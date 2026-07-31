@@ -1,12 +1,12 @@
 # SceneXP
 
-[![CI](https://github.com/PLACEHOLDER/scenexp/actions/workflows/ci.yml/badge.svg)](https://github.com/PLACEHOLDER/scenexp/actions/workflows/ci.yml)
+[![CI](https://github.com/stevendnoll/SceneXP/actions/workflows/ci.yml/badge.svg)](https://github.com/stevendnoll/SceneXP/actions/workflows/ci.yml)
 
 Custom 3D experiences, right in your browser. Built with [Three.js](https://threejs.org/) and nothing else but browser-native HTML, CSS, and JavaScript.
 
 [![A glowing spiral of warm color deep inside the Mandelbrot set, captured mid-dive in the Mandelbrot experience](www/mandelbrot/assets/og-mandelbrot.jpg)](https://www.scenexp.com/mandelbrot/)
 
-[SceneXP.com](https://www.scenexp.com/) is a live website hosting a growing collection of custom 3D experiences, each one built to honor a person, place, or business. The repository currently contains ten experiences (`www/dad`, `www/family`, `www/roqui`, `www/seedtoseed`, `www/interstate`, `www/steve`, `www/gavin`, `www/jamar`, and `www/mandelbrot`) along with the shared 3D experience engine in `www/shared` that powers them all.
+[SceneXP.com](https://www.scenexp.com/) is a live website hosting a growing collection of custom 3D experiences, each one built to honor a person, place, or business. The repository currently contains nine experiences (`www/dad`, `www/family`, `www/roqui`, `www/seedtoseed`, `www/interstate`, `www/steve`, `www/gavin`, `www/jamar`, and `www/mandelbrot`) along with the shared 3D experience engine in `www/shared` that powers them all.
 
 The site itself is about three things:
 
