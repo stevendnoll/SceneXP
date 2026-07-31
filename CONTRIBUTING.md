@@ -140,7 +140,9 @@ source of truth either way.
 
 ## Adding a new experience
 
-1. **Fork the repository** and clone your fork.
+1. **Fork the repository** at
+   [github.com/stevendnoll/SceneXP](https://github.com/stevendnoll/SceneXP)
+   and clone your fork.
 2. **Create your folder**, for example `www/your-world/`. The existing
    experiences are the best reference: start from their structure with an
    `index.html`, a `js/config.js` describing your world, and a `js/main.js`
