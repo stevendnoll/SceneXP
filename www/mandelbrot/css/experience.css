@@ -1,0 +1,57 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+
+/* ============================================================
+   The Mandelbrot Set (www/mandelbrot) experience styles
+   Loaded after the shared stylesheet, so these rules layer on
+   top of ../shared/css/styles-1.0.0.css.
+   ============================================================ */
+
+/* The depth chip: the infinite dive's magnification readout, bottom
+   center, purely a status readout (never a click target). This scene's
+   control row runs always-on, so unlike .mantis-chip the step up above
+   the row applies at EVERY aspect, not just portrait. The text WRAPS
+   (centered) rather than ellipsizing: on a narrow portrait phone the
+   size comparison is the best half of the message, and a second line
+   grows upward from the fixed bottom edge without crowding the row. */
+.depth-chip {
+    position: fixed;
+    bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(92vw, 640px);
+    padding: 0.45rem 1.1rem;
+    background: rgba(12, 10, 8, 0.78);
+    border: 1px solid rgba(255, 122, 26, 0.55);
+    color: #ffd9b0;
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    letter-spacing: 0.3px;
+    line-height: 1.4;
+    text-align: center;
+    border-radius: 20px;
+    z-index: 110;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.depth-chip.visible {
+    opacity: 1;
+}
+
+/* The autozoom row: reuses the .pan-controls shell and the .pan-btn
+   circles from the shared stylesheet. The play button turns the engaged
+   green while the flight is on; the speed button is text instead of an
+   icon. */
+.pan-btn.engaged {
+    background: rgba(52, 110, 82, 0.92);
+    border-color: rgba(170, 235, 195, 0.85);
+}
+
+.pan-btn.autozoom-speed {
+    font-family: var(--font-system);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #fff;
+}

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Putt Putt with Mom and Dad">
+    <!-- A Jolly Roger flown by golfers: a golf ball for the skull (dimple
+         eyes) over two crossed putters for the bones. -->
+    <rect width="64" height="64" rx="14" fill="#1c1c1e"/>
+    <!-- Crossed putters -->
+    <g stroke="#e8e2d2" stroke-width="3.4" stroke-linecap="round">
+        <path d="M17 52 L47 20"/>
+        <path d="M47 52 L17 20"/>
+    </g>
+    <!-- Putter heads -->
+    <rect x="42" y="16" width="10" height="5" rx="2" fill="#e8e2d2" transform="rotate(-46 47 18.5)"/>
+    <rect x="12" y="16" width="10" height="5" rx="2" fill="#e8e2d2" transform="rotate(46 17 18.5)"/>
+    <!-- The golf ball skull -->
+    <circle cx="32" cy="30" r="13" fill="#f4f1e8"/>
+    <!-- Dimple eyes and a couple of spare dimples -->
+    <circle cx="27.5" cy="28" r="2.6" fill="#1c1c1e"/>
+    <circle cx="36.5" cy="28" r="2.6" fill="#1c1c1e"/>
+    <circle cx="32" cy="34" r="1.2" fill="#d8d2c2"/>
+    <circle cx="26" cy="35" r="1" fill="#d8d2c2"/>
+    <circle cx="38" cy="35" r="1" fill="#d8d2c2"/>
+    <circle cx="32" cy="22" r="1" fill="#d8d2c2"/>
+</svg>

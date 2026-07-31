@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="Build your own custom 3D experience with the SceneXP parts library and share it with the world through a GitHub pull request.">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f7fb">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e0f14">
+    <meta name="author" content="Steve Noll">
+
+    <link rel="canonical" href="https://www.scenexp.com/contribute.html">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Contribute | SceneXP">
+    <meta property="og:description" content="Build your own custom 3D experience with the SceneXP parts library and share it with the world through a GitHub pull request.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/contribute.html">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:image" content="https://www.scenexp.com/assets/og-image.webp?v=2">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="The SceneXP logo and wordmark on a dark background with the tagline, custom 3D experiences right in your browser.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Contribute | SceneXP">
+    <meta name="twitter:description" content="Build your own custom 3D experience with the SceneXP parts library and share it through a GitHub pull request.">
+    <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.webp?v=2">
+    <meta name="twitter:image:alt" content="The SceneXP logo and wordmark on a dark background with the tagline, custom 3D experiences right in your browser.">
+
+    <!-- Structured data. JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/contribute.html#webpage",
+      "url": "https://www.scenexp.com/contribute.html",
+      "name": "Contribute to SceneXP",
+      "description": "How to build your own custom 3D experience with the SceneXP parts library and contribute it through a GitHub pull request.",
+      "inLanguage": "en-US",
+      "isPartOf": { "@id": "https://www.scenexp.com/#website" }
+    }
+    </script>
+
+    <title>Contribute | SceneXP</title>
+
+    <link rel="preload" href="/css/site.min.css?v=1" as="style">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/css/site.min.css?v=1">
+
+    <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
+    <script src="/js/theme.min.js?v=1"></script>
+    <script src="/js/nav.min.js?v=1" defer></script>
+</head>
+
+<body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+
+    <header class="site-header">
+        <div class="container site-header-inner">
+            <a class="brand" href="/">
+                <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+                    <defs>
+                        <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#6c4cf1" />
+                            <stop offset="1" stop-color="#06b6d4" />
+                        </linearGradient>
+                    </defs>
+                    <rect width="32" height="32" rx="8" fill="url(#brand-grad)" />
+                    <path d="M8 22 14 10l4 8 3-5 3 9" fill="none" stroke="#ffffff" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                SceneXP
+            </a>
+            <nav id="site-nav" class="site-nav" aria-label="Main">
+                <ul>
+                    <li><a href="/#experiences">Experiences</a></li>
+                    <li><a href="/contact.html">Contact</a></li>
+                    <li><a href="/contribute.html" aria-current="page">Contribute</a></li>
+                </ul>
+            </nav>
+            <button id="nav-toggle" class="nav-toggle" type="button" hidden
+                aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+                <svg class="icon-nav-open" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+                <svg class="icon-nav-close" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
+            </button>
+            <button id="theme-toggle" class="theme-toggle" type="button" hidden aria-label="Theme">
+                <svg class="icon-theme-light" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <circle cx="12" cy="12" r="4.5" fill="currentColor" stroke="none" />
+                    <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19" />
+                </svg>
+                <svg class="icon-theme-dark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" fill="currentColor" />
+                </svg>
+                <svg class="icon-theme-system" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main id="main">
+        <div class="page-hero">
+            <div class="container">
+                <h1>Bring your own little world</h1>
+                <p>SceneXP is open source under the MIT license, and new experiences are warmly welcomed through
+                    GitHub pull requests. If there is a person you would like to honor, or a business you
+                    would like to bring to life as a small 3D world, this page will get you building.</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="container prose">
+                <h2>How the project is put together</h2>
+                <p>There is no framework and no build step beyond minification. Each experience is a static
+                    folder of browser-native HTML, CSS, and JavaScript, powered by Three.js.</p>
+                <ul>
+                    <li><strong>One folder per experience.</strong> Every experience lives in its own folder
+                        under <code>www/</code>, like <code>www/dad</code>, <code>www/family</code>, and
+                        <code>www/roqui</code>, with its own <code>index.html</code>, config, and
+                        orchestrator. Styling comes from the shared versioned stylesheet in
+                        <code>www/shared/css</code>, and an experience that needs rules of its own can
+                        add an optional <code>css/experience.css</code>.</li>
+                    <li><strong>A shared parts library.</strong> <code>www/shared/js</code> holds versioned,
+                        general-purpose modules (scene, lighting, controls, people, scenery, and more). An
+                        experience keeps its own <code>main.js</code> orchestrator and assembles imported parts
+                        driven by one plain config object.</li>
+                    <li><strong>Three.js as a global.</strong> Each experience's <code>index.html</code> loads
+                        <code>lib/three.min.js</code> as a classic script before its module graph.</li>
+                    <li><strong>esbuild for minification.</strong> <code>npm run build</code> minifies JS and
+                        CSS. Every file under <code>www/</code> is picked up automatically, so there is no
+                        build configuration to edit.</li>
+                </ul>
+
+                <h2>Pick an interaction model</h2>
+                <p>Every experience so far follows one of three interaction models, and choosing one up
+                    front is the biggest design decision you will make. All three are assembled from the
+                    same shared parts, so the existing experiences double as working references.</p>
+                <ul>
+                    <li><strong>Explorable worlds.</strong> First-person scenes that visitors walk through,
+                        with keyboard and mouse on desktop, dual joysticks on phones, and collision so
+                        nobody wanders through a wall. Some also offer a guided autopilot tour.
+                        <code>www/dad</code>, <code>www/family</code>, <code>www/roqui</code>,
+                        <code>www/seedtoseed</code>, <code>www/interstate</code>, and
+                        <code>www/steve</code> are all built this way.</li>
+                    <li><strong>Composed views.</strong> A fixed camera frames one lovingly detailed
+                        subject, and the scene moves instead of the visitor. A row of floating buttons
+                        offers gentle pan and zoom, with matching swipe and pinch gestures on touch
+                        screens, and tapping props opens short lines of story. This is the simplest model
+                        to build and a great fit for small subjects. See <code>www/gavin</code> and <code>www/jamar</code>.</li>
+                    <li><strong>Hands-off rides.</strong> The scene drives itself and the visitor mostly
+                        watches, with play and pause, speed, and direction controls for light steering.
+                        The Mandelbrot dive (<code>www/mandelbrot</code>) is the reference: its auto zoom
+                        flies the camera while the visitor picks destinations and adjusts the ride.</li>
+                </ul>
+
+                <h2>Layer on the delight</h2>
+                <p>Whichever model you choose, a few optional layers have proven to be the difference
+                    between a scene visitors look at and a scene they share:</p>
+                <ul>
+                    <li><strong>Discovery checklists.</strong> A short list of things to find in the
+                        scene, ticked off with a small celebration as visitors discover them.</li>
+                    <li><strong>Tap-to-talk props.</strong> Objects and characters that respond to a
+                        click or tap with a short line of story. This is where the honoree's personality
+                        lives.</li>
+                    <li><strong>Guided tours.</strong> An autopilot that drives the camera past the
+                        highlights until the visitor takes over.</li>
+                    <li><strong>Featuring a business.</strong> Experiences that honor a business can
+                        carry its logo on the loading and welcome screens, a floating button to its
+                        website, and a warm invitation card that appears as visitors explore. Always
+                        with the owner's permission, and always in the spirit of a tribute rather than
+                        an advertisement.</li>
+                </ul>
+                <p>The shared modules behind each of these live in <code>www/shared/js</code>, documented
+                    part by part in its <code>README.md</code>.</p>
+
+                <h2>Run it locally</h2>
+                <p>ES modules need to be served over HTTP, so run any static server from the
+                    <code>www</code> folder:</p>
+                <pre><code>cd www
+python3 -m http.server 8000
+# then open http://localhost:8000</code></pre>
+
+                <h2>Add your experience, step by step</h2>
+                <ol>
+                    <li><strong>Fork the repository</strong> on GitHub and clone your fork.</li>
+                    <li><strong>Create your folder</strong>, for example <code>www/your-world/</code>. The
+                        existing experiences are the best reference: start from their structure with an
+                        <code>index.html</code>, a <code>js/config.js</code> describing your world, and a
+                        <code>js/main.js</code> orchestrator that assembles parts from
+                        <code>www/shared/js</code>.</li>
+                    <li><strong>Follow the metadata pattern.</strong> Every experience page carries a strict
+                        same-origin Content Security Policy, full Open Graph and Twitter tags, JSON-LD, and a
+                        polite no-JavaScript fallback. Copy the pattern from an existing experience.</li>
+                    <li><strong>Build and test.</strong> Run <code>npm run build</code> (your new files are
+                        minified automatically), then <code>npm test</code>. Please include a small unit
+                        test for your world, following the <code>tests</code> folder's
+                        <code>&lt;experience&gt;-init.test.mjs</code> pattern. Every pull request should
+                        bring tests along for the code it adds or changes.</li>
+                    <li><strong>Add your world to the directory.</strong> One card in
+                        <code>www/index.html</code>, one entry in <code>www/js/directory.js</code>, and one URL
+                        in <code>www/sitemap.xml</code>.</li>
+                    <li><strong>Open a pull request</strong> telling us the story behind your world. The
+                        <code>main</code> branch does not accept direct pushes, so every change to the
+                        project arrives this way, and we read every pull request with genuine delight.</li>
+                </ol>
+
+                <h2>House rules</h2>
+                <ul>
+                    <li><strong>Honor someone.</strong> Every experience celebrates a person, place, or
+                        business. Kind worlds only, please.</li>
+                    <li><strong>Security first.</strong> Same-origin CSP, no third-party scripts, no trackers,
+                        no CDNs. Everything ships from this domain.</li>
+                    <li><strong>Accessible and considerate.</strong> Keyboard support, reduced-motion respect,
+                        and a no-JavaScript fallback are part of the pattern, not extras.</li>
+                    <li><strong>Fast on phones.</strong> Many visitors arrive on mobile, so please keep assets
+                        lean and performance in mind.</li>
+                    <li><strong>MIT licensed.</strong> Your contribution is published under the project's MIT
+                        license. The bundled <code>three.min.js</code> keeps its own license.</li>
+                </ul>
+
+                <h2>Ready when you are</h2>
+                <p>The public GitHub repository is coming soon. The site launched first, and the source
+                    code follows shortly. If you would like a nudge the moment the repository opens, or
+                    you simply cannot wait to start building, please <a href="/contact.html">reach
+                    out</a> and we will figure it out together.</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container site-footer-inner">
+            <div class="footer-brand">
+                <a class="brand" href="/">
+                    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+                        <defs>
+                            <linearGradient id="brand-grad-footer" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0" stop-color="#6c4cf1" />
+                                <stop offset="1" stop-color="#06b6d4" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="32" height="32" rx="8" fill="url(#brand-grad-footer)" />
+                        <path d="M8 22 14 10l4 8 3-5 3 9" fill="none" stroke="#ffffff" stroke-width="2.5"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    SceneXP
+                </a>
+                <p>Custom 3D experiences for the people you love and the businesses you are proud of. Thank
+                    you for visiting.</p>
+            </div>
+            <nav class="footer-nav" aria-label="Explore">
+                <h2>Explore</h2>
+                <ul>
+                    <li><a href="/#experiences">Experiences</a></li>
+                    <li><a href="/contact.html">Contact</a></li>
+                    <li><a href="/contribute.html">Contribute</a></li>
+                </ul>
+            </nav>
+            <nav class="footer-nav" aria-label="Project">
+                <h2>Project</h2>
+                <ul>
+                    <!-- Placeholder repo URL: swap for the real one when it is published. -->
+                    <li><a href="/privacy.html">Privacy</a></li>
+                    <li><a href="/terms.html">Terms</a></li>
+                </ul>
+            </nav>
+            <div class="footer-meta">
+                <p>Built with Three.js and browser-native HTML, CSS, and JavaScript. Open source under the MIT
+                    license.</p>
+                <p>SceneXP © 2026 <a href="https://www.continuumcommercellc.com/" title="View the Continuum Commerce LLC website" target="_blank" rel="noopener noreferrer">Continuum Commerce LLC</a>.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+
+</html>

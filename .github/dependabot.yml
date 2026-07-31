@@ -1,0 +1,25 @@
+# Dependabot watches the project's two dependency surfaces: the npm
+# devDependencies (esbuild and Jest, nothing ships to the browser) and the
+# GitHub Actions used by CI. Updates arrive as pull requests, so they pass
+# through the same CI checks as every other change. Routine updates are
+# grouped into one weekly pull request per ecosystem to keep the noise down,
+# and security updates still arrive individually as soon as they are needed.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions-dependencies:
+        patterns:
+          - "*"

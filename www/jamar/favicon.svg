@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Jamar's Karaoke Night">
+    <!-- A microphone in outline, waiting for the next singer. Colors are
+         the main site's dark theme: its background under its violet-to-
+         cyan accent pair (www/css/site.css). -->
+    <defs>
+        <linearGradient id="mic" gradientUnits="userSpaceOnUse" x1="32" y1="9" x2="32" y2="53">
+            <stop offset="0" stop-color="#8b71ff"/>
+            <stop offset="1" stop-color="#22d3ee"/>
+        </linearGradient>
+    </defs>
+    <rect width="64" height="64" rx="14" fill="#0e0f14"/>
+    <g stroke="url(#mic)" stroke-width="4" stroke-linecap="round" fill="none">
+        <!-- Mic head -->
+        <circle cx="32" cy="21" r="10"/>
+        <!-- Cradle -->
+        <path d="M18 23a14 14 0 0 0 28 0"/>
+        <!-- Stem and base -->
+        <path d="M32 37v10"/>
+        <path d="M23 51h18"/>
+    </g>
+</svg>

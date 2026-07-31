@@ -1,0 +1,61 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+
+/* ============================================================
+   Gavin's Bug Patrol (www/gavin) experience styles
+   Loaded after the shared stylesheet, so these rules layer on
+   top of ../shared/css/styles-1.0.0.css.
+   ============================================================ */
+
+/* Mantis Watch: the found-count chip, bottom center. Purely a status
+   readout (never a click target), so pointer events pass through. In
+   portrait it steps up to sit just above the portrait view controls
+   (.pan-controls, 54px buttons anchored at bottom 24px), which own the
+   very bottom of the screen there. */
+.mantis-chip {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.45rem 1.1rem;
+    background: rgba(20, 20, 20, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #fff;
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    letter-spacing: 0.3px;
+    border-radius: 999px;
+    white-space: nowrap;
+    z-index: 110;
+    opacity: 0;
+    transition: opacity 0.3s ease, background 0.3s ease, border-color 0.3s ease;
+    pointer-events: none;
+}
+
+/* Above the pan/zoom row while it is on screen: 24px anchor + 54px
+   buttons + a 12px breath. */
+@media (orientation: portrait) {
+    .mantis-chip {
+        bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+.mantis-chip.visible {
+    opacity: 1;
+}
+
+/* Both mantises found: the chip celebrates in the same green the other
+   experiences use for an engaged toggle. */
+.mantis-chip.complete {
+    background: rgba(52, 110, 82, 0.92);
+    border-color: rgba(170, 235, 195, 0.85);
+}
+
+/* A soft pulse each time a mantis is spotted. */
+.mantis-chip.pulse {
+    animation: mantis-chip-pulse 0.9s ease;
+}
+
+@keyframes mantis-chip-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(170, 235, 195, 0); }
+    30% { box-shadow: 0 0 0 8px rgba(170, 235, 195, 0.4); }
+}

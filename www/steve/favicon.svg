@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Steve's Home Office">
+    <!-- A standing-desk monitor on the office's dark green, cursor blinking. -->
+    <rect width="64" height="64" rx="14" fill="#335241"/>
+    <rect x="14" y="16" width="36" height="24" rx="3" fill="#f8f6f1"/>
+    <rect x="17" y="19" width="30" height="18" rx="1.5" fill="#1c2836"/>
+    <rect x="20" y="22" width="10" height="2.4" rx="1.2" fill="#37e06a"/>
+    <rect x="20" y="27" width="16" height="2.4" rx="1.2" fill="#5a7ba6"/>
+    <rect x="20" y="32" width="7" height="2.4" rx="1.2" fill="#f8f6f1"/>
+    <rect x="29" y="31.4" width="3" height="3.6" fill="#37e06a"/>
+    <rect x="29.5" y="40" width="5" height="7" fill="#f8f6f1"/>
+    <rect x="22" y="47" width="20" height="3" rx="1.5" fill="#f8f6f1"/>
+</svg>

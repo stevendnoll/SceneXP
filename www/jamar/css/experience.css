@@ -1,0 +1,146 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+
+/* ============================================================
+   Jamar's karaoke bar (www/jamar) experience styles
+   Loaded after the shared stylesheet, so these rules layer on
+   top of ../shared/css/styles-1.0.0.css.
+   ============================================================ */
+
+/* ---- Karaoke screen close-up overlay ---------------------------------------
+   Mirrors the interstate monitor view, but framed as the bar's wall TV: a
+   slim 16:9 bezel with the stage's neon-pink glow instead of the office
+   blue. The canvas inside is repainted live by the same painter that runs
+   the in-world lyrics screen. */
+#tv-view {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #0a0512;
+}
+#tv-view.hidden { display: none; }
+.tv-backdrop {
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+}
+.tv-frame {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+/* A slim wall-TV shell with a warm magenta screen-glow, echoing the
+   stage wash and the neon. */
+.tv-bezel {
+    padding: 12px;
+    border-radius: 10px;
+    background: linear-gradient(#26242c, #121016);
+    box-shadow:
+        0 0 0 2px #322e3a,
+        0 22px 55px rgba(0, 0, 0, 0.65),
+        0 0 70px 10px rgba(255, 95, 168, 0.16);
+}
+.tv-screen {
+    position: relative;
+    width: min(88vw, 820px);
+    aspect-ratio: 16 / 9;
+    max-height: 64vh;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #151034;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+        inset 0 0 60px rgba(0, 0, 0, 0.55);
+}
+.tv-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+/* A soft top sheen + vignette so the screen reads as glass, not a flat div. */
+.tv-glass {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 18%),
+        radial-gradient(120% 100% at 50% 0%, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.35) 100%);
+}
+.tv-caption {
+    position: relative;
+    max-width: min(88vw, 820px);
+    margin: 24px 16px 0;
+    text-align: center;
+    color: #f3d9e6;
+    font-size: 15px;
+    line-height: 1.5;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+.tv-close {
+    position: absolute;
+    top: 18px;
+    right: 22px;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(48, 22, 40, 0.8);
+    color: #ffe1ef;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+}
+.tv-close:hover { background: rgba(84, 38, 68, 0.9); }
+
+/* ---- Jukebox song picker ---------------------------------------------------
+   Rides inside the standard dialog card. One button per song, with the
+   scene's neon pink marking whichever number is on. */
+.jukebox-songs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 18px 0 22px;
+}
+.jukebox-song {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 95, 168, 0.35);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.jukebox-song:hover,
+.jukebox-song:focus-visible {
+    background: rgba(255, 95, 168, 0.12);
+    border-color: #ff5fa8;
+}
+.jukebox-song-title { font-weight: 600; }
+.jukebox-song-artist {
+    margin-left: auto;
+    opacity: 0.7;
+    font-size: 0.85em;
+}
+.jukebox-song.playing {
+    border-color: #ff5fa8;
+    background: rgba(255, 95, 168, 0.16);
+}
+.jukebox-song.playing::after {
+    content: "PLAYING";
+    font-size: 0.7em;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: #ff5fa8;
+}

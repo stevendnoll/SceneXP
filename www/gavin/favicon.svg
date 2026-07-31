@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Gavin's Bug Patrol">
+    <!-- A praying mantis, face on: triangular head, big eyes, folded
+         raptorial arms, ready to be found among the leaves. -->
+    <rect width="64" height="64" rx="14" fill="#2a5c2e"/>
+    <!-- Antennae -->
+    <path d="M26 13 C24 8 20 5 15 5" stroke="#8fd06a" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+    <path d="M38 13 C40 8 44 5 49 5" stroke="#8fd06a" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+    <!-- Head: the classic triangle -->
+    <path d="M19 13 L45 13 L32 28 Z" fill="#8fd06a"/>
+    <!-- Eyes -->
+    <circle cx="22.5" cy="16.5" r="3.6" fill="#1c3012"/>
+    <circle cx="41.5" cy="16.5" r="3.6" fill="#1c3012"/>
+    <!-- Thorax -->
+    <rect x="30" y="26" width="4" height="9" rx="2" fill="#8fd06a"/>
+    <!-- Abdomen -->
+    <ellipse cx="32" cy="46" rx="6" ry="11.5" fill="#8fd06a"/>
+    <!-- Folded raptorial arms, praying -->
+    <path d="M29 35 L20 39 L23 48" stroke="#8fd06a" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M35 35 L44 39 L41 48" stroke="#8fd06a" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <!-- Back legs -->
+    <path d="M28 52 L17 59" stroke="#8fd06a" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+    <path d="M36 52 L47 59" stroke="#8fd06a" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+</svg>

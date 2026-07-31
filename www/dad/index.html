@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="Take a quiet walk on a 3D stretch of Maryland's NCR Trail, built in loving memory of a dad who rode it every weekend. Meet the riders, find the river, and listen for the little waterfall.">
+    <meta name="theme-color" content="#eef3ec">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK (Phase 5). Crawlers read these without running
+         JavaScript, so they cannot come from config.js and must stay literal
+         absolute URLs naming where this page is actually served (currently
+         www.scenexp.com/dad; these are deployment metadata, not outbound
+         links). When serving from a new domain, update the URLs here:
+         canonical, og:url, og:image, twitter:image, and the JSON-LD ids
+         below. Everything else in the experience is relative, config-driven
+         (DAD_CONFIG.site in js/config.js), or derived from location. -->
+    <link rel="canonical" href="https://www.scenexp.com/dad/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="A Ride on the NCR Trail">
+    <meta property="og:description" content="A quiet 3D walk on Maryland's NCR Trail, built by a son in memory of his dad, who loved to ride it. Say hello to the greeter by his bike, and find the little waterfall.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="A Ride on the NCR Trail">
+    <meta property="og:url" content="https://www.scenexp.com/dad/">
+    <meta property="og:locale" content="en_US">
+    <!-- WebP per preference. If a platform (notably Facebook) won't render the
+         preview, swap the two image URLs below to .../og-dad.jpg (both live in
+         assets/, converted from the specs/og-dad.png capture). -->
+    <meta property="og:image" content="https://www.scenexp.com/dad/assets/og-dad.webp?v=2">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A walkable 3D stretch of the NCR trail, with the Gunpowder River alongside.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="A Ride on the NCR Trail">
+    <meta name="twitter:description" content="A quiet 3D walk on Maryland's NCR Trail, built in loving memory of a dad who rode it every weekend.">
+    <meta name="twitter:image" content="https://www.scenexp.com/dad/assets/og-dad.webp?v=2">
+    <meta name="twitter:image:alt" content="A walkable 3D stretch of the NCR trail, with the Gunpowder River alongside.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/dad/#website",
+      "url": "https://www.scenexp.com/dad/",
+      "name": "A Ride on the NCR Trail",
+      "description": "A walkable 3D stretch of Maryland's NCR Trail, built in loving memory of a dad who loved to ride it.",
+      "inLanguage": "en-US"
+    }
+    </script>
+
+    <title>A Ride on the NCR Trail</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the section links without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text intro and links to the classic site. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>A Ride on the NCR Trail</h1>
+            <p>This is a walkable 3D stretch of Maryland's NCR Trail, which needs
+                JavaScript to run. It was built with love, by one person and an AI,
+                in memory of a dad who rode this trail nearly every weekend. He is
+                out there still, standing beside his bike, happy to say hello. If
+                you would like a small world like this built for someone you love,
+                the developer would be glad to hear from you.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">THE NCR TRAIL</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <div id="blocker">
+        <div id="instructions">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">A quiet stretch of the NCR Trail</p>
+            <p class="click-prompt">Click to take a walk</p>
+            <div class="controls-hint">
+                <span>WASD</span> Move
+                <span>MOUSE</span> Look
+            </div>
+        </div>
+    </div>
+
+    <div id="hud">
+        <div class="crosshair" aria-hidden="true"></div>
+        <div id="look-label" class="look-label" role="status" aria-live="polite"></div>
+    </div>
+
+    <!-- Confirm card shown when a piece is activated. Kept for the shared modal
+         plumbing (this theme hangs no gallery pieces, so it never opens). -->
+    <div id="piece-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="piece-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="piece-title" class="piece-title">Section</h2>
+                <p id="piece-subtitle" class="piece-subtitle"></p>
+                <a id="piece-enter" class="piece-enter" href="#">Enter →</a>
+                <button class="piece-cancel" data-close>Keep exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hello dialog, shown when the greeter (Dad) or his floating sign is
+         activated. Per the Phase 6 spec, this is a Hello, not a Help menu,
+         though it still carries the how-to-move tips as his friendly advice. -->
+    <div id="help-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card help-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="help-title" class="piece-title">Hello</h2>
+                <p class="piece-subtitle">Well hello there, so glad you came out. This is my favorite stretch of trail
+                    in the whole world. Take your time, there is no hurry out here.</p>
+                <ul class="help-list">
+                    <li class="help-desktop"><strong>Move:</strong> <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys.</li>
+                    <li class="help-desktop"><strong>Look:</strong> move the mouse. Click the scene once to capture the cursor. Press <kbd>Esc</kbd> to release it.</li>
+                    <li class="help-mobile"><strong>Move &amp; look:</strong> use the left joystick to walk and the right joystick to look around.</li>
+                    <li><strong>The river:</strong> follow the fence line east to the overlook. You will hear the little waterfall before you see it.</li>
+                    <li><strong>The riders:</strong> a few of my friends are out on the trail today. Give them a wave as they pass.</li>
+                    <li><strong>The notice board:</strong> the kiosk by the trailhead lists a few things worth finding out here.</li>
+                    <li><strong>Autopilot:</strong> press <kbd>T</kbd> or the tour button (top-left) and the trail will show you around. Move to take back the controls.</li>
+                    <li><strong>Settings:</strong> the gear icon (top-right) adjusts movement and look sensitivity.</li>
+                    <li><strong>Heading out?</strong> The Home button (top-right) takes you back to the main site.</li>
+                </ul>
+                <button class="piece-cancel" data-close>Thanks, enjoy the trail!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dialog shown when a rider, a walker, or a trailside prop is activated. -->
+    <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="dialog-title" class="piece-title">On the Trail</h2>
+                <p id="dialog-message" class="piece-subtitle"></p>
+                <button class="piece-enter dialog-primary" type="button" data-close>Continue exploring</button>
+                <button id="dialog-return-btn" class="piece-cancel dialog-return hidden" type="button">Back to the Trailhead</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Celebration shown once the visitor completes every discovery. The peak
+         goodwill moment, so it doubles as a warm, low-pressure invitation to reach out. -->
+    <div id="complete-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="complete-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card complete-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <p class="complete-kicker" aria-hidden="true">★ &nbsp;All discoveries found&nbsp; ★</p>
+                <h2 id="complete-title" class="piece-title">You walked every step of it</h2>
+                <p class="piece-subtitle">Thank you for taking your time out here. This stretch of trail was built with
+                    love, by one person and an AI, in memory of a dad who rode it for years. If you would like a small
+                    world like this made for someone you love, or for your business, I would genuinely love to hear
+                    from you.</p>
+                <a id="complete-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
+                <button id="complete-share" class="piece-cancel complete-share" type="button">Share this</button>
+                <button class="piece-cancel" data-close>Keep exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Partway "reach out" invitation. Reuses the completion celebration's card
+         styling, but fires once the visitor is a few discoveries in (not at the
+         end), catching engaged visitors who may never find every corner. -->
+    <div id="nudge-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="nudge-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card complete-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few discoveries in&nbsp; ★</p>
+                <h2 id="nudge-title" class="piece-title">Enjoying the trail?</h2>
+                <p class="piece-subtitle">Thanks for spending a little time out here. This place was built in memory of
+                    a wonderful dad. If you would like something like it built for someone you care about, I would
+                    love to hear from you. No rush, the trail is not going anywhere.</p>
+                <a id="nudge-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
+                <button class="piece-cancel" data-close>Keep exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notice-board close-up (opens when the trailhead kiosk is clicked).
+         Reuses the whiteboard overlay ids and styles from the shared css; the
+         canvas is painted with the kiosk board (discoveries + dedication). -->
+    <div id="whiteboard-view" class="hidden" role="dialog" aria-modal="true" aria-label="The trailhead notice board, up close">
+        <div class="whiteboard-backdrop" data-close></div>
+        <div class="whiteboard-frame">
+            <div class="whiteboard-surface">
+                <canvas id="whiteboard-canvas" class="whiteboard-canvas"></canvas>
+            </div>
+            <div class="whiteboard-tray" aria-hidden="true"></div>
+        </div>
+        <p id="whiteboard-caption" class="whiteboard-caption"></p>
+        <p class="whiteboard-hint" aria-hidden="true">Drag to pan across the board</p>
+        <button class="whiteboard-close" aria-label="Step back from the notice board" data-close>&times;</button>
+    </div>
+
+    <div id="touch-controls">
+        <div id="joystick-zone">
+            <div class="joystick-base-fixed">
+                <div class="joystick-thumb-fixed"></div>
+            </div>
+        </div>
+        <div id="look-joystick-zone">
+            <div class="joystick-base-fixed">
+                <div class="joystick-thumb-fixed"></div>
+            </div>
+        </div>
+        <div id="tap-zone"></div>
+    </div>
+
+    <!-- Floating controls -->
+    <!-- The Home button returns to the serving site's root in the same tab
+         (there is no featured business here; applySiteLinks keeps it in sync
+         with DAD_CONFIG.site.home). -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+    <!-- Autopilot tour toggle (keyboard shortcut T). Walks the visitor along
+         a guided route of the sights; any movement input hands control back. -->
+    <button id="autopilot-btn" class="ui-float menu-btn autopilot-btn" aria-pressed="false"
+        title="Autopilot tour (T)" aria-label="Toggle the autopilot tour (keyboard shortcut T)">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 19c-2.5-3 1-6.5 4.5-6h5c3.5 0 4.5-3 5.5-5.5" stroke-dasharray="2.6 2.2" />
+            <path d="M21.5 3.6l.6 7.5-6.1-2.4z" fill="currentColor" stroke="none" />
+            <circle cx="5" cy="19" r="2.2" fill="currentColor" stroke="none" />
+        </svg>
+    </button>
+    <button id="settings-btn" class="ui-float settings-btn" title="Movement settings" aria-label="Movement settings"
+        aria-controls="settings-panel" aria-expanded="false">
+        <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+        </svg>
+    </button>
+
+    <div id="settings-panel" class="settings-panel hidden">
+        <div class="settings-header">
+            <span>Settings</span>
+            <button id="settings-close" class="settings-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="settings-body">
+            <label class="settings-label">
+                Walk Speed
+                <input type="range" id="walk-speed-slider" min="2" max="14" step="0.5" value="6.5">
+                <span class="settings-value" id="walk-speed-value">6.5</span>
+            </label>
+            <label class="settings-label">
+                Look Sensitivity
+                <input type="range" id="look-speed-slider" min="0.5" max="4" step="0.1" value="1.0">
+                <span class="settings-value" id="look-speed-value">1.0</span>
+            </label>
+            <!-- (No brightness dimmer here: the world is outdoors, and the sun
+                 and moon set the light.) -->
+        </div>
+    </div>
+
+    <canvas id="game-canvas" aria-label="A walkable 3D stretch of the NCR trail"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,7 @@
+# Minified bundles are build output. Collapse them in pull request diffs
+# and keep them out of the repository language statistics.
+*.min.js linguist-generated
+*.min.css linguist-generated
+
+# Three.js is vendored third-party code carrying its own license.
+www/lib/three.min.js linguist-vendored

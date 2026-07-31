@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="The Seed to Seed Garden">
+    <!-- A young seedling in rich soil, greenhouse green behind, sun up. -->
+    <rect width="64" height="64" rx="14" fill="#2f5b3d"/>
+    <path d="M0 50 Q 20 47 32 49 T 64 47 L 64 64 L 0 64 Z" fill="#3d2f22"/>
+    <circle cx="50" cy="14" r="5" fill="#f0d264"/>
+    <path d="M30 52 V 32" stroke="#f4f1e8" stroke-width="3.4" stroke-linecap="round"/>
+    <path d="M30 37 C 19 37 16 28 16 21 C 25 21 30 26 30 37 Z" fill="#f4f1e8"/>
+    <path d="M30 33 C 40 33 43 25 43 19 C 34.5 19 30 23 30 33 Z" fill="#cfe0c2"/>
+</svg>

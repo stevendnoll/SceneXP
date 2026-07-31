@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Zumba with Roqui">
+    <!-- A music note mid-dance on hot pink, with a disco sparkle. -->
+    <rect width="64" height="64" rx="14" fill="#ff2d78"/>
+    <path d="M40 14 L42 36 A8 8 0 1 1 36 30 L35 18 L24 21 L25 40 A8 8 0 1 1 19 34 L18 16 Z"
+        fill="#ffffff" transform="rotate(8 32 32)"/>
+    <circle cx="50" cy="13" r="3" fill="#ffd23f"/>
+    <path d="M50 6 L50 20 M43 13 L57 13" stroke="#ffd23f" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

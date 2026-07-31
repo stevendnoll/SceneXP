@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="Play through a 3D pirate mini golf course in Ocean City, Maryland, built from a son's favorite summer memory. Board the pirate ship, walk the plank hole, and meet the family playing their evening round.">
+    <meta name="theme-color" content="#eef3ec">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK (Phase 5). Crawlers read these without running
+         JavaScript, so they cannot come from config.js and must stay literal
+         absolute URLs naming where this page is actually served (currently
+         www.scenexp.com/family; these are deployment metadata, not outbound
+         links). When serving from a new domain, update the URLs here:
+         canonical, og:url, og:image, twitter:image, and the JSON-LD ids
+         below. Everything else in the experience is relative, config-driven
+         (FAMILY_CONFIG.site in js/config.js), or derived from location. -->
+    <link rel="canonical" href="https://www.scenexp.com/family/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Putt Putt with Mom and Dad">
+    <meta property="og:description" content="A 3D round of pirate mini golf in Ocean City, built from a son's favorite summer memory of playing putt putt with his parents. Board the ship and walk the plank hole.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Putt Putt with Mom and Dad">
+    <meta property="og:url" content="https://www.scenexp.com/family/">
+    <meta property="og:locale" content="en_US">
+    <!-- WebP per preference. If a platform (notably Facebook) won't render the
+         preview, swap the two image URLs below to .../og-family.jpg (all three
+         formats live in assets/, converted to sRGB from the specs/og-golf.png
+         capture before encoding). -->
+    <meta property="og:image" content="https://www.scenexp.com/family/assets/og-family.webp?v=1">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A walkable 3D pirate mini golf course, with a boardable pirate ship floating in a lagoon.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Putt Putt with Mom and Dad">
+    <meta name="twitter:description" content="A 3D round of pirate mini golf in Ocean City, built from a son's favorite summer memory of playing putt putt with his parents.">
+    <meta name="twitter:image" content="https://www.scenexp.com/family/assets/og-family.webp?v=1">
+    <meta name="twitter:image:alt" content="A walkable 3D pirate mini golf course, with a boardable pirate ship floating in a lagoon.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/family/#website",
+      "url": "https://www.scenexp.com/family/",
+      "name": "Putt Putt with Mom and Dad",
+      "description": "A walkable 3D pirate mini golf course in Ocean City, Maryland, built from a son's favorite summer memory of playing putt putt with his parents.",
+      "inLanguage": "en-US"
+    }
+    </script>
+
+    <title>Putt Putt with Mom and Dad</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the section links without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text intro and links to the classic site. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Putt Putt with Mom and Dad</h1>
+            <p>This is a walkable 3D pirate mini golf course in Ocean City,
+                Maryland, and it needs JavaScript to run. It was built with love,
+                by one person and an AI, from a favorite summer memory: a mom, a
+                dad, and a ten year old playing putt putt by the beach. The family
+                is out there right now, mid round, and the plank hole is waiting.
+                If you would like a small world like this built from a memory you
+                love, the developer would be glad to hear from you.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">PIRATE PUTT PUTT</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <div id="blocker">
+        <div id="instructions">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">A pirate mini golf course in Ocean City, MD</p>
+            <p class="click-prompt">Click to play a round</p>
+            <div class="controls-hint">
+                <span>WASD</span> Move
+                <span>MOUSE</span> Look
+            </div>
+        </div>
+    </div>
+
+    <div id="hud">
+        <div class="crosshair" aria-hidden="true"></div>
+        <div id="look-label" class="look-label" role="status" aria-live="polite"></div>
+    </div>
+
+    <!-- Confirm card shown when a piece is activated. Kept for the shared modal
+         plumbing (this theme hangs no gallery pieces, so it never opens). -->
+    <div id="piece-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="piece-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="piece-title" class="piece-title">Section</h2>
+                <p id="piece-subtitle" class="piece-subtitle"></p>
+                <a id="piece-enter" class="piece-enter" href="#">Enter →</a>
+                <button class="piece-cancel" data-close>Keep exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Welcome dialog, shown when the ticket booth window is activated.
+         There is no greeter on this course (the family is mid round), so the
+         booth carries the friendly how-to-move tips instead. -->
+    <div id="help-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card help-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="help-title" class="piece-title">Welcome to Shipwreck Cove</h2>
+                <p class="piece-subtitle">Evening! One round of pirate golf, on the house. Take your time out there,
+                    the course is all yours tonight. A family is playing their summer round, feel free to say hi.</p>
+                <ul class="help-list">
+                    <li class="help-desktop"><strong>Move:</strong> <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys.</li>
+                    <li class="help-desktop"><strong>Look:</strong> move the mouse. Click the scene once to capture the cursor. Press <kbd>Esc</kbd> to release it.</li>
+                    <li class="help-mobile"><strong>Move &amp; look:</strong> use the left joystick to walk and the right joystick to look around.</li>
+                    <li><strong>The ship:</strong> cross the gangplank at the north path and you are aboard. Three holes play on deck.</li>
+                    <li><strong>The plank:</strong> the famous hole 7. You can walk the plank yourself, the ropes will keep you dry.</li>
+                    <li><strong>The scorecard:</strong> the board by the entrance lists a few things worth finding tonight.</li>
+                    <li><strong>The conch shell:</strong> right here on the counter. Hold it to your ear and see.</li>
+                    <li><strong>Autopilot:</strong> press <kbd>T</kbd> or the tour button (top-left) and the course will show you around. Move to take back the controls.</li>
+                    <li><strong>Settings:</strong> the gear icon (top-right) adjusts movement and look sensitivity.</li>
+                    <li><strong>Heading out?</strong> The Home button (top-right) takes you back to the main site.</li>
+                </ul>
+                <button class="piece-cancel" data-close>Thanks, tee me up!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dialog shown when a family member, a passerby, or a course prop is activated. -->
+    <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="dialog-title" class="piece-title">On the Course</h2>
+                <p id="dialog-message" class="piece-subtitle"></p>
+                <button class="piece-enter dialog-primary" type="button" data-close>Continue exploring</button>
+                <button id="dialog-return-btn" class="piece-cancel dialog-return hidden" type="button">Back to the First Tee</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Celebration shown once the visitor completes every discovery. The peak
+         goodwill moment, so it doubles as a warm, low-pressure invitation to reach out. -->
+    <div id="complete-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="complete-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card complete-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <p class="complete-kicker" aria-hidden="true">★ &nbsp;All discoveries found&nbsp; ★</p>
+                <h2 id="complete-title" class="piece-title">You played the whole course</h2>
+                <p class="piece-subtitle">Thank you for spending an evening here. This course was built with love, by
+                    one person and an AI, from a favorite childhood memory of playing putt putt with Mom and Dad in
+                    Ocean City. If you would like a small world like this made from a memory you love, or for your
+                    business, I would genuinely love to hear from you.</p>
+                <a id="complete-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
+                <button id="complete-share" class="piece-cancel complete-share" type="button">Share this</button>
+                <button class="piece-cancel" data-close>Keep exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Partway "reach out" invitation. Reuses the completion celebration's card
+         styling, but fires once the visitor is a few discoveries in (not at the
+         end), catching engaged visitors who may never find every corner. -->
+    <div id="nudge-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="nudge-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card complete-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few discoveries in&nbsp; ★</p>
+                <h2 id="nudge-title" class="piece-title">Enjoying the course?</h2>
+                <p class="piece-subtitle">Thanks for spending a little time here. This place was built from a favorite
+                    family memory, one perfect summer evening of putt putt by the beach. If you would like something
+                    like it built from a memory you care about, I would love to hear from you. No rush, hole 7 is not
+                    going anywhere.</p>
+                <a id="nudge-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
+                <button class="piece-cancel" data-close>Keep exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scorecard close-up (opens when the scorecard board is clicked).
+         Reuses the whiteboard overlay ids and styles from the shared css; the
+         canvas is painted with the scorecard (discoveries + dedication). -->
+    <div id="whiteboard-view" class="hidden" role="dialog" aria-modal="true" aria-label="The scorecard board, up close">
+        <div class="whiteboard-backdrop" data-close></div>
+        <div class="whiteboard-frame">
+            <div class="whiteboard-surface">
+                <canvas id="whiteboard-canvas" class="whiteboard-canvas"></canvas>
+            </div>
+            <div class="whiteboard-tray" aria-hidden="true"></div>
+        </div>
+        <p id="whiteboard-caption" class="whiteboard-caption"></p>
+        <p class="whiteboard-hint" aria-hidden="true">Drag to pan across the board</p>
+        <button class="whiteboard-close" aria-label="Step back from the scorecard board" data-close>&times;</button>
+    </div>
+
+    <div id="touch-controls">
+        <div id="joystick-zone">
+            <div class="joystick-base-fixed">
+                <div class="joystick-thumb-fixed"></div>
+            </div>
+        </div>
+        <div id="look-joystick-zone">
+            <div class="joystick-base-fixed">
+                <div class="joystick-thumb-fixed"></div>
+            </div>
+        </div>
+        <div id="tap-zone"></div>
+    </div>
+
+    <!-- Floating controls -->
+    <!-- The Home button returns to the serving site's root in the same tab
+         (there is no featured business here; applySiteLinks keeps it in sync
+         with FAMILY_CONFIG.site.home). -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+    <!-- Autopilot tour toggle (keyboard shortcut T). Walks the visitor along
+         a guided route of the sights; any movement input hands control back. -->
+    <button id="autopilot-btn" class="ui-float menu-btn autopilot-btn" aria-pressed="false"
+        title="Autopilot tour (T)" aria-label="Toggle the autopilot tour (keyboard shortcut T)">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 19c-2.5-3 1-6.5 4.5-6h5c3.5 0 4.5-3 5.5-5.5" stroke-dasharray="2.6 2.2" />
+            <path d="M21.5 3.6l.6 7.5-6.1-2.4z" fill="currentColor" stroke="none" />
+            <circle cx="5" cy="19" r="2.2" fill="currentColor" stroke="none" />
+        </svg>
+    </button>
+    <button id="settings-btn" class="ui-float settings-btn" title="Movement settings" aria-label="Movement settings"
+        aria-controls="settings-panel" aria-expanded="false">
+        <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+        </svg>
+    </button>
+
+    <div id="settings-panel" class="settings-panel hidden">
+        <div class="settings-header">
+            <span>Settings</span>
+            <button id="settings-close" class="settings-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="settings-body">
+            <label class="settings-label">
+                Walk Speed
+                <input type="range" id="walk-speed-slider" min="2" max="14" step="0.5" value="6.5">
+                <span class="settings-value" id="walk-speed-value">6.5</span>
+            </label>
+            <label class="settings-label">
+                Look Sensitivity
+                <input type="range" id="look-speed-slider" min="0.5" max="4" step="0.1" value="1.0">
+                <span class="settings-value" id="look-speed-value">1.0</span>
+            </label>
+            <!-- (No brightness dimmer here: the world is outdoors, and the sun
+                 and moon set the light.) -->
+        </div>
+    </div>
+
+    <canvas id="game-canvas" aria-label="A walkable 3D pirate mini golf course"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

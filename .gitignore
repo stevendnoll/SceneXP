@@ -1,0 +1,24 @@
+.claude/
+.DS_Store
+.env
+.env.*
+*.log
+CLAUDE.local.md
+coverage/
+deploy/
+node_modules/
+snaps/
+specs/
+stage/
+Thumbs.db
+
+# Company logo artwork, and the images that contain it, stays out of the
+# public repository. The live site serves the real files. On a fresh clone
+# these spots simply appear blank, which the README notes is expected.
+www/interstate/assets/interstate-logo.webp
+www/interstate/favicon.png
+www/seedtoseed/assets/seedtoseed.svg
+www/interstate/assets/og-interstate.webp
+www/interstate/assets/og-interstate.jpg
+www/seedtoseed/assets/og-seedtoseed.webp
+www/seedtoseed/assets/og-seedtoseed.jpg

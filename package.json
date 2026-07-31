@@ -1,0 +1,38 @@
+{
+  "name": "scenexp",
+  "version": "1.0.0",
+  "description": "SceneXP.com, a home for custom 3D experiences built with Three.js and browser-native HTML, CSS, and JavaScript.",
+  "homepage": "https://www.scenexp.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PLACEHOLDER/scenexp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PLACEHOLDER/scenexp/issues"
+  },
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "build": "node build.mjs"
+  },
+  "keywords": [
+    "threejs",
+    "3d",
+    "webgl",
+    "static-site",
+    "browser"
+  ],
+  "author": "Steve Noll",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "jest": "^30.4.2"
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.8"
+  }
+}

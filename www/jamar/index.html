@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="It is karaoke night at the corner bar and Jamar has the microphone. A living 3D scene built as a birthday present: the lyrics screen rolls, the speakers keep the beat, and his best friends hold down the booth.">
+    <meta name="theme-color" content="#2c1240">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK (Phase 5). Crawlers read these without running
+         JavaScript, so they cannot come from config.js and must stay literal
+         absolute URLs naming where this page is actually served (currently
+         www.scenexp.com/jamar; these are deployment metadata, not outbound
+         links). When serving from a new domain, update the URLs here:
+         canonical, og:url, og:image, twitter:image, and the JSON-LD ids
+         below. Everything else in the experience is relative, config-driven
+         (JAMAR_CONFIG.site in js/config.js), or derived from location. -->
+    <link rel="canonical" href="https://www.scenexp.com/jamar/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Jamar's Karaoke Night">
+    <meta property="og:description" content="A living 3D visit to karaoke night at the corner bar, built as a birthday present. Jamar has the mic, the booth has his best friends, and the whole room knows the words.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/jamar/">
+    <meta property="og:locale" content="en_US">
+    <!-- WebP per preference. og-jamar.webp is a capture of the bar from the
+         visitor's viewpoint (same flow as the other experiences; capture
+         pending). If a platform (notably Facebook) won't render the
+         preview, swap the two image URLs below to .../og-jamar.jpg
+         (both will live in assets/). -->
+    <meta property="og:image" content="https://www.scenexp.com/jamar/assets/og-jamar.webp?v=1">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A 3D karaoke bar at night: Jamar sings on a corner stage under magenta and blue lights, a lyrics screen glows on the brick wall, and two friends raise glasses from a red vinyl booth.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Jamar's Karaoke Night">
+    <meta name="twitter:description" content="A living 3D visit to karaoke night at the corner bar, built as a birthday present. Jamar has the mic.">
+    <meta name="twitter:image" content="https://www.scenexp.com/jamar/assets/og-jamar.webp?v=1">
+    <meta name="twitter:image:alt" content="A 3D karaoke bar at night: Jamar sings on a corner stage under magenta and blue lights, a lyrics screen glows on the brick wall, and two friends raise glasses from a red vinyl booth.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/jamar/#website",
+      "url": "https://www.scenexp.com/jamar/",
+      "name": "Jamar's Karaoke Night",
+      "description": "A passive 3D visit to karaoke night at the corner bar, built as a birthday present for Jamar: he has the microphone, the lyrics screen is rolling, and his best friends hold down the booth.",
+      "inLanguage": "en-US"
+    }
+    </script>
+
+    <title>Jamar's Karaoke Night</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css" as="style">
+    <link rel="preload" href="css/experience.min.css" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css">
+    <link rel="stylesheet" href="css/experience.min.css">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text intro and links to the classic site. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Jamar's Karaoke Night</h1>
+            <p>This is a living 3D scene of karaoke night at the corner bar,
+                and it needs JavaScript to run. The developer built it as a
+                birthday present for his best friend Jamar, who is exactly the
+                person you hope grabs the microphone on karaoke night. In the
+                3D scene, Jamar sings from the corner stage while the lyrics
+                screen rolls, the speakers keep the beat, the disco ball
+                turns, and the developer and their friend Mike raise glasses
+                from the booth beside the stage. Everything in the room can
+                be clicked for a little of its story. If you would like a
+                small world like this built for someone you love, the
+                developer would be glad to hear from you.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">JAMAR'S KARAOKE NIGHT</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- The welcome overlay. This experience is watched, not walked: there
+         are no movement controls to explain, so the overlay just sets the
+         scene and steps aside on the first click, tap, or keypress. -->
+    <div id="blocker">
+        <div id="instructions">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">It is karaoke night at the corner bar, and the birthday man has the mic</p>
+            <p class="click-prompt">Click to join the crowd</p>
+            <div class="controls-hint">
+                <span>SIT BACK</span> No controls needed. Jamar handles the entertainment.
+                <span>LOOK CLOSER</span> Click anything in the bar, or anyone, for a little of its story.
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating controls -->
+    <!-- The Home button returns to the serving site's root in the same tab
+         (there is no featured business here; applySiteLinks keeps it in sync
+         with JAMAR_CONFIG.site.home). No settings cog and no autopilot:
+         there is nothing to adjust and nowhere to be driven. -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+
+    <!-- Dialog shown when something in the bar is clicked: the host's
+         voice, telling the story of karaoke night one prop at a time. -->
+    <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="dialog-title" class="piece-title">At the Bar</h2>
+                <p id="dialog-message" class="piece-subtitle"></p>
+                <button class="piece-enter dialog-primary" type="button" data-close>Back to the show</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jukebox song picker: choose what Jamar sings next. The list is
+         built by main.js from its songbook. -->
+    <div id="jukebox-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="jukebox-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="jukebox-title" class="piece-title">The Jukebox</h2>
+                <p class="piece-subtitle">Every quarter plays for the birthday act tonight. Pick what Jamar sings next.</p>
+                <div id="jukebox-songs" class="jukebox-songs"></div>
+                <button class="piece-enter dialog-primary" type="button" data-close>Back to the show</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Karaoke screen close-up: tapping the lyrics screen brings the wall
+         TV up to full size, still rolling, instead of a dialog card. -->
+    <div id="tv-view" class="hidden" role="dialog" aria-modal="true" aria-label="The karaoke screen, up close">
+        <div class="tv-backdrop" data-close></div>
+        <div class="tv-frame">
+            <div class="tv-bezel">
+                <div class="tv-screen">
+                    <canvas id="tv-canvas" class="tv-canvas"></canvas>
+                    <div class="tv-glass" aria-hidden="true"></div>
+                </div>
+            </div>
+        </div>
+        <p id="tv-caption" class="tv-caption"></p>
+        <button class="tv-close" aria-label="Step back from the screen" data-close>&times;</button>
+    </div>
+
+    <canvas id="game-canvas" aria-label="A living 3D karaoke bar: Jamar sings on the corner stage under magenta and blue lights while the lyrics screen rolls, the speakers keep the beat, the disco ball turns, and Steve and Mike raise glasses from the booth beside the stage"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

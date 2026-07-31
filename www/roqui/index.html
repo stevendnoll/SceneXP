@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="Step into a joyful 3D Zumba class led by Roqui, a wonderful instructor at the Matt Griffin YMCA. Catch the beat, meet the class, fire up the speakers, and find the disco ball.">
+    <meta name="theme-color" content="#ff2d78">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK (Phase 5). Crawlers read these without running
+         JavaScript, so they cannot come from config.js and must stay literal
+         absolute URLs naming where this page is actually served (currently
+         www.scenexp.com/roqui; these are deployment metadata, not outbound
+         links). When serving from a new domain, update the URLs here:
+         canonical, og:url, og:image, twitter:image, and the JSON-LD ids
+         below. Everything else in the experience is relative, config-driven
+         (ROQUI_CONFIG.site in js/config.js), or derived from location. -->
+    <link rel="canonical" href="https://www.scenexp.com/roqui/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Zumba with Roqui">
+    <meta property="og:description" content="A joyful 3D Zumba class, built with love for a wonderful instructor. Step in, catch the beat, and say hola to Roqui and her class.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Zumba with Roqui">
+    <meta property="og:url" content="https://www.scenexp.com/roqui/">
+    <meta property="og:locale" content="en_US">
+    <!-- WebP per preference. og-roqui.webp is a capture of the studio in
+         party mode (from specs/og-roqui.png, same flow as og-dad). If a
+         platform (notably Facebook) won't render the preview, swap the two
+         image URLs below to .../og-roqui.jpg (both live in assets/). -->
+    <meta property="og:image" content="https://www.scenexp.com/roqui/assets/og-roqui.webp?v=1">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Roqui's 3D Zumba class mid-song: lights down, disco ball spinning, the class dancing in front of the mirror wall.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Zumba with Roqui">
+    <meta name="twitter:description" content="A joyful 3D Zumba class, built with love for a wonderful instructor. Step in and catch the beat.">
+    <meta name="twitter:image" content="https://www.scenexp.com/roqui/assets/og-roqui.webp?v=1">
+    <meta name="twitter:image:alt" content="Roqui's 3D Zumba class mid-song: lights down, disco ball spinning, the class dancing in front of the mirror wall.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/roqui/#website",
+      "url": "https://www.scenexp.com/roqui/",
+      "name": "Zumba with Roqui",
+      "description": "A walkable 3D Zumba class, built with love for a wonderful instructor at the Matt Griffin YMCA.",
+      "inLanguage": "en-US"
+    }
+    </script>
+
+    <title>Zumba with Roqui</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the section links without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text intro and links to the classic site. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Zumba with Roqui</h1>
+            <p>This is a walkable 3D Zumba class, which needs JavaScript to run.
+                It was built with love, by one person and an AI, for a wonderful
+                Zumba instructor who teaches every week at the Matt Griffin YMCA
+                in SeaTac, Washington. She is in there right now, leading her
+                class in front of the mirror wall, happy to say hola. If you
+                would like a small world like this built for someone you love,
+                the developer would be glad to hear from you.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">ZUMBA WITH ROQUI</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <div id="blocker">
+        <div id="instructions">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">Roqui's Zumba class is in session</p>
+            <p class="click-prompt">Click to join the class</p>
+            <div class="controls-hint">
+                <span>WASD</span> Move
+                <span>MOUSE</span> Look
+            </div>
+        </div>
+    </div>
+
+    <div id="hud">
+        <div class="crosshair" aria-hidden="true"></div>
+        <div id="look-label" class="look-label" role="status" aria-live="polite"></div>
+    </div>
+
+    <!-- Confirm card shown when a piece is activated. Kept for the shared modal
+         plumbing (this theme hangs no gallery pieces, so it never opens). -->
+    <div id="piece-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="piece-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="piece-title" class="piece-title">Section</h2>
+                <p id="piece-subtitle" class="piece-subtitle"></p>
+                <a id="piece-enter" class="piece-enter" href="#">Enter →</a>
+                <button class="piece-cancel" data-close>Keep exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hola dialog, shown when Roqui or her floating sign is activated. She
+         steps out of the routine for a moment while the class dances on. -->
+    <div id="help-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card help-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="help-title" class="piece-title">¡Hola!</h2>
+                <p class="piece-subtitle">So glad you made it to class! No experience needed here, just follow along
+                    and keep smiling. The steps will find you, I promise.</p>
+                <ul class="help-list">
+                    <li class="help-desktop"><strong>Move:</strong> <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys.</li>
+                    <li class="help-desktop"><strong>Look:</strong> move the mouse. Click the scene once to capture the cursor. Press <kbd>Esc</kbd> to release it.</li>
+                    <li class="help-mobile"><strong>Move &amp; look:</strong> use the left joystick to walk and the right joystick to look around.</li>
+                    <li><strong>The music:</strong> <span class="help-verb">click</span> the speakers or my iPhone to start the playlist. The whole room wakes up.</li>
+                    <li><strong>Autopilot:</strong> press <kbd>T</kbd> or the tour button (top-left) and the studio will show you around. Move to take back the controls.</li>
+                    <li><strong>Settings:</strong> the gear icon (top-right) adjusts movement, look sensitivity, and brightness.</li>
+                    <li><strong>Heading out?</strong> The Home button (top-right) takes you back to the main site.</li>
+                </ul>
+                <button class="piece-cancel" data-close>Thanks, let's dance!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dialog shown when a dancer or a studio prop is activated. -->
+    <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="dialog-title" class="piece-title">In the Studio</h2>
+                <p id="dialog-message" class="piece-subtitle"></p>
+                <button class="piece-enter dialog-primary" type="button" data-close>Keep dancing</button>
+                <button id="dialog-return-btn" class="piece-cancel dialog-return hidden" type="button">Back to the dance floor</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Celebration shown once the visitor completes every discovery. The peak
+         goodwill moment, so it doubles as a warm, low-pressure invitation to reach out. -->
+    <div id="complete-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="complete-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card complete-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <p class="complete-kicker" aria-hidden="true">★ &nbsp;All discoveries found&nbsp; ★</p>
+                <h2 id="complete-title" class="piece-title">You danced through all of it</h2>
+                <p class="piece-subtitle">Thank you for spending time in here. This little studio was built with love,
+                    by one person and an AI, for a wonderful Zumba instructor whose class really is the best hour of
+                    the week. If you would like a small world like this made for someone you love, or for your
+                    business, I would genuinely love to hear from you.</p>
+                <a id="complete-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
+                <button id="complete-share" class="piece-cancel complete-share" type="button">Share this</button>
+                <button class="piece-cancel" data-close>Keep exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Partway "reach out" invitation. Reuses the completion celebration's card
+         styling, but fires once the visitor is a few discoveries in (not at the
+         end), catching engaged visitors who may never find every corner. -->
+    <div id="nudge-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="nudge-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card complete-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few discoveries in&nbsp; ★</p>
+                <h2 id="nudge-title" class="piece-title">Enjoying the class?</h2>
+                <p class="piece-subtitle">Thanks for dancing along. This studio was built with love for a wonderful
+                    Zumba instructor. If you would like something like it built for someone you care about, I would
+                    love to hear from you. No rush, the music is not going anywhere.</p>
+                <a id="nudge-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
+                <button class="piece-cancel" data-close>Keep exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule-board close-up (opens when the board on the wall is clicked).
+         Reuses the whiteboard overlay ids and styles from the shared css; the
+         canvas is painted with the class board (discoveries + schedule note). -->
+    <div id="whiteboard-view" class="hidden" role="dialog" aria-modal="true" aria-label="The class schedule board, up close">
+        <div class="whiteboard-backdrop" data-close></div>
+        <div class="whiteboard-frame">
+            <div class="whiteboard-surface">
+                <canvas id="whiteboard-canvas" class="whiteboard-canvas"></canvas>
+            </div>
+            <div class="whiteboard-tray" aria-hidden="true"></div>
+        </div>
+        <p id="whiteboard-caption" class="whiteboard-caption"></p>
+        <p class="whiteboard-hint" aria-hidden="true">Drag to pan across the board</p>
+        <button class="whiteboard-close" aria-label="Step back from the schedule board" data-close>&times;</button>
+    </div>
+
+    <div id="touch-controls">
+        <div id="joystick-zone">
+            <div class="joystick-base-fixed">
+                <div class="joystick-thumb-fixed"></div>
+            </div>
+        </div>
+        <div id="look-joystick-zone">
+            <div class="joystick-base-fixed">
+                <div class="joystick-thumb-fixed"></div>
+            </div>
+        </div>
+        <div id="tap-zone"></div>
+    </div>
+
+    <!-- Floating controls -->
+    <!-- The Home button returns to the serving site's root in the same tab
+         (there is no featured business here; applySiteLinks keeps it in sync
+         with ROQUI_CONFIG.site.home). -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+    <!-- Autopilot tour toggle (keyboard shortcut T). Walks the visitor along
+         a guided route of the sights; any movement input hands control back. -->
+    <button id="autopilot-btn" class="ui-float menu-btn autopilot-btn" aria-pressed="false"
+        title="Autopilot tour (T)" aria-label="Toggle the autopilot tour (keyboard shortcut T)">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 19c-2.5-3 1-6.5 4.5-6h5c3.5 0 4.5-3 5.5-5.5" stroke-dasharray="2.6 2.2" />
+            <path d="M21.5 3.6l.6 7.5-6.1-2.4z" fill="currentColor" stroke="none" />
+            <circle cx="5" cy="19" r="2.2" fill="currentColor" stroke="none" />
+        </svg>
+    </button>
+    <button id="settings-btn" class="ui-float settings-btn" title="Movement settings" aria-label="Movement settings"
+        aria-controls="settings-panel" aria-expanded="false">
+        <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+        </svg>
+    </button>
+
+    <div id="settings-panel" class="settings-panel hidden">
+        <div class="settings-header">
+            <span>Settings</span>
+            <button id="settings-close" class="settings-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="settings-body">
+            <label class="settings-label">
+                Walk Speed
+                <input type="range" id="walk-speed-slider" min="2" max="14" step="0.5" value="6.5">
+                <span class="settings-value" id="walk-speed-value">6.5</span>
+            </label>
+            <label class="settings-label">
+                Look Sensitivity
+                <input type="range" id="look-speed-slider" min="0.5" max="4" step="0.1" value="1.0">
+                <span class="settings-value" id="look-speed-value">1.0</span>
+            </label>
+            <label class="settings-label">
+                Ambient Brightness
+                <input type="range" id="settings-light-slider" min="0" max="1.5" step="0.05" value="1">
+                <span class="settings-value" id="settings-light-value">100%</span>
+            </label>
+        </div>
+    </div>
+
+    <canvas id="game-canvas" aria-label="A walkable 3D Zumba class led by Roqui"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

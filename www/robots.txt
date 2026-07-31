@@ -1,0 +1,7 @@
+# SceneXP.com - welcome, crawlers. Everything worth reading is listed
+# in the sitemap. api.html is a telemetry endpoint with no content.
+User-agent: *
+Allow: /
+Disallow: /api.html
+
+Sitemap: https://www.scenexp.com/sitemap.xml

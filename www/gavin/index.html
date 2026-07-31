@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="Every spring Gavin releases ladybugs and praying mantises into the patio plants. Watch the Confederate Jasmine up close in 3D while ladybugs patrol, bees commute, and Gavin and his friends search the leaves.">
+    <meta name="theme-color" content="#2a5c2e">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK (Phase 5). Crawlers read these without running
+         JavaScript, so they cannot come from config.js and must stay literal
+         absolute URLs naming where this page is actually served (currently
+         www.scenexp.com/gavin; these are deployment metadata, not outbound
+         links). When serving from a new domain, update the URLs here:
+         canonical, og:url, og:image, twitter:image, and the JSON-LD ids
+         below. Everything else in the experience is relative, config-driven
+         (GAVIN_CONFIG.site in js/config.js), or derived from location. -->
+    <link rel="canonical" href="https://www.scenexp.com/gavin/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Gavin's Bug Patrol">
+    <meta property="og:description" content="A living 3D close-up of the jasmine plant where Gavin releases his ladybugs every spring. Sit still, look closely, and see who moved in.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/gavin/">
+    <meta property="og:locale" content="en_US">
+    <!-- WebP per preference. og-gavin.webp is a capture of the jasmine from
+         the visitor's viewpoint (from the specs/og-gavin.png capture, same flow as the
+         other experiences). If a platform (notably Facebook) won't render
+         the preview, swap the two image URLs below to .../og-gavin.jpg
+         (both live in assets/). -->
+    <meta property="og:image" content="https://www.scenexp.com/gavin/assets/og-gavin.webp?v=2">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A 3D close-up of a Confederate Jasmine in a cedar planter box: ladybugs and a praying mantis on the leaves, bees in the air, and three kids' faces peering in through the far side of the plant.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Gavin's Bug Patrol">
+    <meta name="twitter:description" content="A living 3D close-up of the jasmine plant where Gavin releases his ladybugs every spring. Look closely.">
+    <meta name="twitter:image" content="https://www.scenexp.com/gavin/assets/og-gavin.webp?v=2">
+    <meta name="twitter:image:alt" content="A 3D close-up of a Confederate Jasmine in a cedar planter box: ladybugs and a praying mantis on the leaves, bees in the air, and three kids' faces peering in through the far side of the plant.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/gavin/#website",
+      "url": "https://www.scenexp.com/gavin/",
+      "name": "Gavin's Bug Patrol",
+      "description": "A passive 3D close-up of the Confederate Jasmine where Gavin releases his ladybugs and praying mantises every spring.",
+      "inLanguage": "en-US"
+    }
+    </script>
+
+    <title>Gavin's Bug Patrol</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css" as="style">
+    <link rel="preload" href="css/experience.min.css" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css">
+    <link rel="stylesheet" href="css/experience.min.css">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text intro and links to the classic site. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Gavin's Bug Patrol</h1>
+            <p>This is a living 3D close-up of the Confederate Jasmine on the
+                developer's front patio, and it needs JavaScript to run. Every
+                spring his eleven-year-old son Gavin buys ladybugs and praying
+                mantis eggs from the garden center and releases them into the
+                patio plants. Then he and his friends spend weeks searching the
+                leaves for signs of them. In the 3D scene you hold one quiet
+                view of the jasmine while ladybugs patrol the leaves, two
+                mantises keep very still, ants march the planter box, a spider
+                minds her web, bees commute between the flowers, and Gavin and
+                two friends peer in through the far side of the plant. If you
+                would like a small world like this built for someone you love,
+                the developer would be glad to hear from you.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">GAVIN'S BUG PATROL</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- The welcome overlay. This experience is watched, not walked: there
+         are no movement controls to explain, so the overlay just sets the
+         scene and steps aside on the first click, tap, or keypress. -->
+    <div id="blocker">
+        <div id="instructions">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">Every spring, Gavin releases ladybugs into the patio plants</p>
+            <p class="click-prompt">Click to look closer</p>
+            <div class="controls-hint">
+                <span>SIT BACK</span> No controls needed. The garden does the moving.
+                <span>SPOT THEM</span> Three praying mantises are hiding. Click them when you find them.
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating controls -->
+    <!-- The Home button returns to the serving site's root in the same tab
+         (there is no featured business here; applySiteLinks keeps it in sync
+         with GAVIN_CONFIG.site.home). It is the only button on the page:
+         no settings cog and no autopilot, because there is nothing to
+         adjust and nowhere to be driven. -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+    <!-- Mantis Watch: the find-me score, updated by main.js. -->
+    <div id="mantis-chip" class="mantis-chip" role="status" aria-live="polite"></div>
+
+    <!-- Dialog shown when something in the garden is clicked: the host's
+         voice, telling the story of Gavin's bug patrol one prop at a time. -->
+    <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="dialog-title" class="piece-title">In the Garden</h2>
+                <p id="dialog-message" class="piece-subtitle"></p>
+                <button class="piece-enter dialog-primary" type="button" data-close>Keep watching</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="game-canvas" aria-label="A living 3D close-up of a Confederate Jasmine plant: ladybugs, praying mantises, ants, a spider, and bees move through the leaves while Gavin and two friends peer in from the far side"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

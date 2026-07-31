@@ -1,0 +1,32 @@
+# SceneXP
+
+> SceneXP.com hosts custom 3D experiences built with Three.js and browser-native
+> HTML, CSS, and JavaScript. Each experience is a small explorable world made to
+> honor a person, place, or business. Everything runs in the browser with no app
+> or download, and the project is open source under the MIT license.
+
+## Pages
+
+- [Home and experience directory](https://www.scenexp.com/): browse every hosted 3D experience.
+- [Contact](https://www.scenexp.com/contact.html): request a custom 3D experience for someone you love or for your business.
+- [Contribute](https://www.scenexp.com/contribute.html): developer guide for building a new experience with the shared parts library and submitting it as a GitHub pull request. Covers the three interaction models (walkable first-person worlds with mobile joysticks, fixed-camera composed views with pan and zoom plus swipe and pinch, and hands-off rides with play and pause) and the optional delight layers (discovery checklists, tap-to-talk prop dialogs, guided autopilot tours, and featured-business links).
+- [Privacy](https://www.scenexp.com/privacy.html): no accounts, no cookies, no third-party trackers, anonymized first-party usage counts only.
+- [Terms](https://www.scenexp.com/terms.html): plain-language terms of service covering site use, the MIT license and Three.js attribution, and the hosted Seed to Seed and Interstate Tire logo permissions.
+
+## Experiences
+
+- [A Ride on the NCR Trail](https://www.scenexp.com/dad/): a quiet walkable 3D stretch of Maryland's NCR Trail, built in memory of a dad who rode it nearly every weekend.
+- [Putt Putt with Mom and Dad](https://www.scenexp.com/family/): a playable 3D round of pirate mini golf in Ocean City, Maryland, built from a favorite family summer memory.
+- [Zumba with Roqui](https://www.scenexp.com/roqui/): a joyful 3D Zumba class built to honor a wonderful instructor at the Matt Griffin YMCA.
+- [The Seed to Seed Garden](https://www.scenexp.com/seedtoseed/): a walkable 3D backyard vegetable garden built for Seed to Seed, a home vegetable gardening company, with raised beds, a greenhouse, and a link to their services.
+- [The Interstate Tire Shop](https://www.scenexp.com/interstate/): a walkable 3D tire shop built for Interstate Tire in historic Cockeysville, Maryland, with a garage to explore and the 1892 Pennsylvania RR freight depot on Railroad Ave.
+- [Steve's Home Office](https://www.scenexp.com/steve/): a walkable 3D model of the home office in Steve's house where SceneXP itself gets built, with the developer at his standing desk, the room's own source code on the monitor, birds visiting the backyard fence, and a tuxedo cat asleep by the window.
+- [Gavin's Bug Patrol](https://www.scenexp.com/gavin/): a passive 3D close-up of the Confederate Jasmine where Steve's eleven-year-old son Gavin releases ladybugs and praying mantises every spring, with a fixed viewpoint, a day and night shift of garden bugs, and three hidden mantises to spot.
+- [Jamar's Karaoke Night](https://www.scenexp.com/jamar/): a passive 3D karaoke night at the corner bar, built as a birthday present for Steve's best friend Jamar, who has the microphone and the corner stage, with a rolling lyrics screen, a jukebox for picking his next song, and friends raising a toast from the booth.
+- [The Mandelbrot Set](https://www.scenexp.com/mandelbrot/): a 3D visit to the Mandelbrot set floating in a starfield, honoring Benoit Mandelbrot, with an auto zoom that dives a 3D tunnel of glowing fractal terrain hundreds of billions of times deep, eleven selectable destinations on the burning edge, and a color cycle that drifts from orange to violet on the way down.
+
+## Notes
+
+- Custom experiences serve two audiences equally: tributes to people and memories, and standout marketing experiences for businesses.
+- Experiences work on desktop and mobile in any modern browser.
+- To request a custom experience, use the contact page. The email address is revealed in the browser to deter scrapers.

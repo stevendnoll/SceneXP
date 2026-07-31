@@ -1,0 +1,32 @@
+#!/bin/sh
+# SceneXP pre-push hook.
+#
+# Runs the full Jest coverage suite and rebuilds the minified assets before
+# anything reaches the remote, mirroring what CI enforces. This hook is a
+# convenience layer, and CI remains the source of truth.
+#
+# Enable it once per clone with:  git config core.hooksPath .githooks
+# Skip it for a one-off push with:  git push --no-verify
+
+set -e
+
+# Git hands this hook the list of pushed refs on stdin. Nothing below needs
+# that list, and closing the stream keeps child processes from reading it.
+exec </dev/null
+
+echo "pre-push: running the Jest suite with coverage..."
+npm run test:coverage
+
+echo "pre-push: rebuilding minified assets..."
+before=$(git status --porcelain)
+npm run build
+after=$(git status --porcelain)
+
+if [ "$before" != "$after" ]; then
+  echo ""
+  echo "pre-push: the build refreshed minified assets that were out of date."
+  echo "pre-push: please review the changes, commit them, and push again."
+  exit 1
+fi
+
+echo "pre-push: all checks passed."

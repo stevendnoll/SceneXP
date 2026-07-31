@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="Request a custom 3D experience for someone you love or for your business. Reach out and your host will be glad to hear the story.">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f7fb">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e0f14">
+    <meta name="author" content="Steve Noll">
+
+    <link rel="canonical" href="https://www.scenexp.com/contact.html">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Contact | SceneXP">
+    <meta property="og:description" content="Request a custom 3D experience for someone you love or for your business. Your host would be glad to hear the story.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/contact.html">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:image" content="https://www.scenexp.com/assets/og-image.webp?v=1">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="An invitation to request your own custom 3D experience from SceneXP.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Contact | SceneXP">
+    <meta name="twitter:description" content="Request a custom 3D experience for someone you love or for your business.">
+    <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.webp?v=1">
+    <meta name="twitter:image:alt" content="An invitation to request your own custom 3D experience from SceneXP.">
+
+    <!-- Structured data. JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "ContactPage",
+      "@id": "https://www.scenexp.com/contact.html#contactpage",
+      "url": "https://www.scenexp.com/contact.html",
+      "name": "Contact SceneXP",
+      "description": "Request a custom 3D experience for someone you love or for your business.",
+      "inLanguage": "en-US",
+      "isPartOf": { "@id": "https://www.scenexp.com/#website" }
+    }
+    </script>
+
+    <title>Contact | SceneXP</title>
+
+    <link rel="preload" href="/css/site.min.css?v=1" as="style">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/css/site.min.css?v=1">
+
+    <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
+    <script src="/js/theme.min.js?v=1"></script>
+    <script src="/js/nav.min.js?v=1" defer></script>
+    <!-- Solves a small proof of work, then reveals the email address. -->
+    <script type="module" src="/js/contact.min.js?v=1"></script>
+</head>
+
+<body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+
+    <header class="site-header">
+        <div class="container site-header-inner">
+            <a class="brand" href="/">
+                <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+                    <defs>
+                        <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#6c4cf1" />
+                            <stop offset="1" stop-color="#06b6d4" />
+                        </linearGradient>
+                    </defs>
+                    <rect width="32" height="32" rx="8" fill="url(#brand-grad)" />
+                    <path d="M8 22 14 10l4 8 3-5 3 9" fill="none" stroke="#ffffff" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                SceneXP
+            </a>
+            <nav id="site-nav" class="site-nav" aria-label="Main">
+                <ul>
+                    <li><a href="/#experiences">Experiences</a></li>
+                    <li><a href="/contact.html" aria-current="page">Contact</a></li>
+                    <li><a href="/contribute.html">Contribute</a></li>
+                </ul>
+            </nav>
+            <button id="nav-toggle" class="nav-toggle" type="button" hidden
+                aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+                <svg class="icon-nav-open" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+                <svg class="icon-nav-close" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
+            </button>
+            <button id="theme-toggle" class="theme-toggle" type="button" hidden aria-label="Theme">
+                <svg class="icon-theme-light" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <circle cx="12" cy="12" r="4.5" fill="currentColor" stroke="none" />
+                    <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19" />
+                </svg>
+                <svg class="icon-theme-dark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" fill="currentColor" />
+                </svg>
+                <svg class="icon-theme-system" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main id="main">
+        <div class="page-hero">
+            <div class="container">
+                <h1>We would love to hear your story</h1>
+                <p>Every experience begins the same way: someone knows a person who deserves a world, or a
+                    business that deserves to be more than another template website. If that sounds like you,
+                    please reach out. There is no form to fill and no obligation at all, just a friendly
+                    conversation about a story worth telling.</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="container prose">
+                <h2>What happens after you say hello</h2>
+                <ol>
+                    <li><strong>You share the story.</strong> A few sentences about the person, place, or
+                        business you have in mind is plenty to start.</li>
+                    <li><strong>We sketch the world together.</strong> You will get ideas for the setting, the
+                        people in it, and the little touches that make it feel true.</li>
+                    <li><strong>The world gets built and polished.</strong> You review it as it takes shape,
+                        and nothing ships until it feels right to you.</li>
+                    <li><strong>You share the link.</strong> The finished experience lives at its own address,
+                        ready to be a gift, a tribute, or the front door of your business.</li>
+                </ol>
+
+                <h2>Email your host</h2>
+                <p>To keep this address away from spam robots, your browser solves a tiny puzzle before the
+                    email appears. It takes a blink of an eye.</p>
+            </div>
+
+            <div class="container">
+                <!-- contact.js reveals this box, solves the proof of work, and
+                     inserts the mailto link. The address never appears in the HTML. -->
+                <div id="contact-reveal" class="contact-reveal" hidden>
+                    <h2>Direct email</h2>
+                    <p id="contact-reveal-status" class="contact-reveal-status" role="status" aria-live="polite">
+                    </p>
+                    <p id="contact-reveal-link" class="contact-reveal-link"></p>
+                    <p class="contact-reveal-note">A quick note on the address: SceneXP is a project of
+                        Continuum Commerce LLC, the legal entity behind the site, so your email goes to
+                        the company inbox.</p>
+                </div>
+
+                <noscript>
+                    <div class="noscript-note">
+                        <p>The email address appears here once JavaScript is allowed to run. That small step is
+                            what keeps the address out of the hands of spam robots. Thank you for
+                            understanding, and please do come back with JavaScript enabled.</p>
+                    </div>
+                </noscript>
+            </div>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container site-footer-inner">
+            <div class="footer-brand">
+                <a class="brand" href="/">
+                    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+                        <defs>
+                            <linearGradient id="brand-grad-footer" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0" stop-color="#6c4cf1" />
+                                <stop offset="1" stop-color="#06b6d4" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="32" height="32" rx="8" fill="url(#brand-grad-footer)" />
+                        <path d="M8 22 14 10l4 8 3-5 3 9" fill="none" stroke="#ffffff" stroke-width="2.5"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    SceneXP
+                </a>
+                <p>Custom 3D experiences for the people you love and the businesses you are proud of. Thank
+                    you for visiting.</p>
+            </div>
+            <nav class="footer-nav" aria-label="Explore">
+                <h2>Explore</h2>
+                <ul>
+                    <li><a href="/#experiences">Experiences</a></li>
+                    <li><a href="/contact.html">Contact</a></li>
+                    <li><a href="/contribute.html">Contribute</a></li>
+                </ul>
+            </nav>
+            <nav class="footer-nav" aria-label="Project">
+                <h2>Project</h2>
+                <ul>
+                    <!-- Placeholder repo URL: swap for the real one when it is published. -->
+                    <li><a href="/privacy.html">Privacy</a></li>
+                    <li><a href="/terms.html">Terms</a></li>
+                </ul>
+            </nav>
+            <div class="footer-meta">
+                <p>Built with Three.js and browser-native HTML, CSS, and JavaScript. Open source under the MIT
+                    license.</p>
+                <p>SceneXP © 2026 <a href="https://www.continuumcommercellc.com/" title="View the Continuum Commerce LLC website" target="_blank" rel="noopener noreferrer">Continuum Commerce LLC</a>.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+
+</html>
