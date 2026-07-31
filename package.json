@@ -5,10 +5,10 @@
   "homepage": "https://www.scenexp.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PLACEHOLDER/scenexp.git"
+    "url": "git+https://github.com/stevendnoll/SceneXP.git"
   },
   "bugs": {
-    "url": "https://github.com/PLACEHOLDER/scenexp/issues"
+    "url": "https://github.com/stevendnoll/SceneXP/issues"
   },
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
