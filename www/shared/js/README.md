@@ -52,6 +52,45 @@ Rules that keep the pin honest:
   (scene 1.0.1 with controls 1.0.0) reintroduces the coupling the versions
   exist to prevent.
 
+## The shared stylesheet is versioned differently
+
+The freeze rule above is about the JavaScript parts, and it exists because
+they import each other by relative specifier. A browser resolving
+`./scene-1.0.0.min.js` gets whatever that filename holds today, so editing a
+shipped version in place would silently change every experience pinned to it,
+with no way for a world to opt out. That is the exact outcome the pin exists
+to prevent, so a JavaScript change to a shipped version always cuts the next
+version.
+
+`www/shared/css/styles-1.0.0.css` works the other way around. Nothing imports
+it. Each page links it by name, and a change to the shared chrome (the welcome
+screen, the loading screen, the crosshair, the joysticks, the floating
+buttons, the panels) is normally meant to reach every experience at once. The
+UI theme tokens were added this way. Cutting a version for that would mean
+editing every experience page regardless, and then serving two near-identical
+stylesheets forever. So the shared stylesheet is edited in place, and the
+pages retire their cached copy with a query instead:
+
+```html
+<link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
+<link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
+```
+
+That is the same `?v=<n>` convention the 2D pages already use for
+`/css/site.min.css` and `/js/nav.min.js`. Three things to get right:
+
+- Bump the number on BOTH the preload and the stylesheet line. A preload only
+  satisfies the real request when the URLs match exactly, so a mismatch costs
+  every visitor a second download and logs an unused-preload warning.
+- Only bust what actually changed. A query on an untouched file buys nothing
+  and costs a needless re-download, so a file carrying one reads as "this has
+  been revised". An experience's own `css/experience.css` follows the same
+  rule.
+- The filename semver still moves for a stylesheet change that should reach
+  some experiences and not others. That is a real version cut, exactly like
+  the JavaScript: copy the file, point the pages that want it at the new name,
+  and leave the rest pinned where they are.
+
 ## Init order contract
 
 ```js
