@@ -4,6 +4,10 @@
 
 Custom 3D experiences, right in your browser. Built with [Three.js](https://threejs.org/) and nothing else but browser-native HTML, CSS, and JavaScript.
 
+[![SceneXP.com, custom 3D experiences, right in your browser](www/assets/og-image.jpg)](https://www.scenexp.com/)
+
+Try the 3D Mandelbrot zoom.
+
 [![A glowing spiral of warm color deep inside the Mandelbrot set, captured mid-dive in the Mandelbrot experience](www/mandelbrot/assets/og-mandelbrot.jpg)](https://www.scenexp.com/mandelbrot/)
 
 [SceneXP.com](https://www.scenexp.com/) is a live website hosting a growing collection of custom 3D experiences, each one built to honor a person, place, or business. The repository currently contains nine experiences (`www/dad`, `www/family`, `www/roqui`, `www/seedtoseed`, `www/interstate`, `www/steve`, `www/gavin`, `www/jamar`, and `www/mandelbrot`) along with the shared 3D experience engine in `www/shared` that powers them all.
