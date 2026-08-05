@@ -1,19 +1,20 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * Coverage for the per-experience listings.js placeholder modules (dad,
- * family, roqui, steve). The realtor build rendered for-sale homes on lit
- * podiums here; these experiences keep the module as a deliberate stub so
- * the raycast seam survives -- an empty 'listings' container group, a
- * memoized initListings(), and an inert remainder of the podium API.
+ * Coverage for the per-experience listings.js placeholder modules. The
+ * realtor build rendered for-sale homes on lit podiums here; every
+ * experience that inherited the module keeps it as a deliberate stub so the
+ * raycast seam survives -- an empty 'listings' container group, a memoized
+ * initListings(), and an inert remainder of the podium API.
  *
- * The interstate and seedtoseed copies carry real content and are covered
- * by their own suites; this one pins the stub contract for the rest, so a
- * future edit that grows behavior (or breaks the memo) fails here first.
+ * All six copies are the same code (only their comments differ about what
+ * might one day fill the seam), so they are held to one contract here. A
+ * future edit that grows behavior in any of them, or breaks the memo, fails
+ * here first.
  */
 import { jest } from '@jest/globals';
 import { installThree, uninstallAll } from './helpers/three-stub.mjs';
 
-const EXPERIENCES = ['dad', 'family', 'roqui', 'steve'];
+const EXPERIENCES = ['dad', 'family', 'interstate', 'roqui', 'seedtoseed', 'steve'];
 
 beforeEach(() => {
   installThree();
