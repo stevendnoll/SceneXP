@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="ember">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="Fly a single ship in orbit above a massive Earth and defend the installations on Earth and the Moon from an incoming Martian fleet. A small browser game honoring the first generation of video game designers and developers.">
+    <meta name="theme-color" content="#1b1410">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they cannot come from config.js and must stay literal absolute URLs
+         naming where this page is actually served (currently
+         www.scenexp.com/earthdefense). When serving from a new domain, update
+         the URLs here: canonical, og:url, og:image, twitter:image, and the
+         JSON-LD id below. Everything else is relative or config-driven. -->
+    <link rel="canonical" href="https://www.scenexp.com/earthdefense/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Earth Defense">
+    <meta property="og:description" content="Fly in orbit above a massive Earth and hold the line against an incoming Martian fleet. No fire button, no tutorial, one sitting.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/earthdefense/">
+    <meta property="og:locale" content="en_US">
+    <!-- PLACEHOLDER until M9: the capture is made from the opening frame once
+         the M1 gate settles the composition. -->
+    <meta property="og:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=1">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="The view from a ship in low Earth orbit: Earth's blue limb curves across the bottom of the frame, Mars sits ahead as a small red disc, and the Moon hangs to the right against a field of stars.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Earth Defense">
+    <meta name="twitter:description" content="Fly in orbit above a massive Earth and hold the line against an incoming Martian fleet.">
+    <meta name="twitter:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=1">
+    <meta name="twitter:image:alt" content="The view from a ship in low Earth orbit: Earth's blue limb curves across the bottom of the frame, Mars ahead as a small red disc, and the Moon to the right against a field of stars.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "@id": "https://www.scenexp.com/earthdefense/#game",
+      "url": "https://www.scenexp.com/earthdefense/",
+      "name": "Earth Defense",
+      "description": "A small browser-based 3D space game. Pilot one ship in orbit above Earth and defend the installations on Earth and the Moon from an incoming Martian fleet. Honors the first generation of video game designers and developers.",
+      "genre": ["Action", "Space"],
+      "gamePlatform": "Web browser",
+      "applicationCategory": "Game",
+      "operatingSystem": "Any",
+      "inLanguage": "en-US",
+      "isAccessibleForFree": true
+    }
+    </script>
+
+    <title>Earth Defense</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
+    <link rel="preload" href="css/experience.min.css" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
+    <link rel="stylesheet" href="css/experience.min.css">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the section links without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text intro and links to the classic site. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Earth Defense</h1>
+            <p>This is a small 3D space game, which needs JavaScript to run. You
+                fly a single ship in orbit above a massive Earth. The Moon is on
+                its slow lap overhead, Mars sits far ahead as a small red disc,
+                and a Martian fleet is already on its way in. Your job is to
+                defend the installations on Earth and the Moon, and there is no
+                fire button to learn: line a raider up in the middle of your
+                view and your guns take care of the rest.</p>
+            <p>It is built in honor of the first generation of video game
+                designers and developers, the people who worked out, with almost
+                nothing to work with, that a screen could be a place you go. We
+                have left them unnamed on purpose. The debt is a shared one.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">EARTH DEFENSE</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <div id="blocker">
+        <div id="instructions">
+            <p class="title">EARTH DEFENSE</p>
+            <p class="subtitle">For the people who first made a screen into a place you could go</p>
+            <p class="click-prompt">Click to take the helm</p>
+            <div class="controls-hint">
+                <span>M1</span> The view only, for now
+            </div>
+        </div>
+    </div>
+
+    <div id="hud">
+        <div class="crosshair" aria-hidden="true"></div>
+    </div>
+
+    <!-- Floating controls. M1 ships the Home button only; the settings cog and
+         its look-sensitivity panel arrive with the flight model at M2. -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+
+    <canvas id="game-canvas" aria-label="The view from a ship in orbit above Earth, with the Moon and Mars in the distance"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

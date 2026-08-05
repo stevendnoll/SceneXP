@@ -1,0 +1,62 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * world.js - Builds the Earth Defense world from its config.
+ *
+ * The experience half of the M1 opening frame: it turns EARTHDEFENSE_CONFIG's
+ * `bodies` array into three textured spheres and puts the Moon on its orbit.
+ * Every number comes from config, so this file holds no scale knowledge of its
+ * own and the M1 gate can retune the frame without touching code.
+ *
+ * The structures on Earth and the Moon arrive at M3, along with surface
+ * anchors and collision. This file is deliberately thin until then.
+ */
+
+import { EARTHDEFENSE_CONFIG, spawnPosition } from './config.min.js';
+import {
+    initBodies, createBody, orbitBody, updateBodies,
+    getBody, bodyPositions, getOccluders
+} from '../../shared/js/bodies-1.0.0.min.js';
+
+let group = null;
+
+/** Build every body and return the group to add to the scene.
+ *  `manager` is an optional THREE.LoadingManager so the loading screen can
+ *  report texture progress. */
+export function initWorld(scene, manager) {
+    const config = EARTHDEFENSE_CONFIG;
+    group = initBodies({ groupName: config.rootName, manager });
+
+    for (const spec of config.bodies) {
+        createBody(spec);
+    }
+    // Orbits are wired after every body exists, so a child can name a parent
+    // that appears later in the array.
+    for (const spec of config.bodies) {
+        if (spec.orbit) orbitBody(spec.id, spec.orbit.parent, spec.orbit);
+    }
+
+    if (scene && group) scene.add(group);
+    return group;
+}
+
+/** Advance the world by one frame. */
+export function updateWorld(deltaTime) {
+    updateBodies(deltaTime);
+}
+
+/** Place a camera at the composed spawn viewpoint: `spawn.distance` from
+ *  Earth's centre, `spawn.axisAngle` off the anti-Mars axis, looking straight
+ *  down -Z at Mars. See the spawn block in config.js for why 60 degrees. */
+export function placeCameraAtSpawn(camera, config = EARTHDEFENSE_CONFIG) {
+    if (!camera) return;
+    const p = spawnPosition(config);
+    camera.position.set(p.x, p.y, p.z);
+    camera.up.set(0, 1, 0);
+    // Look along -Z from the spawn point. Aiming at Mars itself would tilt the
+    // nose down by a couple of degrees, which is close but not the composition
+    // the spawn angle was solved for.
+    camera.lookAt(p.x, p.y, p.z - 1000);
+}
+
+export function getWorldGroup() { return group; }
+export { getBody, bodyPositions, getOccluders };

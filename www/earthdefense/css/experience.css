@@ -1,0 +1,54 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+/*
+ * experience.css - Earth Defense specifics, loaded after the shared stylesheet.
+ *
+ * The shared chrome (loading screen, welcome overlay, crosshair, floating
+ * buttons, panels) is already themed by data-ui-theme="ember" on <html>, so
+ * this file only carries what a game in orbit needs on top of it, and reads
+ * the same --ui-* tokens so everything stays in step.
+ *
+ * M1 scope: the deep-space backdrop and the reticle. The throttle track
+ * arrives at M2, the HUD at M5, and the cockpit at M7.
+ */
+
+/* Deep space rather than the shared near-black, so the loading screen and the
+   welcome overlay match the scene waiting behind them instead of flashing a
+   lighter grey at the hand-off. */
+#loading-screen,
+#blocker {
+    background: radial-gradient(ellipse at 50% 78%, #0d1524 0%, #04060d 55%, #000005 100%);
+}
+
+/* The reticle is the weapon: from M4 the ship fires at whatever sits inside it,
+   so it reads as a precise instrument rather than a decorative dot. Its locked
+   state changes SHAPE as well as colour (added at M4), because no information
+   in this experience may be carried by colour alone. */
+#hud .crosshair {
+    opacity: 0.75;
+}
+
+/* A game canvas should never show a text cursor or a selection highlight. */
+#game-canvas {
+    cursor: crosshair;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+/* The welcome overlay's kicker line sits under the title and carries the
+   dedication, which is longer than the usual subtitle, so give it room to
+   breathe on a narrow phone rather than letting it crowd the prompt. */
+#instructions .subtitle {
+    max-width: 30ch;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* The scene keeps turning (it is the experience), but nothing in the
+       chrome should animate for a visitor who has asked us not to. */
+    #loading-screen .loader-progress {
+        transition: none;
+    }
+}
