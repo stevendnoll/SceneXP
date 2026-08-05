@@ -2,27 +2,32 @@
 /**
  * main.js - Application entry point for the Earth Defense experience.
  *
- * M1 SCOPE. This milestone builds the opening frame and nothing else. There is
- * no flight, no targeting, no fleet, and no cockpit: the camera is parked at
- * the composed spawn viewpoint and the world turns in front of it. The gate
- * for M1 is a judgement about that frame, so everything downstream waits until
- * the scale numbers in config.js have stopped moving.
+ * M2 SCOPE. The opening frame from M1 is now flyable. The flight model, every
+ * input source, the settings cog, the pause panel, and the soft perimeter are
+ * wired. There is still no targeting, no fleet, and no cockpit.
  *
- * The loop does run, even though a still frame would satisfy the gate on its
- * own. It costs a few lines and it makes two things checkable by eye that a
- * screenshot cannot show: that the Moon is really on its orbit rather than
- * parked at a hard-coded point, and that a resize reframes cleanly.
+ * This file owns the seam between the shared parts and the scene: flight
+ * (flight-1.0.0) deals only in plain numbers, and this is where those numbers
+ * become a camera. That split is deliberate. It keeps every line of the flight
+ * maths testable with real values, and it means the same module could fly
+ * something other than a camera in a later game.
  *
- * Arriving at M2: initFlight and the throttle. Arriving at M3: the structures.
- * The init order this file will grow into is in the PRD, section 9.6.
+ * Arriving at M3: structures, real collision, and surface anchors. The init
+ * order this file will grow into is in the PRD, section 9.6.
  */
 
-import { EARTHDEFENSE_CONFIG } from './config.min.js';
+import { EARTHDEFENSE_CONFIG, spawnPosition } from './config.min.js';
 import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
 import {
-    initSpace, renderSpace, resizeSpace, getRenderer, getWorldCamera, isTouchDevice
+    initSpace, renderSpace, resizeSpace, setMaxPixelRatio,
+    getRenderer, getWorldCamera, isTouchDevice
 } from '../../shared/js/space-1.0.0.min.js';
-import { initWorld, updateWorld, placeCameraAtSpawn } from './world.min.js';
+import {
+    initFlight, updateFlight, getFlightState, setTargetSpeedFraction,
+    setLookSensitivity, setInvertPitch, setPerimeter, onPerimeterChange,
+    setConstrainPosition, setPaused
+} from '../../shared/js/flight-1.0.0.min.js';
+import { initWorld, updateWorld, bodyPositions } from './world.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
@@ -30,16 +35,26 @@ import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/tele
 const state = {
     isRunning: false,
     isLoaded: false,
+    isPaused: false,
     lastTime: 0,
     isMobile: false
 };
 
-let canvas, loadingScreen, blocker;
+const settings = {
+    lookSensitivity: 1.0,
+    invertPitch: false,
+    reducedFx: false
+};
+
+let canvas, loadingScreen, blocker, touchControls;
+let throttleReadout, perimeterNotice, flightStatus;
+let settingsPanel, settingsBtn, pauseModal;
 let scene = null;
 let cleanupController = null;
 
 let _sessionStart = 0;
 let _sessionEnded = false;
+let _announcedThrottle = null;
 
 // ---- Initialization -------------------------------------------------------
 
@@ -50,26 +65,40 @@ async function init() {
     canvas = document.getElementById('game-canvas');
     loadingScreen = document.getElementById('loading-screen');
     blocker = document.getElementById('blocker');
+    touchControls = document.getElementById('touch-controls');
+    throttleReadout = document.getElementById('throttle-readout');
+    perimeterNotice = document.getElementById('perimeter-notice');
+    flightStatus = document.getElementById('flight-status');
+    settingsPanel = document.getElementById('settings-panel');
+    settingsBtn = document.getElementById('settings-btn');
+    pauseModal = document.getElementById('pause-modal');
 
     if (!canvas) return;
 
+    if (state.isMobile) {
+        document.body.classList.add('is-touch-device');
+        if (touchControls) touchControls.classList.add('visible');
+    }
+    applyHelpVisibility();
     applySiteLinks();
 
-    // Soft bot deterrent, solved before the scene builds (or reused from
-    // sessionStorage). The hash tags every telemetry ping.
     updateLoadingStatus('Verifying your browser…', 10);
     const proof = await getProofOfWork(EARTHDEFENSE_CONFIG.proofOfWork);
     setProofHash(proof && proof.hash);
 
     updateLoadingStatus('Initializing renderer…', 25);
     scene = initSpace(canvas, EARTHDEFENSE_CONFIG);
+    // Yaw then pitch, with no third angle, is what keeps roll out of the scene.
+    const camera = getWorldCamera();
+    if (camera && camera.rotation) camera.rotation.order = 'YXZ';
 
     updateLoadingStatus('Placing the planets…', 45);
     await buildWorldWithTextures();
 
-    placeCameraAtSpawn(getWorldCamera(), EARTHDEFENSE_CONFIG);
+    updateLoadingStatus('Warming the engines…', 88);
+    loadSettings();
+    startFlight();
 
-    updateLoadingStatus('Scattering the stars…', 85);
     setupEventListeners();
 
     updateLoadingStatus('Ready', 100);
@@ -87,13 +116,6 @@ async function init() {
     getRenderer().setAnimationLoop(animate);
 }
 
-/** Build the world behind a THREE.LoadingManager so the loading bar reports
- *  real texture progress, and resolve once the three planet maps are in.
- *
- *  Guarded two ways: onError still resolves (a missing texture should cost the
- *  visitor a grey planet, not a page that never finishes loading), and a
- *  timeout resolves regardless, so a stalled request cannot strand anyone on
- *  the loading screen. */
 function buildWorldWithTextures() {
     return new Promise((resolve) => {
         let settled = false;
@@ -112,11 +134,71 @@ function buildWorldWithTextures() {
         manager.onError = done;
 
         initWorld(scene, manager);
-
-        // If nothing was queued (or the browser served everything from cache
-        // before the handlers attached), onLoad may never fire.
         setTimeout(done, 8000);
     });
+}
+
+/** Hand the flight model its spawn, its settings, and the two boundaries that
+ *  keep a visitor inside the playable volume. */
+function startFlight() {
+    const config = EARTHDEFENSE_CONFIG;
+    initFlight({
+        flight: { ...config.flight, ...settings },
+        spawn: {
+            position: spawnPosition(config),
+            yaw: config.spawn.yaw,
+            pitch: config.spawn.pitch
+        },
+        elements: {
+            canvas,
+            throttleZone: document.getElementById('throttle-zone'),
+            throttleTrack: document.getElementById('throttle-track'),
+            throttleFill: document.getElementById('throttle-fill'),
+            throttleThumb: document.getElementById('throttle-thumb'),
+            lookZone: document.getElementById('look-joystick-zone'),
+            lookThumb: document.getElementById('look-thumb')
+        }
+    });
+
+    // The outer boundary: a polite fade rather than a wall (PRD 5.6).
+    setPerimeter({ x: 0, y: 0, z: 0 }, config.perimeter.radius, config.perimeter.fade);
+    onPerimeterChange(showPerimeterNotice);
+
+    // The inner boundary. Real collision arrives at M3; this is the minimum
+    // needed for the M2 playtest to be about how flying FEELS rather than
+    // about the fact that you can fly through the planet.
+    setConstrainPosition(keepAbovePlanets);
+}
+
+/** Push the ship back out to a standoff altitude if it would enter a body.
+ *  Experience code rather than shared: the real version at M3 lives in
+ *  bodies-1.0.0 and knows about penetration depth and sliding. */
+function keepAbovePlanets(next) {
+    const floor = EARTHDEFENSE_CONFIG.altitudeFloor;
+    const centres = bodyPositions();
+    for (const spec of EARTHDEFENSE_CONFIG.bodies) {
+        const c = centres[spec.id];
+        if (!c) continue;
+        const dx = next.x - c.x, dy = next.y - c.y, dz = next.z - c.z;
+        const d = Math.hypot(dx, dy, dz);
+        const minimum = spec.radius + floor;
+        if (d > 0 && d < minimum) {
+            const k = minimum / d;
+            return { x: c.x + dx * k, y: c.y + dy * k, z: c.z + dz * k };
+        }
+    }
+    return next;
+}
+
+function showPerimeterNotice(outside) {
+    if (!perimeterNotice) return;
+    if (outside) {
+        perimeterNotice.textContent = 'Returning to the defensive perimeter';
+        perimeterNotice.classList.remove('hidden');
+        track('perimeter-reached');
+    } else {
+        perimeterNotice.classList.add('hidden');
+    }
 }
 
 function updateLoadingStatus(message, progress) {
@@ -126,9 +208,12 @@ function updateLoadingStatus(message, progress) {
     if (progressEl) progressEl.style.width = `${progress}%`;
 }
 
-/** Wire the outward-facing links from config, so config stays the single home
- *  for these values. An equivalent fallback is baked into the HTML for the
- *  no-JS path. */
+function applyHelpVisibility() {
+    if (!pauseModal) return;
+    pauseModal.querySelectorAll('.help-desktop').forEach(el => { el.hidden = state.isMobile; });
+    pauseModal.querySelectorAll('.help-mobile').forEach(el => { el.hidden = !state.isMobile; });
+}
+
 function applySiteLinks() {
     const site = EARTHDEFENSE_CONFIG.site;
     const home = document.getElementById('home-btn');
@@ -141,6 +226,105 @@ function applySiteLinks() {
     }
 }
 
+// ---- Settings -------------------------------------------------------------
+
+function readStored(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        return raw === null ? fallback : raw;
+    } catch (e) {
+        return fallback;   // storage disabled or full: run with the defaults
+    }
+}
+
+function writeStored(key, value) {
+    try {
+        localStorage.setItem(key, String(value));
+    } catch (e) { /* not worth interrupting a flight over */ }
+}
+
+function loadSettings() {
+    const keys = EARTHDEFENSE_CONFIG.storage;
+    const sensitivity = parseFloat(readStored(keys.sensitivity, ''));
+    if (Number.isFinite(sensitivity) && sensitivity > 0) settings.lookSensitivity = sensitivity;
+    settings.invertPitch = readStored(keys.invertPitch, 'false') === 'true';
+    settings.reducedFx = readStored(keys.reducedFx, 'false') === 'true';
+    applyReducedFx();
+}
+
+function applyReducedFx() {
+    setMaxPixelRatio(settings.reducedFx ? 1.5 : EARTHDEFENSE_CONFIG.space.maxPixelRatio);
+}
+
+function wireSettings(signal) {
+    const keys = EARTHDEFENSE_CONFIG.storage;
+    const slider = document.getElementById('look-speed-slider');
+    const value = document.getElementById('look-speed-value');
+    const invert = document.getElementById('invert-pitch-toggle');
+    const reduced = document.getElementById('reduced-fx-toggle');
+    const close = document.getElementById('settings-close');
+
+    if (slider) {
+        slider.value = String(settings.lookSensitivity);
+        if (value) value.textContent = settings.lookSensitivity.toFixed(1);
+        slider.addEventListener('input', () => {
+            settings.lookSensitivity = parseFloat(slider.value);
+            if (value) value.textContent = settings.lookSensitivity.toFixed(1);
+            setLookSensitivity(settings.lookSensitivity);
+            writeStored(keys.sensitivity, settings.lookSensitivity);
+        }, { signal });
+    }
+    if (invert) {
+        invert.checked = settings.invertPitch;
+        invert.addEventListener('change', () => {
+            settings.invertPitch = invert.checked;
+            setInvertPitch(settings.invertPitch);
+            writeStored(keys.invertPitch, settings.invertPitch);
+        }, { signal });
+    }
+    if (reduced) {
+        reduced.checked = settings.reducedFx;
+        reduced.addEventListener('change', () => {
+            settings.reducedFx = reduced.checked;
+            applyReducedFx();
+            writeStored(keys.reducedFx, settings.reducedFx);
+        }, { signal });
+    }
+
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => toggleSettings(), { signal });
+    }
+    if (close) {
+        close.addEventListener('click', () => toggleSettings(false), { signal });
+    }
+}
+
+function toggleSettings(force) {
+    if (!settingsPanel) return;
+    const open = force === undefined ? settingsPanel.classList.contains('hidden') : force;
+    settingsPanel.classList.toggle('hidden', !open);
+    if (settingsBtn) settingsBtn.setAttribute('aria-expanded', String(open));
+}
+
+// ---- Pause ----------------------------------------------------------------
+
+function openPause() {
+    if (!state.isLoaded || state.isPaused) return;
+    state.isPaused = true;
+    setPaused(true);
+    if (pauseModal) pauseModal.classList.remove('hidden');
+    // Holding the cursor captive behind a dialog is a trap, not a feature.
+    if (typeof document.exitPointerLock === 'function') document.exitPointerLock();
+    track('pause');
+}
+
+function closePause() {
+    if (!state.isPaused) return;
+    state.isPaused = false;
+    setPaused(false);
+    if (pauseModal) pauseModal.classList.add('hidden');
+}
+
 // ---- Event wiring ---------------------------------------------------------
 
 function setupEventListeners() {
@@ -148,25 +332,35 @@ function setupEventListeners() {
     const signal = cleanupController.signal;
 
     window.addEventListener('pagehide', cleanup);
-
-    // resizeSpace updates BOTH cameras. The spawn viewpoint does not depend on
-    // aspect, so the camera does not need re-placing here yet; when the cockpit
-    // arrives at M7 its portrait framing will hook in at this point.
     window.addEventListener('resize', () => resizeSpace(), { signal });
 
-    // iOS Safari ignores `user-scalable=no`, so the only way to keep the
-    // immersive view from being pinch-zoomed there is to block Safari's own
-    // gesture events. Scoped to this page: the 2D pages stay zoomable.
     ['gesturestart', 'gesturechange', 'gestureend'].forEach(type =>
         document.addEventListener(type, (e) => e.preventDefault(), { passive: false, signal }));
 
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') endSession();
+        if (document.visibilityState === 'hidden') {
+            openPause();       // a backgrounded tab should not keep flying
+            endSession();
+        }
     });
     window.addEventListener('pagehide', endSession);
 
-    // The welcome overlay: any click, tap, or key lets the visitor in. The
-    // scene is already alive behind it, so dismissing is all it does.
+    wireSettings(signal);
+
+    // Pause: Esc on a keyboard, the pause button on a touch screen.
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) pauseBtn.addEventListener('click', openPause, { signal });
+    if (pauseModal) {
+        pauseModal.querySelectorAll('[data-close]').forEach(el =>
+            el.addEventListener('click', closePause, { signal }));
+    }
+    document.addEventListener('keydown', (event) => {
+        if (event.code !== 'Escape') return;
+        if (state.isPaused) closePause();
+        else if (settingsPanel && !settingsPanel.classList.contains('hidden')) toggleSettings(false);
+        else openPause();
+    }, { signal });
+
     if (blocker) {
         const dismiss = (e) => {
             if (e) e.preventDefault();
@@ -185,6 +379,9 @@ function setupEventListeners() {
 function beginFlight() {
     if (!state.isLoaded || !blocker || blocker.classList.contains('hidden')) return;
     blocker.classList.add('hidden');
+    // Desktop visitors expect the mouse to take hold straight away. Touch and
+    // keyboard-only visitors are unaffected: there is nothing to capture.
+    if (!state.isMobile && canvas && canvas.requestPointerLock) canvas.requestPointerLock();
     track('begin-flight');
 }
 
@@ -196,9 +393,44 @@ function animate() {
     const deltaTime = Math.min((now - state.lastTime) / 1000, 0.1);
     state.lastTime = now;
 
-    updateWorld(deltaTime);
-    // No overlay scene yet: the cockpit arrives at M7.
+    if (!state.isPaused) {
+        updateFlight(deltaTime);
+        updateWorld(deltaTime);
+    }
+    applyFlightToCamera();
+    updateReadouts();
+
     renderSpace(scene);
+}
+
+function applyFlightToCamera() {
+    const camera = getWorldCamera();
+    if (!camera) return;
+    const s = getFlightState();
+    camera.position.set(s.position.x, s.position.y, s.position.z);
+    // Rebuilt from two angles every frame, never accumulated, which is what
+    // keeps roll out of a scene that is meant to have none.
+    camera.rotation.set(s.pitch, s.yaw, 0);
+}
+
+function updateReadouts() {
+    const s = getFlightState();
+    if (throttleReadout) {
+        const speed = Math.round(s.speed);
+        const target = Math.round(s.targetSpeed);
+        throttleReadout.textContent = speed === target
+            ? `${speed.toLocaleString()} km/s`
+            : `${speed.toLocaleString()} → ${target.toLocaleString()} km/s`;
+    }
+    // Announce the throttle only when it has actually moved a step, so the
+    // live region reports changes rather than chattering every frame.
+    if (flightStatus) {
+        const notch = Math.round(s.throttle * 10) / 10;
+        if (notch !== _announcedThrottle) {
+            _announcedThrottle = notch;
+            flightStatus.textContent = `Throttle ${Math.round(notch * 100)} percent, speed ${Math.round(s.speed)} kilometres per second.`;
+        }
+    }
 }
 
 // ---- Cleanup / state ------------------------------------------------------
@@ -224,7 +456,6 @@ export function getState() {
 
 // ---- Boot -----------------------------------------------------------------
 
-/** Best-effort check that the browser can create a WebGL context. */
 function hasWebGL() {
     try {
         const c = document.createElement('canvas');
@@ -235,8 +466,6 @@ function hasWebGL() {
     }
 }
 
-/** Route visitors whose browser cannot run the 3D scene to the 2D site, with a
- *  brief note, rather than leaving them staring at a blank canvas. */
 function fallbackTo2D() {
     try {
         const loading = document.getElementById('loading-screen');
@@ -255,8 +484,6 @@ function boot() {
     });
 }
 
-// Auto-boot only in a browser. Under test (Node, no `document`) importing this
-// module must stay side-effect-free rather than booting the whole 3D app.
 if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', boot);
@@ -265,5 +492,4 @@ if (typeof document !== 'undefined') {
     }
 }
 
-// Exposed for unit tests only.
-export const __test__ = { bufToHex, hasWebGL };
+export const __test__ = { bufToHex, hasWebGL, keepAbovePlanets, settings };

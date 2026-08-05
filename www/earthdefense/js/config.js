@@ -161,6 +161,44 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         pitch: 0
     },
 
+    // ---- Flight (flight-1.0.0) --------------------------------------------
+    flight: {
+        // One kilometre per unit, so 4,000 units/s is 4,000 km/s and the HUD
+        // can print it honestly. Fast enough to reach the Moon in about
+        // sixteen seconds, slow enough that Earth still takes three to cross.
+        maxForward: 4000,
+        // Reverse is deliberately a quarter of forward. A ship that backs up
+        // as fast as it flies feels weightless and makes reverse the answer to
+        // everything.
+        maxReverse: 1000,
+        accelTime: 6,
+        decelTime: 4,
+
+        turnRate: 1.3,          // radians/second at full deflection
+        pitchClamp: 1.48,       // 85 degrees, so nobody can invert
+        mouseSensitivity: 0.0022,
+        lookSensitivity: 1.0,   // the settings cog drives this
+        invertPitch: false,
+        // Throttle fraction per second while a key or stick is held. At 0.8 a
+        // full sweep from stop to maximum takes a bit over a second, which
+        // reads as a lever being pushed rather than a switch being flipped.
+        throttleRate: 0.8,
+        gamepadDeadzone: 0.15,
+        lookJoystickRadius: 55,
+        doubleTapMs: 320
+    },
+
+    // A soft boundary, not a wall. Nothing is out at Mars to find, so a
+    // visitor who points that way and holds the throttle down gets a long look
+    // and then a polite nudge home. Forward authority fades across the last
+    // 15,000 units; turning and the trip back stay at full power throughout.
+    perimeter: { radius: 120000, fade: 15000 },
+
+    // Keeps the ship out of the planets until real collision arrives at M3.
+    // A few hundred kilometres of standoff, which at this scale reads as
+    // skimming the atmosphere rather than as hitting an invisible wall.
+    altitudeFloor: 400,
+
     // ---- Boot and site ----------------------------------------------------
     proofOfWork: { prefix: '11', storageKey: 'gallery-pow' },
 

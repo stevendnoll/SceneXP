@@ -3,12 +3,17 @@
  * experience.css - Earth Defense specifics, loaded after the shared stylesheet.
  *
  * The shared chrome (loading screen, welcome overlay, crosshair, floating
- * buttons, panels) is already themed by data-ui-theme="ember" on <html>, so
- * this file only carries what a game in orbit needs on top of it, and reads
- * the same --ui-* tokens so everything stays in step.
+ * buttons, panels, modals) is already themed by data-ui-theme="ember" on
+ * <html>, so this file only carries what a game in orbit needs on top of it,
+ * and reads the same --ui-* tokens so everything stays in step.
  *
- * M1 scope: the deep-space backdrop and the reticle. The throttle track
- * arrives at M2, the HUD at M5, and the cockpit at M7.
+ * PORTRAIT IS THE PRIMARY FRAME (PRD G5, 4.1.1). Every size below is chosen
+ * against a phone held upright first and given room in landscape, not the
+ * other way round.
+ *
+ * Shipped: the deep-space backdrop, the reticle, the touch throttle, the
+ * throttle readout, and the perimeter notice. Still to come: the rest of the
+ * HUD at M5, the cockpit at M7.
  */
 
 /* Deep space rather than the shared near-black, so the loading screen and the
@@ -35,9 +40,8 @@
     touch-action: none;
 }
 
-/* The welcome overlay's kicker line sits under the title and carries the
-   dedication, which is longer than the usual subtitle, so give it room to
-   breathe on a narrow phone rather than letting it crowd the prompt. */
+/* The welcome overlay's kicker carries the dedication, which is longer than a
+   usual subtitle, so give it room to breathe on a narrow phone. */
 #instructions .subtitle {
     max-width: 30ch;
     margin-left: auto;
@@ -45,10 +49,264 @@
     line-height: 1.45;
 }
 
+/* Announced-only text: present for a screen reader, absent for everyone else. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ============================================================
+   The touch throttle
+   ============================================================
+   A vertical track rather than a stick, because it KEEPS ITS POSITION when the
+   thumb lifts. That is the whole reason it is not a joystick: a crossing takes
+   long enough that holding a thumb against the glass the entire way would be
+   unpleasant.
+
+   It sits in the same lower-left corner the shared movement joystick uses, at
+   the same distance from the edges, so muscle memory from the other
+   experiences carries over. */
+
+#throttle-zone {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 180px;
+    height: 240px;
+    pointer-events: auto;
+    z-index: 3;
+    touch-action: none;
+}
+
+.throttle-track {
+    position: absolute;
+    bottom: 40px;
+    left: 30px;
+    width: 58px;
+    height: 170px;
+    border-radius: 29px;
+    background: rgba(var(--ui-joystick-rgb), 0.18);
+    border: 2px solid rgba(var(--ui-joystick-rgb), 0.6);
+    /* Dark outer ring, so the control stays readable against a bright Earth. */
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.28);
+    pointer-events: none;
+}
+
+/* Grows out of the centre detent: up for ahead, down for astern. Readable at a
+   glance without looking away from the reticle, which matters because from M4
+   the reticle is where the shooting happens. */
+.throttle-fill {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    bottom: 50%;
+    height: 0;
+    border-radius: 25px;
+    background: rgba(var(--ui-joystick-rgb), 0.5);
+    transition: height 0.06s ease-out, bottom 0.06s ease-out;
+}
+
+/* The neutral mark. Without it, "where is zero" is guesswork, and zero is the
+   one throttle position a visitor needs to find in a hurry. */
+.throttle-detent {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 50%;
+    height: 2px;
+    transform: translateY(1px);
+    background: rgba(255, 255, 255, 0.65);
+    border-radius: 1px;
+}
+
+.throttle-thumb {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 46px;
+    height: 46px;
+    margin-left: -23px;
+    margin-bottom: -23px;
+    border-radius: 50%;
+    background: rgba(var(--ui-joystick-rgb), 0.8);
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    transition: bottom 0.06s ease-out;
+}
+
+.throttle-label {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.throttle-label-up {
+    top: 6px;
+}
+
+.throttle-label-down {
+    bottom: 6px;
+}
+
+.is-touch-device #throttle-zone {
+    pointer-events: auto;
+}
+
+@supports (padding: max(0px)) {
+    .is-touch-device #throttle-zone {
+        width: calc(180px + env(safe-area-inset-left));
+        height: calc(240px + env(safe-area-inset-bottom));
+    }
+
+    .is-touch-device .throttle-track {
+        bottom: max(40px, calc(40px + env(safe-area-inset-bottom)));
+        left: max(30px, calc(30px + env(safe-area-inset-left)));
+    }
+}
+
+/* Short phones in landscape have very little vertical room, so shrink the
+   track rather than letting it run off the top of the screen. */
+@media (max-height: 480px) {
+    .throttle-track {
+        height: 120px;
+        bottom: 24px;
+    }
+
+    #throttle-zone {
+        height: 170px;
+    }
+}
+
+/* Wide screens (VR headset 2D browser panels): match the shared stylesheet,
+   which pulls the joysticks in toward the centre. */
+@media (min-width: 1500px) {
+    #throttle-zone {
+        left: calc(50% - 350px);
+    }
+}
+
+/* ============================================================
+   Readouts
+   ============================================================ */
+
+.throttle-readout {
+    position: fixed;
+    left: 22px;
+    bottom: 224px;
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.82);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    pointer-events: none;
+}
+
+/* On a desktop there is no throttle track under it, so it sits at the corner. */
+body:not(.is-touch-device) .throttle-readout {
+    bottom: 24px;
+}
+
+@media (max-height: 480px) {
+    .throttle-readout {
+        bottom: 152px;
+    }
+}
+
+/* The polite nudge when a visitor pushes out past the defended volume. In the
+   fiction of the game, not a scolding. */
+.perimeter-notice {
+    position: fixed;
+    top: 84px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(86vw, 34ch);
+    padding: 8px 16px;
+    border-radius: 999px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(var(--ui-accent-rgb), 0.22);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.5);
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+}
+
+.perimeter-notice.hidden {
+    display: none;
+}
+
+/* ============================================================
+   Settings additions
+   ============================================================
+   The shared panel styles cover the slider; the checkbox rows are ours. */
+
+/* The pause button takes the second slot in the top-right cluster, beside
+   Home. The shared stylesheet puts the settings cog top-LEFT, so the two
+   clusters never collide. Spacing follows the shared .checklist-btn
+   convention: Home at 20, then 62px per slot. */
+.pause-btn {
+    top: 20px;
+    left: auto;
+    right: 82px;
+}
+
+.settings-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0 0;
+    font-size: 0.92rem;
+    cursor: pointer;
+}
+
+.settings-check input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: rgb(var(--ui-accent-rgb));
+    cursor: pointer;
+    flex: none;
+}
+
+.settings-check input[type="checkbox"]:focus-visible {
+    outline: 2px solid rgb(var(--ui-accent-rgb));
+    outline-offset: 2px;
+}
+
+.settings-hint {
+    margin: 10px 0 0;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    opacity: 0.72;
+}
+
+/* The dedication in the pause panel, set apart from the control list. */
+.dedication {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    font-size: 0.86rem;
+    line-height: 1.5;
+    opacity: 0.85;
+}
+
 @media (prefers-reduced-motion: reduce) {
+
     /* The scene keeps turning (it is the experience), but nothing in the
        chrome should animate for a visitor who has asked us not to. */
-    #loading-screen .loader-progress {
+    #loading-screen .loader-progress,
+    .throttle-fill,
+    .throttle-thumb,
+    .perimeter-notice {
         transition: none;
     }
 }

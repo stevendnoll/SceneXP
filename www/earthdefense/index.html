@@ -133,10 +133,36 @@
 
     <div id="hud">
         <div class="crosshair" aria-hidden="true"></div>
+        <div id="throttle-readout" class="throttle-readout" aria-hidden="true">0%</div>
+        <div id="perimeter-notice" class="perimeter-notice hidden" role="status" aria-live="polite"></div>
+        <!-- Everything the HUD shows visually is also announced here, so the
+             flight state is available to a screen reader rather than being
+             locked in the pixels. -->
+        <p id="flight-status" class="visually-hidden" role="status" aria-live="polite"></p>
     </div>
 
-    <!-- Floating controls. M1 ships the Home button only; the settings cog and
-         its look-sensitivity panel arrive with the flight model at M2. -->
+    <!-- Touch controls. The LEFT thumb gets a throttle rather than a movement
+         stick: it keeps its position when released, so a long crossing does not
+         mean holding a thumb against the glass. The RIGHT thumb keeps the
+         familiar shared look joystick. -->
+    <div id="touch-controls">
+        <div id="throttle-zone">
+            <div id="throttle-track" class="throttle-track">
+                <div class="throttle-fill" id="throttle-fill" aria-hidden="true"></div>
+                <div class="throttle-detent" aria-hidden="true"></div>
+                <div class="throttle-thumb" id="throttle-thumb" aria-hidden="true"></div>
+                <span class="throttle-label throttle-label-up" aria-hidden="true">▲</span>
+                <span class="throttle-label throttle-label-down" aria-hidden="true">▼</span>
+            </div>
+        </div>
+        <div id="look-joystick-zone">
+            <div class="joystick-base-fixed">
+                <div class="joystick-thumb-fixed" id="look-thumb"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating controls -->
     <a id="home-btn" class="ui-float menu-btn" href="/"
         title="Back to the main site"
         aria-label="Back to the main site">
@@ -146,6 +172,70 @@
             <path d="M10 19v-5h4v5" stroke-linejoin="round" />
         </svg>
     </a>
+
+    <!-- Pause. Esc reaches this on a keyboard; on a touch screen there is no
+         Esc, so it needs a button of its own. Pausing must always be one
+         action away, from either input. -->
+    <button id="pause-btn" class="ui-float menu-btn pause-btn" title="Pause" aria-label="Pause">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 5.5v13M15 5.5v13" />
+        </svg>
+    </button>
+
+    <button id="settings-btn" class="ui-float settings-btn" title="Flight settings" aria-label="Flight settings"
+        aria-controls="settings-panel" aria-expanded="false">
+        <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+        </svg>
+    </button>
+
+    <div id="settings-panel" class="settings-panel hidden">
+        <div class="settings-header">
+            <span>Flight Settings</span>
+            <button id="settings-close" class="settings-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="settings-body">
+            <label class="settings-label">
+                Look Sensitivity
+                <input type="range" id="look-speed-slider" min="0.3" max="3" step="0.1" value="1.0">
+                <span class="settings-value" id="look-speed-value">1.0</span>
+            </label>
+            <label class="settings-check">
+                <input type="checkbox" id="invert-pitch-toggle">
+                <span>Invert pitch</span>
+            </label>
+            <label class="settings-check">
+                <input type="checkbox" id="reduced-fx-toggle">
+                <span>Reduced effects</span>
+            </label>
+            <p class="settings-hint">Reduced effects lowers the rendering detail. Handy if
+                the view feels less than smooth on your device.</p>
+        </div>
+    </div>
+
+    <!-- Pause. Esc opens this, and it is where the dedication lives. -->
+    <div id="pause-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="pause-title" class="piece-title">Holding station</h2>
+                <p class="piece-subtitle">Take your time. Nothing moves while this is open.</p>
+                <ul class="help-list">
+                    <li class="help-desktop"><strong>Throttle:</strong> <kbd>W</kbd> and <kbd>S</kbd>, or the up and down arrows. <kbd>X</kbd> to stop.</li>
+                    <li class="help-desktop"><strong>Look:</strong> move the mouse, or steer with <kbd>A</kbd> <kbd>D</kbd> to turn and <kbd>Q</kbd> <kbd>E</kbd> to climb and dive.</li>
+                    <li class="help-mobile"><strong>Throttle:</strong> the slider on the left. It stays where you leave it, so you can let go. Double tap it to stop.</li>
+                    <li class="help-mobile"><strong>Look:</strong> drag the joystick on the right.</li>
+                    <li><strong>Settings:</strong> the gear icon adjusts look sensitivity.</li>
+                </ul>
+                <p class="piece-subtitle dedication">Built in honor of the first generation of video game
+                    designers and developers, who worked out with almost nothing that a screen
+                    could be a place you go. Left unnamed on purpose. The debt is a shared one.</p>
+                <button class="piece-enter" type="button" data-close>Back to the helm</button>
+            </div>
+        </div>
+    </div>
 
     <canvas id="game-canvas" aria-label="The view from a ship in orbit above Earth, with the Moon and Mars in the distance"></canvas>
 
