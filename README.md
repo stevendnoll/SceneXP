@@ -4,9 +4,13 @@
 
 Custom 3D experiences, right in your browser. Built with [Three.js](https://threejs.org/) and nothing else but browser-native HTML, CSS, and JavaScript.
 
+[![SceneXP.com, custom 3D experiences, right in your browser](www/assets/og-image.jpg)](https://www.scenexp.com/)
+
+Try the 3D Mandelbrot zoom.
+
 [![A glowing spiral of warm color deep inside the Mandelbrot set, captured mid-dive in the Mandelbrot experience](www/mandelbrot/assets/og-mandelbrot.jpg)](https://www.scenexp.com/mandelbrot/)
 
-[SceneXP.com](https://www.scenexp.com/) is a live website hosting a growing collection of custom 3D experiences, each one built to honor a person, place, or business. The repository currently contains nine experiences (`www/dad`, `www/family`, `www/roqui`, `www/seedtoseed`, `www/interstate`, `www/steve`, `www/gavin`, `www/jamar`, and `www/mandelbrot`) along with the shared 3D experience engine in `www/shared` that powers them all.
+[SceneXP.com](https://www.scenexp.com/) is a live website hosting a growing collection of custom 3D experiences, each one built to honor a person, place, or business.
 
 The site itself is about three things:
 
@@ -57,5 +61,3 @@ The 3D experiences send anonymized, fire-and-forget usage pings to a static endp
 The logo artwork itself is not included in this repository. The logo files, the Interstate favicon (which is drawn from the logo), and the social preview captures for those three experiences (which show the logos in-scene) are listed in `.gitignore` and never ship. On a fresh clone, those experiences show blank spots where the logos belong and their three cards on the home page have no preview images. Like the empty `snaps/` folders noted above, that is expected. If you fork this repository for your own site, please supply your own artwork in their place.
 
 This project also stands on excellent open source tooling that never ships to the browser but makes the work possible. [esbuild](https://esbuild.github.io/) minifies the assets, and [Jest](https://jestjs.io/) runs the test suite. Both are MIT licensed and arrive via npm with their licenses intact. Our warm thanks to their maintainers, and to the [Three.js](https://threejs.org/) authors most of all.
-
-The dad, family, roqui, gavin, and jamar experiences are personal tributes. The people they honor are portrayed with love and their real names are used with their (or their family's) blessing. The steve experience is a self-portrait: the developer's own home office, where every experience in this repository gets built, modeled with his blessing by definition (the cat was not consulted). The gavin experience honors the developer's son and his springtime tradition of releasing ladybugs and praying mantises into the patio plants (the mantises were not consulted either, and remain hidden). The jamar experience is a birthday present for the developer's best friend, who has the corner stage, the microphone, and a jukebox queue that knows exactly who is singing next. The mandelbrot experience honors Benoit Mandelbrot, the mathematician who first plotted the set in 1980, with an infinite auto zoom into the boundary that carries his name.

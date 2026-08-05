@@ -191,6 +191,27 @@
                 <p>The shared modules behind each of these live in <code>www/shared/js</code>, documented
                     part by part in its <code>README.md</code>.</p>
 
+                <h2>Dress the shared controls</h2>
+                <p>Every experience shares one welcome screen, loading screen, crosshair, joystick pair,
+                    floating button set, and panel family. By default that chrome is a quiet near-white
+                    that sits under any scene without competing with it. If your world has a mood of its
+                    own, name a theme on your <code>&lt;html&gt;</code> element and the whole set follows
+                    along:</p>
+                <pre><code>&lt;html lang="en" data-ui-theme="garden"&gt;</code></pre>
+                <p>The themes live at the top of <code>www/shared/css/styles-1.0.0.css</code>, next to the
+                    <code>--ui-*</code> tokens they set. Today's set is <code>garden</code> (leaf green),
+                    <code>surf</code> (sea glass aqua), <code>neon</code> (stage-light rose), and
+                    <code>ember</code> (deep-space amber). Leaving the attribute off keeps the default.</p>
+                <p>Adding a theme is six tokens copied from an existing block. Reach for a light tint of
+                    your hue rather than the brand color itself, since the welcome overlay is dark and most
+                    brand colors disappear against it. The test suite checks the contrast of every theme,
+                    so a mistake here shows up as a red test rather than an unreadable welcome screen.</p>
+                <p>One more token to know about. The mobile joysticks follow your accent unless you set
+                    <code>--ui-joystick-rgb</code>, and they are a pair of filled circles sat low on the
+                    screen, one on each side. In pink and flesh tones that arrangement reads as anatomy
+                    rather than as controls, so a theme in that part of the spectrum points the joysticks
+                    somewhere cooler and leaves the rest of its palette alone.</p>
+
                 <h2>Run it locally</h2>
                 <p>ES modules need to be served over HTTP, so run any static server from the
                     <code>www</code> folder:</p>
