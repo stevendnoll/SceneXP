@@ -73,6 +73,59 @@ export function spinAt(elapsedSeconds, rotationPeriod) {
     return (TAU * elapsedSeconds) / rotationPeriod;
 }
 
+/** A latitude/longitude in degrees to a point on the body's own surface.
+ *
+ *  The convention matches THREE.SphereGeometry's UV layout exactly, so a
+ *  latitude and longitude read off a real map lands on the matching feature of
+ *  an equirectangular texture. That is worth getting right: it is the
+ *  difference between an installation standing in Alaska and one standing in
+ *  the sea just west of it.
+ *
+ *      phi   = (lon + 180) degrees      (u = 0 is the left edge, -180)
+ *      theta = (90 - lat) degrees       (v = 0 is the north pole)
+ */
+export function latLonToLocal(latDeg, lonDeg, radius) {
+    const phi = ((lonDeg + 180) * Math.PI) / 180;
+    const theta = ((90 - latDeg) * Math.PI) / 180;
+    const sinTheta = Math.sin(theta);
+    return {
+        x: -radius * Math.cos(phi) * sinTheta,
+        y: radius * Math.cos(theta),
+        z: radius * Math.sin(phi) * sinTheta
+    };
+}
+
+/** How deep `point` sits inside a sphere, or 0 when it is outside or touching. */
+export function sphereOverlap(point, centre, radius) {
+    const d = Math.hypot(point.x - centre.x, point.y - centre.y, point.z - centre.z);
+    return d >= radius ? 0 : radius - d;
+}
+
+/** Does the SEGMENT from a to b pass through the sphere?
+ *
+ *  A segment, not a ray, and that distinction is the whole point. The naive
+ *  version tests the infinite line and reports a hit for a sphere that lies
+ *  beyond the far end, which in practice means a target standing in front of a
+ *  planet is reported as hidden behind it. The parameter is clamped to [0, 1]
+ *  so only the span between the two points can occlude anything.
+ */
+export function segmentHitsSphere(a, b, centre, radius) {
+    const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+    const lengthSq = dx * dx + dy * dy + dz * dz;
+
+    const cx = centre.x - a.x, cy = centre.y - a.y, cz = centre.z - a.z;
+    // Degenerate segment: fall back to a point-in-sphere test.
+    if (lengthSq === 0) return Math.hypot(cx, cy, cz) < radius;
+
+    let t = (cx * dx + cy * dy + cz * dz) / lengthSq;
+    t = Math.max(0, Math.min(1, t));
+
+    const nx = a.x + dx * t - centre.x;
+    const ny = a.y + dy * t - centre.y;
+    const nz = a.z + dz * t - centre.z;
+    return (nx * nx + ny * ny + nz * nz) < radius * radius;
+}
+
 // ---- Shell -----------------------------------------------------------------
 
 /** Prepare the registry. `manager` is an optional THREE.LoadingManager, so the
@@ -200,6 +253,69 @@ export function updateBodies(deltaTime) {
             entry.mesh.rotation.y = spinAt(elapsed, entry.spec.rotationPeriod);
         }
     }
+}
+
+/** Attach a group to a body's surface at a latitude and longitude.
+ *
+ *  The group is PARENTED to the body mesh rather than repositioned each frame,
+ *  which is what makes "the installations ride the Moon" a non-issue instead of
+ *  a subsystem: they inherit the orbit and the spin for free, and nothing can
+ *  drift out of step. Its +Y points straight out from the surface, so anything
+ *  built inside it stands up the way a building does.
+ */
+export function anchorToSurface(bodyId, latDeg, lonDeg, height = 0) {
+    const entry = bodies.get(bodyId);
+    if (!entry) return null;
+
+    const surface = latLonToLocal(latDeg, lonDeg, entry.spec.radius + height);
+    const group = new THREE.Group();
+    group.name = `${bodyId}-anchor`;
+    group.position.set(surface.x, surface.y, surface.z);
+
+    // Stand it up: rotate local +Y onto the outward normal.
+    const normal = new THREE.Vector3(surface.x, surface.y, surface.z).normalize();
+    group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+
+    entry.mesh.add(group);
+    return group;
+}
+
+/** The first body `position` is inside, with how deep and which way is out.
+ *  `radius` is the mover's own radius, so a ship is stopped by its hull rather
+ *  than by its centre point. */
+export function checkBodyCollision(position, radius = 0) {
+    for (const entry of bodies.values()) {
+        const c = entry.mesh.position;
+        const dx = position.x - c.x, dy = position.y - c.y, dz = position.z - c.z;
+        const distance = Math.hypot(dx, dy, dz);
+        const minimum = entry.spec.radius + radius;
+        if (distance < minimum && distance > 0) {
+            return {
+                id: entry.spec.id,
+                distance,
+                penetration: minimum - distance,
+                normal: { x: dx / distance, y: dy / distance, z: dz / distance }
+            };
+        }
+    }
+    return null;
+}
+
+/** Push a position back out to a standoff altitude above any body it has
+ *  entered. Returns the original when it is already clear, so a caller can use
+ *  it as a position filter without branching. */
+export function altitudeFloorAdjust(position, floor = 0, radius = 0) {
+    for (const entry of bodies.values()) {
+        const c = entry.mesh.position;
+        const dx = position.x - c.x, dy = position.y - c.y, dz = position.z - c.z;
+        const distance = Math.hypot(dx, dy, dz);
+        const minimum = entry.spec.radius + floor + radius;
+        if (distance < minimum && distance > 0) {
+            const k = minimum / distance;
+            return { x: c.x + dx * k, y: c.y + dy * k, z: c.z + dz * k };
+        }
+    }
+    return position;
 }
 
 export function getBody(id) {

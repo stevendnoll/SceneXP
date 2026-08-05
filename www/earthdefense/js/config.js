@@ -161,6 +161,47 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         pitch: 0
     },
 
+    // ---- Installations ----------------------------------------------------
+    //
+    // Seven friendly installations: four on Earth, three on the Moon. Each
+    // takes three hits. These are the whole objective, so where they sit is a
+    // design decision rather than decoration.
+    //
+    // A NOTE ON SCALE, said plainly rather than hidden. At 160 units these are
+    // 160 km tall, which is absurd. It is deliberate: anything built to real
+    // scale on a 6,371 unit Earth would be smaller than one pixel from orbit
+    // and the objective would be invisible. The silhouettes are drawn to read
+    // as installations rather than as cities, so the break is stylised instead
+    // of looking like a mistake.
+    //
+    // WHERE THEY SIT. From 8,500 units a sphere only shows a cap of 41.5
+    // degrees around the point directly beneath the player, which at spawn is
+    // 60 N, 90 W. Every Earth site is inside that cap, so all four are on
+    // screen from the first frame, and every one is on land so the textures
+    // read correctly. Earlier drafts of the PRD called for the Mars-facing
+    // hemisphere; that face is 150 degrees away and permanently behind the
+    // planet at spawn, so it was the wrong side to defend.
+    //
+    // The Moon's three sit near its Earth-facing point (0 lat, 90 lon in this
+    // convention), which tidal locking keeps pointed at home all game.
+    structures: {
+        hitPoints: 3,
+        height: 160,
+        beaconColor: 0x7fd4ff,
+        hostileBeaconColor: 0xff7043,
+        earth: [
+            { id: 'earth-north', label: 'Northwatch', lat: 55, lon: -115 },
+            { id: 'earth-west', label: 'Cold Harbour', lat: 60, lon: -150 },
+            { id: 'earth-east', label: 'Longreach', lat: 64, lon: -22 },
+            { id: 'earth-south', label: 'Tidewater', lat: 40, lon: -75 }
+        ],
+        moon: [
+            { id: 'moon-north', label: 'Highstep', lat: 20, lon: 75 },
+            { id: 'moon-south', label: 'Quiet Sea', lat: -25, lon: 105 },
+            { id: 'moon-east', label: 'Farside Gate', lat: 5, lon: 120 }
+        ]
+    },
+
     // ---- Flight (flight-1.0.0) --------------------------------------------
     flight: {
         // One kilometre per unit, so 4,000 units/s is 4,000 km/s and the HUD

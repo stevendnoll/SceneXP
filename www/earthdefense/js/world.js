@@ -16,6 +16,10 @@ import {
     initBodies, createBody, orbitBody, updateBodies,
     getBody, bodyPositions, getOccluders
 } from '../../shared/js/bodies-1.0.0.min.js';
+import {
+    initStructures, getStructures, getStructure,
+    structuresRemaining, structurePositions
+} from './structures.min.js';
 
 let group = null;
 
@@ -34,6 +38,11 @@ export function initWorld(scene, manager) {
     for (const spec of config.bodies) {
         if (spec.orbit) orbitBody(spec.id, spec.orbit.parent, spec.orbit);
     }
+
+    // Installations come last, because each one parents itself to a body that
+    // has to exist first. From here they need no further attention: they ride
+    // the spin, and the Moon's three ride the orbit as well.
+    initStructures(config);
 
     if (scene && group) scene.add(group);
     return group;
@@ -60,3 +69,4 @@ export function placeCameraAtSpawn(camera, config = EARTHDEFENSE_CONFIG) {
 
 export function getWorldGroup() { return group; }
 export { getBody, bodyPositions, getOccluders };
+export { getStructures, getStructure, structuresRemaining, structurePositions };

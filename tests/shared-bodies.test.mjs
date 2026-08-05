@@ -24,11 +24,29 @@ import { jest } from '@jest/globals';
 class Vec3 {
     constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
     set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+    normalize() {
+        const l = Math.hypot(this.x, this.y, this.z) || 1;
+        this.x /= l; this.y /= l; this.z /= l;
+        return this;
+    }
 }
 
 function installThree() {
     globalThis.THREE = {
-        Group: class { constructor() { this.children = []; this.name = ''; } add(o) { this.children.push(o); } },
+        Group: class {
+            constructor() {
+                this.children = [];
+                this.name = '';
+                this.parent = null;
+                this.position = new Vec3();
+                // Records what it was asked to align, so the "stands upright"
+                // assertion can check the real vectors.
+                this.quaternion = {
+                    setFromUnitVectors: (from, to) => { this.aligned = { from, to }; }
+                };
+            }
+            add(o) { o.parent = this; this.children.push(o); }
+        },
         SphereGeometry: class {
             constructor(r, w, h) { this.radius = r; this.widthSegments = w; this.heightSegments = h; this.disposed = 0; }
             dispose() { this.disposed++; }
@@ -47,9 +65,11 @@ function installThree() {
                 this.position = new Vec3();
                 this.rotation = { x: 0, y: 0, z: 0 };
                 this.children = [];
+                this.parent = null;
             }
-            add(o) { this.children.push(o); }
+            add(o) { o.parent = this; this.children.push(o); }
         },
+        Vector3: Vec3,
         Color: class { constructor(hex) { this.hex = hex; } },
         TextureLoader: class {
             constructor(manager) { this.manager = manager; }
@@ -216,6 +236,114 @@ describe('spinAt', () => {
     });
 });
 
+// ---- latLonToLocal ----------------------------------------------------------
+
+describe('latLonToLocal', () => {
+    const R = 100;
+    const on = (p) => Math.hypot(p.x, p.y, p.z);
+
+    test('the poles land on the axis', () => {
+        expect(mod.latLonToLocal(90, 0, R).y).toBeCloseTo(R);
+        expect(mod.latLonToLocal(-90, 0, R).y).toBeCloseTo(-R);
+    });
+
+    test('the equator sits in the XZ plane', () => {
+        for (const lon of [-180, -90, 0, 90, 180]) {
+            expect(mod.latLonToLocal(0, lon, R).y).toBeCloseTo(0, 9);
+        }
+    });
+
+    test('every point is exactly on the surface', () => {
+        for (const lat of [-90, -45, 0, 23.5, 60, 90]) {
+            for (const lon of [-180, -90, 0, 45, 179]) {
+                expect(on(mod.latLonToLocal(lat, lon, R))).toBeCloseTo(R, 6);
+            }
+        }
+    });
+
+    test('matches the SphereGeometry UV convention, so textures line up', () => {
+        // Longitude 90 W, latitude 0 is +Z; 90 E is -Z. Get this backwards and
+        // every installation stands in the wrong place on the map.
+        const west = mod.latLonToLocal(0, -90, R);
+        expect(west.z).toBeCloseTo(R);
+        const east = mod.latLonToLocal(0, 90, R);
+        expect(east.z).toBeCloseTo(-R);
+    });
+
+    test('the spawn sub-player point really is 60 N, 90 W', () => {
+        // The whole structure layout is chosen around this point, so it is
+        // worth pinning rather than trusting.
+        const p = mod.latLonToLocal(60, -90, 1);
+        expect(p.x).toBeCloseTo(0, 9);
+        expect(p.y).toBeCloseTo(Math.sin(Math.PI / 3), 6);
+        expect(p.z).toBeCloseTo(Math.cos(Math.PI / 3), 6);
+    });
+
+    test('height lifts a point off the surface along its own normal', () => {
+        const surface = mod.latLonToLocal(30, 40, 100);
+        const raised = mod.latLonToLocal(30, 40, 110);
+        expect(on(raised)).toBeCloseTo(110);
+        // Same direction, just further out.
+        expect(raised.x / on(raised)).toBeCloseTo(surface.x / on(surface), 9);
+    });
+});
+
+// ---- sphereOverlap and segmentHitsSphere ------------------------------------
+
+describe('sphereOverlap', () => {
+    const centre = { x: 0, y: 0, z: 0 };
+
+    test('is zero outside and on the surface', () => {
+        expect(mod.sphereOverlap({ x: 200, y: 0, z: 0 }, centre, 100)).toBe(0);
+        expect(mod.sphereOverlap({ x: 100, y: 0, z: 0 }, centre, 100)).toBe(0);
+    });
+
+    test('reports how deep a point is, not merely that it is in', () => {
+        expect(mod.sphereOverlap({ x: 60, y: 0, z: 0 }, centre, 100)).toBeCloseTo(40);
+        expect(mod.sphereOverlap({ x: 0, y: 0, z: 0 }, centre, 100)).toBeCloseTo(100);
+    });
+});
+
+describe('segmentHitsSphere', () => {
+    const centre = { x: 0, y: 0, z: 0 };
+    const R = 100;
+
+    test('a segment passing clean through is a hit', () => {
+        expect(mod.segmentHitsSphere({ x: -500, y: 0, z: 0 }, { x: 500, y: 0, z: 0 }, centre, R)).toBe(true);
+    });
+
+    test('a segment that misses to the side is not', () => {
+        expect(mod.segmentHitsSphere({ x: -500, y: 200, z: 0 }, { x: 500, y: 200, z: 0 }, centre, R)).toBe(false);
+    });
+
+    test('a segment that STOPS SHORT of the sphere is not a hit', () => {
+        // The case a ray test gets wrong, and the one that matters most: a
+        // target standing in front of a planet must not read as hidden behind
+        // it. The infinite line through these two points does hit the sphere.
+        expect(mod.segmentHitsSphere({ x: -500, y: 0, z: 0 }, { x: -200, y: 0, z: 0 }, centre, R)).toBe(false);
+    });
+
+    test('a segment beginning beyond the sphere is not a hit either', () => {
+        expect(mod.segmentHitsSphere({ x: 200, y: 0, z: 0 }, { x: 500, y: 0, z: 0 }, centre, R)).toBe(false);
+    });
+
+    test('an endpoint inside counts', () => {
+        expect(mod.segmentHitsSphere({ x: -500, y: 0, z: 0 }, { x: 50, y: 0, z: 0 }, centre, R)).toBe(true);
+        expect(mod.segmentHitsSphere({ x: 50, y: 0, z: 0 }, { x: 500, y: 0, z: 0 }, centre, R)).toBe(true);
+    });
+
+    test('a grazing tangent is not a hit', () => {
+        expect(mod.segmentHitsSphere({ x: -500, y: R, z: 0 }, { x: 500, y: R, z: 0 }, centre, R)).toBe(false);
+    });
+
+    test('a zero-length segment falls back to a point test', () => {
+        const p = { x: 10, y: 0, z: 0 };
+        expect(mod.segmentHitsSphere(p, p, centre, R)).toBe(true);
+        const out = { x: 500, y: 0, z: 0 };
+        expect(mod.segmentHitsSphere(out, out, centre, R)).toBe(false);
+    });
+});
+
 // ---- the shell --------------------------------------------------------------
 
 describe('createBody', () => {
@@ -359,6 +487,116 @@ describe('orbitBody and updateBodies', () => {
         mod.createBody({ id: 'sat', radius: 1 });
         mod.orbitBody('sat', 'ghost', { radius: 10, period: 40, phase: 0, inclination: 0 });
         expect(mod.getBody('sat').position).toMatchObject({ x: 10, y: 0, z: 0 });
+    });
+});
+
+describe('anchorToSurface', () => {
+    beforeEach(() => {
+        mod.initBodies();
+        mod.createBody({ id: 'earth', radius: 6371 });
+        mod.createBody({ id: 'moon', radius: 1737 });
+        mod.orbitBody('moon', 'earth', { ...MOON, tidalLock: true });
+    });
+
+    test('parents the anchor to the body, so it rides the spin and the orbit', () => {
+        // This is why installations on a moving Moon need no per-frame work.
+        const anchor = mod.anchorToSurface('moon', 0, 90, 0);
+        expect(anchor.parent).toBe(mod.getBody('moon'));
+    });
+
+    test('sits exactly on the surface at the given lat and lon', () => {
+        const anchor = mod.anchorToSurface('earth', 60, -90, 0);
+        const p = anchor.position;
+        expect(Math.hypot(p.x, p.y, p.z)).toBeCloseTo(6371, 3);
+        expect(p.y).toBeCloseTo(6371 * Math.sin(Math.PI / 3), 3);
+    });
+
+    test('a height raises it above the surface', () => {
+        const anchor = mod.anchorToSurface('earth', 0, 0, 500);
+        const p = anchor.position;
+        expect(Math.hypot(p.x, p.y, p.z)).toBeCloseTo(6871, 3);
+    });
+
+    test('stands upright: local +Y is rotated onto the outward normal', () => {
+        const anchor = mod.anchorToSurface('earth', 35, 20, 0);
+        expect(anchor.aligned.from).toMatchObject({ x: 0, y: 1, z: 0 });
+        const n = anchor.aligned.to;
+        expect(Math.hypot(n.x, n.y, n.z)).toBeCloseTo(1, 6);
+        // The normal points the same way as the surface point itself.
+        const p = anchor.position;
+        const len = Math.hypot(p.x, p.y, p.z);
+        expect(n.x).toBeCloseTo(p.x / len, 6);
+        expect(n.y).toBeCloseTo(p.y / len, 6);
+    });
+
+    test('an unknown body yields nothing rather than throwing', () => {
+        expect(mod.anchorToSurface('pluto', 0, 0, 0)).toBeNull();
+    });
+});
+
+describe('collision', () => {
+    beforeEach(() => {
+        mod.initBodies();
+        mod.createBody({ id: 'earth', radius: 6371 });
+        mod.createBody({ id: 'mars', radius: 3390, position: [0, 0, -200000] });
+    });
+
+    test('reports nothing in open space', () => {
+        expect(mod.checkBodyCollision({ x: 0, y: 8500, z: 0 })).toBeNull();
+    });
+
+    test('names the body, the depth, and the way out', () => {
+        const hit = mod.checkBodyCollision({ x: 0, y: 6000, z: 0 });
+        expect(hit.id).toBe('earth');
+        expect(hit.penetration).toBeCloseTo(371);
+        expect(hit.normal).toMatchObject({ x: 0, y: 1, z: 0 });
+    });
+
+    test("counts the mover's own radius, so a ship stops at its hull", () => {
+        expect(mod.checkBodyCollision({ x: 0, y: 6400, z: 0 })).toBeNull();
+        expect(mod.checkBodyCollision({ x: 0, y: 6400, z: 0 }, 100)).not.toBeNull();
+    });
+
+    test('finds a body that is not at the origin', () => {
+        const hit = mod.checkBodyCollision({ x: 0, y: 0, z: -199000 });
+        expect(hit.id).toBe('mars');
+    });
+});
+
+describe('altitudeFloorAdjust', () => {
+    beforeEach(() => {
+        mod.initBodies();
+        mod.createBody({ id: 'earth', radius: 6371 });
+    });
+
+    test('leaves a clear position untouched', () => {
+        const p = { x: 0, y: 8500, z: 0 };
+        expect(mod.altitudeFloorAdjust(p, 400)).toBe(p);
+    });
+
+    test('pushes an intruding position out to the standoff altitude', () => {
+        const out = mod.altitudeFloorAdjust({ x: 0, y: 1000, z: 0 }, 400);
+        expect(Math.hypot(out.x, out.y, out.z)).toBeCloseTo(6771);
+        expect(out.y).toBeGreaterThan(0);   // pushed out the way it came in
+    });
+
+    test('keeps the direction of approach rather than teleporting', () => {
+        const out = mod.altitudeFloorAdjust({ x: 3000, y: 3000, z: 0 }, 400);
+        expect(out.x).toBeCloseTo(out.y, 6);
+    });
+
+    test('follows a body that has moved', () => {
+        // The reason main.js uses this rather than its own copy: it reads live
+        // positions, so it still works now that the Moon is in motion.
+        mod.createBody({ id: 'moon', radius: 1737 });
+        mod.orbitBody('moon', 'earth', { radius: 64000, period: 480, phase: 0, inclination: 0 });
+        // Just inside the Moon's surface, not at its exact centre: a point
+        // sitting precisely on a body's centre has no direction to be pushed
+        // in, and the module deliberately leaves it alone.
+        const insideMoon = { x: 65000, y: 0, z: 0 };
+        const out = mod.altitudeFloorAdjust(insideMoon, 400);
+        expect(out).not.toBe(insideMoon);
+        expect(Math.hypot(out.x - 64000, out.y, out.z)).toBeCloseTo(1737 + 400, 3);
     });
 });
 

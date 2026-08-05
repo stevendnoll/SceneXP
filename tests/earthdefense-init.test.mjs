@@ -182,6 +182,79 @@ describe('the Moon is off to one side at spawn', () => {
     });
 });
 
+describe('the installations', () => {
+    const S = () => CONFIG.structures;
+    const earthRadius = () => bodyById('earth').radius;
+
+    // Angular separation on a sphere, in degrees.
+    function sep(a, b) {
+        const [la1, lo1, la2, lo2] = [a.lat, a.lon, b.lat, b.lon].map(d => (d * Math.PI) / 180);
+        return Math.acos(Math.min(1,
+            Math.sin(la1) * Math.sin(la2) + Math.cos(la1) * Math.cos(la2) * Math.cos(lo2 - lo1))) * DEG;
+    }
+
+    // The point on Earth directly beneath the player at spawn.
+    const subPlayer = { lat: 60, lon: -90 };
+    // From altitude, a sphere only shows a cap of this angular radius.
+    const visibleCap = () => Math.acos(earthRadius() / CONFIG.spawn.distance) * DEG;
+
+    test('there are seven, four on Earth and three on the Moon', () => {
+        expect(S().earth).toHaveLength(4);
+        expect(S().moon).toHaveLength(3);
+    });
+
+    test('each takes three hits', () => {
+        expect(S().hitPoints).toBe(3);
+    });
+
+    test('every Earth installation is actually VISIBLE from the spawn point', () => {
+        // The correction that mattered at M3. An earlier draft put these on the
+        // Mars-facing hemisphere, which is 150 degrees from the sub-player
+        // point and therefore permanently behind the planet at spawn.
+        for (const site of S().earth) {
+            expect(sep(subPlayer, site)).toBeLessThan(visibleCap());
+        }
+    });
+
+    test('the Mars-facing face really is the wrong side to defend', () => {
+        // Pins the reasoning, so nobody re-adopts the earlier plan by accident.
+        const marsFacing = { lat: 0, lon: 90 };
+        expect(sep(subPlayer, marsFacing)).toBeGreaterThan(visibleCap());
+    });
+
+    test('no two Earth installations sit on top of each other', () => {
+        const sites = S().earth;
+        for (let i = 0; i < sites.length; i++) {
+            for (let j = i + 1; j < sites.length; j++) {
+                expect(sep(sites[i], sites[j])).toBeGreaterThan(15);
+            }
+        }
+    });
+
+    test('the Moon\'s three sit on its Earth-facing side', () => {
+        // Tidal locking keeps this face pointed at home for the whole game, so
+        // these three never rotate out of sight. In this convention the
+        // Earth-facing point is latitude 0, longitude 90.
+        const earthFacing = { lat: 0, lon: 90 };
+        for (const site of S().moon) {
+            expect(sep(earthFacing, site)).toBeLessThan(60);
+        }
+    });
+
+    test('Earth turns slowly enough to keep every installation reachable', () => {
+        // The M3 verification, as arithmetic rather than as a twelve-minute
+        // stare. A structure must not be carried past the horizon during a
+        // run, or it becomes impossible to defend.
+        const runSeconds = 12 * 60;
+        const degreesTurned = (runSeconds / bodyById('earth').rotationPeriod) * 360;
+        expect(degreesTurned).toBeLessThan(90);
+
+        // Even the furthest site stays within the visible cap plus that drift.
+        const furthest = Math.max(...S().earth.map(s => sep(subPlayer, s)));
+        expect(furthest + degreesTurned).toBeLessThan(180);
+    });
+});
+
 describe('the world builds and ticks', () => {
     beforeEach(() => {
         installThree();
@@ -212,6 +285,81 @@ describe('the world builds and ticks', () => {
 
         expect(world.getWorldGroup()).toBe(group);
         expect(world.getOccluders()).toHaveLength(3);
+
+        // Seven installations, built and parented to their bodies.
+        expect(world.getStructures()).toHaveLength(7);
+        expect(world.structuresRemaining('friendly')).toBe(7);
+    });
+
+    /** Build the installations on the SOURCE module rather than through
+     *  world.js, which resolves to the built copy. Same module graph, but this
+     *  is the instance whose state the assertions can reach (and the one the
+     *  coverage report is about). */
+    async function loadStructures() {
+        jest.resetModules();
+        const bodies = await import('../www/shared/js/bodies-1.0.0.min.js');
+        const structures = await import('../www/earthdefense/js/structures.js');
+        bodies.initBodies();
+        for (const spec of CONFIG.bodies) bodies.createBody(spec);
+        for (const spec of CONFIG.bodies) {
+            if (spec.orbit) bodies.orbitBody(spec.id, spec.orbit.parent, spec.orbit);
+        }
+        structures.initStructures(CONFIG);
+        return structures;
+    }
+
+    test('installations take three hits and report their losses', async () => {
+        const structures = await loadStructures();
+        expect(structures.getStructures()).toHaveLength(7);
+
+        const id = CONFIG.structures.earth[0].id;
+        expect(structures.damageStructure(id, 1)).toBe(2);
+        expect(structures.damageStructure(id, 1)).toBe(1);
+        expect(structures.structuresRemaining('friendly')).toBe(7);   // still standing
+
+        expect(structures.damageStructure(id, 1)).toBe(0);
+        expect(structures.structuresRemaining('friendly')).toBe(6);
+        // A fourth hit is a no-op rather than a negative count.
+        expect(structures.damageStructure(id, 1)).toBe(0);
+        expect(structures.damageStructure('nobody', 1)).toBeNull();
+        expect(structures.getStructure('nobody')).toBeNull();
+    });
+
+    test('a lost pip changes SHAPE, not only colour', async () => {
+        // Nothing in this experience may be readable by colour alone, so the
+        // readout is asserted against real numbers rather than through the
+        // chainable proxy, where every measurement would agree it is zero.
+        const structures = await loadStructures();
+        const pip = () => ({
+            material: null,
+            scale: { x: 1, y: 1, z: 1, set(x, y, z) { this.x = x; this.y = y; this.z = z; } }
+        });
+        const entry = { hitPoints: 2, pips: [pip(), pip(), pip()] };
+
+        structures.__test__.refreshPips(entry);
+
+        expect(entry.pips[0].scale.y).toBe(1);            // two still standing
+        expect(entry.pips[1].scale.y).toBe(1);
+        expect(entry.pips[2].scale.y).toBeLessThan(0.5);  // the lost one collapses
+        expect(entry.pips[2].material).not.toBe(entry.pips[0].material);
+    });
+
+    test('every installation reports a position, before and after a tick', async () => {
+        // Under the chainable proxy the COORDINATES are meaningless (every
+        // measurement reads as zero), so this checks the contract rather than
+        // the arithmetic: seven entries, keyed by id, produced without
+        // throwing on either side of a world update. That the lunar three
+        // actually move is a property of the orbit, asserted with real numbers
+        // in tests/shared-bodies.test.mjs.
+        const structures = await loadStructures();
+        const bodies = await import('../www/shared/js/bodies-1.0.0.min.js');
+
+        expect(Object.keys(structures.structurePositions())).toHaveLength(7);
+        bodies.updateBodies(60);
+        const after = structures.structurePositions();
+        expect(Object.keys(after)).toHaveLength(7);
+        expect(after['moon-north']).toBeDefined();
+        expect(after['earth-north']).toBeDefined();
     });
 
     test('parks the camera at the spawn transform, looking down -Z', async () => {

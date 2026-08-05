@@ -27,7 +27,8 @@ import {
     setLookSensitivity, setInvertPitch, setPerimeter, onPerimeterChange,
     setConstrainPosition, setPaused
 } from '../../shared/js/flight-1.0.0.min.js';
-import { initWorld, updateWorld, bodyPositions } from './world.min.js';
+import { initWorld, updateWorld } from './world.min.js';
+import { altitudeFloorAdjust } from '../../shared/js/bodies-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
@@ -170,24 +171,11 @@ function startFlight() {
     setConstrainPosition(keepAbovePlanets);
 }
 
-/** Push the ship back out to a standoff altitude if it would enter a body.
- *  Experience code rather than shared: the real version at M3 lives in
- *  bodies-1.0.0 and knows about penetration depth and sliding. */
+/** Keep the ship above the surface. M2 carried a hand-rolled version of this
+ *  in this file; M3 replaced it with the shared one, which reads live body
+ *  positions and so keeps working now that the Moon is moving. */
 function keepAbovePlanets(next) {
-    const floor = EARTHDEFENSE_CONFIG.altitudeFloor;
-    const centres = bodyPositions();
-    for (const spec of EARTHDEFENSE_CONFIG.bodies) {
-        const c = centres[spec.id];
-        if (!c) continue;
-        const dx = next.x - c.x, dy = next.y - c.y, dz = next.z - c.z;
-        const d = Math.hypot(dx, dy, dz);
-        const minimum = spec.radius + floor;
-        if (d > 0 && d < minimum) {
-            const k = minimum / d;
-            return { x: c.x + dx * k, y: c.y + dy * k, z: c.z + dz * k };
-        }
-    }
-    return next;
+    return altitudeFloorAdjust(next, EARTHDEFENSE_CONFIG.altitudeFloor);
 }
 
 function showPerimeterNotice(outside) {
