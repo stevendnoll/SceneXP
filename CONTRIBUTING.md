@@ -40,14 +40,13 @@ working references.
 - **Explorable worlds.** First-person scenes that visitors walk through, with
   keyboard and mouse on desktop, dual joysticks on phones, and collision so
   nobody wanders through a wall. Some also offer a guided autopilot tour.
-  `www/dad`, `www/family`, `www/roqui`, `www/seedtoseed`, `www/interstate`,
-  and `www/steve` are all built this way.
+  `www/dad`, `www/family`, `www/roqui`, and `www/steve` are all built this way.
 - **Composed views.** A fixed camera frames one lovingly detailed subject,
   and the scene moves instead of the visitor. A row of floating buttons
   offers gentle pan and zoom, with matching swipe and pinch gestures on
   touch screens, and tapping props opens short lines of story. This is the
   simplest model to build and a great fit for small subjects. See
-  `www/gavin` and `www/jamar`.
+  `www/gavin`.
 - **Hands-off rides.** The scene drives itself and the visitor mostly
   watches, with play and pause, speed, and direction controls for light
   steering. The Mandelbrot dive (`www/mandelbrot`) is the reference: its
