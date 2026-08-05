@@ -35,6 +35,85 @@
     /* System Font Stack */
     --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
         Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+
+    /* ---- Shared UI chrome theme (defaults) -----------------------------
+       Every experience shares the same welcome screen, loading screen,
+       crosshair, joysticks, floating buttons, and panels. These tokens are
+       the one place their colors are decided, so an experience can dress
+       that chrome to match its own world by naming a theme below.
+
+       The defaults are a neutral, near-white frost: bright enough to read
+       comfortably on the dark welcome backdrop, and quiet enough to sit
+       under any scene without competing with it.
+
+       --ui-accent-rgb carries the accent as a bare "r, g, b" triple so the
+       translucent washes (joysticks, glows, hovers) can vary the alpha
+       while still following the theme. Keep the two accent tokens in step
+       when overriding.
+
+       Adding a theme: copy a block below, keep the title at roughly 7:1
+       contrast and the subtitle at roughly 4.5:1 against the welcome
+       backdrop, then set data-ui-theme on the experience's <html>. */
+    --ui-title: #f1f5f9;
+    --ui-subtitle: #c8d3e0;
+    --ui-accent: #b8c6d9;
+    --ui-accent-rgb: 184, 198, 217;
+    --ui-accent-strong: #e2eaf3;
+    --ui-on-accent: #121832;
+    --ui-control-hover: rgba(var(--ui-accent-rgb), 0.3);
+    --ui-control-active: rgba(var(--ui-accent-rgb), 0.42);
+
+    /* The mobile joysticks follow the accent unless a theme says otherwise.
+       They are a pair of filled circles sat low on the screen, one on each
+       side, and in pink and flesh tones that arrangement reads as anatomy
+       rather than as controls. A theme in that part of the spectrum sets
+       this token to something cooler and leaves the rest of its palette
+       alone (see the neon theme below). */
+    --ui-joystick-rgb: var(--ui-accent-rgb);
+}
+
+/* Garden: a pale leaf green for the growing things
+   (www/dad, www/gavin, www/seedtoseed). */
+[data-ui-theme="garden"] {
+    --ui-title: #e4f2d9;
+    --ui-subtitle: #bcd9ab;
+    --ui-accent: #9ecb86;
+    --ui-accent-rgb: 158, 203, 134;
+    --ui-accent-strong: #d6ebc7;
+    --ui-on-accent: #10240e;
+}
+
+/* Surf: sea glass and shoreline aqua (www/family). */
+[data-ui-theme="surf"] {
+    --ui-title: #dcf3f4;
+    --ui-subtitle: #a9dbe0;
+    --ui-accent: #7fcbd4;
+    --ui-accent-rgb: 127, 203, 212;
+    --ui-accent-strong: #cdeef1;
+    --ui-on-accent: #06222a;
+}
+
+/* Neon: the stage-light rose of a night out (www/jamar, www/roqui).
+   The joysticks take the room's other neon, a cool violet, for the reason
+   given beside --ui-joystick-rgb above. */
+[data-ui-theme="neon"] {
+    --ui-title: #ffe3f0;
+    --ui-subtitle: #f7b6d3;
+    --ui-accent: #ff8fc0;
+    --ui-accent-rgb: 255, 143, 192;
+    --ui-accent-strong: #ffd0e5;
+    --ui-on-accent: #2a0a1c;
+    --ui-joystick-rgb: 198, 179, 255;
+}
+
+/* Ember: the warm amber of a deep-space dive (www/mandelbrot). */
+[data-ui-theme="ember"] {
+    --ui-title: #ffe9d2;
+    --ui-subtitle: #f2c496;
+    --ui-accent: #f0a765;
+    --ui-accent-rgb: 240, 167, 101;
+    --ui-accent-strong: #ffd9b0;
+    --ui-on-accent: #2b1405;
 }
 
 html,
@@ -113,7 +192,7 @@ body {
 .loader-title {
     font-size: 1.5rem;
     letter-spacing: 0.5em;
-    color: var(--lcars-orange);
+    color: var(--ui-title);
     margin-bottom: 2rem;
 }
 
@@ -129,7 +208,7 @@ body {
 .loader-progress {
     width: 0%;
     height: 100%;
-    background: linear-gradient(90deg, var(--lcars-orange), var(--command-gold));
+    background: linear-gradient(90deg, var(--ui-accent), var(--ui-accent-strong));
     border-radius: 4px;
     transition: width 0.3s ease;
 }
@@ -207,7 +286,7 @@ body {
     font-size: clamp(1.5rem, 5vw, 3rem);
     font-weight: 300;
     letter-spacing: 0.3em;
-    color: var(--lcars-orange);
+    color: var(--ui-title);
     margin-bottom: 0.25rem;
 }
 
@@ -215,7 +294,7 @@ body {
     font-size: clamp(1rem, 3vw, 1.5rem);
     font-weight: 300;
     letter-spacing: 0.2em;
-    color: var(--command-gold);
+    color: var(--ui-subtitle);
     margin-bottom: 3rem;
 }
 
@@ -256,8 +335,8 @@ body {
 
 .controls-hint span {
     display: inline-block;
-    background: var(--lcars-orange);
-    color: var(--bg-darker);
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
     padding: 0.25rem 0.5rem;
     border-radius: 3px;
     margin: 0 0.5rem 0 1rem;
@@ -298,7 +377,7 @@ body {
 .crosshair::after {
     content: '';
     position: absolute;
-    background: rgba(91, 134, 184, 0.85);
+    background: rgba(var(--ui-accent-rgb), 0.85);
 }
 
 .crosshair::before {
@@ -431,8 +510,8 @@ body {
     width: 120px;
     height: 120px;
     border-radius: 50%;
-    background: rgba(45, 166, 237, 0.2);
-    border: 2px solid rgba(45, 166, 237, 0.65);
+    background: rgba(var(--ui-joystick-rgb), 0.2);
+    border: 2px solid rgba(var(--ui-joystick-rgb), 0.65);
     /* Dark outer ring so the control stays visible over a bright daytime sky. */
     box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.28);
     pointer-events: none;
@@ -451,7 +530,7 @@ body {
     width: 50px;
     height: 50px;
     border-radius: 50%;
-    background: rgba(45, 166, 237, 0.75);
+    background: rgba(var(--ui-joystick-rgb), 0.75);
     border: 1px solid rgba(0, 0, 0, 0.3);
     pointer-events: none;
     transition: transform 0.05s ease-out;
@@ -463,8 +542,8 @@ body {
     width: 120px;
     height: 120px;
     border-radius: 50%;
-    background: rgba(45, 166, 237, 0.2);
-    border: 2px solid rgba(45, 166, 237, 0.4);
+    background: rgba(var(--ui-joystick-rgb), 0.2);
+    border: 2px solid rgba(var(--ui-joystick-rgb), 0.4);
     pointer-events: none;
 }
 
@@ -473,7 +552,7 @@ body {
     width: 50px;
     height: 50px;
     border-radius: 50%;
-    background: rgba(45, 166, 237, 0.6);
+    background: rgba(var(--ui-joystick-rgb), 0.6);
     transform: translate(-50%, -50%);
     pointer-events: none;
 }
@@ -811,11 +890,11 @@ body {
     left: 20px;
     width: 240px;
     background: rgba(18, 24, 50, 0.95);
-    border: 2px solid var(--accent);
+    border: 2px solid var(--ui-accent);
     border-radius: 8px;
     z-index: 110;
     pointer-events: auto;
-    box-shadow: 0 4px 20px rgba(45, 166, 237, 0.2);
+    box-shadow: 0 4px 20px rgba(var(--ui-accent-rgb), 0.2);
     transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
@@ -851,11 +930,11 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    border-bottom: 1px solid rgba(45, 166, 237, 0.3);
+    border-bottom: 1px solid rgba(var(--ui-accent-rgb), 0.3);
     font-size: 0.85rem;
     font-weight: 600;
     letter-spacing: 0.1em;
-    color: var(--accent);
+    color: var(--ui-accent);
     text-transform: uppercase;
 }
 
@@ -914,7 +993,7 @@ body {
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--ui-accent);
     cursor: pointer;
     border: 2px solid var(--bg-darker);
     transition: transform 0.15s ease;
@@ -928,21 +1007,21 @@ body {
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--ui-accent);
     cursor: pointer;
     border: 2px solid var(--bg-darker);
 }
 
 /* Keyboard focus indicator for the sliders (they set outline:none above). */
 .settings-label input[type="range"]:focus-visible {
-    outline: 2px solid var(--primary);
+    outline: 2px solid var(--ui-accent);
     outline-offset: 3px;
 }
 
 .settings-value {
     align-self: flex-end;
     font-size: 0.75rem;
-    color: var(--primary);
+    color: var(--ui-accent);
     font-weight: 600;
     min-width: 2.5em;
     text-align: right;
@@ -1869,8 +1948,8 @@ body {
 
 .is-touch-device #joystick-zone:active .joystick-base-fixed,
 .is-touch-device #look-joystick-zone:active .joystick-base-fixed {
-    border-color: rgba(45, 166, 237, 0.6);
-    background: rgba(45, 166, 237, 0.25);
+    border-color: rgba(var(--ui-joystick-rgb), 0.85);
+    background: rgba(var(--ui-joystick-rgb), 0.35);
 }
 
 /* Safe area insets for notched phones */
@@ -2217,7 +2296,7 @@ body {
 
 .skip-link:focus {
     transform: translateX(-50%) translateY(0);
-    outline: 3px solid var(--accent);
+    outline: 3px solid var(--ui-accent);
     outline-offset: 2px;
 }
 
@@ -2241,7 +2320,7 @@ body {
 }
 
 .a11y-hint a {
-    color: var(--accent);
+    color: var(--ui-accent);
 }
 
 /* "Look at" label near the crosshair */
@@ -2278,9 +2357,9 @@ body {
     max-width: calc(100vw - 40px);
     padding: 11px 14px 13px;
     background: rgba(18, 24, 50, 0.95);
-    border: 2px solid var(--accent);
+    border: 2px solid var(--ui-accent);
     border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(45, 166, 237, 0.2);
+    box-shadow: 0 4px 20px rgba(var(--ui-accent-rgb), 0.2);
     color: var(--text-dim);
     font-family: var(--font-system);
     z-index: 110;
@@ -2307,7 +2386,7 @@ body {
     font-weight: 600;
     letter-spacing: 0.11em;
     text-transform: uppercase;
-    color: var(--accent);
+    color: var(--ui-accent);
 }
 
 .checklist-count {
@@ -2340,7 +2419,7 @@ body {
     width: 13px;
     height: 13px;
     margin-top: 1px;
-    border: 1.5px solid rgba(91, 134, 184, 0.6);
+    border: 1.5px solid rgba(var(--ui-accent-rgb), 0.6);
     border-radius: 3px;
     position: relative;
     transition: background 0.25s ease, border-color 0.25s ease;
@@ -2360,8 +2439,8 @@ body {
 }
 
 .checklist-item.done .checklist-box {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: var(--ui-accent);
+    border-color: var(--ui-accent);
 }
 
 /* The checkmark inside a completed box. */
@@ -2372,7 +2451,7 @@ body {
     top: 0.5px;
     width: 4px;
     height: 8px;
-    border: solid var(--bg-darker);
+    border: solid var(--ui-on-accent);
     border-width: 0 2px 2px 0;
     transform: rotate(40deg);
 }
@@ -2393,7 +2472,7 @@ body {
     margin: 10px 0 0;
     font-size: 0.72rem;
     line-height: 1.4;
-    color: var(--accent);
+    color: var(--ui-accent);
 }
 
 .checklist.complete .checklist-done-msg {
@@ -2456,7 +2535,7 @@ body {
 }
 
 .menu-btn:hover {
-    background: rgba(60, 90, 128, 0.9);
+    background: var(--ui-control-hover);
 }
 
 .menu-btn svg {
@@ -2528,13 +2607,13 @@ body {
 }
 
 @keyframes checklist-btn-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(91, 134, 184, 0); }
-    30% { box-shadow: 0 0 0 6px rgba(91, 134, 184, 0.45); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(var(--ui-accent-rgb), 0); }
+    30% { box-shadow: 0 0 0 6px rgba(var(--ui-accent-rgb), 0.45); }
 }
 
 /* Active (panel open) state. */
 .checklist-btn[aria-expanded="true"] {
-    background: rgba(60, 90, 128, 0.9);
+    background: var(--ui-control-active);
     border-color: rgba(255, 255, 255, 0.6);
 }
 
@@ -2574,7 +2653,7 @@ body {
 }
 
 .settings-btn:hover {
-    background: rgba(60, 90, 128, 0.9);
+    background: var(--ui-control-hover);
     border-color: rgba(255, 255, 255, 0.6);
 }
 
@@ -2596,9 +2675,9 @@ body {
     width: 240px;
     max-width: calc(100vw - 40px);
     background: rgba(18, 24, 50, 0.95);
-    border: 2px solid var(--accent);
+    border: 2px solid var(--ui-accent);
     border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(45, 166, 237, 0.2);
+    box-shadow: 0 4px 20px rgba(var(--ui-accent-rgb), 0.2);
     z-index: 120;
     overflow: hidden;
     pointer-events: auto;
@@ -2617,8 +2696,8 @@ body {
     letter-spacing: 0.1em;
     text-transform: uppercase;
     font-size: 0.85rem;
-    color: var(--accent);
-    border-bottom: 1px solid rgba(45, 166, 237, 0.3);
+    color: var(--ui-accent);
+    border-bottom: 1px solid rgba(var(--ui-accent-rgb), 0.3);
 }
 
 .nav-menu-list {
@@ -2641,13 +2720,13 @@ body {
 
 .nav-menu-list a:hover,
 .nav-menu-list a:focus {
-    background: rgba(45, 166, 237, 0.15);
+    background: rgba(var(--ui-accent-rgb), 0.15);
     color: var(--text-light);
     outline: none;
 }
 
 .nav-menu-list a:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--ui-accent);
     outline-offset: -2px;
 }
 
@@ -4035,9 +4114,12 @@ body {
     stroke-linejoin: round;
 }
 
-.pan-btn:hover,
+.pan-btn:hover {
+    background: var(--ui-control-hover);
+}
+
 .pan-btn.held {
-    background: rgba(60, 90, 128, 0.9);
+    background: var(--ui-control-active);
 }
 
 /* This direction's travel is used up: still pressable, reads as spent. */

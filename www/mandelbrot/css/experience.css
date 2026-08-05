@@ -21,8 +21,10 @@
     max-width: min(92vw, 640px);
     padding: 0.45rem 1.1rem;
     background: rgba(12, 10, 8, 0.78);
-    border: 1px solid rgba(255, 122, 26, 0.55);
-    color: #ffd9b0;
+    /* Follows the page's ember UI theme (data-ui-theme on <html>) so the
+       readout stays in step with the shared chrome around it. */
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.55);
+    color: var(--ui-accent-strong);
     font-family: var(--font-system);
     font-size: 0.85rem;
     letter-spacing: 0.3px;

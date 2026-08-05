@@ -75,6 +75,45 @@ difference between a scene visitors look at and a scene they share:
 The shared modules behind each of these live in `www/shared/js`, documented
 part by part in its `README.md`.
 
+## Dress the shared controls
+
+Every experience shares one welcome screen, loading screen, crosshair,
+joystick pair, floating button set, and panel family. By default that chrome
+is a quiet near-white that sits under any scene without competing with it. If
+your world has a mood of its own, name a theme on your `<html>` element and
+the whole set follows along:
+
+```html
+<html lang="en" data-ui-theme="garden">
+```
+
+The themes live at the top of `www/shared/css/styles-1.0.0.css`, next to the
+`--ui-*` tokens they set. Today's set is `garden` (leaf green), `surf` (sea
+glass aqua), `neon` (stage-light rose), and `ember` (deep-space amber).
+Leaving the attribute off keeps the default.
+
+Adding a theme is six tokens copied from an existing block. Two things to
+keep in mind. Reach for a light tint of your hue rather than the brand color
+itself, since the welcome overlay is dark and most brand colors disappear
+against it. And keep `--ui-accent-rgb` in step with `--ui-accent`: they are
+the same color written twice, because the translucent washes need the
+channels separately. `tests/ui-theme.test.mjs` checks both, along with the
+contrast of every theme, so a mistake here shows up as a red test rather than
+an unreadable welcome screen.
+
+One more token to know about. The mobile joysticks follow your accent unless
+you set `--ui-joystick-rgb`, and they are a pair of filled circles sat low on
+the screen, one on each side. In pink and flesh tones that arrangement reads
+as anatomy rather than as controls, so a theme in that part of the spectrum
+points the joysticks somewhere cooler and leaves the rest of its palette
+alone. The `neon` theme does exactly this, and the test suite holds the line
+for any theme that forgets.
+
+For anything beyond color, an experience can still add its own
+`css/experience.css`, loaded after the shared stylesheet. It can read the
+same tokens, so custom pieces stay in step with the theme (see the
+`.depth-chip` readout in `www/mandelbrot`).
+
 ## Run it locally
 
 ES modules need to be served over HTTP, so run any static server from the
