@@ -69,17 +69,22 @@ function buildOne(config, side) {
     const h = config.height;
     const group = new THREE.Group();
 
+    // Named, because destruction swaps every hull piece to the wreck material
+    // and a restart has to be able to put the right one back on each.
     const base = new THREE.Mesh(p.baseGeometry, p.trimMaterial);
     base.position.y = h * 0.08;
+    base.name = 'base';
     group.add(base);
 
     const mast = new THREE.Mesh(p.mastGeometry, p.hullMaterial);
     mast.position.y = h * 0.52;
+    mast.name = 'mast';
     group.add(mast);
 
     const dish = new THREE.Mesh(p.dishGeometry, p.hullMaterial);
     dish.position.y = h * 0.95;
     dish.rotation.z = 0.35;
+    dish.name = 'dish';
     group.add(dish);
 
     const beaconColor = side === 'hostile' ? config.hostileBeaconColor : config.beaconColor;
@@ -203,6 +208,36 @@ export function destroyStructure(id) {
     // looks like it fell over, which at 160 units tall would be comic.
     entry.group.rotation.z = 0.21;
     return entry;
+}
+
+/** Stand every installation back up, without rebuilding any of it.
+ *
+ *  A restart must NOT go back through `initStructures`. That calls
+ *  `anchorToSurface`, which creates a fresh anchor group and parents it to the
+ *  body every time, so a second run would leave the first run's seven wrecks
+ *  standing in the world forever and a third would leave fourteen. Resetting
+ *  the state of what is already there is both cheaper and the only version
+ *  that is correct. */
+export function resetStructures(config = EARTHDEFENSE_CONFIG) {
+    const p = sharedParts(config.structures);
+    for (const entry of structures.values()) {
+        entry.hitPoints = config.structures.hitPoints;
+        entry.destroyed = false;
+        entry.group.userData.hitPoints = entry.hitPoints;
+        entry.group.userData.destroyed = false;
+        entry.group.rotation.z = 0;
+        if (entry.beacon) entry.beacon.visible = true;
+        // The hull was swapped to the wreck material on destruction, so it has
+        // to be swapped back. Pips and the beacon are left alone: refreshPips
+        // owns the first and the line above owns the second.
+        entry.group.children.forEach((child) => {
+            if (child.name && child.name.startsWith('pip-')) return;
+            if (child === entry.beacon) return;
+            child.material = child.name === 'base' ? p.trimMaterial : p.hullMaterial;
+        });
+        refreshPips(entry);
+    }
+    return structures;
 }
 
 /** A lost pip changes SHAPE as well as colour: it flattens to a dark sliver,

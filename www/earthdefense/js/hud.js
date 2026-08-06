@@ -33,12 +33,14 @@ import { EARTHDEFENSE_CONFIG } from './config.min.js';
 let cfg = null;
 let el = null;
 let pips = [];
+let livesPips = [];
 let navMarkers = [];
 
 // What is currently on screen, so nothing is written twice.
 const shown = {
     structures: null,
     ships: null,
+    lives: null,
     clock: null,
     alert: null,
     spoken: null
@@ -128,6 +130,7 @@ export function initHud(config = EARTHDEFENSE_CONFIG) {
         ships: document.getElementById('ships-count'),
         clock: document.getElementById('elapsed-time'),
         alert: document.getElementById('alert-banner'),
+        lives: document.getElementById('lives-pips'),
         pipLayer: document.getElementById('hostile-pips'),
         navLayer: document.getElementById('nav-markers'),
         alertChevron: document.getElementById('chevron-alert'),
@@ -136,8 +139,23 @@ export function initHud(config = EARTHDEFENSE_CONFIG) {
     };
 
     buildPips(config.fleet ? config.fleet.total : 0);
+    buildLives(config.player ? config.player.lives : 0);
     buildNavMarkers((config.hud && config.hud.navPoints) || []);
     return el;
+}
+
+/** Lives, as pips that EMPTY rather than vanish, so how many the visitor
+ *  started with stays readable at a glance. Shape carries it as well as colour:
+ *  a spent pip is a hollow outline, not a dimmer dot. */
+function buildLives(total) {
+    if (!el.lives) return;
+    el.lives.textContent = '';
+    for (let i = 0; i < total; i++) {
+        const pip = document.createElement('span');
+        pip.className = 'life-pip';
+        el.lives.appendChild(pip);
+        livesPips.push(pip);
+    }
 }
 
 /** One pip per raider, built once. They are diamonds rather than dots so they
@@ -191,6 +209,7 @@ export function updateHud(view) {
 
     setText(el.structures, view.structuresRemaining, 'structures');
     setText(el.ships, view.shipsRemaining, 'ships');
+    updateLives(view.lives);
 
     const clock = formatClock(view.elapsed);
     if (clock !== shown.clock) {
@@ -212,6 +231,14 @@ function setText(node, value, key) {
     if (value === undefined || value === null || value === shown[key]) return;
     shown[key] = value;
     if (node) node.textContent = String(value);
+}
+
+function updateLives(remaining) {
+    if (remaining === undefined || remaining === null || remaining === shown.lives) return;
+    shown.lives = remaining;
+    for (let i = 0; i < livesPips.length; i++) {
+        livesPips[i].classList.toggle('spent', i >= remaining);
+    }
 }
 
 function updateAlert(view) {
@@ -246,6 +273,9 @@ function speak(view) {
     const parts = [];
     if (view.event) parts.push(view.event);
     parts.push(counts);
+    if (view.lives !== undefined && view.lives !== null) {
+        parts.push(`${view.lives} ${view.lives === 1 ? 'hull' : 'hulls'} left.`);
+    }
     if (view.alert) parts.push(`${view.alert.label} is under attack.`);
 
     const sentence = parts.join(' ');
@@ -378,14 +408,17 @@ export function disposeHud() {
     if (el) {
         if (el.pipLayer) el.pipLayer.textContent = '';
         if (el.navLayer) el.navLayer.textContent = '';
+        if (el.lives) el.lives.textContent = '';
     }
     cfg = null;
     el = null;
     pips = [];
+    livesPips = [];
     navMarkers = [];
     scratchVec = null;
     shown.structures = null;
     shown.ships = null;
+    shown.lives = null;
     shown.clock = null;
     shown.alert = null;
     shown.spoken = null;
@@ -394,6 +427,7 @@ export function disposeHud() {
 export const __test__ = {
     edge,
     getPips: () => pips,
+    getLivesPips: () => livesPips,
     getNavMarkers: () => navMarkers,
     getElements: () => el,
     shown

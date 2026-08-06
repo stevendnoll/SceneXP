@@ -56,7 +56,7 @@ class FakeElement {
 const HUD_IDS = [
     'structures-count', 'ships-count', 'elapsed-time', 'alert-banner',
     'hostile-pips', 'nav-markers', 'chevron-alert', 'chevron-hostile',
-    'objective-status'
+    'objective-status', 'lives-pips'
 ];
 
 let nodes;
@@ -308,6 +308,44 @@ describe('the counters', () => {
         expect(hud.formatDistance(1234.6)).toBe('1,235 km');
         expect(hud.formatDistance(64000)).toBe('64k km');
         expect(hud.formatDistance(-10)).toBe('0 km');
+    });
+});
+
+describe('lives', () => {
+    test('there is one pip per life, and the count comes from config', () => {
+        hud.initHud(CONFIG);
+        expect(hud.__test__.getLivesPips()).toHaveLength(CONFIG.player.lives);
+    });
+
+    test('a spent pip EMPTIES rather than disappearing', () => {
+        // How many you started with has to stay readable, and the readout must
+        // not depend on telling two colours apart.
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ lives: CONFIG.player.lives }));
+        const pips = hud.__test__.getLivesPips();
+        expect(pips.every(p => !p.classList.contains('spent'))).toBe(true);
+
+        hud.updateHud(view({ lives: 1 }));
+        expect(pips[0].classList.contains('spent')).toBe(false);
+        expect(pips[1].classList.contains('spent')).toBe(true);
+        expect(pips[2].classList.contains('spent')).toBe(true);
+        // Every pip is still there, so the total is still countable.
+        expect(pips).toHaveLength(CONFIG.player.lives);
+    });
+
+    test('the hull count is spoken too, and reads correctly at one', () => {
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ lives: 2 }));
+        expect(nodes.get('objective-status').textContent).toMatch(/2 hulls left\.$/);
+        hud.updateHud(view({ lives: 1 }));
+        expect(nodes.get('objective-status').textContent).toMatch(/1 hull left\.$/);
+    });
+
+    test('a game with no lives simply has no pips and says nothing about them', () => {
+        hud.initHud({ ...CONFIG, player: { lives: 0 } });
+        expect(hud.__test__.getLivesPips()).toHaveLength(0);
+        hud.updateHud(view());
+        expect(nodes.get('objective-status').textContent).not.toMatch(/hull/);
     });
 });
 

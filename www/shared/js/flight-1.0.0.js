@@ -168,10 +168,16 @@ export function initFlight(options = {}) {
     touch.lookOrigin = null;
     touch.lastTapAt = 0;
     paused = false;
-    pointerLocked = false;
     outsidePerimeter = false;
 
     elements = options.elements || {};
+    // READ THE LOCK RATHER THAN ASSUMING IT IS OFF. init is called again on a
+    // respawn and on a restart, and the pointer lock survives both: the browser
+    // has no reason to fire pointerlockchange, so assuming false here would
+    // leave the module waiting for an event that never comes and mouse look
+    // would be dead for the rest of the session.
+    pointerLocked = typeof document !== 'undefined' && !!elements.canvas &&
+        document.pointerLockElement === elements.canvas;
     controller = new AbortController();
     wireKeyboard(controller.signal);
     wireMouse(controller.signal);

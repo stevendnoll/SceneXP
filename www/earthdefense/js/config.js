@@ -452,10 +452,38 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
     // 15,000 units; turning and the trip back stay at full power throughout.
     perimeter: { radius: 120000, fade: 15000 },
 
-    // Keeps the ship out of the planets until real collision arrives at M3.
-    // A few hundred kilometres of standoff, which at this scale reads as
-    // skimming the atmosphere rather than as hitting an invisible wall.
+    // YOU CANNOT FLY INTO A PLANET. This is a hard floor, applied to the
+    // position every frame, so a visitor who points at Earth and holds the
+    // throttle down slides to a halt 400 units above the surface and skims it.
+    //
+    // That is a deliberate departure from PRD 6.4, which lists flying into a
+    // planet as one of the two ways to lose a life. Settled at the M6 gate:
+    // the planets are the best thing in the experience and the first thing
+    // anyone does is fly at one to see how big it really is. Punishing that
+    // teaches a visitor not to look, which is the opposite of the whole point.
+    // Enemy fire is the only way to lose a ship. The floor is the same polite
+    // nudge it has been since M2, not a consequence.
     altitudeFloor: 400,
+
+    // ---- The visitor's own survival (PRD 6.4) -----------------------------
+    player: {
+        lives: 3,
+
+        // HOW MUCH FIRE A LIFE ABSORBS. PRD 6.4 says a life goes to SUSTAINED
+        // enemy fire, not to a single unlucky shot, and the fleet is already
+        // rate limited to about one incoming shot every 1.4 seconds across all
+        // twelve raiders. Four is therefore several seconds of standing still
+        // in the middle of a group, which is the only way to spend one.
+        hullPoints: 4,
+
+        // Grace after a respawn, so a visitor is not killed again by whatever
+        // they respawned next to before they have their bearings.
+        respawnInvulnerable: 2,
+
+        // How long the wreck hangs before the ship is put back. Long enough to
+        // register what happened, short enough not to be a punishment.
+        respawnDelay: 1.4
+    },
 
     // ---- Boot and site ----------------------------------------------------
     proofOfWork: { prefix: '11', storageKey: 'gallery-pow' },

@@ -150,6 +150,13 @@
                 <span class="objective-count" id="ships-count">12</span>
                 <span class="objective-label">raiders</span>
             </div>
+            <!-- Lives. Pips rather than a number, and they EMPTY rather than
+                 disappearing, so how many you started with stays readable.
+                 Built by hud.js from config.player.lives. -->
+            <div class="objective-row lives-row">
+                <span class="objective-label">hull</span>
+                <span class="lives-pips" id="lives-pips"></span>
+            </div>
         </div>
 
         <div id="elapsed-time" class="elapsed-time" aria-hidden="true">0:00</div>
@@ -319,6 +326,35 @@
                     designers and developers, who worked out with almost nothing that a screen
                     could be a place you go. Left unnamed on purpose. The debt is a shared one.</p>
                 <button class="piece-enter" type="button" data-close>Back to the helm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- The end of a run. Deliberately the same warm card as the pause panel
+         rather than a red failure screen: a loss here should read as an
+         invitation to go again, not as a scolding (PRD 4.5). -->
+    <div id="end-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="end-title">
+        <div class="modal-backdrop"></div>
+        <div class="modal-container piece-card">
+            <div class="piece-card-content">
+                <h2 id="end-title" class="piece-title">Well flown</h2>
+                <p id="end-subtitle" class="piece-subtitle"></p>
+                <dl class="end-stats">
+                    <div class="end-stat">
+                        <dt>Time</dt>
+                        <dd id="end-time">0:00</dd>
+                    </div>
+                    <div class="end-stat">
+                        <dt>Installations saved</dt>
+                        <dd id="end-saved">0</dd>
+                    </div>
+                    <div class="end-stat">
+                        <dt>Raiders destroyed</dt>
+                        <dd id="end-destroyed">0</dd>
+                    </div>
+                </dl>
+                <p id="end-best" class="end-best"></p>
+                <button id="restart-btn" class="piece-enter" type="button">Fly again</button>
             </div>
         </div>
     </div>

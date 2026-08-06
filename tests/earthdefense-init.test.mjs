@@ -490,6 +490,80 @@ describe('the world builds and ticks', () => {
         expect(second[0].position).toBe(firstEntry.position);
     });
 
+    test('a restart stands every installation back up, without rebuilding one', async () => {
+        // THIS MUST NOT GO BACK THROUGH initStructures. That calls
+        // anchorToSurface, which creates a fresh anchor group and parents it to
+        // the body every time, so a second run would leave the first run's
+        // seven wrecks standing in the world forever and a third would leave
+        // fourteen. The assertion that catches it is that the GROUP OBJECTS are
+        // the same ones, not merely that the counts came back.
+        const structures = await loadStructures();
+        const before = structures.getStructures().map(e => e.group);
+
+        structures.destroyStructure(CONFIG.structures.earth[0].id);
+        structures.damageStructure(CONFIG.structures.moon[0].id, 1);
+        expect(structures.structuresRemaining('friendly')).toBe(6);
+
+        structures.resetStructures(CONFIG);
+
+        expect(structures.structuresRemaining('friendly')).toBe(7);
+        expect(structures.targetCandidates()).toHaveLength(7);
+        expect(structures.getStructures().map(e => e.group)).toEqual(before);
+        for (const entry of structures.getStructures()) {
+            expect(entry.hitPoints).toBe(CONFIG.structures.hitPoints);
+            expect(entry.destroyed).toBe(false);
+        }
+    });
+
+    test('a restart puts the fleet back on the start line, without rebuilding it', async () => {
+        jest.resetModules();
+        const fleet = await import('../www/earthdefense/js/fleet.js');
+        fleet.initFleet(CONFIG, null, { structures: () => [] });
+
+        const meshes = fleet.getShips().map(s => s.mesh);
+        const start = fleet.getShips().map(s => ({ ...s.position }));
+
+        for (let i = 0; i < 40; i++) fleet.updateFleet(0.1, null);
+        fleet.destroyShip('raider-0');
+        fleet.destroyShip('raider-5');
+        expect(fleet.shipsRemaining()).toBe(10);
+
+        fleet.resetFleet();
+
+        expect(fleet.shipsRemaining()).toBe(CONFIG.fleet.total);
+        expect(fleet.fleetCandidates()).toHaveLength(CONFIG.fleet.total);
+        // The same twelve hulls, not twelve new ones: a restart that rebuilt
+        // them would leave the previous fleet's geometry on the GPU.
+        expect(fleet.getShips().map(s => s.mesh)).toEqual(meshes);
+        fleet.getShips().forEach((ship, i) => {
+            expect(ship.position.x).toBeCloseTo(start[i].x, 6);
+            expect(ship.position.y).toBeCloseTo(start[i].y, 6);
+            expect(ship.position.z).toBeCloseTo(start[i].z, 6);
+        });
+        expect(fleet.getAlert()).toBeNull();
+
+        fleet.disposeFleet();
+        // Resetting a fleet that does not exist is a no-op, not a crash.
+        expect(fleet.resetFleet()).toBe(0);
+    });
+
+    test('disposing takes the group back out of the scene it joined', async () => {
+        // Releasing the GPU resources while leaving an empty group parented is
+        // how a restart quietly accumulates one dead group per run, each still
+        // walked by the renderer every frame.
+        jest.resetModules();
+        const fleet = await import('../www/earthdefense/js/fleet.js');
+        const scene = {
+            children: [],
+            add(o) { this.children.push(o); },
+            remove(o) { this.children = this.children.filter(c => c !== o); }
+        };
+        const group = fleet.initFleet(CONFIG, scene, {});
+        expect(scene.children).toContain(group);
+        fleet.disposeFleet();
+        expect(scene.children).toHaveLength(0);
+    });
+
     test('a lost pip changes SHAPE, not only colour', async () => {
         // Nothing in this experience may be readable by colour alone, so the
         // readout is asserted against real numbers rather than through the

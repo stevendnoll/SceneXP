@@ -27,7 +27,7 @@ import {
     getBody, bodyPositions, getOccluders
 } from '../../shared/js/bodies-1.0.0.min.js';
 import {
-    initStructures, getStructures, getStructure,
+    initStructures, resetStructures, getStructures, getStructure,
     structuresRemaining, structurePositions, targetCandidates,
     damageStructure, destroyStructure
 } from './structures.min.js';
@@ -81,6 +81,6 @@ export function placeCameraAtSpawn(camera, config = EARTHDEFENSE_CONFIG) {
 export function getWorldGroup() { return group; }
 export { getBody, bodyPositions, getOccluders };
 export {
-    getStructures, getStructure, structuresRemaining, structurePositions,
-    targetCandidates, damageStructure, destroyStructure
+    resetStructures, getStructures, getStructure, structuresRemaining,
+    structurePositions, targetCandidates, damageStructure, destroyStructure
 };

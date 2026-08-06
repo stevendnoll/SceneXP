@@ -60,6 +60,7 @@ const damageables = new Map();   // id -> { id, hitPoints, maxHitPoints }
 
 let settings = null;
 let group = null;
+let host = null;        // the scene the group was added to, so dispose can undo it
 let tracers = [];
 let flashes = [];
 let flashGeometry = null;   // one sphere, shared by every flash in the pool
@@ -152,7 +153,10 @@ export function initWeapons(config = {}, scene = null) {
     buildFlashPool();
     buildBurstPool();
 
-    if (scene) scene.add(group);
+    if (scene) {
+        host = scene;
+        scene.add(group);
+    }
     return group;
 }
 
@@ -468,6 +472,15 @@ function oldest(pool) {
     return best;
 }
 
+/** Play a destruction burst at a point, for something this module did not
+ *  shoot. The player's own ship is the case that needs it: it dies to a
+ *  collision or to accumulated damage rather than to a registered hit, and it
+ *  should still go up the same way everything else does. */
+export function spawnDestruction(at, radius) {
+    if (!settings || !at) return null;
+    return spawnBurst(at, radius || settings.effectRadius);
+}
+
 // ---- Inspection, for the HUD and the suite ---------------------------------
 
 export function getWeaponsGroup() { return group; }
@@ -475,9 +488,16 @@ export function activeTracerCount() { return tracers.filter(t => t.active).lengt
 export function tracerPoolSize() { return tracers.length; }
 export function getCadenceAccumulator() { return accumulator; }
 
-/** Release every pooled geometry and material. Safe to call more than once,
- *  which matters because init calls it first. */
+/** Release every pooled geometry and material, and take the group back out of
+ *  the scene. Safe to call more than once, which matters because init calls it
+ *  first.
+ *
+ *  THE SCENE REMOVAL IS NOT COSMETIC. Releasing the GPU resources while leaving
+ *  an empty group parented is how a restart quietly accumulates one dead group
+ *  per run, each one still walked by the renderer every frame. */
 export function disposeWeapons() {
+    if (host && group && typeof host.remove === 'function') host.remove(group);
+    host = null;
     for (const t of tracers) {
         if (t.geometry) t.geometry.dispose();
         if (t.material) t.material.dispose();

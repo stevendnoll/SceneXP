@@ -402,6 +402,33 @@ body:not(.is-touch-device) .throttle-readout {
     transform: rotate(45deg);
 }
 
+/* Lives. Pips rather than a number, and a spent one EMPTIES to an outline
+   rather than disappearing, so how many you started with stays readable and the
+   readout does not depend on telling two colours apart. */
+.lives-row {
+    margin-top: 2px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.lives-pips {
+    display: inline-flex;
+    gap: 5px;
+}
+
+.life-pip {
+    width: 9px;
+    height: 9px;
+    border: 2px solid #9be7ff;
+    border-radius: 50%;
+    background: #9be7ff;
+}
+
+.life-pip.spent {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.32);
+}
+
 .elapsed-time {
     position: fixed;
     top: 22px;
@@ -669,6 +696,55 @@ body.hull-hit::after {
     font-size: 0.8rem;
     line-height: 1.4;
     opacity: 0.72;
+}
+
+/* ============================================================
+   The end of a run
+   ============================================================
+   Deliberately the same warm card as the pause panel rather than a red failure
+   screen. Losing here should read as an invitation to go again, which is the
+   whole difficulty stance (PRD 4.5), and a win and a loss share the layout so
+   neither is the special case. */
+
+.end-stats {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin: 22px 0 6px;
+    padding: 0;
+    flex-wrap: wrap;
+}
+
+.end-stat {
+    text-align: center;
+}
+
+.end-stat dt {
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.62;
+}
+
+.end-stat dd {
+    margin: 4px 0 0;
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    color: rgb(var(--ui-accent-rgb));
+}
+
+.end-best {
+    margin: 14px 0 0;
+    font-size: 0.86rem;
+    opacity: 0.78;
+    min-height: 1.2em;
+}
+
+/* No close button and no backdrop dismissal on this one. The run is over, so
+   the only way on is the button that starts the next one: a card the visitor
+   can dismiss into a dead scene would leave them with nothing to do. */
+#end-modal .modal-backdrop {
+    pointer-events: none;
 }
 
 /* The dedication in the pause panel, set apart from the control list. */

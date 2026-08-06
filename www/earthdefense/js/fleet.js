@@ -49,6 +49,7 @@ const WORLD_UP = { x: 0, y: 1, z: 0 };
 let cfg = null;
 let hooks = {};
 let group = null;
+let host = null;        // the scene the group was added to, so dispose can undo it
 let ships = [];
 let shared = null;
 let lights = null;          // { points, positions, attribute, geometry, material }
@@ -244,8 +245,45 @@ export function initFleet(config = EARTHDEFENSE_CONFIG, scene = null, hooksIn = 
     assignTargets();
     writeMeshes();
 
-    if (scene) scene.add(group);
+    if (scene) {
+        host = scene;
+        scene.add(group);
+    }
     return group;
+}
+
+/** Put the whole fleet back on the start line without rebuilding a single
+ *  mesh. This is what a restart wants: twelve hulls, a light buffer, and six
+ *  beams are already on the GPU, and throwing them away to make identical ones
+ *  is churn a phone pays for. */
+export function resetFleet() {
+    if (!cfg) return 0;
+    for (const ship of ships) {
+        ship.position.x = ship.start.x;
+        ship.position.y = ship.start.y;
+        ship.position.z = ship.start.z;
+        ship.heading.x = ship.startHeading.x;
+        ship.heading.y = ship.startHeading.y;
+        ship.heading.z = ship.startHeading.z;
+        ship.state = STATE.TRANSIT;
+        ship.alive = true;
+        ship.mesh.visible = true;
+        ship.fireTimer = cfg.fireInterval;
+        ship.playerFireTimer = cfg.playerFireInterval;
+        ship.evadeTimer = 0;
+        ship.evadeCooldown = 0;
+        ship.distanceToPlayer = Infinity;
+    }
+    for (const b of beams) {
+        b.active = false;
+        b.age = 0;
+        b.line.visible = false;
+    }
+    playerFireClock = 0;
+    alert = null;
+    assignTargets();
+    writeMeshes();
+    return ships.length;
 }
 
 function buildSharedParts() {
@@ -316,6 +354,9 @@ function buildShip(index, groupIndex, spec, body) {
     // Aimed inward from the start, so the opening frame shows a fleet already
     // on its way rather than twelve ships pointing in arbitrary directions.
     normalise(ship.heading, -position.x, -position.y, -position.z);
+    // Kept so a restart can put the fleet back without rebuilding it.
+    ship.start = { x: position.x, y: position.y, z: position.z };
+    ship.startHeading = { x: ship.heading.x, y: ship.heading.y, z: ship.heading.z };
 
     ship.candidate = {
         id: ship.id,
@@ -711,6 +752,11 @@ export function fleetCandidates() {
 export function getFleetGroup() { return group; }
 
 export function disposeFleet() {
+    // Taking the group back out of the scene, not only releasing what is in it.
+    // An empty group left parented is still walked by the renderer every frame,
+    // and a restart would leave one behind per run.
+    if (host && group && typeof host.remove === 'function') host.remove(group);
+    host = null;
     if (shared) {
         shared.hull.dispose();
         shared.wing.dispose();

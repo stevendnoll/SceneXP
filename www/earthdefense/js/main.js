@@ -2,11 +2,17 @@
 /**
  * main.js - Application entry point for the Earth Defense experience.
  *
- * M5 SCOPE. The world flies (M2), the installations ride Earth and the Moon
- * (M3), the guns work (M4), and now there is a war on: twelve Martian raiders
- * are strung out along the approach vector from the first frame, and the HUD
- * says how it is going. Still to come are the game state, the win and lose
- * screens, and lives (M6), and the final canopy (M7).
+ * M6 SCOPE. The world flies (M2), the installations ride Earth and the Moon
+ * (M3), the guns work (M4), the fleet is on its way in (M5), and now it is a
+ * game: it can be won, it can be lost, it can be started again, and the clock
+ * only runs while it is actually being played. The final canopy is M7.
+ *
+ * THE STATE MACHINE IS THE SPINE FROM HERE. `gamestate-1.0.0` decides which of
+ * briefing, playing, paused, won, and lost the experience is in, and every
+ * screen and every part of the frame loop follows from that one answer rather
+ * than from a flag of its own. The welcome overlay IS the briefing, which is
+ * why the raiders now hold their positions until the visitor takes the helm:
+ * before M6 the fleet closed in while the dedication was still being read.
  *
  * This file owns the seam between the shared parts and the scene: flight
  * (flight-1.0.0) deals only in plain numbers, and this is where those numbers
@@ -37,20 +43,25 @@ import {
 } from '../../shared/js/flight-1.0.0.min.js';
 import {
     initWorld, updateWorld, getBody, getOccluders, getStructures, getStructure,
-    structuresRemaining, targetCandidates, damageStructure
+    resetStructures, targetCandidates, damageStructure
 } from './world.min.js';
 import { altitudeFloorAdjust } from '../../shared/js/bodies-1.0.0.min.js';
 import { pickTarget } from '../../shared/js/targeting-1.0.0.min.js';
 import {
     initWeapons, updateWeapons, registerDamageable, applyDamage, onHit,
-    disposeWeapons
+    clearDamageables, spawnDestruction, disposeWeapons
 } from '../../shared/js/weapons-1.0.0.min.js';
+import {
+    initGameState, resetRun, transition, getState as gamePhase, isPlaying, isOver,
+    noteDestroyed, getCounters, loseLife, livesRemaining, endedByLives,
+    tick, elapsed, onStateChange, bestTime, recordBestTime, disposeGameState
+} from '../../shared/js/gamestate-1.0.0.min.js';
 import {
     initCockpit, resizeCockpit, muzzleWorldPositions, setCockpitFiring,
     disposeCockpit
 } from './cockpit.min.js';
 import {
-    initFleet, updateFleet, getShips, shipsRemaining, fleetCandidates,
+    initFleet, updateFleet, resetFleet, getShips, fleetCandidates,
     destroyShip, getAlert, disposeFleet
 } from './fleet.min.js';
 import { initHud, updateHud, projectToScreen, getProjection, disposeHud } from './hud.min.js';
@@ -58,10 +69,13 @@ import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/tele
 
 // ---- Application state ----------------------------------------------------
 
+// `isPaused` is deliberately NOT here. Whether the game is running is
+// gamestate's answer now, and a second flag beside it would be one more thing
+// to keep in step and one more way for the pause panel and the simulation to
+// disagree about what is happening.
 const state = {
     isRunning: false,
     isLoaded: false,
-    isPaused: false,
     lastTime: 0,
     isMobile: false
 };
@@ -76,6 +90,7 @@ let canvas, loadingScreen, blocker, touchControls;
 let throttleReadout, perimeterNotice, flightStatus;
 let settingsPanel, settingsBtn, pauseModal;
 let reticle, lockBracket, combatStatus;
+let endModal, endTitle, endSubtitle, endTime, endSaved, endDestroyed, endBest;
 let scene = null;
 let overlayScene = null;
 let cleanupController = null;
@@ -84,10 +99,14 @@ let _sessionStart = 0;
 let _sessionEnded = false;
 let _announcedThrottle = null;
 let _announcedLock = null;
-let _elapsed = 0;
 let _hullHitTimer = 0;
 let _event = null;
 let _eventTimer = 0;
+// The visitor's own survival. Hull points absorb enemy fire and refill with
+// each life; the two timers are the wreck and the grace period after it.
+let _hullPoints = 0;
+let _respawnTimer = 0;
+let _invulnerable = 0;
 
 // The view handed to pickTarget. Rewritten in place each frame rather than
 // rebuilt, because this runs sixty times a second.
@@ -99,7 +118,8 @@ const _player = { position: { x: 0, y: 0, z: 0 }, forward: { x: 0, y: 0, z: -1 }
 const _candidates = [];
 const _hudView = {
     camera: null, elapsed: 0, structuresRemaining: 0, shipsRemaining: 0,
-    ships: null, bodies: null, alert: null, event: null, playerPosition: null
+    ships: null, bodies: null, alert: null, event: null, lives: 0,
+    playerPosition: null
 };
 // One record per navigable body, rewritten in place. bodies-1.0.0 also offers
 // `bodyPositions()`, which builds a fresh object per body per call: fine once,
@@ -125,6 +145,13 @@ async function init() {
     reticle = document.getElementById('reticle');
     lockBracket = document.getElementById('lock-bracket');
     combatStatus = document.getElementById('combat-status');
+    endModal = document.getElementById('end-modal');
+    endTitle = document.getElementById('end-title');
+    endSubtitle = document.getElementById('end-subtitle');
+    endTime = document.getElementById('end-time');
+    endSaved = document.getElementById('end-saved');
+    endDestroyed = document.getElementById('end-destroyed');
+    endBest = document.getElementById('end-best');
 
     if (!canvas) return;
 
@@ -224,9 +251,16 @@ function startFlight() {
     setConstrainPosition(keepAbovePlanets);
 }
 
-/** Keep the ship above the surface. M2 carried a hand-rolled version of this
- *  in this file; M3 replaced it with the shared one, which reads live body
- *  positions and so keeps working now that the Moon is moving. */
+/** Keep the ship above the surface. M2 carried a hand-rolled version of this in
+ *  this file; M3 replaced it with the shared one, which reads live body
+ *  positions and so keeps working now that the Moon is moving.
+ *
+ *  THIS IS THE ONLY THING STANDING BETWEEN A VISITOR AND THE INSIDE OF EARTH,
+ *  and it is a hard floor rather than a warning: the position is rewritten
+ *  every frame, so pointing at a planet and holding the throttle down ends in a
+ *  skim rather than in anything at all. Losing a ship to it was tried at M6 and
+ *  taken back out, because the planets are the best thing here and the first
+ *  thing anyone does is fly at one to see how big it is. */
 function keepAbovePlanets(next) {
     return altitudeFloorAdjust(next, EARTHDEFENSE_CONFIG.altitudeFloor);
 }
@@ -272,6 +306,174 @@ function startCombat() {
     _targetRules.allegiance = config.targeting.allegiance;
 
     initHud(config);
+    startGame();
+}
+
+// ---- The game -------------------------------------------------------------
+
+/** Hand the state machine the two things it counts and the two rules it counts
+ *  them against.
+ *
+ *  THE RULES ARE PREDICATES, not code inside gamestate. That is what keeps the
+ *  module reusable: it never learns what an installation or a raider is, only
+ *  that named counters go down and that these two functions have opinions about
+ *  the result. */
+function startGame() {
+    const config = EARTHDEFENSE_CONFIG;
+
+    initGameState({
+        objectives: [
+            { counter: 'friendlyStructures', ids: getStructures().map(e => e.site.id) },
+            { counter: 'hostileShips', ids: getShips().map(s => s.id) }
+        ],
+        winWhen: (c) => c.hostileShips === 0,
+        loseWhen: (c) => c.friendlyStructures === 0,
+        lives: config.player.lives,
+        storageKey: config.storage.bestTime
+    });
+    onStateChange(handleStateChange);
+
+    _hullPoints = config.player.hullPoints;
+    _respawnTimer = 0;
+    _invulnerable = 0;
+}
+
+/** Everything that has to happen when the game changes state, in one place.
+ *
+ *  Wired as a subscriber rather than done at each call site, so a transition
+ *  from anywhere (the welcome button, Esc, the last raider dying, a restart)
+ *  puts the same screens up. Missing one of these at one call site is how a
+ *  pause panel ends up over a win screen. */
+function handleStateChange(next) {
+    // The simulation is frozen for anything that is not active play, which
+    // includes the briefing: raiders should not close in while the dedication
+    // is still on screen. A wrecked ship stays frozen through a pause and out
+    // the other side, or resuming would hand the controls back to a visitor
+    // whose ship is still an expanding cloud.
+    setPaused(next !== 'playing' || _respawnTimer > 0);
+
+    if (blocker) blocker.classList.toggle('hidden', next !== 'briefing');
+    if (pauseModal) pauseModal.classList.toggle('hidden', next !== 'paused');
+
+    if (next === 'won' || next === 'lost') {
+        // The wash from the shot that ended the run would otherwise sit over
+        // the end screen forever: the frame clock that clears it only runs
+        // while the game is being played.
+        _hullHitTimer = 0;
+        document.body.classList.remove('hull-hit');
+        showEndScreen(next);
+    } else if (endModal) {
+        endModal.classList.add('hidden');
+    }
+
+    if (next !== 'playing' && typeof document.exitPointerLock === 'function') {
+        // Holding the cursor captive behind a dialog is a trap, not a feature.
+        document.exitPointerLock();
+    }
+}
+
+/** The end of a run. The same warm card as the pause panel on purpose: a loss
+ *  should read as an invitation to go again rather than as a scolding, which is
+ *  the whole difficulty stance (PRD 4.5). */
+function showEndScreen(outcome) {
+    const config = EARTHDEFENSE_CONFIG;
+    const counters = getCounters();
+    const seconds = elapsed();
+    const won = outcome === 'won';
+
+    let best = bestTime();
+    let improved = false;
+    // Only a WIN sets a best time. A quick loss is not a fast run.
+    if (won) ({ best, improved } = recordBestTime(seconds));
+
+    if (endTitle) endTitle.textContent = won ? 'The line held' : 'Run ended';
+    if (endSubtitle) endSubtitle.textContent = endMessage(outcome, counters);
+    if (endTime) endTime.textContent = formatClock(seconds);
+    if (endSaved) endSaved.textContent = String(counters.friendlyStructures);
+    if (endDestroyed) {
+        endDestroyed.textContent = String(config.fleet.total - counters.hostileShips);
+    }
+    if (endBest) {
+        endBest.textContent = best === null
+            ? ''
+            : (improved ? `A new best: ${formatClock(best)}` : `Your best: ${formatClock(best)}`);
+    }
+    if (endModal) endModal.classList.remove('hidden');
+    // The card has no close button on purpose, so the one control on it has to
+    // receive focus: a keyboard visitor should not have to go looking for the
+    // only way forward.
+    const restartBtn = document.getElementById('restart-btn');
+    if (restartBtn && typeof restartBtn.focus === 'function') restartBtn.focus();
+
+    announce(endTitle ? endTitle.textContent : outcome, 8);
+    track('run-ended', {
+        outcome,
+        seconds: Math.round(seconds),
+        saved: counters.friendlyStructures,
+        destroyed: config.fleet.total - counters.hostileShips
+    });
+}
+
+/** RUNNING OUT OF HULLS IS NOT A LOST OBJECTIVE (PRD 6.4). The run is over
+ *  either way, but saying the installations fell when they did not is exactly
+ *  the small dishonesty that makes a game feel cheap. */
+function endMessage(outcome, counters) {
+    if (outcome === 'won') {
+        return counters.friendlyStructures === 7
+            ? 'Every installation still standing. Not a scratch on the whole line.'
+            : 'The fleet is gone. What is left down there is still yours.';
+    }
+    if (endedByLives()) {
+        return 'Your ship did not make it home. The installations are still holding.';
+    }
+    return 'The last installation is gone. The raiders have the orbit.';
+}
+
+/** Seconds as m:ss, matching the HUD clock. Small enough to keep here rather
+ *  than reaching into hud.js for one string on one screen. */
+function formatClock(seconds) {
+    const total = Math.max(0, Math.floor(seconds || 0));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** Put the whole game back to its opening position.
+ *
+ *  NOTHING IS REBUILT. Every module resets what it owns rather than being
+ *  disposed and recreated: the installations stand back up, the fleet returns
+ *  to the start line, and the damage ledger is cleared and refilled. Going back
+ *  through the builders would re-anchor seven installations onto bodies that
+ *  already carry them and leave the previous run's wrecks in the world forever.
+ */
+function restartRun() {
+    const config = EARTHDEFENSE_CONFIG;
+
+    resetStructures(config);
+    resetFleet();
+
+    clearDamageables();
+    for (const entry of getStructures()) {
+        registerDamageable(entry.site.id, config.structures.hitPoints);
+    }
+    for (const ship of getShips()) {
+        registerDamageable(ship.id, config.fleet.hitPoints);
+    }
+
+    // Back to the spawn transform with the throttle closed. initFlight disposes
+    // its own listeners first, so this re-wires rather than stacking.
+    startFlight();
+
+    _hullPoints = config.player.hullPoints;
+    _respawnTimer = 0;
+    _invulnerable = 0;
+    _event = null;
+    _eventTimer = 0;
+    _announcedLock = null;
+    _hullHitTimer = 0;
+    document.body.classList.remove('hull-hit');
+
+    resetRun();
+    transition('playing');
+    track('restart');
 }
 
 /** A raider's shot, put on the same ledger the visitor's guns use. Returns the
@@ -283,30 +485,80 @@ function resolveDamage(id, amount) {
 }
 
 /** The scene reacting to a decision `weapons` already made. Which half of the
- *  game the id belongs to is asked rather than parsed out of its prefix. */
+ *  game the id belongs to is asked rather than parsed out of its prefix.
+ *
+ *  `noteDestroyed` is the only place the objective counters move, so what the
+ *  HUD shows and what decides the win can never drift apart. */
 function onDamageResolved(result) {
     const structure = getStructure(result.id);
     if (structure) {
         damageStructure(result.id, result.hitPoints);
         if (result.destroyed) {
+            noteDestroyed(result.id);
             track('structure-lost', { id: result.id });
             announce(`${labelFor(result.id)} destroyed.`);
         }
         return;
     }
     if (result.destroyed && destroyShip(result.id)) {
+        noteDestroyed(result.id);
         track('raider-destroyed', { id: result.id });
-        announce(`Raider destroyed. ${shipsRemaining()} left.`);
+        announce(`Raider destroyed. ${getCounters().hostileShips} left.`);
     }
 }
 
-/** A raider landing a shot on the visitor. At M5 that is a warning and a brief
- *  wash of colour at the edges of the frame; the life it costs is wired at M6
- *  along with the rest of the game state (PRD 6.4). */
-function notePlayerHit() {
+/** A raider landing a shot on the visitor.
+ *
+ *  A single hit never costs a life: PRD 6.4 says SUSTAINED fire, and the fleet
+ *  is already limited to about one incoming shot every 1.4 seconds across all
+ *  twelve raiders, so four hull points is several seconds of sitting still in
+ *  the middle of a group. */
+function notePlayerHit(amount) {
+    if (_invulnerable > 0 || _respawnTimer > 0 || !isPlaying()) return;
+
+    _hullPoints -= (amount || 1);
     _hullHitTimer = 0.45;
     document.body.classList.add('hull-hit');
+
+    if (_hullPoints <= 0) {
+        // The only way to lose a ship. Flying into a planet is not one: see the
+        // note on `altitudeFloor` in config.js for why that was taken out.
+        killPlayer('fire');
+        return;
+    }
     announce('Taking fire.');
+}
+
+/** Losing the ship. Costs a life, not the run, unless it was the last one.
+ *
+ *  The wreck is a real pause of a second or so rather than an instant snap back
+ *  to the spawn point, because a death the visitor does not see is a death they
+ *  will assume was a bug. */
+function killPlayer(cause) {
+    if (_respawnTimer > 0 || isOver()) return;
+    const config = EARTHDEFENSE_CONFIG;
+
+    spawnDestruction(getFlightState().position, config.fleet.effectRadius * 2);
+    setPaused(true);
+    _respawnTimer = config.player.respawnDelay;
+    _hullHitTimer = 0.45;
+    document.body.classList.add('hull-hit');
+    track('player-lost', { cause });
+
+    const left = loseLife();
+    announce(left > 0
+        ? `Ship lost. ${left} ${left === 1 ? 'hull' : 'hulls'} left.`
+        : 'Ship lost.', 5);
+}
+
+/** Put the ship back, with a couple of seconds of grace so nobody is killed
+ *  again by whatever they respawned beside before they have their bearings. */
+function respawnPlayer() {
+    const config = EARTHDEFENSE_CONFIG;
+    startFlight();
+    _hullPoints = config.player.hullPoints;
+    _invulnerable = config.player.respawnInvulnerable;
+    setPaused(false);
 }
 
 function labelFor(id) {
@@ -358,7 +610,11 @@ function updateCombat(deltaTime) {
     // visitor shoot through it.
     _targetRules.occluders = getOccluders();
 
-    const target = pickTarget(_view, combatCandidates(), _targetRules);
+    // A wrecked ship holds its fire but its effects keep running, which is how
+    // the destruction burst it just became gets to finish playing.
+    const target = _respawnTimer > 0
+        ? null
+        : pickTarget(_view, combatCandidates(), _targetRules);
     const shots = updateWeapons(deltaTime, target, muzzleWorldPositions(camera));
 
     setCockpitFiring(shots > 0);
@@ -553,22 +809,20 @@ function toggleSettings(force) {
 }
 
 // ---- Pause ----------------------------------------------------------------
+//
+// Both of these are one line of intent each. The screens, the freeze, and the
+// pointer lock are all handled by `handleStateChange`, so pausing from a key,
+// from a button, and from a backgrounded tab cannot end up doing three
+// slightly different things.
 
 function openPause() {
-    if (!state.isLoaded || state.isPaused) return;
-    state.isPaused = true;
-    setPaused(true);
-    if (pauseModal) pauseModal.classList.remove('hidden');
-    // Holding the cursor captive behind a dialog is a trap, not a feature.
-    if (typeof document.exitPointerLock === 'function') document.exitPointerLock();
-    track('pause');
+    if (!state.isLoaded || !isPlaying()) return;
+    if (transition('paused')) track('pause');
 }
 
 function closePause() {
-    if (!state.isPaused) return;
-    state.isPaused = false;
-    setPaused(false);
-    if (pauseModal) pauseModal.classList.add('hidden');
+    if (gamePhase() !== 'paused') return;
+    transition('playing');
 }
 
 // ---- Event wiring ---------------------------------------------------------
@@ -608,10 +862,13 @@ function setupEventListeners() {
     }
     document.addEventListener('keydown', (event) => {
         if (event.code !== 'Escape') return;
-        if (state.isPaused) closePause();
+        if (gamePhase() === 'paused') closePause();
         else if (settingsPanel && !settingsPanel.classList.contains('hidden')) toggleSettings(false);
         else openPause();
     }, { signal });
+
+    const restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) restartBtn.addEventListener('click', restartRun, { signal });
 
     if (blocker) {
         const dismiss = (e) => {
@@ -628,9 +885,12 @@ function setupEventListeners() {
     }
 }
 
+/** Taking the helm, which is also the start of the run: the welcome overlay IS
+ *  the briefing state, so this is where the clock starts and where the fleet is
+ *  released to close in. */
 function beginFlight() {
-    if (!state.isLoaded || !blocker || blocker.classList.contains('hidden')) return;
-    blocker.classList.add('hidden');
+    if (!state.isLoaded || gamePhase() !== 'briefing') return;
+    transition('playing');
     // Desktop visitors expect the mouse to take hold straight away. Touch and
     // keyboard-only visitors are unaffected: there is nothing to capture.
     if (!state.isMobile && canvas && canvas.requestPointerLock) canvas.requestPointerLock();
@@ -645,19 +905,29 @@ function animate() {
     const deltaTime = Math.min((now - state.lastTime) / 1000, 0.1);
     state.lastTime = now;
 
-    if (!state.isPaused) {
-        _elapsed += deltaTime;
+    // THE WORLD KEEPS TURNING UNLESS THE GAME IS PAUSED. Behind the welcome
+    // overlay and behind the end screen the planets still rotate and the Moon
+    // still travels, so neither screen sits on a frozen photograph. The pause
+    // panel is the one place that genuinely stops, because that is what it is
+    // for.
+    if (gamePhase() !== 'paused') updateWorld(deltaTime);
+
+    if (isPlaying()) {
+        tick(deltaTime);
+        // A no-op while the ship is wrecked: the flight model is paused for the
+        // length of the wreck, so the camera holds still and watches.
         updateFlight(deltaTime);
-        // ORDER MATTERS IN ONE PLACE. The bodies move first, so the raiders
-        // steer at where their installation IS this frame rather than where it
-        // was last one, and the visitor's lock reads the same fresh positions.
-        // The Moon carries three of the seven and travels 838 units a second,
-        // so a frame of lag there is a visible miss.
-        updateWorld(deltaTime);
+        // ORDER MATTERS IN ONE PLACE. The bodies have already moved above, so
+        // the raiders steer at where their installation IS this frame rather
+        // than where it was last one, and the visitor's lock reads the same
+        // fresh positions. The Moon carries three of the seven and travels 838
+        // units a second, so a frame of lag there is a visible miss.
         applyFlightToCamera();
         updateFleet(deltaTime, playerState());
         updateCombat(deltaTime);
+        advanceRespawn(deltaTime);
         advanceNotices(deltaTime);
+        if (_invulnerable > 0) _invulnerable -= deltaTime;
     } else {
         applyFlightToCamera();
     }
@@ -667,14 +937,29 @@ function animate() {
     renderSpace(scene, overlayScene);
 }
 
+/** Count down the wreck, then put the ship back. Run off the frame clock rather
+ *  than a timer, so leaving the page cannot strand a visitor dead. */
+function advanceRespawn(deltaTime) {
+    if (_respawnTimer <= 0 || isOver()) return;
+    _respawnTimer -= deltaTime;
+    if (_respawnTimer > 0) return;
+    _respawnTimer = 0;
+    respawnPlayer();
+}
+
 /** Hand the HUD a snapshot of the game. Every field is read live rather than
  *  cached, which for the nav markers is the whole point: the Moon is moving,
  *  and a cached bearing to it makes an interception feel broken (PRD 5.2). */
 function updateObjectiveHud() {
+    // The counters come from the state machine rather than from a fresh count
+    // of the scene. One ledger: what the HUD shows and what decides the win are
+    // the same numbers, so they cannot drift apart.
+    const counters = getCounters();
     _hudView.camera = getWorldCamera();
-    _hudView.elapsed = _elapsed;
-    _hudView.structuresRemaining = structuresRemaining('friendly');
-    _hudView.shipsRemaining = shipsRemaining();
+    _hudView.elapsed = elapsed();
+    _hudView.structuresRemaining = counters.friendlyStructures;
+    _hudView.shipsRemaining = counters.hostileShips;
+    _hudView.lives = livesRemaining();
     _hudView.ships = getShips();
     _hudView.bodies = liveBodyPositions();
     _hudView.alert = getAlert();
@@ -753,6 +1038,7 @@ function cleanup() {
     disposeFleet();
     disposeCockpit();
     disposeHud();
+    disposeGameState();
     overlayScene = null;
 }
 
@@ -764,8 +1050,11 @@ function endSession() {
     });
 }
 
+/** The application's own state, plus the game's, in the shape every other
+ *  experience's suite already expects. `isPaused` is derived rather than
+ *  stored, so there is still exactly one answer to the question. */
 export function getState() {
-    return { ...state };
+    return { ...state, phase: gamePhase(), isPaused: gamePhase() === 'paused' };
 }
 
 // ---- Boot -----------------------------------------------------------------
@@ -810,5 +1099,8 @@ export const __test__ = {
     bufToHex, hasWebGL, keepAbovePlanets, settings,
     updateCombat, updateLockUi, labelFor, announceLock,
     combatCandidates, resolveDamage, onDamageResolved, notePlayerHit,
-    updateObjectiveHud, advanceNotices, playerState, getProjection
+    updateObjectiveHud, advanceNotices, playerState, getProjection,
+    startGame, handleStateChange, showEndScreen, endMessage, formatClock,
+    restartRun, killPlayer, respawnPlayer, advanceRespawn,
+    openPause, closePause, beginFlight
 };
