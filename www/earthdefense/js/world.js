@@ -10,8 +10,15 @@
  * It is deliberately a re-export surface as much as a builder: main.js asks
  * `world` for the scene's contents (bodies, occluders, installations, targeting
  * candidates) and never reaches past it into either bodies-1.0.0 or
- * structures.js. That keeps one place to look when the fleet arrives at M5 and
- * the candidate list stops being only installations.
+ * structures.js.
+ *
+ * THE RAIDERS ARE NOT IN HERE. From M5 the guns choose between installations
+ * and Martian ships, and it would have been easy to fold the fleet in behind
+ * this same surface. It is deliberately not: `world` is the STANDING scene,
+ * the part that is built once and then only spins, while the fleet is a live
+ * participant with a state machine and a lifetime of its own. main.js joins the
+ * two candidate lists, which puts the seam where the scenario knowledge already
+ * lives.
  */
 
 import { EARTHDEFENSE_CONFIG, spawnPosition } from './config.min.js';

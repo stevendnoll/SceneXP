@@ -12,9 +12,10 @@
  * other way round.
  *
  * Shipped: the deep-space backdrop, the two-state reticle, the target lock
- * bracket, the touch throttle, the throttle readout, and the perimeter notice.
- * Still to come: the objective counters, lives, nav ring, and hostile pips at
- * M5, and the final canopy pass at M7.
+ * bracket, the touch throttle, the throttle readout, the perimeter notice, and
+ * the M5 HUD (objective counters, elapsed time, alert banner, hostile pips, nav
+ * markers, and edge chevrons). Still to come: lives pips at M6 and the final
+ * canopy pass at M7.
  */
 
 /* Deep space rather than the shared near-black, so the loading screen and the
@@ -334,6 +335,248 @@ body:not(.is-touch-device) .throttle-readout {
     }
 }
 
+/* ============================================================
+   The objective
+   ============================================================
+   Two counts that only ever go down, permanently on screen (PRD 8.1), because
+   a visitor should never have to open anything to find out how the game is
+   going.
+
+   BOTH MARKS ARE SHAPE-CODED. A ring means friendly, a diamond means hostile,
+   matching the markers out in the world, so the panel and the sky agree and
+   neither depends on being able to separate blue from orange. */
+
+.objective-panel {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(6, 10, 18, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+    z-index: 4;
+}
+
+.objective-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    line-height: 1.2;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.objective-count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    min-width: 1.4ch;
+    text-align: right;
+}
+
+.objective-label {
+    font-size: 0.78rem;
+    opacity: 0.72;
+}
+
+.objective-mark {
+    width: 11px;
+    height: 11px;
+    flex: none;
+}
+
+/* A ring for the installations you are keeping. */
+.mark-friendly {
+    border: 2px solid #7fd4ff;
+    border-radius: 50%;
+}
+
+/* A diamond for the raiders you are removing. Same silhouette as the pips. */
+.mark-hostile {
+    background: #ff7a52;
+    transform: rotate(45deg);
+}
+
+.elapsed-time {
+    position: fixed;
+    top: 22px;
+    /* Clear of the top-right button cluster (Home at 20, pause at 82). */
+    right: 148px;
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.62);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    pointer-events: none;
+    z-index: 4;
+}
+
+/* ============================================================
+   The alert banner
+   ============================================================
+   Raised when an installation is being fired on. Top centre, where the
+   perimeter notice also lives, and sized so the two never need to be up at
+   once on a narrow phone. */
+
+.alert-banner {
+    position: fixed;
+    top: 84px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(86vw, 32ch);
+    padding: 8px 16px;
+    border-radius: 999px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 122, 82, 0.24);
+    border: 1px solid rgba(255, 122, 82, 0.65);
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+    z-index: 4;
+}
+
+.alert-banner.hidden {
+    display: none;
+}
+
+/* When both want the same slot, the perimeter nudge steps down: it is advice,
+   and the alert is the game. */
+.alert-banner:not(.hidden)~.perimeter-notice:not(.hidden) {
+    top: 136px;
+}
+
+/* ============================================================
+   Markers in the world
+   ============================================================
+   Pips, nav rings, and edge chevrons are all positioned by transform from
+   camera projection every frame, so they composite rather than reflow. Their
+   layers are inert; only the marks inside them are drawn. */
+
+.hostile-pips,
+.nav-markers {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+}
+
+/* A diamond, at any distance (PRD 8.1). A raider 200,000 units out is a few
+   pixels of running light and would otherwise read as a star. */
+.hostile-pip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 9px;
+    height: 9px;
+    background: rgba(255, 122, 82, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.55);
+    transform: translate(-50%, -50%) rotate(45deg);
+    will-change: transform;
+}
+
+.hostile-pip.hidden,
+.nav-marker.hidden,
+.edge-chevron.hidden {
+    display: none;
+}
+
+/* A ring, deliberately NOT a diamond, so a place to go and a thing to shoot
+   are told apart by shape. */
+.nav-marker {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    will-change: transform;
+}
+
+.nav-ring {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(127, 212, 255, 0.85);
+    border-radius: 50%;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+
+.nav-label,
+.nav-distance {
+    font-size: 0.66rem;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.78);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+    white-space: nowrap;
+}
+
+.nav-distance {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.66;
+}
+
+/* Two arrows and no more: the installation under attack, and the nearest
+   raider. One per hostile would ring the screen and say nothing. */
+.edge-chevron {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 26px;
+    height: 26px;
+    pointer-events: none;
+    z-index: 4;
+    will-change: transform;
+}
+
+.edge-chevron svg {
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+
+.chevron-alert svg {
+    stroke: #ff9a5c;
+}
+
+/* Thinner and dimmer than the alert arrow, so when both are up the one that
+   matters is obvious. */
+.chevron-hostile svg {
+    stroke: rgba(255, 122, 82, 0.62);
+    stroke-width: 2;
+}
+
+/* Phones: the panel and the clock shrink, the markers do not. Finding a raider
+   is the game, and a pip that scales with the screen is a pip that disappears
+   on the screens most visitors are using. */
+@media (max-width: 600px) {
+    .objective-panel {
+        top: 14px;
+        left: 14px;
+        padding: 6px 10px;
+    }
+
+    .objective-row {
+        font-size: 0.82rem;
+    }
+
+    .elapsed-time {
+        top: 76px;
+        right: auto;
+        left: 16px;
+        font-size: 0.78rem;
+    }
+}
+
 /* The polite nudge when a visitor pushes out past the defended volume. In the
    fiction of the game, not a scolding. */
 .perimeter-notice {
@@ -356,6 +599,32 @@ body:not(.is-touch-device) .throttle-readout {
 
 .perimeter-notice.hidden {
     display: none;
+}
+
+/* A raider landing a shot. A wash of colour at the EDGES only, so the centre
+   of the frame (where the aiming happens) is never obscured by being hit. It
+   is a slow fade rather than a flash, and it sits nowhere near the
+   photosensitivity thresholds: one soft pulse, well under a second. */
+body.hull-hit::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+    background: radial-gradient(ellipse at 50% 50%,
+            rgba(255, 90, 60, 0) 55%,
+            rgba(255, 90, 60, 0.32) 100%);
+    animation: hull-hit-fade 0.45s ease-out forwards;
+}
+
+@keyframes hull-hit-fade {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
 }
 
 /* ============================================================
@@ -425,5 +694,12 @@ body:not(.is-touch-device) .throttle-readout {
     #reticle .reticle-diamond,
     #reticle .reticle-corners {
         transition: none;
+    }
+
+    /* The hull-hit wash still appears (it is information, not decoration) but
+       it holds steady and then goes rather than fading. */
+    body.hull-hit::after {
+        animation: none;
+        opacity: 0.7;
     }
 }

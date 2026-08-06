@@ -2,10 +2,11 @@
 /**
  * main.js - Application entry point for the Earth Defense experience.
  *
- * M4 SCOPE. The world flies (M2), the installations ride Earth and the Moon
- * (M3), and now the guns work: every frame picks a target and fires at it. The
- * canopy is in as a first draft. Still to come are the Martian fleet (M5), the
- * game state and the HUD counters (M5, M6), and the final canopy (M7).
+ * M5 SCOPE. The world flies (M2), the installations ride Earth and the Moon
+ * (M3), the guns work (M4), and now there is a war on: twelve Martian raiders
+ * are strung out along the approach vector from the first frame, and the HUD
+ * says how it is going. Still to come are the game state, the win and lose
+ * screens, and lives (M6), and the final canopy (M7).
  *
  * This file owns the seam between the shared parts and the scene: flight
  * (flight-1.0.0) deals only in plain numbers, and this is where those numbers
@@ -35,19 +36,24 @@ import {
     setConstrainPosition, setPaused
 } from '../../shared/js/flight-1.0.0.min.js';
 import {
-    initWorld, updateWorld, getOccluders, getStructures,
-    targetCandidates, damageStructure
+    initWorld, updateWorld, getBody, getOccluders, getStructures, getStructure,
+    structuresRemaining, targetCandidates, damageStructure
 } from './world.min.js';
 import { altitudeFloorAdjust } from '../../shared/js/bodies-1.0.0.min.js';
 import { pickTarget } from '../../shared/js/targeting-1.0.0.min.js';
 import {
-    initWeapons, updateWeapons, registerDamageable, onHit, onDestroyed,
+    initWeapons, updateWeapons, registerDamageable, applyDamage, onHit,
     disposeWeapons
 } from '../../shared/js/weapons-1.0.0.min.js';
 import {
     initCockpit, resizeCockpit, muzzleWorldPositions, setCockpitFiring,
     disposeCockpit
 } from './cockpit.min.js';
+import {
+    initFleet, updateFleet, getShips, shipsRemaining, fleetCandidates,
+    destroyShip, getAlert, disposeFleet
+} from './fleet.min.js';
+import { initHud, updateHud, projectToScreen, getProjection, disposeHud } from './hud.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
@@ -77,15 +83,28 @@ let cleanupController = null;
 let _sessionStart = 0;
 let _sessionEnded = false;
 let _announcedThrottle = null;
-let _lockedId = null;
 let _announcedLock = null;
+let _elapsed = 0;
+let _hullHitTimer = 0;
+let _event = null;
+let _eventTimer = 0;
 
 // The view handed to pickTarget. Rewritten in place each frame rather than
 // rebuilt, because this runs sixty times a second.
 const _view = { eye: { x: 0, y: 0, z: 0 }, forward: { x: 0, y: 0, z: -1 } };
 const _targetRules = { coneRadians: 0, range: 0, allegiance: null, occluders: null };
-const _projected = { x: 0, y: 0, visible: false };
-let _projectScratch = null;
+// What the raiders are told about the visitor, and the combined candidate list
+// the guns choose from. Both reused, for the same reason as _view.
+const _player = { position: { x: 0, y: 0, z: 0 }, forward: { x: 0, y: 0, z: -1 } };
+const _candidates = [];
+const _hudView = {
+    camera: null, elapsed: 0, structuresRemaining: 0, shipsRemaining: 0,
+    ships: null, bodies: null, alert: null, event: null, playerPosition: null
+};
+// One record per navigable body, rewritten in place. bodies-1.0.0 also offers
+// `bodyPositions()`, which builds a fresh object per body per call: fine once,
+// wasteful sixty times a second on a phone.
+const _bodies = {};
 
 // ---- Initialization -------------------------------------------------------
 
@@ -214,41 +233,108 @@ function keepAbovePlanets(next) {
 
 // ---- Combat ---------------------------------------------------------------
 
-/** Build the canopy, put every installation on the damage ledger, and wire the
- *  two callbacks that let the scene react to what `weapons` decided. */
+/** Build the canopy and the fleet, put everything that can be shot on one
+ *  damage ledger, and wire the single callback the scene reacts to. */
 function startCombat() {
     const config = EARTHDEFENSE_CONFIG;
 
     overlayScene = initCockpit(config);
     initWeapons(config.weapons, scene);
 
-    // WHO CAN BE SHOT. At M4 this is the seven installations, because the fleet
-    // does not exist yet and the gate needs a target. See the loud note on
-    // config.targeting.allegiance: at M5 the fleet registers here too and the
-    // rules stop admitting friendlies.
+    // THE FLEET REACHES THE REST OF THE GAME THROUGH THESE THREE FUNCTIONS and
+    // through nothing else, which is what keeps fleet.js free of both
+    // structures.js and weapons-1.0.0 and testable with two plain objects.
+    initFleet(config, scene, {
+        structures: targetCandidates,
+        damageStructure: resolveDamage,
+        onPlayerHit: notePlayerHit
+    });
+
+    // ONE LEDGER FOR EVERYTHING THAT CAN DIE. Installations and raiders are the
+    // same kind of entry here, so a hit from the visitor's guns and a hit from
+    // a raider's go through identical arithmetic. Two counters for the same
+    // thing would eventually disagree, and the visible half of that is a
+    // structure showing pips it no longer has.
     for (const entry of getStructures()) {
         registerDamageable(entry.site.id, config.structures.hitPoints);
     }
+    for (const ship of getShips()) {
+        registerDamageable(ship.id, config.fleet.hitPoints);
+    }
 
-    // weapons owns the hit point ledger; the scene only reacts to it. Keeping
-    // the arithmetic in one place is what stops the pips and the counters ever
-    // disagreeing about whether something is still standing.
-    onHit((result) => {
-        damageStructure(result.id, result.hitPoints);
-    });
-    onDestroyed((result) => {
-        track('structure-destroyed', { id: result.id });
-        announce(`${labelFor(result.id)} destroyed.`);
-    });
+    // Only `onHit` is wired, deliberately. weapons fires onDestroyed AND onHit
+    // for a killing shot, so handling both would run the scene's reaction
+    // twice; the result carries the `destroyed` flag anyway.
+    onHit((result) => { onDamageResolved(result); });
 
     _targetRules.coneRadians = config.targeting.coneRadians;
     _targetRules.range = config.targeting.range;
     _targetRules.allegiance = config.targeting.allegiance;
+
+    initHud(config);
+}
+
+/** A raider's shot, put on the same ledger the visitor's guns use. Returns the
+ *  surviving state so the fleet can see what it did. */
+function resolveDamage(id, amount) {
+    const result = applyDamage(id, amount);
+    if (result) onDamageResolved(result);
+    return result;
+}
+
+/** The scene reacting to a decision `weapons` already made. Which half of the
+ *  game the id belongs to is asked rather than parsed out of its prefix. */
+function onDamageResolved(result) {
+    const structure = getStructure(result.id);
+    if (structure) {
+        damageStructure(result.id, result.hitPoints);
+        if (result.destroyed) {
+            track('structure-lost', { id: result.id });
+            announce(`${labelFor(result.id)} destroyed.`);
+        }
+        return;
+    }
+    if (result.destroyed && destroyShip(result.id)) {
+        track('raider-destroyed', { id: result.id });
+        announce(`Raider destroyed. ${shipsRemaining()} left.`);
+    }
+}
+
+/** A raider landing a shot on the visitor. At M5 that is a warning and a brief
+ *  wash of colour at the edges of the frame; the life it costs is wired at M6
+ *  along with the rest of the game state (PRD 6.4). */
+function notePlayerHit() {
+    _hullHitTimer = 0.45;
+    document.body.classList.add('hull-hit');
+    announce('Taking fire.');
 }
 
 function labelFor(id) {
     const entry = getStructures().find(e => e.site.id === id);
-    return entry ? entry.site.label : 'An installation';
+    if (entry) return entry.site.label;
+    // Raiders are deliberately anonymous. "Raider" is the whole identity a
+    // visitor needs, and numbering them would invite counting rather than
+    // flying.
+    return String(id).startsWith('raider') ? 'a raider' : 'an installation';
+}
+
+/** Everything the guns are allowed to consider, in one reused array.
+ *
+ *  The installations are still in it even though `targeting.allegiance` no
+ *  longer admits them. Seven allegiance checks a frame is nothing, and leaving
+ *  them in is what keeps that config line a real switch: setting it back to
+ *  ['friendly'] turns the world into a firing range again without touching
+ *  code, which is occasionally useful while tuning.
+ *
+ *  The candidate OBJECTS are copied out by reference, so the two source arrays
+ *  being reused and rewritten later in the frame does not disturb this one. */
+function combatCandidates() {
+    _candidates.length = 0;
+    const structures = targetCandidates();
+    for (let i = 0; i < structures.length; i++) _candidates.push(structures[i]);
+    const raiders = fleetCandidates();
+    for (let i = 0; i < raiders.length; i++) _candidates.push(raiders[i]);
+    return _candidates;
 }
 
 /** One frame of gunnery: pick a target, fire at it, and show the result.
@@ -272,11 +358,25 @@ function updateCombat(deltaTime) {
     // visitor shoot through it.
     _targetRules.occluders = getOccluders();
 
-    const target = pickTarget(_view, targetCandidates(), _targetRules);
+    const target = pickTarget(_view, combatCandidates(), _targetRules);
     const shots = updateWeapons(deltaTime, target, muzzleWorldPositions(camera));
 
     setCockpitFiring(shots > 0);
     updateLockUi(target, camera);
+}
+
+/** What the raiders are told about the visitor: where the ship is, and where
+ *  its nose is pointing. That second one is the whole break-off rule, since a
+ *  raider decides to weave when the visitor is close and NEARLY lined up. */
+function playerState() {
+    const s = getFlightState();
+    _player.position.x = s.position.x;
+    _player.position.y = s.position.y;
+    _player.position.z = s.position.z;
+    _player.forward.x = s.forward.x;
+    _player.forward.y = s.forward.y;
+    _player.forward.z = s.forward.z;
+    return _player;
 }
 
 /** The reticle changes SHAPE as well as colour the instant a target qualifies,
@@ -291,8 +391,6 @@ function updateLockUi(target, camera) {
     const locked = !!target;
 
     if (reticle) reticle.classList.toggle('locked', locked);
-    _lockedId = locked ? target.id : null;
-
     if (!lockBracket) return;
     if (!locked) {
         lockBracket.classList.add('hidden');
@@ -300,38 +398,20 @@ function updateLockUi(target, camera) {
         return;
     }
 
-    projectToScreen(target.position, camera);
-    if (!_projected.visible) {
-        // Behind the eye. It cannot be, given a six degree cone, but the check
-        // costs nothing and a projected point behind the camera comes back
-        // MIRRORED, so the bracket would appear on the opposite side of the
-        // screen from the target rather than simply being wrong.
+    // The projection is the HUD's, not a second copy. A point behind the eye
+    // comes back MIRRORED, so a private implementation that forgot the
+    // view-space z check would put the bracket on the opposite side of the
+    // screen from the target rather than simply being wrong. One place to get
+    // that right is one place to get it wrong.
+    const projected = projectToScreen(target.position, camera);
+    if (!projected.onScreen) {
         lockBracket.classList.add('hidden');
         return;
     }
     lockBracket.classList.remove('hidden');
     lockBracket.style.transform =
-        `translate(-50%, -50%) translate(${_projected.x.toFixed(1)}px, ${_projected.y.toFixed(1)}px)`;
+        `translate(-50%, -50%) translate(${projected.x.toFixed(1)}px, ${projected.y.toFixed(1)}px)`;
     announceLock(target.id);
-}
-
-/** World point to CSS pixels, with the sign of the view-space z checked first.
- *  That check is the classic bug in this feature: `camera.project()` happily
- *  returns coordinates for a point behind the camera, mirrored through the
- *  origin, so anything drawn from them lands in the wrong corner. */
-function projectToScreen(point, camera) {
-    if (!_projectScratch) _projectScratch = new THREE.Vector3();
-    const v = _projectScratch;
-    v.set(point.x, point.y, point.z);
-    camera.updateMatrixWorld();
-    v.applyMatrix4(camera.matrixWorldInverse);
-    if (v.z >= 0) { _projected.visible = false; return _projected; }
-
-    v.applyMatrix4(camera.projectionMatrix);
-    _projected.x = (v.x * 0.5 + 0.5) * window.innerWidth;
-    _projected.y = (-v.y * 0.5 + 0.5) * window.innerHeight;
-    _projected.visible = true;
-    return _projected;
 }
 
 /** Every combat state the pixels carry is also said in words, because a lock
@@ -342,12 +422,18 @@ function announceLock(id) {
     _announcedLock = id;
     if (!combatStatus) return;
     combatStatus.textContent = id
-        ? `Target locked: ${labelFor(id)}. Guns firing.`
+        ? `Locked on ${labelFor(id)}. Guns firing.`
         : 'No target. Guns idle.';
 }
 
-function announce(message) {
-    if (combatStatus) combatStatus.textContent = message;
+/** News, as opposed to state. It goes to the OBJECTIVE live region rather than
+ *  the combat one, because the combat region carries the lock and is rewritten
+ *  on every change of target: a one-off line put there would be overwritten
+ *  within a frame or two and never actually reach anyone. Held for a few
+ *  seconds so the region has time to say it. */
+function announce(message, seconds = 3) {
+    _event = message;
+    _eventTimer = seconds;
 }
 
 function showPerimeterNotice(outside) {
@@ -560,18 +646,70 @@ function animate() {
     state.lastTime = now;
 
     if (!state.isPaused) {
+        _elapsed += deltaTime;
         updateFlight(deltaTime);
-        // Bodies move BEFORE anything aims, so a lock reads where the Moon is
-        // this frame rather than where it was last one.
+        // ORDER MATTERS IN ONE PLACE. The bodies move first, so the raiders
+        // steer at where their installation IS this frame rather than where it
+        // was last one, and the visitor's lock reads the same fresh positions.
+        // The Moon carries three of the seven and travels 838 units a second,
+        // so a frame of lag there is a visible miss.
         updateWorld(deltaTime);
         applyFlightToCamera();
+        updateFleet(deltaTime, playerState());
         updateCombat(deltaTime);
+        advanceNotices(deltaTime);
     } else {
         applyFlightToCamera();
     }
     updateReadouts();
+    updateObjectiveHud();
 
     renderSpace(scene, overlayScene);
+}
+
+/** Hand the HUD a snapshot of the game. Every field is read live rather than
+ *  cached, which for the nav markers is the whole point: the Moon is moving,
+ *  and a cached bearing to it makes an interception feel broken (PRD 5.2). */
+function updateObjectiveHud() {
+    _hudView.camera = getWorldCamera();
+    _hudView.elapsed = _elapsed;
+    _hudView.structuresRemaining = structuresRemaining('friendly');
+    _hudView.shipsRemaining = shipsRemaining();
+    _hudView.ships = getShips();
+    _hudView.bodies = liveBodyPositions();
+    _hudView.alert = getAlert();
+    _hudView.event = _event;
+    _hudView.playerPosition = getFlightState().position;
+    updateHud(_hudView);
+}
+
+/** Where the navigable bodies are RIGHT NOW, read straight off their meshes.
+ *  The Moon travels 838 units a second, so a cached position is what makes an
+ *  interception feel broken (PRD 5.2). */
+function liveBodyPositions() {
+    for (const point of EARTHDEFENSE_CONFIG.hud.navPoints) {
+        const mesh = getBody(point.id);
+        if (!mesh) continue;
+        const slot = _bodies[point.id] || (_bodies[point.id] = { x: 0, y: 0, z: 0 });
+        slot.x = mesh.position.x;
+        slot.y = mesh.position.y;
+        slot.z = mesh.position.z;
+    }
+    return _bodies;
+}
+
+/** The wash of colour after a raider lands one, and the spoken news line, both
+ *  run off the frame clock rather than off timers, so pausing or leaving the
+ *  page cannot strand either of them lit. */
+function advanceNotices(deltaTime) {
+    if (_hullHitTimer > 0) {
+        _hullHitTimer -= deltaTime;
+        if (_hullHitTimer <= 0) document.body.classList.remove('hull-hit');
+    }
+    if (_eventTimer > 0) {
+        _eventTimer -= deltaTime;
+        if (_eventTimer <= 0) _event = null;
+    }
 }
 
 function applyFlightToCamera() {
@@ -612,7 +750,9 @@ function cleanup() {
     if (renderer) renderer.setAnimationLoop(null);
     if (cleanupController) cleanupController.abort();
     disposeWeapons();
+    disposeFleet();
     disposeCockpit();
+    disposeHud();
     overlayScene = null;
 }
 
@@ -668,5 +808,7 @@ if (typeof document !== 'undefined') {
 
 export const __test__ = {
     bufToHex, hasWebGL, keepAbovePlanets, settings,
-    updateCombat, updateLockUi, projectToScreen, labelFor, announceLock
+    updateCombat, updateLockUi, labelFor, announceLock,
+    combatCandidates, resolveDamage, onDamageResolved, notePlayerHit,
+    updateObjectiveHud, advanceNotices, playerState, getProjection
 };

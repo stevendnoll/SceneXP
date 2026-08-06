@@ -244,17 +244,17 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // the other side of the world.
         range: 8000,
 
-        // WHAT COUNTS AS A TARGET, and the one line in this file that is
-        // temporary. From M5 the Martian fleet arrives and this becomes
-        // ['hostile'], which is the real game: you never shoot your own
-        // installations. Until then the fleet does not exist, and the M4 gate
-        // ("fly at a structure and shoot it") needs something in the world to
-        // shoot at, so the seven friendlies stand in as a firing range.
+        // WHAT COUNTS AS A TARGET. M4 shipped this as ['friendly'] because the
+        // fleet did not exist yet and the gate ("fly at a structure and shoot
+        // it") needed something in the world to shoot at, so the seven
+        // installations stood in as a firing range for exactly one milestone.
+        // M5 retired that: the raiders are here, and you never shoot your own.
         //
-        // FLIP THIS TO ['hostile'] AT M5. It is data rather than code exactly
-        // so that the flip is one word and the targeting module never learns
-        // what a Martian is.
-        allegiance: ['friendly']
+        // It stays data rather than code so the rule is one word, and so the
+        // targeting module never learns what a Martian is. Setting it back to
+        // ['friendly'] turns the game into a firing range again, which is
+        // occasionally a useful thing to be able to do while tuning.
+        allegiance: ['hostile']
     },
 
     // ---- Weapons (weapons-1.0.0) ------------------------------------------
@@ -316,6 +316,134 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // enter from the lower corners and converge, which is the whole trick
         // (PRD 7): it sells a ship without modelling one.
         muzzle: { lateral: 84, drop: 66, forward: 300 }
+    },
+
+    // ---- The Martian fleet (fleet.js) -------------------------------------
+    //
+    // THE WHOLE FLEET EXISTS AT SPAWN. There is no spawner and no wave
+    // appearing from nowhere, because that always reads as cheap. Twelve ships
+    // are strung out in depth along the approach vector from the first frame,
+    // and they arrive in groups because they started strung out. The opening
+    // frame therefore carries a line of hostile lights trailing back toward
+    // Mars, which is both honest about what is renderable at 200,000 units and
+    // a better image than resolved hulls would be.
+    //
+    // ARRIVAL TIMES ARE START DISTANCE OVER CRUISE SPEED, and nothing else, so
+    // they can be read straight off this block: 28,000 / 1,200 is about 23
+    // seconds, 110,000 is about 92, and 200,000 is about 167.
+    fleet: {
+        total: 12,
+        hitPoints: 1,          // one shot, one raider (PRD 6.3)
+        cruiseSpeed: 1200,     // comfortably slower than the player's 4,000
+
+        // THE APPROACH LINE IS TILTED OFF THE MARS AXIS ON PURPOSE. Mars sits
+        // exactly at (0, 0, -200,000) and the trailing group starts 200,000
+        // units out, so an untilted line would place four ships inside the
+        // planet. A few hundredths of a radian is enough: at that range this
+        // puts the fleet about 4 degrees off Mars's centre, just outside its
+        // 1.9 degree disc, so the line still reads as coming FROM Mars while
+        // no raider is ever buried in it.
+        approach: { azimuth: 0.06, elevation: 0.05 },
+
+        // Per-ship scatter around the group's start point, so a group reads as
+        // a formation rather than as a queue. Deterministic (a hash of the
+        // ship index, not Math.random), so the opening frame is the same every
+        // visit and the arrival times stay testable.
+        spread: { lateral: 2400, vertical: 1600, depth: 3200 },
+
+        turnRate: 0.55,        // radians/second: about a 2,200 unit turn radius
+        standoff: 1200,        // how far off a structure an attacker holds
+        attackSpeedFactor: 0.35,
+        // Beyond this the hull is hidden and only the running light and the
+        // HUD pip remain. A 220 unit hull at 15,000 units is about ten pixels,
+        // which is the point below which geometry stops paying for itself.
+        lodResolveDistance: 15000,
+
+        hullLength: 220,
+        hullWidth: 150,
+        hullColor: 0x7a5a4e,
+        lightColor: 0xff6a4a,
+        lightSize: 5,          // in PIXELS: the running light never attenuates
+        effectRadius: 170,     // how big a raider's destruction burst reads
+
+        // WHAT A RAIDER DOES TO AN INSTALLATION, and the first number to tune
+        // if the game turns out to be harder than the brief allows (PRD 4.5:
+        // the visitor should win on a first honest attempt most of the time).
+        //
+        // Twelve seconds a shot means one raider needs 36 seconds to flatten a
+        // three point installation and a pair needs 18. The trip to the Moon
+        // is about 16 seconds each way, so an alert raised the moment an
+        // attacker arrives leaves real time to answer it. Faster than this and
+        // the Moon becomes indefensible; much slower and nothing is ever at
+        // stake.
+        fireInterval: 12,
+        fireDamage: 1,
+        beamLife: 0.45,
+        beamColor: 0xff7a52,
+
+        // Fire on the player, LIGHTLY (PRD D3). Per-ship cadence plus a
+        // fleet-wide gap, so twelve raiders in one place cannot stack into a
+        // wall of fire. At M5 a hit is announced and nothing more; the life it
+        // costs is wired at M6 with the rest of the game state.
+        playerFireInterval: 5,
+        playerFireGap: 1.4,
+        playerFireRange: 4200,
+        playerDamage: 1,
+
+        // BREAKING OFF. The PRD's trigger is "the player is close and holding
+        // a lock", which cannot happen: a raider has one hit point, so the
+        // frame that produces a lock also produces a corpse. The trigger that
+        // preserves the intent is being close and NEARLY lined up, so the
+        // dodge happens while the shot is still being set up.
+        //
+        // The weave has to be shallow enough that the visitor does not simply
+        // lose the ship (PRD 6.3: "the satisfaction of a chase without making
+        // the player miss"). 180 units of lateral aim offset moves a raider
+        // about ten degrees off the line it would otherwise have flown, which
+        // is more than the six degree gun cone (so the lock really does break)
+        // and well under the twenty degree threat cone (so the ship is still
+        // right there when the visitor looks for it). The first draft used 420
+        // and swung it twenty-four degrees, which is a raider getting away
+        // rather than a raider dodging.
+        evade: {
+            triggerDistance: 3000,
+            threatCone: 0.35,    // 20 degrees, wider than the 6 degree gun cone
+            duration: 1.8,
+            cooldown: 7,         // rate limited, or a raider is never killable
+            speedFactor: 1.35,
+            weaveRate: 2.4,
+            weaveOffset: 180
+        },
+
+        // How long an installation stays flagged as under attack after the
+        // last shot landed on it. Long enough to fly toward, short enough that
+        // the banner is not permanently lit.
+        alertLife: 10,
+
+        // GROUP TARGETING IS WHAT MAKES THE STRATEGY EXIST (PRD 4.4). The
+        // choice between Earth and the Moon only costs something if the Moon
+        // is under threat early and stays under threat, so the weights lean
+        // lunar in the first two groups. Weights are counts within the group:
+        // { earth: 2, moon: 2 } sends two ships to each.
+        groups: [
+            { count: 4, startDistance: 28000, weight: { earth: 2, moon: 2 } },
+            { count: 4, startDistance: 110000, weight: { earth: 1, moon: 3 } },
+            { count: 4, startDistance: 200000, weight: { earth: 3, moon: 1 } }
+        ]
+    },
+
+    // ---- HUD (hud.js) -----------------------------------------------------
+    hud: {
+        // Live direction and distance to the two places worth going. Read
+        // fresh every frame: the Moon is moving, and a cached bearing is what
+        // makes an interception feel broken (PRD 5.2).
+        navPoints: [
+            { id: 'earth', label: 'Earth' },
+            { id: 'moon', label: 'Moon' }
+        ],
+        // How far in from the screen edge an off-screen chevron sits, in CSS
+        // pixels. Clear of a phone's rounded corners and of the notch.
+        chevronInset: 52
     },
 
     // A soft boundary, not a wall. Nothing is out at Mars to find, so a

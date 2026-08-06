@@ -182,6 +182,123 @@ describe('the Moon is off to one side at spawn', () => {
     });
 });
 
+describe('the fleet is in the opening frame, not waiting off it', () => {
+    // PRD 6.3: the whole fleet exists at spawn. That is a composition promise
+    // as much as a gameplay one, because what it buys is the image the game
+    // opens on: a line of hostile lights trailing back toward Mars. These are
+    // the geometry assertions behind it; the state machine is in
+    // tests/earthdefense-fleet.test.mjs.
+    const F = () => CONFIG.fleet;
+
+    /** The approach line, as a unit vector. */
+    const approach = () => {
+        const a = F().approach;
+        return norm({ x: Math.sin(a.azimuth), y: Math.sin(a.elevation), z: -1 });
+    };
+
+    const groupCentre = (index) => {
+        const d = approach();
+        const distance = F().groups[index].startDistance;
+        return { x: d.x * distance, y: d.y * distance, z: d.z * distance };
+    };
+
+    const mars = () => ({
+        x: bodyById('mars').position[0],
+        y: bodyById('mars').position[1],
+        z: bodyById('mars').position[2]
+    });
+
+    test('there are twelve of them, in three groups of four', () => {
+        expect(F().groups.reduce((n, g) => n + g.count, 0)).toBe(F().total);
+        expect(F().total).toBe(12);
+    });
+
+    test('the lead group is on screen from the first frame, even in portrait', () => {
+        // If the first thing a visitor has to do is go looking for the enemy,
+        // the opening frame has not done its job.
+        const lead = groupCentre(0);
+        const dir = norm(sub(lead, spawnPosition()));
+        const azimuth = Math.abs(Math.asin(dir.x) * DEG);
+        const horizontalHalf = Math.atan(Math.tan((halfFovDeg() * Math.PI) / 180) * (9 / 21)) * DEG;
+
+        expect(azimuth).toBeLessThan(horizontalHalf);
+        expect(Math.abs(elevation(lead))).toBeLessThan(halfFovDeg());
+    });
+
+    test('the line trails back toward Mars without ever being inside it', () => {
+        // The tilt exists for exactly one reason: Mars sits at the trailing
+        // group's start distance along the Earth-to-Mars axis, so an untilted
+        // approach would bury four raiders in the planet.
+        const marsRadiusDeg = Math.asin(bodyById('mars').radius /
+            len(sub(mars(), spawnPosition()))) * DEG;
+
+        for (let i = 0; i < F().groups.length; i++) {
+            const toGroup = norm(sub(groupCentre(i), spawnPosition()));
+            const toMars = norm(sub(mars(), spawnPosition()));
+            const separation = Math.acos(Math.min(1, dot(toGroup, toMars))) * DEG;
+            // Clear of the disc, so no raider is lost against it...
+            expect(separation).toBeGreaterThan(marsRadiusDeg);
+            // ...but close enough that the eye reads the line as coming from it.
+            expect(separation).toBeLessThan(15);
+        }
+    });
+
+    test('the groups arrive spread across a run, not all at once', () => {
+        const arrival = F().groups.map(g => g.startDistance / F().cruiseSpeed);
+        expect(arrival[0]).toBeLessThan(30);              // PRD 4.2, about twenty seconds
+        for (let i = 1; i < arrival.length; i++) {
+            // Far enough apart to read as separate arrivals rather than as one
+            // long stream, which is the only property that matters here. A
+            // ratio would have been the wrong test: the PRD's own 20 / 90 / 165
+            // is not a geometric series and was never meant to be.
+            expect(arrival[i] - arrival[i - 1]).toBeGreaterThan(45);
+        }
+        // The last of them inside a five to ten minute run, with time to fight.
+        expect(arrival[arrival.length - 1]).toBeLessThan(4 * 60);
+    });
+
+    test('raiders are slower than the player, so a chase can be won', () => {
+        expect(F().cruiseSpeed).toBeLessThan(CONFIG.flight.maxForward);
+    });
+
+    test('you can no longer shoot your own installations', () => {
+        // M4 shipped `allegiance: ['friendly']` as a firing range, because the
+        // fleet did not exist and the gate needed something to shoot at. M5
+        // retires it. This is the assertion that stops the stand-in surviving a
+        // milestone longer than it was meant to.
+        expect(CONFIG.targeting.allegiance).toEqual(['hostile']);
+    });
+
+    test('a raider dies to one shot, so acquiring it IS killing it', () => {
+        // Which is why the raiders break off on the wider threat cone rather
+        // than on the lock the PRD describes: by the time there is a lock there
+        // is nothing left to dodge with. See fleet.js.
+        expect(F().hitPoints).toBe(1);
+        expect(CONFIG.weapons.damagePerShot).toBeGreaterThanOrEqual(F().hitPoints);
+        expect(F().evade.threatCone).toBeGreaterThan(CONFIG.targeting.coneRadians);
+    });
+
+    test('the Moon is put under threat early and stays under it', () => {
+        // PRD 4.4: the Earth-versus-Moon choice is the entire strategy layer,
+        // and it only exists if the Moon is contested from the start.
+        const lunar = F().groups.map(g => g.weight.moon);
+        expect(lunar[0]).toBeGreaterThan(0);
+        expect(lunar.every(n => n > 0)).toBe(true);
+        // And more than a token: at least a third of the fleet overall.
+        const total = F().groups.reduce((n, g) => n + g.weight.moon, 0);
+        expect(total).toBeGreaterThanOrEqual(F().total / 3);
+    });
+
+    test('an installation survives long enough to be defended', () => {
+        // The trip to the Moon is about sixteen seconds each way at full
+        // throttle. A pair of raiders must not be able to flatten something in
+        // less than that, or the alert would be an obituary (PRD 4.5).
+        const secondsForTwo = (CONFIG.structures.hitPoints * F().fireInterval) / 2;
+        const moonTrip = bodyById('moon').orbit.radius / CONFIG.flight.maxForward;
+        expect(secondsForTwo).toBeGreaterThan(moonTrip);
+    });
+});
+
 describe('the installations', () => {
     const S = () => CONFIG.structures;
     const earthRadius = () => bodyById('earth').radius;
@@ -338,6 +455,11 @@ describe('the world builds and ticks', () => {
         const candidate = structures.targetCandidates().find(c => c.id === id);
         expect(candidate.allegiance).toBe('friendly');
         expect(candidate.radius).toBe(CONFIG.structures.height);
+        // The body and the label are carried so the FLEET can read this same
+        // list and weight its targets without deriving "which body is this on"
+        // from the id prefix. `targeting` ignores both.
+        expect(candidate.body).toBe('moon');
+        expect(candidate.label).toBe(CONFIG.structures.moon[0].label);
 
         structures.destroyStructure(id);
         const entry = structures.getStructure(id);

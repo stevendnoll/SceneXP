@@ -146,7 +146,13 @@ export function initStructures(config = EARTHDEFENSE_CONFIG) {
                 id: site.id,
                 position: entry.aim,
                 allegiance: entry.side,
-                radius: spec.height
+                radius: spec.height,
+                // `targeting` ignores these two. They are here because the
+                // fleet reads the SAME list to choose what to attack, and
+                // deriving "which body is this on" from the id prefix would be
+                // a naming convention masquerading as data.
+                body: bodyId,
+                label: site.label
             };
             structures.set(site.id, entry);
         }
