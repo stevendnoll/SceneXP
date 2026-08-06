@@ -292,8 +292,16 @@
                 <input type="checkbox" id="reduced-fx-toggle">
                 <span>Reduced effects</span>
             </label>
+            <!-- Sound is reinforcement only: every cue duplicates something
+                 already on screen and in the live region, so muting costs a
+                 visitor nothing at all. -->
+            <label class="settings-check">
+                <input type="checkbox" id="mute-toggle">
+                <span>Mute sound</span>
+            </label>
             <p class="settings-hint">Reduced effects lowers the rendering detail. Handy if
-                the view feels less than smooth on your device.</p>
+                the view feels less than smooth on your device. Nothing in the game is
+                told by sound alone, so muting loses you nothing.</p>
         </div>
     </div>
 

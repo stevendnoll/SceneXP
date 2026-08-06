@@ -2,10 +2,15 @@
 /**
  * main.js - Application entry point for the Earth Defense experience.
  *
- * M6 SCOPE. The world flies (M2), the installations ride Earth and the Moon
- * (M3), the guns work (M4), the fleet is on its way in (M5), and now it is a
- * game: it can be won, it can be lost, it can be started again, and the clock
- * only runs while it is actually being played. The final canopy is M7.
+ * M7 SCOPE. The world flies (M2), the installations ride Earth and the Moon
+ * (M3), the guns work (M4), the fleet is on its way in (M5), it is a game that
+ * can be won and lost and started again (M6), and now it makes a noise. What is
+ * left is the accessibility and performance pass (M8) and shipping it (M9).
+ *
+ * SOUND IS REINFORCEMENT AND NOTHING ELSE. Every cue duplicates something that
+ * is already on screen and already in the live region, so a muted visitor and a
+ * deaf visitor lose nothing at all (PRD 8.5). That is a rule about what may be
+ * wired here in future as much as a description of what is wired now.
  *
  * THE STATE MACHINE IS THE SPINE FROM HERE. `gamestate-1.0.0` decides which of
  * briefing, playing, paused, won, and lost the experience is in, and every
@@ -65,6 +70,10 @@ import {
     destroyShip, getAlert, disposeFleet
 } from './fleet.min.js';
 import { initHud, updateHud, projectToScreen, getProjection, disposeHud } from './hud.min.js';
+import {
+    initAudio, setEngineThrottle, setMuted, playFire, playHit, playDestruction,
+    playAlert, playLock, disposeAudio
+} from './audio.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
@@ -83,7 +92,8 @@ const state = {
 const settings = {
     lookSensitivity: 1.0,
     invertPitch: false,
-    reducedFx: false
+    reducedFx: false,
+    muted: false
 };
 
 let canvas, loadingScreen, blocker, touchControls;
@@ -99,6 +109,7 @@ let _sessionStart = 0;
 let _sessionEnded = false;
 let _announcedThrottle = null;
 let _announcedLock = null;
+let _announcedAlert = null;
 let _hullHitTimer = 0;
 let _event = null;
 let _eventTimer = 0;
@@ -306,6 +317,11 @@ function startCombat() {
     _targetRules.allegiance = config.targeting.allegiance;
 
     initHud(config);
+    // Wires a one-time gesture listener and builds nothing. The context waits
+    // for the visitor's first click or key, which is both what browsers require
+    // and the right manners: a page nobody has touched should make no sound.
+    initAudio(config);
+    setMuted(settings.muted);
     startGame();
 }
 
@@ -468,6 +484,7 @@ function restartRun() {
     _event = null;
     _eventTimer = 0;
     _announcedLock = null;
+    _announcedAlert = null;
     _hullHitTimer = 0;
     document.body.classList.remove('hull-hit');
 
@@ -495,15 +512,21 @@ function onDamageResolved(result) {
         damageStructure(result.id, result.hitPoints);
         if (result.destroyed) {
             noteDestroyed(result.id);
+            playDestruction();
             track('structure-lost', { id: result.id });
             announce(`${labelFor(result.id)} destroyed.`);
+        } else {
+            playHit();
         }
         return;
     }
     if (result.destroyed && destroyShip(result.id)) {
         noteDestroyed(result.id);
+        playDestruction();
         track('raider-destroyed', { id: result.id });
         announce(`Raider destroyed. ${getCounters().hostileShips} left.`);
+    } else if (!result.destroyed) {
+        playHit();
     }
 }
 
@@ -618,6 +641,9 @@ function updateCombat(deltaTime) {
     const shots = updateWeapons(deltaTime, target, muzzleWorldPositions(camera));
 
     setCockpitFiring(shots > 0);
+    // One cue per shot, rate limited inside audio.js. The guns fire four times
+    // a second, so anything richer than a dry tick becomes unbearable fast.
+    if (shots > 0) playFire();
     updateLockUi(target, camera);
 }
 
@@ -675,6 +701,9 @@ function updateLockUi(target, camera) {
  *  Announced on CHANGE, never per frame, or the live region would chatter. */
 function announceLock(id) {
     if (id === _announcedLock) return;
+    // Acquiring, not losing. A blip every time a target drifts out of the cone
+    // would be constant chatter while flying through a group.
+    if (id && !_announcedLock) playLock();
     _announcedLock = id;
     if (!combatStatus) return;
     combatStatus.textContent = id
@@ -751,6 +780,7 @@ function loadSettings() {
     if (Number.isFinite(sensitivity) && sensitivity > 0) settings.lookSensitivity = sensitivity;
     settings.invertPitch = readStored(keys.invertPitch, 'false') === 'true';
     settings.reducedFx = readStored(keys.reducedFx, 'false') === 'true';
+    settings.muted = readStored(keys.muted, 'false') === 'true';
     applyReducedFx();
 }
 
@@ -764,6 +794,7 @@ function wireSettings(signal) {
     const value = document.getElementById('look-speed-value');
     const invert = document.getElementById('invert-pitch-toggle');
     const reduced = document.getElementById('reduced-fx-toggle');
+    const mute = document.getElementById('mute-toggle');
     const close = document.getElementById('settings-close');
 
     if (slider) {
@@ -790,6 +821,15 @@ function wireSettings(signal) {
             settings.reducedFx = reduced.checked;
             applyReducedFx();
             writeStored(keys.reducedFx, settings.reducedFx);
+        }, { signal });
+    }
+
+    if (mute) {
+        mute.checked = settings.muted;
+        mute.addEventListener('change', () => {
+            settings.muted = mute.checked;
+            setMuted(settings.muted);
+            writeStored(keys.muted, settings.muted);
         }, { signal });
     }
 
@@ -963,6 +1003,11 @@ function updateObjectiveHud() {
     _hudView.ships = getShips();
     _hudView.bodies = liveBodyPositions();
     _hudView.alert = getAlert();
+    // Once per installation coming under attack, not once per frame it stays
+    // under attack, and not again when the same one is hit a second time.
+    const alertId = _hudView.alert ? _hudView.alert.id : null;
+    if (alertId && alertId !== _announcedAlert) playAlert();
+    _announcedAlert = alertId;
     _hudView.event = _event;
     _hudView.playerPosition = getFlightState().position;
     updateHud(_hudView);
@@ -1009,6 +1054,11 @@ function applyFlightToCamera() {
 
 function updateReadouts() {
     const s = getFlightState();
+    // The engine follows the THROTTLE rather than the speed, so pushing the
+    // lever is answered immediately instead of a second later once the ship has
+    // caught up. That gap is what would make the controls feel unresponsive.
+    setEngineThrottle(s.throttle);
+
     if (throttleReadout) {
         const speed = Math.round(s.speed);
         const target = Math.round(s.targetSpeed);
@@ -1038,6 +1088,7 @@ function cleanup() {
     disposeFleet();
     disposeCockpit();
     disposeHud();
+    disposeAudio();
     disposeGameState();
     overlayScene = null;
 }

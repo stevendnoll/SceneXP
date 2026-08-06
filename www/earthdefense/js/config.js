@@ -290,14 +290,42 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
 
     // ---- Cockpit (cockpit.js) ---------------------------------------------
     //
-    // M4 DRAFT VALUES. The canopy needs judging by eye at three aspect ratios
-    // and is expected to take several passes before M7.
+    // EVERY PROPORTION HERE IS A NUMBER RATHER THAN A LINE OF CODE, which is
+    // the point of this block. The canopy is judged by eye against screenshots
+    // at three aspect ratios and is expected to take several passes, so a pass
+    // should be editing these and reloading, not editing geometry. Anything
+    // that can be set to 0 to switch a piece off says so.
+    //
+    // All of them are FRACTIONS of the frame, never absolute units, because the
+    // frame's half-height is fixed by the vertical field of view while its
+    // half-width moves with the aspect ratio. A portrait phone and a wide
+    // desktop then get the same silhouette rather than the same shape stretched.
     cockpit: {
         frameColor: 0x14181f,
         strutColor: 0x2a323d,
         glowColor: 0xff9a5c,
+
+        // The dash, as a fraction of the full frame height. A twelfth reads as
+        // a cockpit and leaves Earth's limb (about a third of the way up in the
+        // opening frame) nowhere near it.
         dashFraction: 0.12,
+        // The console rising toward the side windows: a short bar at each end
+        // of the dash, tilted up and outward. This is most of what makes the
+        // bottom edge read as a moulded thing rather than as a black stripe.
+        // 0 removes them.
+        dashFlareAngle: 0.32,     // radians of tilt
+        dashFlareLength: 0.6,     // as a fraction of the half-width
+        dashFlareOffset: 0.72,    // where along the half-width it is centred
+
+        // The brow along the top edge. Thin on purpose: it closes the frame
+        // vertically, which is what "brackets the view" in PRD 7 asks for,
+        // without any of the crowding a full surround would bring. 0 removes it
+        // and returns the canopy to its M4 draft silhouette.
+        browFraction: 0.055,
+
         strutTopInset: 0.28,
+        strutWidth: 0.055,        // as a fraction of the half-width
+        strutRise: 1.1,           // as a fraction of the half-height
 
         // WHERE THE GUNS SIT, in world units ahead of and below the eye.
         //
@@ -432,6 +460,45 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         ]
     },
 
+    // ---- Sound (audio.js) -------------------------------------------------
+    //
+    // Every sound is SYNTHESIZED, so this block is the whole of it: no files,
+    // no download, no CSP exception, and nothing that can fail to load halfway
+    // through a run.
+    //
+    // NOTHING IS CARRIED BY SOUND ALONE (PRD 8.5). Each cue duplicates
+    // something already on screen and already in the live region, so a muted
+    // visitor and a deaf visitor lose nothing at all. That is a rule about what
+    // may be added here later, not only a description of what is here now.
+    audio: {
+        // Quiet by default. This plays over whatever the visitor already has
+        // on, and a game that arrives loud is a game that gets muted.
+        masterGain: 0.16,
+
+        // The engine: a low sawtooth with a sine an octave under it. It opens
+        // from silence with the throttle, so a ship holding station in orbit is
+        // genuinely silent rather than idling.
+        engineGain: 0.5,
+        engineIdleHz: 46,
+        engineFullHz: 128,
+        engineGlide: 0.35,
+
+        // The guns fire four times a second for as long as a target is held, so
+        // this cue is deliberately dry and unremarkable. Anything with
+        // character becomes unbearable inside ten seconds.
+        fireGain: 0.30,
+        fireHz: 220,
+
+        hitGain: 0.34,
+        destroyGain: 0.45,
+        alertGain: 0.38,
+        lockGain: 0.22,
+
+        // Per cue kind. Without it a destruction landing on the same frame as
+        // three hits turns the mix to gravel.
+        minGapSeconds: 0.05
+    },
+
     // ---- HUD (hud.js) -----------------------------------------------------
     hud: {
         // Live direction and distance to the two places worth going. Read
@@ -503,6 +570,7 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         sensitivity: 'scenexp.earthdefense.sensitivity',
         invertPitch: 'scenexp.earthdefense.invert',
         reducedFx: 'scenexp.earthdefense.reducedfx',
+        muted: 'scenexp.earthdefense.muted',
         bestTime: 'scenexp.earthdefense.best'
     }
 });

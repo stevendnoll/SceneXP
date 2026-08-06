@@ -543,6 +543,31 @@ describe('the rest of the conductor', () => {
         reduced.checked = true;
         fire(reduced, 'change');
         expect(main.__test__.settings.reducedFx).toBe(true);
+
+        const mute = dom.el('mute-toggle');
+        mute.checked = true;
+        fire(mute, 'change');
+        expect(main.__test__.settings.muted).toBe(true);
+        expect(localStorage.getItem(config.storage.muted)).toBe('true');
+    });
+
+    test('a stored mute is honoured before the first sound is ever made', async () => {
+        // The settings panel is reachable from the welcome screen, so a visitor
+        // who muted last time must not be greeted by an engine note.
+        const { EARTHDEFENSE_CONFIG } = await import('../www/earthdefense/js/config.min.js');
+        localStorage.setItem(EARTHDEFENSE_CONFIG.storage.muted, 'true');
+
+        const main = await boot();
+        expect(main.__test__.settings.muted).toBe(true);
+        expect(dom.el('mute-toggle').checked).toBe(true);
+    });
+
+    test('sound is armed but silent until the visitor touches something', async () => {
+        // Browsers refuse to start an AudioContext before a gesture, and a page
+        // nobody has touched should make no sound and hold no audio hardware.
+        await boot();
+        const audio = await import('../www/earthdefense/js/audio.min.js');
+        expect(audio.isRunning()).toBe(false);
     });
 
     test('a resize is handled without a crash', async () => {

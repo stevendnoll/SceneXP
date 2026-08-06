@@ -424,9 +424,13 @@ body:not(.is-touch-device) .throttle-readout {
     background: #9be7ff;
 }
 
+/* Hollow AND smaller. The hollow alone would be a shape change on most screens
+   and an invisible one on a bad screen at arm's length, so the pip also shrinks
+   back: two ways to read the same fact, neither of them a hue. */
 .life-pip.spent {
     background: transparent;
     border-color: rgba(255, 255, 255, 0.32);
+    transform: scale(0.72);
 }
 
 .elapsed-time {
@@ -597,10 +601,65 @@ body:not(.is-touch-device) .throttle-readout {
     }
 
     .elapsed-time {
-        top: 76px;
+        top: 96px;
         right: auto;
         left: 16px;
         font-size: 0.78rem;
+    }
+}
+
+/* A phone turned sideways has very little height and the whole HUD is competing
+   for the same few hundred pixels, so the panel tucks up, the clock goes back
+   to the top right where there is room, and the banner comes up with them.
+   Matches the shared stylesheet's own short-landscape breakpoint. */
+@media (max-height: 500px) and (orientation: landscape) {
+    .objective-panel {
+        top: 12px;
+        left: 12px;
+        gap: 2px;
+        padding: 5px 9px;
+    }
+
+    .objective-row {
+        font-size: 0.76rem;
+    }
+
+    .lives-row {
+        margin-top: 0;
+        padding-top: 3px;
+    }
+
+    .elapsed-time {
+        top: 14px;
+        left: auto;
+        right: 148px;
+    }
+
+    .alert-banner {
+        top: 56px;
+        padding: 6px 14px;
+        font-size: 0.82rem;
+    }
+
+    .alert-banner:not(.hidden)~.perimeter-notice:not(.hidden) {
+        top: 100px;
+    }
+}
+
+/* Very wide screens, including the 2D browser panels in a headset. The shared
+   stylesheet pulls the joysticks in toward the centre at this width; the HUD
+   follows, or the counters end up in the far corner of a visitor's peripheral
+   vision where they may as well not be. */
+@media (min-width: 1500px) {
+
+    .objective-panel,
+    .elapsed-time {
+        left: calc(50% - 700px);
+    }
+
+    .elapsed-time {
+        right: auto;
+        top: 128px;
     }
 }
 

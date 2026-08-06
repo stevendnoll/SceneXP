@@ -2,10 +2,13 @@
 /**
  * cockpit.js - The canopy the visitor looks out of, and where the guns sit.
  *
- * M4 DRAFT. This is the first pass of three or four. It exists now, rather than
- * at M7, for two reasons: the canopy needs judging by eye at several aspect
- * ratios and that takes iterations, and `weapons` needs muzzle positions from
- * somewhere before it can fire a tracer that reads as coming from a ship.
+ * DRAFTED AT M4, MADE TUNABLE AT M7. The shape is still a judgement call made
+ * against screenshots at three aspect ratios, so the job of this file is to put
+ * every proportion of that judgement into config.js and keep none of it here.
+ * A design pass should be editing numbers and reloading. What lives in this
+ * file is only the arithmetic that turns those numbers into a frame, plus the
+ * two rules the arithmetic is not allowed to break: the centre stays clear, and
+ * Earth's limb in the opening frame stays uncovered.
  *
  * IT LIVES IN THE OVERLAY SCENE. The world camera's near plane is 100 units,
  * so anything a metre from the eye would be clipped away entirely. The overlay
@@ -98,6 +101,21 @@ function buildParts(cfg) {
     dash.name = 'dash';
     frame.add(dash);
 
+    // The console rising toward the side windows. Two short bars at the ends of
+    // the dash, tilted up and outward, and they do more for the silhouette than
+    // their size suggests: without them the bottom edge is a black stripe, and
+    // with them it is a moulded thing the visitor is sitting behind.
+    const flares = [new THREE.Mesh(unitBox, shell), new THREE.Mesh(unitBox, shell)];
+    flares.forEach((f, i) => { f.name = `dash-flare-${i}`; frame.add(f); });
+
+    // The brow along the top edge, thin on purpose. PRD 7 asks for a frame that
+    // BRACKETS the view, and a bottom edge with nothing opposite it reads as a
+    // dashboard rather than as a canopy. Thin enough that the sky above Mars
+    // stays open.
+    const brow = new THREE.Mesh(unitBox, shell);
+    brow.name = 'brow';
+    frame.add(brow);
+
     // Two struts rising from the lower corners toward the canopy sides. They
     // do the work of telling the eye it is inside something, at almost no cost
     // in obscured sky.
@@ -110,7 +128,15 @@ function buildParts(cfg) {
     glowStrip.name = 'indicator-glow';
     frame.add(glowStrip);
 
-    return { shell, strut, warm, unitBox, dash, struts, glow: glowStrip };
+    return { shell, strut, warm, unitBox, dash, flares, brow, struts, glow: glowStrip };
+}
+
+/** A config fraction, with a fallback. Every proportion in the canopy comes
+ *  through here, so a config with a piece missing is a canopy without that
+ *  piece rather than a canopy full of NaN. */
+function fraction(cfg, key, fallback) {
+    const value = cfg[key];
+    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
 /** Reposition every piece for an aspect ratio.
@@ -135,8 +161,7 @@ function layout(aspect, cfg) {
     // the M4 starting value: enough to read as a cockpit, little enough that
     // Earth's limb in the opening frame (which sits about a third of the way up)
     // is nowhere near it.
-    const dashFraction = cfg.dashFraction === undefined ? 0.12 : cfg.dashFraction;
-    const dashHeight = halfHeight * 2 * dashFraction;
+    const dashHeight = halfHeight * 2 * fraction(cfg, 'dashFraction', 0.12);
 
     parts.dash.scale.set(halfWidth * 2.4, dashHeight, 1);
     parts.dash.position.set(0, -halfHeight + dashHeight * 0.5, CANOPY_Z);
@@ -144,22 +169,44 @@ function layout(aspect, cfg) {
     parts.glow.scale.set(halfWidth * 1.5, dashHeight * 0.09, 1);
     parts.glow.position.set(0, -halfHeight + dashHeight, CANOPY_Z + 0.01);
 
+    // The dash flares. Tilted so the OUTER end rises, which is why the rotation
+    // takes the side's sign: for the right-hand flare the outer end is the one
+    // at local +x, and for the left-hand one it is at local -x, so the same
+    // signed angle lifts the correct end of each.
+    const flareAngle = fraction(cfg, 'dashFlareAngle', 0.32);
+    const flareLength = halfWidth * fraction(cfg, 'dashFlareLength', 0.6);
+    const flareOffset = halfWidth * fraction(cfg, 'dashFlareOffset', 0.72);
+    parts.flares.forEach((f, i) => {
+        const side = i === 0 ? 1 : -1;
+        f.visible = flareAngle !== 0 && flareLength > 0;
+        f.scale.set(flareLength, dashHeight * 0.55, 1);
+        f.position.set(side * flareOffset, -halfHeight + dashHeight * 0.9, CANOPY_Z - 0.01);
+        f.rotation.z = side * flareAngle;
+    });
+
+    const browHeight = halfHeight * 2 * fraction(cfg, 'browFraction', 0.055);
+    parts.brow.visible = browHeight > 0;
+    parts.brow.scale.set(halfWidth * 2.4, Math.max(browHeight, 0.0001), 1);
+    parts.brow.position.set(0, halfHeight - browHeight * 0.5, CANOPY_Z);
+
     // The struts lean inward as they rise, meeting nothing: they run off the
     // top of the frame rather than closing into an arch, which is what keeps
-    // the upper sky (where Mars sits) completely open.
+    // the upper sky open and what keeps the brow reading as a separate edge
+    // rather than as the top of a windscreen.
     //
     // The lean is derived from the aspect, not fixed. A fixed ANGLE looks
     // right on a desktop and then swings a portrait phone's struts a third of
     // the way to the centre, because the frame is much taller than it is wide.
     // Fixing the top INSET as a fraction of the half-width instead gives the
     // same silhouette at every shape.
-    const strutWidth = halfWidth * 0.055;
-    const topInset = cfg.strutTopInset === undefined ? 0.28 : cfg.strutTopInset;
-    const rise = halfHeight * 1.1;
+    const strutWidth = halfWidth * fraction(cfg, 'strutWidth', 0.055);
+    const topInset = fraction(cfg, 'strutTopInset', 0.28);
+    const rise = halfHeight * fraction(cfg, 'strutRise', 1.1);
     const lean = Math.atan((topInset * halfWidth) / rise);
     parts.struts.forEach((s, i) => {
         const side = i === 0 ? 1 : -1;
-        s.scale.set(strutWidth, rise * 2, 1);
+        s.visible = strutWidth > 0;
+        s.scale.set(Math.max(strutWidth, 0.0001), rise * 2, 1);
         s.position.set(side * halfWidth * 1.02, 0, CANOPY_Z);
         s.rotation.z = side * lean;
     });
