@@ -96,7 +96,7 @@ const settings = {
     muted: false
 };
 
-let canvas, loadingScreen, blocker, touchControls;
+let canvas, loadingScreen, blocker, touchControls, hud;
 let throttleReadout, perimeterNotice, flightStatus;
 let settingsPanel, settingsBtn, pauseModal;
 let reticle, lockBracket, combatStatus;
@@ -147,6 +147,7 @@ async function init() {
     loadingScreen = document.getElementById('loading-screen');
     blocker = document.getElementById('blocker');
     touchControls = document.getElementById('touch-controls');
+    hud = document.getElementById('hud');
     throttleReadout = document.getElementById('throttle-readout');
     perimeterNotice = document.getElementById('perimeter-notice');
     flightStatus = document.getElementById('flight-status');
@@ -197,6 +198,12 @@ async function init() {
     setTimeout(() => {
         if (loadingScreen) loadingScreen.classList.add('hidden');
         state.isLoaded = true;
+        // The shared stylesheet ships #hud at opacity 0 and reveals it with
+        // `.visible`, the same way it does the floating buttons. Forgetting
+        // this line does not break anything loudly: the game runs perfectly and
+        // the entire HUD is simply never drawn, which is exactly how it reached
+        // the first round of screenshots.
+        if (hud) hud.classList.add('visible');
         document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
     }, 400);
 

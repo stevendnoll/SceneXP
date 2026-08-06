@@ -163,6 +163,45 @@
     line-height: 1.45;
 }
 
+/* Two hint rows sharing one grid, so the labels line up in a column and the
+   sentences all start at the same place. Two independently centred rows put
+   the pills at different widths and the sentences at different offsets, which
+   reads as carelessness on the first screen a visitor ever sees. */
+.welcome-hints {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.4rem 0.75rem;
+    align-items: baseline;
+    width: max-content;
+    max-width: min(90vw, 40rem);
+    margin: 0.6rem auto 0;
+    text-align: left;
+}
+
+.welcome-hints .controls-hint {
+    display: contents;
+}
+
+.welcome-hints .controls-hint span {
+    margin: 0;
+    justify-self: stretch;
+    text-align: center;
+}
+
+/* On a narrow phone the pair stacks instead of squeezing the sentence into a
+   two-word column. */
+@media (max-width: 560px) {
+    .welcome-hints {
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+        text-align: center;
+    }
+
+    .welcome-hints .controls-hint span {
+        justify-self: center;
+    }
+}
+
 /* Announced-only text: present for a screen reader, absent for everyone else. */
 .visually-hidden {
     position: absolute;
@@ -755,6 +794,44 @@ body.hull-hit::after {
     font-size: 0.8rem;
     line-height: 1.4;
     opacity: 0.72;
+}
+
+/* ============================================================
+   Modal layout
+   ============================================================
+   THE SHARED STYLESHEET LAYS MODALS OUT BY AN EXPLICIT LIST OF IDS
+   (#piece-modal, #help-modal, #dialog-modal and friends), not by a class, so
+   this experience's two are not in it and got no layout and no `.hidden` rule
+   at all. The failure is a quiet one and worth writing down: both panels sat
+   unhidden in normal document flow, invisible only because the canvas is later
+   in the DOM and painted over them, while the pause card's close button, which
+   carries a z-index, floated over the scene on its own. The pause panel and the
+   end screen could never have appeared.
+
+   Kept here rather than added to the shared list, because a game's pause and
+   end cards are not a pattern the other experiences share. */
+
+#pause-modal,
+#end-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#pause-modal.hidden,
+#end-modal.hidden {
+    display: none;
+}
+
+#pause-modal .modal-backdrop,
+#end-modal .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(6, 10, 18, 0.62);
+    backdrop-filter: blur(3px);
 }
 
 /* ============================================================

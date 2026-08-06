@@ -351,8 +351,8 @@ describe('lifecycle', () => {
         expect(scene).toBe(mod.getCockpitScene());
         expect(scene.children).toEqual([mod.getCanopy()]);
         expect(mod.getCanopy().name).toBe('canopy');
-        // Dash, two flares, the brow, two struts, and the indicator glow.
-        expect(mod.getCanopy().children).toHaveLength(7);
+        // Dash, its lit lip, two flares, the brow, two struts, and the glow.
+        expect(mod.getCanopy().children).toHaveLength(8);
         expect(mod.getLocalMuzzles()).toHaveLength(2);
     });
 
@@ -396,8 +396,8 @@ describe('lifecycle', () => {
         mod.initCockpit(CONFIG);
         disposed.count = 0;
         mod.disposeCockpit();
-        // One shared box plus three materials.
-        expect(disposed.count).toBe(4);
+        // One shared box plus four materials: shell, strut, warm, and the edge.
+        expect(disposed.count).toBe(5);
         expect(mod.getCockpitScene()).toBeNull();
         expect(() => mod.disposeCockpit()).not.toThrow();
     });
@@ -406,7 +406,7 @@ describe('lifecycle', () => {
         mod.initCockpit(CONFIG);
         disposed.count = 0;
         mod.initCockpit(CONFIG);
-        expect(disposed.count).toBe(4);
-        expect(mod.getCanopy().children).toHaveLength(7);
+        expect(disposed.count).toBe(5);
+        expect(mod.getCanopy().children).toHaveLength(8);
     });
 });

@@ -93,6 +93,17 @@ describe('booting', () => {
         });
     });
 
+    test('the HUD is actually REVEALED, not merely populated', async () => {
+        // The shared stylesheet ships #hud at opacity 0 and reveals it with
+        // `.visible`. Forgetting that line breaks nothing loudly: every counter
+        // is written correctly to elements nobody can see, every test passes,
+        // and the game ships with no HUD at all. It reached a full round of
+        // screenshots exactly that way.
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        expect(dom.el('hud').classList.contains('visible')).toBe(true);
+    });
+
     test('the objective counters are on screen before anything is shot', async () => {
         const main = await boot();
         const config = await CONFIG();

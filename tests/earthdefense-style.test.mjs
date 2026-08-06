@@ -128,6 +128,90 @@ describe('nothing in the experience flashes', () => {
     });
 });
 
+describe('everything the page ships hidden is actually hidden', () => {
+    // THE BUG THIS EXISTS FOR. The shared stylesheet lays modals out by an
+    // explicit list of ids rather than by a class, so this experience's pause
+    // panel and end screen matched nothing: no layout, and no `.hidden` rule.
+    // Both sat unhidden in normal document flow, invisible only because the
+    // canvas comes later in the DOM and painted over them, while the pause
+    // card's close button carried a z-index and floated over the scene on its
+    // own. The pause panel and the end screen could never have appeared, and
+    // every unit test passed the whole time.
+    const HTML = readFileSync(new URL('../www/earthdefense/index.html', import.meta.url), 'utf8');
+    const SHARED = readFileSync(new URL('../www/shared/css/styles-1.0.0.css', import.meta.url), 'utf8');
+    const ALL_CSS = `${SHARED}\n${DECLARATIONS}`;
+
+    /** Every element the markup ships with the `hidden` CLASS on it.
+     *
+     *  `visually-hidden` is deliberately excluded and is not the same thing at
+     *  all: those are the polite live regions, which must stay in the
+     *  accessibility tree and would be silenced by `display: none`. */
+    const shipped = [...HTML.matchAll(/<[a-z]+[^>]*>/g)]
+        .map(tag => tag[0])
+        .map(tag => ({
+            tag,
+            id: (tag.match(/id="([\w-]+)"/) || [])[1],
+            classes: ((tag.match(/class="([^"]*)"/) || [])[1] || '').split(/\s+/).filter(Boolean)
+        }))
+        .filter(el => el.classes.includes('hidden'))
+        .map(el => ({ ...el, classes: el.classes.filter(c => c !== 'hidden') }));
+
+    /** Is there a rule anywhere that genuinely takes this element out of play?
+     *
+     *  `display: none` is the usual answer, but the shared settings panel fades
+     *  instead so it can animate, and a faded panel with no pointer events is
+     *  just as gone. Insisting on one mechanism would have failed a rule that
+     *  is perfectly correct. */
+    function hasHidingRule({ id, classes }) {
+        const selectors = [id && `#${id}.hidden`, ...classes.map(c => `.${c}.hidden`)]
+            .filter(Boolean);
+        return selectors.some((selector) => {
+            const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // The selector may sit in a comma-separated list, so the rule body
+            // is whatever follows the next brace.
+            const match = ALL_CSS.match(new RegExp(`${escaped}(?![\\w-])[^{]*\\{([^}]*)\\}`));
+            if (!match) return false;
+            const body = match[1];
+            return /display\s*:\s*none/.test(body) ||
+                /visibility\s*:\s*hidden/.test(body) ||
+                (/opacity\s*:\s*0\b/.test(body) && /pointer-events\s*:\s*none/.test(body));
+        });
+    }
+
+    test('the markup ships several things hidden, so this is checking something', () => {
+        expect(shipped.length).toBeGreaterThan(4);
+        expect(shipped.some(e => e.id === 'pause-modal')).toBe(true);
+        expect(shipped.some(e => e.id === 'end-modal')).toBe(true);
+    });
+
+    test.each(shipped.map(el => [el.id || el.classes[0], el]))(
+        '%s has a rule that takes it off screen', (_label, element) => {
+            expect(hasHidingRule(element)).toBe(true);
+        });
+
+    test('the live regions are NOT hidden this way, and must not be', () => {
+        // `visually-hidden` clips them out of the picture while leaving them in
+        // the accessibility tree. `display: none` would take them out of both,
+        // which is how a polite live region silently stops announcing anything.
+        const body = ruleBody('.visually-hidden');
+        expect(body).not.toBeNull();
+        expect(body).not.toMatch(/display\s*:\s*none/);
+        expect(body).toMatch(/clip-path|clip\s*:/);
+    });
+
+    test('both modals are laid out over the scene rather than left in the flow', () => {
+        // Being hidden is half of it. Without `position: fixed` and a centring
+        // flex box they would appear at the top of the document behind the
+        // canvas, which is a different way of never being seen.
+        for (const id of ['#pause-modal', '#end-modal']) {
+            const body = ruleBody(id);
+            expect(body).not.toBeNull();
+            expect(body).toMatch(/position\s*:\s*fixed/);
+            expect(body).toMatch(/display\s*:\s*flex/);
+        }
+    });
+});
+
 describe('the responsive pass covers the shapes the shared stylesheet does', () => {
     const breakpoints = [...DECLARATIONS.matchAll(/@media ([^{]+)\{/g)].map(m => m[1].trim());
 

@@ -53,6 +53,7 @@ let host = null;        // the scene the group was added to, so dispose can undo
 let ships = [];
 let shared = null;
 let lights = null;          // { points, positions, attribute, geometry, material }
+let lightTexture = null;    // the generated dot, released with everything else
 let beams = [];
 let playerFireClock = 0;
 let alert = null;           // { id, label, body, position, age }
@@ -367,6 +368,36 @@ function buildShip(index, groupIndex, spec, body) {
     return ship;
 }
 
+/** A soft round dot, drawn once into a small canvas.
+ *
+ *  A PointsMaterial with no map draws SQUARES, which is what the first round of
+ *  screenshots showed: the fleet read as a scatter of orange blocks rather than
+ *  as running lights, and a square is the one shape nothing in space is. The
+ *  texture is generated rather than downloaded, so it costs nothing and needs no
+ *  CSP exception. A browser with no canvas gets squares back, which is a worse
+ *  picture rather than a broken one. */
+function runningLightTexture() {
+    if (typeof document === 'undefined' || !document.createElement) return null;
+    const size = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const g = canvas.getContext && canvas.getContext('2d');
+    if (!g || !g.createRadialGradient || !THREE.CanvasTexture) return null;
+
+    const half = size / 2;
+    const gradient = g.createRadialGradient(half, half, 0, half, half, half);
+    // A hot core with a soft falloff, so a light reads as a light rather than
+    // as a disc with an edge.
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.3, 'rgba(255,255,255,0.9)');
+    gradient.addColorStop(0.65, 'rgba(255,255,255,0.28)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gradient;
+    g.fillRect(0, 0, size, size);
+    return new THREE.CanvasTexture(canvas);
+}
+
 /** Every running light in one Points object, with attenuation off so a raider
  *  at 200,000 units is the same handful of pixels as one at 2,000. */
 function buildLights(count) {
@@ -374,10 +405,12 @@ function buildLights(count) {
     const geometry = new THREE.BufferGeometry();
     const attribute = new THREE.BufferAttribute(positions, 3);
     geometry.setAttribute('position', attribute);
+    lightTexture = runningLightTexture();
     const material = new THREE.PointsMaterial({
         color: cfg.lightColor,
         size: cfg.lightSize,
         sizeAttenuation: false,
+        map: lightTexture,
         transparent: true,
         opacity: 0.95,
         depthWrite: false
@@ -766,6 +799,8 @@ export function disposeFleet() {
         lights.geometry.dispose();
         lights.material.dispose();
     }
+    if (lightTexture) lightTexture.dispose();
+    lightTexture = null;
     for (const b of beams) {
         b.geometry.dispose();
         b.material.dispose();

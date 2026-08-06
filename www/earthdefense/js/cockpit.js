@@ -88,8 +88,13 @@ function buildParts(cfg) {
     const warm = new THREE.MeshBasicMaterial({
         color: cfg.glowColor === undefined ? 0xff9a5c : cfg.glowColor,
         transparent: true,
-        opacity: 0.55,
+        opacity: fraction(cfg, 'glowOpacity', 0.85),
         depthWrite: false
+    });
+    // The lit edge. Not a light and not emissive, just a lighter value, which
+    // is all a canopy edge ever is at night.
+    const edge = new THREE.MeshBasicMaterial({
+        color: cfg.edgeColor === undefined ? 0x46525f : cfg.edgeColor
     });
 
     const unitBox = new THREE.BoxGeometry(1, 1, 0.06);
@@ -100,6 +105,12 @@ function buildParts(cfg) {
     const dash = new THREE.Mesh(unitBox, shell);
     dash.name = 'dash';
     frame.add(dash);
+
+    // The lit top edge of the dash. Without it the dash is the same value as
+    // empty space and simply is not there.
+    const lip = new THREE.Mesh(unitBox, edge);
+    lip.name = 'dash-lip';
+    frame.add(lip);
 
     // The console rising toward the side windows. Two short bars at the ends of
     // the dash, tilted up and outward, and they do more for the silhouette than
@@ -128,7 +139,7 @@ function buildParts(cfg) {
     glowStrip.name = 'indicator-glow';
     frame.add(glowStrip);
 
-    return { shell, strut, warm, unitBox, dash, flares, brow, struts, glow: glowStrip };
+    return { shell, strut, warm, edge, unitBox, dash, lip, flares, brow, struts, glow: glowStrip };
 }
 
 /** A config fraction, with a fallback. Every proportion in the canopy comes
@@ -166,8 +177,16 @@ function layout(aspect, cfg) {
     parts.dash.scale.set(halfWidth * 2.4, dashHeight, 1);
     parts.dash.position.set(0, -halfHeight + dashHeight * 0.5, CANOPY_Z);
 
-    parts.glow.scale.set(halfWidth * 1.5, dashHeight * 0.09, 1);
-    parts.glow.position.set(0, -halfHeight + dashHeight, CANOPY_Z + 0.01);
+    // The lit edge sits ON the dash's top line and spans the same width, so the
+    // dash gets a defined upper boundary instead of fading into the sky.
+    const lipHeight = dashHeight * fraction(cfg, 'dashLipFraction', 0.055);
+    parts.lip.visible = lipHeight > 0;
+    parts.lip.scale.set(halfWidth * 2.4, Math.max(lipHeight, 0.0001), 1);
+    parts.lip.position.set(0, -halfHeight + dashHeight + lipHeight * 0.5, CANOPY_Z + 0.005);
+
+    // Narrow and bright: an indicator, not a plank across the screen.
+    parts.glow.scale.set(halfWidth * fraction(cfg, 'glowWidth', 0.5), dashHeight * 0.07, 1);
+    parts.glow.position.set(0, -halfHeight + dashHeight * 0.62, CANOPY_Z + 0.01);
 
     // The dash flares. Tilted so the OUTER end rises, which is why the rotation
     // takes the side's sign: for the right-hand flare the outer end is the one
@@ -253,6 +272,7 @@ export function disposeCockpit() {
         parts.shell.dispose();
         parts.strut.dispose();
         parts.warm.dispose();
+        parts.edge.dispose();
     }
     parts = null;
     active = null;

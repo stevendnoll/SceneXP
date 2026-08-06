@@ -304,18 +304,32 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         frameColor: 0x14181f,
         strutColor: 0x2a323d,
         glowColor: 0xff9a5c,
+        // THE EDGE IS WHAT MAKES THE CANOPY EXIST. A near-black frame against
+        // near-black space has no silhouette at all: the first round of
+        // screenshots showed the dash reading as nothing but the warm strip
+        // floating above it, because the slab underneath was the same value as
+        // the sky. A thin lit edge along the top of the dash is what a real
+        // canopy is read by at night, and it costs one more bar.
+        edgeColor: 0x46525f,
 
         // The dash, as a fraction of the full frame height. A twelfth reads as
         // a cockpit and leaves Earth's limb (about a third of the way up in the
         // opening frame) nowhere near it.
         dashFraction: 0.12,
+        dashLipFraction: 0.055,   // the lit edge, as a fraction of the dash
+
         // The console rising toward the side windows: a short bar at each end
         // of the dash, tilted up and outward. This is most of what makes the
         // bottom edge read as a moulded thing rather than as a black stripe.
         // 0 removes them.
-        dashFlareAngle: 0.32,     // radians of tilt
-        dashFlareLength: 0.6,     // as a fraction of the half-width
-        dashFlareOffset: 0.72,    // where along the half-width it is centred
+        //
+        // The first pass had these at 0.6 of the half-width and 0.32 radians,
+        // which put a 400 pixel slab across each bottom corner and read as a
+        // mistake rather than as a console. Short and shallow is the whole
+        // idea: they break the straight bottom edge and nothing more.
+        dashFlareAngle: 0.22,     // radians of tilt
+        dashFlareLength: 0.3,     // as a fraction of the half-width
+        dashFlareOffset: 0.86,    // where along the half-width it is centred
 
         // The brow along the top edge. Thin on purpose: it closes the frame
         // vertically, which is what "brackets the view" in PRD 7 asks for,
@@ -323,8 +337,17 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // and returns the canopy to its M4 draft silhouette.
         browFraction: 0.055,
 
-        strutTopInset: 0.28,
-        strutWidth: 0.055,        // as a fraction of the half-width
+        // The warm indicator strip along the dash. NARROW AND BRIGHT rather
+        // than wide and dim: at 1.5 of the half-width and 0.55 opacity it read
+        // as a brown plank laid across the bottom of the screen, which is the
+        // single worst thing in the first round of screenshots.
+        glowWidth: 0.5,           // as a fraction of the half-width
+        glowOpacity: 0.85,
+
+        // Slimmer and further outboard than the first pass (0.055 and 0.28),
+        // which put a pair of heavy wedges across the top corners.
+        strutTopInset: 0.18,
+        strutWidth: 0.038,        // as a fraction of the half-width
         strutRise: 1.1,           // as a fraction of the half-height
 
         // WHERE THE GUNS SIT, in world units ahead of and below the eye.
@@ -391,7 +414,11 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         hullWidth: 150,
         hullColor: 0x7a5a4e,
         lightColor: 0xff6a4a,
-        lightSize: 5,          // in PIXELS: the running light never attenuates
+        // In PIXELS: the running light never attenuates, so a raider at 200,000
+        // units is the same size as one at 2,000. Slightly larger than the
+        // first pass because the dot is now a soft round sprite rather than a
+        // hard square, and a soft edge reads smaller than it measures.
+        lightSize: 7,
         effectRadius: 170,     // how big a raider's destruction burst reads
 
         // WHAT A RAIDER DOES TO AN INSTALLATION, and the first number to tune
