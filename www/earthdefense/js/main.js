@@ -2,9 +2,10 @@
 /**
  * main.js - Application entry point for the Earth Defense experience.
  *
- * M2 SCOPE. The opening frame from M1 is now flyable. The flight model, every
- * input source, the settings cog, the pause panel, and the soft perimeter are
- * wired. There is still no targeting, no fleet, and no cockpit.
+ * M4 SCOPE. The world flies (M2), the installations ride Earth and the Moon
+ * (M3), and now the guns work: every frame picks a target and fires at it. The
+ * canopy is in as a first draft. Still to come are the Martian fleet (M5), the
+ * game state and the HUD counters (M5, M6), and the final canopy (M7).
  *
  * This file owns the seam between the shared parts and the scene: flight
  * (flight-1.0.0) deals only in plain numbers, and this is where those numbers
@@ -12,8 +13,14 @@
  * maths testable with real values, and it means the same module could fly
  * something other than a camera in a later game.
  *
- * Arriving at M3: structures, real collision, and surface anchors. The init
- * order this file will grow into is in the PRD, section 9.6.
+ * The same shape holds for the guns. `targeting` is given a view, a candidate
+ * list, and a rules object, and hands back an id: it never sees the scene
+ * graph. `weapons` is given that id and two muzzle points, and never learns
+ * what an installation is. Everything scenario-specific is in this file and in
+ * config.js, which is what makes the six shared modules reusable by the next
+ * space game rather than by this one only.
+ *
+ * The full init order is in the PRD, section 9.6.
  */
 
 import { EARTHDEFENSE_CONFIG, spawnPosition } from './config.min.js';
@@ -27,8 +34,20 @@ import {
     setLookSensitivity, setInvertPitch, setPerimeter, onPerimeterChange,
     setConstrainPosition, setPaused
 } from '../../shared/js/flight-1.0.0.min.js';
-import { initWorld, updateWorld } from './world.min.js';
+import {
+    initWorld, updateWorld, getOccluders, getStructures,
+    targetCandidates, damageStructure
+} from './world.min.js';
 import { altitudeFloorAdjust } from '../../shared/js/bodies-1.0.0.min.js';
+import { pickTarget } from '../../shared/js/targeting-1.0.0.min.js';
+import {
+    initWeapons, updateWeapons, registerDamageable, onHit, onDestroyed,
+    disposeWeapons
+} from '../../shared/js/weapons-1.0.0.min.js';
+import {
+    initCockpit, resizeCockpit, muzzleWorldPositions, setCockpitFiring,
+    disposeCockpit
+} from './cockpit.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
@@ -50,12 +69,23 @@ const settings = {
 let canvas, loadingScreen, blocker, touchControls;
 let throttleReadout, perimeterNotice, flightStatus;
 let settingsPanel, settingsBtn, pauseModal;
+let reticle, lockBracket, combatStatus;
 let scene = null;
+let overlayScene = null;
 let cleanupController = null;
 
 let _sessionStart = 0;
 let _sessionEnded = false;
 let _announcedThrottle = null;
+let _lockedId = null;
+let _announcedLock = null;
+
+// The view handed to pickTarget. Rewritten in place each frame rather than
+// rebuilt, because this runs sixty times a second.
+const _view = { eye: { x: 0, y: 0, z: 0 }, forward: { x: 0, y: 0, z: -1 } };
+const _targetRules = { coneRadians: 0, range: 0, allegiance: null, occluders: null };
+const _projected = { x: 0, y: 0, visible: false };
+let _projectScratch = null;
 
 // ---- Initialization -------------------------------------------------------
 
@@ -73,6 +103,9 @@ async function init() {
     settingsPanel = document.getElementById('settings-panel');
     settingsBtn = document.getElementById('settings-btn');
     pauseModal = document.getElementById('pause-modal');
+    reticle = document.getElementById('reticle');
+    lockBracket = document.getElementById('lock-bracket');
+    combatStatus = document.getElementById('combat-status');
 
     if (!canvas) return;
 
@@ -99,6 +132,7 @@ async function init() {
     updateLoadingStatus('Warming the engines…', 88);
     loadSettings();
     startFlight();
+    startCombat();
 
     setupEventListeners();
 
@@ -176,6 +210,144 @@ function startFlight() {
  *  positions and so keeps working now that the Moon is moving. */
 function keepAbovePlanets(next) {
     return altitudeFloorAdjust(next, EARTHDEFENSE_CONFIG.altitudeFloor);
+}
+
+// ---- Combat ---------------------------------------------------------------
+
+/** Build the canopy, put every installation on the damage ledger, and wire the
+ *  two callbacks that let the scene react to what `weapons` decided. */
+function startCombat() {
+    const config = EARTHDEFENSE_CONFIG;
+
+    overlayScene = initCockpit(config);
+    initWeapons(config.weapons, scene);
+
+    // WHO CAN BE SHOT. At M4 this is the seven installations, because the fleet
+    // does not exist yet and the gate needs a target. See the loud note on
+    // config.targeting.allegiance: at M5 the fleet registers here too and the
+    // rules stop admitting friendlies.
+    for (const entry of getStructures()) {
+        registerDamageable(entry.site.id, config.structures.hitPoints);
+    }
+
+    // weapons owns the hit point ledger; the scene only reacts to it. Keeping
+    // the arithmetic in one place is what stops the pips and the counters ever
+    // disagreeing about whether something is still standing.
+    onHit((result) => {
+        damageStructure(result.id, result.hitPoints);
+    });
+    onDestroyed((result) => {
+        track('structure-destroyed', { id: result.id });
+        announce(`${labelFor(result.id)} destroyed.`);
+    });
+
+    _targetRules.coneRadians = config.targeting.coneRadians;
+    _targetRules.range = config.targeting.range;
+    _targetRules.allegiance = config.targeting.allegiance;
+}
+
+function labelFor(id) {
+    const entry = getStructures().find(e => e.site.id === id);
+    return entry ? entry.site.label : 'An installation';
+}
+
+/** One frame of gunnery: pick a target, fire at it, and show the result.
+ *
+ *  Order matters. The bodies have already moved this frame, so the candidate
+ *  positions read here are where the installations ARE rather than where they
+ *  were, which is the difference between a lock that tracks and one that
+ *  lags a frame behind the Moon. */
+function updateCombat(deltaTime) {
+    const camera = getWorldCamera();
+    if (!camera) return;
+
+    const s = getFlightState();
+    _view.eye.x = s.position.x;
+    _view.eye.y = s.position.y;
+    _view.eye.z = s.position.z;
+    _view.forward.x = s.forward.x;
+    _view.forward.y = s.forward.y;
+    _view.forward.z = s.forward.z;
+    // Read live: the Moon is moving, so a cached occluder list would let a
+    // visitor shoot through it.
+    _targetRules.occluders = getOccluders();
+
+    const target = pickTarget(_view, targetCandidates(), _targetRules);
+    const shots = updateWeapons(deltaTime, target, muzzleWorldPositions(camera));
+
+    setCockpitFiring(shots > 0);
+    updateLockUi(target, camera);
+}
+
+/** The reticle changes SHAPE as well as colour the instant a target qualifies,
+ *  and a bracket is drawn around the target itself.
+ *
+ *  Two separate jobs on purpose. The reticle says "the guns have something",
+ *  which is the rule the visitor is learning and which must read at the centre
+ *  of the frame where they are already looking. The bracket says "it is THAT
+ *  one", which only matters once there is more than one candidate, and which
+ *  has to sit out where the target actually is. */
+function updateLockUi(target, camera) {
+    const locked = !!target;
+
+    if (reticle) reticle.classList.toggle('locked', locked);
+    _lockedId = locked ? target.id : null;
+
+    if (!lockBracket) return;
+    if (!locked) {
+        lockBracket.classList.add('hidden');
+        announceLock(null);
+        return;
+    }
+
+    projectToScreen(target.position, camera);
+    if (!_projected.visible) {
+        // Behind the eye. It cannot be, given a six degree cone, but the check
+        // costs nothing and a projected point behind the camera comes back
+        // MIRRORED, so the bracket would appear on the opposite side of the
+        // screen from the target rather than simply being wrong.
+        lockBracket.classList.add('hidden');
+        return;
+    }
+    lockBracket.classList.remove('hidden');
+    lockBracket.style.transform =
+        `translate(-50%, -50%) translate(${_projected.x.toFixed(1)}px, ${_projected.y.toFixed(1)}px)`;
+    announceLock(target.id);
+}
+
+/** World point to CSS pixels, with the sign of the view-space z checked first.
+ *  That check is the classic bug in this feature: `camera.project()` happily
+ *  returns coordinates for a point behind the camera, mirrored through the
+ *  origin, so anything drawn from them lands in the wrong corner. */
+function projectToScreen(point, camera) {
+    if (!_projectScratch) _projectScratch = new THREE.Vector3();
+    const v = _projectScratch;
+    v.set(point.x, point.y, point.z);
+    camera.updateMatrixWorld();
+    v.applyMatrix4(camera.matrixWorldInverse);
+    if (v.z >= 0) { _projected.visible = false; return _projected; }
+
+    v.applyMatrix4(camera.projectionMatrix);
+    _projected.x = (v.x * 0.5 + 0.5) * window.innerWidth;
+    _projected.y = (-v.y * 0.5 + 0.5) * window.innerHeight;
+    _projected.visible = true;
+    return _projected;
+}
+
+/** Every combat state the pixels carry is also said in words, because a lock
+ *  that only exists as a change of shape is a lock some visitors never see.
+ *  Announced on CHANGE, never per frame, or the live region would chatter. */
+function announceLock(id) {
+    if (id === _announcedLock) return;
+    _announcedLock = id;
+    if (!combatStatus) return;
+    combatStatus.textContent = id
+        ? `Target locked: ${labelFor(id)}. Guns firing.`
+        : 'No target. Guns idle.';
+}
+
+function announce(message) {
+    if (combatStatus) combatStatus.textContent = message;
 }
 
 function showPerimeterNotice(outside) {
@@ -320,7 +492,13 @@ function setupEventListeners() {
     const signal = cleanupController.signal;
 
     window.addEventListener('pagehide', cleanup);
-    window.addEventListener('resize', () => resizeSpace(), { signal });
+    window.addEventListener('resize', () => {
+        resizeSpace();
+        // The canopy is rebuilt for the new aspect rather than stretched: a
+        // portrait phone and a wide desktop want different shapes, and this is
+        // the line whose absence is the classic two-camera bug.
+        resizeCockpit(window.innerWidth / window.innerHeight);
+    }, { signal });
 
     ['gesturestart', 'gesturechange', 'gestureend'].forEach(type =>
         document.addEventListener(type, (e) => e.preventDefault(), { passive: false, signal }));
@@ -383,12 +561,17 @@ function animate() {
 
     if (!state.isPaused) {
         updateFlight(deltaTime);
+        // Bodies move BEFORE anything aims, so a lock reads where the Moon is
+        // this frame rather than where it was last one.
         updateWorld(deltaTime);
+        applyFlightToCamera();
+        updateCombat(deltaTime);
+    } else {
+        applyFlightToCamera();
     }
-    applyFlightToCamera();
     updateReadouts();
 
-    renderSpace(scene);
+    renderSpace(scene, overlayScene);
 }
 
 function applyFlightToCamera() {
@@ -428,6 +611,9 @@ function cleanup() {
     const renderer = getRenderer();
     if (renderer) renderer.setAnimationLoop(null);
     if (cleanupController) cleanupController.abort();
+    disposeWeapons();
+    disposeCockpit();
+    overlayScene = null;
 }
 
 function endSession() {
@@ -480,4 +666,7 @@ if (typeof document !== 'undefined') {
     }
 }
 
-export const __test__ = { bufToHex, hasWebGL, keepAbovePlanets, settings };
+export const __test__ = {
+    bufToHex, hasWebGL, keepAbovePlanets, settings,
+    updateCombat, updateLockUi, projectToScreen, labelFor, announceLock
+};

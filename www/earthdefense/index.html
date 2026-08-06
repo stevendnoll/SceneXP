@@ -126,19 +126,44 @@
             <p class="subtitle">For the people who first made a screen into a place you could go</p>
             <p class="click-prompt">Click to take the helm</p>
             <div class="controls-hint">
-                <span>M1</span> The view only, for now
+                <span>No fire button</span> Line a target up in the middle of your view
             </div>
         </div>
     </div>
 
     <div id="hud">
-        <div class="crosshair" aria-hidden="true"></div>
+        <!-- The reticle IS the weapon: there is no fire button, so the ship
+             shoots whatever sits inside this. Its two states differ in SHAPE
+             as well as colour (a thin ring with ticks when idle, a closed
+             diamond with corner brackets when locked), because nothing in this
+             experience may be carried by colour alone. -->
+        <div id="reticle" class="reticle" aria-hidden="true">
+            <svg viewBox="0 0 64 64" focusable="false">
+                <circle class="reticle-ring" cx="32" cy="32" r="13" />
+                <path class="reticle-ticks" d="M32 8v7M32 49v7M8 32h7M49 32h7" />
+                <path class="reticle-diamond" d="M32 17 47 32 32 47 17 32Z" />
+                <path class="reticle-corners"
+                    d="M14 22v-8h8M50 22v-8h-8M14 42v8h8M50 42v8h-8" />
+                <circle class="reticle-dot" cx="32" cy="32" r="1.6" />
+            </svg>
+        </div>
+
+        <!-- Drawn around the target itself rather than at the centre, so with
+             more than one candidate in the cone it is clear WHICH one the guns
+             chose. Positioned from camera.project() each frame. -->
+        <div id="lock-bracket" class="lock-bracket hidden" aria-hidden="true">
+            <svg viewBox="0 0 48 48" focusable="false">
+                <path d="M4 15V4h11M44 15V4H33M4 33v11h11M44 33v11H33" />
+            </svg>
+        </div>
+
         <div id="throttle-readout" class="throttle-readout" aria-hidden="true">0%</div>
         <div id="perimeter-notice" class="perimeter-notice hidden" role="status" aria-live="polite"></div>
         <!-- Everything the HUD shows visually is also announced here, so the
              flight state is available to a screen reader rather than being
              locked in the pixels. -->
         <p id="flight-status" class="visually-hidden" role="status" aria-live="polite"></p>
+        <p id="combat-status" class="visually-hidden" role="status" aria-live="polite"></p>
     </div>
 
     <!-- Touch controls. The LEFT thumb gets a throttle rather than a movement
@@ -227,6 +252,9 @@
                     <li class="help-desktop"><strong>Look:</strong> move the mouse, or steer with <kbd>A</kbd> <kbd>D</kbd> to turn and <kbd>Q</kbd> <kbd>E</kbd> to climb and dive.</li>
                     <li class="help-mobile"><strong>Throttle:</strong> the slider on the left. It stays where you leave it, so you can let go. Double tap it to stop.</li>
                     <li class="help-mobile"><strong>Look:</strong> drag the joystick on the right.</li>
+                    <li><strong>Guns:</strong> there is no fire button. Line a target up in
+                        the middle of your view and the guns take care of the rest. The
+                        reticle closes into a diamond the moment they have something.</li>
                     <li><strong>Settings:</strong> the gear icon adjusts look sensitivity.</li>
                 </ul>
                 <p class="piece-subtitle dedication">Built in honor of the first generation of video game

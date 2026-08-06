@@ -308,21 +308,64 @@ describe('the world builds and ticks', () => {
         return structures;
     }
 
+    /* From M4, weapons-1.0.0 owns the hit point arithmetic and the scene is
+       TOLD the survivors rather than doing its own subtraction. Two modules
+       counting the same thing would eventually disagree, and the visible half
+       of that disagreement is a structure showing pips it no longer has. */
     test('installations take three hits and report their losses', async () => {
         const structures = await loadStructures();
         expect(structures.getStructures()).toHaveLength(7);
 
         const id = CONFIG.structures.earth[0].id;
-        expect(structures.damageStructure(id, 1)).toBe(2);
+        expect(structures.damageStructure(id, 2)).toBe(2);
         expect(structures.damageStructure(id, 1)).toBe(1);
         expect(structures.structuresRemaining('friendly')).toBe(7);   // still standing
 
-        expect(structures.damageStructure(id, 1)).toBe(0);
+        expect(structures.damageStructure(id, 0)).toBe(0);
         expect(structures.structuresRemaining('friendly')).toBe(6);
-        // A fourth hit is a no-op rather than a negative count.
-        expect(structures.damageStructure(id, 1)).toBe(0);
-        expect(structures.damageStructure('nobody', 1)).toBeNull();
+        // Being told zero again is a no-op rather than a second destruction.
+        expect(structures.damageStructure(id, 0)).toBe(0);
+        expect(structures.damageStructure('nobody', 0)).toBeNull();
         expect(structures.getStructure('nobody')).toBeNull();
+    });
+
+    test('a destroyed installation goes dark and leaves the target list', async () => {
+        const structures = await loadStructures();
+        const id = CONFIG.structures.moon[0].id;
+
+        expect(structures.targetCandidates()).toHaveLength(7);
+        // Every candidate carries what targeting needs and nothing else.
+        const candidate = structures.targetCandidates().find(c => c.id === id);
+        expect(candidate.allegiance).toBe('friendly');
+        expect(candidate.radius).toBe(CONFIG.structures.height);
+
+        structures.destroyStructure(id);
+        const entry = structures.getStructure(id);
+        expect(entry.destroyed).toBe(true);
+        expect(entry.hitPoints).toBe(0);
+        // The visual half (beacon out, hull darkened, mast off true) is not
+        // asserted here: it is all writes onto the chainable proxy, which
+        // accepts them and reports nothing back. It is judged by eye at the
+        // gate instead. What IS assertable is that the wreck leaves the game.
+        expect(structures.structuresRemaining('friendly')).toBe(6);
+        expect(structures.targetCandidates()).toHaveLength(6);
+        expect(structures.targetCandidates().some(c => c.id === id)).toBe(false);
+        // Destroying it twice is a no-op.
+        expect(structures.destroyStructure(id)).toBeNull();
+        expect(structures.destroyStructure('nobody')).toBeNull();
+    });
+
+    test('the candidate list is reused between frames rather than rebuilt', async () => {
+        // Targeting runs over every candidate on every tick, so a fresh object
+        // per structure per frame would hand the collector seven allocations a
+        // frame for nothing.
+        const structures = await loadStructures();
+        const first = structures.targetCandidates();
+        const firstEntry = first[0];
+        const second = structures.targetCandidates();
+        expect(second).toBe(first);
+        expect(second[0]).toBe(firstEntry);
+        expect(second[0].position).toBe(firstEntry.position);
     });
 
     test('a lost pip changes SHAPE, not only colour', async () => {

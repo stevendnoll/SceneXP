@@ -229,6 +229,95 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         doubleTapMs: 320
     },
 
+    // ---- Targeting (targeting-1.0.0) --------------------------------------
+    //
+    // There is no fire button. These four numbers ARE the weapon: the ship
+    // shoots whatever satisfies all of them and stops the instant nothing does.
+    targeting: {
+        // Six degrees. Wide enough that lining a raider up is a normal amount
+        // of flying rather than threading a needle, narrow enough that the lock
+        // still feels like something the visitor did. If M4's gate says
+        // automatic fire feels passive, this is the first number to open up.
+        coneRadians: 0.10472,
+        // Eight thousand units, a little under Earth's diameter. Far enough to
+        // reach across a fight, short enough that nothing is picked off from
+        // the other side of the world.
+        range: 8000,
+
+        // WHAT COUNTS AS A TARGET, and the one line in this file that is
+        // temporary. From M5 the Martian fleet arrives and this becomes
+        // ['hostile'], which is the real game: you never shoot your own
+        // installations. Until then the fleet does not exist, and the M4 gate
+        // ("fly at a structure and shoot it") needs something in the world to
+        // shoot at, so the seven friendlies stand in as a firing range.
+        //
+        // FLIP THIS TO ['hostile'] AT M5. It is data rather than code exactly
+        // so that the flip is one word and the targeting module never learns
+        // what a Martian is.
+        allegiance: ['friendly']
+    },
+
+    // ---- Weapons (weapons-1.0.0) ------------------------------------------
+    weapons: {
+        shotsPerSecond: 4,
+        damagePerShot: 1,
+        // A frame long enough to earn more than four shots is a frame that
+        // stalled, and the right response is to drop the backlog rather than
+        // empty it into whatever is centred when the tab comes back.
+        maxShotsPerFrame: 4,
+
+        // The tracer is COSMETIC. The hit is resolved the moment it is fired
+        // (PRD 6.2), so these numbers change how the shot reads and nothing
+        // about what it does. At 30,000 units/s a tracer crosses a typical
+        // 3,000 unit engagement in a tenth of a second: fast enough to read as
+        // a weapon rather than a thrown stone, slow enough to see leave.
+        tracerSpeed: 30000,
+        tracerLife: 0.35,
+        tracerLength: 900,
+        tracerColor: 0xffd9a0,
+
+        flashLife: 0.18,
+        flashColor: 0xfff0c4,
+        flashScale: 1.8,
+
+        burstLife: 0.9,
+        burstColor: 0xffa657,
+        burstParticles: 24,
+        burstSpeed: 900,
+        burstSize: 90,
+        effectRadius: 200
+    },
+
+    // ---- Cockpit (cockpit.js) ---------------------------------------------
+    //
+    // M4 DRAFT VALUES. The canopy needs judging by eye at three aspect ratios
+    // and is expected to take several passes before M7.
+    cockpit: {
+        frameColor: 0x14181f,
+        strutColor: 0x2a323d,
+        glowColor: 0xff9a5c,
+        dashFraction: 0.12,
+        strutTopInset: 0.28,
+
+        // WHERE THE GUNS SIT, in world units ahead of and below the eye.
+        //
+        // These are absurd as ship dimensions (84 units is 84 km) and that is
+        // forced rather than chosen. The world camera's near plane is 100
+        // units, so a muzzle at any believable offset would sit behind it and
+        // the tracer would only become visible a hundred units out, arriving
+        // from nowhere in the middle of the frame. Pushing the guns to 300
+        // units ahead puts them in front of the near plane, so a tracer is
+        // visible from the moment it leaves.
+        //
+        // The offsets are then set as fractions of that forward distance so
+        // they land where the eye expects: 84/300 is 15.6 degrees out, which
+        // stays inside even a 9:21 portrait phone's 16.7 degree half-field, and
+        // 66/300 is 12.4 degrees down, just above the dash. Tracers therefore
+        // enter from the lower corners and converge, which is the whole trick
+        // (PRD 7): it sells a ship without modelling one.
+        muzzle: { lateral: 84, drop: 66, forward: 300 }
+    },
+
     // A soft boundary, not a wall. Nothing is out at Mars to find, so a
     // visitor who points that way and holds the throttle down gets a long look
     // and then a polite nudge home. Forward authority fades across the last

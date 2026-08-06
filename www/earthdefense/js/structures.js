@@ -29,6 +29,15 @@ const structures = new Map();   // id -> { spec, group, pips, hitPoints, side, b
 
 let shared = null;
 
+// Scratch, so the per-frame candidate and position reads allocate nothing.
+let scratchVec = null;
+const candidateList = [];
+
+function scratch() {
+    if (!scratchVec) scratchVec = new THREE.Vector3();
+    return scratchVec;
+}
+
 /** Build the one set of geometries and materials every installation clones. */
 function sharedParts(config) {
     if (shared) return shared;
@@ -47,7 +56,10 @@ function sharedParts(config) {
         hullMaterial: new THREE.MeshStandardMaterial({ color: 0xb8c4d0, roughness: 0.55, metalness: 0.5 }),
         trimMaterial: new THREE.MeshStandardMaterial({ color: 0x6a7684, roughness: 0.7, metalness: 0.35 }),
         pipLive: new THREE.MeshBasicMaterial({ color: 0x9be7ff }),
-        pipLost: new THREE.MeshBasicMaterial({ color: 0x3a2a26 })
+        pipLost: new THREE.MeshBasicMaterial({ color: 0x3a2a26 }),
+        // Burnt out. Unlit rather than merely dark, so a wreck reads the same
+        // on the night side as it does in full sun.
+        wreckMaterial: new THREE.MeshBasicMaterial({ color: 0x2b2320 })
     };
     return shared;
 }
@@ -90,12 +102,13 @@ function buildOne(config, side) {
         pips.push(pip);
     }
 
-    return { group, pips };
+    return { group, pips, beacon };
 }
 
 /** Place every installation from config onto its body. */
 export function initStructures(config = EARTHDEFENSE_CONFIG) {
     structures.clear();
+    candidateList.length = 0;
     const spec = config.structures;
 
     for (const [bodyId, list] of [['earth', spec.earth], ['moon', spec.moon]]) {
@@ -115,28 +128,75 @@ export function initStructures(config = EARTHDEFENSE_CONFIG) {
             };
             anchor.add(built.group);
 
-            structures.set(site.id, {
+            const entry = {
                 site,
                 body: bodyId,
                 group: built.group,
                 pips: built.pips,
+                beacon: built.beacon,
                 hitPoints: spec.hitPoints,
-                side: 'friendly'
-            });
+                side: 'friendly',
+                // The aim point and the candidate record are built ONCE and
+                // rewritten in place every frame. Targeting runs over all seven
+                // of these on every tick, and a fresh object each time would
+                // hand the collector seven allocations a frame for nothing.
+                aim: { x: 0, y: 0, z: 0 }
+            };
+            entry.candidate = {
+                id: site.id,
+                position: entry.aim,
+                allegiance: entry.side,
+                radius: spec.height
+            };
+            structures.set(site.id, entry);
         }
     }
     return structures;
 }
 
 /** Apply damage and update the readout. Returns the surviving hit points, or
- *  null for an unknown id. Destruction lands at M4; for now the pips fall. */
-export function damageStructure(id, amount = 1) {
+ *  null for an unknown id.
+ *
+ *  The hit point ARITHMETIC is not owned here. weapons-1.0.0 keeps the real
+ *  ledger, and this is the scene reacting to it: pips fall, and at zero the
+ *  installation goes dark. Two places counting the same thing would eventually
+ *  disagree, so this one is told rather than deciding. */
+export function damageStructure(id, hitPointsRemaining) {
     const entry = structures.get(id);
     if (!entry) return null;
-    entry.hitPoints = Math.max(0, entry.hitPoints - amount);
+    entry.hitPoints = Math.max(0, hitPointsRemaining);
     entry.group.userData.hitPoints = entry.hitPoints;
     refreshPips(entry);
+    if (entry.hitPoints === 0) destroyStructure(id);
     return entry.hitPoints;
+}
+
+/** Take an installation out of the game: the beacon goes out, the hull goes
+ *  dark, and the mast leans off true so the loss reads in SILHOUETTE from a
+ *  distance where no colour is legible at all. It stays in the world as a
+ *  wreck rather than vanishing, because something disappearing from under the
+ *  reticle reads as a rendering fault, not as a defeat. */
+export function destroyStructure(id) {
+    const entry = structures.get(id);
+    if (!entry || entry.destroyed) return null;
+    const p = sharedParts(EARTHDEFENSE_CONFIG.structures);
+
+    entry.destroyed = true;
+    entry.hitPoints = 0;
+    entry.group.userData.hitPoints = 0;
+    entry.group.userData.destroyed = true;
+    refreshPips(entry);
+
+    if (entry.beacon) entry.beacon.visible = false;
+    entry.group.children.forEach((child) => {
+        if (child.name && child.name.startsWith('pip-')) return;
+        if (child === entry.beacon) return;
+        child.material = p.wreckMaterial;
+    });
+    // A few degrees off vertical. Enough to read as broken, not so much that it
+    // looks like it fell over, which at 160 units tall would be comic.
+    entry.group.rotation.z = 0.21;
+    return entry;
 }
 
 /** A lost pip changes SHAPE as well as colour: it flattens to a dark sliver,
@@ -170,6 +230,34 @@ export function structuresRemaining(side = 'friendly') {
 /** Every installation's live world position, for the HUD's markers and, from
  *  M5, for the raiders' steering. Read fresh each frame: the Moon's three are
  *  moving, and a cached position is what makes an interception feel broken. */
+/** Every installation still standing, as targeting candidates.
+ *
+ *  THE AIM POINT IS THE BEACON, not the anchor at the visitor's feet. That is
+ *  an occlusion fix rather than a cosmetic one: an anchor sits exactly ON the
+ *  planet's surface, which is exactly on the occluder sphere, so a
+ *  segment-versus-sphere test can go either way on a rounding error and the
+ *  lock flickers as though the planet keeps swallowing its own installation.
+ *  The beacon stands 179 units clear of the surface, which settles it, and it
+ *  is also the more honest place to aim.
+ *
+ *  The returned array and every object in it are reused between calls, so
+ *  hold the values rather than the references if they need to outlive a frame.
+ */
+export function targetCandidates() {
+    candidateList.length = 0;
+    const v = scratch();
+    for (const entry of structures.values()) {
+        if (entry.hitPoints <= 0) continue;
+        const source = entry.beacon || entry.group;
+        source.getWorldPosition(v);
+        entry.aim.x = v.x;
+        entry.aim.y = v.y;
+        entry.aim.z = v.z;
+        candidateList.push(entry.candidate);
+    }
+    return candidateList;
+}
+
 export function structurePositions() {
     const out = {};
     for (const [id, entry] of structures.entries()) {
@@ -182,7 +270,9 @@ export function structurePositions() {
 
 export function disposeStructures() {
     structures.clear();
+    candidateList.length = 0;
+    scratchVec = null;
     shared = null;
 }
 
-export const __test__ = { refreshPips };
+export const __test__ = { refreshPips, sharedParts };

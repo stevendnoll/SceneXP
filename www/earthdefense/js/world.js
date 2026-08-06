@@ -7,8 +7,11 @@
  * Every number comes from config, so this file holds no scale knowledge of its
  * own and the M1 gate can retune the frame without touching code.
  *
- * The structures on Earth and the Moon arrive at M3, along with surface
- * anchors and collision. This file is deliberately thin until then.
+ * It is deliberately a re-export surface as much as a builder: main.js asks
+ * `world` for the scene's contents (bodies, occluders, installations, targeting
+ * candidates) and never reaches past it into either bodies-1.0.0 or
+ * structures.js. That keeps one place to look when the fleet arrives at M5 and
+ * the candidate list stops being only installations.
  */
 
 import { EARTHDEFENSE_CONFIG, spawnPosition } from './config.min.js';
@@ -18,7 +21,8 @@ import {
 } from '../../shared/js/bodies-1.0.0.min.js';
 import {
     initStructures, getStructures, getStructure,
-    structuresRemaining, structurePositions
+    structuresRemaining, structurePositions, targetCandidates,
+    damageStructure, destroyStructure
 } from './structures.min.js';
 
 let group = null;
@@ -69,4 +73,7 @@ export function placeCameraAtSpawn(camera, config = EARTHDEFENSE_CONFIG) {
 
 export function getWorldGroup() { return group; }
 export { getBody, bodyPositions, getOccluders };
-export { getStructures, getStructure, structuresRemaining, structurePositions };
+export {
+    getStructures, getStructure, structuresRemaining, structurePositions,
+    targetCandidates, damageStructure, destroyStructure
+};

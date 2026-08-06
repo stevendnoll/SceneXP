@@ -11,9 +11,10 @@
  * against a phone held upright first and given room in landscape, not the
  * other way round.
  *
- * Shipped: the deep-space backdrop, the reticle, the touch throttle, the
- * throttle readout, and the perimeter notice. Still to come: the rest of the
- * HUD at M5, the cockpit at M7.
+ * Shipped: the deep-space backdrop, the two-state reticle, the target lock
+ * bracket, the touch throttle, the throttle readout, and the perimeter notice.
+ * Still to come: the objective counters, lives, nav ring, and hostile pips at
+ * M5, and the final canopy pass at M7.
  */
 
 /* Deep space rather than the shared near-black, so the loading screen and the
@@ -24,12 +25,124 @@
     background: radial-gradient(ellipse at 50% 78%, #0d1524 0%, #04060d 55%, #000005 100%);
 }
 
-/* The reticle is the weapon: from M4 the ship fires at whatever sits inside it,
-   so it reads as a precise instrument rather than a decorative dot. Its locked
-   state changes SHAPE as well as colour (added at M4), because no information
-   in this experience may be carried by colour alone. */
-#hud .crosshair {
-    opacity: 0.75;
+/* ============================================================
+   The reticle
+   ============================================================
+   The reticle IS the weapon. There is no fire button, so the ship shoots
+   whatever sits inside this, which makes it the single most important element
+   on the screen and the one thing that has to read instantly on a phone held
+   at arm's length.
+
+   ITS TWO STATES DIFFER IN SHAPE, NOT ONLY IN COLOUR. Idle is an open ring
+   with four ticks standing off it. Locked closes into a solid diamond with
+   four corner brackets drawn in. Someone who cannot separate the two hues
+   still sees an outline change from round-and-open to angular-and-closed, and
+   the same silhouette survives a bright Earth filling the frame behind it.
+   No information in this experience is carried by colour alone.
+
+   The transition is a short fade rather than a snap, but it is deliberately
+   under a tenth of a second: the whole point is that the lock reads as
+   INSTANT, so the animation is there to soften an edge, not to take time. */
+
+#reticle {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 64px;
+    height: 64px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 4;
+}
+
+#reticle svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    fill: none;
+    /* A dark outline under every stroke, so the reticle stays legible against
+       a sunlit Earth as well as against empty space. */
+    filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.85));
+}
+
+#reticle .reticle-ring,
+#reticle .reticle-ticks {
+    stroke: rgba(var(--ui-accent-rgb), 0.9);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: opacity 0.08s ease-out;
+}
+
+#reticle .reticle-dot {
+    fill: rgba(var(--ui-accent-rgb), 0.9);
+}
+
+/* The locked half of the pair, hidden until there is something to shoot. */
+#reticle .reticle-diamond,
+#reticle .reticle-corners {
+    stroke: #ffc27a;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0;
+    transition: opacity 0.08s ease-out;
+}
+
+#reticle .reticle-diamond {
+    fill: rgba(255, 154, 92, 0.16);
+}
+
+#reticle.locked .reticle-ring,
+#reticle.locked .reticle-ticks {
+    opacity: 0;
+}
+
+#reticle.locked .reticle-diamond,
+#reticle.locked .reticle-corners {
+    opacity: 1;
+}
+
+#reticle.locked .reticle-dot {
+    fill: #ffd9a0;
+}
+
+/* The bracket sits on the TARGET, not at the centre, so with more than one
+   candidate inside the cone it is unambiguous which one the guns picked. Its
+   position comes from camera.project() every frame, written to the transform
+   in main.js. */
+.lock-bracket {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 54px;
+    height: 54px;
+    pointer-events: none;
+    z-index: 4;
+}
+
+.lock-bracket svg {
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: #ffc27a;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.85));
+}
+
+.lock-bracket.hidden {
+    display: none;
+}
+
+/* Phones are held closer than a monitor, but the reticle is the one element
+   that must not shrink with the screen: it is what the visitor aims with. Held
+   at full size and given a touch more contrast instead. */
+@media (max-width: 600px) {
+    #reticle {
+        width: 60px;
+        height: 60px;
+    }
 }
 
 /* A game canvas should never show a text cursor or a selection highlight. */
@@ -306,7 +419,11 @@ body:not(.is-touch-device) .throttle-readout {
     #loading-screen .loader-progress,
     .throttle-fill,
     .throttle-thumb,
-    .perimeter-notice {
+    .perimeter-notice,
+    #reticle .reticle-ring,
+    #reticle .reticle-ticks,
+    #reticle .reticle-diamond,
+    #reticle .reticle-corners {
         transition: none;
     }
 }
