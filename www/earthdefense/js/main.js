@@ -174,10 +174,10 @@ async function init() {
 
     if (!canvas) return;
 
-    if (state.isMobile) {
-        document.body.classList.add('is-touch-device');
-        if (touchControls) touchControls.classList.add('visible');
-    }
+    // The touch controls EXIST from here but are not revealed yet. See
+    // `showPlayChrome`: nothing you fly with belongs on screen during the
+    // briefing, and on a phone that is most of the lower half of the frame.
+    if (state.isMobile) document.body.classList.add('is-touch-device');
     applyHelpVisibility();
     applySiteLinks();
 
@@ -209,12 +209,9 @@ async function init() {
     setTimeout(() => {
         if (loadingScreen) loadingScreen.classList.add('hidden');
         state.isLoaded = true;
-        // The shared stylesheet ships #hud at opacity 0 and reveals it with
-        // `.visible`, the same way it does the floating buttons. Forgetting
-        // this line does not break anything loudly: the game runs perfectly and
-        // the entire HUD is simply never drawn, which is exactly how it reached
-        // the first round of screenshots.
-        if (hud) hud.classList.add('visible');
+        // The round buttons DO belong to the briefing: settings, the way home,
+        // and pause are all things a visitor may want before they fly. The HUD
+        // and the touch controls are not, and `showPlayChrome` owns those.
         document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
         // Land a keyboard visitor on the one control that matters right now,
         // the same way the end screen lands them on "Fly again". Without this
@@ -393,6 +390,7 @@ function handleStateChange(next) {
     setPaused(next !== 'playing' || _respawnTimer > 0);
 
     if (blocker) blocker.classList.toggle('hidden', next !== 'briefing');
+    showPlayChrome(next !== 'briefing');
     if (pauseModal) pauseModal.classList.toggle('hidden', next !== 'paused');
 
     if (next === 'won' || next === 'lost') {
@@ -410,6 +408,36 @@ function handleStateChange(next) {
         // Holding the cursor captive behind a dialog is a trap, not a feature.
         document.exitPointerLock();
     }
+}
+
+/** The HUD and the touch controls, which belong to FLYING and not to reading.
+ *
+ *  Both used to be revealed the moment loading finished, which meant they sat
+ *  behind the welcome overlay through the whole briefing. On a desktop that was
+ *  merely busy. On a phone in portrait it was a genuine problem, and the first
+ *  portrait capture showed why: the welcome copy stacks straight down the middle
+ *  of the frame, which is exactly where the speed readout and the nav markers
+ *  already are, so the readout landed BETWEEN the two hint rows and read as part
+ *  of the dedication, a nav label sat on its last line, and both thumb controls
+ *  waited under the copy looking ready to use before there was anything to fly.
+ *
+ *  It only became visible once the welcome overlay stopped being opaque, which
+ *  is to say the opening-frame fix is what exposed it. What that fix wanted was
+ *  the SCENE showing through, never the chrome.
+ *
+ *  Briefing is the only state that hides them. Pause, the win card and the loss
+ *  card all keep the HUD up deliberately: those are read against the run they
+ *  belong to, and a card with the numbers gone from behind it reads as a
+ *  different screen rather than as the same one with a panel over it.
+ *
+ *  The round `.ui-float` buttons are NOT part of this. Settings, home and pause
+ *  are all reasonable things to want before flying, and they sit in the top
+ *  corner where nothing collides with them at any shape. */
+function showPlayChrome(on) {
+    if (hud) hud.classList.toggle('visible', on);
+    // Only ever revealed on a touch device, the same condition that put the
+    // `is-touch-device` class on the body at init.
+    if (touchControls) touchControls.classList.toggle('visible', on && state.isMobile);
 }
 
 /** The end of a run. The same warm card as the pause panel on purpose: a loss

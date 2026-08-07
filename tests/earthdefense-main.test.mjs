@@ -99,8 +99,61 @@ describe('booting', () => {
         // is written correctly to elements nobody can see, every test passes,
         // and the game ships with no HUD at all. It reached a full round of
         // screenshots exactly that way.
+        //
+        // The reveal now happens when the visitor takes the helm rather than
+        // when loading finishes, so this asserts it AFTER that, which is the
+        // only moment it was ever meant to matter.
         const main = await boot();
         expect(main.getState().isLoaded).toBe(true);
+        enterWorld();
+        expect(dom.el('hud').classList.contains('visible')).toBe(true);
+    });
+
+    test('the HUD stays off the briefing, where the welcome copy is', async () => {
+        // On a phone in portrait the welcome copy stacks down the middle of the
+        // frame, which is where the speed readout and the nav labels already
+        // are: the readout landed between the two hint rows and read as part of
+        // the dedication. Hidden here means the OPENING FRAME still shows
+        // through the scrim, which is the whole point, without the chrome.
+        const main = await boot();
+        expect(main.getState().phase).toBe('briefing');
+        expect(dom.el('hud').classList.contains('visible')).toBe(false);
+    });
+
+    test('a phone gets its thumb controls when it takes the helm, not before', async () => {
+        // THE PORTRAIT CASE THIS WHOLE RULE IS FOR. Both controls are large and
+        // sit low, which on a phone is directly under the welcome copy, so they
+        // used to wait there looking ready to use before there was anything to
+        // fly. Boots as a touch device, because on a desktop the branch is
+        // never reached and the assertion would pass for the wrong reason.
+        globalThis.navigator.maxTouchPoints = 2;
+        await boot();
+
+        expect(dom.el('touch-controls').classList.contains('visible')).toBe(false);
+        enterWorld();
+        expect(dom.el('touch-controls').classList.contains('visible')).toBe(true);
+    });
+
+    test('a desktop never gets them, helm or no helm', async () => {
+        await boot();
+        enterWorld();
+        expect(dom.el('touch-controls').classList.contains('visible')).toBe(false);
+    });
+
+    test('pausing and ending a run both keep the HUD up', async () => {
+        // Briefing is the ONLY state that hides it. A card with the counters
+        // gone from behind it reads as a different screen rather than as the
+        // same one with a panel over it.
+        const main = await boot();
+        enterWorld();
+
+        main.__test__.handleStateChange('paused');
+        expect(dom.el('hud').classList.contains('visible')).toBe(true);
+
+        main.__test__.handleStateChange('won');
+        expect(dom.el('hud').classList.contains('visible')).toBe(true);
+
+        main.__test__.handleStateChange('lost');
         expect(dom.el('hud').classList.contains('visible')).toBe(true);
     });
 
