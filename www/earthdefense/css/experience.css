@@ -163,6 +163,24 @@
     line-height: 1.45;
 }
 
+/* The helm button wears the shared .click-prompt type exactly as the paragraph
+   it replaced did, so the opening frame is unchanged: this only undoes the
+   button element's own chrome. Its focus ring is below, with the round
+   buttons'. */
+#instructions button.click-prompt {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0.25rem 0.75rem;
+    background: none;
+    border: 0;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 1.25rem;
+    letter-spacing: inherit;
+    cursor: pointer;
+}
+
 /* Two hint rows sharing one grid, so the labels line up in a column and the
    sentences all start at the same place. Two independently centred rows put
    the pills at different widths and the sentences at different offsets, which
@@ -352,13 +370,21 @@
    Readouts
    ============================================================ */
 
+/* On a desktop this lands on the canopy dash, which is dark and opaque, and
+   the plate costs nothing there: it is within a couple of values of the dash
+   it sits on. On a phone the readout floats above the throttle track with open
+   scene behind it, which is the case the plate is actually for (7.6:1 against
+   anything, against 1.14:1 unbacked over sunlit cloud). */
 .throttle-readout {
     position: fixed;
     left: 22px;
     bottom: 224px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(6, 10, 18, 0.62);
     font-size: 0.95rem;
     font-variant-numeric: tabular-nums;
-    color: rgba(255, 255, 255, 0.82);
+    color: rgba(255, 255, 255, 0.9);
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
     pointer-events: none;
 }
@@ -383,7 +409,15 @@ body:not(.is-touch-device) .throttle-readout {
 
    BOTH MARKS ARE SHAPE-CODED. A ring means friendly, a diamond means hostile,
    matching the markers out in the world, so the panel and the sky agree and
-   neither depends on being able to separate blue from orange. */
+   neither depends on being able to separate blue from orange.
+
+   THE PANEL IS OPAQUE ENOUGH TO CARRY ITS OWN CONTRAST. It was 0.42 until the
+   M8 audit, which was luxurious against space (16:1) and not nearly enough
+   against the thing this experience actually puts behind it: a visitor who
+   flies at Earth fills the whole frame with sunlit cloud, and the counters
+   dropped to 2.98:1 there. At 0.72 the counts hold 5.0:1 and the dimmer labels
+   4.6:1 against the brightest pixel the scene can draw, so the one readout
+   that is never allowed to be unreadable never is. */
 
 .objective-panel {
     position: fixed;
@@ -394,7 +428,7 @@ body:not(.is-touch-device) .throttle-readout {
     gap: 4px;
     padding: 8px 12px;
     border-radius: 12px;
-    background: rgba(6, 10, 18, 0.42);
+    background: rgba(6, 10, 18, 0.72);
     border: 1px solid rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(4px);
     pointer-events: none;
@@ -465,21 +499,35 @@ body:not(.is-touch-device) .throttle-readout {
 
 /* Hollow AND smaller. The hollow alone would be a shape change on most screens
    and an invisible one on a bad screen at arm's length, so the pip also shrinks
-   back: two ways to read the same fact, neither of them a hue. */
+   back: two ways to read the same fact, neither of them a hue.
+
+   The outline was 0.32 and measured 2.75:1 against the panel at the M8 audit,
+   which is under the 3:1 that WCAG 1.4.11 asks of a non-text mark. A spent pip
+   is meant to be quiet, not faint: at 0.48 it is still obviously the dimmer of
+   the two states and it is now genuinely there. */
 .life-pip.spent {
     background: transparent;
-    border-color: rgba(255, 255, 255, 0.32);
+    border-color: rgba(255, 255, 255, 0.48);
     transform: scale(0.72);
 }
 
+/* The clock is deliberately the quietest thing on the screen, so it is the one
+   that suffered most from being unbacked: 1.10:1 over sunlit cloud at the M8
+   audit. It takes the same small plate as the nav labels, which lets it stay
+   quiet (it is still the dimmest text in the HUD) and still be readable at
+   5.9:1 wherever the visitor happens to be pointing. */
 .elapsed-time {
     position: fixed;
     top: 22px;
-    /* Clear of the top-right button cluster (Home at 20, pause at 82). */
-    right: 148px;
+    /* Clear of the top-right button cluster: Home at 20, settings at 82, pause
+       at 144, so the cluster ends 194px in and this starts 12px past it. */
+    right: 206px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(6, 10, 18, 0.62);
     font-size: 0.85rem;
     font-variant-numeric: tabular-nums;
-    color: rgba(255, 255, 255, 0.62);
+    color: rgba(255, 255, 255, 0.82);
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
     pointer-events: none;
     z-index: 4;
@@ -576,19 +624,36 @@ body:not(.is-touch-device) .throttle-readout {
     filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
 }
 
+/* THESE TWO ARE THE WORST CASE IN THE WHOLE HUD, and it is structural rather
+   than unlucky: a nav marker is drawn ON the body it names, so its label is
+   always over a lit planet and never over space. The M8 audit measured the
+   distance line at 1.08:1 against sunlit cloud, which is to say invisible, and
+   the second round of screenshots shows exactly that where "Earth 14k km" sits
+   over Canada.
+
+   A soft shadow was never going to fix that, so the pair carry a small plate
+   of their own. It is the same wash as the objective panel, so it reads as
+   part of the same HUD rather than as a new kind of thing, and it holds the
+   label at 5.6:1 and the distance at 4.6:1 against anything the scene can put
+   behind them. */
 .nav-label,
 .nav-distance {
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: rgba(6, 10, 18, 0.62);
     font-size: 0.66rem;
     line-height: 1.25;
     letter-spacing: 0.04em;
-    color: rgba(255, 255, 255, 0.78);
+    color: rgba(255, 255, 255, 0.92);
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
     white-space: nowrap;
 }
 
+/* Dimmer than the name it hangs under, but not by enough to fall back through
+   the floor the plate just bought. */
 .nav-distance {
     font-variant-numeric: tabular-nums;
-    opacity: 0.66;
+    opacity: 0.86;
 }
 
 /* Two arrows and no more: the installation under attack, and the nearest
@@ -671,7 +736,7 @@ body:not(.is-touch-device) .throttle-readout {
     .elapsed-time {
         top: 14px;
         left: auto;
-        right: 148px;
+        right: 206px;
     }
 
     .alert-banner {
@@ -757,14 +822,23 @@ body.hull-hit::after {
    ============================================================
    The shared panel styles cover the slider; the checkbox rows are ours. */
 
-/* The pause button takes the second slot in the top-right cluster, beside
-   Home. The shared stylesheet puts the settings cog top-LEFT, so the two
-   clusters never collide. Spacing follows the shared .checklist-btn
-   convention: Home at 20, then 62px per slot. */
+/* The pause button takes the THIRD slot in the top-right cluster: Home at 20,
+   the settings cog at 82, pause at 144, 62px per slot per the shared
+   .checklist-btn convention.
+
+   IT WAS AT 82 UNTIL M8, DIRECTLY UNDER THE COG. The shared stylesheet
+   declares .settings-btn top-left at line 562 and then moves it to the
+   top-right cluster at right:82px in a later block, which is the one that
+   wins. Reading only the first declaration put two 50px circles on the same
+   coordinates with the same z-index, so the cog painted last, took every
+   click, and the pause button was neither visible nor reachable. On a touch
+   screen there is no Esc, so that was the ONLY route to the pause panel
+   (PRD 8.4). Nothing failed and nothing looked wrong: the second round of
+   screenshots simply shows two buttons where there should be three. */
 .pause-btn {
     top: 20px;
     left: auto;
-    right: 82px;
+    right: 144px;
 }
 
 .settings-check {
@@ -787,6 +861,22 @@ body.hull-hit::after {
 .settings-check input[type="checkbox"]:focus-visible {
     outline: 2px solid rgb(var(--ui-accent-rgb));
     outline-offset: 2px;
+}
+
+/* EVERY CONTROL ON THE PAGE NOW SHOWS THE SAME FOCUS RING. The shared
+   stylesheet styles focus for the sliders, the skip link and the card buttons,
+   and leaves the round floats and the two close crosses on the browser
+   default, which is a different shape in every browser and nearly invisible
+   over a bright frame in one of them. These are the rest of the set, so a
+   keyboard visitor is told where they are in the same voice everywhere.
+   `outline` follows border-radius, so the circles get a circle. */
+#instructions button.click-prompt:focus-visible,
+.menu-btn:focus-visible,
+.settings-btn:focus-visible,
+.modal-close:focus-visible,
+.settings-close:focus-visible {
+    outline: 2px solid rgb(var(--ui-accent-rgb));
+    outline-offset: 3px;
 }
 
 .settings-hint {
@@ -869,8 +959,12 @@ body.hull-hit::after {
     color: rgb(var(--ui-accent-rgb));
 }
 
+/* The bottom margin is for the button below it. `Fly again` takes focus the
+   moment the card opens, and its focus ring is a 3px outline with a 2px offset
+   that reached up into this line's descenders in the second round of
+   screenshots. */
 .end-best {
-    margin: 14px 0 0;
+    margin: 14px 0 10px;
     font-size: 0.86rem;
     opacity: 0.78;
     min-height: 1.2em;
@@ -884,13 +978,33 @@ body.hull-hit::after {
 }
 
 /* The dedication in the pause panel, set apart from the control list. */
+/* The rule above it was white at 0.14 alpha, which is a sensible separator on
+   a dark panel and nothing at all on this one: the pause card is the shared
+   .piece-card, which is warm PAPER with dark ink. A dark rule is what actually
+   draws a line here. */
 .dedication {
     margin-top: 18px;
     padding-top: 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    border-top: 1px solid rgba(0, 0, 0, 0.14);
     font-size: 0.86rem;
     line-height: 1.5;
     opacity: 0.85;
+}
+
+/* The texture credit (PRD 11.3). Quieter than the dedication, because it is a
+   licence obligation rather than the point of the page, but genuinely
+   readable: CC BY asks for attribution a visitor can find, and a credit set so
+   faint that nobody reads it is not one. */
+.credits {
+    margin: 14px 0 18px;
+    font-size: 0.76rem;
+    line-height: 1.5;
+    color: var(--gallery-muted);
+}
+
+.credits a {
+    color: inherit;
+    text-decoration: underline;
 }
 
 @media (prefers-reduced-motion: reduce) {

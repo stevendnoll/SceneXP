@@ -408,6 +408,59 @@ describe('the world builds and ticks', () => {
         expect(world.structuresRemaining('friendly')).toBe(7);
     });
 
+    /** A fresh world.js whose WebP probe sees the canvas this factory returns.
+     *  The answer is cached inside the module, so each case needs its own. */
+    async function loadWorldWith(createElement) {
+        jest.resetModules();
+        const previous = globalThis.document;
+        globalThis.document = { createElement };
+        try {
+            const world = await import('../www/earthdefense/js/world.js');
+            world.supportsWebP();   // ask now, while this document is the one in place
+            return world;
+        } finally {
+            if (previous === undefined) delete globalThis.document;
+            else globalThis.document = previous;
+        }
+    }
+
+    test('each body is fetched as WebP, or as its JPEG on a browser without it', async () => {
+        // The pair of paths is the whole point: a texture that fails to load
+        // is a BLACK PLANET rather than a slightly heavier one, so the choice
+        // is made from a synchronous capability probe before anything is
+        // requested, not from an image `onerror` that would arrive long after
+        // the body was built.
+        // The probe encodes a 1x1 canvas and looks at what came back. A browser
+        // that can encode WebP can decode it; one that returns a PNG data URL
+        // instead is told to fetch the JPEG.
+        const world = await loadWorldWith(() => ({ toDataURL: () => 'data:image/webp;base64,AA' }));
+        expect(world.supportsWebP()).toBe(true);
+        for (const spec of CONFIG.bodies) {
+            expect(world.__test__.textureFor(spec)).toBe(spec.texture);
+            expect(spec.texture).toMatch(/\.webp$/);
+        }
+
+        const fallback = await loadWorldWith(() => ({ toDataURL: () => 'data:image/png;base64,AA' }));
+        expect(fallback.supportsWebP()).toBe(false);
+        for (const spec of CONFIG.bodies) {
+            expect(fallback.__test__.textureFor(spec)).toBe(spec.textureFallback);
+            expect(spec.textureFallback).toMatch(/\.jpg$/);
+        }
+    });
+
+    test('a browser we cannot ask at all gets the JPEG rather than an exception', async () => {
+        const world = await loadWorldWith(() => { throw new Error('no canvas here'); });
+        expect(world.supportsWebP()).toBe(false);
+        expect(world.__test__.textureFor(bodyById('moon'))).toBe(bodyById('moon').textureFallback);
+    });
+
+    test('a spec with only one path keeps it, whatever the browser can decode', async () => {
+        // The seam has to stay usable by a body that ships a single texture, or
+        // it stops being a general mechanism and becomes three special cases.
+        const world = await loadWorldWith(() => ({ toDataURL: () => 'data:image/png;base64,AA' }));
+        expect(world.__test__.textureFor({ texture: 'assets/only.png' })).toBe('assets/only.png');
+    });
+
     /** Build the installations on the SOURCE module rather than through
      *  world.js, which resolves to the built copy. Same module graph, but this
      *  is the instance whose state the assertions can reach (and the one the

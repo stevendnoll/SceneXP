@@ -135,6 +135,23 @@ npm test        # runs the Jest suite
 Node 20 or newer is expected (see `.nvmrc`), and CI runs these same steps on
 every pull request, including a check that the minified assets were rebuilt.
 
+### Caching
+
+The web server sets the actual `Cache-Control` headers and lives outside this
+repository, so what a page can do about caching is choose names and query
+strings that make a long `max-age` safe. Two conventions do that work:
+
+- **Stylesheets carry a `?v=N` query** (`experience.min.css?v=1`). Bump it in
+  the same commit that changes the file, or a returning visitor keeps the old
+  one for as long as the header allows. This is the one that bites, because a
+  stale stylesheet over fresh markup does not look like a caching problem, it
+  looks like a broken layout.
+- **Binary assets are versioned in the FILENAME** rather than by query. The
+  Earth Defense textures are `earth_daymap_1k.webp` and friends, so a resize or
+  a recompress ships under a new name and no cache anywhere has to be
+  persuaded to let go of the old one. Aim for the same when replacing an image:
+  new pixels, new filename.
+
 The `main` branch does not accept direct pushes. Every change, including our
 own, arrives through a pull request once the CI checks pass.
 

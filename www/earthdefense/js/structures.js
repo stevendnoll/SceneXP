@@ -57,6 +57,12 @@ function sharedParts(config) {
         trimMaterial: new THREE.MeshStandardMaterial({ color: 0x6a7684, roughness: 0.7, metalness: 0.35 }),
         pipLive: new THREE.MeshBasicMaterial({ color: 0x9be7ff }),
         pipLost: new THREE.MeshBasicMaterial({ color: 0x3a2a26 }),
+        // Two beacon materials, not seven. A beacon's colour only ever takes
+        // one of these two values, so building a material per installation was
+        // five objects nobody could tell apart from these, none of which had a
+        // dispose path.
+        beaconFriendly: new THREE.MeshBasicMaterial({ color: config.beaconColor }),
+        beaconHostile: new THREE.MeshBasicMaterial({ color: config.hostileBeaconColor }),
         // Burnt out. Unlit rather than merely dark, so a wreck reads the same
         // on the night side as it does in full sun.
         wreckMaterial: new THREE.MeshBasicMaterial({ color: 0x2b2320 })
@@ -87,10 +93,9 @@ function buildOne(config, side) {
     dish.name = 'dish';
     group.add(dish);
 
-    const beaconColor = side === 'hostile' ? config.hostileBeaconColor : config.beaconColor;
     const beacon = new THREE.Mesh(
         p.beaconGeometry,
-        new THREE.MeshBasicMaterial({ color: beaconColor })
+        side === 'hostile' ? p.beaconHostile : p.beaconFriendly
     );
     beacon.position.y = h * 1.12;
     beacon.name = 'beacon';

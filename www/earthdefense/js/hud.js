@@ -30,6 +30,11 @@
 
 import { EARTHDEFENSE_CONFIG } from './config.min.js';
 
+// The rotation that turns a 9px square into a diamond. It lives here rather
+// than only in the stylesheet because an inline transform REPLACES the CSS one,
+// so the shape has to be reapplied on every placement. See `place`.
+const PIP_SPIN = ' rotate(45deg)';
+
 let cfg = null;
 let el = null;
 let pips = [];
@@ -42,13 +47,23 @@ const shown = {
     ships: null,
     lives: null,
     clock: null,
-    alert: null,
-    spoken: null
+    alert: null
+};
+
+// The INPUTS to the spoken sentence rather than the sentence itself, so the
+// "has anything changed" test costs no string building. See `speak`.
+const spoken = {
+    event: undefined,
+    structures: undefined,
+    ships: undefined,
+    lives: undefined,
+    alert: undefined
 };
 
 // Reused, because this runs sixty times a second.
 const projected = { x: 0, y: 0, onScreen: false, behind: false };
 const edge = { x: 0, y: 0, angle: 0 };
+const viewport = { width: 0, height: 0 };
 let scratchVec = null;
 
 // ---- Pure core --------------------------------------------------------------
@@ -211,10 +226,14 @@ export function updateHud(view) {
     setText(el.ships, view.shipsRemaining, 'ships');
     updateLives(view.lives);
 
-    const clock = formatClock(view.elapsed);
-    if (clock !== shown.clock) {
-        shown.clock = clock;
-        if (el.clock) el.clock.textContent = clock;
+    // Compare the SECOND, not the string it would make. Formatting first and
+    // comparing after built and threw away a clock string on 59 frames out of
+    // 60, which is the shape of most of the garbage the M8 audit found: the DOM
+    // write was already guarded, the allocation was not.
+    const second = Math.max(0, Math.floor(view.elapsed || 0));
+    if (second !== shown.clock) {
+        shown.clock = second;
+        if (el.clock) el.clock.textContent = formatClock(second);
     }
 
     updateAlert(view);
@@ -268,20 +287,32 @@ function updateAlert(view) {
  *  Two regions, two jobs. */
 function speak(view) {
     if (!el.status) return;
-    const counts =
-        `${view.structuresRemaining} installations standing, ${view.shipsRemaining} raiders left.`;
+
+    // NOTHING IS BUILT UNTIL SOMETHING HAS CHANGED. The four values below are
+    // everything the sentence is made of, so comparing them is the same test as
+    // comparing the finished string, minus an array, a join, and three or four
+    // template literals on every frame that says exactly what the last one did.
+    // That was the single biggest allocator left in the HUD.
+    const alertLabel = view.alert ? view.alert.label : null;
+    if (view.event === spoken.event
+        && view.structuresRemaining === spoken.structures
+        && view.shipsRemaining === spoken.ships
+        && view.lives === spoken.lives
+        && alertLabel === spoken.alert) return;
+    spoken.event = view.event;
+    spoken.structures = view.structuresRemaining;
+    spoken.ships = view.shipsRemaining;
+    spoken.lives = view.lives;
+    spoken.alert = alertLabel;
+
     const parts = [];
     if (view.event) parts.push(view.event);
-    parts.push(counts);
+    parts.push(`${view.structuresRemaining} installations standing, ${view.shipsRemaining} raiders left.`);
     if (view.lives !== undefined && view.lives !== null) {
         parts.push(`${view.lives} ${view.lives === 1 ? 'hull' : 'hulls'} left.`);
     }
-    if (view.alert) parts.push(`${view.alert.label} is under attack.`);
-
-    const sentence = parts.join(' ');
-    if (sentence === shown.spoken) return;
-    shown.spoken = sentence;
-    el.status.textContent = sentence;
+    if (alertLabel) parts.push(`${alertLabel} is under attack.`);
+    el.status.textContent = parts.join(' ');
 }
 
 /** One pip per living raider, AT ANY DISTANCE (PRD 8.1). That is the whole
@@ -300,7 +331,9 @@ function updatePips(view, viewport) {
             hide(pips[i]);
             continue;
         }
-        place(pips[i], projected.x, projected.y);
+        // The rotation is what makes a pip a diamond rather than a square, and
+        // it has to come through `place` or the inline transform drops it.
+        place(pips[i], projected.x, projected.y, PIP_SPIN);
     }
 }
 
@@ -317,11 +350,19 @@ function updateNav(view, viewport) {
 
         // Live, every frame. The Moon is moving at 838 units a second, and a
         // cached distance is what makes an interception feel broken (PRD 5.2).
+        //
+        // The DISTANCE is read every frame; the string is not. Past 10,000 km
+        // the readout is rounded to the nearest thousand, so at cruising speed
+        // fifteen frames out of sixteen would have formatted the same text and
+        // thrown it away, and `toLocaleString` is not a cheap way to do that.
+        // Comparing the quantum the readout actually shows is the same test as
+        // comparing the finished string.
         if (view.playerPosition) {
-            const text = formatDistance(distanceBetween(view.playerPosition, position));
-            if (text !== nav.shown) {
-                nav.shown = text;
-                nav.distance.textContent = text;
+            const km = Math.max(0, Math.round(distanceBetween(view.playerPosition, position)));
+            const quantum = km >= 10000 ? Math.round(km / 1000) * 1000 : km;
+            if (quantum !== nav.shown) {
+                nav.shown = quantum;
+                nav.distance.textContent = formatDistance(km);
             }
         }
     }
@@ -364,9 +405,20 @@ function nearestHostile(view) {
     return best;
 }
 
-function place(node, x, y) {
+/** Put a marker at a screen point.
+ *
+ *  `spin` IS NOT DECORATION. An inline `transform` replaces the stylesheet's
+ *  outright rather than composing with it, so a mark whose shape comes from a
+ *  rotation loses that shape the first frame it is placed. That is exactly what
+ *  happened to the hostile pips: `.hostile-pip` is a 9px square turned 45
+ *  degrees, and every raider on screen drew as an axis-aligned BLOCK from the
+ *  moment it was positioned. Nothing threw, the stylesheet was right, and the
+ *  only way to catch it was to look. Any caller whose CSS transform carries
+ *  meaning has to pass that meaning through here. */
+function place(node, x, y, spin) {
     node.classList.remove('hidden');
-    node.style.transform = `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+    node.style.transform =
+        `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)${spin || ''}`;
 }
 
 function hide(node) {
@@ -397,9 +449,18 @@ export function projectToScreen(point, camera, viewport = currentViewport()) {
 
 export function getProjection() { return projected; }
 
+/** The viewport, into a reused record. It was a fresh object per frame, which
+ *  is one allocation for two numbers that are read and thrown away inside the
+ *  same call. */
 function currentViewport() {
-    if (typeof window === 'undefined') return { width: 1280, height: 720 };
-    return { width: window.innerWidth, height: window.innerHeight };
+    if (typeof window === 'undefined') {
+        viewport.width = 1280;
+        viewport.height = 720;
+    } else {
+        viewport.width = window.innerWidth;
+        viewport.height = window.innerHeight;
+    }
+    return viewport;
 }
 
 // ---- Lifecycle --------------------------------------------------------------
@@ -421,7 +482,11 @@ export function disposeHud() {
     shown.lives = null;
     shown.clock = null;
     shown.alert = null;
-    shown.spoken = null;
+    spoken.event = undefined;
+    spoken.structures = undefined;
+    spoken.ships = undefined;
+    spoken.lives = undefined;
+    spoken.alert = undefined;
 }
 
 export const __test__ = {
@@ -430,5 +495,6 @@ export const __test__ = {
     getLivesPips: () => livesPips,
     getNavMarkers: () => navMarkers,
     getElements: () => el,
-    shown
+    shown,
+    spoken
 };

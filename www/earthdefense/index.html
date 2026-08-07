@@ -66,13 +66,13 @@
     <title>Earth Defense</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
-    <link rel="preload" href="css/experience.min.css" as="style">
+    <link rel="preload" href="css/experience.min.css?v=1" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
-    <link rel="stylesheet" href="css/experience.min.css">
+    <link rel="stylesheet" href="css/experience.min.css?v=1">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -124,7 +124,15 @@
         <div id="instructions">
             <p class="title">EARTH DEFENSE</p>
             <p class="subtitle">For the people who first made a screen into a place you could go</p>
-            <p class="click-prompt">Click to take the helm</p>
+            <!-- A real button, not a line of prose. It was a <p> reading
+                 "Click to take the helm" until M8, which left a keyboard-only
+                 visitor with nothing to focus and no way to find out that
+                 Enter would start the game: the key was wired, and only a
+                 visitor who guessed would ever press it. As a button it is the
+                 first thing Tab reaches, it takes focus on load, Enter and
+                 Space work because they always do, and the label stops
+                 telling a phone to click. -->
+            <button type="button" id="take-helm-btn" class="click-prompt">Take the helm</button>
             <!-- Two controls and one objective, per PRD 4.2. Laid out as one
                  grid rather than as two centred rows so the labels share a
                  column and the sentences start on the same line. -->
@@ -333,11 +341,23 @@
                     <li><strong>Finding things:</strong> every raider carries a diamond, Earth
                         and the Moon carry a ring with the distance to it, and an arrow at the
                         edge of the screen points the way to anything off it.</li>
-                    <li><strong>Settings:</strong> the gear icon adjusts look sensitivity.</li>
+                    <li class="help-desktop"><strong>Pausing:</strong> <kbd>Esc</kbd>, or the pause button in the top right. Nothing moves while this panel is open.</li>
+                    <li class="help-mobile"><strong>Pausing:</strong> the pause button in the top right. Nothing moves while this panel is open.</li>
+                    <li><strong>Settings:</strong> the gear icon adjusts look sensitivity, and carries
+                        reduced effects and a mute switch.</li>
                 </ul>
                 <p class="piece-subtitle dedication">Built in honor of the first generation of video game
                     designers and developers, who worked out with almost nothing that a screen
                     could be a place you go. Left unnamed on purpose. The debt is a shared one.</p>
+                <!-- CC BY 4.0 requires credit, a link to the license, and a note
+                     that changes were made, and asks that it be somewhere a
+                     visitor can actually find. PRD 11.3 wording, and the same
+                     text appears in the repository README and in
+                     assets/CREDITS.md. -->
+                <p class="credits">Planet and moon textures by
+                    <a href="https://www.solarsystemscope.com/textures" target="_blank" rel="noopener noreferrer">Solar System Scope</a>,
+                    used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>.
+                    Resized and recompressed for this experience.</p>
                 <button class="piece-enter" type="button" data-close>Back to the helm</button>
             </div>
         </div>

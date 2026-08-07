@@ -212,6 +212,110 @@ describe('everything the page ships hidden is actually hidden', () => {
     });
 });
 
+describe('the top-right button cluster does not stack on itself', () => {
+    // THE BUG THIS EXISTS FOR. `.pause-btn` was given `right: 82px` on the
+    // strength of the shared stylesheet's FIRST `.settings-btn` rule, which
+    // puts the cog top-left. A later block in the same file moves the cog to
+    // `right: 82px`, and that is the one that wins, so two 50px circles sat on
+    // the same coordinates with the same z-index. The cog painted second, took
+    // every click, and the pause button was neither visible nor reachable. On
+    // a touch screen there is no Esc, so that was the only route to the pause
+    // panel. Nothing threw. The second round of screenshots simply had two
+    // buttons in it where there should have been three.
+    const SHARED = readFileSync(new URL('../www/shared/css/styles-1.0.0.css', import.meta.url), 'utf8');
+    const SHARED_DECLARATIONS = SHARED.replace(/\/\*[\s\S]*?\*\//g, '');
+    const WIDTH = 50;
+
+    /** The LAST `right` a selector is given across both stylesheets, which is
+     *  the one the browser will use: same specificity, so later wins. Reading
+     *  the first is exactly the mistake this test exists to catch. */
+    function rightOffset(selector) {
+        const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const rules = [...`${SHARED_DECLARATIONS}\n${DECLARATIONS}`
+            .matchAll(new RegExp(`[^{}]*${escaped}(?![\\w-])[^{}]*\\{([^}]*)\\}`, 'g'))];
+        let found = null;
+        for (const rule of rules) {
+            const match = rule[1].match(/(?:^|;)\s*right\s*:\s*(-?[\d.]+)px/);
+            if (match) found = parseFloat(match[1]);
+        }
+        return found;
+    }
+
+    const CLUSTER = [
+        ['home', '.menu-btn'],
+        ['settings', '.settings-btn'],
+        ['pause', '.pause-btn']
+    ];
+
+    test.each(CLUSTER)('the %s button has a right offset at all', (_label, selector) => {
+        expect(rightOffset(selector)).not.toBeNull();
+    });
+
+    test('no two buttons in the cluster overlap', () => {
+        const slots = CLUSTER.map(([label, selector]) => ({
+            label, from: rightOffset(selector)
+        }));
+        for (const a of slots) {
+            for (const b of slots) {
+                if (a === b) continue;
+                const overlaps = a.from < b.from + WIDTH && b.from < a.from + WIDTH;
+                expect(`${a.label} vs ${b.label}: ${overlaps ? 'overlapping' : 'clear'}`)
+                    .toBe(`${a.label} vs ${b.label}: clear`);
+            }
+        }
+    });
+
+    test('the elapsed clock sits clear of the whole cluster', () => {
+        // It was at 148px, which cleared two buttons and would have been under
+        // the third the moment pause moved to its real slot.
+        const furthest = Math.max(...CLUSTER.map(([, s]) => rightOffset(s)));
+        expect(rightOffset('.elapsed-time')).toBeGreaterThanOrEqual(furthest + WIDTH);
+    });
+});
+
+describe('every control shows a focus ring', () => {
+    // A keyboard visitor has to be able to see where they are. The shared
+    // stylesheet covers the sliders, the skip link and the card buttons and
+    // leaves the rest on the browser default, so these are the rest of the set.
+    const FOCUSABLE = [
+        'button.click-prompt', '.menu-btn', '.settings-btn',
+        '.modal-close', '.settings-close', '.settings-check input[type="checkbox"]'
+    ];
+
+    test.each(FOCUSABLE)('%s has a :focus-visible outline', (selector) => {
+        const escaped = `${selector}:focus-visible`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = DECLARATIONS.match(new RegExp(`${escaped}[^{]*\\{([^}]*)\\}`));
+        expect(match).not.toBeNull();
+        expect(match[1]).toMatch(/outline\s*:\s*[^;]*(solid|auto)/);
+    });
+
+    test('nothing in the file turns an outline off without replacing it', () => {
+        const offs = [...DECLARATIONS.matchAll(/outline\s*:\s*(none|0)\s*;/g)];
+        expect(offs).toHaveLength(0);
+    });
+});
+
+describe('the HUD readouts carry their own contrast', () => {
+    // Measured at M8 against the two backdrops this scene can actually put
+    // behind them: deep space, and a sunlit cloud top on the Earth map. Every
+    // one of these was fine against space and collapsed against cloud, which
+    // is the case a visitor reaches by flying at the planet, i.e. immediately.
+    // A plate is the only thing that fixes it, so each of them has to have one.
+    const PLATED = [
+        ['the objective panel', '.objective-panel'],
+        ['the nav marker labels', '.nav-label'],
+        ['the elapsed clock', '.elapsed-time'],
+        ['the speed readout', '.throttle-readout']
+    ];
+
+    test.each(PLATED)('%s sits on an opaque enough plate', (_label, selector) => {
+        const body = ruleBody(selector);
+        expect(body).not.toBeNull();
+        const [, alpha] = body.match(/background\s*:\s*rgba\([^)]*,\s*([\d.]+)\s*\)/) || [];
+        expect(parseFloat(alpha)).toBeGreaterThanOrEqual(0.6);
+    });
+});
+
 describe('the responsive pass covers the shapes the shared stylesheet does', () => {
     const breakpoints = [...DECLARATIONS.matchAll(/@media ([^{]+)\{/g)].map(m => m[1].trim());
 

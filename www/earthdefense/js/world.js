@@ -33,6 +33,41 @@ import {
 } from './structures.min.js';
 
 let group = null;
+let _webpSupport = null;
+
+/** Can this browser decode WebP?
+ *
+ *  Asked once and cached, because the answer cannot change mid-session. The
+ *  probe is a canvas asked to ENCODE a WebP: a browser that cannot encode one
+ *  returns a PNG data URL instead, and every browser that can encode WebP can
+ *  also decode it. That gets a synchronous answer, which an image `onerror`
+ *  fallback could not: by the time a 404 or a decode failure came back the
+ *  planet would already have been built with no map on it.
+ *
+ *  The failure direction is the safe one. A browser we cannot ask (no canvas,
+ *  no toDataURL, an older Safari that decodes WebP but will not encode it) is
+ *  served the JPEG, which is 52 KB heavier across the three bodies and looks
+ *  identical. */
+export function supportsWebP() {
+    if (_webpSupport !== null) return _webpSupport;
+    _webpSupport = false;
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        if (typeof canvas.toDataURL === 'function') {
+            _webpSupport = canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0;
+        }
+    } catch (e) { /* no canvas: the JPEG path is the right answer anyway */ }
+    return _webpSupport;
+}
+
+/** The texture URL this browser should actually fetch. A body with no fallback
+ *  declared keeps whatever it named, so a spec can still carry one path. */
+function textureFor(spec) {
+    if (!spec.textureFallback) return spec.texture;
+    return supportsWebP() ? spec.texture : spec.textureFallback;
+}
 
 /** Build every body and return the group to add to the scene.
  *  `manager` is an optional THREE.LoadingManager so the loading screen can
@@ -42,7 +77,7 @@ export function initWorld(scene, manager) {
     group = initBodies({ groupName: config.rootName, manager });
 
     for (const spec of config.bodies) {
-        createBody(spec);
+        createBody({ ...spec, texture: textureFor(spec) });
     }
     // Orbits are wired after every body exists, so a child can name a parent
     // that appears later in the array.
@@ -79,6 +114,7 @@ export function placeCameraAtSpawn(camera, config = EARTHDEFENSE_CONFIG) {
 }
 
 export function getWorldGroup() { return group; }
+export const __test__ = { textureFor };
 export { getBody, bodyPositions, getOccluders };
 export {
     resetStructures, getStructures, getStructure, structuresRemaining,

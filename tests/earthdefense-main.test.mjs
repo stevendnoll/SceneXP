@@ -613,3 +613,98 @@ describe('the rest of the conductor', () => {
         expect(main.__test__.hasWebGL()).toBe(false);
     });
 });
+
+// ---- M8: the quieter frame and the idle one ---------------------------------
+
+describe('reduced effects', () => {
+    test('the checkbox thins the starfield, the bursts, and the pixel ratio', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+
+        expect(main.__test__.applyReducedFx()).toEqual({
+            reduced: false,
+            maxPixelRatio: config.space.maxPixelRatio,
+            starCount: config.space.starCount,
+            burstParticles: config.weapons.burstParticles
+        });
+
+        const reduced = dom.el('reduced-fx-toggle');
+        reduced.checked = true;
+        fire(reduced, 'change');
+
+        // No reload and no rebuild: the pools are built full and DRAWN short,
+        // so ticking the box has to take effect on the next frame rather than
+        // on the next visit.
+        expect(main.__test__.applyReducedFx()).toEqual({
+            reduced: true,
+            maxPixelRatio: config.reducedFx.maxPixelRatio,
+            starCount: config.reducedFx.starCount,
+            burstParticles: config.reducedFx.burstParticles
+        });
+        expect(config.reducedFx.starCount).toBeLessThan(config.space.starCount);
+        expect(config.reducedFx.burstParticles).toBeLessThan(config.weapons.burstParticles);
+
+        reduced.checked = false;
+        fire(reduced, 'change');
+        expect(main.__test__.applyReducedFx().reduced).toBe(false);
+    });
+
+    test('a system reduced-motion preference does it without the checkbox', async () => {
+        // PRD 12 asks for both routes. A visitor who set the preference at the
+        // operating system should not have to find a checkbox as well.
+        dom.windowStub.matchMedia = (media) => ({
+            media, matches: true,
+            addEventListener() {}, removeEventListener() {},
+            addListener() {}, removeListener() {}
+        });
+        const main = await boot();
+
+        expect(main.__test__.prefersReducedMotion()).toBe(true);
+        expect(main.__test__.settings.reducedFx).toBe(false);   // the box is untouched
+        expect(main.__test__.applyReducedFx().reduced).toBe(true);
+    });
+});
+
+describe('the loop stops when nobody is watching', () => {
+    test('a hidden tab does no work at all', async () => {
+        const main = await boot();
+        enterWorld();
+        stepFrames(2);
+        const before = main.getState().lastTime;
+
+        dom.documentStub.hidden = true;
+        stepFrames(3);
+        // Not one frame's worth of anything. `lastTime` is the first thing a
+        // live frame writes, so an unmoved clock means the loop returned before
+        // it did any work at all.
+        expect(main.getState().lastTime).toBe(before);
+
+        dom.documentStub.hidden = false;
+        expect(() => stepFrames(1)).not.toThrow();
+    });
+
+    test('the pause panel throttles drawing rather than stopping it dead', async () => {
+        // The renderer has no preserveDrawingBuffer, so the canvas contents
+        // after compositing are formally undefined and the pause panel's
+        // backdrop blur samples them. Ten frames a second gives back five
+        // sixths of the work without betting the panel on that.
+        const main = await boot();
+        const draw = main.__test__.shouldDrawThisFrame;
+
+        // Playing: every frame is drawn.
+        enterWorld();
+        expect(draw(1 / 60)).toBe(true);
+        expect(draw(1 / 60)).toBe(true);
+
+        main.__test__.openPause();
+        // A second of sixty-hertz frames should buy about ten drawn ones.
+        let drawn = 0;
+        for (let i = 0; i < 60; i++) if (draw(1 / 60)) drawn++;
+        expect(drawn).toBeGreaterThanOrEqual(9);
+        expect(drawn).toBeLessThanOrEqual(11);
+
+        // Back to the helm, and the debt is forgotten rather than carried.
+        main.__test__.closePause();
+        expect(draw(1 / 60)).toBe(true);
+    });
+});

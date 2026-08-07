@@ -58,7 +58,42 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         maxPixelRatio: 2
     },
 
+    // ---- Reduced effects --------------------------------------------------
+    //
+    // What the settings panel's "Reduced effects" checkbox actually does, and
+    // what `prefers-reduced-motion` turns on by itself (PRD 12). Both routes
+    // land on the same three numbers, so there is one description of what a
+    // quieter frame looks like rather than two that can drift apart.
+    //
+    // These are DRAW RANGES, not pool sizes. The starfield and the burst pools
+    // are built once at full size and then partly drawn, which is what lets the
+    // checkbox take effect on the frame it is ticked instead of on the next
+    // reload. The cost of the unused vertices is a little memory and nothing
+    // per frame.
+    reducedFx: {
+        // A third of the sky. Still unmistakably a starfield, and the biggest
+        // single saving available on a phone: 6,000 points are 6,000 alpha
+        // blended quads over the whole frame every time.
+        starCount: 2000,
+        // A third of a destruction burst. Fewer, not smaller: a burst that
+        // thinned to nothing would stop reading as an explosion.
+        burstParticles: 8,
+        maxPixelRatio: 1.5
+    },
+
     // ---- The three bodies (bodies-1.0.0) ----------------------------------
+    //
+    // TWO TEXTURE PATHS PER BODY, and world.js picks one at build time. WebP is
+    // the one we expect to serve: the three maps come to 235 KB against 287 KB
+    // of JPEG and 2.2 MB of the 2k originals they were resized from, which was
+    // the single largest performance win available (PRD 12). The JPEG is a real
+    // fallback rather than a formality, because a texture that fails to load is
+    // a black planet rather than a slightly worse one.
+    //
+    // All three are 1024x512. The budget allows 700 KB and this spends 235, so
+    // there is room to take Earth back to 2048 if its close-ups read soft. That
+    // would cost about 95 KB of download and, more to the point, four times the
+    // texture memory on the phones that are the target (PRD G5).
     bodies: [
         {
             id: 'earth',
@@ -67,7 +102,8 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
             // the most scrutinised curve in the experience: 128 segments, where
             // 64 would show visible faceting along the horizon.
             segments: 128,
-            texture: 'assets/earth_daymap_2k.jpg',
+            texture: 'assets/earth_daymap_1k.webp',
+            textureFallback: 'assets/earth_daymap_1k.jpg',
             position: [0, 0, 0],
             // One rotation per hour. Deliberately slow: Earth's installations
             // are anchored to its surface, so a faster spin would carry a
@@ -82,7 +118,8 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
             id: 'moon',
             radius: 1737,
             segments: 64,
-            texture: 'assets/moon_2k.jpg',
+            texture: 'assets/moon_1k.webp',
+            textureFallback: 'assets/moon_1k.jpg',
             orbit: {
                 parent: 'earth',
                 // Ten Earth radii, not the true sixty. Close enough to read as
@@ -121,7 +158,8 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
             id: 'mars',
             radius: 3390,
             segments: 64,
-            texture: 'assets/mars_2k.jpg',
+            texture: 'assets/mars_1k.webp',
+            textureFallback: 'assets/mars_1k.jpg',
             // Nobody travels here, so this distance is purely a composition
             // choice: how big a disc do we want ahead. At 200,000 units Mars is
             // about 1.9 degrees across, roughly four times the apparent size of

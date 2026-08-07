@@ -54,7 +54,7 @@ import { altitudeFloorAdjust } from '../../shared/js/bodies-1.0.0.min.js';
 import { pickTarget } from '../../shared/js/targeting-1.0.0.min.js';
 import {
     initWeapons, updateWeapons, registerDamageable, applyDamage, onHit,
-    clearDamageables, spawnDestruction, disposeWeapons
+    clearDamageables, spawnDestruction, disposeWeapons, getWeaponsGroup
 } from '../../shared/js/weapons-1.0.0.min.js';
 import {
     initGameState, resetRun, transition, getState as gamePhase, isPlaying, isOver,
@@ -108,6 +108,10 @@ let cleanupController = null;
 let _sessionStart = 0;
 let _sessionEnded = false;
 let _announcedThrottle = null;
+// The whole numbers the speed readout is currently showing, so the string is
+// built when they move rather than on every frame.
+let _shownSpeed = null;
+let _shownTarget = null;
 let _announcedLock = null;
 let _announcedAlert = null;
 let _hullHitTimer = 0;
@@ -118,6 +122,9 @@ let _eventTimer = 0;
 let _hullPoints = 0;
 let _respawnTimer = 0;
 let _invulnerable = 0;
+// Seconds of drawing owed while the pause panel is up. See shouldDrawThisFrame.
+let _pausedRenderDebt = 0;
+const PAUSED_FRAME_SECONDS = 0.1;
 
 // The view handed to pickTarget. Rewritten in place each frame rather than
 // rebuilt, because this runs sixty times a second.
@@ -191,6 +198,10 @@ async function init() {
     loadSettings();
     startFlight();
     startCombat();
+    // Again, now that the burst pools exist. `loadSettings` runs before the
+    // weapons are built, so its call could only reach the pixel ratio and the
+    // starfield.
+    applyReducedFx();
 
     setupEventListeners();
 
@@ -205,6 +216,12 @@ async function init() {
         // the first round of screenshots.
         if (hud) hud.classList.add('visible');
         document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
+        // Land a keyboard visitor on the one control that matters right now,
+        // the same way the end screen lands them on "Fly again". Without this
+        // the first Tab goes to the skip link and the way into the game is
+        // three stops further on.
+        const helm = document.getElementById('take-helm-btn');
+        if (helm && typeof helm.focus === 'function') helm.focus();
     }, 400);
 
     track('session-start', { device: state.isMobile ? 'touch' : 'desktop' });
@@ -625,11 +642,10 @@ function combatCandidates() {
  *  positions read here are where the installations ARE rather than where they
  *  were, which is the difference between a lock that tracks and one that
  *  lags a frame behind the Moon. */
-function updateCombat(deltaTime) {
+function updateCombat(deltaTime, s = getFlightState()) {
     const camera = getWorldCamera();
     if (!camera) return;
 
-    const s = getFlightState();
     _view.eye.x = s.position.x;
     _view.eye.y = s.position.y;
     _view.eye.z = s.position.z;
@@ -657,8 +673,7 @@ function updateCombat(deltaTime) {
 /** What the raiders are told about the visitor: where the ship is, and where
  *  its nose is pointing. That second one is the whole break-off rule, since a
  *  raider decides to weave when the visitor is close and NEARLY lined up. */
-function playerState() {
-    const s = getFlightState();
+function playerState(s = getFlightState()) {
     _player.position.x = s.position.x;
     _player.position.y = s.position.y;
     _player.position.z = s.position.z;
@@ -791,8 +806,52 @@ function loadSettings() {
     applyReducedFx();
 }
 
+/** Does this visitor's system ask for less motion? Read live rather than
+ *  cached, because the setting can change under a running tab. */
+function prefersReducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+/** The quieter frame, from either route: the settings checkbox or the system's
+ *  own reduced-motion preference (PRD 12).
+ *
+ *  All three levers are applied on the spot, so ticking the box changes the
+ *  next frame rather than the next reload. The starfield and the burst pools
+ *  are built at full size and DRAWN short, which is the only way to do that
+ *  without rebuilding geometry mid-run; the vertices past the draw range cost
+ *  a little memory and nothing per frame.
+ *
+ *  Called before the scene exists during `loadSettings`, so every step here
+ *  has to survive not finding what it is looking for. Returns what it decided,
+ *  which is the half the suite can check: under the test stubs the scene graph
+ *  is a chainable proxy that will agree to any draw range without recording
+ *  one, so the numbers are assertable and the plumbing is not. */
 function applyReducedFx() {
-    setMaxPixelRatio(settings.reducedFx ? 1.5 : EARTHDEFENSE_CONFIG.space.maxPixelRatio);
+    const config = EARTHDEFENSE_CONFIG;
+    const reduced = settings.reducedFx || prefersReducedMotion();
+    const applied = {
+        reduced,
+        maxPixelRatio: reduced ? config.reducedFx.maxPixelRatio : config.space.maxPixelRatio,
+        starCount: reduced ? config.reducedFx.starCount : config.space.starCount,
+        burstParticles: reduced ? config.reducedFx.burstParticles : config.weapons.burstParticles
+    };
+
+    setMaxPixelRatio(applied.maxPixelRatio);
+    setDrawCount(scene && scene.getObjectByName('starfield'), applied.starCount);
+
+    const weapons = getWeaponsGroup();
+    const children = (weapons && weapons.children) || [];
+    for (const child of children) {
+        if (child.name && child.name.indexOf('burst-') === 0) {
+            setDrawCount(child, applied.burstParticles);
+        }
+    }
+    return applied;
+}
+
+/** Draw the first `count` vertices of a Points object and no more. */
+function setDrawCount(points, count) {
+    if (points && points.geometry) points.geometry.setDrawRange(0, count);
 }
 
 function wireSettings(signal) {
@@ -894,9 +953,24 @@ function setupEventListeners() {
         if (document.visibilityState === 'hidden') {
             openPause();       // a backgrounded tab should not keep flying
             endSession();
+        } else {
+            // Coming back: the frame clock has been standing still behind a
+            // hidden tab, so reset it before `animate` reads it. Without this
+            // the first visible frame is handed however long the visitor was
+            // away, clamped to the 0.1s ceiling but still a jump.
+            state.lastTime = performance.now();
         }
-    });
-    window.addEventListener('pagehide', endSession);
+    }, { signal });
+    window.addEventListener('pagehide', endSession, { signal });
+
+    // A system-level reduced-motion change should take effect where the
+    // visitor is, not on their next visit.
+    if (window.matchMedia) {
+        const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+        if (typeof query.addEventListener === 'function') {
+            query.addEventListener('change', applyReducedFx, { signal });
+        }
+    }
 
     wireSettings(signal);
 
@@ -948,6 +1022,14 @@ function beginFlight() {
 
 function animate() {
     if (!state.isRunning) return;
+    // A HIDDEN TAB DOES NO WORK AT ALL (PRD 12). Browsers already suspend
+    // requestAnimationFrame for a backgrounded tab, so this is belt and braces
+    // rather than the main mechanism, but it is the difference between relying
+    // on that and saying it: a tab that is throttled rather than suspended (a
+    // background window that is still compositing somewhere, an embedded view)
+    // would otherwise keep simulating a game nobody is looking at.
+    if (typeof document !== 'undefined' && document.hidden) return;
+
     const now = performance.now();
     const deltaTime = Math.min((now - state.lastTime) / 1000, 0.1);
     state.lastTime = now;
@@ -964,24 +1046,63 @@ function animate() {
         // A no-op while the ship is wrecked: the flight model is paused for the
         // length of the wreck, so the camera holds still and watches.
         updateFlight(deltaTime);
+        // ONE READ OF THE FLIGHT MODEL PER FRAME, PASSED DOWN. `getFlightState`
+        // builds a fresh record with a fresh position and a fresh forward
+        // vector on every call, and five different consumers below used to call
+        // it: fifteen objects a frame, nine hundred a second, for numbers that
+        // cannot change between the first read and the last. Every one of them
+        // still defaults to reading for itself when called on its own, which is
+        // how the suite drives them.
+        const flight = getFlightState();
         // ORDER MATTERS IN ONE PLACE. The bodies have already moved above, so
         // the raiders steer at where their installation IS this frame rather
         // than where it was last one, and the visitor's lock reads the same
         // fresh positions. The Moon carries three of the seven and travels 838
         // units a second, so a frame of lag there is a visible miss.
-        applyFlightToCamera();
-        updateFleet(deltaTime, playerState());
-        updateCombat(deltaTime);
+        applyFlightToCamera(flight);
+        updateFleet(deltaTime, playerState(flight));
+        updateCombat(deltaTime, flight);
         advanceRespawn(deltaTime);
         advanceNotices(deltaTime);
         if (_invulnerable > 0) _invulnerable -= deltaTime;
+        updateReadouts(flight);
+        updateObjectiveHud(flight);
     } else {
-        applyFlightToCamera();
+        const flight = getFlightState();
+        applyFlightToCamera(flight);
+        updateReadouts(flight);
+        updateObjectiveHud(flight);
     }
-    updateReadouts();
-    updateObjectiveHud();
 
-    renderSpace(scene, overlayScene);
+    if (shouldDrawThisFrame(deltaTime)) renderSpace(scene, overlayScene);
+}
+
+/** Should this frame actually be drawn?
+ *
+ *  Behind the pause panel the scene is frozen, so redrawing the same picture
+ *  sixty times a second is the most wasteful thing this experience does: a
+ *  visitor reading the dedication is holding a phone that is rendering three
+ *  planets and a canopy for nothing. PRD 12 asks for the loop to stop there.
+ *
+ *  It is throttled rather than stopped, at about ten frames a second. The
+ *  renderer is built without `preserveDrawingBuffer`, so the contents of the
+ *  canvas after compositing are formally undefined, and the pause panel's
+ *  backdrop blur samples the page behind it. Never drawing again would be
+ *  betting the whole pause screen on a buffer we were told not to rely on. Ten
+ *  a second gives back five sixths of the work and keeps the bet off the
+ *  table. */
+function shouldDrawThisFrame(deltaTime) {
+    if (gamePhase() !== 'paused') {
+        _pausedRenderDebt = 0;
+        return true;
+    }
+    _pausedRenderDebt += deltaTime;
+    if (_pausedRenderDebt < PAUSED_FRAME_SECONDS) return false;
+    // Subtract rather than zero, so the leftover carries and the rate stays ten
+    // a second. Zeroing rounds every interval up to the next whole frame, which
+    // at sixty hertz quietly turns ten into eight and a half.
+    _pausedRenderDebt -= PAUSED_FRAME_SECONDS;
+    return true;
 }
 
 /** Count down the wreck, then put the ship back. Run off the frame clock rather
@@ -997,7 +1118,7 @@ function advanceRespawn(deltaTime) {
 /** Hand the HUD a snapshot of the game. Every field is read live rather than
  *  cached, which for the nav markers is the whole point: the Moon is moving,
  *  and a cached bearing to it makes an interception feel broken (PRD 5.2). */
-function updateObjectiveHud() {
+function updateObjectiveHud(flight = getFlightState()) {
     // The counters come from the state machine rather than from a fresh count
     // of the scene. One ledger: what the HUD shows and what decides the win are
     // the same numbers, so they cannot drift apart.
@@ -1016,7 +1137,7 @@ function updateObjectiveHud() {
     if (alertId && alertId !== _announcedAlert) playAlert();
     _announcedAlert = alertId;
     _hudView.event = _event;
-    _hudView.playerPosition = getFlightState().position;
+    _hudView.playerPosition = flight.position;
     updateHud(_hudView);
 }
 
@@ -1049,29 +1170,34 @@ function advanceNotices(deltaTime) {
     }
 }
 
-function applyFlightToCamera() {
+function applyFlightToCamera(s = getFlightState()) {
     const camera = getWorldCamera();
     if (!camera) return;
-    const s = getFlightState();
     camera.position.set(s.position.x, s.position.y, s.position.z);
     // Rebuilt from two angles every frame, never accumulated, which is what
     // keeps roll out of a scene that is meant to have none.
     camera.rotation.set(s.pitch, s.yaw, 0);
 }
 
-function updateReadouts() {
-    const s = getFlightState();
+function updateReadouts(s = getFlightState()) {
     // The engine follows the THROTTLE rather than the speed, so pushing the
     // lever is answered immediately instead of a second later once the ship has
     // caught up. That gap is what would make the controls feel unresponsive.
     setEngineThrottle(s.throttle);
 
+    // Two `toLocaleString` calls and a DOM write, only when the whole numbers
+    // they format have actually moved. Holding a steady speed is the common
+    // case and it now costs nothing at all.
     if (throttleReadout) {
         const speed = Math.round(s.speed);
         const target = Math.round(s.targetSpeed);
-        throttleReadout.textContent = speed === target
-            ? `${speed.toLocaleString()} km/s`
-            : `${speed.toLocaleString()} → ${target.toLocaleString()} km/s`;
+        if (speed !== _shownSpeed || target !== _shownTarget) {
+            _shownSpeed = speed;
+            _shownTarget = target;
+            throttleReadout.textContent = speed === target
+                ? `${speed.toLocaleString()} km/s`
+                : `${speed.toLocaleString()} → ${target.toLocaleString()} km/s`;
+        }
     }
     // Announce the throttle only when it has actually moved a step, so the
     // live region reports changes rather than chattering every frame.
@@ -1160,5 +1286,6 @@ export const __test__ = {
     updateObjectiveHud, advanceNotices, playerState, getProjection,
     startGame, handleStateChange, showEndScreen, endMessage, formatClock,
     restartRun, killPlayer, respawnPlayer, advanceRespawn,
-    openPause, closePause, beginFlight
+    openPause, closePause, beginFlight,
+    applyReducedFx, prefersReducedMotion, shouldDrawThisFrame, animate
 };

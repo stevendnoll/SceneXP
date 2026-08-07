@@ -440,6 +440,29 @@ describe('hostile pips', () => {
         hud.updateHud(view({ ships: raiders() }));
         expect(hud.__test__.getPips()[0].style.transform).toMatch(/^translate\(-50%, -50%\) translate\(/);
     });
+
+    test('a PLACED pip is still a diamond', () => {
+        // THE BUG THIS EXISTS FOR, and it shipped. `.hostile-pip` is a 9px
+        // square turned 45 degrees by the stylesheet, and an inline transform
+        // REPLACES the stylesheet's rather than composing with it, so the first
+        // frame a pip was positioned it lost its rotation and drew as an
+        // axis-aligned block. Every raider on screen was a small orange square
+        // for two whole milestones. The CSS was right, the JS was right, no
+        // test could see it, and the only reason it was ever caught is that
+        // somebody counted the pixels in a screenshot.
+        //
+        // The nav markers are checked alongside because they use the same
+        // helper and must NOT pick up a rotation: a ring and a diamond being
+        // told apart by shape is the whole colour-blind story (PRD 8.5).
+        hud.initHud(CONFIG);
+        hud.updateHud(view({
+            ships: raiders(),
+            bodies: { earth: { x: 0, y: 0, z: -5000 } }
+        }));
+        expect(hud.__test__.getPips()[0].style.transform).toMatch(/rotate\(45deg\)$/);
+        expect(hud.__test__.getNavMarkers()[0].marker.style.transform).toEqual(expect.any(String));
+        expect(hud.__test__.getNavMarkers()[0].marker.style.transform).not.toMatch(/rotate/);
+    });
 });
 
 describe('the nav markers', () => {
@@ -559,7 +582,15 @@ describe('lifecycle', () => {
         expect(hud.__test__.getPips()).toHaveLength(0);
         expect(hud.__test__.getNavMarkers()).toHaveLength(0);
         expect(nodes.get('hostile-pips').children).toHaveLength(0);
-        expect(hud.__test__.shown.spoken).toBeNull();
+        // The live region remembers the INPUTS to its sentence rather than the
+        // sentence, so it can tell whether anything changed without building a
+        // string every frame. Dispose has to clear all of them, or the next run
+        // would compare against the last one's numbers and stay silent.
+        expect(hud.__test__.spoken.structures).toBeUndefined();
+        expect(hud.__test__.spoken.ships).toBeUndefined();
+        expect(hud.__test__.spoken.lives).toBeUndefined();
+        expect(hud.__test__.spoken.alert).toBeUndefined();
+        expect(hud.__test__.spoken.event).toBeUndefined();
         expect(() => hud.disposeHud()).not.toThrow();
     });
 
