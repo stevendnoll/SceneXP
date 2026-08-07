@@ -23,7 +23,7 @@
  */
 
 import { EARTHDEFENSE_CONFIG } from './config.min.js';
-import { anchorToSurface } from '../../shared/js/bodies-1.0.0.min.js';
+import { anchorToSurface, getBody } from '../../shared/js/bodies-1.0.0.min.js';
 
 const structures = new Map();   // id -> { spec, group, pips, hitPoints, side, body }
 
@@ -31,11 +31,17 @@ let shared = null;
 
 // Scratch, so the per-frame candidate and position reads allocate nothing.
 let scratchVec = null;
+let scratchCentreVec = null;
 const candidateList = [];
 
 function scratch() {
     if (!scratchVec) scratchVec = new THREE.Vector3();
     return scratchVec;
+}
+
+function scratchCentre() {
+    if (!scratchCentreVec) scratchCentreVec = new THREE.Vector3();
+    return scratchCentreVec;
 }
 
 /** Build the one set of geometries and materials every installation clones. */
@@ -150,7 +156,13 @@ export function initStructures(config = EARTHDEFENSE_CONFIG) {
                 // rewritten in place every frame. Targeting runs over all seven
                 // of these on every tick, and a fresh object each time would
                 // hand the collector seven allocations a frame for nothing.
-                aim: { x: 0, y: 0, z: 0 }
+                aim: { x: 0, y: 0, z: 0 },
+                // HOW FAST THIS INSTALLATION IS ACTUALLY TRAVELLING, and which
+                // way is up from it. See `sampleStructureMotion` for why
+                // anything needs to know either.
+                velocity: { x: 0, y: 0, z: 0 },
+                up: { x: 0, y: 1, z: 0 },
+                sampled: false
             };
             entry.candidate = {
                 id: site.id,
@@ -162,7 +174,14 @@ export function initStructures(config = EARTHDEFENSE_CONFIG) {
                 // deriving "which body is this on" from the id prefix would be
                 // a naming convention masquerading as data.
                 body: bodyId,
-                label: site.label
+                label: site.label,
+                // Also ignored by `targeting`, and also for the fleet: a raider
+                // holding station beside this installation has to fly at least
+                // this fast to stay beside it, and has to pick its station on
+                // the side of it that is not inside the planet.
+                velocity: entry.velocity,
+                speed: 0,
+                up: entry.up
             };
             structures.set(site.id, entry);
         }
@@ -232,6 +251,14 @@ export function resetStructures(config = EARTHDEFENSE_CONFIG) {
         entry.group.userData.destroyed = false;
         entry.group.rotation.z = 0;
         if (entry.beacon) entry.beacon.visible = true;
+        // The motion sample starts again from nothing. The aim point still
+        // holds wherever the last run left it, and differencing against that
+        // across a restart would report one enormous velocity on frame one.
+        entry.sampled = false;
+        entry.velocity.x = 0;
+        entry.velocity.y = 0;
+        entry.velocity.z = 0;
+        entry.candidate.speed = 0;
         // The hull was swapped to the wreck material on destruction, so it has
         // to be swapped back. Pips and the beacon are left alone: refreshPips
         // owns the first and the line above owns the second.
@@ -291,17 +318,94 @@ export function structuresRemaining(side = 'friendly') {
  */
 export function targetCandidates() {
     candidateList.length = 0;
-    const v = scratch();
     for (const entry of structures.values()) {
         if (entry.hitPoints <= 0) continue;
-        const source = entry.beacon || entry.group;
-        source.getWorldPosition(v);
-        entry.aim.x = v.x;
-        entry.aim.y = v.y;
-        entry.aim.z = v.z;
+        refreshAim(entry);
         candidateList.push(entry.candidate);
     }
     return candidateList;
+}
+
+/** Read one installation's beacon out of the scene graph and into its aim
+ *  point. Idempotent within a frame, since the bodies only move once. */
+function refreshAim(entry) {
+    const v = scratch();
+    const source = entry.beacon || entry.group;
+    source.getWorldPosition(v);
+    entry.aim.x = v.x;
+    entry.aim.y = v.y;
+    entry.aim.z = v.z;
+    return entry.aim;
+}
+
+/** Measure how fast each installation is travelling, once per frame.
+ *
+ *  WHY THIS EXISTS. An installation's world position is the product of a body
+ *  spin, an orbit, and a surface anchor, none of which reports a velocity, so
+ *  the only honest way to get one is to watch the position move. Earth's four
+ *  come out at about 6 units a second, which is nothing. The Moon's three come
+ *  out at about 838, which is more than a raider's whole loiter speed, and a
+ *  raider that does not know that flies at where its target was and quietly
+ *  falls behind forever. That was the bug: the Moon was never once fired on in
+ *  a fifteen minute run because no attacker could hold station long enough for
+ *  its twelve second clock to finish.
+ *
+ *  CALLED FROM `updateWorld`, AFTER THE BODIES HAVE MOVED, and exactly once a
+ *  frame. Calling it twice in one frame would read a zero difference and report
+ *  the Moon as standing still, which is why the sampling is here rather than
+ *  inside `targetCandidates` (main.js and the fleet both call that, and the HUD
+ *  may call it again).
+ *
+ *  The first sample of an installation's life has nothing to difference against
+ *  and is skipped, so a body's first frame does not report it arriving from the
+ *  origin at several million units a second.
+ *
+ *  THE OUTWARD NORMAL IS SAMPLED HERE TOO, for the same reason and at the same
+ *  rate. A raider picking a station around an installation needs to know which
+ *  half of the sphere is sky and which half is buried in the planet, and this is
+ *  the once-a-frame place that already has both world positions in hand. It is
+ *  deliberately NOT in `refreshAim`: that runs two or three times a frame, and
+ *  a normal that turns by a thousandth of a degree in that time does not need
+ *  reading three times. */
+export function sampleStructureMotion(deltaTime) {
+    const dt = deltaTime || 0;
+    for (const entry of structures.values()) {
+        const previousX = entry.aim.x;
+        const previousY = entry.aim.y;
+        const previousZ = entry.aim.z;
+        refreshAim(entry);
+        refreshUp(entry);
+        if (!entry.sampled || dt <= 0) {
+            entry.sampled = true;
+            continue;
+        }
+        entry.velocity.x = (entry.aim.x - previousX) / dt;
+        entry.velocity.y = (entry.aim.y - previousY) / dt;
+        entry.velocity.z = (entry.aim.z - previousZ) / dt;
+        entry.candidate.speed = Math.hypot(
+            entry.velocity.x, entry.velocity.y, entry.velocity.z);
+    }
+    return structures;
+}
+
+/** Which way is up from an installation: the unit vector from the centre of its
+ *  body out through its beacon. Left at its previous value if the body cannot be
+ *  found or the two points coincide, since a stale normal is a slightly wrong
+ *  formation and a zero one is a raider flying at the middle of a planet. */
+function refreshUp(entry) {
+    const body = getBody(entry.body);
+    if (!body || typeof body.getWorldPosition !== 'function') return entry.up;
+    const c = scratchCentre();
+    body.getWorldPosition(c);
+    const dx = entry.aim.x - c.x;
+    const dy = entry.aim.y - c.y;
+    const dz = entry.aim.z - c.z;
+    const length = Math.hypot(dx, dy, dz);
+    if (length < 1e-6) return entry.up;
+    entry.up.x = dx / length;
+    entry.up.y = dy / length;
+    entry.up.z = dz / length;
+    return entry.up;
 }
 
 export function structurePositions() {
@@ -318,7 +422,8 @@ export function disposeStructures() {
     structures.clear();
     candidateList.length = 0;
     scratchVec = null;
+    scratchCentreVec = null;
     shared = null;
 }
 
-export const __test__ = { refreshPips, sharedParts };
+export const __test__ = { refreshPips, refreshAim, refreshUp, sharedParts };

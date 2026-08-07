@@ -496,7 +496,72 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
 
         turnRate: 0.55,        // radians/second: about a 2,200 unit turn radius
         standoff: 1200,        // how far off a structure an attacker holds
+
+        // LOITERING IS RELATIVE TO THE TARGET, NOT TO SPACE. This fraction of
+        // cruise is what an attacker adds ON TOP of whatever its installation is
+        // already doing, which for Earth's four is about 6 units a second and
+        // for the Moon's three is about 838.
+        //
+        // Read as an absolute speed, as it was until this was found, 0.35 of
+        // 1,200 is 420 units a second against a Moon travelling at 838, so a
+        // raider that reached its station immediately fell off it, bounced back
+        // out to TRANSIT, caught up, and bounced again. It alternated every
+        // single frame, the twelve second fire clock never once ran down, and
+        // the three lunar installations went un-fired-on for an entire fifteen
+        // minute run. The Earth-or-Moon triage in PRD 4.4 was not a hard choice,
+        // it was not a choice at all.
         attackSpeedFactor: 0.35,
+        // The ceiling on that sum, as a multiple of cruise. 838 + 420 is 1,258,
+        // so the half of a lap spent chasing the Moon costs an attacker most of
+        // its engine, which is the right feeling and still a third of the
+        // visitor's 4,000. Anything that would have to fly faster than this to
+        // hold station gets left behind on purpose.
+        attackSpeedCap: 1.5,
+        // And the floor, for the other half of the lap. Coming back across the
+        // circle a raider is flying INTO its target's motion and needs almost
+        // nothing of its own, but a ship that stops dead in space reads as a
+        // freeze rather than as a manoeuvre.
+        attackSpeedFloor: 0.15,
+
+        // TWO RADII, AND THEY ARE A HYSTERESIS BAND. Both are multiples of
+        // standoff. Inside `attackRadius` a raider stops flying at its
+        // installation and starts circling it. Inside the wider `holdRadius` its
+        // twelve second clock runs. Outside that the clock is held at full, so a
+        // long approach still banks no opening shot.
+        //
+        // WHY THEY DIFFER, since one number is obviously tidier and was tried. A
+        // raider settles a little OUTSIDE whichever radius slows it down, so
+        // whatever this is set to is roughly where the formation ends up. Tight
+        // keeps the attackers in close. The clock then has to tolerate the edge
+        // being crossed and recrossed, which beside a moving installation
+        // happens on alternate frames, and that is what the gap between the two
+        // buys. Setting them equal put the whole formation out on the clock's
+        // own edge and the Moon went straight back to never being fired on.
+        attackRadius: 1.15,
+        holdRadius: 1.8,
+
+        // FORMATION SLOTS. Every attacker on a given installation used to
+        // compute the identical aim point, so four raiders converged to within
+        // eight units of each other and drew as ONE light, ONE hull, and ONE HUD
+        // pip. The counter said twelve and the screen showed three.
+        //
+        // Each ship now circles its installation at its OWN height and on its
+        // own shell, in the sky above it rather than on a sphere through it:
+        // half of a full sphere around a lunar installation is inside the Moon.
+        //
+        // A station is a bearing that LEADS the raider rather than a fixed post.
+        // A ship with a turn rate and no brakes cannot sit on a post, it
+        // overshoots and loops back, and one was measured swinging between 465
+        // and 3,161 units of an installation it was meant to be holding station
+        // on, which took it out of its own firing radius twice a lap.
+        slotLead: 0.55,        // radians of bearing the station sits ahead of
+                               // the raider. Bigger circles harder, smaller
+                               // drifts outward. This is the shape knob.
+        slotLatitude: 0.8,     // how far up toward straight overhead the
+                               // highest circle sits, as a fraction of a
+                               // quarter turn
+        slotDepth: 0.12,       // per-ship variation in standoff, as a fraction
+                               // of it, so no two ships share a shell
         // Beyond this the hull is hidden and only the running light and the
         // HUD pip remain. A 220 unit hull at 15,000 units is about ten pixels,
         // which is the point below which geometry stops paying for itself.

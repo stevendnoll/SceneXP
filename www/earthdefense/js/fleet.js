@@ -64,7 +64,10 @@ const aim = { x: 0, y: 0, z: 0 };
 const desired = { x: 0, y: 0, z: 0 };
 const away = { x: 0, y: 0, z: 0 };
 const tangent = { x: 0, y: 0, z: 0 };
+const binormal = { x: 0, y: 0, z: 0 };
 const sideways = { x: 0, y: 0, z: 0 };
+// Retargeting is rare, so this is filled on demand rather than every frame.
+const attackerCount = Object.create(null);
 
 // ---- Pure core --------------------------------------------------------------
 
@@ -86,7 +89,26 @@ export function hashUnit(n) {
  *  Exact rather than a normalised lerp, which turns by less than it promises
  *  and by a different amount depending on how far off the target already is.
  *  A ship that steers at a knowable rate is a ship whose turn radius is a
- *  design number instead of an emergent one. */
+ *  design number instead of an emergent one.
+ *
+ *  THE RESULT IS RENORMALISED, and that is not tidiness. The rotation is only
+ *  unit-preserving in exact arithmetic, so each turn leaves the heading a few
+ *  parts in 10^16 off the unit sphere. That was invisible for as long as ships
+ *  were chasing distant points, because a raider that catches its target's
+ *  bearing takes the `angle <= maxTurn` branch and is handed an exactly unit
+ *  vector, which wiped the error out several times a second.
+ *
+ *  Station keeping removed that accident. A raider holding a post beside a
+ *  moving installation is perpetually a fraction over `maxTurn` off its aim
+ *  point, so it takes the rotation branch on every single frame and never gets
+ *  the reset. The error then compounds, and it compounds in the worst possible
+ *  way: `clamp` starts pinning the dot product at 1 once the heading is longer
+ *  than unit, `acos` returns 0, and the early return hands the inflated heading
+ *  straight back, locking it in. A raider was measured at |heading| 1.68, which
+ *  is a ship flying at 1.68 times its own speed limit, and two of the twelve
+ *  eventually left the world entirely at tens of thousands of units a second.
+ *
+ *  One hypot and three divides per ship per frame closes it for good. */
 export function steerToward(heading, target, maxTurn, out = {}) {
     const dot = clamp(heading.x * target.x + heading.y * target.y + heading.z * target.z, -1, 1);
     const angle = Math.acos(dot);
@@ -108,10 +130,12 @@ export function steerToward(heading, target, maxTurn, out = {}) {
     }
 
     const cos = Math.cos(maxTurn), sin = Math.sin(maxTurn);
-    out.x = heading.x * cos + (px / length) * sin;
-    out.y = heading.y * cos + (py / length) * sin;
-    out.z = heading.z * cos + (pz / length) * sin;
-    return out;
+    // `normalise` reads all three components before writing any, so passing the
+    // same object as `out` and as the source of `heading` is safe.
+    return normalise(out,
+        heading.x * cos + (px / length) * sin,
+        heading.y * cos + (py / length) * sin,
+        heading.z * cos + (pz / length) * sin);
 }
 
 /** Expand a group's weights into one body name per ship.
@@ -151,14 +175,51 @@ export function assignBodies(weight, count) {
     return out;
 }
 
-/** The nearest surviving structure to a point, preferring `body` when one is
- *  named and something on it is still standing. Returns the candidate record,
- *  or null when the last installation has fallen (in which case the game is
- *  already lost and nothing here has to care). */
-export function nearestStructure(from, structures, body = null) {
+/** How high above its installation's horizon ship `index` of `total` circles.
+ *
+ *  ONE NUMBER PER SHIP, AND IT IS AN ELEVATION rather than a full position. A
+ *  raider has a turn rate and no brakes, so it cannot be given a fixed post: it
+ *  arrives, overshoots, and loops back, which was measured swinging a ship
+ *  between 465 and 3,161 units of a target it was supposed to be holding
+ *  station on. What it CAN do is circle, and a circle only needs to be told how
+ *  high and how wide. `aimAtSlot` supplies the rest by aiming a little ahead of
+ *  wherever the ship already is.
+ *
+ *  Spread by equal AREA over the sky above the installation, so the elevations
+ *  do not bunch toward the zenith. `limit` keeps the highest of them clear of
+ *  straight overhead, where an azimuth stops meaning anything.
+ *
+ *  ALWAYS ABOVE THE HORIZON, never below. Below is inside the planet the
+ *  installation stands on, and half of the raiders orbiting through rock is the
+ *  version of this that looks worse than the bug it replaced. */
+export function formationElevation(index, total, limit = 0.8) {
+    const count = Math.max(1, total);
+    return Math.asin(clamp((index + 0.5) / count, 0, 1)) * limit;
+}
+
+/** The best surviving installation for a raider that has just lost its own.
+ *  Returns the candidate record, or null when the last one has fallen (in which
+ *  case the game is already lost and nothing here has to care).
+ *
+ *  `attackers` is `{ [structureId]: howManyRaidersAreAlreadyOnIt }`, and it is
+ *  the whole reason this is not simply "the nearest one", which is what it used
+ *  to be. When Earth's last installation falls, six raiders lose their target on
+ *  the SAME FRAME, and nearest-wins sent all six to whichever lunar site
+ *  happened to be closest. Twelve ships then shared three aim points and the
+ *  Moon's defence became one fight instead of three.
+ *
+ *  THREE TESTS, IN ORDER. The preferred body first, so the group weights still
+ *  mean something after a retarget and the whole fleet does not collapse onto
+ *  one world. Then the fewest attackers, which is the spread. Then distance,
+ *  which only breaks ties. Distance last is deliberate: a raider crossing to a
+ *  quieter installation is the behaviour worth having, and it costs it a flight
+ *  the visitor can see coming. Pass no census and the three tests collapse to
+ *  the original two. */
+export function leastPressuredStructure(from, structures, attackers = {}, body = null) {
     let best = null;
-    let bestDistanceSq = Infinity;
     let bestOnBody = false;
+    let bestAttackers = Infinity;
+    let bestDistanceSq = Infinity;
 
     for (let i = 0; i < structures.length; i++) {
         const s = structures[i];
@@ -166,18 +227,36 @@ export function nearestStructure(from, structures, body = null) {
         const dx = s.position.x - from.x, dy = s.position.y - from.y, dz = s.position.z - from.z;
         const distanceSq = dx * dx + dy * dy + dz * dz;
         const onBody = body !== null && s.body === body;
+        const load = attackers[s.id] || 0;
 
-        // A structure on the preferred body always beats one that is not, at
-        // any distance. That is what keeps the group weights meaningful after
-        // the first retarget instead of collapsing every raider onto Earth.
-        if (best && !onBody && bestOnBody) continue;
-        if (best && onBody === bestOnBody && distanceSq >= bestDistanceSq) continue;
+        if (best) {
+            if (onBody !== bestOnBody) { if (!onBody) continue; }
+            else if (load !== bestAttackers) { if (load > bestAttackers) continue; }
+            else if (distanceSq >= bestDistanceSq) continue;
+        }
 
         best = s;
-        bestDistanceSq = distanceSq;
         bestOnBody = onBody;
+        bestAttackers = load;
+        bestDistanceSq = distanceSq;
     }
     return best;
+}
+
+/** `leastPressuredStructure` with the attacker census taken first.
+ *
+ *  Counted on demand rather than once a frame because a retarget is a rare
+ *  event: it happens when an installation falls and at no other time, so a
+ *  dozen ships worth of counting a handful of times a run is cheaper than the
+ *  same work sixty times a second forever. */
+function chooseStructure(ship, structures) {
+    for (const key in attackerCount) delete attackerCount[key];
+    for (let i = 0; i < ships.length; i++) {
+        const other = ships[i];
+        if (!other.alive || other === ship || !other.targetStructureId) continue;
+        attackerCount[other.targetStructureId] = (attackerCount[other.targetStructureId] || 0) + 1;
+    }
+    return leastPressuredStructure(ship.position, structures, attackerCount, ship.preferredBody);
 }
 
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -274,6 +353,7 @@ export function resetFleet() {
         ship.evadeTimer = 0;
         ship.evadeCooldown = 0;
         ship.distanceToPlayer = Infinity;
+        ship.distanceToTarget = Infinity;
     }
     for (const b of beams) {
         b.active = false;
@@ -349,6 +429,15 @@ function buildShip(index, groupIndex, spec, body) {
         evadeCooldown: 0,
         weavePhase: hashUnit(index * 7 + 5) * Math.PI,
         distanceToPlayer: Infinity,
+        distanceToTarget: Infinity,
+        // This ship's own circle around whatever it attacks, so four raiders on
+        // one installation are four raiders rather than one light with a count
+        // of four beside it. Both are constants for the life of the ship, which
+        // is why a restart has nothing to put back.
+        slotElevation: formationElevation(index, cfg.total, cfg.slotLatitude),
+        // A per-ship radius on top of the shared standoff, so two ships that
+        // pass through the same bearing are still not in the same place.
+        slotDepth: hashUnit(index * 19 + 11),
         alive: true,
         mesh
     };
@@ -513,6 +602,10 @@ function updateShip(ship, dt, player, structures) {
         ship.distanceToPlayer = Infinity;
     }
 
+    // Held on the ship rather than recomputed, because the state decision below
+    // and the fire clock further down are the same question asked twice.
+    ship.distanceToTarget = target ? distanceToPoint(ship.position, target.position) : Infinity;
+
     ship.evadeCooldown = Math.max(0, ship.evadeCooldown - dt);
     if (ship.state === STATE.EVADE) {
         ship.evadeTimer -= dt;
@@ -527,14 +620,27 @@ function updateShip(ship, dt, player, structures) {
         // RETARGET is a decision, not a place to sit: it resolves on the frame
         // it is entered, or there is nothing left to attack and the run is over.
         ship.state = STATE.RETARGET;
-        const replacement = nearestStructure(ship.position, structures, ship.preferredBody);
+        const replacement = chooseStructure(ship, structures);
         if (replacement) {
             ship.targetStructureId = replacement.id;
+            ship.distanceToTarget = distanceToPoint(ship.position, replacement.position);
             ship.state = STATE.TRANSIT;
         }
     } else {
-        const distance = distanceToPoint(ship.position, target.position);
-        ship.state = distance <= cfg.standoff * 1.15 ? STATE.ATTACK : STATE.TRANSIT;
+        // THE TIGHT RADIUS, and deliberately tighter than the one the fire clock
+        // runs in. The two are a hysteresis band rather than a duplication, and
+        // collapsing them into one was tried and undone: raiders settle a little
+        // OUTSIDE whichever radius flips them into station keeping, because that
+        // is where they slow down, so widening this one to match the clock's
+        // simply moved the whole formation out to sit on the clock's edge and
+        // the Moon went back to never being fired on.
+        //
+        // Tight here pulls a raider in close. Wide there means the frame-by-
+        // frame chatter along this edge, which is what holding station beside a
+        // moving installation looks like, costs it nothing.
+        ship.state = ship.distanceToTarget <= cfg.standoff * cfg.attackRadius
+            ? STATE.ATTACK
+            : STATE.TRANSIT;
     }
 
     steerAndMove(ship, dt, target);
@@ -585,20 +691,34 @@ function steerAndMove(ship, dt, target) {
         aim.y = ship.position.y + ship.heading.y * 2000 + sideways.y * swing;
         aim.z = ship.position.z + ship.heading.z * 2000 + sideways.z * swing;
     } else if (ship.state === STATE.ATTACK && target) {
-        speed = cfg.cruiseSpeed * cfg.attackSpeedFactor;
-        // A slow circle at standoff: out along the line from the installation,
-        // plus a tangential nudge. An attacker that parks reads as a bug.
-        normalise(away,
-            ship.position.x - target.position.x,
-            ship.position.y - target.position.y,
-            ship.position.z - target.position.z);
-        normalise(tangent,
-            WORLD_UP.y * away.z - WORLD_UP.z * away.y,
-            WORLD_UP.z * away.x - WORLD_UP.x * away.z,
-            WORLD_UP.x * away.y - WORLD_UP.y * away.x);
-        aim.x = target.position.x + away.x * cfg.standoff + tangent.x * cfg.standoff * 0.6;
-        aim.y = target.position.y + away.y * cfg.standoff + tangent.y * cfg.standoff * 0.6;
-        aim.z = target.position.z + away.z * cfg.standoff + tangent.z * cfg.standoff * 0.6;
+        // STATION KEEPING, not a fixed slow speed. `attackSpeedFactor` is what
+        // this raider flies ON TOP of whatever its installation is already
+        // doing, which is the difference between loitering beside the Moon and
+        // being left behind by it at 418 units a second.
+        //
+        // THE CARRY IS PROJECTED ONTO THE HEADING rather than added whole. A
+        // ship only has a speed along its nose, so what it has to match is the
+        // part of its target's velocity pointing the same way: flying with the
+        // Moon it needs all 838 of them, flying back across the circle it needs
+        // none and adding them anyway throws it wide. The first version added
+        // the whole magnitude and produced exactly that, a raider going round
+        // an installation far too fast on one side of every lap.
+        //
+        // Floored so a raider never stops dead or reverses, and capped so a
+        // target nothing could keep up with is honestly not kept up with rather
+        // than silently making a raider faster than the visitor.
+        const carry = target.velocity
+            ? target.velocity.x * ship.heading.x
+                + target.velocity.y * ship.heading.y
+                + target.velocity.z * ship.heading.z
+            : 0;
+        speed = clamp(
+            carry + cfg.cruiseSpeed * cfg.attackSpeedFactor,
+            cfg.cruiseSpeed * cfg.attackSpeedFloor,
+            cfg.cruiseSpeed * cfg.attackSpeedCap
+        );
+
+        aimAtSlot(ship, target);
     } else if (target) {
         aim.x = target.position.x; aim.y = target.position.y; aim.z = target.position.z;
     } else {
@@ -616,10 +736,83 @@ function steerAndMove(ship, dt, target) {
     ship.position.z += ship.heading.z * speed * dt;
 }
 
+/** Write this ship's next aim point around `target` into the shared `aim`.
+ *
+ *  A CIRCLE, EXPRESSED AS A BEARING THAT LEADS. The station is not a place, it
+ *  is "the same height I am at, a little further around than I am", recomputed
+ *  every frame from where the raider actually is. Chasing a point that keeps
+ *  moving ahead by a fixed angle is what settles a ship with a turn rate and no
+ *  brakes into a steady circle. Aiming at a fixed post instead makes it
+ *  overshoot, loop wide, and come back, which is both ugly and enough to carry
+ *  it out of the radius its fire clock runs in.
+ *
+ *  THE FRAME IS THE INSTALLATION'S OWN. Azimuth is measured around the surface
+ *  normal, and the elevation is never negative, so a raider circles in the sky
+ *  above its target rather than through the body underneath it. On the Moon
+ *  that is not a nicety: a beacon stands 1,916 units from the centre of a body
+ *  with a radius of 1,737, so any station much below the local horizon is
+ *  underground.
+ *
+ *  Falling back to the world's up when no normal is offered keeps this working
+ *  for a caller with plain objects, which is how the suite drives it. */
+function aimAtSlot(ship, target) {
+    const up = target.up || WORLD_UP;
+
+    // A local east and north, so an azimuth around the installation means
+    // something. `normalise` hands back a usable perpendicular of its own when
+    // the cross product vanishes, which is an installation standing directly
+    // under the world's own up axis.
+    normalise(tangent,
+        WORLD_UP.y * up.z - WORLD_UP.z * up.y,
+        WORLD_UP.z * up.x - WORLD_UP.x * up.z,
+        WORLD_UP.x * up.y - WORLD_UP.y * up.x);
+    binormal.x = up.y * tangent.z - up.z * tangent.y;
+    binormal.y = up.z * tangent.x - up.x * tangent.z;
+    binormal.z = up.x * tangent.y - up.y * tangent.x;
+
+    // Where the raider stands now, as a bearing around the installation.
+    normalise(away,
+        ship.position.x - target.position.x,
+        ship.position.y - target.position.y,
+        ship.position.z - target.position.z);
+    const azimuth = Math.atan2(
+        away.x * binormal.x + away.y * binormal.y + away.z * binormal.z,
+        away.x * tangent.x + away.y * tangent.y + away.z * tangent.z);
+
+    // A little further around, at this ship's own height, on this ship's own
+    // shell. Two raiders that reach the same bearing are still separated by the
+    // other two, which is what keeps twelve ships reading as twelve.
+    const ahead = azimuth + cfg.slotLead;
+    const rise = Math.sin(ship.slotElevation);
+    const ring = Math.cos(ship.slotElevation);
+    const east = Math.cos(ahead) * ring;
+    const north = Math.sin(ahead) * ring;
+    // Held inside the ATTACK threshold on purpose. A station the state machine
+    // does not count as attacking is a raider that flies to its post and then
+    // resets its own fire clock for arriving.
+    const radius = cfg.standoff * (1 + ship.slotDepth * cfg.slotDepth);
+
+    aim.x = target.position.x + (up.x * rise + tangent.x * east + binormal.x * north) * radius;
+    aim.y = target.position.y + (up.y * rise + tangent.y * east + binormal.y * north) * radius;
+    aim.z = target.position.z + (up.z * rise + tangent.z * east + binormal.z * north) * radius;
+    return aim;
+}
+
+/** The twelve second clock, run on PROXIMITY rather than on the ATTACK label.
+ *
+ *  The label is not a fact about where a raider is, it is a fact about which
+ *  side of one threshold it was on when the frame started, and beside a moving
+ *  installation it can flip every single frame. Resetting the clock on that flip
+ *  meant a lunar attacker restarted its twelve seconds sixty times a second: in
+ *  a fifteen minute run the three installations on the Moon were never fired on
+ *  once, by any of the six raiders sent to do it.
+ *
+ *  `holdRadius` is the honest version of the same intent. A raider still has to
+ *  arrive before its clock starts, so a long approach banks nothing, but once it
+ *  is loitering in the neighbourhood a frame of drift does not cost it twelve
+ *  seconds of work. */
 function fireAtStructure(ship, dt, target) {
-    if (ship.state !== STATE.ATTACK || !target) {
-        // The clock only runs while a raider is actually in position, so a long
-        // approach does not bank a free opening shot.
+    if (!target || ship.distanceToTarget > cfg.standoff * cfg.holdRadius) {
         ship.fireTimer = cfg.fireInterval;
         return;
     }

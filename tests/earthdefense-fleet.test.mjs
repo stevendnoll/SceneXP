@@ -786,7 +786,7 @@ describe('assignBodies', () => {
     });
 });
 
-describe('nearestStructure', () => {
+describe('leastPressuredStructure', () => {
     const here = { x: 0, y: 0, z: 0 };
     const list = [
         { id: 'near-earth', body: 'earth', position: { x: 100, y: 0, z: 0 } },
@@ -794,21 +794,249 @@ describe('nearestStructure', () => {
         { id: 'far-moon', body: 'moon', position: { x: 64000, y: 0, z: 0 } }
     ];
 
+    // With no census this has to behave exactly like the plain nearest-wins
+    // pick it replaced, or every caller that does not care about crowding
+    // quietly changed behaviour.
     test('picks the closest when no body is preferred', () => {
-        expect(fleet.nearestStructure(here, list).id).toBe('near-earth');
+        expect(fleet.leastPressuredStructure(here, list).id).toBe('near-earth');
     });
 
     test('a preferred body beats a nearer installation on another one', () => {
-        expect(fleet.nearestStructure(here, list, 'moon').id).toBe('far-moon');
+        expect(fleet.leastPressuredStructure(here, list, {}, 'moon').id).toBe('far-moon');
     });
 
     test('falls back to the nearest when nothing on the preferred body survives', () => {
-        expect(fleet.nearestStructure(here, list, 'mars').id).toBe('near-earth');
+        expect(fleet.leastPressuredStructure(here, list, {}, 'mars').id).toBe('near-earth');
     });
 
     test('an empty or malformed list gives null rather than a wrong answer', () => {
-        expect(fleet.nearestStructure(here, [])).toBeNull();
-        expect(fleet.nearestStructure(here, [null, { id: 'x' }])).toBeNull();
+        expect(fleet.leastPressuredStructure(here, [])).toBeNull();
+        expect(fleet.leastPressuredStructure(here, [null, { id: 'x' }])).toBeNull();
+    });
+
+    // The reason this function exists. Twelve raiders losing Earth on one frame
+    // used to pile onto whichever lunar site was nearest.
+    test('a crowded installation loses to a quieter one further away', () => {
+        const attackers = { 'near-earth': 3, 'far-earth': 0 };
+        expect(fleet.leastPressuredStructure(here, list, attackers).id).toBe('far-earth');
+    });
+
+    test('distance still breaks a tie between equally crowded installations', () => {
+        const attackers = { 'near-earth': 2, 'far-earth': 2, 'far-moon': 2 };
+        expect(fleet.leastPressuredStructure(here, list, attackers).id).toBe('near-earth');
+    });
+
+    // Crowding is a tie-breaker WITHIN a body, never a reason to abandon one.
+    // Otherwise the group weights stop meaning anything after the first loss.
+    test('the preferred body outranks the census', () => {
+        const attackers = { 'far-moon': 9, 'near-earth': 0 };
+        expect(fleet.leastPressuredStructure(here, list, attackers, 'moon').id).toBe('far-moon');
+    });
+});
+
+describe('formationElevation', () => {
+    // Below the horizon is inside the planet the installation stands on. On the
+    // Moon a beacon is 1,916 units from a centre with a radius of 1,737, so a
+    // station much under the local horizon is underground.
+    test('every circle sits above the installation, never inside its planet', () => {
+        for (let i = 0; i < 12; i++) {
+            const elevation = fleet.formationElevation(i, 12);
+            expect(elevation).toBeGreaterThan(0);
+            expect(elevation).toBeLessThan(Math.PI / 2);
+        }
+    });
+
+    test('twelve ships get twelve separated heights', () => {
+        const heights = [];
+        for (let i = 0; i < 12; i++) heights.push(fleet.formationElevation(i, 12));
+        heights.sort((a, b) => a - b);
+        for (let i = 1; i < heights.length; i++) {
+            // At 1,200 units of standoff, 0.04 radians is about 48 units of
+            // separation, and the per-ship shell adds to that. Enough that two
+            // raiders passing the same bearing are still two marks.
+            expect(heights[i] - heights[i - 1]).toBeGreaterThan(0.04);
+        }
+    });
+
+    test('the limit is respected and a limit of zero gives one flat ring', () => {
+        expect(fleet.formationElevation(11, 12, 0.5)).toBeLessThanOrEqual(Math.PI / 4);
+        expect(fleet.formationElevation(5, 12, 0)).toBe(0);
+    });
+
+    test('a degenerate total is answered rather than divided by', () => {
+        expect(Number.isFinite(fleet.formationElevation(0, 0))).toBe(true);
+    });
+});
+
+// ---- What the whole thing was for -------------------------------------------
+//
+// The four tests below are the bug this file's station keeping exists to fix,
+// written as the measurements that caught it. Before it, a fifteen minute run
+// landed ZERO shots on any of the three lunar installations, twelve raiders
+// drew as three marks, and two ships eventually left the world entirely.
+
+describe('holding station beside a MOVING installation', () => {
+    /** One installation that travels the way the Moon's do: 838 units a second
+     *  along its orbit, publishing the velocity and the outward normal that
+     *  structures.js samples once a frame. */
+    function movingWorld(speed = 838) {
+        const site = {
+            id: 'moon-a', body: 'moon', label: 'Moon A',
+            position: { x: 0, y: 0, z: 0 },
+            velocity: { x: speed, y: 0, z: 0 },
+            speed,
+            up: { x: 0, y: 1, z: 0 }
+        };
+        const state = { list: [site], site, damage: [], elapsed: 0 };
+        state.hooks = {
+            structures: () => state.list,
+            damageStructure: (id, amount) => {
+                state.damage.push({ id, amount, at: state.elapsed });
+                return { id, hitPoints: 2, destroyed: false };
+            },
+            onPlayerHit: () => {}
+        };
+        return state;
+    }
+
+    /** Advance the installation and then the fleet, in that order, which is the
+     *  order main.js uses and the reason a raider steers at where its target IS. */
+    function fly(world, seconds, step = 0.1) {
+        for (let t = 0; t < seconds; t += step) {
+            world.site.position.x += world.site.velocity.x * step;
+            world.site.position.y += world.site.velocity.y * step;
+            world.site.position.z += world.site.velocity.z * step;
+            world.elapsed += step;
+            fleet.updateFleet(step, null);
+        }
+    }
+
+    function soloOn(world, offset = { x: 0, y: 0, z: 1000 }) {
+        const config = {
+            ...CONFIG,
+            fleet: { ...CONFIG.fleet, groups: [{ count: 1, startDistance: 5000, weight: { moon: 1 } }] }
+        };
+        fleet.initFleet(config, null, world.hooks);
+        const ship = fleet.getShips()[0];
+        ship.position.x = offset.x; ship.position.y = offset.y; ship.position.z = offset.z;
+        ship.heading.x = 0; ship.heading.y = 0; ship.heading.z = -1;
+        return ship;
+    }
+
+    // THE BUG. `attackSpeedFactor` was read as an absolute loiter speed, which
+    // at 0.35 of 1,200 is 420 against a Moon doing 838, so an attacker fell off
+    // its station the instant it arrived, its fire clock reset every frame, and
+    // a fifteen minute run landed exactly zero shots on the Moon.
+    //
+    // The cadence is deliberately NOT asserted at the twelve second interval. A
+    // ship whose speed is a single number along its nose cannot hold a tight
+    // circle around something moving twice as fast as its own loiter speed, so a
+    // lunar attacker drifts in and out and lands one about every twenty seconds.
+    // That is the Moon being genuinely harder to attack than Earth, which is the
+    // triage in PRD 4.4 finally costing something.
+    test('a raider repeatedly fires on an installation that is running away', () => {
+        const world = movingWorld();
+        soloOn(world);
+        fly(world, 90);
+        expect(world.damage.length).toBeGreaterThanOrEqual(2);
+        for (let i = 1; i < world.damage.length; i++) {
+            const gap = world.damage[i].at - world.damage[i - 1].at;
+            expect(gap).toBeGreaterThanOrEqual(CONFIG.fleet.fireInterval - 0.5);
+            expect(gap).toBeLessThan(CONFIG.fleet.fireInterval * 2.5);
+        }
+    });
+
+    test('and is never left behind by it', () => {
+        const world = movingWorld();
+        const ship = soloOn(world);
+        let furthest = 0;
+        for (let t = 0; t < 90; t += 0.1) {
+            world.site.position.x += world.site.velocity.x * 0.1;
+            world.elapsed += 0.1;
+            fleet.updateFleet(0.1, null);
+            furthest = Math.max(furthest, Math.hypot(
+                ship.position.x - world.site.position.x,
+                ship.position.y - world.site.position.y,
+                ship.position.z - world.site.position.z));
+        }
+        // Loose, because the lap around a moving target is not a clean circle.
+        // The point is that the gap stays bounded: before the fix the raider
+        // simply fell behind and the distance grew without limit.
+        expect(furthest).toBeLessThan(CONFIG.fleet.standoff * 4);
+    });
+
+    // A target nothing could keep up with is left behind honestly, rather than
+    // quietly making a raider faster than the visitor's own ship.
+    test('no raider ever outruns its own speed cap', () => {
+        const world = movingWorld(4000);
+        const ship = soloOn(world);
+        let fastest = 0;
+        for (let t = 0; t < 60; t += 0.1) {
+            const before = { ...ship.position };
+            world.site.position.x += world.site.velocity.x * 0.1;
+            world.elapsed += 0.1;
+            fleet.updateFleet(0.1, null);
+            fastest = Math.max(fastest, Math.hypot(
+                ship.position.x - before.x,
+                ship.position.y - before.y,
+                ship.position.z - before.z) / 0.1);
+        }
+        expect(fastest).toBeLessThanOrEqual(CONFIG.fleet.cruiseSpeed * CONFIG.fleet.attackSpeedCap + 1);
+    });
+
+    // The heading is a unit vector by contract, and steerToward's rotation only
+    // preserves that in exact arithmetic. Station keeping takes the rotation
+    // branch on every frame, so nothing else ever puts the error back.
+    test('a long run leaves the heading on the unit sphere', () => {
+        const world = movingWorld();
+        const ship = soloOn(world);
+        fly(world, 600, 1 / 60);
+        expect(Math.hypot(ship.heading.x, ship.heading.y, ship.heading.z)).toBeCloseTo(1, 9);
+    });
+});
+
+describe('twelve raiders read as twelve', () => {
+    test('attackers on one installation do not converge to a single point', () => {
+        const world = makeStructures();
+        // Everything alive is on one installation, which is the state the game
+        // reaches the moment six raiders lose Earth on the same frame.
+        world.list = [world.list[0]];
+        fleet.initFleet(CONFIG, null, world.hooks);
+        for (const ship of fleet.getShips()) ship.targetStructureId = 'earth-a';
+        run(120, null);
+
+        const ships = fleet.getShips();
+        let closest = Infinity;
+        for (let i = 0; i < ships.length; i++) {
+            for (let j = i + 1; j < ships.length; j++) {
+                closest = Math.min(closest, Math.hypot(
+                    ships[i].position.x - ships[j].position.x,
+                    ships[i].position.y - ships[j].position.y,
+                    ships[i].position.z - ships[j].position.z));
+            }
+        }
+        // Before the formation slots this measured eight units, which at any
+        // viewing distance is one mark on screen with a count of twelve beside
+        // it. A hundred is about five pixels apart from 15,000 units away.
+        expect(closest).toBeGreaterThan(100);
+    });
+
+    test('losing a whole body spreads the survivors over what is left', () => {
+        const world = makeStructures();
+        fleet.initFleet(CONFIG, null, world.hooks);
+        // Earth falls, all four at once.
+        world.list = world.list.filter(s => s.body === 'moon');
+        run(2, null);
+
+        const perTarget = {};
+        for (const ship of fleet.getShips()) {
+            perTarget[ship.targetStructureId] = (perTarget[ship.targetStructureId] || 0) + 1;
+        }
+        expect(Object.keys(perTarget).sort()).toEqual(['moon-a', 'moon-b', 'moon-c']);
+        // Twelve over three, give or take the ones that were already there.
+        for (const id of Object.keys(perTarget)) {
+            expect(perTarget[id]).toBeLessThanOrEqual(6);
+        }
     });
 });
 

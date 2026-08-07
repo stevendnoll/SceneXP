@@ -29,7 +29,7 @@ import {
 import {
     initStructures, resetStructures, getStructures, getStructure,
     structuresRemaining, structurePositions, targetCandidates,
-    damageStructure, destroyStructure
+    sampleStructureMotion, damageStructure, destroyStructure
 } from './structures.min.js';
 
 let group = null;
@@ -132,9 +132,17 @@ export function initWorld(scene, manager) {
     return group;
 }
 
-/** Advance the world by one frame. */
+/** Advance the world by one frame.
+ *
+ *  The order is the whole content of this function. The installations are
+ *  parented to the bodies, so their world positions only become this frame's
+ *  positions once `updateBodies` has run, and the motion sample has to happen
+ *  after that and exactly once. Everything downstream (the raiders' station
+ *  keeping, the visitor's lock) then reads where things ARE rather than where
+ *  they were, which on the Moon is a difference of 838 units a second. */
 export function updateWorld(deltaTime) {
     updateBodies(deltaTime);
+    sampleStructureMotion(deltaTime);
 }
 
 /** Place a camera at the composed spawn viewpoint: `spawn.distance` from
