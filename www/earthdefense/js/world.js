@@ -69,6 +69,43 @@ function textureFor(spec) {
     return supportsWebP() ? spec.texture : spec.textureFallback;
 }
 
+/** Give a body a night side that reads as a place rather than as a hole.
+ *
+ *  A directional key light and a low ambient leave the unlit hemisphere at a
+ *  handful of values out of 255, which is why screenshot round 3 caught Earth
+ *  at 26,000 km and the Moon at 6,136 km as black discs. Ambient can lift them,
+ *  but only to a flat grey, and the interesting half of a night side is that it
+ *  still has geography in it.
+ *
+ *  So the body's own colour map is reused as an EMISSIVE MAP, tinted by
+ *  `spec.nightGlow`. Emissive ignores lighting, so it shows through wherever
+ *  the key light does not reach and is swamped by the day side where it does,
+ *  which lands the effect exactly on the unlit hemisphere without a second
+ *  texture, a second draw, or a custom shader.
+ *
+ *  IT LIVES HERE RATHER THAN IN `bodies-1.0.0`. This is a scenario choice about
+ *  three specific planets in one experience, not a fact about spheres, and the
+ *  shared module's coverage floors make a version cut expensive for something
+ *  this small. `createBody` returning a mesh with a public material is the seam
+ *  that lets an experience decorate without the library learning about it.
+ *
+ *  Takes the MATERIAL rather than the body id so it can be exercised against a
+ *  plain object, per the pure core / thin shell rule. Returns whether it did
+ *  anything, which is the only thing worth asserting about it. */
+function applyNightGlow(material, nightGlow) {
+    // 0 and undefined both mean "no night side to rescue". Mars says 0 out loud.
+    if (!nightGlow) return false;
+    // A body built without a colour map has nothing to tint, and an emissive
+    // with no map would light the whole sphere evenly, which is the flat smudge
+    // this exists to avoid. Better to leave it dark than to make it grey.
+    if (!material || !material.map || !material.emissive) return false;
+
+    material.emissive.setHex(nightGlow);
+    material.emissiveMap = material.map;
+    material.needsUpdate = true;
+    return true;
+}
+
 /** Build every body and return the group to add to the scene.
  *  `manager` is an optional THREE.LoadingManager so the loading screen can
  *  report texture progress. */
@@ -77,7 +114,8 @@ export function initWorld(scene, manager) {
     group = initBodies({ groupName: config.rootName, manager });
 
     for (const spec of config.bodies) {
-        createBody({ ...spec, texture: textureFor(spec) });
+        const mesh = createBody({ ...spec, texture: textureFor(spec) });
+        applyNightGlow(mesh && mesh.material, spec.nightGlow);
     }
     // Orbits are wired after every body exists, so a child can name a parent
     // that appears later in the array.
@@ -114,7 +152,7 @@ export function placeCameraAtSpawn(camera, config = EARTHDEFENSE_CONFIG) {
 }
 
 export function getWorldGroup() { return group; }
-export const __test__ = { textureFor };
+export const __test__ = { textureFor, applyNightGlow };
 export { getBody, bodyPositions, getOccluders };
 export {
     resetStructures, getStructures, getStructure, structuresRemaining,

@@ -18,12 +18,44 @@
  * canopy pass at M7.
  */
 
-/* Deep space rather than the shared near-black, so the loading screen and the
-   welcome overlay match the scene waiting behind them instead of flashing a
-   lighter grey at the hand-off. */
-#loading-screen,
-#blocker {
+/* Deep space rather than the shared near-black, so the loading screen does not
+   flash a lighter grey at the hand-off into the scene. The loading screen is
+   the only one of the two that should be OPAQUE: there is nothing behind it
+   yet. */
+#loading-screen {
     background: radial-gradient(ellipse at 50% 78%, #0d1524 0%, #04060d 55%, #000005 100%);
+}
+
+/* THE WELCOME OVERLAY IS A SCRIM, NOT A WALL.
+   It used to share the opaque gradient above, which hid the opening frame
+   completely: the first thing a visitor saw was the dedication on black, and
+   the composition M1 spent a whole gate solving (Earth's limb across the lower
+   third, Mars near the nose, the Moon off to one side) was not visible until
+   they had already decided to click. The scene is the invitation, so it has to
+   be part of the invitation.
+
+   THE ALPHA IS A CONTRAST BUDGET, not a taste call. The brightest thing this
+   scene can put behind the copy is a sunlit cloud top on the Earth map (about
+   #d8dde6, the same worst case the M8 contrast pass measured against). The
+   tightest element over it is the dedication in --ui-subtitle (#f2c496), which
+   clamps down to 16px on a narrow phone and so needs the 4.5:1 normal-text
+   threshold rather than the 3:1 large-text one. Composited over that cloud:
+
+     alpha   subtitle   hint rows (--text-dim)
+     0.85     9.0:1        9.6:1     (the shared default, barely reveals)
+     0.72     6.3:1        6.8:1     <- here
+     0.65     4.9:1        5.3:1     (last value that still clears 4.5)
+     0.60     4.2:1        4.5:1     (fails)
+
+   0.72 keeps better than 6:1 on every piece of copy while passing through more
+   than a quarter of the frame, which is roughly double what the shared value
+   showed. The floor is 0.65 and a screenshot pass may want to walk toward it,
+   but going under that trades the dedication's legibility for scenery.
+
+   The hint pills are opaque --ui-accent on --ui-on-accent, so they carry their
+   own contrast and are not part of this budget. */
+#blocker {
+    background: rgba(4, 6, 13, 0.72);
 }
 
 /* ============================================================
@@ -509,6 +541,47 @@ body:not(.is-touch-device) .throttle-readout {
     background: transparent;
     border-color: rgba(255, 255, 255, 0.48);
     transform: scale(0.72);
+}
+
+/* ---- Hull, which is only on screen while it is damaged --------------------
+   SEGMENTS, NOT DOTS. This row sits directly under the lives row and counts a
+   different thing (the four points ONE ship absorbs fire with, refilled at
+   every respawn, against three ships in reserve). Two rows of identical dots
+   would read as one row of seven, so the shapes have to differ before the
+   labels do: a bar reads as integrity, a dot reads as a count of things.
+
+   It is warm where lives are cool, which is the theme's own accent for damage
+   and matches the edge wash a hit already paints. THE HUE IS THE THIRD SIGNAL,
+   not the first: a spent segment empties and shortens, exactly like a spent
+   life pip, so nothing here is carried by colour. */
+.hull-pips {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.hull-pip {
+    width: 14px;
+    height: 6px;
+    border: 1px solid #ff9f7a;
+    border-radius: 2px;
+    background: #ff9f7a;
+}
+
+/* Hollow AND shorter, the same two-signal treatment the life pips get, and for
+   the same reason: a hollow alone is a hue change on a bad screen at arm's
+   length. 0.52 rather than the life pip's 0.48 because a 1px outline has less
+   of itself to be seen with than a 2px one, which puts it at 3.5:1 against the
+   panel, clear of the 3:1 WCAG 1.4.11 asks of a non-text mark. */
+.hull-pip.spent {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.52);
+    transform: scaleX(0.72);
+}
+
+/* Absent, not merely faded. The row carries no information at full hull, and a
+   dimmed-out row would still be one more thing to look past on a phone. */
+.hull-row.hidden {
+    display: none;
 }
 
 /* The clock is deliberately the quietest thing on the screen, so it is the one

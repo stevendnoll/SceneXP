@@ -56,7 +56,7 @@ class FakeElement {
 const HUD_IDS = [
     'structures-count', 'ships-count', 'elapsed-time', 'alert-banner',
     'hostile-pips', 'nav-markers', 'chevron-alert', 'chevron-hostile',
-    'objective-status', 'lives-pips'
+    'objective-status', 'lives-pips', 'hull-pips', 'hull-row'
 ];
 
 let nodes;
@@ -333,19 +333,113 @@ describe('lives', () => {
         expect(pips).toHaveLength(CONFIG.player.lives);
     });
 
-    test('the hull count is spoken too, and reads correctly at one', () => {
+    test('the life count is spoken too, and reads correctly at one', () => {
         hud.initHud(CONFIG);
         hud.updateHud(view({ lives: 2 }));
-        expect(nodes.get('objective-status').textContent).toMatch(/2 hulls left\.$/);
+        expect(nodes.get('objective-status').textContent).toMatch(/2 lives left\.$/);
         hud.updateHud(view({ lives: 1 }));
-        expect(nodes.get('objective-status').textContent).toMatch(/1 hull left\.$/);
+        expect(nodes.get('objective-status').textContent).toMatch(/1 life left\.$/);
+    });
+
+    test('the spoken word is "lives", never "hull"', () => {
+        // These pips are ships in reserve (config.player.lives). "hull" is the
+        // four-point buffer ONE ship absorbs fire with (config.player.hullPoints)
+        // and has no readout of its own, so a live region that called the pips
+        // hulls was naming the wrong quantity. Asserted rather than merely
+        // renamed, because it is the kind of word that drifts back.
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ lives: 2 }));
+        expect(nodes.get('objective-status').textContent).not.toMatch(/hull/i);
     });
 
     test('a game with no lives simply has no pips and says nothing about them', () => {
         hud.initHud({ ...CONFIG, player: { lives: 0 } });
         expect(hud.__test__.getLivesPips()).toHaveLength(0);
         hud.updateHud(view());
-        expect(nodes.get('objective-status').textContent).not.toMatch(/hull/);
+        expect(nodes.get('objective-status').textContent).not.toMatch(/life|lives/);
+    });
+});
+
+describe('hull, which is only on screen while it is damaged', () => {
+    // THE GAP THIS CLOSES. The four-point buffer one ship absorbs fire with had
+    // no readout at all: the screen-edge wash fires at one fixed intensity
+    // whatever is left, so being one hit from losing the ship looked exactly
+    // like being three, for everyone. The lives pips could not carry it either,
+    // because they count a different thing.
+
+    test('there is one segment per hull point, and the count comes from config', () => {
+        hud.initHud(CONFIG);
+        expect(hud.__test__.getHullPips()).toHaveLength(CONFIG.player.hullPoints);
+    });
+
+    test('a full hull shows no row at all', () => {
+        // It would sit there full for almost the whole run, and this HUD is
+        // already dense on a phone in portrait.
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ hull: CONFIG.player.hullPoints }));
+        expect(nodes.get('hull-row').hidden).toBe(true);
+    });
+
+    test('the row appears the moment a shot lands, and shows what is left', () => {
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ hull: CONFIG.player.hullPoints }));
+        hud.updateHud(view({ hull: 3 }));
+
+        expect(nodes.get('hull-row').hidden).toBe(false);
+        const pips = hud.__test__.getHullPips();
+        expect(pips[0].classList.contains('spent')).toBe(false);
+        expect(pips[1].classList.contains('spent')).toBe(false);
+        expect(pips[2].classList.contains('spent')).toBe(false);
+        expect(pips[3].classList.contains('spent')).toBe(true);
+        // Every segment is still there, so how much a full hull was stays
+        // countable. Same rule as the lives pips.
+        expect(pips).toHaveLength(CONFIG.player.hullPoints);
+    });
+
+    test('a refilled hull takes the row away again', () => {
+        // This is what a respawn does, and it means nothing has to remember to
+        // hide the row: restoring the buffer is the same act as clearing it.
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ hull: 1 }));
+        expect(nodes.get('hull-row').hidden).toBe(false);
+
+        hud.updateHud(view({ hull: CONFIG.player.hullPoints }));
+        expect(nodes.get('hull-row').hidden).toBe(true);
+        expect(hud.__test__.getHullPips().every(p => !p.classList.contains('spent'))).toBe(true);
+    });
+
+    test('a hull of zero hides the row rather than showing an empty one', () => {
+        // Zero is the frame the ship is lost on. The news is "Ship lost", and a
+        // row of four empty segments under it would only compete with that.
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ hull: 2 }));
+        hud.updateHud(view({ hull: 0 }));
+        expect(nodes.get('hull-row').hidden).toBe(true);
+    });
+
+    test('an unchanged hull is not written to the DOM again', () => {
+        // Sixty frames a second, and the row is untouched on almost all of them.
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ hull: 2 }));
+        const before = hud.__test__.getHullPips()[3].classList.contains('spent');
+        hud.updateHud(view({ hull: 2 }));
+        expect(hud.__test__.shown.hull).toBe(2);
+        expect(hud.__test__.getHullPips()[3].classList.contains('spent')).toBe(before);
+    });
+
+    test('a restart does not begin with the previous run\'s damage on screen', () => {
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ hull: 1 }));
+        expect(nodes.get('hull-row').hidden).toBe(false);
+
+        hud.disposeHud();
+        expect(nodes.get('hull-row').hidden).toBe(true);
+        expect(hud.__test__.getHullPips()).toHaveLength(0);
+
+        // And the rebuilt row is the right length rather than twice it, which
+        // is what pushing onto an uncleared array would have given.
+        hud.initHud(CONFIG);
+        expect(hud.__test__.getHullPips()).toHaveLength(CONFIG.player.hullPoints);
     });
 });
 

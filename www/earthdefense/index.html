@@ -66,13 +66,13 @@
     <title>Earth Defense</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
-    <link rel="preload" href="css/experience.min.css?v=1" as="style">
+    <link rel="preload" href="css/experience.min.css?v=2" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
-    <link rel="stylesheet" href="css/experience.min.css?v=1">
+    <link rel="stylesheet" href="css/experience.min.css?v=2">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -165,10 +165,38 @@
             </div>
             <!-- Lives. Pips rather than a number, and they EMPTY rather than
                  disappearing, so how many you started with stays readable.
-                 Built by hud.js from config.player.lives. -->
+                 Built by hud.js from config.player.lives.
+
+                 THE LABEL SAYS "lives", NOT "hull". These pips count ships in
+                 reserve (config.player.lives, three of them). The word "hull"
+                 belongs to config.player.hullPoints, the four-point buffer that
+                 one ship absorbs enemy fire with, and which has its own row
+                 below. Calling both of them "hull" meant a visitor watched a
+                 pip empty and had no way to know whether they had just lost a
+                 quarter of something or a third of it. "lives" is also the
+                 plainest available word, and it is the vocabulary of the
+                 generation this experience is dedicated to. -->
             <div class="objective-row lives-row">
-                <span class="objective-label">hull</span>
+                <span class="objective-label">lives</span>
                 <span class="lives-pips" id="lives-pips"></span>
+            </div>
+
+            <!-- Hull, and it APPEARS ONLY WHEN DAMAGED.
+                 Until now the four-point buffer had no readout at all. The
+                 screen-edge wash fires at one fixed intensity whatever is left,
+                 so nobody could tell a first hit from a last one: not a screen
+                 reader user, and not a sighted player either. Being one shot
+                 from losing the ship read exactly like being three.
+
+                 A permanent row would be full for almost the whole run and add
+                 standing clutter to a HUD the M7 gate is already worried about,
+                 so this behaves like the alert banner instead: absent until it
+                 has something to say, gone again on respawn. Segments rather
+                 than the lives row's dots, so the two are told apart by shape
+                 and never read as one six-item row. -->
+            <div class="objective-row hull-row hidden" id="hull-row">
+                <span class="objective-label">hull</span>
+                <span class="hull-pips" id="hull-pips"></span>
             </div>
         </div>
 

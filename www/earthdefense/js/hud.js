@@ -39,6 +39,7 @@ let cfg = null;
 let el = null;
 let pips = [];
 let livesPips = [];
+let hullPips = [];
 let navMarkers = [];
 
 // What is currently on screen, so nothing is written twice.
@@ -46,6 +47,7 @@ const shown = {
     structures: null,
     ships: null,
     lives: null,
+    hull: null,
     clock: null,
     alert: null
 };
@@ -146,6 +148,8 @@ export function initHud(config = EARTHDEFENSE_CONFIG) {
         clock: document.getElementById('elapsed-time'),
         alert: document.getElementById('alert-banner'),
         lives: document.getElementById('lives-pips'),
+        hull: document.getElementById('hull-pips'),
+        hullRow: document.getElementById('hull-row'),
         pipLayer: document.getElementById('hostile-pips'),
         navLayer: document.getElementById('nav-markers'),
         alertChevron: document.getElementById('chevron-alert'),
@@ -155,6 +159,7 @@ export function initHud(config = EARTHDEFENSE_CONFIG) {
 
     buildPips(config.fleet ? config.fleet.total : 0);
     buildLives(config.player ? config.player.lives : 0);
+    buildHull(config.player ? config.player.hullPoints : 0);
     buildNavMarkers((config.hud && config.hud.navPoints) || []);
     return el;
 }
@@ -170,6 +175,20 @@ function buildLives(total) {
         pip.className = 'life-pip';
         el.lives.appendChild(pip);
         livesPips.push(pip);
+    }
+}
+
+/** The hull buffer ONE ship carries, as segments. Built once and then only
+ *  shown or hidden, because the row spends most of a run at full and a row that
+ *  is rebuilt is a row that flickers. */
+function buildHull(total) {
+    if (!el.hull) return;
+    el.hull.textContent = '';
+    for (let i = 0; i < total; i++) {
+        const pip = document.createElement('span');
+        pip.className = 'hull-pip';
+        el.hull.appendChild(pip);
+        hullPips.push(pip);
     }
 }
 
@@ -225,6 +244,7 @@ export function updateHud(view) {
     setText(el.structures, view.structuresRemaining, 'structures');
     setText(el.ships, view.shipsRemaining, 'ships');
     updateLives(view.lives);
+    updateHull(view.hull);
 
     // Compare the SECOND, not the string it would make. Formatting first and
     // comparing after built and threw away a clock string on 59 frames out of
@@ -258,6 +278,24 @@ function updateLives(remaining) {
     for (let i = 0; i < livesPips.length; i++) {
         livesPips[i].classList.toggle('spent', i >= remaining);
     }
+}
+
+/** Hull, which is on screen ONLY while it is damaged.
+ *
+ *  A full hull says nothing a visitor needs, and this HUD already asks a lot of
+ *  a phone in portrait, so the row leaves rather than sitting there full. It
+ *  comes straight back on the frame a shot lands, and a respawn refills the
+ *  buffer, which takes it away again without anything having to remember to. */
+function updateHull(remaining) {
+    if (remaining === undefined || remaining === null || remaining === shown.hull) return;
+    shown.hull = remaining;
+    for (let i = 0; i < hullPips.length; i++) {
+        hullPips[i].classList.toggle('spent', i >= remaining);
+    }
+    // A hull of zero is the frame the ship is lost on. Hide it then too: the
+    // news is "Ship lost", and an empty row under it would only compete.
+    const damaged = remaining > 0 && remaining < hullPips.length;
+    if (el.hullRow) el.hullRow.classList.toggle('hidden', !damaged);
 }
 
 function updateAlert(view) {
@@ -308,8 +346,11 @@ function speak(view) {
     const parts = [];
     if (view.event) parts.push(view.event);
     parts.push(`${view.structuresRemaining} installations standing, ${view.shipsRemaining} raiders left.`);
+    // "lives", matching the pip label. `view.lives` is ships in reserve, not
+    // the four-point hull buffer a single ship carries. See the note beside the
+    // lives row in index.html for why the two had to stop sharing a word.
     if (view.lives !== undefined && view.lives !== null) {
-        parts.push(`${view.lives} ${view.lives === 1 ? 'hull' : 'hulls'} left.`);
+        parts.push(`${view.lives} ${view.lives === 1 ? 'life' : 'lives'} left.`);
     }
     if (alertLabel) parts.push(`${alertLabel} is under attack.`);
     el.status.textContent = parts.join(' ');
@@ -470,16 +511,22 @@ export function disposeHud() {
         if (el.pipLayer) el.pipLayer.textContent = '';
         if (el.navLayer) el.navLayer.textContent = '';
         if (el.lives) el.lives.textContent = '';
+        if (el.hull) el.hull.textContent = '';
+        // Back to absent, or a restart would begin with the previous run's
+        // damage row still on screen until the first shot landed.
+        if (el.hullRow) el.hullRow.classList.add('hidden');
     }
     cfg = null;
     el = null;
     pips = [];
     livesPips = [];
+    hullPips = [];
     navMarkers = [];
     scratchVec = null;
     shown.structures = null;
     shown.ships = null;
     shown.lives = null;
+    shown.hull = null;
     shown.clock = null;
     shown.alert = null;
     spoken.event = undefined;
@@ -493,6 +540,7 @@ export const __test__ = {
     edge,
     getPips: () => pips,
     getLivesPips: () => livesPips,
+    getHullPips: () => hullPips,
     getNavMarkers: () => navMarkers,
     getElements: () => el,
     shown,

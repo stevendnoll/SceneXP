@@ -461,6 +461,78 @@ describe('the world builds and ticks', () => {
         expect(world.__test__.textureFor({ texture: 'assets/only.png' })).toBe('assets/only.png');
     });
 
+    /** THE NIGHT SIDE (M1 gate: "dark, not black").
+     *
+     *  Screenshot round 3 caught Earth at 26,000 km and the Moon at 6,136 km as
+     *  black discs with a lit rim. Ambient alone can only lift them to a flat
+     *  grey, so the unlit hemisphere is carried by an emissive tinted with the
+     *  body's OWN colour map, which keeps its geography.
+     *
+     *  These assert the CONTRACT rather than the shade. Whether 0x5c74a0 is the
+     *  right blue is a screenshot question and always will be, but "the map is
+     *  reused as the emissive map" and "Mars is left alone" are properties that
+     *  can silently break, and the failure mode is a planet that looks slightly
+     *  wrong to someone who was not looking for it. */
+    function fakeMaterial(overrides = {}) {
+        let hex = 0x000000;
+        return {
+            map: { id: 'colour-map' },
+            emissive: { setHex(v) { hex = v; }, getHex: () => hex },
+            emissiveMap: null,
+            needsUpdate: false,
+            ...overrides
+        };
+    }
+
+    test('a night glow tints the emissive and reuses the body\'s own colour map', async () => {
+        const world = await loadWorldWith(() => ({ toDataURL: () => 'data:image/webp;base64,AA' }));
+        const material = fakeMaterial();
+
+        expect(world.__test__.applyNightGlow(material, 0x5c74a0)).toBe(true);
+        expect(material.emissive.getHex()).toBe(0x5c74a0);
+        // The SAME map object, not a second texture: this is what makes the
+        // dark side show continents instead of a wash, and it costs no download.
+        expect(material.emissiveMap).toBe(material.map);
+        expect(material.needsUpdate).toBe(true);
+    });
+
+    test('a body with no glow, or no map to tint, is left exactly as it was', async () => {
+        const world = await loadWorldWith(() => ({ toDataURL: () => 'data:image/webp;base64,AA' }));
+
+        // Mars says 0 out loud rather than omitting the key. Both must no-op.
+        for (const none of [0, undefined, null]) {
+            const material = fakeMaterial();
+            expect(world.__test__.applyNightGlow(material, none)).toBe(false);
+            expect(material.emissiveMap).toBeNull();
+            expect(material.needsUpdate).toBe(false);
+        }
+
+        // An untextured body would get an evenly lit sphere, which is the flat
+        // smudge the whole approach exists to avoid. Better left dark.
+        const mapless = fakeMaterial({ map: null });
+        expect(world.__test__.applyNightGlow(mapless, 0x5c74a0)).toBe(false);
+        expect(mapless.needsUpdate).toBe(false);
+
+        // And a missing material must not throw the world build.
+        expect(world.__test__.applyNightGlow(null, 0x5c74a0)).toBe(false);
+        expect(world.__test__.applyNightGlow(undefined, 0x5c74a0)).toBe(false);
+    });
+
+    test('the two bodies the visitor gets close to have a night side, and Mars does not', () => {
+        // Earth and the Moon are both approached: Earth fills the opening frame
+        // and the Moon is a sixteen second trip with three installations on it.
+        // Mars is only ever a 1.9 degree disc, so a glow there would just make
+        // the whole thing read as faintly self-lit.
+        expect(bodyById('earth').nightGlow).toBeTruthy();
+        expect(bodyById('moon').nightGlow).toBeTruthy();
+        expect(bodyById('mars').nightGlow).toBeFalsy();
+
+        // The Moon's is dimmer than Earth's. Its map is a darker body to begin
+        // with, so the same value would read brighter against it.
+        const luma = (hex) => ((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255);
+        expect(luma(bodyById('moon').nightGlow)).toBeLessThan(luma(bodyById('earth').nightGlow));
+    });
+
     /** Build the installations on the SOURCE module rather than through
      *  world.js, which resolves to the built copy. Same module graph, but this
      *  is the instance whose state the assertions can reach (and the one the

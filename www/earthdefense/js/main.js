@@ -136,7 +136,7 @@ const _player = { position: { x: 0, y: 0, z: 0 }, forward: { x: 0, y: 0, z: -1 }
 const _candidates = [];
 const _hudView = {
     camera: null, elapsed: 0, structuresRemaining: 0, shipsRemaining: 0,
-    ships: null, bodies: null, alert: null, event: null, lives: 0,
+    ships: null, bodies: null, alert: null, event: null, lives: 0, hull: 0,
     playerPosition: null
 };
 // One record per navigable body, rewritten in place. bodies-1.0.0 also offers
@@ -559,7 +559,14 @@ function onDamageResolved(result) {
  *  A single hit never costs a life: PRD 6.4 says SUSTAINED fire, and the fleet
  *  is already limited to about one incoming shot every 1.4 seconds across all
  *  twelve raiders, so four hull points is several seconds of sitting still in
- *  the middle of a group. */
+ *  the middle of a group.
+ *
+ *  THE ANNOUNCEMENT CARRIES THE COUNT. It used to be a bare "Taking fire.",
+ *  which said that a shot had landed and nothing about how much trouble the
+ *  visitor was in. Neither did the pixels: the edge wash fires at one fixed
+ *  intensity whatever is left, so one hit from losing the ship looked and
+ *  sounded exactly like three. The severity now reaches everyone the same way,
+ *  as the hull row in the panel and as this line. */
 function notePlayerHit(amount) {
     if (_invulnerable > 0 || _respawnTimer > 0 || !isPlaying()) return;
 
@@ -573,7 +580,7 @@ function notePlayerHit(amount) {
         killPlayer('fire');
         return;
     }
-    announce('Taking fire.');
+    announce(`Taking fire. Hull at ${_hullPoints} of ${EARTHDEFENSE_CONFIG.player.hullPoints}.`);
 }
 
 /** Losing the ship. Costs a life, not the run, unless it was the last one.
@@ -592,9 +599,12 @@ function killPlayer(cause) {
     document.body.classList.add('hull-hit');
     track('player-lost', { cause });
 
+    // "lives", matching the HUD pips. `loseLife` returns ships in reserve, which
+    // is a different quantity from the four `hullPoints` a single ship carries,
+    // and the two used to share the word "hull". See index.html's lives row.
     const left = loseLife();
     announce(left > 0
-        ? `Ship lost. ${left} ${left === 1 ? 'hull' : 'hulls'} left.`
+        ? `Ship lost. ${left} ${left === 1 ? 'life' : 'lives'} left.`
         : 'Ship lost.', 5);
 }
 
@@ -1128,6 +1138,7 @@ function updateObjectiveHud(flight = getFlightState()) {
     _hudView.structuresRemaining = counters.friendlyStructures;
     _hudView.shipsRemaining = counters.hostileShips;
     _hudView.lives = livesRemaining();
+    _hudView.hull = _hullPoints;
     _hudView.ships = getShips();
     _hudView.bodies = liveBodyPositions();
     _hudView.alert = getAlert();

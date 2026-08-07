@@ -50,7 +50,22 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // the spawn point, which lights the face of Earth the visitor can see
         // and leaves the Moon in a gibbous phase (prettier than a full disc).
         keyLight: { direction: [0.4, 0.7, 1.0], intensity: 1.35, color: 0xfff4e8 },
-        ambient: { intensity: 0.16, color: 0x4a5a7a },
+
+        // DARK, NOT BLACK (M1 gate). 0.16 was calibrated as "vacuum has no
+        // fill", which is true of vacuum and wrong for this scene: it put the
+        // unlit hemisphere at roughly 3 to 6 values out of 255, so Earth's
+        // night side and the whole Moon at close range read as holes cut in the
+        // starfield rather than as places. The Moon is the worse of the two,
+        // because a visitor flies TO it and arrives at a black disc.
+        //
+        // This lifts everything unlit off the floor, and it is what the
+        // installations on the Moon's night side are lit by. The planets get
+        // most of their rescue from `nightGlow` on the body specs below, which
+        // shows their own geography rather than a flat wash. Deliberately still
+        // low: the terminator is the best line in the scene and fill is what
+        // flattens it. The day side barely moves, since 0.28 of ambient against
+        // 1.35 of key light is under a fifth of the lit value.
+        ambient: { intensity: 0.28, color: 0x4a5a7a },
 
         starCount: 6000,
         starRadius: 450000,
@@ -112,7 +127,28 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
             // twelve-minute run moves a structure about 72 degrees, which keeps
             // every one of them reachable. Verified at M3.
             rotationPeriod: 3600,
-            atmosphere: { scale: 1.025, color: 0x6aa9ff, intensity: 1.15, power: 2.6 }
+            atmosphere: { scale: 1.025, color: 0x6aa9ff, intensity: 1.15, power: 2.6 },
+
+            // THE NIGHT SIDE, read as geography rather than as a wash.
+            //
+            // Ambient alone can only raise the unlit hemisphere to a flat grey,
+            // which trades one wrong reading (a hole) for another (a smudge).
+            // This is applied in world.js as an EMISSIVE TINTED BY THE BODY'S
+            // OWN COLOUR MAP, so the dark side shows continents and ocean at a
+            // few percent, the way a night side actually reads.
+            //
+            // WHY THE COLOUR IS SO BRIGHT FOR SO DARK A RESULT: an emissive map
+            // MULTIPLIES, and the daymap's own albedo is only about 3 to 15
+            // percent in linear terms, so this value is most of two stops above
+            // what lands on screen. #5c74a0 against a mid-albedo pixel comes out
+            // near rgb(26, 33, 45): unmistakably dark, clearly not black, and
+            // cool enough to read as reflected light rather than as a lit
+            // planet. Raise it and Earth starts to look self-illuminated.
+            //
+            // It adds to the LIT side too, since emissive ignores lighting, but
+            // at under five percent of the day side's value that is beneath
+            // notice. Set to 0 or delete the key to switch it off.
+            nightGlow: 0x5c74a0
         },
         {
             id: 'moon',
@@ -120,6 +156,17 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
             segments: 64,
             texture: 'assets/moon_1k.webp',
             textureFallback: 'assets/moon_1k.jpg',
+
+            // Dimmer and warmer than Earth's, for two reasons. The Moon is a
+            // darker body to begin with (its map averages far less albedo than
+            // the daymap, so the same value would read brighter against it than
+            // the arithmetic suggests), and its night side is lit by EARTHSHINE
+            // in the fiction, which is the blue-white of a planet rather than
+            // the neutral of a sky. The visitor arrives here, so this is the
+            // one that has to be right: before this, a screenshot pass caught
+            // the Moon at 6,136 km as a near-total black circle with one lit
+            // edge, at the end of a sixteen second flight made to reach it.
+            nightGlow: 0x44536e,
             orbit: {
                 parent: 'earth',
                 // Ten Earth radii, not the true sixty. Close enough to read as
@@ -166,7 +213,14 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
             // the real Moon in our sky. A clear disc with visible colour, still
             // unmistakably far away.
             position: [0, 0, -MARS_DISTANCE],
-            rotationPeriod: 900
+            rotationPeriod: 900,
+            // NO `nightGlow` HERE, deliberately. Mars is never approached, so
+            // it is only ever a 1.9 degree disc that the key light already
+            // catches almost square on. There is no night side to rescue, and a
+            // glow at that size would only make the whole disc read as slightly
+            // self-lit, which would cost it the one thing it has to do: sit
+            // there looking far away.
+            nightGlow: 0
         }
     ],
 

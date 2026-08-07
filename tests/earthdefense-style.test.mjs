@@ -328,3 +328,46 @@ describe('the responsive pass covers the shapes the shared stylesheet does', () 
         expect(breakpoints.some(b => b.includes(needle))).toBe(true);
     });
 });
+
+describe('the welcome overlay lets the opening frame through', () => {
+    // THE BUG THIS EXISTS FOR. `#blocker` used to share the loading screen's
+    // OPAQUE deep-space gradient, so the first thing a visitor saw was the
+    // dedication on flat black. The opening composition that M1 spent an entire
+    // gate solving (Earth's limb across the lower third, Mars near the nose, the
+    // Moon off to one side) was not visible until after they had clicked, which
+    // is exactly backwards: the scene is the invitation.
+    //
+    // Nothing threw, every test passed, and the only way to catch it was to look
+    // at screenshot 1 and notice the sky was missing.
+
+    test('the loading screen stays opaque, because there is nothing behind it yet', () => {
+        const body = ruleBody('#loading-screen');
+        expect(body).not.toBeNull();
+        expect(body).toMatch(/gradient/);
+        // No alpha channel anywhere in it.
+        expect(body).not.toMatch(/rgba|hsla|transparent/);
+    });
+
+    test('the welcome overlay is a scrim, not a wall', () => {
+        const body = ruleBody('#blocker');
+        expect(body).not.toBeNull();
+        const [, alpha] = body.match(/background\s*:\s*rgba\([^)]*,\s*([\d.]+)\s*\)/) || [];
+        expect(alpha).toBeDefined();
+
+        // THE ALPHA IS A CONTRAST BUDGET. Above 0.80 the scene stops reading at
+        // all, which is the bug coming back by degrees. Below 0.65 the
+        // dedication in --ui-subtitle drops under 4.5:1 against a sunlit cloud
+        // top, which is the brightest backdrop this scene can put behind it and
+        // the same worst case the M8 contrast pass measured. Both ends matter,
+        // so both ends are held.
+        expect(parseFloat(alpha)).toBeGreaterThanOrEqual(0.65);
+        expect(parseFloat(alpha)).toBeLessThanOrEqual(0.80);
+    });
+
+    test('the two no longer share a rule, which is how they came to share an alpha', () => {
+        // A grouped selector is what made an opaque loading screen silently
+        // decide what the welcome overlay looked like.
+        expect(DECLARATIONS).not.toMatch(/#loading-screen\s*,\s*\n?\s*#blocker\s*\{/);
+        expect(DECLARATIONS).not.toMatch(/#blocker\s*,\s*\n?\s*#loading-screen\s*\{/);
+    });
+});
