@@ -923,26 +923,39 @@ describe('holding station beside a MOVING installation', () => {
         return ship;
     }
 
-    // THE BUG. `attackSpeedFactor` was read as an absolute loiter speed, which
+    // THE BUG, IN TWO ROUNDS, because the first fix for it was only half right.
+    //
+    // Round one: `attackSpeedFactor` was read as an absolute loiter speed, which
     // at 0.35 of 1,200 is 420 against a Moon doing 838, so an attacker fell off
     // its station the instant it arrived, its fire clock reset every frame, and
     // a fifteen minute run landed exactly zero shots on the Moon.
     //
-    // The cadence is deliberately NOT asserted at the twelve second interval. A
-    // ship whose speed is a single number along its nose cannot hold a tight
-    // circle around something moving twice as fast as its own loiter speed, so a
-    // lunar attacker drifts in and out and lands one about every twenty seconds.
-    // That is the Moon being genuinely harder to attack than Earth, which is the
-    // triage in PRD 4.4 finally costing something.
+    // Round two: the answer to that was to add the target's velocity PROJECTED
+    // ONTO THE NOSE, which fixes the near half of every lap and abandons the far
+    // half, where the projection is negative and the speed floor pinned the
+    // raider at 180 against a Moon doing 838. A probe over four minutes had the
+    // gap swinging between 734 and 23,538 units, the raider inside its own
+    // firing radius 49.5% of the time, and the cadence at one shot per twenty
+    // seconds with the first landing at t=90s. That was written up here as the
+    // Moon being "genuinely harder to attack", which was a rationalisation: the
+    // same probe against a stationary Earth site held station to within 60 units
+    // and fired on the interval exactly, so the Moon was not harder, it was
+    // close to unattackable, and PRD 4.4's triage had nothing to weigh.
+    //
+    // A raider now borrows its target's velocity WHOLE and spends its engine
+    // only on the circle, so the two cases are the same manoeuvre in different
+    // frames. The cadence is therefore asserted at the interval, tightly, for
+    // Earth and the Moon alike: any drift back toward projecting the carry shows
+    // up here immediately.
     test('a raider repeatedly fires on an installation that is running away', () => {
         const world = movingWorld();
         soloOn(world);
         fly(world, 90);
-        expect(world.damage.length).toBeGreaterThanOrEqual(2);
+        expect(world.damage.length).toBeGreaterThanOrEqual(4);
         for (let i = 1; i < world.damage.length; i++) {
             const gap = world.damage[i].at - world.damage[i - 1].at;
             expect(gap).toBeGreaterThanOrEqual(CONFIG.fleet.fireInterval - 0.5);
-            expect(gap).toBeLessThan(CONFIG.fleet.fireInterval * 2.5);
+            expect(gap).toBeLessThanOrEqual(CONFIG.fleet.fireInterval + 0.5);
         }
     });
 
@@ -954,15 +967,55 @@ describe('holding station beside a MOVING installation', () => {
             world.site.position.x += world.site.velocity.x * 0.1;
             world.elapsed += 0.1;
             fleet.updateFleet(0.1, null);
+            // The opening seconds are an approach, not station keeping, so the
+            // measurement starts once the ship has had time to arrive.
+            if (t < 30) continue;
             furthest = Math.max(furthest, Math.hypot(
                 ship.position.x - world.site.position.x,
                 ship.position.y - world.site.position.y,
                 ship.position.z - world.site.position.z));
         }
-        // Loose, because the lap around a moving target is not a clean circle.
-        // The point is that the gap stays bounded: before the fix the raider
-        // simply fell behind and the distance grew without limit.
-        expect(furthest).toBeLessThan(CONFIG.fleet.standoff * 4);
+        // Inside the radius its own fire clock runs in, which is the property
+        // that actually matters: a raider outside this resets its twelve seconds
+        // and never gets a shot away. The old bound was four times standoff,
+        // which is to say more than twice the firing radius, and a raider can
+        // sit at that distance indefinitely doing nothing at all.
+        expect(furthest).toBeLessThan(CONFIG.fleet.standoff * CONFIG.fleet.holdRadius);
+    });
+
+    // THE MOON AND EARTH ARE THE SAME MANOEUVRE, which is the whole point of
+    // borrowing the velocity whole rather than projecting it. A lunar attacker
+    // holds the same circle as an Earth one; only the frame it holds it in
+    // moves. Asserted as a comparison rather than as two absolute numbers,
+    // because the number is `standoff` and this is about the two agreeing.
+    test('station keeping is the same shape whether the target moves or not', () => {
+        function settledRadius(speed) {
+            const world = movingWorld(speed);
+            const ship = soloOn(world);
+            fly(world, 60);
+            let low = Infinity, high = 0;
+            for (let t = 0; t < 30; t += 0.1) {
+                world.site.position.x += world.site.velocity.x * 0.1;
+                world.elapsed += 0.1;
+                fleet.updateFleet(0.1, null);
+                const d = Math.hypot(
+                    ship.position.x - world.site.position.x,
+                    ship.position.y - world.site.position.y,
+                    ship.position.z - world.site.position.z);
+                low = Math.min(low, d);
+                high = Math.max(high, d);
+            }
+            fleet.disposeFleet();
+            return { low, high };
+        }
+        const still = settledRadius(0);
+        const moving = settledRadius(838);
+        // Both hold a tight circle rather than a wandering one.
+        expect(still.high - still.low).toBeLessThan(CONFIG.fleet.standoff * 0.25);
+        expect(moving.high - moving.low).toBeLessThan(CONFIG.fleet.standoff * 0.25);
+        // And it is the same circle: the Moon costs an attacker nothing it did
+        // not already cost it around Earth.
+        expect(moving.high).toBeLessThan(still.high + CONFIG.fleet.standoff * 0.25);
     });
 
     // A target nothing could keep up with is left behind honestly, rather than

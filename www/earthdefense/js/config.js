@@ -497,31 +497,31 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         turnRate: 0.55,        // radians/second: about a 2,200 unit turn radius
         standoff: 1200,        // how far off a structure an attacker holds
 
-        // LOITERING IS RELATIVE TO THE TARGET, NOT TO SPACE. This fraction of
-        // cruise is what an attacker adds ON TOP of whatever its installation is
-        // already doing, which for Earth's four is about 6 units a second and
-        // for the Moon's three is about 838.
+        // LOITERING IS RELATIVE TO THE TARGET, NOT TO SPACE. An attacker flies
+        // formation with its installation, so it borrows that installation's
+        // whole velocity and this fraction of cruise is what it spends on the
+        // circle itself. 0.35 of 1,200 is 420 units a second around a 1,200 unit
+        // circle, which is 0.35 radians a second and comfortably inside the 0.55
+        // turn rate, so the lap is one the ship can actually fly.
         //
-        // Read as an absolute speed, as it was until this was found, 0.35 of
-        // 1,200 is 420 units a second against a Moon travelling at 838, so a
-        // raider that reached its station immediately fell off it, bounced back
-        // out to TRANSIT, caught up, and bounced again. It alternated every
-        // single frame, the twelve second fire clock never once ran down, and
-        // the three lunar installations went un-fired-on for an entire fifteen
-        // minute run. The Earth-or-Moon triage in PRD 4.4 was not a hard choice,
-        // it was not a choice at all.
+        // AN EARLIER VERSION PROJECTED THE BORROWED VELOCITY ONTO THE NOSE and
+        // added only that, on the reasoning that a ship has one speed and it
+        // points forward. True of the engine, false of the manoeuvre. On half of
+        // every lunar lap the projection is negative, the raider was floored at
+        // a fraction of cruise, and it shed hundreds of units a second until it
+        // was adrift: measured at a gap swinging between 734 and 23,538 units,
+        // inside its own firing radius under half the time, landing one shot per
+        // twenty seconds instead of one per twelve and its first at t=90s. The
+        // Earth-or-Moon triage in PRD 4.4 was not a hard choice, it was not a
+        // choice at all, because the Moon was very nearly unattackable.
         attackSpeedFactor: 0.35,
-        // The ceiling on that sum, as a multiple of cruise. 838 + 420 is 1,258,
-        // so the half of a lap spent chasing the Moon costs an attacker most of
-        // its engine, which is the right feeling and still a third of the
-        // visitor's 4,000. Anything that would have to fly faster than this to
-        // hold station gets left behind on purpose.
+        // THE CEILING ON A RAIDER'S TOTAL SPEED THROUGH SPACE, as a multiple of
+        // cruise, borrowed velocity included. Nothing in the game reaches it:
+        // the Moon's 838 plus the 420 unit circle is 1,258, cruise is 1,200, and
+        // the evade sprint is 1,620. It exists so that a body given a speed no
+        // raider should be able to match leaves its attackers behind honestly,
+        // rather than quietly making them faster than the visitor's own 4,000.
         attackSpeedCap: 1.5,
-        // And the floor, for the other half of the lap. Coming back across the
-        // circle a raider is flying INTO its target's motion and needs almost
-        // nothing of its own, but a ship that stops dead in space reads as a
-        // freeze rather than as a manoeuvre.
-        attackSpeedFloor: 0.15,
 
         // TWO RADII, AND THEY ARE A HYSTERESIS BAND. Both are multiples of
         // standoff. Inside `attackRadius` a raider stops flying at its
