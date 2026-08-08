@@ -305,7 +305,10 @@ describe('the HUD readouts carry their own contrast', () => {
         ['the objective panel', '.objective-panel'],
         ['the nav marker labels', '.nav-label'],
         ['the elapsed clock', '.elapsed-time'],
-        ['the speed readout', '.throttle-readout']
+        // The plate moved up to the wrapper when the bar arrived, because the
+        // bar needs it too: a coloured meter over a sunlit cloud top is exactly
+        // as unreadable as a number over one. Asserting the wrapper covers both.
+        ['the speedometer', '.speedometer']
     ];
 
     test.each(PLATED)('%s sits on an opaque enough plate', (_label, selector) => {
@@ -369,5 +372,79 @@ describe('the welcome overlay lets the opening frame through', () => {
         // decide what the welcome overlay looked like.
         expect(DECLARATIONS).not.toMatch(/#loading-screen\s*,\s*\n?\s*#blocker\s*\{/);
         expect(DECLARATIONS).not.toMatch(/#blocker\s*,\s*\n?\s*#loading-screen\s*\{/);
+    });
+});
+
+/* The speedometer, as a set of rules rather than as a picture.
+ *
+ * A stylesheet test cannot tell you a gradient looks good. What it CAN hold are
+ * the two decisions inside this widget that are invisible once it renders and
+ * expensive to rediscover: that the ramp stops short of red, and that both arms
+ * are drawn from ONE ramp so they cannot drift into disagreeing about what a
+ * given speed looks like. Both are the kind of thing a later tidy-up undoes
+ * without anything appearing to break. */
+describe('the speedometer means what it draws', () => {
+    const HTML = readFileSync(new URL('../www/earthdefense/index.html', import.meta.url), 'utf8');
+
+    test('every piece the script drives is actually in the page', () => {
+        // main.js reaches for each of these by id. A rename on either side is
+        // silent: the meter simply stops moving, and no other test would care.
+        ['speedometer', 'speedo-fwd', 'speedo-rev', 'speedo-ghost-fwd',
+            'speedo-ghost-rev', 'speedo-demand', 'speedo-zero',
+            'throttle-readout'].forEach(id => {
+            expect(HTML).toContain(`id="${id}"`);
+        });
+    });
+
+    test('the ramp stops at amber, because red is already spoken for', () => {
+        const ramp = ruleBody('.speedometer');
+        expect(ramp).not.toBeNull();
+        // Red in this experience means hostile or damaged: the raider pips, the
+        // incoming beams, the "under attack" banner, the hull wash. Full
+        // throttle is a normal thing to be doing and must not borrow that.
+        //
+        // THE GREEN CHANNEL IS WHAT SEPARATES AMBER FROM ALARM RED, and it is a
+        // cleaner test than anything measuring how red the red is. Amber
+        // (#ff9a3c) is emphatically red-dominant and still keeps g=154; the
+        // colours this ramp must never reach lose it (#ff3b30 keeps 59,
+        // #ff5722 keeps 87). Every stop holding half its green is the whole
+        // rule, and it happens to be true of the blues and greens as well.
+        const stops = ramp.match(/#[0-9a-f]{6}/gi) || [];
+        expect(stops.length).toBeGreaterThanOrEqual(4);
+        stops.forEach((hex) => {
+            expect(parseInt(hex.slice(3, 5), 16)).toBeGreaterThanOrEqual(0x80);
+        });
+    });
+
+    test('both arms are drawn from the same ramp', () => {
+        const forward = ruleBody('.speedo-arm-fwd');
+        const reverse = ruleBody('.speedo-arm-rev');
+        // Hand-writing the reverse arm its own stops is the tempting shortcut
+        // and it is how the two directions start disagreeing about what, say,
+        // 800 km/s looks like. One variable, two directions.
+        expect(forward).toMatch(/var\(--speedo-ramp\)/);
+        expect(reverse).toMatch(/var\(--speedo-ramp\)/);
+        // The reverse arm covers its quarter of that ramp by being drawn wider
+        // than itself, not by having a shorter ramp of its own.
+        expect(reverse).toMatch(/background-size:\s*var\(--speedo-rev-scale\)/);
+    });
+
+    test('the geometry is one variable, so nothing drifts off the zero point', () => {
+        // The forward arm's start, the reverse arm's width, the detent and the
+        // demand marker all have to sit on the same zero. Four hardcoded 20%s
+        // would render identically today and come apart the moment the ship's
+        // speed limits change.
+        ['.speedo-arm-fwd', '.speedo-arm-rev', '.speedo-zero', '.speedo-demand']
+            .forEach(selector => {
+                expect(ruleBody(selector)).toMatch(/var\(--speedo-zero\)/);
+            });
+    });
+
+    test('the meter is hidden from a screen reader, which gets the sentence instead', () => {
+        // A clipped gradient is not readable as a value. The live region in
+        // #flight-status already says the speed in words, so exposing this too
+        // would be noise rather than access.
+        expect(HTML).toMatch(/id="speedometer"[^>]*aria-hidden="true"/);
+        expect(HTML).toContain('id="flight-status"');
     });
 });

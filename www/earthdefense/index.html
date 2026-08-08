@@ -252,7 +252,40 @@
             </svg>
         </div>
 
-        <div id="throttle-readout" class="throttle-readout" aria-hidden="true">0%</div>
+        <!-- The speedometer. A single bar with zero at 20% rather than at the
+             middle, because reverse tops out at a quarter of forward and a
+             centred zero would draw those two as the same length. One km/s is
+             the same number of pixels whichever way the ship is going, so the
+             short reverse stub is the honest picture of a ship built to go
+             forward.
+
+             ARIA-HIDDEN, all of it. Every value here is already a sentence in
+             #flight-status below, so a screen reader gets the speed as words
+             instead of a bar it cannot read. -->
+        <div id="speedometer" class="speedometer" aria-hidden="true">
+            <div class="speedo-track">
+                <!-- Two arms, each a fixed-size element carrying the whole
+                     colour ramp as a gradient and revealed by clip-path. The
+                     gradient therefore stays anchored to the scale instead of
+                     stretching as the bar grows, which is what would happen if
+                     the width alone were animated. -->
+                <!-- The ground still to be covered, drawn FIRST so the solid
+                     bar paints over it. Same ramp at low alpha, spanning from
+                     where the ship is to where the throttle is asking, so the
+                     acceleration reads as one bar reaching forward rather than
+                     as a coloured stub trailing a white line. -->
+                <div class="speedo-arm speedo-arm-rev speedo-ghost" id="speedo-ghost-rev"></div>
+                <div class="speedo-arm speedo-arm-fwd speedo-ghost" id="speedo-ghost-fwd"></div>
+                <div class="speedo-arm speedo-arm-rev" id="speedo-rev"></div>
+                <div class="speedo-arm speedo-arm-fwd" id="speedo-fwd"></div>
+                <!-- Where the throttle is ASKING for, which is not where the
+                     ship is: six seconds of acceleration separate them. The far
+                     edge of the ghost, marked. -->
+                <div class="speedo-demand" id="speedo-demand"></div>
+                <div class="speedo-zero" id="speedo-zero"></div>
+            </div>
+            <div id="throttle-readout" class="throttle-readout">0 km/s</div>
+        </div>
         <div id="perimeter-notice" class="perimeter-notice hidden" role="status" aria-live="polite"></div>
         <!-- Everything the HUD shows visually is also announced here, so the
              flight state is available to a screen reader rather than being

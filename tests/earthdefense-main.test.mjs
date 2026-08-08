@@ -21,6 +21,7 @@
  * start" means, so it is where a leak or a stale flag will actually show up.
  */
 import { jest } from '@jest/globals';
+import { readFileSync } from 'node:fs';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 
@@ -759,5 +760,237 @@ describe('the loop stops when nobody is watching', () => {
         // Back to the helm, and the debt is forgotten rather than carried.
         main.__test__.closePause();
         expect(draw(1 / 60)).toBe(true);
+    });
+});
+
+/* ============================================================================
+ * The speedometer
+ * ==========================================================================
+ * WHY THE MATHS IS TESTED AND THE PIXELS ARE NOT. Under the stubs a colour is
+ * a string and a gradient is unrenderable, so nothing here can tell you the bar
+ * looks right. What it CAN hold is the promise the bar makes: that one km/s is
+ * the same distance along the track whichever way the ship is pointing.
+ *
+ * That promise is the entire design. The ship does 4,000 ahead and 1,000
+ * astern, and a meter with zero in the middle would draw those as the same
+ * length, which says full astern is as much of an achievement as full ahead. A
+ * single scale with zero off-centre says the true thing instead, and says it in
+ * the shape rather than in a label nobody reads. It is also exactly the kind of
+ * promise that rots quietly: someone tidies the reverse arm to a round 25% of
+ * the track, everything still renders, and the meter has started lying.
+ */
+describe('the speedometer', () => {
+    const shipped = { maxForward: 4000, maxReverse: 1000 };
+
+    test('zero sits where the two speed limits put it, not in the middle', async () => {
+        const main = await boot();
+        main.__test__.layOutSpeedometer(shipped);
+        // 1,000 astern against 5,000 of total range is a fifth along.
+        expect(main.__test__.speedoPosition(0)).toBeCloseTo(20, 6);
+        expect(dom.el('speedometer').style.getPropertyValue('--speedo-zero')).toBe('20%');
+    });
+
+    test('one km/s is the same distance whichever way the ship is going', async () => {
+        const main = await boot();
+        const { layOutSpeedometer, speedoPosition } = main.__test__;
+        layOutSpeedometer(shipped);
+
+        const ahead = speedoPosition(500) - speedoPosition(0);
+        const astern = speedoPosition(0) - speedoPosition(-500);
+        expect(ahead).toBeCloseTo(astern, 9);
+
+        // And the ends land exactly on the ends, which is what makes the track
+        // a scale rather than a decoration.
+        expect(speedoPosition(4000)).toBeCloseTo(100, 6);
+        expect(speedoPosition(-1000)).toBeCloseTo(0, 6);
+    });
+
+    test('full astern is a quarter of the track that full ahead is', async () => {
+        const main = await boot();
+        const { layOutSpeedometer, speedoPosition } = main.__test__;
+        layOutSpeedometer(shipped);
+
+        const ahead = speedoPosition(4000) - speedoPosition(0);
+        const astern = speedoPosition(0) - speedoPosition(-1000);
+        // THE HONESTY PROPERTY. Reverse is a quarter the speed, so it gets a
+        // quarter the bar. If this ever reads 1, the meter has been "tidied"
+        // into claiming the two are equal.
+        expect(astern / ahead).toBeCloseTo(0.25, 9);
+    });
+
+    test('the geometry follows the config rather than being written twice', async () => {
+        const main = await boot();
+        const { layOutSpeedometer, speedoPosition } = main.__test__;
+        // A ship that reversed as fast as it flew would want a centred zero,
+        // and should get one without anybody editing the stylesheet.
+        layOutSpeedometer({ maxForward: 2000, maxReverse: 2000 });
+        expect(speedoPosition(0)).toBeCloseTo(50, 6);
+        expect(dom.el('speedometer').style.getPropertyValue('--speedo-zero')).toBe('50%');
+        expect(dom.el('speedometer').style.getPropertyValue('--speedo-rev-scale')).toBe('100%');
+    });
+
+    test('the arms fill to their own ends and no further', async () => {
+        const main = await boot();
+        const { layOutSpeedometer, updateSpeedometer } = main.__test__;
+        layOutSpeedometer(shipped);
+
+        updateSpeedometer({ speed: 4000, targetSpeed: 4000 });
+        expect(dom.el('speedo-fwd').style.clipPath).toBe('inset(0 0% 0 0)');
+        expect(dom.el('speedo-rev').style.clipPath).toBe('inset(0 0 0 100%)');
+
+        updateSpeedometer({ speed: -1000, targetSpeed: -1000 });
+        expect(dom.el('speedo-rev').style.clipPath).toBe('inset(0 0 0 0%)');
+        expect(dom.el('speedo-fwd').style.clipPath).toBe('inset(0 100% 0 0)');
+
+        // Half ahead reveals half the forward arm, not half the track.
+        updateSpeedometer({ speed: 2000, targetSpeed: 2000 });
+        expect(dom.el('speedo-fwd').style.clipPath).toBe('inset(0 50% 0 0)');
+    });
+
+    test('the demand marker follows the throttle, not the ship', async () => {
+        const main = await boot();
+        const { layOutSpeedometer, updateSpeedometer, speedoPosition } = main.__test__;
+        layOutSpeedometer(shipped);
+
+        // Six seconds of acceleration separate these two, and drawing the gap
+        // is the entire reason the marker exists.
+        updateSpeedometer({ speed: 0, targetSpeed: 4000 });
+        expect(dom.el('speedo-demand').style.left).toBe('100%');
+        expect(dom.el('speedo-fwd').style.clipPath).toBe('inset(0 100% 0 0)');
+
+        updateSpeedometer({ speed: 4000, targetSpeed: 0 });
+        expect(dom.el('speedo-demand').style.left).toBe(`${speedoPosition(0)}%`);
+    });
+
+    test('a stopped ship lights the detent, since a bar of no length has no colour', async () => {
+        const main = await boot();
+        const { layOutSpeedometer, updateSpeedometer } = main.__test__;
+        layOutSpeedometer(shipped);
+
+        updateSpeedometer({ speed: 0, targetSpeed: 0 });
+        expect(dom.el('speedo-zero').classList.contains('at-rest')).toBe(true);
+
+        updateSpeedometer({ speed: 900, targetSpeed: 900 });
+        expect(dom.el('speedo-zero').classList.contains('at-rest')).toBe(false);
+
+        // Stopped but ASKING to move is not at rest: the ship is about to go.
+        updateSpeedometer({ speed: 0, targetSpeed: 4000 });
+        expect(dom.el('speedo-zero').classList.contains('at-rest')).toBe(false);
+    });
+
+    test('the readout answers one question now that the marker carries the other', async () => {
+        const main = await boot();
+        main.__test__.layOutSpeedometer(shipped);
+        // It used to read "1,851 → 2,088 km/s". The arrow was the only way to
+        // show a throttle the ship had not caught up with, and the bar does
+        // that better, so the number stopped doing two jobs.
+        main.__test__.updateReadouts({ speed: 1851, targetSpeed: 2088, throttle: 0.52 });
+        expect(dom.el('throttle-readout').textContent).toBe('1,851 km/s');
+        expect(dom.el('throttle-readout').textContent).not.toContain('→');
+    });
+
+    test('a steady speed stops writing to the DOM entirely', async () => {
+        const main = await boot();
+        const { layOutSpeedometer, updateSpeedometer } = main.__test__;
+        layOutSpeedometer(shipped);
+
+        updateSpeedometer({ speed: 2000, targetSpeed: 2000 });
+        const arm = dom.el('speedo-fwd');
+        arm.style.clipPath = 'TOUCHED';
+        // Same numbers, so nothing should be rewritten: this runs sixty times a
+        // second for the length of a run and holding a throttle is the norm.
+        updateSpeedometer({ speed: 2000, targetSpeed: 2000 });
+        expect(arm.style.clipPath).toBe('TOUCHED');
+    });
+});
+
+/* The ghost band, which is the gap between where the ship is and where the
+ * throttle is asking, drawn rather than left empty.
+ *
+ * THE BUG IT FIXES WAS A READING, NOT A NUMBER. Acceleration is linear at 667
+ * km/s per second and the bar was always at the right place for the speed. What
+ * it looked like, in a screenshot at six seconds with the ship at 845 of a
+ * demanded 2,420, was a coloured stub failing to keep up with a white line:
+ * the marker was drawn near-opaque and standing proud of the track, so the eye
+ * took IT for the needle and the bar for a laggy fill of it. Filling the gap
+ * makes the two one object again.
+ */
+describe('the speedometer shows the ground still to be covered', () => {
+    const shipped = { maxForward: 4000, maxReverse: 1000 };
+
+    async function meter() {
+        const main = await boot();
+        main.__test__.layOutSpeedometer(shipped);
+        return main.__test__;
+    }
+
+    test('the ghost spans from the ship to the throttle', async () => {
+        const { updateSpeedometer } = await meter();
+        // The screenshot's frame: 845 km/s with 2,420 asked for.
+        updateSpeedometer({ speed: 845, targetSpeed: 2420 });
+        // 845 of 4,000 is 21.1% of the forward arm, 2,420 is 60.5%.
+        expect(dom.el('speedo-ghost-fwd').style.clipPath).toBe('inset(0 39.5% 0 21.1%)');
+        // And the solid bar still ends exactly where the ghost begins, so the
+        // two read as one bar rather than as two.
+        expect(dom.el('speedo-fwd').style.clipPath).toBe('inset(0 78.9% 0 0)');
+    });
+
+    test('it vanishes on its own once the ship has caught up', async () => {
+        const { updateSpeedometer } = await meter();
+        updateSpeedometer({ speed: 2000, targetSpeed: 2000 });
+        // Both ends of the band at the same place is a band of no width. This
+        // is the state the meter spends most of a run in, so it has to be the
+        // quiet one rather than a special case.
+        expect(dom.el('speedo-ghost-fwd').style.clipPath).toBe('inset(0 50% 0 50%)');
+    });
+
+    test('slowing down ghosts the speed about to be shed', async () => {
+        const { updateSpeedometer } = await meter();
+        // Throttle cut: the ghost is behind the bar now, not ahead of it, and
+        // it should still span exactly the interval between the two.
+        updateSpeedometer({ speed: 4000, targetSpeed: 1000 });
+        expect(dom.el('speedo-ghost-fwd').style.clipPath).toBe('inset(0 0% 0 25%)');
+    });
+
+    test('a throttle slammed from ahead to astern ghosts BOTH arms', async () => {
+        const { updateSpeedometer } = await meter();
+        // The case that would have needed its own branch. A ship at +500 asked
+        // for -1,000 has to decelerate through zero before it can accelerate
+        // backwards, so the ground still to be covered genuinely crosses the
+        // detent: all of the reverse arm, and the first slice of the forward one.
+        updateSpeedometer({ speed: 500, targetSpeed: -1000 });
+        expect(dom.el('speedo-ghost-fwd').style.clipPath).toBe('inset(0 87.5% 0 0%)');
+        expect(dom.el('speedo-ghost-rev').style.clipPath).toBe('inset(0 0% 0 0%)');
+        // The solid bar is still on the forward side, because that is where the
+        // ship actually is.
+        expect(dom.el('speedo-fwd').style.clipPath).toBe('inset(0 87.5% 0 0)');
+        expect(dom.el('speedo-rev').style.clipPath).toBe('inset(0 0 0 100%)');
+    });
+
+    test('the arm fractions clamp instead of running off the end', async () => {
+        const { forwardArmFraction, reverseArmFraction } = await meter();
+        // Nothing should be able to produce a negative inset, which renders as
+        // an arm that is somehow longer than its own track.
+        expect(forwardArmFraction(-500)).toBe(0);
+        expect(reverseArmFraction(500)).toBe(0);
+        expect(forwardArmFraction(99999)).toBe(100);
+        expect(reverseArmFraction(-99999)).toBe(100);
+    });
+
+    test('the marker no longer outshouts the bar it annotates', async () => {
+        // Guarding the fix rather than the taste: the demand marker must not be
+        // the loudest thing in the meter, or the reading inverts again and the
+        // bar starts looking like it is lagging a needle.
+        const css = readFileSync(
+            new URL('../www/earthdefense/css/experience.css', import.meta.url), 'utf8');
+        const rule = css.replace(/\/\*[\s\S]*?\*\//g, '')
+            .match(/\.speedo-demand\s*\{([^}]*)\}/)[1];
+        // Inside the track's own height, not standing proud of it.
+        expect(rule).not.toMatch(/top:\s*-/);
+        expect(rule).not.toMatch(/bottom:\s*-/);
+        // And no drop shadow lifting it off the bar.
+        expect(rule).not.toMatch(/box-shadow/);
+        const [, alpha] = rule.match(/rgba\([^)]*,\s*([\d.]+)\s*\)/) || [];
+        expect(parseFloat(alpha)).toBeLessThan(0.9);
     });
 });

@@ -79,11 +79,37 @@ function make2dContext() {
   });
 }
 
+/** A style object that answers the CUSTOM PROPERTY api as well as plain
+ *  assignment. `style.left = '20%'` was all any experience needed until one
+ *  started driving a widget's geometry through `--custom-property`, which is
+ *  the right way to keep a layout in one place and is invisible to a bare
+ *  object: `setProperty` is a method on CSSStyleDeclaration, not a key.
+ *
+ *  Custom properties are kept in their own map, and `getPropertyValue` falls
+ *  back to the camelCase field so a test can read a value back whichever way
+ *  the code under test happened to write it. */
+function makeStyle() {
+  const custom = Object.create(null);
+  return {
+    setProperty(name, value) { custom[name] = String(value); },
+    removeProperty(name) {
+      const previous = custom[name];
+      delete custom[name];
+      return previous === undefined ? '' : previous;
+    },
+    getPropertyValue(name) {
+      if (name in custom) return custom[name];
+      const camel = String(name).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      return this[camel] === undefined ? '' : String(this[camel]);
+    },
+  };
+}
+
 function makeElement(tag = 'div') {
   const listeners = new Map(); // type -> Set<fn>
   const el = {
     tagName: String(tag).toUpperCase(),
-    style: {},
+    style: makeStyle(),
     dataset: {},
     attributes: {},
     classList: makeClassList(),

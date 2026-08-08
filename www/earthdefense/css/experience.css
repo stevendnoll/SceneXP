@@ -402,33 +402,192 @@
    Readouts
    ============================================================ */
 
-/* On a desktop this lands on the canopy dash, which is dark and opaque, and
+/* THE SPEEDOMETER.
+
+   ZERO SITS AT 20%, NOT IN THE MIDDLE. Forward tops out at 4,000 and reverse
+   at 1,000 (a quarter, deliberately, so reverse never becomes the answer to
+   everything). A centred zero would draw full astern and full ahead as the
+   same length, which is a picture of a ship this is not. Anchoring zero at
+   maxReverse / (maxReverse + maxForward) makes one km/s the same number of
+   pixels in both directions, so the short reverse stub IS the information.
+
+   THE RAMP STOPS AT AMBER RATHER THAN RED. Cool to hot is the whole point of a
+   coloured speedometer, but red is already spoken for in this experience: it
+   is the raider pips, the incoming beams, the "under attack" banner, and the
+   hull-damage wash. Full throttle is a normal and desirable thing to be doing,
+   and drawing it in the alarm colour would say otherwise. Amber reads as lit
+   up and fast without ever reading as a warning.
+
+   COLOUR IS NEVER THE ONLY CARRIER. The magnitude is already in the length of
+   the bar, the direction is already in which side of the zero tick it grows
+   from, and the exact value is in the number beside it and in the live region.
+   Anyone who cannot separate these hues loses nothing at all.
+
+   On a desktop this lands on the canopy dash, which is dark and opaque, and
    the plate costs nothing there: it is within a couple of values of the dash
-   it sits on. On a phone the readout floats above the throttle track with open
-   scene behind it, which is the case the plate is actually for (7.6:1 against
+   it sits on. On a phone it floats above the throttle track with open scene
+   behind it, which is the case the plate is actually for (7.6:1 against
    anything, against 1.14:1 unbacked over sunlit cloud). */
-.throttle-readout {
+
+.speedometer {
+    /* Both of these are OVERWRITTEN FROM config.flight at init, so the meter's
+       geometry follows maxReverse and maxForward instead of being a second
+       place those numbers are written down. The values here are the ones the
+       shipped config produces (1,000 and 4,000), so the bar is still correct if
+       the script never runs.
+
+       --speedo-zero  where zero sits: maxReverse / (maxReverse + maxForward)
+       --speedo-rev-scale  how much of the ramp the reverse arm covers, as the
+                           width the gradient is drawn at: maxForward /
+                           maxReverse, so full astern lands at the right hue */
+    --speedo-zero: 20%;
+    --speedo-rev-scale: 400%;
+    /* One ramp, written once, used by both arms. */
+    --speedo-ramp:
+        #3d8bfd 0%,
+        #21c7d6 20%,
+        #36cc7c 45%,
+        #e6c341 72%,
+        #ff9a3c 100%;
+
     position: fixed;
     left: 22px;
     bottom: 224px;
-    padding: 2px 7px;
-    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 5px 9px;
+    border-radius: 8px;
     background: rgba(6, 10, 18, 0.62);
-    font-size: 0.95rem;
-    font-variant-numeric: tabular-nums;
-    color: rgba(255, 255, 255, 0.9);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
     pointer-events: none;
 }
 
 /* On a desktop there is no throttle track under it, so it sits at the corner. */
-body:not(.is-touch-device) .throttle-readout {
+body:not(.is-touch-device) .speedometer {
     bottom: 24px;
 }
 
 @media (max-height: 480px) {
-    .throttle-readout {
+    .speedometer {
         bottom: 152px;
+    }
+}
+
+.speedo-track {
+    position: relative;
+    width: 200px;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.10);
+}
+
+/* Each arm is a FIXED-SIZE element carrying the whole ramp, revealed by
+   clip-path. Animating the width instead would stretch the gradient with it,
+   so the hue at the tip would depend on how long the bar happened to be rather
+   than on how fast the ship is going, which is the one thing it must mean. */
+.speedo-arm {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+}
+
+/* Forward: zero at the left edge, maximum at the right. Stops are placed at
+   the fraction of top speed they stand for, so the hue at any point is a
+   direct read of the number under it. */
+.speedo-arm-fwd {
+    left: var(--speedo-zero);
+    right: 0;
+    background: linear-gradient(to right, var(--speedo-ramp));
+    clip-path: inset(0 100% 0 0);
+}
+
+/* Reverse: THE SAME RAMP, drawn four times as wide as this arm and anchored to
+   the zero end, so the arm shows only its first quarter. That is not a trick to
+   save a gradient, it is what makes the colour honest: 1,000 km/s astern is
+   1,000 km/s, so it has to land on the same hue 1,000 km/s ahead lands on, and
+   full astern comes out in the greens rather than at the top of the scale. The
+   arm never changes size (clip-path does the reveal), so the oversized
+   background stays anchored. */
+.speedo-arm-rev {
+    left: 0;
+    width: var(--speedo-zero);
+    background: linear-gradient(to left, var(--speedo-ramp));
+    background-size: var(--speedo-rev-scale) 100%;
+    background-position: right center;
+    background-repeat: no-repeat;
+    clip-path: inset(0 0 0 100%);
+}
+
+/* THE GROUND STILL TO BE COVERED. The same ramp at low alpha, spanning from
+   where the ship is to where the throttle is asking for.
+
+   THIS EXISTS BECAUSE THE FIRST VERSION READ AS A BUG. Acceleration is linear
+   at 667 km/s per second, so a throttle pushed to 2,400 leaves the bar climbing
+   for a few seconds behind a marker that arrived at once. That is the ship
+   being heavy, and it is worth showing. What it LOOKED like was a coloured stub
+   failing to keep up with a white line, because the marker was the loudest
+   thing in the widget and the eye therefore took it for the needle and the bar
+   for a laggy fill of it. Filling the gap turns two objects into one: solid
+   where the ship is, ghosted where it is going. */
+.speedo-ghost {
+    opacity: 0.3;
+    clip-path: inset(0 100% 0 100%);
+}
+
+/* Where the throttle is ASKING for: the far edge of the ghost, marked.
+
+   QUIETER THAN IT WAS, and that is the substance of the fix rather than a
+   polish pass. It used to be near-opaque white standing proud of the track top
+   and bottom with a drop shadow under it, which is how you draw the primary
+   readout, not how you draw an annotation on one. It now sits within the
+   track's own height and lets the bar be the loudest thing in its own meter. */
+.speedo-demand {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    left: var(--speedo-zero);
+    background: rgba(255, 255, 255, 0.72);
+}
+
+/* The zero detent, and the only thing on the meter when the ship is stopped.
+   A bar of zero length cannot carry a colour, so "still" is this tick lighting
+   blue rather than a blue fill that is not there. */
+.speedo-zero {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--speedo-zero);
+    width: 1px;
+    margin-left: -0.5px;
+    background: rgba(255, 255, 255, 0.42);
+}
+
+.speedo-zero.at-rest {
+    background: #3d8bfd;
+    box-shadow: 0 0 6px rgba(61, 139, 253, 0.9);
+}
+
+.throttle-readout {
+    min-width: 78px;
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* A narrow phone has no room for a 200 pixel bar beside a number. The bar is
+   what survives, since it is the part that is read at a glance. */
+@media (max-width: 420px) {
+    .speedo-track {
+        width: 132px;
+    }
+
+    .throttle-readout {
+        min-width: 0;
+        font-size: 0.78rem;
     }
 }
 

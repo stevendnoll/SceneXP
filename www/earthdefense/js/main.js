@@ -98,6 +98,8 @@ const settings = {
 
 let canvas, loadingScreen, blocker, touchControls, hud;
 let throttleReadout, perimeterNotice, flightStatus;
+let speedometer, speedoForward, speedoReverse, speedoDemand, speedoZero;
+let speedoGhostForward, speedoGhostReverse;
 let settingsPanel, settingsBtn, pauseModal;
 let reticle, lockBracket, combatStatus;
 let endModal, endTitle, endSubtitle, endTime, endSaved, endDestroyed, endBest;
@@ -111,7 +113,21 @@ let _announcedThrottle = null;
 // The whole numbers the speed readout is currently showing, so the string is
 // built when they move rather than on every frame.
 let _shownSpeed = null;
-let _shownTarget = null;
+// The speedometer's geometry, solved once from config.flight at init so the
+// bar never disagrees with the ship it is measuring. See `layOutSpeedometer`.
+let _speedoZeroPct = 20;
+let _speedoUnitPct = 0.02;
+// The last percentages written to the meter, rounded to a tenth. Speed moves
+// continuously, so without this a ship holding a steady throttle would still
+// rewrite four style properties sixty times a second for no visible change.
+let _shownFillFwd = null;
+let _shownFillRev = null;
+let _shownGhostFwdNear = null;
+let _shownGhostFwdFar = null;
+let _shownGhostRevNear = null;
+let _shownGhostRevFar = null;
+let _shownDemand = null;
+let _shownAtRest = null;
 let _announcedLock = null;
 let _announcedAlert = null;
 let _hullHitTimer = 0;
@@ -156,6 +172,14 @@ async function init() {
     touchControls = document.getElementById('touch-controls');
     hud = document.getElementById('hud');
     throttleReadout = document.getElementById('throttle-readout');
+    speedometer = document.getElementById('speedometer');
+    speedoForward = document.getElementById('speedo-fwd');
+    speedoReverse = document.getElementById('speedo-rev');
+    speedoGhostForward = document.getElementById('speedo-ghost-fwd');
+    speedoGhostReverse = document.getElementById('speedo-ghost-rev');
+    speedoDemand = document.getElementById('speedo-demand');
+    speedoZero = document.getElementById('speedo-zero');
+    layOutSpeedometer();
     perimeterNotice = document.getElementById('perimeter-notice');
     flightStatus = document.getElementById('flight-status');
     settingsPanel = document.getElementById('settings-panel');
@@ -1218,24 +1242,155 @@ function applyFlightToCamera(s = getFlightState()) {
     camera.rotation.set(s.pitch, s.yaw, 0);
 }
 
+/** Solve the speedometer's geometry from the ship it measures, once.
+ *
+ *  THE WHOLE SCALE IS ONE NUMBER, and that is the point of the design rather
+ *  than a shortcut. Zero sits `maxReverse / (maxReverse + maxForward)` of the
+ *  way along, which for the shipped 1,000 and 4,000 is a fifth, and from there
+ *  one km/s is worth `100 / (maxReverse + maxForward)` percent of the track
+ *  WHICHEVER WAY THE SHIP IS GOING. A single multiply therefore places any
+ *  speed, forward or astern, and the reverse arm ends up a quarter the length
+ *  of the forward one because reverse really is a quarter as fast.
+ *
+ *  A meter with zero in the middle would have needed two different scales to
+ *  fill the same width, which is the version that quietly claims full astern
+ *  and full ahead are the same achievement.
+ *
+ *  Written to CSS custom properties rather than to individual rules, so the
+ *  stylesheet keeps the arms, the detent and the demand marker in step off one
+ *  value and none of them has to be positioned from here every frame. */
+function layOutSpeedometer(flight = EARTHDEFENSE_CONFIG.flight) {
+    const forward = Math.max(1, flight.maxForward);
+    const reverse = Math.max(0, flight.maxReverse);
+    const span = forward + reverse;
+
+    _speedoZeroPct = (reverse / span) * 100;
+    _speedoUnitPct = 100 / span;
+
+    if (!speedometer || !speedometer.style) return;
+    speedometer.style.setProperty('--speedo-zero', `${_speedoZeroPct}%`);
+    // How wide the reverse arm's gradient is drawn, so the slice of the ramp it
+    // shows is exactly the slice its speeds deserve. Full astern has to land on
+    // the hue the same number ahead lands on, or the colour is decorative.
+    speedometer.style.setProperty(
+        '--speedo-rev-scale', `${reverse > 0 ? (forward / reverse) * 100 : 100}%`);
+}
+
+/** Where a speed sits on the track, as a percentage from the left edge. */
+function speedoPosition(v) {
+    return _speedoZeroPct + v * _speedoUnitPct;
+}
+
+/** How far along the FORWARD arm a speed sits, as a percentage of that arm.
+ *  Anything at or astern of zero is 0, which is what lets the same number
+ *  describe a band that starts on the other side of the detent. */
+function forwardArmFraction(v) {
+    const arm = 100 - _speedoZeroPct;
+    if (arm <= 0) return 0;
+    return Math.min(100, (Math.max(0, v) * _speedoUnitPct / arm) * 100);
+}
+
+/** The same for the REVERSE arm, measured from the detent outward, so a bigger
+ *  number is further astern. */
+function reverseArmFraction(v) {
+    if (_speedoZeroPct <= 0) return 0;
+    return Math.min(100, (Math.max(0, -v) * _speedoUnitPct / _speedoZeroPct) * 100);
+}
+
+/** Push one frame of flight state onto the bar.
+ *
+ *  The two arms are revealed with `clip-path` rather than resized, because each
+ *  one carries the colour ramp as a background: growing the element would
+ *  stretch the gradient with it and the hue at the tip would then depend on how
+ *  long the bar happened to be instead of on how fast the ship is going. Fixed
+ *  boxes, moving clip, and the colour under any point on the track stays a
+ *  direct read of the number it stands for. */
+function updateSpeedometer(s) {
+    if (!speedoForward) return;
+
+    const tenths = (v) => Math.round(v * 10) / 10;
+
+    // As a fraction of each arm's own width, which is what clip-path wants.
+    const fillFwd = tenths(forwardArmFraction(s.speed));
+    const fillRev = tenths(reverseArmFraction(s.speed));
+
+    // THE GHOST SPANS THE WHOLE INTERVAL BETWEEN THE TWO, not just the forward
+    // part of it. A throttle slammed from ahead to astern has to decelerate
+    // through zero before it can accelerate backwards, so the ground still to
+    // be covered genuinely crosses the detent and lands on both arms. Taking
+    // the min and the max and letting each arm clamp its own share is what
+    // makes that case fall out rather than needing its own branch.
+    const lo = Math.min(s.speed, s.targetSpeed);
+    const hi = Math.max(s.speed, s.targetSpeed);
+    const ghostFwdNear = tenths(forwardArmFraction(lo));
+    const ghostFwdFar = tenths(forwardArmFraction(hi));
+    // Astern, a bigger magnitude is further out, so the ends swap over.
+    const ghostRevNear = tenths(reverseArmFraction(hi));
+    const ghostRevFar = tenths(reverseArmFraction(lo));
+
+    const demand = tenths(speedoPosition(s.targetSpeed));
+    // A tenth of a percent of 5,000 km/s is 5 km/s, which is under the rounding
+    // the number beside it already does, so nothing visible is being skipped.
+    const atRest = Math.abs(s.speed) < 1 && Math.abs(s.targetSpeed) < 1;
+
+    if (fillFwd !== _shownFillFwd) {
+        _shownFillFwd = fillFwd;
+        speedoForward.style.clipPath = `inset(0 ${100 - fillFwd}% 0 0)`;
+    }
+    if (fillRev !== _shownFillRev) {
+        _shownFillRev = fillRev;
+        speedoReverse.style.clipPath = `inset(0 0 0 ${100 - fillRev}%)`;
+    }
+    // A band rather than a fill, so both ends move. When the ship has caught up
+    // the two ends meet and the ghost vanishes on its own, which is the state
+    // the meter spends most of its time in.
+    if (ghostFwdNear !== _shownGhostFwdNear || ghostFwdFar !== _shownGhostFwdFar) {
+        _shownGhostFwdNear = ghostFwdNear;
+        _shownGhostFwdFar = ghostFwdFar;
+        speedoGhostForward.style.clipPath =
+            `inset(0 ${100 - ghostFwdFar}% 0 ${ghostFwdNear}%)`;
+    }
+    if (ghostRevNear !== _shownGhostRevNear || ghostRevFar !== _shownGhostRevFar) {
+        _shownGhostRevNear = ghostRevNear;
+        _shownGhostRevFar = ghostRevFar;
+        speedoGhostReverse.style.clipPath =
+            `inset(0 ${ghostRevNear}% 0 ${100 - ghostRevFar}%)`;
+    }
+    if (demand !== _shownDemand) {
+        _shownDemand = demand;
+        speedoDemand.style.left = `${demand}%`;
+    }
+    if (atRest !== _shownAtRest) {
+        _shownAtRest = atRest;
+        // A bar of no length cannot carry a colour, so "still" is the detent
+        // lighting rather than a blue fill that is not there.
+        speedoZero.classList.toggle('at-rest', atRest);
+    }
+}
+
 function updateReadouts(s = getFlightState()) {
     // The engine follows the THROTTLE rather than the speed, so pushing the
     // lever is answered immediately instead of a second later once the ship has
     // caught up. That gap is what would make the controls feel unresponsive.
     setEngineThrottle(s.throttle);
 
-    // Two `toLocaleString` calls and a DOM write, only when the whole numbers
-    // they format have actually moved. Holding a steady speed is the common
-    // case and it now costs nothing at all.
+    updateSpeedometer(s);
+
+    // One `toLocaleString` call and a DOM write, only when the whole number it
+    // formats has actually moved. Holding a steady speed is the common case and
+    // it costs nothing at all.
+    //
+    // THE TARGET LEFT THIS STRING WHEN THE BAR ARRIVED. It used to read
+    // "1,851 → 2,088 km/s", which was the only way to show a throttle asking
+    // for something the ship had not reached yet. The demand marker now carries
+    // that, in the one place where the gap between the two is a distance you
+    // can see rather than two numbers you have to subtract, and the readout
+    // goes back to answering one question.
     if (throttleReadout) {
         const speed = Math.round(s.speed);
-        const target = Math.round(s.targetSpeed);
-        if (speed !== _shownSpeed || target !== _shownTarget) {
+        if (speed !== _shownSpeed) {
             _shownSpeed = speed;
-            _shownTarget = target;
-            throttleReadout.textContent = speed === target
-                ? `${speed.toLocaleString()} km/s`
-                : `${speed.toLocaleString()} → ${target.toLocaleString()} km/s`;
+            throttleReadout.textContent = `${speed.toLocaleString()} km/s`;
         }
     }
     // Announce the throttle only when it has actually moved a step, so the
@@ -1326,5 +1481,7 @@ export const __test__ = {
     startGame, handleStateChange, showEndScreen, endMessage, formatClock,
     restartRun, killPlayer, respawnPlayer, advanceRespawn,
     openPause, closePause, beginFlight,
+    layOutSpeedometer, speedoPosition, updateSpeedometer, updateReadouts,
+    forwardArmFraction, reverseArmFraction,
     applyReducedFx, prefersReducedMotion, shouldDrawThisFrame, animate
 };
