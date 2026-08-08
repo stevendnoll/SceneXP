@@ -70,13 +70,18 @@ function installThree() {
         },
         ConeGeometry: Geometry,
         BoxGeometry: Geometry,
+        SphereGeometry: Geometry,
         BufferGeometry: Geometry,
         BufferAttribute: function (array, itemSize) {
             return { array, itemSize, needsUpdate: false };
         },
         MeshStandardMaterial: material,
+        MeshBasicMaterial: material,
         PointsMaterial: material,
-        LineBasicMaterial: material
+        LineBasicMaterial: material,
+        // The shield is drawn as light rather than as paint, so it names both.
+        AdditiveBlending: 'additive',
+        DoubleSide: 'double'
     };
 }
 
@@ -563,8 +568,10 @@ describe('what is actually drawn', () => {
         for (const ship of fleet.getShips()) {
             for (const part of ship.mesh.children) hulls.add(part.geometry);
         }
-        // One cone and one wing box, shared across all twelve.
-        expect(hulls.size).toBe(2);
+        // One cone, one wing box, and one shield sphere, shared across all
+        // twelve. The shield's MATERIAL cannot be shared, since opacity is what
+        // each one says about its own ship, but the geometry is one sphere.
+        expect(hulls.size).toBe(3);
     });
 
     test('the hull switches off past the resolve distance, and the light does not', () => {
@@ -684,10 +691,14 @@ describe('lifecycle', () => {
         disposed.materials = 0;
         fleet.disposeFleet();
 
-        // Hull, wing, the running-light buffer, and six beams.
-        expect(disposed.geometries).toBe(9);
-        // Hull material, the light material, and six beam materials.
-        expect(disposed.materials).toBe(8);
+        // Hull, wing, the shield sphere, the running-light buffer, and six
+        // beams.
+        expect(disposed.geometries).toBe(10);
+        // Hull material, the light material, six beam materials, and ONE SHIELD
+        // MATERIAL PER SHIP. Twelve of those is the deliberate cost of the
+        // shield being a readout: a shared material would make all twelve
+        // bubbles flash together, which is the one thing it must not do.
+        expect(disposed.materials).toBe(8 + CONFIG.fleet.total);
         expect(fleet.getShips()).toHaveLength(0);
         expect(() => fleet.disposeFleet()).not.toThrow();
     });
@@ -697,7 +708,7 @@ describe('lifecycle', () => {
         fleet.initFleet(CONFIG, null, world.hooks);
         disposed.geometries = 0;
         fleet.initFleet(CONFIG, null, world.hooks);
-        expect(disposed.geometries).toBe(9);
+        expect(disposed.geometries).toBe(10);
         expect(fleet.getShips()).toHaveLength(12);
     });
 
@@ -1108,5 +1119,132 @@ describe('hashUnit', () => {
             sum += v;
         }
         expect(Math.abs(sum / 400)).toBeLessThan(0.15);
+    });
+});
+
+/* The shield.
+ *
+ * IT IS A READOUT, NOT AN EFFECT, and that is the distinction every assertion
+ * below is protecting. Four hit points with no per-raider feedback is a raider
+ * that soaks three shots in silence, which a visitor reads as the guns being
+ * broken rather than as progress. The flash weakening with what is left is the
+ * only thing in the experience that says how close a given raider is to dying,
+ * so "it lights up" is not enough: it has to light up by the right AMOUNT.
+ */
+describe('the shield says how much is left', () => {
+    function fleetOf() {
+        const world = makeStructures();
+        fleet.initFleet(CONFIG, null, world.hooks);
+        return world;
+    }
+
+    test('every raider carries its own bubble, dark until it is hit', () => {
+        fleetOf();
+        for (const ship of fleet.getShips()) {
+            expect(ship.shield).toBeTruthy();
+            expect(ship.shield.mesh.visible).toBe(false);
+            expect(ship.shield.material.opacity).toBe(0);
+        }
+    });
+
+    test('the bubble is a CHILD of the ship, so it follows it for free', () => {
+        fleetOf();
+        const ship = fleet.getShips()[0];
+        // Parented rather than positioned, which is also what makes it inherit
+        // the LOD hide: a raider too far to resolve should not leave a bubble
+        // floating where its hull is not being drawn.
+        expect(ship.mesh.children).toContain(ship.shield.mesh);
+    });
+
+    test('a weaker shield flashes dimmer, monotonically', () => {
+        fleetOf();
+        const id = fleet.getShips()[0].id;
+        const { peakOpacity, minOpacity } = CONFIG.fleet.shield;
+
+        // Walking a raider down from full to its last point. Each flash has to
+        // be strictly weaker than the one before, or the readout says nothing.
+        const peaks = [];
+        for (let left = CONFIG.fleet.hitPoints - 1; left >= 1; left--) {
+            peaks.push(fleet.flashShield(id, left).peak);
+        }
+        for (let i = 1; i < peaks.length; i++) {
+            expect(peaks[i]).toBeLessThan(peaks[i - 1]);
+        }
+        // And the ends land on the two numbers config actually names.
+        expect(peaks[peaks.length - 1]).toBeCloseTo(
+            minOpacity + (peakOpacity - minOpacity) / CONFIG.fleet.hitPoints, 6);
+        expect(fleet.flashShield(id, CONFIG.fleet.hitPoints).peak).toBeCloseTo(peakOpacity, 6);
+    });
+
+    test('four shots inside a second are four flashes, not four stacked spheres', () => {
+        fleetOf();
+        const id = fleet.getShips()[0].id;
+        // At four shots a second a raider takes its whole life inside one
+        // second. Spawning a fade per hit would leave them overlapping and
+        // summing to something brighter than any single flash was worth.
+        fleet.flashShield(id, 3);
+        const first = fleet.getShip(id).shield.material.opacity;
+        run(0.1);
+        fleet.flashShield(id, 2);
+        const second = fleet.getShip(id).shield.material.opacity;
+
+        expect(fleet.getShip(id).mesh.children.filter(c => c.name === 'shield')).toHaveLength(1);
+        // Re-triggered, so the second flash is worth its own number rather than
+        // whatever was left of the first plus its own.
+        expect(second).toBeLessThan(first);
+        expect(second).toBeCloseTo(fleet.getShip(id).shield.peak, 6);
+    });
+
+    test('the flash fades out and puts itself away', () => {
+        fleetOf();
+        const id = fleet.getShips()[0].id;
+        fleet.flashShield(id, 2);
+        expect(fleet.getShip(id).shield.mesh.visible).toBe(true);
+
+        run(CONFIG.fleet.shield.life + 0.2);
+        const shield = fleet.getShip(id).shield;
+        expect(shield.active).toBe(false);
+        expect(shield.mesh.visible).toBe(false);
+        expect(shield.material.opacity).toBe(0);
+    });
+
+    test('a dead raider stops glowing, and a restart brings none of it back', () => {
+        fleetOf();
+        const id = fleet.getShips()[0].id;
+        fleet.flashShield(id, 1);
+        fleet.destroyShip(id);
+
+        let shield = fleet.getShip(id).shield;
+        expect(shield.active).toBe(false);
+        expect(shield.material.opacity).toBe(0);
+
+        // And a mid-fade bubble on a SURVIVING ship is put out by the restart,
+        // or the next run opens with a raider glowing from the last one.
+        const other = fleet.getShips()[1].id;
+        fleet.flashShield(other, 2);
+        fleet.resetFleet();
+        shield = fleet.getShip(other).shield;
+        expect(shield.active).toBe(false);
+        expect(shield.mesh.visible).toBe(false);
+        expect(shield.material.opacity).toBe(0);
+    });
+
+    test('flashing something that is not a living raider is a quiet nothing', () => {
+        fleetOf();
+        expect(fleet.flashShield('earth-a', 2)).toBeNull();
+        expect(fleet.flashShield('raider-999', 2)).toBeNull();
+        const id = fleet.getShips()[0].id;
+        fleet.destroyShip(id);
+        expect(fleet.flashShield(id, 2)).toBeNull();
+    });
+
+    test('the bubble is drawn as light rather than as paint', () => {
+        fleetOf();
+        const material = fleet.getShips()[0].shield.material;
+        // Additive with depth writing off, so two raiders overlapping never
+        // punch a hole in one another and the bubble reads as energy.
+        expect(material.blending).toBe(THREE.AdditiveBlending);
+        expect(material.depthWrite).toBe(false);
+        expect(material.transparent).toBe(true);
     });
 });

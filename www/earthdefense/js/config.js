@@ -476,7 +476,31 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
     // seconds, 110,000 is about 92, and 200,000 is about 167.
     fleet: {
         total: 12,
-        hitPoints: 1,          // one shot, one raider (PRD 6.3)
+
+        // FOUR SHOTS, NOT ONE, and this reverses PRD 6.3's table along with the
+        // "no shields" non-goal in 2.2. It is a playtest finding beating a
+        // pre-playtest decision: at one hit point the game was too easy, and
+        // the reason turned out to be structural rather than a matter of
+        // degree. There is no fire button, so the guns fire whatever sits in
+        // the six degree cone: lining a raider up and killing it were the SAME
+        // ACT, and the whole fight was an aiming exercise with no second beat.
+        //
+        // WHAT THIS BUYS IS THE BREAK-OFF, which was built at M5 and has never
+        // once been seen. `evade` below triggers on the visitor being close and
+        // nearly lined up, and weaves a raider about ten degrees off its line,
+        // comfortably outside the six degree gun cone. At one hit point the
+        // frame that produced a lock also produced a corpse, so a dodge could
+        // never happen. At four, a kill takes a full second of held lock at
+        // four shots a second, which is long enough for a raider to notice, to
+        // break, and to have to be chased back into the cone. That is PRD 6.3's
+        // own "satisfaction of a chase" finally existing.
+        //
+        // THIS IS THE FIRST NUMBER TO TUNE if the swing turns out too far. The
+        // added trigger time is only about nine seconds across all twelve
+        // raiders; the real cost is one evade per kill, so the honest range is
+        // more like thirty to sixty seconds against a run the fleet wins in
+        // 107. Three is the next stop down.
+        hitPoints: 4,
         cruiseSpeed: 1200,     // comfortably slower than the player's 4,000
 
         // THE APPROACH LINE IS TILTED OFF THE MARS AXIS ON PURPOSE. Mars sits
@@ -603,10 +627,18 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         playerDamage: 1,
 
         // BREAKING OFF. The PRD's trigger is "the player is close and holding
-        // a lock", which cannot happen: a raider has one hit point, so the
-        // frame that produces a lock also produces a corpse. The trigger that
-        // preserves the intent is being close and NEARLY lined up, so the
-        // dodge happens while the shot is still being set up.
+        // a lock". That was unreachable while a raider had ONE hit point, since
+        // the frame producing a lock also produced a corpse, so this was built
+        // against the wider threat cone instead: close and NEARLY lined up, so
+        // the dodge happens while the shot is still being set up.
+        //
+        // At four hit points the PRD's own trigger is reachable again, and this
+        // is deliberately NOT being moved back to it. Breaking on "nearly lined
+        // up" starts the dodge while the visitor is still settling the cone,
+        // which is a raider that saw it coming. Breaking on the lock itself
+        // would only ever fire after the first shot had already landed, which
+        // is a raider that noticed late. The first is the better opponent, and
+        // it is now doing the job it was written for rather than standing in.
         //
         // The weave has to be shallow enough that the visitor does not simply
         // lose the ship (PRD 6.3: "the satisfaction of a chase without making
@@ -625,6 +657,44 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
             speedFactor: 1.35,
             weaveRate: 2.4,
             weaveOffset: 180
+        },
+
+        // THE SHIELD, which is what makes four hit points legible.
+        //
+        // A raider that soaks three shots and says nothing is indistinguishable
+        // from a raider being missed, and the visitor's honest reading of that
+        // is that the guns are broken. The sphere is not decoration: it is the
+        // only per-raider damage readout in the experience, and it has to fire
+        // on every absorbed hit for that reason.
+        //
+        // STRENGTH IS CARRIED BY OPACITY, NOT BY HUE. A full shield lights up
+        // hard and the last point barely flickers, so the flash getting weaker
+        // IS the progress bar, and it is monotonic and learnable without a
+        // legend. Colour was the obvious alternative and every ramp collided
+        // with something already spoken for in this scene: blue is the
+        // installations and the nav rings, orange and red are the raiders, the
+        // beams, the alert banner and the hull wash. One colour and a varying
+        // strength collides with nothing and needs no colour vision at all.
+        //
+        // NOT SUPPRESSED UNDER REDUCED EFFECTS, on the same reasoning the
+        // hull-hit wash is not: it carries information rather than atmosphere.
+        // It is also one small additive sphere that is only ever drawn in the
+        // frames just after a hit, so there is nothing here worth reclaiming.
+        shield: {
+            // As a multiple of hull length, so the bubble grows with the ship
+            // rather than needing its own absolute number. Just clear of a 220
+            // unit hull with its wings.
+            radiusFactor: 0.95,
+            life: 0.38,            // seconds to fade from the peak to nothing
+            // A cyan-white that reads as energy rather than as either side's
+            // colour. See the note above about why nothing here is a ramp.
+            color: 0x9fe8ff,
+            // Peak opacity with the shield full, and with one point left.
+            peakOpacity: 0.55,
+            minOpacity: 0.18,
+            // A ten segment sphere is about 180 triangles and is drawn at a few
+            // dozen pixels. Anything finer is spent on nothing.
+            segments: 10
         },
 
         // How long an installation stays flagged as under attack after the

@@ -67,7 +67,7 @@ import {
 } from './cockpit.min.js';
 import {
     initFleet, updateFleet, resetFleet, getShips, fleetCandidates,
-    destroyShip, getAlert, disposeFleet
+    destroyShip, flashShield, getAlert, disposeFleet
 } from './fleet.min.js';
 import { initHud, updateHud, projectToScreen, getProjection, disposeHud } from './hud.min.js';
 import {
@@ -602,6 +602,11 @@ function onDamageResolved(result) {
         track('raider-destroyed', { id: result.id });
         announce(`Raider destroyed. ${getCounters().hostileShips} left.`);
     } else if (!result.destroyed) {
+        // THE ONLY PER-RAIDER DAMAGE READOUT THERE IS. A raider soaking three
+        // shots in silence is indistinguishable from a raider being missed, and
+        // the honest reading of that is that the guns are broken. The flash
+        // weakens with what is left, so a kill is visibly coming.
+        flashShield(result.id, result.hitPoints);
         playHit();
     }
 }

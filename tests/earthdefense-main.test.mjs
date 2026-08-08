@@ -994,3 +994,68 @@ describe('the speedometer shows the ground still to be covered', () => {
         expect(parseFloat(alpha)).toBeLessThan(0.9);
     });
 });
+
+/* Four hit points, and the seam that makes them survivable to look at.
+ *
+ * The fleet suite proves the shield flashes by the right amount. What it cannot
+ * see is whether main.js ever asks it to, and that seam is exactly the kind
+ * this experience keeps losing silently: an absorbed hit that lights nothing
+ * still passes every other test in the repo, and the visitor's reading of a
+ * raider soaking three shots in silence is that the guns are broken.
+ */
+describe('raiders soak shots, and say so when they do', () => {
+    test('one shot no longer kills a raider', async () => {
+        const main = await boot();
+        const CFG = await CONFIG();
+        enterWorld();
+        const { getShips, shipsRemaining } = await import('../www/earthdefense/js/fleet.min.js');
+        const ship = getShips()[0];
+
+        // The whole difficulty change in one assertion. There is no fire
+        // button, so this is a full second of held lock rather than a frame.
+        expect(CFG.fleet.hitPoints).toBeGreaterThan(CFG.weapons.damagePerShot);
+        main.__test__.resolveDamage(ship.id, CFG.weapons.damagePerShot);
+        expect(ship.alive).toBe(true);
+        expect(shipsRemaining()).toBe(CFG.fleet.total);
+        // And it took the hit rather than ignoring it.
+        expect(ship.shield.active).toBe(true);
+    });
+
+    test('an absorbed hit lights that raider and nothing else', async () => {
+        const main = await boot();
+        const CFG = await CONFIG();
+        enterWorld();
+        const { getShips } = await import('../www/earthdefense/js/fleet.min.js');
+        const [hit, bystander] = getShips();
+
+        main.__test__.onDamageResolved({ id: hit.id, hitPoints: 2, destroyed: false });
+
+        expect(hit.shield.active).toBe(true);
+        // A fleet-wide flash would be worse than none: it would say every
+        // raider had been hit.
+        expect(bystander.shield.active).toBe(false);
+        void CFG;
+    });
+
+    test('the killing blow is answered by the burst, not a fifth flicker', async () => {
+        const main = await boot();
+        enterWorld();
+        const { getShips } = await import('../www/earthdefense/js/fleet.min.js');
+        const ship = getShips()[0];
+
+        main.__test__.onDamageResolved({ id: ship.id, hitPoints: 0, destroyed: true });
+        expect(ship.alive).toBe(false);
+        expect(ship.shield.active).toBe(false);
+    });
+
+    test('a hit on an installation never reaches the fleet', async () => {
+        const main = await boot();
+        enterWorld();
+        const { getStructures } = await import('../www/earthdefense/js/structures.min.js');
+        const { getShips } = await import('../www/earthdefense/js/fleet.min.js');
+        const site = getStructures()[0].site.id;
+
+        main.__test__.onDamageResolved({ id: site, hitPoints: 2, destroyed: false });
+        expect(getShips().every(s => !s.shield.active)).toBe(true);
+    });
+});

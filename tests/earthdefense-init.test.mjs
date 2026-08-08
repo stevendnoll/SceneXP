@@ -269,12 +269,29 @@ describe('the fleet is in the opening frame, not waiting off it', () => {
         expect(CONFIG.targeting.allegiance).toEqual(['hostile']);
     });
 
-    test('a raider dies to one shot, so acquiring it IS killing it', () => {
-        // Which is why the raiders break off on the wider threat cone rather
-        // than on the lock the PRD describes: by the time there is a lock there
-        // is nothing left to dodge with. See fleet.js.
-        expect(F().hitPoints).toBe(1);
-        expect(CONFIG.weapons.damagePerShot).toBeGreaterThanOrEqual(F().hitPoints);
+    test('killing a raider takes long enough that it can break off first', () => {
+        // THIS USED TO ASSERT ONE HIT POINT, and the design reason it gave was
+        // sound: at one, acquiring a raider and killing it were the same act,
+        // which is why the break-off triggers on the wider threat cone rather
+        // than on the lock the PRD describes. Playtest found the consequence
+        // the reasoning missed, which is that the fight then has no second beat
+        // at all and the game is an aiming exercise.
+        //
+        // What matters is not the number but the RELATIONSHIP: a kill has to
+        // take longer than a raider takes to notice and dodge, or the evade
+        // system is decoration. There is no fire button, so time-to-kill is
+        // hit points over (damage per shot times shots per second).
+        const shotsToKill = F().hitPoints / CONFIG.weapons.damagePerShot;
+        const secondsToKill = shotsToKill / CONFIG.weapons.shotsPerSecond;
+        expect(secondsToKill).toBeGreaterThan(0.5);
+
+        // And a raider off cooldown gets its dodge in during that window, which
+        // is the whole point of spending the extra time.
+        expect(secondsToKill).toBeLessThan(F().evade.duration);
+
+        // The weave still has to clear the gun cone, or the dodge breaks
+        // nothing, and still has to sit inside the threat cone, or the ship is
+        // simply gone rather than dodging.
         expect(F().evade.threatCone).toBeGreaterThan(CONFIG.targeting.coneRadians);
     });
 

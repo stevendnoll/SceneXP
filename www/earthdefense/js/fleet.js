@@ -364,6 +364,7 @@ export function resetFleet() {
     }
     playerFireClock = 0;
     alert = null;
+    clearShields();
     assignTargets();
     writeMeshes();
     return ships.length;
@@ -380,13 +381,46 @@ function buildSharedParts() {
 
     const wing = new THREE.BoxGeometry(cfg.hullWidth * 1.6, cfg.hullLength * 0.06, cfg.hullLength * 0.34);
 
+    // One sphere, twelve meshes, the same as the hull. The MATERIAL cannot be
+    // shared, because opacity is what each shield says about its own ship.
+    const s = cfg.shield;
+    const shield = new THREE.SphereGeometry(
+        cfg.hullLength * s.radiusFactor, s.segments, Math.max(2, Math.round(s.segments / 2)));
+
     return {
         hull,
         wing,
+        shield,
         hullMaterial: new THREE.MeshStandardMaterial({
             color: cfg.hullColor, roughness: 0.72, metalness: 0.28
         })
     };
+}
+
+/** A raider's shield bubble, parented to the ship's own group.
+ *
+ *  PARENTED RATHER THAN POSITIONED, which is the whole reason this is three
+ *  lines instead of a pool with its own update. A child of the ship follows it
+ *  for free, and it inherits the LOD hide in `writeMeshes` for free as well: a
+ *  raider too far away to resolve into geometry should not have a bubble
+ *  floating where its hull is not being drawn.
+ *
+ *  Additive and depth-write off, so it reads as light rather than as a ball of
+ *  paint, and so two raiders overlapping never punch a hole in each other. */
+function buildShield(mesh) {
+    const material = new THREE.MeshBasicMaterial({
+        color: cfg.shield.color,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide
+    });
+    const bubble = new THREE.Mesh(shared.shield, material);
+    bubble.name = 'shield';
+    bubble.visible = false;
+    mesh.add(bubble);
+    return { mesh: bubble, material, age: 0, peak: 0, active: false };
 }
 
 function buildShip(index, groupIndex, spec, body) {
@@ -441,7 +475,8 @@ function buildShip(index, groupIndex, spec, body) {
         // pass through the same bearing are still not in the same place.
         slotDepth: hashUnit(index * 19 + 11),
         alive: true,
-        mesh
+        mesh,
+        shield: buildShield(mesh)
     };
     // Aimed inward from the start, so the opening frame shows a fleet already
     // on its way rather than twelve ships pointing in arbitrary directions.
@@ -578,6 +613,7 @@ export function updateFleet(deltaTime, player) {
 
     playerFireClock = Math.max(0, playerFireClock - dt);
     advanceBeams(dt);
+    advanceShields(dt);
     advanceAlert(dt);
 
     let alive = 0;
@@ -875,6 +911,71 @@ function fireAtPlayer(ship, dt, player) {
     if (hooks.onPlayerHit) hooks.onPlayerHit(cfg.playerDamage, ship);
 }
 
+// ---- Shields ----------------------------------------------------------------
+
+/** Light a raider's shield for a hit it absorbed.
+ *
+ *  `hitPointsRemaining` is what the ship has LEFT, which is what makes the
+ *  flash a readout rather than an effect. A full shield lights up at
+ *  `peakOpacity` and the last point at `minOpacity`, so four hits on the same
+ *  raider are four visibly weaker flashes and the visitor can see a kill
+ *  coming without any counter being drawn anywhere.
+ *
+ *  RE-TRIGGERED RATHER THAN STACKED. At four shots a second a raider takes its
+ *  four hits inside one second, and spawning a fade per hit would leave four
+ *  overlapping spheres summing to something much brighter than any of them.
+ *  One bubble per ship, restarted, keeps every flash worth the same as the
+ *  number it stands for.
+ *
+ *  Called for absorbed hits only. The fatal one is answered by the destruction
+ *  burst, which is a better payoff than a fifth flicker. */
+export function flashShield(id, hitPointsRemaining) {
+    const ship = getShip(id);
+    if (!ship || !ship.alive || !ship.shield || !cfg) return null;
+
+    const s = cfg.shield;
+    const max = Math.max(1, cfg.hitPoints);
+    const fraction = clamp(hitPointsRemaining / max, 0, 1);
+
+    const shield = ship.shield;
+    shield.peak = s.minOpacity + (s.peakOpacity - s.minOpacity) * fraction;
+    shield.age = 0;
+    shield.active = true;
+    shield.mesh.visible = true;
+    shield.material.opacity = shield.peak;
+    return shield;
+}
+
+function advanceShields(dt) {
+    for (let i = 0; i < ships.length; i++) {
+        const shield = ships[i].shield;
+        if (!shield || !shield.active) continue;
+        shield.age += dt;
+        const life = shield.age / cfg.shield.life;
+        if (life >= 1) {
+            shield.active = false;
+            shield.mesh.visible = false;
+            shield.material.opacity = 0;
+            continue;
+        }
+        shield.material.opacity = shield.peak * (1 - life);
+    }
+}
+
+/** Put every bubble out. Used by a restart and by a raider's own death, so a
+ *  ship cannot come back from a reset still glowing from its last run. */
+function clearShields() {
+    for (let i = 0; i < ships.length; i++) {
+        const shield = ships[i].shield;
+        if (!shield) continue;
+        shield.active = false;
+        shield.age = 0;
+        shield.peak = 0;
+        shield.material.opacity = 0;
+        shield.mesh.visible = false;
+    }
+}
+
 // ---- Alerts -----------------------------------------------------------------
 
 function raiseAlert(target) {
@@ -992,6 +1093,13 @@ export function destroyShip(id) {
     if (!ship || !ship.alive) return null;
     ship.alive = false;
     ship.mesh.visible = false;
+    // The bubble is a child of that hidden group so it goes with it, but the
+    // flags have to come back too or a restart would resume a dead fade.
+    if (ship.shield) {
+        ship.shield.active = false;
+        ship.shield.material.opacity = 0;
+        ship.shield.mesh.visible = false;
+    }
     return ship;
 }
 
@@ -1016,7 +1124,13 @@ export function disposeFleet() {
     if (shared) {
         shared.hull.dispose();
         shared.wing.dispose();
+        shared.shield.dispose();
         shared.hullMaterial.dispose();
+    }
+    // One material per ship, because opacity is per ship. The geometry above is
+    // shared and released once.
+    for (const ship of ships) {
+        if (ship.shield) ship.shield.material.dispose();
     }
     if (lights) {
         lights.geometry.dispose();
