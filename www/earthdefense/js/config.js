@@ -331,10 +331,43 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // still feels like something the visitor did. If M4's gate says
         // automatic fire feels passive, this is the first number to open up.
         coneRadians: 0.10472,
-        // Eight thousand units, a little under Earth's diameter. Far enough to
-        // reach across a fight, short enough that nothing is picked off from
-        // the other side of the world.
-        range: 8000,
+        // THIS IS SET BY THE DODGE, not by how far a gun ought to shoot.
+        //
+        // It was 8,000, a little under Earth's diameter, chosen when the only
+        // question was "far enough to reach across a fight, short enough that
+        // nothing is picked off from the other side of the world". Both halves
+        // of that were satisfied and the number was still wrong, because it was
+        // answering the wrong question.
+        //
+        // The break-off moves a raider a fixed LATERAL distance, so how big that
+        // looks from the cockpit falls off with range. Measured against the six
+        // degree cone and a four hit point kill (1.00s at four shots a second),
+        // the time for a dodging raider to leave the cone is:
+        //
+        //     800 units  0.60s      3,000 units  1.02s
+        //   1,500 units  0.77s      5,000 units  1.27s
+        //   2,500 units  0.93s      8,000 units  1.60s
+        //
+        // The crossover is about 2,900. Inside it the raider escapes and has to
+        // be chased. Outside it the raider dies mid-weave no matter what it
+        // does, and at 8,000 it never even tries, because `fleet.evade` only
+        // arms at 3,000. So five eighths of the old envelope was a zone where
+        // raiders could not defend themselves, and that is where most kills were
+        // happening: the fight was easy because it was being fought in the one
+        // place the opponent had been switched off.
+        //
+        // Matching the range to the evade gate deletes that zone. You can shoot
+        // exactly as far as they can dodge, so every kill is contested and the
+        // approach becomes part of the fight rather than a formality. Two things
+        // follow on purpose. The raiders' own `playerFireRange` is 4,200, so they
+        // now out-reach the visitor and the run-in costs something. And a raider
+        // at 3,000 is roughly three times the apparent size it was at 8,000,
+        // which is the difference between the shield sphere reading as a shield
+        // and reading as a pixel.
+        //
+        // IF THIS OVERSHOOTS, raise it rather than reaching for hit points. Every
+        // unit above 3,000 hands back a slice of the free-kill zone.
+        range: 3000,
 
         // WHAT COUNTS AS A TARGET. M4 shipped this as ['friendly'] because the
         // fleet did not exist yet and the gate ("fly at a structure and shoot
@@ -640,15 +673,37 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // is a raider that noticed late. The first is the better opponent, and
         // it is now doing the job it was written for rather than standing in.
         //
+        // THE TRIGGER DISTANCE IS THE REAL NUMBER HERE, and it is not arbitrary.
+        // A dodge moves a raider a fixed lateral distance, so the angle it buys
+        // shrinks with range, and past about 2,900 units a raider cannot leave
+        // the six degree cone before a 1.00s kill lands. 3,000 is that crossover
+        // rounded off: the boundary between a dodge that works and a dodge that
+        // is theatre. `targeting.range` is now matched to it for that reason, so
+        // if this moves, that has to move with it or a free-kill zone reopens
+        // between the two.
+        //
         // The weave has to be shallow enough that the visitor does not simply
         // lose the ship (PRD 6.3: "the satisfaction of a chase without making
-        // the player miss"). 180 units of lateral aim offset moves a raider
-        // about ten degrees off the line it would otherwise have flown, which
-        // is more than the six degree gun cone (so the lock really does break)
-        // and well under the twenty degree threat cone (so the ship is still
-        // right there when the visitor looks for it). The first draft used 420
-        // and swung it twenty-four degrees, which is a raider getting away
-        // rather than a raider dodging.
+        // the player miss"), and it is, but NOT because of `weaveOffset`.
+        //
+        // WEAVEOFFSET IS VERY NEARLY A DEAD KNOB and the comment here used to
+        // claim otherwise, that 180 units swung a raider ten degrees where an
+        // earlier 420 swung it twenty-four. Measured, it does no such thing. The
+        // aim point is rebuilt from the ship's CURRENT heading every frame, so a
+        // held offset is an integrator rather than a target: the ship turns until
+        // the sine reverses, and how fast it turns is capped by its own turn
+        // rate, not by the offset. Lock-break time at 2,500 units:
+        //
+        //     offset  20   1.067s
+        //     offset  60   0.933s
+        //     offset 180   0.933s   <- shipped
+        //     offset 420   0.933s
+        //     offset 700   0.933s
+        //
+        // Anything past about 60 saturates and is the same dodge. 180 is kept
+        // because it is comfortably inside the flat region, but tuning the SHAPE
+        // of the break-off means `duration` and `weaveRate`, and tuning its
+        // REACH means `triggerDistance`. This one does nothing either way.
         evade: {
             triggerDistance: 3000,
             threatCone: 0.35,    // 20 degrees, wider than the 6 degree gun cone

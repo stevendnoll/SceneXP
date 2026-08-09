@@ -295,6 +295,36 @@ describe('the fleet is in the opening frame, not waiting off it', () => {
         expect(F().evade.threatCone).toBeGreaterThan(CONFIG.targeting.coneRadians);
     });
 
+    test('the guns cannot reach past the range where dodging still works', () => {
+        // THE FREE-KILL ZONE, which is the one that got away for three
+        // milestones. A dodge slides a raider a fixed LATERAL distance, so the
+        // angle it buys falls off with range while the gun cone stays six
+        // degrees wide. Measured against a 1.00s kill, a raider leaves the cone
+        // in 0.60s at 800 units, 0.93s at 2,500, and 1.02s at 3,000: the
+        // crossover is about 2,900, and `evade.triggerDistance` is 3,000 for
+        // exactly that reason.
+        //
+        // A gun that outranges the gate is therefore not a stronger gun, it is a
+        // band of space where the opponent has been switched off. At 8,000 units
+        // of range against a 3,000 unit gate, five eighths of every engagement
+        // was fought against a raider that could not defend itself, and no
+        // amount of hit points fixes that, it only makes the walkover longer.
+        //
+        // Raising `targeting.range` above the gate reopens the zone, so this is
+        // a relationship and not a spot check on either number.
+        expect(CONFIG.targeting.range).toBeLessThanOrEqual(F().evade.triggerDistance);
+    });
+
+    test('raiders out-reach the visitor, so closing the gap costs something', () => {
+        // A CONSEQUENCE OF THE ABOVE RATHER THAN A SEPARATE DECISION, and worth
+        // pinning because it is the thing most likely to be read as a bug. Guns
+        // that stop at the dodge boundary are shorter than the raiders' own
+        // `playerFireRange`, so the run-in is flown under fire. That asymmetry is
+        // what stops the approach being a formality, and if a later tuning pass
+        // removes it the difficulty removed with it will be hard to attribute.
+        expect(CONFIG.targeting.range).toBeLessThan(F().playerFireRange);
+    });
+
     test('the Moon is put under threat early and stays under it', () => {
         // PRD 4.4: the Earth-versus-Moon choice is the entire strategy layer,
         // and it only exists if the Moon is contested from the start.
