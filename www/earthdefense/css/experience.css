@@ -925,6 +925,64 @@ body:not(.is-touch-device) .speedometer {
     opacity: 0.86;
 }
 
+/* ============================================================
+   The replay window
+   ============================================================
+   A frame with nothing inside it. The picture is drawn by the renderer into
+   this exact rectangle with a scissor, so the box must be TRANSPARENT and its
+   position is read from the DOM rather than duplicated in JavaScript. Give it a
+   background and it paints over the render.
+
+   Right hand side, vertically centred. That is the one region free of the
+   objective panel, the speedometer, the throttle, the look joystick, the top
+   buttons and the alert banner, on a desktop and on a phone in portrait alike.
+   Sized off the shorter viewport edge so it stays a corner window rather than
+   taking over a small screen. */
+.replay-inset {
+    position: fixed;
+    right: 18px;
+    top: 50%;
+    width: min(30vmin, 260px);
+    height: calc(min(30vmin, 260px) * 0.62);
+    transform: translateY(-50%);
+    border: 1px solid rgba(255, 154, 92, 0.55);
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+    z-index: 3;
+}
+
+.replay-inset.hidden {
+    display: none;
+}
+
+/* Which installation this is, on the same plate every other label carries. */
+.replay-caption {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    max-width: 100%;
+    padding: 2px 6px;
+    border-radius: 0 5px 0 5px;
+    background: rgba(6, 10, 18, 0.72);
+    font-size: 0.66rem;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    color: rgba(255, 214, 196, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The reticle and the lock bracket are about AIMING, and during the ship replay
+   the visitor is not aiming, they are watching. Leaving them up would draw a
+   sight over a camera that is nowhere near the guns. */
+body.replaying #reticle,
+body.replaying .lock-bracket {
+    opacity: 0;
+}
+
 /* Two arrows and no more: the installation under attack, and the nearest
    raider. One per hostile would ring the screen and say nothing. */
 .edge-chevron {

@@ -55,7 +55,14 @@ class WebGLRenderer {
     setSize(w, h) { this.size = { w, h }; }
     clear() { log.push('clear'); }
     clearDepth() { log.push('clearDepth'); }
-    render(scene, camera) { log.push(`render:${scene.tag}:${camera === installed.cameras[0] ? 'world' : 'overlay'}`); }
+    setScissorTest(on) { this.scissorTest = on; log.push(`scissorTest:${on}`); }
+    setViewport(x, y, w, h) { this.viewport = { x, y, w, h }; log.push(`viewport:${x},${y},${w},${h}`); }
+    setScissor(x, y, w, h) { this.scissor = { x, y, w, h }; log.push(`scissor:${x},${y},${w},${h}`); }
+    render(scene, camera) {
+        const which = camera === installed.cameras[0] ? 'world'
+            : (camera === installed.cameras[1] ? 'overlay' : 'inset');
+        log.push(`render:${scene.tag}:${which}`);
+    }
     setAnimationLoop(fn) { this.animationLoop = fn; }
     dispose() { this.disposed++; }
 }
@@ -253,6 +260,95 @@ describe('renderSpace', () => {
         mod.disposeSpace();
         mod.renderSpace(scene);
         expect(log).toEqual([]);
+    });
+});
+
+// ---- renderInset ------------------------------------------------------------
+//
+// A second pass into a corner of the same canvas, so an experience can show
+// something happening somewhere else without taking the camera off the visitor.
+// Almost everything here is about putting the renderer back the way it was
+// found: this pass runs for two seconds and the main view has to survive it.
+
+describe('renderInset', () => {
+    const RECT = { x: 1300, y: 350, width: 260, height: 160 };
+    const insetCamera = () => new THREE.PerspectiveCamera(55, 1, 10, 500000);
+
+    test('scissors, draws, and puts the renderer back', () => {
+        const scene = mod.initSpace({}, {});
+        log.length = 0;
+        mod.renderInset(scene, insetCamera(), RECT);
+
+        expect(log).toEqual([
+            'scissorTest:true',
+            // 1600x900 window, so a rect 350 down from the top with a height of
+            // 160 starts 390 up from the bottom.
+            'viewport:1300,390,260,160',
+            'scissor:1300,390,260,160',
+            'clear',
+            'render:world:inset',
+            'scissorTest:false',
+            'viewport:0,0,1600,900'
+        ]);
+    });
+
+    test('THE Y AXIS IS FLIPPED, because CSS and WebGL disagree about down', () => {
+        // Said on its own because it is the one bug this seam exists to stop.
+        // The rect comes from the DOM frame drawn over the window, which counts
+        // from the top; WebGL counts from the bottom. Get it wrong and the
+        // picture appears in the opposite corner from its own border.
+        const scene = mod.initSpace({}, {});
+        log.length = 0;
+        mod.renderInset(scene, insetCamera(), { x: 0, y: 0, width: 100, height: 100 });
+        // Read from the log rather than from the renderer, because the restore
+        // at the end of the pass has already put the viewport back by then.
+        expect(log).toContain('viewport:0,800,100,100');
+    });
+
+    test('the aspect comes from the window, so an inset is never stretched', () => {
+        const scene = mod.initSpace({}, {});
+        const camera = insetCamera();
+        mod.renderInset(scene, camera, RECT);
+
+        expect(camera.aspect).toBeCloseTo(260 / 160, 9);
+        expect(camera.projectionUpdates).toBe(1);
+        // And not recomputed every frame for a window that has not changed.
+        mod.renderInset(scene, camera, RECT);
+        expect(camera.projectionUpdates).toBe(1);
+    });
+
+    test('the STARFIELD sits the pass out, and comes back after', () => {
+        // The heaviest thing in the scene by vertex count and the least useful
+        // thing in a close-up. It also cannot be centred on two cameras at once.
+        const scene = mod.initSpace({}, {});
+        const stars = mod.getStarfield();
+        stars.visible = true;
+
+        let duringPass = null;
+        installed.renderer.render = () => { duringPass = stars.visible; };
+        mod.renderInset(scene, insetCamera(), RECT);
+
+        expect(duringPass).toBe(false);
+        expect(stars.visible).toBe(true);
+    });
+
+    test('a window too small to see is not drawn at all', () => {
+        const scene = mod.initSpace({}, {});
+        log.length = 0;
+        expect(mod.renderInset(scene, insetCamera(), { x: 0, y: 0, width: 1, height: 40 })).toBe(false);
+        expect(log).toEqual([]);
+    });
+
+    test('is a no-op with anything missing, or before init', () => {
+        const scene = mod.initSpace({}, {});
+        log.length = 0;
+        expect(mod.renderInset(null, insetCamera(), RECT)).toBe(false);
+        expect(mod.renderInset(scene, null, RECT)).toBe(false);
+        expect(mod.renderInset(scene, insetCamera(), null)).toBe(false);
+        expect(log).toEqual([]);
+
+        mod.disposeSpace();
+        expect(mod.renderInset(scene, insetCamera(), RECT)).toBe(false);
     });
 });
 

@@ -38,7 +38,7 @@
 import { EARTHDEFENSE_CONFIG, spawnPosition } from './config.min.js';
 import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
 import {
-    initSpace, renderSpace, resizeSpace, setMaxPixelRatio,
+    initSpace, renderSpace, renderInset, resizeSpace, setMaxPixelRatio,
     getRenderer, getWorldCamera, isTouchDevice
 } from '../../shared/js/space-1.0.0.min.js';
 import {
@@ -71,6 +71,11 @@ import {
 } from './fleet.min.js';
 import { initHud, updateHud, projectToScreen, getProjection, disposeHud } from './hud.min.js';
 import {
+    initReplay, updateReplay, startShipReplay, startInsetReplay, shipReplayEye,
+    getInsetCamera, isShipReplayRunning, isInsetRunning, isReplayRunning,
+    disposeReplay
+} from './replay.min.js';
+import {
     initAudio, setEngineThrottle, setMuted, playFire, playHit, playDestruction,
     playAlert, playLock, disposeAudio
 } from './audio.min.js';
@@ -102,6 +107,7 @@ let speedometer, speedoForward, speedoReverse, speedoDemand, speedoZero;
 let speedoGhostForward, speedoGhostReverse;
 let settingsPanel, settingsBtn, pauseModal;
 let reticle, lockBracket, combatStatus;
+let replayInset, replayCaption;
 let endModal, endTitle, endSubtitle, endTime, endSaved, endDestroyed, endBest;
 let scene = null;
 let overlayScene = null;
@@ -137,6 +143,20 @@ let _eventTimer = 0;
 // each life; the two timers are the wreck and the grace period after it.
 let _hullPoints = 0;
 let _respawnTimer = 0;
+// An end screen that is waiting for a destruction replay to finish, and the
+// rectangle the replay window is drawn into. Both null for almost the whole run.
+let _endScreenPending = null;
+let _insetRect = null;
+// Secondary detonations still to go off, soonest first, and the clock they are
+// due against. Empty for almost the whole run.
+const _aftershocks = [];
+let _aftershockClock = 0;
+// Where they go off relative to the wreck. Fixed, so a destruction looks the
+// same every time it is watched, and unit length so `offset` means units.
+const AFTERSHOCK_DIRS = [
+    { x: 0.62, y: 0.35, z: -0.70 },
+    { x: -0.66, y: -0.29, z: 0.69 }
+];
 let _invulnerable = 0;
 // Seconds of drawing owed while the pause panel is up. See shouldDrawThisFrame.
 let _pausedRenderDebt = 0;
@@ -188,6 +208,8 @@ async function init() {
     reticle = document.getElementById('reticle');
     lockBracket = document.getElementById('lock-bracket');
     combatStatus = document.getElementById('combat-status');
+    replayInset = document.getElementById('replay-inset');
+    replayCaption = document.getElementById('replay-caption');
     endModal = document.getElementById('end-modal');
     endTitle = document.getElementById('end-title');
     endSubtitle = document.getElementById('end-subtitle');
@@ -375,6 +397,7 @@ function startCombat() {
     _targetRules.allegiance = config.targeting.allegiance;
 
     initHud(config);
+    initReplay(config);
     // Wires a one-time gesture listener and builds nothing. The context waits
     // for the visitor's first click or key, which is both what browsers require
     // and the right manners: a page nobody has touched should make no sound.
@@ -436,8 +459,14 @@ function handleStateChange(next) {
         // while the game is being played.
         _hullHitTimer = 0;
         document.body.classList.remove('hull-hit');
-        showEndScreen(next);
+        // THE PANEL WAITS FOR THE REPLAY. The last life is lost on the frame
+        // the ship is destroyed, so opening the end screen here would drop a
+        // blurred backdrop over the one destruction the whole run led up to.
+        // `advanceEndScreen` puts it up the moment the shot finishes.
+        if (isReplayRunning()) _endScreenPending = next;
+        else showEndScreen(next);
     } else if (endModal) {
+        _endScreenPending = null;
         endModal.classList.add('hidden');
     }
 
@@ -576,6 +605,9 @@ function restartRun() {
     _announcedAlert = null;
     _hullHitTimer = 0;
     document.body.classList.remove('hull-hit');
+    // A restart during a replay would otherwise fly the new run from a camera
+    // still orbiting the last one's wreck, with the window open beside it.
+    clearReplays();
 
     resetRun();
     transition('playing');
@@ -602,6 +634,7 @@ function onDamageResolved(result) {
         if (result.destroyed) {
             noteDestroyed(result.id);
             playDestruction();
+            showStructureLost(result.id);
             track('structure-lost', { id: result.id });
             announce(`${labelFor(result.id)} destroyed.`);
         } else {
@@ -662,7 +695,16 @@ function killPlayer(cause) {
     if (_respawnTimer > 0 || isOver()) return;
     const config = EARTHDEFENSE_CONFIG;
 
-    spawnDestruction(getFlightState().position, config.fleet.effectRadius * 2);
+    const flight = getFlightState();
+    spawnDestruction(flight.position, config.replay.shipBurstRadius);
+    queueAftershocks(flight.position, config.replay.shipBurstRadius);
+    // AND STEP OUTSIDE TO WATCH IT. The burst used to happen at the eye, inside
+    // a near plane of 100 units, so most of the one destruction the visitor
+    // actually cares about was clipped away and the rest sprayed past the
+    // camera. The wreck was already a real pause; it was just a pause with
+    // nothing in it.
+    startShipReplay(flight.position, flight.forward, config.player.respawnDelay);
+    if (document.body) document.body.classList.add('replaying');
     setPaused(true);
     _respawnTimer = config.player.respawnDelay;
     _hullHitTimer = 0.45;
@@ -682,10 +724,101 @@ function killPlayer(cause) {
  *  again by whatever they respawned beside before they have their bearings. */
 function respawnPlayer() {
     const config = EARTHDEFENSE_CONFIG;
+    if (document.body) document.body.classList.remove('replaying');
     startFlight();
     _hullPoints = config.player.hullPoints;
     _invulnerable = config.player.respawnInvulnerable;
     setPaused(false);
+}
+
+/** Stop both shots and put the window away. Everything that ends a run or
+ *  starts a new one comes through here, so a replay can never outlive the thing
+ *  it was watching. */
+function clearReplays() {
+    initReplay(EARTHDEFENSE_CONFIG);
+    _aftershocks.length = 0;
+    _endScreenPending = null;
+    _insetRect = null;
+    if (replayInset) replayInset.classList.add('hidden');
+    if (document.body) document.body.classList.remove('replaying');
+}
+
+/** Queue the secondary detonations that keep a destruction going for as long as
+ *  the shot watching it.
+ *
+ *  ONE BURST IS OVER BEFORE THE SHOT IS: it lives 0.9 seconds against shots of
+ *  2.2 and 2.6, so without these the camera spends more than half its time
+ *  pulling back off an empty patch of space. The directions are fixed rather
+ *  than random, like the fleet's formation scatter, so a death looks the same
+ *  every time it is watched. */
+function queueAftershocks(at, radius) {
+    const list = EARTHDEFENSE_CONFIG.replay.aftershocks || [];
+    for (let i = 0; i < list.length; i++) {
+        const shock = list[i];
+        const dir = AFTERSHOCK_DIRS[i % AFTERSHOCK_DIRS.length];
+        _aftershocks.push({
+            at: shock.at,
+            radius: radius * shock.scale,
+            position: {
+                x: at.x + dir.x * shock.offset,
+                y: at.y + dir.y * shock.offset,
+                z: at.z + dir.z * shock.offset
+            }
+        });
+    }
+    _aftershocks.sort((a, b) => a.at - b.at);
+    _aftershockClock = 0;
+}
+
+/** Fire whichever queued detonations are due. Off the frame clock like every
+ *  other timed thing here, so a backgrounded tab cannot leave one pending. */
+function advanceAftershocks(deltaTime) {
+    if (!_aftershocks.length) return;
+    _aftershockClock += deltaTime;
+    while (_aftershocks.length && _aftershockClock >= _aftershocks[0].at) {
+        const shock = _aftershocks.shift();
+        spawnDestruction(shock.position, shock.radius);
+    }
+}
+
+/** An installation falling, given a burst and a corner window to watch it in.
+ *
+ *  THE CAMERA IS NOT TAKEN. An installation falls while the visitor is flying,
+ *  under fire, and up to 63,000 units away, so cutting to it and back would
+ *  take the controls away at a moment they did nothing wrong, and seven of them
+ *  can fall in one run. The window costs a second render pass for a couple of
+ *  seconds and costs the visitor nothing at all.
+ *
+ *  `entry.aim` is the beacon rather than the anchor, which is also where the
+ *  raiders were shooting, so the burst lands where the fire was going. */
+function showStructureLost(id) {
+    const entry = getStructure(id);
+    if (!entry) return false;
+    const config = EARTHDEFENSE_CONFIG;
+
+    spawnDestruction(entry.aim, config.replay.structureBurstRadius);
+    queueAftershocks(entry.aim, config.replay.structureBurstRadius);
+    startInsetReplay(entry.aim, entry.up, entry.site.label);
+
+    if (replayInset) {
+        // Un-hidden BEFORE the rectangle is read. A display:none element has no
+        // bounding box, so reading first would put the window at the origin
+        // with no size and the render would be scissored out of existence.
+        replayInset.classList.remove('hidden');
+        _insetRect = readInsetRect();
+    }
+    if (replayCaption) replayCaption.textContent = `${entry.site.label} lost`;
+    return true;
+}
+
+/** The replay window's rectangle in CSS pixels, read from the element that
+ *  draws its frame. One source of truth for where the window is: the stylesheet
+ *  positions it, and the scissor follows. */
+function readInsetRect() {
+    if (!replayInset || !replayInset.getBoundingClientRect) return null;
+    const box = replayInset.getBoundingClientRect();
+    if (!box || box.width < 2 || box.height < 2) return null;
+    return { x: box.left, y: box.top, width: box.width, height: box.height };
 }
 
 function labelFor(id) {
@@ -1032,6 +1165,10 @@ function setupEventListeners() {
         // portrait phone and a wide desktop want different shapes, and this is
         // the line whose absence is the classic two-camera bug.
         resizeCockpit(window.innerWidth / window.innerHeight);
+        // The replay window is sized in viewport units, so a resize moves it.
+        // The rectangle is read once when a shot starts, and this is the only
+        // thing that can invalidate it mid-shot.
+        if (_insetRect) _insetRect = readInsetRect();
     }, { signal });
 
     ['gesturestart', 'gesturechange', 'gestureend'].forEach(type =>
@@ -1129,6 +1266,15 @@ function animate() {
     // for.
     if (gamePhase() !== 'paused') updateWorld(deltaTime);
 
+    // OUTSIDE THE isPlaying BRANCH ON PURPOSE. The last life is lost on the
+    // same frame the run ends, so a replay that only advanced while playing
+    // would freeze on its first frame for the one death with the most riding
+    // on it. `advanceEndScreen` is what holds the end panel back until the shot
+    // has finished, and it has to run in the same place for the same reason.
+    updateReplay(deltaTime);
+    advanceAftershocks(deltaTime);
+    advanceEndScreen(deltaTime);
+
     if (isPlaying()) {
         tick(deltaTime);
         // A no-op while the ship is wrecked: the flight model is paused for the
@@ -1147,7 +1293,7 @@ function animate() {
         // than where it was last one, and the visitor's lock reads the same
         // fresh positions. The Moon carries three of the seven and travels 838
         // units a second, so a frame of lag there is a visible miss.
-        applyFlightToCamera(flight);
+        applyViewpoint(flight);
         updateFleet(deltaTime, playerState(flight));
         updateCombat(deltaTime, flight);
         advanceRespawn(deltaTime);
@@ -1157,12 +1303,43 @@ function animate() {
         updateObjectiveHud(flight);
     } else {
         const flight = getFlightState();
-        applyFlightToCamera(flight);
+        applyViewpoint(flight);
         updateReadouts(flight);
         updateObjectiveHud(flight);
     }
 
-    if (shouldDrawThisFrame(deltaTime)) renderSpace(scene, overlayScene);
+    if (shouldDrawThisFrame(deltaTime)) drawFrame();
+}
+
+/** Where the eye is this frame: the ship, or the replay watching its wreck. */
+function applyViewpoint(flight) {
+    const watching = shipReplayEye();
+    if (watching) applyReplayToCamera(watching);
+    else applyFlightToCamera(flight);
+}
+
+/** One frame of picture: the world, the cockpit over it, and the replay window
+ *  over that.
+ *
+ *  THE COCKPIT IS DROPPED WHILE THE SHIP REPLAY RUNS. The canopy is drawn by an
+ *  overlay camera a metre from the eye, so leaving it on would paint the inside
+ *  of a ship over a shot taken from six hundred units outside it, and that ship
+ *  is currently an expanding cloud.
+ *
+ *  The inset goes LAST, after the depth clear the cockpit pass does, so nothing
+ *  can be drawn over the window. */
+function drawFrame() {
+    const watching = isShipReplayRunning();
+    renderSpace(scene, watching ? null : overlayScene);
+
+    if (!isInsetRunning()) {
+        if (replayInset && !replayInset.classList.contains('hidden')) {
+            replayInset.classList.add('hidden');
+            _insetRect = null;
+        }
+        return;
+    }
+    if (_insetRect) renderInset(scene, getInsetCamera(), _insetRect);
 }
 
 /** Should this frame actually be drawn?
@@ -1191,6 +1368,20 @@ function shouldDrawThisFrame(deltaTime) {
     // at sixty hertz quietly turns ten into eight and a half.
     _pausedRenderDebt -= PAUSED_FRAME_SECONDS;
     return true;
+}
+
+/** Put up an end screen that was held back for a replay.
+ *
+ *  Off the frame clock rather than a timer, like everything else here, so a
+ *  backgrounded tab cannot strand a visitor looking at a wreck with no panel.
+ *  The replay is what gates it rather than a duration, so the two can never
+ *  disagree about how long the shot was. */
+function advanceEndScreen() {
+    if (!_endScreenPending || isReplayRunning()) return;
+    const outcome = _endScreenPending;
+    _endScreenPending = null;
+    if (document.body) document.body.classList.remove('replaying');
+    showEndScreen(outcome);
 }
 
 /** Count down the wreck, then put the ship back. Run off the frame clock rather
@@ -1266,6 +1457,23 @@ function applyFlightToCamera(s = getFlightState()) {
     // Rebuilt from two angles every frame, never accumulated, which is what
     // keeps roll out of a scene that is meant to have none.
     camera.rotation.set(s.pitch, s.yaw, 0);
+}
+
+/** THE SAME CAMERA, moved somewhere else. A second camera for the replay would
+ *  have meant teaching the HUD, the starfield and the renderer which one is
+ *  live this frame, in three places that would each have to be found again by
+ *  whoever adds the fourth. One camera means the pips and the nav markers
+ *  project from wherever the eye actually is, which is what makes a raider
+ *  passing the wreck still carry its diamond.
+ *
+ *  `lookAt` rather than a yaw and a pitch, because a replay is aimed at a point
+ *  rather than steered. It leaves no roll: three's default up is the world's,
+ *  and the shot never passes through it. */
+function applyReplayToCamera(watching) {
+    const camera = getWorldCamera();
+    if (!camera) return;
+    camera.position.set(watching.x, watching.y, watching.z);
+    camera.lookAt(watching.look.x, watching.look.y, watching.look.z);
 }
 
 /** Solve the speedometer's geometry from the ship it measures, once.
@@ -1449,9 +1657,12 @@ function cleanup() {
     disposeFleet();
     disposeCockpit();
     disposeHud();
+    disposeReplay();
     disposeAudio();
     disposeGameState();
     overlayScene = null;
+    _endScreenPending = null;
+    _insetRect = null;
 }
 
 function endSession() {
@@ -1513,7 +1724,9 @@ export const __test__ = {
     combatCandidates, resolveDamage, onDamageResolved, notePlayerHit,
     updateObjectiveHud, advanceNotices, playerState, getProjection,
     startGame, handleStateChange, showEndScreen, endMessage, formatClock,
-    restartRun, killPlayer, respawnPlayer, advanceRespawn,
+    restartRun, killPlayer, respawnPlayer, advanceRespawn, advanceEndScreen,
+    showStructureLost, clearReplays, readInsetRect, drawFrame, applyViewpoint,
+    queueAftershocks, advanceAftershocks, aftershocks: _aftershocks,
     openPause, closePause, beginFlight,
     layOutSpeedometer, speedoPosition, updateSpeedometer, updateReadouts,
     forwardArmFraction, reverseArmFraction,

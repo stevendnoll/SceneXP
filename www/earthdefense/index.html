@@ -212,6 +212,18 @@
              config.fleet.total, so the fleet size stays a config number. -->
         <div id="hostile-pips" class="hostile-pips" aria-hidden="true"></div>
 
+        <!-- The corner window an installation's destruction is watched in. The
+             picture inside it is drawn by the renderer into exactly this
+             rectangle (space.js, renderInset), so this element is the layout
+             and the scissor reads its bounding box rather than the two being
+             positioned separately and drifting apart. Right hand side and
+             vertically centred: the only region free of the objective panel,
+             the speedometer, the throttle, the joystick, the top buttons and
+             the alert banner on both a desktop and a phone in portrait. -->
+        <div id="replay-inset" class="replay-inset hidden" aria-hidden="true">
+            <span class="replay-caption" id="replay-caption"></span>
+        </div>
+
         <!-- ONE range readout, under the nearest raider's diamond. Twelve
              identical diamonds say where the raiders are and nothing about
              which one is about to be a problem, and a number under every one of

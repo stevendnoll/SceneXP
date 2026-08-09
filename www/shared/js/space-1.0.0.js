@@ -26,6 +26,10 @@
  * no chance of flying out of it, and its radius can stay comfortably inside
  * the far plane instead of chasing it.
  *
+ * renderInset() draws the world a second time into a rectangle of the canvas,
+ * for an experience that wants to show something happening somewhere else
+ * without taking the camera off the visitor.
+ *
  * Nothing here knows what is being rendered. Bodies, ships, and cockpits are
  * the caller's business; this module owns the frame.
  */
@@ -166,6 +170,57 @@ export function renderSpace(scene, overlayScene) {
         renderer.clearDepth();
         renderer.render(overlayScene, overlayCamera);
     }
+}
+
+/** Draw the same scene a SECOND time, from another camera, into a rectangle of
+ *  the canvas. A picture in picture: a destruction watched from somewhere else
+ *  while the visitor keeps flying.
+ *
+ *  `rect` is in CSS pixels with its origin at the TOP LEFT, because that is
+ *  where the DOM frame drawn over it lives and having the two disagree is the
+ *  classic way this ends up a window in the wrong corner. WebGL counts up from
+ *  the bottom, so the flip happens here, once.
+ *
+ *  THE STARFIELD IS LEFT OUT of the second pass, which is the difference
+ *  between this costing a second full frame and costing very little. The stars
+ *  are the heaviest thing in the scene by vertex count and the least useful
+ *  thing in a close-up of an explosion, where the subject fills the window and
+ *  the background is a planet. It also cannot be centred on two cameras at once.
+ *
+ *  The aspect is taken from the rectangle rather than from the caller, so an
+ *  inset can never be drawn stretched. */
+export function renderInset(scene, camera, rect) {
+    if (!renderer || !scene || !camera || !rect) return false;
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+    if (width < 2 || height < 2) return false;
+
+    const x = Math.round(rect.x);
+    const y = Math.round(viewportHeight() - rect.y - height);
+
+    const aspect = width / height;
+    if (camera.aspect !== aspect) {
+        camera.aspect = aspect;
+        camera.updateProjectionMatrix();
+    }
+
+    const starsWere = starfield ? starfield.visible : false;
+    if (starfield) starfield.visible = false;
+
+    // The scissor is what keeps the clear inside the window. Without it this
+    // clears the whole canvas and the main view is gone.
+    renderer.setScissorTest(true);
+    renderer.setViewport(x, y, width, height);
+    renderer.setScissor(x, y, width, height);
+    renderer.clear();
+    renderer.render(scene, camera);
+
+    // Everything back the way it was found, or the next frame's main pass
+    // draws into this corner too.
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, viewportWidth(), viewportHeight());
+    if (starfield) starfield.visible = starsWere;
+    return true;
 }
 
 /** Resize the renderer and BOTH cameras. Forgetting the overlay camera here is

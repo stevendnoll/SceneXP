@@ -907,9 +907,74 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // they respawned next to before they have their bearings.
         respawnInvulnerable: 2,
 
-        // How long the wreck hangs before the ship is put back. Long enough to
-        // register what happened, short enough not to be a punishment.
-        respawnDelay: 1.4
+        // How long the wreck hangs before the ship is put back, and the length
+        // of the replay that now fills it. ONE NUMBER FOR BOTH, so the camera
+        // cannot still be orbiting a cloud the ship has already been put back
+        // into. Up from 1.4, which was as long as an empty pause is worth and
+        // is not long enough to watch anything.
+        respawnDelay: 2.2
+    },
+
+    // ---- The destruction replays (replay.js) -------------------------------
+    //
+    // TWO SHOTS, AND THEY DIFFER IN WHAT THEY TAKE FROM THE VISITOR. The ship
+    // shot takes the camera, which costs nothing because the flight model is
+    // already frozen for the wreck. The installation shot takes nothing at all:
+    // it is a window in the corner, drawn from a second camera while the
+    // visitor keeps flying, because an installation falls at a moment they did
+    // nothing wrong and can be under fire.
+    //
+    // THE DISTANCES ARE SET BY THE BURST, not by taste. A burst throws its
+    // particles at `weapons.burstSpeed` for `weapons.burstLife`, which is 900
+    // for 0.9 seconds, so the cloud reaches between 284 and 810 units. A camera
+    // any closer than that is INSIDE the explosion rather than watching it, and
+    // the world camera's near plane of 100 would be eating the near half of the
+    // cloud as well. Both shots therefore open outside the slow half and pull
+    // back past the fast half.
+    replay: {
+        // The visitor's own ship. Starts behind, which is continuous with the
+        // view they just lost, and swings about 49 degrees.
+        shipSeconds: 2.2,
+        shipStartDistance: 420,
+        shipEndDistance: 900,
+        shipRise: 0.3,          // radians above the level, so there is a sky
+        shipSwing: 0.85,
+        // `spawnDestruction`'s radius scales the PARTICLE SIZE rather than how
+        // far they fly, which is worth knowing before tuning it: 520 against
+        // the 200 unit base is a burst of chunks two and a half times the size
+        // of a raider's, in the same volume.
+        shipBurstRadius: 520,
+
+        // An installation, in the corner window. Further out than the ship
+        // shot, because a structure is anchored to a planet and the shot wants
+        // the ground under it in frame.
+        insetSeconds: 2.6,
+        insetStartDistance: 700,
+        insetEndDistance: 1200,
+        insetRise: 0.3,
+        insetSwing: 0.55,
+        insetFov: 55,
+        insetNear: 10,          // a close-up, so it can afford a nearer plane
+        insetFar: 500000,
+        // Installations had NO burst at all until this: a destroyed one swapped
+        // to a wreck material and tilted, which is a fine wreck and not an
+        // explosion. Larger than a raider's 170, since a building is not a ship.
+        structureBurstRadius: 420,
+
+        // ONE BURST IS OVER BEFORE THE SHOT IS. It lives 0.9 seconds and the
+        // shots run 2.2 and 2.6, so a single detonation would leave the camera
+        // pulling back off an empty patch of space for more than half the time
+        // it is on screen. These are secondary detonations around the wreck:
+        // `at` is seconds into the shot, `scale` multiplies the burst size, and
+        // `offset` is how far from the centre they go off.
+        //
+        // The directions are FIXED rather than random, like the fleet's
+        // formation scatter, so a death looks the same every time it is
+        // watched and the whole sequence stays assertable.
+        aftershocks: [
+            { at: 0.55, scale: 0.65, offset: 190 },
+            { at: 1.15, scale: 0.45, offset: 330 }
+        ]
     },
 
     // ---- Boot and site ----------------------------------------------------

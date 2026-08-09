@@ -39,7 +39,8 @@ beforeEach(() => {
     // settings panel matters most: main.js's Escape handler checks it before it
     // reaches for the pause, so a panel that reads as already open swallows
     // every Escape key in the suite.
-    ['pause-modal', 'end-modal', 'settings-panel', 'lock-bracket', 'perimeter-notice']
+    ['pause-modal', 'end-modal', 'settings-panel', 'lock-bracket', 'perimeter-notice',
+        'replay-inset']
         .forEach(id => dom.el(id).classList.add('hidden'));
 
     dom.documentStub.pointerLockElement = null;
@@ -283,10 +284,18 @@ describe('ending a run', () => {
 
     test('losing every installation loses it, and says so plainly', async () => {
         const main = await boot();
+        const config = await CONFIG();
         enterWorld();
         await loseEveryInstallation(main);
 
         expect(main.getState().phase).toBe('lost');
+        // THE PANEL WAITS FOR THE REPLAY. The last installation falling starts
+        // the corner window, and dropping a blurred backdrop over it would hide
+        // the destruction that ended the run.
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
+        stepFrames(Math.ceil(config.replay.insetSeconds / 0.016) + 2);
+
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
         expect(dom.el('end-title').textContent).toBe('Run ended');
         expect(dom.el('end-subtitle').textContent).toMatch(/last installation/);
         expect(dom.el('end-saved').textContent).toBe('0');
@@ -378,6 +387,154 @@ describe('ending a run', () => {
         expect(main.__test__.endMessage('won', counters)).toMatch(/Not a scratch/);
         counters.friendlyStructures = 4;
         expect(main.__test__.endMessage('won', counters)).toMatch(/still yours/);
+    });
+});
+
+// ---- The destruction replays ------------------------------------------------
+//
+// Two shots that differ in what they take from the visitor, wired here and
+// measured in the replay suite. What matters at this level is that the wiring
+// exists, that it is put away again, and that nothing survives a restart.
+
+describe('watching things be destroyed', () => {
+    const REPLAY = async () => await import('../www/earthdefense/js/replay.min.js');
+    const replaying = () => dom.documentStub.body.classList.contains('replaying');
+
+    test('losing the ship steps outside to watch, and comes back in', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        const replay = await REPLAY();
+        enterWorld();
+        stepFrames(2);
+
+        main.__test__.killPlayer('fire');
+        expect(replay.isShipReplayRunning()).toBe(true);
+        // The reticle and the lock bracket are about aiming, and a visitor
+        // watching their own wreck is not aiming.
+        expect(replaying()).toBe(true);
+
+        stepFrames(Math.ceil(config.player.respawnDelay / 0.016) + 4);
+        expect(replay.isShipReplayRunning()).toBe(false);
+        expect(replaying()).toBe(false);
+        expect(main.getState().phase).toBe('playing');
+    });
+
+    test('losing an installation opens the window, and names what was lost', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        const replay = await REPLAY();
+        const { getStructures } = await import('../www/earthdefense/js/structures.min.js');
+        enterWorld();
+
+        const entry = getStructures()[0];
+        main.__test__.onDamageResolved({ id: entry.site.id, hitPoints: 0, destroyed: true });
+
+        expect(replay.isInsetRunning()).toBe(true);
+        expect(dom.el('replay-inset').classList.contains('hidden')).toBe(false);
+        expect(dom.el('replay-caption').textContent).toBe(`${entry.site.label} lost`);
+        // AND THE VISITOR KEEPS FLYING. The whole reason this is a window and
+        // not a cut: an installation falls at a moment they did nothing wrong.
+        expect(main.getState().phase).toBe('playing');
+        expect(replay.isShipReplayRunning()).toBe(false);
+
+        stepFrames(Math.ceil(config.replay.insetSeconds / 0.016) + 4);
+        expect(replay.isInsetRunning()).toBe(false);
+        expect(dom.el('replay-inset').classList.contains('hidden')).toBe(true);
+    });
+
+    test('the window is measured from the frame drawn around it', async () => {
+        // One source of truth for where it is: the stylesheet positions the
+        // element and the scissor follows its box. Two copies of the geometry
+        // is how a picture ends up beside its own border.
+        const main = await boot();
+        enterWorld();
+        const rect = main.__test__.readInsetRect();
+        expect(rect).toMatchObject({ x: 0, y: 0, width: 800, height: 600 });
+    });
+
+    test('a structure with no record asks for no window', async () => {
+        const main = await boot();
+        enterWorld();
+        expect(main.__test__.showStructureLost('nothing-by-that-name')).toBe(false);
+        expect(dom.el('replay-inset').classList.contains('hidden')).toBe(true);
+    });
+
+    test('the explosion lasts as long as the shot watching it', async () => {
+        // A burst lives 0.9 seconds and the shots run 2.2 and 2.6, so a single
+        // detonation leaves the camera pulling back off an empty patch of space
+        // for more than half the time it is on screen. Secondary detonations go
+        // off around the wreck to fill it.
+        const main = await boot();
+        const config = await CONFIG();
+        enterWorld();
+
+        main.__test__.killPlayer('fire');
+        expect(main.__test__.aftershocks).toHaveLength(config.replay.aftershocks.length);
+        // Soonest first, and all of them inside the shot.
+        const due = main.__test__.aftershocks.map(s => s.at);
+        expect([...due].sort((a, b) => a - b)).toEqual(due);
+        expect(Math.max(...due)).toBeLessThan(config.player.respawnDelay);
+
+        stepFrames(Math.ceil(Math.max(...due) / 0.016) + 4);
+        expect(main.__test__.aftershocks).toHaveLength(0);
+    });
+
+    test('an aftershock goes off BESIDE the wreck, not on top of it', async () => {
+        // On the centre they would be one bigger flash rather than a sequence.
+        const main = await boot();
+        const config = await CONFIG();
+        enterWorld();
+
+        main.__test__.queueAftershocks({ x: 0, y: 0, z: 0 }, 400);
+        for (const shock of main.__test__.aftershocks) {
+            const distance = Math.hypot(shock.position.x, shock.position.y, shock.position.z);
+            expect(distance).toBeGreaterThan(100);
+            expect(distance).toBeLessThan(config.replay.shipEndDistance);
+            expect(shock.radius).toBeLessThan(400);   // each one smaller than the first
+        }
+    });
+
+    test('a restart cancels whatever was being watched', async () => {
+        // Otherwise the new run flies from a camera still orbiting the last
+        // one's wreck, with the window open beside it.
+        const main = await boot();
+        const replay = await REPLAY();
+        const { getStructures } = await import('../www/earthdefense/js/structures.min.js');
+        enterWorld();
+
+        main.__test__.killPlayer('fire');
+        main.__test__.showStructureLost(getStructures()[0].site.id);
+        expect(replay.isReplayRunning()).toBe(true);
+
+        main.__test__.restartRun();
+        expect(replay.isReplayRunning()).toBe(false);
+        expect(replaying()).toBe(false);
+        expect(dom.el('replay-inset').classList.contains('hidden')).toBe(true);
+    });
+
+    test('the LAST life gets its replay before the end panel', async () => {
+        // The one death with the most riding on it, and the one that would
+        // otherwise be hidden under a blurred backdrop on the frame it happened.
+        const main = await boot();
+        const config = await CONFIG();
+        const replay = await REPLAY();
+        enterWorld();
+
+        // Every life but the last, each one allowed to run its wreck out so the
+        // next kill is permitted.
+        for (let life = 0; life < config.player.lives - 1; life++) {
+            main.__test__.killPlayer('fire');
+            stepFrames(200);
+        }
+        main.__test__.killPlayer('fire');
+
+        expect(main.getState().phase).toBe('lost');
+        expect(replay.isShipReplayRunning()).toBe(true);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
+
+        stepFrames(Math.ceil(config.player.respawnDelay / 0.016) + 4);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
+        expect(replaying()).toBe(false);
     });
 });
 
