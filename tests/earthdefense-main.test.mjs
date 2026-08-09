@@ -703,6 +703,51 @@ describe('reduced effects', () => {
         expect(main.__test__.applyReducedFx().reduced).toBe(false);
     });
 
+    test('a phone starts with it on, and a desktop does not', async () => {
+        // The phone is the primary target and the hardest frame in the
+        // experience, so the default is the setting most phones want rather
+        // than the one that looks best on a workstation.
+        globalThis.navigator.maxTouchPoints = 2;
+        const main = await boot();
+
+        expect(main.__test__.settings.reducedFx).toBe(true);
+        expect(dom.el('reduced-fx-toggle').checked).toBe(true);
+        expect(main.__test__.applyReducedFx().reduced).toBe(true);
+    });
+
+    test('a phone visitor who turns it off keeps it off', async () => {
+        // The default is a starting point, not a policy. An explicit choice is
+        // in storage, and storage wins on the next visit.
+        const config = await CONFIG();
+        globalThis.navigator.maxTouchPoints = 2;
+        localStorage.setItem(config.storage.reducedFx, 'false');
+        const main = await boot();
+
+        expect(main.__test__.settings.reducedFx).toBe(false);
+        expect(main.__test__.applyReducedFx().reduced).toBe(false);
+    });
+
+    test('a phone gets the thrust throttle, and a desktop keeps the lever', async () => {
+        // Reported from an iPhone: a touch slider that keeps its position is a
+        // lever whose setting can be read but never felt. On glass the throttle
+        // commands acceleration and springs home instead. The seam is one flag
+        // into the shared flight model, so this reaches through the built copy
+        // and asks the ship what it does when the throttle closes.
+        globalThis.navigator.maxTouchPoints = 2;
+        await boot();
+        enterWorld();
+        const flight = await import('../www/shared/js/flight-1.0.0.min.js');
+
+        flight.setTargetSpeedFraction(1);
+        stepFrames(120);
+        const underway = flight.getFlightState().speed;
+        expect(underway).toBeGreaterThan(0);
+
+        flight.setTargetSpeedFraction(0);       // the thumb lifts
+        stepFrames(120);
+        expect(flight.getFlightState().speed).toBeCloseTo(underway, 6);
+    });
+
     test('a system reduced-motion preference does it without the checkbox', async () => {
         // PRD 12 asks for both routes. A visitor who set the preference at the
         // operating system should not have to find a checkbox as well.

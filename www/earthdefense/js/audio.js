@@ -24,16 +24,22 @@
  * public function is safe to call before the context exists, after it has been
  * disposed, and in a browser with no Web Audio at all.
  *
- * ONE VOICE PER CUE, AND THEY ARE SHORT. The engine is a single continuous pair
- * of oscillators whose pitch follows the throttle; everything else is a
- * fire-and-forget node that disconnects itself. Nothing accumulates.
+ * ONE VOICE PER CUE, AND THEY ARE SHORT. The engine is the one continuous
+ * sound: three sine oscillators making a low hum, which gets louder with the
+ * throttle. Everything else is a fire-and-forget node that disconnects itself.
+ * Nothing accumulates.
+ *
+ * A PHONE SPEAKER IS THE HARD CASE. It reproduces very little below about
+ * 500 Hz, so anything that carries its meaning down there is a sound only the
+ * author hears. The cues are all mixed above that line. The engine is not, and
+ * cannot be: it is a low hum by design. `buildEngine` has the long version.
  */
 
 import { EARTHDEFENSE_CONFIG } from './config.min.js';
 
 let ctx = null;
 let master = null;
-let engine = null;        // { osc, sub, gain, filter }
+let engine = null;        // { hum, beat, octave, gain, ... }
 let settings = null;
 let muted = false;
 let armed = false;
@@ -43,12 +49,24 @@ let armListeners = null;
 // clicks into a wall of noise. Keyed by cue name, holding a context timestamp.
 const lastPlayed = new Map();
 
+// How much of the engine is present at a standstill, as a fraction of full.
+// Low on purpose: LOUDNESS IS THE THROTTLE, so there has to be somewhere to
+// climb from. Not zero, because a ship holding station is still under power.
+const HUM_AT_IDLE = 0.10;
+
 const DEFAULTS = {
     masterGain: 0.16,
-    engineGain: 0.5,
-    engineIdleHz: 46,
-    engineFullHz: 128,
-    engineGlide: 0.35,     // seconds for the tone to follow a throttle change
+    engineGain: 0.45,
+    engineGlide: 0.35,     // seconds for the hum to follow a throttle change
+    // Three sine voices and nothing else. The pitch moves a little, but the
+    // throttle is carried by LEVEL, which is what the ship is asked to sound
+    // like: quiet hum parked, loud hum running.
+    engineIdleHz: 90,
+    engineFullHz: 140,
+    engineDetune: 1.006,   // the second voice, just off the first, so it breathes
+    engineHumGain: 0.55,
+    engineBeatGain: 0.44,
+    engineOctaveGain: 0.28,
     fireGain: 0.30,
     fireHz: 220,
     hitGain: 0.34,
@@ -102,47 +120,75 @@ export function start() {
     }
 }
 
-/** The engine: a low sawtooth with a sine an octave under it, through a gentle
- *  low pass. Two voices rather than one because a single saw at this pitch
- *  reads as a buzz, and the sub is what makes it read as mass. */
+/** The engine: A LOW HUM, MADE OF THREE SINE WAVES. That is the whole of it.
+ *
+ *  Two earlier versions are worth recording, because both were wrong in ways
+ *  that are easy to walk back into.
+ *
+ *  The first was a sawtooth, and it buzzed like an insect. A sawtooth carries
+ *  every harmonic at 1/n, so at full throttle it was a 128 Hz fundamental under
+ *  ten strong partials. A phone speaker reproduces almost nothing below about
+ *  500 Hz: it played the partials, threw the fundamental away, and what is left
+ *  of a sawtooth minus its bottom is a bee.
+ *
+ *  The second answered that with a bed of filtered noise, which reads as air
+ *  rushing past a hull. IN SPACE THERE IS NO AIR. It was a good engine for an
+ *  aircraft and the wrong sound for this ship entirely.
+ *
+ *  So: sine waves only. A sine has exactly one partial, which means there is
+ *  nothing in this voice that can buzz on any speaker, and no noise, which
+ *  means nothing that can read as wind.
+ *
+ *    hum     The fundamental.
+ *    beat    The same note a fraction of a percent sharp. Two near-identical
+ *            sines drift in and out of phase, which is heard as a slow swell
+ *            of about half a cycle a second. That swell is the only thing
+ *            keeping this from sounding like a test tone, and it costs one
+ *            oscillator.
+ *    octave  Twice the fundamental, quiet. A hum lives below what a handset
+ *            speaker can move, so this is the part a phone actually plays.
+ *
+ *  THE THROTTLE IS LEVEL, NOT PITCH. The hum climbs a little in pitch, enough
+ *  to feel like effort, but the thing a player hears is the engine getting
+ *  louder. */
 function buildEngine() {
     const gain = ctx.createGain();
     gain.gain.value = 0;                 // silent at rest; the throttle opens it
     gain.connect(master);
 
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 600;
-    filter.Q.value = 0.7;
-    filter.connect(gain);
+    const voice = (hz, level) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = hz;
+        const voiceGain = ctx.createGain();
+        voiceGain.gain.value = level;
+        osc.connect(voiceGain);
+        voiceGain.connect(gain);
+        osc.start();
+        return osc;
+    };
 
-    const osc = ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.value = settings.engineIdleHz;
-    osc.connect(filter);
-    osc.start();
+    const base = settings.engineIdleHz;
+    const hum = voice(base, settings.engineHumGain);
+    const beat = voice(base * settings.engineDetune, settings.engineBeatGain);
+    const octave = voice(base * 2, settings.engineOctaveGain);
 
-    const sub = ctx.createOscillator();
-    sub.type = 'sine';
-    sub.frequency.value = settings.engineIdleHz * 0.5;
-    const subGain = ctx.createGain();
-    subGain.gain.value = 0.6;
-    sub.connect(subGain);
-    subGain.connect(filter);
-    sub.start();
-
-    engine = { osc, sub, gain, filter, subGain };
+    engine = { hum, beat, octave, gain };
 }
 
 // ---- The engine -------------------------------------------------------------
 
 /** Follow the throttle. `fraction` is -1 to 1, the flight model's own number.
  *
- *  The tone GLIDES rather than jumping, over about a third of a second, which
- *  is what makes it read as an engine spooling instead of as a slider. Reverse
- *  sounds the same as ahead: the ship has one engine and it is working either
- *  way, and giving reverse its own voice would imply a mechanism that is not
- *  there. */
+ *  LOUDER IS FASTER. The level walks from a tenth of full at a standstill up to
+ *  full at the stops, and that is the thing a player hears. The pitch comes up
+ *  by about a fifth over the same range, which is enough to feel like effort
+ *  without turning the hum into a siren.
+ *
+ *  It GLIDES rather than jumping, over about a third of a second, which is what
+ *  makes it read as an engine spooling instead of as a slider. Reverse sounds
+ *  the same as ahead: the ship has one engine and it is working either way, and
+ *  giving reverse its own voice would imply a mechanism that is not there. */
 export function setEngineThrottle(fraction) {
     if (!engine || !ctx) return;
     const amount = Math.min(1, Math.abs(fraction || 0));
@@ -151,11 +197,11 @@ export function setEngineThrottle(fraction) {
     const now = ctx.currentTime;
     const glide = settings.engineGlide;
 
-    ramp(engine.osc.frequency, target, now, glide);
-    ramp(engine.sub.frequency, target * 0.5, now, glide);
-    // Opens from silence, so a stationary ship in orbit is genuinely quiet.
-    ramp(engine.gain.gain, settings.engineGain * (0.12 + amount * 0.88), now, glide);
-    ramp(engine.filter.frequency, 380 + amount * 900, now, glide);
+    ramp(engine.hum.frequency, target, now, glide);
+    ramp(engine.beat.frequency, target * settings.engineDetune, now, glide);
+    ramp(engine.octave.frequency, target * 2, now, glide);
+    ramp(engine.gain.gain,
+        settings.engineGain * (HUM_AT_IDLE + amount * (1 - HUM_AT_IDLE)), now, glide);
 }
 
 /** setTargetAtTime rather than a linear ramp: it never overshoots, it needs no
@@ -342,11 +388,13 @@ export function disposeAudio() {
     armListeners = null;
 
     if (engine) {
-        try {
-            engine.osc.stop();
-            engine.sub.stop();
-            engine.gain.disconnect();
-        } catch (e) { /* a context that never started */ }
+        // Each in its own try. A voice that never started throws on stop, and
+        // one that does must not take the others down with it: an oscillator
+        // left running after dispose is a tone that outlives the game.
+        for (const voice of [engine.hum, engine.beat, engine.octave]) {
+            try { if (voice) voice.stop(); } catch (e) { /* never started */ }
+        }
+        try { engine.gain.disconnect(); } catch (e) { /* already gone */ }
     }
     if (ctx && typeof ctx.close === 'function') {
         try { ctx.close(); } catch (e) { /* already closed */ }

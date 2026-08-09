@@ -299,9 +299,11 @@
     </div>
 
     <!-- Touch controls. The LEFT thumb gets a throttle rather than a movement
-         stick: it keeps its position when released, so a long crossing does not
-         mean holding a thumb against the glass. The RIGHT thumb keeps the
-         familiar shared look joystick. -->
+         stick, and on touch it COMMANDS ACCELERATION rather than picking a
+         speed: it springs back to the detent when released and the ship carries
+         on at the speed it reached, so a long crossing does not mean holding a
+         thumb against the glass. Double tap to come to a stop. The RIGHT thumb
+         keeps the familiar shared look joystick. -->
     <div id="touch-controls">
         <div id="throttle-zone">
             <div id="throttle-track" class="throttle-track">
@@ -373,9 +375,10 @@
                 <input type="checkbox" id="mute-toggle">
                 <span>Mute sound</span>
             </label>
-            <p class="settings-hint">Reduced effects lowers the rendering detail. Handy if
-                the view feels less than smooth on your device. Nothing in the game is
-                told by sound alone, so muting loses you nothing.</p>
+            <p class="settings-hint">Reduced effects lowers the rendering detail, and it
+                starts switched on for phones and tablets. Turn it off any time you would
+                rather have the fuller sky. Nothing in the game is told by sound alone, so
+                muting loses you nothing.</p>
         </div>
     </div>
 
@@ -390,7 +393,7 @@
                 <ul class="help-list">
                     <li class="help-desktop"><strong>Throttle:</strong> <kbd>W</kbd> and <kbd>S</kbd>, or the up and down arrows. <kbd>X</kbd> to stop.</li>
                     <li class="help-desktop"><strong>Look:</strong> move the mouse, or steer with <kbd>A</kbd> <kbd>D</kbd> to turn and <kbd>Q</kbd> <kbd>E</kbd> to climb and dive.</li>
-                    <li class="help-mobile"><strong>Throttle:</strong> the slider on the left. It stays where you leave it, so you can let go. Double tap it to stop.</li>
+                    <li class="help-mobile"><strong>Throttle:</strong> the slider on the left. Hold it up to gather speed and pull it down to shed speed. Let go and it springs back to the middle, and the ship keeps the speed it has. Double tap it to come to a stop.</li>
                     <li class="help-mobile"><strong>Look:</strong> drag the joystick on the right.</li>
                     <li><strong>Guns:</strong> there is no fire button. Line a target up in
                         the middle of your view and the guns take care of the rest. The

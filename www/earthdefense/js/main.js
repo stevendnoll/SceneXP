@@ -280,7 +280,15 @@ function buildWorldWithTextures() {
 function startFlight() {
     const config = EARTHDEFENSE_CONFIG;
     initFlight({
-        flight: { ...config.flight, ...settings },
+        // THE TOUCH THROTTLE COMMANDS ACCELERATION, the desktop one picks a
+        // speed. A lever needs somewhere to rest and something to rest against,
+        // and glass offers neither: a thumb lifted off a touch slider leaves a
+        // setting behind that cannot be felt, only read, and reading it means
+        // looking away from the fight. A stick that springs home and means
+        // "faster" while it is held asks nothing of a sense the device does not
+        // have. The keyboard keeps the lever, where a key really is a momentary
+        // contact driving a value that persists.
+        flight: { ...config.flight, ...settings, thrustThrottle: state.isMobile },
         spawn: {
             position: spawnPosition(config),
             yaw: config.spawn.yaw,
@@ -868,7 +876,15 @@ function loadSettings() {
     const sensitivity = parseFloat(readStored(keys.sensitivity, ''));
     if (Number.isFinite(sensitivity) && sensitivity > 0) settings.lookSensitivity = sensitivity;
     settings.invertPitch = readStored(keys.invertPitch, 'false') === 'true';
-    settings.reducedFx = readStored(keys.reducedFx, 'false') === 'true';
+    // REDUCED EFFECTS STARTS ON WHEN THE VISITOR ARRIVED ON A TOUCH DEVICE.
+    // A phone is the primary target (PRD G5) and it is also the hardest frame
+    // in the experience: three textured spheres, a canopy, a six thousand point
+    // starfield of alpha blended quads, and a DPR of 3 to draw it all at. The
+    // default is the setting most phones want, and the checkbox is right there
+    // for the ones that do not. An explicit choice writes storage, so a visitor
+    // who turns it off keeps it off.
+    const reducedDefault = state.isMobile ? 'true' : 'false';
+    settings.reducedFx = readStored(keys.reducedFx, reducedDefault) === 'true';
     settings.muted = readStored(keys.muted, 'false') === 'true';
     applyReducedFx();
 }
@@ -1374,10 +1390,18 @@ function updateSpeedometer(s) {
 }
 
 function updateReadouts(s = getFlightState()) {
-    // The engine follows the THROTTLE rather than the speed, so pushing the
-    // lever is answered immediately instead of a second later once the ship has
-    // caught up. That gap is what would make the controls feel unresponsive.
-    setEngineThrottle(s.throttle);
+    // THE LOUDER OF WHAT IS BEING ASKED FOR AND WHAT THE SHIP IS DOING.
+    //
+    // The throttle alone answers a push immediately, instead of a second later
+    // once the ship has caught up, and that gap is what would make the controls
+    // feel unresponsive. But a spring-loaded touch throttle sits at zero for
+    // most of a crossing, and cutting the engine to nothing every time a thumb
+    // lifts would be a ship that goes silent at four thousand km/s. The speed
+    // term holds the hum up through the coast, the throttle term still answers
+    // the burn, and on the desktop the two are so nearly the same number that
+    // nothing changes at all.
+    const reach = Math.max(1, EARTHDEFENSE_CONFIG.flight.maxForward);
+    setEngineThrottle(Math.max(Math.abs(s.throttle), Math.abs(s.speed) / reach));
 
     updateSpeedometer(s);
 

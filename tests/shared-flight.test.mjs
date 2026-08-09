@@ -660,6 +660,186 @@ describe('the touch throttle', () => {
     });
 });
 
+// ---- Thrust mode ------------------------------------------------------------
+//
+// What the touch UI runs. The throttle commands ACCELERATION rather than
+// picking a speed, and it springs home when the thumb lifts. Reported from an
+// iPhone: a lever is the wrong instrument for glass, because a setting left
+// behind on a touch slider can be read but never felt.
+
+describe('the thrust throttle', () => {
+    const thrust = (overrides = {}) =>
+        start({ ...overrides, flight: { ...(overrides.flight || {}), thrustThrottle: true } });
+
+    // A second at full throttle, in the frames a real one would arrive in.
+    const fly = (seconds, step = 0.1) => {
+        for (let i = 0; i < Math.round(seconds / step); i++) mod.updateFlight(step);
+    };
+
+    describe('stepThrust', () => {
+        test('NO COMMAND MEANS NO CHANGE, which is the whole point', () => {
+            expect(mod.stepThrust(2500, 0, 667, 1000, 0.1)).toBe(2500);
+            expect(mod.stepThrust(2500, undefined, 667, 1000, 0.1)).toBe(2500);
+            expect(mod.stepThrust(2500, 1, 667, 1000, 0)).toBe(2500);
+        });
+
+        test('adds speed at the acceleration rate while held', () => {
+            expect(mod.stepThrust(0, 1, 667, 1000, 0.1)).toBeCloseTo(66.7);
+            expect(mod.stepThrust(0, 0.5, 667, 1000, 0.1)).toBeCloseTo(33.35);
+        });
+
+        test('a command against the way you are going brakes, and brakes harder', () => {
+            // The same asymmetry stepSpeed uses: speed is shed faster than it is
+            // built, whichever way the throttle is being read.
+            expect(mod.stepThrust(1000, -1, 667, 1000, 0.1)).toBeCloseTo(900);
+            expect(mod.stepThrust(-1000, 1, 667, 1000, 0.1)).toBeCloseTo(-900);
+            // Still accelerating once through zero, at the gentler rate.
+            expect(mod.stepThrust(-50, -1, 667, 1000, 0.1)).toBeCloseTo(-116.7);
+        });
+
+        test('a stick beyond its own travel is clamped, not trusted', () => {
+            expect(mod.stepThrust(0, 5, 667, 1000, 0.1)).toBeCloseTo(66.7);
+        });
+    });
+
+    test('A RELEASED STICK KEEPS THE SHIP AT SPEED. This is the request.', () => {
+        thrust();
+        dom.elements.throttleZone.fire('touchstart', touchEvent(1, 30, 100));  // full up
+        fly(3);
+        const reached = mod.getFlightState().speed;
+        expect(reached).toBeCloseTo(2000, 0);          // 3s at 4000/6
+
+        dom.elements.throttleZone.fire('touchend', touchEvent(1, 30, 100));
+        fly(5);
+        const s = mod.getFlightState();
+        expect(s.throttle).toBe(0);                     // sprung home
+        expect(s.speed).toBeCloseTo(reached, 6);        // and still flying
+    });
+
+    test('in SPEED mode the same release leaves the lever open', () => {
+        // The contrast, so the two models cannot quietly become one. There the
+        // lift changes nothing at all and the ship carries on to the speed the
+        // lever picked. Closing the lever is what stops it.
+        start();
+        dom.elements.throttleZone.fire('touchstart', touchEvent(1, 30, 100));
+        fly(3);
+        dom.elements.throttleZone.fire('touchend', touchEvent(1, 30, 100));
+        expect(mod.getFlightState().throttle).toBeCloseTo(1);   // stays put
+        fly(5);
+        expect(mod.getFlightState().speed).toBe(FLIGHT.maxForward);
+
+        mod.setTargetSpeedFraction(0);
+        fly(6);
+        expect(mod.getFlightState().speed).toBe(0);
+    });
+
+    test('held wide open it reaches full ahead and stops there', () => {
+        thrust();
+        dom.elements.throttleZone.fire('touchstart', touchEvent(1, 30, 100));
+        fly(20);
+        expect(mod.getFlightState().speed).toBe(FLIGHT.maxForward);
+    });
+
+    test('pulling down sheds speed, then carries on into astern', () => {
+        thrust();
+        mod.setTargetSpeedFraction(1);
+        fly(3);
+        expect(mod.getFlightState().speed).toBeCloseTo(2000, 0);
+
+        mod.setTargetSpeedFraction(-1);
+        fly(2);                                  // 2s of braking at 1000/s
+        expect(mod.getFlightState().speed).toBeCloseTo(0, 0);
+        fly(20);
+        expect(mod.getFlightState().speed).toBe(-FLIGHT.maxReverse);
+    });
+
+    test('the speedometer is told there is no target, because there is none', () => {
+        thrust();
+        mod.setTargetSpeedFraction(1);
+        fly(2);
+        const s = mod.getFlightState();
+        expect(s.targetSpeed).toBe(s.speed);
+    });
+
+    test('a double tap brakes a coasting ship to a standstill', () => {
+        // In speed mode the double tap closes the lever, which stops the ship
+        // because the lever chose its speed. Coasting needs the speed taken off
+        // it instead, so the gesture keeps its promise a different way.
+        thrust();
+        dom.now = 1000;
+        mod.setTargetSpeedFraction(1);
+        fly(3);
+        expect(mod.getFlightState().speed).toBeGreaterThan(1000);
+
+        dom.elements.throttleZone.fire('touchstart', touchEvent(1, 30, 200));
+        dom.elements.throttleZone.fire('touchend', touchEvent(1, 30, 200));
+        dom.now = 1100;
+        dom.elements.throttleZone.fire('touchstart', touchEvent(2, 30, 200));
+        fly(5);
+        expect(mod.getFlightState().speed).toBe(0);
+    });
+
+    test('the brake lets go the moment the pilot takes the stick back', () => {
+        // A control that ignores a hand on it for four seconds feels broken.
+        thrust();
+        dom.now = 1000;
+        mod.setTargetSpeedFraction(1);
+        fly(3);
+        const coasting = mod.getFlightState().speed;
+
+        dom.elements.throttleZone.fire('touchstart', touchEvent(1, 30, 200));
+        dom.elements.throttleZone.fire('touchend', touchEvent(1, 30, 200));
+        dom.now = 1100;
+        dom.elements.throttleZone.fire('touchstart', touchEvent(2, 30, 200));   // braking
+        mod.updateFlight(0.1);
+        dom.elements.throttleZone.fire('touchstart', touchEvent(3, 30, 100));   // hand back on
+        fly(1);
+        expect(mod.getFlightState().speed).toBeGreaterThan(coasting - 100);
+    });
+
+    test('an interrupted gesture springs the stick home too', () => {
+        // touchcancel is what a notification looks like from in here. A stick
+        // left at full ahead would be a ship accelerating on its own with
+        // nothing on screen to explain it.
+        thrust();
+        dom.elements.throttleZone.fire('touchstart', touchEvent(1, 30, 100));
+        expect(mod.getFlightState().throttle).toBeCloseTo(1);
+        dom.elements.throttleZone.fire('touchcancel', touchEvent(1, 30, 100));
+        expect(mod.getFlightState().throttle).toBe(0);
+    });
+
+    test('pausing releases the stick, like it releases the keys', () => {
+        thrust();
+        dom.elements.throttleZone.fire('touchstart', touchEvent(1, 30, 100));
+        mod.setPaused(true);
+        expect(mod.getFlightState().throttle).toBe(0);
+    });
+
+    test('the perimeter still bites, as a ceiling rather than a target', () => {
+        // Nothing to damp when the throttle asks for no particular speed, so
+        // what gets damped is how fast the ship may be while heading out.
+        thrust({ spawn: { position: { x: 0, y: 0, z: -900 }, yaw: 0, pitch: 0 } });
+        mod.setPerimeter({ x: 0, y: 0, z: 0 }, 1000, 100);
+        mod.setTargetSpeedFraction(1);
+        fly(30);
+        expect(mod.getFlightState().speed).toBe(0);
+        // And the way home is never damped.
+        expect(mod.getFlightState().position.z).toBeLessThan(-1000);
+    });
+
+    test('a ship that stops accelerating still coasts out of the world', () => {
+        // The perimeter has to hold a coasting ship, not just a thrusting one:
+        // in this mode letting go is the normal way to travel.
+        thrust({ spawn: { position: { x: 0, y: 0, z: -900 }, yaw: 0, pitch: 0 } });
+        mod.setPerimeter({ x: 0, y: 0, z: 0 }, 1000, 100);
+        mod.setTargetSpeedFraction(1);
+        fly(1);
+        mod.setTargetSpeedFraction(0);              // let go, still moving out
+        fly(30);
+        expect(mod.getFlightState().speed).toBe(0);
+    });
+});
+
 // ---- Touch: the look joystick ----------------------------------------------
 
 describe('the touch look joystick', () => {
@@ -691,6 +871,69 @@ describe('the touch look joystick', () => {
         dom.elements.lookZone.fire('touchmove', touchEvent(7, 400, 300));
         mod.updateFlight(0.1);
         expect(mod.getFlightState().yaw).toBeCloseTo(0);
+    });
+
+    // THE ONE THAT MATTERS ON A PHONE. `touchmove` fires when a finger moves,
+    // so a thumb resting at full deflection emits nothing at all. Reading the
+    // stick inside that handler meant the ship turned only on the frames an
+    // event landed on: a second of full right stick came to 1.2 degrees of yaw
+    // against 74.5 for the same second on a held key, and it read as the game
+    // stuttering rather than as the controls being dead, because the only time
+    // anything moved was the moment the thumb did.
+    //
+    // Every test above this one calls `updateFlight` exactly once per
+    // `touchmove`, which is the one cadence at which the old code was right.
+    test('a thumb held still keeps turning the ship', () => {
+        start();
+        dom.elements.lookZone.fire('touchstart', touchEvent(1, 300, 300));
+        dom.elements.lookZone.fire('touchmove', touchEvent(1, 400, 300));
+        for (let i = 0; i < 60; i++) mod.updateFlight(1 / 60);
+
+        // A full second of saturated stick is a full second of turnRate.
+        expect(mod.getFlightState().yaw).toBeCloseTo(-1.3, 5);
+    });
+
+    test('a held stick matches a held key over the same second', () => {
+        start();
+        dom.elements.lookZone.fire('touchstart', touchEvent(1, 300, 300));
+        dom.elements.lookZone.fire('touchmove', touchEvent(1, 400, 300));
+        for (let i = 0; i < 60; i++) mod.updateFlight(1 / 60);
+        const stick = mod.getFlightState().yaw;
+
+        mod.disposeFlight();
+        start();
+        dom.document.fire('keydown', { code: 'ArrowRight' });
+        for (let i = 0; i < 60; i++) mod.updateFlight(1 / 60);
+
+        expect(stick).toBeCloseTo(mod.getFlightState().yaw, 5);
+    });
+
+    test('pausing releases the stick, like it releases the keys', () => {
+        start();
+        dom.elements.lookZone.fire('touchstart', touchEvent(1, 300, 300));
+        dom.elements.lookZone.fire('touchmove', touchEvent(1, 400, 300));
+        mod.setPaused(true);
+        mod.setPaused(false);
+        const held = mod.getFlightState().yaw;
+        for (let i = 0; i < 60; i++) mod.updateFlight(1 / 60);
+        expect(mod.getFlightState().yaw).toBeCloseTo(held);
+
+        // And the next move of the same finger arms it again.
+        dom.elements.lookZone.fire('touchmove', touchEvent(1, 400, 300));
+        mod.updateFlight(0.1);
+        expect(mod.getFlightState().yaw).toBeLessThan(held);
+    });
+
+    test('a lifted finger stops the turn even without a move', () => {
+        start();
+        dom.elements.lookZone.fire('touchstart', touchEvent(1, 300, 300));
+        dom.elements.lookZone.fire('touchmove', touchEvent(1, 400, 300));
+        mod.updateFlight(1 / 60);
+        const held = mod.getFlightState().yaw;
+
+        dom.elements.lookZone.fire('touchend', touchEvent(1, 400, 300));
+        for (let i = 0; i < 60; i++) mod.updateFlight(1 / 60);
+        expect(mod.getFlightState().yaw).toBeCloseTo(held);
     });
 });
 

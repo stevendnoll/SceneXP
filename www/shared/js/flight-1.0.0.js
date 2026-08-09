@@ -13,12 +13,28 @@
  * of through a stub, and it means a future space game can drive something
  * other than a camera without touching this file.
  *
- * THE THROTTLE SETS A TARGET SPEED, and the ship accelerates toward it. This
- * is not Newtonian drift: at zero throttle the ship coasts to a stop. It is
- * the single most important simplification in the design, and it is why there
- * is no boost button and no brake. The throttle IS the speed selector, so a
- * visitor slows down for close work and opens up for travel without being told
- * to.
+ * TWO THROTTLE MODES, because a lever and a spring-loaded stick are different
+ * instruments and a phone can only really offer the second one.
+ *
+ *   SPEED MODE (the default, and what a keyboard gets). The throttle sets a
+ *   TARGET SPEED and the ship accelerates toward it. Not Newtonian drift: at
+ *   zero throttle the ship coasts to a stop. There is no boost and no brake,
+ *   because the throttle IS the speed selector, so a visitor slows down for
+ *   close work and opens up for travel without being told to. A key is a
+ *   momentary contact driving a value that persists, which is exactly a lever.
+ *
+ *   THRUST MODE (`thrustThrottle`, which the touch UI turns on). The throttle
+ *   commands ACCELERATION. Push it up and the ship gains speed for as long as
+ *   it is held, let go and the ship keeps the speed it has. Push it down to
+ *   slow, and past a stop into astern. This exists because a touch control
+ *   cannot be a lever: there is no detent under a thumb, no way to feel where
+ *   the stick was left, and a finger lifted off glass is indistinguishable from
+ *   a finger holding still. A stick that springs home and means "more" while it
+ *   is held asks nothing of a sense the glass cannot provide.
+ *
+ * A ship coasting under no thrust cannot stop by releasing anything, so thrust
+ * mode gives the double tap that used to close the throttle a real job: it
+ * brakes to a standstill, and lets go the moment the pilot touches the stick.
  *
  * YAW AND PITCH ONLY, NO ROLL. The orientation is rebuilt from two angles
  * every frame rather than accumulated, because accumulating is exactly how
@@ -45,7 +61,8 @@ const DEFAULTS = {
     invertPitch: false,
     throttleRate: 0.8,      // throttle fraction per second for key/pad nudges
     gamepadDeadzone: 0.15,
-    doubleTapMs: 320
+    doubleTapMs: 320,
+    thrustThrottle: false   // false: the throttle picks a speed. true: it accelerates
 };
 
 const TAU = Math.PI * 2;
@@ -67,7 +84,24 @@ const state = {
 const lookDelta = { x: 0, y: 0 };   // instantaneous (mouse), consumed each frame
 const lookRate = { x: 0, y: 0 };    // held (keys, joystick, pad), scaled by dt
 const keys = new Set();
-const touch = { throttleId: null, lookId: null, lookOrigin: null, lastTapAt: 0 };
+// `lookHold` is the joystick's CURRENT DEFLECTION, and it is persistent on
+// purpose. A thumb resting at full deflection is a held control that emits no
+// events at all: `touchmove` fires when a finger MOVES, so writing the turn
+// rate from inside that handler turned the ship on the frames an event happened
+// to land on and on no others. Measured at 60fps, a stick held hard over for a
+// second yawed the ship 1.2 degrees where the same second on a held key yawed
+// it 74.5. The stick is now read every frame, like the keys and the pad.
+const touch = {
+    throttleId: null, lookId: null, lookOrigin: null,
+    lookHold: { x: 0, y: 0 },
+    lastTapAt: 0
+};
+
+// Thrust mode only: a full stop, asked for by a double tap and held until the
+// ship is still or the pilot takes the stick back. It is deliberately NOT part
+// of `state`, because it is a request in progress rather than something the
+// experience should be reading or drawing.
+let braking = false;
 
 let perimeter = null;               // { centre, radius, fade }
 let outsidePerimeter = false;
@@ -109,6 +143,23 @@ export function stepSpeed(current, target, accelRateIn, decelRateIn, dt) {
     const step = rate * dt;
     if (Math.abs(delta) <= step) return target;      // arrive exactly, never past
     return current + Math.sign(delta) * step;
+}
+
+/** THRUST MODE's step. `command` is the stick, -1 to 1, and it is an
+ *  acceleration rather than a destination.
+ *
+ *  NO COMMAND MEANS NO CHANGE, which is the whole character of this mode: a
+ *  released stick leaves the ship flying at whatever speed it had. That is the
+ *  one thing speed mode cannot express, and the reason this exists.
+ *
+ *  A command opposing the way the ship is going is BRAKING and gets the faster
+ *  rate, the same asymmetry `stepSpeed` uses, so shedding speed stays brisker
+ *  than building it however the throttle is being read. */
+export function stepThrust(current, command, accelRateIn, decelRateIn, dt) {
+    const c = Math.max(-1, Math.min(1, command || 0));
+    if (c === 0 || dt <= 0) return current;
+    const braking_ = current !== 0 && Math.sign(c) !== Math.sign(current);
+    return current + c * (braking_ ? decelRateIn : accelRateIn) * dt;
 }
 
 /** Apply a look delta to yaw and pitch, with sensitivity, optional pitch
@@ -156,6 +207,7 @@ export function initFlight(options = {}) {
     state.speed = 0;
     state.targetSpeed = 0;
     state.throttle = 0;
+    braking = false;
 
     lookDelta.x = lookDelta.y = 0;
     lookRate.x = lookRate.y = 0;
@@ -166,6 +218,7 @@ export function initFlight(options = {}) {
     touch.throttleId = null;
     touch.lookId = null;
     touch.lookOrigin = null;
+    touch.lookHold.x = touch.lookHold.y = 0;
     touch.lastTapAt = 0;
     paused = false;
     outsidePerimeter = false;
@@ -205,6 +258,7 @@ export function updateFlight(deltaTime) {
 
     pollGamepad(dt);
     applyHeldKeys(dt);
+    applyTouchLook();
 
     // Look: instantaneous deltas (mouse) plus held rates (keys, stick, pad).
     const dYaw = lookDelta.x + lookRate.x * cfg.turnRate * dt;
@@ -221,9 +275,12 @@ export function updateFlight(deltaTime) {
 
     // Speed.
     const forward = forwardFrom(state.yaw, state.pitch);
-    state.targetSpeed = applyPerimeter(
-        throttleToTargetSpeed(state.throttle, cfg.maxForward, cfg.maxReverse), forward);
-    state.speed = stepSpeed(state.speed, state.targetSpeed, accelRate, decelRate, dt);
+    if (cfg.thrustThrottle) stepThrustMode(forward, dt);
+    else {
+        state.targetSpeed = applyPerimeter(
+            throttleToTargetSpeed(state.throttle, cfg.maxForward, cfg.maxReverse), forward);
+        state.speed = stepSpeed(state.speed, state.targetSpeed, accelRate, decelRate, dt);
+    }
 
     // Move.
     const travel = state.speed * dt;
@@ -236,6 +293,38 @@ export function updateFlight(deltaTime) {
     state.position = next;
 
     notePerimeterCrossing();
+}
+
+/** One frame of thrust mode: brake, integrate, clamp, then answer to the
+ *  perimeter.
+ *
+ *  THE PERIMETER IS A SPEED CEILING HERE, not a target. In speed mode it damps
+ *  the number the throttle asked for, but a thrust throttle asks for nothing to
+ *  damp, so what it damps instead is how fast the ship is allowed to be while
+ *  heading further out. The ship is walked down to that ceiling at the braking
+ *  rate rather than clamped onto it, so the edge of the world stays a hand on
+ *  the shoulder rather than a wall. Inside the perimeter the ceiling is the
+ *  ship's own maximum and none of this is reachable.
+ *
+ *  `targetSpeed` is reported as the current speed, because in this mode there
+ *  genuinely is no target: the speedometer's demand marker rides with the ship
+ *  and its ghost band closes to nothing, which is an honest drawing of a
+ *  control that commands change rather than a destination. */
+function stepThrustMode(forward, dt) {
+    if (braking) {
+        state.speed = stepSpeed(state.speed, 0, accelRate, decelRate, dt);
+        if (state.speed === 0) braking = false;
+    } else {
+        state.speed = stepThrust(state.speed, state.throttle, accelRate, decelRate, dt);
+        state.speed = Math.max(-cfg.maxReverse, Math.min(cfg.maxForward, state.speed));
+    }
+
+    const ceiling = applyPerimeter(
+        state.speed >= 0 ? cfg.maxForward : -cfg.maxReverse, forward);
+    if (Math.abs(state.speed) > Math.abs(ceiling)) {
+        state.speed = stepSpeed(state.speed, ceiling, accelRate, decelRate, dt);
+    }
+    state.targetSpeed = state.speed;
 }
 
 /** Damp only motion that is heading further out. Turning and the trip home
@@ -279,9 +368,15 @@ export function getFlightState() {
     };
 }
 
-/** Set the throttle absolutely, -1 (full astern) to 1 (full ahead). */
+/** Set the throttle absolutely, -1 (full astern) to 1 (full ahead). In thrust
+ *  mode that is a demand for acceleration rather than for a speed.
+ *
+ *  ANY DELIBERATE THROTTLE INPUT CANCELS A BRAKE. A pilot reaching for the
+ *  stick during a stop wants the stick, and a control that ignores a hand on it
+ *  for the next four seconds is a control that feels broken. */
 export function setTargetSpeedFraction(fraction) {
     state.throttle = Math.max(-1, Math.min(1, fraction || 0));
+    braking = false;
     syncThrottleUi();
 }
 
@@ -310,7 +405,19 @@ export function setPaused(on) {
     if (paused) {
         lookDelta.x = lookDelta.y = 0;
         lookRate.x = lookRate.y = 0;
+        // The stick is released along with the keys, and for the same reason:
+        // nothing a visitor was holding when they paused should still be held
+        // when they come back. A finger still on the glass re-arms it with its
+        // next move, and a finger that lifted meanwhile is handled by `onLookEnd`.
+        touch.lookHold.x = touch.lookHold.y = 0;
         keys.clear();
+        // A spring-loaded throttle is held input too, so it comes home with the
+        // rest. Written directly rather than through the setter, because a
+        // pause should not cancel a brake that was already under way.
+        if (cfg.thrustThrottle && state.throttle !== 0) {
+            state.throttle = 0;
+            syncThrottleUi();
+        }
     }
 }
 
@@ -399,10 +506,18 @@ function wireMouse(signal) {
 
 // ---- Touch ------------------------------------------------------------------
 //
-// The throttle is a vertical track that KEEPS ITS POSITION when the thumb
-// lifts. That is what makes it a throttle rather than a stick, and it is what
+// The throttle is a vertical track, and WHAT IT DOES WHEN THE THUMB LIFTS is
+// the one thing `thrustThrottle` changes.
+//
+// In speed mode it keeps its position, which is what makes it a lever, and what
 // lets a visitor cross to the Moon without pinning a thumb to the glass. A
 // double tap returns it to zero.
+//
+// In thrust mode it springs home. Nothing is left behind to be forgotten about,
+// and the ship carries on at the speed it reached, which is what "let go and it
+// stops pushing" has to mean in a place with nothing to slow down against. The
+// double tap becomes the brake, since coasting is now a state a pilot can be in
+// and needs a way out of.
 
 function wireTouch(signal) {
     const zone = elements.throttleZone;
@@ -446,7 +561,11 @@ function onThrottleStart(e) {
     const now = nowMs();
     const sinceLastTap = now - touch.lastTapAt;
     if (touch.lastTapAt > 0 && sinceLastTap >= 0 && sinceLastTap < cfg.doubleTapMs) {
+        // "Stop" in both modes, which is two different instructions. Closing a
+        // lever stops a ship whose speed the lever chooses. A coasting ship
+        // needs its speed taken off it, so here the tap starts a brake.
         setTargetSpeedFraction(0);
+        if (cfg.thrustThrottle) braking = true;
         touch.lastTapAt = 0;
         return;
     }
@@ -468,8 +587,15 @@ function onThrottleMove(e) {
 function onThrottleEnd(e) {
     if (touch.throttleId === null) return;
     if (!findTouch(e.changedTouches, touch.throttleId)) return;
-    // The throttle STAYS where it was left. This is the whole point.
     touch.throttleId = null;
+    // Speed mode: the throttle STAYS where it was left, which is the whole
+    // point of a lever. Thrust mode: it springs back to the detent and the ship
+    // stops accelerating, keeping the speed it has.
+    //
+    // Note this runs on `touchcancel` too. A stick left at full ahead because a
+    // notification interrupted the gesture would be a ship accelerating on its
+    // own with nothing on screen explaining why.
+    if (cfg.thrustThrottle) setTargetSpeedFraction(0);
 }
 
 function onLookStart(e) {
@@ -487,9 +613,21 @@ function onLookMove(e) {
     if (!t || !touch.lookOrigin) return;
     e.preventDefault();
     const radius = cfg.lookJoystickRadius || 55;
-    lookRate.x = clampUnit((t.clientX - touch.lookOrigin.x) / radius);
-    lookRate.y = clampUnit((t.clientY - touch.lookOrigin.y) / radius);
-    setLookThumb(lookRate.x * radius, lookRate.y * radius);
+    // Recorded, not applied. `applyTouchLook` spends it once a frame for as
+    // long as the thumb stays there. See the note on `touch`.
+    touch.lookHold.x = clampUnit((t.clientX - touch.lookOrigin.x) / radius);
+    touch.lookHold.y = clampUnit((t.clientY - touch.lookOrigin.y) / radius);
+    setLookThumb(touch.lookHold.x * radius, touch.lookHold.y * radius);
+}
+
+/** Spend the joystick's held deflection into this frame's turn rate.
+ *
+ *  Additive, so a stick, a key and a pad stick pushed at once compose the way
+ *  two keys do rather than the last writer winning. */
+function applyTouchLook() {
+    if (touch.lookId === null) return;
+    lookRate.x += touch.lookHold.x;
+    lookRate.y += touch.lookHold.y;
 }
 
 function onLookEnd(e) {
@@ -497,6 +635,7 @@ function onLookEnd(e) {
     if (!findTouch(e.changedTouches, touch.lookId)) return;
     touch.lookId = null;
     touch.lookOrigin = null;
+    touch.lookHold.x = touch.lookHold.y = 0;
     lookRate.x = lookRate.y = 0;
     setLookThumb(0, 0);
 }

@@ -784,13 +784,40 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // on, and a game that arrives loud is a game that gets muted.
         masterGain: 0.16,
 
-        // The engine: a low sawtooth with a sine an octave under it. It opens
-        // from silence with the throttle, so a ship holding station in orbit is
-        // genuinely silent rather than idling.
-        engineGain: 0.5,
-        engineIdleHz: 46,
-        engineFullHz: 128,
+        // THE ENGINE IS A LOW HUM, and it is three sine waves. Two earlier
+        // versions are worth remembering. A sawtooth pair buzzed like an insect
+        // on a phone: a saw carries every harmonic, a phone speaker plays almost
+        // nothing under 500 Hz, so the hardware deleted the body and kept the
+        // buzz. A bed of filtered noise fixed the buzz and introduced a worse
+        // problem, which is that noise sweeping under a band pass sounds like
+        // air rushing past a hull, and this ship is in space. A sine has one
+        // partial and no hiss, so neither failure is reachable from here. The
+        // long version is the comment on `buildEngine` in audio.js.
+        //
+        // The gain still opens from near silence, so a ship holding station in
+        // orbit is a quiet hum rather than a running one.
+        engineGain: 0.45,
         engineGlide: 0.35,
+
+        // LEVEL CARRIES THE THROTTLE. The pitch moves about a fifth across the
+        // range, enough to feel like effort, and no further: a sine climbing an
+        // octave stops sounding like an engine and starts sounding like a siren.
+        engineIdleHz: 90,
+        engineFullHz: 140,
+
+        // `engineDetune` is the whole character of the sound. The second voice
+        // sits a little over half a percent sharp of the first, so the two drift
+        // in and out of phase and the hum swells about twice a second. At 1.0 it
+        // is a test tone. Much past 1.02 it is two notes.
+        //
+        // Tuning by ear: for a heavier ship lower `engineIdleHz` and
+        // `engineFullHz` together. `engineOctaveGain` is the only knob that
+        // changes much on a handset, since the fundamental is below what a
+        // phone speaker can move.
+        engineDetune: 1.006,
+        engineHumGain: 0.55,
+        engineBeatGain: 0.44,
+        engineOctaveGain: 0.28,
 
         // The guns fire four times a second for as long as a target is held, so
         // this cue is deliberately dry and unremarkable. Anything with

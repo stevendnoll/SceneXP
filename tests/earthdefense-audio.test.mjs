@@ -87,10 +87,12 @@ class FakeAudioContext {
     createBufferSource() {
         const node = makeNode('buffer-source');
         node.buffer = null;
+        node.loop = false;
         node.started = null;
+        node.stopped = null;
         node.listeners = {};
         node.start = (t) => { node.started = t === undefined ? 0 : t; };
-        node.stop = () => {};
+        node.stop = (t) => { node.stopped = t === undefined ? 0 : t; };
         node.addEventListener = (type, fn) => { node.listeners[type] = fn; };
         return node;
     }
@@ -196,8 +198,9 @@ describe('silent until the visitor acts', () => {
         audio.initAudio(CONFIG);
         gesture();
         const engine = audio.__test__.getEngine();
-        expect(engine.osc.started).not.toBeNull();
-        expect(engine.sub.started).not.toBeNull();
+        expect(engine.hum.started).not.toBeNull();
+        expect(engine.beat.started).not.toBeNull();
+        expect(engine.octave.started).not.toBeNull();
         expect(engine.gain.gain.value).toBe(0);
     });
 
@@ -248,22 +251,45 @@ describe('silent until the visitor acts', () => {
 
 // ---- The engine -------------------------------------------------------------
 
-describe('the engine tone', () => {
+describe('the engine hum', () => {
     beforeEach(() => {
         audio.initAudio(CONFIG);
         gesture();
     });
 
-    test('rises with the throttle and falls with it', () => {
+    test('GETS LOUDER as the ship goes faster, which is the whole cue', () => {
+        // The one thing the engine has to say. Two earlier versions said it
+        // with pitch and with a filter sweep instead, and both were wrong.
         const engine = audio.__test__.getEngine();
         audio.setEngineThrottle(0);
-        const idle = engine.osc.frequency.value;
+        const idle = engine.gain.gain.value;
+        audio.setEngineThrottle(0.5);
+        const half = engine.gain.gain.value;
         audio.setEngineThrottle(1);
-        const full = engine.osc.frequency.value;
+        const full = engine.gain.gain.value;
+
+        expect(idle).toBeGreaterThan(0);        // under power, holding station
+        expect(half).toBeGreaterThan(idle);
+        expect(full).toBeGreaterThan(half);
+        expect(full).toBeCloseTo(CONFIG.audio.engineGain, 6);
+        // And the climb is most of the sound, not a trim.
+        expect(full).toBeGreaterThan(idle * 5);
+    });
+
+    test('rises a little in pitch with the throttle, and falls with it', () => {
+        const engine = audio.__test__.getEngine();
+        audio.setEngineThrottle(0);
+        const idle = engine.hum.frequency.value;
+        audio.setEngineThrottle(1);
+        const full = engine.hum.frequency.value;
 
         expect(idle).toBeCloseTo(CONFIG.audio.engineIdleHz, 6);
         expect(full).toBeCloseTo(CONFIG.audio.engineFullHz, 6);
         expect(full).toBeGreaterThan(idle);
+    });
+
+    test('the pitch climb stays well under an octave, or it is a siren', () => {
+        expect(CONFIG.audio.engineFullHz / CONFIG.audio.engineIdleHz).toBeLessThan(1.8);
     });
 
     test('reverse sounds like ahead, because there is one engine', () => {
@@ -271,21 +297,15 @@ describe('the engine tone', () => {
         // not have.
         const engine = audio.__test__.getEngine();
         audio.setEngineThrottle(0.6);
-        const ahead = engine.osc.frequency.value;
+        const ahead = engine.hum.frequency.value;
         audio.setEngineThrottle(-0.6);
-        expect(engine.osc.frequency.value).toBeCloseTo(ahead, 6);
-    });
-
-    test('the sub sits an octave under the main voice', () => {
-        const engine = audio.__test__.getEngine();
-        audio.setEngineThrottle(0.75);
-        expect(engine.sub.frequency.value).toBeCloseTo(engine.osc.frequency.value / 2, 6);
+        expect(engine.hum.frequency.value).toBeCloseTo(ahead, 6);
     });
 
     test('it GLIDES rather than jumping, which is what makes it an engine', () => {
         const engine = audio.__test__.getEngine();
         audio.setEngineThrottle(1);
-        const last = engine.osc.frequency.calls[engine.osc.frequency.calls.length - 1];
+        const last = engine.hum.frequency.calls[engine.hum.frequency.calls.length - 1];
         expect(last[0]).toBe('target');   // setTargetAtTime, not a hard set
     });
 
@@ -293,7 +313,7 @@ describe('the engine tone', () => {
         // Older implementations, and anything the fake does not model, should
         // land on the right number rather than throwing.
         const bare = { value: 0 };
-        audio.__test__.getEngine().osc.frequency = bare;
+        audio.__test__.getEngine().hum.frequency = bare;
         audio.setEngineThrottle(1);
         expect(bare.value).toBeCloseTo(CONFIG.audio.engineFullHz, 6);
     });
@@ -301,7 +321,55 @@ describe('the engine tone', () => {
     test('a missing or nonsense throttle reads as closed', () => {
         const engine = audio.__test__.getEngine();
         audio.setEngineThrottle();
-        expect(engine.osc.frequency.value).toBeCloseTo(CONFIG.audio.engineIdleHz, 6);
+        expect(engine.hum.frequency.value).toBeCloseTo(CONFIG.audio.engineIdleHz, 6);
+    });
+
+    // ---- What the hum is made of, and what it must never contain -----------
+
+    test('EVERY VOICE IS A SINE, so there is nothing that can buzz', () => {
+        // The first engine was a sawtooth and sounded like a bee: a saw carries
+        // every harmonic at 1/n, and a phone speaker plays almost nothing under
+        // 500 Hz, so the hardware deleted the body and kept the partials. A
+        // sine has exactly one partial. There is no harmonic to survive.
+        const engine = audio.__test__.getEngine();
+        for (const voice of [engine.hum, engine.beat, engine.octave]) {
+            expect(voice.type).toBe('sine');
+        }
+    });
+
+    test('THERE IS NO NOISE IN IT, because the ship is in space', () => {
+        // The second engine was a noise bed under a sweeping band pass, which
+        // is a fine jet and sounds like wind over a hull. There is no air out
+        // there to rush past anything.
+        const engine = audio.__test__.getEngine();
+        expect(engine.noise).toBeUndefined();
+        expect(engine.air).toBeUndefined();
+        expect(engine.rumble).toBeUndefined();
+        expect(Object.keys(engine).sort()).toEqual(['beat', 'gain', 'hum', 'octave']);
+    });
+
+    test('the beat voice sits just off the hum, so the sound breathes', () => {
+        // Two sines a fraction of a percent apart drift in and out of phase,
+        // which is heard as a slow swell. Exactly together is a test tone, and
+        // far apart is two notes rather than one engine.
+        const engine = audio.__test__.getEngine();
+        audio.setEngineThrottle(0.75);
+        const gap = engine.beat.frequency.value - engine.hum.frequency.value;
+
+        expect(gap).toBeGreaterThan(0);
+        expect(CONFIG.audio.engineDetune).toBeGreaterThan(1);
+        expect(CONFIG.audio.engineDetune).toBeLessThan(1.02);
+        // A swell slow enough to be a swell, rather than a warble.
+        expect(gap).toBeLessThan(3);
+    });
+
+    test('the octave voice tracks at twice the hum, for small speakers', () => {
+        // A hum lives below what a handset can move. This voice is the part a
+        // phone actually plays, so it has to follow the throttle too.
+        const engine = audio.__test__.getEngine();
+        audio.setEngineThrottle(0.75);
+        expect(engine.octave.frequency.value)
+            .toBeCloseTo(engine.hum.frequency.value * 2, 6);
     });
 });
 
@@ -391,11 +459,11 @@ describe('muting', () => {
         gesture();
         audio.setEngineThrottle(1);
         const engine = audio.__test__.getEngine();
-        const running = engine.osc.frequency.value;
+        const running = engine.hum.frequency.value;
 
         expect(audio.setMuted(true)).toBe(true);
         expect(audio.isRunning()).toBe(true);
-        expect(engine.osc.frequency.value).toBe(running);
+        expect(engine.hum.frequency.value).toBe(running);
 
         audio.setMuted(false);
         expect(audio.isMuted()).toBe(false);
@@ -430,7 +498,11 @@ describe('lifecycle', () => {
         const engine = audio.__test__.getEngine();
 
         audio.disposeAudio();
-        expect(engine.osc.stopped).not.toBeNull();
+        // An oscillator left running is a tone that outlives the game, so all
+        // three have to stop, not just the one the loop happens to reach first.
+        expect(engine.hum.stopped).not.toBeNull();
+        expect(engine.beat.stopped).not.toBeNull();
+        expect(engine.octave.stopped).not.toBeNull();
         expect(built.closed).toBe(1);
         expect(audio.isRunning()).toBe(false);
         expect(() => audio.disposeAudio()).not.toThrow();
@@ -461,7 +533,7 @@ describe('lifecycle', () => {
         audio.initAudio({});
         gesture();
         expect(audio.isRunning()).toBe(true);
-        expect(audio.__test__.getEngine().osc.frequency.value)
+        expect(audio.__test__.getEngine().hum.frequency.value)
             .toBe(audio.__test__.DEFAULTS.engineIdleHz);
     });
 });
