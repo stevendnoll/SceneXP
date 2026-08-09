@@ -886,6 +886,188 @@ describe('formationElevation', () => {
 // landed ZERO shots on any of the three lunar installations, twelve raiders
 // drew as three marks, and two ships eventually left the world entirely.
 
+// ---- The planets are solid --------------------------------------------------
+//
+// Reported from a run: "the raiders are able to fly right through the earth".
+// Measured before touching anything, with the real config and installations on
+// the far side: TEN OF THE TWELVE went below the surface and the worst reached
+// 6,282 units inside a body whose radius is 6,371. It was the whole fleet
+// taking the short way through the planet, and the cause was structural rather
+// than a tuning slip. Nothing in fleet.js had ever been told the planets exist.
+
+describe('avoidBody', () => {
+    const EARTH = { x: 0, y: 0, z: 0 };
+    const R = 6371;
+
+    test('a path with nothing in the way is handed straight back', () => {
+        const out = fleet.avoidBody({ x: 0, y: 0, z: -20000 }, unit(1, 0, 0), EARTH, R);
+        expect(out.x).toBeCloseTo(1, 9);
+        expect(out.y).toBeCloseTo(0, 9);
+    });
+
+    test('a heading pointing away from a body is never bent', () => {
+        // Even standing on the doorstep. The cheapest way to get this wrong is a
+        // proximity test, which would turn a departing raider back around.
+        const out = fleet.avoidBody({ x: 0, y: 0, z: -(R + 10) }, unit(0, 0, -1), EARTH, R);
+        expect(out.z).toBeCloseTo(-1, 9);
+    });
+
+    test('a path THROUGH a body comes out grazing its limb', () => {
+        // The exact claim: the returned heading is off the centre line by the
+        // body's own angular radius, which is the definition of grazing.
+        const from = { x: 0, y: 0, z: -60000 };
+        const out = fleet.avoidBody(from, unit(0.02, 0, 1), EARTH, R);
+
+        const toCentre = unit(EARTH.x - from.x, EARTH.y - from.y, EARTH.z - from.z);
+        const distance = Math.hypot(from.x, from.y, from.z);
+        expect(angle(out, toCentre)).toBeCloseTo(Math.asin(R / distance), 9);
+        expect(len(out)).toBeCloseTo(1, 9);
+    });
+
+    test('it turns the way the ship was already leaning, not an arbitrary way', () => {
+        // The shorter way round, and the way the turn rate is already going.
+        const from = { x: 0, y: 0, z: -60000 };
+        const up = fleet.avoidBody(from, unit(0, 0.02, 1), EARTH, R, {});
+        const down = fleet.avoidBody(from, unit(0, -0.02, 1), EARTH, R, {});
+        expect(up.y).toBeGreaterThan(0);
+        expect(down.y).toBeLessThan(0);
+    });
+
+    test('dead centre, with no side to prefer, it still turns', () => {
+        // A raider lined up exactly on a planet's middle has no perpendicular
+        // component to lean on. Returning the heading unchanged here is how a
+        // fleet flies into a planet in the one case that matters most.
+        const from = { x: 0, y: 0, z: -60000 };
+        const out = fleet.avoidBody(from, unit(0, 0, 1), EARTH, R);
+        expect(angle(out, unit(0, 0, 1))).toBeCloseTo(Math.asin(R / 60000), 6);
+    });
+
+    test('inside the shell it aims straight out, whatever it was doing', () => {
+        const out = fleet.avoidBody({ x: 0, y: 100, z: 0 }, unit(0, 0, 1), EARTH, R);
+        expect(out.y).toBeCloseTo(1, 9);
+    });
+});
+
+describe('raiders do not fly through planets', () => {
+    const EARTH_R = 6371;
+
+    /** Four installations on a real-sized Earth, including the far side from
+     *  the approach line, which is where the reported bug lives: the raiders
+     *  arrive along -Z, so a beacon at +Z has the whole planet in front of it. */
+    function plantedWorld(withBodies = true) {
+        const at = (x, y, z, id) => {
+            const l = Math.hypot(x, y, z);
+            const k = (EARTH_R + 179) / l;
+            return {
+                id, body: 'earth', label: id,
+                position: { x: x * k, y: y * k, z: z * k },
+                up: { x: x / l, y: y / l, z: z / l },
+                velocity: { x: 0, y: 0, z: 0 }
+            };
+        };
+        const list = [
+            at(0, 0, 1, 'far-side'), at(0.3, 0.2, 1, 'far-b'),
+            at(1, 0, 0.2, 'limb'), at(0, 0, -1, 'near-side')
+        ];
+        const bodies = [{ id: 'earth', centre: { x: 0, y: 0, z: 0 }, radius: EARTH_R }];
+        const state = { list, bodies, damage: 0 };
+        state.hooks = {
+            structures: () => state.list,
+            bodies: () => (withBodies ? state.bodies : []),
+            damageStructure: () => { state.damage++; return { hitPoints: 2, destroyed: false }; },
+            onPlayerHit: () => {}
+        };
+        return state;
+    }
+
+    const lowest = () => {
+        let low = Infinity;
+        for (const ship of fleet.getShips()) {
+            if (!ship.alive) continue;
+            low = Math.min(low, Math.hypot(ship.position.x, ship.position.y, ship.position.z));
+        }
+        return low - EARTH_R;
+    };
+
+    test('THE BUG: not one of the twelve goes below the surface', () => {
+        const world = plantedWorld();
+        fleet.initFleet(CONFIG, null, world.hooks);
+
+        let low = Infinity;
+        for (let t = 0; t < 900; t += 0.1) {
+            fleet.updateFleet(0.1, null);
+            low = Math.min(low, lowest());
+        }
+        expect(low).toBeGreaterThan(0);
+        // And clear of the hard floor as well, which means the STEERING is what
+        // kept them out rather than the backstop shoving them out every frame.
+        expect(low).toBeGreaterThan(CONFIG.fleet.avoid.floor);
+    });
+
+    test('going around does not stop them arriving, or firing', () => {
+        // The failure mode of any avoidance: a fleet that politely orbits the
+        // planet forever and never attacks anything. Every raider has to end up
+        // on station, and the guns have to still go off.
+        const world = plantedWorld();
+        fleet.initFleet(CONFIG, null, world.hooks);
+        for (let t = 0; t < 900; t += 0.1) fleet.updateFleet(0.1, null);
+
+        for (const ship of fleet.getShips()) expect(ship.state).toBe('attack');
+        expect(world.damage).toBeGreaterThan(100);
+    });
+
+    test('the transit leg ends ABOVE the beacon, not on it', () => {
+        // Worth its own test because it is the half of the fix that has nothing
+        // to do with anything being in the way. A raider that flies at a point
+        // 179 units off the ground arrives with a 2,200 unit turn radius and
+        // overshoots through the surface: measured at 129 to 288 units under,
+        // on the NEAR side, with a clear approach the whole way.
+        const world = plantedWorld(false);       // no bodies: no avoidance, no floor
+        world.list = [world.list[3]];            // the near-side beacon only
+        fleet.initFleet(CONFIG, null, world.hooks);
+
+        let low = Infinity;
+        for (let t = 0; t < 600; t += 0.1) {
+            fleet.updateFleet(0.1, null);
+            low = Math.min(low, lowest());
+        }
+        expect(low).toBeGreaterThan(0);
+    });
+
+    test('the hard floor throws a buried ship back out', () => {
+        // The floor exists because steering is a plan and a plan can be beaten:
+        // a raider committed at cruise cannot always out-turn a body, the Moon
+        // can arrive somewhere a ship already is, and an evading raider weaves
+        // wherever the weave takes it. So put a ship where no plan would have
+        // put it and check it is thrown out to the floor exactly.
+        const world = plantedWorld();
+        fleet.initFleet(CONFIG, null, world.hooks);
+        const ship = fleet.getShips()[0];
+        ship.position.x = 0; ship.position.y = 500; ship.position.z = 0;   // buried
+        fleet.updateFleet(0.1, null);
+
+        const out = Math.hypot(ship.position.x, ship.position.y, ship.position.z);
+        expect(out).toBeCloseTo(EARTH_R + CONFIG.fleet.avoid.floor, 6);
+        expect(ship.position.y).toBeGreaterThan(0);      // out the way it went in
+    });
+
+    test('a caller that offers no planets gets the old straight lines', () => {
+        // The hook is optional, which is what lets every other test in this file
+        // drive the steering with plain numbers and nothing in the way.
+        const world = plantedWorld(false);
+        fleet.initFleet(CONFIG, null, world.hooks);
+        let low = Infinity;
+        for (let t = 0; t < 900; t += 0.1) {
+            fleet.updateFleet(0.1, null);
+            low = Math.min(low, lowest());
+        }
+        // The reported bug, reproduced on purpose. This is the control: it is
+        // what says the test above is measuring the avoidance rather than some
+        // accident of the fixture.
+        expect(low).toBeLessThan(-3000);
+    });
+});
+
 describe('holding station beside a MOVING installation', () => {
     /** One installation that travels the way the Moon's do: 838 units a second
      *  along its orbit, publishing the velocity and the outward normal that

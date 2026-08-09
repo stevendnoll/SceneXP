@@ -344,6 +344,11 @@ function startCombat() {
     // structures.js and weapons-1.0.0 and testable with two plain objects.
     initFleet(config, scene, {
         structures: targetCandidates,
+        // The planets, so the raiders can fly around them rather than through
+        // them. Same list the guns use for occlusion, and read live for the
+        // same reason: the Moon travels 838 units a second, so a cached copy is
+        // a raider steering around where the Moon used to be.
+        bodies: getOccluders,
         damageStructure: resolveDamage,
         onPlayerHit: notePlayerHit
     });

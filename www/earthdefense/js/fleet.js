@@ -26,6 +26,16 @@
  * stay assertable. Math.random would have made both untestable in exchange for
  * a variation nobody would notice.
  *
+ * THE PLANETS ARE SOLID FOR RAIDERS TOO, and they were not always. The steering
+ * was a straight line to an aim point, so a raider sent to an installation on
+ * the far side of Earth flew through the planet to reach it: measured at ten of
+ * twelve ships below the surface in one run, the worst 6,282 units inside a
+ * body with a radius of 6,371. The fix is in three parts, and each one covers a
+ * case the others do not. A transit leg now ends a standoff height ABOVE its
+ * beacon rather than on it, `avoidBody` bends a heading around the limb of
+ * anything in the way, and a hard floor after the move is the backstop for
+ * whatever the first two did not see coming.
+ *
  * ONE DRAW CALL FOR EVERY RUNNING LIGHT. A hull 220 units long is about a
  * hundredth of a degree at 200,000 units, which is nothing, so a distant raider
  * is carried by its light and its HUD pip instead (PRD 6.3). All twelve lights
@@ -66,6 +76,10 @@ const away = { x: 0, y: 0, z: 0 };
 const tangent = { x: 0, y: 0, z: 0 };
 const binormal = { x: 0, y: 0, z: 0 };
 const sideways = { x: 0, y: 0, z: 0 };
+const perp = { x: 0, y: 0, z: 0 };
+// The planets, read fresh every frame. The Moon moves 838 units a second, so a
+// cached list is a raider steering around where the Moon used to be.
+const bodyList = [];
 // The velocity a station-keeping raider borrows from whatever it is circling.
 const carry = { x: 0, y: 0, z: 0 };
 // Retargeting is rare, so this is filled on demand rather than every frame.
@@ -286,6 +300,67 @@ function perpendicularTo(v, out = { x: 0, y: 0, z: 0 }) {
         v.x * axisY - v.y * axisX);
 }
 
+/** Bend a desired heading around a body it would otherwise fly into.
+ *
+ *  MEASURED FIRST: with nothing here at all, ten of the twelve raiders went
+ *  below the surface of Earth on a single run, and the worst reached 6,282 units
+ *  inside a body whose radius is 6,371. It was not a graze, it was the whole
+ *  fleet taking the short way through the planet, and it happened because the
+ *  steering was a straight line to an aim point and nothing in this file had
+ *  ever been told the planets exist.
+ *
+ *  THE ANSWER IS THE LIMB, NOT A REPULSIVE FORCE. A force has to be tuned, it
+ *  fights the turn rate, and it is either too weak near the surface or visible
+ *  from a long way out. This asks one geometric question instead: is the body's
+ *  angular radius, seen from here, wider than the angle between my heading and
+ *  its centre. If it is, the path goes through it, and the answer is to fly at
+ *  the edge of the disc rather than at the middle of it.
+ *
+ *  That has two properties worth the arithmetic. It engages EARLY, from tens of
+ *  thousands of units out where a degree of correction is free, so a raider
+ *  curves around a planet rather than swerving at it. And as the ship comes
+ *  round, the limb sweeps ahead of it and the heading follows, which is a slow
+ *  arc around the horizon that resolves itself the moment the target comes into
+ *  view. Nothing has to decide when to stop avoiding.
+ *
+ *  `radius` should already carry whatever clearance is wanted. `desired` and
+ *  `out` may be the same object. */
+export function avoidBody(from, desired, centre, radius, out = { x: 0, y: 0, z: 0 }) {
+    const dx = desired.x, dy = desired.y, dz = desired.z;
+    const wx = centre.x - from.x, wy = centre.y - from.y, wz = centre.z - from.z;
+    const distance = Math.hypot(wx, wy, wz);
+
+    // Already inside the shell. The only heading worth having is straight out,
+    // and the floor below will be doing the real work this frame anyway.
+    if (distance <= radius) return normalise(out, -wx, -wy, -wz);
+
+    const inv = 1 / distance;
+    const cx = wx * inv, cy = wy * inv, cz = wz * inv;
+    const along = dx * cx + dy * cy + dz * cz;
+    // Flying away from it, so there is nothing in the way.
+    if (along <= 0) { out.x = dx; out.y = dy; out.z = dz; return out; }
+
+    const limb = Math.asin(clamp(radius * inv, -1, 1));
+    if (Math.acos(clamp(along, -1, 1)) >= limb) { out.x = dx; out.y = dy; out.z = dz; return out; }
+
+    // The component of the heading at right angles to the centre line is the
+    // side the ship is already leaning toward, so rounding the body that way is
+    // the shorter way round and the way it is already turning.
+    let px = dx - cx * along, py = dy - cy * along, pz = dz - cz * along;
+    const plen = Math.hypot(px, py, pz);
+    if (plen < 1e-6) {
+        // Dead on for the centre, with no side to prefer. Any perpendicular
+        // will do, and picking one deterministically keeps the run repeatable.
+        perpendicularTo({ x: cx, y: cy, z: cz }, perp);
+        px = perp.x; py = perp.y; pz = perp.z;
+    } else {
+        px /= plen; py /= plen; pz /= plen;
+    }
+
+    const s = Math.sin(limb), c = Math.cos(limb);
+    return normalise(out, cx * c + px * s, cy * c + py * s, cz * c + pz * s);
+}
+
 /** Angle in radians between a unit forward and the direction to a point. */
 function angleTo(forward, dx, dy, dz) {
     const length = Math.hypot(dx, dy, dz);
@@ -298,11 +373,14 @@ function angleTo(forward, dx, dy, dz) {
 /** Place the whole fleet and return the group to add to the scene.
  *
  *  `hooksIn` is how the fleet reaches the rest of the game without importing
- *  it: `structures()` hands back the live candidate list, `damageStructure`
- *  puts a shot on the ledger weapons owns, and `onPlayerHit` is called when a
- *  raider lands one on the visitor. Everything the fleet does to the world goes
- *  through one of those three, which is what keeps this file free of both
- *  structures.js and weapons-1.0.0. */
+ *  it: `structures()` hands back the live candidate list, `bodies()` the
+ *  planets as centres and radii, `damageStructure` puts a shot on the ledger
+ *  weapons owns, and `onPlayerHit` is called when a raider lands one on the
+ *  visitor. Everything the fleet does to the world goes through one of those
+ *  four, which is what keeps this file free of structures.js, bodies-1.0.0 and
+ *  weapons-1.0.0 alike. `bodies` is optional: a caller that offers none gets
+ *  straight-line steering, which is how the suite drives the maths with plain
+ *  numbers and nothing in the way. */
 export function initFleet(config = EARTHDEFENSE_CONFIG, scene = null, hooksIn = {}) {
     disposeFleet();
     cfg = config.fleet;
@@ -594,6 +672,26 @@ function readStructures() {
     return Array.isArray(list) ? list : [];
 }
 
+/** The planets, as centres and radii. Refreshed ONCE a frame into a list the
+ *  whole fleet shares: twelve ships asking twice each would be twenty four
+ *  calls and twenty four small allocations for three objects that cannot have
+ *  changed in between.
+ *
+ *  A caller that offers no bodies gets an empty list and no avoidance, which is
+ *  how the suite drives the steering with plain numbers and nothing in the way. */
+function refreshBodies() {
+    bodyList.length = 0;
+    const list = hooks.bodies ? hooks.bodies() : null;
+    if (!Array.isArray(list)) return bodyList;
+    for (let i = 0; i < list.length; i++) {
+        const body = list[i];
+        if (body && body.centre && body.radius > 0) bodyList.push(body);
+    }
+    return bodyList;
+}
+
+function readBodies() { return bodyList; }
+
 // ---- One frame --------------------------------------------------------------
 
 /** Advance every raider.
@@ -610,6 +708,7 @@ export function updateFleet(deltaTime, player) {
     if (!cfg) return 0;
     const dt = deltaTime || 0;
     const structures = readStructures();
+    refreshBodies();
 
     playerFireClock = Math.max(0, playerFireClock - dt);
     advanceBeams(dt);
@@ -767,7 +866,18 @@ function steerAndMove(ship, dt, target) {
 
         aimAtSlot(ship, target);
     } else if (target) {
-        aim.x = target.position.x; aim.y = target.position.y; aim.z = target.position.z;
+        // TRANSIT AIMS ABOVE THE BEACON, NOT AT IT. A beacon stands 179 units
+        // off the surface, so a raider that flies at the point itself arrives
+        // with a 2,200 unit turn radius and no room to use it: measured at 129
+        // to 288 units UNDER the surface on the near side, where nothing was
+        // in the way at all. Aiming a standoff height above puts the end of the
+        // transit leg exactly where the attack circle already is, so the ship
+        // arrives level with its station rather than diving through it.
+        const up = target.up || WORLD_UP;
+        const rise = cfg.avoid.rise * cfg.standoff;
+        aim.x = target.position.x + up.x * rise;
+        aim.y = target.position.y + up.y * rise;
+        aim.z = target.position.z + up.z * rise;
     } else {
         // Nothing to attack: hold the current line rather than stopping dead.
         aim.x = ship.position.x + ship.heading.x * 2000;
@@ -775,7 +885,15 @@ function steerAndMove(ship, dt, target) {
         aim.z = ship.position.z + ship.heading.z * 2000;
     }
 
+    const reach = Math.hypot(
+        aim.x - ship.position.x, aim.y - ship.position.y, aim.z - ship.position.z);
     normalise(desired, aim.x - ship.position.x, aim.y - ship.position.y, aim.z - ship.position.z);
+    // NOT WHILE ATTACKING. The station-keeping circle is built in the
+    // installation's own frame with a never-negative elevation, so it is above
+    // the local horizon by construction, but parts of it pass well inside the
+    // clearance shell this would defend. Avoidance there would fight the lap
+    // rather than protect it. The floor after the move still holds.
+    if (ship.state !== STATE.ATTACK) avoidPlanets(ship, reach);
     steerToward(ship.heading, desired, cfg.turnRate * dt, ship.heading);
 
     // The engine along the nose, plus whatever the target's frame is carrying.
@@ -800,6 +918,73 @@ function steerAndMove(ship, dt, target) {
     ship.position.x += vx * dt;
     ship.position.y += vy * dt;
     ship.position.z += vz * dt;
+
+    keepAboveSurfaces(ship);
+}
+
+/** Bend `desired` around whichever planet is most in the way.
+ *
+ *  ONE BODY AT A TIME, and the worst offender. Avoiding all of them in turn
+ *  would let the second correction undo the first, and there is no case in this
+ *  scenario where two planets block the same path: the nearest other body is
+ *  63,000 units away and 1,737 across.
+ *
+ *  A body BEYOND the aim point is not in the way, however well it lines up.
+ *  Without that check a raider on its way to an Earth installation would dodge
+ *  Mars, which is 200,000 units past it. */
+function avoidPlanets(ship, reach) {
+    const bodies = readBodies();
+    if (!bodies.length) return;
+
+    let worst = null;
+    let deepest = 0;
+    for (let i = 0; i < bodies.length; i++) {
+        const body = bodies[i];
+        const shell = body.radius + cfg.avoid.clearance;
+        const dx = body.centre.x - ship.position.x;
+        const dy = body.centre.y - ship.position.y;
+        const dz = body.centre.z - ship.position.z;
+        const distance = Math.hypot(dx, dy, dz);
+        if (distance - shell > reach) continue;          // past the destination
+        if (distance <= shell) { worst = body; deepest = Infinity; break; }
+
+        const along = (dx * desired.x + dy * desired.y + dz * desired.z) / distance;
+        if (along <= 0) continue;                        // heading away from it
+        const limb = Math.asin(clamp(shell / distance, -1, 1));
+        const intrusion = limb - Math.acos(clamp(along, -1, 1));
+        if (intrusion > deepest) { deepest = intrusion; worst = body; }
+    }
+
+    if (worst) {
+        avoidBody(ship.position, desired, worst.centre,
+            worst.radius + cfg.avoid.clearance, desired);
+    }
+}
+
+/** The hard floor, and the last word. Steering is a plan and a plan can be
+ *  beaten: a raider already committed at cruise cannot always out-turn a body,
+ *  the Moon can arrive somewhere a ship already is, and an evading raider weaves
+ *  wherever the weave takes it. This is the same guarantee the visitor's own
+ *  ship gets from `altitudeFloorAdjust`, said again here because the fleet
+ *  reaches the planets through a hook rather than through that module. */
+function keepAboveSurfaces(ship) {
+    const bodies = readBodies();
+    for (let i = 0; i < bodies.length; i++) {
+        const body = bodies[i];
+        const c = body.centre;
+        const dx = ship.position.x - c.x;
+        const dy = ship.position.y - c.y;
+        const dz = ship.position.z - c.z;
+        const distance = Math.hypot(dx, dy, dz);
+        const minimum = body.radius + cfg.avoid.floor;
+        if (distance > 0 && distance < minimum) {
+            const k = minimum / distance;
+            ship.position.x = c.x + dx * k;
+            ship.position.y = c.y + dy * k;
+            ship.position.z = c.z + dz * k;
+            return;
+        }
+    }
 }
 
 /** Write this ship's next aim point around `target` into the shared `aim`.

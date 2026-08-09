@@ -597,6 +597,30 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         attackRadius: 1.15,
         holdRadius: 1.8,
 
+        // THE PLANETS ARE SOLID FOR RAIDERS TOO. Measured with none of this in
+        // place: ten of the twelve went below the surface of Earth on one run
+        // and the worst reached 6,282 units inside a body with a radius of
+        // 6,371. The steering was a straight line to an aim point and nothing
+        // in fleet.js had ever been told the planets were there.
+        //
+        // `rise` is how high above a beacon a transit leg ends, in multiples of
+        // standoff. One standoff puts the end of the approach exactly where the
+        // attack circle already is, so a raider arrives level with its station
+        // instead of diving at a point on the ground and overshooting through
+        // it. That alone was worth 129 to 288 units on the near side, where
+        // nothing was in the way.
+        //
+        // `clearance` is the daylight the steering tries to keep, and it is
+        // generous on purpose: a raider turns at 0.55 radians a second, which
+        // is a 2,200 unit radius at cruise, so a shell it only notices late is
+        // a shell it cannot turn out of.
+        //
+        // `floor` is the hard stop applied after the move, the same guarantee
+        // the visitor's ship gets. Deliberately much tighter than the
+        // clearance, because it is a backstop rather than a plan: if it is
+        // doing visible work every frame then the steering above it is wrong.
+        avoid: { rise: 1.0, clearance: 900, floor: 250 },
+
         // FORMATION SLOTS. Every attacker on a given installation used to
         // compute the identical aim point, so four raiders converged to within
         // eight units of each other and drew as ONE light, ONE hull, and ONE HUD
