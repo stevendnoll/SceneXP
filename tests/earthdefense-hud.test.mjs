@@ -55,7 +55,7 @@ class FakeElement {
 
 const HUD_IDS = [
     'structures-count', 'ships-count', 'elapsed-time', 'alert-banner',
-    'hostile-pips', 'nav-markers', 'chevron-alert', 'chevron-hostile',
+    'hostile-pips', 'hostile-range', 'nav-markers', 'chevron-alert', 'chevron-hostile',
     'objective-status', 'lives-pips', 'hull-pips', 'hull-row'
 ];
 
@@ -556,6 +556,134 @@ describe('hostile pips', () => {
         expect(hud.__test__.getPips()[0].style.transform).toMatch(/rotate\(45deg\)$/);
         expect(hud.__test__.getNavMarkers()[0].marker.style.transform).toEqual(expect.any(String));
         expect(hud.__test__.getNavMarkers()[0].marker.style.transform).not.toMatch(/rotate/);
+    });
+});
+
+// ---- Which diamond is the problem -------------------------------------------
+//
+// Reported from a run: "when all of the enemy ships appear as diamonds in the
+// HUD it's hard to tell which ship is the closest." Twelve identical marks say
+// where the raiders are and nothing about which one matters, and the fix has to
+// answer that without printing twelve numbers over the fight.
+
+describe('the nearest raider', () => {
+    const range = () => nodes.get('hostile-range');
+    const marked = () => hud.__test__.getPips()
+        .map((pip, i) => (pip.classList.contains('nearest') ? i : -1))
+        .filter(i => i >= 0);
+
+    test('exactly one diamond is marked, and it is the closest one', () => {
+        hud.initHud(CONFIG);
+        // `raiders` walks them out along +x from the eye, so index 0 is nearest.
+        hud.updateHud(view({ ships: raiders() }));
+        expect(marked()).toEqual([0]);
+    });
+
+    test('its range is printed, in kilometres, under the diamond', () => {
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ ships: raiders(-5000) }));
+
+        expect(range().hidden).toBe(false);
+        expect(range().textContent).toBe('5,000 km');
+        // Under it rather than on it. A number centred on the mark it describes
+        // hides the mark.
+        expect(range().style.transform).toMatch(/translate\(0, 14px\)$/);
+    });
+
+    test('the mark and the number move when a nearer raider arrives', () => {
+        hud.initHud(CONFIG);
+        const fleet = raiders(-5000);
+        hud.updateHud(view({ ships: fleet }));
+        expect(marked()).toEqual([0]);
+
+        fleet[7].position = { x: 0, y: 0, z: -1200 };
+        hud.updateHud(view({ ships: fleet }));
+        expect(marked()).toEqual([7]);
+        expect(range().textContent).toBe('1,200 km');
+    });
+
+    test('killing the nearest hands the mark on rather than leaving it', () => {
+        hud.initHud(CONFIG);
+        const fleet = raiders(-5000);
+        hud.updateHud(view({ ships: fleet }));
+
+        fleet[0].alive = false;
+        hud.updateHud(view({ ships: fleet }));
+        expect(marked()).toEqual([1]);
+    });
+
+    test('past 10,000 km the number moves in thousands, like the nav markers', () => {
+        // A readout whose last digits churn every frame is noise beside the
+        // reticle, and formatting a string to throw it away is worse.
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ ships: raiders(-64000) }));
+        expect(range().textContent).toBe('64k km');
+    });
+
+    test('the number is not written again while it says the same thing', () => {
+        hud.initHud(CONFIG);
+        const fleet = raiders(-5000);
+        hud.updateHud(view({ ships: fleet }));
+        const first = hud.__test__.shown.range;
+
+        // Half a kilometre closer, which rounds to the same readout.
+        fleet[0].position = { x: 0, y: 0, z: -4999.6 };
+        hud.updateHud(view({ ships: fleet }));
+        expect(hud.__test__.shown.range).toBe(first);
+    });
+
+    test('a nearest raider that is off screen takes the number with it', () => {
+        // The chevron is already saying which way to look. A range pinned to an
+        // edge the raider is not at would be answering a different question.
+        hud.initHud(CONFIG);
+        const fleet = raiders(-5000);
+        fleet[4].position = { x: 0, y: 0, z: 900 };     // behind the visitor, and closest
+        hud.updateHud(view({ ships: fleet }));
+
+        expect(range().hidden).toBe(true);
+        expect(nodes.get('chevron-hostile').hidden).toBe(false);
+    });
+
+    test('the number and the chevron always mean the SAME raider', () => {
+        // They are two readings of one decision, so this is really a test that
+        // the decision is only made once.
+        hud.initHud(CONFIG);
+        const fleet = raiders(-5000);
+        fleet[9].position = { x: 0, y: 0, z: -800 };
+        hud.updateHud(view({ ships: fleet }));
+
+        expect(marked()).toEqual([9]);
+        // On screen, so the pip is doing the job and the chevron stands down.
+        expect(nodes.get('chevron-hostile').hidden).toBe(true);
+        expect(range().textContent).toBe('800 km');
+    });
+
+    test('an empty sky is quiet rather than broken', () => {
+        hud.initHud(CONFIG);
+        expect(() => hud.updateHud(view({ ships: [] }))).not.toThrow();
+        expect(range().hidden).toBe(true);
+        expect(marked()).toEqual([]);
+    });
+
+    test('with no player position there is nothing to measure from', () => {
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ ships: raiders(), playerPosition: null }));
+        expect(range().hidden).toBe(true);
+        expect(marked()).toEqual([]);
+    });
+
+    test('a restart does not inherit the last run nearest', () => {
+        // The mark is an INDEX into a pip array that init rebuilds, so a stale
+        // one would decorate whichever raider happened to inherit the slot.
+        hud.initHud(CONFIG);
+        hud.updateHud(view({ ships: raiders() }));
+        hud.disposeHud();
+
+        expect(range().hidden).toBe(true);
+        expect(hud.__test__.shown.nearest).toBe(-1);
+
+        hud.initHud(CONFIG);
+        expect(marked()).toEqual([]);
     });
 });
 

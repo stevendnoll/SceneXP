@@ -212,6 +212,14 @@
              config.fleet.total, so the fleet size stays a config number. -->
         <div id="hostile-pips" class="hostile-pips" aria-hidden="true"></div>
 
+        <!-- ONE range readout, under the nearest raider's diamond. Twelve
+             identical diamonds say where the raiders are and nothing about
+             which one is about to be a problem, and a number under every one of
+             them would be a wall of digits over the fight. A sibling of the pip
+             layer rather than a child, because hud.js builds that layer by
+             clearing it. -->
+        <div id="hostile-range" class="hostile-range hidden" aria-hidden="true"></div>
+
         <!-- Live bearing and distance to the two places worth going. Read fresh
              every frame, because the Moon is moving. -->
         <div id="nav-markers" class="nav-markers" aria-hidden="true"></div>
@@ -402,9 +410,10 @@
                         Moon, and twelve Martian raiders on their way in. Hold the
                         installations and see off the raiders. Both counts are top left,
                         and both only go down.</li>
-                    <li><strong>Finding things:</strong> every raider carries a diamond, Earth
-                        and the Moon carry a ring with the distance to it, and an arrow at the
-                        edge of the screen points the way to anything off it.</li>
+                    <li><strong>Finding things:</strong> every raider carries a diamond, and the
+                        closest one is drawn larger with the range to it underneath. Earth and
+                        the Moon carry a ring with their distance, and an arrow at the edge of
+                        the screen points the way to anything off it.</li>
                     <li class="help-desktop"><strong>Pausing:</strong> <kbd>Esc</kbd>, or the pause button in the top right. Nothing moves while this panel is open.</li>
                     <li class="help-mobile"><strong>Pausing:</strong> the pause button in the top right. Nothing moves while this panel is open.</li>
                     <li><strong>Settings:</strong> the gear icon adjusts look sensitivity, and carries

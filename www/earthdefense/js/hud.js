@@ -49,7 +49,10 @@ const shown = {
     lives: null,
     hull: null,
     clock: null,
-    alert: null
+    alert: null,
+    // The nearest raider's pip index, and the rounded range printed under it.
+    nearest: -1,
+    range: null
 };
 
 // The INPUTS to the spoken sentence rather than the sentence itself, so the
@@ -64,6 +67,10 @@ const spoken = {
 
 // Reused, because this runs sixty times a second.
 const projected = { x: 0, y: 0, onScreen: false, behind: false };
+// Which raider is closest, and how far, decided ONCE a frame. The range readout
+// and the edge chevron both ask, and two answers to the same question is how a
+// number ends up describing a ship the arrow is not pointing at.
+const nearest = { index: -1, distance: Infinity, position: null };
 const edge = { x: 0, y: 0, angle: 0 };
 const viewport = { width: 0, height: 0 };
 let scratchVec = null;
@@ -151,6 +158,7 @@ export function initHud(config = EARTHDEFENSE_CONFIG) {
         hull: document.getElementById('hull-pips'),
         hullRow: document.getElementById('hull-row'),
         pipLayer: document.getElementById('hostile-pips'),
+        hostileRange: document.getElementById('hostile-range'),
         navLayer: document.getElementById('nav-markers'),
         alertChevron: document.getElementById('chevron-alert'),
         hostileChevron: document.getElementById('chevron-hostile'),
@@ -358,9 +366,19 @@ function speak(view) {
 
 /** One pip per living raider, AT ANY DISTANCE (PRD 8.1). That is the whole
  *  point of them: a ship 200,000 units out is a few pixels of running light
- *  and would otherwise be indistinguishable from a star. */
+ *  and would otherwise be indistinguishable from a star.
+ *
+ *  AND EXACTLY ONE OF THEM CARRIES A NUMBER. Twelve identical diamonds say
+ *  where the raiders are and nothing at all about which one is the problem,
+ *  which was the report: "it's hard to tell which ship is the closest". Marking
+ *  the nearest and printing its range answers that without turning the screen
+ *  into a wall of digits, and it is the same ship the edge chevron already
+ *  means, so the two can never point at different raiders. */
 function updatePips(view, viewport) {
     const ships = view.ships || [];
+    const closest = findNearestHostile(view);
+    let rangeShown = false;
+
     for (let i = 0; i < pips.length; i++) {
         const ship = ships[i];
         if (!ship || !ship.alive) {
@@ -375,7 +393,65 @@ function updatePips(view, viewport) {
         // The rotation is what makes a pip a diamond rather than a square, and
         // it has to come through `place` or the inline transform drops it.
         place(pips[i], projected.x, projected.y, PIP_SPIN);
+
+        if (i === closest) {
+            placeRange(projected.x, projected.y, nearest.distance);
+            rangeShown = true;
+        }
     }
+
+    // Off screen, or nothing left to fight. The chevron is still saying which
+    // way to look, and a number pinned to an edge the raider is not at would be
+    // answering a question nobody asked.
+    if (!rangeShown) hide(el.hostileRange);
+
+    // Only the two pips that changed hands, rather than a class write on every
+    // diamond every frame.
+    if (closest !== shown.nearest) {
+        if (pips[shown.nearest]) pips[shown.nearest].classList.remove('nearest');
+        if (pips[closest]) pips[closest].classList.add('nearest');
+        shown.nearest = closest;
+    }
+}
+
+/** The range readout, under the diamond it belongs to.
+ *
+ *  Rounded the same way the nav distances are, and compared the same way: past
+ *  10,000 km the readout moves in thousands, so at closing speed most frames
+ *  would format an identical string and throw it away. */
+function placeRange(x, y, distance) {
+    const node = el.hostileRange;
+    if (!node) return;
+    place(node, x, y, ' translate(0, 14px)');
+
+    const km = Math.max(0, Math.round(distance));
+    const quantum = km >= 10000 ? Math.round(km / 1000) * 1000 : km;
+    if (quantum !== shown.range) {
+        shown.range = quantum;
+        node.textContent = formatDistance(km);
+    }
+}
+
+/** The living raider closest to the visitor, as an index into `view.ships`,
+ *  with its distance and position left in `nearest` for the callers that want
+ *  them. -1 when there is nothing alive to measure. */
+function findNearestHostile(view) {
+    const ships = view.ships || [];
+    nearest.index = -1;
+    nearest.distance = Infinity;
+    nearest.position = null;
+    if (!view.playerPosition) return -1;
+
+    for (let i = 0; i < ships.length; i++) {
+        const ship = ships[i];
+        if (!ship || !ship.alive) continue;
+        const distance = distanceBetween(view.playerPosition, ship.position);
+        if (distance >= nearest.distance) continue;
+        nearest.distance = distance;
+        nearest.index = i;
+        nearest.position = ship.position;
+    }
+    return nearest.index;
 }
 
 function updateNav(view, viewport) {
@@ -410,10 +486,13 @@ function updateNav(view, viewport) {
 }
 
 /** Two chevrons, and only two: the installation under attack, and the nearest
- *  raider. A chevron for every hostile would ring the screen and say nothing. */
+ *  raider. A chevron for every hostile would ring the screen and say nothing.
+ *
+ *  Reads the nearest raider that `updatePips` already found this frame, rather
+ *  than looking again. Same ship, by construction. */
 function updateChevrons(view, viewport) {
     placeChevron(el.alertChevron, view.alert ? view.alert.position : null, view, viewport);
-    placeChevron(el.hostileChevron, nearestHostile(view), view, viewport);
+    placeChevron(el.hostileChevron, nearest.position, view, viewport);
 }
 
 function placeChevron(node, position, view, viewport) {
@@ -431,35 +510,22 @@ function placeChevron(node, position, view, viewport) {
         `translate(-50%, -50%) translate(${edge.x.toFixed(1)}px, ${edge.y.toFixed(1)}px) rotate(${edge.angle.toFixed(3)}rad)`;
 }
 
-function nearestHostile(view) {
-    const ships = view.ships || [];
-    if (!view.playerPosition) return null;
-    let best = null;
-    let bestDistance = Infinity;
-    for (const ship of ships) {
-        if (!ship || !ship.alive) continue;
-        const distance = distanceBetween(view.playerPosition, ship.position);
-        if (distance >= bestDistance) continue;
-        bestDistance = distance;
-        best = ship.position;
-    }
-    return best;
-}
-
 /** Put a marker at a screen point.
  *
- *  `spin` IS NOT DECORATION. An inline `transform` replaces the stylesheet's
+ *  `extra` IS NOT DECORATION. An inline `transform` replaces the stylesheet's
  *  outright rather than composing with it, so a mark whose shape comes from a
  *  rotation loses that shape the first frame it is placed. That is exactly what
  *  happened to the hostile pips: `.hostile-pip` is a 9px square turned 45
  *  degrees, and every raider on screen drew as an axis-aligned BLOCK from the
  *  moment it was positioned. Nothing threw, the stylesheet was right, and the
  *  only way to catch it was to look. Any caller whose CSS transform carries
- *  meaning has to pass that meaning through here. */
-function place(node, x, y, spin) {
+ *  meaning has to pass that meaning through here, whether that meaning is a
+ *  shape (the pips' 45 degrees) or an offset (the range readout, which hangs
+ *  below the diamond it belongs to rather than on top of it). */
+function place(node, x, y, extra) {
     node.classList.remove('hidden');
     node.style.transform =
-        `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)${spin || ''}`;
+        `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)${extra || ''}`;
 }
 
 function hide(node) {
@@ -515,6 +581,9 @@ export function disposeHud() {
         // Back to absent, or a restart would begin with the previous run's
         // damage row still on screen until the first shot landed.
         if (el.hullRow) el.hullRow.classList.add('hidden');
+        // The range readout outlives the pip layer, being a sibling of it, so
+        // it has to be put away by hand rather than by the clearing above.
+        if (el.hostileRange) el.hostileRange.classList.add('hidden');
     }
     cfg = null;
     el = null;
@@ -529,6 +598,13 @@ export function disposeHud() {
     shown.hull = null;
     shown.clock = null;
     shown.alert = null;
+    // The index is into a pip array that is about to be rebuilt, so keeping it
+    // would mark whichever raider inherits the slot on the next run.
+    shown.nearest = -1;
+    shown.range = null;
+    nearest.index = -1;
+    nearest.distance = Infinity;
+    nearest.position = null;
     spoken.event = undefined;
     spoken.structures = undefined;
     spoken.ships = undefined;

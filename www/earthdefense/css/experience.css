@@ -829,7 +829,44 @@ body:not(.is-touch-device) .speedometer {
     will-change: transform;
 }
 
+/* THE NEAREST ONE, marked so the answer survives being read at a glance. All
+   twelve diamonds are the same mark on purpose, which is exactly what makes
+   "which of these is about to be a problem" unanswerable in a fight. A ring
+   around one of them is a shape difference rather than a colour difference, so
+   it holds up in the periphery and for a visitor who cannot separate the two
+   oranges. Slightly larger as well, since a ring alone is easy to lose against
+   a bright limb. */
+.hostile-pip.nearest {
+    width: 12px;
+    height: 12px;
+    background: rgba(255, 154, 92, 0.95);
+    box-shadow: 0 0 0 2px rgba(6, 10, 18, 0.55), 0 0 0 4px rgba(255, 154, 92, 0.75);
+}
+
+/* The number itself, on the same plate the nav distances carry and for the same
+   reason: this sits over whatever the fight happens to be in front of, which on
+   this scene is as often a sunlit planet as it is space. */
+.hostile-range {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: rgba(6, 10, 18, 0.62);
+    font-size: 0.66rem;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 214, 196, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+    white-space: nowrap;
+    pointer-events: none;
+    will-change: transform;
+}
+
 .hostile-pip.hidden,
+.hostile-range.hidden,
 .nav-marker.hidden,
 .edge-chevron.hidden {
     display: none;
