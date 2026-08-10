@@ -1,8 +1,8 @@
 # SceneXP
 
 > SceneXP.com hosts custom 3D experiences built with Three.js and browser-native
-> HTML, CSS, and JavaScript. Each experience is a small explorable world made to
-> honor a person, place, or business. Everything runs in the browser with no app
+> HTML, CSS, and JavaScript. Each experience is a small explorable world, almost
+> always made to honor a person, place, or business. Everything runs in the browser with no app
 > or download, and the project is open source under the MIT license.
 
 ## Pages
@@ -24,6 +24,7 @@
 - [Gavin's Bug Patrol](https://www.scenexp.com/gavin/): a passive 3D close-up of the Confederate Jasmine where Steve's eleven-year-old son Gavin releases ladybugs and praying mantises every spring, with a fixed viewpoint, a day and night shift of garden bugs, and three hidden mantises to spot.
 - [Jamar's Karaoke Night](https://www.scenexp.com/jamar/): a passive 3D karaoke night at the corner bar, built as a birthday present for Steve's best friend Jamar, who has the microphone and the corner stage, with a rolling lyrics screen, a jukebox for picking his next song, and friends raising a toast from the booth.
 - [The Mandelbrot Set](https://www.scenexp.com/mandelbrot/): a 3D visit to the Mandelbrot set floating in a starfield, honoring Benoit Mandelbrot, with an auto zoom that dives a 3D tunnel of glowing fractal terrain hundreds of billions of times deep, eleven selectable destinations on the burning edge, and a color cycle that drifts from orange to violet on the way down.
+- [Earth Defense](https://www.scenexp.com/earthdefense/): a playable 3D space game set in orbit above Earth, and the one experience on the site built for its own sake rather than to honor someone. You fly a single ship against twelve incoming Martian raiders and defend seven installations on Earth and the Moon. There is no fire button: line a raider up in the middle of your view and the guns fire themselves. Near-true-scale planets, a Moon on an eight-minute orbit, Mars as a red disc far ahead, a HUD with live ranges and target lock, keyboard and mouse on desktop with a throttle and look joystick on phones, and a third-person camera shot when a run ends.
 
 ## Notes
 

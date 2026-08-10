@@ -983,6 +983,119 @@ body.replaying .lock-bracket {
     opacity: 0;
 }
 
+/* ---- The ending shot ------------------------------------------------------
+
+   A run that finishes plays a few seconds of third-person camera before the
+   summary card: fireworks over Earth for a win, slow fires at the fallen
+   installations for a lost line, and the visitor's own wreck receding for a
+   run that ran out of ships.
+
+   THE WASH IS THE ONLY THING THE PAGE CONTRIBUTES. Everything else is in the
+   scene, where it belongs. This is a corner-lit vignette rather than a flat
+   tint, so the middle of the frame (the planet, the wreck, the shells) stays
+   the colour the renderer drew it and the edges carry the mood. It sits under
+   the HUD and over the canvas.
+
+   It fades in over a second and stays. The card arrives while the last sparks
+   are still going out, so pulling the colour on the frame the camera stopped
+   would leave those embers on a plain black sky.
+
+   A pseudo-element rather than a div, exactly like the hull-hit wash above it,
+   so the ending adds no markup and cannot be left in the page by a script that
+   fails half way through. */
+body.finale-won::before,
+body.finale-lost::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    animation: finale-wash-in 1s ease-out forwards;
+}
+
+body.finale-won::before {
+    background:
+        radial-gradient(120% 90% at 50% 55%, rgba(0, 0, 0, 0) 42%, rgba(64, 40, 10, 0.5) 100%),
+        radial-gradient(90% 70% at 50% 100%, rgba(255, 186, 96, 0.18), rgba(0, 0, 0, 0) 70%);
+}
+
+body.finale-lost::before {
+    background:
+        radial-gradient(120% 90% at 50% 55%, rgba(0, 0, 0, 0) 34%, rgba(52, 6, 4, 0.62) 100%),
+        radial-gradient(90% 70% at 50% 100%, rgba(190, 40, 20, 0.16), rgba(0, 0, 0, 0) 70%);
+}
+
+@keyframes finale-wash-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* NOTHING THAT IS ABOUT FLYING belongs over a shot the visitor is watching
+   rather than steering, which is the same rule the ship replay follows and the
+   same one that drops the canopy for these shots in main.js. The reticle aims
+   guns that are no longer there, the speedometer reads a ship that in two of
+   the three endings has been destroyed, and a pair of thumb controls sitting
+   over a celebration invites a visitor to fly a run that is already over.
+
+   THE OBJECTIVE PANEL AND THE CLOCK STAY. Those are about the RUN rather than
+   about the ship, they are the same numbers the card is about to show, and
+   leaving them up is what keeps the ending and the card reading as one screen
+   rather than two. Exactly the reasoning that keeps the HUD up behind the card
+   itself. */
+body.finale-won #reticle,
+body.finale-lost #reticle,
+body.finale-won .lock-bracket,
+body.finale-lost .lock-bracket,
+body.finale-won #speedometer,
+body.finale-lost #speedometer,
+body.finale-won #throttle-readout,
+body.finale-lost #throttle-readout,
+body.finale-won #touch-controls,
+body.finale-lost #touch-controls {
+    opacity: 0;
+    transition: opacity 0.4s ease-out;
+    pointer-events: none;
+}
+
+/* The way out. Low and centred, clear of the speedometer, and quiet enough
+   that it never competes with what is happening above it. */
+.end-skip {
+    position: fixed;
+    left: 50%;
+    bottom: 8%;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(6, 10, 18, 0.55);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: rgba(226, 236, 250, 0.72);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 5;
+    animation: skip-in 0.9s ease-out forwards;
+}
+
+.end-skip.hidden {
+    display: none;
+}
+
+/* One line of copy, two audiences. A phone has no keys and a desktop has no
+   tap, and telling either of them about the other's control is the small kind
+   of carelessness that reads as a page built for somebody else. */
+.skip-tap { display: none; }
+body.is-touch-device .skip-key { display: none; }
+body.is-touch-device .skip-tap { display: inline; }
+
+/* Held back a beat, so the hint arrives after the shot has started rather than
+   landing on the same frame and reading as an instruction to look away. */
+@keyframes skip-in {
+    0%, 45% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
 /* Two arrows and no more: the installation under attack, and the nearest
    raider. One per hostile would ring the screen and say nothing. */
 .edge-chevron {
@@ -1354,5 +1467,16 @@ body.hull-hit::after {
     body.hull-hit::after {
         animation: none;
         opacity: 0.7;
+    }
+
+    /* Belt and braces. This visitor never sees the ending shot at all (main.js
+       skips straight to the summary card for exactly this preference), so
+       neither of these should ever be on screen. If one somehow is, it arrives
+       rather than animating in. */
+    body.finale-won::before,
+    body.finale-lost::before,
+    .end-skip {
+        animation: none;
+        opacity: 1;
     }
 }

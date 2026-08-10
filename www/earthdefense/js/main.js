@@ -76,6 +76,10 @@ import {
     disposeReplay
 } from './replay.min.js';
 import {
+    initFinale, updateFinale, startFinale, endFinale, finaleEye, finaleWash,
+    isFinaleRunning, getFinaleKind, setFinaleReduced, onFinaleBurst, disposeFinale
+} from './finale.min.js';
+import {
     initAudio, setEngineThrottle, setMuted, playFire, playHit, playDestruction,
     playAlert, playLock, disposeAudio
 } from './audio.min.js';
@@ -107,7 +111,7 @@ let speedometer, speedoForward, speedoReverse, speedoDemand, speedoZero;
 let speedoGhostForward, speedoGhostReverse;
 let settingsPanel, settingsBtn, pauseModal;
 let reticle, lockBracket, combatStatus;
-let replayInset, replayCaption;
+let replayInset, replayCaption, endSkip;
 let endModal, endTitle, endSubtitle, endTime, endSaved, endDestroyed, endBest;
 let scene = null;
 let overlayScene = null;
@@ -146,6 +150,16 @@ let _respawnTimer = 0;
 // An end screen that is waiting for a destruction replay to finish, and the
 // rectangle the replay window is drawn into. Both null for almost the whole run.
 let _endScreenPending = null;
+// Whether the ending shot for the pending outcome has been offered yet. A flag
+// rather than a check on the finale itself, because "has not started" and "has
+// finished" look identical from outside and one of them means play it.
+let _finaleOffered = false;
+// The wash class currently on the body, so the two are never both up and a
+// restart cannot leave one behind.
+let _finaleWash = '';
+// Where the ship was destroyed, kept so the ending shot can pick up the orbit
+// the replay was already flying around it.
+let _lastWreck = null;
 let _insetRect = null;
 // Secondary detonations still to go off, soonest first, and the clock they are
 // due against. Empty for almost the whole run.
@@ -210,6 +224,7 @@ async function init() {
     combatStatus = document.getElementById('combat-status');
     replayInset = document.getElementById('replay-inset');
     replayCaption = document.getElementById('replay-caption');
+    endSkip = document.getElementById('end-skip');
     endModal = document.getElementById('end-modal');
     endTitle = document.getElementById('end-title');
     endSubtitle = document.getElementById('end-subtitle');
@@ -398,6 +413,11 @@ function startCombat() {
 
     initHud(config);
     initReplay(config);
+    initFinale(scene, config);
+    // A shell going off is a boom, which is what `playDestruction` already is.
+    // Reinforcement and nothing else, like every other cue: it duplicates a
+    // bloom that is on screen either way.
+    onFinaleBurst(() => { if (getFinaleKind() === 'won') playDestruction(); });
     // Wires a one-time gesture listener and builds nothing. The context waits
     // for the visitor's first click or key, which is both what browsers require
     // and the right manners: a page nobody has touched should make no sound.
@@ -459,14 +479,22 @@ function handleStateChange(next) {
         // while the game is being played.
         _hullHitTimer = 0;
         document.body.classList.remove('hull-hit');
-        // THE PANEL WAITS FOR THE REPLAY. The last life is lost on the frame
-        // the ship is destroyed, so opening the end screen here would drop a
-        // blurred backdrop over the one destruction the whole run led up to.
-        // `advanceEndScreen` puts it up the moment the shot finishes.
-        if (isReplayRunning()) _endScreenPending = next;
-        else showEndScreen(next);
+        // THE PANEL COMES LAST, ALWAYS. The last life is lost on the frame the
+        // ship is destroyed, so opening the end screen here would drop a
+        // blurred backdrop over the one destruction the whole run led up to,
+        // and it would do the same to the ending shot that follows it.
+        // `advanceEndScreen` owns the order: wreck replay, then finale, then
+        // the card. Called once here so an ending that plays nothing at all
+        // (reduced motion) still puts the card up on this frame rather than on
+        // the next one.
+        _endScreenPending = next;
+        _finaleOffered = false;
+        advanceEndScreen();
     } else if (endModal) {
         _endScreenPending = null;
+        _finaleOffered = false;
+        endFinale();
+        setFinaleWash('');
         endModal.classList.add('hidden');
     }
 
@@ -698,6 +726,9 @@ function killPlayer(cause) {
     const flight = getFlightState();
     spawnDestruction(flight.position, config.replay.shipBurstRadius);
     queueAftershocks(flight.position, config.replay.shipBurstRadius);
+    // Copied rather than held: `getFlightState` builds a fresh record each
+    // call, but the ending shot reads this after a respawn has moved on.
+    _lastWreck = { x: flight.position.x, y: flight.position.y, z: flight.position.z };
     // AND STEP OUTSIDE TO WATCH IT. The burst used to happen at the eye, inside
     // a near plane of 100 units, so most of the one destruction the visitor
     // actually cares about was clipped away and the rest sprayed past the
@@ -736,10 +767,15 @@ function respawnPlayer() {
  *  it was watching. */
 function clearReplays() {
     initReplay(EARTHDEFENSE_CONFIG);
+    endFinale();
+    setFinaleWash('');
     _aftershocks.length = 0;
     _endScreenPending = null;
+    _finaleOffered = false;
+    _lastWreck = null;
     _insetRect = null;
     if (replayInset) replayInset.classList.add('hidden');
+    if (endSkip) endSkip.classList.add('hidden');
     if (document.body) document.body.classList.remove('replaying');
 }
 
@@ -1059,6 +1095,9 @@ function applyReducedFx() {
 
     setMaxPixelRatio(applied.maxPixelRatio);
     setDrawCount(scene && scene.getObjectByName('starfield'), applied.starCount);
+    // The ending's flares, thinned rather than switched off. See
+    // `startEndingShot` for why this checkbox does not skip the shot itself.
+    setFinaleReduced(applied.reduced);
 
     const weapons = getWeaponsGroup();
     const children = (weapons && weapons.children) || [];
@@ -1199,6 +1238,14 @@ function setupEventListeners() {
 
     wireSettings(signal);
 
+    // SKIPPING THE ENDING, from anything at all. Wired ahead of the pause key
+    // so it gets the first look: while an ending is playing there is nothing to
+    // pause, and Escape should cut to the card like every other key. Neither
+    // handler can fire the other's action, since `openPause` refuses unless the
+    // game is being played.
+    document.addEventListener('keydown', () => { skipFinale(); }, { signal });
+    document.addEventListener('pointerdown', () => { skipFinale(); }, { signal });
+
     // Pause: Esc on a keyboard, the pause button on a touch screen.
     const pauseBtn = document.getElementById('pause-btn');
     if (pauseBtn) pauseBtn.addEventListener('click', openPause, { signal });
@@ -1272,6 +1319,7 @@ function animate() {
     // on it. `advanceEndScreen` is what holds the end panel back until the shot
     // has finished, and it has to run in the same place for the same reason.
     updateReplay(deltaTime);
+    advanceFinale(deltaTime);
     advanceAftershocks(deltaTime);
     advanceEndScreen(deltaTime);
 
@@ -1311,8 +1359,12 @@ function animate() {
     if (shouldDrawThisFrame(deltaTime)) drawFrame();
 }
 
-/** Where the eye is this frame: the ship, or the replay watching its wreck. */
+/** Where the eye is this frame: the ship, the replay watching its wreck, or the
+ *  ending. The finale comes first, since it is the one that runs when there is
+ *  no longer a ship to be flying. */
 function applyViewpoint(flight) {
+    const ending = finaleEye();
+    if (ending) { applyReplayToCamera(ending); return; }
     const watching = shipReplayEye();
     if (watching) applyReplayToCamera(watching);
     else applyFlightToCamera(flight);
@@ -1329,7 +1381,10 @@ function applyViewpoint(flight) {
  *  The inset goes LAST, after the depth clear the cockpit pass does, so nothing
  *  can be drawn over the window. */
 function drawFrame() {
-    const watching = isShipReplayRunning();
+    // The canopy is dropped for the ending too, and for the same reason: the
+    // camera is thousands of units outside a ship that is either a cloud of
+    // debris or no longer in the shot at all.
+    const watching = isShipReplayRunning() || isFinaleRunning();
     renderSpace(scene, watching ? null : overlayScene);
 
     if (!isInsetRunning()) {
@@ -1377,11 +1432,143 @@ function shouldDrawThisFrame(deltaTime) {
  *  The replay is what gates it rather than a duration, so the two can never
  *  disagree about how long the shot was. */
 function advanceEndScreen() {
-    if (!_endScreenPending || isReplayRunning()) return;
+    if (!_endScreenPending) return;
+    // The wreck shot first, when there is one. Only the last life has one, and
+    // the ending that follows it is written to open exactly where it closes.
+    if (isReplayRunning()) return;
+    if (!_finaleOffered) {
+        _finaleOffered = true;
+        if (startEndingShot(_endScreenPending)) return;
+    }
+    if (isFinaleRunning()) return;
+
     const outcome = _endScreenPending;
     _endScreenPending = null;
     if (document.body) document.body.classList.remove('replaying');
     showEndScreen(outcome);
+}
+
+/** Which of the three endings this outcome gets, and whether it starts.
+ *
+ *  REDUCED MOTION IS THE ONE THING THAT SKIPS IT. A full-frame camera move with
+ *  no way out is exactly what that preference is about, and the visitor loses
+ *  nothing they were not going to be told: the card carries every number, and
+ *  the live region carries the same sentence either way.
+ *
+ *  The "Reduced effects" checkbox deliberately does NOT skip it. That control
+ *  is about frame rate, and everywhere else in this file it THINS rather than
+ *  removes: fewer stars, fewer burst particles, a lower pixel ratio. Turning it
+ *  into a switch that silently deletes an ending would make it a different kind
+ *  of control from the one its label describes. It reaches the finale as a
+ *  smaller flare pool, through `applyReducedFx`.
+ *
+ *  RUNNING OUT OF SHIPS IS NOT THE SAME LOSS as losing the line, which is the
+ *  same distinction `endMessage` already makes: the installations are still
+ *  standing in one of them, so pointing the camera at a burning Earth would be
+ *  telling the visitor something untrue. */
+function startEndingShot(outcome) {
+    if (prefersReducedMotion()) return false;
+
+    const kind = outcome === 'won'
+        ? 'won'
+        : (endedByLives() ? 'lost-ship' : 'lost-line');
+    const context = kind === 'lost-ship' ? wreckShot() : earthShot();
+    if (!context) return false;
+
+    const seconds = startFinale(kind, context);
+    if (!seconds) return false;
+    setFinaleWash(finaleWash());
+    if (document.body) document.body.classList.add('replaying');
+    if (endSkip) endSkip.classList.remove('hidden');
+    return true;
+}
+
+/** The two planet endings: Earth, seen from over the hemisphere its
+ *  installations are on, with those four points as the sources.
+ *
+ *  THE FALLEN ONES ARE STILL IN THE LIST, and for the loss they are the whole
+ *  list. What the sources mean is "the places this run was about", not "the
+ *  places that survived": a win with three Earth installations lost should
+ *  still light all four, because the celebration belongs to the planet rather
+ *  than to the hardware.
+ *
+ *  Held by reference, never copied. Every one of these `aim` and `up` vectors
+ *  is rewritten in place by `sampleStructureMotion` each frame, so a shell
+ *  launched four seconds in leaves from where that site is by then. */
+function earthShot() {
+    const earth = getBody('earth');
+    if (!earth) return null;
+    const sources = [];
+    for (const entry of getStructures()) {
+        if (entry.body !== 'earth') continue;
+        sources.push({ position: entry.aim, up: entry.up });
+    }
+    if (!sources.length) return null;
+    return {
+        subject: { x: earth.position.x, y: earth.position.y, z: earth.position.z },
+        sources
+    };
+}
+
+/** The ship ending, continuing the replay that is already orbiting the wreck.
+ *
+ *  `side` is where the camera is standing RIGHT NOW relative to the wreck, so
+ *  angle zero of the new orbit is exactly where the old one finished. With the
+ *  preset opening at the distance the replay closes at, there is no cut: one
+ *  move that starts as a replay and becomes an ending. */
+function wreckShot() {
+    const camera = getWorldCamera();
+    const at = _lastWreck;
+    if (!camera || !at) return null;
+    const dx = camera.position.x - at.x;
+    const dy = camera.position.y - at.y;
+    const dz = camera.position.z - at.z;
+    if (Math.hypot(dx, dy, dz) < 1e-6) return null;
+    return {
+        subject: { x: at.x, y: at.y, z: at.z },
+        // Flattened, because the orbit axis is the world's up and a side vector
+        // with a rise in it would tilt the whole circle.
+        side: { x: dx, y: 0, z: dz },
+        sources: [{ position: { x: at.x, y: at.y, z: at.z }, up: { x: 0, y: 1, z: 0 } }]
+    };
+}
+
+/** One body class at a time, so the two washes can never both be up. */
+function setFinaleWash(name) {
+    if (document.body) {
+        if (_finaleWash && _finaleWash !== name) document.body.classList.remove(_finaleWash);
+        if (name) document.body.classList.add(name);
+    }
+    _finaleWash = name;
+    return name;
+}
+
+/** Advance the ending and let its wash follow it out.
+ *
+ *  The wash is tied to the FLARES rather than to the camera move, because the
+ *  sparks outlive it by design: the card arrives while the last of a shell is
+ *  still fading, and pulling the colour on the exact frame the camera stopped
+ *  would leave those embers sitting on a plain black sky. */
+function advanceFinale(deltaTime) {
+    updateFinale(deltaTime);
+    const wash = finaleWash();
+    if (wash !== _finaleWash) setFinaleWash(wash);
+    if (!wash && endSkip && !endSkip.classList.contains('hidden')) {
+        endSkip.classList.add('hidden');
+    }
+}
+
+/** Cut an ending short. Any key, any tap: a shot nobody can leave is a shot
+ *  that has stopped being a gift. The card is what comes next either way, so
+ *  skipping costs the visitor no information at all. */
+function skipFinale() {
+    if (!isFinaleRunning()) return false;
+    endFinale();
+    setFinaleWash('');
+    if (endSkip) endSkip.classList.add('hidden');
+    if (document.body) document.body.classList.remove('replaying');
+    advanceEndScreen();
+    return true;
 }
 
 /** Count down the wreck, then put the ship back. Run off the frame clock rather
@@ -1658,10 +1845,13 @@ function cleanup() {
     disposeCockpit();
     disposeHud();
     disposeReplay();
+    disposeFinale(scene);
     disposeAudio();
     disposeGameState();
     overlayScene = null;
     _endScreenPending = null;
+    _finaleOffered = false;
+    _lastWreck = null;
     _insetRect = null;
 }
 
@@ -1727,6 +1917,8 @@ export const __test__ = {
     restartRun, killPlayer, respawnPlayer, advanceRespawn, advanceEndScreen,
     showStructureLost, clearReplays, readInsetRect, drawFrame, applyViewpoint,
     queueAftershocks, advanceAftershocks, aftershocks: _aftershocks,
+    startEndingShot, earthShot, wreckShot, advanceFinale, skipFinale,
+    setFinaleWash, finaleWash: () => _finaleWash,
     openPause, closePause, beginFlight,
     layOutSpeedometer, speedoPosition, updateSpeedometer, updateReadouts,
     forwardArmFraction, reverseArmFraction,

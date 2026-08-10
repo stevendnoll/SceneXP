@@ -155,6 +155,61 @@ strings that make a long `max-age` safe. Two conventions do that work:
 The `main` branch does not accept direct pushes. Every change, including our
 own, arrives through a pull request once the CI checks pass.
 
+### Social cards, and the Mac screenshot trap
+
+Each experience ships a 1200 by 630 card as `assets/og-<world>.webp` with a
+`.jpg` beside it. The WebP is what the page's `og:image` and the directory card
+point at; the JPEG is the fallback for anything that will not decode WebP, and
+it is what Twitter and this repository's own README use.
+
+**A screenshot taken on a Mac carries the display's colour profile, not sRGB.**
+Convert it without saying so and the tool keeps the raw numbers and drops the
+tag, so a browser reads P3 values as sRGB and the result comes out visibly
+duller and darker than the PNG you were looking at. On the Earth Defense card,
+Earth's lit limb measured `rgb(47,53,71)` that way against `rgb(54,61,81)`
+correctly converted, about thirteen percent down, and the amber pills lost
+their warmth. It is easy to miss, because the PNG on your own screen keeps
+looking right.
+
+The fix is one flag, and the order matters. `-profile` must come **before**
+`-strip`: it converts the pixels out of the display profile, and only then is
+the tag safe to drop.
+
+```bash
+SRGB="/System/Library/ColorSync/Profiles/sRGB Profile.icc"
+magick og-world.png -profile "$SRGB" -strip \
+  -define webp:lossless=true -define webp:method=6 og-world.webp
+magick og-world.png -profile "$SRGB" -strip \
+  -quality 92 -sampling-factor 4:4:4 -interlace Plane og-world.jpg
+```
+
+`-strip` also removes the screenshot's EXIF and XMP, which is worth doing on
+its own account. Two encoder choices are deliberate and worth understanding
+rather than copying blindly:
+
+- **`-quality 92` unless you measure a reason not to.** Lossy WebP is always
+  4:2:0 internally, which can ring around large type on a dark background. An
+  earlier Earth Defense card was a capture of its welcome screen, and its amber
+  title measured RMSE 0.0135 over the text region against 0 for lossless, which
+  earned the swap. The card that shipped is a gameplay frame whose only type is
+  two small nav labels, and those come through at 0.0072, so quality 92 was the
+  right answer there and lossless would have cost 186K against 41K to fix
+  nothing. Measure your own card rather than inheriting either verdict.
+- **`-sampling-factor 4:4:4` for the JPEG.** The default 4:2:0 washes out
+  saturated colour against near-black, which on our cards is exactly where the
+  accent colour lives.
+- **Watch what your picture is actually made of.** For the shipped card the
+  real risk was never the text but the starfield, since lossy codecs like to
+  eat isolated bright pixels on black. Counting them is a one-line check, and
+  all 284 in a sample of open sky survived quality 92.
+
+You can check your own conversion rather than trust it:
+
+```bash
+magick og-world.png -profile "$SRGB" reference.png
+magick compare -metric RMSE reference.png og-world.jpg null:
+```
+
 ## Tests
 
 Pull requests should include unit tests for the code they add or change. The
@@ -206,15 +261,19 @@ source of truth either way.
    same-origin Content Security Policy, full Open Graph and Twitter tags,
    JSON-LD structured data, and a polite no-JavaScript fallback. Copy the
    pattern from an existing experience's `index.html`.
-4. **Build and test.** Run `npm run build` (your new files are minified
+4. **Make a social card.** A 1200 by 630 capture of your world, as
+   `assets/og-<world>.webp` with a `.jpg` beside it. See the note below on
+   converting one, because a screenshot straight off a Mac will not survive
+   the trip unless you ask it to.
+5. **Build and test.** Run `npm run build` (your new files are minified
    automatically) and `npm test`. Please include an init test for your
    world, following the `tests/<experience>-init.test.mjs` pattern (see the
    Tests section above).
-5. **Add your world to the directory.** One card in `www/index.html`, one
+6. **Add your world to the directory.** One card in `www/index.html`, one
    entry in the catalog array in `www/js/directory.js`, and one URL in
    `www/sitemap.xml`. Also please add a short description of your world
    in the `www/llms.txt` file.
-6. **Open a pull request** telling us the story behind your world. We read
+7. **Open a pull request** telling us the story behind your world. We read
    every one with genuine delight.
 
 ## House rules

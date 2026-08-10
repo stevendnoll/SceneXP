@@ -10,7 +10,7 @@ Try the 3D Mandelbrot zoom.
 
 [![A glowing spiral of warm color deep inside the Mandelbrot set, captured mid-dive in the Mandelbrot experience](www/mandelbrot/assets/og-mandelbrot.jpg)](https://www.scenexp.com/mandelbrot/)
 
-[SceneXP.com](https://www.scenexp.com/) is a live website hosting a growing collection of custom 3D experiences, each one built to honor a person, place, or business.
+[SceneXP.com](https://www.scenexp.com/) is a live website hosting a growing collection of custom 3D experiences, almost all of them built to honor a person, place, or business.
 
 The site itself is about three things:
 

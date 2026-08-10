@@ -10,7 +10,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="Fly a single ship in orbit above a massive Earth and defend the installations on Earth and the Moon from an incoming Martian fleet. A small browser game honoring the first generation of video game designers and developers.">
+    <meta name="description" content="Fly a single ship in orbit above a massive Earth and defend the installations on Earth and the Moon from an incoming Martian fleet. A small browser game built for the joy of flying through space.">
     <meta name="theme-color" content="#1b1410">
     <meta name="author" content="Steve Noll">
 
@@ -29,20 +29,54 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/earthdefense/">
     <meta property="og:locale" content="en_US">
-    <!-- PLACEHOLDER until M9: the capture is made from the opening frame once
-         the M1 gate settles the composition. -->
-    <meta property="og:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=1">
+    <!-- THE CARD IS A GAMEPLAY FRAME: the HUD in flight, with the reticle under
+         Mars, raider diamonds across the sky, the nearest one's range, and the
+         Moon labelled at 67k km. It carries no title of its own, so og:title
+         and og:description are doing that work rather than the pixels. Every
+         major card renderer shows both beside the image.
+
+         TWO IMAGES, MOST CAPABLE FIRST. The Open Graph spec allows repeated
+         og:image and consumers take the first one they can handle, so the JPEG
+         costs one tag and covers any scraper that will not decode WebP. The
+         property order matters: og:image:type, :width, :height and :alt attach
+         to the og:image tag most recently above them, so the JPEG's four
+         properties must follow the JPEG's URL and not be interleaved.
+
+         BOTH ARE LOSSY AT 92, AND THAT WAS MEASURED FOR THIS PICTURE rather
+         than inherited. The previous card was the welcome screen and needed
+         lossless WebP, because large amber type on near-black rang badly (RMSE
+         0.0135 over the text region against 0 for lossless). This frame's only
+         type is two small nav labels, which come through at 0.0072, and the
+         risk that actually mattered here was the starfield: every one of the
+         284 lit pixels in a sample of open sky survives at quality 92, with a
+         sky RMSE of 0.0025. Lossless would have cost 186K for no defect it
+         could fix. The JPEG keeps 4:4:4 chroma, since the amber HUD marks are
+         exactly the saturated-on-near-black case 4:2:0 smears.
+
+         ?v=2 BECAUSE THE PIXELS CHANGED UNDER THE SAME FILENAME. Social
+         scrapers cache aggressively by URL, so replacing a card without moving
+         the query leaves the old one in circulation. -->
+    <meta property="og:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=2">
     <meta property="og:image:type" content="image/webp">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="The view from a ship in low Earth orbit: Earth's blue limb curves across the bottom of the frame, Mars sits ahead as a small red disc, and the Moon hangs to the right against a field of stars.">
+    <meta property="og:image:alt" content="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, orange diamonds mark the incoming Martian raiders across a deep starfield, the nearest of them labelled 23k km, and the Moon hangs at the upper right labelled 67k km.">
+    <meta property="og:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=2">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, orange diamonds mark the incoming Martian raiders across a deep starfield, the nearest of them labelled 23k km, and the Moon hangs at the upper right labelled 67k km.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Earth Defense">
     <meta name="twitter:description" content="Fly in orbit above a massive Earth and hold the line against an incoming Martian fleet.">
-    <meta name="twitter:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=1">
-    <meta name="twitter:image:alt" content="The view from a ship in low Earth orbit: Earth's blue limb curves across the bottom of the frame, Mars ahead as a small red disc, and the Moon to the right against a field of stars.">
+    <!-- Twitter takes exactly ONE image and has no type or dimension
+         properties, so this is the JPEG rather than the WebP: the card format
+         has no way to offer an alternative, and a card that renders everywhere
+         beats a card that is 48K smaller. -->
+    <meta name="twitter:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=2">
+    <meta name="twitter:image:alt" content="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, orange diamonds mark the incoming Martian raiders across a deep starfield, the nearest of them labelled 23k km, and the Moon hangs at the upper right labelled 67k km.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
@@ -53,13 +87,27 @@
       "@id": "https://www.scenexp.com/earthdefense/#game",
       "url": "https://www.scenexp.com/earthdefense/",
       "name": "Earth Defense",
-      "description": "A small browser-based 3D space game. Pilot one ship in orbit above Earth and defend the installations on Earth and the Moon from an incoming Martian fleet. Honors the first generation of video game designers and developers.",
+      "description": "A small browser-based 3D space game. Pilot one ship in orbit above Earth and defend the installations on Earth and the Moon from an incoming Martian fleet. Built for the joy of flying through space.",
       "genre": ["Action", "Space"],
       "gamePlatform": "Web browser",
       "applicationCategory": "Game",
       "operatingSystem": "Any",
       "inLanguage": "en-US",
-      "isAccessibleForFree": true
+      "isAccessibleForFree": true,
+      "playMode": "SinglePlayer",
+      "image": "https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=2",
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
+      },
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
     }
     </script>
 
@@ -97,10 +145,9 @@
                 defend the installations on Earth and the Moon, and there is no
                 fire button to learn: line a raider up in the middle of your
                 view and your guns take care of the rest.</p>
-            <p>It is built in honor of the first generation of video game
-                designers and developers, the people who worked out, with almost
-                nothing to work with, that a screen could be a place you go. We
-                have left them unnamed on purpose. The debt is a shared one.</p>
+            <p>Most experiences on SceneXP honor a person or a business. This
+                one is simply a game, built for the joy of flying through space.
+                There was never a deeper reason than that.</p>
             <nav aria-label="Site sections">
                 <ul>
                     <li><a href="/contact.html">Contact the developer</a></li>
@@ -123,7 +170,36 @@
     <div id="blocker">
         <div id="instructions">
             <p class="title">EARTH DEFENSE</p>
-            <p class="subtitle">For the people who first made a screen into a place you could go</p>
+            <!-- AN INVITATION, NOT A DEDICATION, and this is the one experience
+                 on the site where that is right.
+
+                 THIS ONE HAS NO HONOREE, ON PURPOSE. Every other experience
+                 honors a person or a business, because someone real is behind
+                 each of them. Earth Defense is a game. Three dedications were
+                 written and discarded here (the first generation of designers
+                 unnamed, then Nintendo and Sony, then the three consoles
+                 themselves), and every one of them sat slightly wrong for the
+                 same reason: we were looking for a recipient this experience
+                 does not have. Saying so is more honest than manufacturing one,
+                 and "built for the joy of flying" is a thing the other six
+                 cannot say.
+
+                 SO THE LINE UNDER THE TITLE IS THE JOB INSTEAD. It sits
+                 directly above a button reading "Take the helm", so the one
+                 thing it owes a visitor is what they are about to be asked to
+                 do. It read "One ship, twelve raiders, and a very large planet"
+                 for a moment, which was scenery: the planet is already filling
+                 the frame behind the copy, so the line was describing something
+                 the visitor could plainly see.
+
+                 It says INSTALLATIONS rather than bases because the HUD, the
+                 help panel and both end cards all say installations, and this
+                 is where a visitor learns the word. Two words for one thing on
+                 the first screen is a small tax paid on every screen after it.
+
+                 The hint row below carries the counts rather than repeating
+                 this, which is the whole reason it changed at the same time. -->
+            <p class="subtitle">Stop the Martian fleet from destroying the installations on Earth and the Moon</p>
             <!-- A real button, not a line of prose. It was a <p> reading
                  "Click to take the helm" until M8, which left a keyboard-only
                  visitor with nothing to focus and no way to find out that
@@ -135,13 +211,21 @@
             <button type="button" id="take-helm-btn" class="click-prompt">Take the helm</button>
             <!-- Two controls and one objective, per PRD 4.2. Laid out as one
                  grid rather than as two centred rows so the labels share a
-                 column and the sentences start on the same line. -->
+                 column and the sentences start on the same line.
+
+                 THE SECOND ROW USED TO REPEAT THE SUBTITLE. It read "Hold them,
+                 and see off all twelve raiders", which was the objective said
+                 twice in three lines once the subtitle above became the
+                 objective. It now carries the two numbers and the win
+                 condition, which is the one thing about this run that nothing
+                 else on the welcome screen says: the fleet is finite, and
+                 clearing it is how a run ends rather than a timer or a score. -->
             <div class="welcome-hints">
                 <div class="controls-hint">
                     <span>No fire button</span> Line a raider up in the middle of your view
                 </div>
                 <div class="controls-hint">
-                    <span>Seven installations</span> Hold them, and see off all twelve raiders
+                    <span>Seven and twelve</span> Seven installations to hold, and clearing all twelve raiders is how you win
                 </div>
             </div>
         </div>
@@ -223,6 +307,19 @@
         <div id="replay-inset" class="replay-inset hidden" aria-hidden="true">
             <span class="replay-caption" id="replay-caption"></span>
         </div>
+
+        <!-- The way out of the ending shot. A run that finishes plays a few
+             seconds of third-person camera before the summary card, and a shot
+             nobody can leave has stopped being a gift. Any key and any tap cut
+             it short, so this is a hint rather than a control, which is why it
+             is not a button: there is nothing here a keyboard visitor has to
+             reach, since every key already does it. The card that follows
+             carries every number either way, so skipping costs no information.
+             Visitors who prefer reduced motion never see the shot at all. -->
+        <p id="end-skip" class="end-skip hidden" aria-hidden="true">
+            <span class="skip-key">Press any key to continue</span>
+            <span class="skip-tap">Tap anywhere to continue</span>
+        </p>
 
         <!-- ONE range readout, under the nearest raider's diamond. Twelve
              identical diamonds say where the raiders are and nothing about
@@ -431,9 +528,14 @@
                     <li><strong>Settings:</strong> the gear icon adjusts look sensitivity, and carries
                         reduced effects and a mute switch.</li>
                 </ul>
-                <p class="piece-subtitle dedication">Built in honor of the first generation of video game
-                    designers and developers, who worked out with almost nothing that a screen
-                    could be a place you go. Left unnamed on purpose. The debt is a shared one.</p>
+                <!-- Where the dedication would go on any other experience. See
+                     the note on the welcome subtitle for why this one has none.
+                     A short line rather than a hole: the panel's voice carries
+                     through the help list and the credit below, and dropping
+                     straight from a bulleted list into a texture licence reads
+                     as a page that ran out of things to say. -->
+                <p class="piece-subtitle dedication">Built for the joy of flying through space.
+                    There was never a deeper reason than that.</p>
                 <!-- CC BY 4.0 requires credit, a link to the license, and a note
                      that changes were made, and asks that it be somewhere a
                      visitor can actually find. PRD 11.3 wording, and the same

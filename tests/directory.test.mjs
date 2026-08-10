@@ -10,7 +10,7 @@
  */
 import { jest } from '@jest/globals';
 
-const SLUGS = ['dad', 'family', 'roqui', 'seedtoseed', 'interstate', 'steve', 'gavin', 'jamar', 'mandelbrot'];
+const SLUGS = ['dad', 'family', 'roqui', 'seedtoseed', 'interstate', 'steve', 'gavin', 'jamar', 'mandelbrot', 'earthdefense'];
 
 function makeDom({ withMarkup = true } = {}) {
   const dom = {

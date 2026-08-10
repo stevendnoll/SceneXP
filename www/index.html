@@ -10,7 +10,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="SceneXP hosts custom 3D experiences built to honor the people, places, and businesses behind them. Walk through little worlds made with Three.js, right in your browser.">
+    <meta name="description" content="SceneXP hosts custom 3D experiences, almost all of them built to honor the people, places, and businesses behind them. Walk through little worlds made with Three.js, right in your browser.">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f7fb">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e0f14">
     <meta name="author" content="Steve Noll">
@@ -19,7 +19,7 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="SceneXP | Custom 3D Experiences">
-    <meta property="og:description" content="Custom 3D experiences built to honor the people, places, and businesses behind them. Walk through little worlds made with Three.js, right in your browser.">
+    <meta property="og:description" content="Custom 3D experiences, almost all of them built to honor the people, places, and businesses behind them. Walk through little worlds made with Three.js, right in your browser.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/">
@@ -33,7 +33,7 @@
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="SceneXP | Custom 3D Experiences">
-    <meta name="twitter:description" content="Custom 3D experiences built to honor the people, places, and businesses behind them. Little worlds made with Three.js, right in your browser.">
+    <meta name="twitter:description" content="Custom 3D experiences, almost all of them built to honor the people, places, and businesses behind them. Little worlds made with Three.js, right in your browser.">
     <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.webp?v=2">
     <meta name="twitter:image:alt" content="The SceneXP logo and wordmark on a dark background with the tagline, custom 3D experiences right in your browser.">
 
@@ -48,7 +48,7 @@
           "@id": "https://www.scenexp.com/#website",
           "url": "https://www.scenexp.com/",
           "name": "SceneXP",
-          "description": "Custom 3D experiences built to honor the people, places, and businesses behind them.",
+          "description": "Custom 3D experiences, almost all of them built to honor the people, places, and businesses behind them.",
           "inLanguage": "en-US",
           "publisher": {
             "@type": "Organization",
@@ -67,54 +67,60 @@
             {
               "@type": "ListItem",
               "position": 1,
+              "url": "https://www.scenexp.com/earthdefense/",
+              "name": "Earth Defense"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
               "url": "https://www.scenexp.com/mandelbrot/",
               "name": "The Mandelbrot Set"
             },
             {
               "@type": "ListItem",
-              "position": 2,
+              "position": 3,
               "url": "https://www.scenexp.com/jamar/",
               "name": "Jamar's Karaoke Night"
             },
             {
               "@type": "ListItem",
-              "position": 3,
+              "position": 4,
               "url": "https://www.scenexp.com/gavin/",
               "name": "Gavin's Bug Patrol"
             },
             {
               "@type": "ListItem",
-              "position": 4,
+              "position": 5,
               "url": "https://www.scenexp.com/steve/",
               "name": "Steve's Home Office"
             },
             {
               "@type": "ListItem",
-              "position": 5,
+              "position": 6,
               "url": "https://www.scenexp.com/interstate/",
               "name": "The Interstate Tire Shop"
             },
             {
               "@type": "ListItem",
-              "position": 6,
+              "position": 7,
               "url": "https://www.scenexp.com/seedtoseed/",
               "name": "The Seed to Seed Garden"
             },
             {
               "@type": "ListItem",
-              "position": 7,
+              "position": 8,
               "url": "https://www.scenexp.com/roqui/",
               "name": "Zumba with Roqui"
             },
             {
               "@type": "ListItem",
-              "position": 8,
+              "position": 9,
               "url": "https://www.scenexp.com/family/",
               "name": "Putt Putt with Mom and Dad"
             },
             {
               "@type": "ListItem",
-              "position": 9,
+              "position": 10,
               "url": "https://www.scenexp.com/dad/",
               "name": "A Ride on the NCR Trail"
             }
@@ -133,7 +139,7 @@
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
     <script src="/js/nav.min.js?v=1" defer></script>
-    <script src="/js/directory.min.js?v=8" defer></script>
+    <script src="/js/directory.min.js?v=9" defer></script>
 </head>
 
 <body>
@@ -209,8 +215,9 @@
             <div class="container">
                 <div class="section-head">
                     <h2 id="experiences-heading">Step inside the experiences</h2>
-                    <p>Each one is a small handcrafted world you can explore on any modern device. They were all
-                        built to honor the person or business at the heart of them.</p>
+                    <p>Each one is a small handcrafted world you can explore on any modern device. Almost all of them
+                        were built to honor the person or business at the heart of them, and one of them is
+                        simply a game.</p>
                 </div>
 
                 <!-- Search is progressive enhancement: directory.js reveals the form
@@ -226,6 +233,22 @@
                      the TOP of this list and renumber the JSON-LD ItemList in the
                      head to match. -->
                 <ul class="experience-grid">
+                    <li class="experience-card" data-slug="earthdefense">
+                        <a href="/earthdefense/">
+                            <img src="/earthdefense/assets/og-earthdefense.webp?v=2" width="1200" height="630" loading="lazy"
+                                decoding="async"
+                                alt="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, and orange diamonds mark the incoming Martian raiders across a deep starfield.">
+                            <div class="experience-card-body">
+                                <p class="experience-eyebrow">Built for the joy of flying through space</p>
+                                <h3>Earth Defense</h3>
+                                <p>Fly a single ship in orbit above a massive Earth while twelve
+                                    Martian raiders close on the installations below. There is no
+                                    fire button to learn: line a raider up in the middle of your
+                                    view and your guns take care of the rest.</p>
+                                <span class="experience-cta">Take the helm →</span>
+                            </div>
+                        </a>
+                    </li>
                     <li class="experience-card" data-slug="mandelbrot">
                         <a href="/mandelbrot/">
                             <img src="/mandelbrot/assets/og-mandelbrot.webp" width="1200" height="630" loading="lazy"

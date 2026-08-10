@@ -10,8 +10,21 @@
  * (deepFreeze below enforces that). Every number the design expects to tune in
  * playtest lives here and nowhere else.
  *
- * A game honoring the first generation of video game designers and developers,
- * honored as a group and deliberately unnamed. The world is Earth orbit: a
+ * THIS EXPERIENCE HAS NO HONOREE, AND THAT IS THE DECISION. Every other one on
+ * SceneXP honors a person or a business, because someone real is behind each of
+ * them. Earth Defense is a game, built for the joy of flying through space.
+ *
+ * Three dedications were written and discarded before that landed, and the
+ * pattern in the failures is the useful part. First the first generation of
+ * designers and developers, deliberately unnamed, which honored everyone and so
+ * honored nobody in particular. Then Nintendo and Sony, which was worse: a
+ * corporation is a bad recipient for a dedication, every other one here is
+ * aimed at someone who could in principle be moved by it, and that one read as
+ * a legal notice. Then the three consoles themselves, which was warmer and
+ * still not right. All three were searching for a recipient this experience
+ * does not have. Saying so is more honest than manufacturing one.
+ *
+ * The world is Earth orbit: a
  * massive Earth below, the Moon on its eight-minute lap, Mars a ruddy disc
  * ahead, and a Martian fleet already on its way in.
  *
@@ -977,12 +990,136 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         ]
     },
 
+    // ---- How a run ends (finale.js) ---------------------------------------
+    //
+    // THE CARD IS NOT THE ENDING, it is the receipt. A run that has been flown
+    // for six or eight minutes deserves a shot before the numbers, and the end
+    // of a run is the one moment where taking the camera costs the visitor
+    // nothing: there is no ship left to fly and no decision left to take away.
+    // That is exactly the argument the installation replay lost, which is why
+    // that one is a corner window and these are not.
+    //
+    // THE FRAMING IS SOLVED, NOT TASTED. The world camera is 70 degrees, so a
+    // subject at distance d fills `atan(r / d) / 35 degrees` of the half frame.
+    // Earth's 6,371 at 15,000 is 23 degrees against 35, which is 66 percent of
+    // the half height, so the globe covers about two thirds of the frame and
+    // leaves sky above the limb for the shells to bloom in. Closer than about
+    // 12,000 and the limb runs off both edges and the shot stops reading as a
+    // planet.
+    //
+    // A SPARK IS SIZED IN WORLD UNITS. At 15,000 units one unit is 900 / (2 *
+    // 15000 * tan 35) = 0.043 pixels on a 900 pixel frame, so the 220 unit
+    // points below are about 9 pixels each and a shell that throws them 990
+    // units is roughly 85 pixels across: a tenth of the globe beside it, which
+    // is a firework rather than a smudge or a second explosion.
+    //
+    // THE HEIGHTS ARE NOT PHYSICAL and are not meant to be. A shell that rises
+    // 670 units above the surface has climbed 670 km, which is nonsense as
+    // pyrotechnics and is the only way a launch is legible from a camera far
+    // enough back to see the planet it is launched from. The whole scene is
+    // already at that scale: a raider is hundreds of units across.
+    finale: {
+        // One pool for all three shots, since only one ever runs. Sized for
+        // the win, which is the busiest: four shells in the air at 34 sparks
+        // plus their launch trails is a little over 200 live at a peak, and
+        // the headroom covers the overlap when the cadence tightens.
+        flarePool: 520,
+        // The reduced-effects draw range, in the same spirit as the starfield
+        // and the burst pools: built once at full size, partly used. Reduced
+        // MOTION skips the finale entirely, so this is only reached by a
+        // visitor who ticked the box for frame rate rather than for comfort.
+        reducedPool: 180,
+
+        // Fireworks over the hemisphere the installations are on. The camera
+        // pulls back a sixth over the shot, which is what says a camera is
+        // there rather than a picture being played.
+        won: {
+            seconds: 5.6,
+            startDistance: 15000,
+            endDistance: 17500,
+            rise: 0.12,         // radians above the sites, so the limb is under them
+            swing: 0.20,        // about 11 degrees of orbit, a drift not a sweep
+            // A shell every 0.42 seconds from four sites in turn, so each site
+            // gets a second and a half to clear before its next one.
+            shellEvery: 0.42,
+            riseSeconds: 0.8,
+            liftSpeed: 1200,    // straight up from the surface
+            liftTrail: 5,       // points in the climbing streak
+            gravity: 900,       // pulls the climb over and the sparks down
+            sparks: 34,
+            sparkSpeed: 900,
+            sparkLife: 1.6,
+            sparkDrag: 0.5,
+            size: 220,
+            // Warm, cold, warm, cold. Four colours cycling against four sites
+            // would give every site the same colour every time, so the list is
+            // deliberately a different length from the site list.
+            colours: [0xfff2cf, 0x9fd4ff, 0xffc48a, 0xd6b4ff, 0xbdffd0],
+            wash: 'finale-won'
+        },
+
+        // The same vantage, the opposite content. No launches, no bloom: four
+        // slow fires where the installations were, and a red wash. The shot is
+        // shorter than the win on purpose, because there is nothing to wait
+        // for and holding on it would read as a stall rather than as grief.
+        lostLine: {
+            seconds: 4.4,
+            startDistance: 15000,
+            endDistance: 16200,
+            rise: 0.12,
+            swing: 0.14,
+            shellEvery: 0.5,
+            riseSeconds: 0,     // no climb: an ember starts where the fire is
+            liftSpeed: 0,
+            liftTrail: 0,
+            gravity: 40,        // barely any, so the smoke hangs
+            sparks: 14,
+            sparkSpeed: 150,
+            sparkLife: 2.6,
+            sparkDrag: 0.9,     // heavy, so they stall close to the ground
+            size: 300,
+            colours: [0xff5a2a, 0xc2331a, 0xff7a3c, 0x8a2b18],
+            wash: 'finale-lost'
+        },
+
+        // The visitor's own wreck, continuing straight out of the replay that
+        // was already orbiting it. NO CUT: the replay ends at
+        // `replay.shipEndDistance` and this opens there, so the two are one
+        // move. Cold, slow, and it keeps going long after the debris stops
+        // being anything.
+        lostShip: {
+            seconds: 3.8,
+            startDistance: 900, // replay.shipEndDistance, deliberately equal
+            endDistance: 4200,
+            rise: 0.3,          // replay.shipRise, for the same reason
+            swing: 0.5,
+            shellEvery: 0.85,
+            riseSeconds: 0,
+            liftSpeed: 0,
+            liftTrail: 0,
+            gravity: 0,         // it is a vacuum and there is nothing to fall to
+            sparks: 10,
+            sparkSpeed: 120,
+            sparkLife: 3.2,
+            sparkDrag: 0.15,
+            size: 190,
+            colours: [0x9fb6d8, 0x6d8099, 0xc8d6e8],
+            wash: 'finale-lost'
+        }
+    },
+
     // ---- Boot and site ----------------------------------------------------
     proofOfWork: { prefix: '11', storageKey: 'gallery-pow' },
 
     site: {
+        // THE ONE EXPERIENCE WITH NO HONOREE. The key stays so this file is
+        // still a working template for the next one, and so the directory card
+        // has a line to print, but the value is what this is FOR rather than
+        // who it is for. See the note at the top of this file for the three
+        // dedications that were written and discarded before that landed.
         honoree: {
-            label: 'the first generation of video game designers and developers'
+            label: null,
+            line: 'Built for the joy of flying through space'
         },
         home: {
             path: '/',

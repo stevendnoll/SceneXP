@@ -40,7 +40,7 @@ beforeEach(() => {
     // reaches for the pause, so a panel that reads as already open swallows
     // every Escape key in the suite.
     ['pause-modal', 'end-modal', 'settings-panel', 'lock-bracket', 'perimeter-notice',
-        'replay-inset']
+        'replay-inset', 'end-skip']
         .forEach(id => dom.el(id).classList.add('hidden'));
 
     dom.documentStub.pointerLockElement = null;
@@ -79,6 +79,21 @@ function stepFrames(n = 1) {
 }
 
 const CONFIG = async () => (await import('../www/earthdefense/js/config.min.js')).EARTHDEFENSE_CONFIG;
+
+/** Step past whatever ending a finished run earned.
+ *
+ *  EVERY ENDING NOW PLAYS A SHOT BEFORE THE CARD: fireworks over Earth for a
+ *  win, fires at the fallen installations for a lost line, and the visitor's
+ *  own wreck receding when the ships run out. The card is the receipt and it
+ *  arrives last, so anything asserting on it has to come through here. Sized
+ *  for the longest of the three plus the replay that can precede it, since
+ *  which one is playing is exactly what most of these tests do not care about. */
+function playOutTheEnding(config) {
+    const finale = config.finale;
+    const longest = Math.max(
+        finale.won.seconds, finale.lostLine.seconds, finale.lostShip.seconds);
+    stepFrames(Math.ceil((longest + config.replay.insetSeconds) / 0.016) + 6);
+}
 
 // ---- Boot -------------------------------------------------------------------
 
@@ -271,11 +286,17 @@ describe('ending a run', () => {
 
     test('clearing the fleet wins it and puts the end screen up', async () => {
         const main = await boot();
+        const config = await CONFIG();
         enterWorld();
         stepFrames(60);
         await clearTheFleet(main);
 
+        // THE CELEBRATION COMES FIRST. Dropping a blurred card over the last
+        // raider dying would make a win read as a dialog rather than as a win.
         expect(main.getState().phase).toBe('won');
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
+        playOutTheEnding(config);
+
         expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
         expect(dom.el('end-title').textContent).toBe('The line held');
         expect(dom.el('end-saved').textContent).toBe('7');
@@ -294,6 +315,10 @@ describe('ending a run', () => {
         // the destruction that ended the run.
         expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
         stepFrames(Math.ceil(config.replay.insetSeconds / 0.016) + 2);
+        // And then the ending shot the window handed off to: four slow fires
+        // where the installations were.
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
+        playOutTheEnding(config);
 
         expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
         expect(dom.el('end-title').textContent).toBe('Run ended');
@@ -317,6 +342,7 @@ describe('ending a run', () => {
         }
 
         expect(main.getState().phase).toBe('lost');
+        playOutTheEnding(config);
         expect(dom.el('end-subtitle').textContent).toMatch(/still holding/);
         expect(dom.el('end-saved').textContent).toBe('7');
     });
@@ -339,6 +365,7 @@ describe('ending a run', () => {
         enterWorld();
         stepFrames(120);
         await clearTheFleet(main);
+        playOutTheEnding(config);
 
         expect(localStorage.getItem(config.storage.bestTime)).not.toBeNull();
         expect(dom.el('end-best').textContent).toMatch(/best/i);
@@ -354,6 +381,7 @@ describe('ending a run', () => {
         enterWorld();
         stepFrames(120);
         await clearTheFleet(main);
+        playOutTheEnding(config);
 
         expect(localStorage.getItem(config.storage.bestTime)).toBe('1');
         expect(dom.el('end-best').textContent).toBe('Your best: 0:01');
@@ -376,8 +404,10 @@ describe('ending a run', () => {
         // It has no close button on purpose, so a keyboard visitor must not
         // have to go looking for the one way forward.
         const main = await boot();
+        const config = await CONFIG();
         enterWorld();
         await clearTheFleet(main);
+        playOutTheEnding(config);
         expect(dom.documentStub.activeElement).toBe(dom.el('restart-btn'));
     });
 
@@ -533,6 +563,12 @@ describe('watching things be destroyed', () => {
         expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
 
         stepFrames(Math.ceil(config.player.respawnDelay / 0.016) + 4);
+        // And the replay hands straight off to the ending, which continues the
+        // same orbit outward rather than cutting. The card is still last.
+        expect(replay.isShipReplayRunning()).toBe(false);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
+
+        playOutTheEnding(config);
         expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
         expect(replaying()).toBe(false);
     });
@@ -1259,5 +1295,221 @@ describe('raiders soak shots, and say so when they do', () => {
 
         main.__test__.onDamageResolved({ id: site, hitPoints: 2, destroyed: false });
         expect(getShips().every(s => !s.shield.active)).toBe(true);
+    });
+});
+
+// ---- The endings ------------------------------------------------------------
+//
+// A run that finishes plays a third-person shot before the summary card, and
+// which shot depends on HOW it finished. The camera path and the flares are
+// measured in the finale suite, where the numbers are real; what matters here
+// is the wiring: that the right ending is chosen, that the card waits for it,
+// that any key or tap gets out of it, and that reduced motion never sees it.
+
+describe('how a run ends', () => {
+    const FINALE = async () => await import('../www/earthdefense/js/finale.min.js');
+    const washed = (name) => dom.documentStub.body.classList.contains(name);
+
+    async function clearTheFleet(main) {
+        const { getShips } = await import('../www/earthdefense/js/fleet.min.js');
+        for (const ship of getShips()) {
+            main.__test__.onDamageResolved({ id: ship.id, hitPoints: 0, destroyed: true });
+        }
+    }
+
+    test('a win gets the celebration, not a dialog', async () => {
+        const main = await boot();
+        const finale = await FINALE();
+        enterWorld();
+        stepFrames(30);
+        await clearTheFleet(main);
+
+        expect(finale.isFinaleRunning()).toBe(true);
+        expect(finale.getFinaleKind()).toBe('won');
+        expect(washed('finale-won')).toBe(true);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
+    });
+
+    test('losing the line burns the places it was lost at', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        const finale = await FINALE();
+        const { getStructures } = await import('../www/earthdefense/js/structures.min.js');
+        enterWorld();
+        for (const entry of getStructures()) {
+            main.__test__.onDamageResolved({ id: entry.site.id, hitPoints: 0, destroyed: true });
+        }
+
+        // The corner window watching the last installation fall goes first.
+        stepFrames(Math.ceil(config.replay.insetSeconds / 0.016) + 2);
+        expect(finale.getFinaleKind()).toBe('lost-line');
+        expect(washed('finale-lost')).toBe(true);
+    });
+
+    test('running out of ships gets the wreck, and NOT a burning Earth', async () => {
+        // RUNNING OUT OF SHIPS IS NOT LOSING THE LINE (PRD 6.4). The
+        // installations are still standing, so pointing the camera at a burning
+        // Earth would be telling the visitor something untrue.
+        const main = await boot();
+        const config = await CONFIG();
+        const finale = await FINALE();
+        enterWorld();
+
+        for (let life = 0; life < config.player.lives; life++) {
+            main.__test__.killPlayer('fire');
+            stepFrames(200);
+        }
+        expect(main.getState().phase).toBe('lost');
+        expect(finale.getFinaleKind()).toBe('lost-ship');
+    });
+
+    test('the ending hands off from the wreck replay rather than cutting', async () => {
+        // The replay closes at `replay.shipEndDistance` and the ending opens
+        // there, on the same side of the wreck, so the two are one move.
+        const main = await boot();
+        const config = await CONFIG();
+        const replay = await import('../www/earthdefense/js/replay.min.js');
+        const finale = await FINALE();
+        enterWorld();
+
+        for (let life = 0; life < config.player.lives; life++) {
+            main.__test__.killPlayer('fire');
+            if (life < config.player.lives - 1) stepFrames(200);
+        }
+        // The replay owns the camera first, and the ending does not start
+        // until it has finished.
+        expect(replay.isShipReplayRunning()).toBe(true);
+        expect(finale.isFinaleRunning()).toBe(false);
+
+        stepFrames(Math.ceil(config.player.respawnDelay / 0.016) + 4);
+        expect(finale.isFinaleRunning()).toBe(true);
+    });
+
+    test('any key cuts it short and brings the card forward', async () => {
+        // A shot nobody can leave has stopped being a gift, and the card
+        // carries every number either way, so skipping costs no information.
+        const main = await boot();
+        const finale = await FINALE();
+        enterWorld();
+        await clearTheFleet(main);
+        expect(finale.isFinaleRunning()).toBe(true);
+
+        fire(dom.documentStub, 'keydown', { code: 'KeyJ' });
+        expect(finale.isFinaleRunning()).toBe(false);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
+        expect(washed('finale-won')).toBe(false);
+        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
+    });
+
+    test('a tap cuts it short too, since a phone has no keys', async () => {
+        const main = await boot();
+        const finale = await FINALE();
+        enterWorld();
+        await clearTheFleet(main);
+
+        fire(dom.documentStub, 'pointerdown', {});
+        expect(finale.isFinaleRunning()).toBe(false);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
+    });
+
+    test('Escape skips the ending rather than opening a pause panel', async () => {
+        // There is nothing to pause: the run is over. The skip listener is
+        // wired first so it gets the first look, and `openPause` refuses
+        // anyway unless the game is being played.
+        const main = await boot();
+        enterWorld();
+        await clearTheFleet(main);
+
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+        expect(main.getState().phase).toBe('won');
+        expect(dom.el('pause-modal').classList.contains('hidden')).toBe(true);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
+    });
+
+    test('a key press with no ending running does nothing at all', async () => {
+        const main = await boot();
+        enterWorld();
+        expect(main.__test__.skipFinale()).toBe(false);
+        expect(main.getState().phase).toBe('playing');
+    });
+
+    test('reduced motion goes straight to the card', async () => {
+        // The one preference that skips the shot. Nothing is lost: the card
+        // carries every number and the live region carries the same sentence.
+        globalThis.window.matchMedia = () => ({
+            matches: true, addEventListener() { }, removeEventListener() { }
+        });
+        const main = await boot();
+        const finale = await FINALE();
+        enterWorld();
+        await clearTheFleet(main);
+
+        expect(finale.isFinaleRunning()).toBe(false);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
+        expect(washed('finale-won')).toBe(false);
+    });
+
+    test('the skip hint is only up while there is something to skip', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        enterWorld();
+        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
+
+        await clearTheFleet(main);
+        expect(dom.el('end-skip').classList.contains('hidden')).toBe(false);
+
+        playOutTheEnding(config);
+        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
+    });
+
+    test('a restart leaves no ending behind', async () => {
+        // Otherwise the new run opens over the last one's embers, with a red
+        // wash on the body and a hint offering to skip nothing.
+        const main = await boot();
+        const finale = await FINALE();
+        enterWorld();
+        await clearTheFleet(main);
+        expect(finale.isFinaleRunning()).toBe(true);
+
+        main.__test__.restartRun();
+        expect(finale.isFinaleRunning()).toBe(false);
+        expect(washed('finale-won')).toBe(false);
+        expect(washed('finale-lost')).toBe(false);
+        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
+        expect(main.getState().phase).toBe('playing');
+    });
+
+    test('the ending stands off Earth at the distance it was composed for', async () => {
+        // The one thing this level can genuinely check about the shot: that
+        // real, live installation positions reached it. Under the chainable
+        // THREE proxy the camera itself is not assertable (see the suite
+        // header), but the eye the shot asks for is plain numbers, and it can
+        // only be at this distance if `earthShot` fed it a real subject.
+        const main = await boot();
+        const config = await CONFIG();
+        const finale = await FINALE();
+        enterWorld();
+        await clearTheFleet(main);
+        stepFrames(4);
+
+        const eye = finale.finaleEye();
+        expect(eye).not.toBeNull();
+        const out = Math.hypot(eye.x - eye.look.x, eye.y - eye.look.y, eye.z - eye.look.z);
+        expect(out).toBeGreaterThan(config.finale.won.startDistance - 1);
+        expect(out).toBeLessThan(config.finale.won.endDistance + 1);
+    });
+
+    test('the two planet endings launch from Earth and never from the Moon', async () => {
+        // The Moon's three installations are 63,000 units away and out of
+        // frame, so a shell from one of them would be a firework nobody sees
+        // and a camera aim nobody asked for.
+        const main = await boot();
+        enterWorld();
+        const shot = main.__test__.earthShot();
+        expect(shot.sources.length).toBe(4);
+        for (const source of shot.sources) {
+            expect(Math.hypot(source.position.x, source.position.y, source.position.z))
+                .toBeLessThan(20000);
+        }
     });
 });
