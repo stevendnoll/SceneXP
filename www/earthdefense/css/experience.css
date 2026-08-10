@@ -1057,45 +1057,6 @@ body.finale-lost #touch-controls {
     pointer-events: none;
 }
 
-/* The way out. Low and centred, clear of the speedometer, and quiet enough
-   that it never competes with what is happening above it. */
-.end-skip {
-    position: fixed;
-    left: 50%;
-    bottom: 8%;
-    transform: translateX(-50%);
-    margin: 0;
-    padding: 4px 12px;
-    border-radius: 999px;
-    background: rgba(6, 10, 18, 0.55);
-    font-size: 0.72rem;
-    letter-spacing: 0.08em;
-    color: rgba(226, 236, 250, 0.72);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 5;
-    animation: skip-in 0.9s ease-out forwards;
-}
-
-.end-skip.hidden {
-    display: none;
-}
-
-/* One line of copy, two audiences. A phone has no keys and a desktop has no
-   tap, and telling either of them about the other's control is the small kind
-   of carelessness that reads as a page built for somebody else. */
-.skip-tap { display: none; }
-body.is-touch-device .skip-key { display: none; }
-body.is-touch-device .skip-tap { display: inline; }
-
-/* Held back a beat, so the hint arrives after the shot has started rather than
-   landing on the same frame and reading as an instruction to look away. */
-@keyframes skip-in {
-    0%, 45% { opacity: 0; }
-    100% { opacity: 1; }
-}
-
 /* Two arrows and no more: the installation under attack, and the nearest
    raider. One per hostile would ring the screen and say nothing. */
 .edge-chevron {
@@ -1474,8 +1435,7 @@ body.hull-hit::after {
        neither of these should ever be on screen. If one somehow is, it arrives
        rather than animating in. */
     body.finale-won::before,
-    body.finale-lost::before,
-    .end-skip {
+    body.finale-lost::before {
         animation: none;
         opacity: 1;
     }

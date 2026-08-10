@@ -40,7 +40,7 @@ beforeEach(() => {
     // reaches for the pause, so a panel that reads as already open swallows
     // every Escape key in the suite.
     ['pause-modal', 'end-modal', 'settings-panel', 'lock-bracket', 'perimeter-notice',
-        'replay-inset', 'end-skip']
+        'replay-inset']
         .forEach(id => dom.el(id).classList.add('hidden'));
 
     dom.documentStub.pointerLockElement = null;
@@ -68,10 +68,14 @@ async function boot() {
     // state the briefing is in; the shot has its own describe block, which boots
     // through `bootIntoOpening` instead and drives it properly.
     //
-    // Two steps, because that is genuinely how it ends: `skipIntro` stops the
-    // shot and `advanceIntro` puts the briefing up on the NEXT frame. See the
-    // comment on `advanceIntro` for why the reveal is deliberately a frame late.
-    main.__test__.skipIntro();
+    // ENDED THROUGH THE INTRO MODULE RATHER THAN THROUGH main.js, because there
+    // is no longer any way for a VISITOR to end it early and this helper should
+    // not invent one. Stepping 325 frames to watch it out would be honest and
+    // would also add five simulated seconds to each of a hundred and thirty
+    // tests. Two steps, because that is genuinely how it finishes: the shot
+    // stops, and `advanceIntro` puts the briefing up on the NEXT frame.
+    const intro = await import('../www/earthdefense/js/intro.min.js');
+    intro.endIntro();
     stepFrames(1);
     return main;
 }
@@ -108,6 +112,19 @@ const CONFIG = async () => (await import('../www/earthdefense/js/config.min.js')
  *  arrives last, so anything asserting on it has to come through here. Sized
  *  for the longest of the three plus the replay that can precede it, since
  *  which one is playing is exactly what most of these tests do not care about. */
+/** Report every raider as destroyed, the way a killing shot does.
+ *
+ *  MODULE SCOPE, because three separate describes now win a run in order to get
+ *  at what happens next: the endings, the pause button going away, and the
+ *  pointer lock being ignored once there is nothing left to pause. It was two
+ *  identical copies in two describes before the third needed it. */
+async function clearTheFleet(main) {
+    const { getShips } = await import('../www/earthdefense/js/fleet.min.js');
+    for (const ship of getShips()) {
+        main.__test__.onDamageResolved({ id: ship.id, hitPoints: 0, destroyed: true });
+    }
+}
+
 function playOutTheEnding(config) {
     const finale = config.finale;
     const longest = Math.max(
@@ -204,6 +221,46 @@ describe('booting', () => {
         expect(main.getState().phase).toBe('briefing');
     });
 
+    /** THE WORLD CLOCK ONLY RUNS FOR A RUN.
+     *
+     *  It used to run behind the welcome screen so the briefing would not sit
+     *  on a frozen photograph, and that was a mistake measured rather than
+     *  argued. The Moon laps in eight minutes, and its phase and inclination
+     *  are solved backwards from where it has to sit in the opening frame, so
+     *  a visitor who actually read the briefing was shown a different
+     *  composition from the one the config went to that trouble to build. How
+     *  fast it decays is asserted in tests/earthdefense-init.test.mjs, where
+     *  the orbit maths can be run for real.
+     *
+     *  WHAT IS CHECKED HERE IS THE DECISION, not its effect. Body positions
+     *  live on Three.js meshes and this suite runs on a chainable stub that
+     *  records nothing, so "did the Moon move" cannot be asked at this level.
+     *  "Does the briefing get a zero" can. */
+    test('the briefing gets a zero rather than a frame of time', async () => {
+        const main = await boot();
+        expect(main.getState().phase).toBe('briefing');
+        expect(main.__test__.worldStep('briefing', 0.016)).toBe(0);
+    });
+
+    /** ZERO, NOT SKIPPED, and the difference is the point: `updateWorld` still
+     *  runs, so every installation's aim and up is reseated on every frame and
+     *  what is behind the overlay is correct rather than merely unmoving.
+     *  `sampleStructureMotion` handles a zero step by declining to divide by
+     *  it. */
+    test('a run and the end screen get the real frame time', async () => {
+        const main = await boot();
+        expect(main.__test__.worldStep('playing', 0.016)).toBe(0.016);
+        expect(main.__test__.worldStep('won', 0.016)).toBe(0.016);
+        expect(main.__test__.worldStep('lost', 0.016)).toBe(0.016);
+    });
+
+    /** The pause panel is the one place that stops outright: it says nothing
+     *  moves while it is open, so nothing does, down to not being asked. */
+    test('the pause panel skips the world entirely', async () => {
+        const main = await boot();
+        expect(main.__test__.worldStep('paused', 0.016)).toBe(null);
+    });
+
     test('the clock does not run while the dedication is still up', async () => {
         await boot();
         stepFrames(30);
@@ -289,14 +346,6 @@ describe('pausing', () => {
 // ---- Winning and losing -----------------------------------------------------
 
 describe('ending a run', () => {
-    /** Report every raider as destroyed, the way a killing shot does. */
-    async function clearTheFleet(main) {
-        const { getShips } = await import('../www/earthdefense/js/fleet.min.js');
-        for (const ship of getShips()) {
-            main.__test__.onDamageResolved({ id: ship.id, hitPoints: 0, destroyed: true });
-        }
-    }
-
     async function loseEveryInstallation(main) {
         const { getStructures } = await import('../www/earthdefense/js/structures.min.js');
         for (const entry of getStructures()) {
@@ -1339,7 +1388,6 @@ describe('how a run opens', () => {
         expect(intro.isIntroRunning()).toBe(true);
         expect(main.__test__.introPending()).toBe(true);
         expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
-        expect(dom.el('end-skip').classList.contains('hidden')).toBe(false);
         expect(main.getState().phase).toBe('briefing');
     });
 
@@ -1355,7 +1403,6 @@ describe('how a run opens', () => {
         expect(intro.isIntroRunning()).toBe(false);
         expect(main.__test__.introPending()).toBe(false);
         expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
-        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
         expect(main.getState().phase).toBe('briefing');
     });
 
@@ -1366,56 +1413,112 @@ describe('how a run opens', () => {
     // assertion would pass or fail for reasons that have nothing to do with
     // the code. The intro suite installs recording stubs and can see it.
 
-    /** ANY KEY, ANY TAP, exactly like the endings. A shot nobody can leave has
-     *  stopped being a gift, and this one stands between a visitor and the
-     *  button they came to press. */
-    test('any key skips it', async () => {
+    /** CLICKING DURING THE SHOT MUST NOT TAKE THE CURSOR, which was a real bug
+     *  and a nasty one, because it did not strand the visitor until several
+     *  seconds after the click that caused it.
+     *
+     *  `flight-1.0.0` grabs the pointer lock on a canvas click whenever it is
+     *  not paused, and `initFlight` resets that flag to false: correctly, since
+     *  it is also what a respawn calls. `handleStateChange` is the only thing
+     *  that would say otherwise and it is deliberately not fired for the opening
+     *  briefing. Through the briefing proper the welcome overlay covers the
+     *  canvas and swallows the clicks, so it never showed. Through the OPENING
+     *  SHOT the overlay is hidden, and hidden means `pointer-events: none`, so a
+     *  click during the cinematic went to the canvas and took the cursor. The
+     *  welcome screen then arrived with every click being delivered to the
+     *  locked canvas, and "Take the helm" could not be reached with a mouse. */
+    test('clicking during the shot does not take the cursor', async () => {
+        await bootIntoOpening();
+
+        fire(dom.el('game-canvas'), 'click');
+
+        expect(dom.documentStub.pointerLockElement).toBe(null);
+    });
+
+    /** And the welcome screen that follows arrives with the cursor free, which
+     *  is the condition the visitor's actual symptom rested on.
+     *
+     *  THE SYMPTOM ITSELF CANNOT BE ASSERTED HERE, and saying so is more useful
+     *  than a test that looks like it does. What stranded the visitor was the
+     *  browser delivering every click to the LOCKED ELEMENT rather than to the
+     *  element under the pointer, so the blocker's own handler never ran. The
+     *  DOM stub dispatches to whatever element the test names, lock or no lock,
+     *  so `enterWorld()` would succeed here either way. What is checkable is the
+     *  precondition: no lock when the overlay appears. */
+    test('the welcome screen arrives with the cursor free', async () => {
+        const main = await bootIntoOpening();
+        const config = await CONFIG();
+
+        fire(dom.el('game-canvas'), 'click');
+        stepFrames(Math.ceil(config.intro.seconds / 0.016) + 4);
+
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        expect(dom.documentStub.pointerLockElement).toBe(null);
+
+        // And taking the helm is what takes the cursor, which is the one place
+        // it should ever be taken.
+        enterWorld();
+        expect(main.getState().phase).toBe('playing');
+        expect(dom.documentStub.pointerLockElement).toBe(dom.el('game-canvas'));
+    });
+
+    /** The briefing proper is covered by the overlay, so this was never the
+     *  visible half of the bug. It is asserted anyway: the flight model is now
+     *  told it is paused at boot, and that is the fact both cases rest on. */
+    test('clicking during the briefing does not take it either', async () => {
+        await boot();
+
+        fire(dom.el('game-canvas'), 'click');
+
+        expect(dom.documentStub.pointerLockElement).toBe(null);
+    });
+
+    /** IT CANNOT BE SKIPPED, and that is the point of this block.
+     *
+     *  It WAS leavable on any key or any tap, which sounds like courtesy and on
+     *  a touch screen is not a control a visitor chooses so much as one they
+     *  trip over while waiting. Playtesting had people tapping straight through
+     *  the shot at the end of a run without ever deciding to. Five seconds is
+     *  not a toll worth protecting them from at that price, and the shot is the
+     *  plot. */
+    test('a key does not skip it', async () => {
         const main = await bootIntoOpening();
         const intro = await INTRO();
 
         fire(dom.documentStub, 'keydown', { code: 'KeyQ' });
-        expect(intro.isIntroRunning()).toBe(false);
-
         stepFrames(1);
-        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+
+        expect(intro.isIntroRunning()).toBe(true);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
         expect(main.getState().phase).toBe('briefing');
     });
 
-    test('any tap skips it', async () => {
-        await bootIntoOpening();
+    test('a tap does not skip it', async () => {
         const intro = await INTRO();
+        await bootIntoOpening();
 
         fire(dom.documentStub, 'pointerdown', {});
-        expect(intro.isIntroRunning()).toBe(false);
-
         stepFrames(1);
-        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+
+        expect(intro.isIntroRunning()).toBe(true);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
     });
 
-    /** THE KEY THAT SKIPS IS NOT ALSO THE KEY THAT STARTS THE GAME, and this is
-     *  the reason the briefing is revealed a frame late rather than inside the
-     *  skip handler. A visitor pressing Enter to get past the cinematic means
-     *  "show me the briefing", not "I have read it, launch". Revealing the
-     *  overlay synchronously would let the same keydown fall through to the
-     *  listener that takes the helm, and hand them a run already in progress. */
-    test('the Enter that skips the shot does not also take the helm', async () => {
+    /** AND ENTER CANNOT START THE GAME EARLY EITHER. The listener that turns
+     *  Enter into "Take the helm" checks whether the welcome overlay is
+     *  visible, and through the whole shot it is not. */
+    test('Enter during the shot does not take the helm', async () => {
         const main = await bootIntoOpening();
+        const config = await CONFIG();
 
         fire(dom.documentStub, 'keydown', { code: 'Enter' });
         stepFrames(1);
-
         expect(main.getState().phase).toBe('briefing');
-        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
 
-        // And the NEXT Enter does take the helm, so nothing has been broken.
+        // And once the shot has run its course, it works normally.
+        stepFrames(Math.ceil(config.intro.seconds / 0.016) + 4);
         fire(dom.documentStub, 'keydown', { code: 'Enter' });
         expect(main.getState().phase).toBe('playing');
-    });
-
-    test('skipping when nothing is playing does nothing at all', async () => {
-        const main = await boot();
-        expect(main.__test__.skipIntro()).toBe(false);
-        expect(main.getState().phase).toBe('briefing');
     });
 
     /** REDUCED MOTION SKIPS IT ENTIRELY, the same preference and the same
@@ -1432,7 +1535,6 @@ describe('how a run opens', () => {
         expect(intro.isIntroRunning()).toBe(false);
         expect(main.__test__.introPending()).toBe(false);
         expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
-        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
     });
 
     /** ONCE PER PAGE LOAD. A restart returns to the briefing and must not play
@@ -1466,16 +1568,357 @@ describe('how a run opens', () => {
     });
 });
 
+describe('Escape, the pointer lock, and the pause panel', () => {
+    const AUDIO = async () => await import('../www/earthdefense/js/audio.min.js');
+    const dropTheLock = () => {
+        dom.documentStub.pointerLockElement = null;
+        fire(dom.documentStub, 'pointerlockchange', {});
+    };
+
+    /** THE WHOLE POINT. While the pointer is locked a browser handles Escape
+     *  itself, to give the cursor back, and never delivers the keydown to the
+     *  page. The Escape listener in this file is real and correct and simply
+     *  never fires, so pressing the one key a visitor reaches for released the
+     *  mouse and left the game running underneath. Losing the LOCK is the
+     *  signal, not the keystroke. */
+    test('losing the pointer lock mid-run puts the pause panel up', async () => {
+        const main = await boot();
+        enterWorld();
+        expect(main.getState().phase).toBe('playing');
+        expect(dom.documentStub.pointerLockElement).toBe(dom.el('game-canvas'));
+
+        dropTheLock();
+
+        expect(main.getState().phase).toBe('paused');
+        expect(dom.el('pause-modal').classList.contains('hidden')).toBe(false);
+    });
+
+    /** It lands on the PAUSE panel, not the welcome screen. The welcome overlay
+     *  here is the briefing: its button says "Take the helm", and taking the
+     *  helm is what starts the clock and releases the fleet. Putting it back up
+     *  over a run already underway would describe a state the game is not in. */
+    test('it does not put the welcome screen back up', async () => {
+        const main = await boot();
+        enterWorld();
+        dropTheLock();
+
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
+        expect(main.getState().phase).toBe('paused');
+    });
+
+    test('taking the lock is not losing it', async () => {
+        const main = await boot();
+        enterWorld();
+        fire(dom.documentStub, 'pointerlockchange', {});   // still locked
+        expect(main.getState().phase).toBe('playing');
+    });
+
+    /** No loop guard is needed and this says so. `handleStateChange` drops the
+     *  lock on the way into the pause, which fires this again, and `openPause`
+     *  refuses because the game is no longer playing. */
+    test('the pause dropping the lock does not re-trigger anything', async () => {
+        const main = await boot();
+        enterWorld();
+        dropTheLock();
+        dropTheLock();
+        dropTheLock();
+        expect(main.getState().phase).toBe('paused');
+    });
+
+    test('losing it during the briefing does nothing', async () => {
+        const main = await boot();
+        dropTheLock();
+        expect(main.getState().phase).toBe('briefing');
+        expect(dom.el('pause-modal').classList.contains('hidden')).toBe(true);
+    });
+
+    test('losing it once a run is over does nothing', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        enterWorld();
+        await clearTheFleet(main);
+        playOutTheEnding(config);
+
+        dropTheLock();
+        expect(main.getState().phase).toBe('won');
+        expect(dom.el('pause-modal').classList.contains('hidden')).toBe(true);
+    });
+
+    /** AND RESUMING TAKES THE MOUSE BACK. Nothing was picking the lock up
+     *  again, so a resumed visitor had a ship they could throttle and could not
+     *  steer until they happened to click the canvas, which nothing tells them
+     *  to do. */
+    test('resuming takes the mouse back', async () => {
+        const main = await boot();
+        enterWorld();
+        dropTheLock();
+        expect(dom.documentStub.pointerLockElement).toBe(null);
+
+        main.__test__.closePause();
+
+        expect(main.getState().phase).toBe('playing');
+        expect(dom.documentStub.pointerLockElement).toBe(dom.el('game-canvas'));
+    });
+
+    test('a browser that refuses the lock is not a broken game', async () => {
+        const main = await boot();
+        enterWorld();
+        dropTheLock();
+        // Chrome turns the request down for about a second after Escape, and
+        // reports it by rejecting a promise. Expected, not an error.
+        dom.el('game-canvas').requestPointerLock = () => Promise.reject(new Error('too soon'));
+
+        expect(() => main.__test__.closePause()).not.toThrow();
+        expect(main.getState().phase).toBe('playing');
+    });
+
+    test('a touch device is never asked for a pointer lock', async () => {
+        dom.windowStub.ontouchstart = true;
+        const main = await boot();
+        enterWorld();
+        expect(main.__test__.takePointer()).toBe(false);
+        expect(dom.documentStub.pointerLockElement).toBe(null);
+    });
+
+    /** THE SOUND STOPS WHEN THE GAME DOES. The cues are all fire and forget and
+     *  nothing fires while the simulation is frozen, but the engine hum is
+     *  continuous and `updateReadouts` runs on both sides of the `isPlaying`
+     *  branch, so a paused ship went on sounding as loud as it had been flying. */
+    test('the sound stops while the game is paused and comes back after', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        enterWorld();
+        expect(audio.isSuspended()).toBe(false);
+
+        main.__test__.openPause();
+        expect(audio.isSuspended()).toBe(true);
+
+        main.__test__.closePause();
+        expect(audio.isSuspended()).toBe(false);
+    });
+
+    /** Held apart from the mute checkbox, so resuming cannot hand the sound
+     *  back to somebody who turned it off. */
+    test('resuming does not un-mute a visitor who muted', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        enterWorld();
+        audio.setMuted(true);
+
+        main.__test__.openPause();
+        main.__test__.closePause();
+
+        expect(audio.isMuted()).toBe(true);
+        expect(audio.isSuspended()).toBe(false);
+    });
+
+    test('an ending is not a pause and keeps its sound', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        enterWorld();
+        await clearTheFleet(main);
+        // The win shot fires `playDestruction` on every shell, so suspending
+        // here would silence the celebration. The ENGINE goes; the mix stays.
+        expect(audio.isSuspended()).toBe(false);
+    });
+
+    /** THE ENGINE IS A FLIGHT INSTRUMENT AND IT GOES WITH THEM. The hum means
+     *  "you are under power", and it went on meaning that under all three end
+     *  cards, including the two where the ship has been destroyed. */
+    test('the engine is cut the moment a run ends', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        enterWorld();
+        expect(audio.isEngineSilenced()).toBe(false);
+
+        await clearTheFleet(main);
+        expect(audio.isEngineSilenced()).toBe(true);
+    });
+
+    /** Cut when the run ENDS, not when the card arrives, which is a few seconds
+     *  later. The gap is a third-person shot of a wreck or a planet, and a
+     *  cockpit engine over that belongs to the frame we just left. */
+    test('the engine is already gone before the end card arrives', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        const config = await CONFIG();
+        enterWorld();
+        await clearTheFleet(main);
+
+        // The shot is still running and the card is not up yet.
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
+        expect(audio.isEngineSilenced()).toBe(true);
+
+        playOutTheEnding(config);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
+        expect(audio.isEngineSilenced()).toBe(true);
+    });
+
+    test('losing the line cuts it too', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        enterWorld();
+        const { getStructures } = await import('../www/earthdefense/js/structures.min.js');
+        for (const entry of getStructures()) {
+            main.__test__.onDamageResolved({ id: entry.site.id, hitPoints: 0, destroyed: true });
+        }
+        expect(main.getState().phase).toBe('lost');
+        expect(audio.isEngineSilenced()).toBe(true);
+    });
+
+    test('a restart brings the engine back', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        const config = await CONFIG();
+        enterWorld();
+        await clearTheFleet(main);
+        playOutTheEnding(config);
+        expect(audio.isEngineSilenced()).toBe(true);
+
+        main.__test__.restartRun();
+        expect(audio.isEngineSilenced()).toBe(false);
+    });
+
+    /** BETWEEN LIVES TOO, and this one is not a state change: the phase stays
+     *  `playing` through a respawn, so the switch that catches the end of a run
+     *  cannot see it. It caught the LAST death, which does end the run, and left
+     *  the first two humming over the visitor's own explosion. */
+    test('the engine is cut over a mid-run wreck', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        enterWorld();
+        expect(audio.isEngineSilenced()).toBe(false);
+
+        main.__test__.killPlayer('test');
+        expect(main.getState().phase).toBe('playing');   // still a run
+        expect(audio.isEngineSilenced()).toBe(true);
+    });
+
+    test('and comes back with the new ship', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        const config = await CONFIG();
+        enterWorld();
+        main.__test__.killPlayer('test');
+
+        main.__test__.advanceRespawn(config.player.respawnDelay + 0.1);
+
+        expect(main.getState().phase).toBe('playing');
+        expect(audio.isEngineSilenced()).toBe(false);
+    });
+
+    /** Every death behaves the same now, which is the point: it was the LAST
+     *  one differing from the first two that sent us looking. */
+    test('every life is cut the same way', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        const config = await CONFIG();
+        enterWorld();
+
+        const lives = config.player.lives;
+        for (let i = 0; i < lives - 1; i++) {
+            main.__test__.killPlayer('test');
+            expect(audio.isEngineSilenced()).toBe(true);
+            main.__test__.advanceRespawn(config.player.respawnDelay + 0.1);
+            expect(audio.isEngineSilenced()).toBe(false);
+        }
+
+        // The last one ends the run, and the silence stays.
+        main.__test__.killPlayer('test');
+        expect(main.getState().phase).toBe('lost');
+        expect(audio.isEngineSilenced()).toBe(true);
+        main.__test__.advanceRespawn(config.player.respawnDelay + 0.1);
+        expect(audio.isEngineSilenced()).toBe(true);
+    });
+
+    test('a restart after running out brings it back', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        const config = await CONFIG();
+        enterWorld();
+        for (let i = 0; i < config.player.lives; i++) main.__test__.killPlayer('test');
+        expect(audio.isEngineSilenced()).toBe(true);
+
+        main.__test__.restartRun();
+        expect(audio.isEngineSilenced()).toBe(false);
+    });
+
+    /** A pause is not an ending: the engine comes back when you resume. */
+    test('pausing does not cut the engine', async () => {
+        const main = await boot();
+        const audio = await AUDIO();
+        enterWorld();
+
+        main.__test__.openPause();
+        expect(audio.isEngineSilenced()).toBe(false);
+        expect(audio.isSuspended()).toBe(true);
+
+        main.__test__.closePause();
+        expect(audio.isEngineSilenced()).toBe(false);
+    });
+});
+
+describe('the pause button belongs to a run', () => {
+    /** IT IS NOT ONE OF THE OTHER ROUND BUTTONS, however much it looks like
+     *  one. Settings and the way home are wanted at any moment. Pausing is only
+     *  something you can do to something that is happening, and `openPause`
+     *  already refused on both the welcome screen and the end card, which made
+     *  the button worse than broken: available-looking, and inert. */
+    test('is not on the welcome screen', async () => {
+        await boot();
+        // The settings and home buttons are NOT checked here for the same
+        // reason they are not checked anywhere: they are revealed through
+        // `querySelectorAll('.ui-float')`, which the DOM stub answers with an
+        // empty list. The pause button is assertable precisely because it was
+        // taken out of that sweep and given its own named element.
+        expect(dom.el('pause-btn').classList.contains('visible')).toBe(false);
+    });
+
+    test('is not there during the opening shot either', async () => {
+        await bootIntoOpening();
+        expect(dom.el('pause-btn').classList.contains('visible')).toBe(false);
+    });
+
+    test('arrives with the run', async () => {
+        await boot();
+        enterWorld();
+        expect(dom.el('pause-btn').classList.contains('visible')).toBe(true);
+    });
+
+    /** Still there while paused, because on a phone it is the control the
+     *  visitor just pressed, and a button that vanishes under the thumb that
+     *  used it reads as a fault. */
+    test('stays up while the pause panel is open', async () => {
+        const main = await boot();
+        enterWorld();
+        main.__test__.openPause();
+        expect(dom.el('pause-btn').classList.contains('visible')).toBe(true);
+    });
+
+    test('goes when the run is over', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        enterWorld();
+        await clearTheFleet(main);
+        playOutTheEnding(config);
+        expect(dom.el('pause-btn').classList.contains('visible')).toBe(false);
+    });
+
+    test('comes back for a restart', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        enterWorld();
+        await clearTheFleet(main);
+        playOutTheEnding(config);
+
+        main.__test__.restartRun();
+        expect(dom.el('pause-btn').classList.contains('visible')).toBe(true);
+    });
+});
+
 describe('how a run ends', () => {
     const FINALE = async () => await import('../www/earthdefense/js/finale.min.js');
     const washed = (name) => dom.documentStub.body.classList.contains(name);
-
-    async function clearTheFleet(main) {
-        const { getShips } = await import('../www/earthdefense/js/fleet.min.js');
-        for (const ship of getShips()) {
-            main.__test__.onDamageResolved({ id: ship.id, hitPoints: 0, destroyed: true });
-        }
-    }
 
     test('a win gets the celebration, not a dialog', async () => {
         const main = await boot();
@@ -1545,9 +1988,17 @@ describe('how a run ends', () => {
         expect(finale.isFinaleRunning()).toBe(true);
     });
 
-    test('any key cuts it short and brings the card forward', async () => {
-        // A shot nobody can leave has stopped being a gift, and the card
-        // carries every number either way, so skipping costs no information.
+    /** THE ENDING CANNOT BE SKIPPED, and this is the block that says so.
+     *
+     *  It WAS leavable on any key or any tap. Playtesting found the failure that
+     *  arrangement actually produces: on a touch screen "any tap anywhere" is
+     *  not a control a visitor chooses, it is one they trip over while waiting,
+     *  and people were tapping straight through the one moment the whole run was
+     *  built toward without ever deciding to. Four seconds is not a toll worth
+     *  protecting them from at that price.
+     *
+     *  Reduced motion is now the ONLY way past it, and that test is below. */
+    test('a key does not cut it short', async () => {
         const main = await boot();
         const finale = await FINALE();
         enterWorld();
@@ -1555,42 +2006,54 @@ describe('how a run ends', () => {
         expect(finale.isFinaleRunning()).toBe(true);
 
         fire(dom.documentStub, 'keydown', { code: 'KeyJ' });
-        expect(finale.isFinaleRunning()).toBe(false);
-        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
-        expect(washed('finale-won')).toBe(false);
-        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
+
+        expect(finale.isFinaleRunning()).toBe(true);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
     });
 
-    test('a tap cuts it short too, since a phone has no keys', async () => {
+    test('a tap does not either, which is the one that was being tripped over', async () => {
         const main = await boot();
         const finale = await FINALE();
         enterWorld();
         await clearTheFleet(main);
 
         fire(dom.documentStub, 'pointerdown', {});
-        expect(finale.isFinaleRunning()).toBe(false);
-        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
+
+        expect(finale.isFinaleRunning()).toBe(true);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
     });
 
-    test('Escape skips the ending rather than opening a pause panel', async () => {
-        // There is nothing to pause: the run is over. The skip listener is
-        // wired first so it gets the first look, and `openPause` refuses
-        // anyway unless the game is being played.
+    /** Escape is the interesting key, because it is the one with another job.
+     *  There is nothing to pause once the run is over, and `openPause` refuses
+     *  unless the game is being played, so it does nothing rather than putting a
+     *  pause panel over an ending. */
+    test('Escape neither skips the ending nor opens a pause panel', async () => {
         const main = await boot();
+        const finale = await FINALE();
         enterWorld();
         await clearTheFleet(main);
 
         fire(dom.documentStub, 'keydown', { code: 'Escape' });
+
         expect(main.getState().phase).toBe('won');
+        expect(finale.isFinaleRunning()).toBe(true);
         expect(dom.el('pause-modal').classList.contains('hidden')).toBe(true);
-        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
     });
 
-    test('a key press with no ending running does nothing at all', async () => {
+    /** And the card still arrives on its own, off the frame clock, so nobody is
+     *  left watching a finished shot. This is what a visitor gets instead of a
+     *  skip: a short wait that ends by itself. */
+    test('the card arrives when the shot finishes, without being asked', async () => {
         const main = await boot();
+        const config = await CONFIG();
+        const finale = await FINALE();
         enterWorld();
-        expect(main.__test__.skipFinale()).toBe(false);
-        expect(main.getState().phase).toBe('playing');
+        await clearTheFleet(main);
+
+        playOutTheEnding(config);
+
+        expect(finale.isFinaleRunning()).toBe(false);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
     });
 
     test('reduced motion goes straight to the card', async () => {
@@ -1609,19 +2072,6 @@ describe('how a run ends', () => {
         expect(washed('finale-won')).toBe(false);
     });
 
-    test('the skip hint is only up while there is something to skip', async () => {
-        const main = await boot();
-        const config = await CONFIG();
-        enterWorld();
-        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
-
-        await clearTheFleet(main);
-        expect(dom.el('end-skip').classList.contains('hidden')).toBe(false);
-
-        playOutTheEnding(config);
-        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
-    });
-
     test('a restart leaves no ending behind', async () => {
         // Otherwise the new run opens over the last one's embers, with a red
         // wash on the body and a hint offering to skip nothing.
@@ -1635,7 +2085,6 @@ describe('how a run ends', () => {
         expect(finale.isFinaleRunning()).toBe(false);
         expect(washed('finale-won')).toBe(false);
         expect(washed('finale-lost')).toBe(false);
-        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
         expect(main.getState().phase).toBe('playing');
     });
 

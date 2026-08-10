@@ -379,8 +379,8 @@ export function startFinale(kind, context = {}) {
     return shot.seconds;
 }
 
-/** Stop early and leave nothing behind. This is what the skip key calls, and
- *  what a restart calls, so a new run can never open on the last one's embers. */
+/** Stop early and leave nothing behind. This is what a restart calls, so a new
+ *  run can never open on the last one's embers. */
 export function endFinale() {
     shot.running = false;
     shot.kind = '';

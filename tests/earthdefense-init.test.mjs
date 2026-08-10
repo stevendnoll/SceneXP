@@ -180,6 +180,38 @@ describe('the Moon is off to one side at spawn', () => {
         const speed = (2 * Math.PI * orbit.radius) / orbit.period;
         expect(speed).toBeLessThan(4000);   // the player's planned top speed
     });
+
+    /** WHY THE BRIEFING HOLDS THE WORLD STILL, written down as the measurement
+     *  it came from rather than as an assertion about main.js.
+     *
+     *  Everything above is asserted at t = 0, because t = 0 is when a run
+     *  starts. The welcome screen is not t = 0: it is however long the visitor
+     *  spends reading it. The world clock used to run behind that overlay, on
+     *  the reasoning that a briefing should not sit on a frozen photograph,
+     *  which is a fair thing to want and turned out to cost the entire
+     *  composition this describe block exists to protect.
+     *
+     *  At 0.75 degrees of orbit a second the Moon leaves the narrowest portrait
+     *  frame in well under fifteen seconds, which is less time than it takes to
+     *  read the welcome copy. `worldStep` now hands the briefing a zero. */
+    test('would leave a portrait frame within seconds if the clock ran', () => {
+        const aspect = 9 / 21;
+        const horizontalHalf = Math.atan(Math.tan((halfFovDeg() * Math.PI) / 180) * aspect) * DEG;
+        const azimuthAt = (t) => Math.asin(norm(sub(moonAt(t), spawnPosition())).x) * DEG;
+
+        // In frame when a run starts, and that is the whole point of the freeze.
+        expect(azimuthAt(0)).toBeLessThan(horizontalHalf);
+        // And gone within fifteen seconds of reading, if time were allowed to pass.
+        expect(azimuthAt(15)).toBeGreaterThan(horizontalHalf);
+    });
+
+    test('is most of a quarter turn away after a minute of reading', () => {
+        // The number that made this worth fixing rather than noting. A visitor
+        // who reads the briefing properly used to start their run on a sky that
+        // had nothing to do with the one that was composed for them.
+        const travelled = (60 / bodyById('moon').orbit.period) * 360;
+        expect(travelled).toBeGreaterThan(40);
+    });
 });
 
 describe('the fleet is in the opening frame, not waiting off it', () => {

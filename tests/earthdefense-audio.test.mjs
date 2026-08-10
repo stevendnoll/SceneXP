@@ -489,6 +489,216 @@ describe('muting', () => {
     });
 });
 
+// ---- Pausing ----------------------------------------------------------------
+
+/** THE SECOND REASON THE SOUND CAN BE OFF, and it is a separate one on purpose.
+ *
+ *  `muted` is the visitor's decision and has a checkbox behind it. `suspended`
+ *  is the game's: the run is stopped, so the sound is too. The engine hum is the
+ *  thing this actually silences, because it is the one continuous voice and
+ *  `updateReadouts` keeps feeding it on both sides of the `isPlaying` branch, so
+ *  a paused ship went on sounding exactly as loud as it had been flying.
+ *
+ *  WHAT MATTERS IS THAT THEY COMPOSE rather than overwrite each other. Both are
+ *  read through `level`, so either alone is silence and neither can undo the
+ *  other. Two independent writers to `master.gain` would get this wrong the
+ *  first time the second one was called, and the visible symptom would be a
+ *  visitor who muted, paused, resumed, and got their sound back. */
+describe('pausing', () => {
+    test('is a gain of zero, like muting, and not a teardown', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setEngineThrottle(1);
+        const engine = audio.__test__.getEngine();
+        const running = engine.hum.frequency.value;
+
+        expect(audio.setSuspended(true)).toBe(true);
+        expect(audio.isSuspended()).toBe(true);
+        // Still running, still at the same pitch: resuming picks up where it
+        // left off rather than restarting the engine.
+        expect(audio.isRunning()).toBe(true);
+        expect(engine.hum.frequency.value).toBe(running);
+
+        expect(audio.setSuspended(false)).toBe(false);
+        expect(audio.isSuspended()).toBe(false);
+    });
+
+    test('a paused game plays no cues', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setSuspended(true);
+        expect(afterAGap(audio.playFire)).toBe(false);
+        expect(afterAGap(audio.playDestruction)).toBe(false);
+        expect(afterAGap(audio.playAlert)).toBe(false);
+    });
+
+    /** THE ONE THAT WOULD ACTUALLY BITE SOMEBODY. Resuming must not hand the
+     *  sound back to a visitor who turned it off. */
+    test('resuming does not un-mute a visitor who muted', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setMuted(true);
+        audio.setSuspended(true);
+        audio.setSuspended(false);
+
+        expect(audio.isMuted()).toBe(true);
+        expect(audio.__test__.level()).toBe(0);
+        expect(afterAGap(audio.playFire)).toBe(false);
+    });
+
+    /** And the mirror of it: the settings panel is reachable from the pause
+     *  panel, so turning the sound back on there must not start the engine
+     *  humming behind a panel that says nothing is moving. */
+    test('un-muting while paused stays silent until the game resumes', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setSuspended(true);
+        audio.setMuted(true);
+        audio.setMuted(false);
+
+        expect(audio.isMuted()).toBe(false);
+        expect(audio.__test__.level()).toBe(0);
+
+        audio.setSuspended(false);
+        expect(audio.__test__.level()).toBe(CONFIG.audio.masterGain);
+    });
+
+    test('either reason alone is silence', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        const full = CONFIG.audio.masterGain;
+
+        expect(audio.__test__.level()).toBe(full);
+        audio.setMuted(true);
+        expect(audio.__test__.level()).toBe(0);
+        audio.setMuted(false);
+        audio.setSuspended(true);
+        expect(audio.__test__.level()).toBe(0);
+        audio.setSuspended(false);
+        expect(audio.__test__.level()).toBe(full);
+    });
+
+    test('is safe before the first gesture and after disposal', () => {
+        audio.initAudio(CONFIG);
+        expect(audio.setSuspended(true)).toBe(true);   // no context yet
+        gesture();
+        audio.disposeAudio();
+        expect(audio.setSuspended(true)).toBe(true);   // and none any more
+    });
+
+    /** A pause that outlives its run would leave the next one silent, so
+     *  disposal clears it the same way it clears the mute. */
+    test('a fresh init starts unsuspended', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setSuspended(true);
+        audio.disposeAudio();
+        expect(audio.isSuspended()).toBe(false);
+    });
+});
+
+// ---- Cutting the engine -----------------------------------------------------
+
+/** THE THIRD REASON SOMETHING CAN BE SILENT, and the only one that is not the
+ *  master gain.
+ *
+ *  The hum means "you are under power". It went on meaning that under all three
+ *  end cards, including the two where the ship the visitor was flying has been
+ *  destroyed. So it is cut when the run ends, on the same argument that drops
+ *  the canopy and the flight instruments: the engine is a flight instrument.
+ *
+ *  IT CANNOT BE `setSuspended`, which is the whole reason this is a separate
+ *  switch. That takes the whole mix down, and an ending is not silent: the win
+ *  shot fires a boom on every shell. Cutting one voice is the difference between
+ *  fixing this and breaking the celebration. */
+describe('cutting the engine', () => {
+    const engineGain = () => audio.__test__.getEngine().gain.gain.value;
+
+    test('takes the engine voice to nothing', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setEngineThrottle(1);
+        expect(engineGain()).toBeGreaterThan(0);
+
+        expect(audio.setEngineSilenced(true)).toBe(true);
+        expect(audio.isEngineSilenced()).toBe(true);
+        expect(engineGain()).toBe(0);
+    });
+
+    /** THE ONE THAT MAKES IT WORK AT ALL. `updateReadouts` runs on both sides of
+     *  main.js's `isPlaying` branch and keeps reporting the wreck's last speed,
+     *  so without a latch the very next frame would wind the hum back up and the
+     *  cut would last about sixteen milliseconds. */
+    test('stays cut even though the throttle keeps being reported', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setEngineThrottle(1);
+        audio.setEngineSilenced(true);
+
+        for (let i = 0; i < 30; i++) audio.setEngineThrottle(1);
+        expect(engineGain()).toBe(0);
+    });
+
+    /** AND THE MIX IS UNTOUCHED, so the fireworks still go off over it. */
+    test('leaves the master gain alone so an ending keeps its sound', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setEngineSilenced(true);
+
+        expect(audio.__test__.level()).toBe(CONFIG.audio.masterGain);
+        expect(audio.isSuspended()).toBe(false);
+        expect(afterAGap(audio.playDestruction)).toBe(true);
+    });
+
+    /** A restart is what brings it back, through the throttle rather than
+     *  through a second call here, so the engine returns at the speed the new
+     *  run is flying rather than the speed the last one died at. */
+    test('a new run winds it back up', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setEngineThrottle(1);
+        audio.setEngineSilenced(true);
+        expect(engineGain()).toBe(0);
+
+        audio.setEngineSilenced(false);
+        // Still nothing until something reports a throttle.
+        expect(engineGain()).toBe(0);
+        audio.setEngineThrottle(0.5);
+        expect(engineGain()).toBeGreaterThan(0);
+    });
+
+    test('is safe before the first gesture and after disposal', () => {
+        audio.initAudio(CONFIG);
+        expect(audio.setEngineSilenced(true)).toBe(true);
+        gesture();
+        audio.disposeAudio();
+        expect(audio.setEngineSilenced(true)).toBe(true);
+    });
+
+    test('a fresh init starts with the engine live', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setEngineSilenced(true);
+        audio.disposeAudio();
+        expect(audio.isEngineSilenced()).toBe(false);
+    });
+
+    /** The three switches are independent and none of them stands in for
+     *  another: an ending is not a pause, and neither is a mute. */
+    test('is not the same switch as pausing or muting', () => {
+        audio.initAudio(CONFIG);
+        gesture();
+        audio.setEngineSilenced(true);
+        expect(audio.isSuspended()).toBe(false);
+        expect(audio.isMuted()).toBe(false);
+
+        audio.setSuspended(true);
+        expect(audio.isEngineSilenced()).toBe(true);
+        audio.setSuspended(false);
+        expect(audio.isEngineSilenced()).toBe(true);
+    });
+});
+
 // ---- Lifecycle --------------------------------------------------------------
 
 describe('lifecycle', () => {

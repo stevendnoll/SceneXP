@@ -55,11 +55,19 @@
  * squadron close up the same way, and the whole shot is a value a test can
  * assent to.
  *
- * REDUCED MOTION SKIPS IT ENTIRELY. A full-frame camera move that holds the
- * page for five seconds is precisely what that preference is about, and the
- * visitor loses nothing they needed: the welcome overlay carries the objective
- * either way. Reduced EFFECTS thins it to five ships instead of nine, which is
- * how that control behaves everywhere else in this experience.
+ * IT CANNOT BE SKIPPED, AND REDUCED MOTION IS THE ONLY WAY PAST IT. Both were
+ * true of the endings first and both arrived here for the same reason. It was
+ * briefly leavable on any key or any tap, which sounds like courtesy and on a
+ * touch screen is not a control a visitor chooses so much as one they trip over
+ * while waiting: playtesting had people tapping straight through the shot at the
+ * end of a run without ever deciding to. Five seconds is not a toll worth
+ * protecting them from at that price, and the shot is the plot.
+ *
+ * The preference is the real guarantee and it is untouched: a visitor who has
+ * asked for reduced motion never sees this at all, and loses nothing they
+ * needed, since the welcome overlay carries the objective either way. Reduced
+ * EFFECTS thins it to five ships instead of nine, which is how that control
+ * behaves everywhere else in this experience.
  *
  * IT IS SILENT. This plays before the visitor has clicked anything, so there is
  * no gesture, no audio context, and nothing we could ethically do about it.
@@ -352,9 +360,9 @@ export function startIntro(mars, config = EARTHDEFENSE_CONFIG) {
     return shot.seconds;
 }
 
-/** Stop early and leave nothing on screen. This is what the skip listener calls
- *  and what a failed start unwinds through, so the briefing can never open with
- *  nine spare raiders parked at Mars. */
+/** Stop the shot and leave nothing on screen. Called by `updateIntro` when the
+ *  path runs out, and by a failed start unwinding, so the briefing can never
+ *  open with nine spare raiders parked at Mars. */
 export function endIntro() {
     shot.running = false;
     shot.elapsed = shot.seconds;

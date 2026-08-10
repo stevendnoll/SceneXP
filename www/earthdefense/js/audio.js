@@ -42,6 +42,18 @@ let master = null;
 let engine = null;        // { hum, beat, octave, gain, ... }
 let settings = null;
 let muted = false;
+// Silence that the VISITOR did not ask for and cannot see a control for: the
+// game is stopped, so the sound stops with it. Kept apart from `muted` rather
+// than folded into it, because they answer to different people. Resuming from a
+// pause must not un-mute someone who muted, and ticking the sound back on while
+// the pause panel is open must not start the engine humming behind it. See
+// `level`.
+let suspended = false;
+// The engine alone, cut because there is no longer a ship under power. THE
+// THIRD REASON SOMETHING CAN BE SILENT, and the only one that is not about the
+// master gain: an ending has to keep its own sound while losing the engine, so
+// this cuts one voice rather than the mix. See `setEngineSilenced`.
+let engineOff = false;
 let armed = false;
 let armListeners = null;
 
@@ -107,7 +119,7 @@ export function start() {
     try {
         ctx = new Ctx();
         master = ctx.createGain();
-        master.gain.value = muted ? 0 : settings.masterGain;
+        master.gain.value = level();
         master.connect(ctx.destination);
         buildEngine();
         armed = true;
@@ -191,6 +203,10 @@ function buildEngine() {
  *  giving reverse its own voice would imply a mechanism that is not there. */
 export function setEngineThrottle(fraction) {
     if (!engine || !ctx) return;
+    // A CUT ENGINE STAYS CUT. `updateReadouts` runs on both sides of main.js's
+    // `isPlaying` branch and goes on reporting the wreck's last speed, so
+    // without this the next frame would wind the hum straight back up.
+    if (engineOff) return;
     const amount = Math.min(1, Math.abs(fraction || 0));
     const target = settings.engineIdleHz +
         (settings.engineFullHz - settings.engineIdleHz) * amount;
@@ -221,7 +237,11 @@ function ramp(param, value, now, seconds) {
  *  second and a destruction can land on the same frame as three hits, so
  *  without this the mix turns to gravel in a real fight. */
 function allow(kind) {
-    if (!ctx || muted) return false;
+    // SUSPENDED COUNTS AS SILENT HERE TOO, not only at the master gain. Nothing
+    // should reach a cue while the game is stopped, and today nothing does,
+    // because the frozen simulation is what fires them. This is so that stays
+    // true of anything added later that is NOT driven by the simulation.
+    if (!ctx || muted || suspended) return false;
     const now = ctx.currentTime;
     const last = lastPlayed.get(kind);
     if (last !== undefined && now - last < settings.minGapSeconds) return false;
@@ -368,14 +388,84 @@ function cleanupOn(source, nodes) {
 
 /** Muting is a gain of zero rather than a torn-down context, so the engine tone
  *  is exactly where it was when the visitor turns it back on. */
+/** How loud the master should be right now, given both reasons it might not be.
+ *
+ *  ONE PLACE THAT ANSWERS IT, so the two switches compose instead of fighting.
+ *  Either alone is silence and neither can override the other, which is the only
+ *  arrangement where "unmute" during a pause does nothing audible and "resume"
+ *  after muting stays quiet. Two independent writers to `master.gain` would get
+ *  this wrong the first time the second one was called. */
+function level() {
+    if (!settings) return 0;
+    return (muted || suspended) ? 0 : settings.masterGain;
+}
+
 export function setMuted(on) {
     muted = !!on;
     if (!master || !ctx) return muted;
-    ramp(master.gain, muted ? 0 : settings.masterGain, ctx.currentTime, 0.08);
+    ramp(master.gain, level(), ctx.currentTime, 0.08);
     return muted;
 }
 
+/** Stop the sound for as long as the game is stopped.
+ *
+ *  WHAT THIS IS ACTUALLY SILENCING IS THE ENGINE. The cues are all fire and
+ *  forget and nothing fires while the game is frozen, but the hum is continuous
+ *  and `updateReadouts` runs on both sides of the `isPlaying` branch, so a
+ *  paused ship went on sounding exactly as loud as it had been flying. A panel
+ *  saying "Nothing moves while this is open" over a running engine is the page
+ *  contradicting itself.
+ *
+ *  RAMPED, NOT CUT, and over the same 0.08 seconds as the mute. A gain node
+ *  taken to zero in one sample is a click, and a click is the one sound in this
+ *  file nobody designed.
+ *
+ *  NOT `ctx.suspend()`, which was the obvious alternative and would also stop
+ *  the oscillators burning cycles. It is asynchronous, it takes the clock down
+ *  with it, and every `currentTime` based cue and ramp would then have to reason
+ *  about a clock that stops. Three sine waves is not enough CPU to buy that. */
+export function setSuspended(on) {
+    suspended = !!on;
+    if (!master || !ctx) return suspended;
+    ramp(master.gain, level(), ctx.currentTime, 0.08);
+    return suspended;
+}
+
+/** Cut the engine, because there is no ship under power any more.
+ *
+ *  NOT `setSuspended`, and the difference is the whole reason this exists. That
+ *  one takes the master gain to zero, which is right for a pause because a
+ *  paused game should make no sound at all. An ENDING is not silent: the win
+ *  shot fires a boom on every shell. So this cuts a single voice and leaves the
+ *  mix alone.
+ *
+ *  WHAT IT IS FIXING IS A LIE ABOUT THE SHIP. The hum means "you are under
+ *  power", and it went on meaning that under all three end cards, including the
+ *  two where the ship the visitor was flying has been destroyed. It is the same
+ *  argument that drops the canopy and the flight instruments for an ending: the
+ *  engine is a flight instrument, and it goes with them.
+ *
+ *  IT IS CUT WHEN THE RUN ENDS, NOT WHEN THE CARD ARRIVES, which is a few
+ *  seconds earlier and is the better moment. The ending shot is a third-person
+ *  camera thousands of units outside a ship that is wrecked or gone, and a
+ *  cockpit engine droning over it belongs to the frame we just left.
+ *
+ *  Over the engine's own glide rather than instantly, so it winds down instead
+ *  of clicking off. */
+export function setEngineSilenced(on) {
+    engineOff = !!on;
+    if (!engine || !ctx) return engineOff;
+    if (engineOff) ramp(engine.gain.gain, 0, ctx.currentTime, settings.engineGlide);
+    // Coming back is not done here. A restart calls `setEngineThrottle` on its
+    // first frame, and letting that be the thing that reopens the gain means the
+    // engine returns at the speed the new run is actually flying rather than at
+    // the speed the last one died at.
+    return engineOff;
+}
+
 export function isMuted() { return muted; }
+export function isSuspended() { return suspended; }
+export function isEngineSilenced() { return engineOff; }
 export function isRunning() { return !!ctx; }
 export function getContext() { return ctx; }
 
@@ -405,7 +495,9 @@ export function disposeAudio() {
     settings = null;
     armed = false;
     muted = false;
+    suspended = false;
+    engineOff = false;
     lastPlayed.clear();
 }
 
-export const __test__ = { DEFAULTS, allow, tone, noiseSource, getEngine: () => engine };
+export const __test__ = { DEFAULTS, allow, tone, noiseSource, level, getEngine: () => engine };

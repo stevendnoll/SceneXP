@@ -84,8 +84,8 @@ import {
     isFinaleRunning, getFinaleKind, setFinaleReduced, onFinaleBurst, disposeFinale
 } from './finale.min.js';
 import {
-    initAudio, setEngineThrottle, setMuted, playFire, playHit, playDestruction,
-    playAlert, playLock, disposeAudio
+    initAudio, setEngineThrottle, setMuted, setSuspended, setEngineSilenced,
+    playFire, playHit, playDestruction, playAlert, playLock, disposeAudio
 } from './audio.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
@@ -113,9 +113,9 @@ let canvas, loadingScreen, blocker, touchControls, hud;
 let throttleReadout, perimeterNotice, flightStatus;
 let speedometer, speedoForward, speedoReverse, speedoDemand, speedoZero;
 let speedoGhostForward, speedoGhostReverse;
-let settingsPanel, settingsBtn, pauseModal;
+let settingsPanel, settingsBtn, pauseModal, pauseBtn;
 let reticle, lockBracket, combatStatus;
-let replayInset, replayCaption, endSkip;
+let replayInset, replayCaption;
 let endModal, endTitle, endSubtitle, endTime, endSaved, endDestroyed, endBest;
 let scene = null;
 let overlayScene = null;
@@ -229,12 +229,12 @@ async function init() {
     settingsPanel = document.getElementById('settings-panel');
     settingsBtn = document.getElementById('settings-btn');
     pauseModal = document.getElementById('pause-modal');
+    pauseBtn = document.getElementById('pause-btn');
     reticle = document.getElementById('reticle');
     lockBracket = document.getElementById('lock-bracket');
     combatStatus = document.getElementById('combat-status');
     replayInset = document.getElementById('replay-inset');
     replayCaption = document.getElementById('replay-caption');
-    endSkip = document.getElementById('end-skip');
     endModal = document.getElementById('end-modal');
     endTitle = document.getElementById('end-title');
     endSubtitle = document.getElementById('end-subtitle');
@@ -268,6 +268,29 @@ async function init() {
     updateLoadingStatus('Warming the engines…', 88);
     loadSettings();
     startFlight();
+    // AND SAY OUT LOUD THAT NOBODY IS FLYING IT YET.
+    //
+    // `initFlight` resets its own paused flag to false, correctly, because it is
+    // also what a respawn calls and a respawned ship is immediately live. The
+    // one place that would otherwise say otherwise is `handleStateChange`, and
+    // that is deliberately NOT fired for the opening briefing: `initGameState`
+    // enters it without calling back, because nobody has subscribed yet. So
+    // between boot and the helm the flight model believed it was live, and
+    // nothing had lied to it, nobody had told it the truth.
+    //
+    // WHAT THAT COST WAS THE CURSOR. `flight-1.0.0` grabs the pointer lock on a
+    // canvas click whenever it is not paused. Through the briefing proper the
+    // welcome overlay covers the canvas and swallows those clicks, so it never
+    // showed. Through the OPENING SHOT the overlay is hidden, and hidden here
+    // means `pointer-events: none`, so a click during the cinematic went
+    // straight through to the canvas and took the cursor. The shot then ended,
+    // the welcome screen arrived, and every subsequent click was delivered to
+    // the locked canvas instead of to the button: "Take the helm" could not be
+    // reached with a mouse at all until the visitor guessed at Escape.
+    //
+    // The lock is taken in exactly one place now, `beginFlight`, which is the
+    // moment it is actually wanted.
+    setPaused(true);
     startCombat();
     // Again, now that the burst pools exist. `loadSettings` runs before the
     // weapons are built, so its call could only reach the pixel ratio and the
@@ -481,7 +504,29 @@ function handleStateChange(next) {
 
     if (blocker) blocker.classList.toggle('hidden', next !== 'briefing');
     showPlayChrome(next !== 'briefing');
+    showPauseButton(next);
     if (pauseModal) pauseModal.classList.toggle('hidden', next !== 'paused');
+    // THE SOUND STOPS WHEN THE GAME DOES. Every cue is fire-and-forget and
+    // nothing fires while the game is frozen, but the engine hum is continuous
+    // and `updateReadouts` runs on both sides of the `isPlaying` branch, so a
+    // paused ship went on sounding exactly as loud as it had been flying. Held
+    // apart from the mute checkbox inside audio.js, so resuming cannot un-mute
+    // a visitor who muted.
+    setSuspended(next === 'paused');
+    // AND THE ENGINE GOES WHEN THE RUN DOES, which is a different switch from
+    // the one above and deliberately so. `setSuspended` takes the whole mix
+    // down, which is right for a pause and wrong here: the win shot fires a
+    // boom on every shell, and an ending that celebrated in silence would be a
+    // worse bug than the one this fixes. This cuts the engine voice alone.
+    //
+    // The hum means "you are under power", and it went on meaning that under
+    // all three end cards, including the two where the ship has been destroyed.
+    // Same argument that drops the canopy and the flight instruments for an
+    // ending: the engine is a flight instrument and it goes with them. It is
+    // cut here rather than when the card arrives, because the seconds in
+    // between are a third-person shot of a wreck or a planet, and a cockpit
+    // engine droning over that belongs to the frame we just left.
+    setEngineSilenced(next === 'won' || next === 'lost');
 
     if (next === 'won' || next === 'lost') {
         // The wash from the shot that ended the run would otherwise sit over
@@ -537,6 +582,55 @@ function handleStateChange(next) {
  *  The round `.ui-float` buttons are NOT part of this. Settings, home and pause
  *  are all reasonable things to want before flying, and they sit in the top
  *  corner where nothing collides with them at any shape. */
+/** The pause button, which belongs to a RUN rather than to the page.
+ *
+ *  IT IS NOT ONE OF THE OTHER ROUND BUTTONS, however much it looks like one.
+ *  Settings and the way home are things a visitor may want at any moment, so
+ *  they come up with the briefing and stay up. Pausing is only a thing you can
+ *  do to something that is happening: on the welcome screen nothing is moving
+ *  yet, and on the end card the run is over. `openPause` already refuses in
+ *  both, which meant the button was not broken, it was worse than broken. It was
+ *  a control that looked available, invited a press, and then did nothing at
+ *  all, twice per visit.
+ *
+ *  Taking it OUT of the `.ui-float` sweep in `revealBriefing` and driving it
+ *  from the phase instead means the two can never disagree: there is one
+ *  condition, `playing or paused`, and it is the same condition `openPause`
+ *  enforces. Paused is in the list because the button is what a touch visitor
+ *  pressed to get there, and a control that vanishes under the thumb that used
+ *  it reads as a fault. */
+/** How much time the world gets on this frame: `null` to skip it entirely, or
+ *  the seconds to advance it by.
+ *
+ *  A FUNCTION RATHER THAN A CONDITION IN `animate` because it is the only thing
+ *  in that loop that a test at this level can actually check. Body positions are
+ *  held on Three.js meshes, and the suite runs on a chainable stub that records
+ *  nothing, so "did the Moon move" is not a question that can be asked there.
+ *  Whether the briefing gets a zero is.
+ *
+ *  Three answers, three reasons:
+ *
+ *    paused    Skipped outright. The panel says nothing moves, so nothing does.
+ *
+ *    briefing  ZERO, WHICH IS NOT THE SAME AS SKIPPING. The clock does not
+ *              advance, so the composed opening frame keeps for as long as the
+ *              visitor reads, but `updateWorld` still runs and still reseats
+ *              every installation's aim and up. What is behind the overlay is
+ *              correct, not merely unmoving.
+ *
+ *    anything  The real frame time. A run, and the end screen after it. */
+export function worldStep(phase, deltaTime) {
+    if (phase === 'paused') return null;
+    return phase === 'briefing' ? 0 : deltaTime;
+}
+
+function showPauseButton(phase) {
+    if (!pauseBtn) return false;
+    const on = phase === 'playing' || phase === 'paused';
+    pauseBtn.classList.toggle('visible', on);
+    return on;
+}
+
 function showPlayChrome(on) {
     if (hud) hud.classList.toggle('visible', on);
     // Only ever revealed on a touch device, the same condition that put the
@@ -747,6 +841,16 @@ function killPlayer(cause) {
     startShipReplay(flight.position, flight.forward, config.player.respawnDelay);
     if (document.body) document.body.classList.add('replaying');
     setPaused(true);
+    // AND THE ENGINE GOES WITH THE SHIP. It is beside `setPaused` because it is
+    // the same fact said to a different module: there is no longer anything
+    // under power, and the hum means there is.
+    //
+    // IT IS HERE RATHER THAN IN `handleStateChange` BECAUSE LOSING A LIFE IS NOT
+    // A STATE CHANGE. The phase stays `playing` through a respawn, so the switch
+    // that catches the end of a run cannot see this at all: it caught the LAST
+    // death, which does end the run, and left the first two humming over the
+    // visitor's own explosion. That inconsistency is what sent us looking.
+    setEngineSilenced(true);
     _respawnTimer = config.player.respawnDelay;
     _hullHitTimer = 0.45;
     document.body.classList.add('hull-hit');
@@ -770,6 +874,16 @@ function respawnPlayer() {
     _hullPoints = config.player.hullPoints;
     _invulnerable = config.player.respawnInvulnerable;
     setPaused(false);
+    // A NEW SHIP, SO A NEW ENGINE. This only releases the latch: the hum itself
+    // comes back on the next frame's `setEngineThrottle`, which reports the
+    // fresh ship at rest rather than the wreck at cruise, so the engine returns
+    // at idle and climbs with the throttle instead of snapping back to whatever
+    // speed the last one died at.
+    //
+    // SAFE ON THE LAST LIFE BECAUSE THIS NEVER RUNS THERE. `advanceRespawn`
+    // returns early once the run is over, so a lost run keeps the silence that
+    // `handleStateChange` gave it.
+    setEngineSilenced(false);
 }
 
 /** Stop both shots and put the window away. Everything that ends a run or
@@ -785,7 +899,6 @@ function clearReplays() {
     _lastWreck = null;
     _insetRect = null;
     if (replayInset) replayInset.classList.add('hidden');
-    if (endSkip) endSkip.classList.add('hidden');
     if (document.body) document.body.classList.remove('replaying');
 }
 
@@ -1202,6 +1315,65 @@ function openPause() {
 function closePause() {
     if (gamePhase() !== 'paused') return;
     transition('playing');
+    // AND TAKE THE MOUSE BACK, or resuming hands the visitor a ship they can
+    // throttle but cannot steer. `handleStateChange` drops the lock on the way
+    // into every state that is not play, and nothing was picking it up again on
+    // the way out: mouse look stayed dead until they happened to click the
+    // canvas, which nothing tells them to do.
+    takePointer();
+}
+
+/** ESCAPE IS WHY THIS EXISTS, and the reason it needs a lock listener rather
+ *  than a key handler is worth writing down, because the key handler below
+ *  looks like it already covers it and does not.
+ *
+ *  While the pointer is locked, pressing Escape is how a browser gives the
+ *  cursor back, and the browser handles it rather than delivering it to the
+ *  page. The `keydown` listener for Escape never fires. So the one key a visitor
+ *  reaches for released the mouse, left the game running underneath, and looked
+ *  like a page that had stopped listening.
+ *
+ *  LOSING THE LOCK IS THE SIGNAL, NOT THE KEYSTROKE, which also picks up the
+ *  cases Escape never covered: switching tabs, a browser gesture, anything else
+ *  that takes the cursor back. Every one of them means the visitor's attention
+ *  has left a game that is still being played, which is what a pause is for.
+ *
+ *  IT LANDS ON THE PAUSE PANEL RATHER THAN THE WELCOME SCREEN, which is where
+ *  this experience parts company with the other six. They show their blocker
+ *  because their blocker IS their pause screen. Here the welcome overlay is the
+ *  BRIEFING: its button says "Take the helm", and taking the helm is what starts
+ *  the clock and releases the fleet. Putting it back up over a run already
+ *  underway would have the page describing a state the game is not in. The pause
+ *  panel says "Holding station", carries every control, and resumes.
+ *
+ *  NOTHING GUARDS AGAINST A LOOP because nothing needs to, by construction
+ *  rather than by luck: `handleStateChange` exits the lock for every state that
+ *  is not play, so this fires again on the way INTO the pause, and `openPause`
+ *  refuses because the game is no longer playing. The two endings are the same. */
+function onPointerLockChange() {
+    if (typeof document === 'undefined') return false;
+    if (document.pointerLockElement === canvas) return false;
+    openPause();
+    return true;
+}
+
+/** Ask for the mouse, quietly.
+ *
+ *  A REFUSAL IS NORMAL AND IS NOT AN ERROR. Browsers impose a short lock-out
+ *  after Escape releases a pointer lock, so a visitor who presses Escape and
+ *  closes the panel straight away asks for it back inside that window and is
+ *  turned down. Newer browsers report that by rejecting a promise, which would
+ *  otherwise surface in the console as an unhandled rejection for something
+ *  entirely expected. They are not stranded either way: the canvas click handler
+ *  in `flight-1.0.0` asks again on their next click. */
+function takePointer() {
+    if (state.isMobile || !canvas || typeof canvas.requestPointerLock !== 'function') return false;
+    if (typeof document !== 'undefined' && document.pointerLockElement === canvas) return false;
+    try {
+        const asked = canvas.requestPointerLock();
+        if (asked && typeof asked.catch === 'function') asked.catch(() => {});
+    } catch (e) { /* older browsers throw where newer ones reject */ }
+    return true;
 }
 
 // ---- Event wiring ---------------------------------------------------------
@@ -1251,33 +1423,26 @@ function setupEventListeners() {
 
     wireSettings(signal);
 
-    // SKIPPING THE ENDING, from anything at all. Wired ahead of the pause key
-    // so it gets the first look: while an ending is playing there is nothing to
-    // pause, and Escape should cut to the card like every other key. Neither
-    // handler can fire the other's action, since `openPause` refuses unless the
-    // game is being played.
-    document.addEventListener('keydown', () => { skipFinale(); }, { signal });
-    document.addEventListener('pointerdown', () => { skipFinale(); }, { signal });
-
-    // SKIPPING THE OPENING, on the same terms. The two can never both be
-    // running, since one plays before a run exists and the other only once one
-    // is over, so they are two listeners rather than one only because they are
-    // two separate shots with separate reasons to be leavable.
-    //
-    // THIS ONE DOES NOT REVEAL ANYTHING ITSELF. It stops the shot and lets
-    // `advanceIntro` put the briefing up on the next frame, which is what keeps
-    // the Enter that skips the opening from also being the Enter that takes the
-    // helm. See `advanceIntro`.
-    document.addEventListener('keydown', () => { skipIntro(); }, { signal });
-    document.addEventListener('pointerdown', () => { skipIntro(); }, { signal });
+    // NEITHER CINEMATIC IS SKIPPABLE, and the listeners that used to do it are
+    // gone rather than disabled. Both shots are short, both are the plot, and a
+    // stray tap was destroying the one at the end of a run: on a touch screen
+    // "any tap anywhere" is not a control a visitor chooses to use, it is one
+    // they trip over while waiting. Reduced motion still skips both outright,
+    // which is the guarantee that actually matters and is a separate mechanism
+    // from this one. See `startOpening` and `startEndingShot`.
 
     // Pause: Esc on a keyboard, the pause button on a touch screen.
-    const pauseBtn = document.getElementById('pause-btn');
     if (pauseBtn) pauseBtn.addEventListener('click', openPause, { signal });
     if (pauseModal) {
         pauseModal.querySelectorAll('[data-close]').forEach(el =>
             el.addEventListener('click', closePause, { signal }));
     }
+    // THE ESCAPE HANDLER BELOW CANNOT SEE ESCAPE while the pointer is locked,
+    // because the browser takes that keystroke to release the lock and never
+    // delivers it. This is what actually answers Escape on a desktop. See
+    // `onPointerLockChange`.
+    document.addEventListener('pointerlockchange', onPointerLockChange, { signal });
+
     document.addEventListener('keydown', (event) => {
         if (event.code !== 'Escape') return;
         if (gamePhase() === 'paused') closePause();
@@ -1311,7 +1476,7 @@ function beginFlight() {
     transition('playing');
     // Desktop visitors expect the mouse to take hold straight away. Touch and
     // keyboard-only visitors are unaffected: there is nothing to capture.
-    if (!state.isMobile && canvas && canvas.requestPointerLock) canvas.requestPointerLock();
+    takePointer();
     track('begin-flight');
 }
 
@@ -1331,12 +1496,37 @@ function animate() {
     const deltaTime = Math.min((now - state.lastTime) / 1000, 0.1);
     state.lastTime = now;
 
-    // THE WORLD KEEPS TURNING UNLESS THE GAME IS PAUSED. Behind the welcome
-    // overlay and behind the end screen the planets still rotate and the Moon
-    // still travels, so neither screen sits on a frozen photograph. The pause
-    // panel is the one place that genuinely stops, because that is what it is
-    // for.
-    if (gamePhase() !== 'paused') updateWorld(deltaTime);
+    // THE WORLD CLOCK ONLY RUNS FOR A RUN.
+    //
+    // IT USED TO RUN BEHIND THE WELCOME SCREEN TOO, so that the briefing would
+    // not sit on a frozen photograph, and that was a mistake measured rather
+    // than argued. The Moon laps in eight minutes, which is 0.75 degrees of
+    // orbit a second, and the whole reason it is where it is in the opening
+    // frame is that its phase and inclination were solved backwards from that
+    // frame: 10.8 degrees right of the nose and 7.0 above it, inside the
+    // narrowest portrait phone with room to spare. Measured against the spawn
+    // camera, it crosses that phone's 16.7 degree edge at about NINE SECONDS
+    // and is 54 degrees out by one minute. A visitor who reads the briefing
+    // before pressing the button was shown a different composition from the one
+    // the config went to that trouble to build, and the longer they read the
+    // worse it got.
+    //
+    // THE BRIEFING IS NOW COHERENTLY A HELD FRAME, which is the better story
+    // anyway. The fleet has always been frozen here, because `updateFleet` only
+    // runs while playing, so the old arrangement had raiders standing still on
+    // their way in while the Moon lapped past them. Nothing moves because the
+    // run has not started.
+    //
+    // ZERO RATHER THAN A SKIP, so every derived position is still refreshed on
+    // every frame: `sampleStructureMotion` handles a zero step by reseating each
+    // installation's aim and up and declining to divide by it, which is what
+    // keeps the nav markers and the targeting candidates correct behind the
+    // overlay instead of merely unmoving.
+    //
+    // The pause panel still skips entirely, and the end screen still turns: one
+    // is meant to stop, and the other has no composition left to protect.
+    const step = worldStep(gamePhase(), deltaTime);
+    if (step !== null) updateWorld(step);
 
     // OUTSIDE THE isPlaying BRANCH ON PURPOSE. The last life is lost on the
     // same frame the run ends, so a replay that only advanced while playing
@@ -1509,7 +1699,6 @@ function startOpening() {
     // buttons. Both belong to a visitor who is being asked to do something, and
     // during the shot there is nothing to do but watch it.
     if (blocker) blocker.classList.add('hidden');
-    if (endSkip) endSkip.classList.remove('hidden');
     return true;
 }
 
@@ -1517,33 +1706,39 @@ function startOpening() {
  *  happens instead of it when there is no shot to play. */
 function revealBriefing() {
     setFleetVisible(true);
-    if (endSkip) endSkip.classList.add('hidden');
     if (blocker) blocker.classList.remove('hidden');
-    // The round buttons DO belong to the briefing: settings, the way home, and
-    // pause are all things a visitor may want before they fly. The HUD and the
-    // touch controls are not, and `showPlayChrome` owns those.
-    document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
+    // The round buttons DO belong to the briefing: settings and the way home are
+    // both things a visitor may want before they fly. The HUD and the touch
+    // controls are not, and `showPlayChrome` owns those.
+    //
+    // PAUSE IS THE EXCEPTION AND IT IS EXCLUDED BY NAME. There is nothing to
+    // pause on a welcome screen, and `showPauseButton` owns it from here on.
+    document.querySelectorAll('.ui-float').forEach(el => {
+        if (el !== pauseBtn) el.classList.add('visible');
+    });
     // Land a keyboard visitor on the one control that matters right now, the
     // same way the end screen lands them on "Fly again". Without this the first
-    // Tab goes to the skip link and the way into the game is three stops
-    // further on.
+    // Tab goes to the skip link at the top of the page and the way into the
+    // game is three stops further on.
     const helm = document.getElementById('take-helm-btn');
     if (helm && typeof helm.focus === 'function') helm.focus();
 }
 
 /** Advance the opening shot, and put the briefing up when it is over.
  *
- *  THE REVEAL IS ALWAYS A FRAME LATE, ON PURPOSE, and it is the only subtle
- *  thing in this file's half of the feature. `skipIntro` stops the shot and
- *  this notices on the NEXT frame, so that a visitor who skips with Enter or
- *  Space cannot start the game with the same keystroke. The listener that turns
- *  Enter into "Take the helm" is on `document` too, and it fires in the same
- *  dispatch; what stops it is that it checks whether the welcome overlay is
- *  visible, and at that instant it is still hidden. Revealing the overlay
- *  inside the skip handler would hand a visitor who only wanted to READ the
- *  briefing a run already in progress. Deferring by a frame is the same shape
- *  of answer as `advanceEndScreen` holding the card back for a shot: the order
- *  screens appear in is the render loop's to own, not an event handler's. */
+ *  THE REVEAL IS A FRAME LATE, which is now a small nicety rather than the load
+ *  bearing thing it was. `updateIntro` stops the shot on its last frame and this
+ *  notices on the next one, so the frame that lands exactly on the spawn point
+ *  is drawn before anything is put over it.
+ *
+ *  IT USED TO BE LOAD BEARING because the shot was skippable: the Enter that
+ *  skipped it would otherwise have fallen through, in the same event dispatch,
+ *  to the listener that turns Enter into "Take the helm", and handed a visitor
+ *  who only wanted to READ the briefing a run already in progress. The skip is
+ *  gone, so that collision cannot happen, but the ordering is kept because it
+ *  was right for the other reason too: which screen appears when belongs to the
+ *  render loop, the same way `advanceEndScreen` owns the order at the other end
+ *  of a run. */
 function advanceIntro(deltaTime) {
     if (!_introPending) return;
     if (isIntroRunning()) { updateIntro(deltaTime); return; }
@@ -1551,22 +1746,20 @@ function advanceIntro(deltaTime) {
     revealBriefing();
 }
 
-/** Any key, any tap, exactly like the endings. A shot nobody can leave has
- *  stopped being a gift, and this one stands between a visitor and the button
- *  they came to press. */
-function skipIntro() {
-    if (!isIntroRunning()) return false;
-    endIntro();
-    track('skip-intro');
-    return true;
-}
-
 /** Which of the three endings this outcome gets, and whether it starts.
  *
- *  REDUCED MOTION IS THE ONE THING THAT SKIPS IT. A full-frame camera move with
- *  no way out is exactly what that preference is about, and the visitor loses
- *  nothing they were not going to be told: the card carries every number, and
- *  the live region carries the same sentence either way.
+ *  REDUCED MOTION IS THE ONE THING THAT SKIPS IT, and since the shot stopped
+ *  being leavable that is meant literally. A full-frame camera move with no way
+ *  out is exactly what that preference is about, and the visitor loses nothing
+ *  they were not going to be told: the card carries every number, and the live
+ *  region carries the same sentence either way.
+ *
+ *  IT USED TO BE LEAVABLE ON ANY KEY OR ANY TAP, which sounds like courtesy and
+ *  on a touch screen is not a control a visitor chooses so much as one they trip
+ *  over while waiting. Playtesting had people tapping straight through the shot
+ *  at the end of a run without ever deciding to, and losing the one moment the
+ *  whole run was built toward. Four seconds is not a toll worth protecting them
+ *  from at that price.
  *
  *  The "Reduced effects" checkbox deliberately does NOT skip it. That control
  *  is about frame rate, and everywhere else in this file it THINS rather than
@@ -1592,7 +1785,6 @@ function startEndingShot(outcome) {
     if (!seconds) return false;
     setFinaleWash(finaleWash());
     if (document.body) document.body.classList.add('replaying');
-    if (endSkip) endSkip.classList.remove('hidden');
     return true;
 }
 
@@ -1666,22 +1858,6 @@ function advanceFinale(deltaTime) {
     updateFinale(deltaTime);
     const wash = finaleWash();
     if (wash !== _finaleWash) setFinaleWash(wash);
-    if (!wash && endSkip && !endSkip.classList.contains('hidden')) {
-        endSkip.classList.add('hidden');
-    }
-}
-
-/** Cut an ending short. Any key, any tap: a shot nobody can leave is a shot
- *  that has stopped being a gift. The card is what comes next either way, so
- *  skipping costs the visitor no information at all. */
-function skipFinale() {
-    if (!isFinaleRunning()) return false;
-    endFinale();
-    setFinaleWash('');
-    if (endSkip) endSkip.classList.add('hidden');
-    if (document.body) document.body.classList.remove('replaying');
-    advanceEndScreen();
-    return true;
 }
 
 /** Count down the wreck, then put the ship back. Run off the frame clock rather
@@ -2036,12 +2212,14 @@ export const __test__ = {
     restartRun, killPlayer, respawnPlayer, advanceRespawn, advanceEndScreen,
     showStructureLost, clearReplays, readInsetRect, drawFrame, applyViewpoint,
     queueAftershocks, advanceAftershocks, aftershocks: _aftershocks,
-    startEndingShot, earthShot, wreckShot, advanceFinale, skipFinale,
+    startEndingShot, earthShot, wreckShot, advanceFinale,
     setFinaleWash, finaleWash: () => _finaleWash,
-    startOpening, revealBriefing, advanceIntro, skipIntro,
+    startOpening, revealBriefing, advanceIntro,
     introPending: () => _introPending,
-    openPause, closePause, beginFlight,
+    openPause, closePause, beginFlight, onPointerLockChange, takePointer,
+    showPauseButton,
     layOutSpeedometer, speedoPosition, updateSpeedometer, updateReadouts,
     forwardArmFraction, reverseArmFraction,
-    applyReducedFx, prefersReducedMotion, shouldDrawThisFrame, animate
+    applyReducedFx, prefersReducedMotion, shouldDrawThisFrame, animate,
+    worldStep
 };
