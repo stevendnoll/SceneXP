@@ -67,8 +67,12 @@ import {
 } from './cockpit.min.js';
 import {
     initFleet, updateFleet, resetFleet, getShips, fleetCandidates,
-    destroyShip, flashShield, getAlert, disposeFleet
+    destroyShip, flashShield, getAlert, setFleetVisible, disposeFleet
 } from './fleet.min.js';
+import {
+    initIntro, updateIntro, startIntro, endIntro, introEye,
+    isIntroRunning, setIntroReduced, disposeIntro
+} from './intro.min.js';
 import { initHud, updateHud, projectToScreen, getProjection, disposeHud } from './hud.min.js';
 import {
     initReplay, updateReplay, startShipReplay, startInsetReplay, shipReplayEye,
@@ -147,6 +151,12 @@ let _eventTimer = 0;
 // each life; the two timers are the wreck and the grace period after it.
 let _hullPoints = 0;
 let _respawnTimer = 0;
+// Whether the opening shot is still owed the visitor a welcome screen. True
+// from the moment the shot starts until the frame after it stops, however it
+// stopped. A flag rather than `isIntroRunning()` for the same reason
+// `_finaleOffered` is one: from outside, "has not started" and "has finished"
+// look identical, and only one of them means put the briefing up.
+let _introPending = false;
 // An end screen that is waiting for a destruction replay to finish, and the
 // rectangle the replay window is drawn into. Both null for almost the whole run.
 let _endScreenPending = null;
@@ -270,16 +280,11 @@ async function init() {
     setTimeout(() => {
         if (loadingScreen) loadingScreen.classList.add('hidden');
         state.isLoaded = true;
-        // The round buttons DO belong to the briefing: settings, the way home,
-        // and pause are all things a visitor may want before they fly. The HUD
-        // and the touch controls are not, and `showPlayChrome` owns those.
-        document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
-        // Land a keyboard visitor on the one control that matters right now,
-        // the same way the end screen lands them on "Fly again". Without this
-        // the first Tab goes to the skip link and the way into the game is
-        // three stops further on.
-        const helm = document.getElementById('take-helm-btn');
-        if (helm && typeof helm.focus === 'function') helm.focus();
+        // The opening shot, if it can run, and the briefing straight away if it
+        // cannot. `revealBriefing` is what the shot itself ends on, so there is
+        // one description of what "the welcome screen is up" means rather than
+        // two that could fall out of step.
+        if (!startOpening()) revealBriefing();
     }, 400);
 
     track('session-start', { device: state.isMobile ? 'touch' : 'desktop' });
@@ -414,6 +419,11 @@ function startCombat() {
     initHud(config);
     initReplay(config);
     initFinale(scene, config);
+    // AFTER `initFleet`, and that is an ordering rule rather than a preference:
+    // every hull in the opening squadron is built from the fleet's own shared
+    // geometry, so a raider has one definition rather than two that are free to
+    // drift apart. See the note in intro.js.
+    initIntro(scene, config);
     // A shell going off is a boom, which is what `playDestruction` already is.
     // Reinforcement and nothing else, like every other cue: it duplicates a
     // bloom that is on screen either way.
@@ -1098,6 +1108,9 @@ function applyReducedFx() {
     // The ending's flares, thinned rather than switched off. See
     // `startEndingShot` for why this checkbox does not skip the shot itself.
     setFinaleReduced(applied.reduced);
+    // The opening's squadron, thinned on exactly the same terms: five raiders
+    // forming up instead of nine, rather than no opening at all.
+    setIntroReduced(applied.reduced);
 
     const weapons = getWeaponsGroup();
     const children = (weapons && weapons.children) || [];
@@ -1246,6 +1259,18 @@ function setupEventListeners() {
     document.addEventListener('keydown', () => { skipFinale(); }, { signal });
     document.addEventListener('pointerdown', () => { skipFinale(); }, { signal });
 
+    // SKIPPING THE OPENING, on the same terms. The two can never both be
+    // running, since one plays before a run exists and the other only once one
+    // is over, so they are two listeners rather than one only because they are
+    // two separate shots with separate reasons to be leavable.
+    //
+    // THIS ONE DOES NOT REVEAL ANYTHING ITSELF. It stops the shot and lets
+    // `advanceIntro` put the briefing up on the next frame, which is what keeps
+    // the Enter that skips the opening from also being the Enter that takes the
+    // helm. See `advanceIntro`.
+    document.addEventListener('keydown', () => { skipIntro(); }, { signal });
+    document.addEventListener('pointerdown', () => { skipIntro(); }, { signal });
+
     // Pause: Esc on a keyboard, the pause button on a touch screen.
     const pauseBtn = document.getElementById('pause-btn');
     if (pauseBtn) pauseBtn.addEventListener('click', openPause, { signal });
@@ -1318,6 +1343,7 @@ function animate() {
     // would freeze on its first frame for the one death with the most riding
     // on it. `advanceEndScreen` is what holds the end panel back until the shot
     // has finished, and it has to run in the same place for the same reason.
+    advanceIntro(deltaTime);
     updateReplay(deltaTime);
     advanceFinale(deltaTime);
     advanceAftershocks(deltaTime);
@@ -1363,6 +1389,10 @@ function animate() {
  *  ending. The finale comes first, since it is the one that runs when there is
  *  no longer a ship to be flying. */
 function applyViewpoint(flight) {
+    // The opening shot outranks everything, and can only be running before a
+    // run has started, so it can never be in competition with the other two.
+    const opening = introEye();
+    if (opening) { applyReplayToCamera(opening); return; }
     const ending = finaleEye();
     if (ending) { applyReplayToCamera(ending); return; }
     const watching = shipReplayEye();
@@ -1383,8 +1413,10 @@ function applyViewpoint(flight) {
 function drawFrame() {
     // The canopy is dropped for the ending too, and for the same reason: the
     // camera is thousands of units outside a ship that is either a cloud of
-    // debris or no longer in the shot at all.
-    const watching = isShipReplayRunning() || isFinaleRunning();
+    // debris or no longer in the shot at all. The opening shot is the third
+    // case and the plainest one: the camera is at Mars, and the visitor has not
+    // been given a ship yet.
+    const watching = isIntroRunning() || isShipReplayRunning() || isFinaleRunning();
     renderSpace(scene, watching ? null : overlayScene);
 
     if (!isInsetRunning()) {
@@ -1446,6 +1478,87 @@ function advanceEndScreen() {
     _endScreenPending = null;
     if (document.body) document.body.classList.remove('replaying');
     showEndScreen(outcome);
+}
+
+// ---- The opening shot -----------------------------------------------------
+
+/** Play the opening shot, or say it could not.
+ *
+ *  ONCE PER PAGE LOAD, and it is `init` calling this exactly once that says so
+ *  rather than a flag. A restart returns to the briefing and does not come back
+ *  through here: the story has been told, and telling it again is a toll on the
+ *  one visitor who has already decided they like the game.
+ *
+ *  REDUCED MOTION SKIPS IT, for the same reason it skips the endings. A
+ *  full-frame camera move holding the page for five seconds is exactly what
+ *  that preference is about, and nothing is lost by going straight to the
+ *  welcome overlay: the overlay carries the objective either way, which is more
+ *  than the shot does.
+ *
+ *  THE REAL FLEET STANDS DOWN FOR THE DURATION. Its trailing four raiders start
+ *  200,000 units out, which is within a few thousand units of where this shot's
+ *  camera is standing, so leaving them up would put two separate sets of
+ *  Martian ships in the same frame. */
+function startOpening() {
+    if (prefersReducedMotion()) return false;
+    const mars = getBody('mars');
+    if (!mars || !startIntro(mars.position, EARTHDEFENSE_CONFIG)) return false;
+    setFleetVisible(false);
+    _introPending = true;
+    // The briefing is deliberately NOT up yet, and neither are the round
+    // buttons. Both belong to a visitor who is being asked to do something, and
+    // during the shot there is nothing to do but watch it.
+    if (blocker) blocker.classList.add('hidden');
+    if (endSkip) endSkip.classList.remove('hidden');
+    return true;
+}
+
+/** Put the welcome screen up. The end of the opening shot, and also what
+ *  happens instead of it when there is no shot to play. */
+function revealBriefing() {
+    setFleetVisible(true);
+    if (endSkip) endSkip.classList.add('hidden');
+    if (blocker) blocker.classList.remove('hidden');
+    // The round buttons DO belong to the briefing: settings, the way home, and
+    // pause are all things a visitor may want before they fly. The HUD and the
+    // touch controls are not, and `showPlayChrome` owns those.
+    document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
+    // Land a keyboard visitor on the one control that matters right now, the
+    // same way the end screen lands them on "Fly again". Without this the first
+    // Tab goes to the skip link and the way into the game is three stops
+    // further on.
+    const helm = document.getElementById('take-helm-btn');
+    if (helm && typeof helm.focus === 'function') helm.focus();
+}
+
+/** Advance the opening shot, and put the briefing up when it is over.
+ *
+ *  THE REVEAL IS ALWAYS A FRAME LATE, ON PURPOSE, and it is the only subtle
+ *  thing in this file's half of the feature. `skipIntro` stops the shot and
+ *  this notices on the NEXT frame, so that a visitor who skips with Enter or
+ *  Space cannot start the game with the same keystroke. The listener that turns
+ *  Enter into "Take the helm" is on `document` too, and it fires in the same
+ *  dispatch; what stops it is that it checks whether the welcome overlay is
+ *  visible, and at that instant it is still hidden. Revealing the overlay
+ *  inside the skip handler would hand a visitor who only wanted to READ the
+ *  briefing a run already in progress. Deferring by a frame is the same shape
+ *  of answer as `advanceEndScreen` holding the card back for a shot: the order
+ *  screens appear in is the render loop's to own, not an event handler's. */
+function advanceIntro(deltaTime) {
+    if (!_introPending) return;
+    if (isIntroRunning()) { updateIntro(deltaTime); return; }
+    _introPending = false;
+    revealBriefing();
+}
+
+/** Any key, any tap, exactly like the endings. A shot nobody can leave has
+ *  stopped being a gift, and this one stands between a visitor and the button
+ *  they came to press. */
+function skipIntro() {
+    if (!isIntroRunning()) return false;
+    endIntro();
+    track('skip-intro');
+    return true;
 }
 
 /** Which of the three endings this outcome gets, and whether it starts.
@@ -1841,6 +1954,11 @@ function cleanup() {
     if (renderer) renderer.setAnimationLoop(null);
     if (cleanupController) cleanupController.abort();
     disposeWeapons();
+    // BEFORE `disposeFleet`, because the opening squadron is drawing from the
+    // fleet's geometry. Nothing is freed on this side, but taking the group out
+    // of the scene first means there is never a frame in which meshes built on
+    // released buffers are still hanging in it.
+    disposeIntro(scene);
     disposeFleet();
     disposeCockpit();
     disposeHud();
@@ -1851,6 +1969,7 @@ function cleanup() {
     overlayScene = null;
     _endScreenPending = null;
     _finaleOffered = false;
+    _introPending = false;
     _lastWreck = null;
     _insetRect = null;
 }
@@ -1919,6 +2038,8 @@ export const __test__ = {
     queueAftershocks, advanceAftershocks, aftershocks: _aftershocks,
     startEndingShot, earthShot, wreckShot, advanceFinale, skipFinale,
     setFinaleWash, finaleWash: () => _finaleWash,
+    startOpening, revealBriefing, advanceIntro, skipIntro,
+    introPending: () => _introPending,
     openPause, closePause, beginFlight,
     layOutSpeedometer, speedoPosition, updateSpeedometer, updateReadouts,
     forwardArmFraction, reverseArmFraction,

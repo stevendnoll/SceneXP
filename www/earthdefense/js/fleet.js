@@ -475,6 +475,53 @@ function buildSharedParts() {
     };
 }
 
+/** One raider hull, for somebody who is not the fleet.
+ *
+ *  THIS EXISTS FOR THE OPENING SHOT AND FOR NOTHING ELSE. intro.js flies a
+ *  throwaway squadron at Mars before the welcome screen, and the alternative to
+ *  this function was a second definition of what a Martian raider looks like,
+ *  in another file, free to drift away from this one. A raider is a four sided
+ *  cone with a wing on it, and there should be exactly one place that says so.
+ *
+ *  IT SHARES THE GEOMETRY AND THE MATERIAL rather than making its own, which is
+ *  the whole saving: nine more hulls at Mars cost nine draw calls and no new
+ *  buffers. The cost of that is a lifetime rule, stated here because it is not
+ *  visible from the call site: a mesh from this function is only valid while
+ *  the fleet is, and a caller may remove and forget its own groups but must
+ *  never dispose `shared.hull`, `shared.wing`, or `shared.hullMaterial`.
+ *  `disposeFleet` owns all three.
+ *
+ *  No shield and no running light. Both belong to a ship that can be shot at,
+ *  and nothing in the opening can be. */
+export function createRaiderMesh(name = 'raider') {
+    if (!shared || typeof THREE === 'undefined' || !THREE.Group) return null;
+    const mesh = new THREE.Group();
+    mesh.name = name;
+    mesh.add(new THREE.Mesh(shared.hull, shared.hullMaterial));
+    const wing = new THREE.Mesh(shared.wing, shared.hullMaterial);
+    wing.position.z = -cfg.hullLength * 0.22;
+    mesh.add(wing);
+    return mesh;
+}
+
+/** Show or hide the whole standing fleet in one call.
+ *
+ *  Also for the opening shot. The twelve raiders are on their start line from
+ *  the moment the world is built, and the trailing four of them start 200,000
+ *  units out, which is exactly where the opening shot's camera is standing. Two
+ *  sets of Martian ships in one frame is not a composition, it is a bug that
+ *  looks like a composition, so the real fleet sits out the five seconds.
+ *
+ *  THE GROUP, NOT THE SHIPS. Per-ship visibility is `writeMeshes`'s to own (it
+ *  is how the LOD hide and death are expressed), and a flag set here would be
+ *  overwritten on the next frame the fleet updates. Hiding the parent leaves
+ *  every one of those decisions untouched underneath. */
+export function setFleetVisible(on) {
+    if (!group) return false;
+    group.visible = !!on;
+    return group.visible;
+}
+
 /** A raider's shield bubble, parented to the ship's own group.
  *
  *  PARENTED RATHER THAN POSITIONED, which is the whole reason this is three
@@ -1344,5 +1391,10 @@ export const __test__ = {
     // Read through functions rather than exported directly: dispose replaces
     // both, so a captured reference would go stale after a restart.
     allBeams: () => beams,
-    getLights: () => lights
+    getLights: () => lights,
+    // Whether the whole fleet is on screen. A read for `setFleetVisible`, which
+    // main.js turns off for the length of the opening shot: without this the
+    // only way to check it happened would be to call the setter, which would
+    // answer the question by changing the answer.
+    isVisible: () => !!(group && group.visible)
 };

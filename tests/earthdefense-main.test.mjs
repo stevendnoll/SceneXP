@@ -62,6 +62,26 @@ async function boot() {
     await flushAsync();
     await jest.advanceTimersByTimeAsync(8000);
     await jest.advanceTimersByTimeAsync(500);
+    // THE OPENING SHOT NOW STANDS BETWEEN LOADING AND THE WELCOME SCREEN, so
+    // this is where it is got out of the way. Everything below this helper is
+    // about the briefing or about a run, and every one of those tests wants the
+    // state the briefing is in; the shot has its own describe block, which boots
+    // through `bootIntoOpening` instead and drives it properly.
+    //
+    // Two steps, because that is genuinely how it ends: `skipIntro` stops the
+    // shot and `advanceIntro` puts the briefing up on the NEXT frame. See the
+    // comment on `advanceIntro` for why the reveal is deliberately a frame late.
+    main.__test__.skipIntro();
+    stepFrames(1);
+    return main;
+}
+
+/** Boot and stop, with the opening shot still playing. */
+async function bootIntoOpening() {
+    const main = await import('../www/earthdefense/js/main.js');
+    await flushAsync();
+    await jest.advanceTimersByTimeAsync(8000);
+    await jest.advanceTimersByTimeAsync(500);
     return main;
 }
 
@@ -1305,6 +1325,146 @@ describe('raiders soak shots, and say so when they do', () => {
 // measured in the finale suite, where the numbers are real; what matters here
 // is the wiring: that the right ending is chosen, that the card waits for it,
 // that any key or tap gets out of it, and that reduced motion never sees it.
+
+describe('how a run opens', () => {
+    const INTRO = async () => await import('../www/earthdefense/js/intro.min.js');
+
+    /** THE BRIEFING IS HELD BACK, which is the whole shape of this feature at
+     *  this level. The welcome overlay is what a visitor acts on, and it does
+     *  not arrive until the shot that explains it has finished. */
+    test('the welcome screen waits for the opening shot', async () => {
+        const main = await bootIntoOpening();
+        const intro = await INTRO();
+
+        expect(intro.isIntroRunning()).toBe(true);
+        expect(main.__test__.introPending()).toBe(true);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
+        expect(dom.el('end-skip').classList.contains('hidden')).toBe(false);
+        expect(main.getState().phase).toBe('briefing');
+    });
+
+    /** And it arrives on its own, off the frame clock, so a visitor who simply
+     *  watches is never stranded looking at a finished shot. */
+    test('the welcome screen arrives when the shot ends', async () => {
+        const main = await bootIntoOpening();
+        const config = await CONFIG();
+        const intro = await INTRO();
+
+        stepFrames(Math.ceil(config.intro.seconds / 0.016) + 4);
+
+        expect(intro.isIntroRunning()).toBe(false);
+        expect(main.__test__.introPending()).toBe(false);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
+        expect(main.getState().phase).toBe('briefing');
+    });
+
+    // THE REAL FLEET STANDING DOWN FOR THE DURATION is asserted in
+    // tests/earthdefense-intro.test.mjs rather than here. It has to be: this
+    // suite runs on the chainable THREE proxy, where `group.visible = false`
+    // goes into a set trap that stores nothing and reads back truthy, so the
+    // assertion would pass or fail for reasons that have nothing to do with
+    // the code. The intro suite installs recording stubs and can see it.
+
+    /** ANY KEY, ANY TAP, exactly like the endings. A shot nobody can leave has
+     *  stopped being a gift, and this one stands between a visitor and the
+     *  button they came to press. */
+    test('any key skips it', async () => {
+        const main = await bootIntoOpening();
+        const intro = await INTRO();
+
+        fire(dom.documentStub, 'keydown', { code: 'KeyQ' });
+        expect(intro.isIntroRunning()).toBe(false);
+
+        stepFrames(1);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        expect(main.getState().phase).toBe('briefing');
+    });
+
+    test('any tap skips it', async () => {
+        await bootIntoOpening();
+        const intro = await INTRO();
+
+        fire(dom.documentStub, 'pointerdown', {});
+        expect(intro.isIntroRunning()).toBe(false);
+
+        stepFrames(1);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+    });
+
+    /** THE KEY THAT SKIPS IS NOT ALSO THE KEY THAT STARTS THE GAME, and this is
+     *  the reason the briefing is revealed a frame late rather than inside the
+     *  skip handler. A visitor pressing Enter to get past the cinematic means
+     *  "show me the briefing", not "I have read it, launch". Revealing the
+     *  overlay synchronously would let the same keydown fall through to the
+     *  listener that takes the helm, and hand them a run already in progress. */
+    test('the Enter that skips the shot does not also take the helm', async () => {
+        const main = await bootIntoOpening();
+
+        fire(dom.documentStub, 'keydown', { code: 'Enter' });
+        stepFrames(1);
+
+        expect(main.getState().phase).toBe('briefing');
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+
+        // And the NEXT Enter does take the helm, so nothing has been broken.
+        fire(dom.documentStub, 'keydown', { code: 'Enter' });
+        expect(main.getState().phase).toBe('playing');
+    });
+
+    test('skipping when nothing is playing does nothing at all', async () => {
+        const main = await boot();
+        expect(main.__test__.skipIntro()).toBe(false);
+        expect(main.getState().phase).toBe('briefing');
+    });
+
+    /** REDUCED MOTION SKIPS IT ENTIRELY, the same preference and the same
+     *  reasoning as the endings: a full-frame camera move holding the page is
+     *  exactly what it is about. The visitor loses nothing, since the welcome
+     *  overlay carries the objective either way. */
+    test('reduced motion goes straight to the welcome screen', async () => {
+        globalThis.window.matchMedia = () => ({
+            matches: true, addEventListener() { }, removeEventListener() { }
+        });
+        const main = await bootIntoOpening();
+        const intro = await INTRO();
+
+        expect(intro.isIntroRunning()).toBe(false);
+        expect(main.__test__.introPending()).toBe(false);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        expect(dom.el('end-skip').classList.contains('hidden')).toBe(true);
+    });
+
+    /** ONCE PER PAGE LOAD. A restart returns to the briefing and must not play
+     *  it again: the story has been told, and a second telling is a toll on the
+     *  one visitor who has already decided they like the game. */
+    test('a restart does not replay it', async () => {
+        const main = await boot();
+        const intro = await INTRO();
+        enterWorld();
+
+        main.__test__.restartRun();
+        stepFrames(2);
+
+        expect(intro.isIntroRunning()).toBe(false);
+        expect(main.__test__.introPending()).toBe(false);
+        expect(main.getState().phase).toBe('playing');
+    });
+
+    // The round buttons also wait for the briefing, and that is NOT asserted
+    // here either: they are revealed through `querySelectorAll('.ui-float')`,
+    // which the DOM stub answers with an empty list, so there is nothing for a
+    // test at this level to observe. It was untestable before this change too.
+
+    /** The HUD and the thumb controls are held back through the whole thing,
+     *  for the same reason they are held back through the briefing: nothing you
+     *  fly with belongs on screen before there is anything to fly. */
+    test('nothing you fly with is on screen during it', async () => {
+        await bootIntoOpening();
+        expect(dom.el('hud').classList.contains('visible')).toBe(false);
+        expect(dom.el('touch-controls').classList.contains('visible')).toBe(false);
+    });
+});
 
 describe('how a run ends', () => {
     const FINALE = async () => await import('../www/earthdefense/js/finale.min.js');

@@ -990,6 +990,193 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         ]
     },
 
+    // ---- How a run opens (intro.js) ---------------------------------------
+    //
+    // THE OPENING FRAME USED TO ARRIVE WITHOUT ITS FIRST HALF. A visitor landed
+    // on the welcome overlay already sitting 8,500 units over Earth, with a line
+    // of hostile lights trailing away toward a small red disc, and nothing on
+    // the page had told them what that line was. This is the missing story: the
+    // same fleet, at Mars, closing up into formation, and then the camera runs
+    // the approach line back to Earth ahead of them.
+    //
+    // IT ARRIVES, IT DOES NOT CUT. The last frame of this shot IS the spawn
+    // frame. The path ends at `spawnPosition(config)` looking 1,000 units down
+    // -Z, which is `placeCameraAtSpawn` word for word, so the welcome overlay
+    // comes up over a view that is already the one the visitor is about to fly
+    // from. That is the same trick the wreck ending plays at the other end of a
+    // run, and it works here for the same reason.
+    //
+    // THE CAMERA NEVER TURNS AROUND, and the geometry below is arranged so that
+    // it does not have to. This was the one real design trap in the shot, and
+    // the first draft fell in it: the obvious staging is to stand between Mars
+    // and Earth looking back at Mars, which then needs a 180 degree whip to run
+    // at Earth, thrown at a visitor who has been on the page for four hundred
+    // milliseconds. But the spawn camera LOOKS AT MARS. So the shot starts
+    // close to Mars, on the Earth side, already looking at it, and then simply
+    // retreats. One long pull-back with 15 degrees of settle in it. Mars shrinks
+    // from a 28 degree disc to the 1.9 degree one the spawn frame has always
+    // had, the formation shrinks with it into the line of lights the spawn frame
+    // has always shown, and Earth's limb rises into the bottom of the frame on
+    // the last beat. The opening frame is not cut to, it is assembled.
+    //
+    // THE PATH IS CHECKED AGAINST THE PLANETS IN TESTS, not by eye. It only ever
+    // moves away from Mars, it passes about 905 units above Earth's surface as
+    // it settles over the pole, and it clears the Moon by about 13,900.
+    // `tests/earthdefense-intro.test.mjs` samples the whole path against all
+    // three bodies and fails if `clearance` is broken, because a plausible
+    // looking retune of any number in this block could quietly put the camera
+    // inside a planet.
+    //
+    // NO STARS STREAK, written down so nobody goes looking for the bug.
+    // `space-1.0.0` parents the starfield to the camera every frame, on purpose,
+    // so the sky is at infinity for a scene 200,000 units across. The pull-back
+    // therefore reads entirely through Mars receding and Earth arriving, which
+    // is honest at this scale: real stars would not streak here either.
+    // Detaching the field would buy streaks and cost a visible snap when the
+    // normal loop re-centres it on arrival.
+    //
+    // IT IS SILENT, and that is the browser's ruling rather than ours. This
+    // plays before the visitor has clicked anything, so there is no gesture and
+    // `initAudio` has deliberately not built a context yet.
+    intro: {
+        // Once per page load. A restart returns to the briefing and does NOT
+        // replay this: the story has been told, and a second telling is a toll.
+        seconds: 5.2,
+        // How the 5.2 divides, and they partition it exactly. The form-up owns
+        // the larger share and the pull-back gets the rest.
+        //
+        // THIS IS THE FIRST NUMBER TO TUNE. Steve chose five seconds against a
+        // timeline that had been drawn for eight, so the form-up is the beat
+        // that paid for the difference. If the squadron looks like it is
+        // hurrying, this is why, and `seconds` and `formSeconds` move together.
+        formSeconds: 3.1,
+        runSeconds: 2.1,
+        // The turn leads the move, so the camera is already facing where it is
+        // going rather than being dragged round after it has set off.
+        lookLead: 0.35,
+
+        // ---- The camera -----------------------------------------------------
+        //
+        // Distance from Mars's centre at the opening. Mars's angular RADIUS here
+        // is asin(3390 / 14000) = 14.0 degrees against a 35 degree half frame,
+        // so the disc covers about 40 percent of the frame height. Against the
+        // 1.9 degrees it has in the spawn frame, that is unmistakably a
+        // close-up, and it leaves the edges free for the formation to sit in.
+        //
+        // IT IS ALSO A CLEARANCE BUDGET, which is the less obvious half. The
+        // squadron hangs on the same line at `range`, and its deepest ship
+        // starts a further `slot.depth * 4 + scatter.depth` back toward the
+        // planet. Measured, the nearest any raider comes to Mars's surface over
+        // the whole form-up is 2,548. Shortening this without shortening those
+        // parks raiders inside the planet.
+        marsDistance: 14000,
+        // WHICH WAY ROUND MARS THE CAMERA STANDS, and this is not a taste
+        // decision, it is THE composition. It is the fleet's own approach
+        // heading: -sin(fleet.approach.azimuth) on X, +1 on Z, which is the line
+        // the raiders are flying along. The camera therefore stands ahead of the
+        // squadron and watches it come, and the wedge is seen close to along its
+        // own axis.
+        //
+        // THE FIRST DRAFT STOOD 32 DEGREES OFF THIS LINE and the wedge did not
+        // survive it. A formation has depth (four ranks of `slot.depth`, plus up
+        // to `scatter.depth` of it before the ships close up), and depth seen
+        // from off-axis projects sideways across the frame. Measured at 32
+        // degrees off, the finished V was a sheared diagonal smeared over 20
+        // degrees of frame with its two columns bunched at opposite ends,
+        // nothing like the shape it is laid out as. On the line it comes back:
+        // the pairs land symmetrically either side of the leader, and the whole
+        // squadron sits inside 15.4 degrees.
+        //
+        // FLATTENED INTO THE EQUATORIAL PLANE, hence the zero on Y. `orbitEye`
+        // takes `side` and the orbit axis to be perpendicular, and the fleet's
+        // heading has a small downward tilt on it, so passing the raw heading
+        // here left the vector 1 percent short and quietly made `marsDistance`
+        // mean 13,851. The 2.9 degrees of tilt given up is swamped by the
+        // elevation below. Same flattening the finale does, for the same reason.
+        //
+        // IT HAS TO TRACK `fleet.approach`. The intro suite asserts they agree,
+        // so retuning the approach fails loudly here rather than silently
+        // shearing the wedge again.
+        marsSide: [-0.06, 0, 1],
+        // Above the plane, so the shot looks DOWN on the formation rather than
+        // meeting it edge on: at 0.26 the camera sits 15 degrees off the fleet's
+        // flight axis, which is enough to open the V out and to put the disc
+        // under it, and little enough to keep the wedge symmetrical. This and
+        // `marsSide` are the same decision measured on two axes.
+        marsElevation: 0.26,
+        // How far the camera drifts around Mars over the shot. SMALL, and it was
+        // not always: at 0.26 the drift pushed the finished formation 28 degrees
+        // off the view axis, because the camera orbits away from the line the
+        // squadron is anchored on while still looking at Mars, and the nearer
+        // thing leaves the frame first. A held shot with a little life in it is
+        // all this was ever worth.
+        swing: 0.06,
+        // How close the path may come to any body's SURFACE, in units. The
+        // assertion, not the result. Measured: Earth 905, Mars 10,610, Moon
+        // 13,969.
+        clearance: 600,
+
+        // ---- The squadron ---------------------------------------------------
+        //
+        // NOT THE REAL FLEET, and this is the one thing in this block worth
+        // being careful with. The twelve raiders are already built and already
+        // standing on their start line, and those positions are load bearing:
+        // arrival times are read straight off them and the init suite asserts
+        // the opening frame against them. Flying them to Mars and putting them
+        // back with `resetFleet` would mean a visible snap on the exact frame
+        // the camera is watching them on. So the intro owns nine throwaway
+        // hulls, built through `createRaiderMesh` from fleet.js's own shared
+        // geometry so a raider keeps one definition, and the real fleet is
+        // simply hidden for five seconds. At arrival the throwaways are 190,000
+        // units behind the camera and smaller than a pixel, so disposing them
+        // is invisible.
+        ships: 9,
+        reducedShips: 5,
+        // How far ahead of the camera the formation forms up. The drift closes
+        // the leader to about 3,700 by the end of the form-up, where a 220 unit
+        // hull is roughly 44 pixels on a 900 pixel frame: a ship rather than a
+        // mote. The deepest scattered raider opens at 8,300 and 19 pixels, which
+        // still reads as a shape rather than a dot.
+        range: 4600,
+        // The wedge, in the formation's own axes. Ship zero is the apex and
+        // every ship after it is one of a pair, so nine ships is a leader and
+        // four ranks.
+        //
+        // THE WHOLE SQUADRON IS SET BY A PORTRAIT PHONE, like the Moon's orbit
+        // phase above it. Three.js field of view is vertical, so a 9:21 phone
+        // sees only about 16.7 degrees either side of the nose, and the measured
+        // worst case across the entire form-up is 15.4. That is the budget the
+        // three numbers below and `marsSide` are all spending, and there is not
+        // much of it left: widening the wedge, scattering it further sideways or
+        // taking the camera off the flight line all push raiders off the edge of
+        // a phone. The intro suite asserts the 16.7.
+        slot: { lateral: 230, depth: 320, vertical: 85 },
+        // Where each ship starts before it closes up, in the same axes.
+        //
+        // WEIGHTED HEAVILY INTO DEPTH, and `depth` is always applied BEHIND the
+        // formation. Ships strung out along the line of flight converging
+        // forward is what reads as forming up; a ship that started in front
+        // would have to reverse into its slot. Depth is also the cheap axis
+        // here: the camera stands on that line, so a ship scattered along it
+        // moves toward the middle of the frame rather than toward its edge,
+        // which is why this can be 3,000 while `lateral` is 380.
+        // Deterministic, from `hashUnit`, exactly like the real fleet's scatter.
+        scatter: { lateral: 380, vertical: 520, depth: 3000 },
+        // How far off its final heading a ship starts pointing, 0 to 1. Enough
+        // that the noses visibly come round, short of ships flying backwards.
+        headingScatter: 0.9,
+        // The fraction of the form-up any one ship spends moving; the rest is
+        // its stagger. Nine ships easing over the same three seconds reads as a
+        // swarm settling. Nine arriving in sequence reads as a formation being
+        // made, and the last one lands exactly as the form-up ends.
+        shipTravel: 0.55,
+        // The formation is under way for the whole shot, so it never settles
+        // into a photograph. 320 units a second closes about 1,000 of the 4,600
+        // over the form-up, which is a quarter again in apparent size: plainly
+        // an approach, and nowhere near swallowing the frame.
+        driftSpeed: 320
+    },
+
     // ---- How a run ends (finale.js) ---------------------------------------
     //
     // THE CARD IS NOT THE ENDING, it is the receipt. A run that has been flown
