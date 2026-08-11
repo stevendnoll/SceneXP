@@ -22,3 +22,6 @@ www/interstate/assets/og-interstate.webp
 www/interstate/assets/og-interstate.jpg
 www/seedtoseed/assets/og-seedtoseed.webp
 www/seedtoseed/assets/og-seedtoseed.jpg
+
+# Omit from sitemap.xml, llms.txt, and the scene directory.
+www/sunnyvalejenn
