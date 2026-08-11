@@ -94,6 +94,19 @@
             place: 'Deep space',
             url: 'mandelbrot/',
             tags: ['mandelbrot', 'fractal', 'math', 'mathematics', 'zoom', 'infinite', 'space', 'stars', 'spiral', 'science', 'geometry', 'dive']
+        },
+        {
+            slug: 'earthdefense',
+            title: 'Earth Defense',
+            // THE ONE ENTRY WHERE THIS FIELD IS NOT AN HONOREE. Every other
+            // experience honors a person or a business; this one is a game and
+            // deliberately has nobody. The field still earns its keep, since it
+            // is both the card's eyebrow line and part of the search haystack.
+            honoree: 'Built for the joy of flying through space',
+            blurb: 'Fly a single ship in orbit above a massive Earth while twelve Martian raiders close on the installations below. There is no fire button to learn: line a raider up in the middle of your view and your guns take care of the rest.',
+            place: 'Earth orbit',
+            url: 'earthdefense/',
+            tags: ['earth', 'defense', 'space', 'game', 'moon', 'mars', 'martian', 'orbit', 'flying', 'ship', 'raiders', 'arcade', 'action', 'shooter', 'stars', 'planets', 'defend', 'fly']
         }
     ];
 

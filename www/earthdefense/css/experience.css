@@ -1,0 +1,1442 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+/*
+ * experience.css - Earth Defense specifics, loaded after the shared stylesheet.
+ *
+ * The shared chrome (loading screen, welcome overlay, crosshair, floating
+ * buttons, panels, modals) is already themed by data-ui-theme="ember" on
+ * <html>, so this file only carries what a game in orbit needs on top of it,
+ * and reads the same --ui-* tokens so everything stays in step.
+ *
+ * PORTRAIT IS THE PRIMARY FRAME (PRD G5, 4.1.1). Every size below is chosen
+ * against a phone held upright first and given room in landscape, not the
+ * other way round.
+ *
+ * Shipped: the deep-space backdrop, the two-state reticle, the target lock
+ * bracket, the touch throttle, the throttle readout, the perimeter notice, and
+ * the M5 HUD (objective counters, elapsed time, alert banner, hostile pips, nav
+ * markers, and edge chevrons). Still to come: lives pips at M6 and the final
+ * canopy pass at M7.
+ */
+
+/* Deep space rather than the shared near-black, so the loading screen does not
+   flash a lighter grey at the hand-off into the scene. The loading screen is
+   the only one of the two that should be OPAQUE: there is nothing behind it
+   yet. */
+#loading-screen {
+    background: radial-gradient(ellipse at 50% 78%, #0d1524 0%, #04060d 55%, #000005 100%);
+}
+
+/* THE WELCOME OVERLAY IS A SCRIM, NOT A WALL.
+   It used to share the opaque gradient above, which hid the opening frame
+   completely: the first thing a visitor saw was the dedication on black, and
+   the composition M1 spent a whole gate solving (Earth's limb across the lower
+   third, Mars near the nose, the Moon off to one side) was not visible until
+   they had already decided to click. The scene is the invitation, so it has to
+   be part of the invitation.
+
+   THE ALPHA IS A CONTRAST BUDGET, not a taste call. The brightest thing this
+   scene can put behind the copy is a sunlit cloud top on the Earth map (about
+   #d8dde6, the same worst case the M8 contrast pass measured against). The
+   tightest element over it is the dedication in --ui-subtitle (#f2c496), which
+   clamps down to 16px on a narrow phone and so needs the 4.5:1 normal-text
+   threshold rather than the 3:1 large-text one. Composited over that cloud:
+
+     alpha   subtitle   hint rows (--text-dim)
+     0.85     9.0:1        9.6:1     (the shared default, barely reveals)
+     0.72     6.3:1        6.8:1     <- here
+     0.65     4.9:1        5.3:1     (last value that still clears 4.5)
+     0.60     4.2:1        4.5:1     (fails)
+
+   0.72 keeps better than 6:1 on every piece of copy while passing through more
+   than a quarter of the frame, which is roughly double what the shared value
+   showed. The floor is 0.65 and a screenshot pass may want to walk toward it,
+   but going under that trades the dedication's legibility for scenery.
+
+   The hint pills are opaque --ui-accent on --ui-on-accent, so they carry their
+   own contrast and are not part of this budget. */
+#blocker {
+    background: rgba(4, 6, 13, 0.72);
+}
+
+/* ============================================================
+   The reticle
+   ============================================================
+   The reticle IS the weapon. There is no fire button, so the ship shoots
+   whatever sits inside this, which makes it the single most important element
+   on the screen and the one thing that has to read instantly on a phone held
+   at arm's length.
+
+   ITS TWO STATES DIFFER IN SHAPE, NOT ONLY IN COLOUR. Idle is an open ring
+   with four ticks standing off it. Locked closes into a solid diamond with
+   four corner brackets drawn in. Someone who cannot separate the two hues
+   still sees an outline change from round-and-open to angular-and-closed, and
+   the same silhouette survives a bright Earth filling the frame behind it.
+   No information in this experience is carried by colour alone.
+
+   The transition is a short fade rather than a snap, but it is deliberately
+   under a tenth of a second: the whole point is that the lock reads as
+   INSTANT, so the animation is there to soften an edge, not to take time. */
+
+#reticle {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 64px;
+    height: 64px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 4;
+}
+
+#reticle svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    fill: none;
+    /* A dark outline under every stroke, so the reticle stays legible against
+       a sunlit Earth as well as against empty space. */
+    filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.85));
+}
+
+#reticle .reticle-ring,
+#reticle .reticle-ticks {
+    stroke: rgba(var(--ui-accent-rgb), 0.9);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: opacity 0.08s ease-out;
+}
+
+#reticle .reticle-dot {
+    fill: rgba(var(--ui-accent-rgb), 0.9);
+}
+
+/* The locked half of the pair, hidden until there is something to shoot. */
+#reticle .reticle-diamond,
+#reticle .reticle-corners {
+    stroke: #ffc27a;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0;
+    transition: opacity 0.08s ease-out;
+}
+
+#reticle .reticle-diamond {
+    fill: rgba(255, 154, 92, 0.16);
+}
+
+#reticle.locked .reticle-ring,
+#reticle.locked .reticle-ticks {
+    opacity: 0;
+}
+
+#reticle.locked .reticle-diamond,
+#reticle.locked .reticle-corners {
+    opacity: 1;
+}
+
+#reticle.locked .reticle-dot {
+    fill: #ffd9a0;
+}
+
+/* The bracket sits on the TARGET, not at the centre, so with more than one
+   candidate inside the cone it is unambiguous which one the guns picked. Its
+   position comes from camera.project() every frame, written to the transform
+   in main.js. */
+.lock-bracket {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 54px;
+    height: 54px;
+    pointer-events: none;
+    z-index: 4;
+}
+
+.lock-bracket svg {
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: #ffc27a;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.85));
+}
+
+.lock-bracket.hidden {
+    display: none;
+}
+
+/* Phones are held closer than a monitor, but the reticle is the one element
+   that must not shrink with the screen: it is what the visitor aims with. Held
+   at full size and given a touch more contrast instead. */
+@media (max-width: 600px) {
+    #reticle {
+        width: 60px;
+        height: 60px;
+    }
+}
+
+/* A game canvas should never show a text cursor or a selection highlight. */
+#game-canvas {
+    cursor: crosshair;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+/* The welcome overlay's kicker carries the dedication, which is longer than a
+   usual subtitle, so give it room to breathe on a narrow phone. */
+#instructions .subtitle {
+    max-width: 30ch;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.45;
+}
+
+/* The helm button wears the shared .click-prompt type exactly as the paragraph
+   it replaced did, so the opening frame is unchanged: this only undoes the
+   button element's own chrome. Its focus ring is below, with the round
+   buttons'. */
+#instructions button.click-prompt {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0.25rem 0.75rem;
+    background: none;
+    border: 0;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 1.25rem;
+    letter-spacing: inherit;
+    cursor: pointer;
+}
+
+/* Two hint rows sharing one grid, so the labels line up in a column and the
+   sentences all start at the same place. Two independently centred rows put
+   the pills at different widths and the sentences at different offsets, which
+   reads as carelessness on the first screen a visitor ever sees. */
+.welcome-hints {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.4rem 0.75rem;
+    align-items: baseline;
+    width: max-content;
+    max-width: min(90vw, 40rem);
+    margin: 0.6rem auto 0;
+    text-align: left;
+}
+
+.welcome-hints .controls-hint {
+    display: contents;
+}
+
+.welcome-hints .controls-hint span {
+    margin: 0;
+    justify-self: stretch;
+    text-align: center;
+}
+
+/* On a narrow phone the pair stacks instead of squeezing the sentence into a
+   two-word column. */
+@media (max-width: 560px) {
+    .welcome-hints {
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+        text-align: center;
+    }
+
+    .welcome-hints .controls-hint span {
+        justify-self: center;
+    }
+}
+
+/* Announced-only text: present for a screen reader, absent for everyone else. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ============================================================
+   The touch throttle
+   ============================================================
+   A vertical track rather than a stick, because it KEEPS ITS POSITION when the
+   thumb lifts. That is the whole reason it is not a joystick: a crossing takes
+   long enough that holding a thumb against the glass the entire way would be
+   unpleasant.
+
+   It sits in the same lower-left corner the shared movement joystick uses, at
+   the same distance from the edges, so muscle memory from the other
+   experiences carries over. */
+
+#throttle-zone {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 180px;
+    height: 240px;
+    pointer-events: auto;
+    z-index: 3;
+    touch-action: none;
+}
+
+.throttle-track {
+    position: absolute;
+    bottom: 40px;
+    left: 30px;
+    width: 58px;
+    height: 170px;
+    border-radius: 29px;
+    background: rgba(var(--ui-joystick-rgb), 0.18);
+    border: 2px solid rgba(var(--ui-joystick-rgb), 0.6);
+    /* Dark outer ring, so the control stays readable against a bright Earth. */
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.28);
+    pointer-events: none;
+}
+
+/* Grows out of the centre detent: up for ahead, down for astern. Readable at a
+   glance without looking away from the reticle, which matters because from M4
+   the reticle is where the shooting happens. */
+.throttle-fill {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    bottom: 50%;
+    height: 0;
+    border-radius: 25px;
+    background: rgba(var(--ui-joystick-rgb), 0.5);
+    transition: height 0.06s ease-out, bottom 0.06s ease-out;
+}
+
+/* The neutral mark. Without it, "where is zero" is guesswork, and zero is the
+   one throttle position a visitor needs to find in a hurry. */
+.throttle-detent {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 50%;
+    height: 2px;
+    transform: translateY(1px);
+    background: rgba(255, 255, 255, 0.65);
+    border-radius: 1px;
+}
+
+.throttle-thumb {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 46px;
+    height: 46px;
+    margin-left: -23px;
+    margin-bottom: -23px;
+    border-radius: 50%;
+    background: rgba(var(--ui-joystick-rgb), 0.8);
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    transition: bottom 0.06s ease-out;
+}
+
+.throttle-label {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.throttle-label-up {
+    top: 6px;
+}
+
+.throttle-label-down {
+    bottom: 6px;
+}
+
+.is-touch-device #throttle-zone {
+    pointer-events: auto;
+}
+
+@supports (padding: max(0px)) {
+    .is-touch-device #throttle-zone {
+        width: calc(180px + env(safe-area-inset-left));
+        height: calc(240px + env(safe-area-inset-bottom));
+    }
+
+    .is-touch-device .throttle-track {
+        bottom: max(40px, calc(40px + env(safe-area-inset-bottom)));
+        left: max(30px, calc(30px + env(safe-area-inset-left)));
+    }
+}
+
+/* Short phones in landscape have very little vertical room, so shrink the
+   track rather than letting it run off the top of the screen. */
+@media (max-height: 480px) {
+    .throttle-track {
+        height: 120px;
+        bottom: 24px;
+    }
+
+    #throttle-zone {
+        height: 170px;
+    }
+}
+
+/* Wide screens (VR headset 2D browser panels): match the shared stylesheet,
+   which pulls the joysticks in toward the centre. */
+@media (min-width: 1500px) {
+    #throttle-zone {
+        left: calc(50% - 350px);
+    }
+}
+
+/* ============================================================
+   Readouts
+   ============================================================ */
+
+/* THE SPEEDOMETER.
+
+   ZERO SITS AT 20%, NOT IN THE MIDDLE. Forward tops out at 4,000 and reverse
+   at 1,000 (a quarter, deliberately, so reverse never becomes the answer to
+   everything). A centred zero would draw full astern and full ahead as the
+   same length, which is a picture of a ship this is not. Anchoring zero at
+   maxReverse / (maxReverse + maxForward) makes one km/s the same number of
+   pixels in both directions, so the short reverse stub IS the information.
+
+   THE RAMP STOPS AT AMBER RATHER THAN RED. Cool to hot is the whole point of a
+   coloured speedometer, but red is already spoken for in this experience: it
+   is the raider pips, the incoming beams, the "under attack" banner, and the
+   hull-damage wash. Full throttle is a normal and desirable thing to be doing,
+   and drawing it in the alarm colour would say otherwise. Amber reads as lit
+   up and fast without ever reading as a warning.
+
+   COLOUR IS NEVER THE ONLY CARRIER. The magnitude is already in the length of
+   the bar, the direction is already in which side of the zero tick it grows
+   from, and the exact value is in the number beside it and in the live region.
+   Anyone who cannot separate these hues loses nothing at all.
+
+   On a desktop this lands on the canopy dash, which is dark and opaque, and
+   the plate costs nothing there: it is within a couple of values of the dash
+   it sits on. On a phone it floats above the throttle track with open scene
+   behind it, which is the case the plate is actually for (7.6:1 against
+   anything, against 1.14:1 unbacked over sunlit cloud). */
+
+.speedometer {
+    /* Both of these are OVERWRITTEN FROM config.flight at init, so the meter's
+       geometry follows maxReverse and maxForward instead of being a second
+       place those numbers are written down. The values here are the ones the
+       shipped config produces (1,000 and 4,000), so the bar is still correct if
+       the script never runs.
+
+       --speedo-zero  where zero sits: maxReverse / (maxReverse + maxForward)
+       --speedo-rev-scale  how much of the ramp the reverse arm covers, as the
+                           width the gradient is drawn at: maxForward /
+                           maxReverse, so full astern lands at the right hue */
+    --speedo-zero: 20%;
+    --speedo-rev-scale: 400%;
+    /* One ramp, written once, used by both arms. */
+    --speedo-ramp:
+        #3d8bfd 0%,
+        #21c7d6 20%,
+        #36cc7c 45%,
+        #e6c341 72%,
+        #ff9a3c 100%;
+
+    position: fixed;
+    left: 22px;
+    bottom: 224px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 5px 9px;
+    border-radius: 8px;
+    background: rgba(6, 10, 18, 0.62);
+    pointer-events: none;
+}
+
+/* On a desktop there is no throttle track under it, so it sits at the corner. */
+body:not(.is-touch-device) .speedometer {
+    bottom: 24px;
+}
+
+@media (max-height: 480px) {
+    .speedometer {
+        bottom: 152px;
+    }
+}
+
+.speedo-track {
+    position: relative;
+    width: 200px;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.10);
+}
+
+/* Each arm is a FIXED-SIZE element carrying the whole ramp, revealed by
+   clip-path. Animating the width instead would stretch the gradient with it,
+   so the hue at the tip would depend on how long the bar happened to be rather
+   than on how fast the ship is going, which is the one thing it must mean. */
+.speedo-arm {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+}
+
+/* Forward: zero at the left edge, maximum at the right. Stops are placed at
+   the fraction of top speed they stand for, so the hue at any point is a
+   direct read of the number under it. */
+.speedo-arm-fwd {
+    left: var(--speedo-zero);
+    right: 0;
+    background: linear-gradient(to right, var(--speedo-ramp));
+    clip-path: inset(0 100% 0 0);
+}
+
+/* Reverse: THE SAME RAMP, drawn four times as wide as this arm and anchored to
+   the zero end, so the arm shows only its first quarter. That is not a trick to
+   save a gradient, it is what makes the colour honest: 1,000 km/s astern is
+   1,000 km/s, so it has to land on the same hue 1,000 km/s ahead lands on, and
+   full astern comes out in the greens rather than at the top of the scale. The
+   arm never changes size (clip-path does the reveal), so the oversized
+   background stays anchored. */
+.speedo-arm-rev {
+    left: 0;
+    width: var(--speedo-zero);
+    background: linear-gradient(to left, var(--speedo-ramp));
+    background-size: var(--speedo-rev-scale) 100%;
+    background-position: right center;
+    background-repeat: no-repeat;
+    clip-path: inset(0 0 0 100%);
+}
+
+/* THE GROUND STILL TO BE COVERED. The same ramp at low alpha, spanning from
+   where the ship is to where the throttle is asking for.
+
+   THIS EXISTS BECAUSE THE FIRST VERSION READ AS A BUG. Acceleration is linear
+   at 667 km/s per second, so a throttle pushed to 2,400 leaves the bar climbing
+   for a few seconds behind a marker that arrived at once. That is the ship
+   being heavy, and it is worth showing. What it LOOKED like was a coloured stub
+   failing to keep up with a white line, because the marker was the loudest
+   thing in the widget and the eye therefore took it for the needle and the bar
+   for a laggy fill of it. Filling the gap turns two objects into one: solid
+   where the ship is, ghosted where it is going. */
+.speedo-ghost {
+    opacity: 0.3;
+    clip-path: inset(0 100% 0 100%);
+}
+
+/* Where the throttle is ASKING for: the far edge of the ghost, marked.
+
+   QUIETER THAN IT WAS, and that is the substance of the fix rather than a
+   polish pass. It used to be near-opaque white standing proud of the track top
+   and bottom with a drop shadow under it, which is how you draw the primary
+   readout, not how you draw an annotation on one. It now sits within the
+   track's own height and lets the bar be the loudest thing in its own meter. */
+.speedo-demand {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    left: var(--speedo-zero);
+    background: rgba(255, 255, 255, 0.72);
+}
+
+/* The zero detent, and the only thing on the meter when the ship is stopped.
+   A bar of zero length cannot carry a colour, so "still" is this tick lighting
+   blue rather than a blue fill that is not there. */
+.speedo-zero {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--speedo-zero);
+    width: 1px;
+    margin-left: -0.5px;
+    background: rgba(255, 255, 255, 0.42);
+}
+
+.speedo-zero.at-rest {
+    background: #3d8bfd;
+    box-shadow: 0 0 6px rgba(61, 139, 253, 0.9);
+}
+
+.throttle-readout {
+    min-width: 78px;
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* A narrow phone has no room for a 200 pixel bar beside a number. The bar is
+   what survives, since it is the part that is read at a glance. */
+@media (max-width: 420px) {
+    .speedo-track {
+        width: 132px;
+    }
+
+    .throttle-readout {
+        min-width: 0;
+        font-size: 0.78rem;
+    }
+}
+
+/* ============================================================
+   The objective
+   ============================================================
+   Two counts that only ever go down, permanently on screen (PRD 8.1), because
+   a visitor should never have to open anything to find out how the game is
+   going.
+
+   BOTH MARKS ARE SHAPE-CODED. A ring means friendly, a diamond means hostile,
+   matching the markers out in the world, so the panel and the sky agree and
+   neither depends on being able to separate blue from orange.
+
+   THE PANEL IS OPAQUE ENOUGH TO CARRY ITS OWN CONTRAST. It was 0.42 until the
+   M8 audit, which was luxurious against space (16:1) and not nearly enough
+   against the thing this experience actually puts behind it: a visitor who
+   flies at Earth fills the whole frame with sunlit cloud, and the counters
+   dropped to 2.98:1 there. At 0.72 the counts hold 5.0:1 and the dimmer labels
+   4.6:1 against the brightest pixel the scene can draw, so the one readout
+   that is never allowed to be unreadable never is. */
+
+.objective-panel {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(6, 10, 18, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+    z-index: 4;
+}
+
+.objective-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    line-height: 1.2;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.objective-count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    min-width: 1.4ch;
+    text-align: right;
+}
+
+.objective-label {
+    font-size: 0.78rem;
+    opacity: 0.72;
+}
+
+.objective-mark {
+    width: 11px;
+    height: 11px;
+    flex: none;
+}
+
+/* A ring for the installations you are keeping. */
+.mark-friendly {
+    border: 2px solid #7fd4ff;
+    border-radius: 50%;
+}
+
+/* A diamond for the raiders you are removing. Same silhouette as the pips. */
+.mark-hostile {
+    background: #ff7a52;
+    transform: rotate(45deg);
+}
+
+/* Lives. Pips rather than a number, and a spent one EMPTIES to an outline
+   rather than disappearing, so how many you started with stays readable and the
+   readout does not depend on telling two colours apart. */
+.lives-row {
+    margin-top: 2px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.lives-pips {
+    display: inline-flex;
+    gap: 5px;
+}
+
+.life-pip {
+    width: 9px;
+    height: 9px;
+    border: 2px solid #9be7ff;
+    border-radius: 50%;
+    background: #9be7ff;
+}
+
+/* Hollow AND smaller. The hollow alone would be a shape change on most screens
+   and an invisible one on a bad screen at arm's length, so the pip also shrinks
+   back: two ways to read the same fact, neither of them a hue.
+
+   The outline was 0.32 and measured 2.75:1 against the panel at the M8 audit,
+   which is under the 3:1 that WCAG 1.4.11 asks of a non-text mark. A spent pip
+   is meant to be quiet, not faint: at 0.48 it is still obviously the dimmer of
+   the two states and it is now genuinely there. */
+.life-pip.spent {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.48);
+    transform: scale(0.72);
+}
+
+/* ---- Hull, which is only on screen while it is damaged --------------------
+   SEGMENTS, NOT DOTS. This row sits directly under the lives row and counts a
+   different thing (the four points ONE ship absorbs fire with, refilled at
+   every respawn, against three ships in reserve). Two rows of identical dots
+   would read as one row of seven, so the shapes have to differ before the
+   labels do: a bar reads as integrity, a dot reads as a count of things.
+
+   It is warm where lives are cool, which is the theme's own accent for damage
+   and matches the edge wash a hit already paints. THE HUE IS THE THIRD SIGNAL,
+   not the first: a spent segment empties and shortens, exactly like a spent
+   life pip, so nothing here is carried by colour. */
+.hull-pips {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.hull-pip {
+    width: 14px;
+    height: 6px;
+    border: 1px solid #ff9f7a;
+    border-radius: 2px;
+    background: #ff9f7a;
+}
+
+/* Hollow AND shorter, the same two-signal treatment the life pips get, and for
+   the same reason: a hollow alone is a hue change on a bad screen at arm's
+   length. 0.52 rather than the life pip's 0.48 because a 1px outline has less
+   of itself to be seen with than a 2px one, which puts it at 3.5:1 against the
+   panel, clear of the 3:1 WCAG 1.4.11 asks of a non-text mark. */
+.hull-pip.spent {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.52);
+    transform: scaleX(0.72);
+}
+
+/* Absent, not merely faded. The row carries no information at full hull, and a
+   dimmed-out row would still be one more thing to look past on a phone. */
+.hull-row.hidden {
+    display: none;
+}
+
+/* The clock is deliberately the quietest thing on the screen, so it is the one
+   that suffered most from being unbacked: 1.10:1 over sunlit cloud at the M8
+   audit. It takes the same small plate as the nav labels, which lets it stay
+   quiet (it is still the dimmest text in the HUD) and still be readable at
+   5.9:1 wherever the visitor happens to be pointing. */
+.elapsed-time {
+    position: fixed;
+    top: 22px;
+    /* Clear of the top-right button cluster: Home at 20, settings at 82, pause
+       at 144, so the cluster ends 194px in and this starts 12px past it. */
+    right: 206px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(6, 10, 18, 0.62);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.82);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    pointer-events: none;
+    z-index: 4;
+}
+
+/* ============================================================
+   The alert banner
+   ============================================================
+   Raised when an installation is being fired on. Top centre, where the
+   perimeter notice also lives, and sized so the two never need to be up at
+   once on a narrow phone. */
+
+.alert-banner {
+    position: fixed;
+    top: 84px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(86vw, 32ch);
+    padding: 8px 16px;
+    border-radius: 999px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 122, 82, 0.24);
+    border: 1px solid rgba(255, 122, 82, 0.65);
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+    z-index: 4;
+}
+
+.alert-banner.hidden {
+    display: none;
+}
+
+/* When both want the same slot, the perimeter nudge steps down: it is advice,
+   and the alert is the game. */
+.alert-banner:not(.hidden)~.perimeter-notice:not(.hidden) {
+    top: 136px;
+}
+
+/* ============================================================
+   Markers in the world
+   ============================================================
+   Pips, nav rings, and edge chevrons are all positioned by transform from
+   camera projection every frame, so they composite rather than reflow. Their
+   layers are inert; only the marks inside them are drawn. */
+
+.hostile-pips,
+.nav-markers {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+}
+
+/* A diamond, at any distance (PRD 8.1). A raider 200,000 units out is a few
+   pixels of running light and would otherwise read as a star. */
+.hostile-pip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 9px;
+    height: 9px;
+    background: rgba(255, 122, 82, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.55);
+    transform: translate(-50%, -50%) rotate(45deg);
+    will-change: transform;
+}
+
+/* THE NEAREST ONE, marked so the answer survives being read at a glance. All
+   twelve diamonds are the same mark on purpose, which is exactly what makes
+   "which of these is about to be a problem" unanswerable in a fight. A ring
+   around one of them is a shape difference rather than a colour difference, so
+   it holds up in the periphery and for a visitor who cannot separate the two
+   oranges. Slightly larger as well, since a ring alone is easy to lose against
+   a bright limb. */
+.hostile-pip.nearest {
+    width: 12px;
+    height: 12px;
+    background: rgba(255, 154, 92, 0.95);
+    box-shadow: 0 0 0 2px rgba(6, 10, 18, 0.55), 0 0 0 4px rgba(255, 154, 92, 0.75);
+}
+
+/* The number itself, on the same plate the nav distances carry and for the same
+   reason: this sits over whatever the fight happens to be in front of, which on
+   this scene is as often a sunlit planet as it is space. */
+.hostile-range {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: rgba(6, 10, 18, 0.62);
+    font-size: 0.66rem;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 214, 196, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+    white-space: nowrap;
+    pointer-events: none;
+    will-change: transform;
+}
+
+.hostile-pip.hidden,
+.hostile-range.hidden,
+.nav-marker.hidden,
+.edge-chevron.hidden {
+    display: none;
+}
+
+/* A ring, deliberately NOT a diamond, so a place to go and a thing to shoot
+   are told apart by shape. */
+.nav-marker {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    will-change: transform;
+}
+
+.nav-ring {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(127, 212, 255, 0.85);
+    border-radius: 50%;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+
+/* THESE TWO ARE THE WORST CASE IN THE WHOLE HUD, and it is structural rather
+   than unlucky: a nav marker is drawn ON the body it names, so its label is
+   always over a lit planet and never over space. The M8 audit measured the
+   distance line at 1.08:1 against sunlit cloud, which is to say invisible, and
+   the second round of screenshots shows exactly that where "Earth 14k km" sits
+   over Canada.
+
+   A soft shadow was never going to fix that, so the pair carry a small plate
+   of their own. It is the same wash as the objective panel, so it reads as
+   part of the same HUD rather than as a new kind of thing, and it holds the
+   label at 5.6:1 and the distance at 4.6:1 against anything the scene can put
+   behind them. */
+.nav-label,
+.nav-distance {
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: rgba(6, 10, 18, 0.62);
+    font-size: 0.66rem;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+    white-space: nowrap;
+}
+
+/* Dimmer than the name it hangs under, but not by enough to fall back through
+   the floor the plate just bought. */
+.nav-distance {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.86;
+}
+
+/* ============================================================
+   The replay window
+   ============================================================
+   A frame with nothing inside it. The picture is drawn by the renderer into
+   this exact rectangle with a scissor, so the box must be TRANSPARENT and its
+   position is read from the DOM rather than duplicated in JavaScript. Give it a
+   background and it paints over the render.
+
+   Right hand side, vertically centred. That is the one region free of the
+   objective panel, the speedometer, the throttle, the look joystick, the top
+   buttons and the alert banner, on a desktop and on a phone in portrait alike.
+   Sized off the shorter viewport edge so it stays a corner window rather than
+   taking over a small screen. */
+.replay-inset {
+    position: fixed;
+    right: 18px;
+    top: 50%;
+    width: min(30vmin, 260px);
+    height: calc(min(30vmin, 260px) * 0.62);
+    transform: translateY(-50%);
+    border: 1px solid rgba(255, 154, 92, 0.55);
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+    z-index: 3;
+}
+
+.replay-inset.hidden {
+    display: none;
+}
+
+/* Which installation this is, on the same plate every other label carries. */
+.replay-caption {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    max-width: 100%;
+    padding: 2px 6px;
+    border-radius: 0 5px 0 5px;
+    background: rgba(6, 10, 18, 0.72);
+    font-size: 0.66rem;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    color: rgba(255, 214, 196, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The reticle and the lock bracket are about AIMING, and during the ship replay
+   the visitor is not aiming, they are watching. Leaving them up would draw a
+   sight over a camera that is nowhere near the guns. */
+body.replaying #reticle,
+body.replaying .lock-bracket {
+    opacity: 0;
+}
+
+/* ---- The ending shot ------------------------------------------------------
+
+   A run that finishes plays a few seconds of third-person camera before the
+   summary card: fireworks over Earth for a win, slow fires at the fallen
+   installations for a lost line, and the visitor's own wreck receding for a
+   run that ran out of ships.
+
+   THE WASH IS THE ONLY THING THE PAGE CONTRIBUTES. Everything else is in the
+   scene, where it belongs. This is a corner-lit vignette rather than a flat
+   tint, so the middle of the frame (the planet, the wreck, the shells) stays
+   the colour the renderer drew it and the edges carry the mood. It sits under
+   the HUD and over the canvas.
+
+   It fades in over a second and stays. The card arrives while the last sparks
+   are still going out, so pulling the colour on the frame the camera stopped
+   would leave those embers on a plain black sky.
+
+   A pseudo-element rather than a div, exactly like the hull-hit wash above it,
+   so the ending adds no markup and cannot be left in the page by a script that
+   fails half way through. */
+body.finale-won::before,
+body.finale-lost::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    animation: finale-wash-in 1s ease-out forwards;
+}
+
+body.finale-won::before {
+    background:
+        radial-gradient(120% 90% at 50% 55%, rgba(0, 0, 0, 0) 42%, rgba(64, 40, 10, 0.5) 100%),
+        radial-gradient(90% 70% at 50% 100%, rgba(255, 186, 96, 0.18), rgba(0, 0, 0, 0) 70%);
+}
+
+body.finale-lost::before {
+    background:
+        radial-gradient(120% 90% at 50% 55%, rgba(0, 0, 0, 0) 34%, rgba(52, 6, 4, 0.62) 100%),
+        radial-gradient(90% 70% at 50% 100%, rgba(190, 40, 20, 0.16), rgba(0, 0, 0, 0) 70%);
+}
+
+@keyframes finale-wash-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* NOTHING THAT IS ABOUT FLYING belongs over a shot the visitor is watching
+   rather than steering, which is the same rule the ship replay follows and the
+   same one that drops the canopy for these shots in main.js. The reticle aims
+   guns that are no longer there, the speedometer reads a ship that in two of
+   the three endings has been destroyed, and a pair of thumb controls sitting
+   over a celebration invites a visitor to fly a run that is already over.
+
+   THE OBJECTIVE PANEL AND THE CLOCK STAY. Those are about the RUN rather than
+   about the ship, they are the same numbers the card is about to show, and
+   leaving them up is what keeps the ending and the card reading as one screen
+   rather than two. Exactly the reasoning that keeps the HUD up behind the card
+   itself. */
+body.finale-won #reticle,
+body.finale-lost #reticle,
+body.finale-won .lock-bracket,
+body.finale-lost .lock-bracket,
+body.finale-won #speedometer,
+body.finale-lost #speedometer,
+body.finale-won #throttle-readout,
+body.finale-lost #throttle-readout,
+body.finale-won #touch-controls,
+body.finale-lost #touch-controls {
+    opacity: 0;
+    transition: opacity 0.4s ease-out;
+    pointer-events: none;
+}
+
+/* Two arrows and no more: the installation under attack, and the nearest
+   raider. One per hostile would ring the screen and say nothing. */
+.edge-chevron {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 26px;
+    height: 26px;
+    pointer-events: none;
+    z-index: 4;
+    will-change: transform;
+}
+
+.edge-chevron svg {
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+
+.chevron-alert svg {
+    stroke: #ff9a5c;
+}
+
+/* Thinner and dimmer than the alert arrow, so when both are up the one that
+   matters is obvious. */
+.chevron-hostile svg {
+    stroke: rgba(255, 122, 82, 0.62);
+    stroke-width: 2;
+}
+
+/* Phones: the panel and the clock shrink, the markers do not. Finding a raider
+   is the game, and a pip that scales with the screen is a pip that disappears
+   on the screens most visitors are using. */
+@media (max-width: 600px) {
+    .objective-panel {
+        top: 14px;
+        left: 14px;
+        padding: 6px 10px;
+    }
+
+    .objective-row {
+        font-size: 0.82rem;
+    }
+
+    .elapsed-time {
+        top: 96px;
+        right: auto;
+        left: 16px;
+        font-size: 0.78rem;
+    }
+}
+
+/* A phone turned sideways has very little height and the whole HUD is competing
+   for the same few hundred pixels, so the panel tucks up, the clock goes back
+   to the top right where there is room, and the banner comes up with them.
+   Matches the shared stylesheet's own short-landscape breakpoint. */
+@media (max-height: 500px) and (orientation: landscape) {
+    .objective-panel {
+        top: 12px;
+        left: 12px;
+        gap: 2px;
+        padding: 5px 9px;
+    }
+
+    .objective-row {
+        font-size: 0.76rem;
+    }
+
+    .lives-row {
+        margin-top: 0;
+        padding-top: 3px;
+    }
+
+    .elapsed-time {
+        top: 14px;
+        left: auto;
+        right: 206px;
+    }
+
+    .alert-banner {
+        top: 56px;
+        padding: 6px 14px;
+        font-size: 0.82rem;
+    }
+
+    .alert-banner:not(.hidden)~.perimeter-notice:not(.hidden) {
+        top: 100px;
+    }
+}
+
+/* Very wide screens, including the 2D browser panels in a headset. The shared
+   stylesheet pulls the joysticks in toward the centre at this width; the HUD
+   follows, or the counters end up in the far corner of a visitor's peripheral
+   vision where they may as well not be. */
+@media (min-width: 1500px) {
+
+    .objective-panel,
+    .elapsed-time {
+        left: calc(50% - 700px);
+    }
+
+    .elapsed-time {
+        right: auto;
+        top: 128px;
+    }
+}
+
+/* The polite nudge when a visitor pushes out past the defended volume. In the
+   fiction of the game, not a scolding. */
+.perimeter-notice {
+    position: fixed;
+    top: 84px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(86vw, 34ch);
+    padding: 8px 16px;
+    border-radius: 999px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(var(--ui-accent-rgb), 0.22);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.5);
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+}
+
+.perimeter-notice.hidden {
+    display: none;
+}
+
+/* A raider landing a shot. A wash of colour at the EDGES only, so the centre
+   of the frame (where the aiming happens) is never obscured by being hit. It
+   is a slow fade rather than a flash, and it sits nowhere near the
+   photosensitivity thresholds: one soft pulse, well under a second. */
+body.hull-hit::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+    background: radial-gradient(ellipse at 50% 50%,
+            rgba(255, 90, 60, 0) 55%,
+            rgba(255, 90, 60, 0.32) 100%);
+    animation: hull-hit-fade 0.45s ease-out forwards;
+}
+
+@keyframes hull-hit-fade {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+/* ============================================================
+   Settings additions
+   ============================================================
+   The shared panel styles cover the slider; the checkbox rows are ours. */
+
+/* The pause button takes the THIRD slot in the top-right cluster: Home at 20,
+   the settings cog at 82, pause at 144, 62px per slot per the shared
+   .checklist-btn convention.
+
+   IT WAS AT 82 UNTIL M8, DIRECTLY UNDER THE COG. The shared stylesheet
+   declares .settings-btn top-left at line 562 and then moves it to the
+   top-right cluster at right:82px in a later block, which is the one that
+   wins. Reading only the first declaration put two 50px circles on the same
+   coordinates with the same z-index, so the cog painted last, took every
+   click, and the pause button was neither visible nor reachable. On a touch
+   screen there is no Esc, so that was the ONLY route to the pause panel
+   (PRD 8.4). Nothing failed and nothing looked wrong: the second round of
+   screenshots simply shows two buttons where there should be three. */
+.pause-btn {
+    top: 20px;
+    left: auto;
+    right: 144px;
+}
+
+.settings-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0 0;
+    font-size: 0.92rem;
+    cursor: pointer;
+}
+
+.settings-check input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: rgb(var(--ui-accent-rgb));
+    cursor: pointer;
+    flex: none;
+}
+
+.settings-check input[type="checkbox"]:focus-visible {
+    outline: 2px solid rgb(var(--ui-accent-rgb));
+    outline-offset: 2px;
+}
+
+/* EVERY CONTROL ON THE PAGE NOW SHOWS THE SAME FOCUS RING. The shared
+   stylesheet styles focus for the sliders, the skip link and the card buttons,
+   and leaves the round floats and the two close crosses on the browser
+   default, which is a different shape in every browser and nearly invisible
+   over a bright frame in one of them. These are the rest of the set, so a
+   keyboard visitor is told where they are in the same voice everywhere.
+   `outline` follows border-radius, so the circles get a circle. */
+#instructions button.click-prompt:focus-visible,
+.menu-btn:focus-visible,
+.settings-btn:focus-visible,
+.modal-close:focus-visible,
+.settings-close:focus-visible {
+    outline: 2px solid rgb(var(--ui-accent-rgb));
+    outline-offset: 3px;
+}
+
+.settings-hint {
+    margin: 10px 0 0;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    opacity: 0.72;
+}
+
+/* ============================================================
+   Modal layout
+   ============================================================
+   THE SHARED STYLESHEET LAYS MODALS OUT BY AN EXPLICIT LIST OF IDS
+   (#piece-modal, #help-modal, #dialog-modal and friends), not by a class, so
+   this experience's two are not in it and got no layout and no `.hidden` rule
+   at all. The failure is a quiet one and worth writing down: both panels sat
+   unhidden in normal document flow, invisible only because the canvas is later
+   in the DOM and painted over them, while the pause card's close button, which
+   carries a z-index, floated over the scene on its own. The pause panel and the
+   end screen could never have appeared.
+
+   Kept here rather than added to the shared list, because a game's pause and
+   end cards are not a pattern the other experiences share. */
+
+#pause-modal,
+#end-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#pause-modal.hidden,
+#end-modal.hidden {
+    display: none;
+}
+
+#pause-modal .modal-backdrop,
+#end-modal .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(6, 10, 18, 0.62);
+    backdrop-filter: blur(3px);
+}
+
+/* ============================================================
+   The end of a run
+   ============================================================
+   Deliberately the same warm card as the pause panel rather than a red failure
+   screen. Losing here should read as an invitation to go again, which is the
+   whole difficulty stance (PRD 4.5), and a win and a loss share the layout so
+   neither is the special case. */
+
+.end-stats {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin: 22px 0 6px;
+    padding: 0;
+    flex-wrap: wrap;
+}
+
+.end-stat {
+    text-align: center;
+}
+
+.end-stat dt {
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.62;
+}
+
+.end-stat dd {
+    margin: 4px 0 0;
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    color: rgb(var(--ui-accent-rgb));
+}
+
+/* The bottom margin is for the button below it. `Fly again` takes focus the
+   moment the card opens, and its focus ring is a 3px outline with a 2px offset
+   that reached up into this line's descenders in the second round of
+   screenshots. */
+.end-best {
+    margin: 14px 0 10px;
+    font-size: 0.86rem;
+    opacity: 0.78;
+    min-height: 1.2em;
+}
+
+/* No close button and no backdrop dismissal on this one. The run is over, so
+   the only way on is the button that starts the next one: a card the visitor
+   can dismiss into a dead scene would leave them with nothing to do. */
+#end-modal .modal-backdrop {
+    pointer-events: none;
+}
+
+/* The dedication in the pause panel, set apart from the control list. */
+/* The rule above it was white at 0.14 alpha, which is a sensible separator on
+   a dark panel and nothing at all on this one: the pause card is the shared
+   .piece-card, which is warm PAPER with dark ink. A dark rule is what actually
+   draws a line here. */
+.dedication {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(0, 0, 0, 0.14);
+    font-size: 0.86rem;
+    line-height: 1.5;
+    opacity: 0.85;
+}
+
+/* The texture credit (PRD 11.3). Quieter than the dedication, because it is a
+   licence obligation rather than the point of the page, but genuinely
+   readable: CC BY asks for attribution a visitor can find, and a credit set so
+   faint that nobody reads it is not one. */
+.credits {
+    margin: 14px 0 18px;
+    font-size: 0.76rem;
+    line-height: 1.5;
+    color: var(--gallery-muted);
+}
+
+.credits a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    /* The scene keeps turning (it is the experience), but nothing in the
+       chrome should animate for a visitor who has asked us not to. */
+    #loading-screen .loader-progress,
+    .throttle-fill,
+    .throttle-thumb,
+    .perimeter-notice,
+    #reticle .reticle-ring,
+    #reticle .reticle-ticks,
+    #reticle .reticle-diamond,
+    #reticle .reticle-corners {
+        transition: none;
+    }
+
+    /* The hull-hit wash still appears (it is information, not decoration) but
+       it holds steady and then goes rather than fading. */
+    body.hull-hit::after {
+        animation: none;
+        opacity: 0.7;
+    }
+
+    /* Belt and braces. This visitor never sees the ending shot at all (main.js
+       skips straight to the summary card for exactly this preference), so
+       neither of these should ever be on screen. If one somehow is, it arrives
+       rather than animating in. */
+    body.finale-won::before,
+    body.finale-lost::before {
+        animation: none;
+        opacity: 1;
+    }
+}
