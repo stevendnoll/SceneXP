@@ -213,6 +213,38 @@
     cursor: pointer;
 }
 
+/* The second way off this screen, and it is DELIBERATELY QUIETER than the
+   first. "Take the helm" is what the welcome screen is asking for and it keeps
+   the 1.25rem type; this is the same warm colour at a smaller size with an
+   underline, so it reads as a link a visitor may want rather than as a second
+   equal choice. Underlined rather than merely coloured, because nothing on this
+   page may be told by colour alone.
+
+   It is a real <button> and not an <a> because it opens a dialog rather than
+   going anywhere, which is also why it takes the same focus ring as the helm
+   button above it. */
+#instructions button.briefing-menu-btn {
+    display: block;
+    margin: 0.35rem auto 0;
+    padding: 0.2rem 0.6rem;
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.92rem;
+    letter-spacing: inherit;
+    color: inherit;
+    opacity: 0.78;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+#instructions button.briefing-menu-btn:hover {
+    opacity: 1;
+}
+
 /* Two hint rows sharing one grid, so the labels line up in a column and the
    sentences all start at the same place. Two independently centred rows put
    the pills at different widths and the sentences at different offsets, which
@@ -1221,25 +1253,30 @@ body.hull-hit::after {
 /* ============================================================
    Settings additions
    ============================================================
-   The shared panel styles cover the slider; the checkbox rows are ours. */
+   The shared panel styles cover the slider; the checkbox rows are ours. They
+   are still called .settings-* because they are the same four controls, moved
+   from the floating panel into the helm card. See #card-settings below. */
 
-/* The pause button takes the THIRD slot in the top-right cluster: Home at 20,
-   the settings cog at 82, pause at 144, 62px per slot per the shared
-   .checklist-btn convention.
+/* The pause button takes the SECOND slot in the top-right cluster: Home at 20,
+   pause at 82, 62px per slot per the shared .checklist-btn convention.
 
-   IT WAS AT 82 UNTIL M8, DIRECTLY UNDER THE COG. The shared stylesheet
-   declares .settings-btn top-left at line 562 and then moves it to the
-   top-right cluster at right:82px in a later block, which is the one that
-   wins. Reading only the first declaration put two 50px circles on the same
-   coordinates with the same z-index, so the cog painted last, took every
-   click, and the pause button was neither visible nor reachable. On a touch
-   screen there is no Esc, so that was the ONLY route to the pause panel
-   (PRD 8.4). Nothing failed and nothing looked wrong: the second round of
-   screenshots simply shows two buttons where there should be three. */
+   IT WAS AT 144 UNTIL THE COG WENT AWAY, which left a 62px hole between Home
+   and pause where the settings button used to be. There are two round buttons
+   now, so there are two slots.
+
+   THE HISTORY IS WORTH KEEPING because it is the same trap twice over. This
+   was at 82 originally, on the strength of the shared stylesheet's FIRST
+   .settings-btn rule, which puts the cog top-left. A later block in the same
+   file moves the cog to right:82px, and that is the one that wins, so two 50px
+   circles sat on the same coordinates with the same z-index: the cog painted
+   last, took every click, and the pause button was neither visible nor
+   reachable. Nothing failed and nothing looked wrong. Coming back to 82 is
+   safe now for the plain reason that the cog is gone from the page entirely.
+   The style suite asserts the cluster does not overlap either way. */
 .pause-btn {
     top: 20px;
     left: auto;
-    right: 144px;
+    right: 82px;
 }
 
 .settings-check {
@@ -1272,10 +1309,10 @@ body.hull-hit::after {
    keyboard visitor is told where they are in the same voice everywhere.
    `outline` follows border-radius, so the circles get a circle. */
 #instructions button.click-prompt:focus-visible,
+#instructions button.briefing-menu-btn:focus-visible,
 .menu-btn:focus-visible,
-.settings-btn:focus-visible,
-.modal-close:focus-visible,
-.settings-close:focus-visible {
+.card-settings > summary:focus-visible,
+.modal-close:focus-visible {
     outline: 2px solid rgb(var(--ui-accent-rgb));
     outline-offset: 3px;
 }
@@ -1378,6 +1415,108 @@ body.hull-hit::after {
     pointer-events: none;
 }
 
+/* ============================================================
+   Flight settings, inside the helm card
+   ============================================================
+   The four controls that used to live in a floating panel behind a floating
+   cog, which on a desktop could not be operated at all: flying locks the
+   pointer and hides the cursor, and the one moment the cog became reachable was
+   the moment the pause card's backdrop covered it. The card is the only surface
+   in this experience where the cursor is guaranteed free, so this is where they
+   belong.
+
+   THE CARD IS WARM PAPER WITH DARK INK (the shared .piece-card), and the panel
+   these came from was dark navy with a bright accent border. Every colour here
+   is therefore stated against the paper rather than inherited from the old
+   panel, which is the same trap the .dedication rule below already fell into
+   once with a white separator nobody could see. */
+
+.card-settings {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(0, 0, 0, 0.14);
+    text-align: left;
+}
+
+/* The disclosure itself. The default triangle is replaced with one that follows
+   the card's ink, and `list-style` plus the WebKit pseudo-element are both
+   needed to retire the built-in marker across browsers. */
+.card-settings > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 2px;
+    border-radius: 6px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+}
+
+.card-settings > summary::-webkit-details-marker {
+    display: none;
+}
+
+.card-settings > summary::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 6px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.2s ease;
+}
+
+.card-settings[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.card-settings-body {
+    padding: 4px 2px 2px;
+}
+
+/* The slider row. The shared .settings-label already lays this out as a column
+   with the value tucked to the right, and that layout is kept: what has to
+   change is every colour in it, because the shared rules name the dark panel's
+   palette and this card is paper.
+
+   THE LABEL WAS --text-dim AND THE VALUE WAS --ui-accent, which is pale grey
+   and amber. Both were chosen to sit on near-black. Dropped onto the card they
+   are a label nobody can read and a number that fights the paper, so both are
+   restated in the card's own ink. */
+.card-settings-body .settings-label {
+    margin-top: 12px;
+    font-size: 0.82rem;
+    color: var(--gallery-ink);
+}
+
+.card-settings-body .settings-label input[type="range"] {
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.card-settings-body .settings-value {
+    color: var(--gallery-ink);
+}
+
+/* The way home from inside a run, under the dismiss button. Quiet on purpose:
+   the card is for coming back to the helm, and leaving is the other thing it
+   happens to allow. */
+.card-home {
+    margin: 12px 0 0;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.card-home a {
+    color: var(--gallery-muted);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.card-home a:hover {
+    color: inherit;
+}
+
 /* The dedication in the pause panel, set apart from the control list. */
 /* The rule above it was white at 0.14 alpha, which is a sensible separator on
    a dark panel and nothing at all on this one: the pause card is the shared
@@ -1416,6 +1555,8 @@ body.hull-hit::after {
     .throttle-fill,
     .throttle-thumb,
     .perimeter-notice,
+    #instructions button.briefing-menu-btn,
+    .card-settings > summary::before,
     #reticle .reticle-ring,
     #reticle .reticle-ticks,
     #reticle .reticle-diamond,

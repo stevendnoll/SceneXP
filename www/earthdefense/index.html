@@ -35,14 +35,18 @@
          and og:description are doing that work rather than the pixels. Every
          major card renderer shows both beside the image.
 
-         TWO IMAGES, MOST CAPABLE FIRST. The Open Graph spec allows repeated
-         og:image and consumers take the first one they can handle, so the JPEG
-         costs one tag and covers any scraper that will not decode WebP. The
-         property order matters: og:image:type, :width, :height and :alt attach
-         to the og:image tag most recently above them, so the JPEG's four
-         properties must follow the JPEG's URL and not be interleaved.
+         EXACTLY ONE og:image, WHICH IS THE WHOLE POINT OF THIS PARAGRAPH.
+         This block used to carry two, a WebP followed by a JPEG, on the
+         reading that the Open Graph spec allows repeated og:image and that
+         consumers take the first one they can handle. The spec does allow it.
+         Consumers do not all behave that way. Apple's link preview renders
+         EVERY og:image it finds, so texting this page produced two identical
+         cards stacked in the message box, and Earth Defense was the only page
+         on the site that did it because it was the only page with two tags.
+         A fallback nobody asked for is not worth a second card in a friend's
+         thread. One image, the same as the other eleven pages.
 
-         BOTH ARE LOSSY AT 92, AND THAT WAS MEASURED FOR THIS PICTURE rather
+         IT IS LOSSY AT 92, AND THAT WAS MEASURED FOR THIS PICTURE rather
          than inherited. The previous card was the welcome screen and needed
          lossless WebP, because large amber type on near-black rang badly (RMSE
          0.0135 over the text region against 0 for lossless). This frame's only
@@ -50,19 +54,13 @@
          risk that actually mattered here was the starfield: every one of the
          284 lit pixels in a sample of open sky survives at quality 92, with a
          sky RMSE of 0.0025. Lossless would have cost 186K for no defect it
-         could fix. The JPEG keeps 4:4:4 chroma, since the amber HUD marks are
-         exactly the saturated-on-near-black case 4:2:0 smears.
+         could fix.
 
-         ?v=2 BECAUSE THE PIXELS CHANGED UNDER THE SAME FILENAME. Social
-         scrapers cache aggressively by URL, so replacing a card without moving
-         the query leaves the old one in circulation. -->
-    <meta property="og:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=2">
+         ?v=3 BECAUSE THE TAGS CHANGED UNDER THE SAME FILENAME. Social scrapers
+         cache aggressively by URL, so a card that has already been fetched
+         stays in circulation until something about the request moves. -->
+    <meta property="og:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=3">
     <meta property="og:image:type" content="image/webp">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, orange diamonds mark the incoming Martian raiders across a deep starfield, the nearest of them labelled 23k km, and the Moon hangs at the upper right labelled 67k km.">
-    <meta property="og:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=2">
-    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, orange diamonds mark the incoming Martian raiders across a deep starfield, the nearest of them labelled 23k km, and the Moon hangs at the upper right labelled 67k km.">
@@ -71,11 +69,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Earth Defense">
     <meta name="twitter:description" content="Fly in orbit above a massive Earth and hold the line against an incoming Martian fleet.">
-    <!-- Twitter takes exactly ONE image and has no type or dimension
-         properties, so this is the JPEG rather than the WebP: the card format
-         has no way to offer an alternative, and a card that renders everywhere
-         beats a card that is 48K smaller. -->
-    <meta name="twitter:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=2">
+    <!-- The same single WebP as og:image, which is what the other eleven pages
+         do. Twitter takes exactly one image and has no type property, so there
+         was never anywhere to offer an alternative here anyway. -->
+    <meta name="twitter:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=3">
     <meta name="twitter:image:alt" content="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, orange diamonds mark the incoming Martian raiders across a deep starfield, the nearest of them labelled 23k km, and the Moon hangs at the upper right labelled 67k km.">
 
     <!-- Structured data: site identity for search engines.
@@ -95,7 +92,7 @@
       "inLanguage": "en-US",
       "isAccessibleForFree": true,
       "playMode": "SinglePlayer",
-      "image": "https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=2",
+      "image": "https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=3",
       "author": {
         "@type": "Person",
         "name": "Steve Noll"
@@ -209,6 +206,16 @@
                  Space work because they always do, and the label stops
                  telling a phone to click. -->
             <button type="button" id="take-helm-btn" class="click-prompt">Take the helm</button>
+            <!-- The way into the helm card BEFORE a run, and the reason the
+                 settings cog is gone from the corner.
+                 A visitor who wants to turn the sound down or soften the look
+                 sensitivity wants it now, not once they are flying, and while
+                 they are flying the mouse is captured and a floating gear
+                 cannot be clicked at all. This opens the same card that Esc and
+                 the pause button open, so there is exactly one place the
+                 controls and the settings live. Quieter than "Take the helm" on
+                 purpose: flying is still the thing this screen is asking for. -->
+            <button type="button" id="briefing-menu-btn" class="briefing-menu-btn">Controls and settings</button>
             <!-- Two controls and one objective, per PRD 4.2. Laid out as one
                  grid rather than as two centred rows so the labels share a
                  column and the sentences start on the same line.
@@ -454,55 +461,34 @@
         </svg>
     </button>
 
-    <button id="settings-btn" class="ui-float settings-btn" title="Flight settings" aria-label="Flight settings"
-        aria-controls="settings-panel" aria-expanded="false">
-        <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
-        </svg>
-    </button>
+    <!-- THE SETTINGS COG USED TO BE HERE, AND IT WAS A TRAP.
+         Flying means the pointer is locked and the cursor is hidden, so a
+         floating gear cannot be clicked at all. Escape is how a browser gives
+         the cursor back, and losing the lock is what raises the pause card, so
+         the cog was buried under the card's backdrop the instant it became
+         reachable. Closing the card asked for the lock straight back. The only
+         way through was the brief window where the browser's post-Escape
+         lock-out refused that request, which is exactly why it worked
+         sometimes and not others.
+         The settings now live inside the card, which is the one surface where
+         the cursor is guaranteed to be free. See #card-settings below. -->
 
-    <div id="settings-panel" class="settings-panel hidden">
-        <div class="settings-header">
-            <span>Flight Settings</span>
-            <button id="settings-close" class="settings-close" aria-label="Close">&times;</button>
-        </div>
-        <div class="settings-body">
-            <label class="settings-label">
-                Look Sensitivity
-                <input type="range" id="look-speed-slider" min="0.3" max="3" step="0.1" value="1.0">
-                <span class="settings-value" id="look-speed-value">1.0</span>
-            </label>
-            <label class="settings-check">
-                <input type="checkbox" id="invert-pitch-toggle">
-                <span>Invert pitch</span>
-            </label>
-            <label class="settings-check">
-                <input type="checkbox" id="reduced-fx-toggle">
-                <span>Reduced effects</span>
-            </label>
-            <!-- Sound is reinforcement only: every cue duplicates something
-                 already on screen and in the live region, so muting costs a
-                 visitor nothing at all. -->
-            <label class="settings-check">
-                <input type="checkbox" id="mute-toggle">
-                <span>Mute sound</span>
-            </label>
-            <p class="settings-hint">Reduced effects lowers the rendering detail, and it
-                starts switched on for phones and tablets. Turn it off any time you would
-                rather have the fuller sky. Nothing in the game is told by sound alone, so
-                muting loses you nothing.</p>
-        </div>
-    </div>
-
-    <!-- Pause. Esc opens this, and it is where the dedication lives. -->
+    <!-- Pause, and now the whole menu. Esc opens this, the dedication lives
+         here, and so do the flight settings and the way back to the site. -->
     <div id="pause-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
         <div class="modal-backdrop" data-close></div>
         <div class="modal-container piece-card">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
             <div class="piece-card-content">
+                <!-- The title and the line under it are REWRITTEN BY main.js,
+                     because this one card now serves two moments. Over a run it
+                     is a pause and says so. Opened from the welcome screen it is
+                     a briefing, where "nothing moves while this is open" would
+                     be describing a game that has not started. The strings live
+                     in CARD_COPY, and these are the paused ones so the markup
+                     reads as the state the card is in most often. -->
                 <h2 id="pause-title" class="piece-title">Holding station</h2>
-                <p class="piece-subtitle">Take your time. Nothing moves while this is open.</p>
+                <p id="pause-subtitle" class="piece-subtitle">Take your time. Nothing moves while this is open.</p>
                 <ul class="help-list">
                     <li class="help-desktop"><strong>Throttle:</strong> <kbd>W</kbd> and <kbd>S</kbd>, or the up and down arrows. <kbd>X</kbd> to stop.</li>
                     <li class="help-desktop"><strong>Look:</strong> move the mouse, or steer with <kbd>A</kbd> <kbd>D</kbd> to turn and <kbd>Q</kbd> <kbd>E</kbd> to climb and dive.</li>
@@ -519,11 +505,51 @@
                         closest one is drawn larger with the range to it underneath. Earth and
                         the Moon carry a ring with their distance, and an arrow at the edge of
                         the screen points the way to anything off it.</li>
-                    <li class="help-desktop"><strong>Pausing:</strong> <kbd>Esc</kbd>, or the pause button in the top right. Nothing moves while this panel is open.</li>
-                    <li class="help-mobile"><strong>Pausing:</strong> the pause button in the top right. Nothing moves while this panel is open.</li>
-                    <li><strong>Settings:</strong> the gear icon adjusts look sensitivity, and carries
-                        reduced effects and a mute switch.</li>
+                    <li class="help-desktop"><strong>Pausing:</strong> <kbd>Esc</kbd>, or the pause button in the top right. Nothing moves while this panel is open, and everything you can adjust is right here.</li>
+                    <li class="help-mobile"><strong>Pausing:</strong> the pause button in the top right. Nothing moves while this panel is open, and everything you can adjust is right here.</li>
                 </ul>
+
+                <!-- COLLAPSED BY DEFAULT, and <details> rather than a scripted
+                     toggle. Most visitors open this card to check a control and
+                     go back to flying, and four settings expanded under a ten
+                     item help list makes them scroll past the answer on a phone
+                     in portrait. The browser gives the disclosure its keyboard
+                     handling, its Enter and Space, and its expanded state to a
+                     screen reader for free, which is four things a div and a
+                     click listener would each have to be taught.
+
+                     The old panel's controls, unchanged and with the same ids,
+                     so main.js still finds them and a visitor's stored
+                     preferences carry straight over. -->
+                <details id="card-settings" class="card-settings">
+                    <summary>Flight settings</summary>
+                    <div class="card-settings-body">
+                        <label class="settings-label">
+                            Look Sensitivity
+                            <input type="range" id="look-speed-slider" min="0.3" max="3" step="0.1" value="1.0">
+                            <span class="settings-value" id="look-speed-value">1.0</span>
+                        </label>
+                        <label class="settings-check">
+                            <input type="checkbox" id="invert-pitch-toggle">
+                            <span>Invert pitch</span>
+                        </label>
+                        <label class="settings-check">
+                            <input type="checkbox" id="reduced-fx-toggle">
+                            <span>Reduced effects</span>
+                        </label>
+                        <!-- Sound is reinforcement only: every cue duplicates
+                             something already on screen and in the live region,
+                             so muting costs a visitor nothing at all. -->
+                        <label class="settings-check">
+                            <input type="checkbox" id="mute-toggle">
+                            <span>Mute sound</span>
+                        </label>
+                        <p class="settings-hint">Reduced effects lowers the rendering detail, and it
+                            starts switched on for phones and tablets. Turn it off any time you would
+                            rather have the fuller sky. Nothing in the game is told by sound alone, so
+                            muting loses you nothing.</p>
+                    </div>
+                </details>
                 <!-- Where the dedication would go on any other experience. See
                      the note on the welcome subtitle for why this one has none.
                      A short line rather than a hole: the panel's voice carries
@@ -541,7 +567,17 @@
                     <a href="https://www.solarsystemscope.com/textures" target="_blank" rel="noopener noreferrer">Solar System Scope</a>,
                     used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>.
                     Resized and recompressed for this experience.</p>
-                <button class="piece-enter" type="button" data-close>Back to the helm</button>
+                <button id="card-dismiss" class="piece-enter" type="button" data-close>Back to the helm</button>
+                <!-- The way home from INSIDE a run, which nothing offered
+                     before. The round home button in the corner is still there
+                     and still works from the welcome screen, from the end card
+                     and from a keyboard at any time, but a visitor mid-flight
+                     has a captured cursor and cannot reach it with a mouse.
+                     A quiet text link rather than a second big button: leaving
+                     is not what this card is for. -->
+                <p class="card-home">
+                    <a id="home-link" href="/">Back to the main site</a>
+                </p>
             </div>
         </div>
     </div>

@@ -113,7 +113,7 @@ let canvas, loadingScreen, blocker, touchControls, hud;
 let throttleReadout, perimeterNotice, flightStatus;
 let speedometer, speedoForward, speedoReverse, speedoDemand, speedoZero;
 let speedoGhostForward, speedoGhostReverse;
-let settingsPanel, settingsBtn, pauseModal, pauseBtn;
+let pauseModal, pauseBtn, pauseTitle, pauseSubtitle, cardDismiss, cardSettings, briefingMenuBtn;
 let reticle, lockBracket, combatStatus;
 let replayInset, replayCaption;
 let endModal, endTitle, endSubtitle, endTime, endSaved, endDestroyed, endBest;
@@ -229,10 +229,13 @@ async function init() {
     layOutSpeedometer();
     perimeterNotice = document.getElementById('perimeter-notice');
     flightStatus = document.getElementById('flight-status');
-    settingsPanel = document.getElementById('settings-panel');
-    settingsBtn = document.getElementById('settings-btn');
     pauseModal = document.getElementById('pause-modal');
     pauseBtn = document.getElementById('pause-btn');
+    pauseTitle = document.getElementById('pause-title');
+    pauseSubtitle = document.getElementById('pause-subtitle');
+    cardDismiss = document.getElementById('card-dismiss');
+    cardSettings = document.getElementById('card-settings');
+    briefingMenuBtn = document.getElementById('briefing-menu-btn');
     reticle = document.getElementById('reticle');
     lockBracket = document.getElementById('lock-bracket');
     combatStatus = document.getElementById('combat-status');
@@ -508,7 +511,15 @@ function handleStateChange(next) {
     if (blocker) blocker.classList.toggle('hidden', next !== 'briefing');
     showPlayChrome(next !== 'briefing');
     showPauseButton(next);
-    if (pauseModal) pauseModal.classList.toggle('hidden', next !== 'paused');
+    // LEAVING THE BRIEFING CLEARS THE BRIEFING CARD, whatever put it up. The
+    // flag is only meaningful over a welcome screen, and clearing it here rather
+    // than in `beginFlight` means every route out is covered by the one line,
+    // including a restart landing back on the briefing.
+    if (next !== 'briefing') _cardOverBriefing = false;
+    // The card's own copy, set on the way in so that every route to a pause
+    // gets it: the button, Escape, a lost pointer lock, a backgrounded tab.
+    if (next === 'paused') applyCardCopy('paused');
+    if (pauseModal) pauseModal.classList.toggle('hidden', next !== 'paused' && !_cardOverBriefing);
     // THE SOUND STOPS WHEN THE GAME DOES. Every cue is fire-and-forget and
     // nothing fires while the game is frozen, but the engine hum is continuous
     // and `updateReadouts` runs on both sides of the `isPlaying` branch, so a
@@ -1164,10 +1175,22 @@ function applyHelpVisibility() {
     pauseModal.querySelectorAll('.help-mobile').forEach(el => { el.hidden = !state.isMobile; });
 }
 
+/** The two ways home, pointed at the same place from one config entry.
+ *
+ *  THE ROUND BUTTON IN THE CORNER AND THE LINK INSIDE THE CARD, and both are
+ *  kept on purpose rather than one being a leftover. The corner button is the
+ *  site-wide convention, it is what every experience's skip link targets, and a
+ *  keyboard visitor can Tab to it at any moment including mid-flight. What it
+ *  cannot be is CLICKED mid-flight, because the pointer is locked and the cursor
+ *  is hidden, and that is the case the card link answers. */
 function applySiteLinks() {
     const site = EARTHDEFENSE_CONFIG.site;
-    const home = document.getElementById('home-btn');
-    if (home) {
+    const targets = [
+        document.getElementById('home-btn'),
+        document.getElementById('home-link')
+    ];
+    for (const home of targets) {
+        if (!home) continue;
         home.href = site.home.path;
         home.removeAttribute('target');
         home.removeAttribute('rel');
@@ -1272,7 +1295,10 @@ function wireSettings(signal) {
     const invert = document.getElementById('invert-pitch-toggle');
     const reduced = document.getElementById('reduced-fx-toggle');
     const mute = document.getElementById('mute-toggle');
-    const close = document.getElementById('settings-close');
+    // NO CLOSE BUTTON OF ITS OWN ANY MORE. These four controls moved out of a
+    // floating panel and into the helm card, which already has a cross, a
+    // dismiss button, a backdrop and Escape. `<details>` owns the open and shut
+    // of the section itself.
 
     if (slider) {
         slider.value = String(settings.lookSensitivity);
@@ -1310,19 +1336,100 @@ function wireSettings(signal) {
         }, { signal });
     }
 
-    if (settingsBtn) {
-        settingsBtn.addEventListener('click', () => toggleSettings(), { signal });
-    }
-    if (close) {
-        close.addEventListener('click', () => toggleSettings(false), { signal });
-    }
 }
 
-function toggleSettings(force) {
-    if (!settingsPanel) return;
-    const open = force === undefined ? settingsPanel.classList.contains('hidden') : force;
-    settingsPanel.classList.toggle('hidden', !open);
-    if (settingsBtn) settingsBtn.setAttribute('aria-expanded', String(open));
+// ---- The helm card --------------------------------------------------------
+//
+// ONE CARD, TWO MOMENTS, AND IT IS NOW THE ONLY MENU. Settings used to live in
+// a floating panel behind a floating cog, and on a desktop that pair could not
+// be operated at all: see the note where the cog used to be in index.html. The
+// card is the one surface in this experience where the cursor is guaranteed to
+// be free, so everything a visitor might reach for is on it.
+//
+// The two moments are a PAUSE, over a run that is happening, and a BRIEFING,
+// opened from the welcome screen before anything has started. They share every
+// pixel except the title, the line under it and the dismiss button, because a
+// briefing that promised "nothing moves while this is open" would be describing
+// a game that is not running yet.
+
+const CARD_COPY = {
+    paused: {
+        title: 'Holding station',
+        subtitle: 'Take your time. Nothing moves while this is open.',
+        dismiss: 'Back to the helm'
+    },
+    briefing: {
+        title: 'Before you fly',
+        subtitle: 'The controls, and everything you can adjust. Nothing has started yet.',
+        dismiss: 'Back to the briefing'
+    }
+};
+
+/** Whether the card is up over the BRIEFING rather than over a paused run.
+ *
+ *  A flag rather than a sixth game state, deliberately. Reading the controls on
+ *  a welcome screen is not a phase of a game: nothing is moving either way, the
+ *  clock has not started, and giving `gamestate` a state for it would mean every
+ *  transition table in the module grew a column for a screen that is only ever
+ *  read. What it does need is a way for Escape, the dismiss button and the
+ *  backdrop to tell the two apart, which is what this is. */
+let _cardOverBriefing = false;
+
+function applyCardCopy(mode) {
+    const copy = CARD_COPY[mode];
+    if (!copy) return null;
+    if (pauseTitle) pauseTitle.textContent = copy.title;
+    if (pauseSubtitle) pauseSubtitle.textContent = copy.subtitle;
+    if (cardDismiss) cardDismiss.textContent = copy.dismiss;
+    return copy;
+}
+
+/** Open the card from wherever the visitor happens to be.
+ *
+ *  Flying pauses, which is the old behaviour and goes through `openPause` so the
+ *  freeze, the sound and the pointer lock are still handled in exactly one
+ *  place. The briefing opens the card directly, because there is no game state
+ *  to change: the world is already frozen at zero (see `worldStep`) and no
+ *  pointer lock exists yet. An ended run gets nothing, the same way `openPause`
+ *  has always refused there: the end card is already up and is already modal. */
+function openHelmCard() {
+    if (!state.isLoaded) return false;
+    if (isPlaying()) { openPause(); return true; }
+    if (_cardOverBriefing || gamePhase() !== 'briefing' || !pauseModal) return false;
+    _cardOverBriefing = true;
+    applyCardCopy('briefing');
+    // OPENED FROM THE BRIEFING, THE SETTINGS ARE EXPANDED. The button that gets
+    // a visitor here says "Controls and settings", and handing them a collapsed
+    // disclosure is hiding the half they just asked for. Over a run the section
+    // is left exactly as they last had it: a pause is usually about getting back
+    // to flying, and the help list is what most visitors came to re-read.
+    if (cardSettings) cardSettings.open = true;
+    pauseModal.classList.remove('hidden');
+    // Land the keyboard inside the card rather than leaving it out on the
+    // welcome screen behind it, where Enter would take the helm.
+    if (cardDismiss && typeof cardDismiss.focus === 'function') cardDismiss.focus();
+    return true;
+}
+
+/** Close the card whichever moment it was opened in.
+ *
+ *  Every dismissal routes through here, so the backdrop, the cross, the button
+ *  and Escape cannot drift apart. Resuming a run and going back to a briefing
+ *  are genuinely different things, and this is the only place that has to know
+ *  which one it is. */
+function dismissHelmCard() {
+    if (_cardOverBriefing) return closeBriefingCard();
+    return closePause();
+}
+
+function closeBriefingCard() {
+    if (!_cardOverBriefing) return false;
+    _cardOverBriefing = false;
+    if (pauseModal) pauseModal.classList.add('hidden');
+    // Back to the one control this screen is really asking for.
+    const helm = document.getElementById('take-helm-btn');
+    if (helm && typeof helm.focus === 'function') helm.focus();
+    return true;
 }
 
 // ---- Pause ----------------------------------------------------------------
@@ -1338,7 +1445,7 @@ function openPause() {
 }
 
 function closePause() {
-    if (gamePhase() !== 'paused') return;
+    if (gamePhase() !== 'paused') return false;
     transition('playing');
     // AND TAKE THE MOUSE BACK, or resuming hands the visitor a ship they can
     // throttle but cannot steer. `handleStateChange` drops the lock on the way
@@ -1346,6 +1453,7 @@ function closePause() {
     // the way out: mouse look stayed dead until they happened to click the
     // canvas, which nothing tells them to do.
     takePointer();
+    return true;
 }
 
 /** ESCAPE IS WHY THIS EXISTS, and the reason it needs a lock listener rather
@@ -1460,7 +1568,22 @@ function setupEventListeners() {
     if (pauseBtn) pauseBtn.addEventListener('click', openPause, { signal });
     if (pauseModal) {
         pauseModal.querySelectorAll('[data-close]').forEach(el =>
-            el.addEventListener('click', closePause, { signal }));
+            el.addEventListener('click', dismissHelmCard, { signal }));
+    }
+    // The way into the card from the welcome screen.
+    //
+    // STOPPING PROPAGATION IS NOT DEFENSIVE, IT IS REQUIRED. This button sits
+    // inside #blocker, and the blocker turns a click ANYWHERE on itself into
+    // "take the helm" so that the whole welcome screen is one big target. Left
+    // to bubble, asking for the settings would start the run underneath the
+    // card that just opened, on both a mouse and a thumb.
+    if (briefingMenuBtn) {
+        const openFromBriefing = (e) => {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            openHelmCard();
+        };
+        briefingMenuBtn.addEventListener('click', openFromBriefing, { signal });
+        briefingMenuBtn.addEventListener('touchend', openFromBriefing, { signal });
     }
     // THE ESCAPE HANDLER BELOW CANNOT SEE ESCAPE while the pointer is locked,
     // because the browser takes that keystroke to release the lock and never
@@ -1468,11 +1591,15 @@ function setupEventListeners() {
     // `onPointerLockChange`.
     document.addEventListener('pointerlockchange', onPointerLockChange, { signal });
 
+    // ONE KEY, ONE CARD, IN EVERY DIRECTION. Escape used to mean three things
+    // depending on what happened to be open, and one of them was a settings
+    // panel that no longer exists. Now it opens the card wherever a visitor is
+    // and closes it wherever they opened it from.
     document.addEventListener('keydown', (event) => {
         if (event.code !== 'Escape') return;
-        if (gamePhase() === 'paused') closePause();
-        else if (settingsPanel && !settingsPanel.classList.contains('hidden')) toggleSettings(false);
-        else openPause();
+        if (_cardOverBriefing) closeBriefingCard();
+        else if (gamePhase() === 'paused') closePause();
+        else openHelmCard();
     }, { signal });
 
     const restartBtn = document.getElementById('restart-btn');
@@ -1487,6 +1614,13 @@ function setupEventListeners() {
         blocker.addEventListener('touchend', dismiss, { signal });
         document.addEventListener('keydown', (event) => {
             if (event.code === 'Enter' || event.code === 'Space') {
+                // NOT WHILE THE CARD IS OVER THE BRIEFING. The welcome screen is
+                // still in the DOM behind it, so without this the Enter or Space
+                // that dismisses the card would fall through in the same
+                // dispatch and start the run as well. `beginFlight` cannot catch
+                // this itself: the phase is still `briefing`, which is exactly
+                // the phase it is waiting for.
+                if (_cardOverBriefing) return;
                 if (!blocker.classList.contains('hidden')) beginFlight();
             }
         }, { signal });
@@ -1744,9 +1878,11 @@ function startOpening() {
 function revealBriefing() {
     setFleetVisible(true);
     if (blocker) blocker.classList.remove('hidden');
-    // The round buttons DO belong to the briefing: settings and the way home are
-    // both things a visitor may want before they fly. The HUD and the touch
-    // controls are not, and `showPlayChrome` owns those.
+    // The way home DOES belong to the briefing, and it is now the only round
+    // button in this sweep: the settings cog is gone, and its four controls live
+    // inside the card behind the "Controls and settings" button on this screen.
+    // The HUD and the touch controls are not part of the briefing at all, and
+    // `showPlayChrome` owns those.
     //
     // PAUSE IS THE EXCEPTION AND IT IS EXCLUDED BY NAME. There is nothing to
     // pause on a welcome screen, and `showPauseButton` owns it from here on.

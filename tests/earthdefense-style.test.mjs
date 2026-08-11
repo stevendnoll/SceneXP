@@ -241,9 +241,14 @@ describe('the top-right button cluster does not stack on itself', () => {
         return found;
     }
 
+    // TWO BUTTONS NOW, NOT THREE. The settings cog left the page: a floating
+    // control cannot be clicked while the pointer is locked, and its panel was
+    // buried under the pause card's backdrop the moment Escape made the cursor
+    // available. Both of its jobs moved into the card. The test still earns its
+    // keep with two, because pause moved back into the slot the cog vacated and
+    // that is the coordinate the original bug was about.
     const CLUSTER = [
         ['home', '.menu-btn'],
-        ['settings', '.settings-btn'],
         ['pause', '.pause-btn']
     ];
 
@@ -278,8 +283,9 @@ describe('every control shows a focus ring', () => {
     // stylesheet covers the sliders, the skip link and the card buttons and
     // leaves the rest on the browser default, so these are the rest of the set.
     const FOCUSABLE = [
-        'button.click-prompt', '.menu-btn', '.settings-btn',
-        '.modal-close', '.settings-close', '.settings-check input[type="checkbox"]'
+        'button.click-prompt', 'button.briefing-menu-btn', '.menu-btn',
+        '.card-settings > summary', '.modal-close',
+        '.settings-check input[type="checkbox"]'
     ];
 
     test.each(FOCUSABLE)('%s has a :focus-visible outline', (selector) => {
