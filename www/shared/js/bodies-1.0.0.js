@@ -332,6 +332,30 @@ export function getBodiesGroup() { return group; }
 
 export function getElapsed() { return elapsed; }
 
+/** Put the orbit clock back to zero, without rebuilding anything.
+ *
+ *  `initBodies` and `disposeBodies` were the only two things that ever did
+ *  this, and both of them throw every mesh and texture away to do it, which is
+ *  far too much to ask of a scene that only wants its sky back at the start.
+ *
+ *  A SCENE THAT COMPOSES ITS OPENING FRAME NEEDS THIS. Where a moon is at t=0
+ *  can be a solved value rather than an arbitrary one: Earth Defense picks its
+ *  moon's phase and inclination backwards from where the moon has to sit in the
+ *  frame the visitor is first shown. Nothing put the clock back when that scene
+ *  restarted, so a second run opened on a sky the composition never intended,
+ *  and the faster the body the worse it read: at an eight minute lap a two
+ *  minute run leaves the moon a quarter of an orbit away.
+ *
+ *  IT DOES NOT MOVE ANYTHING BY ITSELF, deliberately. Every mesh still sits
+ *  where the last `updateBodies` left it until the next one runs, so a caller
+ *  that wants the change on the frame it asked rather than the frame after
+ *  follows this with `updateBodies(0)`. That keeps the two facts separate: this
+ *  is what time it is, and that is where everything goes. */
+export function resetBodyClock() {
+    elapsed = 0;
+    return elapsed;
+}
+
 /** Every body's current world-space centre, as plain numbers. This is what the
  *  HUD's nav markers and any AI steering should read, because it is live: a
  *  cached moon position is what makes an interception feel broken. */

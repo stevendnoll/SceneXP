@@ -47,7 +47,7 @@ import {
     setConstrainPosition, setPaused
 } from '../../shared/js/flight-1.0.0.min.js';
 import {
-    initWorld, updateWorld, getBody, getOccluders, getStructures, getStructure,
+    initWorld, updateWorld, resetWorld, getBody, getOccluders, getStructures, getStructure,
     resetStructures, targetCandidates, damageStructure
 } from './world.min.js';
 import { altitudeFloorAdjust } from '../../shared/js/bodies-1.0.0.min.js';
@@ -724,6 +724,19 @@ function formatClock(seconds) {
 function restartRun() {
     const config = EARTHDEFENSE_CONFIG;
 
+    // THE SKY GOES FIRST, and it used to not go at all. The Moon's phase and
+    // the Earth rotation the four installations ride are both part of the
+    // composed opening frame, and both are driven by a clock in bodies-1.0.0
+    // that only `initBodies` had ever reset. A restart put everything else back
+    // and left the sky where the last run had carried it: after two minutes the
+    // Moon had swung from 10.9 degrees right of the nose to 104, and Earth had
+    // turned 13 degrees with the installations on it.
+    //
+    // BEFORE THE INSTALLATIONS, because they are PARENTED to Earth. Their world
+    // positions are Earth's rotation applied to a fixed local point, and
+    // `resetWorld` re-seats the cached aim and up vectors that everything
+    // downstream steers by. Resetting them first would sample the old sky.
+    resetWorld();
     resetStructures(config);
     resetFleet();
 

@@ -23,7 +23,7 @@
 
 import { EARTHDEFENSE_CONFIG, spawnPosition } from './config.min.js';
 import {
-    initBodies, createBody, orbitBody, updateBodies,
+    initBodies, createBody, orbitBody, updateBodies, resetBodyClock,
     getBody, bodyPositions, getOccluders
 } from '../../shared/js/bodies-1.0.0.min.js';
 import {
@@ -143,6 +143,31 @@ export function initWorld(scene, manager) {
 export function updateWorld(deltaTime) {
     updateBodies(deltaTime);
     sampleStructureMotion(deltaTime);
+}
+
+/** Put the standing scene back to its first frame, for a restart.
+ *
+ *  THE OPENING FRAME IS A COMPOSED VALUE, NOT AN ARBITRARY ONE, which is the
+ *  whole reason this exists. The Moon's phase and inclination are solved
+ *  backwards from where it has to sit at spawn: 10.8 degrees right of the nose
+ *  and 7.0 above, inside the narrowest portrait phone with room to spare. The
+ *  four Earth installations are inside the 41.5 degree cap the spawn point can
+ *  see, and they are parented to Earth, so they turn with it.
+ *
+ *  None of that survived a restart. `restartRun` put the fleet, the
+ *  installations and the flight model back and left the sky where the last run
+ *  had carried it: measured after a two minute run, the Moon had moved from
+ *  10.9 degrees right of the nose to 104 degrees, Earth had turned 13 degrees
+ *  and taken the installations with it, and Mars had turned 52. A second run
+ *  opened on a composition nobody had chosen.
+ *
+ *  ZERO RATHER THAN A SKIP, exactly like the briefing's held frame in main.js's
+ *  loop: `updateWorld(0)` re-seats every body and every installation's aim and
+ *  up on THIS frame rather than the next one, so nothing is drawn from the old
+ *  sky in between. */
+export function resetWorld() {
+    resetBodyClock();
+    updateWorld(0);
 }
 
 /** Place a camera at the composed spawn viewpoint: `spawn.distance` from

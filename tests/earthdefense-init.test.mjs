@@ -509,6 +509,43 @@ describe('the world builds and ticks', () => {
         expect(world.structuresRemaining('friendly')).toBe(7);
     });
 
+    /** THE STANDING SCENE GOES BACK TO ITS FIRST FRAME FOR A RESTART, and the
+     *  reason it has to is composition rather than tidiness. Where the Moon
+     *  sits at spawn is a SOLVED value: its phase and inclination are picked
+     *  backwards from the frame the visitor is first shown, and the four Earth
+     *  installations are inside the cap that frame can see because Earth's
+     *  rotation is at zero. `restartRun` does not rebuild the world, so before
+     *  this existed a second run inherited the first one's sky.
+     *
+     *  THE CLOCK IS THE ONLY HONEST HANDLE AT THIS LAYER, and that is a
+     *  statement about the stub rather than about the code. This describe runs
+     *  on the chainable THREE proxy, where every mesh position reads back as
+     *  zero, so "the Moon moved back" is not a question that can be asked here:
+     *  an assertion on `getBody('moon').position` would pass against a proxy
+     *  and prove nothing. Every position is a pure function of this number, so
+     *  this is the fact worth holding. That `updateBodies(0)` really does put
+     *  the meshes back on the same frame is asserted in
+     *  tests/shared-bodies.test.mjs, which builds against a stub that records. */
+    test('resetWorld winds the standing scene back to its first frame', async () => {
+        jest.resetModules();
+        const bodies = await import('../www/shared/js/bodies-1.0.0.min.js');
+        const world = await import('../www/earthdefense/js/world.js');
+        world.initWorld({ add() {} }, null);
+
+        // A quarter of the Moon's eight minute lap.
+        world.updateWorld(120);
+        expect(bodies.getElapsed()).toBeCloseTo(120);
+
+        world.resetWorld();
+        expect(bodies.getElapsed()).toBe(0);
+
+        // And it runs on from there rather than being pinned, which is the
+        // failure a reset in the wrong place would leave: a second run under a
+        // sky that never moves again.
+        world.updateWorld(0.5);
+        expect(bodies.getElapsed()).toBeCloseTo(0.5);
+    });
+
     /** A fresh world.js whose WebP probe sees the canvas this factory returns.
      *  The answer is cached inside the module, so each case needs its own. */
     async function loadWorldWith(createElement) {

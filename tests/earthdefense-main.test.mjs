@@ -690,6 +690,74 @@ describe('restarting', () => {
             .toBe(config.structures.hitPoints);
     });
 
+    /** THE SKY IS PART OF "EVERY MODULE", and it was the one that was not put
+     *  back. Reported by Steve after beating the game and pressing Fly again.
+     *
+     *  IT MATTERS BECAUSE THE OPENING FRAME IS A SOLVED VALUE. The Moon's phase
+     *  and inclination are picked backwards from where it has to sit at spawn,
+     *  10.8 degrees right of the nose and 7.0 above, and Earth's rotation is
+     *  what puts the four installations inside the 41.5 degree cap the spawn
+     *  point can see. Both ride one clock in bodies-1.0.0 that only
+     *  `initBodies` had ever reset, and `restartRun` does not rebuild the
+     *  world. Measured before the fix, after a two minute run: the Moon had
+     *  swung from 10.9 degrees right of the nose to 104, Earth had turned 13
+     *  degrees carrying the installations with it, and Mars 52. The second run
+     *  opened on a composition nobody had chosen.
+     *
+     *  Asserted through the clock and `orbitPositionAt` rather than off the
+     *  meshes, because this suite's THREE stub models no geometry: the position
+     *  is a pure function of the clock, so the clock is the honest handle. */
+    test('puts the sky back, not only the things that can be shot', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        const bodies = await import('../www/shared/js/bodies-1.0.0.min.js');
+        const fleet = await import('../www/earthdefense/js/fleet.min.js');
+        const moon = config.bodies.find((b) => b.id === 'moon').orbit;
+        const composed = bodies.orbitPositionAt(0, moon);
+
+        enterWorld();
+        // Two minutes is a quarter of the Moon's eight minute lap, so this is
+        // an unmissable amount of drift rather than a rounding error.
+        stepFrames(Math.ceil(120 / 0.016));
+        expect(bodies.getElapsed()).toBeGreaterThan(100);
+        const drifted = bodies.orbitPositionAt(bodies.getElapsed(), moon);
+        expect(Math.hypot(drifted.x - composed.x, drifted.z - composed.z))
+            .toBeGreaterThan(moon.radius);
+
+        for (const ship of fleet.getShips()) {
+            main.__test__.onDamageResolved({ id: ship.id, hitPoints: 0, destroyed: true });
+        }
+        playTheLastExplosion(config);
+        playOutTheEnding(config);
+        fire(dom.el('restart-btn'), 'click');
+
+        expect(bodies.getElapsed()).toBe(0);
+        const back = bodies.orbitPositionAt(bodies.getElapsed(), moon);
+        expect(back.x).toBeCloseTo(composed.x, 6);
+        expect(back.y).toBeCloseTo(composed.y, 6);
+        expect(back.z).toBeCloseTo(composed.z, 6);
+    });
+
+    /** And it runs on from there rather than being pinned at zero, which is the
+     *  failure a reset in the wrong place would produce: a second run under a
+     *  sky that never moves again. */
+    test('and the sky starts moving again from there', async () => {
+        const main = await boot();
+        const bodies = await import('../www/shared/js/bodies-1.0.0.min.js');
+        const fleet = await import('../www/earthdefense/js/fleet.min.js');
+
+        enterWorld();
+        stepFrames(60);
+        for (const ship of fleet.getShips()) {
+            main.__test__.onDamageResolved({ id: ship.id, hitPoints: 0, destroyed: true });
+        }
+        main.__test__.restartRun();
+        expect(bodies.getElapsed()).toBe(0);
+
+        stepFrames(30);
+        expect(bodies.getElapsed()).toBeGreaterThan(0.4);
+    });
+
     test('the second run can actually be won', async () => {
         // The failure this catches is silent and total: if the ids are not made
         // destructible again, the counters read full and nothing ever brings

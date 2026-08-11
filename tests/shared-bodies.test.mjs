@@ -477,6 +477,51 @@ describe('orbitBody and updateBodies', () => {
         expect(mod.getBody('still').rotation.y).toBe(0);
     });
 
+    /** THE CLOCK CAN BE PUT BACK WITHOUT THROWING THE SCENE AWAY.
+     *
+     *  `initBodies` and `disposeBodies` were the only two things that reset it,
+     *  and both rebuild every mesh and reload every texture to do it, which is
+     *  far too much for a scene that only wants its sky back at the start of a
+     *  new run. Earth Defense solves its moon's phase backwards from the frame
+     *  a visitor is first shown, and nothing put that back on a restart. */
+    test('resetBodyClock winds the clock back to zero', () => {
+        buildSystem();
+        mod.updateBodies(120);
+        expect(mod.getElapsed()).toBeCloseTo(120);
+
+        expect(mod.resetBodyClock()).toBe(0);
+        expect(mod.getElapsed()).toBe(0);
+    });
+
+    /** AND MOVES NOTHING BY ITSELF, which is the half a caller has to know
+     *  about. What time it is and where everything goes are kept as two facts,
+     *  so a caller that wants the change on the frame it asked for follows this
+     *  with a zero-length step rather than waiting for the next real one. */
+    test('resetBodyClock leaves the meshes until something steps them', () => {
+        buildSystem();
+        mod.updateBodies(120);
+        const moved = { ...mod.getBody('moon').position };
+        const spun = mod.getBody('mars').rotation.y;
+
+        mod.resetBodyClock();
+        expect(mod.getBody('moon').position.x).toBeCloseTo(moved.x);
+        expect(mod.getBody('mars').rotation.y).toBeCloseTo(spun);
+
+        // A zero step re-seats everything on this frame rather than the next.
+        mod.updateBodies(0);
+        const start = mod.orbitPositionAt(0, MOON);
+        expect(mod.getBody('moon').position.x).toBeCloseTo(start.x);
+        expect(mod.getBody('moon').position.z).toBeCloseTo(start.z);
+        expect(mod.getBody('mars').rotation.y).toBeCloseTo(0);
+        expect(mod.getElapsed()).toBe(0);
+    });
+
+    test('resetBodyClock is safe with no bodies built at all', () => {
+        mod.disposeBodies();
+        expect(mod.resetBodyClock()).toBe(0);
+        expect(() => mod.updateBodies(0)).not.toThrow();
+    });
+
     test('orbiting an unknown body is a no-op rather than a throw', () => {
         mod.initBodies();
         expect(mod.orbitBody('nobody', 'earth', MOON)).toBeNull();
