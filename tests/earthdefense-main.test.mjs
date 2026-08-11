@@ -35,12 +35,13 @@ beforeEach(() => {
 
     // The welcome overlay and both modals ship hidden or shown by the page; the
     // auto-vivified stubs start bare, so seed what main.js expects to find.
-    // The page ships these hidden and the auto-vivified stubs start bare. The
-    // settings panel matters most: main.js's Escape handler checks it before it
-    // reaches for the pause, so a panel that reads as already open swallows
-    // every Escape key in the suite.
-    ['pause-modal', 'end-modal', 'settings-panel', 'lock-bracket', 'perimeter-notice',
-        'replay-inset']
+    //
+    // THE SETTINGS PANEL IS NO LONGER IN THIS LIST because it is no longer on
+    // the page. Its four controls moved into the helm card, which is the one
+    // surface a visitor can reach with a cursor: a floating cog cannot be
+    // clicked while the pointer is locked, and Escape, the only way to get the
+    // cursor back, raises the card whose backdrop then covers the cog.
+    ['pause-modal', 'end-modal', 'lock-bracket', 'perimeter-notice', 'replay-inset']
         .forEach(id => dom.el(id).classList.add('hidden'));
 
     dom.documentStub.pointerLockElement = null;
@@ -344,15 +345,110 @@ describe('pausing', () => {
         expect(main.getState().isPaused).toBe(true);
     });
 
-    test('Escape closes the settings panel before it reaches for the pause', async () => {
+});
+
+// ---- The helm card ----------------------------------------------------------
+//
+// WHAT THIS DESCRIBE EXISTS FOR. Settings used to live in a floating panel
+// behind a floating cog, and on a desktop that pair was unreachable by design
+// rather than by accident: flying locks the pointer and hides the cursor, so
+// the cog cannot be clicked; Escape is how a browser hands the cursor back, and
+// losing the lock is what raises the pause card, whose backdrop then covers the
+// cog; closing the card asks for the lock straight back. The only way through
+// was the browser's brief post-Escape lock-out refusing that request, which is
+// why it worked sometimes and not others.
+//
+// Everything now lives on the card, which serves two moments, and the tests
+// below are about the seam between them: the same card over a running game and
+// over a welcome screen, with different copy and different ways out.
+
+describe('the helm card', () => {
+    test('the briefing opens the card without starting the run', async () => {
+        const main = await boot();
+        fire(dom.el('briefing-menu-btn'), 'click');
+
+        expect(dom.el('pause-modal').classList.contains('hidden')).toBe(false);
+        // THE POINT OF THE WHOLE TEST. The card is up, and the game has not
+        // moved: no clock, no fleet closing in, and no pause state either,
+        // because pausing a game that has not started is not a thing.
+        expect(main.getState().phase).toBe('briefing');
+    });
+
+    test('the briefing route expands the settings it advertised', async () => {
+        await boot();
+        expect(dom.el('card-settings').open).toBeFalsy();
+        fire(dom.el('briefing-menu-btn'), 'click');
+        expect(dom.el('card-settings').open).toBe(true);
+    });
+
+    test('the card says which moment it is in', async () => {
+        await boot();
+        fire(dom.el('briefing-menu-btn'), 'click');
+        expect(dom.el('pause-title').textContent).toBe('Before you fly');
+        expect(dom.el('card-dismiss').textContent).toBe('Back to the briefing');
+
+        // And over a run it goes back to being a pause. "Nothing moves while
+        // this is open" is a promise only one of the two moments can keep.
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+        enterWorld();
+        fire(dom.el('pause-btn'), 'click');
+        expect(dom.el('pause-title').textContent).toBe('Holding station');
+        expect(dom.el('card-dismiss').textContent).toBe('Back to the helm');
+    });
+
+    test('Escape closes the briefing card without pausing anything', async () => {
+        const main = await boot();
+        fire(dom.el('briefing-menu-btn'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+
+        expect(dom.el('pause-modal').classList.contains('hidden')).toBe(true);
+        expect(main.getState().phase).toBe('briefing');
+        expect(main.getState().isPaused).toBe(false);
+    });
+
+    test('Enter does not take the helm out from under the open card', async () => {
+        // THE BUG THIS EXISTS FOR. The welcome screen is still in the DOM behind
+        // the card, and #blocker turns Enter into "take the helm" so the whole
+        // screen is one target. Without the guard, the Enter that dismisses the
+        // card falls through in the same dispatch and starts the run as well,
+        // leaving a visitor flying behind a panel they were only reading.
+        const main = await boot();
+        fire(dom.el('briefing-menu-btn'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Enter' });
+
+        expect(main.getState().phase).toBe('briefing');
+    });
+
+    test('Escape over a run still pauses it, and again to resume', async () => {
         const main = await boot();
         enterWorld();
-        fire(dom.el('settings-btn'), 'click');
-        expect(dom.el('settings-panel').classList.contains('hidden')).toBe(false);
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+        expect(main.getState().isPaused).toBe(true);
 
         fire(dom.documentStub, 'keydown', { code: 'Escape' });
-        expect(dom.el('settings-panel').classList.contains('hidden')).toBe(true);
         expect(main.getState().isPaused).toBe(false);
+    });
+
+    test('an ended run is left alone, the end card is already up', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        enterWorld();
+        await clearTheFleet(main);
+        playOutTheEnding(config);
+
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+        expect(main.getState().phase).toBe('won');
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
+    });
+
+    test('both ways home point at the same place', async () => {
+        // The round button in the corner is the site-wide convention and the
+        // skip link's target; the card link is the one a visitor can actually
+        // click mid-flight, when the cursor is captured.
+        await boot();
+        const config = await CONFIG();
+        expect(dom.el('home-btn').href).toBe(config.site.home.path);
+        expect(dom.el('home-link').href).toBe(config.site.home.path);
     });
 });
 

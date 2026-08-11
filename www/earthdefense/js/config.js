@@ -343,7 +343,7 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         turnRate: 1.3,          // radians/second at full deflection
         pitchClamp: 1.48,       // 85 degrees, so nobody can invert
         mouseSensitivity: 0.0022,
-        lookSensitivity: 1.0,   // the settings cog drives this
+        lookSensitivity: 1.0,   // the flight settings in the helm card drive this
         invertPitch: false,
         // Throttle fraction per second while a key or stick is held. At 0.8 a
         // full sweep from stop to maximum takes a bit over a second, which
