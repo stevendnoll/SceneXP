@@ -6,6 +6,10 @@ Custom 3D experiences, right in your browser. Built with [Three.js](https://thre
 
 [![SceneXP.com, custom 3D experiences, right in your browser](www/assets/og-image.jpg)](https://www.scenexp.com/)
 
+Defend Earth from the Martian fleet.
+
+[![A close-up of the Earth with Mars and the moon in the distance](www/earthdefense/assets/og-earthdefense.jpg)](https://www.scenexp.com/earthdefense/)
+
 Try the 3D Mandelbrot zoom.
 
 [![A glowing spiral of warm color deep inside the Mandelbrot set, captured mid-dive in the Mandelbrot experience](www/mandelbrot/assets/og-mandelbrot.jpg)](https://www.scenexp.com/mandelbrot/)
