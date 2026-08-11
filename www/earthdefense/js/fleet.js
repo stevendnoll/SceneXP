@@ -100,6 +100,42 @@ export function hashUnit(n) {
     return ((h >>> 0) / 4294967296) * 2 - 1;
 }
 
+/** The unit vector from Earth out to where the fleet stands, which is the
+ *  approach line read outward. Measured from Earth, so a raider's start is this
+ *  times its group's start distance, and its heading is this reversed.
+ *
+ *  Pure, and exported because the opening shot is staged on the same line. It
+ *  was written twice for a while, once here and once as `approachHeading` in
+ *  intro.js, and the two disagreeing is exactly how the shot ended up framed on
+ *  a fleet that was standing somewhere else. */
+export function approachDirection(approach, out = { x: 0, y: 0, z: 0 }) {
+    const a = approach || {};
+    return normalise(out, Math.sin(a.azimuth || 0), Math.sin(a.elevation || 0), -1);
+}
+
+/** Where the trailing group starts, before any per-ship scatter.
+ *
+ *  THE OPENING SHOT IS STAGED ON THIS POINT, which is the whole reason it is
+ *  exported rather than left inside `buildShip`. The squadron forms up here and
+ *  the camera stands `intro.range` ahead of it, so the last frame of the shot
+ *  puts the wedge exactly where the deepest four raiders are standing.
+ *
+ *  NOMINAL RATHER THAN THE SCATTER CENTROID, deliberately. The four real
+ *  raiders sit within a couple of thousand units of this, which from the spawn
+ *  point is a third of a degree, well inside Mars's own disc: near enough that
+ *  the markers land on the wedge. Using their actual mean instead would drag
+ *  the anchor a thousand units sideways off the approach ray for no visible
+ *  gain, and take the shot's whole composition with it. */
+export function fleetStartAnchor(config = EARTHDEFENSE_CONFIG, out = { x: 0, y: 0, z: 0 }) {
+    const f = (config && config.fleet) || {};
+    const groups = f.groups || [];
+    if (!groups.length) { out.x = 0; out.y = 0; out.z = 0; return out; }
+    const distance = groups[groups.length - 1].startDistance || 0;
+    approachDirection(f.approach, out);
+    out.x *= distance; out.y *= distance; out.z *= distance;
+    return out;
+}
+
 /** Turn a unit heading toward a unit target by at most `maxTurn` radians.
  *
  *  Exact rather than a normalised lerp, which turns by less than it promises
@@ -549,15 +585,9 @@ function buildShield(mesh) {
 }
 
 function buildShip(index, groupIndex, spec, body) {
-    const a = cfg.approach;
     // The approach line, tilted off the Earth-to-Mars axis. See config.js for
-    // why it is tilted at all.
-    const direction = {
-        x: Math.sin(a.azimuth),
-        y: Math.sin(a.elevation),
-        z: -1
-    };
-    normalise(direction, direction.x, direction.y, direction.z);
+    // why it is tilted at all, and why it is tilted so much less than it was.
+    const direction = approachDirection(cfg.approach);
 
     const s = cfg.spread;
     const position = {

@@ -20,34 +20,64 @@
  * other end of a run, where the finale opens at the distance the replay closes
  * at, and it works here for the same reason.
  *
+ * THE SHOT IS STAGED ON THE REAL FLEET'S START LINE, and it was not always, and
+ * that correction is what most of this file now is. The staging used to be
+ * chosen for the picture: put the camera 14,000 units off Mars, hang a wedge
+ * between it and the disc, and it framed beautifully. What it framed was a
+ * fleet that did not exist. The twelve real raiders stood 3.4 degrees to the
+ * right of Mars, so a visitor watched a squadron close up dead centre on the
+ * planet, the camera pulled back, and the hostile markers lit up two Mars
+ * diameters away from where the squadron had just been. Both halves were
+ * correct and they were not the same fleet.
+ *
+ * So the staging is now derived rather than composed. `fleetStartAnchor` gives
+ * the point the trailing group starts from; the squadron forms up there, ship
+ * zero lands exactly on it, and the camera stands `range` ahead of it on the
+ * fleet's own heading. The last frame therefore puts the wedge within a third
+ * of a degree of the four raiders about to be marked, which is well inside
+ * Mars's own disc as seen from the spawn point.
+ *
+ * MARS IS NOT AN INPUT TO ANY OF IT, which is the part worth not undoing. This
+ * file no longer knows where Mars is. It is behind the squadron because
+ * `MARS_DISTANCE` is 10,000 units further out than the trailing group's start,
+ * and that is a property of config.js that the intro suite asserts against this
+ * path rather than a number this module is holding.
+ *
  * THE CAMERA NEVER TURNS AROUND, and the geometry is arranged so it does not
- * have to. The spawn camera looks AT Mars. So this one starts close to Mars,
- * on the Earth side of it, already looking at Mars, and then retreats: one long
- * pull-back with 15 degrees of settle in it rather than a whip. Mars shrinks
- * from a 28 degree disc to the 1.9 degree one the spawn frame has always had,
- * the formation shrinks with it into the line of lights the spawn frame has
- * always shown, and Earth's limb rises into the bottom of the frame on the last
- * beat. The opening frame is not cut to, it is assembled.
+ * have to. The spawn camera looks down the approach line, and so does this one
+ * from the first frame: it starts just ahead of the fleet facing back at it,
+ * and then retreats down the same line. One long pull-back with 15 degrees of
+ * settle in it rather than a whip. Mars shrinks from a 27 degree disc to the
+ * 1.8 degree one the spawn frame has, the formation shrinks with it into the
+ * line of lights the spawn frame has always shown, and Earth's limb rises into
+ * the bottom of the frame on the last beat.
  *
  * THE CAMERA STANDS ON THE FLEET'S OWN APPROACH LINE, which is the one thing
- * here that took two attempts. A formation has depth, and depth seen from off
+ * here that took three attempts. A formation has depth, and depth seen from off
  * its own axis projects sideways across the frame: the first staging put the
  * camera 32 degrees off the line and the finished wedge was a sheared diagonal
  * with its two columns bunched at opposite edges, nothing like the shape
- * `wedgeSlot` lays out. `intro.marsSide` is now `fleet.approach` flattened, so
- * the squadron is watched along the line it is flying, and the pairs land
- * symmetrically either side of their leader.
+ * `wedgeSlot` lays out. The second stood on the Mars-to-fleet line, only 12
+ * degrees off, and still pulled the two columns 93 percent out of balance. The
+ * camera now stands on `approachHeading` itself, so the squadron is watched
+ * along the line it is flying and the pairs land symmetrically either side of
+ * their leader. `elevation` lifts the camera off that line vertically, which is
+ * free: a lift moves the wedge's depth into screen-Y, and the shear that
+ * matters is horizontal.
  *
- * THIS IS NOT THE REAL FLEET, and that is the one decision in this file worth
- * defending. The twelve raiders are built and standing on their start line from
- * the moment the world is, and those start positions are load bearing: arrival
+ * THESE ARE STILL NOT THE REAL RAIDERS, even though they now stand exactly
+ * where four of them do, and that is the one decision in this file worth
+ * defending. The twelve are built and standing on their start line from the
+ * moment the world is, and those start positions are load bearing: arrival
  * times are read straight off them and the init suite asserts the opening frame
  * against them. Flying them to Mars and putting them back with `resetFleet`
  * would mean a snap on the exact frame the camera is watching them. So this
  * module owns nine throwaway hulls, built through `createRaiderMesh` from
  * fleet.js's own shared geometry so a raider keeps one definition, and the real
- * fleet is hidden for five seconds. At arrival the throwaways are 190,000 units
- * behind the camera and smaller than a pixel, so disposing them is invisible.
+ * fleet is hidden for five seconds. Hiding it matters more than it used to:
+ * they are no longer parked somewhere else in the sky, they are in the same
+ * cubic kilometre. At arrival the throwaways are 200,000 units behind the
+ * camera and smaller than a pixel, so disposing them is invisible.
  *
  * NOTHING HERE IS RANDOM, exactly like the fleet's formation scatter and the
  * finale's spark directions. Every start offset and every start heading comes
@@ -75,7 +105,9 @@
 
 import { EARTHDEFENSE_CONFIG, spawnPosition } from './config.min.js';
 import { orbitEye, smoothstep } from './replay.min.js';
-import { createRaiderMesh, hashUnit } from './fleet.min.js';
+import {
+    createRaiderMesh, hashUnit, fleetStartAnchor, approachDirection
+} from './fleet.min.js';
 
 const WORLD_UP = { x: 0, y: 1, z: 0 };
 
@@ -93,12 +125,11 @@ let activeCount = 0;
 const shot = { running: false, elapsed: 0, seconds: 0 };
 
 // The frame the whole shot is built in, solved once when it starts.
-const marsAt = { x: 0, y: 0, z: 0 };
 const spawnAt = { x: 0, y: 0, z: 0 };
-// Where the camera stands at angle zero, as a unit direction out of Mars. The
-// formation hangs on this same line, which is what puts it between the camera
-// and the disc.
-const standAt = { x: 0, y: 0, z: 0 };
+// The point the real fleet's trailing group starts from. The formation arrives
+// here on the last frame and the camera stands `range` ahead of it, so this one
+// vector places both.
+const anchor = { x: 0, y: 0, z: 0 };
 // The formation's own axes: where it is heading, and right and up beside that.
 const nose = { x: 0, y: 0, z: 1 };
 const right = { x: 1, y: 0, z: 0 };
@@ -107,8 +138,12 @@ const above = { x: 0, y: 1, z: 0 };
 const base = { x: 0, y: 0, z: 0 };
 
 const eye = { x: 0, y: 0, z: 0, look: { x: 0, y: 0, z: 0 } };
-const scratch = { x: 0, y: 0, z: 0 };
 const heading = { x: 0, y: 0, z: 1 };
+// `introPath` is called a few thousand times by the suite and once a frame by
+// the game, so its two axes are solved into these rather than allocated.
+const pathSide = { x: 0, y: 0, z: 0 };
+const pathUp = { x: 0, y: 0, z: 0 };
+const pathRight = { x: 0, y: 0, z: 0 };
 
 // ---- Pure core --------------------------------------------------------------
 
@@ -157,31 +192,46 @@ export function shipProgress(index, total, elapsed, formSeconds, shipTravel) {
 /** The camera, for any moment of the shot.
  *
  *  Two eased parameters and no branch on which beat is playing, which is what
- *  makes the joins invisible: the orbit around Mars is running for the whole
- *  shot, the pull-back to the spawn point is blended over it, and the look
- *  target crosses from Mars to straight-ahead on its own slightly earlier
- *  clock so the camera is facing where it is going rather than being dragged
- *  round after it has set off.
+ *  makes the joins invisible: the orbit around the formation is running for the
+ *  whole shot, the pull-back to the spawn point is blended over it, and the look
+ *  target crosses from the formation to straight-ahead on its own slightly
+ *  earlier clock so the camera is facing where it is going rather than being
+ *  dragged round after it has set off.
+ *
+ *  IT ORBITS THE FORMATION, NOT THE PLANET, which is the change that let
+ *  `swing` stop being an apology. Orbiting Mars walked the squadron out of the
+ *  frame, because the nearer thing leaves first, so the drift had to be kept
+ *  tiny for a reason that had nothing to do with how much life the shot wanted.
+ *  Around the formation the subject holds still and the background slides.
  *
  *  THE LOOK TARGET IS PART ABSOLUTE AND PART RELATIVE, on purpose. It blends
- *  Mars's centre, a fixed point, against a point 1,000 units down -Z FROM
- *  WHEREVER THE CAMERA IS, which is a moving one. That is what makes the last
- *  frame exact rather than nearly right: at the end of the blend the camera is
- *  at the spawn point looking 1,000 units down -Z, which is `placeCameraAtSpawn`
- *  word for word, whatever the numbers above it have been retuned to.
+ *  the anchor, a fixed point, against a point 1,000 units down -Z FROM WHEREVER
+ *  THE CAMERA IS, which is a moving one. That is what makes the last frame
+ *  exact rather than nearly right: at the end of the blend the camera is at the
+ *  spawn point looking 1,000 units down -Z, which is `placeCameraAtSpawn` word
+ *  for word, whatever the numbers above it have been retuned to.
  *
  *  Takes its subjects as plain vectors so the whole path can be sampled against
  *  the planets in a test without a renderer, which is the only way the clearance
- *  margin is worth anything. */
-export function introPath(elapsed, spec, mars, spawn, out = { x: 0, y: 0, z: 0, look: { x: 0, y: 0, z: 0 } }) {
+ *  margin is worth anything. Note that Mars is NOT among them: the shot is
+ *  placed entirely off the fleet's own anchor and heading, and Mars filling the
+ *  frame behind it is a property of where config.js puts Mars. */
+export function introPath(elapsed, spec, subject, forward, spawn, out = { x: 0, y: 0, z: 0, look: { x: 0, y: 0, z: 0 } }) {
     const seconds = Math.max(0.1, spec.seconds || 5);
     const form = Math.max(0, spec.formSeconds || 0);
     const run = Math.max(0.1, spec.runSeconds || 1);
     const t = Math.min(Math.max(elapsed, 0), seconds);
 
-    const side = unit(spec.marsSide || [0, 0, 1], scratch);
-    orbitEye(mars, WORLD_UP, side, spec.marsDistance || 13000,
-        (spec.swing || 0) * smoothstep(t / seconds), spec.marsElevation || 0, out);
+    // The camera stands AHEAD of the squadron, which is `range` along the
+    // heading, and looks back down it. It orbits about the formation's own up
+    // axis: taking that axis from `formationFrame` rather than from the world
+    // keeps `orbitEye`'s side and axis exactly perpendicular, so `range` means
+    // `range`. The old code flattened its side vector into the equatorial plane
+    // to get the same guarantee and quietly lost a percent of its distance.
+    normalise(pathSide, forward.x, forward.y, forward.z);
+    formationFrame(forward, pathRight, pathUp);
+    orbitEye(subject, pathUp, pathSide, spec.range || 4000,
+        (spec.swing || 0) * smoothstep(t / seconds), spec.elevation || 0, out);
 
     const moveU = smoothstep((t - form) / run);
     const lookU = smoothstep((t - form + (spec.lookLead || 0)) / run);
@@ -193,9 +243,9 @@ export function introPath(elapsed, spec, mars, spawn, out = { x: 0, y: 0, z: 0, 
     out.y += (spawn.y - out.y) * moveU;
     out.z += (spawn.z - out.z) * moveU;
 
-    out.look.x = mars.x + ((out.x) - mars.x) * lookU;
-    out.look.y = mars.y + ((out.y) - mars.y) * lookU;
-    out.look.z = mars.z + ((out.z - SPAWN_LOOK_AHEAD) - mars.z) * lookU;
+    out.look.x = subject.x + ((out.x) - subject.x) * lookU;
+    out.look.y = subject.y + ((out.y) - subject.y) * lookU;
+    out.look.z = subject.z + ((out.z - SPAWN_LOOK_AHEAD) - subject.z) * lookU;
     return out;
 }
 
@@ -220,13 +270,15 @@ export function formationFrame(forward, outRight = { x: 0, y: 0, z: 0 }, outUp =
 /** The direction the fleet is travelling: out of Mars and toward Earth, along
  *  the same tilted approach line the real raiders fly in on.
  *
- *  Read from `fleet.approach` rather than written down again here, so the
- *  squadron that forms up in the opening is heading exactly where the twelve
- *  raiders behind it are heading. The sign is flipped because `approach`
- *  describes where the fleet STARTS, measured outward from Earth. */
+ *  `approachDirection`'s vector reversed, rather than the trigonometry written
+ *  down a second time. `approach` describes where the fleet STARTS, measured
+ *  outward from Earth; this is the way it then flies. Delegating matters more
+ *  than it looks: the camera is placed off this heading and the raiders are
+ *  placed off that direction, so the two drifting apart would put the shot back
+ *  where it started, framed on a fleet standing somewhere else. */
 export function approachHeading(approach, out = { x: 0, y: 0, z: 1 }) {
-    const a = approach || {};
-    return normalise(out, -Math.sin(a.azimuth || 0), -Math.sin(a.elevation || 0), 1);
+    approachDirection(approach, out);
+    return normalise(out, -out.x, -out.y, -out.z);
 }
 
 // ---- Setup ------------------------------------------------------------------
@@ -322,34 +374,32 @@ export function setIntroReduced(on) {
 
 /** Begin the opening shot.
  *
- *  `mars` is the planet's world position, passed in rather than read from a
- *  body id, for the same reason the finale takes its sources by argument: this
- *  file then has no opinion about how the world is assembled and can be driven
- *  by two plain vectors in a test.
+ *  Takes nothing but the config, because there is nothing else to take any
+ *  more. The anchor and the heading both come from `config.fleet`, and the
+ *  camera is placed off those, so this can be driven end to end in a test with
+ *  no world, no bodies and no renderer.
  *
  *  Returns the length of the shot in seconds, or 0 if it cannot run. */
-export function startIntro(mars, config = EARTHDEFENSE_CONFIG) {
-    if (!cfg || !group || !mars) return 0;
+export function startIntro(config = EARTHDEFENSE_CONFIG) {
+    if (!cfg || !group) return 0;
 
-    marsAt.x = mars.x; marsAt.y = mars.y; marsAt.z = mars.z;
     const p = spawnPosition(config);
     spawnAt.x = p.x; spawnAt.y = p.y; spawnAt.z = p.z;
 
-    // The line the camera stands on at angle zero, which is also the line the
-    // formation hangs on. Taking it from `orbitEye` rather than writing the
-    // trigonometry again means the two can never disagree about where "in front
-    // of the camera" is.
-    orbitEye(marsAt, WORLD_UP, unit(cfg.marsSide || [0, 0, 1], scratch),
-        1, 0, cfg.marsElevation || 0, standAt);
-    standAt.x -= marsAt.x; standAt.y -= marsAt.y; standAt.z -= marsAt.z;
+    // Where the trailing group of real raiders stands. The camera is placed off
+    // this and the formation arrives on it, which is the whole of the fix that
+    // put the wedge and the hostile markers in the same place.
+    fleetStartAnchor(config, anchor);
 
-    // The formation sits `range` in front of the camera, which on that line is
-    // `marsDistance - range` out from Mars. Between the camera and the disc, so
-    // the ships are silhouettes on it rather than specks beside it.
-    const out = (cfg.marsDistance || 13000) - (cfg.range || 4200);
-    base.x = marsAt.x + standAt.x * out;
-    base.y = marsAt.y + standAt.y * out;
-    base.z = marsAt.z + standAt.z * out;
+    // THE FORMATION IS RUN BACKWARDS FROM ITS ARRIVAL. It drifts forward for
+    // the whole shot, so it opens the entire drift behind the anchor in order
+    // to finish exactly on it: the frame that has to be right is the last one,
+    // where the wedge hands over to the markers. Ship zero has no slot offset,
+    // so ship zero lands on the anchor to the unit.
+    const drift = (cfg.driftSpeed || 0) * Math.max(0.1, cfg.seconds || 5);
+    base.x = anchor.x - nose.x * drift;
+    base.y = anchor.y - nose.y * drift;
+    base.z = anchor.z - nose.z * drift;
 
     shot.running = true;
     shot.elapsed = 0;
@@ -446,7 +496,7 @@ function writeShips() {
 }
 
 function writeEye() {
-    introPath(shot.elapsed, cfg, marsAt, spawnAt, eye);
+    introPath(shot.elapsed, cfg, anchor, nose, spawnAt, eye);
 }
 
 // ---- What the caller reads --------------------------------------------------
@@ -466,13 +516,8 @@ function normalise(out, x, y, z) {
     return out;
 }
 
-/** A three number array from config as a unit vector. */
-function unit(list, out) {
-    return normalise(out, list[0] || 0, list[1] || 0, list[2] || 0);
-}
-
 export const __test__ = {
-    shot, eye, base, nose, right, above, marsAt, spawnAt,
+    shot, eye, base, nose, right, above, anchor, spawnAt,
     squadron: () => squadron,
     activeCount: () => activeCount,
     group: () => group,

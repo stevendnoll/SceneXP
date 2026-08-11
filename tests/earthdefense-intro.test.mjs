@@ -127,7 +127,16 @@ afterEach(() => {
     delete globalThis.document;
 });
 
-const MARS = { x: 0, y: 0, z: -200000 };
+/** Mars, read from config rather than written down, because the whole point of
+ *  the current staging is that this module does not decide where it is. */
+const mars = () => {
+    const p = CONFIG.bodies.find((b) => b.id === 'mars').position;
+    return { x: p[0], y: p[1], z: p[2] };
+};
+/** The two vectors the shot is now placed from: where the trailing group of
+ *  real raiders stands, and the direction the fleet flies. */
+const anchor = () => fleet.fleetStartAnchor(CONFIG);
+const heading = () => intro.approachHeading(CONFIG.fleet.approach);
 const MARS_RADIUS = 3390;
 const EARTH_RADIUS = 6371;
 const MOON_RADIUS = 1737;
@@ -153,20 +162,20 @@ function moonPosition() {
 function bodies() {
     return [
         { name: 'earth', at: { x: 0, y: 0, z: 0 }, radius: EARTH_RADIUS },
-        { name: 'mars', at: MARS, radius: MARS_RADIUS },
+        { name: 'mars', at: mars(), radius: MARS_RADIUS },
         { name: 'moon', at: moonPosition(), radius: MOON_RADIUS }
     ];
 }
 
 /** The path, sampled finely enough that a body cannot be passed through
- *  between two samples: the fastest stretch covers about 190,000 units in 2.1
+ *  between two samples: the fastest stretch covers about 200,000 units in 2.1
  *  seconds, so 2,000 samples is roughly 100 units a step. */
 function samplePath(steps = 2000, spec = CONFIG.intro) {
     const spawn = spawnPosition(CONFIG);
     const out = [];
     for (let i = 0; i <= steps; i++) {
         const t = (i / steps) * spec.seconds;
-        const eye = intro.introPath(t, spec, MARS, spawn);
+        const eye = intro.introPath(t, spec, anchor(), heading(), spawn);
         out.push({ t, x: eye.x, y: eye.y, z: eye.z, look: { ...eye.look } });
     }
     return out;
@@ -176,7 +185,7 @@ function samplePath(steps = 2000, spec = CONFIG.intro) {
  *  rather than recomputed here: `startIntro` then `updateIntro` in one step, so
  *  what is asserted is what would reach the meshes. */
 function shipsAt(seconds) {
-    intro.startIntro(MARS, CONFIG);
+    intro.startIntro(CONFIG);
     intro.updateIntro(seconds);
     return intro.__test__.squadron()
         .slice(0, intro.__test__.activeCount())
@@ -209,6 +218,19 @@ function screenAngles(eye, point) {
     };
 }
 
+/** The same, signed, for the tests that care WHERE in the frame rather than
+ *  how far out. Which side of Mars a raider is on only reads off the signs. */
+function framePosition(eye, point) {
+    const { forward, right, up } = cameraAxes(eye);
+    const d = sub(point, eye);
+    const ahead = dot(d, forward);
+    if (ahead <= 0) return null;
+    return {
+        h: Math.atan2(dot(d, right), ahead) * 180 / Math.PI,
+        v: Math.atan2(dot(d, up), ahead) * 180 / Math.PI
+    };
+}
+
 // ---- The join at the end ----------------------------------------------------
 
 describe('the shot lands on the spawn frame', () => {
@@ -238,17 +260,47 @@ describe('the shot lands on the spawn frame', () => {
      *  long frame on a slow phone cannot overshoot the join it just landed. */
     it('holds the final frame when read past the end', () => {
         const spawn = spawnPosition(CONFIG);
-        const over = intro.introPath(CONFIG.intro.seconds * 3, CONFIG.intro, MARS, spawn);
+        const over = intro.introPath(CONFIG.intro.seconds * 3, CONFIG.intro, anchor(), heading(), spawn);
         expect(over.x).toBeCloseTo(spawn.x, 3);
         expect(over.z).toBeCloseTo(spawn.z, 3);
     });
 
-    /** It opens where config says, so `marsDistance` means what it reads as.
-     *  This is what caught the un-flattened `marsSide`, which left the vector a
-     *  percent short and quietly turned 14,000 into 13,851. */
-    it('opens exactly marsDistance from Mars', () => {
+    /** It opens where config says, so `range` means what it reads as. The old
+     *  version of this caught an un-flattened side vector that was a percent
+     *  short and quietly turned 14,000 into 13,851; the axes are exactly
+     *  perpendicular by construction now, and this is what says so. */
+    it('opens exactly range ahead of the fleet start point', () => {
         const first = samplePath()[0];
-        expect(len(sub(first, MARS))).toBeCloseTo(CONFIG.intro.marsDistance, 0);
+        expect(len(sub(first, anchor()))).toBeCloseTo(CONFIG.intro.range, 0);
+    });
+
+    /** THE ASSERTION THE WHOLE RESTAGING WAS FOR. The shot used to finish with
+     *  its wedge dead centre on Mars while the raiders it stood for were 3.4
+     *  degrees to the right, so the hostile markers lit up two Mars diameters
+     *  from where the squadron had just been. Ship zero has no slot offset and
+     *  the drift is run backwards from the arrival, so it lands ON the trailing
+     *  group's start point, and every other ship lands in formation around it. */
+    it('finishes with its leader on the trailing group start point', () => {
+        const led = shipsAt(CONFIG.intro.seconds)[0];
+        expect(len(sub(led, anchor()))).toBeLessThan(1);
+    });
+
+    /** And says the same thing the way a visitor sees it: as an angle on the
+     *  spawn frame, against the size of the disc they are looking at. Every
+     *  real raider in the trailing group lands within one Mars diameter of
+     *  where the wedge finished. It was 3.4 degrees, or nearly four diameters,
+     *  before the fleet and the shot were put on the same line. */
+    it('finishes where the trailing raiders will be marked', () => {
+        const spawn = spawnPosition(CONFIG);
+        const discRadius = Math.asin(MARS_RADIUS / len(sub(mars(), spawn))) * 180 / Math.PI;
+        const wedge = unit(sub(shipsAt(CONFIG.intro.seconds)[0], spawn));
+        const trailing = fleet.getShips().filter((s) => s.startDistance ===
+            CONFIG.fleet.groups.at(-1).startDistance);
+        expect(trailing).toHaveLength(CONFIG.fleet.groups.at(-1).count);
+        for (const ship of trailing) {
+            const off = Math.acos(Math.min(1, dot(wedge, unit(sub(ship.position, spawn))))) * 180 / Math.PI;
+            expect(off).toBeLessThan(discRadius * 2);
+        }
     });
 });
 
@@ -276,7 +328,7 @@ describe('the camera path clears every body', () => {
     it('never approaches Mars', () => {
         const path = samplePath();
         for (let i = 1; i < path.length; i++) {
-            expect(len(sub(path[i], MARS))).toBeGreaterThanOrEqual(len(sub(path[i - 1], MARS)) - 1e-6);
+            expect(len(sub(path[i], mars()))).toBeGreaterThanOrEqual(len(sub(path[i - 1], mars())) - 1e-6);
         }
     });
 
@@ -385,21 +437,40 @@ describe('shipProgress', () => {
 describe('the camera stands on the fleet approach line', () => {
     /** THIS COUPLING IS THE COMPOSITION, so it is asserted rather than trusted.
      *  A formation's depth seen from off its own axis smears sideways across the
-     *  frame, and the first draft of this shot stood 32 degrees off and turned
-     *  the wedge into a sheared diagonal. Retuning `fleet.approach` has to fail
-     *  here rather than quietly do that again. */
-    it('takes marsSide from fleet.approach, flattened', () => {
-        const side = unit({ x: CONFIG.intro.marsSide[0], y: CONFIG.intro.marsSide[1], z: CONFIG.intro.marsSide[2] });
-        const nose = intro.approachHeading(CONFIG.fleet.approach);
-        const flat = unit({ x: nose.x, y: 0, z: nose.z });
-        expect(side.x).toBeCloseTo(flat.x, 3);
-        expect(side.z).toBeCloseTo(flat.z, 3);
+     *  frame: one draft stood 32 degrees off and turned the wedge into a sheared
+     *  diagonal, and a later one stood on the Mars-to-fleet line, only 12
+     *  degrees off, and still pulled the columns 93 percent out of balance.
+     *
+     *  The camera is placed off `approachHeading` now rather than off a config
+     *  vector that had to be kept in step with it by hand, so the only way to
+     *  break this is `elevation` and `swing`, and those are bounded below. */
+    it('opens on the flight line itself, lifted only by elevation', () => {
+        const first = samplePath()[0];
+        const stand = unit(sub(first, anchor()));
+        const off = Math.acos(Math.min(1, dot(stand, heading()))) * 180 / Math.PI;
+        // At swing 0 the whole offset is the lift, which is `elevation` exactly.
+        expect(off).toBeCloseTo(CONFIG.intro.elevation * 180 / Math.PI, 3);
     });
 
-    /** Flattened, so `orbitEye`'s side and axis are perpendicular and the
-     *  distance it returns is the distance that was asked for. */
-    it('keeps marsSide out of the vertical', () => {
-        expect(CONFIG.intro.marsSide[1]).toBe(0);
+    /** THE LIFT IS VERTICAL AND THE SHEAR THAT MATTERS IS HORIZONTAL, which is
+     *  why `elevation` can be 15 degrees for free while `swing` has to stay
+     *  near two. Measured in the formation's own axes: the camera stands off
+     *  the line along `above`, and not at all along `right`. */
+    it('lifts the camera out of the flight line vertically, not sideways', () => {
+        const right = {}, above = {};
+        intro.formationFrame(heading(), right, above);
+        const stand = unit(sub(samplePath()[0], anchor()));
+        expect(dot(stand, right)).toBeCloseTo(0, 9);
+        expect(dot(stand, above)).toBeCloseTo(Math.sin(CONFIG.intro.elevation), 6);
+    });
+
+    /** `orbitEye` takes its side and axis to be perpendicular, so `range` only
+     *  means `range` if they are. They come from `formationFrame` rather than
+     *  from the world, which is what guarantees it. */
+    it('builds the orbit on perpendicular axes, so range means range', () => {
+        const right = {}, above = {};
+        intro.formationFrame(heading(), right, above);
+        expect(dot(above, heading())).toBeCloseTo(0, 9);
     });
 
     /** The fleet flies at Earth, so the heading is the approach reversed. */
@@ -430,17 +501,44 @@ describe('the squadron is in frame and clear of Mars', () => {
     const PORTRAIT_HALF_WIDTH = 16.7;
     const HALF_HEIGHT = 35;
 
+    /** MARS IS THE BACKDROP, AND NOTHING IN intro.js KNOWS THAT. The shot is
+     *  placed entirely off the fleet's own anchor and heading; the planet fills
+     *  the frame behind the squadron only because MARS_DISTANCE sits 10,000
+     *  units past the trailing group's start. That is the property this asserts,
+     *  and it is the one a retune of MARS_DISTANCE or of the group distances
+     *  would silently cost. Eight of the nine raiders are silhouetted on the
+     *  disc through the whole form-up, and the ninth is just off the limb. */
+    it('holds Mars behind the squadron for the whole form-up', () => {
+        const spawn = spawnPosition(CONFIG);
+        for (const k of [0, 0.5, 1]) {
+            const t = k * CONFIG.intro.formSeconds;
+            const eye = intro.introPath(t, CONFIG.intro, anchor(), heading(), spawn);
+            const frozen = { x: eye.x, y: eye.y, z: eye.z, look: { ...eye.look } };
+            const discRadius = Math.asin(MARS_RADIUS / len(sub(mars(), frozen))) * 180 / Math.PI;
+            // Big enough to read as a planet rather than a marble.
+            expect(discRadius).toBeGreaterThan(10);
+            const centre = framePosition(frozen, mars());
+            expect(centre).not.toBeNull();
+            const on = shipsAt(t).filter((ship) => {
+                const a = framePosition(frozen, ship);
+                return a && Math.hypot(a.h - centre.h, a.v - centre.v) < discRadius;
+            });
+            expect(on.length).toBeGreaterThanOrEqual(CONFIG.intro.ships - 1);
+        }
+    });
+
     /** THE BUDGET THE WHOLE SQUADRON BLOCK IS SPENDING. Measured worst case is
-     *  15.4 degrees, and there is not much left: widening the wedge, scattering
-     *  it further sideways, or taking the camera off the flight line all push
-     *  raiders off the edge of a phone. */
+     *  8.9 degrees. It was 15.4 while the camera stood off the flight line to
+     *  frame Mars, and standing on the line handed most of it back, but the
+     *  bound stays: widening the wedge or scattering it further sideways can
+     *  spend it again. */
     it('keeps every raider inside a portrait phone for the whole form-up', () => {
         const spawn = spawnPosition(CONFIG);
         let worstH = 0;
         let worstV = 0;
         for (let k = 0; k <= 60; k++) {
             const t = (k / 60) * CONFIG.intro.formSeconds;
-            const eye = intro.introPath(t, CONFIG.intro, MARS, spawn);
+            const eye = intro.introPath(t, CONFIG.intro, anchor(), heading(), spawn);
             const frozen = { x: eye.x, y: eye.y, z: eye.z, look: { ...eye.look } };
             for (const ship of shipsAt(t)) {
                 const a = screenAngles(frozen, ship);
@@ -453,15 +551,19 @@ describe('the squadron is in frame and clear of Mars', () => {
         expect(worstV).toBeLessThan(HALF_HEIGHT);
     });
 
-    /** NO RAIDER IS EVER INSIDE MARS. `marsDistance` is a clearance budget as
-     *  much as a framing choice: the squadron hangs on the same line, and the
-     *  deepest scattered ship starts thousands of units further along it. */
+    /** NO RAIDER IS EVER INSIDE MARS, and the budget for that moved when the
+     *  staging did. It used to be `marsDistance`. It is now the 10,000 units
+     *  MARS_DISTANCE leaves between the planet and the fleet's start point,
+     *  spent by `scatter.depth` plus four ranks of `slot.depth` running
+     *  backwards from it, plus the whole drift the formation opens behind its
+     *  arrival. Measured, the deepest opening raider clears the surface by
+     *  1,878. */
     it('never puts a raider inside Mars', () => {
         let worst = Infinity;
         for (let k = 0; k <= 40; k++) {
             const t = (k / 40) * CONFIG.intro.formSeconds;
             for (const ship of shipsAt(t)) {
-                worst = Math.min(worst, len(sub(ship, MARS)) - MARS_RADIUS);
+                worst = Math.min(worst, len(sub(ship, mars())) - MARS_RADIUS);
             }
         }
         expect(worst).toBeGreaterThan(CONFIG.intro.clearance);
@@ -474,7 +576,7 @@ describe('the squadron is in frame and clear of Mars', () => {
     it('draws the closest raider big enough to read', () => {
         const spawn = spawnPosition(CONFIG);
         const t = CONFIG.intro.formSeconds;
-        const eye = intro.introPath(t, CONFIG.intro, MARS, spawn);
+        const eye = intro.introPath(t, CONFIG.intro, anchor(), heading(), spawn);
         const frozen = { x: eye.x, y: eye.y, z: eye.z };
         let nearest = Infinity;
         for (const ship of shipsAt(t)) nearest = Math.min(nearest, len(sub(ship, frozen)));
@@ -488,7 +590,7 @@ describe('the squadron is in frame and clear of Mars', () => {
     it('finishes with its pairs either side of the leader', () => {
         const spawn = spawnPosition(CONFIG);
         const t = CONFIG.intro.formSeconds;
-        const eye = intro.introPath(t, CONFIG.intro, MARS, spawn);
+        const eye = intro.introPath(t, CONFIG.intro, anchor(), heading(), spawn);
         const frozen = { x: eye.x, y: eye.y, z: eye.z, look: { ...eye.look } };
         const { right } = cameraAxes(frozen);
         const ships = shipsAt(t);
@@ -548,7 +650,7 @@ describe('starting, stopping and thinning', () => {
     });
 
     it('reports the length of the shot and runs for it', () => {
-        expect(intro.startIntro(MARS, CONFIG)).toBeCloseTo(CONFIG.intro.seconds, 6);
+        expect(intro.startIntro(CONFIG)).toBeCloseTo(CONFIG.intro.seconds, 6);
         expect(intro.isIntroRunning()).toBe(true);
         expect(intro.updateIntro(CONFIG.intro.seconds - 0.1)).toBe(true);
         expect(intro.updateIntro(0.2)).toBe(false);
@@ -558,7 +660,7 @@ describe('starting, stopping and thinning', () => {
     /** Nothing on screen when it is not playing, so a briefing can never open
      *  on nine spare raiders parked at Mars. */
     it('hides the squadron when it stops', () => {
-        intro.startIntro(MARS, CONFIG);
+        intro.startIntro(CONFIG);
         expect(intro.__test__.group().visible).toBe(true);
         intro.endIntro();
         expect(intro.__test__.group().visible).toBe(false);
@@ -566,7 +668,7 @@ describe('starting, stopping and thinning', () => {
 
     it('offers no eye unless it is running', () => {
         expect(intro.introEye()).toBeNull();
-        intro.startIntro(MARS, CONFIG);
+        intro.startIntro(CONFIG);
         expect(intro.introEye()).not.toBeNull();
         intro.endIntro();
         expect(intro.introEye()).toBeNull();
@@ -610,11 +712,15 @@ describe('starting, stopping and thinning', () => {
         intro.disposeIntro(scene);
         fleet.disposeFleet();
         expect(intro.initIntro(scene, CONFIG)).toBe(false);
-        expect(intro.startIntro(MARS, CONFIG)).toBe(0);
+        expect(intro.startIntro(CONFIG)).toBe(0);
     });
 
-    it('refuses to start without a subject', () => {
-        expect(intro.startIntro(null, CONFIG)).toBe(0);
+    /** There is no subject to pass any more, so the only way in is a squadron
+     *  that was never built. `initIntro` having declined has to leave this
+     *  declining too, rather than starting a shot with nothing in it. */
+    it('refuses to start when the squadron was never built', () => {
+        intro.disposeIntro(scene);
+        expect(intro.startIntro(CONFIG)).toBe(0);
         expect(intro.isIntroRunning()).toBe(false);
     });
 
@@ -623,10 +729,11 @@ describe('starting, stopping and thinning', () => {
      *  stubs: the main suite runs on the chainable THREE proxy, where setting
      *  `visible` stores nothing and reads back truthy.
      *
-     *  main.js hides the standing fleet for the length of the shot. Its
-     *  trailing raiders start 200,000 units out, within a few thousand units of
-     *  where this camera stands, so leaving them up would put two separate sets
-     *  of Martian ships in the same frame. */
+     *  main.js hides the standing fleet for the length of the shot, and that
+     *  matters more than it used to. The squadron now forms up ON the trailing
+     *  group's start point rather than somewhere in front of Mars, so leaving
+     *  the real four up would draw two sets of Martian ships through each other
+     *  rather than merely in the same frame. */
     it('lets the standing fleet be hidden and shown as a whole', () => {
         expect(fleet.setFleetVisible(false)).toBe(false);
         expect(fleet.__test__.isVisible()).toBe(false);
@@ -670,7 +777,7 @@ describe('it survives a config with holes in it', () => {
     it('paths through an almost empty spec without producing NaN', () => {
         const spawn = spawnPosition(CONFIG);
         for (const t of [0, 1, 2, 3, 4]) {
-            const eye = intro.introPath(t, bare, MARS, spawn);
+            const eye = intro.introPath(t, bare, anchor(), heading(), spawn);
             for (const v of [eye.x, eye.y, eye.z, eye.look.x, eye.look.y, eye.look.z]) {
                 expect(Number.isFinite(v)).toBe(true);
             }
@@ -679,7 +786,7 @@ describe('it survives a config with holes in it', () => {
 
     it('still lands on the spawn point with everything defaulted', () => {
         const spawn = spawnPosition(CONFIG);
-        const last = intro.introPath(bare.seconds, bare, MARS, spawn);
+        const last = intro.introPath(bare.seconds, bare, anchor(), heading(), spawn);
         expect(last.x).toBeCloseTo(spawn.x, 3);
         expect(last.y).toBeCloseTo(spawn.y, 3);
         expect(last.z).toBeCloseTo(spawn.z, 3);
@@ -713,7 +820,7 @@ describe('it survives a config with holes in it', () => {
         intro.disposeIntro(scene);
         expect(intro.initIntro(scene, { ...CONFIG, intro: null })).toBe(false);
         expect(intro.setIntroReduced(true)).toBe(0);
-        expect(intro.startIntro(MARS, CONFIG)).toBe(0);
+        expect(intro.startIntro(CONFIG)).toBe(0);
     });
 
     it('does nothing on a frame when no shot is running', () => {
@@ -721,7 +828,7 @@ describe('it survives a config with holes in it', () => {
     });
 
     it('tolerates a frame with no delta on it', () => {
-        intro.startIntro(MARS, CONFIG);
+        intro.startIntro(CONFIG);
         expect(intro.updateIntro()).toBe(true);
         expect(intro.__test__.shot.elapsed).toBe(0);
     });

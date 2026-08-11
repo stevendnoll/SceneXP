@@ -45,7 +45,25 @@ function deepFreeze(obj) {
 // Mars sits on the -Z axis, so -Z is "outward" and the whole scene is built
 // around that one convention: the fleet arrives along it, the player spawns
 // looking down it, and the defended face of Earth is the one turned toward it.
-const MARS_DISTANCE = 200000;
+//
+// IT IS 10,000 UNITS FURTHER OUT THAN THE FLEET'S DEEPEST START, and that gap
+// is the one number holding the opening shot together. Mars used to sit at
+// exactly the trailing group's 200,000, which put those four raiders BESIDE the
+// planet rather than in front of it: 15,570 units off its centre, four and a
+// half Mars radii, and a full 3.4 degrees to the right of it on the spawn
+// frame. The opening shot could not be staged on them, because no camera close
+// enough to resolve a 220 unit hull can hold a planet 15,570 units off to the
+// side in the same frame, let alone on a portrait phone's 16.7 degree half
+// field. So the shot invented a formation in front of Mars instead, the fleet
+// stood somewhere else, and the wedge a visitor watched form up was not where
+// the hostile diamonds appeared a second later.
+//
+// Moving Mars back rather than pulling the fleet in is what keeps this free:
+// arrival times are start distance over cruise speed, so the fleet's whole
+// balance is untouched, and Mars is decoration that nobody ever flies to. The
+// disc at spawn goes from 1.94 degrees across to 1.81, which is under a tenth
+// of a degree and beneath noticing.
+const MARS_DISTANCE = 210000;
 
 export const EARTHDEFENSE_CONFIG = deepFreeze({
     rootName: 'orbit',
@@ -220,15 +238,17 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
             segments: 64,
             texture: 'assets/mars_1k.webp',
             textureFallback: 'assets/mars_1k.jpg',
-            // Nobody travels here, so this distance is purely a composition
-            // choice: how big a disc do we want ahead. At 200,000 units Mars is
-            // about 1.9 degrees across, roughly four times the apparent size of
-            // the real Moon in our sky. A clear disc with visible colour, still
-            // unmistakably far away.
+            // At 210,000 units Mars is about 1.8 degrees across, roughly three
+            // and a half times the apparent size of the real Moon in our sky. A
+            // clear disc with visible colour, still unmistakably far away.
+            //
+            // This is no longer purely a composition choice. See MARS_DISTANCE
+            // above: the 10,000 units between the fleet's deepest start and this
+            // is what lets the opening shot be staged on the real raiders.
             position: [0, 0, -MARS_DISTANCE],
             rotationPeriod: 900,
             // NO `nightGlow` HERE, deliberately. Mars is never approached, so
-            // it is only ever a 1.9 degree disc that the key light already
+            // it is only ever a 1.8 degree disc that the key light already
             // catches almost square on. There is no night side to rescue, and a
             // glow at that size would only make the whole disc read as slightly
             // self-lit, which would cost it the one thing it has to do: sit
@@ -549,14 +569,25 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         hitPoints: 4,
         cruiseSpeed: 1200,     // comfortably slower than the player's 4,000
 
-        // THE APPROACH LINE IS TILTED OFF THE MARS AXIS ON PURPOSE. Mars sits
-        // exactly at (0, 0, -200,000) and the trailing group starts 200,000
-        // units out, so an untilted line would place four ships inside the
-        // planet. A few hundredths of a radian is enough: at that range this
-        // puts the fleet about 4 degrees off Mars's centre, just outside its
-        // 1.9 degree disc, so the line still reads as coming FROM Mars while
-        // no raider is ever buried in it.
-        approach: { azimuth: 0.06, elevation: 0.05 },
+        // THE APPROACH LINE IS TILTED OFF THE MARS AXIS, but only just, and it
+        // used to be tilted seven times harder for a reason that no longer
+        // exists. Mars sat at exactly the trailing group's start distance, so
+        // an untilted line buried four raiders in the planet, and 0.06 by 0.05
+        // was the cheapest way out. What it bought in clearance it paid for in
+        // composition: 15,570 units of sideways offset put the deepest group
+        // BESIDE Mars rather than in front of it, 3.4 degrees to the right of
+        // the disc on the spawn frame, and nowhere the opening shot could be
+        // staged. See MARS_DISTANCE, which now carries that clearance instead.
+        //
+        // WHAT THE TILT IS STILL FOR is the lean. At 200,000 units this is
+        // 1,600 across and 1,200 up, which puts the trailing group's centre
+        // 0.82 degrees off Mars's centre against its 0.91 degree disc radius:
+        // two of the four raiders sit on the disc and two just clear of the
+        // limb, so the group reads as standing AT Mars rather than pasted flat
+        // on it. The intro suite asserts this against the opening shot, so
+        // retuning it fails loudly rather than quietly sliding the wedge off
+        // the raiders it is supposed to be standing in for.
+        approach: { azimuth: 0.008, elevation: 0.006 },
 
         // Per-ship scatter around the group's start point, so a group reads as
         // a formation rather than as a queue. Deterministic (a hash of the
@@ -999,6 +1030,18 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
     // same fleet, at Mars, closing up into formation, and then the camera runs
     // the approach line back to Earth ahead of them.
     //
+    // IT IS THE REAL FLEET'S OWN START LINE, and that is the correction this
+    // block is currently carrying. The shot used to hang an invented formation
+    // in front of Mars, because that framed well, and the actual raiders stood
+    // 3.4 degrees to the right of the disc where nobody had staged anything. So
+    // a visitor watched a wedge close up dead centre on Mars, the camera pulled
+    // back, and the hostile diamonds lit up a couple of Mars diameters to the
+    // right of where the wedge had just been. Nothing was wrong in either half;
+    // they were simply not the same fleet. The squadron here now forms up ON the
+    // trailing group's start point, `range` in front of it down its own flight
+    // line, so the last frame of the shot puts the wedge where the diamonds are
+    // about to appear, to within a third of a degree.
+    //
     // IT ARRIVES, IT DOES NOT CUT. The last frame of this shot IS the spawn
     // frame. The path ends at `spawnPosition(config)` looking 1,000 units down
     // -Z, which is `placeCameraAtSpawn` word for word, so the welcome overlay
@@ -1011,17 +1054,23 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
     // the first draft fell in it: the obvious staging is to stand between Mars
     // and Earth looking back at Mars, which then needs a 180 degree whip to run
     // at Earth, thrown at a visitor who has been on the page for four hundred
-    // milliseconds. But the spawn camera LOOKS AT MARS. So the shot starts
-    // close to Mars, on the Earth side, already looking at it, and then simply
-    // retreats. One long pull-back with 15 degrees of settle in it. Mars shrinks
-    // from a 28 degree disc to the 1.9 degree one the spawn frame has always
-    // had, the formation shrinks with it into the line of lights the spawn frame
-    // has always shown, and Earth's limb rises into the bottom of the frame on
-    // the last beat. The opening frame is not cut to, it is assembled.
+    // milliseconds. But the spawn camera LOOKS DOWN THE APPROACH LINE, and so
+    // does this one. The shot starts just ahead of the fleet's start point,
+    // already facing back along the line the raiders are flying, and then simply
+    // retreats down it. One long pull-back with 15 degrees of settle in it. Mars
+    // shrinks from a 27 degree disc to the 1.8 degree one the spawn frame has,
+    // the formation shrinks with it into the line of lights the spawn frame has
+    // always shown, and Earth's limb rises into the bottom of the frame on the
+    // last beat. The opening frame is not cut to, it is assembled.
+    //
+    // MARS IS NOT AN INPUT TO ANY OF IT, which is worth saying because it used
+    // to be all of it. The camera is placed from the fleet's own start point and
+    // heading; Mars is simply 10,000 units behind that point and fills the
+    // frame, which is a property MARS_DISTANCE owns and the intro suite checks.
     //
     // THE PATH IS CHECKED AGAINST THE PLANETS IN TESTS, not by eye. It only ever
-    // moves away from Mars, it passes about 905 units above Earth's surface as
-    // it settles over the pole, and it clears the Moon by about 13,900.
+    // moves away from Mars, it passes about 880 units above Earth's surface as
+    // it settles over the pole, and it clears the Moon by about 14,000.
     // `tests/earthdefense-intro.test.mjs` samples the whole path against all
     // three bodies and fails if `clearance` is broken, because a plausible
     // looking retune of any number in this block could quietly put the camera
@@ -1057,87 +1106,79 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
 
         // ---- The camera -----------------------------------------------------
         //
-        // Distance from Mars's centre at the opening. Mars's angular RADIUS here
-        // is asin(3390 / 14000) = 14.0 degrees against a 35 degree half frame,
-        // so the disc covers about 40 percent of the frame height. Against the
-        // 1.9 degrees it has in the spawn frame, that is unmistakably a
-        // close-up, and it leaves the edges free for the formation to sit in.
+        // THE CAMERA STANDS ON THE FLEET'S OWN FLIGHT LINE, `range` ahead of the
+        // trailing group's start point, facing back down it. That single
+        // sentence is the whole staging, and every number under it is a small
+        // adjustment to it rather than a placement of its own. There is no
+        // "which way round Mars" any more: the fleet's start point and heading
+        // decide where the camera goes, and Mars is behind it because
+        // MARS_DISTANCE puts it there.
         //
-        // IT IS ALSO A CLEARANCE BUDGET, which is the less obvious half. The
-        // squadron hangs on the same line at `range`, and its deepest ship
-        // starts a further `slot.depth * 4 + scatter.depth` back toward the
-        // planet. Measured, the nearest any raider comes to Mars's surface over
-        // the whole form-up is 2,548. Shortening this without shortening those
-        // parks raiders inside the planet.
-        marsDistance: 14000,
-        // WHICH WAY ROUND MARS THE CAMERA STANDS, and this is not a taste
-        // decision, it is THE composition. It is the fleet's own approach
-        // heading: -sin(fleet.approach.azimuth) on X, +1 on Z, which is the line
-        // the raiders are flying along. The camera therefore stands ahead of the
-        // squadron and watches it come, and the wedge is seen close to along its
-        // own axis.
+        // BEING ON THE LINE IS NOT A TASTE DECISION, IT IS THE COMPOSITION. A
+        // formation has depth (four ranks of `slot.depth`, plus up to
+        // `scatter.depth` of it before the ships close up), and depth seen from
+        // off-axis projects sideways across the frame. An early draft stood 32
+        // degrees off and the finished V was a sheared diagonal smeared over 20
+        // degrees with its two columns bunched at opposite ends. A later one
+        // stood on the Mars-to-fleet line instead, which is only 12 degrees off,
+        // and still pulled the two columns 93 percent out of balance. On the
+        // flight line itself the pairs land symmetrically either side of the
+        // leader, and the only shear left is the 2.2 degrees of `swing`.
         //
-        // THE FIRST DRAFT STOOD 32 DEGREES OFF THIS LINE and the wedge did not
-        // survive it. A formation has depth (four ranks of `slot.depth`, plus up
-        // to `scatter.depth` of it before the ships close up), and depth seen
-        // from off-axis projects sideways across the frame. Measured at 32
-        // degrees off, the finished V was a sheared diagonal smeared over 20
-        // degrees of frame with its two columns bunched at opposite ends,
-        // nothing like the shape it is laid out as. On the line it comes back:
-        // the pairs land symmetrically either side of the leader, and the whole
-        // squadron sits inside 15.4 degrees.
+        // Mars's angular RADIUS at the opening is asin(3390 / 14,560) = 13.5
+        // degrees against a 35 degree half frame, so the disc covers about 38
+        // percent of the frame height and eight of the nine raiders are
+        // silhouetted on it. Against the 1.8 degrees it has in the spawn frame,
+        // that is unmistakably a close-up.
         //
-        // FLATTENED INTO THE EQUATORIAL PLANE, hence the zero on Y. `orbitEye`
-        // takes `side` and the orbit axis to be perpendicular, and the fleet's
-        // heading has a small downward tilt on it, so passing the raw heading
-        // here left the vector 1 percent short and quietly made `marsDistance`
-        // mean 13,851. The 2.9 degrees of tilt given up is swamped by the
-        // elevation below. Same flattening the finale does, for the same reason.
-        //
-        // IT HAS TO TRACK `fleet.approach`. The intro suite asserts they agree,
-        // so retuning the approach fails loudly here rather than silently
-        // shearing the wedge again.
-        marsSide: [-0.06, 0, 1],
-        // Above the plane, so the shot looks DOWN on the formation rather than
-        // meeting it edge on: at 0.26 the camera sits 15 degrees off the fleet's
-        // flight axis, which is enough to open the V out and to put the disc
-        // under it, and little enough to keep the wedge symmetrical. This and
-        // `marsSide` are the same decision measured on two axes.
-        marsElevation: 0.26,
-        // How far the camera drifts around Mars over the shot. SMALL, and it was
-        // not always: at 0.26 the drift pushed the finished formation 28 degrees
-        // off the view axis, because the camera orbits away from the line the
-        // squadron is anchored on while still looking at Mars, and the nearer
-        // thing leaves the frame first. A held shot with a little life in it is
-        // all this was ever worth.
+        // How far ahead of the fleet's start point the camera stands. Also a
+        // CLEARANCE BUDGET: the squadron's deepest ship opens a further
+        // `slot.depth * 4 + scatter.depth` back toward the planet, and measured,
+        // the nearest any raider comes to Mars's surface over the whole form-up
+        // is 1,878. Lengthening this without shortening those parks raiders
+        // inside Mars.
+        range: 4600,
+        // How far the camera is lifted off the flight line, in radians, so the
+        // shot looks DOWN on the formation rather than meeting it edge on. At
+        // 0.26 that is 15 degrees, which is enough to open the V out and to put
+        // the disc under it. It costs nothing in symmetry, because a lift is
+        // vertical and the shear that matters is horizontal: it moves the
+        // squadron's depth into screen-Y, where the wedge is laid out to have
+        // some anyway.
+        elevation: 0.26,
+        // How far the camera drifts round the formation over the shot, so the
+        // opening is a held shot with a little life in it rather than a
+        // photograph. SMALL, because this is the one thing here that IS
+        // horizontal: at the end of the form-up it has reached 2.2 degrees off
+        // the flight line, which is the whole of the 0.11 shear the intro suite
+        // measures against a bound of 0.2. It orbits the FORMATION now rather
+        // than Mars, so it no longer walks the squadron out of the frame the way
+        // it did when this had to be kept under 0.06 for that reason instead.
         swing: 0.06,
         // How close the path may come to any body's SURFACE, in units. The
-        // assertion, not the result. Measured: Earth 905, Mars 10,610, Moon
-        // 13,969.
+        // assertion, not the result. Measured: Earth 882, Mars 11,000, Moon
+        // 14,000.
         clearance: 600,
 
         // ---- The squadron ---------------------------------------------------
         //
-        // NOT THE REAL FLEET, and this is the one thing in this block worth
-        // being careful with. The twelve raiders are already built and already
-        // standing on their start line, and those positions are load bearing:
-        // arrival times are read straight off them and the init suite asserts
-        // the opening frame against them. Flying them to Mars and putting them
-        // back with `resetFleet` would mean a visible snap on the exact frame
-        // the camera is watching them on. So the intro owns nine throwaway
-        // hulls, built through `createRaiderMesh` from fleet.js's own shared
-        // geometry so a raider keeps one definition, and the real fleet is
-        // simply hidden for five seconds. At arrival the throwaways are 190,000
-        // units behind the camera and smaller than a pixel, so disposing them
-        // is invisible.
+        // IN THE REAL FLEET'S PLACE, BUT NOT THE REAL FLEET, and the difference
+        // between those two is the one thing in this block worth being careful
+        // with. The squadron forms up ON the trailing group's start point and
+        // ship zero lands exactly on it, so the last frame of the shot stands
+        // nine hulls where four raiders are about to be marked. But it is not
+        // those raiders. The twelve are already built and already standing on
+        // their start line, and those positions are load bearing: arrival times
+        // are read straight off them and the init suite asserts the opening
+        // frame against them. Flying them to Mars and putting them back with
+        // `resetFleet` would mean a visible snap on the exact frame the camera
+        // is watching them on. So the intro owns nine throwaway hulls, built
+        // through `createRaiderMesh` from fleet.js's own shared geometry so a
+        // raider keeps one definition, and the real fleet is simply hidden for
+        // five seconds. At arrival the throwaways are 200,000 units behind the
+        // camera and smaller than a pixel, so disposing them is invisible.
         ships: 9,
         reducedShips: 5,
-        // How far ahead of the camera the formation forms up. The drift closes
-        // the leader to about 3,700 by the end of the form-up, where a 220 unit
-        // hull is roughly 44 pixels on a 900 pixel frame: a ship rather than a
-        // mote. The deepest scattered raider opens at 8,300 and 19 pixels, which
-        // still reads as a shape rather than a dot.
-        range: 4600,
         // The wedge, in the formation's own axes. Ship zero is the apex and
         // every ship after it is one of a pair, so nine ships is a leader and
         // four ranks.
@@ -1145,11 +1186,11 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // THE WHOLE SQUADRON IS SET BY A PORTRAIT PHONE, like the Moon's orbit
         // phase above it. Three.js field of view is vertical, so a 9:21 phone
         // sees only about 16.7 degrees either side of the nose, and the measured
-        // worst case across the entire form-up is 15.4. That is the budget the
-        // three numbers below and `marsSide` are all spending, and there is not
-        // much of it left: widening the wedge, scattering it further sideways or
-        // taking the camera off the flight line all push raiders off the edge of
-        // a phone. The intro suite asserts the 16.7.
+        // worst case across the entire form-up is 8.9. That was 15.4 while the
+        // camera stood off the flight line to frame Mars; standing on the line
+        // handed most of the budget back, and the intro suite still asserts the
+        // 16.7 because widening the wedge or scattering it further sideways can
+        // spend it again.
         slot: { lateral: 230, depth: 320, vertical: 85 },
         // Where each ship starts before it closes up, in the same axes.
         //
@@ -1159,9 +1200,14 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // would have to reverse into its slot. Depth is also the cheap axis
         // here: the camera stands on that line, so a ship scattered along it
         // moves toward the middle of the frame rather than toward its edge,
-        // which is why this can be 3,000 while `lateral` is 380.
+        // which is why this can be 2,400 while `lateral` is 380.
+        //
+        // IT IS BOUNDED BY MARS. `depth` runs backwards from a formation that is
+        // now only 10,000 units in front of the planet, so this plus
+        // `slot.depth * 4` is what stands between the deepest opening raider and
+        // the surface. At 2,400 that raider opens 1,878 units clear of it.
         // Deterministic, from `hashUnit`, exactly like the real fleet's scatter.
-        scatter: { lateral: 380, vertical: 520, depth: 3000 },
+        scatter: { lateral: 380, vertical: 520, depth: 2400 },
         // How far off its final heading a ship starts pointing, 0 to 1. Enough
         // that the noses visibly come round, short of ships flying backwards.
         headingScatter: 0.9,
@@ -1174,6 +1220,14 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // into a photograph. 320 units a second closes about 1,000 of the 4,600
         // over the form-up, which is a quarter again in apparent size: plainly
         // an approach, and nowhere near swallowing the frame.
+        //
+        // IT IS RUN BACKWARDS FROM THE ARRIVAL, not forwards from the opening.
+        // The formation STARTS `driftSpeed * seconds` behind the trailing
+        // group's start point so that it ENDS on it, because the frame that has
+        // to be exact is the last one: that is where the wedge hands over to the
+        // hostile markers. Raising this therefore moves the opening back toward
+        // Mars rather than moving the arrival forward, which is the direction
+        // `scatter.depth`'s clearance budget is measured in.
         driftSpeed: 320
     },
 

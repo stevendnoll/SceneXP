@@ -183,9 +183,12 @@ describe('the whole fleet exists at spawn', () => {
         expect(at(trailing)).toBeLessThan(200);
     });
 
-    test('no raider starts inside Mars, which is why the approach line is tilted', () => {
-        // Mars sits exactly at the trailing group's start distance along the
-        // Earth-to-Mars axis. An untilted approach would bury four ships in it.
+    test('no raider starts inside Mars, which MARS_DISTANCE is what buys', () => {
+        // Mars used to sit at exactly the trailing group's start distance along
+        // the Earth-to-Mars axis, so the tilt was the only thing keeping four
+        // ships out of it. Mars is 10,000 units further out now and the tilt is
+        // a seventh of what it was; the clearance comes from the gap. Measured,
+        // the closest trailing raider clears the surface by 8,408.
         const world = makeStructures();
         fleet.initFleet(CONFIG, null, world.hooks);
         const mars = CONFIG.bodies.find(b => b.id === 'mars');
@@ -201,12 +204,18 @@ describe('the whole fleet exists at spawn', () => {
     });
 
     test('the line still reads as coming FROM Mars rather than from somewhere else', () => {
-        // Tilted, but only just: a few degrees off the Mars bearing keeps the
-        // opening frame's image (PRD 6.3) intact.
+        // Tilted, but barely, and the bound that matters is now the UPPER one.
+        // The tilt was 4.4 degrees while it was the only thing keeping raiders
+        // out of the planet, and that offset is exactly what put the fleet
+        // beside Mars instead of in front of it and made the opening shot
+        // impossible to stage on the real ships. MARS_DISTANCE carries the
+        // clearance now, so all this has left to do is give the line a lean:
+        // enough that the trailing group is not mechanically centred on the
+        // disc, little enough that it is unmistakably standing at it.
         const a = CONFIG.fleet.approach;
         const offAxis = Math.hypot(a.azimuth, a.elevation) * (180 / Math.PI);
-        expect(offAxis).toBeGreaterThan(1);
-        expect(offAxis).toBeLessThan(8);
+        expect(offAxis).toBeGreaterThan(0.1);
+        expect(offAxis).toBeLessThan(2);
     });
 
     test('every raider starts pointed inward, already on its way', () => {
@@ -452,38 +461,96 @@ describe('breaking off', () => {
         // measuring the wrong thing entirely.
         //
         // So the same break-off is flown twice, once with the weave and once
-        // with the offset zeroed, and what is asserted is the difference: the
-        // dodge itself has to stay inside the width of the threat cone.
-        const withWeave = flyBreakOff(CONFIG.fleet.evade.weaveOffset);
-        const straight = flyBreakOff(0);
-        expect(angle(withWeave.bearing, straight.bearing))
-            .toBeLessThan(CONFIG.fleet.evade.threatCone);
-        // And it is a real dodge rather than a rounding error.
-        expect(angle(withWeave.bearing, straight.bearing)).toBeGreaterThan(0.01);
+        // with the offset zeroed, and what is asserted is the difference.
+        //
+        // EVERY RAIDER AT ITS WIDEST, rather than ship zero on its last frame,
+        // and both halves of that correction were forced by the same edit.
+        //
+        // This used to fly ship zero alone and compare the two END bearings
+        // against `threatCone`. It passed at 0.348 against 0.35. Moving the
+        // approach line to stage the opening shot on the real raiders (see
+        // config.js MARS_DISTANCE) changed where every ship starts, reshuffled
+        // which raider drew which number, and broke it at 0.397 without
+        // changing a single evade parameter. That is a test measuring one start
+        // position rather than a property.
+        //
+        // Worse, an end-of-flight sample measures the weave's PHASE. It is a
+        // sinusoid, so a raider can be caught anywhere in its cycle: raider
+        // nine ends 0.004 radians off its straight line having swung 0.2 to get
+        // there. `weaveDepth` takes the peak over the whole break-off instead,
+        // which is the amplitude this has always claimed to be about.
+        //
+        // THE BOUNDS ARE THE TWO CONES THE DODGE SITS BETWEEN. It has to beat
+        // the six degree gun cone or the break-off breaks no lock, and it has
+        // to stay inside a swing the visitor can chase back: at a 1.3 radian a
+        // second turn rate, 30 degrees is a third of a second of re-aiming.
+        // `threatCone` is what makes a raider NOTICE, a trigger rather than an
+        // amplitude, and it was only ever the nearest constant to hand.
+        const FOLLOWABLE = 30 * Math.PI / 180;
+        // Counted from config rather than from `getShips`, which is empty until
+        // `flyBreakOff` has built a fleet of its own.
+        const dodges = Array.from({ length: CONFIG.fleet.total }, (_, i) => weaveDepth(i));
+
+        // Followable, on every raider without exception.
+        expect(Math.max(...dodges)).toBeLessThan(FOLLOWABLE);
+        // A real dodge rather than a rounding error, on every raider.
+        expect(Math.min(...dodges)).toBeGreaterThan(0.05);
+
+        // AND IT BEATS THE GUN CONE ON ALL BUT ONE, which is stated as a count
+        // rather than as a minimum because it is a hash lottery and always was.
+        // How wide a raider swings depends on `weavePhase`, a draw of `hashUnit`
+        // on its index, and on the angle between its nose and its target, so the
+        // measured spread across twelve ships is 0.08 to 0.41: five to one. No
+        // single `weaveOffset` puts every draw between the two cones. Raider
+        // nine is the low draw and reaches 4.4 degrees against the 6 degree gun
+        // cone, so a visitor already holding a lock on that one ship keeps it
+        // through the break-off. It drew 6.4 degrees before the approach line
+        // moved, which cleared the cone by seven percent: the same lottery, won
+        // rather than lost. Raising `weaveOffset` to rescue it would push the
+        // high draws past FOLLOWABLE, which is the worse trade.
+        const beatsTheGun = dodges.filter((d) => d > CONFIG.targeting.coneRadians);
+        expect(beatsTheGun.length).toBeGreaterThanOrEqual(CONFIG.fleet.total - 1);
     });
 
-    /** Fly one raider through a full break-off and report where it ended up
-     *  relative to the visitor watching it. */
-    function flyBreakOff(weaveOffset) {
+    /** Fly one raider through a full break-off and report where it sat relative
+     *  to the visitor watching it, ON EVERY FRAME rather than only the last.
+     *
+     *  The weave is a sinusoid, so a single end-of-flight sample measures its
+     *  PHASE and not its amplitude: raider nine happens to land near its neutral
+     *  point and reads 0.004 radians of dodge, having swung a fifth of a radian
+     *  to get there. The whole track is what the caller wants the peak of. */
+    function flyBreakOff(weaveOffset, index = 0) {
         const world = makeStructures();
         const config = {
             ...CONFIG,
             fleet: { ...CONFIG.fleet, evade: { ...CONFIG.fleet.evade, weaveOffset } }
         };
         fleet.initFleet(config, null, world.hooks);
-        const ship = fleet.getShips()[0];
+        const ship = fleet.getShips()[index];
         const player = playerFacing(ship, CONFIG.fleet.evade.triggerDistance * 0.6);
 
+        const track = [];
         for (let i = 0; i < Math.ceil(CONFIG.fleet.evade.duration / 0.05); i++) {
             fleet.updateFleet(0.05, player);
-        }
-        expect(ship.state).toBe(fleet.__test__.STATE.EVADE);
-        return {
-            bearing: unit(
+            track.push(unit(
                 ship.position.x - player.position.x,
                 ship.position.y - player.position.y,
-                ship.position.z - player.position.z)
-        };
+                ship.position.z - player.position.z));
+        }
+        expect(ship.state).toBe(fleet.__test__.STATE.EVADE);
+        return { track, bearing: track[track.length - 1] };
+    }
+
+    /** How far the weave moved a raider at its widest, by flying the same
+     *  break-off twice and comparing the two tracks frame for frame. */
+    function weaveDepth(index) {
+        const withWeave = flyBreakOff(CONFIG.fleet.evade.weaveOffset, index).track;
+        const straight = flyBreakOff(0, index).track;
+        let worst = 0;
+        for (let i = 0; i < withWeave.length; i++) {
+            worst = Math.max(worst, angle(withWeave[i], straight[i]));
+        }
+        return worst;
     }
 
     test('no visitor at all means no break-off and no incoming fire', () => {
@@ -1283,6 +1350,90 @@ describe('twelve raiders read as twelve', () => {
         for (const id of Object.keys(perTarget)) {
             expect(perTarget[id]).toBeLessThanOrEqual(6);
         }
+    });
+});
+
+/* The start line, as two exported vectors.
+ *
+ * THESE EXIST BECAUSE THE OPENING SHOT IS STAGED ON THEM. intro.js places its
+ * camera off `fleetStartAnchor` and flies its squadron along `approachDirection`
+ * reversed, so a raider and the wedge that stands in for it come out of one
+ * definition rather than two that have to be kept in step by hand. They were two
+ * for a while, and the shot ended up framed on a fleet standing somewhere else.
+ */
+describe('approachDirection and fleetStartAnchor', () => {
+    test('points outward from Earth, down the tilted approach line', () => {
+        const d = fleet.approachDirection(CONFIG.fleet.approach);
+        expect(Math.hypot(d.x, d.y, d.z)).toBeCloseTo(1, 9);
+        // Outward is -Z, and the tilt leans it a little right and a little up.
+        expect(d.z).toBeLessThan(-0.99);
+        expect(d.x).toBeGreaterThan(0);
+        expect(d.y).toBeGreaterThan(0);
+    });
+
+    test('is exactly the heading the opening shot flies, reversed', () => {
+        const d = fleet.approachDirection(CONFIG.fleet.approach);
+        const ship = (fleet.initFleet(CONFIG, null, makeStructures().hooks),
+            fleet.getShips()[0]);
+        // Every raider is aimed inward from the first frame, which is this
+        // direction turned around.
+        expect(ship.heading.z).toBeCloseTo(-d.z, 2);
+    });
+
+    test('puts the anchor on the trailing group start distance, unscattered', () => {
+        const anchor = fleet.fleetStartAnchor(CONFIG);
+        const last = CONFIG.fleet.groups[CONFIG.fleet.groups.length - 1];
+        expect(Math.hypot(anchor.x, anchor.y, anchor.z)).toBeCloseTo(last.startDistance, 6);
+        // On the ray itself, so it is a point on the approach line rather than
+        // the hash-scattered mean of the four ships standing near it.
+        const d = fleet.approachDirection(CONFIG.fleet.approach);
+        expect(anchor.x).toBeCloseTo(d.x * last.startDistance, 6);
+        expect(anchor.y).toBeCloseTo(d.y * last.startDistance, 6);
+        expect(anchor.z).toBeCloseTo(d.z * last.startDistance, 6);
+    });
+
+    test('lands within a Mars disc of every raider it stands in for', () => {
+        // The property the whole restaging was for, from the fleet's side.
+        // tests/earthdefense-intro.test.mjs asserts the other half, that the
+        // wedge finishes on this point.
+        fleet.initFleet(CONFIG, null, makeStructures().hooks);
+        const anchor = fleet.fleetStartAnchor(CONFIG);
+        const last = CONFIG.fleet.groups[CONFIG.fleet.groups.length - 1];
+        const trailing = fleet.getShips().filter(s => s.startDistance === last.startDistance);
+        expect(trailing).toHaveLength(last.count);
+        for (const ship of trailing) {
+            const off = Math.hypot(
+                ship.position.x - anchor.x,
+                ship.position.y - anchor.y,
+                ship.position.z - anchor.z);
+            // The scatter block's own diagonal, which is what "near" means here.
+            const s = CONFIG.fleet.spread;
+            expect(off).toBeLessThan(Math.hypot(s.lateral, s.vertical, s.depth));
+        }
+    });
+
+    /** The fallbacks, driven rather than trusted. A default nobody exercises is
+     *  untested code that looks like safety. */
+    test('reads a missing approach block as straight out along -Z', () => {
+        expect(fleet.approachDirection(undefined)).toEqual({ x: 0, y: 0, z: -1 });
+        expect(fleet.approachDirection({})).toEqual({ x: 0, y: 0, z: -1 });
+    });
+
+    test('gives the origin rather than NaN when there are no groups at all', () => {
+        expect(fleet.fleetStartAnchor({ fleet: { groups: [] } })).toEqual({ x: 0, y: 0, z: 0 });
+        expect(fleet.fleetStartAnchor({})).toEqual({ x: 0, y: 0, z: 0 });
+        expect(fleet.fleetStartAnchor(null)).toEqual({ x: 0, y: 0, z: 0 });
+    });
+
+    test('reads a group with no start distance as standing on Earth', () => {
+        const anchor = fleet.fleetStartAnchor({ fleet: { approach: CONFIG.fleet.approach, groups: [{}] } });
+        expect(anchor).toEqual({ x: 0, y: 0, z: -0 });
+    });
+
+    test('writes into the vector it is given rather than allocating', () => {
+        const out = { x: 1, y: 1, z: 1 };
+        expect(fleet.fleetStartAnchor(CONFIG, out)).toBe(out);
+        expect(out.x).not.toBe(1);
     });
 });
 

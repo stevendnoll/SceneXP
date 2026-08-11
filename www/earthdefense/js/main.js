@@ -1685,14 +1685,14 @@ function advanceEndScreen() {
  *  welcome overlay: the overlay carries the objective either way, which is more
  *  than the shot does.
  *
- *  THE REAL FLEET STANDS DOWN FOR THE DURATION. Its trailing four raiders start
- *  200,000 units out, which is within a few thousand units of where this shot's
- *  camera is standing, so leaving them up would put two separate sets of
- *  Martian ships in the same frame. */
+ *  THE REAL FLEET STANDS DOWN FOR THE DURATION, and this is no longer a
+ *  precaution. The shot is staged ON the trailing group's start point: the
+ *  squadron finishes exactly where those four raiders are standing, a few
+ *  thousand units from the camera. Leaving them up would draw two sets of
+ *  Martian ships through each other rather than merely in the same frame. */
 function startOpening() {
     if (prefersReducedMotion()) return false;
-    const mars = getBody('mars');
-    if (!mars || !startIntro(mars.position, EARTHDEFENSE_CONFIG)) return false;
+    if (!startIntro(EARTHDEFENSE_CONFIG)) return false;
     setFleetVisible(false);
     _introPending = true;
     // The briefing is deliberately NOT up yet, and neither are the round

@@ -257,21 +257,43 @@ describe('the fleet is in the opening frame, not waiting off it', () => {
         expect(Math.abs(elevation(lead))).toBeLessThan(halfFovDeg());
     });
 
-    test('the line trails back toward Mars without ever being inside it', () => {
-        // The tilt exists for exactly one reason: Mars sits at the trailing
-        // group's start distance along the Earth-to-Mars axis, so an untilted
-        // approach would bury four raiders in the planet.
+    test('the line trails back toward Mars, and the far end reaches it', () => {
+        // THIS TEST USED TO ASSERT THE OPPOSITE OF WHAT IT NOW DOES for the
+        // trailing group, and the reversal is the point. It required every
+        // group to sit CLEAR of Mars's disc, because the approach line was
+        // tilted hard enough to keep raiders out of a planet that sat at their
+        // own start distance, and 15,570 units of sideways offset was the price.
+        // What that bought in clearance it cost in truth: the deepest raiders
+        // were 3.4 degrees off Mars, the opening shot could not be staged on
+        // them, and the wedge a visitor watched form up was two Mars diameters
+        // from where the markers appeared. MARS_DISTANCE carries the clearance
+        // now, so the far end of the line can land where it always claimed to
+        // be coming from.
         const marsRadiusDeg = Math.asin(bodyById('mars').radius /
             len(sub(mars(), spawnPosition()))) * DEG;
-
-        for (let i = 0; i < F().groups.length; i++) {
+        const separations = F().groups.map((_, i) => {
             const toGroup = norm(sub(groupCentre(i), spawnPosition()));
             const toMars = norm(sub(mars(), spawnPosition()));
-            const separation = Math.acos(Math.min(1, dot(toGroup, toMars))) * DEG;
-            // Clear of the disc, so no raider is lost against it...
-            expect(separation).toBeGreaterThan(marsRadiusDeg);
-            // ...but close enough that the eye reads the line as coming from it.
-            expect(separation).toBeLessThan(15);
+            return Math.acos(Math.min(1, dot(toGroup, toMars))) * DEG;
+        });
+
+        // The trailing group stands AT Mars: inside one disc of its centre, so
+        // it reads as having just left, and this is the frame the opening shot
+        // hands over to. `tests/earthdefense-intro.test.mjs` asserts the other
+        // half, that the wedge finishes on this same point.
+        expect(separations.at(-1)).toBeLessThan(marsRadiusDeg * 2);
+
+        // The nearer groups are pulled well off it, and by parallax rather than
+        // by the tilt: the spawn camera sits 8,500 units off the Earth-to-Mars
+        // axis, so a raider 28,000 out is 12 degrees below the planet however
+        // straight the line is. That IS the trailing image, and it is why the
+        // fleet reads as a line coming toward you rather than a cluster.
+        expect(separations[0]).toBeGreaterThan(marsRadiusDeg * 4);
+        for (let i = 1; i < separations.length; i++) {
+            // Monotonic: the further out a group starts, the nearer Mars it is.
+            expect(separations[i]).toBeLessThan(separations[i - 1]);
+            // And none of it wanders off somewhere Mars cannot explain.
+            expect(separations[i]).toBeLessThan(15);
         }
     });
 
@@ -600,7 +622,7 @@ describe('the world builds and ticks', () => {
     test('the two bodies the visitor gets close to have a night side, and Mars does not', () => {
         // Earth and the Moon are both approached: Earth fills the opening frame
         // and the Moon is a sixteen second trip with three installations on it.
-        // Mars is only ever a 1.9 degree disc, so a glow there would just make
+        // Mars is only ever a 1.8 degree disc, so a glow there would just make
         // the whole thing read as faintly self-lit.
         expect(bodyById('earth').nightGlow).toBeTruthy();
         expect(bodyById('moon').nightGlow).toBeTruthy();
