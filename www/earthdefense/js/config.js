@@ -1260,6 +1260,32 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
     // enough back to see the planet it is launched from. The whole scene is
     // already at that scale: a raider is hundreds of units across.
     finale: {
+        // HOW LONG THE RUN'S LAST EXPLOSION GETS TO ITSELF, before any of the
+        // three shots is allowed to take the camera.
+        //
+        // A RUN ENDS ON A DESTRUCTION, ALWAYS: the last raider, the last
+        // installation, or the visitor's own ship. Every one of those spawns a
+        // `weapons.burstLife` cloud at the moment the state machine flips, and
+        // the two losses already had somewhere for it to play, because a
+        // destruction replay stands between them and the ending: 2.2 seconds
+        // over the wreck, 2.6 in the corner window. The WIN had nothing. The
+        // fireworks opened on the same frame as the kill, 15,000 units away
+        // over Earth, and the explosion the whole run was aimed at was thrown
+        // away in the cut. Steve reported it as the ending feeling disjointed,
+        // which is exactly what it was: a cut over an unfinished action.
+        //
+        // MATCHED TO `weapons.burstLife`, so the cloud finishes rather than
+        // nearly finishing. The intro suite's opposite number in the main suite
+        // asserts the two agree, so shortening the burst does not silently
+        // leave a beat of dead air and lengthening it does not silently go back
+        // to cutting away early.
+        //
+        // IT IS A MINIMUM, NOT AN ADDITION. The clock starts when the run ends
+        // and runs alongside whatever else is happening, so the two losses are
+        // untouched: their replays are twice as long and were always going to
+        // outlast it. This only ever bites on the win.
+        beat: 0.9,
+
         // One pool for all three shots, since only one ever runs. Sized for
         // the win, which is the busiest: four shells in the air at 34 sparks
         // plus their launch trails is a little over 200 live at a peak, and

@@ -384,6 +384,33 @@ describe('the effect pools', () => {
         expect(origins).toEqual([10, -10, 10, -10]);
     });
 
+    /** THE BURST POOL IS READABLE FOR THE SAME REASON THE TRACER POOL IS.
+     *
+     *  A scene's own suite has no geometry to look at: earthdefense's stub
+     *  models none at all, so `points.visible` and `material.opacity` are
+     *  swallowed by a proxy. A pool slot is a plain object, so `active` and
+     *  `age` survive, and they are the only honest way to ask from outside
+     *  whether an explosion is still playing. That question is load bearing at
+     *  the end of an Earth Defense run, where the ending is held back until the
+     *  destruction that caused it has finished.
+     *
+     *  DRIVEN WITH NO TARGET, which is the same call that scene makes once its
+     *  run is over: every pool advances, and nothing fires. */
+    test('reports the burst pool, and advances it with no target at all', () => {
+        mod.spawnDestruction({ x: 0, y: 0, z: -500 }, 200);
+        const burst = mod.__test__.allBursts().find(b => b.active);
+        expect(burst).toBeTruthy();
+        expect(burst.age).toBe(0);
+
+        expect(mod.updateWeapons(0.1, null, null)).toBe(0);
+        expect(burst.active).toBe(true);
+        expect(burst.age).toBeCloseTo(0.1, 6);
+
+        // And it retires on its own life rather than needing a target to end it.
+        mod.updateWeapons(mod.__test__.DEFAULTS.burstLife, null, null);
+        expect(burst.active).toBe(false);
+    });
+
     test('a tracer leaves the muzzle and heads for the target', () => {
         mod.registerDamageable('outpost', 10);
         mod.updateWeapons(0.016, targetFor('outpost'), [MUZZLES[0]]);

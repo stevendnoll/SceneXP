@@ -125,6 +125,19 @@ async function clearTheFleet(main) {
     }
 }
 
+/** Step past the beat the run's last explosion is owed before any ending may
+ *  take the camera.
+ *
+ *  EVERY RUN ENDS ON A DESTRUCTION, and `config.finale.beat` is how long its
+ *  burst gets to itself. The two losses never notice it, because the
+ *  destruction replay standing in front of their ending is more than twice as
+ *  long; a WIN cuts to fireworks 15,000 units away and used to do it on the
+ *  same frame as the kill. So anything that wins a run and then asserts on the
+ *  ending has to come through here first. */
+function playTheLastExplosion(config) {
+    stepFrames(Math.ceil(config.finale.beat / 0.016) + 2);
+}
+
 function playOutTheEnding(config) {
     const finale = config.finale;
     const longest = Math.max(
@@ -1922,15 +1935,150 @@ describe('how a run ends', () => {
 
     test('a win gets the celebration, not a dialog', async () => {
         const main = await boot();
+        const config = await CONFIG();
         const finale = await FINALE();
         enterWorld();
         stepFrames(30);
         await clearTheFleet(main);
+        playTheLastExplosion(config);
 
         expect(finale.isFinaleRunning()).toBe(true);
         expect(finale.getFinaleKind()).toBe('won');
         expect(washed('finale-won')).toBe(true);
         expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
+    });
+
+    /** AND IT HAS TO BE STILL MOVING WHILE IT IS HELD ON, which is the other
+     *  half of the same bug and the half that was invisible.
+     *
+     *  `updateWeapons` has exactly one caller, `updateCombat`, and that lives
+     *  inside the loop's `isPlaying()` branch. Every run ends on a destruction,
+     *  so the state machine flips on the same frame the burst is spawned, the
+     *  effects stop being advanced, and the cloud FREEZES mid-flight. The two
+     *  losses were spending their whole replay orbiting a still photograph of an
+     *  explosion: 2.2 seconds over a wreck that was not moving.
+     *
+     *  Read off the burst pool rather than off the scene, because this suite's
+     *  THREE stub models no geometry. A pool slot is a plain object, so `active`
+     *  and `age` are real numbers even when the mesh under them is a proxy. */
+    test('the last explosion keeps playing after the run has ended', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        const weapons = await import('../www/shared/js/weapons-1.0.0.min.js');
+        enterWorld();
+        stepFrames(10);
+
+        await clearTheFleet(main);
+        expect(main.getState().phase).toBe('won');
+        // Stand in for the killing shot's own burst. `clearTheFleet` reports the
+        // damage rather than firing, so nothing spawned one.
+        weapons.spawnDestruction({ x: 0, y: 0, z: -1000 }, 200);
+        const burst = weapons.__test__.allBursts().find((b) => b.active);
+        expect(burst).toBeTruthy();
+        expect(burst.age).toBe(0);
+
+        stepFrames(10);
+        expect(burst.age).toBeGreaterThan(0);
+        expect(burst.active).toBe(true);
+
+        // And it retires on its own schedule rather than hanging about.
+        stepFrames(Math.ceil(config.weapons.burstLife / 0.016) + 2);
+        expect(burst.active).toBe(false);
+    });
+
+    /** The guns are still OFF, which is the thing that makes running the
+     *  effects past the end of a run safe. `updateWeapons` is handed a null
+     *  target, so it advances every pool and considers firing at nothing. */
+    test('but the guns do not keep firing after the run has ended', async () => {
+        const main = await boot();
+        const weapons = await import('../www/shared/js/weapons-1.0.0.min.js');
+        const { getShips } = await import('../www/earthdefense/js/fleet.min.js');
+        enterWorld();
+        stepFrames(10);
+
+        // Lose the line rather than clearing the fleet, so there are still
+        // twelve live raiders for a gun to lock onto afterwards.
+        const { getStructures } = await import('../www/earthdefense/js/structures.min.js');
+        for (const entry of getStructures()) {
+            main.__test__.onDamageResolved({ id: entry.site.id, hitPoints: 0, destroyed: true });
+        }
+        expect(main.getState().phase).toBe('lost');
+        expect(getShips().some((ship) => ship.alive)).toBe(true);
+
+        const live = () => weapons.__test__.allTracers().filter((t) => t.active).length;
+        stepFrames(60);
+        expect(live()).toBe(0);
+    });
+
+    /** THE RUN'S LAST EXPLOSION GETS TO FINISH, and this is the block that says
+     *  so. Steve reported the ending as feeling disjointed: the last raider
+     *  died and the fireworks were already playing, 15,000 units away over
+     *  Earth, so the one kill the whole run was aimed at was thrown away in the
+     *  cut. Measured before the fix: 0.00 seconds between the killing shot and
+     *  `startFinale`, against a burst 0.9 seconds long.
+     *
+     *  THE TWO LOSSES NEVER HAD THIS PROBLEM, which is why it went unnoticed.
+     *  Both have a destruction replay standing between them and their ending:
+     *  2.21 seconds over the wreck, 2.61 in the corner window. The win had
+     *  nothing between the kill and the camera leaving. */
+    test('a win holds on the last kill before the fireworks start', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        const finale = await FINALE();
+        enterWorld();
+        stepFrames(30);
+        await clearTheFleet(main);
+
+        // The run is decided on this frame, and the camera has not moved.
+        expect(main.getState().phase).toBe('won');
+        expect(finale.isFinaleRunning()).toBe(false);
+
+        // Still held one frame short of the beat...
+        stepFrames(Math.floor(config.finale.beat / 0.016) - 1);
+        expect(finale.isFinaleRunning()).toBe(false);
+
+        // ...and away on the other side of it.
+        stepFrames(3);
+        expect(finale.isFinaleRunning()).toBe(true);
+    });
+
+    /** IT IS A MINIMUM, NOT AN ADDITION, and that distinction is the whole
+     *  design of it. The beat is counted down before the replay gate rather
+     *  than after it, so it runs ALONGSIDE a destruction replay instead of
+     *  being added to one. A loss that already waited 2.2 seconds still waits
+     *  2.2, not 3.1. */
+    test('the beat costs a loss nothing, because its replay is longer', async () => {
+        const main = await boot();
+        const config = await CONFIG();
+        const finale = await FINALE();
+        const replay = await import('../www/earthdefense/js/replay.min.js');
+        enterWorld();
+
+        for (let life = 0; life < config.player.lives; life++) {
+            main.__test__.killPlayer('fire');
+            if (life < config.player.lives - 1) stepFrames(200);
+        }
+        expect(replay.isShipReplayRunning()).toBe(true);
+
+        // Past the beat, and the replay is still what is holding the ending.
+        stepFrames(Math.ceil(config.finale.beat / 0.016) + 2);
+        expect(replay.isShipReplayRunning()).toBe(true);
+        expect(finale.isFinaleRunning()).toBe(false);
+
+        // The ending arrives on the replay's schedule, not the beat plus it.
+        stepFrames(Math.ceil((config.player.respawnDelay - config.finale.beat) / 0.016) + 4);
+        expect(finale.isFinaleRunning()).toBe(true);
+    });
+
+    /** THE BEAT IS SIZED BY THE THING IT IS WAITING FOR. A burst is
+     *  `weapons.burstLife` long, so a shorter beat cuts away from an explosion
+     *  still expanding and a longer one buys dead air. Asserted rather than
+     *  left as a coincidence between two blocks of config. */
+    test('the beat lasts at least as long as the burst it is waiting on', async () => {
+        const config = await CONFIG();
+        expect(config.finale.beat).toBeGreaterThanOrEqual(config.weapons.burstLife);
+        // And is not padded out into a pause the visitor would notice as one.
+        expect(config.finale.beat).toBeLessThan(config.weapons.burstLife * 1.5);
     });
 
     test('losing the line burns the places it was lost at', async () => {
@@ -2000,9 +2148,11 @@ describe('how a run ends', () => {
      *  Reduced motion is now the ONLY way past it, and that test is below. */
     test('a key does not cut it short', async () => {
         const main = await boot();
+        const config = await CONFIG();
         const finale = await FINALE();
         enterWorld();
         await clearTheFleet(main);
+        playTheLastExplosion(config);
         expect(finale.isFinaleRunning()).toBe(true);
 
         fire(dom.documentStub, 'keydown', { code: 'KeyJ' });
@@ -2013,9 +2163,11 @@ describe('how a run ends', () => {
 
     test('a tap does not either, which is the one that was being tripped over', async () => {
         const main = await boot();
+        const config = await CONFIG();
         const finale = await FINALE();
         enterWorld();
         await clearTheFleet(main);
+        playTheLastExplosion(config);
 
         fire(dom.documentStub, 'pointerdown', {});
 
@@ -2029,9 +2181,11 @@ describe('how a run ends', () => {
      *  pause panel over an ending. */
     test('Escape neither skips the ending nor opens a pause panel', async () => {
         const main = await boot();
+        const config = await CONFIG();
         const finale = await FINALE();
         enterWorld();
         await clearTheFleet(main);
+        playTheLastExplosion(config);
 
         fire(dom.documentStub, 'keydown', { code: 'Escape' });
 
@@ -2063,9 +2217,15 @@ describe('how a run ends', () => {
             matches: true, addEventListener() { }, removeEventListener() { }
         });
         const main = await boot();
+        const config = await CONFIG();
         const finale = await FINALE();
         enterWorld();
         await clearTheFleet(main);
+        // THE BEAT IS NOT A CAMERA MOVE, so reduced motion still gets it. What
+        // the preference removes is the shot; what it must not remove is the
+        // visitor's last kill finishing before the receipt lands over it.
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(true);
+        playTheLastExplosion(config);
 
         expect(finale.isFinaleRunning()).toBe(false);
         expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
@@ -2076,9 +2236,11 @@ describe('how a run ends', () => {
         // Otherwise the new run opens over the last one's embers, with a red
         // wash on the body and a hint offering to skip nothing.
         const main = await boot();
+        const config = await CONFIG();
         const finale = await FINALE();
         enterWorld();
         await clearTheFleet(main);
+        playTheLastExplosion(config);
         expect(finale.isFinaleRunning()).toBe(true);
 
         main.__test__.restartRun();
@@ -2099,6 +2261,7 @@ describe('how a run ends', () => {
         const finale = await FINALE();
         enterWorld();
         await clearTheFleet(main);
+        playTheLastExplosion(config);
         stepFrames(4);
 
         const eye = finale.finaleEye();

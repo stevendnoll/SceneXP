@@ -527,5 +527,10 @@ export const __test__ = {
     DEFAULTS, spawnTracer, spawnFlash, spawnBurst, oldest,
     // Read through a function rather than exported directly: dispose replaces
     // the arrays, so a captured reference would go stale after a restart.
-    allTracers: () => tracers
+    allTracers: () => tracers,
+    // The burst pool, for the same reason and one more. A pool slot is a plain
+    // object holding a chainable mesh, so `active` and `age` are readable under
+    // a THREE stub that models no geometry at all: they are the only honest way
+    // for a scene's own suite to ask whether an explosion is still playing.
+    allBursts: () => bursts
 };

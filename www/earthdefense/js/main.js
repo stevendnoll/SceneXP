@@ -164,6 +164,9 @@ let _endScreenPending = null;
 // rather than a check on the finale itself, because "has not started" and "has
 // finished" look identical from outside and one of them means play it.
 let _finaleOffered = false;
+// Seconds still owed to the destruction that ended the run before any ending
+// may take the camera. See `advanceEndScreen` and `config.finale.beat`.
+let _endBeat = 0;
 // The wash class currently on the body, so the two are never both up and a
 // restart cannot leave one behind.
 let _finaleWash = '';
@@ -538,16 +541,24 @@ function handleStateChange(next) {
         // ship is destroyed, so opening the end screen here would drop a
         // blurred backdrop over the one destruction the whole run led up to,
         // and it would do the same to the ending shot that follows it.
-        // `advanceEndScreen` owns the order: wreck replay, then finale, then
-        // the card. Called once here so an ending that plays nothing at all
-        // (reduced motion) still puts the card up on this frame rather than on
-        // the next one.
+        // `advanceEndScreen` owns the order: the last explosion, then the
+        // wreck replay, then the finale, then the card.
+        //
+        // THE BEAT IS SET HERE BECAUSE THIS IS THE FRAME THE RUN ENDED ON, and
+        // the burst that ended it was spawned on this same frame. Called once
+        // here so an ending that plays nothing at all (reduced motion) is
+        // already counting rather than waiting for the next frame to start; the
+        // zero delta means it cannot finish on this one, which is the point.
+        // Reduced motion gets the beat too, deliberately: it asks for no camera
+        // moves, not for the receipt to land over the visitor's last kill.
         _endScreenPending = next;
         _finaleOffered = false;
-        advanceEndScreen();
+        _endBeat = EARTHDEFENSE_CONFIG.finale.beat || 0;
+        advanceEndScreen(0);
     } else if (endModal) {
         _endScreenPending = null;
         _finaleOffered = false;
+        _endBeat = 0;
         endFinale();
         setFinaleWash('');
         endModal.classList.add('hidden');
@@ -896,6 +907,7 @@ function clearReplays() {
     _aftershocks.length = 0;
     _endScreenPending = null;
     _finaleOffered = false;
+    _endBeat = 0;
     _lastWreck = null;
     _insetRect = null;
     if (replayInset) replayInset.classList.add('hidden');
@@ -1537,6 +1549,7 @@ function animate() {
     updateReplay(deltaTime);
     advanceFinale(deltaTime);
     advanceAftershocks(deltaTime);
+    advanceSpentEffects(deltaTime);
     advanceEndScreen(deltaTime);
 
     if (isPlaying()) {
@@ -1653,9 +1666,20 @@ function shouldDrawThisFrame(deltaTime) {
  *  backgrounded tab cannot strand a visitor looking at a wreck with no panel.
  *  The replay is what gates it rather than a duration, so the two can never
  *  disagree about how long the shot was. */
-function advanceEndScreen() {
+function advanceEndScreen(deltaTime = 0) {
     if (!_endScreenPending) return;
-    // The wreck shot first, when there is one. Only the last life has one, and
+    // THE LAST EXPLOSION FIRST, ALWAYS. A run ends on a destruction, and its
+    // burst is still expanding on the frame the state machine flips. The two
+    // losses have a replay standing here already and never needed this; the win
+    // cut to fireworks 15,000 units away on the same frame as the kill, which
+    // is what made the ending feel disjointed. Counted down before the replay
+    // gate rather than after it, so it runs ALONGSIDE a replay instead of being
+    // added to one: a minimum dwell, not an extra pause.
+    if (_endBeat > 0) {
+        _endBeat = Math.max(0, _endBeat - (deltaTime || 0));
+        if (_endBeat > 0) return;
+    }
+    // The wreck shot next, when there is one. Only the last life has one, and
     // the ending that follows it is written to open exactly where it closes.
     if (isReplayRunning()) return;
     if (!_finaleOffered) {
@@ -1858,6 +1882,36 @@ function advanceFinale(deltaTime) {
     updateFinale(deltaTime);
     const wash = finaleWash();
     if (wash !== _finaleWash) setFinaleWash(wash);
+}
+
+/** Keep the gunnery EFFECTS running after the run has ended, with the guns
+ *  themselves switched off.
+ *
+ *  `updateCombat` is the only caller of `updateWeapons` and it lives inside the
+ *  `isPlaying()` branch, which is right for the firing half and was quietly
+ *  wrong for the other half. Every run ends on a destruction, and the burst it
+ *  spawns is `weapons.burstLife` long: the state machine flips on the same
+ *  frame, `updateCombat` stops being called, and the cloud FREEZES mid-flight.
+ *  The wreck replay then spent two seconds orbiting a still photograph of an
+ *  explosion, and the win never got to show one at all.
+ *
+ *  The same file already knew this. `updateCombat`'s own comment says "a wrecked
+ *  ship holds its fire but its effects keep running, which is how the
+ *  destruction burst it just became gets to finish playing" - true for the first
+ *  two deaths, which leave the phase at `playing`, and never true for the one
+ *  that ends the run.
+ *
+ *  NULL TARGET IS THE WHOLE MECHANISM, and it is the same trick that comment
+ *  describes. `updateWeapons` advances tracers, flashes and bursts before it
+ *  considers firing, and with nothing to fire at it advances them and stops. No
+ *  muzzles either, since those are read only on the firing path.
+ *
+ *  ONLY ONCE THE RUN IS OVER, rather than "whenever not playing". The briefing
+ *  has no effects to age and a pause is meant to be frozen; `isOver` is the one
+ *  window where effects should outlive the simulation that made them. */
+function advanceSpentEffects(deltaTime) {
+    if (!isOver()) return;
+    updateWeapons(deltaTime, null, null);
 }
 
 /** Count down the wreck, then put the ship back. Run off the frame clock rather
@@ -2145,6 +2199,7 @@ function cleanup() {
     overlayScene = null;
     _endScreenPending = null;
     _finaleOffered = false;
+    _endBeat = 0;
     _introPending = false;
     _lastWreck = null;
     _insetRect = null;
