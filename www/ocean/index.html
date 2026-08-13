@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         media-src is here for the silent keep-alive element that promotes the
+         iOS audio session, which needs a blob: URL. Three shipped scenes carry
+         that workaround without this directive and it has never worked in any
+         of them; see the note in js/audio.js. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <!-- SCAFFOLD PAGE. This is a bench for tuning the water, not the finished
+         experience. Still to come before it ships: the welcome screen, the four
+         minute day cycle, the mute control, the wet sand, the surf audio wiring,
+         the Open Graph and Twitter blocks, the JSON-LD, the canonical URL, and
+         entries in sitemap.xml, llms.txt, and robots.txt. Do not deploy as is. -->
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#8fb6cc">
+    <meta name="description" content="A quiet stretch of sea, breaking on a beach, for as long as you would like to watch it.">
+
+    <title>The Ocean (scaffold)</title>
+
+    <!-- An external file rather than a <style> block, because style-src 'self'
+         blocks inline styles and the page would render unstyled with nothing but
+         a console message to say why. Same reason the script below is external. -->
+    <link rel="stylesheet" href="css/experience.min.css?v=1">
+</head>
+
+<body>
+    <canvas id="scene" aria-label="A view out to sea from the water's edge, with waves breaking toward you"
+        role="img"></canvas>
+
+    <noscript>
+        <p class="fallback">
+            This page shows a moving 3D view of the sea, which needs JavaScript to draw.
+            You are very welcome to switch it on and come back, and thank you for stopping by.
+        </p>
+    </noscript>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,731 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+//
+// Tests for www/ocean/js/water.js.
+//
+// THE POINT OF THESE IS THE PHYSICS, not the plumbing. A wave simulation fails
+// in a way unit tests are unusually good at catching and eyes are unusually bad
+// at: it looks broadly like water either way, and the difference between the
+// beach directing the surf and the surf being placed by hand is invisible in a
+// screenshot. So the assertions below are mostly statements about the sea.
+// Waves must grow as they shallow, they must never stand taller than the depth
+// allows, they must swing round to arrive parallel to the beach, foam must
+// exist shoreward of where it was made and not seaward of it, and the phase
+// must never run backwards. Every one of those is a thing that could quietly
+// stop being true during a retune, and none of them would announce it.
+//
+// The THREE stub at the bottom is real enough to hold typed arrays, because the
+// one plumbing bug worth guarding against is an attribute the shader reads
+// under a name the geometry does not supply. That failure mode is silent: the
+// attribute reads as zero, the sea goes flat, and nothing anywhere reports it.
+
+import { jest } from '@jest/globals';
+
+const CONFIG_URL = '../www/ocean/js/config.js';
+const WATER_URL = '../www/ocean/js/water.js';
+
+// water.js imports './config.min.js'. The minified build is real and current,
+// but pointing the test at the source keeps a stale build from passing.
+jest.unstable_mockModule('../www/ocean/js/config.min.js', async () => (
+    await import(CONFIG_URL)
+));
+
+const { OCEAN_CONFIG } = await import(CONFIG_URL);
+
+// ---------------------------------------------------------------------------
+// A THREE stub with real arrays in it
+// ---------------------------------------------------------------------------
+
+class StubBufferAttribute {
+    constructor(array, itemSize) {
+        this.array = array;
+        this.itemSize = itemSize;
+        this.count = array.length / itemSize;
+        this.usage = 'static';
+        this.needsUpdate = false;
+    }
+    setUsage(usage) { this.usage = usage; return this; }
+}
+
+class StubBufferGeometry {
+    constructor() { this.attributes = {}; this.index = null; this.disposed = false; }
+    setAttribute(name, attribute) { this.attributes[name] = attribute; return this; }
+    getAttribute(name) { return this.attributes[name]; }
+    setIndex(attribute) { this.index = attribute; return this; }
+    computeVertexNormals() { this.normalsComputed = true; }
+    dispose() { this.disposed = true; }
+}
+
+class StubMaterial {
+    constructor(params = {}) { Object.assign(this, params); this.disposed = false; }
+    dispose() { this.disposed = true; }
+}
+
+class StubMesh {
+    constructor(geometry, material) {
+        this.geometry = geometry;
+        this.material = material;
+        this.parent = null;
+        this.matrixAutoUpdate = true;
+    }
+    updateMatrix() { this.matrixUpdated = true; }
+}
+
+class StubVector4 {
+    constructor() { this.x = 0; this.y = 0; this.z = 0; this.w = 0; }
+}
+
+function installThree() {
+    globalThis.THREE = {
+        BufferGeometry: StubBufferGeometry,
+        BufferAttribute: StubBufferAttribute,
+        MeshStandardMaterial: StubMaterial,
+        Mesh: StubMesh,
+        Vector4: StubVector4,
+        Color: class { constructor(hex) { this.hex = hex; } },
+        DynamicDrawUsage: 'dynamic',
+        FrontSide: 'front'
+    };
+}
+
+function makeScene() {
+    return {
+        children: [],
+        add(object) { this.children.push(object); object.parent = this; },
+        remove(object) {
+            const i = this.children.indexOf(object);
+            if (i >= 0) this.children.splice(i, 1);
+            object.parent = null;
+        }
+    };
+}
+
+installThree();
+const water = await import(WATER_URL);
+const {
+    bedHeightAt, tideOffset, depthAt, waveNumberAt, shoalingAt, breakAmount,
+    envelopeAt, rowPositions, halfWidthAt, waveConstants, buildProfile, breakRow,
+    initWater, updateWater, consumeBreaks, breakDistance, disposeWater,
+    getWaterMesh, getProfile, getElapsed, __test__
+} = water;
+
+const { beach, water: WATER } = OCEAN_CONFIG;
+
+afterEach(() => { disposeWater(); });
+
+// ---------------------------------------------------------------------------
+
+describe('the beach has a shape', () => {
+    test('the bed drops away on the configured slope out to sea', () => {
+        const near = bedHeightAt(beach.shoreZ - 10);
+        const far = bedHeightAt(beach.shoreZ - 20);
+        expect(near).toBeCloseTo(-10 * beach.slope, 6);
+        expect(far).toBeCloseTo(-20 * beach.slope, 6);
+    });
+
+    test('it flattens out at maxDepth rather than running to the centre of the earth', () => {
+        // farZ is 420 metres out, which on this slope would be 30 metres of
+        // depth. The profile is supposed to stop at maxDepth.
+        expect(bedHeightAt(beach.farZ)).toBeCloseTo(-beach.maxDepth, 6);
+    });
+
+    test('it keeps climbing shoreward of the water line, which is the dry beach', () => {
+        expect(bedHeightAt(beach.shoreZ + 5)).toBeCloseTo(5 * beach.slope, 6);
+    });
+});
+
+describe('the tide', () => {
+    test('starts at mean level and stays inside its range', () => {
+        expect(tideOffset(0)).toBeCloseTo(0, 6);
+        for (let t = 0; t < WATER.tidePeriodSeconds * 2; t += 7) {
+            expect(Math.abs(tideOffset(t))).toBeLessThanOrEqual(WATER.tideRange / 2 + 1e-9);
+        }
+    });
+
+    test('reaches its high point a quarter of the way through the cycle', () => {
+        // Half a period is the one sample that reads identically to the start,
+        // since sin(pi) and sin(0) are both zero. A quarter is the peak.
+        expect(tideOffset(WATER.tidePeriodSeconds / 4)).toBeCloseTo(WATER.tideRange / 2, 6);
+    });
+
+    test('moves the water line up the beach', () => {
+        const dry = beach.shoreZ + 2;
+        // Two metres up the sand is dry at mean tide and wet at high tide,
+        // because 2 metres of slope is well inside the tide's half range.
+        expect(depthAt(dry, 0)).toBe(0);
+        expect(depthAt(dry, WATER.tideRange / 2)).toBeGreaterThan(0);
+    });
+});
+
+describe('depth', () => {
+    test('is exactly zero above the water line, which is how a dry row is known', () => {
+        expect(depthAt(beach.shoreZ + 10, 0)).toBe(0);
+    });
+
+    test('never returns a value between zero and minDepth', () => {
+        for (let z = beach.shoreZ - 1; z < beach.shoreZ + 1; z += 0.01) {
+            const d = depthAt(z, 0);
+            expect(d === 0 || d >= WATER.minDepth).toBe(true);
+        }
+    });
+
+    test('deepens monotonically out to sea', () => {
+        let previous = 0;
+        for (let z = beach.shoreZ; z > beach.farZ; z -= 5) {
+            const d = depthAt(z, 0);
+            expect(d).toBeGreaterThanOrEqual(previous - 1e-9);
+            previous = d;
+        }
+        expect(previous).toBeCloseTo(beach.maxDepth, 6);
+    });
+});
+
+describe('waves feel the bottom', () => {
+    const k0 = (Math.PI * 2) / 62;   // the longest component
+
+    test('deep water leaves the wave number alone', () => {
+        // Deep water for this component is anything past half its wavelength.
+        expect(waveNumberAt(k0, 200)).toBeCloseTo(k0, 6);
+    });
+
+    test('shallow water shortens the wavelength', () => {
+        const shallow = waveNumberAt(k0, 1.0);
+        expect(shallow).toBeGreaterThan(k0);
+        // Shorter still as it gets shallower: this is the bunching up that
+        // makes a set of waves visibly crowd together as they arrive.
+        expect(waveNumberAt(k0, 0.4)).toBeGreaterThan(shallow);
+    });
+
+    test('shoaling is one in deep water and grows as the bottom comes up', () => {
+        const c0 = Math.sqrt(9.81 / k0);
+        expect(shoalingAt(waveNumberAt(k0, 300), 300, c0)).toBeCloseTo(1, 2);
+        const mid = shoalingAt(waveNumberAt(k0, 2), 2, c0);
+        const shallow = shoalingAt(waveNumberAt(k0, 0.8), 0.8, c0);
+        expect(shallow).toBeGreaterThan(mid);
+        expect(shallow).toBeGreaterThan(1.2);
+    });
+
+    test('shoaling dips slightly before it grows, which is real', () => {
+        // A shoaling wave gets very slightly SHORTER before it stands up,
+        // because the group speed briefly rises. If this ever reads as a bug and
+        // gets "fixed", the sea loses a small piece of its honesty.
+        const c0 = Math.sqrt(9.81 / k0);
+        const samples = [];
+        for (let d = 30; d > 0.5; d -= 0.5) samples.push(shoalingAt(waveNumberAt(k0, d), d, c0));
+        expect(Math.min(...samples)).toBeLessThan(1);
+        expect(samples[samples.length - 1]).toBeGreaterThan(1.2);
+    });
+});
+
+describe('waves break where the depth says they do', () => {
+    test('nothing breaks in water far deeper than the wave is tall', () => {
+        expect(breakAmount(0.5, 6)).toBe(0);
+    });
+
+    test('everything breaks in water far shallower', () => {
+        expect(breakAmount(2.0, 0.4)).toBe(1);
+    });
+
+    test('the ramp is centred on the McCowan ratio', () => {
+        const depth = 2;
+        const atRatio = breakAmount(WATER.breakRatio * depth, depth);
+        expect(atRatio).toBeCloseTo(0.5, 2);
+    });
+
+    test('it is monotone, so a wave never un-breaks as it gets taller', () => {
+        let previous = -1;
+        for (let h = 0; h < 4; h += 0.05) {
+            const b = breakAmount(h, 2);
+            expect(b).toBeGreaterThanOrEqual(previous);
+            previous = b;
+        }
+    });
+});
+
+describe('the set envelope', () => {
+    test('averages out to one over a long run', () => {
+        let sum = 0;
+        let n = 0;
+        for (let t = 0; t < 4000; t += 0.5) { sum += envelopeAt(t, 0); n++; }
+        expect(sum / n).toBeCloseTo(1, 1);
+    });
+
+    test('stays inside the configured depth', () => {
+        for (let t = 0; t < 2000; t += 0.7) {
+            const e = envelopeAt(t, 1);
+            expect(e).toBeGreaterThanOrEqual(1 - WATER.setDepth - 1e-9);
+            expect(e).toBeLessThanOrEqual(1 + WATER.setDepth + 1e-9);
+        }
+    });
+
+    test('the components do not peak together', () => {
+        // If every component swelled at the same moment the sea would breathe
+        // as one object rather than producing sets.
+        const a = [];
+        const b = [];
+        for (let t = 0; t < 600; t += 1) { a.push(envelopeAt(t, 0)); b.push(envelopeAt(t, 2)); }
+        const peakA = a.indexOf(Math.max(...a));
+        const peakB = b.indexOf(Math.max(...b));
+        expect(Math.abs(peakA - peakB)).toBeGreaterThan(3);
+    });
+});
+
+describe('the mesh is laid out for a camera that never moves', () => {
+    test('rows run from the near edge out to the horizon, in order', () => {
+        const zs = rowPositions(64);
+        expect(zs[0]).toBeCloseTo(beach.nearZ, 6);
+        expect(zs[zs.length - 1]).toBeCloseTo(beach.farZ, 6);
+        for (let i = 1; i < zs.length; i++) expect(zs[i]).toBeLessThan(zs[i - 1]);
+    });
+
+    test('rows are packed toward the camera rather than spread evenly', () => {
+        const zs = rowPositions(101);
+        const middle = zs[50];
+        const even = beach.nearZ + (beach.farZ - beach.nearZ) * 0.5;
+        // The halfway row sits much nearer than halfway out, which is the whole
+        // point of the bias: the near water is what fills the screen.
+        expect(middle).toBeGreaterThan(even);
+    });
+
+    test('the sheet widens toward the horizon', () => {
+        expect(halfWidthAt(0)).toBeCloseTo(beach.nearHalfWidth, 6);
+        expect(halfWidthAt(1)).toBeCloseTo(beach.farHalfWidth, 6);
+        expect(halfWidthAt(0.5)).toBeGreaterThan(halfWidthAt(0.25));
+    });
+});
+
+describe('wave constants', () => {
+    test('every component gets a wave number, a speed, and a Snell invariant', () => {
+        const constants = waveConstants(WATER.waves);
+        expect(constants).toHaveLength(WATER.waves.length);
+        constants.forEach((c, i) => {
+            expect(c.k0).toBeCloseTo((Math.PI * 2) / WATER.waves[i].length, 9);
+            expect(c.c0).toBeGreaterThan(0);
+            expect(c.omega).toBeGreaterThan(0);
+            expect(c.kSin).toBeCloseTo(c.k0 * WATER.waves[i].dirX, 9);
+        });
+    });
+
+    test('longer waves travel faster, which is why they arrive first', () => {
+        const constants = waveConstants(WATER.waves);
+        for (let i = 1; i < constants.length; i++) {
+            expect(constants[i].c0).toBeLessThan(constants[i - 1].c0);
+        }
+    });
+
+    test('a wave aimed almost along the beach is clamped rather than allowed to break the maths', () => {
+        const [c] = waveConstants([{ length: 40, amplitude: 1, steepness: 0.5, speed: 1, dirX: 4 }]);
+        expect(Math.abs(c.kSin / c.k0)).toBeLessThanOrEqual(0.95);
+    });
+});
+
+describe('the profile is the sea in one array', () => {
+    const rows = 120;
+    const zs = rowPositions(rows);
+    const n = WATER.waves.length;
+
+    test('every array is the size it claims to be', () => {
+        const p = buildProfile(zs, 0);
+        expect(p.depth).toHaveLength(rows);
+        expect(p.breaking).toHaveLength(rows);
+        expect(p.foamBed).toHaveLength(rows);
+        expect(p.edge).toHaveLength(rows);
+        expect(p.phase).toHaveLength(rows * n);
+        expect(p.amp).toHaveLength(rows * n);
+        expect(p.k).toHaveLength(rows * n);
+    });
+
+    test('NO WAVE EVER STANDS TALLER THAN THE DEPTH ALLOWS', () => {
+        // The single most important assertion in the file. If this fails the
+        // surf is no longer being placed by the beach, and something is drawing
+        // two metre waves in half a metre of water.
+        for (let t = 0; t < 400; t += 13) {
+            const p = buildProfile(zs, t);
+            for (let r = 0; r < rows; r++) {
+                if (p.depth[r] <= 0) continue;
+                const ceiling = (WATER.breakRatio * p.depth[r]) / 2;
+                for (let i = 0; i < n; i++) {
+                    expect(p.amp[r * n + i]).toBeLessThanOrEqual(ceiling + 1e-6);
+                }
+            }
+        }
+    });
+
+    test('WAVES STAND UP ON THEIR WAY IN', () => {
+        // The visible payoff of the whole shoaling calculation. If the peak
+        // ever sinks back to the offshore height, waves are arriving the size
+        // they left at and the sea has lost the thing it is watched for.
+        const p = buildProfile(zs, 0);
+        const offshore = p.amp[(rows - 5) * n];
+        let peak = 0;
+        let peakRow = -1;
+        for (let r = 0; r < rows; r++) {
+            if (p.amp[r * n] > peak) { peak = p.amp[r * n]; peakRow = r; }
+        }
+        expect(peak).toBeGreaterThan(offshore * 1.1);
+        // And it peaks in the shallows on its way to breaking, not out at sea.
+        expect(p.depth[peakRow]).toBeLessThan(3);
+        expect(p.depth[peakRow]).toBeGreaterThan(0.5);
+    });
+
+    test('the phase never runs backwards, so crests cannot tear', () => {
+        const p = buildProfile(zs, 0);
+        for (let i = 0; i < n; i++) {
+            for (let r = rows - 2; r >= 0; r--) {
+                // Row indices count down toward the camera, which is the
+                // direction of travel, so phase must accumulate as r falls.
+                expect(p.phase[r * n + i]).toBeGreaterThanOrEqual(p.phase[(r + 1) * n + i] - 1e-9);
+            }
+        }
+    });
+
+    test('waves swing round to arrive parallel to the beach', () => {
+        // Snell: k sin(theta) is conserved, and k grows shoreward, so sin(theta)
+        // must shrink. This is what stops an angled swell breaking crooked.
+        const p = buildProfile(zs, 0);
+        const constants = waveConstants(WATER.waves);
+        const angleAt = (row, i) => Math.abs(constants[i].kSin / p.k[row * n + i]);
+        const surfRow = breakRow(p);
+        for (let i = 0; i < n; i++) {
+            if (WATER.waves[i].dirX === 0) continue;
+            expect(angleAt(surfRow, i)).toBeLessThan(angleAt(rows - 5, i));
+        }
+    });
+
+    test('breaking rises toward the shore and is nothing out in deep water', () => {
+        const p = buildProfile(zs, 0);
+        expect(p.breaking[rows - 3]).toBeCloseTo(0, 3);
+        expect(Math.max(...p.breaking)).toBeGreaterThan(0.8);
+    });
+
+    test('FOAM EXISTS SHOREWARD OF THE BREAK AND NOT SEAWARD OF IT', () => {
+        const p = buildProfile(zs, 0);
+        const surfRow = breakRow(p);
+        // Just seaward of where the surf is: no whitewater yet.
+        expect(p.foamBed[Math.min(rows - 1, surfRow + 12)]).toBeLessThan(0.2);
+        // Well shoreward: the last wave left the beach covered in it.
+        expect(p.foamBed[Math.max(0, surfRow - 12)]).toBeGreaterThan(0.3);
+    });
+
+    test('foam decays rather than covering the whole beach forever', () => {
+        const p = buildProfile(zs, 0);
+        const surfRow = breakRow(p);
+        const near = p.foamBed[Math.max(0, surfRow - 4)];
+        const nearer = p.foamBed[0];
+        expect(nearer).toBeLessThanOrEqual(near + 1e-6);
+    });
+
+    test('rows above the water line carry no wave at all', () => {
+        // Push the tide down so the near rows are dry sand.
+        const p = buildProfile(zs, WATER.tidePeriodSeconds * 0.75);
+        let dryRows = 0;
+        for (let r = 0; r < rows; r++) {
+            if (p.depth[r] > 0) continue;
+            dryRows++;
+            expect(p.edge[r]).toBe(0);
+            expect(p.foamBed[r]).toBe(0);
+            for (let i = 0; i < n; i++) expect(p.amp[r * n + i]).toBe(0);
+        }
+        expect(dryRows).toBeGreaterThan(0);
+    });
+
+    test('the edge fades in rather than starting on a hard line', () => {
+        const p = buildProfile(zs, 0);
+        for (let r = 0; r < rows; r++) {
+            expect(p.edge[r]).toBeGreaterThanOrEqual(0);
+            expect(p.edge[r]).toBeLessThanOrEqual(1);
+        }
+        expect(p.edge[rows - 1]).toBeCloseTo(1, 6);
+    });
+
+    test('rebuilding into an existing profile allocates nothing new', () => {
+        const p = buildProfile(zs, 0);
+        const same = buildProfile(zs, 30, OCEAN_CONFIG, p);
+        expect(same).toBe(p);
+        expect(same.depth).toBe(p.depth);
+    });
+
+    test('the set envelope actually moves the break line', () => {
+        // If it does not, the surf is a fixed line and the scene is wallpaper.
+        const distances = new Set();
+        for (let t = 0; t < 200; t += 5) {
+            const p = buildProfile(zs, t);
+            distances.add(breakRow(p));
+        }
+        expect(distances.size).toBeGreaterThan(1);
+    });
+
+    test('breakRow reports nothing when nothing is breaking', () => {
+        const flat = buildProfile(zs, 0);
+        flat.breaking.fill(0);
+        expect(breakRow(flat)).toBe(-1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('the mesh', () => {
+    test('is built, named, and added to the scene', () => {
+        const scene = makeScene();
+        const mesh = initWater(scene, OCEAN_CONFIG);
+        expect(mesh).toBe(getWaterMesh());
+        expect(mesh.name).toBe('ocean');
+        expect(scene.children).toContain(mesh);
+        // Every vertex moves every frame, so a bounding volume from the rest
+        // pose would cull the sea out of its own frame.
+        expect(mesh.frustumCulled).toBe(false);
+    });
+
+    test('has one vertex per grid point and two triangles per cell', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        const geometry = getWaterMesh().geometry;
+        const { rows, cols } = __test__.state().grid;
+        expect(geometry.getAttribute('position').count).toBe(rows * cols);
+        expect(geometry.index.array).toHaveLength((rows - 1) * (cols - 1) * 6);
+    });
+
+    test('EVERY TRIANGLE FACES THE SKY', () => {
+        // The bug this replaces: the grid was wound so the cross product
+        // pointed at the seabed. Every face was culled from above, the beach
+        // disappeared entirely, and the only water left on screen was the
+        // underside of distant crests standing higher than the camera. It
+        // rendered, it had specular highlights on it, and it was completely
+        // wrong. Nothing but arithmetic catches that before a screenshot does.
+        initWater(makeScene(), OCEAN_CONFIG);
+        const geometry = getWaterMesh().geometry;
+        const position = geometry.getAttribute('position').array;
+        const index = geometry.index.array;
+        const at = (i) => [position[i * 3], position[i * 3 + 1], position[i * 3 + 2]];
+        const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+
+        // Sample across the sheet rather than trusting the first triangle: the
+        // grid is a trapezoid, so the columns are not parallel and a winding
+        // that happens to work at the near edge could fail at the far one.
+        const triangles = index.length / 3;
+        for (const t of [0, 1, Math.floor(triangles / 2), triangles - 1]) {
+            const p0 = at(index[t * 3]);
+            const p1 = at(index[t * 3 + 1]);
+            const p2 = at(index[t * 3 + 2]);
+            const a = sub(p1, p0);
+            const b = sub(p2, p0);
+            const upward = a[2] * b[0] - a[0] * b[2];   // the y of a cross b
+            expect(upward).toBeGreaterThan(0);
+        }
+    });
+
+    test('EVERY ATTRIBUTE THE SHADER READS IS ONE THE GEOMETRY SUPPLIES', () => {
+        // The silent failure this file exists to prevent: a renamed attribute
+        // reads as zero in GLSL, the sea goes flat, and nothing reports it.
+        initWater(makeScene(), OCEAN_CONFIG);
+        const geometry = getWaterMesh().geometry;
+        const declared = [...__test__.VERTEX_HEAD.matchAll(/attribute\s+\w+\s+(\w+);/g)].map((m) => m[1]);
+        expect(declared.length).toBeGreaterThan(0);
+        for (const name of declared) expect(geometry.getAttribute(name)).toBeDefined();
+    });
+
+    test('EVERY UNIFORM THE SHADER READS IS ONE THE MATERIAL SUPPLIES', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        const { uniforms } = __test__.state();
+        const sources = [__test__.VERTEX_HEAD, __test__.FRAGMENT_HEAD].join('\n');
+        const declared = [...sources.matchAll(/uniform\s+\w+\s+(\w+);/g)].map((m) => m[1]);
+        for (const name of declared) expect(uniforms[name]).toBeDefined();
+    });
+
+    test('the wave constants reach the shader as vec4 uniforms', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        const { uniforms } = __test__.state();
+        const constants = waveConstants(WATER.waves);
+        expect(uniforms.uOmega.value.x).toBeCloseTo(constants[0].omega, 9);
+        expect(uniforms.uKSin.value.w).toBeCloseTo(constants[3].kSin, 9);
+        expect(uniforms.uSteepness.value.y).toBeCloseTo(WATER.waves[1].steepness, 9);
+    });
+
+    test('the per-row profile is broadcast across each row of vertices', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        const { grid } = __test__.state();
+        const shore = getWaterMesh().geometry.getAttribute('aShore').array;
+        const row = 40;
+        const first = shore[row * grid.cols * 4];
+        for (let c = 1; c < grid.cols; c++) {
+            expect(shore[(row * grid.cols + c) * 4]).toBe(first);
+        }
+    });
+
+    test('phase is wrapped into a single turn so float32 keeps its precision', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        const phase = getWaterMesh().geometry.getAttribute('aPhase').array;
+        for (let i = 0; i < phase.length; i++) {
+            expect(phase[i]).toBeGreaterThanOrEqual(0);
+            expect(phase[i]).toBeLessThan(Math.PI * 2 + 1e-4);
+        }
+        // And the unwrapped profile really does run well past one turn, so the
+        // wrap is doing something rather than being decoration.
+        const p = getProfile();
+        expect(Math.max(...p.phase)).toBeGreaterThan(Math.PI * 20);
+    });
+
+    test('a phone gets a smaller grid', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        const full = __test__.state().grid;
+        disposeWater();
+        initWater(makeScene(), OCEAN_CONFIG, { mobile: true });
+        const small = __test__.state().grid;
+        expect(small.rows).toBeLessThan(full.rows);
+        expect(small.cols).toBeLessThan(full.cols);
+    });
+
+    test('the vertex colour attribute carries the water line fade', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        const colors = getWaterMesh().geometry.getAttribute('color');
+        expect(colors.itemSize).toBe(4);
+        expect(getWaterMesh().material.vertexColors).toBe(true);
+    });
+});
+
+describe('the frame loop', () => {
+    test('advances the clock the shader runs on', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        updateWater(0.016);
+        updateWater(0.016);
+        expect(getElapsed()).toBeCloseTo(0.032, 6);
+        expect(__test__.state().uniforms.uTime.value).toBeCloseTo(0.032, 6);
+    });
+
+    test('a backgrounded tab does not teleport the sea forward', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        updateWater(45);
+        expect(getElapsed()).toBeLessThanOrEqual(0.25);
+    });
+
+    test('negative time is ignored rather than run backwards', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        updateWater(-5);
+        expect(getElapsed()).toBe(0);
+    });
+
+    test('THE PROFILE REBUILDS FAR LESS OFTEN THAN THE FRAME DRAWS', () => {
+        // The whole performance argument of the module. If this ever becomes a
+        // per-frame pass over every vertex, a phone stops holding sixty frames.
+        initWater(makeScene(), OCEAN_CONFIG);
+        const attribute = getWaterMesh().geometry.getAttribute('aAmp');
+        let uploads = 0;
+        for (let i = 0; i < 60; i++) {
+            attribute.needsUpdate = false;
+            updateWater(1 / 60);
+            if (attribute.needsUpdate) uploads++;
+        }
+        expect(uploads).toBeLessThanOrEqual(WATER.profileHz + 1);
+        expect(uploads).toBeGreaterThan(0);
+    });
+
+    test('does nothing at all before the sea exists', () => {
+        expect(() => updateWater(0.016)).not.toThrow();
+        expect(breakDistance()).toBe(0);
+    });
+});
+
+describe('the seam with the surf audio', () => {
+    test('waves reach the break line and are reported', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        consumeBreaks();
+        for (let i = 0; i < 60 * 30; i++) updateWater(1 / 60);
+        const events = consumeBreaks();
+        expect(events.length).toBeGreaterThan(0);
+    });
+
+    test('each one is shaped for playBreak(strength, pan)', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        for (let i = 0; i < 60 * 30; i++) updateWater(1 / 60);
+        for (const event of consumeBreaks()) {
+            expect(event.strength).toBeGreaterThanOrEqual(0);
+            expect(event.strength).toBeLessThanOrEqual(1);
+            expect(Math.abs(event.pan)).toBeLessThanOrEqual(1);
+            expect(event.distance).toBeGreaterThan(0);
+        }
+    });
+
+    test('they arrive at something like the rate waves arrive at', () => {
+        // Thirty seconds of a real shorebreak is a handful of arrivals, not
+        // one and not two hundred. A rattle here means the short chop
+        // components have been given a voice they should not have.
+        initWater(makeScene(), OCEAN_CONFIG);
+        consumeBreaks();
+        for (let i = 0; i < 60 * 30; i++) updateWater(1 / 60);
+        const count = consumeBreaks().length;
+        expect(count).toBeGreaterThan(3);
+        expect(count).toBeLessThan(30);
+    });
+
+    test('only the two longest components get a voice', () => {
+        expect(__test__.SOUNDING_WAVES).toBe(2);
+    });
+
+    test('the queue is drained rather than handed out live', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        for (let i = 0; i < 600; i++) updateWater(1 / 60);
+        const first = consumeBreaks();
+        const second = consumeBreaks();
+        expect(second).not.toBe(first);
+        expect(second).toHaveLength(0);
+    });
+
+    test('the queue cannot grow without bound if nobody drains it', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        for (let i = 0; i < 60 * 60; i++) updateWater(1 / 60);
+        // A minute of surf. Even undrained this is tens of entries, not
+        // thousands, which is the shape that matters.
+        expect(consumeBreaks().length).toBeLessThan(200);
+    });
+
+    test('the break distance is reported in metres from the water line', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        updateWater(0.016);
+        const distance = breakDistance();
+        expect(distance).toBeGreaterThan(2);
+        expect(distance).toBeLessThan(120);
+    });
+});
+
+describe('teardown', () => {
+    test('gives the GPU resources back and takes the mesh out of the scene', () => {
+        const scene = makeScene();
+        const mesh = initWater(scene, OCEAN_CONFIG);
+        const { geometry, material } = mesh;
+        disposeWater();
+        expect(geometry.disposed).toBe(true);
+        expect(material.disposed).toBe(true);
+        expect(scene.children).not.toContain(mesh);
+        expect(getWaterMesh()).toBeNull();
+    });
+
+    test('is safe to call twice, and safe to call having never started', () => {
+        expect(() => { disposeWater(); disposeWater(); }).not.toThrow();
+    });
+
+    test('a second sea can be built after the first is torn down', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        disposeWater();
+        const scene = makeScene();
+        expect(() => initWater(scene, OCEAN_CONFIG)).not.toThrow();
+        expect(scene.children).toHaveLength(1);
+        expect(getElapsed()).toBe(0);
+    });
+});
+
+describe('the small helpers', () => {
+    test('clamp holds the ends', () => {
+        expect(__test__.clamp(-3, 0, 1)).toBe(0);
+        expect(__test__.clamp(3, 0, 1)).toBe(1);
+        expect(__test__.clamp(0.5, 0, 1)).toBe(0.5);
+    });
+
+    test('smoothstep is flat at both ends and half in the middle', () => {
+        expect(__test__.smoothstep(0, 1, -1)).toBe(0);
+        expect(__test__.smoothstep(0, 1, 2)).toBe(1);
+        expect(__test__.smoothstep(0, 1, 0.5)).toBeCloseTo(0.5, 9);
+    });
+
+    test('smoothstep survives a degenerate range rather than dividing by zero', () => {
+        expect(__test__.smoothstep(1, 1, 0)).toBe(0);
+        expect(__test__.smoothstep(1, 1, 2)).toBe(1);
+    });
+});

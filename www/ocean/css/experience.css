@@ -1,0 +1,43 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed.
+ *
+ * experience.css - The Ocean experience.
+ *
+ * SCAFFOLD. Enough to get the canvas filling the viewport while the water is
+ * being tuned. The finished page picks up the shared site stylesheet, the
+ * welcome overlay, and the mute control.
+ *
+ * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block.
+ * The page runs a strict same-origin CSP with style-src 'self', which blocks
+ * inline styles outright, and the failure is silent apart from a console
+ * message: the page simply renders unstyled. The same rule applies to
+ * JavaScript, which is why every experience keeps a js/main.js rather than a
+ * script block. */
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    /* Matches the scene background, so a slow first frame is a calm sky rather
+       than a white flash. */
+    background: #8fb6cc;
+}
+
+#scene {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    font: 400 1.05rem/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #10333f;
+    text-align: center;
+}

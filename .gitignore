@@ -25,3 +25,9 @@ www/seedtoseed/assets/og-seedtoseed.jpg
 
 # Omit from sitemap.xml, llms.txt, and the scene directory.
 www/sunnyvalejenn
+
+# Temporary listening bench for the ocean surf synth. Deleted when the real
+# scene lands; never meant for the public repo.
+www/ocean/audio-lab.html
+www/ocean/audio-lab.js
+www/ocean/audio-lab.min.js
