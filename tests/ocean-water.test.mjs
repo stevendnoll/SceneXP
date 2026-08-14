@@ -901,32 +901,20 @@ describe('the mesh', () => {
         // between 0.11 and 0.51, so the whole inner sea was permanently
         // somewhere between milk and cream and nothing ever read as arriving.
         //
-        // The chain is worth stating because no single link looks wrong.
-        // `foamBed` is `max(breaking, carried * decay)`, and `breaking` is 1 at
-        // every row inside the break line, so the decay is topped straight back
-        // up at the next row and never happens. That leaves foamBed pinned at
-        // exactly 1 across the whole surf zone, which is correct: the sea IS
-        // breaking there. The ONLY thing between that constant and a painted
-        // white carpet is the sheet pulse it gets multiplied by. So the duty
-        // cycle of that pulse is not a matter of taste, it is the floor under
-        // the foam, and it has to spend most of its time near zero.
+        // The chain is worth stating because no single link looks wrong. The
+        // foam bed used to be `max(breaking, carried * decay)`, and `breaking`
+        // is 1 at every row inside the break line, so the decay was topped
+        // straight back up at the next row and never happened. That pinned the
+        // bed at exactly 1 across the whole surf zone. The ONLY thing between
+        // that constant and a painted white carpet was the sheet pulse it gets
+        // multiplied by. So the duty cycle of that pulse is not a matter of
+        // taste, it is the floor under the foam.
         const zs = rowPositions(WATER.rows);
         const p = buildProfile(zs, 0);
         const surf = breakRow(p);
         expect(surf).toBeGreaterThan(0);
 
-        // First the fact that makes the rest necessary: the bed really is pinned.
-        const inner = [];
-        for (let r = 0; r <= surf; r++) {
-            if (p.depth[r] > WATER.minDepth * 1.5) inner.push(p.foamBed[r]);
-        }
-        expect(inner.length).toBeGreaterThan(20);
-        // Pinned across most of the zone. It tapers at the very last rows, where
-        // the sheet is fading out anyway, so this asks for the bulk rather than
-        // for every row.
-        expect(inner.filter((v) => v > 0.95).length / inner.length).toBeGreaterThan(0.7);
-
-        // Now the pulse. `oceanPulse` raises a raised cosine to `foamSheetTrail`,
+        // The pulse. `oceanPulse` raises a raised cosine to `foamSheetTrail`,
         // and an exponent BELOW one broadens it rather than tightening it, which
         // is how this was got wrong: 0.8 was chosen on purpose for a long soft
         // tail, and a long soft tail on a constant is a wash.
@@ -941,6 +929,42 @@ describe('the mesh', () => {
         // is present, which is what leaves clear water for the next wave to
         // arrive into. At 0.8 this was 0.55 and the sea was never clean.
         expect(duty).toBeLessThan(0.4);
+    });
+
+    test('THE SURF FADES TOWARD THE SAND, because a bore is not a breaker', () => {
+        // The other half of the same fault, and the half that survived the
+        // first fix. `breaking` says how hard the sea is collapsing and it is
+        // pinned at 1 across the whole inner zone, correctly, because
+        // everything shoreward of the break line is collapsing and gets more so
+        // as the water thins. Used as the AMOUNT of whitewater it claims a
+        // fifteen centimetre bore sliding over wet sand throws as much foam as
+        // a metre and a half of water falling on itself at the break.
+        //
+        // It does not. Whitewater goes with the size of the thing breaking, so
+        // the bed is scaled by the wave height here against the biggest the sea
+        // managed on the way in. Steve's ocean-12 and ocean-14 caught the surge
+        // at its peak and the near field was one flat white edge to edge, at
+        // the same colour from twelve metres all the way to the sand.
+        const zs = rowPositions(WATER.rows);
+        const p = buildProfile(zs, 20);
+        const surf = breakRow(p);
+        expect(surf).toBeGreaterThan(0);
+
+        // Compare the brightest whitewater anywhere against what reaches the
+        // last of the water before the sand. Found from the profile rather than
+        // written down in metres, so it follows the beach.
+        let peak = 0;
+        let nearest = -1;
+        for (let r = 0; r <= surf; r++) {
+            if (p.depth[r] <= WATER.minDepth * 1.5) continue;
+            peak = Math.max(peak, p.foamBed[r]);
+            if (nearest < 0) nearest = p.foamBed[r];   // row 0 is nearest the camera
+        }
+        expect(peak).toBeGreaterThan(0.5);
+        expect(nearest).toBeGreaterThan(0);
+        // Half again is the floor under "the surf reads as a band rather than as
+        // a sheet". It was x1.2 when the near field was a wash, which is nothing.
+        expect(peak / nearest).toBeGreaterThan(1.5);
     });
 
     test('OPEN WATER IS MOSTLY NOT WHITE, however many waves are in the sum', () => {

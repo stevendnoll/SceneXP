@@ -496,7 +496,20 @@ export const OCEAN_CONFIG = deepFreeze({
         // before and 10% after, all the way out to the horizon. 0.70 puts it
         // back to about 6%, which is where it was when Steve last approved it.
         foamCrestThreshold: 0.70,
-        foamPersistence: 0.55,  // how far shoreward whitewater survives
+        // How far shoreward whitewater survives, as `4 + 40 * this` metres.
+        //
+        // THIS HAS TO BE MEASURED AGAINST THE SURF ZONE, not chosen in the
+        // abstract, and 0.55 was a decay length of 26 metres across a surf zone
+        // 7 metres wide. Foam made at the break arrived at the sand at 86 per
+        // cent of full strength, so there was no fade at all and the near field
+        // was one flat white from the break line to the beach. It was tuned on
+        // a 1:8 beach with a much wider zone and quietly stopped meaning
+        // anything when the beach went to 1:4.5.
+        //
+        // 0.04 is six metres, which is the width of the zone it has to cross, so
+        // whitewater is down to about a third of itself by the time it reaches
+        // the sand. Measured peak to nearest: x1.2 before, x2.0 now.
+        foamPersistence: 0.04,
         // Cycles per metre of the COARSEST foam octave, so about half a metre
         // across. The shader adds two finer octaves on top and fades them out
         // with distance, which is why this one number is not the whole grain:

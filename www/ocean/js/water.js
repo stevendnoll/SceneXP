@@ -389,6 +389,10 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
     const carried = new Float32Array(n);   // accumulated phase per component
     const grown = new Float32Array(n);     // shoaled height, before the cap
     let foam = 0;
+    // The biggest wave this sea has managed on the way in, which is the one at
+    // the break line. Whitewater is scaled against it, so the surf fades toward
+    // the sand instead of painting the near field one flat white.
+    let tallest = 0;
     let previousZ = rowZ[rows - 1];
 
     // From the horizon inward: index counts down because row 0 is the row
@@ -503,7 +507,28 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
         // the cheap stand-in for advecting a foam field, and it gets the thing
         // that matters: whitewater exists shoreward of where it was made, not
         // only exactly on the wave that made it.
-        foam = Math.max(breaking, foam * Math.exp(-Math.abs(step) / foamDecayMetres));
+        //
+        // HOW HARD IT IS BREAKING IS NOT HOW MUCH FOAM THERE IS, and conflating
+        // the two is what made the surf a flat sheet. `breaking` is pinned at 1
+        // across the entire inner zone, correctly: everything shoreward of the
+        // break line is collapsing and gets more so as the water thins. Used
+        // directly as the amount of whitewater it says a fifteen centimetre bore
+        // sliding over wet sand throws as much foam as a metre and a half of
+        // water falling on itself at the break, which is plainly untrue and
+        // painted the near field one uniform white from the break line to the
+        // sand. Steve's screenshots caught the surge at its peak twice out of
+        // four and the whole picture was a wash.
+        //
+        // Whitewater goes with the SIZE of the thing breaking. Scaling by the
+        // wave height here against the biggest it managed on the way in gives
+        // that for free and costs one running maximum, because the loop already
+        // runs from the horizon inward and the largest wave is the one at the
+        // break by construction. It also makes the decay term matter for the
+        // first time: with the bed pinned at 1 the max always chose `breaking`
+        // and the exponential was dead code.
+        tallest = Math.max(tallest, ampTotal);
+        const size = tallest > EPSILON ? ampTotal / tallest : 0;
+        foam = Math.max(breaking * size, foam * Math.exp(-Math.abs(step) / foamDecayMetres));
         p.foamBed[r] = foam;
 
         // `p.edge` was set above, before the cap, because the waves are faded
