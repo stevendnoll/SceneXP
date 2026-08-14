@@ -178,6 +178,34 @@ export function shoalingAt(k, depth, c0) {
     return Math.sqrt(c0 / Math.max(2 * n * c, EPSILON));
 }
 
+/** How sharp the crest of this component is, as a fraction of its own amplitude.
+ *
+ *  A sum of sines cannot look like surf, and the reason is arithmetic rather
+ *  than artistic. A four second wave breaking in a metre and a half of water is
+ *  a metre tall over a fifteen metre wavelength, so its face is nine degrees.
+ *  Nine degrees is a gradient, not a wave. What makes a real shoaling wave look
+ *  the way it does is that it stops being a sine on the way in: the crest draws
+ *  up into a peak and the trough spreads out flat beneath it.
+ *
+ *  That shape is a second harmonic riding in phase with the fundamental, and
+ *  second order Stokes theory says exactly how much of one. The ratio grows as
+ *  the water shallows, and then it diverges, which is the theory announcing that
+ *  cnoidal theory has taken over. So THE CLAMP IS THE MODEL HERE, not a guard on
+ *  it. A quarter is also the largest ratio that leaves one trough per wave: past
+ *  it the trough splits in two around a bump in the middle, which reads as a
+ *  bug rather than as water.
+ *
+ *  Written with tanh rather than the textbook's cosh and sinh, which are the
+ *  same thing rearranged and do not overflow out where the bottom stops
+ *  mattering. In deep water it settles on the familiar a*k/2. */
+export function sharpenAt(amp, k, depth, limit = OCEAN_CONFIG.water.crestSharpen) {
+    if (amp <= EPSILON || k <= EPSILON || depth <= EPSILON) return 0;
+    const t = Math.tanh(k * depth);
+    if (t <= EPSILON) return limit;
+    const ratio = ((amp * k) / 4) * (3 / (t * t * t) - 1 / t);
+    return Math.min(limit, ratio);
+}
+
 /** How hard a wave of height h is breaking in water of the given depth.
  *
  *  Zero for a wave comfortably inside what the depth can carry, one for a wave
@@ -328,6 +356,7 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
         edge: new Float32Array(rows),
         phase: new Float32Array(rows * n),
         amp: new Float32Array(rows * n),
+        sharp: new Float32Array(rows * n),
         k: new Float32Array(rows * n)
     };
 
@@ -362,6 +391,7 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
             for (let i = 0; i < n; i++) {
                 p.phase[r * n + i] = carried[i];
                 p.amp[r * n + i] = 0;
+                p.sharp[r * n + i] = 0;
                 p.k[r * n + i] = constants[i].k0;
             }
             continue;
@@ -427,10 +457,21 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
         const allowed = smoothMin(wanted, ceiling, ceiling * 0.3) * edge;
         const scale = wanted > EPSILON ? allowed / wanted : 1;
 
+        // Second pass: the final amplitude, and the second harmonic that turns
+        // it from a sine into something with a crest. `sharpenAt` needs the
+        // amplitude the component actually ended up with, which is why this
+        // cannot fold into the pass above.
+        //
+        // The harmonic does NOT change the wave height, so nothing above it
+        // needs revisiting. It lifts the crest and the trough by the same
+        // amount, leaving trough-to-crest exactly where the depth cap left it,
+        // which is the quantity McCowan's ratio is about. What moves is where
+        // the still water line sits within the wave, and that is the point.
         let ampTotal = 0;
         for (let i = 0; i < n; i++) {
             const amp = grown[i] * scale;
             p.amp[r * n + i] = amp;
+            p.sharp[r * n + i] = amp * sharpenAt(amp, p.k[r * n + i], depth, water.crestSharpen);
             ampTotal += amp;
         }
 
@@ -514,13 +555,10 @@ attribute vec4 aPhase;
 attribute vec4 aAmp;
 attribute vec4 aWaveK;
 attribute vec4 aShore;
-uniform float uFoamLag;
-uniform float uFoamTrail;
-uniform float uFoamSheetLag;
-uniform float uFoamSheetTrail;
+attribute vec4 aSharp;
 varying vec4 vSurf;
-varying vec4 vFoam;
-varying float vSheet;
+varying vec3 vFoam;
+varying vec2 vPulse;
 `;
 
 /** Replaces `#include <beginnormal_vertex>`.
@@ -547,6 +585,8 @@ const VERTEX_BODY = `
     float dXdx = 0.0, dYdx = 0.0, dZdx = 0.0;
     float dXdz = 0.0, dYdz = 0.0, dZdz = 0.0;
     float ampTotal = 0.0;
+    vec2 phasor = vec2(0.0);
+    float ampFund = 0.0;
     float lean = 1.0 + uLeanGain * aShore.y;
 
     for (int i = 0; i < 4; i++) {
@@ -569,18 +609,50 @@ const VERTEX_BODY = `
         // approaching the break so the crest cusps forward.
         float h = uSteepness[i] * amp * lean;
 
+        // THE SECOND HARMONIC IS WHAT MAKES IT A WAVE. A sine has a crest
+        // exactly as round as its trough, which is why the sea read as a floor
+        // no matter how tall the waves were made. This term is in phase with
+        // the fundamental and at twice its wave number, so it adds to the crest
+        // and fills in the trough: the peak draws up, the hollow flattens out.
+        // The CPU decided how much of it there should be, from the local depth,
+        // in sharpenAt.
+        //
+        // Minus cosine rather than plus, because the fundamental here is a sine.
+        // At the crest, where phase is a quarter turn, cos(2 * phase) is minus
+        // one, so subtracting it lifts the crest rather than flattening it. Get
+        // the sign backwards and the sea grows sharp troughs and round crests,
+        // which looks like a photographic negative of surf.
+        float sharp = aSharp[i];
+        float c2 = cos(2.0 * phase);
+        float s2 = sin(2.0 * phase);
+
         waveOffset.x += h * sinTheta * c;
         waveOffset.z += h * cosTheta * c;
-        waveOffset.y += amp * s;
-        ampTotal += amp;
+        waveOffset.y += amp * s - sharp * c2;
+        // The crest signal that drives the foam is normalised by this, so the
+        // harmonic belongs in it. Leave it out and a sharpened crest reads as
+        // greater than one and every wave whitecaps.
+        ampTotal += amp + sharp;
+
+        // WHERE IN THE WAVE ARE WE. Summed as a vector rather than picked from
+        // one component, which is the whole point: see the note by vPulse
+        // below. cos and sin of each phase, weighted by how much of the sea
+        // that component is, so the answer is the phase of the wave the eye
+        // actually sees rather than of whichever one happens to be listed first.
+        phasor += amp * vec2(c, s);
+        ampFund += amp;
 
         float kx = k * sinTheta;
         float kz = k * cosTheta;
+        // d/dphase of (amp * sin - sharp * cos(2 phase)) is amp * cos + 2 sharp
+        // sin(2 phase). The horizontal terms are untouched: the harmonic moves
+        // water up and down, not along.
+        float dY = amp * c + 2.0 * sharp * s2;
         dXdx += -h * sinTheta * s * kx;
-        dYdx += amp * c * kx;
+        dYdx += dY * kx;
         dZdx += -h * cosTheta * s * kx;
         dXdz += -h * sinTheta * s * kz;
-        dYdz += amp * c * kz;
+        dYdz += dY * kz;
         dZdz += -h * cosTheta * s * kz;
     }
 
@@ -592,30 +664,36 @@ const VERTEX_BODY = `
     float fold = clamp(1.0 - jacobian, 0.0, 1.0);
     float crest = ampTotal > 0.0001 ? waveOffset.y / ampTotal : 0.0;
 
-    // The foam pulse rides the longest component, which is the one that reads
-    // as arriving. A raised cosine rather than a sawtooth on the wrapped phase:
-    // a sawtooth has a discontinuity once per wavelength, and interpolating
-    // across it puts a hard seam in the foam at every crest, which is precisely
-    // where nobody should be looking at a seam.
-    float foamPhase = aPhase[0] + uKSin[0] * position.x - uOmega[0] * uTime;
-    // TWO PULSES, NOT ONE, and the difference between them is the difference
-    // between surf and a painted white stripe. The depth tells you where a wave
-    // COULD break and says so about twenty metres wide, all the time. The tight
-    // pulse says where one IS breaking, which is a band that travels. The broad
-    // pulse sits further back again and is the sheet of whitewater the last
-    // wave left behind on its way through, which is what makes the clear water
-    // between arrivals read as the gap between two waves rather than as a gap
-    // in the effect.
+    // THE FOAM HAS TO RIDE THE WAVE THE EYE SEES, and for a while it did not.
+    // The pulse used to be built from aPhase[0], the first component in the
+    // list, on the reasoning that the longest wave is the one that reads as
+    // arriving. That held while the swell carried nearly all the height. It
+    // stopped holding the moment the height was split between a 58 metre swell
+    // and a 17.5 metre chop: the foam went on riding the swell while the crests
+    // on screen were the chop, so the white and the wave under it were on
+    // different rhythms. Measured at the break, the breaking term peaked at one
+    // phase, the fold term a third of a wave later, and the residue a third of
+    // a wave after that. Three signals, three timings, one wave.
     //
-    // The max is not paranoia. A raised cosine is in [0, 1] on paper, but a
-    // float can land a hair below zero at the trough, and pow() of a negative
-    // base is undefined in GLSL: one NaN there spreads through the foam term
-    // and takes the fragment colour with it.
-    float trail = pow(max(0.0, 0.5 + 0.5 * cos(foamPhase - uFoamLag)), uFoamTrail);
-    vSheet = pow(max(0.0, 0.5 + 0.5 * cos(foamPhase - uFoamLag - uFoamSheetLag)), uFoamSheetTrail);
+    // So the phase is summed as a VECTOR over all four components, weighted by
+    // amplitude. Adding phases is meaningless, adding unit vectors and reading
+    // the direction back is not, and it gives the phase of the combined wave
+    // for free. It also comes with an amplitude: the phasor is short exactly
+    // when the components disagree, which is a lull, and the foam eases off
+    // there on its own.
+    //
+    // Handed to the fragment shader as the vector rather than as the pulses, so
+    // the pulses are evaluated per PIXEL. A pulse is a power of a raised cosine
+    // and interpolating one across a triangle leaves the foam edge visibly
+    // faceted at column spacing, which near the camera is a dozen pixels.
+    // Interpolating the vector is safe where interpolating the angle would not
+    // be: the angle wraps once per wavelength and a linear blend across the
+    // wrap runs backwards through the whole cycle, putting a seam in the foam
+    // at every crest.
+    vPulse = phasor / max(ampFund, 0.0001);
 
     vSurf = vec4(aShore.x, aShore.y, crest, fold);
-    vFoam = vec4(position.x + waveOffset.x, position.z + waveOffset.z, aShore.z, trail);
+    vFoam = vec3(position.x + waveOffset.x, position.z + waveOffset.z, aShore.z);
 `;
 
 /** Replaces `#include <begin_vertex>`. The displacement was already solved
@@ -642,9 +720,29 @@ uniform float uFoamCrestThreshold;
 uniform float uFoamNoiseScale;
 uniform float uFoamDrift;
 uniform float uDeepReference;
+uniform float uFoamLag;
+uniform float uFoamTrail;
+uniform float uFoamSheetLag;
+uniform float uFoamSheetTrail;
 varying vec4 vSurf;
-varying vec4 vFoam;
-varying float vSheet;
+varying vec3 vFoam;
+varying vec2 vPulse;
+
+/** Where the wave is, a given lag behind its crest, as a raised cosine.
+ *
+ *  vPulse is the amplitude-weighted phasor of the four components, so rotating
+ *  it by the lag and reading the projection back is cos(phase - lag) for the
+ *  combined wave. Same quantity the old per-vertex pulse computed from one
+ *  component, minus the assumption that one component speaks for the whole sea.
+ *
+ *  The max is not paranoia. A raised cosine is in [0, 1] on paper, but a float
+ *  can land a hair below zero at the trough, and pow() of a negative base is
+ *  undefined in GLSL: one NaN there spreads through the foam and takes the
+ *  fragment colour with it. */
+float oceanPulse(vec2 wave, float lag, float trail) {
+    float projection = wave.x * cos(lag) + wave.y * sin(lag);
+    return pow(max(0.0, 0.5 + 0.5 * projection), trail);
+}
 
 float oceanHash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -722,14 +820,43 @@ const FRAGMENT_BODY = `
     // ES 3.00, which is what Three asks for on a WebGL2 context. There is a
     // test in the suite for the whole class. (No back quotes in here: this
     // whole shader is a JavaScript template literal and one would end it.)
+    float trail = oceanPulse(vPulse, uFoamLag, uFoamTrail);
+    float sheet = oceanPulse(vPulse, uFoamLag + uFoamSheetLag, uFoamSheetTrail);
+
     float b = smoothstep(uFoamBreakThreshold, uFoamBreakThreshold + 0.45, breaking);
-    float arriving = b * vFoam.w;
+    float arriving = b * trail;
     float breakFoam = arriving * mix(clamp(0.35 + 0.9 * n, 0.0, 1.0), 1.0, arriving * arriving);
-    float foldFoam = smoothstep(0.10, 0.55, fold) * (0.55 + 0.45 * n);
+    // THE FOLD IS A LIP, NOT A FLASH. It is the best trigger in the file, since
+    // the surface compressing past the point of folding is exactly where a real
+    // wave throws whitewater, but it is a derivative and it behaves like one:
+    // measured across the breaking zone it sits at zero three quarters of the
+    // time and its ninety ninth percentile is 0.43. Sent through a window of
+    // 0.10 to 0.55 it spent its life on the steep part of that ramp and went
+    // from nothing to very nearly white in a quarter of a second, once every
+    // couple of seconds. That is not surf pitching over, that is a light being
+    // switched on, and it is what "glitchy when they crest" was.
+    //
+    // Narrowing the window made it worse, which is the useful part. A narrow
+    // window is a STEEPER ramp, so the term reached white sooner and the worst
+    // step per frame went up rather than down. The rate is set by the wave and
+    // no reshaping of the threshold can slow it.
+    //
+    // So the lip rides the same pulse as everything else instead of standing
+    // alone. Multiplied by trail it can only brighten where the wave front
+    // already is, and its rise is the product of a fast ramp and a slow one,
+    // which the slow one bounds.
+    //
+    // Measured over ninety seconds across the surf zone, the frame to frame
+    // change in the foam: mean 0.0033 to 0.0026, 99.9th percentile 0.042 to
+    // 0.039, worst single frame 0.055 to 0.057. So the typical pixel settled
+    // by about a fifth and the worst one did not move. Said plainly, because
+    // the honest reading is that the envelope fixed the term that was flashing
+    // and the remaining worst case belongs to something else.
+    float foldFoam = smoothstep(0.04, 0.30, fold) * trail * (0.55 + 0.45 * n) * 0.78;
     float crestFoam = smoothstep(uFoamCrestThreshold, 1.0, crest) * (0.4 + 0.6 * n) * 0.8;
     // The sheet the last wave left, on the broad pulse rather than the tight
     // one, so it lingers and fades where the break itself has already gone.
-    float bedFoam = vFoam.z * vSheet * (0.25 + 0.75 * n) * 0.85;
+    float bedFoam = vFoam.z * sheet * (0.25 + 0.75 * n) * 0.85;
 
     float foam = clamp(max(max(breakFoam, foldFoam), max(crestFoam, bedFoam)), 0.0, 1.0);
 
@@ -932,7 +1059,7 @@ function buildMaterial(config) {
     return mat;
 }
 
-/** Allocate the four per-vertex attributes and fill them from the profile.
+/** Allocate the five per-vertex attributes and fill them from the profile.
  *
  *  Each value is constant along a row, so this is a row loop with an inner
  *  broadcast rather than a real per-vertex computation. The arrays are marked
@@ -946,9 +1073,10 @@ function writeAttributes() {
             phase: new Float32Array(count * 4),
             amp: new Float32Array(count * 4),
             waveK: new Float32Array(count * 4),
-            shore: new Float32Array(count * 4)
+            shore: new Float32Array(count * 4),
+            sharp: new Float32Array(count * 4)
         };
-        for (const name of ['phase', 'amp', 'waveK', 'shore']) {
+        for (const name of ['phase', 'amp', 'waveK', 'shore', 'sharp']) {
             const attribute = new THREE.BufferAttribute(attributes[name], 4);
             attribute.setUsage(THREE.DynamicDrawUsage);
             geometry.setAttribute('a' + name.charAt(0).toUpperCase() + name.slice(1), attribute);
@@ -989,6 +1117,7 @@ function refreshAttributes() {
             for (let w = 0; w < 4; w++) {
                 attributes.phase[i + w] = wrapped[w];
                 attributes.amp[i + w] = w < n ? profile.amp[r * n + w] : 0;
+                attributes.sharp[i + w] = w < n ? profile.sharp[r * n + w] : 0;
                 attributes.waveK[i + w] = w < n ? profile.k[r * n + w] : 1;
             }
             attributes.shore[i] = profile.depth[r];
@@ -1000,7 +1129,7 @@ function refreshAttributes() {
         }
     }
 
-    for (const name of ['aPhase', 'aAmp', 'aWaveK', 'aShore']) {
+    for (const name of ['aPhase', 'aAmp', 'aWaveK', 'aShore', 'aSharp']) {
         const attribute = geometry.getAttribute(name);
         if (attribute) attribute.needsUpdate = true;
     }

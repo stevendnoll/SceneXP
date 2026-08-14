@@ -214,7 +214,31 @@ export const OCEAN_CONFIG = deepFreeze({
         // a frame. A gentle 1:33 shore is DISSIPATIVE, lovely to stand in and
         // terrible to photograph, because the surf is a white line near the
         // horizon. Raise this and the surf comes to meet the camera.
-        slope: 0.13,        // metres of depth per metre out to sea, about 1:8
+        //
+        // 1:8 was still not enough, and the paragraph above is why the obvious
+        // answer did not work. Asked for bigger waves a second time, the swell
+        // was swept from x1.0 to x1.6 and the tallest crest in the frame went
+        // from 38 pixels to 43: a sixty per cent bigger sea bought five pixels,
+        // because it broke at 20 metres instead of 13 and the distance ate the
+        // rest. The slope swept over the same range went 38, 41, 53, 65, 71.
+        // Measured over a minute of sea, the tallest crest in an 836 pixel frame:
+        //
+        //     as it shipped              38px   break 2.5-13.6m   relief 0.79m
+        //     swell x1.4 alone           41px   break 2.5-18.1m   relief 1.08m
+        //     slope 0.22 alone           ~60px  break 2.5- 9.0m   relief 0.72m
+        //     swell x1.4 + slope 0.22    65px   break 2.5-11.9m   relief 1.03m
+        //
+        // The pairing is the point. The steeper beach is what makes the wave
+        // big in the picture, and the bigger swell is what stops the steeper
+        // beach from dragging the break line into the camera's lap: on its own
+        // 0.22 puts the surf at nine metres, and a metre of swell on top of it
+        // pushes the line back out to twelve, which is about where it was.
+        //
+        // 1:4.5 is steeper than a sandy beach really gets. It is a shingle bank
+        // or a pocket beach, and it is a deliberate choice: this is the profile
+        // that plunges rather than spills, and plunging is what a person means
+        // when they picture surf.
+        slope: 0.22,        // metres of depth per metre out to sea, about 1:4.5
         // Deep enough that the longest component is genuinely in deep water out
         // there rather than already half shoaled. At 6.5 metres a 62 metre swell
         // is feeling the bottom before it is anywhere near the camera, so it
@@ -296,11 +320,54 @@ export const OCEAN_CONFIG = deepFreeze({
         // depth limit was wrongly applied to each component on its own, and the
         // sea it produced was two and a half metres tall and breaking 45 metres
         // away, which is a different beach entirely.
+        //
+        // THE WAVELENGTHS DECIDE HOW MANY WAVES ARE IN THE PICTURE, and that
+        // turned out to matter more than how tall they are. The camera can see
+        // about forty metres of usable water before perspective crushes the
+        // rest into a strip under the horizon. When nearly all the height sat
+        // on a 62 metre swell, that swell compressed to roughly 22 metres by
+        // the time it broke, and barely one and a half crests fitted in the
+        // whole shot. At any moment there was one long bulge, and a good part
+        // of the time the entire visible sea sat on the flank of a single wave:
+        // measured over a minute, the worst instant had 19cm of relief across
+        // forty metres of ocean, which is a mirror.
+        //
+        // SWELL AND CHOP, WITH THE HEIGHT SPLIT BETWEEN THEM, rather than one
+        // spectrum shortened. The two jobs turn out to be different jobs:
+        //
+        //   - The long wave decides WHERE the sea breaks and is the only one
+        //     that shoals usefully. Shoaling at the break depth falls off fast
+        //     with wavelength (x1.21 at 62 metres, x1.09 at 38, x1.02 at 26),
+        //     because the break depth is fixed by the wave HEIGHT and a short
+        //     wave has barely begun to feel the bottom by the time it gets
+        //     there. Shorten everything and waves arrive the size they left at.
+        //   - The short waves decide what the near field LOOKS like. Face angle
+        //     goes as amplitude times wave number, so at a given height a short
+        //     wave has a steeper face, and several of them fit in the frame.
+        //
+        // So the primary keeps its length and gives up a third of its height to
+        // a 17 metre chop, which is what a real beach has on it anyway. Crests
+        // in the near field went from 1.5 to 3.0, the worst instant went from
+        // 19cm of relief to 43cm, and the shoaling is untouched at x1.23. The
+        // break line stayed where Steve approved it, because the total height
+        // was held fixed and the break follows the total.
+        //
+        // The lengths avoid simple ratios on purpose: 8.5 would have been
+        // exactly half of 17 and those two would have locked into a repeating
+        // pattern, which is the corrugated roof this list exists to avoid.
+        //
+        // The amplitudes are the round five set multiplied by 1.4 across the
+        // board, so the shape of the spectrum is untouched and only its size
+        // moved. Offshore height went from 1.00 metres to 1.40, which puts the
+        // break in 2.16 metres of water instead of 1.57 and makes the breaking
+        // wave itself 1.7 metres rather than 1.2. On its own that is nearly
+        // invisible, for the reason set out at beach.slope. Paired with the
+        // steeper beach it is most of the difference.
         waves: [
-            { length: 62, amplitude: 0.250, steepness: 0.82, speed: 1.00, dirX: 0.16 },
-            { length: 41, amplitude: 0.150, steepness: 0.74, speed: 1.12, dirX: -0.28 },
-            { length: 23, amplitude: 0.076, steepness: 0.62, speed: 1.26, dirX: 0.42 },
-            { length: 13, amplitude: 0.036, steepness: 0.48, speed: 1.40, dirX: -0.55 }
+            { length: 58, amplitude: 0.238, steepness: 0.82, speed: 1.00, dirX: 0.16 },
+            { length: 17.5, amplitude: 0.266, steepness: 0.74, speed: 1.12, dirX: -0.28 },
+            { length: 8, amplitude: 0.133, steepness: 0.62, speed: 1.26, dirX: 0.42 },
+            { length: 4.3, amplitude: 0.063, steepness: 0.48, speed: 1.40, dirX: -0.55 }
         ],
 
         // Shoaling and breaking. A wave feels the bottom at approximately half
@@ -311,8 +378,53 @@ export const OCEAN_CONFIG = deepFreeze({
         breakRatio: 0.78,
         breakSoftness: 0.30,   // how abruptly the collapse happens
         shoalGain: 0.90,       // how much a wave grows as it shallows
-        leanGain: 1.35,        // extra Gerstner Q approaching the break, the
-                               // forward-cusping crest that reads as pitching
+        // Extra Gerstner Q approaching the break: the cusping crest that reads
+        // as pitching. It was 1.35, which is barely a fifth of the way to the
+        // point where a trochoid actually develops a peak, so the crests were
+        // still round. The ceiling is not a matter of taste: past a certain
+        // lean the surface turns inside out and the mesh folds through itself.
+        // The exact test is the Jacobian of the horizontal displacement, which
+        // hits zero at the fold. Swept over a full tide and both set cycles it
+        // bottomed out at 0.42 at 2.5, 0.34 at 3.0, and 0.26 at 3.5, and 3.0
+        // was chosen for keeping a third of the margin in hand while taking the
+        // steepest face in the surf from 11 degrees to 31.
+        //
+        // Then the swell went up by 1.4 and the same margin had to be bought
+        // back, because the Jacobian is driven by amplitude times wave number
+        // times Q and only the last of those is a free parameter. At 2.6 the
+        // floor is 0.35, which is the margin 3.0 used to hold at the old
+        // height. The face gives up a couple of degrees for it and the wave is
+        // half a metre taller, which is a trade worth making.
+        leanGain: 2.60,
+
+        // WHY A SINE IS NOT A WAVE, and the fix for it.
+        //
+        // A breaking wave in shallow water is not steep in the way a deep water
+        // wave is steep. Run the numbers: a four second wave breaking in 1.5
+        // metres of water is 1.2 metres tall over a 15 metre wavelength, so its
+        // face is about nine degrees. That is what the linear sum of four sines
+        // was drawing, and nine degrees is not a face, it is a gradient. The
+        // scene had no visible wave shape at all and read as a lit floor.
+        //
+        // Real shoaling waves look steep because they stop being sinusoidal.
+        // The crest sharpens and rises, the trough flattens and fills in, and
+        // eventually the face goes vertical. None of that is available to a sum
+        // of sines, so it has to be put in on purpose: a second harmonic in
+        // phase with each component, which is exactly second order Stokes
+        // theory and exactly the shape a cnoidal wave has.
+        //
+        // The Stokes ratio diverges as the water shallows, which is theory's own
+        // way of saying it has stopped applying, so THE CLAMP IS PART OF THE
+        // MODEL rather than a safety rail. A quarter is also the largest value
+        // that keeps one trough per wave: past it the trough splits into two
+        // humps with a bump between them, which looks like a rendering fault.
+        //
+        // A pleasant consequence: the crest now stands about 0.62 of the wave
+        // height above the still water line instead of exactly half, which is
+        // what real waves do and what makes them look like they are rearing up
+        // rather than merely going up and down.
+        crestSharpen: 0.25,    // ceiling on the second harmonic, as a fraction
+                               // of each component's own amplitude
 
         // Foam. THE PART THAT SELLS IT, more than the wave shape does.
         foamBreakThreshold: 0.34,

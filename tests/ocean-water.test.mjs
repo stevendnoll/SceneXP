@@ -102,7 +102,7 @@ function makeScene() {
 installThree();
 const water = await import(WATER_URL);
 const {
-    bedHeightAt, tideOffset, depthAt, waveNumberAt, shoalingAt, breakAmount,
+    bedHeightAt, tideOffset, depthAt, waveNumberAt, shoalingAt, sharpenAt, breakAmount,
     envelopeAt, rowPositions, halfWidthAt, waveConstants, buildProfile, breakRow,
     initWater, updateWater, consumeBreaks, breakDistance, disposeWater,
     getWaterMesh, getProfile, getElapsed, __test__
@@ -148,9 +148,13 @@ describe('the tide', () => {
     });
 
     test('moves the water line up the beach', () => {
-        const dry = beach.shoreZ + 2;
-        // Two metres up the sand is dry at mean tide and wet at high tide,
-        // because 2 metres of slope is well inside the tide's half range.
+        // Half way up the strip the tide can reach: dry at mean tide, wet at
+        // high tide. Written as a fraction of the tide's reach rather than as a
+        // distance in metres, because the distance depends on the slope and the
+        // slope moves. Hard coding two metres passed on a 1:8 beach and failed
+        // the day it became 1:4.5, when two metres of sand stood higher than
+        // the tide could climb.
+        const dry = beach.shoreZ + (WATER.tideRange / 2) / beach.slope / 2;
         expect(depthAt(dry, 0)).toBe(0);
         expect(depthAt(dry, WATER.tideRange / 2)).toBeGreaterThan(0);
     });
@@ -213,6 +217,46 @@ describe('waves feel the bottom', () => {
         for (let d = 30; d > 0.5; d -= 0.5) samples.push(shoalingAt(waveNumberAt(k0, d), d, c0));
         expect(Math.min(...samples)).toBeLessThan(1);
         expect(samples[samples.length - 1]).toBeGreaterThan(1.2);
+    });
+
+    test('a wave in deep water is very nearly a sine, and one in the shallows is not', () => {
+        // The crest sharpening is second order Stokes, and second order theory
+        // is a correction: out where the bottom is irrelevant the correction has
+        // to be small or the sea is being drawn wrong far from shore, where
+        // nothing is happening and any shape at all reads as an artefact.
+        const amp = 0.19;
+        expect(sharpenAt(amp, waveNumberAt(k0, 200), 200, 0.25)).toBeLessThan(0.02);
+        // And it has to matter where waves break, or it buys nothing.
+        expect(sharpenAt(amp, waveNumberAt(k0, 1.3), 1.3, 0.25)).toBeGreaterThan(0.1);
+    });
+
+    test('THE CREST SHARPENING NEVER SPLITS THE TROUGH IN TWO', () => {
+        // A fundamental plus a second harmonic has one trough per wave only
+        // while the harmonic stays under a quarter of the fundamental. Past
+        // that, the derivative picks up a second pair of zeros and the trough
+        // grows a bump in the middle of it, which does not read as water. The
+        // Stokes ratio itself diverges as the depth goes to nothing, so this
+        // clamp is doing real work rather than guarding an edge case: without
+        // it the last few metres of the sheet would be corrugated.
+        for (let d = 8; d > 0.02; d -= 0.02) {
+            for (const amp of [0.05, 0.19, 0.5, 2.0]) {
+                expect(sharpenAt(amp, waveNumberAt(k0, d), d, 0.25)).toBeLessThanOrEqual(0.25);
+            }
+        }
+        // Nothing to sharpen is nothing to sharpen, in every degenerate form.
+        expect(sharpenAt(0, 0.1, 2, 0.25)).toBe(0);
+        expect(sharpenAt(0.2, 0, 2, 0.25)).toBe(0);
+        expect(sharpenAt(0.2, 0.1, 0, 0.25)).toBe(0);
+    });
+
+    test('a taller wave has a sharper crest than a short one in the same water', () => {
+        // Stokes second order goes as amplitude squared, so the correction is a
+        // larger FRACTION of a bigger wave. It is why a set wave looks more
+        // pointed than the one before it and not merely larger.
+        const k = waveNumberAt(k0, 2.5);
+        const small = sharpenAt(0.08, k, 2.5, 0.25);
+        const large = sharpenAt(0.20, k, 2.5, 0.25);
+        expect(large).toBeGreaterThan(small);
     });
 });
 
@@ -408,6 +452,124 @@ describe('the profile is the sea in one array', () => {
                 expect(total * 2).toBeLessThanOrEqual(WATER.breakRatio * p.depth[r] + 1e-6);
             }
         }
+    });
+
+    test('A WAVE IS NOT A SINE, AND IN THE SHALLOWS IT IS NOT CLOSE', () => {
+        // The fault behind "the crests do not look quite right". Four sines
+        // added together are still a sine in the only way that matters here:
+        // the crest is exactly as round as the trough is, and the still water
+        // line sits exactly halfway up. Real water does not do that. A shoaling
+        // wave draws its crest up into a peak and spreads its trough out flat
+        // beneath it, and the still water line ends up nearer two thirds of the
+        // way down. That asymmetry IS the shape the eye reads as a wave, and
+        // without it a metre of swell reads as a lit floor no matter how tall it
+        // is made.
+        //
+        // Asserted on where the water sits rather than on the harmonic, because
+        // the harmonic is the implementation and this is the property.
+        const p = buildProfile(zs, 11);
+        let deepest = null;
+        let surf = null;
+        for (let r = 0; r < rows; r++) {
+            if (p.depth[r] <= 0.4) continue;
+            let crest = 0;
+            let trough = 0;
+            for (let i = 0; i < n; i++) {
+                crest += p.amp[r * n + i] + p.sharp[r * n + i];
+                trough += p.amp[r * n + i] - p.sharp[r * n + i];
+            }
+            if (crest + trough <= 1e-9) continue;
+            const above = crest / (crest + trough);
+            if (p.breaking[r] > 0.5 && !surf) surf = above;
+            deepest = above;
+        }
+        // Out where the bottom is irrelevant, water really is nearly a sine and
+        // the crest really does sit halfway. Anything else out there is a bug.
+        expect(deepest).toBeGreaterThan(0.5);
+        expect(deepest).toBeLessThan(0.53);
+        // In the surf it has to have moved, and moved a long way. A sine gives
+        // exactly 0.5 here, which is what this scene was drawing.
+        expect(surf).toBeGreaterThan(0.56);
+        // But not past what one trough per wave allows: a quarter of harmonic
+        // on a full fundamental puts the line at 0.625 and no further.
+        expect(surf).toBeLessThanOrEqual(0.625);
+    });
+
+    test('THE SHARPENING DOES NOT SMUGGLE HEIGHT PAST THE DEPTH LIMIT', () => {
+        // The second harmonic lifts the crest, which is the point, and it lifts
+        // the trough by exactly as much, which is the part that keeps the test
+        // above it honest. Trough to crest is untouched, so McCowan's ratio
+        // still governs and the cap did not need revisiting. If a future change
+        // sharpens the crest WITHOUT filling the trough, the sea quietly grows
+        // and this is the tripwire.
+        for (let t = 0; t < 300; t += 17) {
+            const p = buildProfile(zs, t);
+            for (let r = 0; r < rows; r++) {
+                if (p.depth[r] <= 0) continue;
+                let above = 0;
+                let below = 0;
+                for (let i = 0; i < n; i++) {
+                    above += p.amp[r * n + i] + p.sharp[r * n + i];
+                    below += p.amp[r * n + i] - p.sharp[r * n + i];
+                }
+                // The trough is still a trough. A harmonic bigger than the wave
+                // it rides on would push it above the still water line, and the
+                // sea would be all crest and no hollow.
+                expect(below).toBeGreaterThanOrEqual(0);
+                expect(above + below).toBeLessThanOrEqual(WATER.breakRatio * p.depth[r] + 1e-6);
+            }
+        }
+    });
+
+    test('THE FOAM PULSE AND THE WAVE UNDER IT ARE THE SAME WAVE', () => {
+        // What broke when the height was split between a swell and a chop, and
+        // the reason it is worth a test rather than a comment: the failure was
+        // silent. The pulse rode component zero, the visible crests were
+        // component one, and the white simply sat on a different rhythm from the
+        // water. Nothing in the suite noticed and nothing could, because every
+        // part was individually correct.
+        //
+        // Stated as the property: the phasor the shader builds has to point at
+        // the crest. Rotate it to zero lag and its projection should peak when
+        // the sea is actually highest, not a third of a wave later.
+        const consts = waveConstants(WATER.waves);
+        const p = buildProfile(zs, 23);
+        let row = -1;
+        for (let r = 0; r < rows; r++) {
+            if (p.depth[r] > 0 && p.breaking[r] > 0.5) { row = r; break; }
+        }
+        expect(row).toBeGreaterThan(0);
+
+        // Walk one full period of the longest component and record both.
+        const period = (Math.PI * 2) / consts[0].omega;
+        let bestSurface = { y: -Infinity };
+        let bestPulse = { x: -Infinity };
+        for (let s = 0; s < 720; s++) {
+            const t = 23 + (s / 720) * period;
+            let y = 0;
+            let py = 0;
+            let ampFund = 0;
+            for (let i = 0; i < n; i++) {
+                const amp = p.amp[row * n + i];
+                if (amp <= 0) continue;
+                const phase = p.phase[row * n + i] - consts[i].omega * t;
+                y += amp * Math.sin(phase) - p.sharp[row * n + i] * Math.cos(2 * phase);
+                // Only the y component of the phasor is needed. Reading it back
+                // is the projection at a quarter wave of lag, which is the pulse
+                // that peaks on the crest.
+                py += amp * Math.sin(phase);
+                ampFund += amp;
+            }
+            if (y > bestSurface.y) bestSurface = { y, s };
+            const projection = py / ampFund;   // the pulse at the lag that peaks on the crest
+            if (projection > bestPulse.x) bestPulse = { x: projection, s };
+        }
+        // Within a twentieth of a wave of each other. They are not identical
+        // signals, because the second harmonic shapes the surface and not the
+        // phasor, so this is a tolerance rather than an equality.
+        const apart = Math.abs(bestSurface.s - bestPulse.s);
+        const wrapped = Math.min(apart, 720 - apart);
+        expect(wrapped).toBeLessThan(36);
     });
 
     test('THE TROUGH NEVER GOES UNDER THE SEABED', () => {
@@ -607,6 +769,38 @@ describe('the mesh', () => {
         for (const name of declared) expect(geometry.getAttribute(name)).toBeDefined();
     });
 
+    test('WHATEVER MOVES THE SURFACE UP AND DOWN ALSO MOVES THE NORMAL', () => {
+        // Water is almost entirely specular, so its shape reaches the eye
+        // through the normal and hardly at all through the geometry. Add a term
+        // to the height and forget the derivative and the sea is displaced
+        // correctly and lit as though it were a flat plane, which is a very
+        // convincing way to produce exactly the mirror this scene started as.
+        // Nothing between this file and a browser type checks the shader, so
+        // the invariant is asserted on the source: every quantity that appears
+        // in the vertical displacement has to appear in its derivative.
+        const body = __test__.VERTEX_BODY;
+        const height = body.match(/waveOffset\.y\s*\+=([^;]+);/);
+        const slope = body.match(/float\s+dY\s*=([^;]+);/);
+        expect(height).not.toBeNull();
+        expect(slope).not.toBeNull();
+        //
+        // The trig factors are exempt, and they are the only exemption: a
+        // derivative is allowed to turn a sine into a cosine, and that is the
+        // one thing it is supposed to do. What it is not allowed to do is drop
+        // an amplitude. They are found rather than listed, so a fifth term
+        // added later is covered without anybody remembering to come back here.
+        const trig = new Set([...body.matchAll(/float\s+(\w+)\s*=\s*(?:sin|cos)\s*\(/g)]
+            .map((m) => m[1]));
+        const terms = new Set([...height[1].matchAll(/\b([a-z]\w*)\b/gi)]
+            .map((m) => m[1])
+            .filter((word) => !trig.has(word)));
+        expect(terms.size).toBeGreaterThan(1);
+        for (const term of terms) expect(slope[1]).toContain(term);
+        // And the derivative has to be the one both directions actually use.
+        expect(body).toMatch(/dYdx\s*\+=\s*dY\s*\*\s*kx;/);
+        expect(body).toMatch(/dYdz\s*\+=\s*dY\s*\*\s*kz;/);
+    });
+
     test('EVERY UNIFORM THE SHADER READS IS ONE THE MATERIAL SUPPLIES', () => {
         initWater(makeScene(), OCEAN_CONFIG);
         const { uniforms } = __test__.state();
@@ -699,7 +893,61 @@ describe('the mesh', () => {
 
         const fragment = __test__.FRAGMENT_BODY;
         expect(fragment).toMatch(/breakFoam\s*=\s*arriving/); // gated, not raw
-        expect(fragment).toMatch(/bedFoam\s*=\s*vFoam\.z\s*\*\s*vSheet/);
+        expect(fragment).toMatch(/bedFoam\s*=\s*vFoam\.z\s*\*\s*sheet/);
+        // Both gates have to be pulses off the same wave, not constants.
+        expect(fragment).toMatch(/trail\s*=\s*oceanPulse\(vPulse/);
+        expect(fragment).toMatch(/sheet\s*=\s*oceanPulse\(vPulse/);
+    });
+
+    test('NOTHING IN THE FOAM IS ALLOWED TO SWITCH ON BY ITSELF', () => {
+        // The fold term used to. It is a derivative of a derivative, it spends
+        // three quarters of its life at exactly zero, and left as its own term
+        // in the max() it went from nothing to nearly white in a quarter of a
+        // second on its own schedule. Narrowing its window made it worse, since
+        // a narrower window is a steeper ramp. Nothing about the threshold can
+        // slow a rate that the wave sets.
+        //
+        // The rule that fixes it is that every foam term has to be enveloped by
+        // something that changes on the wave's timescale rather than on a
+        // derivative's, so a term can brighten only where the wave already is.
+        // A new term added without an envelope is exactly the regression this
+        // catches, and it would look like a light switching on in the surf.
+        const fragment = __test__.FRAGMENT_BODY;
+        const envelopes = ['trail', 'sheet', 'arriving', 'crest'];
+        // `foam` itself is the combination of the terms, not one of them.
+        const terms = [...fragment.matchAll(/float\s+(\w+[Ff]oam)\s*=\s*([^;]+);/g)];
+        expect(terms.length).toBeGreaterThanOrEqual(4);
+        for (const [, name, expression] of terms) {
+            const enveloped = envelopes.some((e) => new RegExp(`\\b${e}\\b`).test(expression));
+            expect(`${name}: ${enveloped}`).toBe(`${name}: true`);
+        }
+    });
+
+    test('NO ONE COMPONENT SPEAKS FOR THE SEA', () => {
+        // The foam pulse used to be built from aPhase[0], on the reasoning that
+        // the longest wave is the one that reads as arriving. That was true
+        // while the swell carried nearly all the height, and it silently stopped
+        // being true when the height was split with a shorter chop: the white
+        // went on riding the swell while the crests on screen were the chop.
+        // Nothing failed, nothing warned, the foam was just on the wrong wave.
+        //
+        // The rule that prevents it coming back is that outside the loop over
+        // components, no component may be singled out. Inside the loop every
+        // read is indexed by the loop variable, so a literal index anywhere else
+        // is a component being promoted above the others.
+        const body = __test__.VERTEX_BODY;
+        // Comments are prose and are allowed to name a component. This one does,
+        // a few lines down, to explain why it must not be read there.
+        const outside = body
+            .replace(/for\s*\(int i[\s\S]*?\n    \}/, '')
+            .replace(/\/\/[^\n]*/g, '');
+        expect(outside.length).toBeGreaterThan(200);   // the strip really worked
+        for (const name of ['aPhase', 'aAmp', 'aWaveK', 'aSharp', 'uOmega', 'uKSin', 'uSteepness']) {
+            expect(outside).not.toContain(name);
+        }
+        // And what replaced it has to be a sum over all of them.
+        expect(body).toMatch(/phasor\s*\+=/);
+        expect(__test__.VERTEX_HEAD).toContain('varying vec2 vPulse');
     });
 
     test('the wave constants reach the shader as vec4 uniforms', () => {
