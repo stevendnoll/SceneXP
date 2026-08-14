@@ -169,7 +169,16 @@ export const OCEAN_CONFIG = deepFreeze({
     camera: {
         height: 1.15,
         z: 8,
-        fov: 62,
+        // 48 DEGREES, NOT 62. A wide lens exaggerates whatever is nearest, and
+        // what is nearest here is the two or three metres of water at the
+        // camera's feet, which the depth limit keeps almost flat by
+        // construction. At 62 degrees that near water took nearly two thirds of
+        // the picture and the surf was left a strip forty pixels tall under the
+        // horizon. Narrowing to roughly a fifty millimetre lens spends the
+        // frame on the part of the sea that is doing something. It costs sky,
+        // which the day cycle will want back, so this is the number to revisit
+        // when the sky is real rather than a flat colour.
+        fov: 48,
         // Dead level. A pitch of even a degree or two puts the horizon off
         // centre and starts the frame feeling like a shot from something that
         // might move, which is the opposite of what this scene promises.
@@ -186,28 +195,71 @@ export const OCEAN_CONFIG = deepFreeze({
         // THIS ONE NUMBER PLACES THE SURF. Nothing in water.js decides where
         // waves break: they break where their height passes 0.78 of the local
         // depth, so the slope decides the depth and the depth decides the line.
-        // A 0.62 metre swell needs about 1.6 metres of water to stand up in,
-        // and 1.6 metres at 1:12 lands the break a little under 20 metres out,
-        // which is the shot we chose.
+        // A one metre swell needs about 1.3 metres of water to stand up in, and
+        // 1.3 metres at 1:8 lands the break ten metres beyond the water's edge.
         //
-        // It is steep for a beach, and deliberately. A gentle 1:33 shore is a
-        // DISSIPATIVE beach: the same swell breaks 55 metres out and spills
-        // slowly the whole way in, which is a lovely thing to stand in and a
-        // terrible thing to photograph from the sand, because the surf is a
-        // white line near the horizon. Steep beaches give a SHOREBREAK, waves
-        // that stand up late and collapse close in, which is the one that fills
-        // a frame. Raise this and the surf comes to meet the camera; lower it
-        // and the surf retreats toward the horizon.
-        slope: 0.072,       // metres of depth per metre out to sea, about 1:14
+        // A BREAKING WAVE ALWAYS LOOKS THE SAME SIZE ON A GIVEN BEACH, and that
+        // is the argument for this number being 0.13. The wave breaks where its
+        // height passes 0.78 of the depth, the depth at distance D is slope x D,
+        // so the wave is 0.78 x slope x D tall and subtends 0.78 x slope from
+        // the camera. The distance cancels. Nothing else in the scene can make
+        // the surf bigger in the frame: not the camera height, which only slides
+        // it up and down, and not the swell, which just moves the break line out
+        // until the wave is the same apparent size again. Only the slope.
+        //
+        // At 1:14 the surf stood 39 pixels tall under the horizon and the scene
+        // read as a mirror with a glare on it (specs/ocean-5.png, ocean-6.png).
+        // 1:8 is a steep sandy beach, which is the SHOREBREAK end of the range:
+        // waves stand up late and collapse close in, which is the one that fills
+        // a frame. A gentle 1:33 shore is DISSIPATIVE, lovely to stand in and
+        // terrible to photograph, because the surf is a white line near the
+        // horizon. Raise this and the surf comes to meet the camera.
+        slope: 0.13,        // metres of depth per metre out to sea, about 1:8
         // Deep enough that the longest component is genuinely in deep water out
         // there rather than already half shoaled. At 6.5 metres a 62 metre swell
         // is feeling the bottom before it is anywhere near the camera, so it
         // arrives pre-flattened and has almost nothing left to do on the way in.
         maxDepth: 11,       // past here the profile flattens into deep water
-        nearZ: 14,          // the plane starts behind the camera
-        farZ: -420,         // and runs to the horizon
-        nearHalfWidth: 26,  // a trapezoid rather than a rectangle, so vertices
-        farHalfWidth: 300   // are spent where the camera can actually see them
+
+        // THE SHEET IS MEASURED FROM THE CAMERA, NOT FROM ITSELF. Every number
+        // below is a distance in front of the eye, because a fixed camera makes
+        // the mapping from metres to pixels a known quantity and there is no
+        // reason to guess at it. The first draft measured everything along the
+        // sheet instead and put a fifth of the grid behind the viewer.
+        nearZ: 10.5,        // the near edge, a little behind the camera so the
+                            // waterline still has sheet under it at high tide
+        farZ: -404,         // out to where the fog has finished the job
+        // Where the packed part of the row curve begins, in metres in front of
+        // the camera. The bottom edge of the frame meets still water about two
+        // metres out (camera height over the tangent of half the vertical field
+        // of view), so anything nearer than this is off the bottom of the
+        // screen and wants a flat handful of rows rather than the curve.
+        rowNear: 2.2,
+        nearRows: 8,
+        // The sheet is the camera's own footprint. Half its width grows by this
+        // much per metre of distance. Columns then sit on radial lines from the
+        // eye and every one of them is the same number of pixels wide, all the
+        // way to the horizon. The old fixed trapezoid was three and a half
+        // times too wide at the break line, which spent most of its columns off
+        // the sides of the screen and left the surf a metre and a half between
+        // samples.
+        //
+        // The number is the tangent of half the HORIZONTAL field of view, and
+        // the field of view is set vertically, so it has to be sized for the
+        // widest screen anyone might be on. 1.15 covers about 21:9 at the
+        // camera's 48 degrees, which is as wide as monitors get. A 16:9 viewer
+        // does pay for that: roughly a third of the columns land off the sides.
+        // That is the cheaper mistake, since the other one puts sky in the
+        // corners of an ultrawide. THIS NUMBER FOLLOWS camera.fov: narrow the
+        // lens and it must come down with it, or the sheet is wider than the
+        // frustum again and the columns go back to being wasted.
+        widthPerMetre: 1.15,
+        // Only so the rows level with the eye still have some width. Kept small
+        // on purpose: it is a constant added to a term that grows with
+        // distance, so it is negligible out at the horizon and dominates in the
+        // first few metres, where it buys nothing but wasted columns. At 3 it
+        // doubled the column spacing across the whole foreground.
+        baseHalfWidth: 0.8
     },
 
     // ---- The water (water.js) -----------------------------------------------
@@ -215,9 +267,9 @@ export const OCEAN_CONFIG = deepFreeze({
         // Grid resolution. Rows are packed toward the camera on a power curve,
         // because a fixed camera means the near water is on screen at a hundred
         // times the size of the far water and deserves the vertices.
-        rows: 190,
-        cols: 150,
-        rowBias: 2.35,      // higher packs more rows into the near field
+        rows: 260,
+        cols: 200,
+        rowBias: 2.40,      // higher packs more rows into the near field
         // Half of the above on a phone. Checked once at startup rather than
         // watched, since the camera never moves and neither does the framing.
         mobileScale: 0.55,
@@ -233,11 +285,22 @@ export const OCEAN_CONFIG = deepFreeze({
         // shallows, which is real: waves refract to arrive parallel to the
         // beach. It also means the break line lands square to the camera
         // however the swell is angled out at sea.
+        // AMPLITUDES ARE PER COMPONENT AND THEY ADD UP, which is easy to forget
+        // when reading down the column. These four sum to half a metre, so the
+        // swell is a metre from trough to crest, and that ONE METRE is the
+        // number that decides everything downstream: the sea breaks where its
+        // total height passes 0.78 of the depth, so a one metre swell needs
+        // about 1.3 metres of water and lands the surf fifteen to twenty metres
+        // out on this slope. Raise any one of these and the whole break line
+        // moves seaward. They were four times this to begin with, back when the
+        // depth limit was wrongly applied to each component on its own, and the
+        // sea it produced was two and a half metres tall and breaking 45 metres
+        // away, which is a different beach entirely.
         waves: [
-            { length: 62, amplitude: 0.62, steepness: 0.82, speed: 1.00, dirX: 0.16 },
-            { length: 41, amplitude: 0.38, steepness: 0.74, speed: 1.12, dirX: -0.28 },
-            { length: 23, amplitude: 0.19, steepness: 0.62, speed: 1.26, dirX: 0.42 },
-            { length: 13, amplitude: 0.09, steepness: 0.48, speed: 1.40, dirX: -0.55 }
+            { length: 62, amplitude: 0.250, steepness: 0.82, speed: 1.00, dirX: 0.16 },
+            { length: 41, amplitude: 0.150, steepness: 0.74, speed: 1.12, dirX: -0.28 },
+            { length: 23, amplitude: 0.076, steepness: 0.62, speed: 1.26, dirX: 0.42 },
+            { length: 13, amplitude: 0.036, steepness: 0.48, speed: 1.40, dirX: -0.55 }
         ],
 
         // Shoaling and breaking. A wave feels the bottom at approximately half
@@ -255,22 +318,39 @@ export const OCEAN_CONFIG = deepFreeze({
         foamBreakThreshold: 0.34,
         foamCrestThreshold: 0.62,
         foamPersistence: 0.55,  // how far shoreward whitewater survives
-        foamNoiseScale: 0.85,
+        // Cycles per metre of the COARSEST foam octave, so about half a metre
+        // across. The shader adds two finer octaves on top and fades them out
+        // with distance, which is why this one number is not the whole grain:
+        // see the note beside the fade in water.js. It was 0.85 to begin with,
+        // a metre and a bit, and at two metres from the eye that is a third of
+        // the screen in one blob. Foam has to be smaller than the thing it is
+        // sitting on or it stops reading as texture.
+        foamNoiseScale: 2.2,
         foamDriftSpeed: 0.35,
 
         // THE FOAM HAS TO COME AND GO, which is a separate problem from where it
         // appears. Depth alone says the whole inner zone is breaking, and it is,
         // so foam driven by depth alone paints a permanent white carpet from the
-        // break line to the sand. Real whitewater arrives with a wave, runs up,
-        // and drains away, and the few seconds of clear water before the next
-        // one is what makes the arrival feel like an event.
+        // break line to the sand. It does not travel and it does not arrive, so
+        // none of it reads as a wave. Real whitewater comes in with one, runs
+        // up, and drains away, and the few seconds of clear water before the
+        // next one is what makes the arrival feel like an event.
         //
-        // So the depth answer is multiplied by a pulse that travels with the
-        // crest of the longest wave. `foamLag` is how far behind the crest the
-        // sheet sits, in radians, and `foamTrail` is how tightly the pulse is
-        // drawn in: higher is a narrower band and more clear water between.
+        // So both depth-driven foam terms are multiplied by a pulse that travels
+        // with the crest of the longest wave, and there are TWO of them. The
+        // tight one is the wave that is breaking right now. The broad one sits
+        // further back again and is the sheet it leaves behind, which is why the
+        // foam fades out over a few seconds instead of switching off with the
+        // crest that made it.
+        //
+        // Lags are in radians behind the crest. Trails are how tightly each
+        // pulse is drawn in: higher is a narrower band and more clear water
+        // between, and the sheet's is well below one on purpose, because a
+        // number under one is what gives it the long soft tail.
         foamLag: 2.2,
         foamTrail: 2.5,
+        foamSheetLag: 1.1,
+        foamSheetTrail: 0.8,
 
         // Colour. Deep water is not blue so much as dark and slightly green,
         // and the shallow edge picks up the sand under it. Both are lit by the

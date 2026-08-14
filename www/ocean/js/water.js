@@ -223,24 +223,56 @@ export function envelopeAt(elapsed, index, water = OCEAN_CONFIG.water) {
  *  the water two hundred metres out, so even spacing would spend most of the
  *  budget on rows that are three pixels tall. `rowBias` above one packs rows
  *  toward the camera; it is the first thing to lower if the far water looks
- *  faceted and the first thing to raise if the near water looks coarse. */
-export function rowPositions(rows, beach = OCEAN_CONFIG.beach, bias = OCEAN_CONFIG.water.rowBias) {
+ *  faceted and the first thing to raise if the near water looks coarse.
+ *
+ *  PACKED TOWARD THE CAMERA, NOT TOWARD THE SHEET'S OWN NEAR EDGE. Those sound
+ *  like the same sentence and they are not, and the difference cost a
+ *  screenshot round. The sheet has to start behind the camera so the waterline
+ *  has something under it at high tide, so a curve anchored at the sheet's edge
+ *  crowds its rows behind the viewer, where no arrangement of them can be seen:
+ *  the first draft put a fifth of the entire grid back there and left the near
+ *  water, which fills the bottom half of the frame, with about fifteen rows to
+ *  cover three hundred pixels. Every one of those rows was twenty pixels of
+ *  linear interpolation, which is what "the sea looks soft" turned out to be.
+ *
+ *  So the curve is anchored at `rowNear`, a distance IN FRONT of the camera,
+ *  and the strip from there back to the sheet's edge gets a flat `nearRows`.
+ *  That strip sits below the bottom of the frame by construction and is only
+ *  there to be covered and uncovered by the tide. */
+export function rowPositions(rows, config = OCEAN_CONFIG) {
+    const { beach, camera, water } = config;
     const out = new Float32Array(rows);
-    const span = beach.farZ - beach.nearZ;
-    for (let i = 0; i < rows; i++) {
-        const t = rows > 1 ? i / (rows - 1) : 0;
-        out[i] = beach.nearZ + span * Math.pow(t, bias);
+    const nearRows = Math.max(0, Math.min(beach.nearRows, rows - 2));
+    const curveRows = rows - nearRows;
+    // Distances in front of the camera. The near edge is behind it, so this one
+    // is negative, which is exactly why it cannot be the anchor of a power curve.
+    const nearEdge = camera.z - beach.nearZ;
+    const far = camera.z - beach.farZ;
+
+    for (let i = 0; i < nearRows; i++) {
+        out[i] = camera.z - (nearEdge + (beach.rowNear - nearEdge) * (i / nearRows));
+    }
+    for (let i = 0; i < curveRows; i++) {
+        const t = curveRows > 1 ? i / (curveRows - 1) : 0;
+        out[nearRows + i] = camera.z - (beach.rowNear + (far - beach.rowNear) * Math.pow(t, water.rowBias));
     }
     return out;
 }
 
-/** Half the width of the mesh at row parameter t, 0 nearest the camera.
+/** Half the width of the mesh at a given z.
  *
- *  A trapezoid rather than a rectangle. The camera's field of view is a wedge,
- *  so a rectangular sheet would either waste most of its near columns off the
- *  sides of the screen or run out of width at the horizon. */
-export function halfWidthAt(t, beach = OCEAN_CONFIG.beach) {
-    return beach.nearHalfWidth + (beach.farHalfWidth - beach.nearHalfWidth) * t;
+ *  THE SHEET IS THE CAMERA'S OWN FOOTPRINT, which is what makes this a function
+ *  of distance rather than of the row index. Widening on the row parameter
+ *  instead looks equivalent and is not, because the rows are not evenly spaced:
+ *  it made the sheet three and a half times wider than the frustum at the break
+ *  line, so most of the columns fell off the sides of the screen and the surf
+ *  was left with a metre and a half between samples.
+ *
+ *  Growing the half width linearly with distance puts the columns on radial
+ *  lines from the eye, so every column is the same number of pixels wide from
+ *  the foreground to the horizon, which is the best a fixed grid can do. */
+export function halfWidthAt(z, beach = OCEAN_CONFIG.beach, camera = OCEAN_CONFIG.camera) {
+    return beach.baseHalfWidth + Math.max(0, camera.z - z) * beach.widthPerMetre;
 }
 
 /** Constants for one wave component that never change once config is read.
@@ -308,6 +340,7 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
     const foamDecayMetres = 4 + 40 * water.foamPersistence;
 
     const carried = new Float32Array(n);   // accumulated phase per component
+    const grown = new Float32Array(n);     // shoaled height, before the cap
     let foam = 0;
     let previousZ = rowZ[rows - 1];
 
@@ -334,9 +367,9 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
             continue;
         }
 
-        let breakingWeight = 0;
-        let ampTotal = 0;
-
+        // First pass: how tall each component WANTS to be here, having grown on
+        // the way in. Nothing is capped yet, because the cap is on the sum.
+        let wanted = 0;
         for (let i = 0; i < n; i++) {
             const w = constants[i];
             const k = waveNumberAt(w.k0, depth);
@@ -350,36 +383,60 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
             carried[i] += k * cosTheta * step;
             p.phase[r * n + i] = carried[i];
 
-            // Grow the wave as it shallows, then cap it at what the depth can
-            // physically carry. `shoalGain` blends between no shoaling at all
-            // and the full Green's law answer, which is the dial for how
-            // dramatically waves stand up on their way in.
+            // Grow the wave as it shallows. `shoalGain` blends between no
+            // shoaling at all and the full Green's law answer, which is the dial
+            // for how dramatically waves stand up on their way in.
             const ks = shoalingAt(k, depth, w.c0);
-            const grown = w.amplitude * envelope[i] * (1 + water.shoalGain * (ks - 1));
-
-            // How hard this component is breaking, measured on the height it
-            // WANTS to be rather than the height it ends up with, since the cap
-            // below is precisely the consequence of breaking.
-            const breaking = breakAmount(grown * 2, depth, water);
-
-            // Cap the height at what the depth can carry, but round the corner
-            // rather than cutting it. A hard min creases the sea along one row;
-            // an asymptotic cap like tanh has the opposite problem, and it is a
-            // worse one: tanh is already eight percent below the identity at
-            // half the ceiling, so every wave is quietly flattened long before
-            // it breaks and the moment of STANDING UP, which is the single most
-            // watchable thing a wave does, never happens. A smooth minimum is
-            // exactly the ceiling far from it and exactly the wave everywhere
-            // else, with the blend confined to the last third.
-            const ceiling = (water.breakRatio * depth) / 2;
-            const amp = smoothMin(grown, ceiling, ceiling * 0.3);
-
-            p.amp[r * n + i] = amp;
-            ampTotal += amp;
-            breakingWeight += breaking * amp;
+            grown[i] = w.amplitude * envelope[i] * (1 + water.shoalGain * (ks - 1));
+            wanted += grown[i];
         }
 
-        const breaking = ampTotal > EPSILON ? clamp(breakingWeight / ampTotal, 0, 1) : 0;
+        // THE DEPTH LIMIT IS ON THE WHOLE SEA, NOT ON EACH WAVE IN IT, and
+        // getting that backwards is not a subtle error. McCowan says the water
+        // surface cannot stand more than about 0.78 of the local depth above
+        // the trough, and there is one water surface. Capping each of the four
+        // components at that figure separately lets them sum to four times it:
+        // half a metre of water was carrying a metre and a third of wave, the
+        // trough went a clear nineteen centimetres BELOW the seabed, and the
+        // beach came through the sea as a hard edged tan slab. Which is what
+        // ocean-4.png caught. So the cap is computed once on the total and
+        // shared out, which shrinks the whole sea together and keeps the
+        // relative sizes of the components intact.
+        //
+        // Round the corner rather than cutting it. A hard min creases the sea
+        // along one row; an asymptotic cap like tanh has the opposite problem
+        // and it is a worse one, since tanh is already eight percent below the
+        // identity at half the ceiling, so every wave is quietly flattened long
+        // before it breaks and the moment of STANDING UP, which is the single
+        // most watchable thing a wave does, never happens. A smooth minimum is
+        // exactly the ceiling far from it and exactly the wave everywhere else,
+        // with the blend confined to the last third.
+        //
+        // And the sea has to die out entirely at the water's edge. `minDepth`
+        // stops the depth reaching zero so the arithmetic stays well behaved,
+        // which means the cap by itself still permits a few centimetres of wave
+        // in water that is really only a few millimetres deep, and the trough of
+        // it sits just under the sand. Fading the waves out over the same span
+        // the sheet itself fades out over settles both at once, and it is what
+        // the last stretch of a beach looks like anyway: a sheet of water, not
+        // a wave.
+        const edge = smoothstep(0, 0.35, depth);
+        p.edge[r] = edge;
+
+        const ceiling = (water.breakRatio * depth) / 2;
+        const allowed = smoothMin(wanted, ceiling, ceiling * 0.3) * edge;
+        const scale = wanted > EPSILON ? allowed / wanted : 1;
+
+        let ampTotal = 0;
+        for (let i = 0; i < n; i++) {
+            const amp = grown[i] * scale;
+            p.amp[r * n + i] = amp;
+            ampTotal += amp;
+        }
+
+        // Measured on the height the sea WANTED, not the height it ended up
+        // with, because the cap above is precisely the consequence of breaking.
+        const breaking = breakAmount(wanted * 2, depth, water);
         p.breaking[r] = breaking;
 
         // Foam left behind. Whatever is breaking here tops the bed up, and
@@ -390,9 +447,8 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
         foam = Math.max(breaking, foam * Math.exp(-Math.abs(step) / foamDecayMetres));
         p.foamBed[r] = foam;
 
-        // Fade the sheet out over the last few centimetres rather than ending
-        // it on a hard geometric edge against the sand.
-        p.edge[r] = smoothstep(0, 0.35, depth);
+        // `p.edge` was set above, before the cap, because the waves are faded
+        // out over the same span the sheet is. One number, one water's edge.
     }
 
     return p;
@@ -460,8 +516,11 @@ attribute vec4 aWaveK;
 attribute vec4 aShore;
 uniform float uFoamLag;
 uniform float uFoamTrail;
+uniform float uFoamSheetLag;
+uniform float uFoamSheetTrail;
 varying vec4 vSurf;
 varying vec4 vFoam;
+varying float vSheet;
 `;
 
 /** Replaces `#include <beginnormal_vertex>`.
@@ -539,11 +598,21 @@ const VERTEX_BODY = `
     // across it puts a hard seam in the foam at every crest, which is precisely
     // where nobody should be looking at a seam.
     float foamPhase = aPhase[0] + uKSin[0] * position.x - uOmega[0] * uTime;
+    // TWO PULSES, NOT ONE, and the difference between them is the difference
+    // between surf and a painted white stripe. The depth tells you where a wave
+    // COULD break and says so about twenty metres wide, all the time. The tight
+    // pulse says where one IS breaking, which is a band that travels. The broad
+    // pulse sits further back again and is the sheet of whitewater the last
+    // wave left behind on its way through, which is what makes the clear water
+    // between arrivals read as the gap between two waves rather than as a gap
+    // in the effect.
+    //
     // The max is not paranoia. A raised cosine is in [0, 1] on paper, but a
     // float can land a hair below zero at the trough, and pow() of a negative
     // base is undefined in GLSL: one NaN there spreads through the foam term
     // and takes the fragment colour with it.
     float trail = pow(max(0.0, 0.5 + 0.5 * cos(foamPhase - uFoamLag)), uFoamTrail);
+    vSheet = pow(max(0.0, 0.5 + 0.5 * cos(foamPhase - uFoamLag - uFoamSheetLag)), uFoamSheetTrail);
 
     vSurf = vec4(aShore.x, aShore.y, crest, fold);
     vFoam = vec4(position.x + waveOffset.x, position.z + waveOffset.z, aShore.z, trail);
@@ -575,6 +644,7 @@ uniform float uFoamDrift;
 uniform float uDeepReference;
 varying vec4 vSurf;
 varying vec4 vFoam;
+varying float vSheet;
 
 float oceanHash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -610,16 +680,56 @@ const FRAGMENT_BODY = `
     float deepMix = smoothstep(0.0, uDeepReference, depth);
     vec3 waterColor = mix(uShallowColor, uDeepColor, deepMix);
 
-    vec2 grain = vFoam.xy * uFoamNoiseScale;
-    float n = oceanNoise(grain + vec2(0.0, uTime * uFoamDrift));
-    n = 0.65 * n + 0.35 * oceanNoise(grain * 2.7 - vec2(0.0, uTime * uFoamDrift * 1.6));
+    // THE GRAIN IS MIPMAPPED BY HAND. Whitewater has structure from a hand's
+    // width down, and the first version drew all of it at a single scale of
+    // about a metre, which in the foreground is a third of the screen across
+    // and at the break line is finer than a pixel. Both ends were wrong: the
+    // near water had no texture to speak of, which is most of what "the sea
+    // looks soft" was, and the far water was being handed detail smaller than
+    // the pixel it lands on, which does not read as detail at all. It reads as
+    // a shimmer that moves when nothing in the scene has moved.
+    //
+    // So the fine octaves fade in as the water comes toward the camera. The
+    // distances are here rather than in config because they are meaningless
+    // apart from the octave multipliers beside them, and a number that can only
+    // be moved together with another number should live where that one does.
+    float viewDistance = distance(cameraPosition.xz, vFoam.xy);
+    float midOctave = 1.0 - smoothstep(24.0, 95.0, viewDistance);
+    float fineOctave = 1.0 - smoothstep(5.0, 26.0, viewDistance);
 
-    float breakFoam = smoothstep(uFoamBreakThreshold, 1.0, breaking * (0.45 + 0.75 * n));
-    float foldFoam = smoothstep(0.12, 0.7, fold) * (0.55 + 0.45 * n);
+    vec2 grain = vFoam.xy * uFoamNoiseScale;
+    vec2 drift = vec2(0.0, uTime * uFoamDrift);
+    float n = oceanNoise(grain + drift);
+    n = mix(n, 0.62 * n + 0.38 * oceanNoise(grain * 3.1 - drift * 1.7), midOctave);
+    n = mix(n, 0.68 * n + 0.32 * oceanNoise(grain * 9.7 + drift * 2.6), fineOctave);
+
+    // TORN AT THE EDGES, SOLID IN THE MIDDLE. The first version multiplied the
+    // breaking signal by the noise and then thresholded it, which is the wrong
+    // way round. Noise averaging about eight tenths scaled the whole surf zone
+    // down before it was ever tested, so a row that was breaking hard came out
+    // around four tenths white and the entire break line read as haze. Noise
+    // belongs on the EDGE of the foam, taking bites out of the thin stuff and
+    // leaving the thick stuff alone, because that is what a breaking wave does:
+    // it is ragged where it is running out and it is opaque where it is not.
+    //
+    // BOTH DEPTH TERMS ARE GATED BY A PULSE, and it took getting this wrong to
+    // see why it matters. Depth alone says the whole inner twenty metres is
+    // breaking, and it is right, so a foam term driven by depth alone is a
+    // white carpet nailed to the seabed from the surf line to the sand. It does
+    // not travel, it does not arrive, and nothing about it is a wave. Only the
+    // pulse makes it surf.
+    // Named arriving and not active, because active is a reserved word in GLSL
+    // ES 3.00, which is what Three asks for on a WebGL2 context. There is a
+    // test in the suite for the whole class. (No back quotes in here: this
+    // whole shader is a JavaScript template literal and one would end it.)
+    float b = smoothstep(uFoamBreakThreshold, uFoamBreakThreshold + 0.45, breaking);
+    float arriving = b * vFoam.w;
+    float breakFoam = arriving * mix(clamp(0.35 + 0.9 * n, 0.0, 1.0), 1.0, arriving * arriving);
+    float foldFoam = smoothstep(0.10, 0.55, fold) * (0.55 + 0.45 * n);
     float crestFoam = smoothstep(uFoamCrestThreshold, 1.0, crest) * (0.4 + 0.6 * n) * 0.8;
-    // The depth answer, gated by the pulse travelling with the crest. Without
-    // the second factor this term alone paints the inner zone permanently white.
-    float bedFoam = vFoam.z * vFoam.w * (0.25 + 0.75 * n) * 0.9;
+    // The sheet the last wave left, on the broad pulse rather than the tight
+    // one, so it lingers and fades where the break itself has already gone.
+    float bedFoam = vFoam.z * vSheet * (0.25 + 0.75 * n) * 0.85;
 
     float foam = clamp(max(max(breakFoam, foldFoam), max(crestFoam, bedFoam)), 0.0, 1.0);
 
@@ -631,16 +741,16 @@ const FRAGMENT_BODY = `
 
 /** Replaces `#include <roughnessmap_fragment>`. Open water is close to a
  *  mirror and foam is close to chalk, and having one material do both is most
- *  of why the surf reads as a different substance from the water around it. */
+ *  of why the surf reads as a different substance from the water around it.
+ *
+ *  `foam` is the one computed in the colour block above, not a second cheaper
+ *  guess at it. Three inlines every chunk into a single main() and this one
+ *  runs after `map_fragment`, so the variable is simply in scope. The earlier
+ *  version recomputed an approximation here, which cost a second noise fetch to
+ *  arrive at a slightly different answer: the surf could then be white and
+ *  glossy at the same pixel, which is exactly the seam this is meant to avoid. */
 const FRAGMENT_ROUGHNESS = `
-    float roughnessFactor = roughness;
-    {
-        vec2 g = vFoam.xy * uFoamNoiseScale;
-        float fn = oceanNoise(g + vec2(0.0, uTime * uFoamDrift));
-        float f = clamp(max(smoothstep(uFoamBreakThreshold, 1.0, vSurf.y * (0.45 + 0.75 * fn)),
-                            max(smoothstep(0.12, 0.7, vSurf.w), vFoam.z * vFoam.w * 0.85)), 0.0, 1.0);
-        roughnessFactor = mix(roughnessFactor, 0.92, f);
-    }
+    float roughnessFactor = mix(roughness, 0.92, foam);
 `;
 
 // ---------------------------------------------------------------------------
@@ -676,7 +786,7 @@ export function initWater(scene, config = OCEAN_CONFIG, options = {}) {
     grid = { rows, cols };
 
     constants = waveConstants(water.waves);
-    rowZ = rowPositions(rows, config.beach, water.rowBias);
+    rowZ = rowPositions(rows, config);
     profile = buildProfile(rowZ, 0, config);
     cycles = new Array(SOUNDING_WAVES).fill(null);
 
@@ -707,8 +817,7 @@ function buildGeometry(rows, cols, zs, beach) {
     const normals = new Float32Array(count * 3);
 
     for (let r = 0; r < rows; r++) {
-        const t = rows > 1 ? r / (rows - 1) : 0;
-        const halfWidth = halfWidthAt(t, beach);
+        const halfWidth = halfWidthAt(zs[r], beach);
         for (let c = 0; c < cols; c++) {
             const u = cols > 1 ? c / (cols - 1) : 0.5;
             const i = (r * cols + c) * 3;
@@ -719,9 +828,10 @@ function buildGeometry(rows, cols, zs, beach) {
         }
     }
 
-    // 16 bit indices top out at 65535 vertices and the full grid is 28500, so
-    // the narrower type is safe here. It is asserted rather than assumed
-    // because raising `water.rows` past about 400 would silently wrap.
+    // 16 bit indices top out at 65535 vertices and the full grid is 52000, so
+    // the narrower type still fits, but not by much any more. The wider type is
+    // chosen rather than assumed because one more bump to rows or cols would
+    // otherwise wrap the indices silently and shred the mesh.
     const IndexArray = count > 65535 ? Uint32Array : Uint16Array;
     const indices = new IndexArray((rows - 1) * (cols - 1) * 6);
     let n = 0;
@@ -789,6 +899,8 @@ function buildMaterial(config) {
         uFoamDrift: { value: water.foamDriftSpeed },
         uFoamLag: { value: water.foamLag },
         uFoamTrail: { value: water.foamTrail },
+        uFoamSheetLag: { value: water.foamSheetLag },
+        uFoamSheetTrail: { value: water.foamSheetTrail },
         uDeepReference: { value: config.beach.maxDepth * 0.55 }
     };
 
@@ -1050,6 +1162,7 @@ export function disposeWater() {
 export const __test__ = {
     GRAVITY, SOUNDING_WAVES, clamp, smoothstep, totalAmpAt, detectBreaks,
     VERTEX_HEAD, VERTEX_BODY, VERTEX_POSITION, FRAGMENT_HEAD, FRAGMENT_BODY,
+    FRAGMENT_ROUGHNESS,
     setElapsed: (v) => { elapsed = v; },
     state: () => ({ grid, profile, constants, rowZ, uniforms, attributes, cycles })
 };

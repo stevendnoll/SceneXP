@@ -108,7 +108,7 @@ const {
     getWaterMesh, getProfile, getElapsed, __test__
 } = water;
 
-const { beach, water: WATER } = OCEAN_CONFIG;
+const { beach, water: WATER, camera } = OCEAN_CONFIG;
 
 afterEach(() => { disposeWater(); });
 
@@ -286,10 +286,62 @@ describe('the mesh is laid out for a camera that never moves', () => {
         expect(middle).toBeGreaterThan(even);
     });
 
-    test('the sheet widens toward the horizon', () => {
-        expect(halfWidthAt(0)).toBeCloseTo(beach.nearHalfWidth, 6);
-        expect(halfWidthAt(1)).toBeCloseTo(beach.farHalfWidth, 6);
-        expect(halfWidthAt(0.5)).toBeGreaterThan(halfWidthAt(0.25));
+    test('ALMOST EVERY ROW IS IN FRONT OF THE CAMERA', () => {
+        // The bug this replaces: the row curve was anchored at the sheet's own
+        // near edge, which is behind the eye, so it packed its rows behind the
+        // eye too. A fifth of the grid was spent on water nobody could ever be
+        // shown, and the near field was left too coarse to hold a wave shape.
+        // Nothing about the picture said "the rows are in the wrong place", it
+        // only said "soft", which is why this is arithmetic and not a screenshot.
+        const zs = rowPositions(OCEAN_CONFIG.water.rows);
+        const behind = Array.from(zs).filter((z) => z >= camera.z).length;
+        expect(behind).toBeLessThanOrEqual(beach.nearRows);
+        expect(behind / zs.length).toBeLessThan(0.05);
+    });
+
+    test('rows are spaced by how much screen they cover, not by metres', () => {
+        // Screen height per metre falls off as one over distance, so rows
+        // spaced for the eye should be roughly even in one over distance. The
+        // real assertion is the one that matters in practice: no row in the
+        // visible sea is more than a few times the screen height of its
+        // neighbours, because that ratio IS the softness.
+        const zs = rowPositions(OCEAN_CONFIG.water.rows);
+        const screenY = (z) => 1 / (camera.z - z);   // proportional to pixels
+        // DERIVED FROM THE LENS, not written down. The bottom edge of the
+        // picture meets still water at the camera height over the tangent of
+        // half the vertical field of view, and everything nearer than that is
+        // off the bottom of the screen. An earlier version hard coded two
+        // metres, which was right for a 62 degree lens and wrong the moment the
+        // lens changed, and it then failed on the seam between the near strip
+        // and the row curve, which is a part of the sheet nobody can see.
+        const frameBottom = camera.height / Math.tan((camera.fov * Math.PI) / 360);
+        let worst = 0;
+        for (let i = 1; i < zs.length; i++) {
+            const near = camera.z - zs[i];
+            if (near < frameBottom || near > 380) continue;
+            worst = Math.max(worst, Math.abs(screenY(zs[i]) - screenY(zs[i - 1])));
+        }
+        // One over metres. Half the camera height is about a tenth of the frame.
+        expect(worst).toBeLessThan(0.05);
+    });
+
+    test('the sheet is the camera frustum, so columns are even in pixels', () => {
+        // Half width has to grow linearly with DISTANCE. Any column then sits on
+        // a fixed radial line from the eye, which is the only arrangement where
+        // a near column and a far column are the same width on screen.
+        const wide = halfWidthAt(camera.z - 100);
+        const close = halfWidthAt(camera.z - 10);
+        expect(wide - close).toBeCloseTo(90 * beach.widthPerMetre, 6);
+        // Never zero, or the rows level with the eye collapse to a line.
+        expect(halfWidthAt(camera.z + 5)).toBeCloseTo(beach.baseHalfWidth, 6);
+
+        // And it has to actually cover the frame, on the widest screen anyone
+        // is plausibly using. 21:9 is as wide as monitors get; the field of view
+        // is set vertically, so the wider the screen the more sheet it needs.
+        const halfFov = Math.tan((camera.fov * Math.PI) / 360) * 2.4;
+        for (const distance of [5, 20, 80, 300]) {
+            expect(halfWidthAt(camera.z - distance)).toBeGreaterThan(distance * halfFov);
+        }
     });
 });
 
@@ -334,18 +386,51 @@ describe('the profile is the sea in one array', () => {
         expect(p.k).toHaveLength(rows * n);
     });
 
-    test('NO WAVE EVER STANDS TALLER THAN THE DEPTH ALLOWS', () => {
+    test('THE SEA NEVER STANDS TALLER THAN THE DEPTH ALLOWS', () => {
         // The single most important assertion in the file. If this fails the
         // surf is no longer being placed by the beach, and something is drawing
         // two metre waves in half a metre of water.
+        //
+        // THE SUM, NOT EACH COMPONENT. The version of this test that shipped
+        // first checked the four components one at a time, which is the same
+        // mistake the code was making, so it agreed with the bug and passed for
+        // as long as the bug lasted. There is one water surface and McCowan is
+        // a statement about it: four waves each allowed 0.78 of the depth sum
+        // to three times the depth. A test that restates the implementation
+        // cannot catch the implementation being wrong, and the only defence is
+        // to assert the physical property instead.
         for (let t = 0; t < 400; t += 13) {
             const p = buildProfile(zs, t);
             for (let r = 0; r < rows; r++) {
                 if (p.depth[r] <= 0) continue;
-                const ceiling = (WATER.breakRatio * p.depth[r]) / 2;
-                for (let i = 0; i < n; i++) {
-                    expect(p.amp[r * n + i]).toBeLessThanOrEqual(ceiling + 1e-6);
-                }
+                let total = 0;
+                for (let i = 0; i < n; i++) total += p.amp[r * n + i];
+                expect(total * 2).toBeLessThanOrEqual(WATER.breakRatio * p.depth[r] + 1e-6);
+            }
+        }
+    });
+
+    test('THE TROUGH NEVER GOES UNDER THE SEABED', () => {
+        // What the reader actually sees when the cap above is wrong, and the
+        // reason it is worth a second test rather than being left implied. With
+        // every component at its trough at once the water surface sank below
+        // the sand, and the beach came up through the sea as a hard edged slab
+        // hanging in mid air. It is in specs/ocean-4.png.
+        //
+        // A wave capped at 0.78 of the depth has its trough at 0.39 of the
+        // depth, so a correct cap leaves well over half the depth in hand and
+        // this can never be close. The tolerance is for the last centimetre at
+        // the very water's edge, where `minDepth` holds the depth off zero on
+        // purpose and the sheet is nearly transparent anyway.
+        for (let t = 0; t < 560; t += 37) {
+            const p = buildProfile(zs, t);
+            const tide = tideOffset(t);
+            for (let r = 0; r < rows; r++) {
+                if (p.depth[r] <= 0) continue;
+                let trough = 0;
+                for (let i = 0; i < n; i++) trough -= p.amp[r * n + i];
+                const clearance = (trough + tide) - bedHeightAt(zs[r]);
+                expect(clearance).toBeGreaterThan(-0.02);
             }
         }
     });
@@ -528,6 +613,93 @@ describe('the mesh', () => {
         const sources = [__test__.VERTEX_HEAD, __test__.FRAGMENT_HEAD].join('\n');
         const declared = [...sources.matchAll(/uniform\s+\w+\s+(\w+);/g)].map((m) => m[1]);
         for (const name of declared) expect(uniforms[name]).toBeDefined();
+    });
+
+    test('NO LOCAL IS NAMED AFTER A GLSL RESERVED WORD', () => {
+        // The shader is a string in a JavaScript file, so nothing between here
+        // and a browser ever compiles it. Naming a local `active` cost a round
+        // trip: it is an ordinary English word, it is not reserved in GLSL ES
+        // 1.00, and it IS reserved in 3.00, which is what Three asks for on a
+        // WebGL2 context. The compiler says "illegal use of reserved word" and
+        // points at the line, which is the one thing about it that was never in
+        // doubt. This list is the 3.00 reserved set that is plausible as a
+        // variable name; the exotic ones are left out on purpose.
+        const RESERVED = [
+            'active', 'asm', 'cast', 'centroid', 'class', 'common', 'default', 'double',
+            'enum', 'extern', 'external', 'filter', 'fixed', 'flat', 'goto', 'half',
+            'inline', 'input', 'interface', 'long', 'namespace', 'noinline', 'output',
+            'packed', 'partition', 'patch', 'public', 'resource', 'row_major', 'sample',
+            'short', 'sizeof', 'static', 'subroutine', 'superp', 'switch', 'template',
+            'this', 'typedef', 'union', 'unsigned', 'using', 'volatile'
+        ];
+        const source = [
+            __test__.VERTEX_HEAD, __test__.VERTEX_BODY, __test__.VERTEX_POSITION,
+            __test__.FRAGMENT_HEAD, __test__.FRAGMENT_BODY, __test__.FRAGMENT_ROUGHNESS
+        ].join('\n').replace(/\/\/.*$/gm, '');   // comments may say the words
+
+        const declared = [...source.matchAll(/\b(?:float|int|bool|vec[234]|mat[234]|ivec[234]|bvec[234])\s+(\w+)/g)]
+            .map((m) => m[1]);
+        expect(declared.length).toBeGreaterThan(15);
+        for (const name of declared) expect(RESERVED).not.toContain(name);
+    });
+
+    test('EVERY VARYING THE FRAGMENT READS IS ONE THE VERTEX SHADER WROTE', () => {
+        // A varying declared on one side and not the other is a link error, so
+        // the page renders nothing at all and the console says so in GLSL. This
+        // is cheaper to meet here. It is a live risk because the two halves are
+        // in different string constants a hundred lines apart, and adding a
+        // signal to the foam means touching four of them.
+        const vertex = [__test__.VERTEX_HEAD, __test__.VERTEX_BODY, __test__.VERTEX_POSITION].join('\n');
+        const fragment = [__test__.FRAGMENT_HEAD, __test__.FRAGMENT_BODY, __test__.FRAGMENT_ROUGHNESS].join('\n');
+        const declaredIn = (src) => [...src.matchAll(/varying\s+\w+\s+(\w+);/g)].map((m) => m[1]);
+        const vertexVaryings = declaredIn(vertex);
+        expect(declaredIn(fragment).sort()).toEqual(vertexVaryings.sort());
+        // Declared is not the same as assigned. Every one has to be given a
+        // value on the vertex side or it reaches the fragment as whatever was
+        // in the register, which on some drivers is convincingly plausible.
+        for (const name of vertexVaryings) {
+            expect(vertex).toMatch(new RegExp(`${name}\\s*=`));
+        }
+    });
+
+    test('DEPTH ALONE CANNOT BE THE FOAM, so the pulse is not decoration', () => {
+        // The trap: `breaking` is very nearly flat right across the surf zone,
+        // because everything shoreward of the break line is also breaking and
+        // gets more so as the water thins. That is correct physics and it is a
+        // terrible picture. Foam driven by this number alone is a white carpet
+        // nailed to the seabed twenty metres wide: it never travels, never
+        // arrives, and reads as a painted stripe rather than as surf.
+        //
+        // So both depth-driven foam terms in the fragment shader are gated by a
+        // pulse that rides the crest. This test states the fact that makes that
+        // necessary, so that the next person to simplify the foam meets the
+        // reason here rather than in a screenshot.
+        // The window is the surf zone itself, found from the break line rather
+        // than written down in metres, so it follows the beach when the slope
+        // moves. Hard coding it meant this test measured open sea the first
+        // time the beach got steeper and the break came in to meet the camera.
+        const zs = rowPositions(WATER.rows);
+        const p = buildProfile(zs, 0);
+        const surf = breakRow(p);
+        // Row 0 is nearest the camera and the rows count outward, so everything
+        // shoreward of the break is rows 0 up to the break row.
+        const inner = [];
+        for (let r = 0; r <= surf; r++) {
+            if (p.depth[r] > WATER.minDepth * 1.5) inner.push(p.breaking[r]);
+        }
+        expect(inner.length).toBeGreaterThan(20);
+        // Pinned at the top across most of the zone and never anywhere near
+        // zero: there is no gap in it for one wave to end and the next to
+        // begin, which is the whole point. It tapers only at the seaward edge,
+        // where the break line is by definition the row that just reaches the
+        // threshold.
+        const pinned = inner.filter((v) => v > 0.95).length;
+        expect(pinned / inner.length).toBeGreaterThan(0.7);
+        expect(Math.min(...inner)).toBeGreaterThan(0.4);
+
+        const fragment = __test__.FRAGMENT_BODY;
+        expect(fragment).toMatch(/breakFoam\s*=\s*arriving/); // gated, not raw
+        expect(fragment).toMatch(/bedFoam\s*=\s*vFoam\.z\s*\*\s*vSheet/);
     });
 
     test('the wave constants reach the shader as vec4 uniforms', () => {

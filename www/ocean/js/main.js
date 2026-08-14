@@ -25,7 +25,7 @@
 
 import { OCEAN_CONFIG } from './config.min.js';
 import {
-    initWater, updateWater, consumeBreaks, breakDistance, disposeWater, bedHeightAt
+    initWater, updateWater, consumeBreaks, breakDistance, disposeWater, bedHeightAt, halfWidthAt
 } from './water.min.js';
 
 const state = {
@@ -108,7 +108,9 @@ function buildSand() {
     for (let r = 0; r < rows; r++) {
         const t = r / (rows - 1);
         const z = beach.nearZ + (beach.farZ - beach.nearZ) * Math.pow(t, 2.0);
-        const halfWidth = beach.nearHalfWidth + (beach.farHalfWidth - beach.nearHalfWidth) * t;
+        // Same frustum footprint as the water, from the same helper, so the two
+        // sheets can never disagree about how wide the world is.
+        const halfWidth = halfWidthAt(z, beach);
         for (let c = 0; c < cols; c++) {
             const u = c / (cols - 1);
             const i = (r * cols + c) * 3;
