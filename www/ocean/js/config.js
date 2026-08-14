@@ -483,7 +483,19 @@ export const OCEAN_CONFIG = deepFreeze({
 
         // Foam. THE PART THAT SELLS IT, more than the wave shape does.
         foamBreakThreshold: 0.34,
-        foamCrestThreshold: 0.62,
+        // Whitecaps: how close to its own maximum the surface has to come before
+        // it goes white, out in open water where nothing is breaking.
+        //
+        // THIS NUMBER DEPENDS ON HOW MANY COMPONENTS THERE ARE, which is not
+        // obvious and is worth stating. The signal is the surface height over
+        // the SUM of the amplitudes, so it can only approach one when the
+        // components happen to agree, and four comparable components agree far
+        // less often than one dominant one does. Moving the height onto the
+        // swell doubled the whitecapping without anybody touching this line:
+        // measured on water that is not breaking, 5% of samples went white
+        // before and 10% after, all the way out to the horizon. 0.70 puts it
+        // back to about 6%, which is where it was when Steve last approved it.
+        foamCrestThreshold: 0.70,
         foamPersistence: 0.55,  // how far shoreward whitewater survives
         // Cycles per metre of the COARSEST foam octave, so about half a metre
         // across. The shader adds two finer octaves on top and fades them out
@@ -512,12 +524,33 @@ export const OCEAN_CONFIG = deepFreeze({
         //
         // Lags are in radians behind the crest. Trails are how tightly each
         // pulse is drawn in: higher is a narrower band and more clear water
-        // between, and the sheet's is well below one on purpose, because a
-        // number under one is what gives it the long soft tail.
+        // between.
+        //
+        // THE PARAGRAPH ABOVE WAS RIGHT AND THE SHEET'S NUMBER WAS WRONG, and
+        // it took four screenshots to see it because the fault it produced is
+        // the exact fault the paragraph exists to prevent. The sheet's trail was
+        // 0.8, chosen deliberately below one for a long soft tail. An exponent
+        // below one BROADENS a raised cosine rather than tightening it, so the
+        // sheet pulse sat high for most of every cycle. On its own that is only
+        // a soft tail, as intended. Multiplied by `foamBed`, which is pinned at
+        // exactly 1 across the whole surf zone, it is a constant, and a constant
+        // is a carpet.
+        //
+        // `foamBed` is pinned because it is `max(breaking, carried * decay)` and
+        // `breaking` is 1 at every row inside the break line, so the decay is
+        // topped straight back up at the next row and never gets to happen. The
+        // sheet pulse was the only thing standing between that and a permanent
+        // wash, and it was not narrow enough to do it.
+        //
+        // Measured over three minutes across the near field, mean foam swung
+        // between 0.11 and 0.51: never clean, never white, always milk. At 2.4
+        // the floor is 0.04 and the peak is untouched at 0.50, so the water
+        // between waves goes back to being water. Higher buys almost nothing:
+        // 3.2 gets the floor to 0.03 and costs brightness.
         foamLag: 2.2,
         foamTrail: 2.5,
         foamSheetLag: 1.1,
-        foamSheetTrail: 0.8,
+        foamSheetTrail: 2.40,
 
         // Colour. Deep water is not blue so much as dark and slightly green,
         // and the shallow edge picks up the sand under it. Both are lit by the

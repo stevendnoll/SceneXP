@@ -895,6 +895,98 @@ describe('the mesh', () => {
         }
     });
 
+    test('THE SEA BETWEEN WAVES HAS TO BE WATER, NOT MILK', () => {
+        // What four screenshots caught and no test did. The near field never
+        // went clean: measured across it over three minutes, mean foam swung
+        // between 0.11 and 0.51, so the whole inner sea was permanently
+        // somewhere between milk and cream and nothing ever read as arriving.
+        //
+        // The chain is worth stating because no single link looks wrong.
+        // `foamBed` is `max(breaking, carried * decay)`, and `breaking` is 1 at
+        // every row inside the break line, so the decay is topped straight back
+        // up at the next row and never happens. That leaves foamBed pinned at
+        // exactly 1 across the whole surf zone, which is correct: the sea IS
+        // breaking there. The ONLY thing between that constant and a painted
+        // white carpet is the sheet pulse it gets multiplied by. So the duty
+        // cycle of that pulse is not a matter of taste, it is the floor under
+        // the foam, and it has to spend most of its time near zero.
+        const zs = rowPositions(WATER.rows);
+        const p = buildProfile(zs, 0);
+        const surf = breakRow(p);
+        expect(surf).toBeGreaterThan(0);
+
+        // First the fact that makes the rest necessary: the bed really is pinned.
+        const inner = [];
+        for (let r = 0; r <= surf; r++) {
+            if (p.depth[r] > WATER.minDepth * 1.5) inner.push(p.foamBed[r]);
+        }
+        expect(inner.length).toBeGreaterThan(20);
+        // Pinned across most of the zone. It tapers at the very last rows, where
+        // the sheet is fading out anyway, so this asks for the bulk rather than
+        // for every row.
+        expect(inner.filter((v) => v > 0.95).length / inner.length).toBeGreaterThan(0.7);
+
+        // Now the pulse. `oceanPulse` raises a raised cosine to `foamSheetTrail`,
+        // and an exponent BELOW one broadens it rather than tightening it, which
+        // is how this was got wrong: 0.8 was chosen on purpose for a long soft
+        // tail, and a long soft tail on a constant is a wash.
+        let sum = 0;
+        const steps = 2048;
+        for (let i = 0; i < steps; i++) {
+            const theta = (i / steps) * Math.PI * 2;
+            sum += Math.pow(Math.max(0, 0.5 + 0.5 * Math.cos(theta)), WATER.foamSheetTrail);
+        }
+        const duty = sum / steps;
+        // Below four tenths means the residue is absent more of the time than it
+        // is present, which is what leaves clear water for the next wave to
+        // arrive into. At 0.8 this was 0.55 and the sea was never clean.
+        expect(duty).toBeLessThan(0.4);
+    });
+
+    test('OPEN WATER IS MOSTLY NOT WHITE, however many waves are in the sum', () => {
+        // `crest` is the surface height over the SUM of the amplitudes, so it
+        // can only approach one when the components happen to agree. Four
+        // comparable components agree far less often than one dominant one, so
+        // this threshold silently means something different every time the
+        // spectrum is rebalanced. Moving the height onto the swell doubled the
+        // whitecapping from 5% of open water to 10%, out to the horizon, with
+        // nobody touching the number that controls it.
+        const zs = rowPositions(WATER.rows);
+        const constants = waveConstants(WATER.waves);
+        const parts = constants.length;
+        const TAU = Math.PI * 2;
+        let lit = 0;
+        let seen = 0;
+        for (let t = 0; t < 40; t += 2) {
+            const p = buildProfile(zs, t);
+            for (let r = 0; r < WATER.rows; r++) {
+                // Only water that is NOT breaking: foam there is the surf doing
+                // its job, and this test is about the open sea beyond it.
+                if (p.depth[r] <= 0.02 || p.breaking[r] > 0.05) continue;
+                for (let c = 0; c < 8; c++) {
+                    const x = -14 + c * 4;
+                    let y = 0;
+                    let ampTotal = 0;
+                    for (let i = 0; i < parts; i++) {
+                        const amp = p.amp[r * parts + i];
+                        if (amp <= 0) continue;
+                        const raw = p.phase[r * parts + i];
+                        const phase = (raw - Math.floor(raw / TAU) * TAU)
+                            + constants[i].kSin * x - constants[i].omega * t;
+                        y += amp * Math.sin(phase) - p.sharp[r * parts + i] * Math.cos(2 * phase);
+                        ampTotal += amp + p.sharp[r * parts + i];
+                    }
+                    seen++;
+                    if (ampTotal > 1e-4 && y / ampTotal > WATER.foamCrestThreshold) lit++;
+                }
+            }
+        }
+        expect(seen).toBeGreaterThan(10000);
+        // A tenth of the open ocean in whitecaps is a gale. This is a beach on
+        // a calm day, so the figure belongs nearer a twentieth.
+        expect(lit / seen).toBeLessThan(0.075);
+    });
+
     test('DEPTH ALONE CANNOT BE THE FOAM, so the pulse is not decoration', () => {
         // The trap: `breaking` is very nearly flat right across the surf zone,
         // because everything shoreward of the break line is also breaking and
