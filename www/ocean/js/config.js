@@ -178,7 +178,24 @@ export const OCEAN_CONFIG = deepFreeze({
         // frame on the part of the sea that is doing something. It costs sky,
         // which the day cycle will want back, so this is the number to revisit
         // when the sky is real rather than a flat colour.
-        fov: 48,
+        //
+        // 40 NOW, AND THIS IS WHY SURF PHOTOGRAPHS LOOK THE WAY THEY DO. After
+        // the beach slope, the swell height, and the spectrum had all been
+        // measured out, the lens was the only lever left on apparent size, and
+        // it is the strongest one. Tallest wave in an 829 pixel frame: 139px at
+        // 48 degrees, 153 at 44, 170 at 40, 191 at 36, 216 at 32. Nothing about
+        // the sea changes. Narrowing also walks the bottom edge of the frame
+        // out from 2.6 metres to 3.2, which quietly deletes the nearest strip
+        // of water, and that strip is the one the depth cap keeps almost flat,
+        // so it never had a wave shape in it to lose.
+        //
+        // 40 degrees is about a 33mm lens. Steve chose it from the table over
+        // the longer options, which start to read as a photograph of surf
+        // rather than as standing on a beach.
+        //
+        // TWO NUMBERS IN `beach` FOLLOW THIS ONE and were recomputed with it:
+        // `widthPerMetre` and `rowNear`.
+        fov: 40,
         // Dead level. A pitch of even a degree or two puts the horizon off
         // centre and starts the frame feeling like a shot from something that
         // might move, which is the opposite of what this scene promises.
@@ -258,7 +275,10 @@ export const OCEAN_CONFIG = deepFreeze({
         // metres out (camera height over the tangent of half the vertical field
         // of view), so anything nearer than this is off the bottom of the
         // screen and wants a flat handful of rows rather than the curve.
-        rowNear: 2.2,
+        // FOLLOWS camera.fov: it is camera.height / tan(fov / 2), held at about
+        // 85 percent of that so the curve starts just inside the frame edge
+        // rather than exactly on it. 2.2 at 48 degrees, 2.7 at 40.
+        rowNear: 2.7,
         nearRows: 8,
         // The sheet is the camera's own footprint. Half its width grows by this
         // much per metre of distance. Columns then sit on radial lines from the
@@ -270,14 +290,15 @@ export const OCEAN_CONFIG = deepFreeze({
         //
         // The number is the tangent of half the HORIZONTAL field of view, and
         // the field of view is set vertically, so it has to be sized for the
-        // widest screen anyone might be on. 1.15 covers about 21:9 at the
-        // camera's 48 degrees, which is as wide as monitors get. A 16:9 viewer
-        // does pay for that: roughly a third of the columns land off the sides.
-        // That is the cheaper mistake, since the other one puts sky in the
-        // corners of an ultrawide. THIS NUMBER FOLLOWS camera.fov: narrow the
-        // lens and it must come down with it, or the sheet is wider than the
-        // frustum again and the columns go back to being wasted.
-        widthPerMetre: 1.15,
+        // widest screen anyone might be on. It covers a little past 21:9 at the
+        // camera's field of view, which is as wide as monitors get. A 16:9
+        // viewer does pay for that: roughly a third of the columns land off the
+        // sides. That is the cheaper mistake, since the other one puts sky in
+        // the corners of an ultrawide. THIS NUMBER FOLLOWS camera.fov: narrow
+        // the lens and it must come down with it, or the sheet is wider than
+        // the frustum again and the columns go back to being wasted. It is
+        // 2.58 x tan(fov / 2), so 1.15 at 48 degrees and 0.94 at 40.
+        widthPerMetre: 0.94,
         // Only so the rows level with the eye still have some width. Kept small
         // on purpose: it is a constant added to a term that grows with
         // distance, so it is negligible out at the horizon and dominates in the
@@ -346,28 +367,41 @@ export const OCEAN_CONFIG = deepFreeze({
         //     wave has a steeper face, and several of them fit in the frame.
         //
         // So the primary keeps its length and gives up a third of its height to
-        // a 17 metre chop, which is what a real beach has on it anyway. Crests
-        // in the near field went from 1.5 to 3.0, the worst instant went from
-        // 19cm of relief to 43cm, and the shoaling is untouched at x1.23. The
-        // break line stayed where Steve approved it, because the total height
-        // was held fixed and the break follows the total.
+        // a 17 metre chop, which is what a real beach has on it anyway.
         //
-        // The lengths avoid simple ratios on purpose: 8.5 would have been
-        // exactly half of 17 and those two would have locked into a repeating
+        // THAT SPLIT WAS TOO FAR, AND IT COST THE SEA ITS SHOALING. The two
+        // paragraphs above are both true and together they hide a third fact:
+        // the shoaling coefficient does not just fall off with wavelength, it
+        // goes BELOW ONE. A wave in intermediate depth shrinks slightly before
+        // it grows, and only recovers in the last couple of metres. Measured
+        // component by component, from 8 metres of water to the break depth:
+        //
+        //     58 metre swell    x0.90 -> x1.08     grows a fifth
+        //     17.5 metre chop   x0.99 -> x0.91     SHRINKS a tenth
+        //     8 metre chop      x1.00 -> x0.93     shrinks
+        //
+        // With most of the height on the 17.5 metre chop those cancelled almost
+        // exactly, and the height-weighted total came out at x1.02 from the far
+        // edge of the domain to the break. The sea did not stand up. It arrived
+        // the size it left at, so the only thing shaping the picture was
+        // perspective, and perspective always makes the nearest thing the
+        // biggest thing. Steve caught it from a screenshot: the waves looked
+        // biggest right in front of the camera, which is not what an ocean does.
+        //
+        // So the height goes back onto the wavelengths that can actually shoal,
+        // and the chop is trimmed to what it is for, which is texture. The
+        // weighted shoaling is x1.10 and the tallest wave in the frame moved
+        // from 8 metres out, in the shallows, to the break line itself. The
+        // total height is unchanged, so the break line has not moved.
+        //
+        // The lengths avoid simple ratios on purpose: 5.5 would have been
+        // exactly half of 11 and those two would have locked into a repeating
         // pattern, which is the corrugated roof this list exists to avoid.
-        //
-        // The amplitudes are the round five set multiplied by 1.4 across the
-        // board, so the shape of the spectrum is untouched and only its size
-        // moved. Offshore height went from 1.00 metres to 1.40, which puts the
-        // break in 2.16 metres of water instead of 1.57 and makes the breaking
-        // wave itself 1.7 metres rather than 1.2. On its own that is nearly
-        // invisible, for the reason set out at beach.slope. Paired with the
-        // steeper beach it is most of the difference.
         waves: [
-            { length: 58, amplitude: 0.238, steepness: 0.82, speed: 1.00, dirX: 0.16 },
-            { length: 17.5, amplitude: 0.266, steepness: 0.74, speed: 1.12, dirX: -0.28 },
-            { length: 8, amplitude: 0.133, steepness: 0.62, speed: 1.26, dirX: 0.42 },
-            { length: 4.3, amplitude: 0.063, steepness: 0.48, speed: 1.40, dirX: -0.55 }
+            { length: 58, amplitude: 0.430, steepness: 0.82, speed: 1.00, dirX: 0.16 },
+            { length: 26, amplitude: 0.170, steepness: 0.74, speed: 1.12, dirX: -0.28 },
+            { length: 11, amplitude: 0.075, steepness: 0.62, speed: 1.26, dirX: 0.42 },
+            { length: 5, amplitude: 0.035, steepness: 0.48, speed: 1.40, dirX: -0.55 }
         ],
 
         // Shoaling and breaking. A wave feels the bottom at approximately half
@@ -377,7 +411,23 @@ export const OCEAN_CONFIG = deepFreeze({
         // line sits where it does without anybody placing it.
         breakRatio: 0.78,
         breakSoftness: 0.30,   // how abruptly the collapse happens
-        shoalGain: 0.90,       // how much a wave grows as it shallows
+        // How much a wave grows as it shallows, as a multiple of the physical
+        // Green's law answer. One is the truth and this is deliberately past it.
+        //
+        // The truth is disappointing on its own: a swell grows about a fifth on
+        // the way in and breaks, and most of what the eye reads as a wave
+        // STANDING UP is not the height at all, it is the wavelength collapsing
+        // to a third of what it was. A fifth of growth spread over forty metres
+        // is not an event, and the scene needs the break to be an event.
+        //
+        // At 2.5 the sea two thirds of the way out is noticeably flatter than
+        // the sea at the break, which is the crescendo the real thing has and
+        // the linear version does not. Pushed to 4 it is stronger still and the
+        // far water starts to look dead, which is the cost: this dial trades the
+        // horizon for the break line. It only works at all because the height
+        // sits on wavelengths that shoal. On the old spectrum it did nothing
+        // whatsoever, and five minutes were spent finding that out.
+        shoalGain: 2.50,
         // Extra Gerstner Q approaching the break: the cusping crest that reads
         // as pitching. It was 1.35, which is barely a fifth of the way to the
         // point where a trochoid actually develops a peak, so the crests were
@@ -392,10 +442,15 @@ export const OCEAN_CONFIG = deepFreeze({
         // Then the swell went up by 1.4 and the same margin had to be bought
         // back, because the Jacobian is driven by amplitude times wave number
         // times Q and only the last of those is a free parameter. At 2.6 the
-        // floor is 0.35, which is the margin 3.0 used to hold at the old
-        // height. The face gives up a couple of degrees for it and the wave is
-        // half a metre taller, which is a trade worth making.
-        leanGain: 2.60,
+        // floor was 0.35, which is the margin 3.0 used to hold at the old
+        // height.
+        //
+        // Moving the height onto longer waves handed some of it straight back,
+        // for the same reason: a 58 metre wave has a third the wave number of a
+        // 17.5 metre one carrying the same amplitude. At the current spectrum
+        // the floor is 0.48 at 2.6, 0.40 at 3.2, 0.31 at 3.8 and 0.23 at 4.4.
+        // 3.2 buys back the steeper face at the margin the scene has always run.
+        leanGain: 3.20,
 
         // WHY A SINE IS NOT A WAVE, and the fix for it.
         //

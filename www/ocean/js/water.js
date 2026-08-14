@@ -117,7 +117,25 @@ const SOUNDING_WAVES = 2;
  *  configured slope until it flattens off at `maxDepth`. Shoreward of the water
  *  line it keeps climbing on the same slope, which is the dry beach, and is why
  *  the sand mesh can be built from this same function rather than from a second
- *  set of numbers that would drift out of step with it. */
+ *  set of numbers that would drift out of step with it.
+ *
+ *  A SANDBAR WAS TRIED HERE AND MEASURED OUT, and the reason is worth keeping
+ *  because the idea is a good one and will come back. On a barred beach the
+ *  swell trips on a ridge parked offshore, rides the trough behind it as
+ *  whitewater without rebuilding, and breaks a second time small at the sand:
+ *  two break lines with calm water between them, which is what most people
+ *  picture when they picture surf. A Gaussian ridge added here gets all of it
+ *  for about fifteen lines, since everything downstream reads depth and nothing
+ *  cares what shape the bed is.
+ *
+ *  It does not survive contact with the geometry. A trough only exists if the
+ *  ridge falls away faster than the beach climbs, which needs the bed nearly
+ *  flat where the trough goes, which puts the bar far out. Every version that
+ *  broke the wave in the right depth put the bar past thirty metres, and a wave
+ *  breaking at thirty metres is a third the height on screen of one breaking at
+ *  twelve. That is also true of the real thing: offshore breakers look enormous
+ *  in photographs because they are shot on long lenses, not because they are
+ *  large in the eye. The scene gets the same effect from the lens for free. */
 export function bedHeightAt(z, beach = OCEAN_CONFIG.beach) {
     return Math.max(-beach.maxDepth, (z - beach.shoreZ) * beach.slope);
 }

@@ -614,6 +614,45 @@ describe('the profile is the sea in one array', () => {
         expect(p.depth[peakRow]).toBeGreaterThan(0.5);
     });
 
+    test('THE WHOLE SEA STANDS UP, NOT JUST THE LONGEST WAVE IN IT', () => {
+        // The test above passed for a full round while the sea was flat, and it
+        // is worth being precise about how. It reads `p.amp[r * n]`, which is
+        // component ZERO. The long swell always shoaled beautifully. What the
+        // eye sees is the SUM, and the sum was doing nothing at all, because
+        // Green's law dips BELOW one in intermediate depth: a wave shrinks a
+        // little before it grows. Component by component, from 8 metres of
+        // water to the break, the 58 metre swell went x0.90 to x1.08 while the
+        // 17.5 metre chop went x0.99 to x0.91. With most of the height on the
+        // chop they cancelled, the total came out at x1.02, and the sea arrived
+        // exactly the size it left at.
+        //
+        // Nothing failed. Every component was individually correct and the one
+        // test aimed at this was individually correct too. It just was not
+        // looking at the sea.
+        const p = buildProfile(zs, 0);
+        const total = (r) => {
+            let sum = 0;
+            for (let i = 0; i < n; i++) sum += p.amp[r * n + i];
+            return sum;
+        };
+        // Deep enough to be the "before", shallow enough to still be offshore
+        // of anything that is breaking. Found from the depth rather than from a
+        // row index, so it survives the grid being resized.
+        let deep = -1;
+        let atBreak = -1;
+        for (let r = rows - 1; r >= 0; r--) {
+            if (deep < 0 && p.depth[r] > 0 && p.depth[r] < 8) deep = r;
+            if (p.breaking[r] >= WATER.foamBreakThreshold) { atBreak = r; break; }
+        }
+        expect(deep).toBeGreaterThan(0);
+        expect(atBreak).toBeGreaterThan(0);
+        // A tenth is not much, and it is deliberately not much: this is a floor
+        // under "the sea is visibly doing something on the way in", not a
+        // restatement of whatever shoalGain happens to be today.
+        expect(total(atBreak)).toBeGreaterThan(total(deep) * 1.1);
+    });
+
+
     test('the phase never runs backwards, so crests cannot tear', () => {
         const p = buildProfile(zs, 0);
         for (let i = 0; i < n; i++) {
