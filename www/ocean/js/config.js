@@ -25,10 +25,8 @@
  * The consequence is that ALL of the motion has to come from the water, which
  * is why the sets and the tide below are not decoration.
  *
- * THE SOUND, THE BEACH, AND THE WATER ARE REAL. The sky and the day cycle are
- * still to come, and the sand section is written but only half consumed. Their
- * sections are sketched here so the shape of the finished config is visible
- * while it is still cheap to change.
+ * THE SOUND, THE BEACH, THE WATER, AND THE SKY ARE REAL. The sand section is
+ * written but only half consumed, and it is the last placeholder left.
  *
  * THE MOST IMPORTANT NUMBER IN THE FILE IS `beach.slope`. Nothing decides where
  * waves break: they break where their height passes a fraction of the local
@@ -613,9 +611,301 @@ export const OCEAN_CONFIG = deepFreeze({
         dryingSeconds: 7
     },
 
-    // ---- Still to come ------------------------------------------------------
-    // sky:    the four minute day cycle, weighted toward dawn and sunset
-    // cycle:  entry point per visit, biased to land just before golden light
+    // ---- The sky (sky.js) ---------------------------------------------------
+    //
+    // THE SKY IS THE WATER'S LIGHT SOURCE, NOT ITS BACKDROP, and that is the
+    // whole reason this section is shaped the way it is. Water is close to a
+    // mirror, so almost everything the eye reads as the colour of the sea is
+    // the sky bouncing off it. Before this section existed the sea reflected
+    // nothing at all, because a MeshStandardMaterial with no environment has no
+    // specular except the punctual sun, so the only bright thing on the water
+    // was the sun's own lobe and every other pixel fell back to `deepColor`.
+    //
+    // Measured off specs/ocean/ocean-1.png and ocean-4.png: sky (132, 173, 197)
+    // against sea (0, 11, 20) in the band eight to thirty two pixels under the
+    // horizon. That band is between 0.4 and 1.6 degrees below the eye, so the
+    // view ray meets the water at 88 to 90 degrees off the normal, and Schlick
+    // with n = 1.33 puts the reflectance there between 0.87 and 0.97. It should
+    // have been within a few percent of the sky. It was at a tenth of it, which
+    // is why the horizon read as a hard black seam.
+    //
+    // So `sky.keys` below is consumed twice over: once to draw the dome, and
+    // once inside the water's own shader as the thing it reflects. One set of
+    // numbers, two consumers, which is the only way the two can agree.
+    sky: {
+        // Comfortably inside camera.far (900) and centred on the eye rather
+        // than on the origin. The camera sits 1.15 metres up, and a dome
+        // centred at the world origin would put its equator 1.15 metres below
+        // the eye, which at this radius is a degree and a half of error on the
+        // one line in the frame the eye actually rests on.
+        domeRadius: 700,
+
+        // How fast the gradient climbs away from the horizon, as the exponent
+        // on the elevation. REAL SKY IS PALE AT THE HORIZON AND SATURATED
+        // OVERHEAD, because a horizontal line of sight runs through far more
+        // air, and that is the opposite of what a linear ramp draws. 0.45 puts
+        // the mix about seventy percent of the way to the zenith colour by
+        // thirty degrees up, which is roughly where the real transition sits.
+        gradientPower: 0.45,
+
+        sun: {
+            // A REAL SUN IS HALF A DEGREE ACROSS and that is a smaller dot than
+            // anyone pictures: 0.53 degrees in a forty degree frame is eleven
+            // pixels. Photographs of sunsets look otherwise because a long lens
+            // magnifies the sun and not the horizon behind it, and because the
+            // eye remembers the glare rather than the disc. 1.2 degrees is a
+            // deliberate departure, about twice life size, chosen so the sun
+            // reads as the sun rather than as a stuck pixel. Raise it and it
+            // starts to look like a planet.
+            angularDiameterDegrees: 1.2,
+            // Degrees of soft edge on the limb. Enough to stop the disc
+            // crawling with aliasing as it drifts, and small enough that it is
+            // still a disc.
+            limbSoftnessDegrees: 0.14,
+            // How much brighter than the sky the disc is. Past the point where
+            // filmic tone mapping saturates it to white, which is exactly what
+            // should happen, but not so far past that the warm fringe at sunset
+            // is lost too.
+            discStrength: 7.0,
+            // The halo. Two terms, because the real thing has two: a wide bloom
+            // out to twenty five degrees or so, from scattering through the
+            // whole depth of the atmosphere, and a tight aureole a few degrees
+            // across from the air immediately around the sun. One term cannot
+            // be both. The exponent is on the cosine of the angle, so 8 puts
+            // the wide bloom's half brightness at about 25 degrees and the
+            // aureole, which runs at twelve times the exponent, at about 7.
+            glowPower: 8.0,
+            glowStrength: 0.30,
+            aureoleRatio: 12.0,
+            aureoleStrength: 0.55
+        },
+
+        // HIGH THIN CLOUD, AND IT EARNS ITS PLACE AT THE TWO GOLDEN HOURS.
+        // Cirrus underlit by a sun near the horizon is most of what makes a
+        // sunset look like a sunset, and a clean gradient cannot do it at any
+        // exposure. The cost is honest: it is a second moving element in the
+        // half of the frame that is meant to be still, so it drifts slowly
+        // enough to be noticed having moved rather than noticed moving.
+        cloud: {
+            // The sheet is sampled by projecting the view direction onto a
+            // plane at this height, which is what gives cloud its perspective:
+            // features converge and compress toward the horizon on their own,
+            // with no distance term anywhere. Height and scale only ever appear
+            // multiplied together, so one of them is redundant and this one is
+            // pinned at 1 to say so.
+            height: 1.0,
+            scale: 0.9,
+            // CIRRUS IS STRETCHED, not blobby. Compressing the sample along the
+            // horizon axis draws features that are wide and thin, which is the
+            // difference between high cloud and cotton wool.
+            stretch: 0.35,
+            // Threshold and ramp on two octaves of value noise. Noise averages
+            // about a half, so a coverage above that leaves clear sky between
+            // the streaks, which is what thin cloud is.
+            coverage: 0.52,
+            softness: 0.30,
+            // WHERE THE CLOUD STOPS, and it has to stop. The projection divides
+            // by the elevation, so it runs away to infinity at the horizon and
+            // the noise there is finer than a pixel: detail smaller than the
+            // pixel it lands on does not read as detail, it reads as a shimmer
+            // in a part of the frame that is supposed to be perfectly still.
+            // Below nine degrees there is no cloud at all.
+            horizonFadeFrom: 0.015,
+            horizonFadeTo: 0.16,
+            // Projected units per second. Slow on purpose: at this rate a
+            // streak crosses the visible band in something over a minute.
+            driftSpeed: 0.010,
+            // How far toward the sun's own colour the underside of a cloud goes
+            // when it is between the eye and a low sun. This is the sunset.
+            sunlitMix: 0.55
+        },
+
+        // ---- The day, as a list of looks ------------------------------------
+        //
+        // `at` is the position in the cycle, 0 to 1, and it WRAPS: past the last
+        // entry the interpolation runs back round to the first. There is no
+        // duplicate keyframe at 1.0 and there should not be one.
+        //
+        // THE SPACING IS THE "UNEQUAL PHASES" DECISION. Phase is not linear in
+        // solar time. Night gets eleven percent of the wall clock and the two
+        // golden hours between them get well over half, because the point of a
+        // day cycle in a scene with nothing to do is the light, and midday light
+        // on water is the least interesting light there is.
+        //
+        // `azimuth` is degrees from straight out to sea, positive to the right,
+        // and IT IS A CHEAT worth stating plainly. A real sun rises behind a
+        // west facing beach and sets in front of it, so a real day gives you one
+        // golden hour on the water and one with the sun at your back. This one
+        // swings from 22 degrees left at sunrise to 22 degrees right at sunset,
+        // which is a beach that quietly rotates through the day. Nothing in the
+        // frame can contradict it: the horizon is featureless, the camera never
+        // moves, and the waves refract to arrive straight on however they are
+        // angled out at sea. It buys two golden hours instead of one.
+        //
+        // 22 degrees rather than 30 because the glint path is the composition.
+        // The horizontal field of view is about 61 degrees, so the frame runs
+        // to a little over 30 degrees either side, and a sun at 30 would put
+        // its path against the edge of the picture.
+        //
+        // `exposure` drives the renderer's tone mapping directly. It is the
+        // cheapest lever in the file: it is what stops night from being a black
+        // rectangle and midday from being a white one.
+        keys: [
+            {
+                at: 0.00, name: 'night',
+                elevation: -12, azimuth: -24,
+                sunColor: 0xff9a5a, sunIntensity: 0.0,
+                zenith: 0x05080f, horizon: 0x0d1626,
+                hemiSky: 0x1a2740, hemiGround: 0x0a0d14, hemiIntensity: 0.30,
+                cloudColor: 0x1a2233, cloudOpacity: 0.35,
+                exposure: 1.45
+            },
+            {
+                at: 0.06, name: 'first light',
+                elevation: -4, azimuth: -23,
+                sunColor: 0xff9a5a, sunIntensity: 0.0,
+                zenith: 0x101f3a, horizon: 0x35405c,
+                hemiSky: 0x2c3d5e, hemiGround: 0x1a1a20, hemiIntensity: 0.55,
+                cloudColor: 0x3a4258, cloudOpacity: 0.50,
+                exposure: 1.30
+            },
+            {
+                at: 0.12, name: 'sunrise',
+                elevation: 0, azimuth: -22,
+                sunColor: 0xff8843, sunIntensity: 1.60,
+                zenith: 0x2a4a72, horizon: 0xd98a5a,
+                hemiSky: 0x6f89ad, hemiGround: 0x4a3a2c, hemiIntensity: 0.75,
+                cloudColor: 0xffb98a, cloudOpacity: 0.62,
+                exposure: 1.15
+            },
+            {
+                at: 0.20, name: 'golden morning',
+                elevation: 8, azimuth: -19,
+                sunColor: 0xffc189, sunIntensity: 2.60,
+                zenith: 0x3e6f9e, horizon: 0xf0b98a,
+                hemiSky: 0x93b3cf, hemiGround: 0x6b5b45, hemiIntensity: 1.00,
+                cloudColor: 0xffd9b8, cloudOpacity: 0.55,
+                exposure: 1.05
+            },
+            {
+                at: 0.32, name: 'morning',
+                elevation: 25, azimuth: -13,
+                sunColor: 0xfff0d8, sunIntensity: 3.00,
+                zenith: 0x4d86c0, horizon: 0xafcadd,
+                hemiSky: 0xb4d0e4, hemiGround: 0x6b5b45, hemiIntensity: 1.10,
+                cloudColor: 0xf4f7fa, cloudOpacity: 0.45,
+                exposure: 1.00
+            },
+            {
+                at: 0.46, name: 'midday',
+                elevation: 58, azimuth: -3,
+                sunColor: 0xfffaf0, sunIntensity: 3.30,
+                zenith: 0x3f7ec4, horizon: 0xc4dced,
+                hemiSky: 0xc3dcec, hemiGround: 0x6b5b45, hemiIntensity: 1.20,
+                cloudColor: 0xffffff, cloudOpacity: 0.40,
+                exposure: 0.95
+            },
+            {
+                at: 0.60, name: 'afternoon',
+                elevation: 32, azimuth: 10,
+                sunColor: 0xfff2dc, sunIntensity: 3.00,
+                zenith: 0x4a84c2, horizon: 0xb9d2e4,
+                hemiSky: 0xb8d3e6, hemiGround: 0x6b5b45, hemiIntensity: 1.10,
+                cloudColor: 0xfaf9f6, cloudOpacity: 0.44,
+                exposure: 1.00
+            },
+            {
+                at: 0.72, name: 'late afternoon',
+                elevation: 14, azimuth: 16,
+                sunColor: 0xffd9a5, sunIntensity: 2.70,
+                zenith: 0x4477ae, horizon: 0xdcc7ae,
+                hemiSky: 0xa9c1d6, hemiGround: 0x6b5b45, hemiIntensity: 1.00,
+                cloudColor: 0xffe6c8, cloudOpacity: 0.52,
+                exposure: 1.05
+            },
+            {
+                at: 0.82, name: 'golden evening',
+                elevation: 6, azimuth: 20,
+                sunColor: 0xffab5e, sunIntensity: 2.40,
+                zenith: 0x2f5f92, horizon: 0xf2a86a,
+                hemiSky: 0x8ea9c4, hemiGround: 0x5e4c38, hemiIntensity: 0.90,
+                cloudColor: 0xffc48f, cloudOpacity: 0.60,
+                exposure: 1.10
+            },
+            {
+                at: 0.90, name: 'sunset',
+                elevation: 0, azimuth: 22,
+                sunColor: 0xff6a2e, sunIntensity: 1.50,
+                zenith: 0x1f3f6a, horizon: 0xe4703f,
+                hemiSky: 0x63799a, hemiGround: 0x40352a, hemiIntensity: 0.70,
+                cloudColor: 0xff9152, cloudOpacity: 0.66,
+                exposure: 1.15
+            },
+            {
+                at: 0.95, name: 'dusk',
+                elevation: -5, azimuth: 24,
+                sunColor: 0xd4643c, sunIntensity: 0.15,
+                zenith: 0x122a4c, horizon: 0x6d4a5c,
+                hemiSky: 0x3a4c6e, hemiGround: 0x1e1e26, hemiIntensity: 0.50,
+                cloudColor: 0x5c4258, cloudOpacity: 0.55,
+                exposure: 1.30
+            }
+        ]
+    },
+
+    // ---- The cycle ----------------------------------------------------------
+    //
+    // THE FOUR MINUTE CYCLE WAS MEASURED AND REPLACED, and the measurement is
+    // the argument. Four minutes over half a turn is 0.75 degrees per second.
+    // The frame is 40 degrees tall over about 830 pixels, so the scale is 20.2
+    // pixels per degree, and the sun would have crossed the picture at FIFTEEN
+    // PIXELS PER SECOND. That is not a day passing, that is a timelapse, and it
+    // would have made the sky the fastest moving and fastest repeating thing in
+    // a scene whose entire promise is that the horizon never moves: faster than
+    // the tide at 560 seconds and faster than the wave sets beating out over
+    // minutes. It is about a hundred and eighty times real time.
+    //
+    // The original objection to ten minutes was right and still stands, which is
+    // that most visitors would see one lighting state. The answer is not a
+    // number between four and ten. It is to STOP TREATING THAT AS A PROBLEM: the
+    // entry point is drawn fresh every visit, so one visitor gets a sunrise and
+    // the next gets the gold before a sunset, and the scene has a reason to be
+    // opened twice. A slow drift underneath means a long visit is not a
+    // photograph either.
+    //
+    // A REAL SUN MOVES AT 15 DEGREES PER HOUR, which in this frame is 0.085
+    // pixels per second. 2510 seconds over half a turn is 1.35 pixels per
+    // second: sixteen times real time, still far too slow to catch in the act,
+    // and fast enough that the light has plainly changed if you look away and
+    // back. That is the same standard the tide is held to.
+    //
+    // The number is deliberately not a neat multiple of anything else that
+    // cycles here. 2510 over the tide's 560 is 4.48, over the visual set period
+    // of 74 is 33.9, over the audio set period of 61 is 41.1. Nothing lines up,
+    // so nothing beats.
+    cycle: {
+        seconds: 2510,
+        // WHERE A VISIT STARTS, weighted rather than uniform, and weighted to
+        // land SHORT OF the good light rather than in it. A five minute visit
+        // covers 0.12 of the cycle, so an entry at 0.68 walks through late
+        // afternoon, into the golden evening, and is still short of sunset when
+        // most people have gone. Arriving just before is worth more than
+        // arriving during, because it means the light improves while you watch.
+        //
+        // Night is not in the list. It is four and a half minutes of the cycle
+        // and it is genuinely lovely once the sea reflects a dark sky, but it is
+        // a poor first impression and nobody should be dropped into it.
+        entry: [
+            { from: 0.62, to: 0.80, weight: 5 },   // walks into the golden evening
+            // Opens exactly on the `first light` keyframe and not a hair before
+            // it. Five minutes from 0.06 walks through sunrise at 0.12 and into
+            // the golden morning at 0.20, which is the best five minutes on this
+            // half of the day.
+            { from: 0.06, to: 0.16, weight: 3 },
+            { from: 0.30, to: 0.55, weight: 2 },   // plain daylight, the honest default
+            { from: 0.80, to: 0.92, weight: 2 }    // already in it
+        ]
+    }
 });
 
 /** The bed and break levels for a given sea state, 0 calm to 1 stormy.

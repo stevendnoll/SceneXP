@@ -3,10 +3,10 @@
  * main.js - Entry point for the Ocean experience.
  *
  * SCAFFOLD, NOT THE FINISHED PAGE. This exists so the water can be looked at in
- * a browser while it is being tuned. The sky is a flat colour, the sand is a
- * placeholder, there is no welcome screen, no day cycle, no mute control, and
- * the surf synthesiser next door is not wired up yet. Everything on that list
- * has a home already and is noted below where it will land.
+ * a browser while it is being tuned. The sand is still a placeholder, there is
+ * no welcome screen, no mute control, and the surf synthesiser next door is not
+ * wired up yet. Everything on that list has a home already and is noted below
+ * where it will land.
  *
  * THE FRAME LOOP IS THE WHOLE FILE once those arrive. This experience has no
  * input to route, no state machine, and nothing to pause: past the welcome
@@ -27,6 +27,9 @@ import { OCEAN_CONFIG } from './config.min.js';
 import {
     initWater, updateWater, consumeBreaks, breakDistance, disposeWater, bedHeightAt, halfWidthAt
 } from './water.min.js';
+import {
+    initSky, updateSky, disposeSky, skyUniforms, getPhase, setPhase, SKY_GLSL, SKY_UNIFORM_GLSL
+} from './sky.min.js';
 
 const state = {
     running: false,
@@ -64,31 +67,12 @@ function buildRenderer() {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
 }
 
-/** A flat sky and a low sun, standing in until the day cycle lands.
- *
- *  The sun sits low and slightly off to one side on purpose. A sun overhead
- *  lights the tops of the waves and nothing else, which reads as a swimming
- *  pool. A sun near the horizon rakes across the faces of the waves and throws
- *  a specular path toward the camera, and that path is most of what makes a
- *  photograph of the sea look like the sea. */
-function buildSky() {
+/** The empty scene. Everything that lights it now lives in sky.js, which owns
+ *  the sun, the fill, the fog, and the renderer's exposure, because all four are
+ *  the same decision made once and a day cycle that moved only three of them
+ *  would come apart at dusk. */
+function buildScene() {
     scene = new THREE.Scene();
-    const sky = new THREE.Color(0x8fb6cc);
-    scene.background = sky;
-    // Haze rather than a hard edge. The far rows of the water are a few pixels
-    // tall and fog is what turns them into a horizon instead of a seam.
-    scene.fog = new THREE.Fog(sky, 90, 400);
-
-    const sun = new THREE.DirectionalLight(0xfff1de, 2.4);
-    sun.position.set(-45, 16, -160);
-    sun.name = 'sun';
-    scene.add(sun);
-
-    // Sky fill from above, sand bounce from below. A single ambient would flatten
-    // the troughs, which are lit by the sky and nothing else.
-    const fill = new THREE.HemisphereLight(0xbcd8e8, 0x6b5b45, 1.1);
-    fill.name = 'skyFill';
-    scene.add(fill);
 }
 
 /** The beach under the water.
@@ -182,6 +166,11 @@ function loop(now) {
     const delta = state.lastTime ? seconds - state.lastTime : 0;
     state.lastTime = seconds;
 
+    // The sky first, because the water's own shader reads the sky's uniforms
+    // and the sand is lit by the sky's lights. Updating it after would draw one
+    // frame of sea under yesterday's sun, which at a frame is invisible and at
+    // a breakpoint is an hour of confusion.
+    updateSky(delta);
     updateWater(delta);
 
     // THE AUDIO SEAM. Each entry is already shaped for `playBreak(strength,
@@ -210,19 +199,35 @@ function init() {
 
     state.mobile = detectMobile();
     buildRenderer();
-    buildSky();
-    buildSand();
+    buildScene();
+    // The camera comes before the sky because the dome is centred on the eye
+    // rather than on the world origin. See the note in sky.js: a dome at the
+    // origin puts its equator a degree and a half below the horizon the visitor
+    // is looking at, and that is the one line in the frame nobody can miss.
     placeCamera();
-    initWater(scene, OCEAN_CONFIG, { mobile: state.mobile });
+    initSky(scene, camera, OCEAN_CONFIG, { renderer });
+    buildSand();
+    // The sea reflects the sky by compiling the sky's own program into its
+    // shader, so the sky has to exist first. Handed over rather than imported:
+    // water.js deliberately knows nothing about sky.js.
+    initWater(scene, OCEAN_CONFIG, {
+        mobile: state.mobile,
+        sky: { uniformGlsl: SKY_UNIFORM_GLSL, glsl: SKY_GLSL, uniforms: skyUniforms() }
+    });
 
     window.addEventListener('resize', onResize, { passive: true });
     document.addEventListener('visibilitychange', onVisibility);
     start();
 
-    // Tuning aid while the sea is being dialled in. It is far easier to say the
+    // Tuning aids while the sea is being dialled in. It is far easier to say the
     // break is at 22 metres and should be at 16 than to argue about a
-    // screenshot. Goes away with the scaffold.
+    // screenshot, and easier still to say a screenshot was taken at phase 0.84
+    // than to call it the orange one. Both go away with the scaffold.
     window.oceanBreakDistance = breakDistance;
+    window.oceanPhase = getPhase;
+    // Jump the day to a given phase, so a screenshot pass can walk the whole
+    // cycle in a minute instead of in the forty two it actually takes.
+    window.oceanSetPhase = setPhase;
 }
 
 if (typeof document !== 'undefined') {
@@ -233,4 +238,4 @@ if (typeof document !== 'undefined') {
     }
 }
 
-export { init, start, stop, disposeWater };
+export { init, start, stop, disposeWater, disposeSky };

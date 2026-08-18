@@ -78,6 +78,14 @@
  * untouched, which means the day cycle lands later and drives the water for
  * free instead of needing a second implementation inside a custom shader.
  *
+ * THAT BET PAID, AND ONLY HALF OF IT. When sky.js arrived, the sun, the fill,
+ * the fog, and the exposure all reached the water through Three with no change
+ * here at all, exactly as promised. The half it did not cover is the one that
+ * turned out to matter most: a standard material has no specular except the
+ * punctual lights, so the sea reflected nothing, and a sea that reflects nothing
+ * is black at the horizon where it should be brightest. That needed real work,
+ * and it is `FRAGMENT_REFLECT` below.
+ *
  * THE AUDIO SEAM IS ONE FUNCTION. `consumeBreaks()` returns the waves that
  * actually reached the break line since the last call. audio.js already takes
  * `playBreak(strength, pan)`, so the crash the visitor hears is the wave they
@@ -923,6 +931,56 @@ const FRAGMENT_ROUGHNESS = `
     float roughnessFactor = mix(roughness, 0.92, foam);
 `;
 
+/** Injected after `#include <opaque_fragment>`, and ONLY when the caller hands
+ *  `initWater` a sky to reflect. Everything before this point is the water's own
+ *  colour and the light that lands on it; this is the light that bounces off it.
+ *
+ *  THE SEA IS MOSTLY A MIRROR AND THIS IS THE ENTIRE MIRROR. Without it a
+ *  MeshStandardMaterial has no specular at all except the punctual sun, so every
+ *  pixel off the glint path falls back to `deepColor` and the band under the
+ *  horizon, which should be the brightest water in the frame, comes out the
+ *  darkest. Measured on specs/ocean/ocean-1.png: sky (132, 173, 197), sea
+ *  (0, 11, 20) at half a degree below the eye, where Fresnel says 0.95.
+ *
+ *  IT GOES HERE, AFTER `opaque_fragment` AND BEFORE TONE MAPPING, on purpose.
+ *  A reflection is light, so it has to be added in linear space and then
+ *  survive the same filmic curve and the same fog as everything else. Put it
+ *  after `colorspace_fragment` instead and the sky reflected in the sea is a
+ *  different colour from the sky above it, which is the seam this exists to
+ *  close, reopened one chunk further down.
+ *
+ *  `geometryNormal` and `geometryViewDir` are Three's own, set up in
+ *  `lights_fragment_begin` and still in scope. Using them rather than a private
+ *  varying means the normal here is the SAME one the lighting used, flip and
+ *  all, so the mirror and the sun highlight can never disagree about which way
+ *  the water is facing. That matters on this mesh: it is double sided, and the
+ *  strip of sea seen from underneath near the horizon has its normal flipped. */
+const FRAGMENT_REFLECT = `
+    vec3 waterWorldNormal = inverseTransformDirection(geometryNormal, viewMatrix);
+    vec3 waterToEye = inverseTransformDirection(geometryViewDir, viewMatrix);
+    // Schlick, with R0 = 0.020 for air to water at n = 1.33. The constant is
+    // not the interesting part. The fifth power is: it holds the reflection
+    // near two percent for most of the frame and then runs to one in the last
+    // degree or so before grazing, which is why a sea is dark at your feet and
+    // silver at the horizon, and why no amount of fog could have faked this.
+    float waterCosTheta = clamp(dot(waterToEye, waterWorldNormal), 0.0, 1.0);
+    float waterFresnel = 0.020 + 0.980 * pow(1.0 - waterCosTheta, 5.0);
+    // Whitewater is air, not glass. It scatters rather than reflects, so the
+    // mirror switches off exactly where the foam switches on, and the surf goes
+    // back to being the one part of the sea that is its own colour.
+    waterFresnel *= 1.0 - foam;
+    // Zero, because the sun is drawn ONCE. Three's directional light at
+    // roughness 0.08 already puts a tight specular lobe on the water, and that
+    // lobe smeared across the wave slopes is the glint path. Reflecting the
+    // disc as well would lay a second, harder sun over the first.
+    vec3 waterSky = oceanSkyColor(reflect(-waterToEye, waterWorldNormal), 0.0);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, waterSky, waterFresnel);
+    // Thin water shows the sand through it, but only while there is still
+    // transmission to see through. At a grazing angle there is not, so the
+    // shallows stop showing sand at the same rate they start showing sky.
+    gl_FragColor.a = mix(gl_FragColor.a, 1.0, waterFresnel);
+`;
+
 // ---------------------------------------------------------------------------
 // The THREE shell
 // ---------------------------------------------------------------------------
@@ -946,7 +1004,16 @@ let cycles = null;        // last seen crest count per sounding wave
  *
  *  `options.mobile` halves the grid. It is asked once and never again, because
  *  the camera never moves and the framing never changes, so there is no moment
- *  later at which the answer could become different. */
+ *  later at which the answer could become different.
+ *
+ *  `options.sky` is `{ uniformGlsl, glsl, uniforms }`, which is exactly what
+ *  sky.js exports, and the sea reflects nothing at all without it. IT ARRIVES AS
+ *  AN ARGUMENT RATHER THAN AN IMPORT so this file still knows nothing about the
+ *  one next door: water.js is the piece of this experience most likely to be
+ *  wanted by a second scene, and a scene that wants a lake at dusk under someone
+ *  else's sky should be able to hand one over without editing anything here. The
+ *  contract is a function named `oceanSkyColor(vec3 dir, float discWeight)` and
+ *  the uniforms it reads. */
 export function initWater(scene, config = OCEAN_CONFIG, options = {}) {
     settings = config;
     const water = config.water;
@@ -961,7 +1028,7 @@ export function initWater(scene, config = OCEAN_CONFIG, options = {}) {
     cycles = new Array(SOUNDING_WAVES).fill(null);
 
     geometry = buildGeometry(rows, cols, rowZ, config.beach);
-    material = buildMaterial(config);
+    material = buildMaterial(config, options.sky || null);
     writeAttributes();
 
     mesh = new THREE.Mesh(geometry, material);
@@ -1036,7 +1103,7 @@ function buildGeometry(rows, cols, zs, beach) {
  *  written from scratch. The short version: the day cycle is coming, and this
  *  way it drives the water through Three's own lighting without the water
  *  needing to know it exists. */
-function buildMaterial(config) {
+function buildMaterial(config, sky = null) {
     const water = config.water;
     const mat = new THREE.MeshStandardMaterial({
         color: 0xffffff,
@@ -1084,21 +1151,35 @@ function buildMaterial(config) {
 
     mat.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, uniforms);
+        // The sky's uniforms are shared BY REFERENCE with the sky dome's own
+        // material rather than copied. One write in updateSky moves both
+        // programs, which is the only arrangement in which the sea can be
+        // trusted to be reflecting the sky that is actually over it.
+        if (sky) Object.assign(shader.uniforms, sky.uniforms);
         shader.vertexShader = shader.vertexShader
             .replace('#include <common>', '#include <common>\n' + VERTEX_HEAD)
             .replace('#include <beginnormal_vertex>', VERTEX_BODY)
             .replace('#include <begin_vertex>', VERTEX_POSITION);
         shader.fragmentShader = shader.fragmentShader
-            .replace('#include <common>', '#include <common>\n' + FRAGMENT_HEAD)
+            .replace('#include <common>', '#include <common>\n' + FRAGMENT_HEAD
+                + (sky ? sky.uniformGlsl + sky.glsl : ''))
             .replace('#include <roughnessmap_fragment>', FRAGMENT_ROUGHNESS)
             .replace('#include <map_fragment>', '#include <map_fragment>\n' + FRAGMENT_BODY);
+        if (sky) {
+            shader.fragmentShader = shader.fragmentShader
+                .replace('#include <opaque_fragment>', '#include <opaque_fragment>\n' + FRAGMENT_REFLECT);
+        }
     };
 
     // Two materials with identical parameters share a compiled program in
     // Three, and the cache key does not include onBeforeCompile. Nothing else
     // in the scene uses a standard material with these settings today, but a
     // shared program would be a genuinely baffling bug to meet later.
-    mat.customProgramCacheKey = () => 'ocean-water-1';
+    //
+    // The sky is in the key because it changes the program. Without it a page
+    // that built one sea with a sky and one without would compile the first and
+    // hand the same binary to the second.
+    mat.customProgramCacheKey = () => (sky ? 'ocean-water-1-sky' : 'ocean-water-1');
     return mat;
 }
 

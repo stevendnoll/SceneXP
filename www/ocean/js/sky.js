@@ -1,0 +1,638 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * sky.js - The sky, the sun, and the day it belongs to.
+ *
+ * THIS FILE IS THE WATER'S LIGHT SOURCE. It draws a dome, but that is the small
+ * half of its job. The large half is that `SKY_GLSL` below is compiled into the
+ * water's own fragment shader as well, so the sea reflects exactly the sky that
+ * is over it rather than a second approximation of it. One function, two
+ * programs, one set of uniforms shared by reference between the two materials.
+ *
+ * WHY THAT MATTERS MORE THAN IT SOUNDS. Water is close to a mirror, so nearly
+ * everything the eye reads as the colour of the sea is the sky bouncing off it,
+ * and the closer to the horizon the more completely so: Fresnel reflectance at
+ * a degree below the eye is about 0.95. Before this file existed the sea had no
+ * environment to reflect at all, so the band under the horizon fell back to
+ * `deepColor` and measured (0, 11, 20) against a sky of (132, 173, 197). The
+ * horizon was a hard black seam. See the note on `sky` in config.js.
+ *
+ * THE CYCLE IS SLOW AND THE ENTRY POINT IS RANDOM, which is the opposite of the
+ * usual arrangement and is a deliberate choice recorded in config.js under
+ * `cycle`. The short version: a fast day cycle makes the sky the fastest moving
+ * thing in a scene built on a horizon that never moves.
+ *
+ * PURE CORE, THIN SHELL, the same division water.js uses. Everything above the
+ * THREE section is arithmetic on plain numbers and is exercised directly by the
+ * suite. THREE appears only in the last third.
+ */
+
+import { OCEAN_CONFIG } from './config.min.js';
+
+/** Radians per degree. */
+const DEG = Math.PI / 180;
+
+// ---------------------------------------------------------------------------
+// The pure core: the day as a number, and what the sky looks like at it
+// ---------------------------------------------------------------------------
+
+/** A phase brought back into [0, 1), for any input including negatives.
+ *
+ *  The cycle wraps, so every consumer below can assume its argument is in range
+ *  and none of them has to think about it again. */
+export function wrapPhase(phase) {
+    if (!Number.isFinite(phase)) return 0;
+    return phase - Math.floor(phase);
+}
+
+/** Move the day on by `deltaSeconds`.
+ *
+ *  Separate from `wrapPhase` only so the caller never has to know the cycle
+ *  length, which lives in config and should stay there. */
+export function advancePhase(phase, deltaSeconds, cycle = OCEAN_CONFIG.cycle) {
+    const seconds = cycle.seconds > 0 ? cycle.seconds : 1;
+    return wrapPhase(phase + deltaSeconds / seconds);
+}
+
+/** Where this visit starts, drawn from the weighted windows in config.
+ *
+ *  `random` is injected rather than reached for, so the suite can pin it and so
+ *  a future "share this exact sky" link has somewhere to plug in.
+ *
+ *  THE WEIGHTS ARE OVER WINDOWS, NOT OVER POINTS, so the result is continuous
+ *  inside each window. A list of named times of day would put every visitor on
+ *  one of a dozen skies and the repeat visit would show the same one back. */
+export function entryPhase(random = Math.random, cycle = OCEAN_CONFIG.cycle) {
+    const windows = cycle.entry;
+    if (!windows || windows.length === 0) return wrapPhase(random());
+
+    let total = 0;
+    for (let i = 0; i < windows.length; i++) total += Math.max(0, windows[i].weight);
+    if (total <= 0) return wrapPhase(random());
+
+    let pick = random() * total;
+    for (let i = 0; i < windows.length; i++) {
+        const weight = Math.max(0, windows[i].weight);
+        if (pick < weight || i === windows.length - 1) {
+            const w = windows[i];
+            return wrapPhase(w.from + (w.to - w.from) * random());
+        }
+        pick -= weight;
+    }
+    return wrapPhase(random());
+}
+
+/** Split a packed 0xRRGGBB into three channels in 0..1, still in sRGB.
+ *
+ *  Deliberately NOT converted to linear here. Interpolating two skies in linear
+ *  light is the physically defensible thing to do and it looks wrong: the
+ *  midpoint between a deep blue zenith and an orange horizon comes out muddy
+ *  and dark, because linear interpolation follows the straight line between two
+ *  points and perceptual space is not straight. Blending in sRGB keeps the
+ *  midpoints as bright as the ends, which is what a real sky does as it turns. */
+export function unpackColor(hex) {
+    return [
+        ((hex >> 16) & 0xff) / 255,
+        ((hex >> 8) & 0xff) / 255,
+        (hex & 0xff) / 255
+    ];
+}
+
+/** Blend two packed colours, returning three channels in 0..1 sRGB. */
+export function mixColor(a, b, t) {
+    const ca = unpackColor(a);
+    const cb = unpackColor(b);
+    return [
+        ca[0] + (cb[0] - ca[0]) * t,
+        ca[1] + (cb[1] - ca[1]) * t,
+        ca[2] + (cb[2] - ca[2]) * t
+    ];
+}
+
+/** The two keyframes either side of a phase, and how far between them it is.
+ *
+ *  THE LIST WRAPS AND THERE IS NO KEYFRAME AT 1.0. Past the last entry the
+ *  second key is the first one, one turn later, which is what closes the day
+ *  into a loop. Duplicating the first key at the end would work until somebody
+ *  edited one copy, which is the sort of bug that shows up as a one frame flash
+ *  at midnight and gets blamed on the renderer. */
+export function bracketKeys(phase, keys) {
+    const p = wrapPhase(phase);
+    const last = keys.length - 1;
+
+    if (keys.length === 1) return { from: keys[0], to: keys[0], t: 0 };
+
+    for (let i = 0; i < last; i++) {
+        if (p >= keys[i].at && p < keys[i + 1].at) {
+            const span = keys[i + 1].at - keys[i].at;
+            return { from: keys[i], to: keys[i + 1], t: span > 0 ? (p - keys[i].at) / span : 0 };
+        }
+    }
+
+    // Past the last key, or before the first one. Both are the wrap.
+    const from = keys[last];
+    const to = keys[0];
+    const span = 1 - from.at + to.at;
+    const along = p >= from.at ? p - from.at : 1 - from.at + p;
+    return { from, to, t: span > 0 ? along / span : 0 };
+}
+
+/** The whole look of the sky at a given phase, as plain numbers.
+ *
+ *  Angles in degrees, colours as three channels in 0..1 sRGB, intensities as
+ *  they go to the lights. Nothing here knows THREE exists, which is the point:
+ *  this is the function the suite can hold to a standard, and everything below
+ *  it is plumbing. */
+export function skyStateAt(phase, sky = OCEAN_CONFIG.sky) {
+    const { from, to, t } = bracketKeys(phase, sky.keys);
+    const lerp = (a, b) => a + (b - a) * t;
+
+    return {
+        name: t < 0.5 ? from.name : to.name,
+        elevation: lerp(from.elevation, to.elevation),
+        azimuth: lerp(from.azimuth, to.azimuth),
+        sunColor: mixColor(from.sunColor, to.sunColor, t),
+        sunIntensity: lerp(from.sunIntensity, to.sunIntensity),
+        zenith: mixColor(from.zenith, to.zenith, t),
+        horizon: mixColor(from.horizon, to.horizon, t),
+        hemiSky: mixColor(from.hemiSky, to.hemiSky, t),
+        hemiGround: mixColor(from.hemiGround, to.hemiGround, t),
+        hemiIntensity: lerp(from.hemiIntensity, to.hemiIntensity),
+        cloudColor: mixColor(from.cloudColor, to.cloudColor, t),
+        cloudOpacity: lerp(from.cloudOpacity, to.cloudOpacity),
+        exposure: lerp(from.exposure, to.exposure)
+    };
+}
+
+/** A unit vector pointing from the eye toward the sun.
+ *
+ *  Azimuth is degrees from straight out to sea, which is -Z, positive turning
+ *  toward +X. Elevation is degrees above the horizon and goes negative at
+ *  night, which is how the disc takes itself out of the sky without anything
+ *  needing to switch it off. */
+export function sunDirectionAt(elevationDegrees, azimuthDegrees) {
+    const el = elevationDegrees * DEG;
+    const az = azimuthDegrees * DEG;
+    const horizontal = Math.cos(el);
+    return {
+        x: horizontal * Math.sin(az),
+        y: Math.sin(el),
+        z: -horizontal * Math.cos(az)
+    };
+}
+
+/** Fresnel reflectance of water at a given angle, by Schlick.
+ *
+ *  Not used by the renderer, which does this in GLSL, and kept here because it
+ *  is the number the whole design rests on and it deserves to be assertable.
+ *  `cosTheta` is the cosine of the angle between the view ray and the surface
+ *  normal, so 1 is straight down into the water and 0 is along the surface.
+ *
+ *  R0 is 0.020 for air to water at n = 1.33, and the point of the function is
+ *  that it does not stay there: at 88 degrees off the normal it is 0.87, and by
+ *  90 it is 1. That climb is the whole reason the sea is bright at the horizon
+ *  and dark at your feet. */
+export function fresnelWater(cosTheta, r0 = 0.020) {
+    const c = Math.min(1, Math.max(0, cosTheta));
+    const f = Math.pow(1 - c, 5);
+    return r0 + (1 - r0) * f;
+}
+
+/** How much of the sun's halo survives at a given elevation, 1 to 0.
+ *
+ *  THE DISC TAKES ITSELF OUT OF THE SKY AT NIGHT AND THE HALO DOES NOT, which is
+ *  the whole reason this exists. The disc is gated on the view ray being above
+ *  the horizon, so a sun that has set simply is not drawn. The glow is a smooth
+ *  falloff over tens of degrees, so a sun twelve degrees under still lights most
+ *  of the sky in front of it. With the night keyframe's own sky at 0.004 of
+ *  linear and its sun colour still the warm one left over from dawn, the halo
+ *  came out TWENTY TIMES the sky it was added to, and midnight rendered a flat
+ *  warm brown: (123, 65, 49) where it should have been nearly black and blue.
+ *
+ *  So the halo fades out over twilight, which is also what the real one does.
+ *  The sun is level at 0 degrees, civil twilight runs to -6 and nautical to -12,
+ *  and past the end of nautical there is no glow left to see. The ramp here runs
+ *  from -12 to -1, so sunset keeps its full glow, dusk at -5 keeps two thirds of
+ *  it, which is the afterglow, and night keeps none. */
+export function twilightGlow(elevationDegrees) {
+    const t = Math.min(1, Math.max(0, (elevationDegrees + 12) / 11));
+    return t * t * (3 - 2 * t);
+}
+
+/** One sRGB channel in 0..1, brought back to linear light. */
+export function srgbToLinear(c) {
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+/** Three's ACES filmic curve, run on the CPU. Linear in, linear out.
+ *
+ *  THIS EXISTS BECAUSE OF THE ORDER THREE APPLIES FOG IN, and the reason is
+ *  worth the twenty lines. Fog is the LAST thing in the fragment program, after
+ *  tone mapping and after the colour space encode, which means `fogColor` is not
+ *  a colour in the scene, it is a colour on the screen: whatever a surface fades
+ *  to is that value shown literally. So handing it the sky's horizon colour is
+ *  wrong. The sky itself does not appear on screen as its own colour, it appears
+ *  as its colour through the filmic curve, and the far water would have faded
+ *  toward something the sky above it never renders as.
+ *
+ *  The gap is not academic. At the day horizon the sky renders (191, 205, 214)
+ *  where the raw colour is (175, 202, 221), and under a sunset (229, 129, 69)
+ *  against (228, 112, 63), because ACES compresses a saturated colour far harder
+ *  than a pale one. Either way it is sixteen or seventeen levels in one channel,
+ *  laid down exactly along the horizon, which is the one line in the frame this
+ *  whole file exists to keep clean.
+ *
+ *  CAREFUL: this is a copy of a curve that lives in the renderer, so it is only
+ *  true while `renderer.toneMapping` is ACESFilmic. Change that in main.js and
+ *  this has to change with it, or the seam comes back with no other symptom.
+ *  There is a test that pins the two to each other by the numbers above. */
+export function toneMapACES(rgbLinear, exposure = 1) {
+    const s = exposure / 0.6;
+    let r = rgbLinear[0] * s;
+    let g = rgbLinear[1] * s;
+    let b = rgbLinear[2] * s;
+
+    // Into the ACES working space.
+    let x = 0.59719 * r + 0.35458 * g + 0.04823 * b;
+    let y = 0.07600 * r + 0.90834 * g + 0.01566 * b;
+    let z = 0.02840 * r + 0.13383 * g + 0.83777 * b;
+
+    const fit = (v) => (v * (v + 0.0245786) - 0.000090537)
+        / (v * (0.983729 * v + 0.4329510) + 0.238081);
+    x = fit(x);
+    y = fit(y);
+    z = fit(z);
+
+    // And back out of it.
+    r = 1.60475 * x - 0.53108 * y - 0.07367 * z;
+    g = -0.10208 * x + 1.10813 * y - 0.00605 * z;
+    b = -0.00327 * x - 0.07276 * y + 1.07602 * z;
+
+    const clamp01 = (v) => Math.min(1, Math.max(0, v));
+    return [clamp01(r), clamp01(g), clamp01(b)];
+}
+
+// ---------------------------------------------------------------------------
+// The shared sky program
+// ---------------------------------------------------------------------------
+
+/** The uniform block, as GLSL. Declared once and injected into both programs,
+ *  so a uniform can never exist in one and not the other. */
+export const SKY_UNIFORM_GLSL = `
+uniform vec3 uSkyZenith;
+uniform vec3 uSkyHorizon;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uCloudColor;
+uniform float uSkyGradientPower;
+uniform float uSunDiscCos;
+uniform float uSunLimbCos;
+uniform float uSunDiscStrength;
+uniform float uSunGlowPower;
+uniform float uSunGlowStrength;
+uniform float uSunAureolePower;
+uniform float uSunAureoleStrength;
+uniform float uCloudOpacity;
+uniform float uCloudScale;
+uniform float uCloudStretch;
+uniform float uCloudCoverage;
+uniform float uCloudSoftness;
+uniform float uCloudFadeFrom;
+uniform float uCloudFadeTo;
+uniform float uCloudSunlitMix;
+uniform vec2 uCloudDrift;
+`;
+
+/** `oceanSkyColor(dir, discWeight)` and the noise it needs.
+ *
+ *  SELF CONTAINED ON PURPOSE. It declares its own hash rather than borrowing
+ *  water.js's, because it is compiled into two different programs and a shared
+ *  function that only works when something else happens to be above it is a
+ *  trap for whoever adds the third one.
+ *
+ *  `discWeight` exists so THE SUN IS ONLY DRAWN ONCE. The dome passes 1 and the
+ *  water passes 0, because the water already has a sun: Three's directional
+ *  light at roughness 0.08 produces a tight specular lobe, and that lobe smeared
+ *  across the wave slopes IS the glint path. Reflecting the disc as well would
+ *  put a second, harder sun on top of the first one. The broad glow and the
+ *  clouds stay in the reflection, since the directional light provides neither.
+ */
+export const SKY_GLSL = `
+float skyHash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+float skyNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = skyHash(i);
+    float b = skyHash(i + vec2(1.0, 0.0));
+    float c = skyHash(i + vec2(0.0, 1.0));
+    float d = skyHash(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+/* How much cloud is in a given direction, 0 to 1.
+ *
+ * The sheet is a plane overhead and the sample point is where the view ray
+ * meets it, which is where the perspective comes from: the divide by dir.y
+ * spreads features overhead and crushes them together toward the horizon,
+ * exactly as real cloud does, with no distance term anywhere in it.
+ *
+ * The fade is not decoration. That same divide runs away to infinity at the
+ * horizon, so without it the noise there is finer than the pixel it lands on,
+ * which does not read as cloud. It reads as a shimmer in the stillest part of
+ * the frame. It also buys the water's reflection an early exit: a ray leaving
+ * the sea near the horizon comes back at a shallow angle and returns here
+ * before any noise is fetched. */
+float skyCloudAmount(vec3 dir) {
+    float lift = smoothstep(uCloudFadeFrom, uCloudFadeTo, dir.y);
+    if (lift <= 0.0) return 0.0;
+    vec2 p = dir.xz * (uCloudScale / max(dir.y, uCloudFadeFrom)) + uCloudDrift;
+    p.x *= uCloudStretch;
+    float n = skyNoise(p);
+    n = 0.62 * n + 0.38 * skyNoise(p * 2.7 + 11.3);
+    return smoothstep(uCloudCoverage, uCloudCoverage + uCloudSoftness, n) * lift;
+}
+
+vec3 oceanSkyColor(vec3 rayDir, float discWeight) {
+    vec3 dir = normalize(rayDir);
+    float up = clamp(dir.y, 0.0, 1.0);
+
+    /* Pale at the horizon, saturated overhead. A horizontal line of sight runs
+     * through far more air than a vertical one, so this is the way round the
+     * real thing goes and a linear ramp draws it backwards. */
+    vec3 color = mix(uSkyHorizon, uSkyZenith, pow(up, uSkyGradientPower));
+
+    /* Two halo terms, because the sky around the sun has two: a wide bloom from
+     * the whole depth of the atmosphere and a tight aureole from the air just
+     * around the disc. One exponent cannot be both. */
+    float toSun = max(dot(dir, uSunDir), 0.0);
+    color += uSunColor * (pow(toSun, uSunGlowPower) * uSunGlowStrength
+        + pow(toSun, uSunAureolePower) * uSunAureoleStrength);
+
+    /* Cloud, underlit by a low sun. This term is the sunset. */
+    float cloud = skyCloudAmount(dir) * uCloudOpacity;
+    vec3 litCloud = mix(uCloudColor, uSunColor, pow(toSun, 3.0) * uCloudSunlitMix);
+    color = mix(color, litCloud, cloud);
+
+    /* The disc goes on last so cloud can pass in front of it, and it is gated
+     * on the ray being above the horizon so a sun that has set stays set. */
+    float disc = smoothstep(uSunLimbCos, uSunDiscCos, dot(dir, uSunDir));
+    disc *= smoothstep(-0.010, 0.010, dir.y) * (1.0 - cloud * 0.85);
+    color += uSunColor * (disc * uSunDiscStrength * discWeight);
+
+    return color;
+}
+`;
+
+// ---------------------------------------------------------------------------
+// The THREE shell
+// ---------------------------------------------------------------------------
+
+const VERTEX_SHADER = `
+varying vec3 vRayDir;
+void main() {
+    vRayDir = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+/** The dome's own program.
+ *
+ *  THE LAST TWO LINES ARE NOT OPTIONAL. A ShaderMaterial gets no tone mapping
+ *  and no colour space transform of its own, and the sky HAS to go through the
+ *  same filmic curve and the same encode as the water, or the horizon is a seam
+ *  again for a brand new reason: the sea reflecting a sky that is a different
+ *  colour from the sky above it.
+ *
+ *  Only the two `_fragment` chunks, and NOT their `_pars_` halves. Three puts
+ *  `tonemapping_pars_fragment` and `colorspace_pars_fragment` into the fragment
+ *  prefix of every material that is not a RawShaderMaterial, so the functions
+ *  these two call are already declared above anything written here. Including
+ *  the pars again defines `LinearToneMapping` and its siblings twice, which is
+ *  a GLSL compile error and takes the whole sky down with it. */
+const FRAGMENT_SHADER = `
+#include <common>
+${SKY_UNIFORM_GLSL}
+${SKY_GLSL}
+varying vec3 vRayDir;
+void main() {
+    gl_FragColor = vec4(oceanSkyColor(vRayDir, 1.0), 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+}
+`;
+
+let uniforms = null;
+let dome = null;
+let domeGeometry = null;
+let domeMaterial = null;
+let sunLight = null;
+let fillLight = null;
+let sceneRef = null;
+let rendererRef = null;
+let settings = null;
+let phase = 0;
+let elapsed = 0;
+
+/** The uniform objects, for water.js to graft into its own material.
+ *
+ *  Handed over BY REFERENCE and never replaced, so one write in `updateSky`
+ *  moves both programs. Returning copies here would produce a sea reflecting
+ *  yesterday's sky, which is the kind of fault that looks like a colour grading
+ *  choice rather than a bug. */
+export function skyUniforms() {
+    return uniforms;
+}
+
+/** Build the sky, its two lights, and the fog they share.
+ *
+ *  Takes the camera because the dome is centred on the eye rather than on the
+ *  world origin: the camera sits 1.15 metres up and never moves, so a dome at
+ *  the origin would put its equator a degree and a half below the horizon the
+ *  visitor is actually looking at. Takes the renderer because the day cycle
+ *  drives tone mapping exposure, which is the cheapest lever there is on how
+ *  night and midday read. */
+export function initSky(scene, camera, config = OCEAN_CONFIG, options = {}) {
+    settings = config;
+    sceneRef = scene;
+    rendererRef = options.renderer || null;
+
+    const sky = config.sky;
+    const random = options.random || Math.random;
+    phase = options.phase != null ? wrapPhase(options.phase) : entryPhase(random, config.cycle);
+    elapsed = 0;
+
+    const discRadius = (sky.sun.angularDiameterDegrees / 2) * DEG;
+    const limbRadius = discRadius + sky.sun.limbSoftnessDegrees * DEG;
+
+    uniforms = {
+        uSkyZenith: { value: new THREE.Color() },
+        uSkyHorizon: { value: new THREE.Color() },
+        uSunDir: { value: new THREE.Vector3(0, 0.2, -1) },
+        uSunColor: { value: new THREE.Color() },
+        uCloudColor: { value: new THREE.Color() },
+        uSkyGradientPower: { value: sky.gradientPower },
+        uSunDiscCos: { value: Math.cos(discRadius) },
+        uSunLimbCos: { value: Math.cos(limbRadius) },
+        uSunDiscStrength: { value: sky.sun.discStrength },
+        uSunGlowPower: { value: sky.sun.glowPower },
+        uSunGlowStrength: { value: sky.sun.glowStrength },
+        uSunAureolePower: { value: sky.sun.glowPower * sky.sun.aureoleRatio },
+        uSunAureoleStrength: { value: sky.sun.aureoleStrength },
+        // Opacity is per keyframe, not per cloud sheet: thin cloud at midday is
+        // the same cloud lit differently at sunset. `applyState` fills it in
+        // before the first frame, so the zero here is never seen.
+        uCloudOpacity: { value: 0 },
+        uCloudScale: { value: sky.cloud.height * sky.cloud.scale },
+        uCloudStretch: { value: sky.cloud.stretch },
+        uCloudCoverage: { value: sky.cloud.coverage },
+        uCloudSoftness: { value: sky.cloud.softness },
+        uCloudFadeFrom: { value: sky.cloud.horizonFadeFrom },
+        uCloudFadeTo: { value: sky.cloud.horizonFadeTo },
+        uCloudSunlitMix: { value: sky.cloud.sunlitMix },
+        uCloudDrift: { value: new THREE.Vector2() }
+    };
+
+    domeGeometry = new THREE.SphereGeometry(sky.domeRadius, 32, 16);
+    domeMaterial = new THREE.ShaderMaterial({
+        uniforms,
+        vertexShader: VERTEX_SHADER,
+        fragmentShader: FRAGMENT_SHADER,
+        side: THREE.BackSide,
+        depthWrite: false,
+        depthTest: false,
+        fog: false
+    });
+
+    dome = new THREE.Mesh(domeGeometry, domeMaterial);
+    dome.name = 'sky';
+    dome.frustumCulled = false;
+    // First in the queue and it writes no depth, so it is a background that
+    // happens to be geometry rather than something the sea has to sort against.
+    dome.renderOrder = -1;
+    if (camera) dome.position.copy(camera.position);
+    if (scene) scene.add(dome);
+
+    // The sun. Position is a direction times a distance, since a directional
+    // light only reads the direction from its position to its target.
+    sunLight = new THREE.DirectionalLight(0xffffff, 1);
+    sunLight.name = 'sun';
+    if (scene) scene.add(sunLight);
+
+    // Sky from above, sand bounce from below. A single ambient would flatten the
+    // troughs, which are lit by the sky and by nothing else.
+    fillLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 1);
+    fillLight.name = 'skyFill';
+    if (scene) scene.add(fillLight);
+
+    // Haze rather than a hard edge, and its colour is the sky's own horizon so
+    // the far water and the sky it fades into can never disagree. The far rows
+    // are a few pixels tall and fog is what turns them into a horizon instead
+    // of a seam.
+    if (scene) scene.fog = new THREE.Fog(0x000000, 90, 400);
+
+    applyState(skyStateAt(phase, sky));
+    return dome;
+}
+
+/** Push one interpolated state out to everything that consumes it. */
+function applyState(state) {
+    const dir = sunDirectionAt(state.elevation, state.azimuth);
+
+    uniforms.uSkyZenith.value.setRGB(state.zenith[0], state.zenith[1], state.zenith[2], THREE.SRGBColorSpace);
+    uniforms.uSkyHorizon.value.setRGB(state.horizon[0], state.horizon[1], state.horizon[2], THREE.SRGBColorSpace);
+    uniforms.uSunColor.value.setRGB(state.sunColor[0], state.sunColor[1], state.sunColor[2], THREE.SRGBColorSpace);
+    uniforms.uCloudColor.value.setRGB(state.cloudColor[0], state.cloudColor[1], state.cloudColor[2], THREE.SRGBColorSpace);
+    uniforms.uSunDir.value.set(dir.x, dir.y, dir.z);
+    // Both halo terms fade out through twilight. Applied to the strengths on the
+    // CPU rather than as another smoothstep in the shader, because it is one
+    // number per frame either way and this one is testable. See twilightGlow.
+    const halo = twilightGlow(state.elevation);
+    uniforms.uSunGlowStrength.value = settings.sky.sun.glowStrength * halo;
+    uniforms.uSunAureoleStrength.value = settings.sky.sun.aureoleStrength * halo;
+    uniforms.uCloudOpacity.value = state.cloudOpacity;
+    uniforms.uCloudDrift.value.set(0, elapsed * settings.sky.cloud.driftSpeed);
+
+    sunLight.color.setRGB(state.sunColor[0], state.sunColor[1], state.sunColor[2], THREE.SRGBColorSpace);
+    sunLight.intensity = state.sunIntensity;
+    sunLight.position.set(dir.x, dir.y, dir.z).multiplyScalar(300);
+
+    fillLight.color.setRGB(state.hemiSky[0], state.hemiSky[1], state.hemiSky[2], THREE.SRGBColorSpace);
+    fillLight.groundColor.setRGB(state.hemiGround[0], state.hemiGround[1], state.hemiGround[2], THREE.SRGBColorSpace);
+    fillLight.intensity = state.hemiIntensity;
+
+    if (sceneRef && sceneRef.fog) {
+        // The fog is the horizon AS THE SCREEN WILL SHOW IT, not as the sky is.
+        // See toneMapACES: fog is applied after tone mapping, so anything set
+        // here is taken literally, and the untouched colour would fade the far
+        // water to something the sky above it never renders as. Stored in the
+        // working space so Three's own encode on upload is the only one applied.
+        const shown = toneMapACES(state.horizon.map(srgbToLinear), state.exposure);
+        sceneRef.fog.color.setRGB(shown[0], shown[1], shown[2], THREE.LinearSRGBColorSpace);
+    }
+    if (rendererRef) rendererRef.toneMappingExposure = state.exposure;
+}
+
+/** Advance the day.
+ *
+ *  Everything here moves on a clock measured in tens of minutes, so there is no
+ *  case for rebuilding it less often than the frame: it is one interpolation
+ *  between two keyframes and a handful of uniform writes, and skipping frames
+ *  to save that would trade nothing for a visible step in the light. */
+export function updateSky(deltaSeconds) {
+    if (!uniforms) return phase;
+    const delta = Number.isFinite(deltaSeconds) ? deltaSeconds : 0;
+    elapsed += delta;
+    phase = advancePhase(phase, delta, settings.cycle);
+    applyState(skyStateAt(phase, settings.sky));
+    return phase;
+}
+
+/** Where in the day we are, 0 to 1. Mostly here so a screenshot can be
+ *  described as "at 0.84" rather than as "the orange one". */
+export function getPhase() { return phase; }
+
+/** Jump the day, keeping every uniform object it already handed out.
+ *
+ *  THE POINT IS THAT IT DOES NOT REBUILD ANYTHING. The obvious way to move the
+ *  sky is to dispose it and init it again, and that quietly breaks the sea: the
+ *  water's compiled shader holds references to the OLD uniform objects, so the
+ *  dome would jump to the new hour and the reflection in the water would stay
+ *  at the old one. Two skies in one frame, and the only clue is that the
+ *  horizon has gone back to being a seam. */
+export function setPhase(next) {
+    if (!uniforms) return phase;
+    phase = wrapPhase(next);
+    applyState(skyStateAt(phase, settings.sky));
+    return phase;
+}
+
+/** The current look, for anything that wants to read the light without
+ *  reaching into THREE objects to get it. The sand's wet band will want this. */
+export function getSkyState() { return skyStateAt(phase, settings.sky); }
+
+export function disposeSky() {
+    if (sceneRef) {
+        if (dome) sceneRef.remove(dome);
+        if (sunLight) sceneRef.remove(sunLight);
+        if (fillLight) sceneRef.remove(fillLight);
+        sceneRef.fog = null;
+    }
+    if (domeGeometry) domeGeometry.dispose();
+    if (domeMaterial) domeMaterial.dispose();
+    dome = null;
+    domeGeometry = null;
+    domeMaterial = null;
+    sunLight = null;
+    fillLight = null;
+    sceneRef = null;
+    rendererRef = null;
+    uniforms = null;
+}
+
+/** Test seam, matching water.js. Not used by the page. */
+export const __sky = {
+    state: () => ({ uniforms, dome, sunLight, fillLight, phase, elapsed })
+};
