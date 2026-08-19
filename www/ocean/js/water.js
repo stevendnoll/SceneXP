@@ -1109,6 +1109,11 @@ let attributes = null;    // the four Float32Arrays and their BufferAttributes
 let elapsed = 0;
 let sinceProfile = 0;
 let breaks = [];
+// An override for `water.profileHz`, null when the config's own value stands.
+// EXISTS BECAUSE THE RIGHT VALUE IS A PROPERTY OF THE MACHINE, not of the scene:
+// the ceiling is the attribute upload, which cannot be measured anywhere but in
+// a browser on the hardware in question. See `setProfileHz`.
+let profileHzOverride = null;
 let cycles = null;        // last seen crest count per sounding wave
 
 /** Build the sea and add it to the scene.
@@ -1448,7 +1453,7 @@ export function updateWater(deltaTime, sea = CALM) {
     }
 
     sinceProfile += dt;
-    const interval = 1 / Math.max(1, settings.water.profileHz);
+    const interval = 1 / Math.max(1, profileRate());
     if (sinceProfile >= interval) {
         sinceProfile = 0;
         buildProfile(rowZ, elapsed, settings, profile, sea);
@@ -1542,6 +1547,33 @@ function totalAmpAt(row) {
     let total = 0;
     for (let i = 0; i < n; i++) total += profile.amp[row * n + i];
     return total;
+}
+
+/** How often the profile is rebuilt, in hertz. */
+export function profileRate() {
+    if (profileHzOverride != null) return profileHzOverride;
+    return settings ? settings.water.profileHz : OCEAN_CONFIG.water.profileHz;
+}
+
+/**
+ * Rebuild the profile at a different rate, or pass null to go back to config.
+ *
+ * A TUNING SEAM, NOT A FEATURE. Everything the storm moves quickly arrives
+ * through the profile, so this number decides how smoothly the waterline
+ * withdraws and how smoothly the wall comes in. Its ceiling is the attribute
+ * upload rather than the arithmetic, and an upload cost cannot be measured
+ * outside a browser on the machine in question, so the value has to be found by
+ * trying it. Exposed on `window` as `oceanProfileHz` for exactly that.
+ */
+export function setProfileHz(hz) {
+    if (hz == null) { profileHzOverride = null; return profileRate(); }
+    const value = Number(hz);
+    if (!Number.isFinite(value) || value <= 0) return profileRate();
+    profileHzOverride = Math.max(1, Math.min(120, value));
+    // Rebuild on the next frame rather than waiting out the old interval, so a
+    // change made while watching is visible immediately.
+    sinceProfile = Infinity;
+    return profileHzOverride;
 }
 
 /** The waves that reached the break line since the last call, and clears them.

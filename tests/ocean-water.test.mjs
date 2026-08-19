@@ -105,6 +105,7 @@ const {
     bedHeightAt, tideOffset, depthAt, waveNumberAt, shoalingAt, sharpenAt, breakAmount,
     envelopeAt, rowPositions, halfWidthAt, waveConstants, buildProfile, breakRow,
     initWater, updateWater, consumeBreaks, breakDistance, disposeWater,
+    setProfileHz, profileRate,
     getWaterMesh, getProfile, getElapsed, __test__
 } = water;
 
@@ -1372,5 +1373,63 @@ describe('the small helpers', () => {
     test('smoothstep survives a degenerate range rather than dividing by zero', () => {
         expect(__test__.smoothstep(1, 1, 0)).toBe(0);
         expect(__test__.smoothstep(1, 1, 2)).toBe(1);
+    });
+});
+
+describe('how often the storm is redrawn', () => {
+    // THE ASSUMPTION THAT BROKE. `profileHz` was 6 because the profile was said
+    // to change only as the tide and the set envelope move, "both of which are
+    // measured in minutes". True of the ambient sea it was written for, and the
+    // storm arc broke it: the surge, the tsunami front, and the swell all move
+    // in seconds and all three arrive through the profile. Steve reported it as
+    // the surge lagging and the water receding from the beach lagging, which
+    // were one stutter seen twice.
+    test('the profile keeps up with things that move in seconds', () => {
+        // Measured in pixels of jump per update: the waterline moved 21 px at
+        // 6 Hz and the wall 217 px. This is the floor that keeps those honest
+        // without pinning the exact value, which is a property of the machine.
+        expect(OCEAN_CONFIG.water.profileHz).toBeGreaterThanOrEqual(15);
+    });
+
+    test('the rate can be changed while watching, and put back', () => {
+        // The ceiling is the attribute upload, which cannot be measured outside
+        // a browser, so the value has to be found by trying it on the hardware.
+        initWater(makeScene(), OCEAN_CONFIG);
+        expect(profileRate()).toBe(OCEAN_CONFIG.water.profileHz);
+        expect(setProfileHz(45)).toBe(45);
+        expect(profileRate()).toBe(45);
+        expect(setProfileHz(null)).toBe(OCEAN_CONFIG.water.profileHz);
+    });
+
+    test('a nonsense rate is refused rather than freezing the sea', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        const original = profileRate();
+        [0, -5, NaN, 'fast'].forEach((bad) => {
+            expect(setProfileHz(bad)).toBe(original);
+        });
+        // And absurd but positive values are clamped rather than honoured.
+        expect(setProfileHz(100000)).toBeLessThanOrEqual(120);
+        setProfileHz(null);
+    });
+
+    test('raising it actually rebuilds more often', () => {
+        initWater(makeScene(), OCEAN_CONFIG);
+        const countRebuilds = (hz) => {
+            setProfileHz(hz);
+            const before = getProfile().depth.slice();
+            let changes = 0;
+            let last = before;
+            for (let i = 0; i < 60; i++) {
+                updateWater(1 / 60, { swell: 1 + i * 0.02, lean: 3, surge: i * 0.01 });
+                const now = getProfile().depth;
+                if (now.some((v, k) => v !== last[k])) changes++;
+                last = now.slice();
+            }
+            return changes;
+        };
+        const slow = countRebuilds(6);
+        const fast = countRebuilds(30);
+        expect(fast).toBeGreaterThan(slow * 2);
+        setProfileHz(null);
     });
 });

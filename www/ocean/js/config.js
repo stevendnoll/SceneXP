@@ -69,6 +69,68 @@ export const OCEAN_CONFIG = deepFreeze({
     // The visual scene never depended on any of this. `consumeBreaks()` stays,
     // because sand.js drives the swash and the wet band from the same queue.
 
+    // ---- Keeping the frame rate ---------------------------------------------
+    //
+    // THE SCENE GETS TWICE AS EXPENSIVE AT THE EXACT MOMENT IT MATTERS MOST, and
+    // that is inherent rather than a bug. Measured across the arc, the share of
+    // the frame filled by water:
+    //
+    //     ordinary  50%      t=74  63%
+    //     storm     60%      t=76  74%
+    //     lull      53%      t=78  100%, and 252 rows above the horizon
+    //
+    // The water's fragment shader is the most expensive thing here: it evaluates
+    // the whole sky function per pixel for the Fresnel reflection, then foam
+    // noise, then Three's standard lighting. Normally it runs on half the frame
+    // and the cheap sky dome covers the rest. From t=78 the wall fills the frame
+    // and it runs on all of it. The CPU is flat throughout, measured at 0.10 to
+    // 0.14 ms a frame from the first second to the last, so none of this is the
+    // simulation.
+    //
+    // SO THE ANSWER IS FEWER PIXELS, NOT LESS SEA. On a Retina display a
+    // 1920x1080 window renders 3840x2160, which is 8.3 million pixels of that
+    // shader. Dropping the ratio from 2 to 1.5 removes 44 per cent of the work
+    // and costs almost nothing to look at, because what is on screen at that
+    // point is a smooth wall of water behind fog.
+    //
+    // MEASURED AGAINST THE DISPLAY RATHER THAN AGAINST 60. A fixed millisecond
+    // budget calls a 30 Hz panel permanently slow and never notices a 120 Hz one
+    // struggling. So the yardstick is the best frame this device has managed,
+    // which is a fair estimate of its refresh interval, with an absolute floor
+    // underneath for the case where it was never fast even once.
+    quality: {
+        minScale: 0.60,
+        // Slow if a frame takes this much longer than the best one seen.
+        slowRatio: 1.30,
+        // Fast enough to try for more only when there is real headroom. Close to
+        // 1 because a vsynced display reports its interval no matter how much
+        // room is left, so the only way to find the ceiling is to reach for it
+        // and come back down if it does not hold.
+        fastRatio: 1.08,
+        // The backstop, in seconds, for a device that was never fast even once.
+        slowSeconds: 1 / 25,
+        stepDown: 0.85,
+        // Smaller than the step down, deliberately. Getting it wrong downward
+        // costs a little sharpness and getting it wrong upward costs the frame
+        // rate at the climax, so the two are not symmetrical.
+        stepUp: 1.06,
+        // CHANGING THE RATIO REALLOCATES THE DRAWING BUFFER, which is itself a
+        // dropped frame, so this cannot be a per-frame decision. Longer before
+        // reaching back up than before backing off.
+        holdDownSeconds: 1.0,
+        holdUpSeconds: 3.0,
+        // Ignore the opening frames: shader compilation and the first attribute
+        // upload both land there and neither says anything about the device.
+        settleFrames: 60,
+        // A frame longer than this is a tab coming back or the machine sleeping,
+        // not a slow frame, and must not drag the measurement down with it.
+        ignoreAboveSeconds: 0.10,
+        // How quickly the running estimate follows. Slow enough that the profile
+        // rebuild, which lands six times a second and takes about 1.4 ms, cannot
+        // move it on its own.
+        smoothing: 0.05
+    },
+
     // ---- The camera ---------------------------------------------------------
     // Sat on the wet sand at the top of the run up, looking straight out to sea.
     // It never moves. Metres, and -Z is out to sea, so distance from shore is
@@ -638,11 +700,43 @@ export const OCEAN_CONFIG = deepFreeze({
         setSubPeriodSeconds: 29,
         setDepth: 0.45,
 
-        // How often the per-row profile is rebuilt on the CPU, in hertz. The
+        // How often the per-row profile is rebuilt on the CPU, in hertz.
+        //
+        // THIS WAS 6, AND THE COMMENT DEFENDING IT IS THE BUG. It read: "the
         // profile only changes as the tide and the set envelope move, both of
-        // which are measured in minutes, so this can be far below frame rate.
-        // Everything that changes at wave speed happens on the GPU.
-        profileHz: 6,
+        // which are measured in minutes, so this can be far below frame rate."
+        // Every word of that was true of the ambient sea it was written for. The
+        // storm arc broke it on 2026-08-19 and nobody came back here. The surge,
+        // the tsunami front, and the swell all move in SECONDS now, and all
+        // three arrive through this function, so at 6 Hz they were being
+        // redrawn ten times a second slower than the sea around them.
+        //
+        // Steve reported it as the scene lagging during the surge and the water
+        // "receding from the beach" lagging too. Neither was a frame rate. They
+        // are the same stutter seen twice, and it was measured in pixels of jump
+        // per update rather than in frames:
+        //
+        //                    waterline      the wall at t=78
+        //     6 Hz             21 px            217 px
+        //     20 Hz           6.4 px             65 px
+        //     30 Hz           4.3 px             43 px
+        //     60 Hz           2.1 px             22 px
+        //
+        // AND THE COST IS AFFORDABLE, measured through a rebuild of the whole
+        // drawback: 7.7 ms of CPU per second of scene at 6 Hz, 23 at 20, 35 at
+        // 30, 70 at 60. The worst single rebuild is 1.3 ms at every rate, so
+        // raising this makes the cost more EVEN as well as larger: at 6 Hz one
+        // frame in ten pays 1.8 ms and the rest pay nothing.
+        //
+        // 20 is a first step rather than a final answer. The ceiling is not the
+        // CPU, it is the upload: `refreshAttributes` writes five vec4s per
+        // vertex, which is 3.97 MB, and 79 MB/s at this rate. Every value in it
+        // is per ROW and duplicated across all 200 columns, so the real
+        // information is 20 KB. Fixing THAT is what would allow 60 Hz, and it is
+        // the long-standing "attribute broadcast" note. Use `oceanProfileHz(n)`
+        // in the console to find the number this machine likes before changing
+        // it here.
+        profileHz: 20,
         // Shallowest water the maths is allowed to see. Local wavelength goes
         // to zero at the waterline and the wave number to infinity with it, so
         // the profile stops just short of the edge.

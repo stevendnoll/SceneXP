@@ -43,7 +43,8 @@
 
 import { OCEAN_CONFIG } from './config.min.js';
 import {
-    initWater, updateWater, consumeBreaks, breakDistance, resetWater, disposeWater
+    initWater, updateWater, consumeBreaks, breakDistance, resetWater, disposeWater,
+    setProfileHz, profileRate
 } from './water.min.js';
 import {
     initSky, updateSky, disposeSky, skyUniforms, getPhase, setPhase, SKY_GLSL, SKY_UNIFORM_GLSL
@@ -94,6 +95,17 @@ let ending = null;      // the card that sits on the black
 let replay = null;
 let welcome = null;     // the card that holds the arc until the visitor is ready
 
+// What the renderer would use if nothing were slow, and how far below it we have
+// had to settle. See `nextPixelScale`.
+const quality = {
+    ceiling: 1,
+    scale: 1,
+    frame: 0,           // smoothed seconds per frame
+    best: Infinity,     // the fastest we have seen, which estimates the display
+    since: 0,           // seconds since the ratio last changed
+    frames: 0
+};
+
 /** A phone or tablet, asked once.
  *
  *  The camera never moves and the framing never changes, so unlike a walkable
@@ -114,7 +126,67 @@ function buildRenderer() {
     // what keeps a glinting sea looking bright rather than looking blown out.
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, state.mobile ? 1.5 : 2));
+    quality.ceiling = Math.min(window.devicePixelRatio || 1, state.mobile ? 1.5 : 2);
+    renderer.setPixelRatio(quality.ceiling * quality.scale);
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+}
+
+/**
+ * How far below the device's own pixel ratio to render, given how the last few
+ * seconds went. Pure, so the whole policy can be tested without a GPU, which
+ * matters here more than usual because the thing it is protecting against is the
+ * one part of this scene that cannot be measured off a browser.
+ *
+ * Returns the scale unchanged when nothing should happen, so the caller can
+ * compare and only pay for a resize when there is a real decision.
+ *
+ * MEASURED AGAINST THE DISPLAY, NOT AGAINST 60. A fixed millisecond budget calls
+ * a 30 Hz panel permanently slow and never notices a 120 Hz one struggling, so
+ * the yardstick is the best frame this device has managed. `slowSeconds` sits
+ * underneath as a backstop for a device that was never fast even once, which is
+ * the case the relative test cannot see by construction.
+ */
+export function nextPixelScale(sample, config = OCEAN_CONFIG) {
+    const q = config.quality;
+    const { frame, best, scale, since, frames } = sample;
+    if (frames < q.settleFrames) return scale;
+
+    const slow = frame > best * q.slowRatio || frame > q.slowSeconds;
+    if (slow) {
+        if (since < q.holdDownSeconds) return scale;
+        return Math.max(q.minScale, scale * q.stepDown);
+    }
+    // Only reach upward from below, and only with real headroom under us.
+    if (scale < 1 && frame < best * q.fastRatio && since >= q.holdUpSeconds) {
+        return Math.min(1, scale * q.stepUp);
+    }
+    return scale;
+}
+
+/** Fold this frame into the running estimate and act on it if it says so. */
+function adaptQuality(delta) {
+    const q = OCEAN_CONFIG.quality;
+    // A frame this long is a tab coming back or a machine waking, and letting it
+    // into the average would drop the resolution for something that never
+    // happened while anybody was watching.
+    if (!renderer || delta <= 0 || delta > q.ignoreAboveSeconds) return;
+
+    quality.frame = quality.frame === 0
+        ? delta : quality.frame + (delta - quality.frame) * q.smoothing;
+    quality.since += delta;
+    quality.frames += 1;
+    // The best frame is read from the SMOOTHED value rather than from a single
+    // frame, or one lucky frame early on would set an unreachable target and the
+    // scene would spend the rest of the visit trying to live up to it.
+    if (quality.frames >= q.settleFrames && quality.frame < quality.best) {
+        quality.best = quality.frame;
+    }
+
+    const next = nextPixelScale(quality, OCEAN_CONFIG);
+    if (Math.abs(next - quality.scale) < 0.005) return;
+    quality.scale = next;
+    quality.since = 0;
+    renderer.setPixelRatio(quality.ceiling * quality.scale);
     renderer.setSize(window.innerWidth, window.innerHeight, false);
 }
 
@@ -140,6 +212,11 @@ function onResize() {
     if (!renderer || !camera) return;
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    // The ceiling can change under us when a laptop is moved to another monitor,
+    // and the scale we have settled on is kept across the move: it describes how
+    // hard this scene is, not how many pixels that particular screen has.
+    quality.ceiling = Math.min(window.devicePixelRatio || 1, state.mobile ? 1.5 : 2);
+    renderer.setPixelRatio(quality.ceiling * quality.scale);
     renderer.setSize(window.innerWidth, window.innerHeight, false);
 }
 
@@ -166,6 +243,7 @@ function loop(now) {
     const seconds = now / 1000;
     const delta = state.lastTime ? seconds - state.lastTime : 0;
     state.lastTime = seconds;
+    adaptQuality(delta);
     // The sea moves while the welcome card is up; the story does not.
     if (state.begun) state.arc += Math.max(0, Math.min(0.25, delta));
 
@@ -389,6 +467,22 @@ function init() {
         return state.arc;
     };
     window.oceanArc = () => state.arc;
+    // What the adaptive resolution has settled on, which is the only way to tell
+    // a scene that is running slowly from one that has quietly stopped trying.
+    // How smoothly the storm moves, which is a different question from how fast
+    // the scene draws. Everything the arc moves quickly arrives through the
+    // profile, so this is the number to try if the withdrawal or the wall look
+    // steppy. Its ceiling is the attribute upload and that can only be found by
+    // trying it here. Call with no argument to read it, a number to set it, or
+    // null to go back to config.
+    window.oceanProfileHz = (hz) => (hz === undefined ? profileRate() : setProfileHz(hz));
+    window.oceanQuality = () => ({
+        ratio: quality.ceiling * quality.scale,
+        ceiling: quality.ceiling,
+        scale: Number(quality.scale.toFixed(3)),
+        frameMs: Number((quality.frame * 1000).toFixed(2)),
+        bestMs: Number((quality.best * 1000).toFixed(2))
+    });
 }
 
 if (typeof document !== 'undefined') {
