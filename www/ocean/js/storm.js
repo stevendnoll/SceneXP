@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * storm.js - The three minute arc. The clock the whole scene now runs on.
+ * storm.js - The ninety second arc. The clock the whole scene now runs on.
  *
  * THIS FILE IS THE ONLY THING IN THE SCENE THAT KNOWS WHAT TIME IT IS. Everything
  * else takes numbers and draws them: water.js is handed a swell scale and a
@@ -11,7 +11,9 @@
  * WHAT THE ARC IS. An ordinary bright day at a beach that turns. The swell
  * builds, the break line marches out to sea, the horizon starts disappearing
  * behind the swell, waves begin coming over the camera, the sea withdraws, and a
- * tsunami arrives. Then black. Three minutes, agreed with Steve on 2026-08-19.
+ * tsunami arrives. Then black. It was three minutes, then two, and is now ninety
+ * seconds: every viewing since has said the same thing, which is that the parts
+ * with nothing happening in them are longer than they feel while writing them.
  *
  * THE DRAWBACK IS THE MOST IMPORTANT TWENTY SECONDS IN IT. A sea that goes the
  * wrong way is more frightening than any amount of water arriving, because
@@ -22,7 +24,7 @@
  * PURE CORE, NO SHELL AT ALL. There is no THREE in this file and there should
  * never be. It is arithmetic on a clock, which means the entire arc can be
  * inspected, tested, and retimed without a browser, and a screenshot pass can
- * jump to 2:24 rather than waiting for it.
+ * jump to 1:12 rather than waiting for it.
  */
 
 import { OCEAN_CONFIG } from './config.min.js';
@@ -280,10 +282,16 @@ export function frontAt(seconds, storm = OCEAN_CONFIG.storm) {
     // Linear in TIME rather than smoothed, because this one is a body of water
     // with momentum and easing it in would read as hesitation. The only thing a
     // tsunami does is keep coming.
+    // GROWS AND STEEPENS ON THE WAY IN, because a tsunami shoals: the same body
+    // of water piles into less and less depth, so it stands taller and its front
+    // face gets shorter. Green's law does this for the ordinary swell on its own
+    // and cannot do it here, since the rise is a step in the water LEVEL rather
+    // than a wave, so it is walked along the front's own progress instead.
+    const grown = t.riseFar + (t.riseNear - t.riseFar) * p;
     return {
         z: t.fromZ + (t.toZ - t.fromZ) * p,
-        rise: t.rise * smoothstep(0, 0.25, p),
-        width: t.frontWidth,
+        rise: grown * smoothstep(0, 0.25, p),
+        width: t.frontWidthFar + (t.frontWidthNear - t.frontWidthFar) * p,
         foam: t.frontFoam * smoothstep(0, 0.15, p),
         // The sea BEHIND the front, as a swell multiplier. Full from the moment
         // it appears, because the wall is supposed to be already enormous when
@@ -296,7 +304,7 @@ export function frontAt(seconds, storm = OCEAN_CONFIG.storm) {
  *
  *  THE SHAPE IS WRITTEN TWICE ON PURPOSE AND THERE IS A TEST THAT SAYS SO.
  *  water.js applies it per row while building the profile, and it cannot import
- *  this file, because water.js knowing about a three minute story is exactly the
+ *  this file, because water.js knowing about a ninety second story is exactly the
  *  coupling that keeps being avoided here: the sea takes numbers and draws them.
  *  So the same smoothstep exists in both places and `ocean-storm.test.mjs`
  *  asserts they agree across the whole sheet. Duplicating four characters of

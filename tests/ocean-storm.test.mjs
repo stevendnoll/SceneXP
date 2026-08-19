@@ -6,9 +6,9 @@
 // that never reaches its peak, a stage nobody ever enters, a drawback that does
 // not actually go backwards, a fade that finishes after the scene does: each of
 // those leaves every function in this file returning a perfectly reasonable
-// number and the experience broken. So most of what follows walks the whole two
-// minutes and asserts things about the SHAPE rather than about values at
-// convenient instants. It was three minutes until Steve watched it and said so,
+// number and the experience broken. So most of what follows walks the whole arc
+// and asserts things about the SHAPE rather than about values at convenient
+// instants. It has been three minutes, then two, and now ninety seconds,
 // which is why almost nothing below names a second: the times come out of the
 // stage table, and the ones that do not are floors on how short a beat can get
 // rather than descriptions of where it currently sits.
@@ -139,9 +139,9 @@ describe('the shape of the arc', () => {
         expect(swellAt(0)).toBeCloseTo(1, 6);
         expect(swellAt(STORM.seconds)).toBeGreaterThan(2.2);
         // TAKEN FROM THE STAGE TABLE RATHER THAN WRITTEN DOWN, because the arc
-        // was retimed from three minutes to two and every hardcoded second in
-        // here went stale at once. A test that has to be edited whenever the
-        // pacing changes is a test that will eventually be edited to pass.
+        // has been retimed three times and every hardcoded second in here went
+        // stale each time. A test that has to be edited whenever the pacing
+        // changes is a test that will eventually be edited to pass.
         const at = (name) => STORM.stages.find((s) => s.name === name).from;
         expect(swellAt(at('storm'))).toBeGreaterThan(swellAt(at('turning')));
 
@@ -345,10 +345,23 @@ describe('the water coming over the camera', () => {
         // surge of 0.99, and the tsunami peaks at 1.55. The sea would have
         // climbed off the end of the beach three seconds before it reached the
         // camera, and the failure would have looked like a rendering fault.
+        // FOUND BY HAND FOUR TIMES BEFORE THIS TEST COULD CATCH IT, because it
+        // only ever read `surgeAt`. The surge is one of three things that push
+        // the water up the beach: the tide, the tsunami front's own rise, and
+        // the bore run up behind it. Leaving two of them out meant the assertion
+        // passed happily every time the sheet actually ran out.
         const tideHigh = OCEAN_CONFIG.water.tideRange / 2;
-        const peak = Math.max(...everySecond().map((t) => surgeAt(t))) + tideHigh;
+        const peak = Math.max(...everySecond().map((t) => levelAt(t))) + tideHigh;
+        // The biggest bore this sea can make, which rides on top of all of it.
+        // Ritter's front speed feeding the ballistic stop gives 2 g d / a, and
+        // `swashDecel` is g sin(beta) cos(beta) from the same slope.
+        const beta = Math.atan(beach.slope);
+        const a = 9.81 * Math.sin(beta) * Math.cos(beta);
+        const bore = OCEAN_CONFIG.sand.swash.maxBoreDepth
+            * Math.max(...everySecond().map((t) => swellAt(t)));
+        const runUp = (2 * 9.81 * bore) / a;
         const waterline = beach.shoreZ + peak / beach.slope;
-        expect(waterline).toBeLessThan(beach.nearZ);
+        expect(waterline + runUp).toBeLessThan(beach.nearZ);
     });
 });
 
@@ -364,7 +377,7 @@ describe('the ending', () => {
 
     test('THE FADE IS OVER THE TSUNAMI, NOT OVER AN EMPTY BEACH', () => {
         // A fade that began before the last beat would black the screen out
-        // while the thing everybody waited three minutes for was still arriving.
+        // while the thing everybody waited the whole arc for was still arriving.
         const fadeStart = STORM.seconds - STORM.fadeSeconds;
         expect(stageAt(fadeStart).name).toBe('tsunami');
         // The sea is past the camera by then, which is the honest statement of

@@ -316,18 +316,24 @@ export const OCEAN_CONFIG = deepFreeze({
         //        waterline already at z 14.2.
         //   24   ran out again when the bore ceiling went up to clear the tide
         //        at low water. Measured furthest reach over the whole arc: 23.6.
+        //   28   ran out a fourth time when the tsunami front was made to GROW
+        //        as it approached. A 4.80 m rise puts the waterline at 29.4 all
+        //        on its own, and the bore behind it runs another 9.4.
         //
-        // 28 carries that with four metres in hand. There is a test that walks
-        // every second of the arc and asserts it, because this is the third time
-        // the same edge has been found the hard way and the pattern is obvious
-        // in hindsight: every change that makes the water more dangerous makes
-        // it travel further, and the sheet is what it travels on.
+        // 44 carries the lot with five metres in hand. The pattern is obvious in
+        // hindsight and worth stating plainly: EVERY CHANGE THAT MAKES THE WATER
+        // MORE DANGEROUS MAKES IT TRAVEL FURTHER, and the sheet is what it
+        // travels on. The first three were found by hand. The test now walks the
+        // arc with the front's rise and the bore included so the fifth is not.
+        //
+        // It stays free. The extra rows land in the flat near strip behind the
+        // camera, which has always been below the bottom of the frame.
         //
         // It costs nothing visible. The extra rows land in the flat near strip
         // behind the camera, which has always been below the bottom of the
         // frame, and `rowNear` and `widthPerMetre` follow `camera.fov` rather
         // than this.
-        nearZ: 28,
+        nearZ: 44,
         farZ: -404,         // out to where the fog has finished the job
         // Where the packed part of the row curve begins, in metres in front of
         // the camera. The bottom edge of the frame meets still water about two
@@ -1234,15 +1240,15 @@ export const OCEAN_CONFIG = deepFreeze({
     // meaning something, which is exactly the effect a horror scene wants and
     // exactly the effect a busy one destroys.
     storm: {
-        seconds: 120,
+        seconds: 90,
         // Start times, not ranges, so two stages can never overlap or leave a
         // gap. The last one runs to `seconds`. Names are for the audio bed and
         // the debug label rather than for anything visual, since every visible
         // quantity below interpolates straight through the boundaries.
         stages: [
             { from: 0,   name: 'ordinary' },   // the sea as it has always been
-            { from: 18,  name: 'turning' },    // the swell starts to build
-            { from: 52,  name: 'storm' },      // faces near vertical, first engulfment
+            { from: 12,  name: 'turning' },    // the swell starts to build
+            { from: 34,  name: 'storm' },      // faces near vertical, first engulfment
             // THE LULL IS STEVE'S AND IT IS THE BEST NOTE OF THE THREE. The
             // drawback used to begin straight off the storm's peak, so a set was
             // always mid flight when the sea started leaving, and the visitor
@@ -1253,9 +1259,9 @@ export const OCEAN_CONFIG = deepFreeze({
             // A real drawback is preceded by exactly this: the sea stops. Six
             // seconds of a flat, silent ocean after ninety seconds of building
             // storm is the loudest thing in the arc, and it costs one keyframe.
-            { from: 78,  name: 'lull' },       // the sea stops, and that is worse
-            { from: 88,  name: 'drawback' },   // then it goes the wrong way
-            { from: 98,  name: 'tsunami' }
+            { from: 54,  name: 'lull' },       // the sea stops, and that is worse
+            { from: 62,  name: 'drawback' },   // then it goes the wrong way
+            { from: 76,  name: 'tsunami' }
         ],
         // ---- The swell ------------------------------------------------------
         //
@@ -1291,22 +1297,22 @@ export const OCEAN_CONFIG = deepFreeze({
         // down, which is the same margin the calm sea has always run at.
         swell: [
             { at: 0,   value: 1.00 },
-            { at: 18,  value: 1.05 },   // barely, and only so it is already moving
-            { at: 52,  value: 2.00 },   // the horizon starts going
-            { at: 78,  value: 2.40 },   // the peak of the storm
+            { at: 12,  value: 1.05 },   // barely, and only so it is already moving
+            { at: 34,  value: 1.90 },   // the horizon starts going
+            { at: 54,  value: 2.40 },   // the peak of the storm
             // THE SEA STOPS. Down past calm, to a third of the sea the scene
             // opened with, in six seconds. Nothing else in the arc moves this
             // fast and nothing else should: every other curve here is a weather
             // system and this one is the bottom dropping out.
-            { at: 84,  value: 0.30 },
-            { at: 92,  value: 0.28 },   // and stays there while the water leaves
+            { at: 59,  value: 0.30 },
+            { at: 66,  value: 0.28 },   // and stays there while the water leaves
             // THE PEAK LANDS WITH THE FRONT, NOT AFTER IT. This used to reach
             // 2.60 at t=116, which is a second after the fade has started, so
             // the biggest sea in the whole scene happened behind the blackout.
             // Steve's words: it ends just as the waves get good.
-            { at: 98,  value: 1.80 },
-            { at: 102, value: 2.60 },
-            { at: 120, value: 2.60 }
+            { at: 76,  value: 1.80 },
+            { at: 80,  value: 2.60 },
+            { at: 90,  value: 2.60 }
         ],
         // Crest cusping, and it comes DOWN as the swell goes up. Not a look
         // decision: amplitude times wave number times this is what drives the
@@ -1320,9 +1326,9 @@ export const OCEAN_CONFIG = deepFreeze({
         // and it is worth it, because size is the thing being asked for.
         lean: [
             { at: 0,   value: 3.20 },
-            { at: 52,  value: 2.60 },
-            { at: 78,  value: 1.60 },
-            { at: 120, value: 1.20 }
+            { at: 34,  value: 2.60 },
+            { at: 54,  value: 1.60 },
+            { at: 90,  value: 1.20 }
         ],
         // ---- The surge ------------------------------------------------------
         //
@@ -1371,29 +1377,29 @@ export const OCEAN_CONFIG = deepFreeze({
         // marching in, and only crosses the eye at the very end.
         surge: [
             { at: 0,   value: 0.00 },
-            { at: 52,  value: 0.15 },
+            { at: 34,  value: 0.15 },
             // A PLATEAU AND NOT A PEAK, and the difference is how many waves get
             // to hit you. Whether a bore covers the eye depends on the sea being
             // already high when it arrives, so the number of white-outs in the
             // storm is set by how long this sits up rather than by how high it
             // gets. A single peak at 74 gave exactly one hit in the whole storm,
             // because only one break happened to land on it.
-            { at: 62,  value: 0.55 },   // ankle deep at the camera, no more
-            { at: 74,  value: 0.55 },
+            { at: 42,  value: 0.55 },   // ankle deep at the camera, no more
+            { at: 52,  value: 0.55 },
             // Back to an ordinary water level for the lull, so the sea is flat
             // AND normal. A lull on a raised sea would still look like weather.
-            { at: 83,  value: 0.05 },
-            { at: 88,  value: 0.00 },   // the sea is flat AND at its own level
-            { at: 94,  value: -0.90 },  // drawback, and the beach is bare
+            { at: 58,  value: 0.05 },
+            { at: 62,  value: 0.00 },   // the sea is flat AND at its own level
+            { at: 68,  value: -0.90 },  // drawback, and the beach is bare
             // THE RECOVERY HAS TO TRAVEL WITH THE FRONT. It used to lag it, so
             // when the front arrived carrying 1.70 m the water at the camera
             // came out below the eye: the tsunami reached the visitor and did
             // not cover them, because the sea underneath it was still drawn
             // back. The drawback ends when the thing that caused it arrives.
-            { at: 98,  value: -0.80 },
-            { at: 102, value: 0.10 },
-            { at: 106, value: 0.35 },
-            { at: 120, value: 0.40 }
+            { at: 74,  value: -0.85 },
+            { at: 79,  value: 0.10 },
+            { at: 83,  value: 0.30 },
+            { at: 90,  value: 0.35 }
         ],
         // How far either side of eye level the white-out ramps, in metres. A
         // hard switch at exactly eye level would flicker every time a crest
@@ -1449,11 +1455,11 @@ export const OCEAN_CONFIG = deepFreeze({
         // looking at the thing it starts from.
         gloom: [
             { at: 0,   value: 0.00 },   // the first frame, and only the first
-            { at: 6,   value: 0.12 },
-            { at: 20,  value: 0.42 },
-            { at: 45,  value: 0.75 },
-            { at: 75,  value: 0.94 },
-            { at: 100, value: 1.00 }    // fully closed before the tsunami lands
+            { at: 4,   value: 0.12 },
+            { at: 14,  value: 0.42 },
+            { at: 32,  value: 0.75 },
+            { at: 54,  value: 0.94 },
+            { at: 74,  value: 1.00 }    // fully closed before the tsunami lands
         ],
         // The closing fade, in seconds off the end. Long enough to read as an
         // ending rather than as a page crashing, short enough that nobody is
@@ -1494,19 +1500,57 @@ export const OCEAN_CONFIG = deepFreeze({
             // visible in the distance while the sea recedes, and 88 is the second
             // the surge turns negative, so the two are the same beat: the water
             // leaves, and the reason it is leaving comes out of the fog behind it.
-            startAt: 88,
-            arriveAt: 101,
+            startAt: 62,
+            arriveAt: 80,
             // THE FRONT CARRIES THE WATER NOW, NOT THE SURGE. The surge used to
             // ramp to 1.55 at the end and the front added its own rise on top,
             // which is two systems raising the same sea and a level of 3 m if
             // they ever fully overlapped. The surge now returns to about zero
             // and this is what covers the eye, which is also the honest shape:
             // the water arrives BECAUSE the front arrives.
-            rise: 1.70,
+            // ---- IT GROWS AND IT STEEPENS ON THE WAY IN ----------------------
+            //
+            // A CONSTANT RISE ARRIVES THE SAME SIZE IT LEFT, which is not what a
+            // tsunami does and not what makes one frightening. In deep water it
+            // is a long low hump; as the bottom comes up it shoals, so the same
+            // water piles into less depth and the front steepens into a wall.
+            // Green's law is doing this for the ordinary swell already. It
+            // cannot do it here, because the rise is a step in the water LEVEL
+            // rather than a wave, so it is put in by hand along the front's own
+            // progress.
+            //
+            // The measured payoff, crest above the eye at 20.2 px per degree:
+            //
+            //     338m away   2.96 m over the eye     10 px
+            //     208m        3.91                    22 px
+            //      76m        4.88                    74 px
+            //      28m        5.23                   214 px
+            //       8m        5.37                   686 px
+            //
+            // THE LAST LINE IS THE POINT AND IT IS WHY NO CAMERA TILT IS NEEDED.
+            // The frame holds 405 px above the horizon, so the wall runs out of
+            // frame before it arrives, and a thing too big for the picture reads
+            // as bigger than a thing that fits in it. Steve asked whether the
+            // perspective could be tilted to sell the scale. It can be, and this
+            // is better: it costs no camera motion, which keeps the no-bob
+            // promise, and it is what the water actually does.
+            riseFar: 1.70,
+            riseNear: 4.80,
             // How abrupt the step is. Wide enough that it never falls between
             // two rows of the grid and strobes as it crosses them, tight enough
             // to read as an edge rather than as a slope.
-            frontWidth: 26,
+            // AND THE FACE STEEPENS AS IT NARROWS. Half width in metres, so the
+            // face angle is atan(rise / 2 * width): 3 degrees out at the fog
+            // limit and 14 by the time it arrives. A step that stayed 26 m wide
+            // while its rise tripled would read as a ramp rather than a wall.
+            //
+            // It cannot narrow indefinitely. Far out the rows are 20 m apart, so
+            // a narrow front would fall between two of them and strobe as it
+            // crossed the grid; near the camera they are under a metre apart and
+            // 8 m is many rows. So the wide end is a grid constraint and the
+            // narrow end is the look, which is a happy way round.
+            frontWidthFar: 26,
+            frontWidthNear: 8,
             // THE WHITE LINE IS WHAT MAKES IT VISIBLE AT DISTANCE. A 1.55 m step
             // subtends about four pixels at the fog limit and the sea out there
             // is already the colour of the sky, so the level change alone
@@ -1534,7 +1578,7 @@ export const OCEAN_CONFIG = deepFreeze({
             // stays a smooth wall rather than a mile of whitewater.
             swellBehind: 2.90
         },
-        fadeSeconds: 5
+        fadeSeconds: 6
     },
 
     // ---- The cycle ----------------------------------------------------------

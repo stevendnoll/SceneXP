@@ -12,7 +12,8 @@
  * pause", and that was true of an ambient sea that ran forever. Steve reframed
  * the scene on 2026-08-19: it now opens as an ordinary bright day, the sky closes
  * over, a storm swell builds until the sea is frightening, a tsunami arrives, and
- * the page fades to black. Two minutes. That is a timeline with an ending, so there is a clock to run, stages
+ * the page fades to black. Ninety seconds. That is a timeline with an ending, so
+ * there is a clock to run, stages
  * to move between, and a finish.
  *
  * There is still no INPUT to route past the welcome screen and the mute button,
@@ -130,8 +131,8 @@ function onVisibility() {
     } else if (!state.running && !state.finished) {
         // `lastTime` is cleared so the first frame back reports a delta of zero
         // rather than however long the tab was hidden. That matters more now
-        // than it used to: the arc is a two minute story, and a visitor who
-        // switched away for three minutes should come back to the sea they left
+        // than it used to: the arc is a ninety second story, and a visitor who
+        // switched away for two minutes should come back to the sea they left
         // rather than to the credits.
         state.lastTime = 0;
         start();
