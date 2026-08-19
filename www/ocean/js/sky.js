@@ -47,9 +47,17 @@ export function wrapPhase(phase) {
 /** Move the day on by `deltaSeconds`.
  *
  *  Separate from `wrapPhase` only so the caller never has to know the cycle
- *  length, which lives in config and should stay there. */
+ *  length, which lives in config and should stay there.
+ *
+ *  A CYCLE OF ZERO SECONDS MEANS HELD, and that is the case config ships today.
+ *  It reads as a special case and it is the honest one: a day that takes no time
+ *  to pass is not a day passing infinitely fast, it is a day that does not pass.
+ *  This used to divide by 1 instead, purely as a guard against dividing by zero,
+ *  which would have spun the sky through a full day every second the moment
+ *  anyone tried to hold it. Non-finite input is held too, for the same reason. */
 export function advancePhase(phase, deltaSeconds, cycle = OCEAN_CONFIG.cycle) {
-    const seconds = cycle.seconds > 0 ? cycle.seconds : 1;
+    const seconds = cycle.seconds;
+    if (!Number.isFinite(seconds) || seconds <= 0) return wrapPhase(phase);
     return wrapPhase(phase + deltaSeconds / seconds);
 }
 

@@ -166,6 +166,36 @@ export const OCEAN_CONFIG = deepFreeze({
     // (shoreZ - z) and gets larger the further out you look.
     camera: {
         height: 1.15,
+        // 8, AND 11.6 WAS TRIED AND PUT THE EYE UNDER THE SAND. It was moved
+        // back to bring the swash into frame, it shipped, and the screenshots
+        // came back with the bottom fifth of the picture blank. The arithmetic
+        // that priced the move was wrong in one specific way, and it is worth
+        // writing down because it will look like a good idea again:
+        //
+        // `height` IS MEASURED FROM STILL WATER, NOT FROM THE SAND, and the
+        // beach above the waterline rises on the same 1:4.5 that places the
+        // surf. So every metre backward lifts the ground under the camera by
+        // 22 centimetres. At z = 8 the bed is 0.44 m up and the eye clears it
+        // by 0.71. At z = 11.6 the bed is 1.232 m up and the eye, still at
+        // 1.15, is BELOW IT. Nothing in the scene then sits lower than 11.6
+        // degrees under the horizon, the frame reaches 20, and the bottom 170
+        // pixels of an 810 pixel frame have no geometry in them at all. They
+        // render as bare sky dome, which is what the smooth untextured band
+        // along the bottom of the 2026-08-19 screenshots is.
+        //
+        // The move was priced against a flat ground plane at y = 0. That plane
+        // is real seaward of the waterline and imaginary shoreward of it.
+        //
+        // SO STANDING BACK IS NOT A FREE LEVER ON THIS BEACH. It costs surf,
+        // because the break line is anchored to the shore rather than to the
+        // camera, and tallest wave in an 810 pixel frame goes 165px at z 8,
+        // 146 at 9.5, 127 at 11.6, 110 at 14. And past about z 9.7 it also
+        // costs the ground under the visitor's feet unless `height` rises with
+        // it, which is a second decision about whether they are standing or
+        // sitting and changes the horizon's place in the frame.
+        //
+        // Steve's call after seeing it: stay at 8 and keep the full focus on
+        // the water. The swash is not worth the beach it would take to show.
         z: 8,
         // 48 DEGREES, NOT 62. A wide lens exaggerates whatever is nearest, and
         // what is nearest here is the two or three metres of water at the
@@ -265,8 +295,15 @@ export const OCEAN_CONFIG = deepFreeze({
         // the mapping from metres to pixels a known quantity and there is no
         // reason to guess at it. The first draft measured everything along the
         // sheet instead and put a fifth of the grid behind the viewer.
-        nearZ: 10.5,        // the near edge, a little behind the camera so the
-                            // waterline still has sheet under it at high tide
+        // The near edge, 2.5 metres BEHIND the eye, which is the property that
+        // matters and not the number. It means the sheet passes under the
+        // camera rather than ending in front of it, so there is geometry at
+        // every angle the frame reaches and no gap along the bottom. It also
+        // sits shoreward of the highest waterline (7.25), so the water's edge
+        // always has sheet beneath it at the top of the tide. Anything that
+        // moves the camera back past this has to move this with it. See
+        // `camera.z` for the version of that mistake that shipped.
+        nearZ: 10.5,
         farZ: -404,         // out to where the fog has finished the job
         // Where the packed part of the row curve begins, in metres in front of
         // the camera. The bottom edge of the frame meets still water about two
@@ -558,6 +595,22 @@ export const OCEAN_CONFIG = deepFreeze({
         // the floor is 0.04 and the peak is untouched at 0.50, so the water
         // between waves goes back to being water. Higher buys almost nothing:
         // 3.2 gets the floor to 0.03 and costs brightness.
+        //
+        // THESE NUMBERS ARE SETTLED AND THE SCREENSHOTS THAT LOOK WASHED ARE NOT
+        // A FAULT. Twice now a pale near field in a screenshot has been read as
+        // a foam bug, and the second time it was not one. Running the shader's
+        // own foam terms on the CPU from the real profile shows the band doing
+        // exactly what it should: arriving at the break line, travelling
+        // shoreward at about 2 metres per second, and leaving clear water
+        // behind it. Share of the visible sea under foam above 0.5, over four
+        // minutes: median 0.1 per cent, ninetieth percentile 37, peak 58. No
+        // sample anywhere reaches 0.9, which is where the shader would mix the
+        // noise out, so the whitewater is never the flat sheet earlier rounds
+        // were chasing. A frame caught at the peak is a frame of a wave landing.
+        //
+        // MEASURE THE FIELD, DO NOT READ THE PIXELS. Brightness in a screenshot
+        // cannot tell foam from lit shallow water from a sky reflection, and it
+        // has now produced a wrong diagnosis twice.
         foamLag: 2.2,
         foamTrail: 2.5,
         foamSheetLag: 1.1,
@@ -600,7 +653,44 @@ export const OCEAN_CONFIG = deepFreeze({
         minDepth: 0.12
     },
 
-    // ---- The sand -----------------------------------------------------------
+    // ---- The sand (sand.js) -------------------------------------------------
+    //
+    // THE SAND'S JOB IS TO SHOW WHERE THE WATER HAS BEEN. A beach photographed
+    // between waves is not a flat tan surface, it is a dark wet band with a
+    // ragged upper edge, drying unevenly back to pale. That band is the record
+    // of the last few waves, and it is the reason a still frame of a beach
+    // still reads as moving. It is also the cheapest thing in the scene: one
+    // number per row, updated a dozen times a second.
+    //
+    // AND FROM THIS CAMERA YOU CANNOT SEE THE SWASH. That is measured, it was
+    // tested by moving the camera, and the answer came back that the move costs
+    // more than the swash is worth. Distances from the eye at z = 8:
+    //
+    //     bottom edge of the frame meets the sea   3.16m out, z = 4.84
+    //     waterline, high tide                     z = 7.25   not in frame
+    //     waterline, mean tide                     z = 6.00   not in frame
+    //     waterline, low tide                      z = 4.75   just in frame
+    //     top of the run up                        z = 8.40   BEHIND the eye
+    //
+    // A level 40 degree lens at 1.15 metres sees the sea no nearer than 3.16
+    // metres, and the water's edge is two metres away. So the beach at the
+    // visitor's feet, the swash running up it, and the wet band it leaves are
+    // all off the bottom of the picture, and the sand is only ever seen as the
+    // SEABED through shallow water, at about a sixth of the pixel.
+    //
+    // STANDING BACK TO SEE IT DOES NOT WORK, and the reason is not the one that
+    // looks obvious. `camera.z` 11.6 was tried, shipped, and screenshotted, and
+    // it left the bottom 170 pixels of the frame empty, because the beach rises
+    // on the same slope that places the surf and it came up past the eye. The
+    // full account is under `camera.z`. Tilting down does not reach it either,
+    // since the top of the run up is behind the eye at any workable distance.
+    //
+    // SO THE SWASH IS BUILT, CORRECT, TESTED, AND DELIBERATELY NOT VISIBLE. It
+    // costs nothing per frame, it drives the wetness that the seabed shows in
+    // the shallows at low tide, and it is ready if the camera ever earns its
+    // way back. Everything else below is doing visible work on that seabed: the
+    // grain and the ripples are what stop the shallows being a flat olive wash,
+    // and the wet mirror is what makes them look like a beach under water.
     sand: {
         color: 0xbda882,
         wetColor: 0x6b5b45,
@@ -608,7 +698,77 @@ export const OCEAN_CONFIG = deepFreeze({
         // dries back. Nearly free to compute and it is the detail that makes
         // people say the water looks real, which is a strange thing to be true
         // of the sand.
-        dryingSeconds: 7
+        dryingSeconds: 7,
+
+        // ---- The swash: how far up the beach each wave reaches -------------
+        //
+        // THE SHAPE IS BALLISTIC AND IT IS NOT A GUESS. A sheet of water thrown
+        // up a plane beach decelerates under the downslope component of
+        // gravity, so its position is a parabola in time: x = u0 t - a t^2 / 2,
+        // with a = g sin(beta) cos(beta). On this beach that is 2.06 m/s^2, and
+        // the whole shape follows from the run up distance alone: u0 is
+        // sqrt(2 a X) and the sheet is up and back in 2 u0 / a. So one number
+        // below sets both how far the water comes and how long it takes, and
+        // they cannot disagree.
+        //
+        // THE RUN UP IS SET BY WHERE THE CAMERA SITS, NOT BY THE WAVE, and that
+        // is a departure worth stating. The physical answer for a 1.7 metre
+        // breaker is the Iribarren number: at this slope and this swell it comes
+        // out around 1.3, giving 2.2 metres of vertical run up, which on a 1:4.5
+        // beach is TEN METRES horizontally. The camera sits two metres shoreward
+        // of the still water line, so a real swash would run eight metres past
+        // it and the visitor would be knee deep with the lens under water.
+        //
+        // The scene's geometry is compressed and this is where the bill comes
+        // due: the surf zone is ten metres wide here because the break line was
+        // placed for the composition, where a real one on this swell would be
+        // several times that. So the run up is scaled to the beach we built.
+        // 2.4 metres puts the biggest sets at the camera's feet, which is
+        // exactly what `camera` claims the viewer is sitting at the top of, and
+        // leaves the ordinary ones stopping a metre short.
+        swash: {
+            maxRunUp: 2.4,      // metres past the still water line, biggest sets
+            minRunUp: 0.6,      // ... and the smallest inners
+            // The bore takes time to cross the surf zone, so the sheet arrives
+            // after the crash rather than with it. Measured at 2.4 m/s in the
+            // foam field, which is where this number comes from rather than
+            // from taste.
+            boreSpeed: 2.4,
+            // More than this on the beach at once and the older ones are
+            // dropped. Four covers a set arriving on top of its own backwash.
+            maxActive: 4
+        },
+
+        // ---- What it looks like up close -----------------------------------
+        // Grain, in cycles per metre, so about a hand's width across. It fades
+        // out with distance for the same reason the foam's fine octaves do:
+        // detail finer than the pixel it lands on does not read as detail, it
+        // reads as a shimmer.
+        grainScale: 7.0,
+        grainStrength: 0.13,
+        grainFadeMetres: 20,
+        // Ripples run PARALLEL TO THE WATERLINE, which is what makes them read
+        // as a beach rather than as noise, and they only appear on sand that is
+        // wet, because dry sand does not hold them.
+        rippleScale: 2.6,
+        rippleStrength: 0.10,
+
+        // WET SAND IS NOT ONLY DARKER, IT IS A MIRROR, and the mirror is most of
+        // the effect. A film of water over sand reflects the sky at a grazing
+        // angle exactly as the sea does, which is why a beach at sunset has a
+        // band of sky lying on it between waves. It runs through the same
+        // `oceanSkyColor` and the same Fresnel as the water, so the two can
+        // never disagree about what is overhead.
+        dryRoughness: 0.95,
+        wetRoughness: 0.22,
+        // Wet sand is a thin film over a rough bed rather than a deep body of
+        // water, so it never reaches the sea's own reflectance.
+        wetReflect: 0.70,
+
+        // How often the wet band is rebuilt on the CPU, in hertz. It is one
+        // number per row and the fastest thing in it is a swash lasting a
+        // couple of seconds, so this is far below frame rate on purpose.
+        profileHz: 12
     },
 
     // ---- The sky (sky.js) ---------------------------------------------------
@@ -855,55 +1015,59 @@ export const OCEAN_CONFIG = deepFreeze({
 
     // ---- The cycle ----------------------------------------------------------
     //
-    // THE FOUR MINUTE CYCLE WAS MEASURED AND REPLACED, and the measurement is
-    // the argument. Four minutes over half a turn is 0.75 degrees per second.
-    // The frame is 40 degrees tall over about 830 pixels, so the scale is 20.2
-    // pixels per degree, and the sun would have crossed the picture at FIFTEEN
-    // PIXELS PER SECOND. That is not a day passing, that is a timelapse, and it
-    // would have made the sky the fastest moving and fastest repeating thing in
-    // a scene whose entire promise is that the horizon never moves: faster than
-    // the tide at 560 seconds and faster than the wave sets beating out over
-    // minutes. It is about a hundred and eighty times real time.
+    // THERE IS NO CYCLE ANY MORE. THE SUN IS HELD, AND MIDDAY IS A CHOICE.
     //
-    // The original objection to ten minutes was right and still stands, which is
-    // that most visitors would see one lighting state. The answer is not a
-    // number between four and ten. It is to STOP TREATING THAT AS A PROBLEM: the
-    // entry point is drawn fresh every visit, so one visitor gets a sunrise and
-    // the next gets the gold before a sunset, and the scene has a reason to be
-    // opened twice. A slow drift underneath means a long visit is not a
-    // photograph either.
+    // The scene is no longer an endless calm sea. The plan is an arc: an
+    // ordinary bright day that turns, a swell that builds until the sea is
+    // frightening, and a tsunami at the end of it. Given that, a moving sun is
+    // not a feature, it is a competing signal. Two things in the frame cannot
+    // both be the thing that is changing, and the one that has to be changing
+    // is the water.
     //
-    // A REAL SUN MOVES AT 15 DEGREES PER HOUR, which in this frame is 0.085
-    // pixels per second. 2510 seconds over half a turn is 1.35 pixels per
-    // second: sixteen times real time, still far too slow to catch in the act,
-    // and fast enough that the light has plainly changed if you look away and
-    // back. That is the same standard the tide is held to.
+    // MIDDAY IS THE RIGHT LIGHT FOR THAT, and not as a fallback. A high sun at
+    // 40 to 58 degrees puts no glitter path on the water and no warmth in the
+    // sky, so the sea is its own colour and the scene reads as ordinary, which
+    // is the whole setup. Dusk would announce the ending in the first second.
+    // It is also the only light in which a wall of water rising out of the fog
+    // at 400 metres is legible rather than a silhouette against a blaze.
     //
-    // The number is deliberately not a neat multiple of anything else that
-    // cycles here. 2510 over the tide's 560 is 4.48, over the visual set period
-    // of 74 is 33.9, over the audio set period of 61 is 41.1. Nothing lines up,
-    // so nothing beats.
+    // A HELD SUN IS NOT A STILL SKY. The cloud sheet still drifts at
+    // `sky.cloud.driftSpeed`, the tide still moves on 560 seconds, the wave
+    // sets still beat out over minutes, and the sea state is about to become the
+    // scene's real clock. Nothing here was carrying the scene.
+    //
+    // WHAT WAS HERE BEFORE, so nobody re-derives it. A four minute cycle was
+    // measured and rejected: over half a turn that is 0.75 degrees per second,
+    // and at 20.2 pixels per degree the sun crossed the frame at FIFTEEN PIXELS
+    // PER SECOND, which is a timelapse rather than a day. It was replaced with a
+    // 2510 second cycle at 1.35 pixels per second, sixteen times real time, and
+    // that worked. It is being removed because the scene changed under it, not
+    // because it was wrong. If the arc is ever abandoned, the number to restore
+    // is 2510 and the reason it is not a neat multiple of the tide, the visual
+    // set period, or the audio set period is so that nothing beats against it.
     cycle: {
-        seconds: 2510,
-        // WHERE A VISIT STARTS, weighted rather than uniform, and weighted to
-        // land SHORT OF the good light rather than in it. A five minute visit
-        // covers 0.12 of the cycle, so an entry at 0.68 walks through late
-        // afternoon, into the golden evening, and is still short of sunset when
-        // most people have gone. Arriving just before is worth more than
-        // arriving during, because it means the light improves while you watch.
+        // ZERO MEANS HELD, not "infinitely fast". `advancePhase` reads it that
+        // way on purpose, so the sun stays exactly where the visit started it
+        // and `oceanSetPhase` still works for a screenshot pass.
+        seconds: 0,
+        // ONE WINDOW, AND IT IS STILL DRAWN FRESH EVERY VISIT. Steve asked for
+        // the time of day to stop moving, not for every visitor to get the
+        // identical frame, so this keeps the draw and narrows it to the part of
+        // the day that stays bright.
         //
-        // Night is not in the list. It is four and a half minutes of the cycle
-        // and it is genuinely lovely once the sea reflects a dark sky, but it is
-        // a poor first impression and nobody should be dropped into it.
+        // 0.38 to 0.56 puts the sun between 39 and 58 degrees up and swings the
+        // azimuth from 8.7 degrees left of centre to 6.3 right, so the highlight
+        // on the water sits somewhere different each visit while the mood does
+        // not change at all. Exposure only moves between 0.95 and 0.99 across
+        // the whole band, which is the measure of how little is at stake here.
+        //
+        // The eleven keyframes above are DELIBERATELY KEPT even though nine of
+        // them are now unreachable. They cost nothing, since only the two either
+        // side of the phase are ever read, and they are the only record of what
+        // this sky looked like at every hour. `oceanSetPhase` reaches all of
+        // them, which is how the scene gets QA'd at dusk without shipping dusk.
         entry: [
-            { from: 0.62, to: 0.80, weight: 5 },   // walks into the golden evening
-            // Opens exactly on the `first light` keyframe and not a hair before
-            // it. Five minutes from 0.06 walks through sunrise at 0.12 and into
-            // the golden morning at 0.20, which is the best five minutes on this
-            // half of the day.
-            { from: 0.06, to: 0.16, weight: 3 },
-            { from: 0.30, to: 0.55, weight: 2 },   // plain daylight, the honest default
-            { from: 0.80, to: 0.92, weight: 2 }    // already in it
+            { from: 0.38, to: 0.56, weight: 1 }
         ]
     }
 });

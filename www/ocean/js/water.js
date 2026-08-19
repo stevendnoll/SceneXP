@@ -969,6 +969,26 @@ const FRAGMENT_REFLECT = `
     // mirror switches off exactly where the foam switches on, and the surf goes
     // back to being the one part of the sea that is its own colour.
     waterFresnel *= 1.0 - foam;
+    // AND A SHEET WITH NO WATER IN IT REFLECTS NOTHING. The sheet carries on
+    // shoreward past the water's edge so the waterline always has geometry
+    // beneath it, and those rows are hidden by folding the edge fade into the
+    // vertex colour alpha, which Three multiplies into diffuseColor for us.
+    // Without this line the mirror ignores that entirely: alpha arrives at zero
+    // on a dry row and the assignment at the bottom of this block lifts it back
+    // to the Fresnel value, which is 0.14 near the eye and 0.34 out at the
+    // water's edge. The result is a pane of sky laid over the dry beach, and it
+    // is invisible today only because nothing dry is in frame at camera.z 8.
+    // It would not stay invisible.
+    //
+    // vColor.a IS the edge fade rather than a second copy of it, so the two
+    // cannot drift. USE_COLOR_ALPHA is Three's own define, set whenever a
+    // material has vertexColors and a four wide colour attribute, which is
+    // exactly what applyEdgeFade builds. The guard matters because that
+    // attribute is created on the first update rather than at build time, so
+    // there is a window in which the varying does not exist.
+#ifdef USE_COLOR_ALPHA
+    waterFresnel *= vColor.a;
+#endif
     // Zero, because the sun is drawn ONCE. Three's directional light at
     // roughness 0.08 already puts a tight specular lobe on the water, and that
     // lobe smeared across the wave slopes is the glint path. Reflecting the
@@ -1415,7 +1435,7 @@ export function disposeWater() {
 export const __test__ = {
     GRAVITY, SOUNDING_WAVES, clamp, smoothstep, totalAmpAt, detectBreaks,
     VERTEX_HEAD, VERTEX_BODY, VERTEX_POSITION, FRAGMENT_HEAD, FRAGMENT_BODY,
-    FRAGMENT_ROUGHNESS,
+    FRAGMENT_ROUGHNESS, FRAGMENT_REFLECT,
     setElapsed: (v) => { elapsed = v; },
     state: () => ({ grid, profile, constants, rowZ, uniforms, attributes, cycles })
 };

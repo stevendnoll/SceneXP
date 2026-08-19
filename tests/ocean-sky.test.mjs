@@ -135,9 +135,33 @@ describe('the day is a loop', () => {
         expect(wrapPhase(NaN)).toBe(0);
     });
 
-    test('a full cycle of seconds returns to where it started', () => {
-        const back = advancePhase(0.3, CYCLE.seconds, CYCLE);
-        expect(back).toBeCloseTo(0.3, 9);
+    test('THE SUN THIS SCENE SHIPS WITH DOES NOT MOVE', () => {
+        // The scene is an arc now, from an ordinary bright sea to a tsunami, and
+        // a sun crossing the sky would be a second thing changing alongside the
+        // only thing that should be. Config holds it by setting the cycle to
+        // zero seconds, so an hour of frames has to leave the phase alone.
+        let phase = 0.47;
+        for (let i = 0; i < 3600; i++) phase = advancePhase(phase, 1, CYCLE);
+        expect(phase).toBeCloseTo(0.47, 9);
+    });
+
+    test('zero seconds means held, not infinitely fast', () => {
+        // The distinction this pins used to be a divide by zero guard that fell
+        // back to a one second day. Under that reading, holding the sun would
+        // have span it through a full cycle every second, which is the loudest
+        // possible failure and would still have passed a test that only asked
+        // for a finite number back.
+        expect(advancePhase(0.3, 5, { seconds: 0 })).toBeCloseTo(0.3, 9);
+        expect(advancePhase(0.3, 5, { seconds: -100 })).toBeCloseTo(0.3, 9);
+        expect(advancePhase(0.3, 5, { seconds: NaN })).toBeCloseTo(0.3, 9);
+    });
+
+    test('a running cycle still comes back round, for whenever one returns', () => {
+        // The machinery is kept rather than deleted, because the arc is a plan
+        // and plans change. Exercised against a cycle of its own so it does not
+        // go untested while config holds the sun.
+        expect(advancePhase(0.3, 2510, { seconds: 2510 })).toBeCloseTo(0.3, 9);
+        expect(advancePhase(0.3, 1255, { seconds: 2510 })).toBeCloseTo(0.8, 9);
     });
 
     test('the keyframe list wraps, so the last key runs into the first', () => {
@@ -402,28 +426,35 @@ describe('where a visit starts', () => {
         }
     });
 
-    test('the weighting favours the run up to the golden evening', () => {
-        const golden = CYCLE.entry[0];
-        let hits = 0;
-        for (let i = 0; i < 4000; i++) {
-            const p = entryPhase(Math.random, CYCLE);
-            if (p >= golden.from && p <= golden.to) hits++;
+    test('THE DAY STAYS BRIGHT, WHEREVER THE DRAW LANDS', () => {
+        // The point of the one window config now ships. The scene turns from an
+        // ordinary sea into a frightening one, and that only works if it opens
+        // ordinary, so no draw may land anywhere the light is doing the work.
+        // Stated as sun elevation rather than as phase, because the phase
+        // numbers are an index and the elevation is the thing being asked for.
+        for (let i = 0; i < 400; i++) {
+            const state = skyStateAt(entryPhase(Math.random, CYCLE), SKY);
+            expect(state.elevation).toBeGreaterThan(35);
         }
-        const total = CYCLE.entry.reduce((sum, w) => sum + w.weight, 0);
-        // Well inside the sampling noise on 4000 draws, and far enough from a
-        // uniform draw over four windows (0.25) to fail if the weights stopped
-        // being applied at all.
-        expect(hits / 4000).toBeGreaterThan(golden.weight / total - 0.05);
-        expect(hits / 4000).toBeLessThan(golden.weight / total + 0.05);
     });
 
-    test('a scripted random picks the window the weights say it should', () => {
-        // First draw selects the window, second places the phase inside it. 0.99
-        // of the total weight is inside the last window, and a half puts the
-        // phase at its midpoint.
-        const last = CYCLE.entry[CYCLE.entry.length - 1];
-        const p = entryPhase(scriptedRandom([0.999, 0.5]), CYCLE);
-        expect(p).toBeCloseTo((last.from + last.to) / 2, 6);
+    test('the weighting still works, tested on a cycle of its own', () => {
+        // Config has one window today, so weighting it against itself would
+        // assert nothing. The machinery is worth keeping tested regardless: it
+        // is what a future cycle would run on, and a weighted draw that quietly
+        // went uniform is the kind of failure that looks like taste.
+        const cycle = { seconds: 100, entry: [
+            { from: 0.0, to: 0.1, weight: 3 },
+            { from: 0.5, to: 0.6, weight: 1 }
+        ] };
+        let heavy = 0;
+        for (let i = 0; i < 4000; i++) {
+            if (entryPhase(Math.random, cycle) < 0.2) heavy++;
+        }
+        expect(heavy / 4000).toBeGreaterThan(0.70);
+        expect(heavy / 4000).toBeLessThan(0.80);
+        // First draw selects the window, second places the phase inside it.
+        expect(entryPhase(scriptedRandom([0.999, 0.5]), cycle)).toBeCloseTo(0.55, 6);
     });
 
     test('a cycle with no windows falls back to anywhere in the day', () => {
@@ -570,11 +601,21 @@ describe('the scene the sky builds', () => {
         expect(getPhase()).not.toBeCloseTo(first, 3);
     });
 
-    test('updateSky advances the day and survives a nonsense delta', () => {
+    test('updateSky holds the day config ships, and survives a nonsense delta', () => {
         initSky(makeScene(), null, OCEAN_CONFIG, { phase: 0.5 });
-        updateSky(CYCLE.seconds / 4);
-        expect(getPhase()).toBeCloseTo(0.75, 6);
+        // Twenty minutes of frames, which is longer than anyone will watch.
+        updateSky(1200);
+        expect(getPhase()).toBeCloseTo(0.5, 6);
         updateSky(undefined);
+        expect(getPhase()).toBeCloseTo(0.5, 6);
+    });
+
+    test('and advances it again the moment a cycle is handed one', () => {
+        // The hold is a config decision, not a capability that was removed, and
+        // the difference matters because the arc is a plan rather than a law.
+        const running = { ...OCEAN_CONFIG, cycle: { seconds: 1000, entry: CYCLE.entry } };
+        initSky(makeScene(), null, running, { phase: 0.5 });
+        updateSky(250);
         expect(getPhase()).toBeCloseTo(0.75, 6);
     });
 

@@ -684,20 +684,43 @@ describe('the profile is the sea in one array', () => {
     });
 
     test('FOAM EXISTS SHOREWARD OF THE BREAK AND NOT SEAWARD OF IT', () => {
+        // PROBED BY DISTANCE, NOT BY ROW INDEX, and the first version of this
+        // was probed by index: twelve rows either side of the break. That is a
+        // different distance on every grid, and a trial move of `camera.z` from
+        // 8 to 11.6 showed it, because the row curve is anchored to the eye.
+        // Twelve rows shoreward landed on DRY SAND above the waterline, where
+        // there is correctly no foam, so the test failed while reporting nothing
+        // about foam at all. Half way from the break to the water's edge is a
+        // place, and it stays one wherever the camera goes.
         const p = buildProfile(zs, 0);
-        const surfRow = breakRow(p);
-        // Just seaward of where the surf is: no whitewater yet.
-        expect(p.foamBed[Math.min(rows - 1, surfRow + 12)]).toBeLessThan(0.2);
-        // Well shoreward: the last wave left the beach covered in it.
-        expect(p.foamBed[Math.max(0, surfRow - 12)]).toBeGreaterThan(0.3);
+        const breakZ = zs[breakRow(p)];
+        const half = (beach.shoreZ - breakZ) / 2;
+        const rowNearest = (target) => {
+            let best = 0;
+            for (let r = 1; r < rows; r++) {
+                if (Math.abs(zs[r] - target) < Math.abs(zs[best] - target)) best = r;
+            }
+            return best;
+        };
+        // The same distance out past the break: swell, not whitewater yet.
+        expect(p.foamBed[rowNearest(breakZ - half)]).toBeLessThan(0.2);
+        // And half way in to the beach: the last wave left it covered.
+        expect(p.foamBed[rowNearest(breakZ + half)]).toBeGreaterThan(0.3);
     });
 
     test('foam decays rather than covering the whole beach forever', () => {
+        // Measured at the WATER'S EDGE, which is the shallowest row that still
+        // has water in it. The old version compared against row zero, and row
+        // zero is the sheet's near edge up on dry sand, so it read a hard zero
+        // and passed against anything at all.
         const p = buildProfile(zs, 0);
-        const surfRow = breakRow(p);
-        const near = p.foamBed[Math.max(0, surfRow - 4)];
-        const nearer = p.foamBed[0];
-        expect(nearer).toBeLessThanOrEqual(near + 1e-6);
+        let edge = 0;
+        while (edge < rows && p.depth[edge] <= 0) edge++;
+        const peak = Math.max(...p.foamBed);
+        expect(peak).toBeGreaterThan(0.5);
+        // Whitewater is thickest where it is made and thins on the way in. Half
+        // is a generous margin on a run that measures about a third.
+        expect(p.foamBed[edge]).toBeLessThan(peak * 0.5);
     });
 
     test('rows above the water line carry no wave at all', () => {
@@ -893,6 +916,53 @@ describe('the mesh', () => {
         for (const name of vertexVaryings) {
             expect(vertex).toMatch(new RegExp(`${name}\\s*=`));
         }
+    });
+
+    test('THE MIRROR IS OFF WHERE THERE IS NO WATER TO MIRROR IN', () => {
+        // WHAT SHIPPED AND WAS CAUGHT BY MOVING THE CAMERA. The sheet runs on
+        // shoreward past the water's edge so the waterline always has geometry
+        // under it, and those rows are hidden by an alpha of zero carried in the
+        // vertex colour. The reflection block runs after that and used to end
+        // with an unconditional `gl_FragColor.a = mix(a, 1.0, waterFresnel)`,
+        // which lifted a hidden row straight back into view as a pane of sky
+        // over the dry beach. Nothing in frame at camera.z 8 is dry, so it was
+        // invisible rather than absent.
+        //
+        // A PORT, NOT A RESTATEMENT. The four lines below are the shader's own
+        // arithmetic evaluated in JS, so the assertion is about the number the
+        // beach ends up with rather than about the text of the source.
+        const reflect = (cosTheta, foam, coverage, alphaIn) => {
+            let f = 0.020 + 0.980 * Math.pow(1 - cosTheta, 5);
+            f *= 1 - foam;
+            f *= coverage;                       // the line under test
+            return { fresnel: f, alpha: alphaIn + (1 - alphaIn) * f };
+        };
+        // A dry row at the water's edge, seen at the angle the eye actually
+        // meets it: 1.15 m up, 5.6 m out, so about 11.6 degrees off the surface.
+        const grazing = Math.sin((11.6 * Math.PI) / 180);
+        expect(reflect(grazing, 0, 0, 0).alpha).toBe(0);
+        // And the size of what it was. Without the coverage term the same dry
+        // row came out a third of the way to opaque, which is why this is worth
+        // a test rather than a comment.
+        expect(reflect(grazing, 0, 1, 0).alpha).toBeGreaterThan(0.3);
+        // Wet water still reflects, and still more of it the flatter you look.
+        const steep = Math.sin((45 * Math.PI) / 180);
+        expect(reflect(grazing, 0, 1, 0.5).alpha)
+            .toBeGreaterThan(reflect(steep, 0, 1, 0.5).alpha);
+        // Foam is air and scatters, so it takes the mirror down with it.
+        expect(reflect(grazing, 1, 1, 0).fresnel).toBe(0);
+
+        // The coverage term has to come BEFORE both readers of `waterFresnel`,
+        // or it scales nothing that matters.
+        const src = __test__.FRAGMENT_REFLECT.replace(/\/\/.*$/gm, '');
+        const scaled = src.indexOf('vColor.a');
+        expect(scaled).toBeGreaterThan(-1);
+        expect(scaled).toBeLessThan(src.indexOf('gl_FragColor.rgb'));
+        expect(scaled).toBeLessThan(src.indexOf('gl_FragColor.a'));
+        // Guarded, because Three only declares vColor once the four wide colour
+        // attribute exists, and `applyEdgeFade` builds that on the first update
+        // rather than at build time.
+        expect(src).toMatch(/#ifdef\s+USE_COLOR_ALPHA[\s\S]*vColor\.a[\s\S]*#endif/);
     });
 
     test('THE SEA BETWEEN WAVES HAS TO BE WATER, NOT MILK', () => {

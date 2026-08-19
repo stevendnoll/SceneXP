@@ -3,16 +3,25 @@
  * main.js - Entry point for the Ocean experience.
  *
  * SCAFFOLD, NOT THE FINISHED PAGE. This exists so the water can be looked at in
- * a browser while it is being tuned. The sand is still a placeholder, there is
- * no welcome screen, no mute control, and the surf synthesiser next door is not
- * wired up yet. Everything on that list has a home already and is noted below
- * where it will land.
+ * a browser while it is being tuned. There is no welcome screen, no mute
+ * control, and the surf synthesiser next door is not wired up yet. Everything
+ * on that list has a home already and is noted below where it will land.
  *
- * THE FRAME LOOP IS THE WHOLE FILE once those arrive. This experience has no
- * input to route, no state machine, and nothing to pause: past the welcome
- * screen there is a sea, a sky, and a mute button. That is the point of it, and
- * it is why this file should stay one of the shortest main.js in the project
- * rather than growing toward the Earth Defense one.
+ * THIS FILE IS ABOUT TO NEED A STATE MACHINE, AND IT USED TO SAY THE OPPOSITE.
+ * The note here read "no input to route, no state machine, and nothing to
+ * pause", and that was true of an ambient sea that ran forever. Steve reframed
+ * the scene on 2026-08-19: it now opens as an ordinary bright day, a storm swell
+ * builds until the sea is frightening, a tsunami arrives, and the page fades to
+ * black. That is a timeline with an ending, so there is a clock to run, stages
+ * to move between, and a finish.
+ *
+ * There is still no INPUT to route past the welcome screen and the mute button,
+ * which is the part of the original claim that survives. The visitor watches.
+ *
+ * ONE GENUINELY NEW PROPERTY: this is the first scene in the project that can
+ * legitimately STOP RENDERING. Once the fade is complete there is nothing left
+ * to draw, so the loop should end rather than idle, and a phone left on the
+ * finished page should be doing no work at all.
  *
  * NEITHER SHARED SCENE PART FITS. `scene-1.0.0` builds a walkable world with a
  * sky, clouds, and a day cycle geared to buildings; `space-1.0.0` builds an
@@ -25,11 +34,12 @@
 
 import { OCEAN_CONFIG } from './config.min.js';
 import {
-    initWater, updateWater, consumeBreaks, breakDistance, disposeWater, bedHeightAt, halfWidthAt
+    initWater, updateWater, consumeBreaks, breakDistance, disposeWater
 } from './water.min.js';
 import {
     initSky, updateSky, disposeSky, skyUniforms, getPhase, setPhase, SKY_GLSL, SKY_UNIFORM_GLSL
 } from './sky.min.js';
+import { initSand, updateSand, addBreaks, disposeSand, swashReachMetres } from './sand.min.js';
 
 const state = {
     running: false,
@@ -75,61 +85,6 @@ function buildScene() {
     scene = new THREE.Scene();
 }
 
-/** The beach under the water.
- *
- *  PLACEHOLDER. It takes its shape from `bedHeightAt` in water.js so the sand
- *  and the depth the waves are solved against can never disagree, which is the
- *  seam that matters. What it does not have yet is the wet band: sand stays
- *  dark for a few seconds after the sheet retreats, and `sand.wetColor` and
- *  `sand.dryingSeconds` in config are waiting for the module that does it. */
-function buildSand() {
-    const { beach } = OCEAN_CONFIG;
-    const rows = 90;
-    const cols = 60;
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(rows * cols * 3);
-
-    for (let r = 0; r < rows; r++) {
-        const t = r / (rows - 1);
-        const z = beach.nearZ + (beach.farZ - beach.nearZ) * Math.pow(t, 2.0);
-        // Same frustum footprint as the water, from the same helper, so the two
-        // sheets can never disagree about how wide the world is.
-        const halfWidth = halfWidthAt(z, beach);
-        for (let c = 0; c < cols; c++) {
-            const u = c / (cols - 1);
-            const i = (r * cols + c) * 3;
-            positions[i] = (u * 2 - 1) * halfWidth;
-            positions[i + 1] = bedHeightAt(z, beach);
-            positions[i + 2] = z;
-        }
-    }
-
-    // Same winding as the water. See the note in water.js: the obvious order
-    // faces these triangles at the seabed and the beach vanishes.
-    const indices = new Uint16Array((rows - 1) * (cols - 1) * 6);
-    let n = 0;
-    for (let r = 0; r < rows - 1; r++) {
-        for (let c = 0; c < cols - 1; c++) {
-            const a = r * cols + c;
-            indices[n++] = a; indices[n++] = a + 1; indices[n++] = a + cols;
-            indices[n++] = a + 1; indices[n++] = a + cols + 1; indices[n++] = a + cols;
-        }
-    }
-
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-    geometry.computeVertexNormals();
-
-    const material = new THREE.MeshStandardMaterial({
-        color: OCEAN_CONFIG.sand.color,
-        roughness: 0.95,
-        metalness: 0
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.name = 'sand';
-    scene.add(mesh);
-}
-
 function placeCamera() {
     const cfg = OCEAN_CONFIG.camera;
     camera = new THREE.PerspectiveCamera(cfg.fov, window.innerWidth / window.innerHeight, 0.1, 900);
@@ -173,10 +128,16 @@ function loop(now) {
     updateSky(delta);
     updateWater(delta);
 
-    // THE AUDIO SEAM. Each entry is already shaped for `playBreak(strength,
-    // pan)` in audio.min.js. Drained every frame whether or not anything is
+    // THE BREAK QUEUE HAS TWO READERS AND ONE DRAIN. Each entry is already
+    // shaped for `playBreak(strength, pan)` in audio.min.js, and sand.js turns
+    // the same entry into a sheet of water running up the beach. Drained once
+    // here and handed on, rather than each consumer calling `consumeBreaks`,
+    // because the second caller would get an empty array and the sand would
+    // silently stop moving. Drained every frame whether or not anything is
     // listening, so the queue cannot grow while the page is muted.
-    consumeBreaks();
+    const breaks = consumeBreaks();
+    addBreaks(breaks);
+    updateSand(delta);
 
     renderer.render(scene, camera);
 }
@@ -206,14 +167,12 @@ function init() {
     // is looking at, and that is the one line in the frame nobody can miss.
     placeCamera();
     initSky(scene, camera, OCEAN_CONFIG, { renderer });
-    buildSand();
-    // The sea reflects the sky by compiling the sky's own program into its
-    // shader, so the sky has to exist first. Handed over rather than imported:
-    // water.js deliberately knows nothing about sky.js.
-    initWater(scene, OCEAN_CONFIG, {
-        mobile: state.mobile,
-        sky: { uniformGlsl: SKY_UNIFORM_GLSL, glsl: SKY_GLSL, uniforms: skyUniforms() }
-    });
+    // Both sheets reflect the sky by compiling the sky's own program into their
+    // shaders, so the sky has to exist first. Handed over rather than imported:
+    // water.js and sand.js deliberately know nothing about sky.js.
+    const sky = { uniformGlsl: SKY_UNIFORM_GLSL, glsl: SKY_GLSL, uniforms: skyUniforms() };
+    initSand(scene, OCEAN_CONFIG, { mobile: state.mobile, sky });
+    initWater(scene, OCEAN_CONFIG, { mobile: state.mobile, sky });
 
     window.addEventListener('resize', onResize, { passive: true });
     document.addEventListener('visibilitychange', onVisibility);
@@ -224,6 +183,7 @@ function init() {
     // screenshot, and easier still to say a screenshot was taken at phase 0.84
     // than to call it the orange one. Both go away with the scaffold.
     window.oceanBreakDistance = breakDistance;
+    window.oceanSwashReach = swashReachMetres;
     window.oceanPhase = getPhase;
     // Jump the day to a given phase, so a screenshot pass can walk the whole
     // cycle in a minute instead of in the forty two it actually takes.
@@ -238,4 +198,4 @@ if (typeof document !== 'undefined') {
     }
 }
 
-export { init, start, stop, disposeWater, disposeSky };
+export { init, start, stop, disposeWater, disposeSky, disposeSand };
