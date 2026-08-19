@@ -453,6 +453,19 @@ describe('the ending', () => {
         const near = frontAt(t.arriveAt - 4);
         expect(near.rise).toBeGreaterThan(1);
         expect(near.foam).toBeGreaterThan(0.5);
+
+        // AND A SEA BEHIND IT BIG ENOUGH TO STAND ABOVE THE HORIZON. This is
+        // what makes it a wall rather than a step. The level rise alone is a few
+        // pixels at three hundred metres, so without this the front travelled
+        // correctly and was invisible, which is how it shipped twice.
+        //
+        // The horizon is at eye height by definition, so a crest that clears
+        // `camera.height` is drawn against the sky. `swellBehind` is a multiple
+        // of a spectrum whose deep water crest is about 0.67 m, and the front's
+        // own rise sits under it.
+        expect(near.swellBehind).toBeGreaterThan(2.5);
+        const crest = near.swellBehind * 0.67 + near.rise;
+        expect(crest).toBeGreaterThan(camera.height * 2);
     });
 
     test('the front arrives while there is still scene left to see it in', () => {
@@ -460,8 +473,16 @@ describe('the ending', () => {
         // nobody was shown, which is the same failure as not having one.
         const t = STORM.tsunami;
         expect(t.arriveAt).toBeLessThan(STORM.seconds);
-        expect(t.startAt).toBeGreaterThan(
+        // THE WALL APPEARS AS THE WATER GOES, and these two coinciding is the
+        // point rather than an accident: the sea leaves and the reason it is
+        // leaving comes out of the fog behind it in the same second. This used
+        // to demand the front appear strictly after the drawback started, which
+        // read as caution and was really just the old timing written down.
+        expect(t.startAt).toBeGreaterThanOrEqual(
             STORM.stages.find((s) => s.name === 'drawback').from
+        );
+        expect(t.startAt).toBeLessThan(
+            STORM.stages.find((s) => s.name === 'drawback').from + 4
         );
         // At least a few seconds of it on screen before the black starts.
         expect(STORM.seconds - STORM.fadeSeconds).toBeGreaterThan(t.arriveAt - 12);

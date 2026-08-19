@@ -441,9 +441,25 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
         // It has to match `frontLevelAt` in storm.js exactly, and there is a
         // test that walks the sheet and checks that it does.
         let level = tide;
+        let behindFront = 0;
         if (front) {
-            level += front.rise * (1 - smoothstep(front.z - front.width, front.z + front.width, z));
+            behindFront = 1 - smoothstep(front.z - front.width, front.z + front.width, z);
+            level += front.rise * behindFront;
         }
+        // THE SEA IS A DIFFERENT SIZE ON THE TWO SIDES OF THE FRONT, and that is
+        // what turns a step in the water level into a WALL. The level alone is
+        // only a few pixels tall at three hundred metres, so on its own it
+        // arrives without ever having been seen. Put a huge swell behind it and
+        // leave the drawn back water in front of it calm, and the horizon grows
+        // a ridge that stands above the eye line while the sea in front of it
+        // lies flat. That contrast is the whole picture.
+        //
+        // It is also what actually happens. The water behind a tsunami front is
+        // the disturbed water the front is made of, and the water ahead of it
+        // has just been pulled out and has nothing driving it.
+        const rowSwell = front
+            ? swell + (front.swellBehind - swell) * behindFront
+            : swell;
 
         const depth = depthAt(z, level, beach, water);
         p.depth[r] = depth;
@@ -489,7 +505,7 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
             // seaward because a bigger wave runs out of water further out. Scale
             // the answer instead of the input and the surf zone stays put while
             // the waves in it get taller, which is not a thing a sea does.
-            grown[i] = w.amplitude * swell * envelope[i] * (1 + water.shoalGain * (ks - 1));
+            grown[i] = w.amplitude * rowSwell * envelope[i] * (1 + water.shoalGain * (ks - 1));
             wanted += grown[i];
         }
 

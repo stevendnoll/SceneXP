@@ -284,7 +284,11 @@ export function frontAt(seconds, storm = OCEAN_CONFIG.storm) {
         z: t.fromZ + (t.toZ - t.fromZ) * p,
         rise: t.rise * smoothstep(0, 0.25, p),
         width: t.frontWidth,
-        foam: t.frontFoam * smoothstep(0, 0.15, p)
+        foam: t.frontFoam * smoothstep(0, 0.15, p),
+        // The sea BEHIND the front, as a swell multiplier. Full from the moment
+        // it appears, because the wall is supposed to be already enormous when
+        // it comes out of the fog rather than to grow on the way in.
+        swellBehind: t.swellBehind
     };
 }
 
