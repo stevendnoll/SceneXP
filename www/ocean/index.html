@@ -6,28 +6,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
     <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
-         media-src is here for the silent keep-alive element that promotes the
-         iOS audio session, which needs a blob: URL. Three shipped scenes carry
-         that workaround without this directive and it has never worked in any
-         of them; see the note in js/audio.js. -->
+         No media-src: this scene plays no sound, so nothing may load any. The
+         directive was here for a silent keep-alive element that promoted the iOS
+         audio session, and it went with the synthesiser on 2026-08-19. -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <!-- SCAFFOLD PAGE. This is a bench for tuning the water, not the finished
-         experience. Still to come before it ships: the welcome screen, the mute
-         control, the surf audio wiring, the Open Graph and Twitter blocks, the
-         JSON-LD, the canonical URL, and entries in sitemap.xml, llms.txt, and
-         robots.txt. Do not deploy as is.
+    <!-- NOT YET READY TO DEPLOY. The behaviour is all here now: the welcome
+         card and the arc. What is still owed is page
+         furniture, and it is the furniture that the noindex below is waiting on:
+         the Open Graph and Twitter blocks, the JSON-LD, the canonical URL, and
+         entries in sitemap.xml, llms.txt, and robots.txt.
 
-         AND THE WELCOME SCREEN NOW OWES THE VISITOR A WARNING. The scene is a
-         three minute arc that ends in a tsunami and is meant to be frightening,
-         so somebody has to be told that before it starts rather than after. That
-         is a content decision as much as an accessibility one and it is the one
-         thing on the list above that cannot be quietly dropped. -->
+         THE WARNING ON THE CARD IS NOT FURNITURE AND DOES NOT COME OUT. This is
+         ninety seconds that sets out to frighten somebody and ends with the sea
+         closing over their head, which is a thing a visitor is owed in advance
+         rather than after. The card was originally needed because sound cannot
+         start without a gesture; the sound is gone and the warning is the better
+         reason anyway. THE SCENE IS SILENT BY DESIGN, so there is no mute
+         control and nothing here should add one. -->
     <meta name="robots" content="noindex, nofollow">
     <meta name="theme-color" content="#8fb6cc">
-    <meta name="description" content="A quiet stretch of sea that does not stay quiet. A three minute view from the water's edge.">
+    <meta name="description" content="A quiet stretch of sea that does not stay quiet. Ninety seconds from the water's edge, and the weather is turning.">
 
     <title>The Ocean (scaffold)</title>
 
@@ -40,6 +41,27 @@
 <body>
     <canvas id="scene" aria-label="A view out to sea from the water's edge, with waves breaking toward you"
         role="img"></canvas>
+
+    <!-- The welcome card. It tells the visitor what they are about to watch and
+         holds the arc at zero until they are ready. The sea is already running
+         behind it, so the card sits over a living ordinary afternoon rather than
+         over a still frame. -->
+    <div id="welcome">
+        <div class="card">
+            <h1>The Ocean</h1>
+            <p class="lede">
+                Ninety seconds at the water's edge, beginning on an ordinary bright afternoon.
+            </p>
+            <p class="warning">
+                Please know before you start that this one is meant to unsettle you.
+                The weather turns, the surf keeps rising, and the sea comes over you
+                at the end. It plays without sound, so you are welcome to watch it
+                anywhere.
+            </p>
+            <button id="begin" type="button" class="primary">Begin</button>
+            <p class="note">You can watch it again as many times as you wish.</p>
+        </div>
+    </div>
 
     <!-- The white-out when the water comes over the camera, and the closing
          fade. Both are plain elements rather than anything in WebGL: neither is

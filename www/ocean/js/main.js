@@ -2,10 +2,18 @@
 /**
  * main.js - Entry point for the Ocean experience.
  *
- * SCAFFOLD, NOT THE FINISHED PAGE. This exists so the water can be looked at in
- * a browser while it is being tuned. There is no welcome screen, no mute
- * control, and the surf synthesiser next door is not wired up yet. Everything
- * on that list has a home already and is noted below where it will land.
+ * NOT THE FINISHED PAGE YET, but no longer a bare bench either. The welcome
+ * card and the arc are wired as of 2026-08-19. What is still owed before this
+ * can ship is page furniture rather than behaviour: the Open Graph and Twitter
+ * blocks, the JSON-LD, the canonical URL, entries in sitemap.xml, llms.txt and
+ * robots.txt, dropping the noindex, and an init test. Reduced motion also still
+ * needs a real answer for the arc, which is a harder question than the
+ * stylesheet handles today.
+ *
+ * THE SCENE IS SILENT AND THAT IS A DECISION. A full procedural surf synth was
+ * built and wired here and removed on 2026-08-19 after three rounds of listening
+ * QA. See the note in config.js for what was wrong with it and what was never
+ * found. Recover it from git if it is ever wanted.
  *
  * THIS FILE IS ABOUT TO NEED A STATE MACHINE, AND IT USED TO SAY THE OPPOSITE.
  * The note here read "no input to route, no state machine, and nothing to
@@ -16,8 +24,8 @@
  * there is a clock to run, stages
  * to move between, and a finish.
  *
- * There is still no INPUT to route past the welcome screen and the mute button,
- * which is the part of the original claim that survives. The visitor watches.
+ * There is still no INPUT to route past the welcome screen, which is the part of
+ * the original claim that survives. The visitor watches.
  *
  * ONE GENUINELY NEW PROPERTY: this is the first scene in the project that can
  * legitimately STOP RENDERING. Once the fade is complete there is nothing left
@@ -50,6 +58,18 @@ const state = {
     running: false,
     lastTime: 0,
     mobile: false,
+    // THE STORY WAITS FOR THE VISITOR AND THE SEA DOES NOT. The water runs from
+    // the moment the page loads, so what sits behind the welcome card is a
+    // living ordinary sea rather than a freeze frame, but the arc holds at zero
+    // until somebody presses Begin.
+    //
+    // It was originally the only arrangement that worked, because a browser will
+    // not build an AudioContext without a gesture. The sound is gone and this
+    // stays, because the reasons that survive it are better ones: the card
+    // carries a content warning this scene owes anybody who opens it, and a
+    // ninety second story should not be a third over before the visitor has
+    // finished reading the page it is on.
+    begun: false,
     // Seconds since the arc began, which is the clock the whole scene runs on.
     // Deliberately NOT the same as water.js's own elapsed: that one keeps
     // running so the sea is never reset mid wave, and this one is what a replay
@@ -72,6 +92,7 @@ let wash = null;        // the white-out when the water comes over the camera
 let blackout = null;    // the closing fade
 let ending = null;      // the card that sits on the black
 let replay = null;
+let welcome = null;     // the card that holds the arc until the visitor is ready
 
 /** A phone or tablet, asked once.
  *
@@ -145,7 +166,8 @@ function loop(now) {
     const seconds = now / 1000;
     const delta = state.lastTime ? seconds - state.lastTime : 0;
     state.lastTime = seconds;
-    state.arc += Math.max(0, Math.min(0.25, delta));
+    // The sea moves while the welcome card is up; the story does not.
+    if (state.begun) state.arc += Math.max(0, Math.min(0.25, delta));
 
     // THE ARC IS READ BEFORE ANYTHING IS DRAWN, and the water level under the
     // camera is read from the SEA rather than from the arc, so the white-out can
@@ -177,13 +199,14 @@ function loop(now) {
     updateSky(delta, storm.gloom, storm.clarity);
     updateWater(delta, storm);
 
-    // THE BREAK QUEUE HAS TWO READERS AND ONE DRAIN. Each entry is already
-    // shaped for `playBreak(strength, pan)` in audio.min.js, and sand.js turns
-    // the same entry into a sheet of water running up the beach. Drained once
-    // here and handed on, rather than each consumer calling `consumeBreaks`,
-    // because the second caller would get an empty array and the sand would
-    // silently stop moving. Drained every frame whether or not anything is
-    // listening, so the queue cannot grow while the page is muted.
+    // THE BREAK QUEUE. sand.js turns each entry into a sheet of water running up
+    // the beach. It had a second reader until the sound was removed, which is
+    // why it is drained once here and handed on rather than each consumer
+    // calling `consumeBreaks`: the second caller would get an empty array and
+    // the sand would silently stop moving. Worth keeping that shape, since the
+    // queue is the obvious seam for anything else that wants to know a wave
+    // broke. Drained every frame whether or not anyone is reading it, so it
+    // cannot grow.
     const breaks = consumeBreaks();
     // The swell goes with them, because a bore's depth is set by the wave that
     // made it and has to be baked in at that moment rather than read later.
@@ -212,6 +235,29 @@ function loop(now) {
 function paintOverlay(washAmount, fade) {
     if (wash) wash.style.opacity = washAmount.toFixed(3);
     if (blackout) blackout.style.opacity = fade.toFixed(3);
+}
+
+/** The visitor is ready. Start the story.
+ *
+ *  THE CARD OUTLIVED THE REASON IT WAS BUILT. It arrived because a browser will
+ *  not build an AudioContext without a gesture, and the scene has no sound any
+ *  more. It stays because the other two jobs it does are the ones that mattered:
+ *  it carries the content warning, which this scene owes anybody who opens it,
+ *  and it stops a ninety second story running while the visitor is still reading
+ *  the page. */
+function beginArc() {
+    if (state.begun) return;
+    state.begun = true;
+    if (welcome) {
+        welcome.style.opacity = '0';
+        // Stops catching clicks the instant it starts fading rather than when it
+        // finishes. Under reduced motion there is no fade at all, so without
+        // this the card would sit invisible over the whole page for most of a
+        // second, swallowing anything aimed at what is behind it.
+        welcome.style.pointerEvents = 'none';
+        // Then out of the flow entirely once the fade is done.
+        setTimeout(() => { if (welcome) welcome.hidden = true; }, 700);
+    }
 }
 
 /** The end of the arc: stop drawing, and show the card.
@@ -300,7 +346,18 @@ function init() {
     blackout = document.getElementById('blackout');
     ending = document.getElementById('ending');
     replay = document.getElementById('replay');
+    welcome = document.getElementById('welcome');
     if (replay) replay.addEventListener('click', replayArc);
+
+    const beginBtn = document.getElementById('begin');
+    if (beginBtn) {
+        beginBtn.addEventListener('click', beginArc);
+    } else {
+        // No card on the page, so nothing is holding the story back. This is the
+        // path the old scaffold took and the one a stripped-down embed would
+        // take.
+        beginArc();
+    }
 
     window.addEventListener('resize', onResize, { passive: true });
     document.addEventListener('visibilitychange', onVisibility);
@@ -321,6 +378,9 @@ function init() {
     // half minutes in front of it. Takes seconds from the start of the story.
     window.oceanSetArc = (seconds) => {
         const at = Math.max(0, Number(seconds) || 0);
+        // Jumping the arc implies starting it, or the clock would be set and
+        // then sit there while the welcome card held it at that number.
+        beginArc();
         // Coming back from the ending has to clear the card and restart the
         // loop, and `replayArc` is the only thing that knows how, so it runs
         // first and the time is set after it rather than before.

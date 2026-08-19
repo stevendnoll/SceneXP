@@ -2,9 +2,9 @@
  *
  * experience.css - The Ocean experience.
  *
- * SCAFFOLD. Enough to get the canvas filling the viewport while the water is
- * being tuned. The finished page picks up the shared site stylesheet, the
- * welcome overlay, and the mute control.
+ * Enough to get the canvas filling the viewport, plus the three things that sit
+ * over it: the welcome card, the white-out, and the ending. The finished page
+ * will also pick up the shared site stylesheet.
  *
  * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block.
  * The page runs a strict same-origin CSP with style-src 'self', which blocks
@@ -28,6 +28,110 @@ body {
     display: block;
     width: 100%;
     height: 100%;
+}
+
+/* ---- The welcome card -------------------------------------------------------
+ *
+ * DARK OVER A BRIGHT SEA. The scene opens at midday under a clear sky, which is
+ * close to the brightest thing a screen can show, so light text on a scrim is
+ * the only combination that stays readable across the whole frame. The scrim is
+ * also doing the honest work of saying "this is not the experience yet".
+ *
+ * It stays out of the way of the horizon as far as it can. The composition
+ * behind it is the reason anybody is here. */
+#welcome {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: linear-gradient(180deg, rgba(6, 20, 27, 0.62) 0%, rgba(6, 20, 27, 0.78) 100%);
+    opacity: 1;
+    transition: opacity 650ms ease;
+    font: 400 1rem/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #e8eef1;
+}
+
+#welcome[hidden] {
+    display: none;
+}
+
+#welcome .card {
+    max-width: 34rem;
+    text-align: center;
+}
+
+#welcome h1 {
+    margin: 0 0 0.75rem;
+    font-size: clamp(1.9rem, 6vw, 3rem);
+    font-weight: 300;
+    letter-spacing: 0.02em;
+}
+
+#welcome .lede {
+    margin: 0 0 1.25rem;
+    font-size: clamp(1rem, 2.6vw, 1.15rem);
+    color: #cfdde3;
+}
+
+/* The one paragraph on this page that cannot be skimmed past, so it is set apart
+   rather than run in with the rest. A rule down the side does that without
+   shouting, which suits the tone better than a warning box would. */
+#welcome .warning {
+    margin: 0 auto 1.75rem;
+    max-width: 30rem;
+    padding: 0.85rem 1.1rem;
+    text-align: left;
+    border-left: 2px solid #6f8b96;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 0 0.35rem 0.35rem 0;
+    color: #b9ccd4;
+    font-size: 0.95rem;
+}
+
+#welcome .note {
+    margin: 1.1rem 0 0;
+    font-size: 0.85rem;
+    color: #8ea3ac;
+}
+
+/* ---- Buttons ----------------------------------------------------------------
+ *
+ * Shared shape between Begin and Watch it again, so the page has one button
+ * rather than two. Generous hit areas: this scene gets watched on phones held at
+ * arm's length. */
+#welcome .primary,
+#replay {
+    font: inherit;
+    color: #e8eef1;
+    background: transparent;
+    border: 1px solid #5c6d75;
+    border-radius: 2rem;
+    cursor: pointer;
+    transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+#welcome .primary:hover,
+#welcome .primary:focus-visible,
+#replay:hover,
+#replay:focus-visible {
+    background: rgba(232, 238, 241, 0.10);
+    border-color: #9fb0b8;
+}
+
+#welcome .primary:focus-visible,
+#replay:focus-visible {
+    outline: 2px solid #9fb0b8;
+    outline-offset: 3px;
+}
+
+#welcome .primary {
+    padding: 0.8rem 2.6rem;
+    font-size: 1.05rem;
+    border-color: #93aeb9;
+    background: rgba(232, 238, 241, 0.08);
 }
 
 /* ---- The arc's two overlays -------------------------------------------------
@@ -104,37 +208,21 @@ body {
     color: #9fb0b8;
 }
 
+/* Shape and states come from the shared button block above. Only the sizing is
+   its own, because this one is the single thing on a black screen. */
 #replay {
     margin-top: 0.5rem;
     padding: 0.7rem 1.6rem;
-    font: inherit;
-    color: #e8eef1;
-    background: transparent;
-    border: 1px solid #5c6d75;
-    border-radius: 2rem;
-    cursor: pointer;
-    transition: background-color 200ms ease, border-color 200ms ease;
-}
-
-#replay:hover,
-#replay:focus-visible {
-    background: rgba(232, 238, 241, 0.10);
-    border-color: #9fb0b8;
-}
-
-#replay:focus-visible {
-    outline: 2px solid #9fb0b8;
-    outline-offset: 3px;
 }
 
 /* Reduced motion gets the same scene without the transitions. The arc itself is
    the thing that would need a real answer here, and that belongs with the
    welcome screen rather than with a stylesheet. */
 @media (prefers-reduced-motion: reduce) {
-    #ending {
-        transition: none;
-    }
 
+    #welcome,
+    #ending,
+    #welcome .primary,
     #replay {
         transition: none;
     }

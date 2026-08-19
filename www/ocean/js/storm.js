@@ -49,7 +49,7 @@ export function arcProgress(seconds, storm = OCEAN_CONFIG.storm) {
 }
 
 /** The named stage at a given time, for anything that needs to branch rather
- *  than interpolate: the audio bed, the copy on the ending card, a debug label.
+ *  than interpolate: the copy on the ending card, a debug label.
  *
  *  Returns the LAST stage whose `from` has passed, so the table reads as a
  *  sequence of start times rather than as a set of ranges that have to be kept

@@ -513,7 +513,7 @@ function buildMaterial(config, sky) {
 /** Take the waves that just broke and put them on the beach.
  *
  *  Handed the array `consumeBreaks()` returned rather than calling it, because
- *  that queue has one reader and audio.js is about to be the other. main.js
+ *  that queue has one reader, and briefly had a second. main.js
  *  drains it once and gives it to both. */
 export function addBreaks(events, sea = null) {
     if (!events || !settings) return;

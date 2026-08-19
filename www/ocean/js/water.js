@@ -87,8 +87,8 @@
  * and it is `FRAGMENT_REFLECT` below.
  *
  * THE AUDIO SEAM IS ONE FUNCTION. `consumeBreaks()` returns the waves that
- * actually reached the break line since the last call. audio.js already takes
- * `playBreak(strength, pan)`, so the crash the visitor hears is the wave they
+ * actually reached the break line since the last call. Each entry carries a
+ * strength and a stereo placement, so a listener could be driven by the wave they
  * just watched rather than a timer running alongside it. That is the whole
  * reason the two were built separably.
  *
@@ -109,10 +109,10 @@ const GRAVITY = 9.81;
  *  this is only a floor under the floor. */
 const EPSILON = 1e-6;
 
-/** Waves that get their own break event for the audio. The two longest, which
- *  are the two that actually read as arriving. The short components are chop
- *  riding on top and firing a crash for each of them would turn the beach into
- *  a rattle. */
+/** Waves that get their own break event. The two longest, which are the two
+ *  that actually read as arriving. The short components are chop riding on top
+ *  and reporting an arrival for each of them would turn the beach into a
+ *  rattle. */
 const SOUNDING_WAVES = 2;
 
 /** A sea with no storm on it, which is what every caller gets by default.
@@ -640,7 +640,7 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
  *  the sand every single time. That is the swash, not the surf. The break line
  *  is where the collapse STARTS, which is the outer edge of the zone.
  *
- *  Used for two things: deciding when a wave has arrived so audio.js can be
+ *  Used for two things: deciding when a wave has arrived so a listener can be
  *  told, and reporting the break distance so the scene can be tuned by looking
  *  at a number rather than at a screenshot. */
 export function breakRow(profile, threshold = 0.5) {
@@ -1546,8 +1546,11 @@ function totalAmpAt(row) {
 
 /** The waves that reached the break line since the last call, and clears them.
  *
- *  THE SEAM WITH audio.js. Each entry is ready to hand straight to
- *  `playBreak(strength, pan)`. It is a queue rather than a callback so the
+ *  THE SEAM FOR ANYTHING THAT WANTS TO KNOW A WAVE BROKE. sand.js reads it to
+ *  start a sheet of water up the beach, and each entry also carries a strength
+ *  and a stereo placement for a listener that no longer exists: the surf
+ *  synthesiser was removed on 2026-08-19, see config. It is a queue rather than
+ *  a callback so the
  *  frame loop stays in charge of ordering, and so a muted or suspended page can
  *  drain and discard without the water knowing anything about sound. */
 export function consumeBreaks() {
