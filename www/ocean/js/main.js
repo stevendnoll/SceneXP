@@ -34,17 +34,24 @@
 
 import { OCEAN_CONFIG } from './config.min.js';
 import {
-    initWater, updateWater, consumeBreaks, breakDistance, disposeWater
+    initWater, updateWater, consumeBreaks, breakDistance, surfaceAt, disposeWater
 } from './water.min.js';
 import {
     initSky, updateSky, disposeSky, skyUniforms, getPhase, setPhase, SKY_GLSL, SKY_UNIFORM_GLSL
 } from './sky.min.js';
 import { initSand, updateSand, addBreaks, disposeSand, swashReachMetres } from './sand.min.js';
+import { stormStateAt, surgeAt } from './storm.min.js';
 
 const state = {
     running: false,
     lastTime: 0,
-    mobile: false
+    mobile: false,
+    // Seconds since the arc began, which is the clock the whole scene runs on.
+    // Deliberately NOT the same as water.js's own elapsed: that one keeps
+    // running so the sea is never reset mid wave, and this one is what a replay
+    // puts back to zero.
+    arc: 0,
+    finished: false
 };
 
 let canvas = null;
@@ -52,6 +59,10 @@ let renderer = null;
 let scene = null;
 let camera = null;
 let frame = 0;
+let wash = null;        // the white-out when the water comes over the camera
+let blackout = null;    // the closing fade
+let ending = null;      // the card that sits on the black
+let replay = null;
 
 /** A phone or tablet, asked once.
  *
@@ -108,7 +119,12 @@ function onResize() {
 function onVisibility() {
     if (document.hidden) {
         stop();
-    } else if (!state.running) {
+    } else if (!state.running && !state.finished) {
+        // `lastTime` is cleared so the first frame back reports a delta of zero
+        // rather than however long the tab was hidden. That matters more now
+        // than it used to: the arc is a three minute story, and a visitor who
+        // switched away for four minutes should come back to the sea they left
+        // rather than to the credits.
         state.lastTime = 0;
         start();
     }
@@ -120,13 +136,23 @@ function loop(now) {
     const seconds = now / 1000;
     const delta = state.lastTime ? seconds - state.lastTime : 0;
     state.lastTime = seconds;
+    state.arc += Math.max(0, Math.min(0.25, delta));
+
+    // THE ARC IS READ BEFORE ANYTHING IS DRAWN, and the water level under the
+    // camera is read from the SEA rather than from the arc, so the white-out can
+    // never disagree with the water actually on screen. The surge has to be
+    // asked for first because the sea needs it to answer, which is the one place
+    // the two modules have to be unpicked in the right order.
+    const surge = surgeAt(state.arc, OCEAN_CONFIG.storm);
+    const storm = stormStateAt(state.arc, OCEAN_CONFIG,
+        surfaceAt(OCEAN_CONFIG.camera.z, { surge }));
 
     // The sky first, because the water's own shader reads the sky's uniforms
     // and the sand is lit by the sky's lights. Updating it after would draw one
     // frame of sea under yesterday's sun, which at a frame is invisible and at
     // a breakpoint is an hour of confusion.
     updateSky(delta);
-    updateWater(delta);
+    updateWater(delta, storm);
 
     // THE BREAK QUEUE HAS TWO READERS AND ONE DRAIN. Each entry is already
     // shaped for `playBreak(strength, pan)` in audio.min.js, and sand.js turns
@@ -137,13 +163,72 @@ function loop(now) {
     // listening, so the queue cannot grow while the page is muted.
     const breaks = consumeBreaks();
     addBreaks(breaks);
-    updateSand(delta);
+    // Handed the same state the water got, so the wet band and the water's edge
+    // are the same edge. During the drawback that is the whole shot.
+    updateSand(delta, storm);
 
     renderer.render(scene, camera);
+    paintOverlay(storm);
+
+    // THE ONE SCENE IN THIS PROJECT THAT CAN HONESTLY STOP DRAWING. Once the
+    // fade is complete there is nothing left on screen, so idling the loop would
+    // be a phone warming itself on a black rectangle.
+    if (storm.finished && storm.fade >= 1) finish();
+}
+
+/** The white-out and the closing fade, both plain DOM.
+ *
+ *  KEPT OUT OF WEBGL ON PURPOSE. Neither is a 3D effect: one is a face full of
+ *  whitewater and the other is the end of a film. Doing them as two divs means
+ *  the renderer never learns about the story, the reduced-motion variant is a
+ *  stylesheet rather than a branch, and the fade keeps working on a frame the
+ *  GPU has already stopped producing. */
+function paintOverlay(storm) {
+    if (wash) wash.style.opacity = storm.engulf.toFixed(3);
+    if (blackout) blackout.style.opacity = storm.fade.toFixed(3);
+}
+
+/** The end of the arc: stop drawing, and show the card.
+ *
+ *  THE CARD IS NOT OPTIONAL AND A BARE BLACK SCREEN WAS THE FIRST PLAN. Steve
+ *  and I both landed on the same objection: a black rectangle with nothing in it
+ *  does not read as an ending, it reads as a page that has broken, and a visitor
+ *  who thinks the scene crashed does not share it with anyone. One line and a
+ *  way back is the whole fix. */
+function finish() {
+    if (state.finished) return;
+    state.finished = true;
+    stop();
+    if (ending) {
+        ending.hidden = false;
+        // Requested on the next frame so the transition has a frame to start
+        // from. Setting hidden and opacity in the same tick skips the fade.
+        requestAnimationFrame(() => { ending.style.opacity = '1'; });
+    }
+    if (replay) replay.focus();
+}
+
+/** Put the arc back to the beginning without rebuilding the scene.
+ *
+ *  THE SEA IS NOT RESET, ONLY THE STORY IS. water.js keeps its own clock so the
+ *  waves carry on from where they were, which means a replay opens on a sea that
+ *  is already alive rather than on one frozen at phase zero. The sky is left
+ *  alone too, so a second run is the same time of day as the first: the visitor
+ *  is watching it happen again, not visiting a different afternoon. */
+function replayArc() {
+    state.arc = 0;
+    state.finished = false;
+    state.lastTime = 0;
+    if (ending) {
+        ending.style.opacity = '0';
+        ending.hidden = true;
+    }
+    paintOverlay({ engulf: 0, fade: 0 });
+    start();
 }
 
 function start() {
-    if (state.running) return;
+    if (state.running || state.finished) return;
     state.running = true;
     frame = requestAnimationFrame(loop);
 }
@@ -174,6 +259,12 @@ function init() {
     initSand(scene, OCEAN_CONFIG, { mobile: state.mobile, sky });
     initWater(scene, OCEAN_CONFIG, { mobile: state.mobile, sky });
 
+    wash = document.getElementById('wash');
+    blackout = document.getElementById('blackout');
+    ending = document.getElementById('ending');
+    replay = document.getElementById('replay');
+    if (replay) replay.addEventListener('click', replayArc);
+
     window.addEventListener('resize', onResize, { passive: true });
     document.addEventListener('visibilitychange', onVisibility);
     start();
@@ -188,6 +279,19 @@ function init() {
     // Jump the day to a given phase, so a screenshot pass can walk the whole
     // cycle in a minute instead of in the forty two it actually takes.
     window.oceanSetPhase = setPhase;
+    // AND JUMP THE ARC, which is the one that matters now. A screenshot pass
+    // wants the drawback at 145 seconds without sitting through the two and a
+    // half minutes in front of it. Takes seconds from the start of the story.
+    window.oceanSetArc = (seconds) => {
+        const at = Math.max(0, Number(seconds) || 0);
+        // Coming back from the ending has to clear the card and restart the
+        // loop, and `replayArc` is the only thing that knows how, so it runs
+        // first and the time is set after it rather than before.
+        if (state.finished) replayArc();
+        state.arc = at;
+        return state.arc;
+    };
+    window.oceanArc = () => state.arc;
 }
 
 if (typeof document !== 'undefined') {

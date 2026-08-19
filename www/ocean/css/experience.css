@@ -30,6 +30,116 @@ body {
     height: 100%;
 }
 
+/* ---- The arc's two overlays -------------------------------------------------
+ *
+ * THE WHITE-OUT IS NOT AN UNDERWATER VIEW, and that is a deliberate choice
+ * rather than a shortcut. A wave breaking over your head is an opaque wall of
+ * aerated water that arrives faster than the eye adapts, so it is a white wash
+ * over the whole frame and not a green room with fish in it. It is also why the
+ * camera never has to move for it, which keeps the no-bob promise intact.
+ *
+ * Both of these are driven from JavaScript by writing `style.opacity`, which is
+ * CSSOM rather than an inline style attribute and is therefore NOT blocked by
+ * style-src 'self'. The rule at the top of this file still holds: no rule lives
+ * outside a stylesheet. What JavaScript sets is one animated VALUE, the same way
+ * earthdefense and interstate already do. */
+#wash,
+#blackout {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+}
+
+#wash {
+    /* Brightest at the bottom, where the water actually arrives from, and
+       thinner at the top. A flat fill reads as a lens cap rather than as a sea. */
+    background:
+        radial-gradient(120% 90% at 50% 100%,
+            rgba(255, 255, 255, 0.97) 0%,
+            rgba(233, 243, 246, 0.93) 35%,
+            rgba(198, 222, 229, 0.80) 70%,
+            rgba(176, 205, 214, 0.62) 100%);
+}
+
+#blackout {
+    background: #000;
+}
+
+/* ---- The ending -------------------------------------------------------------
+ *
+ * Sits on top of the blackout, so it needs no background of its own. Faded in by
+ * JavaScript once the scene has stopped drawing. */
+#ending {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 2rem;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 900ms ease;
+    font: 400 1rem/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #e8eef1;
+}
+
+#ending[hidden] {
+    display: none;
+}
+
+.ending-line {
+    margin: 0;
+    font-size: clamp(1.4rem, 4.5vw, 2.1rem);
+    font-weight: 300;
+    letter-spacing: 0.01em;
+}
+
+.ending-note {
+    margin: 0;
+    max-width: 30rem;
+    color: #9fb0b8;
+}
+
+#replay {
+    margin-top: 0.5rem;
+    padding: 0.7rem 1.6rem;
+    font: inherit;
+    color: #e8eef1;
+    background: transparent;
+    border: 1px solid #5c6d75;
+    border-radius: 2rem;
+    cursor: pointer;
+    transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+#replay:hover,
+#replay:focus-visible {
+    background: rgba(232, 238, 241, 0.10);
+    border-color: #9fb0b8;
+}
+
+#replay:focus-visible {
+    outline: 2px solid #9fb0b8;
+    outline-offset: 3px;
+}
+
+/* Reduced motion gets the same scene without the transitions. The arc itself is
+   the thing that would need a real answer here, and that belongs with the
+   welcome screen rather than with a stylesheet. */
+@media (prefers-reduced-motion: reduce) {
+    #ending {
+        transition: none;
+    }
+
+    #replay {
+        transition: none;
+    }
+}
+
 .fallback {
     position: absolute;
     inset: 0;

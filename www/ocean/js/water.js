@@ -115,6 +115,16 @@ const EPSILON = 1e-6;
  *  a rattle. */
 const SOUNDING_WAVES = 2;
 
+/** A sea with no storm on it, which is what every caller gets by default.
+ *
+ *  THE DEFAULT IS THE OLD BEHAVIOUR EXACTLY. water.js knew nothing about an arc
+ *  until storm.js existed and it still does not: it takes a swell multiplier and
+ *  a surge, and whether those come from a three minute story or from a slider is
+ *  none of its business. That is what keeps the file reusable for the next water
+ *  scene, and it is the same seam that keeps the sky an argument rather than an
+ *  import. Frozen because it is shared by every default call. */
+const CALM = Object.freeze({ swell: 1, surge: 0 });
+
 // ---------------------------------------------------------------------------
 // The pure core: depth, dispersion, shoaling, breaking
 // ---------------------------------------------------------------------------
@@ -368,12 +378,16 @@ export function waveConstants(waves) {
  *  the GPU as vertex attributes a few times a second and rebuilt in place, so
  *  allocating twenty eight thousand small objects per rebuild would be the one
  *  genuinely wasteful thing in the frame budget. */
-export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
+export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, sea = CALM) {
     const { beach, water } = config;
     const rows = rowZ.length;
     const constants = waveConstants(water.waves);
     const n = constants.length;
-    const tide = tideOffset(elapsed, water);
+    // The arc rides on top of the tide rather than replacing it, so a storm
+    // surge and a slow tide are the same kind of quantity and the sea has one
+    // water level rather than two competing ones.
+    const swell = sea.swell > 0 ? sea.swell : 0;
+    const tide = tideOffset(elapsed, water) + sea.surge;
 
     const p = out || {
         depth: new Float32Array(rows),
@@ -447,7 +461,14 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null) {
             // shoaling at all and the full Green's law answer, which is the dial
             // for how dramatically waves stand up on their way in.
             const ks = shoalingAt(k, depth, w.c0);
-            grown[i] = w.amplitude * envelope[i] * (1 + water.shoalGain * (ks - 1));
+            // The storm scales the DEEP WATER amplitude and nothing else, which
+            // is the only place it can be applied without lying. Everything
+            // downstream of here is the sea's own response to that: the shoaling
+            // grows it, the depth cap limits it, and the break line moves itself
+            // seaward because a bigger wave runs out of water further out. Scale
+            // the answer instead of the input and the surf zone stays put while
+            // the waves in it get taller, which is not a thing a sea does.
+            grown[i] = w.amplitude * swell * envelope[i] * (1 + water.shoalGain * (ks - 1));
             wanted += grown[i];
         }
 
@@ -1316,7 +1337,7 @@ function applyEdgeFade() {
  *  the set envelope, neither of which changes measurably between frames. On a
  *  phone that is the difference between a per-frame pass over twenty eight
  *  thousand vertices and a per-frame pass over one uniform. */
-export function updateWater(deltaTime) {
+export function updateWater(deltaTime, sea = CALM) {
     if (!mesh) return;
     // A tab that has been in the background hands back an enormous delta on the
     // first frame. Clamping it means the sea resumes rather than teleporting
@@ -1325,14 +1346,34 @@ export function updateWater(deltaTime) {
     elapsed += dt;
     if (uniforms) uniforms.uTime.value = elapsed;
 
+    // THE LEAN GOES EVERY FRAME AND THE SWELL GOES SIX TIMES A SECOND, and the
+    // asymmetry is not an oversight. The lean is one uniform, so animating it
+    // per frame is free. The swell is baked into a per row profile that costs a
+    // pass over the rows and an upload, and it is a quantity that takes tens of
+    // seconds to move, so putting it on the profile clock is the same trade
+    // already made for the tide and the sets.
+    if (uniforms && sea.lean != null) uniforms.uLeanGain.value = sea.lean;
+
     sinceProfile += dt;
     const interval = 1 / Math.max(1, settings.water.profileHz);
     if (sinceProfile >= interval) {
         sinceProfile = 0;
-        buildProfile(rowZ, elapsed, settings, profile);
+        buildProfile(rowZ, elapsed, settings, profile, sea);
         refreshAttributes();
     }
     detectBreaks();
+}
+
+/** The water surface at a given z right now, in world metres, still water only.
+ *
+ *  No wave on it, because the caller is the arc asking "is the sea over the
+ *  camera yet" and a crest passing is not the same question as the sea having
+ *  arrived. Returns the BED height where the water has not reached, which is
+ *  what dry means. */
+export function surfaceAt(z, sea = CALM) {
+    if (!settings) return 0;
+    const level = tideOffset(elapsed, settings.water) + sea.surge;
+    return Math.max(bedHeightAt(z, settings.beach), level);
 }
 
 /** Notice when a crest reaches the break line, so the sound and the sight agree.

@@ -102,8 +102,16 @@ export function swashFromBreak(event, now, sand = OCEAN_CONFIG.sand) {
  *
  *  The maximum over every swash on the beach, floored at the still waterline,
  *  because the sea is always at least where the sea is. */
-export function reachZ(swashes, now, elapsed, config = OCEAN_CONFIG) {
-    const line = waterlineZ(elapsed, config.beach, config.water);
+export function reachZ(swashes, now, elapsed, config = OCEAN_CONFIG, surge = 0) {
+    // THE SURGE HAS TO REACH THE SAND OR THE TWO SHEETS DISAGREE ABOUT WHERE
+    // THE SEA IS. The water draws its own waterline from the tide plus the arc's
+    // surge, and if this one used the tide alone then during the drawback the
+    // sea would visibly retreat down the beach while the wet band stayed put,
+    // and during the storm the flooded sand would be drawn dry. Neither is
+    // currently on screen, because everything between the water's edge and the
+    // camera sits under the bottom of the frame, which is exactly the sort of
+    // reason a bug survives to the day somebody moves the camera.
+    const line = waterlineZ(elapsed, config.beach, config.water) + surge / config.beach.slope;
     let reach = line;
     for (let i = 0; i < swashes.length; i++) {
         const s = swashes[i];
@@ -422,7 +430,7 @@ export function addBreaks(events) {
  *  The wetness is rebuilt at `sand.profileHz` rather than every frame, for the
  *  same reason the water's profile is: the fastest thing in it is a swash that
  *  takes three seconds, and the sand does not move at all. */
-export function updateSand(deltaTime) {
+export function updateSand(deltaTime, sea = null) {
     if (!settings || !wet) return;
     const delta = Number.isFinite(deltaTime) ? deltaTime : 0;
     elapsed += delta;
@@ -431,7 +439,8 @@ export function updateSand(deltaTime) {
     const interval = 1 / Math.max(1, settings.sand.profileHz);
     if (sinceProfile < interval) return;
 
-    const reach = reachZ(swashes, elapsed, elapsed, settings);
+    const surge = sea && Number.isFinite(sea.surge) ? sea.surge : 0;
+    const reach = reachZ(swashes, elapsed, elapsed, settings, surge);
     soak(wet, rowZ, reach, sinceProfile, settings.sand);
     sinceProfile = 0;
 

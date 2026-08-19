@@ -15,13 +15,19 @@
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
     <!-- SCAFFOLD PAGE. This is a bench for tuning the water, not the finished
-         experience. Still to come before it ships: the welcome screen, the four
-         minute day cycle, the mute control, the wet sand, the surf audio wiring,
-         the Open Graph and Twitter blocks, the JSON-LD, the canonical URL, and
-         entries in sitemap.xml, llms.txt, and robots.txt. Do not deploy as is. -->
+         experience. Still to come before it ships: the welcome screen, the mute
+         control, the surf audio wiring, the Open Graph and Twitter blocks, the
+         JSON-LD, the canonical URL, and entries in sitemap.xml, llms.txt, and
+         robots.txt. Do not deploy as is.
+
+         AND THE WELCOME SCREEN NOW OWES THE VISITOR A WARNING. The scene is a
+         three minute arc that ends in a tsunami and is meant to be frightening,
+         so somebody has to be told that before it starts rather than after. That
+         is a content decision as much as an accessibility one and it is the one
+         thing on the list above that cannot be quietly dropped. -->
     <meta name="robots" content="noindex, nofollow">
     <meta name="theme-color" content="#8fb6cc">
-    <meta name="description" content="A quiet stretch of sea, breaking on a beach, for as long as you would like to watch it.">
+    <meta name="description" content="A quiet stretch of sea that does not stay quiet. A three minute view from the water's edge.">
 
     <title>The Ocean (scaffold)</title>
 
@@ -34,6 +40,25 @@
 <body>
     <canvas id="scene" aria-label="A view out to sea from the water's edge, with waves breaking toward you"
         role="img"></canvas>
+
+    <!-- The white-out when the water comes over the camera, and the closing
+         fade. Both are plain elements rather than anything in WebGL: neither is
+         a 3D effect, and keeping them here means they still work on a frame the
+         renderer has already stopped producing. aria-hidden because they carry
+         no information a screen reader could use, and the ending card below
+         carries all of it. -->
+    <div id="wash" aria-hidden="true"></div>
+    <div id="blackout" aria-hidden="true"></div>
+
+    <!-- The ending. Hidden until the fade completes, then it is the only thing
+         on the page. role="status" so it is announced when it appears rather
+         than stealing focus from the start, and the button takes focus so a
+         keyboard visitor is not left hunting on a black screen. -->
+    <div id="ending" hidden role="status" aria-live="polite">
+        <p class="ending-line">The sea has taken the beach.</p>
+        <p class="ending-note">Thank you for watching. It happens the same way every time.</p>
+        <button id="replay" type="button">Watch it again</button>
+    </div>
 
     <noscript>
         <p class="fallback">

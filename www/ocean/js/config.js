@@ -295,15 +295,26 @@ export const OCEAN_CONFIG = deepFreeze({
         // the mapping from metres to pixels a known quantity and there is no
         // reason to guess at it. The first draft measured everything along the
         // sheet instead and put a fifth of the grid behind the viewer.
-        // The near edge, 2.5 metres BEHIND the eye, which is the property that
-        // matters and not the number. It means the sheet passes under the
-        // camera rather than ending in front of it, so there is geometry at
-        // every angle the frame reaches and no gap along the bottom. It also
-        // sits shoreward of the highest waterline (7.25), so the water's edge
-        // always has sheet beneath it at the top of the tide. Anything that
-        // moves the camera back past this has to move this with it. See
-        // `camera.z` for the version of that mistake that shipped.
-        nearZ: 10.5,
+        // The near edge, well BEHIND the eye, which is the property that matters
+        // and not the number. It means the sheet passes under the camera rather
+        // than ending in front of it, so there is geometry at every angle the
+        // frame reaches and no gap along the bottom. Anything that moves the
+        // camera back past this has to move this with it, and `camera.z` carries
+        // the version of that mistake that shipped.
+        //
+        // 16, NOT 10.5, AND THE ARC IS WHY. The waterline for a given water
+        // level sits at `shoreZ + level / slope`, so a rising sea walks it
+        // shoreward at four and a half metres per metre of surge on this beach.
+        // At 10.5 the sheet ran out at a surge of 0.99 m. The tsunami needs
+        // 1.55, which puts the waterline at z 13.0, and a sheet ending at 10.5
+        // would have let the sea climb off the end of the beach three seconds
+        // before it reached the camera. 16 carries 2.2 m of surge with the run
+        // up on top of it, which is the whole arc with room to spare.
+        //
+        // It costs eight rows out of 260, which are the flat near strip and were
+        // always below the frame. Nothing else moves: `rowNear` and
+        // `widthPerMetre` follow `camera.fov`, not this.
+        nearZ: 16,
         farZ: -404,         // out to where the fog has finished the job
         // Where the packed part of the row curve begins, in metres in front of
         // the camera. The bottom edge of the frame meets still water about two
@@ -1011,6 +1022,142 @@ export const OCEAN_CONFIG = deepFreeze({
                 exposure: 1.30
             }
         ]
+    },
+
+    // ---- The arc (storm.js) -------------------------------------------------
+    //
+    // THREE MINUTES, WITH AN ENDING. Agreed with Steve on 2026-08-19, and it is
+    // the number every other number here hangs off. The scene opens as an
+    // ordinary bright day, the swell builds until the sea is frightening, the
+    // water starts coming over the camera, the sea withdraws, a tsunami
+    // arrives, and the page fades to black.
+    //
+    // THE SEA IS THE ONLY THING THAT CHANGES. The sun is held (see `cycle`), the
+    // camera never moves (see `camera`), and there is nothing to click. That is
+    // deliberate: with one signal in the frame, a visitor reads every change as
+    // meaning something, which is exactly the effect a horror scene wants and
+    // exactly the effect a busy one destroys.
+    storm: {
+        seconds: 180,
+        // Start times, not ranges, so two stages can never overlap or leave a
+        // gap. The last one runs to `seconds`. Names are for the audio bed and
+        // the debug label rather than for anything visual, since every visible
+        // quantity below interpolates straight through the boundaries.
+        stages: [
+            { from: 0,   name: 'ordinary' },   // the sea as it has always been
+            { from: 35,  name: 'turning' },    // the swell starts to build
+            { from: 90,  name: 'storm' },      // faces near vertical, first engulfment
+            { from: 130, name: 'drawback' },   // the sea goes the wrong way
+            { from: 150, name: 'tsunami' }
+        ],
+        // ---- The swell ------------------------------------------------------
+        //
+        // A MULTIPLE OF THE CALM SPECTRUM in `water.waves`, and THE CEILING HERE
+        // IS PHYSICS RATHER THAN TASTE. The Gerstner displacement folds the mesh
+        // through itself when the Jacobian of the horizontal displacement
+        // reaches zero, and the sea is measurably close to that. Swept on the
+        // CPU over ninety seconds of sea, 810 pixel frame:
+        //
+        //   swell  lean  face  foldMargin  deepCrest  px@200m  tallestBreaker
+        //    1.0   3.20   32d     0.391      0.67m      3.8px       95px
+        //    1.5   3.20   39d     0.307      1.01m      5.7px       97px
+        //    2.0   3.20   54d     0.215      1.37m      7.7px       99px
+        //    2.5   3.20   70d     0.125      1.74m      9.8px      101px
+        //    2.5   1.20   31d     0.524      1.74m      9.8px      101px
+        //    3.0   1.20   35d     0.477      2.11m     11.9px      102px
+        //
+        // READ THE LAST COLUMN FIRST. The breaking wave in front of the camera
+        // does not get bigger. 95 pixels to 102 across a sea three times the
+        // size, because a wave breaks at 0.78 of the local depth and the depth
+        // is the slope times the distance, so the distance cancels and only
+        // `beach.slope` survives. Anyone arriving here to make the surf larger
+        // should read that column and then go and read `beach.slope`.
+        //
+        // THE COLUMN THAT DOES MOVE IS `deepCrest`, AND IT IS THE WHOLE POINT.
+        // Deep water swell is not depth limited, so the background is free. At
+        // 2.0 the crests clear eye level (1.15 m) and stay above it out to 412
+        // metres, which means THE SWELL STARTS HIDING THE HORIZON. That is the
+        // strongest big sea cue there is and this scene had never once done it.
+        // The break line marching seaward from 12 m to 19 m is the second one.
+        //
+        // 2.6 at the peak keeps a fold margin of about 0.1 with the lean pulled
+        // down, which is the same margin the calm sea has always run at.
+        swell: [
+            { at: 0,   value: 1.00 },
+            { at: 35,  value: 1.05 },   // barely, and only so it is already moving
+            { at: 90,  value: 2.00 },   // the horizon starts going
+            { at: 130, value: 2.40 },
+            { at: 150, value: 2.20 },   // the drawback takes the sea down with it
+            { at: 168, value: 2.60 }    // and the tsunami brings it back
+        ],
+        // Crest cusping, and it comes DOWN as the swell goes up. Not a look
+        // decision: amplitude times wave number times this is what drives the
+        // Jacobian to zero. Holding 3.2 to a 2.4 swell leaves a margin of about
+        // 0.13, which a set arriving on a high tide could cross, and the far
+        // side of that line is a mesh visibly passing through itself.
+        //
+        // The cost is real and it is in the `face` column above: at 2.5 the
+        // difference between lean 3.2 and 1.2 is a wave face of 70 degrees
+        // against one of 31. So the storm trades some of its pitch for its size,
+        // and it is worth it, because size is the thing being asked for.
+        lean: [
+            { at: 0,   value: 3.20 },
+            { at: 90,  value: 2.60 },
+            { at: 130, value: 1.60 },
+            { at: 180, value: 1.20 }
+        ],
+        // ---- The surge ------------------------------------------------------
+        //
+        // Metres the still water level stands above its mean, added to the tide
+        // rather than replacing it. THE NEGATIVE NUMBERS ARE THE BEST PART.
+        //
+        // A drawback is what a tsunami does before it arrives, and everybody
+        // watching already knows what it means, which is why twenty seconds of a
+        // sea going the wrong way is worth more than any amount of water coming
+        // the right way. It is also nearly free: the waterline walks down the
+        // beach on its own, because `waterlineZ` is already the shore position
+        // for a given water level, and the sand under the shallows becomes the
+        // subject of the frame for the first time.
+        //
+        // THE PEAK IS SET BY `camera.height` (1.15), which is the level at which
+        // the water covers the eye. 1.55 clears it by 0.4 so the tsunami is over
+        // the camera rather than lapping at it. See `engulfWashMetres`.
+        //
+        // AND ONLY THE TSUNAMI ENGULFS ANYTHING, WHICH IS NOT WHAT WAS ASKED
+        // FOR. Steve asked for waves that sometimes crash over the visitor
+        // through the storm, and this table does not deliver it. Walking the arc
+        // shows why, and it is not a matter of turning the surge up:
+        //
+        //   surge 0.55 puts the waterline at z 8.5, just past the camera at 8,
+        //   in 0.11 m of water. The depth cap then limits the wave standing in
+        //   that water to about 4 cm, because `breakRatio` x depth is the whole
+        //   point of the sea model. So the camera stands in a puddle.
+        //
+        // What actually knocks a person over at a beach is the BORE, the broken
+        // whitewater running shoreward, and a bore is not depth limited the way
+        // an unbroken wave is. sand.js already tracks bores as swash events with
+        // a run up and a timing, but not with a THICKNESS, and thickness is the
+        // missing quantity. Until that exists, a steady surge high enough to
+        // engulf would leave the camera permanently submerged, which is worse
+        // than not doing it. Flagged to Steve rather than faked.
+        surge: [
+            { at: 0,   value: 0.00 },
+            { at: 90,  value: 0.15 },
+            { at: 118, value: 0.55 },   // ankle deep at the camera, no more
+            { at: 130, value: 0.30 },
+            { at: 145, value: -0.90 },  // drawback, and the beach is bare
+            { at: 152, value: -0.90 },
+            { at: 172, value: 1.55 },   // the tsunami, well over the eye
+            { at: 180, value: 1.55 }
+        ],
+        // How far either side of eye level the white-out ramps, in metres. A
+        // hard switch at exactly eye level would flicker every time a crest
+        // passed, since the surface is never still.
+        engulfWashMetres: 0.35,
+        // The closing fade, in seconds off the end. Long enough to read as an
+        // ending rather than as a page crashing, short enough that nobody is
+        // left watching a grey rectangle.
+        fadeSeconds: 8
     },
 
     // ---- The cycle ----------------------------------------------------------
