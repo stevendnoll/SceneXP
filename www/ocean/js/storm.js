@@ -288,15 +288,71 @@ export function frontAt(seconds, storm = OCEAN_CONFIG.storm) {
     // and cannot do it here, since the rise is a step in the water LEVEL rather
     // than a wave, so it is walked along the front's own progress instead.
     const grown = t.riseFar + (t.riseNear - t.riseFar) * p;
+    // IT SLOWS DOWN AS IT COMES IN, which is both what a shoaling wave does and
+    // what the scene needs. A tsunami's speed is sqrt(g h), so it runs at about
+    // ten metres a second in eleven metres of water and half that in the
+    // shallows. Travelling at a constant rate it crossed the whole visible band
+    // in five seconds and the rise had no time to read; this spends most of the
+    // approach in the near half, where a metre of water is worth ten times the
+    // pixels it is worth at the fog limit.
+    const travelled = Math.pow(p, 0.7);
     return {
-        z: t.fromZ + (t.toZ - t.fromZ) * p,
-        rise: grown * smoothstep(0, 0.25, p),
+        z: t.fromZ + (t.toZ - t.fromZ) * travelled,
+        // THE FADE IN IS SHORT ON PURPOSE. It used to ramp over the first
+        // quarter of the approach, which meant the wall came out of the fog at
+        // half the height the OLD constant rise had, and Steve read it correctly
+        // as having got smaller. It is fully formed inside a second now. Nothing
+        // pops, because at four hundred metres it is behind the fog anyway; the
+        // ramp is only here so the step does not spring into existence on a
+        // frame where somebody happens to be looking at the horizon.
+        rise: grown * smoothstep(0, 0.10, p),
         width: t.frontWidthFar + (t.frontWidthNear - t.frontWidthFar) * p,
         foam: t.frontFoam * smoothstep(0, 0.15, p),
         // The sea BEHIND the front, as a swell multiplier. Full from the moment
         // it appears, because the wall is supposed to be already enormous when
         // it comes out of the fog rather than to grow on the way in.
         swellBehind: t.swellBehind
+    };
+}
+
+/** How far the air has cleared, 0 the scene's usual fog and 1 wide open.
+ *
+ *  Exists because a wall of water four hundred metres out was being painted the
+ *  exact colour of the sky behind it. See `sky.fog` in config. */
+export function clarityAt(seconds, storm = OCEAN_CONFIG.storm) {
+    return curveAt(seconds, storm.clarity, storm);
+}
+
+/** Where the calm has reached, during the lull, as a z.
+ *
+ *  THE SEA CANNOT GO FLAT ALL AT ONCE AND IT KEPT DOING EXACTLY THAT. Amplitude
+ *  here is a function of the row and the CURRENT swell, with no memory of the
+ *  waves already in flight, so dropping the swell shrinks every wave in place at
+ *  the same instant. What that looks like is the large one you are watching
+ *  quietly melting ten metres from the break, which Steve reported twice, and
+ *  the second time after a fix that had only slowed the melting down.
+ *
+ *  The calm has to TRAVEL, because that is what it is: the storm stops making
+ *  waves out at sea, and the last ones it made keep coming until they arrive.
+ *  So the boundary starts offshore and sweeps in, the sea seaward of it is
+ *  already flat, and the waves shoreward of it are still full size and still
+ *  have somewhere to go. The sea empties from the horizon inward and the last
+ *  few waves break properly. Same mechanism as the tsunami front, opposite
+ *  errand: one brings water in, the other takes the waves away.
+ *
+ *  Returns null outside the lull, which is most of the arc. */
+export function lullFrontAt(seconds, storm = OCEAN_CONFIG.storm) {
+    const l = storm.lull;
+    if (!l || seconds < l.startAt) return null;
+    const span = l.endAt - l.startAt;
+    const p = span > 0 ? Math.min(1, (seconds - l.startAt) / span) : 1;
+    if (p >= 1) return null;      // past the lull the arc's own swell is the sea
+    return {
+        z: l.fromZ + (l.toZ - l.fromZ) * p,
+        width: l.width,
+        // The sea as it was when the storm stopped. Rows the calm has not
+        // reached yet are still this big, which is the whole point.
+        before: swellAt(l.startAt, storm)
     };
 }
 
@@ -377,8 +433,10 @@ export function stormStateAt(seconds, config = OCEAN_CONFIG, surfaceY = null) {
         swell: swellAt(seconds, storm),
         lean: leanAt(seconds, storm),
         gloom: gloomAt(seconds, storm),
+        clarity: clarityAt(seconds, storm),
         surge,
         front,
+        lull: lullFrontAt(seconds, storm),
         engulf: engulfAt(surface, config),
         fade: fadeAt(seconds, storm),
         // The arc is over when the fade is complete, which is the moment main.js

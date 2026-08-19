@@ -319,8 +319,10 @@ export const OCEAN_CONFIG = deepFreeze({
         //   28   ran out a fourth time when the tsunami front was made to GROW
         //        as it approached. A 4.80 m rise puts the waterline at 29.4 all
         //        on its own, and the bore behind it runs another 9.4.
+        //   44   ran out a FIFTH time when the wall was sized to occupy the
+        //        lower sky. Nine metres of rise floods to z 47 before the bore.
         //
-        // 44 carries the lot with five metres in hand. The pattern is obvious in
+        // 64 carries the lot with seven metres in hand. The pattern is obvious in
         // hindsight and worth stating plainly: EVERY CHANGE THAT MAKES THE WATER
         // MORE DANGEROUS MAKES IT TRAVEL FURTHER, and the sheet is what it
         // travels on. The first three were found by hand. The test now walks the
@@ -333,7 +335,7 @@ export const OCEAN_CONFIG = deepFreeze({
         // behind the camera, which has always been below the bottom of the
         // frame, and `rowNear` and `widthPerMetre` follow `camera.fov` rather
         // than this.
-        nearZ: 44,
+        nearZ: 64,
         farZ: -404,         // out to where the fog has finished the job
         // Where the packed part of the row curve begins, in metres in front of
         // the camera. The bottom edge of the frame meets still water about two
@@ -982,6 +984,43 @@ export const OCEAN_CONFIG = deepFreeze({
             sunlitMix: 0.55
         },
 
+        // ---- How far you can see ---------------------------------------------
+        //
+        // Haze rather than a hard edge, and its colour is the sky's own horizon,
+        // so the far water and the sky it fades into can never disagree. The far
+        // rows are a few pixels tall and fog is what turns them into a horizon
+        // instead of a seam. These lived in sky.js as literals until the tsunami
+        // needed them to move.
+        //
+        // 400 METRES WAS ERASING THE TSUNAMI, and it took three rounds of
+        // looking at the water to find it, because every one of those rounds
+        // assumed the problem was the wall. Measured, the wall's visibility
+        // against the fog as it approached:
+        //
+        //     403m   100% fog    invisible
+        //     309m    71%
+        //     214m    40%
+        //     120m    10%
+        //      72m     0%
+        //
+        // So a wall two hundred metres out was more than half painted in the
+        // exact colour of the sky behind it, and at first appearance it was
+        // literally not there. Steve read that as the wall not rising in the
+        // distance and asked whether it was a Three limitation. It was a config
+        // number.
+        //
+        // `clearFar` is where the far edge goes once the tsunami is coming. It
+        // is safe to open the distance up now in a way it would not have been
+        // before sky.js existed: Fresnel at a grazing angle is about 0.95, so
+        // the far water is already reflecting almost exactly the sky above it
+        // and needs far less fog to sit down against the horizon. And once the
+        // wall is up it hides the sheet's own far edge behind itself.
+        fog: {
+            near: 90,
+            far: 400,
+            clearFar: 1000
+        },
+
         // ---- The storm sky ---------------------------------------------------
         //
         // ONE PALETTE, NOT ELEVEN MORE KEYFRAMES. The day below has eleven hours
@@ -1079,6 +1118,20 @@ export const OCEAN_CONFIG = deepFreeze({
             // 1.12 was compensating for colours that were too dark, which is a
             // second dial doing the first dial's job, and it lifted the sun's
             // halo and the foam along with the sky.
+            // HOW MUCH OF THE SUN SURVIVES, applied to the halo, the aureole,
+            // the disc, and the sunlit undersides of the cloud. THREE OF THOSE
+            // FOUR WERE NOT BEING TOUCHED AT ALL: the halo and aureole were
+            // scaled only by twilight, and the disc and the cloud's sunlit mix
+            // were set once when the sky was built and never updated. So under a
+            // thick overcast the sky still carried a full sun, and the sea, which
+            // reflects the sky by construction, carried it too. Steve saw it on
+            // the tsunami: a bright reflective wall where a dark one is far more
+            // threatening.
+            //
+            // 0.04 rather than 0 because a real overcast is not perfectly even.
+            // There is usually a slightly brighter patch where the sun is, and
+            // taking it to nothing makes the sky look painted.
+            sunGlowScale: 0.04,
             exposure: 1.00
         },
 
@@ -1259,8 +1312,8 @@ export const OCEAN_CONFIG = deepFreeze({
             // A real drawback is preceded by exactly this: the sea stops. Six
             // seconds of a flat, silent ocean after ninety seconds of building
             // storm is the loudest thing in the arc, and it costs one keyframe.
-            { from: 54,  name: 'lull' },       // the sea stops, and that is worse
-            { from: 62,  name: 'drawback' },   // then it goes the wrong way
+            { from: 52,  name: 'lull' },       // the sea stops, and that is worse
+            { from: 60,  name: 'drawback' },   // then it goes the wrong way
             { from: 76,  name: 'tsunami' }
         ],
         // ---- The swell ------------------------------------------------------
@@ -1304,7 +1357,7 @@ export const OCEAN_CONFIG = deepFreeze({
             // opened with, in six seconds. Nothing else in the arc moves this
             // fast and nothing else should: every other curve here is a weather
             // system and this one is the bottom dropping out.
-            { at: 59,  value: 0.30 },
+            { at: 58,  value: 0.30 },
             { at: 66,  value: 0.28 },   // and stays there while the water leaves
             // THE PEAK LANDS WITH THE FRONT, NOT AFTER IT. This used to reach
             // 2.60 at t=116, which is a second after the fade has started, so
@@ -1327,7 +1380,7 @@ export const OCEAN_CONFIG = deepFreeze({
         lean: [
             { at: 0,   value: 3.20 },
             { at: 34,  value: 2.60 },
-            { at: 54,  value: 1.60 },
+            { at: 52,  value: 1.60 },
             { at: 90,  value: 1.20 }
         ],
         // ---- The surge ------------------------------------------------------
@@ -1388,9 +1441,9 @@ export const OCEAN_CONFIG = deepFreeze({
             { at: 52,  value: 0.55 },
             // Back to an ordinary water level for the lull, so the sea is flat
             // AND normal. A lull on a raised sea would still look like weather.
-            { at: 58,  value: 0.05 },
-            { at: 62,  value: 0.00 },   // the sea is flat AND at its own level
-            { at: 68,  value: -0.90 },  // drawback, and the beach is bare
+            { at: 57,  value: 0.05 },
+            { at: 60,  value: 0.00 },   // the sea is flat AND at its own level
+            { at: 66,  value: -0.90 },  // drawback, and the beach is bare
             // THE RECOVERY HAS TO TRAVEL WITH THE FRONT. It used to lag it, so
             // when the front arrived carrying 1.70 m the water at the camera
             // came out below the eye: the tsunami reached the visitor and did
@@ -1404,6 +1457,48 @@ export const OCEAN_CONFIG = deepFreeze({
         // How far either side of eye level the white-out ramps, in metres. A
         // hard switch at exactly eye level would flicker every time a crest
         // passed, since the surface is never still.
+        // ---- How far you can see, over the arc -------------------------------
+        //
+        // 0 is the fog the scene runs on and 1 is `sky.fog.clearFar`. It opens
+        // during the LULL, before the wall exists, which is both the useful
+        // order and the eerie one: the sea goes quiet, the haze lifts, and the
+        // thing you can now see all the way to the horizon is the thing that is
+        // coming. Opening it later would mean the wall appeared and the air
+        // cleared at the same moment, which reads as a trick.
+        clarity: [
+            { at: 0,  value: 0.00 },
+            { at: 52, value: 0.00 },   // the lull begins
+            { at: 60, value: 0.75 },
+            { at: 66, value: 1.00 }
+        ],
+
+        // ---- The calm sweeping in ------------------------------------------
+        //
+        // THE SEA CANNOT GO FLAT ALL AT ONCE, and dropping the swell curve does
+        // exactly that: amplitude is a function of the row and the current
+        // swell, with no memory of waves already in flight, so every wave in the
+        // scene shrinks at the same instant. What it looks like is the large one
+        // you are watching melting ten metres short of the break. Reported
+        // twice, the second time after a fix that had only slowed it down.
+        //
+        // So the calm TRAVELS. The storm stops making waves out at sea, the
+        // boundary sweeps in, and the last waves it made keep coming and break
+        // properly while the water behind them is already flat. The sea empties
+        // from the horizon inward, which is both what happens and a far better
+        // picture than a sea that deflates.
+        //
+        // It starts at 170 m rather than at the fog limit because past that a
+        // crest is three or four pixels and the swell curve dropping on its own
+        // out there is invisible. 200 m over ten seconds is 20 m/s, faster than
+        // the waves themselves, but the 50 m blend means any given wave takes
+        // two and a half seconds to give up rather than one frame.
+        lull: {
+            startAt: 52,
+            endAt: 62,
+            fromZ: -170,
+            toZ: 30,
+            width: 50
+        },
         engulfWashMetres: 0.35,
         // How long the white-out takes to run off the lens once the water has
         // dropped back below the eye, in seconds. INSTANT ON, GRADUAL OFF: a
@@ -1500,7 +1595,11 @@ export const OCEAN_CONFIG = deepFreeze({
             // visible in the distance while the sea recedes, and 88 is the second
             // the surge turns negative, so the two are the same beat: the water
             // leaves, and the reason it is leaving comes out of the fog behind it.
-            startAt: 62,
+            // STARTS THE SECOND THE WATER DOES. Steve asked for the swell to
+            // begin forming as soon as the sea starts to go, and it already did:
+            // what was missing was being able to SEE it, which was the fog. Now
+            // that the air opens during the lull, the two are one beat.
+            startAt: 60,
             arriveAt: 80,
             // THE FRONT CARRIES THE WATER NOW, NOT THE SURGE. The surge used to
             // ramp to 1.55 at the end and the front added its own rise on top,
@@ -1534,8 +1633,29 @@ export const OCEAN_CONFIG = deepFreeze({
             // perspective could be tilted to sell the scale. It can be, and this
             // is better: it costs no camera motion, which keeps the no-bob
             // promise, and it is what the water actually does.
-            riseFar: 1.70,
-            riseNear: 4.80,
+            // 2.40 rather than 1.70 at the far end. The wall is supposed to be
+            // already frightening when it comes out of the fog and then to grow,
+            // rather than to start as a ripple and become frightening later.
+            // 4.5 TO 9.0, AND THE SIZE IS CHOSEN IN PIXELS RATHER THAN METRES.
+            // Physical accuracy and the picture pull opposite ways here and it
+            // is worth saying so plainly. A real tsunami in deep water is a low
+            // hump under a metre tall and completely invisible; the towering
+            // wall everyone pictures is a shallow water phenomenon a few hundred
+            // metres offshore at most. Sized honestly it would be nothing until
+            // it was already on top of the visitor, which is exactly the note
+            // this is answering.
+            //
+            // So it is sized to occupy the lower sky at the distance it is being
+            // watched from, and it still GROWS on the way in, which is the part
+            // that is genuinely physical. Measured, height above the eye in pixels:
+            //
+            //     403m   15px      162m   56px
+            //     312m   22px      121m   80px
+            //     206m   41px       47m  229px
+            //
+            // Nine metres at the shore is a large tsunami and not an absurd one.
+            riseFar: 4.50,
+            riseNear: 9.00,
             // How abrupt the step is. Wide enough that it never falls between
             // two rows of the grid and strobes as it crosses them, tight enough
             // to read as an edge rather than as a slope.

@@ -173,6 +173,10 @@ export function applyGloom(state, gloom, sky = OCEAN_CONFIG.sky) {
         // cloud is what hides it, so fading the disc as well would take it out
         // twice and leave a bright patch of sky with no sun in it.
         sunIntensity: lerp(state.sunIntensity, state.sunIntensity * s.sunIntensityScale),
+        // Everything the sun puts into the SKY, as opposed to onto the water.
+        // One number for four uniforms, because a cloud thick enough to hide the
+        // disc hides the halo around it too and they cannot disagree.
+        sunGlow: lerp(1, s.sunGlowScale, g),
         zenith: blend(state.zenith, s.zenith),
         horizon: blend(state.horizon, s.horizon),
         hemiSky: blend(state.hemiSky, s.hemiSky),
@@ -204,6 +208,7 @@ export function skyStateAt(phase, sky = OCEAN_CONFIG.sky) {
         // there is a storm on or not.
         cloudCoverage: sky.cloud.coverage,
         cloudFadeTo: sky.cloud.horizonFadeTo,
+        sunGlow: 1,
         name: t < 0.5 ? from.name : to.name,
         elevation: lerp(from.elevation, to.elevation),
         azimuth: lerp(from.azimuth, to.azimuth),
@@ -591,7 +596,7 @@ export function initSky(scene, camera, config = OCEAN_CONFIG, options = {}) {
     // the far water and the sky it fades into can never disagree. The far rows
     // are a few pixels tall and fog is what turns them into a horizon instead
     // of a seam.
-    if (scene) scene.fog = new THREE.Fog(0x000000, 90, 400);
+    if (scene) scene.fog = new THREE.Fog(0x000000, sky.fog.near, sky.fog.far);
 
     applyState(skyStateAt(phase, sky));
     return dome;
@@ -610,8 +615,18 @@ function applyState(state) {
     // CPU rather than as another smoothstep in the shader, because it is one
     // number per frame either way and this one is testable. See twilightGlow.
     const halo = twilightGlow(state.elevation);
-    uniforms.uSunGlowStrength.value = settings.sky.sun.glowStrength * halo;
-    uniforms.uSunAureoleStrength.value = settings.sky.sun.aureoleStrength * halo;
+    // TIMES THE GLOOM AS WELL AS THE TWILIGHT, and the gloom half was missing.
+    // A sun behind a thick lid contributes almost nothing to the sky, and since
+    // the sea reflects this exact function it was putting a sunny glare on a
+    // storm. The disc and the cloud's sunlit mix are set here for the same
+    // reason: both used to be written once when the sky was built, so no amount
+    // of cloud could take them down.
+    const sun = halo * (state.sunGlow == null ? 1 : state.sunGlow);
+    uniforms.uSunGlowStrength.value = settings.sky.sun.glowStrength * sun;
+    uniforms.uSunAureoleStrength.value = settings.sky.sun.aureoleStrength * sun;
+    uniforms.uSunDiscStrength.value = settings.sky.sun.discStrength * sun;
+    uniforms.uCloudSunlitMix.value = settings.sky.cloud.sunlitMix
+        * (state.sunGlow == null ? 1 : state.sunGlow);
     uniforms.uCloudOpacity.value = state.cloudOpacity;
     // Coverage is the noise threshold, so lowering it does not make the same
     // clouds darker, it makes there be MORE of them. That is what turns a few
@@ -649,11 +664,20 @@ function applyState(state) {
  *  case for rebuilding it less often than the frame: it is one interpolation
  *  between two keyframes and a handful of uniform writes, and skipping frames
  *  to save that would trade nothing for a visible step in the light. */
-export function updateSky(deltaSeconds, gloom = 0) {
+export function updateSky(deltaSeconds, gloom = 0, clarity = 0) {
     if (!uniforms) return phase;
     const delta = Number.isFinite(deltaSeconds) ? deltaSeconds : 0;
     elapsed += delta;
     lastGloom = gloom;
+    // HOW FAR YOU CAN SEE, and it opens up for the tsunami. The fog's far edge
+    // was a fixed 400 m, which is fine for a horizon and fatal for a wall of
+    // water that has to be watched coming from four hundred metres away: the
+    // fog colour IS the horizon colour, so the wall arrived painted the exact
+    // shade of the sky behind it. See `sky.fog` in config for the measurements.
+    if (sceneRef && sceneRef.fog) {
+        const f = settings.sky.fog;
+        sceneRef.fog.far = f.far + (f.clearFar - f.far) * Math.max(0, Math.min(1, clarity));
+    }
     phase = advancePhase(phase, delta, settings.cycle);
     applyState(applyGloom(skyStateAt(phase, settings.sky), gloom, settings.sky));
     return phase;

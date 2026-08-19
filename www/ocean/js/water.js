@@ -394,6 +394,9 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
     // not: it is a step in the water level that is in a PLACE and travels, and
     // there is genuinely more water on one side of it than the other.
     const front = sea.front || null;
+    // The calm sweeping in during the lull. Same shape as the front and the
+    // opposite errand: rows it has not reached yet are still carrying the storm.
+    const lull = sea.lull || null;
 
     const p = out || {
         depth: new Float32Array(rows),
@@ -457,9 +460,15 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
         // It is also what actually happens. The water behind a tsunami front is
         // the disturbed water the front is made of, and the water ahead of it
         // has just been pulled out and has nothing driving it.
-        const rowSwell = front
-            ? swell + (front.swellBehind - swell) * behindFront
-            : swell;
+        let rowSwell = swell;
+        // SHOREWARD OF THE CALM BOUNDARY THE SEA IS STILL THE STORM. Applied
+        // before the tsunami's own blend because the two never overlap in time,
+        // and if they ever did the wall should win: it is the newer sea.
+        if (lull) {
+            const notYet = smoothstep(lull.z - lull.width, lull.z + lull.width, z);
+            rowSwell = swell + (lull.before - swell) * notYet;
+        }
+        if (front) rowSwell = rowSwell + (front.swellBehind - rowSwell) * behindFront;
 
         const depth = depthAt(z, level, beach, water);
         p.depth[r] = depth;

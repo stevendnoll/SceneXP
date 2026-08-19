@@ -242,7 +242,12 @@ describe('the shape of the arc', () => {
         // and the sea being out is the whole point of the beat, so its appearing
         // does not end anything. It ends when the water returns.
         const lull = STORM.stages.find((s) => s.name === 'lull').from;
-        const back = everySecond().find((t) => t > lull && levelAt(t) > 0.5);
+        // AFTER IT HAS ACTUALLY GONE, which the first version of this forgot.
+        // The storm's own surge plateau now overlaps the start of the lull, so
+        // looking for "the water is high again" from the lull onward found the
+        // water that had not left yet and reported a one second beat.
+        const gone = everySecond().find((t) => t > lull && levelAt(t) < -0.5);
+        const back = everySecond().find((t) => t > gone && levelAt(t) > 0.5);
         expect(back - lull).toBeGreaterThanOrEqual(14);
         const below = everySecond().filter((t) => surgeAt(t) < -0.5);
         expect(below.length).toBeGreaterThanOrEqual(8);

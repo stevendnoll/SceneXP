@@ -174,7 +174,7 @@ function loop(now) {
     // The gloom goes with it: the sky closing over is the first sign anything is
     // wrong, and it runs ahead of the swell for the same reason real weather
     // does, which is that a cloud front does not have to travel as a wave.
-    updateSky(delta, storm.gloom);
+    updateSky(delta, storm.gloom, storm.clarity);
     updateWater(delta, storm);
 
     // THE BREAK QUEUE HAS TWO READERS AND ONE DRAIN. Each entry is already
