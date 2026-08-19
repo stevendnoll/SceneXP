@@ -302,19 +302,32 @@ export const OCEAN_CONFIG = deepFreeze({
         // camera back past this has to move this with it, and `camera.z` carries
         // the version of that mistake that shipped.
         //
-        // 16, NOT 10.5, AND THE ARC IS WHY. The waterline for a given water
-        // level sits at `shoreZ + level / slope`, so a rising sea walks it
-        // shoreward at four and a half metres per metre of surge on this beach.
-        // At 10.5 the sheet ran out at a surge of 0.99 m. The tsunami needs
-        // 1.55, which puts the waterline at z 13.0, and a sheet ending at 10.5
-        // would have let the sea climb off the end of the beach three seconds
-        // before it reached the camera. 16 carries 2.2 m of surge with the run
-        // up on top of it, which is the whole arc with room to spare.
+        // 24, NOT 10.5, AND IT MOVED TWICE FOR TWO DIFFERENT REASONS. The
+        // waterline for a given water level sits at `shoreZ + level / slope`, so
+        // a rising sea walks it shoreward at four and a half metres per metre of
+        // surge on this beach.
         //
-        // It costs eight rows out of 260, which are the flat near strip and were
-        // always below the frame. Nothing else moves: `rowNear` and
-        // `widthPerMetre` follow `camera.fov`, not this.
-        nearZ: 16,
+        //   10.5 ran out at a surge of 0.99 m, and the tsunami needs 1.55, so
+        //        the sea climbed off the end of the beach before reaching the
+        //        camera. Moved to 16.
+        //   16   ran out once the swash got a bore behind it. Run up is now
+        //        derived from bore depth at 9.53 metres per metre, so the
+        //        tsunami's bore runs the best part of ten metres past a
+        //        waterline already at z 14.2.
+        //   24   ran out again when the bore ceiling went up to clear the tide
+        //        at low water. Measured furthest reach over the whole arc: 23.6.
+        //
+        // 28 carries that with four metres in hand. There is a test that walks
+        // every second of the arc and asserts it, because this is the third time
+        // the same edge has been found the hard way and the pattern is obvious
+        // in hindsight: every change that makes the water more dangerous makes
+        // it travel further, and the sheet is what it travels on.
+        //
+        // It costs nothing visible. The extra rows land in the flat near strip
+        // behind the camera, which has always been below the bottom of the
+        // frame, and `rowNear` and `widthPerMetre` follow `camera.fov` rather
+        // than this.
+        nearZ: 28,
         farZ: -404,         // out to where the fog has finished the job
         // Where the packed part of the row curve begins, in metres in front of
         // the camera. The bottom edge of the frame meets still water about two
@@ -634,6 +647,31 @@ export const OCEAN_CONFIG = deepFreeze({
         deepColor: 0x0d3a4a,
         shallowColor: 0x2f7f86,
         foamColor: 0xeaf4f6,
+        // ---- What the sea is made of once the sky closes over ---------------
+        //
+        // THE BODY COLOUR HAS TO GO GREY WITH THE SKY, and leaving it out was a
+        // reported bug: the sea read as darker than the sky above it and as a
+        // different colour, in a way that looked like two materials rather than
+        // one scene. The cause is where the pixel comes from. Near the horizon
+        // Fresnel is close to one, so the water IS the sky and matches it for
+        // free. Everywhere else Fresnel is a few percent, so the pixel is almost
+        // entirely body colour lit by the lights, and a dark teal tuned for a
+        // blue afternoon under a grey lid is exactly a mismatch.
+        //
+        // Greyer and slightly LIGHTER, which is the counterintuitive half. An
+        // overcast sea is not a dark sea, it is a colourless one: the light
+        // arriving is white rather than blue, so the water stops being able to
+        // be blue, and the whole dome is bright rather than just the sun.
+        // Blended by the arc's gloom, so the two can never be out of step.
+        //
+        // LIFTED FOR THE SAME REASON `sky.storm` WAS. These are albedos rather
+        // than rendered colours, so they are not inverted through ACES directly,
+        // but they are multiplied by light that has been dimmed and then tone
+        // mapped, and the first pass wrote them by eye at (36,52,60) and
+        // (80,102,108) against a day palette of (13,58,74) and (47,127,134).
+        // Less saturated and no brighter is not a grey sea, it is a dark one.
+        stormDeepColor: 0x3f5058,
+        stormShallowColor: 0x7c9298,
         opacityNear: 0.82,      // thin water over sand shows the sand
 
         // The tide moves the whole waterline slowly up and down the beach. A
@@ -722,24 +760,71 @@ export const OCEAN_CONFIG = deepFreeze({
         // below sets both how far the water comes and how long it takes, and
         // they cannot disagree.
         //
-        // THE RUN UP IS SET BY WHERE THE CAMERA SITS, NOT BY THE WAVE, and that
-        // is a departure worth stating. The physical answer for a 1.7 metre
-        // breaker is the Iribarren number: at this slope and this swell it comes
-        // out around 1.3, giving 2.2 metres of vertical run up, which on a 1:4.5
-        // beach is TEN METRES horizontally. The camera sits two metres shoreward
-        // of the still water line, so a real swash would run eight metres past
-        // it and the visitor would be knee deep with the lens under water.
+        // THE RUN UP USED TO BE SET BY WHERE THE CAMERA SITS AND IT IS NOT ANY
+        // MORE, which is worth stating because the old reasoning was sound and
+        // the scene outgrew it. It ran: the physical answer for a 1.7 metre
+        // breaker is the Iribarren number, which at this slope and swell comes
+        // out around 1.3, giving 2.2 metres of vertical run up and TEN METRES
+        // horizontally on a 1:4.5 beach. The camera sits two metres shoreward of
+        // the still water line, so a real swash would run eight metres past it
+        // and the visitor would be knee deep with the lens under water. That was
+        // written as a problem to be avoided, and the run up was scaled down to
+        // the compressed geometry to avoid it.
         //
-        // The scene's geometry is compressed and this is where the bill comes
-        // due: the surf zone is ten metres wide here because the break line was
-        // placed for the composition, where a real one on this swell would be
-        // several times that. So the run up is scaled to the beach we built.
-        // 2.4 metres puts the biggest sets at the camera's feet, which is
-        // exactly what `camera` claims the viewer is sitting at the top of, and
-        // leaves the ordinary ones stopping a metre short.
+        // A VISITOR KNEE DEEP WITH THE LENS UNDER WATER IS NOW THE GOAL. So the
+        // scaling is gone and the run up comes out of the bore depth below,
+        // which is the honest direction for it to come from anyway. What the old
+        // note got right is that this beach is compressed: the surf zone is ten
+        // metres wide where a real one on this swell would be several times
+        // that. The consequence lands on `beach.nearZ` rather than here, because
+        // a swash that runs further needs sheet under it, and that is a length
+        // of mesh rather than a compromise on the water.
         swash: {
-            maxRunUp: 2.4,      // metres past the still water line, biggest sets
-            minRunUp: 0.6,      // ... and the smallest inners
+            // ---- The bore ---------------------------------------------------
+            //
+            // HOW DEEP THE WATER IS WHEN IT ARRIVES, and it replaced a pair of
+            // run up distances because a distance cannot answer the question
+            // the scene actually needed. Steve asked for waves that sometimes
+            // break over the visitor, and the old numbers said how FAR the
+            // water came without ever saying how MUCH of it there was, so a
+            // swash could be configured to run ten metres and still be a
+            // millimetre thick.
+            //
+            // RUN UP IS NOW DERIVED FROM THESE. Ritter's dam break solution
+            // gives the front of a released body of water of depth d a speed of
+            // 2 sqrt(g d), and a sheet leaving at that speed and decelerating
+            // under `swashDecel` stops after u0^2 / 2a, so X = 2 g d0 / a. On
+            // this beach that is 9.53 metres of run up per metre of bore, and
+            // the two can no longer disagree.
+            //
+            //   0.07 m of bore -> 0.67 m of run up   (the old minRunUp was 0.6)
+            //   0.30 m of bore -> 2.86 m of run up   (the old maxRunUp was 2.4)
+            //
+            // So the calm beach is almost exactly where it was, which is the
+            // point: this is a better description of the same sea, not a
+            // different one.
+            //
+            // SCALED BY THE SWELL AT THE MOMENT OF BREAKING, which is what makes
+            // the storm dangerous. A bigger swell breaks in deeper water, so the
+            // breaker feeding the bore is genuinely bigger even though it does
+            // not LOOK bigger from the beach (see `beach.slope`). At the storm
+            // peak a 0.9 strength set gives a 0.63 m bore, and 0.63 m of water
+            // on top of a surge that has already put the sea past the camera is
+            // over the visitor's head. Ordinary sets at 0.55 strength give
+            // 0.39 m and wash past at chest height without covering the lens,
+            // which is the "sometimes" that was asked for.
+            //
+            // 0.38 AND NOT 0.30, BECAUSE OF THE TIDE. The tide swings the water
+            // level a quarter of a metre either way on its own clock, the arc is
+            // two minutes, and a visit lands on a roughly random part of that
+            // swing. At 0.30 the storm bore cleared the eye at mean and high
+            // water and missed entirely at low, so a third of visitors would
+            // have been promised waves breaking over them and got none. Raising
+            // the BORE rather than the surge is the fix that works: raising the
+            // surge instead would have put high water above eye level all by
+            // itself and left those visitors under a permanent white-out.
+            minBoreDepth: 0.07,
+            maxBoreDepth: 0.38,
             // The bore takes time to cross the surf zone, so the sheet arrives
             // after the crash rather than with it. Measured at 2.4 m/s in the
             // foam field, which is where this number comes from rather than
@@ -891,6 +976,106 @@ export const OCEAN_CONFIG = deepFreeze({
             sunlitMix: 0.55
         },
 
+        // ---- The storm sky ---------------------------------------------------
+        //
+        // ONE PALETTE, NOT ELEVEN MORE KEYFRAMES. The day below has eleven hours
+        // in it and the arc builds a storm through whichever one the visit drew.
+        // Writing an overcast twin for each would be eleven more chances for two
+        // lists to drift apart, so `applyGloom` blends the hour toward this
+        // single set instead. That also means it keeps working if the held sun
+        // is ever moved back onto a cycle.
+        //
+        // THE SUN STAYS EXACTLY WHERE IT IS. Only what it delivers goes. An
+        // overcast sky is not a sunset and not a night: the sun is still up
+        // there, you simply cannot see it, so the light goes flat and grey
+        // rather than going dark or going warm. Moving the sun to sell a storm
+        // would put the water's specular lobe somewhere the time of day does not
+        // agree with, and the sea would read as the wrong hour rather than as
+        // the wrong weather.
+        storm: {
+            // Two thirds of the sun's punch gone, which is roughly what a thick
+            // overcast costs. Cutting both equally is the classic mistake and it
+            // reads as dusk rather than as weather.
+            sunIntensityScale: 0.34,
+            // AND THE FILL DOES NOT DROP AT ALL, which looks like a mistake and
+            // is the physics. A clear sky delivers ambient from a deep blue dome
+            // plus a small bright sun. An overcast one delivers it from a dome
+            // that is uniformly bright white, and the total is comparable or
+            // higher: it is why a grey day still hurts to look up at. This was
+            // 0.85, and the sea came out darker than the sky above it, which
+            // was reported twice before the cause was found.
+            hemiIntensityScale: 1.00,
+            // THESE ARE PIPELINE INPUTS, NOT SCREEN COLOURS, AND WRITING THEM
+            // AS SCREEN COLOURS IS THE BUG THAT TOOK THREE ROUNDS TO FIND. Every
+            // colour here goes srgbToLinear -> exposure -> ACES -> sRGB before
+            // anybody sees it, and ACES crushes mid tones hard. Measured on the
+            // values this section used to hold:
+            //
+            //     cloudColor  written (76,82,92)    showed as ( 18, 22, 30)
+            //     zenith      written (57,64,74)    showed as (  7, 10, 15)
+            //     horizon     written (106,113,122) showed as ( 48, 56, 67)
+            //
+            // So the "grey lid" was rendering at about (19,23,31), which is
+            // black, and the sea reflecting it came out black next to the parts
+            // of the sky near the sun that were not. That is the dark grey
+            // reflection that kept being reported and kept surviving fixes
+            // aimed at the water, because the water was innocent.
+            //
+            // The day keyframes below never had this problem because they were
+            // tuned by looking at screenshots, so they are already compensated:
+            // midday horizon is written (196,220,237) and shows as (164,180,190).
+            // These were written by eye against no screenshot at all.
+            //
+            // Solved backwards through the pipeline for a proper overcast lid:
+            //
+            //     cloudColor  write (179,190,201) -> shows (145,154,164)
+            //     horizon     write (172,181,194) -> shows (136,145,157)
+            //     zenith      write (157,159,174) -> shows (117,119,136)
+            //
+            // A thick overcast is BRIGHT. It is uncomfortable to look up at.
+            // Dark is what a storm feels like and not what it measures.
+            zenith: 0x9d9fae,
+            horizon: 0xacb5c2,
+            hemiSky: 0xa8b0bb,
+            hemiGround: 0x6a6459,
+            cloudColor: 0xb3bec9,
+            cloudOpacity: 0.94,
+            // COVERAGE IS A THRESHOLD ON NOISE, so lowering it does not darken
+            // the clouds that are there, it makes there be more of them. 0.52
+            // leaves clear sky between high streaks. 0.18 is a lid. That is the
+            // difference between a bright day with cloud on it and a sky that
+            // has closed over, and it is the single most effective number here.
+            cloudCoverage: 0.18,
+            // WHERE THE CLOUD STOPS, AND THIS ONE IS A BUG FIX RATHER THAN A
+            // LOOK. The clear sky fades its cloud out below nine degrees, for
+            // the good reason in `cloud.horizonFadeTo`: the projection divides
+            // by elevation, so near the horizon the noise gets finer than a
+            // pixel and reads as a shimmer.
+            //
+            // The water then showed the storm before the sky did. A reflection
+            // off flat water at a grazing angle leaves at the same grazing
+            // angle, so it samples the band that has no cloud in it, while a
+            // reflection off a tilted WAVE FACE points steeply up into cloud
+            // that is already black. The sea came out in grey swatches on the
+            // wave faces against clear sky between them, none of it matching the
+            // dome overhead, and it started happening long before the sky looked
+            // like anything at all.
+            //
+            // A real overcast covers the sky down to the horizon, so the lid
+            // has to as well. Only the TO edge moves: the FROM edge is what
+            // clamps the projection divisor, and lowering that is what would
+            // bring the shimmer back.
+            cloudFadeTo: 0.03,
+            // Up, not down. Tone mapping is what keeps a grey sky looking like
+            // weather rather than like an underexposed photograph, and a storm
+            // sky is genuinely bright even while it is dark in colour.
+            // Back down to 1.0 now the palette carries the brightness itself.
+            // 1.12 was compensating for colours that were too dark, which is a
+            // second dial doing the first dial's job, and it lifted the sun's
+            // halo and the foam along with the sky.
+            exposure: 1.00
+        },
+
         // ---- The day, as a list of looks ------------------------------------
         //
         // `at` is the position in the cycle, 0 to 1, and it WRAPS: past the last
@@ -1026,11 +1211,22 @@ export const OCEAN_CONFIG = deepFreeze({
 
     // ---- The arc (storm.js) -------------------------------------------------
     //
-    // THREE MINUTES, WITH AN ENDING. Agreed with Steve on 2026-08-19, and it is
-    // the number every other number here hangs off. The scene opens as an
-    // ordinary bright day, the swell builds until the sea is frightening, the
-    // water starts coming over the camera, the sea withdraws, a tsunami
-    // arrives, and the page fades to black.
+    // TWO MINUTES, WITH AN ENDING. Steve tried three and it dragged, which is
+    // the right way round to find that out. Every time below moved with it, and
+    // NOT PROPORTIONALLY: the opening lost the most because it is the part with
+    // least happening, and the drawback lost the least because it needs a real
+    // number of seconds on the clock to be read as wrong rather than as a lull.
+    //
+    //     stage      3 min    2 min
+    //     ordinary    0-35     0-20    establishing, and it does not need long
+    //     turning    35-90    20-55
+    //     storm      90-130   55-85    the white-outs happen in here
+    //     drawback  130-150   85-100   15s, down from 20, and no shorter
+    //     tsunami   150-180  100-120
+    //
+    // The scene opens as an ordinary bright day, the swell builds until the sea
+    // is frightening, the sky closes over, the water starts coming over the
+    // camera, the sea withdraws, a tsunami arrives, and the page fades to black.
     //
     // THE SEA IS THE ONLY THING THAT CHANGES. The sun is held (see `cycle`), the
     // camera never moves (see `camera`), and there is nothing to click. That is
@@ -1038,17 +1234,28 @@ export const OCEAN_CONFIG = deepFreeze({
     // meaning something, which is exactly the effect a horror scene wants and
     // exactly the effect a busy one destroys.
     storm: {
-        seconds: 180,
+        seconds: 120,
         // Start times, not ranges, so two stages can never overlap or leave a
         // gap. The last one runs to `seconds`. Names are for the audio bed and
         // the debug label rather than for anything visual, since every visible
         // quantity below interpolates straight through the boundaries.
         stages: [
             { from: 0,   name: 'ordinary' },   // the sea as it has always been
-            { from: 35,  name: 'turning' },    // the swell starts to build
-            { from: 90,  name: 'storm' },      // faces near vertical, first engulfment
-            { from: 130, name: 'drawback' },   // the sea goes the wrong way
-            { from: 150, name: 'tsunami' }
+            { from: 20,  name: 'turning' },    // the swell starts to build
+            { from: 55,  name: 'storm' },      // faces near vertical, first engulfment
+            // THE LULL IS STEVE'S AND IT IS THE BEST NOTE OF THE THREE. The
+            // drawback used to begin straight off the storm's peak, so a set was
+            // always mid flight when the sea started leaving, and the visitor
+            // watched a large wave approach and then quietly dissolve on its way
+            // in. It read as the scene losing its place rather than as the sea
+            // doing something.
+            //
+            // A real drawback is preceded by exactly this: the sea stops. Six
+            // seconds of a flat, silent ocean after ninety seconds of building
+            // storm is the loudest thing in the arc, and it costs one keyframe.
+            { from: 84,  name: 'lull' },       // the sea stops, and that is worse
+            { from: 94,  name: 'drawback' },   // then it goes the wrong way
+            { from: 104, name: 'tsunami' }
         ],
         // ---- The swell ------------------------------------------------------
         //
@@ -1084,11 +1291,22 @@ export const OCEAN_CONFIG = deepFreeze({
         // down, which is the same margin the calm sea has always run at.
         swell: [
             { at: 0,   value: 1.00 },
-            { at: 35,  value: 1.05 },   // barely, and only so it is already moving
-            { at: 90,  value: 2.00 },   // the horizon starts going
-            { at: 130, value: 2.40 },
-            { at: 150, value: 2.20 },   // the drawback takes the sea down with it
-            { at: 168, value: 2.60 }    // and the tsunami brings it back
+            { at: 20,  value: 1.05 },   // barely, and only so it is already moving
+            { at: 55,  value: 2.00 },   // the horizon starts going
+            { at: 84,  value: 2.40 },   // the peak of the storm
+            // THE SEA STOPS. Down past calm, to a third of the sea the scene
+            // opened with, in six seconds. Nothing else in the arc moves this
+            // fast and nothing else should: every other curve here is a weather
+            // system and this one is the bottom dropping out.
+            { at: 90,  value: 0.30 },
+            { at: 98,  value: 0.28 },   // and stays there while the water leaves
+            // THE PEAK LANDS WITH THE FRONT, NOT AFTER IT. This used to reach
+            // 2.60 at t=116, which is a second after the fade has started, so
+            // the biggest sea in the whole scene happened behind the blackout.
+            // Steve's words: it ends just as the waves get good.
+            { at: 104, value: 2.00 },
+            { at: 108, value: 2.60 },
+            { at: 120, value: 2.60 }
         ],
         // Crest cusping, and it comes DOWN as the swell goes up. Not a look
         // decision: amplitude times wave number times this is what drives the
@@ -1102,9 +1320,9 @@ export const OCEAN_CONFIG = deepFreeze({
         // and it is worth it, because size is the thing being asked for.
         lean: [
             { at: 0,   value: 3.20 },
-            { at: 90,  value: 2.60 },
-            { at: 130, value: 1.60 },
-            { at: 180, value: 1.20 }
+            { at: 55,  value: 2.60 },
+            { at: 85,  value: 1.60 },
+            { at: 120, value: 1.20 }
         ],
         // ---- The surge ------------------------------------------------------
         //
@@ -1140,24 +1358,160 @@ export const OCEAN_CONFIG = deepFreeze({
         // missing quantity. Until that exists, a steady surge high enough to
         // engulf would leave the camera permanently submerged, which is worse
         // than not doing it. Flagged to Steve rather than faked.
+        // THE TAIL IS TIMED SO THE TSUNAMI IS SEEN BEFORE IT ARRIVES. The first
+        // version ramped from the drawback straight to the peak over twenty two
+        // seconds, and walking it showed the white-out saturating at t = 165,
+        // seven seconds before the fade even starts. The visitor would have
+        // waited three minutes and then watched the ending through a blank white
+        // rectangle. The bore is what does it: the surge alone is only halfway
+        // up at that point, and half a metre of bore on top of it is enough.
+        //
+        // So the level is held low while the sea comes back, which gives about
+        // twenty seconds of an enormous visible swell with the break line
+        // marching in, and only crosses the eye at the very end.
         surge: [
             { at: 0,   value: 0.00 },
-            { at: 90,  value: 0.15 },
-            { at: 118, value: 0.55 },   // ankle deep at the camera, no more
-            { at: 130, value: 0.30 },
-            { at: 145, value: -0.90 },  // drawback, and the beach is bare
-            { at: 152, value: -0.90 },
-            { at: 172, value: 1.55 },   // the tsunami, well over the eye
-            { at: 180, value: 1.55 }
+            { at: 55,  value: 0.15 },
+            // A PLATEAU AND NOT A PEAK, and the difference is how many waves get
+            // to hit you. Whether a bore covers the eye depends on the sea being
+            // already high when it arrives, so the number of white-outs in the
+            // storm is set by how long this sits up rather than by how high it
+            // gets. A single peak at 74 gave exactly one hit in the whole storm,
+            // because only one break happened to land on it.
+            { at: 68,  value: 0.55 },   // ankle deep at the camera, no more
+            { at: 80,  value: 0.55 },
+            // Back to an ordinary water level for the lull, so the sea is flat
+            // AND normal. A lull on a raised sea would still look like weather.
+            { at: 89,  value: 0.05 },
+            { at: 94,  value: 0.00 },   // the sea is flat AND at its own level
+            { at: 100, value: -0.90 },  // drawback, and the beach is bare
+            // THE RECOVERY HAS TO TRAVEL WITH THE FRONT. It used to lag it, so
+            // when the front arrived carrying 1.70 m the water at the camera
+            // came out below the eye: the tsunami reached the visitor and did
+            // not cover them, because the sea underneath it was still drawn
+            // back. The drawback ends when the thing that caused it arrives.
+            { at: 104, value: -0.80 },
+            { at: 108, value: 0.10 },
+            { at: 112, value: 0.35 },
+            { at: 120, value: 0.40 }
         ],
         // How far either side of eye level the white-out ramps, in metres. A
         // hard switch at exactly eye level would flicker every time a crest
         // passed, since the surface is never still.
         engulfWashMetres: 0.35,
+        // How long the white-out takes to run off the lens once the water has
+        // dropped back below the eye, in seconds. INSTANT ON, GRADUAL OFF: a
+        // wave hitting you is sudden and draining is not, so `washEnvelope` is
+        // deliberately asymmetric. Released LINEARLY so it reaches exactly zero,
+        // where an exponential would leave a percent of white on the screen for
+        // the rest of the scene, which is most of the bug this was added for.
+        washReleaseSeconds: 0.9,
+        // And how long it takes to arrive. FAST IS NOT INSTANT. The first
+        // version had no attack at all: the target was taken straight whenever
+        // it was rising, so the screen went from clear to full white in a single
+        // frame. Sixteen milliseconds is not how water arrives, it is how a
+        // camera flash goes off, and it was reported as exactly that. The lens
+        // model makes it worse, because a bore is at full thickness the instant
+        // it reaches you, so the signal underneath really is a step and
+        // something has to turn it into a wave. A fifth of a second is about how
+        // long a wall of whitewater takes to cover a face.
+        washAttackSeconds: 0.22,
+        // ---- The sky closing over -------------------------------------------
+        //
+        // 0 is the day the visit drew and 1 is the overcast lid in `sky.storm`.
+        // Runs AHEAD of the swell on purpose: weather arrives before the sea it
+        // makes does, because a swell has to travel and a cloud front does not,
+        // so the sky going grey is the first sign anything is wrong. That is
+        // also the most useful thing it can do dramatically, since it is the
+        // only cue the visitor gets before the water starts behaving badly.
+        //
+        // It does NOT clear for the tsunami. There is a version of this scene
+        // where the sun comes back out for the ending and it is a better film
+        // and a worse beach: weather does not politely leave before a wave
+        // arrives, and the sea being lit by a sky that has given up is the
+        // whole look of the last thirty seconds.
+        // The keys are placed so the gloom LEADS the swell at every second of
+        // the arc, not just at the ends, and there is a test that walks it and
+        // compares how far each has travelled toward its own finish. An earlier
+        // version flattened between 45 and 80 while the swell was climbing
+        // hardest, so for about ten seconds in the middle the sea was outrunning
+        // the weather that was supposed to be causing it.
+        // IT STARTS MOVING AT ONCE, which is Steve's call and the right one. It
+        // used to sit near zero for the first fourteen seconds so the scene
+        // could open as an unambiguously ordinary day, and the effect was that
+        // the sea started building while the sky was still innocent, so the
+        // weather looked like a consequence of the surf rather than its cause.
+        //
+        // Dark cloud is the only warning the visitor gets and it costs nothing
+        // to give it early. The first frame is still clean, which is all the
+        // "ordinary bright day" opening actually needs: what sells the turn is
+        // the CHANGE, and a change is easier to notice while you are still
+        // looking at the thing it starts from.
+        gloom: [
+            { at: 0,   value: 0.00 },   // the first frame, and only the first
+            { at: 6,   value: 0.12 },
+            { at: 20,  value: 0.42 },
+            { at: 45,  value: 0.75 },
+            { at: 75,  value: 0.94 },
+            { at: 100, value: 1.00 }    // fully closed before the tsunami lands
+        ],
         // The closing fade, in seconds off the end. Long enough to read as an
         // ending rather than as a page crashing, short enough that nobody is
         // left watching a grey rectangle.
-        fadeSeconds: 8
+        // ---- The tsunami itself ---------------------------------------------
+        //
+        // A STEP THAT TRAVELS, AND UNTIL THIS EXISTED THERE WAS NOTHING TO SEE
+        // COMING. The surge above raises the water level everywhere at once,
+        // which is what a surge is and is not what anybody pictures when they
+        // hear tsunami: the ocean inflating in place has no object in it, no
+        // arrival, and nothing to watch. Steve watched it and said he could not
+        // see it approaching, which was the correct reading of what was there.
+        //
+        // So the front is a place. Water seaward of it stands `rise` metres
+        // higher, water shoreward of it is at whatever the arc otherwise says,
+        // and it sweeps from the fog limit to the beach. That buys three things
+        // and all three are the point: a line that closes on the shore, deeper
+        // water behind it so the swell back there stands taller than the swell
+        // in front of it, and an actual arrival.
+        tsunami: {
+            // Starts at the fog's far edge rather than at the sheet's, because
+            // anything past 400 m is fog and would simply fade in rather than
+            // arrive. Ends past the camera, so it does not stop in frame.
+            fromZ: -395,
+            toZ: 30,
+            // Out of the drawback and into the ending. 320 metres in 22 seconds
+            // is 15 m/s, which is far slower than the real thing in deep water
+            // and the right speed for a scene: fast enough to feel wrong, slow
+            // enough that the last ten seconds are watchable.
+            // TIMED SO THE HIT LANDS BEFORE THE FADE, not during it. Once the
+            // level step was fixed the front stopped raising the water early and
+            // the eye was not covered until t=118, four seconds into a fade that
+            // starts at 114, so the payoff arrived on a half black screen. It
+            // crosses the camera at about t=112 now, which leaves the white-out,
+            // its clearing, and a second of standing under the thing before the
+            // black starts.
+            startAt: 95,
+            arriveAt: 107,
+            // THE FRONT CARRIES THE WATER NOW, NOT THE SURGE. The surge used to
+            // ramp to 1.55 at the end and the front added its own rise on top,
+            // which is two systems raising the same sea and a level of 3 m if
+            // they ever fully overlapped. The surge now returns to about zero
+            // and this is what covers the eye, which is also the honest shape:
+            // the water arrives BECAUSE the front arrives.
+            rise: 1.70,
+            // How abrupt the step is. Wide enough that it never falls between
+            // two rows of the grid and strobes as it crosses them, tight enough
+            // to read as an edge rather than as a slope.
+            frontWidth: 26,
+            // THE WHITE LINE IS WHAT MAKES IT VISIBLE AT DISTANCE. A 1.55 m step
+            // subtends about four pixels at the fog limit and the sea out there
+            // is already the colour of the sky, so the level change alone
+            // arrives without having been seen. The front of a real bore is
+            // broken water and it is white, and white against a grey sea reads
+            // at any distance.
+            frontFoam: 0.85
+        },
+        fadeSeconds: 5
     },
 
     // ---- The cycle ----------------------------------------------------------

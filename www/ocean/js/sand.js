@@ -84,18 +84,117 @@ export function waterlineZ(elapsed, beach = OCEAN_CONFIG.beach, water = OCEAN_CO
     return beach.shoreZ + tideOffset(elapsed, water) / beach.slope;
 }
 
+/** How deep the bore is when it reaches the sand, in metres.
+ *
+ *  THE NEW PRIMARY QUANTITY, AND THE ONE THE SCENE WAS MISSING. Everything the
+ *  swash does used to hang off a run up distance, which is a length and cannot
+ *  answer the only question that matters for a wave breaking over somebody: how
+ *  much water is standing there. A bore is broken whitewater carrying momentum
+ *  shoreward, and it is NOT limited by the local depth the way an unbroken wave
+ *  is, which is exactly why it can knock a person over in water they were
+ *  standing up in a moment earlier.
+ *
+ *  Scales with the swell because the breaker it came from does: a wave breaks at
+ *  0.78 of the local depth and a bigger swell breaks in deeper water, so breaker
+ *  height goes up roughly in step with the swell even though its APPARENT size
+ *  does not. See `beach.slope`, which is where that argument lives. */
+export function boreDepth(strength, sand = OCEAN_CONFIG.sand, swell = 1) {
+    const { minBoreDepth, maxBoreDepth } = sand.swash;
+    const s = Math.max(0, Math.min(1, strength));
+    return (minBoreDepth + (maxBoreDepth - minBoreDepth) * s) * Math.max(0, swell);
+}
+
+/** How far up the beach a bore of depth `d0` runs, in metres.
+ *
+ *  RUN UP IS NOW DERIVED AND IT USED TO BE CONFIGURED, which is the whole point
+ *  of this change. Ritter's dam break solution gives the front of a released
+ *  body of water of depth d a speed of 2 sqrt(g d), and a sheet leaving the
+ *  shoreline at that speed and decelerating at `swashDecel` stops after
+ *  u0^2 / 2a. Substituting: X = 2 g d0 / a.
+ *
+ *  So the depth of the water and the distance it runs are one number wearing two
+ *  hats, and a deeper bore cannot fail to run further. The old code carried
+ *  `minRunUp` and `maxRunUp` directly, which meant a swash could be configured
+ *  to run ten metres and still be a millimetre thick. */
+export function runUpFromBore(d0, beach = OCEAN_CONFIG.beach) {
+    const a = swashDecel(beach);
+    if (a <= 0 || !(d0 > 0)) return 0;
+    return (2 * GRAVITY * d0) / a;
+}
+
+/** Depth of the swash lens at `s` metres up the beach from the water's edge.
+ *
+ *  THE LENS IS A WEDGE: thickest at the back, zero at the tip. Two of the three
+ *  things here are exact and the third is the simplest shape consistent with
+ *  them, which is stated plainly rather than dressed up. The tip position is
+ *  exact, straight from the ballistic parabola in `swashReach`. Zero depth at
+ *  the tip is exact, because a tongue of water running up sand ends in an edge
+ *  and not in a step. The profile between them is taken as linear, and the
+ *  drain as linear in time, which is the honest simplification: the full Shen
+ *  and Meyer solution is a quadratic in position over time and its shape only
+ *  differs from this one by a few centimetres at the scales in this scene.
+ *
+ *  NEGATIVE `s` IS THE SEAWARD SIDE and it matters more than the rest. Once the
+ *  surge has carried the waterline past the camera, the camera is behind the
+ *  shoreline rather than in front of it, and the bore passes over it at full
+ *  thickness rather than at the thin end of a wedge. That is the case that
+ *  engulfs somebody, so it is the case that must not be special cased away. */
+export function swashDepth(age, swash, beach = OCEAN_CONFIG.beach, s = 0) {
+    const duration = swashDuration(swash.runUp, beach);
+    if (!(age > 0) || !(duration > 0) || age >= duration) return 0;
+    // HELD ON THE WAY UP, DRAINED ON THE WAY BACK, and the first version drained
+    // the whole time. That was wrong in a way that mattered: the sheet is FED by
+    // the bore behind it while it is still advancing, so the front does not thin
+    // as it travels, and a model that started draining at once was thinnest at
+    // exactly the moment the water was passing somebody. Measured, it cost about
+    // forty per cent of the depth at the camera and it was the difference
+    // between a wave breaking over the visitor and one washing past their knees.
+    //
+    // The corner at half the duration is not a smoothing failure. That is the
+    // instant the tip stops and the water turns around, which is a real event
+    // and the only one in a swash.
+    const atShore = swash.depth * Math.min(1, 2 * (1 - age / duration));
+    if (s <= 0) return atShore;
+    const tip = swashReach(age, swash.runUp, beach);
+    if (!(tip > 0) || s >= tip) return 0;
+    return atShore * (1 - s / tip);
+}
+
 /** Turn a break event from water.js into a swash waiting to happen.
  *
  *  The delay is the honest part: the wave breaks out at the surf line and the
  *  bore has to cross the zone before any water arrives at the sand. At 2.4 m/s
  *  over a twelve metre zone that is five seconds, which is long enough that
  *  running the two together would look wrong. */
-export function swashFromBreak(event, now, sand = OCEAN_CONFIG.sand) {
-    const { minRunUp, maxRunUp, boreSpeed } = sand.swash;
+export function swashFromBreak(event, now, sand = OCEAN_CONFIG.sand, swell = 1, beach = OCEAN_CONFIG.beach) {
+    const { boreSpeed } = sand.swash;
     const strength = Math.max(0, Math.min(1, event.strength || 0));
-    const runUp = minRunUp + (maxRunUp - minRunUp) * strength;
+    const depth = boreDepth(strength, sand, swell);
     const distance = Math.max(0, event.distance || 0);
-    return { start: now + distance / boreSpeed, runUp };
+    return { start: now + distance / boreSpeed, depth, runUp: runUpFromBore(depth, beach) };
+}
+
+/** The water surface at `z` right now, in world metres, swash included.
+ *
+ *  THIS IS THE NUMBER THE WHITE-OUT IS DRIVEN FROM, and it is why the bore had
+ *  to exist. The still water level answers "has the sea arrived", which during
+ *  the storm is yes and ankle deep. This answers "is there water over your
+ *  head", which is a different question and only a bore can say yes to it.
+ *
+ *  Takes the deepest of the active swashes rather than adding them, because two
+ *  sheets crossing the same sand are one sheet of water and not two stacked. */
+export function swashSurfaceAt(z, swashes, now, line, config = OCEAN_CONFIG, level = 0) {
+    const { beach } = config;
+    const bed = bedHeightAt(z, beach);
+    // The still surface here: the sea if this z is under it, the sand if not.
+    let surface = Math.max(bed, level);
+    const s = z - line;
+    for (let i = 0; i < swashes.length; i++) {
+        const swash = swashes[i];
+        const depth = swashDepth(now - swash.start, swash, beach, s);
+        if (depth > 0) surface = Math.max(surface, Math.max(bed, level) + depth);
+    }
+    return surface;
 }
 
 /** The shoreward-most z the water has reached at this instant.
@@ -416,13 +515,46 @@ function buildMaterial(config, sky) {
  *  Handed the array `consumeBreaks()` returned rather than calling it, because
  *  that queue has one reader and audio.js is about to be the other. main.js
  *  drains it once and gives it to both. */
-export function addBreaks(events) {
+export function addBreaks(events, sea = null) {
     if (!events || !settings) return;
     const max = settings.sand.swash.maxActive;
+    // The swell at the moment the wave BROKE, baked into the swash there and
+    // then. A swash that read the live swell every frame would grow and shrink
+    // under itself as the storm built, which is not a thing water does once it
+    // has left the wave.
+    const swell = sea && Number.isFinite(sea.swell) ? sea.swell : 1;
     for (let i = 0; i < events.length; i++) {
-        swashes.push(swashFromBreak(events[i], elapsed, settings.sand));
+        swashes.push(swashFromBreak(events[i], elapsed, settings.sand, swell, settings.beach));
     }
     if (swashes.length > max) swashes = swashes.slice(swashes.length - max);
+}
+
+/** Put the beach back to its first frame, for the replay.
+ *
+ *  The wetness goes to zero rather than to whatever it was, because a beach that
+ *  opened already soaked would be telling the visitor about a wave that has not
+ *  happened yet. See `resetWater` for why the clock has to go with it. */
+export function resetSand() {
+    elapsed = 0;
+    sinceProfile = 0;
+    swashes = [];
+    if (wet) {
+        wet.fill(0);
+        writeWet();
+    }
+}
+
+/** The water surface at `z` right now, swash included, for the arc to read.
+ *
+ *  Takes the SURGE rather than a water level, exactly like `reachZ`, so the two
+ *  cannot be handed different ideas of where the sea is. The tide comes from
+ *  this module's own clock, which is driven by the same delta as water.js's, so
+ *  the two agree without either having to ask the other. */
+export function surfaceWithSwash(z, surge = 0) {
+    if (!settings) return 0;
+    const { beach, water } = settings;
+    const level = tideOffset(elapsed, water) + surge;
+    return swashSurfaceAt(z, swashes, elapsed, beach.shoreZ + level / beach.slope, settings, level);
 }
 
 /** Advance the beach.

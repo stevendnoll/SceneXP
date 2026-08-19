@@ -144,6 +144,50 @@ export function bracketKeys(phase, keys) {
     return { from, to, t: span > 0 ? along / span : 0 };
 }
 
+/** Darken a sky state toward the storm palette, 0 clear and 1 fully overcast.
+ *
+ *  A SECOND AXIS THROUGH THE SAME KEYFRAMES, not a second set of them. The day
+ *  has eleven hours in it and the arc has a storm building through one of them,
+ *  and writing eleven more keyframes for "the same hour but overcast" would be
+ *  eleven more chances for the two lists to drift apart. Blending toward one
+ *  palette gives the storm at any hour for the price of one table, which also
+ *  means it still works if the held sun is ever moved.
+ *
+ *  THE SUN DOES NOT MOVE AND THAT IS THE POINT. Only the light it delivers goes,
+ *  because that is what an overcast sky does: the sun is still up there and you
+ *  simply cannot see it any more. Keeping the direction means the water's
+ *  specular lobe stays where it was and the sea goes flat and grey rather than
+ *  going dark, which is the difference between a storm and a sunset. */
+export function applyGloom(state, gloom, sky = OCEAN_CONFIG.sky) {
+    const g = Math.max(0, Math.min(1, gloom || 0));
+    if (g <= 0 || !sky.storm) return state;
+    const s = sky.storm;
+    const lerp = (a, b) => a + (b - a) * g;
+    const blend = (from, to) => {
+        const target = unpackColor(to);
+        return [lerp(from[0], target[0]), lerp(from[1], target[1]), lerp(from[2], target[2])];
+    };
+    return {
+        ...state,
+        // The disc itself is left alone. It is drawn behind the cloud and the
+        // cloud is what hides it, so fading the disc as well would take it out
+        // twice and leave a bright patch of sky with no sun in it.
+        sunIntensity: lerp(state.sunIntensity, state.sunIntensity * s.sunIntensityScale),
+        zenith: blend(state.zenith, s.zenith),
+        horizon: blend(state.horizon, s.horizon),
+        hemiSky: blend(state.hemiSky, s.hemiSky),
+        hemiGround: blend(state.hemiGround, s.hemiGround),
+        hemiIntensity: lerp(state.hemiIntensity, state.hemiIntensity * s.hemiIntensityScale),
+        cloudColor: blend(state.cloudColor, s.cloudColor),
+        cloudOpacity: lerp(state.cloudOpacity, s.cloudOpacity),
+        cloudCoverage: lerp(sky.cloud.coverage, s.cloudCoverage),
+        // Only the outer edge. See config: the inner one clamps the projection
+        // divisor and moving it is what brings the horizon shimmer back.
+        cloudFadeTo: lerp(sky.cloud.horizonFadeTo, s.cloudFadeTo),
+        exposure: lerp(state.exposure, s.exposure)
+    };
+}
+
 /** The whole look of the sky at a given phase, as plain numbers.
  *
  *  Angles in degrees, colours as three channels in 0..1 sRGB, intensities as
@@ -155,6 +199,11 @@ export function skyStateAt(phase, sky = OCEAN_CONFIG.sky) {
     const lerp = (a, b) => a + (b - a) * t;
 
     return {
+        // Clear sky by default. `applyGloom` is what moves these, and carrying
+        // them here means `applyState` has one place to read them from whether
+        // there is a storm on or not.
+        cloudCoverage: sky.cloud.coverage,
+        cloudFadeTo: sky.cloud.horizonFadeTo,
         name: t < 0.5 ? from.name : to.name,
         elevation: lerp(from.elevation, to.elevation),
         azimuth: lerp(from.azimuth, to.azimuth),
@@ -443,6 +492,9 @@ let rendererRef = null;
 let settings = null;
 let phase = 0;
 let elapsed = 0;
+// The last gloom the arc asked for, held so `setPhase` can jump the hour for a
+// screenshot without also clearing the storm out of the sky.
+let lastGloom = 0;
 
 /** The uniform objects, for water.js to graft into its own material.
  *
@@ -561,6 +613,14 @@ function applyState(state) {
     uniforms.uSunGlowStrength.value = settings.sky.sun.glowStrength * halo;
     uniforms.uSunAureoleStrength.value = settings.sky.sun.aureoleStrength * halo;
     uniforms.uCloudOpacity.value = state.cloudOpacity;
+    // Coverage is the noise threshold, so lowering it does not make the same
+    // clouds darker, it makes there be MORE of them. That is what turns a few
+    // high streaks into an overcast lid, and it is why the storm needs this as
+    // well as the opacity rather than instead of it.
+    if (state.cloudCoverage != null) uniforms.uCloudCoverage.value = state.cloudCoverage;
+    // The lid has to reach the horizon, or the water reflects a storm the sky
+    // has not got. See `sky.storm.cloudFadeTo` for the whole account.
+    if (state.cloudFadeTo != null) uniforms.uCloudFadeTo.value = state.cloudFadeTo;
     uniforms.uCloudDrift.value.set(0, elapsed * settings.sky.cloud.driftSpeed);
 
     sunLight.color.setRGB(state.sunColor[0], state.sunColor[1], state.sunColor[2], THREE.SRGBColorSpace);
@@ -589,12 +649,13 @@ function applyState(state) {
  *  case for rebuilding it less often than the frame: it is one interpolation
  *  between two keyframes and a handful of uniform writes, and skipping frames
  *  to save that would trade nothing for a visible step in the light. */
-export function updateSky(deltaSeconds) {
+export function updateSky(deltaSeconds, gloom = 0) {
     if (!uniforms) return phase;
     const delta = Number.isFinite(deltaSeconds) ? deltaSeconds : 0;
     elapsed += delta;
+    lastGloom = gloom;
     phase = advancePhase(phase, delta, settings.cycle);
-    applyState(skyStateAt(phase, settings.sky));
+    applyState(applyGloom(skyStateAt(phase, settings.sky), gloom, settings.sky));
     return phase;
 }
 
@@ -613,7 +674,9 @@ export function getPhase() { return phase; }
 export function setPhase(next) {
     if (!uniforms) return phase;
     phase = wrapPhase(next);
-    applyState(skyStateAt(phase, settings.sky));
+    // Keeps whatever gloom the arc had put on, so jumping the hour for a
+    // screenshot does not also clear the storm out of the sky.
+    applyState(applyGloom(skyStateAt(phase, settings.sky), lastGloom, settings.sky));
     return phase;
 }
 

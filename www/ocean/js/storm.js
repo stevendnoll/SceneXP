@@ -105,6 +105,17 @@ export function leanAt(seconds, storm = OCEAN_CONFIG.storm) {
     return curveAt(seconds, storm.lean, storm);
 }
 
+/** How far the sky has closed over, 0 the day the visit drew and 1 overcast.
+ *
+ *  Leads the swell rather than tracking it, because weather arrives before the
+ *  sea it makes does: a swell has to travel and a cloud front does not. It is
+ *  also the only warning the visitor gets before the water starts behaving
+ *  badly, which makes it the most useful thing in the arc dramatically and the
+ *  cheapest thing in it computationally. */
+export function gloomAt(seconds, storm = OCEAN_CONFIG.storm) {
+    return curveAt(seconds, storm.gloom, storm);
+}
+
 /** Metres the still water level stands above its normal mean.
  *
  *  Negative during the drawback, which is the whole point of it. Added to the
@@ -154,17 +165,165 @@ export function curveAt(seconds, keys, storm = OCEAN_CONFIG.storm) {
 export function engulfAt(surfaceY, config = OCEAN_CONFIG) {
     const eye = config.camera.height;
     const wash = config.storm.engulfWashMetres;
-    return smoothstep(eye - wash, eye + wash, surfaceY);
+    // THE RAMP STARTS AT EYE LEVEL AND IT USED TO START BELOW IT, which left the
+    // frame permanently milky. The first version ran from eye - 0.35 to
+    // eye + 0.35 on the reasoning that a hard switch would flicker as crests
+    // passed. What it actually did was return a small non-zero value for any
+    // water standing anywhere near the camera, and through the storm the surge
+    // alone sits in that band, so the white never fully cleared between waves.
+    //
+    // Water below the eye is water you are standing IN, not water you are
+    // looking THROUGH, so it has to contribute exactly nothing. The flicker the
+    // old lower edge was guarding against is handled properly by the release
+    // envelope in `washEnvelope`, which is the right tool for it.
+    return smoothstep(eye, eye + wash, surfaceY);
+}
+
+/** Smooth the white-out over time: fast on, slow off.
+ *
+ *  A WAVE HITTING YOU IS FAST AND DRAINING OFF IS NOT, so this is deliberately
+ *  asymmetric rather than a symmetric smoothing.
+ *
+ *  FAST IS NOT THE SAME AS INSTANT, AND THAT WAS THE SECOND BUG HERE. The first
+ *  version returned the target unchanged whenever it was rising, which takes the
+ *  screen from clear to full white in a SINGLE FRAME. Sixteen milliseconds is
+ *  not how water arrives, it is how a camera flash goes off, and that is exactly
+ *  what Steve saw twice running. The lens model makes it worse: the bore is at
+ *  full thickness the instant it arrives, so the underlying signal really is a
+ *  step, and something has to turn that into water.
+ *
+ *  A fifth of a second is about how long a wall of whitewater takes to cover a
+ *  face, which is fast enough to be violent and slow enough to be a wave.
+ *
+ *  IT FIRES ON THE ARRIVAL AND NOT ON THE STATE, which is the third fix here and
+ *  the one that finally made it read as water. Following the engulfment directly
+ *  meant the screen stayed white for as long as the sea was over the eye, and a
+ *  big bore sits there for three or four seconds. Steve's note is the right test
+ *  for it: a brief flash is fine, but the picture has to come back within a
+ *  second or two or you lose sight of the next wave, and losing sight of the
+ *  next wave is losing the scene.
+ *
+ *  So the attack runs only while the water is still RISING over the eye, and
+ *  everything else releases. Physically that is water on a lens rather than a
+ *  camera underwater: it sheets off on its own schedule and does not wait for
+ *  the sea to let go. It also means a visitor standing in a wave sees the wave,
+ *  which is the entire point of putting them there.
+ *
+ *  Pure, with both previous values passed in, so the frame loop owns the state
+ *  and this stays testable. BOTH EDGES ARE LINEAR, so the release reaches
+ *  exactly zero, which an exponential never would: an exponential leaves a
+ *  percent of white on the screen forever, which was the first bug here. */
+export function washEnvelope(previous, target, deltaSeconds, storm = OCEAN_CONFIG.storm) {
+    const prev = previous && typeof previous === 'object'
+        ? previous : { wash: 0, target: 0, attacking: false };
+    const delta = Math.max(0, deltaSeconds);
+    const release = storm.washReleaseSeconds > 0 ? storm.washReleaseSeconds : 1;
+    const attack = storm.washAttackSeconds > 0 ? storm.washAttackSeconds : 0.2;
+
+    // RISING IS A RATE, NOT A DIFFERENCE, and testing it as a difference is what
+    // kept the screen white for three seconds after this was supposedly fixed.
+    // The tide moves under the whole scene, so once a bore is sitting over the
+    // camera the water keeps creeping up by about a thousandth of the wash per
+    // frame. Any tolerance near zero reads that as an arrival, the attack stays
+    // latched, and the picture never comes back until the wave leaves.
+    //
+    // The threshold is the release rate itself, which is the one number here
+    // that does not need choosing: if the water is coming up slower than it
+    // drains off the lens, then it is not arriving, it is just there. An onset
+    // runs at about eight per second against a creep of six hundredths, so the
+    // two are nowhere near each other and nothing has to be tuned.
+    //
+    // AND THE ONSET HAS TO LATCH. The rate test is true for one frame only,
+    // because the arrival is a step: the water goes over the eye between two
+    // frames and then simply stays there. Attacking only on frames that pass the
+    // test therefore moved the wash by a single frame's worth, about eight per
+    // cent, and the white-out disappeared entirely. So the onset arms the
+    // attack, the attack runs until it has caught the target, and everything
+    // after that releases. A second wave arriving mid release arms it again.
+    const gained = target - prev.target;
+    let attacking = prev.attacking;
+    if (delta > 0 && gained / delta > 1 / release) attacking = true;
+
+    let wash;
+    if (attacking) {
+        wash = Math.min(target, prev.wash + delta / attack);
+        if (wash >= target - 1e-9) attacking = false;
+    } else {
+        wash = Math.max(0, prev.wash - delta / release);
+    }
+    return { wash, target, attacking };
+}
+
+/** Where the tsunami front is, as a z, and how much water is standing behind it.
+ *
+ *  THE TSUNAMI HAD NO OBJECT IN IT AND THIS IS THE FIX. Everything before this
+ *  raised the water level EVERYWHERE AT ONCE, which is what a surge is and is
+ *  not what anybody means by a tsunami arriving. The sea got higher, the swell
+ *  got bigger, and there was nothing to watch approach, because nothing was
+ *  approaching: the whole ocean was simply inflating in place. Steve watched it
+ *  and said he could not see it coming, which is precisely correct.
+ *
+ *  So the surge becomes a STEP THAT TRAVELS. Water behind the front stands
+ *  `rise` metres higher, water ahead of it is at the level the arc otherwise
+ *  says, and the front sweeps from the fog limit to the beach. That gives three
+ *  things at once and all of them are the point: a visible line on the horizon
+ *  that grows as it closes, deeper water behind it so the swell back there
+ *  stands taller than the swell in front, and a real arrival time.
+ *
+ *  Returns `null` before the front exists, which is most of the arc, so callers
+ *  can skip the whole per-row branch on the cheap. */
+export function frontAt(seconds, storm = OCEAN_CONFIG.storm) {
+    const t = storm.tsunami;
+    if (!t || seconds < t.startAt) return null;
+    const span = t.arriveAt - t.startAt;
+    const p = span > 0 ? Math.min(1, (seconds - t.startAt) / span) : 1;
+    // Linear in TIME rather than smoothed, because this one is a body of water
+    // with momentum and easing it in would read as hesitation. The only thing a
+    // tsunami does is keep coming.
+    return {
+        z: t.fromZ + (t.toZ - t.fromZ) * p,
+        rise: t.rise * smoothstep(0, 0.25, p),
+        width: t.frontWidth,
+        foam: t.frontFoam * smoothstep(0, 0.15, p)
+    };
+}
+
+/** How much the front raises the water at a given z, in metres.
+ *
+ *  THE SHAPE IS WRITTEN TWICE ON PURPOSE AND THERE IS A TEST THAT SAYS SO.
+ *  water.js applies it per row while building the profile, and it cannot import
+ *  this file, because water.js knowing about a three minute story is exactly the
+ *  coupling that keeps being avoided here: the sea takes numbers and draws them.
+ *  So the same smoothstep exists in both places and `ocean-storm.test.mjs`
+ *  asserts they agree across the whole sheet. Duplicating four characters of
+ *  arithmetic is cheaper than a dependency, but only while something checks it.
+ *
+ *  One is seaward of the front and zero shoreward, because the raised water is
+ *  what is CHASING the front rather than what is waiting for it. */
+export function frontLevelAt(z, front) {
+    if (!front) return 0;
+    // ASCENDING EDGES AND THEN INVERTED, NOT DESCENDING EDGES. This read
+    // `smoothstep(front.z + width, front.z - width, z)` for a day, which is a
+    // REVERSED range, and both smoothsteps in this codebase guard that case with
+    // `if (edge1 <= edge0) return x >= edge1 ? 1 : 0`. That guard is meant for a
+    // zero width range and it silently turns a reversed one into a hard step
+    // returning 1 almost everywhere. So the front raised the WHOLE OCEAN the
+    // instant it appeared, which is precisely the behaviour it was built to
+    // replace, and it went unnoticed because the white line uses a Gaussian and
+    // looked perfect while the level under it was wrong.
+    return front.rise * (1 - smoothstep(front.z - front.width, front.z + front.width, z));
 }
 
 /** The still water surface at the camera from the surge alone, in world metres.
  *
- *  A FALLBACK, NOT THE ANSWER. water.js knows the real water level because it
- *  also knows the tide, and the tide is a quarter of a metre either way against
- *  a wash that ramps over 0.35, so the two disagree by enough to matter. Pass
- *  `surfaceY` into `stormStateAt` from `surfaceAt` in water.js wherever there is
- *  a sea to ask. This exists for the frames before one has been built and for
- *  the tests, and it is deliberately the conservative half of the answer.
+ *  A FALLBACK, NOT THE ANSWER, AND IT IS MISSING THE HALF THAT MATTERS. The
+ *  still water level says whether the sea has reached the camera, and during the
+ *  storm the answer is yes and ankle deep. What puts water over somebody's head
+ *  is the BORE, the broken whitewater running shoreward, which is not limited by
+ *  the local depth the way an unbroken wave is. sand.js is what tracks that, so
+ *  pass `surfaceY` in from `surfaceWithSwash` wherever there is a beach to ask.
+ *  This exists for the frames before one has been built and for the tests, and
+ *  it is deliberately the conservative half of the answer.
  *
  *  The bed under the camera is above mean sea level, since the beach climbs
  *  shoreward, so a surge has to clear that before there is any water here at
@@ -191,15 +350,23 @@ export function fadeAt(seconds, storm = OCEAN_CONFIG.storm) {
 export function stormStateAt(seconds, config = OCEAN_CONFIG, surfaceY = null) {
     const storm = config.storm;
     const surge = surgeAt(seconds, storm);
-    // The live surface where there is a sea to ask, because it carries the tide.
-    const surface = surfaceY == null ? surfaceAtCamera(surge, config) : surfaceY;
+    const front = frontAt(seconds, storm);
+    // The front counts as water once it has passed the camera, and leaving it
+    // out of the fallback was wrong the moment the surge handed the covering
+    // over to it: the estimate said the eye was dry through the entire ending.
+    const level = surge + frontLevelAt(config.camera.z, front);
+    // The live surface where there is a sea to ask, because it carries the tide
+    // and the bores, neither of which this file can see.
+    const surface = surfaceY == null ? surfaceAtCamera(level, config) : surfaceY;
     return {
         seconds,
         progress: arcProgress(seconds, storm),
         stage: stageAt(seconds, storm).name,
         swell: swellAt(seconds, storm),
         lean: leanAt(seconds, storm),
+        gloom: gloomAt(seconds, storm),
         surge,
+        front,
         engulf: engulfAt(surface, config),
         fade: fadeAt(seconds, storm),
         // The arc is over when the fade is complete, which is the moment main.js

@@ -388,6 +388,12 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
     // water level rather than two competing ones.
     const swell = sea.swell > 0 ? sea.swell : 0;
     const tide = tideOffset(elapsed, water) + sea.surge;
+    // THE ONE THING IN THIS FILE THAT IS NOT THE SAME EVERYWHERE. Every other
+    // quantity here varies with depth, which varies with z, so the sea is
+    // uniform in the sense that one rule makes all of it. A tsunami front is
+    // not: it is a step in the water level that is in a PLACE and travels, and
+    // there is genuinely more water on one side of it than the other.
+    const front = sea.front || null;
 
     const p = out || {
         depth: new Float32Array(rows),
@@ -424,7 +430,22 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
         const step = z - previousZ;   // positive: we are moving shoreward
         previousZ = z;
 
-        const depth = depthAt(z, tide, beach, water);
+        // Behind the front (seaward, smaller z) the water stands higher, and
+        // `frontWidth` is what stops it being a one row cliff that strobes as it
+        // crosses the grid.
+        //
+        // ASCENDING EDGES AND THEN INVERTED. Writing it the natural way round,
+        // `smoothstep(front.z + width, front.z - width, z)`, is a REVERSED range,
+        // and `smoothstep` above guards that with `edge1 <= edge0` and returns a
+        // hard 1. So the front raised the entire sheet the instant it existed.
+        // It has to match `frontLevelAt` in storm.js exactly, and there is a
+        // test that walks the sheet and checks that it does.
+        let level = tide;
+        if (front) {
+            level += front.rise * (1 - smoothstep(front.z - front.width, front.z + front.width, z));
+        }
+
+        const depth = depthAt(z, level, beach, water);
         p.depth[r] = depth;
 
         // Above the water line: no wave, no foam, nothing to draw.
@@ -558,7 +579,25 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
         tallest = Math.max(tallest, ampTotal);
         const size = tallest > EPSILON ? ampTotal / tallest : 0;
         foam = Math.max(breaking * size, foam * Math.exp(-Math.abs(step) / foamDecayMetres));
-        p.foamBed[r] = foam;
+        // A WHITE LINE ON THE HORIZON IS WHAT MAKES THE THING VISIBLE. A step in
+        // the water level is only a couple of pixels tall out at the fog limit,
+        // and the sea there is already the colour of the sky, so the level alone
+        // arrives without ever having been seen coming. The front of a tsunami
+        // bore is broken water and it is white, and white against a grey sea
+        // reads at any distance, which is the whole reason this term exists.
+        //
+        // Written into the bed rather than into `breaking`, because it is not a
+        // wave collapsing: it is whitewater that is already there and being
+        // carried. Taken at the maximum so a front crossing the surf zone does
+        // not fight with the surf that is already breaking in it.
+        //
+        // NOT folded into `foam` itself, which is the running total the next row
+        // inherits. Doing that would carry the line shoreward as the loop walks
+        // in, smearing the front's whitewater across the water AHEAD of it,
+        // which is the one side of a bore that is still clean.
+        p.foamBed[r] = front
+            ? Math.max(foam, front.foam * Math.exp(-(((z - front.z) / front.width) ** 2)))
+            : foam;
 
         // `p.edge` was set above, before the cap, because the waves are faded
         // out over the same span the sheet is. One number, one water's edge.
@@ -1030,6 +1069,12 @@ let mesh = null;
 let material = null;
 let geometry = null;
 let uniforms = null;
+// The four colours the gloom blends between, built once. Kept beside the
+// uniforms rather than read from config every frame because these are THREE
+// Colors in the working space and re-parsing a hex sixty times a second to get
+// the same object back is the sort of thing that never shows up in a profile
+// and never should have been written either.
+let palette = null;
 let settings = null;
 let constants = null;
 let profile = null;
@@ -1160,6 +1205,16 @@ function buildMaterial(config, sky = null) {
         // lights correctly, and the extra fill is confined to that strip.
         side: THREE.DoubleSide
     });
+
+    // The two ends of the gloom blend, built once. Re-parsing a hex sixty times
+    // a second to get the same object back is the sort of thing that never shows
+    // up in a profile and never should have been written either.
+    palette = {
+        deep: new THREE.Color(water.deepColor),
+        shallow: new THREE.Color(water.shallowColor),
+        stormDeep: new THREE.Color(water.stormDeepColor),
+        stormShallow: new THREE.Color(water.stormShallowColor)
+    };
 
     uniforms = {
         uTime: { value: 0 },
@@ -1354,6 +1409,19 @@ export function updateWater(deltaTime, sea = CALM) {
     // already made for the tide and the sets.
     if (uniforms && sea.lean != null) uniforms.uLeanGain.value = sea.lean;
 
+    // THE SEA GOES GREY WITH THE SKY, and it has to be here rather than in the
+    // reflection. The reflected sky already matches by construction, since it is
+    // the sky's own function reading the sky's own uniforms, but it is only most
+    // of the pixel near the horizon where Fresnel approaches one. Across the
+    // rest of the frame the pixel is body colour, and a body colour tuned for a
+    // blue afternoon under a grey lid reads as two different scenes. See
+    // `water.stormDeepColor` in config for the whole account.
+    if (uniforms && palette && sea.gloom > 0) {
+        const g = Math.min(1, sea.gloom);
+        uniforms.uDeepColor.value.copy(palette.deep).lerp(palette.stormDeep, g);
+        uniforms.uShallowColor.value.copy(palette.shallow).lerp(palette.stormShallow, g);
+    }
+
     sinceProfile += dt;
     const interval = 1 / Math.max(1, settings.water.profileHz);
     if (sinceProfile >= interval) {
@@ -1364,16 +1432,39 @@ export function updateWater(deltaTime, sea = CALM) {
     detectBreaks();
 }
 
-/** The water surface at a given z right now, in world metres, still water only.
+// THERE WAS A `surfaceAt` HERE AND IT WAS DELETED THE DAY THE BORE ARRIVED.
+// It reported the still water surface, which answers "has the sea reached this
+// z" and was the right question right up until the white-out needed answering
+// "is there water over your head". Only broken whitewater says yes to the
+// second one, and only sand.js tracks that, so `surfaceWithSwash` over there is
+// now the single answer. Two functions reporting the water level from two
+// modules is exactly the split that put the sky and the sea on different hours
+// once already.
+
+/** Put the sea back to its first frame, without rebuilding any of it.
  *
- *  No wave on it, because the caller is the arc asking "is the sea over the
- *  camera yet" and a crest passing is not the same question as the sea having
- *  arrived. Returns the BED height where the water has not reached, which is
- *  what dry means. */
-export function surfaceAt(z, sea = CALM) {
-    if (!settings) return 0;
-    const level = tideOffset(elapsed, settings.water) + sea.surge;
-    return Math.max(bedHeightAt(z, settings.beach), level);
+ *  FOR THE REPLAY, AND IT RESETS MORE THAN IT FIRST SEEMS IT SHOULD. The obvious
+ *  version left the sea running and only put the story back, on the reasoning
+ *  that a replay should open on a living sea rather than on one frozen at phase
+ *  zero. That was a nice idea and it was wrong, because THE TIDE IS ON THIS
+ *  CLOCK TOO. The tide swings the water level a quarter of a metre either way on
+ *  a 560 second period, the arc is 120, and the whole storm was tuned against
+ *  the tide rising through it. Leaving the clock running meant the second replay
+ *  ran the storm at half tide and the third at low water, where measurably NO
+ *  wave breaks over the visitor at all. A visitor pressing "watch it again" and
+ *  getting a visibly weaker storm is the worst possible answer.
+ *
+ *  So a replay is a replay. It also makes the line on the ending card true. */
+export function resetWater() {
+    elapsed = 0;
+    sinceProfile = 0;
+    breaks = [];
+    if (cycles) cycles.fill(null);
+    if (profile && rowZ) {
+        buildProfile(rowZ, 0, settings, profile);
+        refreshAttributes();
+    }
+    if (uniforms) uniforms.uTime.value = 0;
 }
 
 /** Notice when a crest reaches the break line, so the sound and the sight agree.
@@ -1462,6 +1553,7 @@ export function disposeWater() {
     geometry = null;
     material = null;
     uniforms = null;
+    palette = null;
     attributes = null;
     profile = null;
     rowZ = null;

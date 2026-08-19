@@ -6,9 +6,12 @@
 // that never reaches its peak, a stage nobody ever enters, a drawback that does
 // not actually go backwards, a fade that finishes after the scene does: each of
 // those leaves every function in this file returning a perfectly reasonable
-// number and the experience broken. So most of what follows walks the whole
-// three minutes and asserts things about the SHAPE rather than about values at
-// convenient instants.
+// number and the experience broken. So most of what follows walks the whole two
+// minutes and asserts things about the SHAPE rather than about values at
+// convenient instants. It was three minutes until Steve watched it and said so,
+// which is why almost nothing below names a second: the times come out of the
+// stage table, and the ones that do not are floors on how short a beat can get
+// rather than descriptions of where it currently sits.
 //
 // The two assertions worth reading first are the fold margin one, which is the
 // only hard physical limit in the scene, and the one about the sheet being long
@@ -27,12 +30,28 @@ jest.unstable_mockModule('../www/ocean/js/config.min.js', async () => (
 const { OCEAN_CONFIG } = await import(CONFIG_URL);
 const {
     arcProgress, stageAt, stageProgress, curveAt, swellAt, leanAt, surgeAt,
-    engulfAt, surfaceAtCamera, fadeAt, stormStateAt
+    engulfAt, washEnvelope, gloomAt, frontAt, frontLevelAt, surfaceAtCamera, fadeAt,
+    stormStateAt
 } = await import(STORM_URL);
 const { bedHeightAt, tideOffset } = await import(WATER_URL);
 
 const STORM = OCEAN_CONFIG.storm;
 const { beach, camera } = OCEAN_CONFIG;
+
+/** THE WATER LEVEL AT A GIVEN z, which is the surge PLUS whatever the tsunami
+ *  front is carrying. Almost every assertion below used to read `surgeAt` on its
+ *  own, and they all broke together the day the front took over the job of
+ *  covering the eye from the surge. That was the tests being specific about a
+ *  contributor when they meant the total. */
+const levelAt = (t, z = camera.z) => surgeAt(t) + frontLevelAt(z, frontAt(t));
+
+/** water.js's smoothstep, restated so the front's shape can be checked against
+ *  a second implementation rather than against itself. */
+const smoothstepCopy = (edge0, edge1, x) => {
+    if (edge1 <= edge0) return x >= edge1 ? 1 : 0;
+    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+};
 
 /** Every second of the arc, plus a little past the end. */
 const everySecond = () => {
@@ -119,10 +138,20 @@ describe('the shape of the arc', () => {
         // rest of config was tuned against, the turn has nothing to turn from.
         expect(swellAt(0)).toBeCloseTo(1, 6);
         expect(swellAt(STORM.seconds)).toBeGreaterThan(2.2);
-        // And it is bigger at the end of every stage than at the start of it,
-        // up to the drawback, which is the one place the sea is allowed to ease.
-        expect(swellAt(90)).toBeGreaterThan(swellAt(35));
-        expect(swellAt(130)).toBeGreaterThan(swellAt(90));
+        // TAKEN FROM THE STAGE TABLE RATHER THAN WRITTEN DOWN, because the arc
+        // was retimed from three minutes to two and every hardcoded second in
+        // here went stale at once. A test that has to be edited whenever the
+        // pacing changes is a test that will eventually be edited to pass.
+        const at = (name) => STORM.stages.find((s) => s.name === name).from;
+        expect(swellAt(at('storm'))).toBeGreaterThan(swellAt(at('turning')));
+
+        // AND THEN IT STOPS, WHICH IS THE BEAT THE ARC WAS MISSING. The lull
+        // takes the sea below the calm it opened with, so a set is never left
+        // mid flight when the water starts leaving. This assertion used to say
+        // the drawback was bigger than the storm, which was true and was the
+        // problem: a big wave was always dissolving on its way in.
+        expect(swellAt(at('lull') + 6)).toBeLessThan(swellAt(0) * 0.5);
+        expect(swellAt(at('drawback'))).toBeLessThan(swellAt(0));
     });
 
     test('the swell never exceeds what the mesh can carry', () => {
@@ -136,24 +165,92 @@ describe('the shape of the arc', () => {
 
     test('the cusping comes DOWN as the swell goes up', () => {
         // They trade against each other through the fold limit, so a table where
-        // both climbed would be one that had forgotten the constraint.
-        expect(leanAt(0)).toBeGreaterThan(leanAt(90));
-        expect(leanAt(90)).toBeGreaterThan(leanAt(130));
-        expect(leanAt(130)).toBeGreaterThan(leanAt(STORM.seconds));
-        for (const t of everySecond()) expect(leanAt(t)).toBeGreaterThan(0);
+        // both climbed would be one that had forgotten the constraint. Stated
+        // over the whole arc rather than at three chosen instants, which is both
+        // stronger and immune to the pacing being changed under it.
+        let previous = Infinity;
+        for (const t of everySecond()) {
+            const lean = leanAt(t);
+            expect(lean).toBeGreaterThan(0);
+            expect(lean).toBeLessThanOrEqual(previous + 1e-9);
+            previous = lean;
+        }
+        expect(leanAt(STORM.seconds)).toBeLessThan(leanAt(0) * 0.6);
+    });
+
+    test('THE SKY CLOSES OVER, AND IT LEADS THE SEA', () => {
+        // Weather arrives before the sea it makes does, because a cloud front
+        // does not have to travel as a wave. That ordering is the only warning
+        // the visitor gets, so it is worth pinning rather than leaving to the
+        // shape of two tables that happen to be edited together.
+        expect(gloomAt(0)).toBe(0);
+        expect(gloomAt(STORM.seconds)).toBeCloseTo(1, 6);
+        // Measured against how far each has travelled toward its own end, which
+        // is the only fair comparison between a multiplier and a fraction.
+        const swellSpan = swellAt(STORM.seconds) - swellAt(0);
+        for (const t of everySecond()) {
+            if (t === 0 || t >= STORM.seconds) continue;
+            const swellProgress = (swellAt(t) - swellAt(0)) / swellSpan;
+            expect(gloomAt(t)).toBeGreaterThanOrEqual(swellProgress - 1e-9);
+        }
+        // And it never comes back. A sun breaking through for the ending is a
+        // better film and a worse beach.
+        let previous = -1;
+        for (const t of everySecond()) {
+            expect(gloomAt(t)).toBeGreaterThanOrEqual(previous - 1e-9);
+            previous = gloomAt(t);
+        }
+    });
+
+    test('THE SEA FALLS CALM BEFORE IT LEAVES', () => {
+        // STEVE'S NOTE, AND THE BEST ONE OF THE ROUND. The drawback used to
+        // begin straight off the storm's peak, so a set was always mid flight
+        // when the water started going, and the visitor watched a large wave
+        // approach and then dissolve. It read as the scene losing its place.
+        //
+        // The order is the whole assertion: FLAT first, then GONE. A real
+        // drawback is preceded by exactly this, and six seconds of a stopped
+        // ocean after ninety of building storm is the loudest thing in the arc.
+        const lull = STORM.stages.find((s) => s.name === 'lull').from;
+        const drawback = STORM.stages.find((s) => s.name === 'drawback').from;
+        expect(drawback).toBeGreaterThan(lull + 5);
+        // Flat by the time the water starts leaving...
+        expect(swellAt(drawback)).toBeLessThan(0.5);
+        // ...and the water level still ordinary while it is, or a lull on a
+        // raised sea would read as more weather rather than as an absence.
+        expect(Math.abs(levelAt(drawback))).toBeLessThan(0.2);
+        // The sea is only actually gone afterwards.
+        expect(Math.min(...everySecond().map((t) => surgeAt(t)))).toBeLessThan(-0.8);
+        const goneAt = everySecond().find((t) => surgeAt(t) < -0.5);
+        expect(goneAt).toBeGreaterThan(drawback);
     });
 
     test('THE DRAWBACK ACTUALLY GOES BACKWARDS', () => {
         // The single most effective twenty seconds in the arc, and the one most
         // easily lost to a sign or a smoothing window. The sea has to sit BELOW
         // its own mean for long enough to be read as wrong, not dip through it.
+        // MEASURED OVER THE WHOLE WRONG-SEA WINDOW, not just the deep part. The
+        // lull now carries half of this beat: the ocean stops for eleven seconds
+        // before it starts leaving, so the stretch where something is visibly
+        // wrong runs from the lull to the front arriving rather than only while
+        // the water is out. Asserting the deep part alone drove the number down
+        // toward whatever the table happened to say, which is how a threshold
+        // ends up being edited to pass.
+        //
+        // MEASURED TO WHEN THE WATER COMES BACK, not to when the front first
+        // appears. The front shows up on the horizon while the sea is still out,
+        // and the sea being out is the whole point of the beat, so its appearing
+        // does not end anything. It ends when the water returns.
+        const lull = STORM.stages.find((s) => s.name === 'lull').from;
+        const back = everySecond().find((t) => t > lull && levelAt(t) > 0.5);
+        expect(back - lull).toBeGreaterThanOrEqual(14);
         const below = everySecond().filter((t) => surgeAt(t) < -0.5);
-        expect(below.length).toBeGreaterThan(10);
+        expect(below.length).toBeGreaterThanOrEqual(8);
         expect(Math.min(...everySecond().map((t) => surgeAt(t)))).toBeLessThan(-0.8);
         // And it happens BEFORE the tsunami, or it is just a low tide.
         const lowest = below[Math.floor(below.length / 2)];
         expect(lowest).toBeLessThan(STORM.seconds);
-        expect(surgeAt(STORM.seconds)).toBeGreaterThan(1);
+        expect(levelAt(STORM.seconds)).toBeGreaterThan(1);
     });
 
     test('the drawback uncovers beach that was under water', () => {
@@ -170,33 +267,74 @@ describe('the shape of the arc', () => {
 });
 
 describe('the water coming over the camera', () => {
-    test('dry sand is not engulfed and a metre over the eye is', () => {
+    test('WATER BELOW THE EYE CONTRIBUTES EXACTLY NOTHING', () => {
+        // THE BUG STEVE CAUGHT ON SCREEN: the frame stayed milky between waves.
+        // The ramp used to run from eye - 0.35 to eye + 0.35, on the reasoning
+        // that a hard edge at eye level would flicker as crests passed. What it
+        // actually did was return a small non-zero value for water standing
+        // anywhere near the camera, and through the whole storm the surge alone
+        // sits in that band, so the white never fully cleared.
+        //
+        // Water below the eye is water you are standing IN. It has to be zero,
+        // and zero exactly, not nearly. The flicker the old lower edge was
+        // guarding against belongs to `washEnvelope`, which is the right tool.
         expect(engulfAt(0)).toBe(0);
-        expect(engulfAt(camera.height - STORM.engulfWashMetres)).toBe(0);
-        expect(engulfAt(camera.height)).toBeCloseTo(0.5, 6);
+        expect(engulfAt(camera.height - 0.5)).toBe(0);
+        expect(engulfAt(camera.height - 0.01)).toBe(0);
+        expect(engulfAt(camera.height)).toBe(0);
+        // And over the eye it ramps to a full white-out.
+        expect(engulfAt(camera.height + STORM.engulfWashMetres / 2)).toBeCloseTo(0.5, 6);
         expect(engulfAt(camera.height + STORM.engulfWashMetres)).toBe(1);
     });
 
-    test('THE SURFACE UNDER THE CAMERA STARTS AT THE SAND, NOT AT ZERO', () => {
-        // The beach climbs shoreward, so the bed under the camera is above mean
-        // sea level and a surge has to clear it before there is any water here
-        // at all. Reading the surface as the surge alone would have said the
-        // camera was ankle deep from the first frame.
-        const bed = bedHeightAt(camera.z, beach);
-        expect(bed).toBeGreaterThan(0);
-        expect(surfaceAtCamera(0)).toBeCloseTo(bed, 9);
-        expect(surfaceAtCamera(-0.9)).toBeCloseTo(bed, 9);
-        expect(surfaceAtCamera(1.55)).toBeCloseTo(1.55, 9);
+    test('THE WHITE-OUT IS A FLASH AND THEN IT CLEARS', () => {
+        // THREE ROUNDS OF THE SAME COMPLAINT LIVE IN THIS TEST. First it left a
+        // permanent milky veil, then it went from clear to full white in one
+        // frame like a camera flash, then it stayed white for three seconds and
+        // lost the next wave. Steve's standard is the right one: a brief flash
+        // is fine, the picture has to be back within a second or two.
+        const step = 1 / 60;
+        const run = (targets) => {
+            let env = { wash: 0, target: 0, attacking: false };
+            const out = [];
+            for (const target of targets) {
+                env = washEnvelope(env, target, step, STORM);
+                out.push(env.wash);
+            }
+            return out;
+        };
+        // A wave arrives as a STEP and then sits there while the tide creeps up
+        // underneath it, which is exactly the signal that used to latch the
+        // attack forever. Four seconds of it.
+        const hit = [0];
+        for (let i = 0; i < 240; i++) hit.push(Math.min(1, 0.79 + i * 0.0001));
+        const trace = run(hit);
+
+        // It rises fast, but not in one frame.
+        expect(trace[1]).toBeLessThan(0.25);
+        expect(trace[1]).toBeGreaterThan(0);
+        // It gets somewhere worth seeing.
+        expect(Math.max(...trace)).toBeGreaterThan(0.7);
+        // AND IT IS GONE INSIDE TWO SECONDS, with the water still over the eye.
+        const clearedBy = trace.findIndex((v, i) => i > 20 && v <= 0.02);
+        expect(clearedBy).toBeGreaterThan(0);
+        expect(clearedBy * step).toBeLessThan(2);
+        // Exactly zero, not nearly. Both edges are linear so it lands on it; an
+        // exponential leaves a percent of white on screen for the rest of the
+        // scene, which was the first version of this bug.
+        expect(trace[trace.length - 1]).toBe(0);
     });
 
-    test('the tsunami covers the eye and nothing before it does', () => {
-        const engulfed = everySecond().filter((t) => stormStateAt(t).engulf > 0.5);
-        expect(engulfed.length).toBeGreaterThan(3);
-        // All of it is in the last stage. This is the assertion that would have
-        // caught the version of the surge table where the storm peak was set
-        // high enough to leave the camera permanently under water.
-        const tsunami = STORM.stages[STORM.stages.length - 1].from;
-        for (const t of engulfed) expect(t).toBeGreaterThanOrEqual(tsunami);
+    test('a second wave mid clear starts the flash again', () => {
+        // The release must not lock out a fresh arrival, or a set of three waves
+        // would show one white-out and two nothings.
+        const step = 1 / 60;
+        let env = { wash: 0, target: 0, attacking: false };
+        for (let i = 0; i < 30; i++) env = washEnvelope(env, 0.9, step, STORM);
+        const midClear = env.wash;
+        expect(midClear).toBeLessThan(0.9);
+        env = washEnvelope(env, 1, step, STORM);
+        expect(env.wash).toBeGreaterThan(midClear);
     });
 
     test('THE SHEET IS LONG ENOUGH FOR THE SEA THE ARC ASKS FOR', () => {
@@ -229,7 +367,104 @@ describe('the ending', () => {
         // while the thing everybody waited three minutes for was still arriving.
         const fadeStart = STORM.seconds - STORM.fadeSeconds;
         expect(stageAt(fadeStart).name).toBe('tsunami');
-        expect(stormStateAt(fadeStart).engulf).toBeGreaterThan(0.5);
+        // The sea is past the camera by then, which is the honest statement of
+        // "the tsunami is here". NOT stated as engulfment: the white-out is
+        // driven by the bore, which lives in sand.js and depends on which waves
+        // happen to have broken, so asserting it here would be asserting against
+        // the conservative surge-only estimate and would mean nothing.
+        const waterline = beach.shoreZ + levelAt(fadeStart) / beach.slope;
+        expect(waterline).toBeGreaterThan(camera.z);
+    });
+
+    test('THE TSUNAMI IS WATCHABLE BEFORE IT ARRIVES', () => {
+        // THE BUG THIS CAUGHT, AND IT WOULD HAVE RUINED THE ENDING. The first
+        // surge table ramped straight out of the drawback to the peak, and
+        // walking it showed the water crossing eye level at t = 165, seven
+        // seconds before the fade even starts. A visitor would have waited three
+        // minutes and watched the finish through a blank white rectangle.
+        //
+        // So there has to be real time between the sea coming back and the sea
+        // covering the lens. Measured on the still water level, which is the
+        // half of it the arc controls.
+        // MEASURED FROM THE FRONT'S OWN LIFE, which is the honest clock for it.
+        // This used to measure from the end of the drawback, and that stopped
+        // meaning anything when the front took over the covering: the base surge
+        // now stays drawn back while the front comes in, so "the drawback ended"
+        // and "the tsunami arrived" became the same instant.
+        const appears = STORM.tsunami.startAt;
+        const covered = everySecond().find((t) => t >= appears && levelAt(t) >= camera.height);
+        // Ten seconds is the floor, not the target. It is about as short as the
+        // sea coming back can be and still register as an event rather than as a
+        // cut, and it survived the arc being retimed from three minutes to two,
+        // which is exactly the pressure this number exists to resist.
+        expect(covered - appears).toBeGreaterThanOrEqual(10);
+        // And the hit lands BEFORE the fade, or the payoff arrives on a screen
+        // that is already going black.
+        expect(covered).toBeLessThan(STORM.seconds - STORM.fadeSeconds);
+    });
+
+    test('THE FRONT IS THE SAME SHAPE IN BOTH FILES', () => {
+        // water.js applies the front per row while building the profile and
+        // cannot import storm.js, because the sea knowing about a two minute
+        // story is the coupling this whole design avoids. So the smoothstep
+        // exists twice and this is what stops the copies drifting.
+        //
+        // IT ALREADY DRIFTED ONCE, IN BOTH COPIES AT THE SAME TIME. Written the
+        // natural way round, `smoothstep(z + width, z - width, ...)` is a
+        // REVERSED range, and both smoothsteps guard that with `edge1 <= edge0`
+        // and return a hard 1. The front raised the entire ocean the instant it
+        // appeared, which is exactly what it was built to replace, and it hid
+        // because the visible white line uses a Gaussian and looked perfect.
+        const front = frontAt(STORM.tsunami.startAt + 8);
+        const ours = (z) => front.rise * (1 - smoothstepCopy(
+            front.z - front.width, front.z + front.width, z));
+        for (const z of [-400, front.z - 60, front.z - 10, front.z, front.z + 10, front.z + 60, 20]) {
+            expect(frontLevelAt(z, front)).toBeCloseTo(ours(z), 9);
+        }
+        // The properties that matter, stated directly so the copies above cannot
+        // both be wrong in the same way and still agree.
+        expect(frontLevelAt(front.z - 500, front)).toBeCloseTo(front.rise, 6);
+        expect(frontLevelAt(front.z + 500, front)).toBeCloseTo(0, 6);
+        expect(frontLevelAt(front.z, front)).toBeCloseTo(front.rise / 2, 6);
+        expect(frontLevelAt(0, null)).toBe(0);
+    });
+
+    test('THE TSUNAMI IS A THING THAT TRAVELS, NOT A LEVEL THAT RISES', () => {
+        // WHAT STEVE COULD NOT SEE COMING, AND WHY. Before the front existed the
+        // ending raised the water everywhere at once, so the ocean inflated in
+        // place: no object, no approach, nothing to watch. These assertions are
+        // about it being somewhere and moving, which is the whole difference.
+        const t = STORM.tsunami;
+        expect(frontAt(0)).toBeNull();
+        expect(frontAt(t.startAt - 1)).toBeNull();
+        // It starts out at the fog limit and finishes past the camera, so it
+        // neither fades in nor stops in frame.
+        expect(frontAt(t.startAt).z).toBeLessThan(-300);
+        expect(frontAt(t.arriveAt).z).toBeGreaterThan(camera.z);
+        // And it only ever comes closer.
+        let previous = -Infinity;
+        for (let s = t.startAt; s <= STORM.seconds; s++) {
+            const front = frontAt(s);
+            expect(front.z).toBeGreaterThanOrEqual(previous - 1e-9);
+            previous = front.z;
+        }
+        // Carrying real water and a white edge by the time it is close enough
+        // for either to be seen.
+        const near = frontAt(t.arriveAt - 4);
+        expect(near.rise).toBeGreaterThan(1);
+        expect(near.foam).toBeGreaterThan(0.5);
+    });
+
+    test('the front arrives while there is still scene left to see it in', () => {
+        // A front that landed after the fade had finished would be a tsunami
+        // nobody was shown, which is the same failure as not having one.
+        const t = STORM.tsunami;
+        expect(t.arriveAt).toBeLessThan(STORM.seconds);
+        expect(t.startAt).toBeGreaterThan(
+            STORM.stages.find((s) => s.name === 'drawback').from
+        );
+        // At least a few seconds of it on screen before the black starts.
+        expect(STORM.seconds - STORM.fadeSeconds).toBeGreaterThan(t.arriveAt - 12);
     });
 
     test('finished only becomes true at the very end', () => {

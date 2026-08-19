@@ -101,11 +101,15 @@ installThree();
 const sand = await import(SAND_URL);
 const {
     swashDecel, swashDuration, swashReach, waterlineZ, swashFromBreak, reachZ, soak,
+    boreDepth, runUpFromBore, swashDepth, swashSurfaceAt, surfaceWithSwash,
     sandRows, initSand, updateSand, addBreaks, disposeSand, swashReachMetres,
     getSandMesh, getWet, __sand
 } = sand;
 
 const { beach, sand: SAND, water: WATER, camera } = OCEAN_CONFIG;
+// The same constant sand.js uses, restated rather than imported because it is
+// not exported and a test that reached for it would be asserting against itself.
+const GRAVITY = 9.81;
 
 afterEach(() => { disposeSand(); });
 
@@ -174,23 +178,54 @@ describe('the swash is a parabola with nothing to tune', () => {
         expect(swashDuration(2.4, { slope: 0 })).toBe(0);
     });
 
-    test('the configured run up lands in about three seconds', () => {
+    test('the biggest calm swash lands in about three seconds', () => {
         // Not a tuned number, an output, and it is worth pinning because the
         // surf synthesiser next door was tuned to the same rhythm from the
         // other end: audio.breaks.washSeconds is 3.4.
-        const duration = swashDuration(SAND.swash.maxRunUp);
+        const duration = swashDuration(runUpFromBore(SAND.swash.maxBoreDepth));
         expect(duration).toBeGreaterThan(2);
         expect(duration).toBeLessThan(4.5);
     });
 });
 
 describe('the waves that broke are the water that arrives', () => {
-    test('a stronger break runs further up, inside the configured range', () => {
+    test('RUN UP IS DERIVED FROM THE BORE, NOT CONFIGURED BESIDE IT', () => {
+        // THE STRUCTURAL POINT OF THE WHOLE BORE CHANGE. Run up used to be two
+        // numbers in config, which meant a swash could be set to run ten metres
+        // and still be a millimetre thick, and a millimetre of water cannot
+        // break over anybody. Now Ritter's dam break front speed 2 sqrt(g d)
+        // feeds the ballistic stop at u0^2 / 2a, so X = 2 g d0 / a and the depth
+        // and the distance are one number wearing two hats.
+        const a = swashDecel(beach);
+        for (const d0 of [0.05, 0.3, 0.72, 1.4]) {
+            expect(runUpFromBore(d0, beach)).toBeCloseTo((2 * GRAVITY * d0) / a, 9);
+        }
+        // Which makes it linear in depth, so twice the bore runs exactly twice
+        // as far. That is the relationship a reader should be able to rely on.
+        expect(runUpFromBore(0.6, beach)).toBeCloseTo(2 * runUpFromBore(0.3, beach), 9);
+        expect(runUpFromBore(0, beach)).toBe(0);
+        expect(runUpFromBore(-1, beach)).toBe(0);
+    });
+
+    test('a stronger break brings deeper water and runs further', () => {
         const weak = swashFromBreak({ strength: 0, distance: 0 }, 0);
         const strong = swashFromBreak({ strength: 1, distance: 0 }, 0);
-        expect(weak.runUp).toBeCloseTo(SAND.swash.minRunUp, 9);
-        expect(strong.runUp).toBeCloseTo(SAND.swash.maxRunUp, 9);
+        expect(weak.depth).toBeCloseTo(SAND.swash.minBoreDepth, 9);
+        expect(strong.depth).toBeCloseTo(SAND.swash.maxBoreDepth, 9);
+        expect(strong.runUp).toBeCloseTo(runUpFromBore(strong.depth, beach), 9);
         expect(strong.runUp).toBeGreaterThan(weak.runUp);
+    });
+
+    test('A BIGGER SWELL MAKES A DEEPER BORE, WHICH IS WHY THE STORM IS DANGEROUS', () => {
+        // The bore is the one quantity in the scene that a bigger swell actually
+        // makes bigger at the camera. The breaking wave itself does not: it is
+        // pinned by the beach slope and the distance cancels, which is measured
+        // to death under `beach.slope`. So this is the whole mechanism by which
+        // three minutes of building storm turns into water over somebody's head.
+        const calm = swashFromBreak({ strength: 0.9, distance: 0 }, 0, SAND, 1);
+        const storm = swashFromBreak({ strength: 0.9, distance: 0 }, 0, SAND, 2.4);
+        expect(storm.depth).toBeCloseTo(calm.depth * 2.4, 9);
+        expect(storm.runUp).toBeCloseTo(calm.runUp * 2.4, 9);
     });
 
     test('the sheet arrives after the crash, by the time a bore takes to cross',
@@ -207,9 +242,68 @@ describe('the waves that broke are the water that arrives', () => {
 
     test('a nonsense event is clamped rather than propagated', () => {
         const s = swashFromBreak({ strength: 5, distance: -3 }, 0);
-        expect(s.runUp).toBeCloseTo(SAND.swash.maxRunUp, 9);
+        expect(s.depth).toBeCloseTo(SAND.swash.maxBoreDepth, 9);
         expect(s.start).toBe(0);
-        expect(swashFromBreak({}, 0).runUp).toBeCloseTo(SAND.swash.minRunUp, 9);
+        expect(swashFromBreak({}, 0).depth).toBeCloseTo(SAND.swash.minBoreDepth, 9);
+    });
+
+    test('THE LENS IS A WEDGE: full thickness behind, nothing at the tip', () => {
+        // The shape that decides whether somebody gets hit. Two ends of it are
+        // exact and only the middle is a simplification: the tip comes straight
+        // from the ballistic parabola, and a tongue of water running up sand has
+        // to end in an edge rather than in a step.
+        const swash = { start: 0, depth: 0.5, runUp: 4 };
+        const duration = swashDuration(4, beach);
+        const mid = duration / 2;
+        // At the tip there is nothing, and just behind it there is a little.
+        const tip = swashReach(mid, 4, beach);
+        expect(swashDepth(mid, swash, beach, tip + 0.01)).toBe(0);
+        expect(swashDepth(mid, swash, beach, tip - 0.5)).toBeGreaterThan(0);
+        // It gets deeper all the way back to the water's edge.
+        let previous = 0;
+        for (let s = tip - 0.1; s > 0; s -= 0.2) {
+            const d = swashDepth(mid, swash, beach, s);
+            expect(d).toBeGreaterThanOrEqual(previous - 1e-9);
+            previous = d;
+        }
+        // And it has drained by the time the sheet is back.
+        expect(swashDepth(duration + 0.1, swash, beach, 0)).toBe(0);
+        expect(swashDepth(-1, swash, beach, 0)).toBe(0);
+    });
+
+    test('THE LENS IS FED ON THE WAY UP AND ONLY DRAINS ON THE WAY BACK', () => {
+        // A REAL BUG, WORTH ABOUT FORTY PER CENT OF THE DEPTH. The first version
+        // drained linearly from the moment the swash started, which meant the
+        // sheet was thinnest at exactly the moment it was travelling past
+        // somebody. A bore FEEDS the lens behind it while the tip is still
+        // advancing, so the thickness holds until the water turns around.
+        //
+        // Measured across the tide, the difference was whether a storm wave
+        // broke over the visitor or washed past their knees.
+        const swash = { start: 0, depth: 0.5, runUp: 4 };
+        const duration = swashDuration(4, beach);
+        // Full thickness for the whole outward half.
+        for (const f of [0.05, 0.2, 0.35, 0.49]) {
+            expect(swashDepth(duration * f, swash, beach, -1)).toBeCloseTo(0.5, 6);
+        }
+        // Then it drains, and is gone when the sheet is back.
+        expect(swashDepth(duration * 0.75, swash, beach, -1)).toBeCloseTo(0.25, 6);
+        expect(swashDepth(duration * 0.99, swash, beach, -1)).toBeLessThan(0.02);
+        expect(swashDepth(duration, swash, beach, -1)).toBe(0);
+    });
+
+    test('SEAWARD OF THE WATERLINE THE BORE PASSES OVER AT FULL THICKNESS', () => {
+        // The case that actually engulfs somebody, and the one most easily lost
+        // to a clamp. Once the surge has carried the water's edge past the
+        // camera, the camera is BEHIND the shoreline, so the bore rolls over it
+        // whole rather than reaching it at the thin end of a wedge. A model that
+        // only ran from zero upward would have quietly said nobody ever gets
+        // more than a wedge tip, which is the version that did not engulf.
+        const swash = { start: 0, depth: 0.5, runUp: 4 };
+        const early = swashDuration(4, beach) * 0.1;
+        expect(swashDepth(early, swash, beach, -2)).toBeGreaterThan(0.4);
+        expect(swashDepth(early, swash, beach, -2))
+            .toBeCloseTo(swashDepth(early, swash, beach, 0), 9);
     });
 });
 
@@ -308,8 +402,15 @@ describe('the sheet the sand is drawn on', () => {
         // the tide would climb off the end of the sand and simply stop being
         // drawn. Highest waterline plus the largest run up, against the near
         // edge, both in world z.
+        // AND THE ARC RAISED THE BAR HERE TWICE. It used to be enough to clear
+        // the high tide plus a configured 2.4 m run up. Now the tsunami's surge
+        // carries the waterline to z 14.2 and the bore behind it runs another
+        // 6.9, so the sheet has to reach past 21. The storm suite walks every
+        // second of the arc and asserts the real figure; this is the cheap
+        // version of the same check, against the worst the calm sea can do.
         const highTide = beach.shoreZ + (WATER.tideRange / 2) / beach.slope;
-        expect(sandRows()[0]).toBeGreaterThan(highTide + SAND.swash.maxRunUp);
+        const biggest = runUpFromBore(boreDepth(1, SAND, 1), beach);
+        expect(sandRows()[0]).toBeGreaterThan(highTide + biggest);
     });
 });
 
@@ -341,10 +442,34 @@ describe('the beach in a scene', () => {
         initSand(makeScene(), OCEAN_CONFIG);
         addBreaks([{ strength: 1, pan: 0, distance: 0 }]);
         // Halfway through the swash, the water is at its furthest.
-        updateSand(swashDuration(SAND.swash.maxRunUp) / 2);
+        const biggest = runUpFromBore(boreDepth(1, SAND, 1), beach);
+        updateSand(swashDuration(biggest) / 2);
         expect(swashReachMetres()).toBeGreaterThan(1);
         const wet = getWet();
         expect(Math.max(...wet)).toBe(1);
+    });
+
+    test('A BIG BORE ON A RISEN SEA PUTS WATER OVER THE CAMERA', () => {
+        // The end to end version of what the bore was added for, through the
+        // real shell rather than through the pure core. A storm sized break on a
+        // sea the surge has already pushed past the camera has to leave the
+        // water surface above eye level, or the white-out never fires and three
+        // minutes of build has no payoff.
+        initSand(makeScene(), OCEAN_CONFIG);
+        const surge = 0.55;
+        // Dry-ish first: the still sea alone does not reach the eye. The camera
+        // is standing in ankle deep water and that is all.
+        expect(surfaceWithSwash(camera.z, surge)).toBeLessThan(camera.height);
+        addBreaks([{ strength: 0.9, pan: 0, distance: 0 }], { swell: 2.4 });
+        updateSand(0.05);
+        expect(surfaceWithSwash(camera.z, surge)).toBeGreaterThan(camera.height);
+        // And the same break in a calm sea does not, which is what makes it a
+        // storm rather than a permanent flood.
+        disposeSand();
+        initSand(makeScene(), OCEAN_CONFIG);
+        addBreaks([{ strength: 0.9, pan: 0, distance: 0 }], { swell: 1 });
+        updateSand(0.05);
+        expect(surfaceWithSwash(camera.z, 0)).toBeLessThan(camera.height);
     });
 
     test('the wetness is broadcast across each row, not left on one vertex', () => {

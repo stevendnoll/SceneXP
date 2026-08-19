@@ -10,9 +10,9 @@
  * THIS FILE IS ABOUT TO NEED A STATE MACHINE, AND IT USED TO SAY THE OPPOSITE.
  * The note here read "no input to route, no state machine, and nothing to
  * pause", and that was true of an ambient sea that ran forever. Steve reframed
- * the scene on 2026-08-19: it now opens as an ordinary bright day, a storm swell
- * builds until the sea is frightening, a tsunami arrives, and the page fades to
- * black. That is a timeline with an ending, so there is a clock to run, stages
+ * the scene on 2026-08-19: it now opens as an ordinary bright day, the sky closes
+ * over, a storm swell builds until the sea is frightening, a tsunami arrives, and
+ * the page fades to black. Two minutes. That is a timeline with an ending, so there is a clock to run, stages
  * to move between, and a finish.
  *
  * There is still no INPUT to route past the welcome screen and the mute button,
@@ -34,13 +34,16 @@
 
 import { OCEAN_CONFIG } from './config.min.js';
 import {
-    initWater, updateWater, consumeBreaks, breakDistance, surfaceAt, disposeWater
+    initWater, updateWater, consumeBreaks, breakDistance, resetWater, disposeWater
 } from './water.min.js';
 import {
     initSky, updateSky, disposeSky, skyUniforms, getPhase, setPhase, SKY_GLSL, SKY_UNIFORM_GLSL
 } from './sky.min.js';
-import { initSand, updateSand, addBreaks, disposeSand, swashReachMetres } from './sand.min.js';
-import { stormStateAt, surgeAt } from './storm.min.js';
+import {
+    initSand, updateSand, addBreaks, surfaceWithSwash, resetSand, disposeSand,
+    swashReachMetres
+} from './sand.min.js';
+import { stormStateAt, surgeAt, frontAt, frontLevelAt, washEnvelope } from './storm.min.js';
 
 const state = {
     running: false,
@@ -51,7 +54,12 @@ const state = {
     // running so the sea is never reset mid wave, and this one is what a replay
     // puts back to zero.
     arc: 0,
-    finished: false
+    finished: false,
+    // The white-out envelope, carried whole rather than as a number, because it
+    // has to remember whether it is mid attack. See washEnvelope: it fires on
+    // the water ARRIVING rather than on it being there, and the arrival is a
+    // single frame, so without a latch the flash never gets off the ground.
+    wash: { wash: 0, target: 0, attacking: false }
 };
 
 let canvas = null;
@@ -122,8 +130,8 @@ function onVisibility() {
     } else if (!state.running && !state.finished) {
         // `lastTime` is cleared so the first frame back reports a delta of zero
         // rather than however long the tab was hidden. That matters more now
-        // than it used to: the arc is a three minute story, and a visitor who
-        // switched away for four minutes should come back to the sea they left
+        // than it used to: the arc is a two minute story, and a visitor who
+        // switched away for three minutes should come back to the sea they left
         // rather than to the credits.
         state.lastTime = 0;
         start();
@@ -143,15 +151,29 @@ function loop(now) {
     // never disagree with the water actually on screen. The surge has to be
     // asked for first because the sea needs it to answer, which is the one place
     // the two modules have to be unpicked in the right order.
-    const surge = surgeAt(state.arc, OCEAN_CONFIG.storm);
+    //
+    // IT COMES FROM sand.js AND NOT FROM water.js, and that is the whole reason
+    // the bore exists. water.js knows the still water level, which answers "has
+    // the sea arrived" and during the storm says yes, ankle deep. sand.js knows
+    // what the bores are doing, which answers "is there water over your head",
+    // and that is a different question that only broken whitewater says yes to.
+    // THE FRONT COUNTS AS SURGE ONCE IT HAS PASSED YOU, and leaving it out was
+    // the reason the tsunami stopped covering the eye when the surge curve
+    // handed that job over to the front. sand.js is told about a water level
+    // rather than about a tsunami, which is what keeps it reusable.
+    const surge = surgeAt(state.arc, OCEAN_CONFIG.storm)
+        + frontLevelAt(OCEAN_CONFIG.camera.z, frontAt(state.arc, OCEAN_CONFIG.storm));
     const storm = stormStateAt(state.arc, OCEAN_CONFIG,
-        surfaceAt(OCEAN_CONFIG.camera.z, { surge }));
+        surfaceWithSwash(OCEAN_CONFIG.camera.z, surge));
 
     // The sky first, because the water's own shader reads the sky's uniforms
     // and the sand is lit by the sky's lights. Updating it after would draw one
     // frame of sea under yesterday's sun, which at a frame is invisible and at
     // a breakpoint is an hour of confusion.
-    updateSky(delta);
+    // The gloom goes with it: the sky closing over is the first sign anything is
+    // wrong, and it runs ahead of the swell for the same reason real weather
+    // does, which is that a cloud front does not have to travel as a wave.
+    updateSky(delta, storm.gloom);
     updateWater(delta, storm);
 
     // THE BREAK QUEUE HAS TWO READERS AND ONE DRAIN. Each entry is already
@@ -162,13 +184,16 @@ function loop(now) {
     // silently stop moving. Drained every frame whether or not anything is
     // listening, so the queue cannot grow while the page is muted.
     const breaks = consumeBreaks();
-    addBreaks(breaks);
+    // The swell goes with them, because a bore's depth is set by the wave that
+    // made it and has to be baked in at that moment rather than read later.
+    addBreaks(breaks, storm);
     // Handed the same state the water got, so the wet band and the water's edge
     // are the same edge. During the drawback that is the whole shot.
     updateSand(delta, storm);
 
     renderer.render(scene, camera);
-    paintOverlay(storm);
+    state.wash = washEnvelope(state.wash, storm.engulf, delta, OCEAN_CONFIG.storm);
+    paintOverlay(state.wash.wash, storm.fade);
 
     // THE ONE SCENE IN THIS PROJECT THAT CAN HONESTLY STOP DRAWING. Once the
     // fade is complete there is nothing left on screen, so idling the loop would
@@ -183,9 +208,9 @@ function loop(now) {
  *  the renderer never learns about the story, the reduced-motion variant is a
  *  stylesheet rather than a branch, and the fade keeps working on a frame the
  *  GPU has already stopped producing. */
-function paintOverlay(storm) {
-    if (wash) wash.style.opacity = storm.engulf.toFixed(3);
-    if (blackout) blackout.style.opacity = storm.fade.toFixed(3);
+function paintOverlay(washAmount, fade) {
+    if (wash) wash.style.opacity = washAmount.toFixed(3);
+    if (blackout) blackout.style.opacity = fade.toFixed(3);
 }
 
 /** The end of the arc: stop drawing, and show the card.
@@ -210,20 +235,31 @@ function finish() {
 
 /** Put the arc back to the beginning without rebuilding the scene.
  *
- *  THE SEA IS NOT RESET, ONLY THE STORY IS. water.js keeps its own clock so the
- *  waves carry on from where they were, which means a replay opens on a sea that
- *  is already alive rather than on one frozen at phase zero. The sky is left
- *  alone too, so a second run is the same time of day as the first: the visitor
- *  is watching it happen again, not visiting a different afternoon. */
+ *  THE SEA IS RESET TOO, AND THE FIRST VERSION DID NOT DO THAT. It left the
+ *  water and the sand running on their own clocks, so that a replay would open
+ *  on a living sea rather than on one frozen at phase zero. That reasoning was
+ *  fine and the consequence was not: THE TIDE IS ON THE SAME CLOCK. It swings
+ *  the water level a quarter of a metre either way over 560 seconds, the arc is
+ *  120, and the storm was tuned against the tide rising through it. Measured
+ *  across the tide, the second replay ran the storm at half tide and the third
+ *  at low water, where no wave breaks over the visitor at all. Somebody pressing
+ *  "watch it again" and getting a weaker storm is the worst answer available.
+ *
+ *  The sky is deliberately NOT reset. It holds the hour the visit drew and the
+ *  gloom follows the arc, so a second run is the same afternoon rather than a
+ *  different one. */
 function replayArc() {
     state.arc = 0;
+    resetWater();
+    resetSand();
     state.finished = false;
     state.lastTime = 0;
     if (ending) {
         ending.style.opacity = '0';
         ending.hidden = true;
     }
-    paintOverlay({ engulf: 0, fade: 0 });
+    state.wash = { wash: 0, target: 0, attacking: false };
+    paintOverlay(0, 0);
     start();
 }
 
