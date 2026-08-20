@@ -1788,13 +1788,25 @@ export const OCEAN_CONFIG = deepFreeze({
             // kind of scene, and because the first sign of trouble should stay
             // the cloud. By the tsunami it is nearly one a second, which with
             // the gap below is as busy as this is ever allowed to get.
+            // TRIMMED BY ABOUT A FIFTH ON 2026-08-20, together with a raised
+            // `boltChance`, so that the count of flashes WITH NO CHANNEL IN THEM
+            // came down by roughly a third while the number of visible bolts
+            // stayed where it was. See `boltChance` for the reasoning: the two
+            // numbers move together and neither means much alone.
             rate: [
                 { at: 0,  value: 0.00 },
                 { at: 22, value: 0.00 },   // the sky closes first, alone
-                { at: 30, value: 0.14 },   // the first distant flashes
-                { at: 54, value: 0.50 },   // through the lull, which it fills
-                { at: 76, value: 0.85 },
-                { at: 90, value: 0.85 }
+                { at: 30, value: 0.11 },   // the first distant flashes
+                { at: 54, value: 0.40 },   // through the lull, which it fills
+                // THE ELECTRICAL PEAK LANDS IN THE DRAWBACK, NOT IN THE TSUNAMI,
+                // and that is the whole shape of this curve. The drawback is the
+                // twenty seconds where the sea has gone quiet and nothing is
+                // happening yet, which is exactly when the scene needs something
+                // to carry the tension. The tsunami does not: it arrives with
+                // the largest object in the whole arc and it wants the frame.
+                { at: 70, value: 0.62 },   // the loudest the sky ever gets
+                { at: 80, value: 0.44 },   // and it backs off for the wall
+                { at: 90, value: 0.40 }
             ],
             // THE CEILING. 0.34 seconds between any two flashes is 2.94 a
             // second. Anyone lowering this should check `flashesPerSecondCeiling`
@@ -1819,7 +1831,51 @@ export const OCEAN_CONFIG = deepFreeze({
             azimuthDegrees: 46,
             // A channel is only drawn inside this, and then only sometimes.
             boltAzimuthDegrees: 30,
-            boltChance: 0.62,
+            // THERE ARE TWO KINDS OF FLASH WITH NO CHANNEL AND ONLY ONE OF THEM
+            // IS WORTH HAVING. A strike outside `boltAzimuthDegrees` is off the
+            // side of the frame, and a flash from somewhere you cannot see is
+            // both realistic and useful: it says the storm is bigger than the
+            // view. A strike INSIDE the frame that then fails this roll is the
+            // other kind, and it is the weaker one, because the eye goes to
+            // where the light came from and finds nothing there.
+            //
+            // A CURVE RATHER THAN A NUMBER, AND THE FALL AT THE END IS THE POINT.
+            // Steve watched the finished storm and said there were far too many
+            // channels once the tsunami was on its way in. He is right, and the
+            // reason is compositional rather than meteorological: a channel is
+            // the second largest bright object this scene can draw, and putting
+            // one next to the largest one splits the frame. The wall should be
+            // the only thing to look at while it arrives.
+            //
+            // The FLASH rate is deliberately not cut in step with this. A flash
+            // with no channel in it lights the wall from the side and throws a
+            // glint path down the face of it, which is help rather than
+            // competition, so the sky goes on flashing while the channels thin
+            // out. Measured over 300 runs of the arc, per ten second bin:
+            //
+            //                    channels          flash only
+            //                  before  after     before  after
+            //     60-70s         2.55   2.57       2.51   2.57
+            //     70-80s         3.39   1.68       3.45   3.64
+            //     80-90s         3.28   0.61       3.31   3.38
+            //     last 20s       6.67   2.29  -66%
+            //
+            // Read the right hand pair as carefully as the left. The flashes are
+            // UNCHANGED, so the sky over the tsunami is lit exactly as often as
+            // it was and only the channels have gone.
+            //
+            // Steve asked for at least half and said maybe more. This is the
+            // "maybe more" end, because in the frame the difference between two
+            // channels and three is larger than the numbers suggest: at one
+            // every nine seconds they read as separate events, and at one every
+            // three they read as a texture. After the wall lands most visits now
+            // see no channel at all, which is the intended reading.
+            boltChance: [
+                { at: 30, value: 0.75 },
+                { at: 68, value: 0.75 },
+                { at: 78, value: 0.30 },
+                { at: 90, value: 0.26 }
+            ],
             // HOW FAR OUT, walked from the far end of the range to the near end
             // by `approach`, so the storm closes in rather than just getting
             // busier. The spread is what stops them all landing at one distance.

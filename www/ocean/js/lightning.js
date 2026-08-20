@@ -226,7 +226,11 @@ export function planStrike(now, lastFlashAt, random = Math.random,
     // Whether there is a channel to see. Off frame strikes never draw one, and
     // even in frame most distant flashes have no visible channel.
     const inFrame = Math.abs(azimuth) < cfg.boltAzimuthDegrees * DEG;
-    const drawBolt = inFrame && random() < cfg.boltChance;
+    // A CURVE RATHER THAN A NUMBER, because the tsunami needs the frame. See the
+    // note in config: the flash rate carries on, so the sky still lights the wall
+    // as it comes in, but the channels thin out so there is one thing to look at
+    // rather than two competing.
+    const drawBolt = inFrame && random() < curveAt(now, cfg.boltChance, config.storm);
 
     return { flashes, azimuth, distance, drawBolt };
 }

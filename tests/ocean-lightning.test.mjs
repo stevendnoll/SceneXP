@@ -29,6 +29,7 @@ jest.unstable_mockModule('../www/ocean/js/storm.min.js', async () => (
 ));
 
 const { OCEAN_CONFIG } = await import(CONFIG_URL);
+const { curveAt } = await import(STORM_URL);
 
 // ---------------------------------------------------------------------------
 // A THREE stub, real enough to hold buffers and a light
@@ -132,9 +133,22 @@ afterEach(() => { disposeLightning(); });
  *
  *  A counter rather than a list, so a test can pull ten thousand values without
  *  the sequence repeating on a short period and accidentally making the
- *  scheduler periodic, which is exactly the property under test. */
+ *  scheduler periodic, which is exactly the property under test.
+ *
+ *  THE HASH AND THE WARM UP ARE NOT DECORATION, and leaving them out produced a
+ *  genuinely misleading measurement. A plain linear congruential generator seeded
+ *  with 1, 2, 3 and so on returns almost the SAME FIRST VALUE for every one of
+ *  them, because the first step is dominated by the additive constant. So a
+ *  characterisation of the first strike across two hundred seeds came back
+ *  clustered inside a single second, which looked like the scheduler having no
+ *  randomness in its first event and was in fact this function having none in its
+ *  first output. Hashing the seed and discarding ten values makes neighbouring
+ *  seeds diverge, and the same measurement then spread across thirty seconds.
+ *
+ *  Anything here that samples the FIRST draw of a run depends on this. */
 function seeded(seed = 1) {
-    let s = seed >>> 0;
+    let s = (seed * 2654435761) >>> 0;
+    for (let i = 0; i < 10; i++) s = (s * 1664525 + 1013904223) >>> 0;
     return () => {
         s = (s * 1664525 + 1013904223) >>> 0;
         return s / 4294967296;
@@ -264,7 +278,67 @@ describe('the flash envelope', () => {
         // so the threshold is never reached however long the scene runs.
         expect(strikeRateAt(0, OCEAN_CONFIG)).toBe(0);
         expect(strikeRateAt(15, OCEAN_CONFIG)).toBe(0);
-        expect(strikeRateAt(80, OCEAN_CONFIG)).toBeGreaterThan(0.5);
+        // And genuinely busy once the storm is running. Deliberately a loose
+        // bound: this used to assert a rate above 0.5 at t=80, which was pinning
+        // one number off the curve rather than a property, and it broke the
+        // moment the curve was reshaped to give the tsunami a quieter sky.
+        expect(strikeRateAt(70, OCEAN_CONFIG)).toBeGreaterThan(0.25);
+    });
+
+    test('the sky is at its loudest in the drawback, not in the tsunami', () => {
+        // THE SHAPE OF THE ARC, AND IT IS NOT THE OBVIOUS ONE. The drawback is
+        // the stretch where the sea has gone quiet and nothing has arrived yet,
+        // so it is where the scene most needs something carrying the tension.
+        // The tsunami is the opposite: it brings the largest object in the whole
+        // arc with it and it wants the frame to itself.
+        const drawback = strikeRateAt(70, OCEAN_CONFIG);
+        const landing = strikeRateAt(88, OCEAN_CONFIG);
+        expect(drawback).toBeGreaterThan(landing);
+        // But it never goes quiet, because the flashes are what light the wall.
+        expect(landing).toBeGreaterThan(drawback * 0.4);
+    });
+
+    test('the channels thin right out once the wall is on its way', () => {
+        // Steve watched it and said there were far too many channels as the
+        // tsunami came in. A channel is the second largest bright object the
+        // scene can draw and the wall is the largest, so the two split the frame.
+        // The FLASH rate is deliberately not cut in step: a flash lights the wall
+        // rather than competing with it.
+        const chance = (t) => curveAt(t, LIGHT.boltChance, OCEAN_CONFIG.storm);
+        expect(chance(60)).toBeGreaterThan(0.7);
+        expect(chance(80)).toBeLessThan(chance(60) * 0.5);
+        expect(chance(90)).toBeLessThan(chance(60) * 0.5);
+        // Not to zero, though. A storm that stops producing channels entirely
+        // reads as the effect having been switched off.
+        expect(chance(90)).toBeGreaterThan(0.15);
+    });
+
+    test('the last twenty seconds carry far fewer channels than the peak', () => {
+        // The end to end version of the two above, counted rather than asserted
+        // off the curves, because the rate and the chance multiply and either one
+        // alone can be moved without the frame actually getting calmer.
+        let peakBin = 0;
+        let lateBin = 0;
+        for (let seed = 1; seed <= 60; seed++) {
+            const uniforms = makeSkyUniforms();
+            initLightning(makeScene(), null, OCEAN_CONFIG,
+                { sky: { uniforms }, random: seeded(seed) });
+            const seen = new Set();
+            for (let t = 0; t < 90; t += 1 / 60) {
+                updateLightning(t, OCEAN_CONFIG);
+                const live = __lightning.state().strike;
+                if (live && !seen.has(live)) {
+                    seen.add(live);
+                    if (!live.drawBolt) continue;
+                    if (t >= 60 && t < 70) peakBin++;
+                    if (t >= 70) lateBin++;
+                }
+            }
+            disposeLightning();
+        }
+        // Twenty seconds of tsunami must not carry more channels than the ten
+        // seconds of drawback before it.
+        expect(lateBin).toBeLessThan(peakBin);
     });
 
     test('a threshold is always finite, positive, and averages one', () => {
@@ -301,6 +375,47 @@ describe('the flash envelope', () => {
         // Not before the sky has closed over, and not so late it never lands.
         expect(first).toBeGreaterThan(22);
         expect(first).toBeLessThan(55);
+    });
+});
+
+describe('the onset survives the rate being tuned', () => {
+    test('every visit gets lightning, and gets a channel to look at', () => {
+        // CUTTING A RATE IS AN EASY WAY TO QUIETLY DELAY THE FIRST STRIKE past
+        // the part of the arc somebody already watched and approved, and the
+        // median hides it: a change that moves the median by a second can still
+        // leave one visit in twenty with no bolt at all. So this walks eighty
+        // whole arcs and asserts on the worst of them rather than the middle.
+        const first = [];
+        const firstBolt = [];
+        for (let seed = 1; seed <= 80; seed++) {
+            const uniforms = makeSkyUniforms();
+            initLightning(makeScene(), null, OCEAN_CONFIG,
+                { sky: { uniforms }, random: seeded(seed) });
+            let flash = null;
+            let bolt = null;
+            const seen = new Set();
+            for (let t = 0; t < OCEAN_CONFIG.storm.seconds; t += 1 / 60) {
+                updateLightning(t, OCEAN_CONFIG);
+                if (uniforms.uFlash.value > 0 && flash === null) flash = t;
+                const live = __lightning.state().strike;
+                if (live && !seen.has(live)) {
+                    seen.add(live);
+                    if (live.drawBolt && bolt === null) bolt = t;
+                }
+            }
+            first.push(flash);
+            firstBolt.push(bolt);
+            disposeLightning();
+        }
+        // Nobody watches a storm with no lightning in it, and nobody watches one
+        // with no channel in it either. Both are the promise the scene makes.
+        expect(first.every((t) => t !== null)).toBe(true);
+        expect(firstBolt.every((t) => t !== null)).toBe(true);
+        // Never before the sky has closed over, which is the arc's own order.
+        expect(Math.min(...first)).toBeGreaterThan(22);
+        // And the slowest visit still has most of the arc left to run.
+        expect(Math.max(...first)).toBeLessThan(58);
+        expect(Math.max(...firstBolt)).toBeLessThan(72);
     });
 });
 
