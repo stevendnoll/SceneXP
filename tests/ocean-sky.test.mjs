@@ -108,9 +108,10 @@ installThree();
 const sky = await import(SKY_URL);
 const {
     wrapPhase, advancePhase, entryPhase, unpackColor, mixColor, bracketKeys, skyStateAt,
-    sunDirectionAt, fresnelWater, srgbToLinear, toneMapACES, twilightGlow,
+    sunDirectionAt, fresnelWater, srgbToLinear, linearToSrgb, toneMapACES, shownColor,
+    twilightGlow, applyGloom,
     SKY_GLSL, SKY_UNIFORM_GLSL,
-    initSky, updateSky, setPhase, getPhase, getSkyState, skyUniforms, disposeSky
+    initSky, updateSky, setPhase, getPhase, getSkyState, skyUniforms, disposeSky, __sky
 } = sky;
 
 const SKY = OCEAN_CONFIG.sky;
@@ -505,6 +506,22 @@ describe('the sky and the sea share one set of uniforms', () => {
         expect(new Set(declared)).toEqual(new Set(Object.keys(skyUniforms())));
     });
 
+    test('every uniform the program USES is a uniform the program DECLARES', () => {
+        // A MISSPELLED UNIFORM IS NOT A COMPILE ERROR IN ANY USEFUL SENSE. It is
+        // an undeclared identifier, which does fail to compile, and Three
+        // swallows the log and draws nothing, so the symptom is a black sky with
+        // a console message nobody is looking at. The reverse case is worse: a
+        // uniform that is declared and never written reads as zero forever, and
+        // for uFlash that is a storm with no lightning in it that looks entirely
+        // deliberate. The existing test above pins declared-against-supplied;
+        // this one pins used-against-declared, which is the other half.
+        const declared = new Set([...SKY_UNIFORM_GLSL.matchAll(/uniform\s+\w+\s+(\w+);/g)]
+            .map((m) => m[1]));
+        const used = new Set([...SKY_GLSL.matchAll(/\bu[A-Z]\w*/g)].map((m) => m[0]));
+        expect(used.size).toBeGreaterThan(10);
+        for (const name of used) expect(declared).toContain(name);
+    });
+
     test('the shared program offers water.js the contract it compiles against',
         () => {
             expect(SKY_GLSL).toContain('vec3 oceanSkyColor(vec3 rayDir, float discWeight)');
@@ -631,4 +648,176 @@ describe('the scene the sky builds', () => {
             initSky(makeScene(), null, OCEAN_CONFIG, { phase: 0.90 });
             expect(getSkyState().name).toBe('sunset');
         });
+});
+
+// ---------------------------------------------------------------------------
+// The storm sky
+// ---------------------------------------------------------------------------
+
+describe('a colour reaches the screen through four stages, not three', () => {
+    // THIS BLOCK IS THE ONE THAT WOULD HAVE CAUGHT THE STORM PALETTE TWICE.
+    // Both times the palette was "solved backwards through the pipeline" and
+    // both times the solve stopped a stage short, so the numbers written in the
+    // comment beside each colour were not the numbers the sky rendered.
+
+    test('the encode is the stage that keeps going missing', () => {
+        // Without the final encode a mid grey looks about forty seven levels
+        // darker than it is, which is the size of the error that shipped.
+        const linear = toneMapACES(unpackColor(0x828b95).map(srgbToLinear), 1.0);
+        const withoutEncode = linear.map((c) => Math.round(c * 255));
+        const withEncode = shownColor(0x828b95, 1.0);
+        expect(withoutEncode).toEqual([72, 82, 94]);
+        expect(withEncode).toEqual([144, 154, 164]);
+        expect(withEncode[0] - withoutEncode[0]).toBeGreaterThan(40);
+    });
+
+    test('srgbToLinear and linearToSrgb are actually inverses', () => {
+        // Six places rather than nine, and only because the two standard
+        // breakpoints, 0.04045 and 0.0031308, are rounded decimals that do not
+        // land on each other exactly. The gap is three parts in a hundred
+        // million, which is a thousandth of the last byte of a colour.
+        for (const v of [0, 0.002, 0.04045, 0.2, 0.5, 0.9, 1]) {
+            expect(linearToSrgb(srgbToLinear(v))).toBeCloseTo(v, 6);
+        }
+    });
+
+    test('the storm palette renders the greys its comment claims it does', () => {
+        // Pinned to the values in `sky.storm`, at the storm's own exposure.
+        // If somebody retunes the palette these numbers move with it, and the
+        // point is that they have to be RE-MEASURED rather than assumed.
+        const e = SKY.storm.exposure;
+        expect(shownColor(SKY.storm.cloudColor, e)).toEqual([144, 154, 164]);
+        expect(shownColor(SKY.storm.horizon, e)).toEqual([136, 146, 157]);
+        expect(shownColor(SKY.storm.zenith, e)).toEqual([117, 120, 136]);
+    });
+
+    test('the storm sky is genuinely darker than the clear sky it replaces', () => {
+        // THE FAULT THIS EXISTS TO PREVENT. Measured off the QA screenshots, the
+        // old storm sky came out at (191,196,201) against a clear sky of
+        // (182,194,208): through the entire storm it got very slightly BRIGHTER.
+        // Any future palette has to clear this bar to count as weather.
+        const midday = skyStateAt(0.46, SKY);
+        const clear = toneMapACES(midday.horizon.map(srgbToLinear), midday.exposure);
+        const storm = toneMapACES(unpackColor(SKY.storm.horizon).map(srgbToLinear),
+            SKY.storm.exposure);
+        const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+        expect(lum(storm)).toBeLessThan(lum(clear) * 0.75);
+    });
+});
+
+describe('the storm base is what puts the contrast back', () => {
+    test('a clear sky has no base in it at all, so it costs nothing', () => {
+        // The shader gives up on the first compare when this is zero, which is
+        // what keeps the whole opening of the arc free of a layer it does not
+        // use. See skyShelf.
+        expect(skyStateAt(0.46, SKY).shelfOpacity).toBe(0);
+        expect(applyGloom(skyStateAt(0.46, SKY), 0, SKY).shelfOpacity).toBe(0);
+    });
+
+    test('the gloom brings it into being rather than darkening it', () => {
+        const at = (g) => applyGloom(skyStateAt(0.46, SKY), g, SKY).shelfOpacity;
+        expect(at(0.5)).toBeCloseTo(SKY.storm.shelfOpacity * 0.5, 9);
+        expect(at(1)).toBeCloseTo(SKY.storm.shelfOpacity, 9);
+        expect(at(1)).toBeGreaterThan(0.8);
+    });
+
+    test('the bright strip along the horizon narrows as the storm closes in', () => {
+        // The gap between the base and the sea is the whole look, and squeezing
+        // it is the storm arriving. Both edges have to come DOWN, monotonically.
+        const edge = (g) => applyGloom(skyStateAt(0.46, SKY), g, SKY).shelfFadeFrom;
+        const wide = edge(0);
+        const closing = edge(0.5);
+        const shut = edge(1);
+        expect(wide).toBeGreaterThan(closing);
+        expect(closing).toBeGreaterThan(shut);
+        // And it never shuts completely: a base that reached the horizon would
+        // put the sea back under a featureless lid, which is what was wrong.
+        expect(shut).toBeGreaterThan(0.02);
+    });
+
+    test('the base always stops higher than the sheet above it does', () => {
+        // The cirrus sheet has to reach the horizon under a storm, for the
+        // reason in `storm.cloudFadeTo`. If the base ever reached as low there
+        // would be no strip left to see.
+        const state = applyGloom(skyStateAt(0.46, SKY), 1, SKY);
+        expect(state.shelfFadeFrom).toBeGreaterThan(state.cloudFadeTo);
+    });
+
+    test('thickness ramps about the noise mean, not about the coverage edge', () => {
+        // THE BUG THIS PINS made the storm come and go. Modelled with the
+        // threshold deciding presence, the base opened into clear sky whenever
+        // the drift carried a low patch across the frame, and the contrast
+        // measured anywhere from 43 to 93 over one pass of the drift. Centring
+        // the shading on the noise's own mean instead holds it at 92.
+        expect(SKY_GLSL).toContain('smoothstep(0.5 - uShelfDepth, 0.5 + uShelfDepth, n)');
+        // And coverage stays low enough that the layer is near solid.
+        expect(SKY.shelf.coverage).toBeLessThan(0.25);
+    });
+
+    test('the projection is clamped against a constant, not against a moving edge', () => {
+        // uShelfFadeFrom walks down as the gloom rises. Clamping the divisor to
+        // it would rescale the cloud underneath itself as the storm built, so
+        // the pattern would breathe in place instead of drifting.
+        expect(SKY_GLSL).toContain('uShelfScale / max(dir.y, 0.02)');
+        expect(SKY_GLSL).not.toContain('uShelfScale / max(dir.y, uShelfFadeFrom)');
+    });
+
+    test('the base hides the sun harder than the thin sheet does', () => {
+        expect(SKY_GLSL).toContain('(1.0 - cloud * 0.85) * (1.0 - base * 0.98)');
+    });
+});
+
+describe('the drift is integrated, because the speed changes', () => {
+    test('the storm speeds the sky up', () => {
+        const clear = skyStateAt(0.46, SKY).driftSpeed;
+        const storm = applyGloom(skyStateAt(0.46, SKY), 1, SKY).driftSpeed;
+        expect(clear).toBeCloseTo(SKY.cloud.driftSpeed, 9);
+        expect(storm).toBeCloseTo(SKY.cloud.driftSpeed * SKY.storm.driftSpeedScale, 9);
+        expect(storm / clear).toBeGreaterThan(3);
+    });
+
+    test('a rising speed never shunts the clouds forward', () => {
+        // THE WHOLE REASON THIS IS ACCUMULATED. Written the obvious way, as
+        // elapsed * speed, raising the speed reprices the entire history at the
+        // new rate: after 60 seconds of calm drift, turning the storm on would
+        // move the cloud by fifty times one frame's worth in a single frame.
+        // Assert against that number directly rather than against a shape.
+        initSky(makeScene(), null, OCEAN_CONFIG, { phase: 0.46 });
+        let previous = 0;
+        let biggest = 0;
+        for (let i = 0; i < 600; i++) {
+            // A minute of calm, then the gloom comes on over thirty seconds.
+            const gloom = i < 360 ? 0 : Math.min(1, (i - 360) / 180);
+            updateSky(1 / 6, gloom, 0);
+            const now = __sky.state().drifted;
+            biggest = Math.max(biggest, now - previous);
+            expect(now).toBeGreaterThanOrEqual(previous);
+            previous = now;
+        }
+        // No frame ever moves the sky by more than one frame of the fastest the
+        // sky ever goes. The naive version's worst frame is a hundred times this.
+        const fastestFrame = SKY.cloud.driftSpeed * SKY.storm.driftSpeedScale / 6;
+        expect(biggest).toBeLessThanOrEqual(fastestFrame * 1.0001);
+    });
+
+    test('the two sheets drift together, and the low one drifts faster', () => {
+        initSky(makeScene(), null, OCEAN_CONFIG, { phase: 0.46 });
+        updateSky(10, 1, 0);
+        const u = skyUniforms();
+        expect(u.uCloudDrift.value.y).toBeGreaterThan(0);
+        expect(u.uShelfDrift.value.y)
+            .toBeCloseTo(u.uCloudDrift.value.y * SKY.shelf.driftRatio, 9);
+        expect(SKY.shelf.driftRatio).toBeGreaterThan(1);
+    });
+
+    test('jumping the hour for a screenshot does not jump the clouds', () => {
+        // setPhase reruns applyState, which reads the accumulator rather than
+        // recomputing from a clock. A screenshot pass walking the day should not
+        // teleport the sky sideways every time it lands.
+        initSky(makeScene(), null, OCEAN_CONFIG, { phase: 0.46 });
+        updateSky(10, 1, 0);
+        const before = skyUniforms().uCloudDrift.value.y;
+        setPhase(0.20);
+        expect(skyUniforms().uCloudDrift.value.y).toBeCloseTo(before, 9);
+    });
 });

@@ -188,6 +188,19 @@ export function applyGloom(state, gloom, sky = OCEAN_CONFIG.sky) {
         // Only the outer edge. See config: the inner one clamps the projection
         // divisor and moving it is what brings the horizon shimmer back.
         cloudFadeTo: lerp(sky.cloud.horizonFadeTo, s.cloudFadeTo),
+        // THE STORM BASE, which exists at all only because of this line: it is
+        // the one part of the sky with no clear weather equivalent, so the gloom
+        // does not darken it, it brings it into being.
+        shelfOpacity: lerp(0, s.shelfOpacity),
+        // BOTH EDGES MOVE HERE, unlike the sheet above, and moving them is the
+        // storm arriving. The base walks down out of the top of the frame until
+        // the only light left in the sky is the strip along the horizon. Nothing
+        // clamps a divisor on these: see the note in `skyShelf`.
+        shelfFadeFrom: lerp(sky.shelf.horizonFadeFrom, s.shelfFadeFrom),
+        shelfFadeTo: lerp(sky.shelf.horizonFadeTo, s.shelfFadeTo),
+        // A SPEED, NOT A POSITION. `updateSky` integrates it. See the note there
+        // for why multiplying an elapsed time by this would lurch.
+        driftSpeed: lerp(state.driftSpeed, state.driftSpeed * s.driftSpeedScale),
         exposure: lerp(state.exposure, s.exposure)
     };
 }
@@ -209,6 +222,12 @@ export function skyStateAt(phase, sky = OCEAN_CONFIG.sky) {
         cloudCoverage: sky.cloud.coverage,
         cloudFadeTo: sky.cloud.horizonFadeTo,
         sunGlow: 1,
+        // No storm base at all under a clear sky, and the fade edges carry the
+        // ends of the ramp the gloom walks down from. See `applyGloom`.
+        shelfOpacity: 0,
+        shelfFadeFrom: sky.shelf.horizonFadeFrom,
+        shelfFadeTo: sky.shelf.horizonFadeTo,
+        driftSpeed: sky.cloud.driftSpeed,
         name: t < 0.5 ? from.name : to.name,
         elevation: lerp(from.elevation, to.elevation),
         azimuth: lerp(from.azimuth, to.azimuth),
@@ -285,6 +304,16 @@ export function srgbToLinear(c) {
     return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
 
+/** One linear channel in 0..1, encoded back to sRGB. The inverse of the above.
+ *
+ *  THIS IS THE STAGE THAT KEEPS GETTING LEFT OUT, and it has now cost two rounds
+ *  of tuning on the storm palette. It is what `<colorspace_fragment>` does to
+ *  every pixel on its way to the screen, because `renderer.outputColorSpace` is
+ *  sRGB, and it is the LAST thing that happens rather than the first. */
+export function linearToSrgb(c) {
+    return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+}
+
 /** Three's ACES filmic curve, run on the CPU. Linear in, linear out.
  *
  *  THIS EXISTS BECAUSE OF THE ORDER THREE APPLIES FOG IN, and the reason is
@@ -333,6 +362,30 @@ export function toneMapACES(rgbLinear, exposure = 1) {
     return [clamp01(r), clamp01(g), clamp01(b)];
 }
 
+/** What a packed 0xRRGGBB colour in this sky ACTUALLY LOOKS LIKE, as three
+ *  bytes on the screen. The whole pipeline, in the order the GPU runs it.
+ *
+ *  WRITE THIS DOWN ONCE SO NOBODY HAS TO REMEMBER IT AGAIN. Every colour handed
+ *  to the sky is a pipeline input rather than a screen value, and there are FOUR
+ *  stages between the two, not three:
+ *
+ *      hex -> srgbToLinear -> exposure and ACES -> linearToSrgb -> screen
+ *
+ *  The storm palette has been solved backwards through this twice. The first
+ *  attempt skipped the first stage and wrote screen colours directly, which
+ *  rendered a grey lid as near black. The second caught that and still stopped
+ *  one stage short of the encode, which put every colour about forty seven
+ *  levels ABOVE its target and shipped a storm sky no darker than the clear one.
+ *  See the note in `sky.storm` for the measurements both times.
+ *
+ *  Solving the other way, from a target to a hex, has no closed form worth
+ *  writing because ACES mixes the channels: a per channel bisection overshoots a
+ *  grey by about twelve levels. Iterate on all three together against this. */
+export function shownColor(hex, exposure = 1) {
+    return toneMapACES(unpackColor(hex).map(srgbToLinear), exposure)
+        .map((c) => Math.round(linearToSrgb(c) * 255));
+}
+
 // ---------------------------------------------------------------------------
 // The shared sky program
 // ---------------------------------------------------------------------------
@@ -362,6 +415,22 @@ uniform float uCloudFadeFrom;
 uniform float uCloudFadeTo;
 uniform float uCloudSunlitMix;
 uniform vec2 uCloudDrift;
+uniform vec3 uShelfLight;
+uniform vec3 uShelfDark;
+uniform float uShelfOpacity;
+uniform float uShelfScale;
+uniform float uShelfStretch;
+uniform float uShelfCoverage;
+uniform float uShelfSoftness;
+uniform float uShelfDepth;
+uniform float uShelfWarp;
+uniform float uShelfFadeFrom;
+uniform float uShelfFadeTo;
+uniform vec2 uShelfDrift;
+uniform vec3 uFlashColor;
+uniform vec3 uFlashDir;
+uniform float uFlash;
+uniform float uFlashSpread;
 `;
 
 /** `oceanSkyColor(dir, discWeight)` and the noise it needs.
@@ -417,6 +486,58 @@ float skyCloudAmount(vec3 dir) {
     return smoothstep(uCloudCoverage, uCloudCoverage + uCloudSoftness, n) * lift;
 }
 
+/* The storm base: how much of it is in a given direction, and how thick.
+ *
+ * Returns coverage in x and thickness in y, which are DELIBERATELY TWO
+ * DIFFERENT QUANTITIES. Coverage says whether there is cloud here at all and is
+ * nearly always one, thickness says how much of it there is and is where all
+ * the contrast comes from. Building this the way skyCloudAmount is built, with
+ * the threshold deciding presence, gave a base that opened up into clear sky
+ * whenever the drift carried a low patch across the frame. See sky.shelf.
+ *
+ * THE FIRST THING IT DOES IS GIVE UP. Under a clear sky the opacity is zero, so
+ * the whole layer, warp and octaves and all, costs one compare for the entire
+ * opening of the arc. That matters more here than it looks: this function is
+ * compiled into the water's shader as well as the dome's, so it runs per water
+ * fragment across a full screen sheet.
+ *
+ * The second early out is worth as much again. The base stops well above the
+ * horizon, so a reflection leaving flat water at a grazing angle comes back at
+ * a grazing angle and returns here before any noise is fetched. Only a tilted
+ * wave face pointing steeply up pays for the rest. */
+vec2 skyShelf(vec3 dir) {
+    if (uShelfOpacity <= 0.0) return vec2(0.0);
+    float lift = smoothstep(uShelfFadeFrom, uShelfFadeTo, dir.y);
+    if (lift <= 0.0) return vec2(0.0);
+
+    /* THE DIVISOR IS CLAMPED AGAINST A CONSTANT AND NOT AGAINST uShelfFadeFrom,
+     * which is what the sheet above does. That edge MOVES as the gloom rises,
+     * and clamping to it would rescale the projection underneath the cloud as
+     * the storm built, so the pattern would breathe in place rather than drift.
+     * lift has already guaranteed dir.y is above the edge, so this only ever
+     * catches an edge configured at zero. */
+    vec2 p = dir.xz * (uShelfScale / max(dir.y, 0.02)) + uShelfDrift;
+    p.x *= uShelfStretch;
+
+    /* THE WARP IS WHAT MAKES IT CONVECTION. Bending the sample point by a
+     * coarser noise before the octaves are taken turns straight features into
+     * billows and curls, which is the difference between a cloud and a gradient.
+     * Two fetches, and it is the only term in this sky that says the air is
+     * moving vertically. */
+    vec2 warp = vec2(skyNoise(p * 0.5 + 19.7), skyNoise(p * 0.5 + 4.3)) - 0.5;
+    p += warp * uShelfWarp;
+
+    float n = skyNoise(p);
+    n = 0.66 * n + 0.34 * skyNoise(p * 2.4 + 5.1);
+    return vec2(
+        smoothstep(uShelfCoverage, uShelfCoverage + uShelfSoftness, n) * lift,
+        /* Centred on the noise's OWN mean rather than on the coverage threshold,
+         * so the thickness uses the full swing of the noise symmetrically and
+         * the base has as much thick in it as thin. */
+        smoothstep(0.5 - uShelfDepth, 0.5 + uShelfDepth, n)
+    );
+}
+
 vec3 oceanSkyColor(vec3 rayDir, float discWeight) {
     vec3 dir = normalize(rayDir);
     float up = clamp(dir.y, 0.0, 1.0);
@@ -438,10 +559,37 @@ vec3 oceanSkyColor(vec3 rayDir, float discWeight) {
     vec3 litCloud = mix(uCloudColor, uSunColor, pow(toSun, 3.0) * uCloudSunlitMix);
     color = mix(color, litCloud, cloud);
 
+    /* THE STORM BASE GOES OVER THE TOP OF THE SHEET, because it is BELOW it and
+     * therefore in front of it from down here. Its own noise picks between a
+     * light grey and a much darker one, and that pick is the entire point of the
+     * layer: the sky it replaced had a contrast of thirteen levels and this one
+     * measures ninety two. See sky.shelf. */
+    vec2 shelf = skyShelf(dir);
+    float base = shelf.x * uShelfOpacity;
+    color = mix(color, mix(uShelfLight, uShelfDark, shelf.y), base);
+
+    /* LIGHTNING, AND IT LIGHTS THE CLOUD RATHER THAN THE SKY. Multiplying by the
+     * cloud means a flash brightens the deck it is inside and leaves clear sky
+     * alone, which is what sheet lightning is and is the reason this reads as
+     * being INSIDE the storm rather than as the exposure jumping. It also means
+     * no flash can happen before there is weather to hold it, however the arc is
+     * retimed, because with no cloud the term is zero.
+     *
+     * The base counts for more than the sheet: the thick low deck is what a
+     * channel is actually buried in, and the thin stuff above it is lit second
+     * hand. And because this whole function is compiled into the water's shader,
+     * every wave facing the strike reflects the lit cloud without the sea being
+     * told a thing about it. */
+    float toFlash = max(dot(dir, uFlashDir), 0.0);
+    float lit = pow(toFlash, uFlashSpread) * (base + cloud * 0.45);
+    color += uFlashColor * (uFlash * lit);
+
     /* The disc goes on last so cloud can pass in front of it, and it is gated
-     * on the ray being above the horizon so a sun that has set stays set. */
+     * on the ray being above the horizon so a sun that has set stays set. The
+     * base hides it harder than the sheet does, because it is thicker: a sun
+     * still burning through a cumulonimbus would undo the whole layer. */
     float disc = smoothstep(uSunLimbCos, uSunDiscCos, dot(dir, uSunDir));
-    disc *= smoothstep(-0.010, 0.010, dir.y) * (1.0 - cloud * 0.85);
+    disc *= smoothstep(-0.010, 0.010, dir.y) * (1.0 - cloud * 0.85) * (1.0 - base * 0.98);
     color += uSunColor * (disc * uSunDiscStrength * discWeight);
 
     return color;
@@ -497,6 +645,9 @@ let rendererRef = null;
 let settings = null;
 let phase = 0;
 let elapsed = 0;
+// HOW FAR THE CLOUD HAS TRAVELLED, accumulated rather than derived, because the
+// speed is no longer constant. See `updateSky`.
+let drifted = 0;
 // The last gloom the arc asked for, held so `setPhase` can jump the hour for a
 // screenshot without also clearing the storm out of the sky.
 let lastGloom = 0;
@@ -528,6 +679,8 @@ export function initSky(scene, camera, config = OCEAN_CONFIG, options = {}) {
     const random = options.random || Math.random;
     phase = options.phase != null ? wrapPhase(options.phase) : entryPhase(random, config.cycle);
     elapsed = 0;
+    drifted = 0;
+    lastGloom = 0;
 
     const discRadius = (sky.sun.angularDiameterDegrees / 2) * DEG;
     const limbRadius = discRadius + sky.sun.limbSoftnessDegrees * DEG;
@@ -557,8 +710,42 @@ export function initSky(scene, camera, config = OCEAN_CONFIG, options = {}) {
         uCloudFadeFrom: { value: sky.cloud.horizonFadeFrom },
         uCloudFadeTo: { value: sky.cloud.horizonFadeTo },
         uCloudSunlitMix: { value: sky.cloud.sunlitMix },
-        uCloudDrift: { value: new THREE.Vector2() }
+        uCloudDrift: { value: new THREE.Vector2() },
+        // The storm base. Everything the gloom moves is filled in by
+        // `applyState` before the first frame, so the zeroes here are never
+        // seen, and everything it does not is set once right here.
+        //
+        // THE TWO COLOURS DO NOT FOLLOW THE HOUR, which is the same bargain the
+        // rest of `sky.storm` strikes and is worth knowing about. The shipped
+        // scene holds the sun near midday, so there is no hour for them to
+        // follow; drive the day round with `oceanSetPhase` and a grey base will
+        // sit under an orange sky, exactly as the grey lid already does.
+        uShelfLight: { value: new THREE.Color() },
+        uShelfDark: { value: new THREE.Color() },
+        uShelfOpacity: { value: 0 },
+        uShelfScale: { value: sky.shelf.scale },
+        uShelfStretch: { value: sky.shelf.stretch },
+        uShelfCoverage: { value: sky.shelf.coverage },
+        uShelfSoftness: { value: sky.shelf.softness },
+        uShelfDepth: { value: sky.shelf.depth },
+        uShelfWarp: { value: sky.shelf.warp },
+        uShelfFadeFrom: { value: sky.shelf.horizonFadeFrom },
+        uShelfFadeTo: { value: sky.shelf.horizonFadeTo },
+        uShelfDrift: { value: new THREE.Vector2() },
+        // THE FLASH IS DECLARED HERE AND DRIVEN FROM lightning.js, which is the
+        // same division water.js and sand.js already work under: the sky owns
+        // its program and its uniforms, and whoever has something to say writes
+        // through the objects `skyUniforms` hands out. Left at zero, so a page
+        // that never builds the lightning has a sky with no flash in it rather
+        // than a shader with an undefined uniform, which silently reads as zero
+        // anyway and would have been indistinguishable from working.
+        uFlashColor: { value: new THREE.Color(sky.flash.color) },
+        uFlashDir: { value: new THREE.Vector3(0, 1, 0) },
+        uFlash: { value: 0 },
+        uFlashSpread: { value: sky.flash.spread }
     };
+    uniforms.uShelfLight.value.setRGB(...unpackColor(sky.shelf.light), THREE.SRGBColorSpace);
+    uniforms.uShelfDark.value.setRGB(...unpackColor(sky.shelf.dark), THREE.SRGBColorSpace);
 
     domeGeometry = new THREE.SphereGeometry(sky.domeRadius, 32, 16);
     domeMaterial = new THREE.ShaderMaterial({
@@ -636,7 +823,13 @@ function applyState(state) {
     // The lid has to reach the horizon, or the water reflects a storm the sky
     // has not got. See `sky.storm.cloudFadeTo` for the whole account.
     if (state.cloudFadeTo != null) uniforms.uCloudFadeTo.value = state.cloudFadeTo;
-    uniforms.uCloudDrift.value.set(0, elapsed * settings.sky.cloud.driftSpeed);
+    // READ, NOT COMPUTED. This used to be `elapsed * driftSpeed`, which is only
+    // correct while the speed never changes. See `updateSky`.
+    uniforms.uCloudDrift.value.set(0, drifted);
+    uniforms.uShelfDrift.value.set(0, drifted * settings.sky.shelf.driftRatio);
+    if (state.shelfOpacity != null) uniforms.uShelfOpacity.value = state.shelfOpacity;
+    if (state.shelfFadeFrom != null) uniforms.uShelfFadeFrom.value = state.shelfFadeFrom;
+    if (state.shelfFadeTo != null) uniforms.uShelfFadeTo.value = state.shelfFadeTo;
 
     sunLight.color.setRGB(state.sunColor[0], state.sunColor[1], state.sunColor[2], THREE.SRGBColorSpace);
     sunLight.intensity = state.sunIntensity;
@@ -679,7 +872,17 @@ export function updateSky(deltaSeconds, gloom = 0, clarity = 0) {
         sceneRef.fog.far = f.far + (f.clearFar - f.far) * Math.max(0, Math.min(1, clarity));
     }
     phase = advancePhase(phase, delta, settings.cycle);
-    applyState(applyGloom(skyStateAt(phase, settings.sky), gloom, settings.sky));
+    const state = applyGloom(skyStateAt(phase, settings.sky), gloom, settings.sky);
+    // THE DRIFT IS INTEGRATED AND IT HAS TO BE. The storm speeds the sky up by
+    // six times, so the drift is a rate that changes, and position is the
+    // integral of a rate rather than the product of it with the clock. Written
+    // the obvious way, as `elapsed * speed`, every rise in the speed would
+    // reprice the WHOLE history at the new rate and shunt the clouds forward by
+    // minutes in one frame, and the fall at the end of the arc would drag them
+    // back again. Adding this frame's own travel is the only version that has
+    // no seam in it.
+    drifted += delta * state.driftSpeed;
+    applyState(state);
     return phase;
 }
 
@@ -725,9 +928,12 @@ export function disposeSky() {
     sceneRef = null;
     rendererRef = null;
     uniforms = null;
+    elapsed = 0;
+    drifted = 0;
+    lastGloom = 0;
 }
 
 /** Test seam, matching water.js. Not used by the page. */
 export const __sky = {
-    state: () => ({ uniforms, dome, sunLight, fillLight, phase, elapsed })
+    state: () => ({ uniforms, dome, sunLight, fillLight, phase, elapsed, drifted })
 };

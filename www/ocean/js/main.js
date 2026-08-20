@@ -54,6 +54,9 @@ import {
     swashReachMetres
 } from './sand.min.js';
 import { stormStateAt, surgeAt, frontAt, frontLevelAt, washEnvelope } from './storm.min.js';
+import {
+    initLightning, updateLightning, resetLightning, disposeLightning, forceStrike
+} from './lightning.min.js';
 
 const state = {
     running: false,
@@ -116,6 +119,19 @@ function detectMobile() {
     if (typeof window === 'undefined') return false;
     const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
     return Boolean(coarse) || Math.min(window.innerWidth, window.innerHeight) < 600;
+}
+
+/** Whether the visitor has asked for less movement.
+ *
+ *  THE ANSWER IS NOT "DO NOT SHOW THE STORM". The stylesheet already drops the
+ *  card transitions, and what this gates is the lightning's envelope: one stroke
+ *  instead of two, a quarter of the amplitude, and an attack slow enough to be a
+ *  swell rather than a snap. The channel still draws and still branches. The
+ *  setting asks for less motion, not for less story, and a storm with the
+ *  electricity taken out of it is a worse scene rather than a gentler one. */
+function prefersReducedMotion() {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 function buildRenderer() {
@@ -275,6 +291,14 @@ function loop(now) {
     // wrong, and it runs ahead of the swell for the same reason real weather
     // does, which is that a cloud front does not have to travel as a wave.
     updateSky(delta, storm.gloom, storm.clarity);
+    // AFTER THE SKY AND BEFORE THE WATER, and the order is not arbitrary. The
+    // flash is a term in the sky's own program, so it has to be written after
+    // `updateSky` has finished pushing this frame's state out or it would be
+    // overwritten before anything read it, and before `updateWater` because the
+    // sea reflects that program. Handed the arc clock rather than a delta, so a
+    // replay or an `oceanSetArc` jump lands the storm's electricity where the
+    // rest of the scene is.
+    updateLightning(state.arc, OCEAN_CONFIG);
     updateWater(delta, storm);
 
     // THE BREAK QUEUE. sand.js turns each entry into a sheet of water running up
@@ -377,6 +401,11 @@ function replayArc() {
     state.arc = 0;
     resetWater();
     resetSand();
+    // The storm's schedule goes back with it. A replay that came back with its
+    // lightning half way through its own timetable would be the same class of
+    // fault as the tide one above: the second watch would not be the storm the
+    // first one was.
+    resetLightning();
     state.finished = false;
     state.lastTime = 0;
     if (ending) {
@@ -419,6 +448,17 @@ function init() {
     const sky = { uniformGlsl: SKY_UNIFORM_GLSL, glsl: SKY_GLSL, uniforms: skyUniforms() };
     initSand(scene, OCEAN_CONFIG, { mobile: state.mobile, sky });
     initWater(scene, OCEAN_CONFIG, { mobile: state.mobile, sky });
+    // THE LIGHTNING GOES IN NOW EVEN THOUGH THE FIRST STRIKE IS THIRTY SECONDS
+    // AWAY, because it adds a light to the scene and Three keys its compiled
+    // programs on how many lights there are. Adding one at the first flash would
+    // recompile the water, the sand, and the sky in the middle of the arc, on
+    // the frame of a flash, which is the worst moment available.
+    //
+    // REDUCED MOTION IS READ ONCE AND PASSED IN rather than reached for inside
+    // the module, matching how `mobile` is handled: the camera never moves and
+    // the visit is ninety seconds, so there is no later moment at which this
+    // answer could usefully change.
+    initLightning(scene, camera, OCEAN_CONFIG, { sky, reducedMotion: prefersReducedMotion() });
 
     wash = document.getElementById('wash');
     blackout = document.getElementById('blackout');
@@ -467,6 +507,13 @@ function init() {
         return state.arc;
     };
     window.oceanArc = () => state.arc;
+    // FIRE A STRIKE ON THE NEXT FRAME. A flash lasts about three hundred
+    // milliseconds, so catching one for a screenshot by waiting is a poor use of
+    // an afternoon. Takes an optional distance in metres, since the near and far
+    // ends of the range look quite different and both want photographing. It
+    // goes through the same path as a real strike, minimum gap included, so it
+    // cannot show you a flash the rate limiter would have refused.
+    window.oceanStrike = (metres) => forceStrike(metres);
     // What the adaptive resolution has settled on, which is the only way to tell
     // a scene that is running slowly from one that has quietly stopped trying.
     // How smoothly the storm moves, which is a different question from how fast
@@ -493,4 +540,4 @@ if (typeof document !== 'undefined') {
     }
 }
 
-export { init, start, stop, disposeWater, disposeSky, disposeSand };
+export { init, start, stop, disposeWater, disposeSky, disposeSand, disposeLightning };

@@ -1017,6 +1017,121 @@ export const OCEAN_CONFIG = deepFreeze({
             sunlitMix: 0.55
         },
 
+        // ---- The storm base --------------------------------------------------
+        //
+        // A SECOND SHEET, LOWER DOWN, AND IT EXISTS BECAUSE THE STORM SKY HAD NO
+        // VARIANCE IN IT. Measured across the sky band of the QA screenshots,
+        // 1st to 99th percentile of luminance:
+        //
+        //     ocean-2  clear        mean 182,194,208   spread 29
+        //     ocean-8  peak storm   mean 191,196,201   spread 13
+        //
+        // Read the second row twice. Through the whole storm the sky does not
+        // get DARKER, it gets very slightly brighter, and its contrast falls by
+        // more than half. That is `sky.storm` below working exactly as written:
+        // its only two levers are a flat grey palette and `cloudCoverage`
+        // dropping to 0.18, and at that threshold most of the noise saturates,
+        // so the sheet converges on a single tone. Turning the gloom up harder
+        // arrives at featureless sooner. A threatening sky is a HIGH CONTRAST
+        // sky, so the missing quantity was never brightness.
+        //
+        // WHAT THIS DRAWS is the underside of a cumulonimbus, specifically the
+        // shelf cloud (an arcus) on the leading edge of an advancing gust front.
+        // It is the right cloud for this camera: it comes in over the horizon,
+        // it is dark underneath, and the bright strip of sky left between its
+        // base and the sea is the whole look. `storm.shelfFadeFrom` is what
+        // keeps that strip, and the strip narrowing as the gloom rises is the
+        // light being squeezed out.
+        //
+        // IT IS A DENSITY LAYER, NOT A COVERAGE ONE, AND BUILDING IT THE OTHER
+        // WAY WAS THE FIRST MISTAKE HERE. Modelled like the cirrus sheet above,
+        // where the noise threshold decides PRESENCE, the base opened up into
+        // clear sky whenever the drift carried a low patch across the frame:
+        // swept over the drift, the contrast measured anywhere from 43 to 93 and
+        // the sky periodically lost its storm altogether. A real overcast base
+        // has no gaps in it, only thick parts and thin parts, so `coverage` here
+        // is set low enough to be near total and all of the variation comes from
+        // `depth` shading between `light` and `dark`. Swept again over the same
+        // drift the contrast holds at 92 and the bright strip holds at 145.
+        //
+        // THE VISIBLE SKY IS 20 DEGREES TALL. `camera.fov` is 40 and the camera
+        // is dead level, so a view ray leaving the top of the frame has a dir.y
+        // of about 0.34 and everything in this block has to live inside that.
+        // Numbers that read like a whole hemisphere are out of frame.
+        shelf: {
+            // A LOWER PLANE THAN THE SHEET ABOVE, which is the whole of what
+            // makes it read as a lower cloud. Same projection, and half the
+            // divisor means features twice the size that converge toward the
+            // horizon twice as fast. `cloud.scale` is 0.9 for the cirrus.
+            scale: 0.42,
+            // Barely stretched. Cirrus runs at 0.35, which draws features three
+            // times wider than they are deep, and a storm base has bulk rather
+            // than streaks.
+            stretch: 0.75,
+            // PRESENCE, and it is deliberately almost total. See above: this is
+            // the number that must NOT behave like `cloud.coverage`. Noise
+            // averages about a half, so a threshold this low leaves the base
+            // solid nearly everywhere and opens only the occasional ragged rent
+            // where the lid behind shows through.
+            coverage: 0.14,
+            softness: 0.16,
+            // THICKNESS, and this is where all the contrast comes from. The ramp
+            // is centred on the noise's own mean rather than on the coverage
+            // threshold, so it uses the full swing of the noise symmetrically
+            // and the base has as much thick as thin in it. A mild control: 0.12
+            // and 0.22 measure within a level of each other, because the warp
+            // below already spreads the distribution wide.
+            depth: 0.16,
+            // THE WARP IS WHAT MAKES IT CONVECTION. Offsetting the sample point
+            // by a second, coarser noise lookup before the octaves are taken
+            // bends straight features into billows and curls. Two extra fetches,
+            // and it is the difference between a cloud and a gradient. This is
+            // the one term in the sky that says the air is moving vertically.
+            warp: 1.15,
+            // WHERE THE BASE STOPS, AND IT STOPS WELL ABOVE THE HORIZON. The
+            // cirrus sheet has to reach the horizon under a storm, for the
+            // reason in `storm.cloudFadeTo`. This one is the opposite: the gap
+            // between the base and the sea is the bright strip, and the strip is
+            // what makes the dark read as dark. These are the CLEAR SKY ends of
+            // the ramp, which the gloom walks down to `storm.shelfFadeFrom` and
+            // `storm.shelfFadeTo`. At 0.22 the base is confined to the top third
+            // of the frame, which is a storm still out at sea.
+            horizonFadeFrom: 0.22,
+            horizonFadeTo: 0.40,
+            // Faster than the sheet above it, because it is lower: the same wind
+            // crosses more degrees per second the closer the cloud is.
+            driftRatio: 1.8,
+            // PIPELINE INPUTS, NOT SCREEN COLOURS. Solved backwards through
+            // srgbToLinear -> exposure -> ACES -> the sRGB encode, jointly across
+            // the three channels because ACES mixes them and a per channel solve
+            // overshoots by about twelve levels. See the note in `sky.storm`,
+            // which is where that lesson was paid for and where the arithmetic
+            // it records is still missing its last step.
+            //
+            //     light  write (115,120,130) -> shows (124,130,142)
+            //     dark   write ( 65, 68, 76) -> shows ( 53, 56, 66)
+            light: 0x737882,
+            dark: 0x41444c
+        },
+
+        // ---- The lightning flash, as the sky sees it -------------------------
+        //
+        // WHEN and HOW OFTEN live in `storm.lightning`, because they are the
+        // story. These two are the look, and they live here because the flash is
+        // a term in the sky's own program and the sea reflects it by
+        // construction. See `oceanSkyColor`.
+        flash: {
+            // Slightly blue of white. A return stroke runs at around thirty
+            // thousand kelvin, so the light really is blue, and a warm flash
+            // reads as an explosion rather than as lightning.
+            color: 0xbcd2ff,
+            // The exponent on the cosine to the strike. 3.0 puts the half
+            // brightness point about 40 degrees off, which is wide: a flash
+            // inside a cloud deck lights a large part of it rather than
+            // spotlighting one patch, and a tight falloff looks like a searchlight.
+            spread: 3.0
+        },
+
         // ---- How far you can see ---------------------------------------------
         //
         // Haze rather than a hard edge, and its colour is the sky's own horizon,
@@ -1104,19 +1219,48 @@ export const OCEAN_CONFIG = deepFreeze({
             // midday horizon is written (196,220,237) and shows as (164,180,190).
             // These were written by eye against no screenshot at all.
             //
-            // Solved backwards through the pipeline for a proper overcast lid:
+            // AND THEN THE SOLVE ITSELF WAS WRONG, WHICH TOOK A FOURTH ROUND TO
+            // FIND. The fix above worked the pipeline backwards as srgbToLinear
+            // -> exposure -> ACES and stopped there, but there is one more stage:
+            // `<colorspace_fragment>` encodes the tone mapped result back to sRGB
+            // on its way to the screen, because `renderer.outputColorSpace` is
+            // sRGB. Leaving that stage out understates the result by about
+            // forty seven levels, so every colour here was solved to a target it
+            // then sailed straight past. What the old values actually rendered:
             //
-            //     cloudColor  write (179,190,201) -> shows (145,154,164)
-            //     horizon     write (172,181,194) -> shows (136,145,157)
-            //     zenith      write (157,159,174) -> shows (117,119,136)
+            //     cloudColor  write (179,190,201) -> aimed (145,154,164) -> SHOWED (192,198,204)
+            //     horizon     write (172,181,194) -> aimed (136,145,157) -> SHOWED (187,192,200)
+            //     zenith      write (157,159,174) -> aimed (117,119,136) -> SHOWED (173,175,186)
             //
-            // A thick overcast is BRIGHT. It is uncomfortable to look up at.
-            // Dark is what a storm feels like and not what it measures.
-            zenith: 0x9d9fae,
-            horizon: 0xacb5c2,
+            // Confirmed against the QA screenshots rather than argued: the sky
+            // band of ocean-8.png, at full gloom, measures (191,196,201) against
+            // the (192,198,204) predicted for the old cloudColor. The storm sky
+            // was a whole stage of the pipeline brighter than its author meant.
+            //
+            // These are the same targets, re-solved with the encode included and
+            // jointly across the three channels, because ACES mixes them and a
+            // per channel solve overshoots by about twelve levels:
+            //
+            //     cloudColor  write (130,139,149) -> shows (144,154,164)
+            //     horizon     write (123,132,143) -> shows (136,146,157)
+            //     zenith      write (110,112,126) -> shows (117,120,136)
+            //
+            // A thick overcast is still BRIGHT and the argument above still
+            // stands. It is uncomfortable to look up at, and the bright strip
+            // this leaves along the horizon is exactly what `sky.shelf` needs to
+            // sit its dark base against. What it is not is the SAME brightness
+            // as the clear sky it replaced, which is what was shipping.
+            //
+            // ONLY THE THREE SKY COLOURS MOVE. `hemiSky` and `hemiGround` are
+            // light intensities that reach the screen through the sand and the
+            // sea rather than as colours of their own, they were tuned by looking
+            // at the water, and the note above records that dropping the fill was
+            // reported as a bug twice. They stay exactly where they are.
+            zenith: 0x6e707e,
+            horizon: 0x7b848f,
             hemiSky: 0xa8b0bb,
             hemiGround: 0x6a6459,
-            cloudColor: 0xb3bec9,
+            cloudColor: 0x828b95,
             cloudOpacity: 0.94,
             // COVERAGE IS A THRESHOLD ON NOISE, so lowering it does not darken
             // the clouds that are there, it makes there be more of them. 0.52
@@ -1165,7 +1309,35 @@ export const OCEAN_CONFIG = deepFreeze({
             // There is usually a slightly brighter patch where the sun is, and
             // taking it to nothing makes the sky look painted.
             sunGlowScale: 0.04,
-            exposure: 1.00
+            exposure: 1.00,
+
+            // ---- The storm base, and how fast the whole sky moves ------------
+            //
+            // How much of `sky.shelf` is there at full gloom. Not quite 1, so a
+            // little of the lid behind it survives in the thinnest parts and the
+            // base has something to be in front of.
+            shelfOpacity: 0.92,
+            // WHERE THE BASE STOPS, walked down from `shelf.horizonFadeFrom` as
+            // the gloom rises. That descent IS the storm arriving: the bright
+            // strip along the horizon starts as most of the frame and is squeezed
+            // down to a band a few degrees tall. At full gloom the base covers
+            // everything above about 7.5 degrees and the strip below it is the
+            // only light left in the sky.
+            shelfFadeFrom: 0.045,
+            shelfFadeTo: 0.13,
+            // HOW MUCH FASTER THE SKY MOVES UNDER A STORM. `cloud.driftSpeed` is
+            // deliberately slow enough to be noticed having moved rather than
+            // noticed moving, which is right for an ordinary afternoon and wrong
+            // for a gust front: outflow cloud moves visibly, and a sky that
+            // ACCELERATES is a threat cue that costs one uniform. At 6x the base
+            // crosses about half a degree a second, so a feature takes some forty
+            // seconds to cross the frame. Plainly moving, and not a timelapse.
+            //
+            // CAREFUL: this makes the drift a rate rather than a position, so
+            // `updateSky` has to INTEGRATE it. Multiplying an elapsed time by a
+            // speed that changes would jump the clouds backwards every time the
+            // speed rose. See the note there.
+            driftSpeedScale: 6.0
         },
 
         // ---- The day, as a list of looks ------------------------------------
@@ -1589,6 +1761,168 @@ export const OCEAN_CONFIG = deepFreeze({
             { at: 54,  value: 0.94 },
             { at: 74,  value: 1.00 }    // fully closed before the tsunami lands
         ],
+        // ---- The lightning ---------------------------------------------------
+        //
+        // READ THE RATE LIMIT FIRST. Everything else here is taste and this one
+        // is not. A real strike is three or four return strokes about fifty
+        // milliseconds apart, which is twenty flashes a second, and twenty hertz
+        // is in the middle of the band most likely to provoke a seizure in a
+        // photosensitive viewer. WCAG 2.3.1 asks for no more than three general
+        // flashes in a second, and a flash that covers the whole sky and most of
+        // the sea is a general flash by any reading.
+        //
+        // So the flicker is not reproduced, and the limit is on by DEFAULT
+        // rather than behind the reduced motion query. Putting the safe version
+        // behind a setting only protects the people who already found the
+        // setting. `minGapSeconds` is enforced flash to flash rather than strike
+        // to strike, which is what makes the ceiling hold across the boundary
+        // between one strike and the next as well as inside a double.
+        //
+        // A double flash a third of a second apart is still unmistakably
+        // lightning. A real strike with one distinct second stroke looks exactly
+        // like this, which is the happy part: the safe version is also a version
+        // that happens in nature.
+        lightning: {
+            // Strikes per second, over the arc. Nothing at all until the sky has
+            // closed over, because a bolt out of a bright sky is a different
+            // kind of scene, and because the first sign of trouble should stay
+            // the cloud. By the tsunami it is nearly one a second, which with
+            // the gap below is as busy as this is ever allowed to get.
+            rate: [
+                { at: 0,  value: 0.00 },
+                { at: 22, value: 0.00 },   // the sky closes first, alone
+                { at: 30, value: 0.14 },   // the first distant flashes
+                { at: 54, value: 0.50 },   // through the lull, which it fills
+                { at: 76, value: 0.85 },
+                { at: 90, value: 0.85 }
+            ],
+            // THE CEILING. 0.34 seconds between any two flashes is 2.94 a
+            // second. Anyone lowering this should check `flashesPerSecondCeiling`
+            // stays under three, and there is a test that walks the whole arc and
+            // asserts no pair of flashes ever lands closer than this.
+            minGapSeconds: 0.34,
+            // How often a strike has a second return stroke, and how far behind.
+            // The gap is over the minimum on purpose, so the pair reads as two
+            // events rather than as a stutter.
+            strokeChance: 0.42,
+            strokeGapSeconds: 0.40,
+            // The second stroke is not brighter than the first. See the note on
+            // `flashLevelAt` for why they are combined with a max.
+            secondStrokePower: 0.78,
+            // The envelope. Fast up, slow down, and the decay reaches exactly
+            // zero rather than trailing off forever.
+            attackSeconds: 0.035,
+            decaySeconds: 0.28,
+            // WHERE THEY ARE. Wider than the frame, which is about 30 degrees
+            // either side at this field of view, so some strikes are off screen
+            // and show only as a flash. That is most of what a real storm does.
+            azimuthDegrees: 46,
+            // A channel is only drawn inside this, and then only sometimes.
+            boltAzimuthDegrees: 30,
+            boltChance: 0.62,
+            // HOW FAR OUT, walked from the far end of the range to the near end
+            // by `approach`, so the storm closes in rather than just getting
+            // busier. The spread is what stops them all landing at one distance.
+            farMetres: 900,
+            nearMetres: 210,
+            approach: [
+                { at: 30, value: 0.12 },
+                { at: 60, value: 0.45 },
+                { at: 76, value: 0.72 },
+                { at: 90, value: 0.88 }
+            ],
+            approachSpread: 0.30,
+            // Distance dimming. Inverse rather than inverse square, because the
+            // flash lights a cloud deck that reaches most of the way to the
+            // strike rather than lighting a point. Anything closer than this is
+            // at full brightness.
+            referenceMetres: 320,
+            // How hard the flash drives the sky's own colour, and the sea's
+            // reflection of it, which is one number because they are one term.
+            skyGain: 2.4,
+            // The light it throws directly on the water. Separate from the sky
+            // term because this one makes a glint path and that one does not.
+            lightIntensity: 4.2,
+            lightColor: 0xcfe0ff,
+            // THE REDUCED MOTION SKY. Not "no lightning": a storm with the
+            // electricity taken out is a worse scene, and the setting asks for
+            // less motion rather than for less story. One stroke, a quarter of
+            // the amplitude, and an attack five times slower, which turns a snap
+            // into a swell. The channel still draws, and still branches.
+            reduced: {
+                gain: 0.26,
+                strokeChance: 0,
+                attackSeconds: 0.18,
+                decaySeconds: 0.55
+            },
+
+            // ---- The channel ------------------------------------------------
+            //
+            // MIDPOINT DISPLACEMENT, which is the classic fractal for this and
+            // is the right one. One segment from the cloud base to the water,
+            // split at the middle, middle shoved sideways, repeat with half the
+            // shove. Six passes gives sixty four segments in the trunk and takes
+            // the displacement from thirty metres to under one, which is what
+            // produces the look: large scale wander, small scale jitter, the
+            // same statistics at every zoom.
+            bolt: {
+                // THE CLOUD BASE IS USUALLY OUT OF FRAME AND THAT IS CORRECT.
+                // The frame stops 20 degrees up, so at 400 metres out a base
+                // this high sits at 45 degrees and only the bottom third of the
+                // channel is visible. That is what lightning looks like from
+                // underneath, and the missing top is most of why it reads as
+                // enormous.
+                baseHeightMetres: 420,
+                iterations: 6,
+                jitterMetres: 30,
+                jitterDecay: 0.52,
+                // BRANCHING ONLY IN THE MIDDLE PASSES. On the first pass it
+                // gives two trunks and no main channel. On the last it gives
+                // fuzz, because the children are too short for any remaining
+                // pass to develop them and come out as straight whiskers.
+                branchFrom: 1,
+                branchTo: 3,
+                branchChance: 0.30,
+                branchGenerations: 2,
+                branchLength: 0.55,
+                branchSpreadDegrees: 42,
+                // Children are thinner, dimmer, and less crooked than the trunk,
+                // which is what keeps the trunk reading as the trunk.
+                branchThin: 0.55,
+                branchDim: 0.52,
+                branchJitterDecay: 0.7,
+                // A HARD STOP. Branching compounds: each pass doubles the set
+                // and then adds to it, so an unlucky seed grows faster than the
+                // doubling alone. Better a slightly plainer bolt than a frame
+                // that allocates for a second. Sized so the buffers are 512 * 6
+                // vertices, which is nothing next to the water's sheet.
+                maxSegments: 512,
+                // WIDTH IS ANGULAR, NOT METRIC, and that is a departure from
+                // perspective made on purpose. A real channel is centimetres
+                // across, so a true width at 400 metres is far under a pixel and
+                // the bolt vanishes. This holds it at a constant size on screen,
+                // which is also what a photograph of lightning shows, because
+                // what is being photographed is the glow and not the channel.
+                //
+                // THE ARITHMETIC, since this is the number most likely to want
+                // tuning by eye. The vertical field of view is 40 degrees, so a
+                // 1080 line frame is 0.037 degrees per pixel. This is the HALF
+                // width, so the channel is twice it: 0.0045 radians is 0.26
+                // degrees each side, giving about 14 pixels overall with a core
+                // of three or four. Halve it for a hairline, double it for
+                // something closer to a special effect.
+                //
+                // Distance is NOT a cue here and does not need to be. A near
+                // strike still reads as nearer, because the channel's wander is
+                // in metres and a hundred metres of lateral wander subtends four
+                // times the angle at 210 metres that it does at 900.
+                widthRadians: 0.0045,
+                intensity: 2.2,
+                coreColor: 0xffffff,
+                glowColor: 0x6f8cff
+            }
+        },
+
         // The closing fade, in seconds off the end. Long enough to read as an
         // ending rather than as a page crashing, short enough that nobody is
         // left watching a grey rectangle.
