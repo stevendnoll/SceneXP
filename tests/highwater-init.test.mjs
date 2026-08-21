@@ -227,6 +227,9 @@ describe('the page carries the metadata a share and a crawler need', () => {
         for (const event of ['session-start', 'begin-watching', 'arc-complete', 'replay']) {
             expect(main).toMatch(new RegExp(`\\btrack\\(\\s*'${event}'`));
         }
+        // The stage checkpoints are built from the stage name, so they are one
+        // template literal rather than five names.
+        expect(main).toMatch(/\btrack\(\s*`reached-\$\{/);
         expect(main).toMatch(/\btrackFinal\(\s*'session-end'/);
         expect(main).toMatch(/import \{[^}]*\btrack\b[^}]*\} from '\.\.\/\.\.\/shared\/js\/telemetry-1\.0\.0\.min\.js'/);
     });
@@ -242,6 +245,73 @@ describe('the page carries the metadata a share and a crawler need', () => {
         expect(card).toMatch(/lightning/);
         expect(card).toMatch(/flashes/);
         expect(card).toMatch(/without sound/);
+    });
+});
+
+describe('the drop-off funnel', () => {
+    // Steve asked for a checkpoint every thirty seconds so we could see where
+    // people leave. These hang on the arc's own six named stages instead, which
+    // costs no second schedule, reads as a sentence at the far end, and survives
+    // the arc being retimed (it has been three minutes, then two, then ninety
+    // seconds, and every hardcoded second in these suites went stale each time).
+
+    test('one watch reports every stage exactly once, in order', async () => {
+        jest.resetModules();
+        const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
+        const { nextStageIndex } = await import('../www/highwater/js/main.js');
+        const stages = OCEAN_CONFIG.storm.stages;
+
+        let reached = 0;
+        const fired = [];
+        for (let t = 0; t <= OCEAN_CONFIG.storm.seconds; t += 1 / 60) {
+            const i = nextStageIndex(t, reached, OCEAN_CONFIG);
+            if (i >= 0) { reached = i; fired.push(stages[i].name); }
+        }
+        // Every stage but the first, which begins at zero and would only repeat
+        // `begin-watching` under a different name.
+        expect(fired).toEqual(stages.slice(1).map((st) => st.name));
+    });
+
+    test('IT CANNOT FIRE TWICE, WHICH IS THE POINT', () => {
+        // This runs on every animation frame. A version that reported the
+        // CURRENT stage rather than a CHANGE of stage would send sixty
+        // telemetry requests a second, aimed at the site's own server, and it
+        // would look perfectly fine from inside the browser. That is the guard
+        // most likely to be refactored away by somebody tidying the caller, and
+        // this is what should stop them.
+        return (async () => {
+            jest.resetModules();
+            const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
+            const { nextStageIndex } = await import('../www/highwater/js/main.js');
+            // A whole second of frames inside one stage, after it was reported.
+            const inDrawback = 65;
+            const reached = OCEAN_CONFIG.storm.stages.findIndex((st) => st.name === 'drawback');
+            for (let i = 0; i < 60; i++) {
+                expect(nextStageIndex(inDrawback + i / 60, reached, OCEAN_CONFIG)).toBe(-1);
+            }
+        })();
+    });
+
+    test('a jump in the clock leaves one mark, not a fake session', async () => {
+        // `oceanSetArc(73)` is a QA hook. Reporting every stage it skipped would
+        // put a complete, entirely fictional watch into the log.
+        jest.resetModules();
+        const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
+        const { nextStageIndex } = await import('../www/highwater/js/main.js');
+        const stages = OCEAN_CONFIG.storm.stages;
+        const first = nextStageIndex(73, 0, OCEAN_CONFIG);
+        expect(stages[first].name).toBe('drawback');
+        // And nothing further from the same position.
+        expect(nextStageIndex(73, first, OCEAN_CONFIG)).toBe(-1);
+    });
+
+    test('nothing is reported before the story starts', async () => {
+        jest.resetModules();
+        const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
+        const { nextStageIndex } = await import('../www/highwater/js/main.js');
+        // The arc clock is held at zero while the welcome card is up, and the
+        // opening stage is index 0, so there is nothing above `reached`.
+        expect(nextStageIndex(0, 0, OCEAN_CONFIG)).toBe(-1);
     });
 });
 

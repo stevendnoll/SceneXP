@@ -59,7 +59,7 @@ import {
     initSand, updateSand, addBreaks, surfaceWithSwash, resetSand, disposeSand,
     swashReachMetres
 } from './sand.min.js';
-import { stormStateAt, surgeAt, frontAt, frontLevelAt, washEnvelope } from './storm.min.js';
+import { stormStateAt, surgeAt, frontAt, frontLevelAt, washEnvelope, stageAt } from './storm.min.js';
 import {
     initLightning, updateLightning, resetLightning, disposeLightning, forceStrike
 } from './lightning.min.js';
@@ -267,7 +267,14 @@ function loop(now) {
     state.lastTime = seconds;
     adaptQuality(delta);
     // The sea moves while the welcome card is up; the story does not.
-    if (state.begun) state.arc += Math.max(0, Math.min(0.25, delta));
+    if (state.begun) {
+        state.arc += Math.max(0, Math.min(0.25, delta));
+        // Read off the arc clock rather than off wall time, which is what makes
+        // these honest: the clock stops when the tab is hidden, so a visitor who
+        // walked away for five minutes does not come back having "reached" the
+        // tsunami they never saw.
+        reportStage();
+    }
 
     // THE ARC IS READ BEFORE ANYTHING IS DRAWN, and the water level under the
     // camera is read from the SEA rather than from the arc, so the white-out can
@@ -365,6 +372,7 @@ function beginArc() {
     //
     // Inside the `begun` guard on purpose, so the QA hooks that call through
     // here (`oceanSetArc`) cannot log a second one.
+    watch = 1;
     track('begin-watching', { reduced: prefersReducedMotion() ? 1 : 0 });
     if (welcome) {
         welcome.style.opacity = '0';
@@ -393,7 +401,7 @@ function finish() {
     // difference between a good idea and a good experience. `runs` distinguishes
     // a first watch from a second, so this stays meaningful after a replay.
     runs += 1;
-    track('arc-complete', { run: runs });
+    track('arc-complete', { watch });
     stop();
     if (ending) {
         ending.hidden = false;
@@ -426,7 +434,11 @@ function replayArc() {
     // second time is the nearest available proxy and it costs one line.
     //
     // Not guarded: a third watch is worth knowing about too.
-    track('replay', { run: runs + 1 });
+    watch += 1;
+    // The funnel starts again with it, or the second watch would report no
+    // stages at all and read as somebody who pressed replay and left.
+    stageReached = 0;
+    track('replay', { watch });
     state.arc = 0;
     resetWater();
     resetSand();
@@ -452,8 +464,61 @@ function replayArc() {
 // long somebody stayed.
 let sessionStart = 0;
 let sessionEnded = false;
+// Which viewing this is, 1 based, so every event on the arc can say which watch
+// it belongs to and a funnel can be read over first watches alone.
+let watch = 0;
 // How many times the arc has been watched all the way through this load.
 let runs = 0;
+// The furthest stage reported this watch, as an index into `storm.stages`.
+// Compared rather than counted, so jumping the clock with `oceanSetArc` reports
+// the stage it lands in and not every stage it skipped over.
+let stageReached = 0;
+
+/** Report each stage of the story the first time this watch reaches it.
+ *
+ *  THE DROP OFF CURVE, AND WHY IT IS NOT A THIRTY SECOND TIMER. Steve asked for
+ *  a checkpoint every half minute so we could see where people leave. The arc
+ *  already divides itself into six named stages and `stageAt` already answers
+ *  which one a second belongs to, so hanging the checkpoints on those costs no
+ *  second schedule and reads better at the far end: "forty five per cent reached
+ *  the drawback" is a sentence, and "forty five per cent reached sixty seconds"
+ *  is a lookup.
+ *
+ *  IT ALSO SURVIVES A RETIME, which a grid of seconds does not. This arc has
+ *  been three minutes, then two, then ninety seconds, and every hardcoded second
+ *  in the tests went stale each time. The stage names did not move once.
+ *
+ *  The seconds go along as a parameter anyway, so nothing is lost.
+ *
+ *  `ordinary` is deliberately not reported: it starts at zero, so it would be
+ *  the same event as `begin-watching` with a different name on it. */
+function reportStage() {
+    const index = nextStageIndex(state.arc, stageReached, OCEAN_CONFIG);
+    if (index < 0) return;
+    stageReached = index;
+    track(`reached-${OCEAN_CONFIG.storm.stages[index].name}`,
+        { at: Math.round(state.arc), watch });
+}
+
+/** Which stage index is newly reached at `seconds`, or -1 for nothing to report.
+ *
+ *  PULLED OUT AND EXPORTED BECAUSE THE IDEMPOTENCE IS THE WHOLE THING. This runs
+ *  on every animation frame, so a version that returned a stage rather than a
+ *  CHANGE of stage would fire sixty telemetry requests a second and turn a quiet
+ *  usage counter into a flood aimed at the site's own server. That is not a
+ *  subtle failure but it is a silent one from inside the browser, and it is
+ *  exactly the sort of guard that gets refactored away by somebody simplifying
+ *  the caller. Pure, so a test can beat on it without a canvas.
+ *
+ *  Returns at most one index per call even when the clock jumps, so
+ *  `oceanSetArc(73)` reports the drawback rather than every stage in front of
+ *  it. A QA jump should leave one mark in the log, not a fake session. */
+export function nextStageIndex(seconds, reached, config = OCEAN_CONFIG) {
+    const stages = config.storm.stages;
+    const name = stageAt(seconds, config.storm).name;
+    const index = stages.findIndex((st) => st.name === name);
+    return index > reached ? index : -1;
+}
 
 function endSession() {
     if (sessionEnded || !sessionStart) return;
