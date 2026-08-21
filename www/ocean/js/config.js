@@ -293,12 +293,15 @@ export const OCEAN_CONFIG = deepFreeze({
         //   44   ran out a FIFTH time when the wall was sized to occupy the
         //        lower sky. Nine metres of rise floods to z 47 before the bore.
         //   64   ran out a SIXTH time on 2026-08-21 when Steve asked for the
-        //        wall to be more massive still. 13 m of rise floods to z 68 and
-        //        the bore runs another 9.4 past that. THE TEST CAUGHT THIS ONE
+        //        wall to be more massive. 13 m of rise floods to z 68 and the
+        //        bore runs another 9.4 past that. THE TEST CAUGHT THIS ONE
         //        rather than a person, which is what it was written for, and it
         //        caught it in the same minute the height changed.
+        //   88   ran out a SEVENTH time an hour later, when he asked for taller
+        //        again. 17 m of rise floods to z 86, and the bore behind it is
+        //        longer too now that the swell peak has gone up, at 10.5 m.
         //
-        // 88 carries the lot with ten metres in hand. The pattern is obvious in
+        // 110 carries the lot with thirteen metres in hand. The pattern is obvious in
         // hindsight and worth stating plainly: EVERY CHANGE THAT MAKES THE WATER
         // MORE DANGEROUS MAKES IT TRAVEL FURTHER, and the sheet is what it
         // travels on. The first three were found by hand. The test now walks the
@@ -316,7 +319,7 @@ export const OCEAN_CONFIG = deepFreeze({
         // behind the camera, which has always been below the bottom of the
         // frame, and `rowNear` and `widthPerMetre` follow `camera.fov` rather
         // than this.
-        nearZ: 88,
+        nearZ: 110,
         farZ: -404,         // out to where the fog has finished the job
         // Where the packed part of the row curve begins, in metres in front of
         // the camera. The bottom edge of the frame meets still water about two
@@ -454,10 +457,58 @@ export const OCEAN_CONFIG = deepFreeze({
 
         // Shoaling and breaking. A wave feels the bottom at approximately half
         // its wavelength, grows as the depth drops, and breaks when its height
-        // passes roughly 0.78 of the depth it is standing in. That ratio is the
-        // McCowan criterion and it is doing real work here: it is why the break
-        // line sits where it does without anybody placing it.
-        breakRatio: 0.78,
+        // passes some fraction of the depth it is standing in. That ratio is why
+        // the break line sits where it does without anybody placing it.
+        //
+        // 1.20, AND 0.78 WAS THE WRONG NUMBER FOR THIS BEACH. 0.78 is McCowan's
+        // solitary wave limit over a FLAT bottom, and `beach.slope` here is 0.22,
+        // which is 1 in 4.5, or a twelve degree face. That is a steep beach, and
+        // on a steep beach the breaker index runs far higher: the wave surges up
+        // the slope and plunges rather than spilling, and measured indices of
+        // 1.0 to 1.2 are ordinary there. So this is MORE physical than what it
+        // replaces, not less, which was a pleasant surprise.
+        //
+        // IT IS ALSO THE ONLY LEVER ON THE HEIGHT OF A BREAKING WAVE, and that
+        // is the thing worth knowing before touching any of this. Measured with
+        // the CPU port of the vertex shader over t=30..57, sweeping the swell
+        // alone and changing nothing else:
+        //
+        //     swell   tallest wave in frame   deep water crest
+        //     2.40           95 px                 1.80 m
+        //     2.76          100                    2.09
+        //     3.12          103                    2.39
+        //     4.80          110                    3.86
+        //
+        // A DOUBLED SWELL BUYS FIFTEEN PIXELS. The height of a breaking wave is
+        // 0.78 (now 1.20) times the depth it breaks in, and a bigger swell
+        // simply breaks further out, where it is taller AND further away, and the
+        // two cancel almost exactly in angular terms. The background swell is not
+        // depth limited and does grow, which is the second column. Steve asked
+        // for taller waves and the swell curve on its own could not have given
+        // him any. This could:
+        //
+        //     break   swell   minJacobian  tallest  face angle
+        //      0.78    2.40        0.390      95 px     30 deg    <- was
+        //      0.95    2.40        0.312     118        36
+        //      1.10    2.40        0.242     139        49
+        //      1.20    2.40        0.216     154        62
+        //      1.20    2.76        0.156     161        62        <- is
+        //      1.35    2.76        0.099     184        83        too tight
+        //      1.50    2.76        0.040     205        90        too tight
+        //
+        // The last column is the surprise and it is worth reading twice. The
+        // crest face gets STEEPER as the cap comes up, from 30 degrees to 62,
+        // with `storm.lean` completely untouched. A taller wave is a steeper
+        // wave, because the face is height over horizontal separation and the
+        // lean only controls the second of those. The sea did not trade its
+        // pitch for its size here; it got both.
+        //
+        // The fold margin is what is paid instead: 0.390 down to 0.156. That is
+        // above the 0.1 this file has treated as the floor and below the third
+        // of a margin the lean note wants held, so 1.35 was measured, looked at,
+        // and left alone. It is the next stop if the sea is ever wanted bigger
+        // again, and it wants the swell peak brought back down to pay for it.
+        breakRatio: 1.20,
         breakSoftness: 0.30,   // how abruptly the collapse happens
         // How much a wave grows as it shallows, as a multiple of the physical
         // Green's law answer. One is the truth and this is deliberately past it.
@@ -498,6 +549,20 @@ export const OCEAN_CONFIG = deepFreeze({
         // 17.5 metre one carrying the same amplitude. At the current spectrum
         // the floor is 0.48 at 2.6, 0.40 at 3.2, 0.31 at 3.8 and 0.23 at 4.4.
         // 3.2 buys back the steeper face at the margin the scene has always run.
+        //
+        // THIS NUMBER IS ONLY THE FIRST FRAME. `storm.lean` overrides it from
+        // the sea state every single frame (see `updateWater`, `sea.lean`), so
+        // the value that any rendered frame actually uses comes from that curve
+        // and this one is just where the uniform starts. It is held equal to
+        // `storm.lean`'s first keyframe so the two cannot disagree.
+        //
+        // WORTH SAYING LOUDLY BECAUSE IT INVALIDATES A MEASUREMENT. Sweeping the
+        // fold against THIS number on 2026-08-21 produced a table describing a
+        // sea the scene never draws: it said the shipped margin was 0.112 and
+        // the surf face was 59 degrees, when with the real curve they are 0.390
+        // and 30 degrees. The 30 matches the "31 degrees" recorded further up
+        // this file, which is what caught it. Anything sweeping the fold has to
+        // read `leanAt(t)`.
         leanGain: 3.20,
 
         // WHY A SINE IS NOT A WAVE, and the fix for it.
@@ -1563,11 +1628,23 @@ export const OCEAN_CONFIG = deepFreeze({
         //
         // 2.6 at the peak keeps a fold margin of about 0.1 with the lean pulled
         // down, which is the same margin the calm sea has always run at.
+        //
+        // RAISED ABOUT FIFTEEN PER CENT ON 2026-08-21, AND IT IS THE SMALL HALF
+        // OF THAT CHANGE. Steve asked for taller, more threatening waves. This
+        // curve cannot deliver a taller BREAKING wave at any value, because the
+        // breaker is depth limited and a bigger swell just breaks further out:
+        // see the table on `water.breakRatio`, which is where that height
+        // actually came from. What this curve does control is the background,
+        // which is not depth limited, and a bigger background is what keeps the
+        // horizon hidden further out. The first two keyframes are deliberately
+        // NOT raised, so the ordinary afternoon the scene opens on is exactly
+        // the one it always opened on. Measured, no crest clears the eye at all
+        // before t=12 either way.
         swell: [
             { at: 0,   value: 1.00 },
             { at: 12,  value: 1.05 },   // barely, and only so it is already moving
-            { at: 34,  value: 1.90 },   // the horizon starts going
-            { at: 54,  value: 2.40 },   // the peak of the storm
+            { at: 34,  value: 2.05 },   // the horizon starts going
+            { at: 54,  value: 2.76 },   // the peak of the storm
             // THE SEA STOPS. Down past calm, to a third of the sea the scene
             // opened with, in six seconds. Nothing else in the arc moves this
             // fast and nothing else should: every other curve here is a weather
@@ -1578,9 +1655,9 @@ export const OCEAN_CONFIG = deepFreeze({
             // 2.60 at t=116, which is a second after the fade has started, so
             // the biggest sea in the whole scene happened behind the blackout.
             // Steve's words: it ends just as the waves get good.
-            { at: 76,  value: 1.80 },
-            { at: 80,  value: 2.60 },
-            { at: 90,  value: 2.60 }
+            { at: 76,  value: 2.00 },
+            { at: 80,  value: 2.90 },
+            { at: 90,  value: 2.90 }
         ],
         // Crest cusping, and it comes DOWN as the swell goes up. Not a look
         // decision: amplitude times wave number times this is what drives the
@@ -2207,7 +2284,23 @@ export const OCEAN_CONFIG = deepFreeze({
             //
             // Nine metres at the shore is a large tsunami and not an absurd one.
             //
-            // 9.0 AND 13.0 SINCE 2026-08-21, AFTER MEASURING WHAT THE APPROACH
+            // 12.0 AND 17.0, RAISED TWICE ON 2026-08-21. The reasoning below is
+            // from the first pass at 9.0/13.0 and is unchanged; Steve looked at
+            // that and asked for taller again, so the same levers were pushed
+            // further and `beach.nearZ` went 88 -> 110 to carry it. The table
+            // below is the FIRST pass. Where it stands now, same measurement:
+            //
+            //     342m  63 px  12%      137m  179 px  33%
+            //     263m  83     15%       84m  308     57%
+            //     197m 118     22%       31m  778    100%
+            //
+            // Which is about 2.6 times the wall that shipped before 2026-08-21,
+            // and it fills the frame at t=76 rather than t=78. `swellBehind`
+            // also went 2.9 -> 4.5 in this pass, once the fold behind the front
+            // had actually been measured rather than guessed at: see the note
+            // there. The eye is still covered at t=78.1.
+            //
+            // 9.0 AND 13.0 EARLIER THE SAME DAY, AFTER MEASURING THE APPROACH
             // ACTUALLY LOOKED LIKE. Steve said the wall was visible and
             // threatening but wanted it more massive, and the profile agreed
             // with him in a specific way that neither of the tables above shows:
@@ -2269,8 +2362,8 @@ export const OCEAN_CONFIG = deepFreeze({
             // fifteen along much of the coast it hit. The honest part of this
             // block was always the paragraph above about deep water, and that has
             // not changed: the far end is a picture, the near end is not.
-            riseFar: 9.00,
-            riseNear: 13.00,
+            riseFar: 12.00,
+            riseNear: 17.00,
             // How abrupt the step is. Wide enough that it never falls between
             // two rows of the grid and strobes as it crosses them, tight enough
             // to read as an edge rather than as a slope.
@@ -2308,10 +2401,27 @@ export const OCEAN_CONFIG = deepFreeze({
             // the sky rather than against the sea.
             //
             // Deep water is what makes it safe. Out past the shoaling the depth
-            // is `maxDepth` plus the front's own rise, so the McCowan limit is
-            // near five metres of amplitude and nothing back there breaks. It
-            // stays a smooth wall rather than a mile of whitewater.
-            swellBehind: 2.90
+            // is `maxDepth` plus the front's own rise, so the depth cap is near
+            // ten metres of amplitude and nothing back there breaks. It stays a
+            // smooth wall rather than a mile of whitewater.
+            //
+            // 4.50 SINCE 2026-08-21, AND THE FOLD WAS MEASURED THIS TIME. This
+            // was left at 2.90 in the morning's pass with a note saying it was
+            // the stronger knob but that the mesh fold behind the front had never
+            // been checked. It has now, with the CPU port of the vertex shader
+            // run over t=70..82:
+            //
+            //     swellBehind 2.9   Jacobian margin 0.63
+            //                 4.5                   0.50
+            //                 6.0                   0.34
+            //
+            // So the caution was worth taking and the answer is that there is
+            // plenty of room. 4.5 adds about a metre and a third of crest on top
+            // of the step and keeps two thirds of the margin. Note the crest it
+            // actually produces is 3.3 m and not 4.5: this is a SWELL SCALE on
+            // the same footing as `storm.swell`, not a height in metres, and
+            // reading it as metres overstates the wall by half.
+            swellBehind: 4.50
         },
         fadeSeconds: 6
     },

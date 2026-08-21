@@ -155,12 +155,29 @@ describe('the shape of the arc', () => {
     });
 
     test('the swell never exceeds what the mesh can carry', () => {
-        // 2.6 is where the fold margin was measured, and past about 2.7 at these
-        // leans the Gerstner displacement turns the surface inside out. This is
-        // a config guard rather than a physics simulation: the real check is the
+        // A config guard rather than a physics simulation: the real check is the
         // Jacobian sweep in the scratchpad, and this is what stops somebody
         // typing 6 into the table between sweeps.
-        for (const t of everySecond()) expect(swellAt(t)).toBeLessThanOrEqual(2.7);
+        //
+        // RE-SWEPT 2026-08-21 AND RAISED FROM 2.7 TO 3.0, because `breakRatio`
+        // moved and the old bound was measured against the old cap. Whole-arc
+        // minimum Jacobian at the shipped spectrum and lean curve:
+        //
+        //     peak 2.40   0.207        peak 3.20   0.111
+        //          2.76   0.173  <-         3.40   0.096
+        //          3.00   0.140             3.80   0.047
+        //
+        // 2.76 ships with 0.173 in hand. 3.0 is the guard, which still holds
+        // 0.14, and there is no reason to go near it: the same sweep shows the
+        // tallest wave in the frame moving only 161 px to 176 across that entire
+        // range, because the breaker is depth limited. Height comes from
+        // `water.breakRatio`, not from here.
+        //
+        // ANY RESWEEP MUST READ `leanAt(t)`. `water.leanGain` is only the first
+        // frame; `storm.lean` overrides it every frame after. Sweeping the
+        // static value describes a sea the scene never draws, and doing exactly
+        // that on 2026-08-21 produced a table that was wrong in both columns.
+        for (const t of everySecond()) expect(swellAt(t)).toBeLessThanOrEqual(3.0);
     });
 
     test('the cusping comes DOWN as the swell goes up', () => {
