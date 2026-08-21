@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 //
-// Tests for www/ocean/js/sky.js.
+// Tests for www/highwater/js/sky.js.
 //
 // THE POINT OF THESE IS THAT THE SKY AND THE SEA ARE ONE DECISION. sky.js draws
 // a dome, but its real job is to be the thing the water reflects, and the seam
@@ -19,12 +19,12 @@
 
 import { jest } from '@jest/globals';
 
-const CONFIG_URL = '../www/ocean/js/config.js';
-const SKY_URL = '../www/ocean/js/sky.js';
+const CONFIG_URL = '../www/highwater/js/config.js';
+const SKY_URL = '../www/highwater/js/sky.js';
 
 // sky.js imports './config.min.js'. The minified build is real and current, but
 // pointing the test at the source keeps a stale build from passing.
-jest.unstable_mockModule('../www/ocean/js/config.min.js', async () => (
+jest.unstable_mockModule('../www/highwater/js/config.min.js', async () => (
     await import(CONFIG_URL)
 ));
 

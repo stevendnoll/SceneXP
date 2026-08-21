@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 //
-// Tests for www/ocean/js/lightning.js.
+// Tests for www/highwater/js/lightning.js.
 //
 // THE FIRST BLOCK IS THE ONLY ONE THAT IS NOT ABOUT LOOKS. Lightning is the
 // first thing in this scene that flashes, and a flash covering the whole sky and
@@ -17,14 +17,14 @@
 
 import { jest } from '@jest/globals';
 
-const CONFIG_URL = '../www/ocean/js/config.js';
-const STORM_URL = '../www/ocean/js/storm.js';
-const LIGHTNING_URL = '../www/ocean/js/lightning.js';
+const CONFIG_URL = '../www/highwater/js/config.js';
+const STORM_URL = '../www/highwater/js/storm.js';
+const LIGHTNING_URL = '../www/highwater/js/lightning.js';
 
-jest.unstable_mockModule('../www/ocean/js/config.min.js', async () => (
+jest.unstable_mockModule('../www/highwater/js/config.min.js', async () => (
     await import(CONFIG_URL)
 ));
-jest.unstable_mockModule('../www/ocean/js/storm.min.js', async () => (
+jest.unstable_mockModule('../www/highwater/js/storm.min.js', async () => (
     await import(STORM_URL)
 ));
 

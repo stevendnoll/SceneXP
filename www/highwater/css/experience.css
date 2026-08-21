@@ -1,10 +1,16 @@
 /* © 2026 Continuum Commerce LLC. MIT licensed.
  *
- * experience.css - The Ocean experience.
+ * experience.css - High Water.
  *
  * Enough to get the canvas filling the viewport, plus the three things that sit
- * over it: the welcome card, the white-out, and the ending. The finished page
- * will also pick up the shared site stylesheet.
+ * over it: the welcome card, the white-out, and the ending.
+ *
+ * THE SHARED SHEET LOADS FIRST AND THIS ONE SECOND, which is the order the
+ * cascade needs. `shared/css/styles-1.0.0.css` sets a universal reset and a dark
+ * body, and this scene wants a pale sky behind a slow first frame, so the
+ * background below has to be the later rule. Everything in the cards carries its
+ * own margin, colour and font already, so the reset has nothing of theirs to
+ * take away.
  *
  * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block.
  * The page runs a strict same-origin CSP with style-src 'self', which blocks
@@ -228,14 +234,9 @@ body {
     }
 }
 
-.fallback {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-    font: 400 1.05rem/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
-    color: #10333f;
-    text-align: center;
-}
+/* NO .fallback RULE HERE ANY MORE. The no-JS message used to be a bare
+   paragraph this file styled itself. It is now the house's `.noscript-fallback`
+   block, which carries a heading, three paragraphs and the site nav, and which
+   `../shared/css/no-js-1.0.0.min.css` styles the same way it does on the other
+   eleven experiences. Removed rather than left in place, because a dead rule
+   with a plausible name is the sort of thing somebody restores by accident. */

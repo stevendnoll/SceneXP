@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="surf">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         No media-src: this scene plays no sound, so nothing may load any. The
+         directive was here for a silent keep-alive element that promoted the iOS
+         audio session, and it went with the synthesiser on 2026-08-19. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <!-- ================= ONE STEP LEFT BEFORE THIS PAGE CAN SHIP =================
+
+         The social card image does not exist yet, and THREE things below point
+         at it. Capture a 1200x630 frame of the scene, save it as
+         assets/og-highwater.webp with a .jpg beside it, then delete the
+         `robots` line further down. Nothing else needs touching.
+
+         The three dependants, so none is missed:
+           1. og:image and twitter:image in this file
+           2. the home page card in www/index.html (an <img> tag, so a missing
+              file is a broken image on the site's front door)
+           3. the `noindex` below
+
+         t=72 to t=74 makes the best frame. The wall is 40 to 57 per cent of the
+         sky there: close enough to read as a wall, not yet so close that it is
+         an abstract grey field. `oceanSetArc(73)` gets you there directly.
+         CONTRIBUTING.md has the note on converting a Mac screenshot so it
+         survives the trip.
+         ========================================================================== -->
+    <meta name="robots" content="noindex, nofollow">
+
+    <meta name="description" content="Ninety seconds at the water's edge in 3D, beginning on an ordinary bright afternoon. The sky closes over, the surf keeps rising, and the sea does not stay where it belongs. Plays without sound in any modern browser.">
+    <meta name="theme-color" content="#8fb6cc">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they cannot come from config.js and must stay literal absolute URLs
+         naming where this page is actually served (currently
+         www.scenexp.com/highwater). When serving from a new domain, update the
+         URLs here: canonical, og:url, og:image, twitter:image, and the JSON-LD
+         id below. Everything else is relative or config-driven. -->
+    <link rel="canonical" href="https://www.scenexp.com/highwater/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="High Water">
+    <!-- IT DOES NOT SAY TSUNAMI, AND THAT IS DELIBERATE. The welcome card tells
+         a visitor exactly what is coming, because they are about to choose
+         whether to watch and are owed that. A share preview is read by people
+         who have not chosen anything yet, so it sets the weather and stops.
+         The name does the same work: "High Water" is honest about the subject
+         without handing over the last thirty seconds. -->
+    <meta property="og:description" content="Ninety seconds at the water's edge, beginning on an ordinary bright afternoon. The weather turns while you stand there, and the sea does not stay where it belongs.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/highwater/">
+    <meta property="og:locale" content="en_US">
+    <!-- EXACTLY ONE og:image. Apple's link preview renders every og:image it
+         finds, so a second one as a fallback puts two identical cards in a
+         friend's message thread. See the longer note in earthdefense, which is
+         the page that shipped that bug. -->
+    <meta property="og:image" content="https://www.scenexp.com/highwater/assets/og-highwater.webp?v=1">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <!-- WRITTEN FOR THE FRAME RECOMMENDED ABOVE AND NOT YET CHECKED AGAINST A
+         REAL CAPTURE. Please read it against the picture before shipping: alt
+         text describing a different image is worse than none. -->
+    <meta property="og:image:alt" content="A view out to sea from the water's edge under a dark storm sky: a wall of grey water crosses the whole frame a short way offshore with a white broken edge along its front, the beach in the foreground is bare where the sea has drawn back, and a branching fork of lightning stands in the cloud above.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="High Water">
+    <meta name="twitter:description" content="Ninety seconds at the water's edge on an ordinary bright afternoon. The weather turns while you stand there.">
+    <!-- The same single WebP as og:image. Twitter takes exactly one image and
+         has no type property, so there was never anywhere to offer an
+         alternative here anyway. -->
+    <meta name="twitter:image" content="https://www.scenexp.com/highwater/assets/og-highwater.webp?v=1">
+    <meta name="twitter:image:alt" content="A view out to sea from the water's edge under a dark storm sky: a wall of grey water crosses the whole frame a short way offshore with a white broken edge along its front, the beach in the foreground is bare where the sea has drawn back, and a branching fork of lightning stands in the cloud above.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/highwater/#website",
+      "url": "https://www.scenexp.com/highwater/",
+      "name": "High Water",
+      "description": "A passive 3D scene at the water's edge. Ninety seconds that begin on an ordinary bright afternoon and end with the sea closing over the viewer.",
+      "inLanguage": "en-US"
+    }
+    </script>
+
+    <title>High Water</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
+    <link rel="preload" href="css/experience.min.css?v=1" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <!-- The shared sheet FIRST and the experience sheet second, which is the
+         order the cascade needs: the shared one sets a universal reset and a
+         dark body, and this scene wants a pale sky behind a slow first frame.
+         Every rule in the cards below carries its own margin, colour and font,
+         so the reset has nothing of theirs to take away. -->
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
+    <link rel="stylesheet" href="css/experience.min.css?v=1">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text intro and links to the classic site. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>High Water</h1>
+            <p>This is a passive 3D scene at the water's edge, and it needs
+                JavaScript to draw. It runs for ninety seconds and begins on an
+                ordinary bright afternoon, with the surf coming in and the
+                horizon exactly where you would expect it. Then the weather
+                turns. The sky closes over into a storm base, lightning starts
+                to work along it, the swell builds until the crests stand above
+                the horizon line, and the sea eventually stops behaving.</p>
+            <p>Please know before you start that this one is meant to unsettle
+                you, and that the sea comes over you at the end. It plays
+                without sound, so you are welcome to watch it anywhere, and you
+                can watch it again as many times as you wish.</p>
+            <p>Most experiences on SceneXP honor a person or a business. This
+                one is a study of water, built to find out whether a browser
+                could be made to feel like standing somewhere you should not be
+                standing.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <canvas id="scene" aria-label="A view out to sea from the water's edge, with waves breaking toward you"
+        role="img"></canvas>
+
+    <!-- Back to the site. No settings cog and no autopilot, because there is
+         nothing to adjust and nowhere to be driven: the scene runs itself and
+         the only control it has ever needed is the one that starts it. -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+
+    <!-- The welcome card. It tells the visitor what they are about to watch and
+         holds the arc at zero until they are ready. The sea is already running
+         behind it, so the card sits over a living ordinary afternoon rather than
+         over a still frame. -->
+    <div id="welcome">
+        <div class="card">
+            <h1>High Water</h1>
+            <p class="lede">
+                Ninety seconds at the water's edge, beginning on an ordinary bright afternoon.
+            </p>
+            <p class="warning">
+                Please know before you start that this one is meant to unsettle you.
+                The weather turns, the surf keeps rising, and the sea comes over you
+                at the end. There is lightning, so the screen flashes from time to
+                time. It plays without sound, so you are welcome to watch it
+                anywhere.
+            </p>
+            <button id="begin" type="button" class="primary">Begin</button>
+            <p class="note">You can watch it again as many times as you wish.</p>
+        </div>
+    </div>
+
+    <!-- The white-out when the water comes over the camera, and the closing
+         fade. Both are plain elements rather than anything in WebGL: neither is
+         a 3D effect, and keeping them here means they still work on a frame the
+         renderer has already stopped producing. aria-hidden because they carry
+         no information a screen reader could use, and the ending card below
+         carries all of it. -->
+    <div id="wash" aria-hidden="true"></div>
+    <div id="blackout" aria-hidden="true"></div>
+
+    <!-- The ending. Hidden until the fade completes, then it is the only thing
+         on the page. role="status" so it is announced when it appears rather
+         than stealing focus from the start, and the button takes focus so a
+         keyboard visitor is not left hunting on a black screen. -->
+    <div id="ending" hidden role="status" aria-live="polite">
+        <p class="ending-line">The sea has taken the beach.</p>
+        <p class="ending-note">Thank you for watching. It happens the same way every time.</p>
+        <button id="replay" type="button">Watch it again</button>
+    </div>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

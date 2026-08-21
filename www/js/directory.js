@@ -107,6 +107,20 @@
             place: 'Earth orbit',
             url: 'earthdefense/',
             tags: ['earth', 'defense', 'space', 'game', 'moon', 'mars', 'martian', 'orbit', 'flying', 'ship', 'raiders', 'arcade', 'action', 'shooter', 'stars', 'planets', 'defend', 'fly']
+        },
+        {
+            slug: 'highwater',
+            // ANOTHER ENTRY WHERE THIS FIELD IS NOT AN HONOREE, like
+            // earthdefense above. This one is a study of water rather than a
+            // tribute to anybody, and saying so is more honest than inventing a
+            // recipient. The field still earns its keep: it is the card's
+            // eyebrow line and part of the search haystack.
+            honoree: 'A study of water and weather',
+            title: 'High Water',
+            blurb: 'Ninety seconds at the water\'s edge, beginning on an ordinary bright afternoon. The sky closes over, lightning starts to work along the cloud base, and the surf keeps rising. Please know before you start that the sea does not stay where it belongs.',
+            place: 'The water\'s edge',
+            url: 'highwater/',
+            tags: ['high', 'water', 'ocean', 'sea', 'beach', 'shore', 'storm', 'surf', 'waves', 'swell', 'wave', 'tsunami', 'lightning', 'thunderstorm', 'weather', 'clouds', 'tide', 'surge', 'flood', 'sand', 'coast', 'passive', 'ambient', 'silent']
         }
     ];
 

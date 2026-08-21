@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 //
-// Tests for www/ocean/js/storm.js.
+// Tests for www/highwater/js/storm.js.
 //
 // THE ARC IS A STORY AND A STORY CAN BE WRONG IN WAYS ARITHMETIC CANNOT. A curve
 // that never reaches its peak, a stage nobody ever enters, a drawback that does
@@ -19,11 +19,11 @@
 
 import { jest } from '@jest/globals';
 
-const CONFIG_URL = '../www/ocean/js/config.js';
-const STORM_URL = '../www/ocean/js/storm.js';
-const WATER_URL = '../www/ocean/js/water.js';
+const CONFIG_URL = '../www/highwater/js/config.js';
+const STORM_URL = '../www/highwater/js/storm.js';
+const WATER_URL = '../www/highwater/js/water.js';
 
-jest.unstable_mockModule('../www/ocean/js/config.min.js', async () => (
+jest.unstable_mockModule('../www/highwater/js/config.min.js', async () => (
     await import(CONFIG_URL)
 ));
 

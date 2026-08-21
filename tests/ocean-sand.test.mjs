@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 //
-// Tests for www/ocean/js/sand.js.
+// Tests for www/highwater/js/sand.js.
 //
 // THE POINT OF THESE IS THE SWASH, which is the only thing in the file with any
 // physics in it. It is a parabola with no free parameters: the run up distance
@@ -19,17 +19,17 @@
 
 import { jest } from '@jest/globals';
 
-const CONFIG_URL = '../www/ocean/js/config.js';
-const WATER_URL = '../www/ocean/js/water.js';
-const SAND_URL = '../www/ocean/js/sand.js';
+const CONFIG_URL = '../www/highwater/js/config.js';
+const WATER_URL = '../www/highwater/js/water.js';
+const SAND_URL = '../www/highwater/js/sand.js';
 
 // sand.js imports './config.min.js' and './water.min.js'. The minified builds
 // are real and current, but pointing the test at the sources keeps a stale
 // build from passing.
-jest.unstable_mockModule('../www/ocean/js/config.min.js', async () => (
+jest.unstable_mockModule('../www/highwater/js/config.min.js', async () => (
     await import(CONFIG_URL)
 ));
-jest.unstable_mockModule('../www/ocean/js/water.min.js', async () => (
+jest.unstable_mockModule('../www/highwater/js/water.min.js', async () => (
     await import(WATER_URL)
 ));
 

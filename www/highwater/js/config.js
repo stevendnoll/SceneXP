@@ -44,6 +44,20 @@ function deepFreeze(obj) {
 }
 
 export const OCEAN_CONFIG = deepFreeze({
+    // ---- The anonymous visit counter ---------------------------------------
+    //
+    // A tiny proof of work, solved once per visit and cached in sessionStorage,
+    // whose hash tags the site's own usage pings. It is a soft bot deterrent
+    // rather than an identifier: there are no accounts, no cookies, and no
+    // third party anything on this domain, and the hash is what lets one
+    // visitor's two pings be counted as one visit instead of two.
+    //
+    // THE STORAGE KEY IS SHARED ON PURPOSE and is not a copy and paste slip.
+    // Every experience uses 'gallery-pow', so a visitor who walks the trail and
+    // then comes here solves the puzzle once for the whole site rather than
+    // once per world.
+    proofOfWork: { prefix: '11', storageKey: 'gallery-pow' },
+
     // ---- Sound: DELIBERATELY NONE ------------------------------------------
     //
     // THE OCEAN SCENE IS SILENT, and that is a decision rather than a gap.
@@ -52,7 +66,7 @@ export const OCEAN_CONFIG = deepFreeze({
     // continuous voices for the lull, the drawback, and the tsunami. It was
     // removed on 2026-08-19 at Steve's request after three rounds of listening
     // QA. Recover it from git if it is ever wanted: `www/ocean/js/audio.js`
-    // and `tests/ocean-audio.test.mjs`.
+    // and `tests/ocean-audio.test.mjs`, under the folder's old name.
     //
     // WHAT WENT WRONG IS WORTH KNOWING, because two of the three faults were
     // real and measurable and the third was never found:

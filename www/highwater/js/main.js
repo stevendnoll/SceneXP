@@ -42,6 +42,12 @@
  */
 
 import { OCEAN_CONFIG } from './config.min.js';
+// THE ONLY TWO SHARED PARTS THIS SCENE USES. Everything that draws the sea is
+// local, because none of it existed before; these two are the house's anonymous
+// visit counter and the soft bot deterrent that tags it, and every other
+// experience on the site carries them.
+import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
+import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import {
     initWater, updateWater, consumeBreaks, breakDistance, resetWater, disposeWater,
     setProfileHz, profileRate
@@ -350,6 +356,16 @@ function paintOverlay(washAmount, fade) {
 function beginArc() {
     if (state.begun) return;
     state.begun = true;
+    // THE CONVERSION ON THE CONTENT WARNING, which is the one number this card
+    // was always going to raise and nobody could answer. `session-start` counts
+    // everybody who arrived; this counts everybody who read what was coming and
+    // pressed the button anyway. The gap between the two is the cost of the
+    // warning, and it is worth knowing rather than guessing, because if it turns
+    // out to be large the answer is better wording and not a quieter warning.
+    //
+    // Inside the `begun` guard on purpose, so the QA hooks that call through
+    // here (`oceanSetArc`) cannot log a second one.
+    track('begin-watching', { reduced: prefersReducedMotion() ? 1 : 0 });
     if (welcome) {
         welcome.style.opacity = '0';
         // Stops catching clicks the instant it starts fading rather than when it
@@ -372,6 +388,12 @@ function beginArc() {
 function finish() {
     if (state.finished) return;
     state.finished = true;
+    // MADE IT TO THE END. Ninety seconds is a long time to ask for, and the
+    // difference between a scene people start and a scene people finish is the
+    // difference between a good idea and a good experience. `runs` distinguishes
+    // a first watch from a second, so this stays meaningful after a replay.
+    runs += 1;
+    track('arc-complete', { run: runs });
     stop();
     if (ending) {
         ending.hidden = false;
@@ -398,6 +420,13 @@ function finish() {
  *  gloom follows the arc, so a second run is the same afternoon rather than a
  *  different one. */
 function replayArc() {
+    // THE CLOSEST THING THIS PROJECT HAS TO A MEASURE OF DELIGHT. The stated
+    // goal for every scene on the site is that somebody enjoys it enough to pass
+    // it on, and there is no honest way to count that from here. Watching it a
+    // second time is the nearest available proxy and it costs one line.
+    //
+    // Not guarded: a third watch is worth knowing about too.
+    track('replay', { run: runs + 1 });
     state.arc = 0;
     resetWater();
     resetSand();
@@ -417,6 +446,30 @@ function replayArc() {
     start();
 }
 
+// Dwell time, reported once when the page is first hidden or torn down. It is
+// really a "time to first leave" rather than a total, because backgrounding the
+// tab ends the measured session, which makes it an honest lower bound on how
+// long somebody stayed.
+let sessionStart = 0;
+let sessionEnded = false;
+// How many times the arc has been watched all the way through this load.
+let runs = 0;
+
+function endSession() {
+    if (sessionEnded || !sessionStart) return;
+    sessionEnded = true;
+    trackFinal('session-end', {
+        seconds: Math.round((Date.now() - sessionStart) / 1000),
+        // WHERE THEY GOT TO, which is the question this scene actually wants
+        // answered. A ninety second arc that people leave at forty is a
+        // different problem from one nobody starts, and the two look identical
+        // in a plain session count.
+        arc: Math.round(state.arc),
+        finished: state.finished ? 1 : 0,
+        runs
+    });
+}
+
 function start() {
     if (state.running || state.finished) return;
     state.running = true;
@@ -429,11 +482,23 @@ function stop() {
     frame = 0;
 }
 
-function init() {
+async function init() {
     canvas = document.getElementById('scene');
     if (!canvas || typeof THREE === 'undefined') return;
 
     state.mobile = detectMobile();
+    // Tag every ping with the input mode, then solve a tiny proof of work (or
+    // reuse a still-valid one from sessionStorage) and hand its hash to the
+    // telemetry layer, which is what ties one visitor's hits together.
+    //
+    // AWAITED BEFORE THE SCENE IS BUILT, matching the other experiences. It
+    // costs a few milliseconds on a cold visit and nothing on a warm one, and
+    // this page has a welcome card in front of it anyway, so there is no frame
+    // anybody is waiting on. `getProofOfWork` resolves rather than rejects when
+    // it cannot solve one, so a failure here degrades to an untagged ping.
+    setMobile(state.mobile);
+    const proof = await getProofOfWork(OCEAN_CONFIG.proofOfWork);
+    setProofHash(proof && proof.hash);
     buildRenderer();
     buildScene();
     // The camera comes before the sky because the dome is centred on the eye
@@ -479,7 +544,40 @@ function init() {
 
     window.addEventListener('resize', onResize, { passive: true });
     document.addEventListener('visibilitychange', onVisibility);
+    // Session end, for dwell time. visibilitychange to hidden is the reliable
+    // terminal signal, especially on mobile where unload often does not fire,
+    // and pagehide is the backup. Both are page-lifetime listeners and
+    // `endSession` is idempotent, so being called twice costs nothing.
+    //
+    // NOT FOLDED INTO `onVisibility` ABOVE, which already handles hidden. That
+    // one pauses the render loop and is about the sea; this one closes the
+    // books and is about the visit, and a visitor who switches away and comes
+    // back resumes the first without reopening the second.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') endSession();
+    });
+    window.addEventListener('pagehide', endSession);
+
+    // SHOW THE FLOATING CHROME. `.ui-float` is `display: none` in the shared
+    // stylesheet and only `.ui-float.visible` is shown, which is how the other
+    // experiences keep their buttons off the screen until the world behind them
+    // exists. Adding the markup without this line puts a home button on the page
+    // that nobody can see, which is exactly what shipped for an hour on
+    // 2026-08-21 and what Steve caught by looking at the scene.
+    //
+    // Done here rather than after a loading screen, because this scene has no
+    // loading screen: the welcome card is the thing in front of the sea, and a
+    // visitor reading a content warning is precisely the visitor most likely to
+    // want a way out. So the button is there before they decide.
+    document.querySelectorAll('.ui-float').forEach((el) => el.classList.add('visible'));
+
     start();
+
+    // The visit is on the record from here. Recorded at init rather than at
+    // `beginArc`, so the count includes visitors who read the content warning
+    // and decided not to watch, which is a number worth being able to see.
+    track('session-start', { device: state.mobile ? 'touch' : 'desktop' });
+    sessionStart = Date.now();
 
     // Tuning aids while the sea is being dialled in. It is far easier to say the
     // break is at 22 metres and should be at 16 than to argue about a

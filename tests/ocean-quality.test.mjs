@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * Adaptive resolution for the Ocean (www/ocean/js/main.js).
+ * Adaptive resolution for the Ocean (www/highwater/js/main.js).
  *
  * WHY THIS EXISTS AS A PURE FUNCTION AT ALL. The thing it protects against is
  * the only part of this scene that cannot be measured outside a browser: the
@@ -22,8 +22,8 @@ let CONFIG;
 beforeAll(async () => {
     // main.js only runs anything when there is a document, so importing it in
     // Node gets the module and none of the scene.
-    ({ OCEAN_CONFIG: CONFIG } = await import('../www/ocean/js/config.js'));
-    ({ nextPixelScale } = await import('../www/ocean/js/main.js'));
+    ({ OCEAN_CONFIG: CONFIG } = await import('../www/highwater/js/config.js'));
+    ({ nextPixelScale } = await import('../www/highwater/js/main.js'));
 });
 
 afterEach(() => { jest.restoreAllMocks(); });

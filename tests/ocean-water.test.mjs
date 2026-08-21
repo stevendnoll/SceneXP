@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 //
-// Tests for www/ocean/js/water.js.
+// Tests for www/highwater/js/water.js.
 //
 // THE POINT OF THESE IS THE PHYSICS, not the plumbing. A wave simulation fails
 // in a way unit tests are unusually good at catching and eyes are unusually bad
@@ -20,12 +20,12 @@
 
 import { jest } from '@jest/globals';
 
-const CONFIG_URL = '../www/ocean/js/config.js';
-const WATER_URL = '../www/ocean/js/water.js';
+const CONFIG_URL = '../www/highwater/js/config.js';
+const WATER_URL = '../www/highwater/js/water.js';
 
 // water.js imports './config.min.js'. The minified build is real and current,
 // but pointing the test at the source keeps a stale build from passing.
-jest.unstable_mockModule('../www/ocean/js/config.min.js', async () => (
+jest.unstable_mockModule('../www/highwater/js/config.min.js', async () => (
     await import(CONFIG_URL)
 ));
 
