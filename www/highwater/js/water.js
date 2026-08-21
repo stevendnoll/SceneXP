@@ -851,6 +851,7 @@ uniform vec3 uDeepColor;
 uniform vec3 uShallowColor;
 uniform vec3 uFoamColor;
 uniform float uOpacityNear;
+uniform float uRoughness;
 uniform float uFoamBreakThreshold;
 uniform float uFoamCrestThreshold;
 uniform float uFoamNoiseScale;
@@ -1013,7 +1014,7 @@ const FRAGMENT_BODY = `
  *  arrive at a slightly different answer: the surf could then be white and
  *  glossy at the same pixel, which is exactly the seam this is meant to avoid. */
 const FRAGMENT_ROUGHNESS = `
-    float roughnessFactor = mix(roughness, 0.92, foam);
+    float roughnessFactor = mix(uRoughness, 0.92, foam);
 `;
 
 /** Injected after `#include <opaque_fragment>`, and ONLY when the caller hands
@@ -1223,7 +1224,12 @@ function buildMaterial(config, sky = null) {
     const water = config.water;
     const mat = new THREE.MeshStandardMaterial({
         color: 0xffffff,
-        roughness: 0.08,
+        // ONLY THE FIRST FRAME, AND ONLY FOR THE LIGHTING SETUP. The shader
+        // reads `uRoughness` rather than this, because Three refreshes a
+        // material's own uniforms on a version bump and bumping the version
+        // every frame would recompile the program. Held equal to the config
+        // value so the two cannot disagree if the injection is ever removed.
+        roughness: water.roughness,
         metalness: 0.0,
         transparent: true,
         // DOUBLE SIDED, WHICH IS UNUSUAL FOR A HEIGHTFIELD and worth the note.
@@ -1255,6 +1261,7 @@ function buildMaterial(config, sky = null) {
         uDeepColor: { value: new THREE.Color(water.deepColor) },
         uShallowColor: { value: new THREE.Color(water.shallowColor) },
         uFoamColor: { value: new THREE.Color(water.foamColor) },
+        uRoughness: { value: water.roughness },
         uOpacityNear: { value: water.opacityNear },
         uFoamBreakThreshold: { value: water.foamBreakThreshold },
         uFoamCrestThreshold: { value: water.foamCrestThreshold },
@@ -1450,6 +1457,11 @@ export function updateWater(deltaTime, sea = CALM) {
         const g = Math.min(1, sea.gloom);
         uniforms.uDeepColor.value.copy(palette.deep).lerp(palette.stormDeep, g);
         uniforms.uShallowColor.value.copy(palette.shallow).lerp(palette.stormShallow, g);
+        // AND THE SURFACE STOPS BEING A MIRROR, which is what takes the sun's
+        // glint path off a sea the sun is no longer shining on. See
+        // `water.stormRoughness` in config for why this and not the light.
+        const w = settings.water;
+        uniforms.uRoughness.value = w.roughness + (w.stormRoughness - w.roughness) * g;
     }
 
     sinceProfile += dt;

@@ -522,6 +522,71 @@ export const OCEAN_CONFIG = deepFreeze({
         // of a margin the lean note wants held, so 1.35 was measured, looked at,
         // and left alone. It is the next stop if the sea is ever wanted bigger
         // again, and it wants the swell peak brought back down to pay for it.
+        // ---- How glossy the surface is -------------------------------------
+        //
+        // THE SUN'S GLINT PATH IS A SPECULAR LOBE AND THIS IS ITS WIDTH. Three's
+        // directional light on a surface this smooth puts a very tight highlight
+        // wherever a wave facet happens to line up with the sun, and that
+        // scatter of highlights smeared along the swell IS the glint path. It is
+        // the best thing in the frame on the bright afternoon the scene opens
+        // on, and it is why this is 0.08 rather than anything sensible for
+        // water.
+        //
+        // AND IT WAS STILL THERE UNDER THE STORM, WHICH IS THE BUG. By the time
+        // the shelf cloud has closed over, the sky's own sun disc is gated out
+        // by `1.0 - cloud * 0.85` in `oceanSkyColor` and nothing in the frame
+        // shows a sun at all. The light did not get the message: a
+        // DirectionalLight at 34 per cent of midday was still throwing a hard
+        // white highlight off a sun the visitor cannot see. Steve reported it
+        // four separate times as the sea being blown out under the storm, and
+        // every time the suspicion was the lightning or the sky, because that is
+        // where the brightness was expected to come from.
+        //
+        // CUTTING THE LIGHT DOES NOT FIX IT, and that is worth writing down
+        // before somebody tries. GGX's D term goes as 1/roughness^4, so at 0.08
+        // the peak is four orders of magnitude over saturation and the intensity
+        // is a nearly inert knob. Measured on the storm sky, peak screen value
+        // of the specular alone:
+        //
+        //     sunIntensityScale   0.34 -> 255      0.020 -> 252
+        //                         0.20 -> 255      0.005 -> 235
+        //                         0.10 -> 255      0.001 -> 160
+        //
+        // Seven times less light and it is still pure white. Same family of
+        // mistake as `storm.lightning.skyGain`: see the note there.
+        //
+        // ROUGHNESS IS THE LEVER. Same measurement, sweeping this instead:
+        //
+        //     roughness   clear sky   full gloom
+        //       0.08        255          255
+        //       0.18        254          249
+        //       0.25        246          227
+        //       0.35        215          155
+        //       0.50        125           60
+        //       0.65         58           22
+        //
+        // And it is the physical answer as well as the effective one. Microfacet
+        // roughness models the surface structure BELOW the size of a mesh cell,
+        // which on this sea is every ripple under about half a metre. A calm
+        // afternoon has almost none of that and is close to a mirror. A sea
+        // under a storm is covered in it. Cox and Munk measured the mean square
+        // slope of the sea surface rising roughly linearly with wind speed,
+        // about eight fold from a light breeze to a gale, so a storm surface
+        // being several times rougher than a calm one is the direction the
+        // physics points even if the exact mapping to a GGX alpha is not one
+        // this file should pretend to.
+        //
+        // 0.52 puts the storm peak around 55, which against a sea body of 40 to
+        // 70 is a sheen rather than a highlight. The glint path does not dim, it
+        // stops existing, which is what an overcast sky does to it. The sea does
+        // not go dull: the mirror that gives it its colour and its shape is the
+        // Fresnel sky term in `FRAGMENT_REFLECT`, which is applied after the
+        // lighting and does not read this at all.
+        //
+        // Walked by `gloom` in `updateWater`, so the glint fades out over the
+        // same forty seconds the cloud takes to close.
+        roughness: 0.08,
+        stormRoughness: 0.52,
         breakRatio: 1.20,
         breakSoftness: 0.30,   // how abruptly the collapse happens
         // How much a wave grows as it shallows, as a multiple of the physical

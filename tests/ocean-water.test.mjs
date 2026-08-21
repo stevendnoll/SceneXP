@@ -30,6 +30,11 @@ jest.unstable_mockModule('../www/highwater/js/config.min.js', async () => (
 ));
 
 const { OCEAN_CONFIG } = await import(CONFIG_URL);
+// The glint test below needs the sky's own colour pipeline and gloom blend, so
+// the answer it checks is the one the screen actually gets rather than a second
+// implementation of tone mapping.
+const { toneMapACES, linearToSrgb, skyStateAt, applyGloom } =
+    await import('../www/highwater/js/sky.js');
 
 // ---------------------------------------------------------------------------
 // A THREE stub with real arrays in it
@@ -81,7 +86,16 @@ function installThree() {
         MeshStandardMaterial: StubMaterial,
         Mesh: StubMesh,
         Vector4: StubVector4,
-        Color: class { constructor(hex) { this.hex = hex; } },
+        // ENOUGH OF THREE.Color TO SURVIVE THE GLOOM BLEND. `updateWater`
+        // lerps the deep and shallow colours toward their storm twins as the
+        // sky closes over, and until 2026-08-21 no test drove it with a gloom
+        // above zero, so a bare `{ hex }` was enough and that whole branch had
+        // never run under test. It has now.
+        Color: class {
+            constructor(hex) { this.hex = hex; this.t = 0; }
+            copy(other) { this.hex = other.hex; this.t = 0; return this; }
+            lerp(other, t) { this.to = other.hex; this.t = t; return this; }
+        },
         DynamicDrawUsage: 'dynamic',
         FrontSide: 'front'
     };
@@ -862,6 +876,69 @@ describe('the mesh', () => {
         // And the derivative has to be the one both directions actually use.
         expect(body).toMatch(/dYdx\s*\+=\s*dY\s*\*\s*kx;/);
         expect(body).toMatch(/dYdz\s*\+=\s*dY\s*\*\s*kz;/);
+    });
+
+    test('THE SUN LOSES ITS GLINT PATH WHEN THE SKY LOSES ITS SUN', () => {
+        // THE BUG THIS PROTECTS AGAINST, WHICH SHIPPED FOR WEEKS. By full gloom
+        // the sky's own sun disc is gated out by cloud and nothing in the frame
+        // shows a sun at all, but the DirectionalLight kept throwing a hard
+        // white specular highlight off it. Steve reported the sea being blown
+        // out under the storm four separate times.
+        //
+        // Asserted on the RESULT rather than on the config, by porting Three's
+        // own GGX and pushing the answer through the four stage colour pipeline.
+        // That costs a dozen lines of duplication and buys the thing that
+        // matters: this test does not care HOW the glint is removed, only that
+        // it is gone, so it survives the fix being re-implemented.
+        initWater(makeScene(), OCEAN_CONFIG);
+        const { uniforms } = __test__.state();
+
+        // Three's BRDF_GGX with V_GGX_SmithCorrelated, at the brightest facet:
+        // the one oriented so the half vector IS the normal. On a sea this size
+        // that facet exists somewhere, which is why the glint is a path.
+        const peak = (roughness, sunIntensity, exposure, sunColor) => {
+            const c = Math.cos(25 * Math.PI / 180);
+            const a = roughness * roughness, a2 = a * a;
+            const D = a2 / (Math.PI * a2 * a2);
+            const g = 2 * c * Math.sqrt(a2 + (1 - a2) * c * c);
+            const F = 0.04 + 0.96 * Math.pow(1 - c, 5);
+            const brdf = F * (0.5 / g) * D;
+            const lin = sunColor.map((x) => x * sunIntensity * c * brdf);
+            return linearToSrgb(toneMapACES(lin, exposure)[0]) * 255;
+        };
+        const state = (gloom) => applyGloom(skyStateAt(0.46, OCEAN_CONFIG.sky),
+            gloom, OCEAN_CONFIG.sky);
+
+        // The bright afternoon keeps its mirror. This is a feature and the
+        // reason `water.roughness` is 0.08 rather than anything sensible.
+        updateWater(1 / 60, { swell: 1, surge: 0, gloom: 0 });
+        const calmRough = uniforms.uRoughness.value;
+        expect(calmRough).toBeCloseTo(OCEAN_CONFIG.water.roughness, 6);
+        const clear = state(0);
+        expect(peak(calmRough, clear.sunIntensity, clear.exposure, clear.sunColor))
+            .toBeGreaterThan(250);
+
+        // And the storm does not.
+        updateWater(1 / 60, { swell: 1, surge: 0, gloom: 1 });
+        const stormRough = uniforms.uRoughness.value;
+        expect(stormRough).toBeCloseTo(OCEAN_CONFIG.water.stormRoughness, 6);
+        const storm = state(1);
+        expect(peak(stormRough, storm.sunIntensity, storm.exposure, storm.sunColor))
+            .toBeLessThan(120);
+
+        // THE PART THAT IS ACTUALLY WORTH A TEST. Dimming the light was the
+        // obvious fix and it does not work: GGX's D term goes as 1 over
+        // roughness to the fourth, so at 0.08 the peak is orders of magnitude
+        // past saturation and the intensity barely moves it. Held here so that
+        // anybody who reverts the roughness and reaches for `sunIntensityScale`
+        // instead finds out from a red test rather than from Steve.
+        expect(peak(calmRough, storm.sunIntensity, storm.exposure, storm.sunColor))
+            .toBeGreaterThan(250);
+
+        // The sea is never rougher than the whitewater on it, which is the
+        // other end the shader mixes toward.
+        expect(stormRough).toBeLessThan(0.92);
+        expect(stormRough).toBeGreaterThan(calmRough);
     });
 
     test('EVERY UNIFORM THE SHADER READS IS ONE THE MATERIAL SUPPLIES', () => {
