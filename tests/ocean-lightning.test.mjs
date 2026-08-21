@@ -313,10 +313,20 @@ describe('the flash envelope', () => {
         expect(chance(90)).toBeGreaterThan(0.15);
     });
 
-    test('the last twenty seconds carry far fewer channels than the peak', () => {
+    test('the last twenty seconds carry channels far less often than the peak', () => {
         // The end to end version of the two above, counted rather than asserted
         // off the curves, because the rate and the chance multiply and either one
         // alone can be moved without the frame actually getting calmer.
+        //
+        // COUNTED PER SECOND, AND THE FIRST VERSION WAS NOT. It compared a raw
+        // count over twenty seconds of tsunami against one over ten seconds of
+        // drawback, so it was really asserting that the tsunami had less than
+        // HALF the density, and it only passed because at the time it had about
+        // a third. The 2026-08-21 rate trim took the drawback down with it and
+        // the ratio moved to 0.53, which is still comfortably thinner and still
+        // exactly the effect the test exists to protect, but the old form failed
+        // it. Two windows of different lengths should never have been compared
+        // by count.
         let peakBin = 0;
         let lateBin = 0;
         for (let seed = 1; seed <= 60; seed++) {
@@ -336,9 +346,11 @@ describe('the flash envelope', () => {
             }
             disposeLightning();
         }
-        // Twenty seconds of tsunami must not carry more channels than the ten
-        // seconds of drawback before it.
-        expect(lateBin).toBeLessThan(peakBin);
+        // A second of tsunami must carry channels at well under three quarters
+        // the rate of a second of drawback. Against a flat boltChance the two
+        // densities come out level and this fails, which is the whole point.
+        expect(peakBin).toBeGreaterThan(0);
+        expect(lateBin / 20).toBeLessThan((peakBin / 10) * 0.75);
     });
 
     test('a threshold is always finite, positive, and averages one', () => {

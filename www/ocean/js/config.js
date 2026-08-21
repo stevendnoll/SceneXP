@@ -1793,20 +1793,60 @@ export const OCEAN_CONFIG = deepFreeze({
             // came down by roughly a third while the number of visible bolts
             // stayed where it was. See `boltChance` for the reasoning: the two
             // numbers move together and neither means much alone.
+            //
+            // AND TRIMMED AGAIN, MUCH HARDER, ON 2026-08-21. Steve watched the
+            // whole arc repeatedly and reported that the stretch from the
+            // midpoint to the tsunami was disorienting, and that the worst of it
+            // was just before the sea starts to recede. He is right and the
+            // profile said so plainly: the busiest ten seconds in the entire
+            // ninety were 60-70s at 7.65 flashes, which is a flash every 1.3
+            // seconds for ten seconds straight. That is not a storm building,
+            // that is a strobe. Measured over 600 runs of the arc:
+            //
+            //                  flashes            channels     flash only
+            //                before  after      before  after   before after
+            //     40-50s       4.17   2.93        1.38   1.34     2.80  1.59
+            //     50-60s       5.74   3.62        1.94   1.71     3.80  1.91
+            //     60-70s       7.65   4.20        2.62   1.93     5.03  2.27
+            //     70-80s       7.63   4.51        1.59   1.35     6.04  3.15
+            //     80-90s       5.75   4.30        0.78   0.71     4.97  3.58
+            //     40-90s      30.94  19.56       8.31   7.04     22.64 12.50
+            //                        -37%              -15%            -45%
+            //
+            // THE POINT OF THE TABLE IS THE THIRD PAIR. Well over a third of the
+            // light events are gone, but the channels gave up only a sixth of
+            // theirs, because the rate came down and `boltChance` went up to
+            // meet it. What actually took the cut is the flash with nothing in
+            // it, which is down by nearly half. Steve likes the streaks and was
+            // troubled by the flashing, so that is the split the numbers were
+            // aimed at.
+            //
+            // Note the last two rows, which are not a mistake. The flash only
+            // count now PEAKS over the tsunami rather than before it. That is
+            // the same compositional call `boltChance` records: once the wall is
+            // coming, a bare flash lights the face of it and helps, while a
+            // channel beside it splits the frame and competes.
             rate: [
                 { at: 0,  value: 0.00 },
                 { at: 22, value: 0.00 },   // the sky closes first, alone
                 { at: 30, value: 0.11 },   // the first distant flashes
-                { at: 54, value: 0.40 },   // through the lull, which it fills
+                // THE CLIMB STOPS AT THE MIDPOINT. Up to here the storm is still
+                // introducing itself and the rate is where it always was. After
+                // here it goes almost flat, and the storm goes on building
+                // through the cloud, the swell, and the light instead. A rate
+                // that keeps climbing to the end has nowhere to put the tsunami.
+                { at: 46, value: 0.24 },
                 // THE ELECTRICAL PEAK LANDS IN THE DRAWBACK, NOT IN THE TSUNAMI,
-                // and that is the whole shape of this curve. The drawback is the
-                // twenty seconds where the sea has gone quiet and nothing is
-                // happening yet, which is exactly when the scene needs something
-                // to carry the tension. The tsunami does not: it arrives with
-                // the largest object in the whole arc and it wants the frame.
-                { at: 70, value: 0.62 },   // the loudest the sky ever gets
-                { at: 80, value: 0.44 },   // and it backs off for the wall
-                { at: 90, value: 0.40 }
+                // and that is still the shape here, just a far gentler one. The
+                // drawback is the twenty seconds where the sea has gone quiet
+                // and nothing is happening yet, which is exactly when the scene
+                // needs something to carry the tension. The tsunami does not: it
+                // arrives with the largest object in the arc and it wants the
+                // frame.
+                { at: 60, value: 0.30 },
+                { at: 70, value: 0.36 },   // the loudest the sky ever gets
+                { at: 80, value: 0.33 },   // and it backs off for the wall
+                { at: 90, value: 0.30 }
             ],
             // THE CEILING. 0.34 seconds between any two flashes is 2.94 a
             // second. Anyone lowering this should check `flashesPerSecondCeiling`
@@ -1816,7 +1856,15 @@ export const OCEAN_CONFIG = deepFreeze({
             // How often a strike has a second return stroke, and how far behind.
             // The gap is over the minimum on purpose, so the pair reads as two
             // events rather than as a stutter.
-            strokeChance: 0.42,
+            //
+            // THE CHEAPEST FLASH TO REMOVE IS THE SECOND ONE, and that is why
+            // this moved from 0.42 to 0.30 on 2026-08-21 rather than the rate
+            // taking the whole cut. A second stroke is a whole extra screen wide
+            // flash that adds NO new channel, no new position, and no new
+            // information: the eye has already been to that part of the sky. So
+            // per unit of disorientation removed it is the least costly thing in
+            // this section, and roughly a quarter of the trim came from here.
+            strokeChance: 0.30,
             strokeGapSeconds: 0.40,
             // The second stroke is not brighter than the first. See the note on
             // `flashLevelAt` for why they are combined with a max.
@@ -1870,11 +1918,27 @@ export const OCEAN_CONFIG = deepFreeze({
             // every nine seconds they read as separate events, and at one every
             // three they read as a texture. After the wall lands most visits now
             // see no channel at all, which is the intended reading.
+            //
+            // RAISED AGAIN ON 2026-08-21 TO ABSORB THE SECOND RATE CUT. With a
+            // third of the strikes gone, holding this at 0.75 would have taken a
+            // third of the channels with them, and the channels are the part
+            // Steve singled out as worth keeping. 0.94 through the middle of the
+            // arc is close to the ceiling this can reach: a strike outside
+            // `boltAzimuthDegrees` never draws one, and that is 30 of the 46
+            // degrees the strikes are spread over, so the most any setting here
+            // can deliver is 0.652 channels per strike.
+            //
+            // What that buys is a middle stretch where nearly every flash you
+            // see INSIDE the frame has something in it to look at. The flashes
+            // with no channel have not gone away, they are now almost entirely
+            // the ones from off the side of the view, which is the kind worth
+            // having: it says the storm is wider than the window.
             boltChance: [
                 { at: 30, value: 0.75 },
-                { at: 68, value: 0.75 },
-                { at: 78, value: 0.30 },
-                { at: 90, value: 0.26 }
+                { at: 46, value: 0.94 },
+                { at: 70, value: 0.94 },
+                { at: 78, value: 0.36 },
+                { at: 90, value: 0.32 }
             ],
             // HOW FAR OUT, walked from the far end of the range to the near end
             // by `approach`, so the storm closes in rather than just getting
