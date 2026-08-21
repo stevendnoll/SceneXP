@@ -36,7 +36,9 @@ const {
     rowPositions, buildProfile, waveConstants, waveSurfaceAt, initWater, updateWater, disposeWater
 } = await import(WATER_URL);
 const { swellAt, curveAt, frontAt } = await import(STORM_URL);
-const { lightOn, sinkAt, targetTilt, stepRoll } = await import(BUOY_URL);
+const { lightOn, sinkAt, targetTilt, stepRoll, initBuoy, disposeBuoy, SHAPE } = await import(BUOY_URL);
+const { srgbToLinear, toneMapACES, linearToSrgb, unpackColor, skyStateAt, applyGloom } =
+    await import('../www/highwater/js/sky.js');
 
 const B = OCEAN_CONFIG.storm.buoy;
 const DEG = 180 / Math.PI;
@@ -392,6 +394,117 @@ describe('the roll', () => {
     test('a flat sea leaves it upright', () => {
         expect(targetTilt(0, 0, B).x).toBeCloseTo(0, 12);
         expect(targetTilt(0, 0, B).z).toBeCloseTo(0, 12);
+    });
+});
+
+describe('it lives in the same weather as everything else', () => {
+    test('THE BODY IS LIT AND ONLY THE LAMP IS NOT', () => {
+        // The buoy used to be built entirely from MeshBasicMaterial, which
+        // ignores light completely, so it was the same bright orange at t=0
+        // under a blue sky as at t=50 under a black one. In an arc whose whole
+        // subject is the light changing, the one object that ignores the light
+        // is the one that reads as pasted on. Steve saw it and asked for rust;
+        // the rust was not the problem.
+        //
+        // Recorded off the THREE stub rather than asserted on source text,
+        // by delegating to it through a proxy that notes what was reached for.
+        const real = globalThis.THREE;
+        const used = [];
+        globalThis.THREE = new Proxy(real, {
+            get(target, prop) {
+                if (typeof prop === 'string') used.push(prop);
+                return target[prop];
+            }
+        });
+        try {
+            initBuoy(makeScene(), OCEAN_CONFIG, {});
+            disposeBuoy();
+        } finally {
+            globalThis.THREE = real;
+        }
+        // Orange, white, black. Pinned at three rather than "at least one",
+        // because the count going UP means a weathering scheme has crept back
+        // in: at 16 px wide a fourth colour is mud, and that was tried and
+        // rejected on 2026-08-21.
+        expect(used.filter((n) => n === 'MeshStandardMaterial').length).toBe(3);
+        // And exactly one thing that emits rather than receives. A navigation
+        // light that dims as the weather closes in is not a navigation light.
+        expect(used.filter((n) => n === 'MeshBasicMaterial').length).toBe(1);
+        // NOTHING ABOVE THE LAMP. A cone topmark was here and came out at
+        // Steve's request: 5 px of black sitting over the light, taking the eye
+        // off the one part that is meant to be the brightest thing on it.
+        expect(used).not.toContain('ConeGeometry');
+        // AND NOTHING POINTED UNDERNEATH IT EITHER. The hull bottom used to be
+        // a long cone, which is fine as long as it is never seen, and it is
+        // seen: while the buoy climbs the face of the tsunami the sight line to
+        // its underside clears the water in front by three to five metres. A
+        // rounded bowl is what a float lifted clear of the water looks like.
+        // `ConeGeometry` appearing at either end is the same mistake twice.
+        expect(used).toContain('SphereGeometry');
+    });
+
+    test('THE FLOAT IS THE LARGEST THING ABOVE THE WATERLINE', () => {
+        // The bug behind "I barely see the orange" and "the stem still looks
+        // gray", which were one bug and not two. The hull sat almost entirely
+        // UNDER the water, so of 36 px of buoy only 4 were orange and 15 were
+        // white mast. Nothing about the palette could have fixed that.
+        //
+        // A real mark is mostly float: the mast carries the light and nothing
+        // else, and at a hundred metres it is the orange mass that says "buoy".
+        const bands = {
+            float: SHAPE.HULL_TOP,
+            band: SHAPE.BAND_TOP - SHAPE.HULL_TOP,
+            shoulder: SHAPE.SHOULDER_TOP - SHAPE.BAND_TOP,
+            tower: SHAPE.TOWER_TOP - SHAPE.SHOULDER_TOP,
+            lamp: SHAPE.LAMP - SHAPE.TOWER_TOP
+        };
+        for (const [name, size] of Object.entries(bands)) {
+            expect(size).toBeGreaterThan(0);
+            expect(bands.float).toBeGreaterThanOrEqual(size);
+            void name;
+        }
+        // And it is a substantial share rather than merely the biggest of five
+        // slivers. A third is the floor.
+        expect(bands.float).toBeGreaterThan(0.33);
+        // The bands have to run in order, or the geometry overlaps itself.
+        const stops = [SHAPE.HULL_TOP, SHAPE.BAND_TOP, SHAPE.SHOULDER_TOP,
+            SHAPE.TOWER_TOP, SHAPE.LAMP];
+        for (let i = 1; i < stops.length; i++) expect(stops[i]).toBeGreaterThan(stops[i - 1]);
+        expect(SHAPE.LAMP).toBeLessThanOrEqual(1);
+    });
+
+    test('and it is still findable against the sea it sits on', () => {
+        // The risk of lighting it. An albedo is not a screen colour: it gets
+        // multiplied by a storm sky that has had two thirds of its sun taken
+        // away, and a buoy nobody can pick out has stopped being a ruler.
+        //
+        // A Lambert response under this scene's own two lights, compared
+        // against the sea's own storm colour through the same pipeline.
+        const luma = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+        const lit = (hex, gloom) => {
+            const st = applyGloom(skyStateAt(0.46, OCEAN_CONFIG.sky), gloom, OCEAN_CONFIG.sky);
+            const albedo = unpackColor(hex).map(srgbToLinear);
+            const irr = [0, 1, 2].map((i) => st.hemiIntensity
+                * (st.hemiSky[i] * 0.5 + st.hemiGround[i] * 0.5)
+                + st.sunIntensity * st.sunColor[i] * 0.55);
+            // Diffuse plus the retroreflective floor, which is what the
+            // material actually draws.
+            return toneMapACES(
+                albedo.map((a, i) => a * irr[i] / Math.PI + a * B.retroreflect), st.exposure)
+                .map((c) => Math.min(255, Math.max(0, linearToSrgb(c) * 255)));
+        };
+        const hull = luma(lit(B.hullColor, 1));
+        const sea = luma(lit(OCEAN_CONFIG.water.stormDeepColor, 1));
+        expect(hull - sea).toBeGreaterThan(25);
+
+        // AND IT HAS TO ACTUALLY DARKEN, or it has gone back to being a
+        // cut-out that ignores the weather. The retroreflective floor lifts it
+        // but must not flatten it: past about 0.6 the storm stops reaching it
+        // at all and there was no point lighting it in the first place.
+        expect(luma(lit(B.hullColor, 1))).toBeLessThan(luma(lit(B.hullColor, 0)) * 0.92);
+        // Stated on the floor itself as well, because that is the number
+        // somebody would reach for if the buoy still looked too dark.
+        expect(B.retroreflect).toBeLessThan(0.6);
     });
 });
 

@@ -2330,13 +2330,83 @@ export const OCEAN_CONFIG = deepFreeze({
             // and, more usefully here, the one hue this scene does not otherwise
             // contain. Every colour in the frame is a grey, a blue or a green,
             // so orange cannot be confused with any of them at 31 px.
-            hullColor: 0xe8622a,
+            // ORANGE, WHITE AND BLACK, AND THESE ARE ALBEDOS NOW rather than
+            // screen colours. They used to be screen colours, because the buoy
+            // used unlit materials and what was written was what was drawn. They
+            // are multiplied by the light now, so each is written BRIGHTER than
+            // it will ever appear, the same way `sand.color` at 0xbda882 draws
+            // as sand rather than as cream.
+            //
+            // SOLVED AGAINST WHAT THE UNLIT BUOY USED TO DRAW, because that is
+            // the look Steve approved and lighting it should not have changed
+            // it. Old drawn colour, and what these albedos now draw as:
+            //
+            //                  was        clear afternoon    full storm
+            //     orange   233,113,46        228,123,48       185,76,24
+            //     white   213,214,213       214,214,211     179,180,176
+            //     black      15,20,24          19,25,30         8,12,15
+            //
+            // The middle column is the old look restored. The right hand one is
+            // the whole reason for lighting it: the buoy now goes grey with the
+            // weather like everything else in the frame.
+            //
+            // A RUST BAND AND MARINE GROWTH WERE TRIED HERE AND REMOVED. Steve
+            // had asked whether the buoy could look weathered, and a two colour
+            // weathering scheme was added and immediately taken back out: he
+            // looked at it and said he wanted the orange, white and black. He is
+            // right, and the reason is the size. At 16 px wide a fifth colour is
+            // not a fifth colour, it is mud, and three strong values a viewer
+            // can name is the whole of what makes this thing read.
+            //
+            // Which also answers the texture question properly. The buoy is
+            // 16 px wide and 9 on a phone at the adaptive floor, so a 512 square
+            // map shows about eight texels across its visible face. A CC0 PBR
+            // set from Poly Haven or ambientCG is clean licensing and safe
+            // provenance, and it is also one to four megabytes to deliver
+            // something smaller than a full stop. What it would have bought is
+            // detail this object has no room for.
+            hullColor: 0xff7a33,
             // A dark band round the top of the hull and on the topmark. At this
             // size a band is the only marking that survives, and two tones on
             // one mass is what makes a shape read as a marked object rather than
             // a moulded one.
-            bandColor: 0x21262b,
-            towerColor: 0xd8dcd8,
+            bandColor: 0x2b3238,
+            towerColor: 0xf6f8f4,
+            // Matte. Weathered paint and rust have no gloss, and a matte object
+            // this small is also one that cannot develop a distracting specular
+            // pip as a wave face swings past the sun.
+            roughness: 0.88,
+            // ---- The retroreflective floor ------------------------------------
+            //
+            // A REAL PROPERTY OF A REAL BUOY, and the answer to a note Steve
+            // made three times. Lighting the buoy properly is what stopped it
+            // reading as pasted on, and it also took it grey under the storm,
+            // because a storm sky has two thirds of its sun removed and a white
+            // object under a dim light IS grey. Correct, and not what a mark
+            // looks like: navigation marks are painted and taped with
+            // retroreflective material specifically so they do not vanish in bad
+            // light. So the floor is not a cheat, it is the missing physics.
+            //
+            // Emissive of the same hue as the paint, so it lifts the colour
+            // rather than washing it toward white. Solved against the old unlit
+            // buoy, which is the look being asked for:
+            //
+            //     emissive   orange storm    white storm    still lit
+            //       0.00      185, 76,24     179,180,176      100%
+            //       0.15      209, 98,34     198,199,196       73%
+            //       0.30      224,117,44     210,210,208       57%   <- is
+            //       0.60      241,145,63     224,224,223       40%
+            //
+            //     old unlit   233,113,46     213,214,213
+            //
+            // 0.30 puts the STORM appearance within a few levels of the look
+            // that was approved, and leaves the clear afternoon brighter than it
+            // (242,149,65 and 225,226,224), which is right: it is a sunny day.
+            // Over half the response still comes from the sky, so the buoy goes
+            // on greying with the weather rather than going back to being a
+            // cut-out. Past about 0.6 it stops responding to the storm at all
+            // and there is no point having lit it.
+            retroreflect: 0.30,
             // THE LIGHT IS EMISSIVE GEOMETRY AND NOT A LIGHT. Three keys its
             // compiled programs on how many lights are in the scene, so adding
             // a real one would recompile the water, the sand and the sky. It

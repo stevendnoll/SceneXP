@@ -163,6 +163,19 @@ export function stepRoll(state, target, delta, cfg = OCEAN_CONFIG.storm.buoy) {
 // The THREE shell
 // ---------------------------------------------------------------------------
 
+/** Where each band of the buoy ends, as a fraction of its height above the
+ *  waterline. Exported because THE SPLIT IS THE DESIGN and it is invisible from
+ *  anywhere else: these five numbers decide whether the thing reads as a buoy or
+ *  as a post, and the first version had them so wrong that only 10 per cent of
+ *  what showed was orange. A test asserts the float stays the largest mass. */
+export const SHAPE = {
+    HULL_TOP: 0.40,
+    BAND_TOP: 0.47,
+    SHOULDER_TOP: 0.545,
+    TOWER_TOP: 0.87,
+    LAMP: 0.94
+};
+
 let group = null;
 let lightMesh = null;
 let lightMaterial = null;
@@ -199,71 +212,147 @@ export function initBuoy(scene, config = OCEAN_CONFIG, options = {}) {
         const m = new THREE.Mesh(geo, mat);
         m.position.y = y;
         group.add(m);
-        built.push(geo, mat);
+        built.push(geo);
         return m;
     };
 
-    const hull = new THREE.MeshBasicMaterial({ color: cfg.hullColor, fog: true });
-    const band = new THREE.MeshBasicMaterial({ color: cfg.bandColor, fog: true });
-    const tower = new THREE.MeshBasicMaterial({ color: cfg.towerColor, fog: true });
+    // LIT, AND IT USED TO BE UNLIT. Every material here was a
+    // MeshBasicMaterial, chosen because the shading across a half metre float at
+    // a hundred metres is a fraction of a level and because a basic material
+    // cannot be recompiled by a change in the light count. Both of those are
+    // true and both missed the point: a basic material ignores the light
+    // ENTIRELY, so through an arc whose whole subject is the light changing, the
+    // buoy was the same bright orange at t=0 under a blue sky as at t=50 under a
+    // black one. It was the one object in the frame not living in the same
+    // weather as everything else, and that, rather than any want of rust, is
+    // what made it read as a game object.
+    //
+    // The sun and hemisphere lights carry the sky's own colour (see
+    // `applyState` in sky.js), so a standard material greys and darkens with the
+    // storm for free, and the lightning's own directional light strikes it.
+    //
+    // NO RECOMPILE RISK: the buoy is built after `initLightning`, so the light
+    // count is already final when this material first compiles.
+    const weathered = (color) => new THREE.MeshStandardMaterial({
+        color,
+        // Weathered paint is matte, and a matte object this small is also one
+        // that cannot develop a distracting specular pip on a wave.
+        roughness: cfg.roughness,
+        metalness: 0,
+        // THE RETROREFLECTIVE FLOOR, WHICH IS A REAL PROPERTY OF A REAL BUOY.
+        // Lighting the buoy correctly made it go grey under the storm, which is
+        // what the physics says and is not what a mark looks like: navigation
+        // marks are painted and taped with retroreflective material precisely so
+        // they do NOT disappear in bad light. That is a floor under the
+        // brightness, and a floor is what this is.
+        //
+        // Emissive of the same hue as the paint, so it lifts the colour rather
+        // than washing it toward white. See `retroreflect` in config for the
+        // solve: at 0.30 the storm appearance lands within a few levels of the
+        // old unlit buoy Steve approved, while 57 per cent of the response still
+        // comes from the sky, so it goes on greying with the weather.
+        emissive: new THREE.Color(color),
+        emissiveIntensity: cfg.retroreflect,
+        fog: true
+    });
+    // THREE COLOURS AND NOT FIVE. A rust band at the waterline and marine
+    // growth below it were tried on 2026-08-21 and taken straight back out:
+    // Steve looked at them and said he wanted the orange, white and black. He is
+    // right, and the reason is the size. At 16 px a fifth colour is not a fifth
+    // colour, it is mud. Three strong values that a viewer can name is what
+    // makes this thing read at all.
+    const hull = weathered(cfg.hullColor);
+    const band = weathered(cfg.bandColor);
+    const tower = weathered(cfg.towerColor);
+    // THE LAMP STAYS UNLIT, WHICH IS THE WHOLE POINT OF IT. It is the one part
+    // that emits rather than receives, so it must NOT darken with the storm: a
+    // navigation light that dims as the weather closes in is the opposite of a
+    // navigation light.
     lightMaterial = new THREE.MeshBasicMaterial({ color: cfg.lightColor, fog: true });
+    built.push(hull, band, tower, lightMaterial);
 
     const r = cfg.radius;
-    // A REAL PILLAR BUOY HAS FOUR PARTS AND THE FIRST VERSION HAD TWO. It was a
-    // white post on an orange can, which is what you get by modelling the parts
-    // rather than the OUTLINE. At 36 px the outline is the only thing there is,
-    // so what follows is chosen for what it does to the silhouette and not for
-    // what it would be called on a chart.
+    const H = cfg.height;
+
+    // PROPORTIONS ARE THE WHOLE DESIGN AT THIS SIZE, and the first version got
+    // them badly wrong. Measured on it, above the waterline: 4 px of orange
+    // against 15 px of white mast. The hull was almost entirely UNDER the water,
+    // so the buoy was 44 per cent stem and 10 per cent orange, and Steve
+    // reported exactly that ("I barely see the orange", "the stem still looks
+    // gray"). Neither was a colour problem.
     //
-    //   the flotation collar   flares the base, so the shape is not a cylinder
-    //   the waist              a step in the profile, so the eye sees two masses
-    //   the crossed reflector  breaks the vertical line, which is the single
-    //                          biggest thing that stops it reading as a post
-    //   the cage and topmark   gives it a head, so it has a top rather than
-    //                          just stopping
+    // So everything below is written as a fraction of the height rather than in
+    // multiples of the radius, because the fractions ARE the thing being tuned
+    // and hiding them inside `r * 1.16` is how they went wrong unnoticed. The
+    // split now, of what is above water:
+    //
+    //     orange hull   40%      the object, and it should be
+    //     black band     7%
+    //     white tower   41%
+    //     lamp          12%
+    //
+    // A REAL MARK IS MOSTLY FLOAT. The mast carries the light and nothing else,
+    // and on the water it is the orange mass that says "buoy" from a distance.
+    const { HULL_TOP, BAND_TOP, SHOULDER_TOP, TOWER_TOP, LAMP } = SHAPE;
 
-    // The collar: the widest thing on it, sitting at the waterline. Real marks
-    // carry one because it is what makes them float upright, and here it is what
-    // stops the base reading as a drum.
-    add(new THREE.CylinderGeometry(r * 1.35, r * 1.05, r * 0.42, 12), hull, r * 0.12);
-    // The body below it, tapering in, mostly under water.
-    add(new THREE.CylinderGeometry(r * 1.05, r * 0.55, r * 1.5, 12), hull, -r * 0.62);
-    // A dark band around the top of the hull. Two tones on one mass reads as a
-    // marked object rather than a painted one, and at this size a band is the
-    // only marking that survives.
-    add(new THREE.CylinderGeometry(r * 1.08, r * 1.08, r * 0.30, 12), band, r * 0.46);
-    // The waist: a narrow step between hull and tower, which is the part that
-    // makes the whole thing read as built rather than moulded.
-    add(new THREE.CylinderGeometry(r * 0.62, r * 0.86, r * 0.55, 10), tower, r * 0.88);
+    // BELOW THE WATERLINE, AND IT DOES GET SEEN. This was a long cone tapering
+    // to a small flat cap, on the reasonable assumption that nothing under the
+    // water is ever in shot. It is: while the buoy climbs the face of the
+    // tsunami it sits at the surface height of its OWN row, and the water
+    // between it and the camera has not been lifted yet, so the sight line to
+    // its underside clears that water by three to five metres. Steve saw the
+    // point of the cone and said so.
+    //
+    // Two changes, and the second matters more than the first. The draft is
+    // shorter, 0.38 m rather than 0.73, so there is half as much to show. And it
+    // ends in a ROUNDED BOWL rather than a point, because a float with a rounded
+    // bottom lifted clear of the water is what a buoy on a wave actually looks
+    // like, while a cone is what a mistake looks like.
+    add(new THREE.CylinderGeometry(r * 1.14, r * 1.04, H * 0.07, 12), hull, -H * 0.035);
+    const bowl = new THREE.SphereGeometry(r * 1.04, 12, 6);
+    // Squashed, so it is a shallow hull bottom and not half a ball. The upper
+    // half sits inside the float above it and is never drawn.
+    bowl.scale(1, 0.40, 1);
+    add(bowl, hull, -H * 0.07);
+    // THE FLOAT, which is now the largest thing on it. Slightly barrelled, so
+    // the silhouette is not a drum.
+    add(new THREE.CylinderGeometry(r * 1.14, r * 1.34, H * HULL_TOP, 12), hull, H * HULL_TOP / 2);
+    // The dark band round the top of the float. Two values on one mass is what
+    // reads as a marked object rather than a moulded one.
+    add(new THREE.CylinderGeometry(r * 1.20, r * 1.20, H * (BAND_TOP - HULL_TOP), 12),
+        band, H * (HULL_TOP + BAND_TOP) / 2);
+    // The shoulder, stepping in from float to tower. This is the part that makes
+    // the whole thing read as built rather than moulded.
+    add(new THREE.CylinderGeometry(r * 0.68, r * 1.12, H * (SHOULDER_TOP - BAND_TOP), 10),
+        tower, H * (BAND_TOP + SHOULDER_TOP) / 2);
 
-    const towerBase = r * 1.16;
-    const towerTop = cfg.height - r * 1.5;
-    // The tower, tapering. A parallel post is the thing that read as a post.
-    add(new THREE.CylinderGeometry(r * 0.20, r * 0.42, towerTop - towerBase, 8),
+    const towerBase = H * SHOULDER_TOP;
+    const towerTop = H * TOWER_TOP;
+    // THE TOWER, AND IT IS DELIBERATELY STOUT. It was slender before, which is
+    // the second half of why it read grey: a thin pale shape on a grey sky is
+    // mostly antialiasing, and antialiasing against grey IS grey. 10.6 px across
+    // at the base rather than 6.6 gives it enough body to hold its own colour.
+    add(new THREE.CylinderGeometry(r * 0.46, r * 0.68, towerTop - towerBase, 8),
         tower, (towerBase + towerTop) / 2);
 
-    // THE CROSSED RADAR REFLECTOR, AND THIS IS THE PART THAT FIXES IT. A buoy is
-    // recognisable at distance because something sticks out sideways two thirds
-    // of the way up. Two thin crossed plates cost four triangles each and they
-    // are the difference between a mast and a mark.
-    const armY = towerBase + (towerTop - towerBase) * 0.55;
+    // THE CROSSED RADAR REFLECTOR, which is what stops the tower reading as a
+    // post. A buoy is recognisable at distance because something sticks out
+    // sideways, and two thin crossed plates cost four triangles each.
+    const armY = towerBase + (towerTop - towerBase) * 0.45;
     const arm = new THREE.BoxGeometry(r * 2.1, r * 0.5, r * 0.09);
-    const armA = add(arm, tower, armY);
+    add(arm, tower, armY);
     const armB = new THREE.Mesh(arm, tower);
     armB.position.y = armY;
     armB.rotation.y = Math.PI / 2;
     group.add(armB);
-    void armA;
 
-    // The cage around the lamp, as an open ring rather than a solid, so the lamp
-    // reads as sitting INSIDE something.
-    add(new THREE.TorusGeometry(r * 0.44, r * 0.07, 4, 8), tower, towerTop + r * 0.30);
-    // The lamp.
-    lightMesh = add(new THREE.SphereGeometry(r * 0.26, 8, 6), lightMaterial,
-        towerTop + r * 0.30);
-    // The topmark: a small cone above the light, which is what a real mark
-    // carries and what gives the silhouette a point instead of a stub.
-    add(new THREE.ConeGeometry(r * 0.34, r * 0.62, 8), band, towerTop + r * 0.95);
+    // The cage around the lamp, open rather than solid, so the light reads as
+    // sitting INSIDE something.
+    add(new THREE.TorusGeometry(r * 0.44, r * 0.07, 4, 8), tower, H * LAMP);
+    // The lamp, and nothing above it. A cone topmark was here and came out at
+    // Steve's request: at this size it was 5 px of black sitting over the light,
+    // which took the eye off the one part that is supposed to be the brightest.
+    lightMesh = add(new THREE.SphereGeometry(r * 0.26, 8, 6), lightMaterial, H * LAMP);
 
     group.position.set(cfg.x, 0, cfg.z);
     scene.add(group);
