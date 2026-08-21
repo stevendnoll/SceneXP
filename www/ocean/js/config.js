@@ -292,12 +292,22 @@ export const OCEAN_CONFIG = deepFreeze({
         //        on its own, and the bore behind it runs another 9.4.
         //   44   ran out a FIFTH time when the wall was sized to occupy the
         //        lower sky. Nine metres of rise floods to z 47 before the bore.
+        //   64   ran out a SIXTH time on 2026-08-21 when Steve asked for the
+        //        wall to be more massive still. 13 m of rise floods to z 68 and
+        //        the bore runs another 9.4 past that. THE TEST CAUGHT THIS ONE
+        //        rather than a person, which is what it was written for, and it
+        //        caught it in the same minute the height changed.
         //
-        // 64 carries the lot with seven metres in hand. The pattern is obvious in
+        // 88 carries the lot with ten metres in hand. The pattern is obvious in
         // hindsight and worth stating plainly: EVERY CHANGE THAT MAKES THE WATER
         // MORE DANGEROUS MAKES IT TRAVEL FURTHER, and the sheet is what it
         // travels on. The first three were found by hand. The test now walks the
         // arc with the front's rise and the bore included so the fifth is not.
+        //
+        // AND IT WORKS THE OTHER WAY TOO, which is worth knowing before reaching
+        // for `tsunami.riseNear`: this number is the real ceiling on how tall the
+        // wall is allowed to be, and `riseFar` is capped by `riseNear` in turn.
+        // Wanting a bigger wall means moving this first.
         //
         // It stays free. The extra rows land in the flat near strip behind the
         // camera, which has always been below the bottom of the frame.
@@ -306,7 +316,7 @@ export const OCEAN_CONFIG = deepFreeze({
         // behind the camera, which has always been below the bottom of the
         // frame, and `rowNear` and `widthPerMetre` follow `camera.fov` rather
         // than this.
-        nearZ: 64,
+        nearZ: 88,
         farZ: -404,         // out to where the fog has finished the job
         // Where the packed part of the row curve begins, in metres in front of
         // the camera. The bottom edge of the frame meets still water about two
@@ -2196,8 +2206,71 @@ export const OCEAN_CONFIG = deepFreeze({
             //     206m   41px       47m  229px
             //
             // Nine metres at the shore is a large tsunami and not an absurd one.
-            riseFar: 4.50,
-            riseNear: 9.00,
+            //
+            // 9.0 AND 13.0 SINCE 2026-08-21, AFTER MEASURING WHAT THE APPROACH
+            // ACTUALLY LOOKED LIKE. Steve said the wall was visible and
+            // threatening but wanted it more massive, and the profile agreed
+            // with him in a specific way that neither of the tables above shows:
+            // for the eight seconds from t=63 to t=70 the wall occupied between
+            // FIVE AND TWELVE PER CENT of the sky, and almost all of its growth
+            // in that stretch came from the distance closing rather than from
+            // the wall getting bigger. It was a band on the horizon for most of
+            // the time it was being watched.
+            //
+            // Measured with `buildProfile` run headless, so the depth cap, the
+            // shoaling, the set envelope and the crest harmonic are all in it
+            // rather than `rise` and `swellBehind` being added up by hand. That
+            // matters: the swell behind the front contributes only 1.5 to 2.0 m
+            // of crest, not the 2.9 the note below reads as. Height of the
+            // tallest thing in the frame, above the eye, at 27 px/degree, and
+            // the share of the 540 px of sky the frame holds:
+            //
+            //             before          after
+            //     342m     24 px   4%     44 px   8%
+            //     263m     32      6%     58     11%
+            //     197m     48      9%     83     15%
+            //     137m     78     14%    126     23%
+            //      84m    142     26%    219     40%
+            //      31m    409     76%    584    100%
+            //
+            // About 80 per cent taller the whole way in, and it now fills the
+            // frame at t=76 rather than t=78, so there are two more seconds of
+            // standing under something too big for the picture.
+            //
+            // THE ENDING IS UNCHANGED. The water still covers the eye at t=78.1
+            // against 78.2 before, because the front reaches the camera at the
+            // same moment either way and it was already far over the eye when it
+            // got there.
+            //
+            // WHY THE STEP AND NOT `swellBehind`. Both work, and per unit
+            // swellBehind is the stronger knob: 2.9 to 9.0 takes the crest from
+            // 1.66 m to 5.69 and never comes near the depth cap, which is about
+            // 7 m in the deep water behind the front. It was not used because it
+            // is the one that costs STEEPNESS. The mesh folds when the Gerstner
+            // horizontal displacement passes through itself, that ceiling has
+            // never been measured for this part of the arc, and the note below is
+            // explicit that the water back there should stay a smooth wall
+            // rather than a mile of whitewater. A level step carries no
+            // steepness at all, so it is free of both concerns. If more height
+            // is ever wanted than the beach can carry, swellBehind is where to
+            // go next, and the Jacobian has to be swept first.
+            //
+            // `riseNear` IS CAPPED BY THE BEACH AND NOT BY TASTE, which is the
+            // constraint that decided these two numbers. See `beach.nearZ`: the
+            // waterline walks shoreward at four and a half metres per metre of
+            // water, so 13 m of rise floods to z 77 and the sheet has to reach
+            // past it. And `riseFar` is then capped by `riseNear`, since a front
+            // that starts taller than it ends would shrink on the way in. The
+            // approach is what Steve asked about, `riseFar` is what drives it,
+            // and it is reached through the near end. That is not obvious and it
+            // is why the sheet had to move again.
+            //
+            // THIRTEEN METRES IS STILL A REAL NUMBER. Tohoku in 2011 ran up past
+            // fifteen along much of the coast it hit. The honest part of this
+            // block was always the paragraph above about deep water, and that has
+            // not changed: the far end is a picture, the near end is not.
+            riseFar: 9.00,
+            riseNear: 13.00,
             // How abrupt the step is. Wide enough that it never falls between
             // two rows of the grid and strobes as it crosses them, tight enough
             // to read as an edge rather than as a slope.
