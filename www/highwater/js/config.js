@@ -2604,6 +2604,22 @@ export const OCEAN_CONFIG = deepFreeze({
             //      84m    142     26%    219     40%
             //      31m    409     76%    584    100%
             //
+            // EVERY NUMBER IN THE TWO TABLES ABOVE WAS A DESCRIPTION OF INTENT
+            // AND NOT OF THE SCREEN, and it is worth knowing why before trusting
+            // any of them. They were computed as `frontLevelAt(z) + crest`, and
+            // until 2026-08-21 `frontLevelAt` reached the sea only through
+            // `depthAt`: the vertex offset was the astronomical tide alone, so
+            // the rise changed how big the waves behind the front were allowed
+            // to be and never once moved the surface. The wall on screen was the
+            // swell, about 3.3 m of it, against the 17 these tables claim.
+            //
+            // The lift is real now, and the drawn wall measures 63 / 83 / 118 /
+            // 179 / 308 / 528 px at those distances. Which is to say the tables
+            // were right all along about what this section was FOR, and the
+            // scene has finally caught up with them. The last figure is 528
+            // rather than 584 because `bodyMetres` tapers the raised water away
+            // behind the front, which the old arithmetic did not know about.
+            //
             // About 80 per cent taller the whole way in, and it now fills the
             // frame at t=76 rather than t=78, so there are two more seconds of
             // standing under something too big for the picture.
@@ -2655,6 +2671,29 @@ export const OCEAN_CONFIG = deepFreeze({
             // crossed the grid; near the camera they are under a metre apart and
             // 8 m is many rows. So the wide end is a grid constraint and the
             // narrow end is the look, which is a happy way round.
+            // HOW FAR BACK THE RAISED WATER REACHES, and it exists because the
+            // step cannot be a plateau once it actually lifts the mesh.
+            //
+            // Seaward of the front the water stands `rise` higher, which as a
+            // model is a step running out to infinity. The sheet is not
+            // infinite: it stops 412 m out, and lifting the whole of it put THE
+            // SHEET'S OWN FAR EDGE 43 to 58 px above the horizon under a third
+            // of a fog. That is a hard line with sky above it, which reads as a
+            // rendering fault rather than as a sea, and no amount of tuning the
+            // height fixes it.
+            //
+            // So the lift tapers back to nothing over this distance behind the
+            // front, which turns the step into a body of water with a back to
+            // it. A real tsunami's wavelength is tens of kilometres and this is
+            // 110 m: it is sized for the frame, exactly as the height already
+            // is, and the honest reason is that the visitor can only ever see
+            // the front of it.
+            //
+            // It only shapes what is DRAWN. `depthAt` still reads the untapered
+            // level, because out there the depth is capped at `beach.maxDepth`
+            // anyway and tapering it would change nothing except to make two
+            // numbers disagree.
+            bodyMetres: 110,
             frontWidthFar: 26,
             frontWidthNear: 8,
             // THE WHITE LINE IS WHAT MAKES IT VISIBLE AT DISTANCE. A 1.55 m step

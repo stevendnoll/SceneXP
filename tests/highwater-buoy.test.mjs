@@ -114,6 +114,84 @@ describe('the CPU surface query agrees with the vertex shader', () => {
         expect(worst).toBeLessThan(0.001);
     });
 
+    test('THE DRAWN SURFACE ACTUALLY RISES WHEN THE TSUNAMI PASSES', () => {
+        // THE BUG THAT LIVED IN THIS SCENE THE LONGEST. `transformed.y +=
+        // aShore.w` is the only thing that lifts this mesh, and until 2026-08-21
+        // the attribute writer put `tideOffset(elapsed)` in it: the astronomical
+        // tide alone. The surge and the tsunami's rise reached the sea only
+        // through `depth`, so they changed how big its waves could be without
+        // ever changing where its surface sat. At the wall the arc believed in
+        // 17.35 m of water and the mesh was drawn at 3.38.
+        //
+        // Nothing failed. Every test passed. The scene looked plausible, because
+        // the deeper water let the swell behind the front stand tall enough to
+        // read as a wall. It took putting a floating object on the sea to find
+        // it, because a buoy is the first thing in this scene that had to agree
+        // with the water rather than be the water.
+        //
+        // Asserted end to end on the live profile: run the arc to the moment the
+        // front is passing a point, and the surface there must be metres up.
+        initWater(makeScene(), OCEAN_CONFIG);
+        const at = OCEAN_CONFIG.storm.buoy.z;
+        let calm = null;
+        let lifted = null;
+        // FROM t=55 AND AT 20 Hz. The point is to exercise the live profile
+        // being rebuilt under the query, not to render the arc: walking all
+        // seventy six seconds at frame rate cost fifty seconds of test time for
+        // no extra coverage, since the profile itself only rebuilds twenty times
+        // a second.
+        let elapsed = 55;
+        while (elapsed < 76) {
+            const dt = 1 / 20;
+            elapsed += dt;
+            updateWater(dt, {
+                swell: swellAt(elapsed, OCEAN_CONFIG.storm),
+                surge: curveAt(elapsed, OCEAN_CONFIG.storm.surge, OCEAN_CONFIG.storm),
+                front: frontAt(elapsed, OCEAN_CONFIG.storm),
+                gloom: 1
+            });
+            const front = frontAt(elapsed, OCEAN_CONFIG.storm);
+            // Well ahead of the front: the drawback's flat water.
+            if (front && front.z < at - 60) calm = waveSurfaceAt(0, at).lift;
+            // Well behind it: the body of the wave.
+            if (front && front.z > at + 30) lifted = lifted ?? waveSurfaceAt(0, at).lift;
+        }
+        expect(calm).not.toBeNull();
+        expect(lifted).not.toBeNull();
+        // The drawback puts the flat water slightly BELOW mean level, which is
+        // itself only true now that the surge lifts the mesh as well.
+        expect(calm).toBeLessThan(0.5);
+        // And the wave body is metres up. Ten is a floor, not a target: it is
+        // there to fail loudly if the lift ever goes back to being the tide.
+        expect(lifted).toBeGreaterThan(10);
+    });
+
+    test('the raised water has a back to it, so the sheet edge stays down', () => {
+        // The one thing the lift could not simply be. Seaward of the front the
+        // water stands `rise` higher for ever, and lifting the whole sheet by
+        // that put ITS OWN FAR EDGE 43 to 58 px above the horizon under a third
+        // of a fog: a hard line with sky above it. `tsunami.bodyMetres` tapers
+        // the lift away behind the front, which turns the step into a body of
+        // water with a back.
+        const rows = rowPositions(OCEAN_CONFIG.water.rows, OCEAN_CONFIG);
+        const farRow = rows.length - 1;
+        for (const t of [62, 66, 70, 74, 78]) {
+            const p = buildProfile(rows, t, OCEAN_CONFIG, null, {
+                swell: swellAt(t, OCEAN_CONFIG.storm),
+                surge: curveAt(t, OCEAN_CONFIG.storm.surge, OCEAN_CONFIG.storm),
+                front: frontAt(t, OCEAN_CONFIG.storm)
+            });
+            // ASSERTED IN PIXELS, because pixels are the artifact. A metre of
+            // lift 412 m out is about a pixel, and the first version of this
+            // guessed a bound in metres and tripped over its own arbitrariness
+            // at 1.58 m, which is 1.6 px and is nothing.
+            const dist = OCEAN_CONFIG.camera.z - rows[farRow];
+            const above = Math.max(0, p.lift[farRow] - OCEAN_CONFIG.camera.height);
+            const px = Math.atan(above / dist) * (180 / Math.PI) * (1080 / OCEAN_CONFIG.camera.fov);
+            expect(px).toBeLessThan(5);
+        }
+    });
+
     test('it reports null rather than a wrong answer before the sea exists', () => {
         // The frames before the first profile. Returning zero here would put the
         // buoy at mean sea level for a frame on every replay, which is a visible

@@ -400,6 +400,11 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
 
     const p = out || {
         depth: new Float32Array(rows),
+        // WHAT THE MESH IS ACTUALLY LIFTED BY, per row. Computed here so that
+        // the attribute writer and `waveSurfaceAt` cannot disagree about where
+        // the surface is: one of them putting the water somewhere the other does
+        // not is exactly how the buoy ended up floating in mid air.
+        lift: new Float32Array(rows),
         breaking: new Float32Array(rows),
         foamBed: new Float32Array(rows),
         edge: new Float32Array(rows),
@@ -469,6 +474,43 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
             rowSwell = swell + (lull.before - swell) * notYet;
         }
         if (front) rowSwell = rowSwell + (front.swellBehind - rowSwell) * behindFront;
+
+        // ---- WHAT LIFTS THE MESH ------------------------------------------
+        //
+        // AND UNTIL 2026-08-21 THIS WAS THE TIDE AND NOTHING ELSE. `level` above
+        // has carried the surge and the tsunami's rise for a long time, but only
+        // `depthAt` ever read it: the vertex offset was `tideOffset` on its own,
+        // so the surge and the front changed how DEEP the water was, and
+        // therefore how big its waves were allowed to be, without ever changing
+        // where its surface sat. Measured at the wall, the arc believed in 17.35
+        // m of water and the mesh was drawn at 3.38.
+        //
+        // That is why `riseFar` and `riseNear` worked at all: more rise meant
+        // more depth, which raised the `breakRatio x depth` cap, which let the
+        // swell behind the front stand taller. The wall was made of waves rather
+        // than of level, and every pixel table written about it was overstated.
+        //
+        // IT IS A WAVE BODY AND NOT A PLATEAU, which is the one thing this could
+        // not simply be. The front is a step, so water seaward of it stands
+        // `rise` higher all the way out, and lifting the mesh by that put the
+        // SHEET'S OWN FAR EDGE 43 to 58 px above the horizon under only a third
+        // of a fog: a hard line with sky above it, which is a rendering fault
+        // rather than a sea. So the lift tapers back to nothing over
+        // `bodyMetres` behind the front, which also happens to be what a wave is.
+        // Physically that length should be kilometres; it is sized for the
+        // frame, in exactly the way the height already is.
+        //
+        // The TAPER IS ON THE DRAWN LIFT ONLY and deliberately not on `level`.
+        // Depth out there is capped at `beach.maxDepth` anyway, so tapering it
+        // would change nothing except to make two numbers disagree.
+        let lift = tide;
+        if (front) {
+            const behind = Math.max(0, front.z - z);
+            const body = front.body > 0
+                ? 1 - smoothstep(front.body * 0.35, front.body, behind) : 1;
+            lift += front.rise * behindFront * body;
+        }
+        p.lift[r] = lift;
 
         const depth = depthAt(z, level, beach, water);
         p.depth[r] = depth;
@@ -1354,8 +1396,6 @@ function refreshAttributes() {
     const { rows, cols } = grid;
     const n = constants.length;
     const TAU = Math.PI * 2;
-    const tide = tideOffset(elapsed, settings.water);
-
     for (let r = 0; r < rows; r++) {
         const base = r * cols * 4;
         const p0 = profile.phase[r * n];
@@ -1380,9 +1420,11 @@ function refreshAttributes() {
             attributes.shore[i] = profile.depth[r];
             attributes.shore[i + 1] = profile.breaking[r];
             attributes.shore[i + 2] = profile.foamBed[r];
-            // The tide rides in the attribute rather than moving the mesh, so
-            // the sheet stays put and only the water level in it changes.
-            attributes.shore[i + 3] = tide;
+            // The water level rides in the attribute rather than moving the
+            // mesh, so the sheet stays put and only the surface in it moves.
+            // PER ROW SINCE 2026-08-21, because the tsunami is a level that is
+            // in a PLACE. See the note beside `p.lift` in `buildProfile`.
+            attributes.shore[i + 3] = profile.lift[r];
         }
     }
 
@@ -1509,7 +1551,8 @@ export function waveSurfaceAt(x, z) {
     // there may stand, so they change the SIZE of the water rather than its
     // elevation. Anything floating has to ride what is drawn, not what the story
     // believes, or it will hang seventeen metres over the tsunami.
-    const lift = tideOffset(elapsed, settings.water);
+    // The same per row number the attribute writer uses, so the two cannot
+    // disagree about where the water is.
     // Nearest row. The rows are packed toward the camera, so a linear scan is
     // both correct and cheap at this call rate: one float per row, once a frame,
     // for one object.
@@ -1539,6 +1582,24 @@ export function waveSurfaceAt(x, z) {
         const dY = amp * cs + 2 * sharp * Math.sin(2 * phase);
         slopeX += dY * k * sinTheta;
         slopeZ += dY * k * cosTheta;
+    }
+    const lift = profile.lift[row];
+
+    // THE FACE OF THE FRONT IS A SLOPE TOO, and leaving it out is the difference
+    // between a buoy carried up a wall and a buoy taking a lift. The wave sum
+    // above knows nothing about it, because the front is not a wave: it is a
+    // step in `lift`, held per row. So the gradient is read straight off the
+    // neighbouring rows rather than derived, which costs two array reads and is
+    // exact for the quantity the shader is actually handed.
+    //
+    // Rows run from the camera outward, so `rowZ` DECREASES as the index rises.
+    // Getting that backwards would pitch the buoy down the face instead of up
+    // it, which looks like the sea running the wrong way.
+    if (row > 0 && row < rowZ.length - 1) {
+        const dz = rowZ[row + 1] - rowZ[row - 1];
+        if (Math.abs(dz) > 1e-6) {
+            slopeZ += (profile.lift[row + 1] - profile.lift[row - 1]) / dz;
+        }
     }
     return { y: y + lift, wave: y, lift, slopeX, slopeZ, row, depth: profile.depth[row] };
 }

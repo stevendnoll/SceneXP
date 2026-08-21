@@ -307,6 +307,12 @@ export function frontAt(seconds, storm = OCEAN_CONFIG.storm) {
         // frame where somebody happens to be looking at the horizon.
         rise: grown * smoothstep(0, 0.10, p),
         width: t.frontWidthFar + (t.frontWidthNear - t.frontWidthFar) * p,
+        // How far back the raised water reaches before it tapers away. Carried
+        // on the front rather than read from config by water.js, the same way
+        // `rise` and `width` are, so the sea never has to know what a tsunami
+        // is. See the note beside `p.lift` in water.js for why this is not
+        // simply infinite.
+        body: t.bodyMetres,
         foam: t.frontFoam * smoothstep(0, 0.15, p),
         // The sea BEHIND the front, as a swell multiplier. Full from the moment
         // it appears, because the wall is supposed to be already enormous when
