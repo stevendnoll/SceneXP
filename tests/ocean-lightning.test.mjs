@@ -684,6 +684,49 @@ describe('the scene the lightning builds', () => {
         expect(peak).toBeGreaterThan(0.5);
     });
 
+    test('dimming the sky wash leaves the channel and the glint alone', () => {
+        // THE WHOLE POINT OF HAVING THREE GAINS. `skyGain` is the screen wide
+        // wash, `bolt.intensity` is the channel, `lightIntensity` is the glint
+        // path on the water, and they are separate numbers precisely so the
+        // wash can be turned down without taking the streaks with it. That is
+        // the tuning Steve asked for on 2026-08-21 and it is only possible while
+        // this holds.
+        //
+        // The obvious refactor, folding `skyGain` into `flash` so there is one
+        // multiply instead of three, would silently couple all three and this is
+        // the test that would stop it.
+        const half = structuredClone(OCEAN_CONFIG);
+        half.storm.lightning.skyGain = OCEAN_CONFIG.storm.lightning.skyGain / 2;
+
+        const run = (config) => {
+            const scene = makeScene();
+            const uniforms = makeSkyUniforms();
+            initLightning(scene, null, config, { sky: { uniforms }, random: seeded(11) });
+            const light = scene.children.find((c) => c.name === 'lightningFlash');
+            const mesh = scene.children.find((c) => c.name === 'lightning');
+            let flash = 0, bolt = 0, glint = 0;
+            for (let t = 0; t < 90; t += 1 / 60) {
+                updateLightning(t, config);
+                flash = Math.max(flash, uniforms.uFlash.value);
+                bolt = Math.max(bolt, mesh.material.uniforms.uBoltIntensity.value);
+                glint = Math.max(glint, light.intensity);
+            }
+            disposeLightning();
+            return { flash, bolt, glint };
+        };
+
+        const full = run(OCEAN_CONFIG);
+        const dim = run(half);
+        expect(full.flash).toBeGreaterThan(0);
+        expect(full.bolt).toBeGreaterThan(0);
+        expect(full.glint).toBeGreaterThan(0);
+        // The wash halves...
+        expect(dim.flash).toBeCloseTo(full.flash / 2, 6);
+        // ...and the other two do not move at all.
+        expect(dim.bolt).toBeCloseTo(full.bolt, 6);
+        expect(dim.glint).toBeCloseTo(full.glint, 6);
+    });
+
     test('the flash always comes back to zero between strikes', () => {
         // The decay reaches exactly zero, so over ninety seconds there must be
         // frames with no flash on them at all. A permanent glow would mean the

@@ -1959,7 +1959,62 @@ export const OCEAN_CONFIG = deepFreeze({
             referenceMetres: 320,
             // How hard the flash drives the sky's own colour, and the sea's
             // reflection of it, which is one number because they are one term.
-            skyGain: 2.4,
+            //
+            // THIS NUMBER IS NOT LINEAR IN WHAT YOU SEE AND IT IS NOT CLOSE.
+            // The flash is added in LINEAR light and then goes through exposure,
+            // ACES, and the sRGB encode, and at the old 2.4 it was so far into
+            // the top of that curve that most of the useful range of this knob
+            // did nothing at all. Measured on the storm sky at full gloom, at the
+            // peak of a flash directly ahead, over the upper sky band:
+            //
+            //     skyGain   mean   peak   share of the sky at 230+
+            //     2.4        241    246          92.4%
+            //     2.0        238    244          90.9%
+            //     1.6        234    241          88.3%
+            //     1.3        230    237          79.2%
+            //     1.1        226    233          47.9%
+            //     0.9        220    229           0.0%
+            //     0.75       214    223           0.0%
+            //
+            // At 2.4 the sky was 92 per cent WHITE at every peak. Steve asked
+            // for a slight reduction, and the honest answer was that a slight
+            // change to this number is invisible: 2.4 to 2.0 moves the blown out
+            // share by a point and a half.
+            //
+            // 1.1 is where the picture actually changes. The peak is still 233,
+            // so it still reads as lightning and still lights the whole sky, but
+            // the blown out share halves and the sky keeps its own colour at the
+            // edges of the frame instead of clipping to paper white everywhere
+            // at once. If it wants to come down further, 0.9 is the next stop
+            // and is the point at which nothing in the frame clips at all.
+            //
+            // What that means for the strikes the arc actually produces, since
+            // `reach` dims them by distance and the second stroke runs at 0.78:
+            //
+            //                        old 2.4              new 1.1
+            //                     mean peak blown     mean peak blown
+            //     900m  first      219  227    0%      188  199    0%
+            //     600m  first      230  237   78%      205  215    0%
+            //     400m  first      238  243   91%      220  228    0%
+            //     293m  first      241  246   92%      226  233   48%
+            //     293m  second     237  243   90%      219  227    0%
+            //
+            // WHICH IS THE SHAPE THAT WAS WANTED. Only the nearest first stroke
+            // still whites out any of the frame, and it is meant to. Every other
+            // flash in the arc has stopped clipping, so distance is legible in
+            // the light again: a far strike now reads as a far strike instead of
+            // as the same sheet of white the near one produces.
+            //
+            // A SIDE EFFECT WORTH KNOWING: the channels read BETTER after this,
+            // not worse. A bolt is additive over the sky behind it, and a sky
+            // already sitting at 244 has nothing left to add to.
+            //
+            // IT DOES NOT TOUCH THE CHANNEL. `bolt.intensity` and
+            // `lightIntensity` are multiplied off `flash` before this is applied,
+            // so the streaks and the glint path on the water are exactly as
+            // bright as they were. That separation is the reason the three are
+            // three numbers.
+            skyGain: 1.1,
             // The light it throws directly on the water. Separate from the sky
             // term because this one makes a glint path and that one does not.
             lightIntensity: 4.2,
