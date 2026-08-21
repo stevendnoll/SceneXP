@@ -112,7 +112,10 @@ const quality = {
     frame: 0,           // smoothed seconds per frame
     best: Infinity,     // the fastest we have seen, which estimates the display
     since: 0,           // seconds since the ratio last changed
-    frames: 0
+    frames: 0,
+    // Held at full resolution for a screenshot, and ignored by `adaptQuality`
+    // while it is set. Off for every real visitor. See `oceanCapture`.
+    pinned: false
 };
 
 /** A phone or tablet, asked once.
@@ -192,6 +195,8 @@ function adaptQuality(delta) {
     // into the average would drop the resolution for something that never
     // happened while anybody was watching.
     if (!renderer || delta <= 0 || delta > q.ignoreAboveSeconds) return;
+    // A capture in progress owns the resolution. See `oceanCapture`.
+    if (quality.pinned) return;
 
     quality.frame = quality.frame === 0
         ? delta : quality.frame + (delta - quality.frame) * q.smoothing;
@@ -686,6 +691,33 @@ async function init() {
     // trying it here. Call with no argument to read it, a number to set it, or
     // null to go back to config.
     window.oceanProfileHz = (hz) => (hz === undefined ? profileRate() : setProfileHz(hz));
+    // CAPTURE MODE, FOR THE SOCIAL CARD, and it exists because of one specific
+    // trap. The adaptive resolution can sit as low as `quality.minScale` (0.60)
+    // and climbs back at 6 per cent every three seconds, so recovering from the
+    // floor takes the better part of half a minute. The frame worth
+    // photographing is t=73, which is the single heaviest moment in the arc:
+    // the wall fills most of the picture and the fill rate cost peaks. So the
+    // one frame anybody wants to capture is the frame most likely to be
+    // rendering at 60 per cent and being upscaled, and a soft social card with
+    // no explanation is exactly how that would show up.
+    //
+    // It also takes the floating home button out of shot, which is chrome
+    // rather than scene and does not belong on a picture of the sea.
+    //
+    // Pass false to put both back.
+    window.oceanCapture = (on = true) => {
+        quality.pinned = !!on;
+        if (on) {
+            quality.scale = 1;
+            quality.since = 0;
+            renderer.setPixelRatio(quality.ceiling);
+            renderer.setSize(window.innerWidth, window.innerHeight, false);
+        }
+        document.querySelectorAll('.ui-float').forEach((el) => {
+            el.classList.toggle('visible', !on);
+        });
+        return { pinned: quality.pinned, ratio: quality.ceiling * quality.scale };
+    };
     window.oceanQuality = () => ({
         ratio: quality.ceiling * quality.scale,
         ceiling: quality.ceiling,

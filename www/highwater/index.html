@@ -26,9 +26,23 @@
               file is a broken image on the site's front door)
            3. the `noindex` below
 
-         t=72 to t=74 makes the best frame. The wall is 40 to 57 per cent of the
-         sky there: close enough to read as a wall, not yet so close that it is
-         an abstract grey field. `oceanSetArc(73)` gets you there directly.
+         HOW TO TAKE IT:
+           1. Size the browser window to about 1.9:1 rather than capturing wide
+              and cropping. `camera.fov` is VERTICAL, so a wider window shows
+              more sea either side at the same height, while a crop cuts the top
+              off the wall.
+           2. `oceanCapture()` in the console. It pins the renderer to full
+              resolution and takes the home button out of shot. The adaptive
+              scale can sit as low as 0.60 and takes half a minute to climb
+              back, and t=73 is the heaviest frame in the arc, so without this
+              the one frame worth photographing is the one most likely to be
+              upscaled from 60 per cent.
+           3. `oceanSetArc(73)`, then capture. t=72 to t=74 is the window: the
+              wall is 40 to 57 per cent of the sky there, close enough to read
+              as a wall and not yet so close that it is an abstract grey field.
+           4. `oceanCapture(false)` to put the button and the adaptive scale
+              back, if you carry on watching.
+
          CONTRIBUTING.md has the note on converting a Mac screenshot so it
          survives the trip.
          ========================================================================== -->

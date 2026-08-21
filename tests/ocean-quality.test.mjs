@@ -40,6 +40,35 @@ function sample(frameMs, bestMs, overrides = {}) {
     };
 }
 
+describe('the capture pin', () => {
+    test('the floor is low enough that a capture could be soft', () => {
+        // THE REASON `oceanCapture` EXISTS, stated as a number rather than left
+        // in a comment. The adaptive scale can sit at `minScale` and climbs by
+        // `stepUp` no more often than every `holdUpSeconds`, so recovering from
+        // the floor is not a thing that happens while somebody lines up a
+        // screenshot. And the frame worth capturing, t=73, is the heaviest in
+        // the whole arc.
+        const q = CONFIG.quality;
+        expect(q.minScale).toBeLessThan(0.8);
+        const steps = Math.ceil(Math.log(1 / q.minScale) / Math.log(q.stepUp));
+        const recoverySeconds = steps * q.holdUpSeconds;
+        // If this ever drops under ten seconds the pin has stopped earning its
+        // keep and can go. Today it is about half a minute.
+        expect(recoverySeconds).toBeGreaterThan(10);
+    });
+
+    test('a pinned scale is never lowered by a slow frame', () => {
+        // `adaptQuality` returns early while pinned, so the only thing this can
+        // check without a renderer is that the decision function would
+        // otherwise have dropped it. If that stops being true the early return
+        // is dead code and somebody should notice.
+        const q = CONFIG.quality;
+        const slow = { frame: q.slowSeconds * 2, best: q.slowSeconds / 2, scale: 1,
+            since: q.holdDownSeconds + 1, frames: q.settleFrames + 1 };
+        expect(nextPixelScale(slow, CONFIG)).toBeLessThan(1);
+    });
+});
+
 describe('it does nothing until it knows anything', () => {
     test('the opening frames are ignored, whatever they look like', () => {
         // Shader compilation and the first attribute upload both land in the
