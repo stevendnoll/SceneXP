@@ -2267,6 +2267,205 @@ export const OCEAN_CONFIG = deepFreeze({
         // The closing fade, in seconds off the end. Long enough to read as an
         // ending rather than as a page crashing, short enough that nobody is
         // left watching a grey rectangle.
+        // ---- The buoy --------------------------------------------------------
+        //
+        // THE ONLY MAN MADE THING IN THE SCENE, AND IT IS HERE FOR SCALE BEFORE
+        // IT IS HERE FOR STORY. Until this existed there was nothing in the
+        // frame to measure the sea against. The swell is two to three metres and
+        // the wall is seventeen, and with nothing of known size next to either
+        // of them the eye reads grey rather than huge. A buoy is the cheapest
+        // possible fix: everybody knows roughly how big one is, so every wave
+        // that passes it is measured for free, for the whole ninety seconds.
+        //
+        // AND IT IS A GAUGE. A buoy is a thing that is supposed to be upright.
+        // Watching one fail to be upright, more and more, is a reading of the
+        // sea that no amount of water on its own can give, because water has no
+        // "should" to be measured against. That is the whole reason this beats
+        // the boat that was also considered: a boat leaving tells you somebody
+        // decided, and a buoy tells you how bad it actually is.
+        //
+        // IT IS THE LAST THING THE SEA TAKES BEFORE IT TAKES THE BEACH. A moored
+        // buoy cannot steer away, so it never leaves: it is buried by crests
+        // through the storm, handed back by the flat sea of the lull, lowered by
+        // the drawback, and finally rolled under by the tsunami front on its way
+        // in. See `lostMetres` for why that beats the fixed timer this had
+        // first, and for the general lesson, which is that a ruler is worth most
+        // next to the biggest thing in the picture.
+        buoy: {
+            // WHERE. 120 m out, which the fog maths chose rather than taste:
+            // `clarity` is 0 until t=52, so `sky.fog.far` is 400 m for the whole
+            // time the buoy is on screen, and at 280 m an object is already 61
+            // per cent faded into the sky. 120 m costs only 10 per cent of fog
+            // and is deep water on this beach, since the bed reaches `maxDepth`
+            // about 50 m out, so a moored mark here is unremarkable.
+            //
+            // Off to one side, because dead centre is where the tsunami arrives
+            // and the two should never have shared a spot.
+            x: -13,
+            z: -95,
+            // 95 m RATHER THAN 120, AND THE SECOND NUMBER IS THE INTERESTING
+            // ONE. Distance turns out to be purely a size and fog choice here
+            // and not a liveliness one: the bed reaches `beach.maxDepth` about
+            // 55 m out, so the wave steepness from 55 m to 220 m is IDENTICAL
+            // (20 degrees of slope, measured). Moving the buoy in and out only
+            // changes how many pixels tall it is. 95 m costs 2 per cent of fog
+            // and buys 39 px against 29, which is the difference between a lean
+            // that reads and one that moves the masthead three pixels.
+            //
+            // x IS CLAMPED BY A PHONE HELD UPRIGHT and not by taste. `camera.fov`
+            // is VERTICAL, so a portrait screen is narrow: about 19 degrees
+            // across, against 69 on a wide monitor. That puts the frame edge
+            // only 16 m either side of the axis at this distance, so anything
+            // past that is simply not in the picture for a mobile visitor, which
+            // is most of them. 13 m keeps it in frame everywhere with 3 m to
+            // spare, and is still visibly off centre on a desktop.
+            // HOW BIG. 1.05 m across the float and 2.4 m from the waterline to
+            // the top of the light, which is an ordinary channel mark. At 120 m
+            // that is about 31 px tall: small, and small is correct. It is a
+            // ruler, not a subject, and the moment it is big enough to look at
+            // instead of the sea it has failed at the only job it has.
+            radius: 0.52,
+            height: 2.40,
+            // Orange over white, which is what a real special mark looks like
+            // and, more usefully here, the one hue this scene does not otherwise
+            // contain. Every colour in the frame is a grey, a blue or a green,
+            // so orange cannot be confused with any of them at 31 px.
+            hullColor: 0xe8622a,
+            // A dark band round the top of the hull and on the topmark. At this
+            // size a band is the only marking that survives, and two tones on
+            // one mass is what makes a shape read as a marked object rather than
+            // a moulded one.
+            bandColor: 0x21262b,
+            towerColor: 0xd8dcd8,
+            // THE LIGHT IS EMISSIVE GEOMETRY AND NOT A LIGHT. Three keys its
+            // compiled programs on how many lights are in the scene, so adding
+            // a real one would recompile the water, the sand and the sky. It
+            // would also buy nothing: a 25 W lamp at 120 m illuminates no pixel
+            // of anything. What is wanted is a bright dot, and a bright dot is
+            // what this is.
+            lightColor: 0xffc46b,
+            // Fl(2) 6s, a real flash character: two quick flashes, then a long
+            // dark. Chosen over a plain blink because the PAIR is what makes it
+            // read as a navigation light rather than as a rendering artefact,
+            // and because a rhythm the eye can learn in the first ten seconds is
+            // a rhythm it notices the absence of at the end.
+            flashPeriod: 6.0,
+            flashOn: 0.35,
+            flashGap: 0.55,
+            // HOW HARD IT LEANS. The tilt is the surface slope under it times
+            // this. A real buoy does not follow the slope exactly, because it
+            // has a keel and its own inertia, so a factor under one is both the
+            // honest answer and the one that stops it flapping about at every
+            // ripple.
+            // 0.90, RAISED FROM 0.62 AFTER MEASURING THE SWING. The lower figure
+            // was reasoned for a keeled spar buoy, which stays stubbornly
+            // upright while the sea moves around it. This is a small float with
+            // a short mast, closer to a can mark, and one of those follows the
+            // surface nearly all the way. Measured at the buoy's own position,
+            // pitch asked of it and what the pendulum then does with it:
+            //
+            //     t=5    5 deg  ->   6 deg swing     4 px at the masthead
+            //     t=25   8      ->  11               7
+            //     t=31  10      ->  13               8
+            //
+            // and at 0.90 those become 15 degrees and 12 px by t=31. THE BOB IS
+            // STILL THE MAIN EVENT and no gain here changes that: the buoy rises
+            // and falls through 17 px at the start and 32 by the end, which is
+            // four times the lean and is what actually reads at this size.
+            tiltGain: 0.90,
+            maxTiltDegrees: 46,
+            // ---- The roll ---------------------------------------------------
+            //
+            // A DRIVEN PENDULUM, AND THE FIRST VERSION WAS NOT. It chased the
+            // surface slope with an exponential approach, which is stable, is
+            // trivially correct, and produced a buoy that was measurably duller
+            // than the real thing: an exponential can never go PAST its target,
+            // so the mast never swung further than the water under it was
+            // tilted. That capped the lean at 13 degrees, which at 39 px moves
+            // the masthead by about five pixels, and Steve had asked to see the
+            // thing tossed about.
+            //
+            // A float in a seaway is a pendulum being driven by the wave it is
+            // sitting on, and a driven pendulum overshoots. So it is modelled as
+            // one, and the overshoot is not a cheat added to make it livelier,
+            // it is the part the first version was missing.
+            //
+            // `stiffness` sets the natural roll period at 2 pi / sqrt(k), which
+            // is 2.1 s here. A real mark of this size rolls in two to four. The
+            // dominant swell arrives about every 5.6 s in 11 m of water, so the
+            // buoy rings a couple of times between waves, which is exactly what
+            // buoy footage looks like.
+            //
+            // The damping ratio is `damping / (2 sqrt(stiffness))`, so 0.20
+            // here, which overshoots its target by about half. That turns a 13
+            // degree slope into a 20 degree swing without either number being
+            // dishonest about what the water is doing.
+            rollStiffness: 9.0,
+            rollDamping: 1.2,
+            // Integrated with a clamped step, which is what makes a spring safe
+            // here. Semi implicit Euler goes unstable when the step approaches
+            // the natural period, and a tab returning from the background hands
+            // over exactly that. At 1/30 s and this stiffness the step is a
+            // tenth of a radian of phase, which has margin to spare.
+            rollMaxStep: 1 / 30,
+            // REDUCED MOTION GETS A CALMER BUOY AND NOT A MISSING ONE. The
+            // scale reference is the reason it exists, and taking it away would
+            // cost that. So it keeps its place and loses most of its swing.
+            reducedTiltScale: 0.30,
+            // WHEN THE SEA TAKES IT, AND IT IS THE TSUNAMI THAT DOES IT.
+            //
+            // This was a fixed `lostAt: 32` first, because Steve had asked for
+            // the thing gone before the arc got interesting. He watched it and
+            // said he had expected it back during the lull, and he was right in
+            // a way worth recording: A BUOY THAT DIES AT THIRTY SECONDS THROWS
+            // AWAY THE ONLY JOB IT HAS. It is a ruler, and the three things in
+            // this scene that most need measuring are the storm peak, the
+            // drawback and the wall. All three happen after 32. It also spent
+            // its entire life on the calmest sea in the arc, which is the one
+            // stretch where a scale reference proves nothing.
+            //
+            // So it lives, and the arc does the work instead:
+            //
+            //   t=0-28    floats and flashes on an ordinary sea. Establishes
+            //             how big it is, which is the whole point of it.
+            //   t=28-50   the crests clear eye level, so it starts vanishing
+            //             behind swells for seconds at a time. NO CODE DOES
+            //             THIS. It falls out of the sea being tall enough.
+            //   t=52-60   the lull. The sea goes flat and hands it back,
+            //             upright and still flashing, which is the eeriest
+            //             beat in the arc and until now had nothing in it.
+            //   t=60-72   the drawback takes it down with everything else.
+            //   t~72      the front reaches it and rolls it under.
+            //
+            // `lostMetres` is how far the front travels PAST it before there is
+            // nothing left to draw. Measured in metres rather than seconds
+            // because the front is what is doing it: at about 15 m/s there, 25 m
+            // is a second and a half, which is a thing being rolled over rather
+            // than a thing fading out.
+            // `lostAfterMetres` IS THE FIX FOR THE ONE THING STEVE COULD STILL
+            // SEE. `behindFront` blends the big water in over the front's own
+            // width, so when the front's EDGE reaches the buoy the sea there is
+            // still the drawback's flat 0.7 m, and it does not reach its full
+            // 3.3 m until the front is about twenty metres past. Starting the
+            // sink at the edge meant the buoy went down at precisely the rate
+            // the water came up:
+            //
+            //     t=72.0   water 1.70 m   sink 0.00   buoy top 1.70 m
+            //     t=72.5         2.80          0.95            1.85
+            //     t=73.0         3.33          1.88            1.45   <- falling
+            //
+            // The two cancelled, and it read as the sea flowing around a thing
+            // that was not moving. 25 m holds it up until the water is genuinely
+            // there, so it is carried to the top of the face first and taken
+            // afterwards, which is also what happens to a moored mark.
+            lostAfterMetres: 25,
+            // And then how far past THAT before there is nothing left to draw.
+            // At about 17 m/s here, 30 m is a second and three quarters: a thing
+            // being rolled over rather than a thing fading out.
+            lostMetres: 30,
+            lostDepth: 2.3
+        },
+
         // ---- The tsunami itself ---------------------------------------------
         //
         // A STEP THAT TRAVELS, AND UNTIL THIS EXISTED THERE WAS NOTHING TO SEE

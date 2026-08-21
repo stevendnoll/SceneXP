@@ -1474,6 +1474,75 @@ export function updateWater(deltaTime, sea = CALM) {
     detectBreaks();
 }
 
+/** Where the DRAWN water surface is at a world point, for something floating on
+ *  it. Returns metres above still water and the two surface slopes, or null
+ *  before the sea exists.
+ *
+ *  READ THE NOTE BELOW THIS ONE BEFORE ADDING A SECOND CALLER. A `surfaceAt`
+ *  lived here once, answered a subtly different question, and had to be deleted.
+ *  This one is NOT that function and must not grow into it. It answers "where is
+ *  the drawn surface", which is what a buoy rides on. It does NOT answer "is
+ *  there water over your head", which only broken whitewater says yes to and
+ *  which `surfaceWithSwash` in sand.js is still the single answer for. The two
+ *  disagree in the surf and the disagreement is the entire point of both.
+ *
+ *  IT MIRRORS THE VERTEX SHADER AND HAS TO KEEP MIRRORING IT. The sea is
+ *  displaced on the GPU, so this is a second implementation of the same sum and
+ *  the two drifting apart would show as a buoy floating above or inside the
+ *  water. `phase`, `amp`, `sharp` and `k` all come from the profile the shader
+ *  is reading through its attributes, so the only thing restated here is the
+ *  trigonometry, and a test walks both against each other.
+ *
+ *  THE HORIZONTAL GERSTNER OFFSET IS DELIBERATELY IGNORED. A vertex also moves
+ *  sideways, so the surface point at world x is not exactly the height computed
+ *  for the vertex whose rest position is x. For a small float at a hundred
+ *  metres that error is well under a metre of arc and under a pixel on screen,
+ *  and carrying it would mean inverting the displacement, which has no closed
+ *  form. */
+export function waveSurfaceAt(x, z) {
+    if (!profile || !rowZ || !constants) return null;
+    // THE VERTEX OFFSET IS PART OF THE ANSWER AND IT IS NOT THE ARC'S LEVEL.
+    // `transformed.y += aShore.w` is the only thing that lifts this mesh, and
+    // `refreshAttributes` writes `tideOffset(elapsed)` into it: the astronomical
+    // tide and nothing else. The surge and the tsunami front's own rise reach
+    // the sea through `depth` instead, which sets the cap on how tall the waves
+    // there may stand, so they change the SIZE of the water rather than its
+    // elevation. Anything floating has to ride what is drawn, not what the story
+    // believes, or it will hang seventeen metres over the tsunami.
+    const lift = tideOffset(elapsed, settings.water);
+    // Nearest row. The rows are packed toward the camera, so a linear scan is
+    // both correct and cheap at this call rate: one float per row, once a frame,
+    // for one object.
+    let row = 0;
+    let bestGap = Infinity;
+    for (let r = 0; r < rowZ.length; r++) {
+        const gap = Math.abs(rowZ[r] - z);
+        if (gap < bestGap) { bestGap = gap; row = r; }
+    }
+    const n = constants.length;
+    let y = 0;
+    let slopeX = 0;
+    let slopeZ = 0;
+    for (let i = 0; i < n; i++) {
+        const k = profile.k[row * n + i];
+        const amp = profile.amp[row * n + i];
+        if (!(amp > 0) || !(k > 0)) continue;
+        const sinTheta = Math.max(-0.95, Math.min(0.95, constants[i].kSin / k));
+        const cosTheta = Math.sqrt(1 - sinTheta * sinTheta);
+        const phase = profile.phase[row * n + i]
+            + constants[i].kSin * x - constants[i].omega * elapsed;
+        const sn = Math.sin(phase);
+        const cs = Math.cos(phase);
+        const sharp = profile.sharp[row * n + i];
+        y += amp * sn - sharp * Math.cos(2 * phase);
+        // d/dphase of the line above, which is what the shader's `dY` is.
+        const dY = amp * cs + 2 * sharp * Math.sin(2 * phase);
+        slopeX += dY * k * sinTheta;
+        slopeZ += dY * k * cosTheta;
+    }
+    return { y: y + lift, wave: y, lift, slopeX, slopeZ, row, depth: profile.depth[row] };
+}
+
 // THERE WAS A `surfaceAt` HERE AND IT WAS DELETED THE DAY THE BORE ARRIVED.
 // It reported the still water surface, which answers "has the sea reached this
 // z" and was the right question right up until the white-out needed answering

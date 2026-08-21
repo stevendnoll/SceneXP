@@ -60,6 +60,7 @@ import {
     swashReachMetres
 } from './sand.min.js';
 import { stormStateAt, surgeAt, frontAt, frontLevelAt, washEnvelope, stageAt } from './storm.min.js';
+import { initBuoy, updateBuoy, resetBuoy, disposeBuoy } from './buoy.min.js';
 import {
     initLightning, updateLightning, resetLightning, disposeLightning, forceStrike
 } from './lightning.min.js';
@@ -318,6 +319,14 @@ function loop(now) {
     // rest of the scene is.
     updateLightning(state.arc, OCEAN_CONFIG);
     updateWater(delta, storm);
+    // AFTER THE WATER AND NOT BEFORE IT. `waveSurfaceAt` reads the profile that
+    // `updateWater` has just rebuilt, so asking first would float the buoy on
+    // last frame's sea. At one frame that is a fraction of a millimetre and
+    // invisible; the reason to get it right is that the profile is rebuilt six
+    // times a second rather than sixty, so the stale frame is not the previous
+    // one, it is up to a sixth of a second old, which at the storm's peak is a
+    // visible step.
+    updateBuoy(state.arc, delta, OCEAN_CONFIG);
 
     // THE BREAK QUEUE. sand.js turns each entry into a sheet of water running up
     // the beach. It had a second reader until the sound was removed, which is
@@ -452,6 +461,7 @@ function replayArc() {
     // fault as the tide one above: the second watch would not be the storm the
     // first one was.
     resetLightning();
+    resetBuoy();
     state.finished = false;
     state.lastTime = 0;
     if (ending) {
@@ -594,6 +604,10 @@ async function init() {
     // the visit is ninety seconds, so there is no later moment at which this
     // answer could usefully change.
     initLightning(scene, camera, OCEAN_CONFIG, { sky, reducedMotion: prefersReducedMotion() });
+    // AFTER THE WATER, because it rides the water's own profile and there is
+    // nothing to float on until that exists. It carries no light of its own, so
+    // unlike the lightning it has no bearing on when the shaders compile.
+    initBuoy(scene, OCEAN_CONFIG, { reducedMotion: prefersReducedMotion() });
 
     wash = document.getElementById('wash');
     blackout = document.getElementById('blackout');
