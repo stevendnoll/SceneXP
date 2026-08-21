@@ -140,8 +140,12 @@ describe('the CPU surface query agrees with the vertex shader', () => {
         // seventy six seconds at frame rate cost fifty seconds of test time for
         // no extra coverage, since the profile itself only rebuilds twenty times
         // a second.
+        // TO 84 AND NOT 76. The front was slowed on 2026-08-21 to keep the
+        // camera from sitting under water for seven seconds, so it now passes
+        // the buoy later than this test used to assume. Walked past the front's
+        // own arrival rather than to a second that happened to work.
         let elapsed = 55;
-        while (elapsed < 76) {
+        while (elapsed < 84) {
             const dt = 1 / 20;
             elapsed += dt;
             updateWater(dt, {

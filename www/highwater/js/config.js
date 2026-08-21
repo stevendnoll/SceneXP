@@ -2507,7 +2507,36 @@ export const OCEAN_CONFIG = deepFreeze({
             // what was missing was being able to SEE it, which was the fog. Now
             // that the air opens during the lull, the two are one beat.
             startAt: 60,
-            arriveAt: 80,
+            // 85 SINCE 2026-08-21, AND IT IS ABOUT THE ENDING RATHER THAN THE
+            // TSUNAMI. Once the rise actually lifted the mesh, the camera went
+            // under at t=78.1 and the closing fade does not begin until 84.1,
+            // which left SEVEN AND A HALF SECONDS of sitting under water with a
+            // clear view of it and nothing happening. Measured:
+            //
+            //     arriveAt   camera covered   clear seconds under water
+            //        80          t=78.1                7.5
+            //        83            80.8                4.8
+            //        85            82.6                3.0   <- is
+            //        86            83.5                2.1
+            //
+            // 85 puts the hit 1.5 s before the fade begins, which is about how
+            // long the white-out takes to release, so the sequence reads as one
+            // move: the water arrives, the white clears just far enough to show
+            // you are under it, and the black takes over.
+            //
+            // 86 was measured and not taken. It lands the payoff 0.6 s before
+            // the fade, so the white-out would still be at full strength when
+            // the screen starts going dark, and the note above about the hit
+            // landing BEFORE the fade rather than during it is the reason that
+            // note exists.
+            //
+            // STEVE ASKED FOR THE FRONT TO SPAWN FURTHER OUT and it cannot:
+            // `fromZ` is -395 and the sheet itself ends at -404, so there is
+            // nowhere further to put it. Slowing it over the same distance is
+            // the same thing from the visitor's side and costs nothing, and it
+            // buys five more seconds of watching the wall come in, which is the
+            // part of this scene that works hardest.
+            arriveAt: 85,
             // THE FRONT CARRIES THE WATER NOW, NOT THE SURGE. The surge used to
             // ramp to 1.55 at the end and the front added its own rise on top,
             // which is two systems raising the same sea and a level of 3 m if
@@ -2693,7 +2722,13 @@ export const OCEAN_CONFIG = deepFreeze({
             // level, because out there the depth is capped at `beach.maxDepth`
             // anyway and tapering it would change nothing except to make two
             // numbers disagree.
-            bodyMetres: 110,
+            // 85 RATHER THAN 110, AND SLOWING THE FRONT IS WHAT MOVED IT. A
+            // slower front is further out at any given second, so the back of
+            // the raised body reached closer to the sheet's own edge and put it
+            // 10 px above the horizon at t=62. 85 m clears it entirely. The wall
+            // itself is untouched, because the lift at the FRONT is where the
+            // taper is 1 and the body length only shapes what is behind it.
+            bodyMetres: 85,
             frontWidthFar: 26,
             frontWidthNear: 8,
             // THE WHITE LINE IS WHAT MAKES IT VISIBLE AT DISTANCE. A 1.55 m step
