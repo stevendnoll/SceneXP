@@ -158,9 +158,21 @@ own, arrives through a pull request once the CI checks pass.
 ### Social cards, and the Mac screenshot trap
 
 Each experience ships a 1200 by 630 card as `assets/og-<world>.webp` with a
-`.jpg` beside it. The WebP is what the page's `og:image` and the directory card
-point at; the JPEG is the fallback for anything that will not decode WebP, and
-it is what Twitter and this repository's own README use.
+`.jpg` beside it.
+
+**The WebP is what every page points at, including Twitter.** `og:image`,
+`twitter:image` and the directory card on the home page all name the WebP, on
+all twelve experiences. An earlier version of this note said the JPEG was what
+Twitter used, which was never true of any page in the repository.
+
+The JPEG is not referenced by any page. It ships for two reasons:
+
+- **The README embeds the JPEGs.** A README is rendered on hosts we do not
+  control, so the widest-support format is the right one there.
+- **It is the file to swap to** if a platform ever declines to render a WebP
+  preview. Facebook has historically been the one to watch. Swapping means
+  editing the two meta URLs on that page, which is why both files ship even
+  though only one is ever served to a browser.
 
 **A screenshot taken on a Mac carries the display's colour profile, not sRGB.**
 Convert it without saying so and the tool keeps the raw numbers and drops the
@@ -198,6 +210,27 @@ rather than copying blindly:
 - **`-sampling-factor 4:4:4` for the JPEG.** The default 4:2:0 washes out
   saturated colour against near-black, which on our cards is exactly where the
   accent colour lives.
+- **`cwebp -sharp_yuv` when the card holds a small saturated object.** Lossy
+  WebP is always 4:2:0 internally and there is no flag to change it, so a
+  brightly coloured thing only a few pixels across loses half its chroma
+  resolution, and **raising the quality will not buy it back**. On the High Water
+  card the buoy is a 20 pixel orange float, and its error sat on a floor: RMSE
+  0.0127 at quality 88 against 0.0112 at 97. A number that barely moves with
+  quality is chroma subsampling rather than ringing, and it is the tell worth
+  learning, because the instinct is to reach for a higher quality or for
+  lossless and neither helps. `-sharp_yuv` took it to 0.0103 at 24.0 KB against
+  24.2, so it cost nothing at all, where lossless would have been 136.6 KB.
+  ImageMagick has no equivalent, so a card like that is encoded with `cwebp`
+  from a PNG that ImageMagick has already converted out of the display profile:
+
+  ```bash
+  magick og-world.png -profile "$SRGB" -strip -alpha off /tmp/card.png
+  cwebp -q 92 -sharp_yuv -metadata none /tmp/card.png -o og-world.webp
+  magick /tmp/card.png -quality 92 -sampling-factor 4:4:4 -interlace Plane -strip og-world.jpg
+  ```
+
+  Measure your own card. A view with nothing small and saturated in it does not
+  need this, and the plain ImageMagick recipe above is fine.
 - **Watch what your picture is actually made of.** For the shipped card the
   real risk was never the text but the starfield, since lossy codecs like to
   eat isolated bright pixels on black. Counting them is a one-line check, and

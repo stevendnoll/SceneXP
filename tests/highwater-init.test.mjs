@@ -239,12 +239,27 @@ describe('the page carries the metadata a share and a crawler need', () => {
         // closing over their head. That is a thing a visitor is owed in
         // advance, and the flashing is a thing a photosensitive visitor is owed
         // in advance. Neither line is furniture and neither comes out.
+        //
+        // ASSERTED AS SUBSTANCE AND NOT AS WORDING, which the first version got
+        // wrong. It pinned the literal phrase "meant to unsettle you", so the
+        // first time somebody improved the prose the suite failed for a reason
+        // that had nothing to do with the visitor. Worse, a test like that
+        // quietly discourages the edit. What must never change is WHAT A
+        // VISITOR IS TOLD; how gracefully it is put is meant to keep improving.
+        //
+        // Four things are owed, and each is matched against the several honest
+        // ways of saying it:
+        //
+        //   that it is a warning at all
+        //   that the sea closes over them, which is the ending
+        //   that the screen flashes, which is the photosensitivity risk
+        //   that it is silent, so they know they can watch it anywhere
         const card = html.slice(html.indexOf('id="welcome"'), html.indexOf('id="wash"'));
-        expect(card).toMatch(/meant to unsettle you/);
-        expect(card).toMatch(/comes over you/);
-        expect(card).toMatch(/lightning/);
-        expect(card).toMatch(/flashes/);
-        expect(card).toMatch(/without sound/);
+        expect(card).toMatch(/unsettl|disturb|frighten|upsett/i);
+        expect(card).toMatch(/comes over you|over your head|closes over|takes you under/i);
+        expect(card).toMatch(/lightning/i);
+        expect(card).toMatch(/flash/i);
+        expect(card).toMatch(/without sound|no sound|silent/i);
     });
 });
 

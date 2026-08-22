@@ -13,40 +13,25 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <!-- ================= ONE STEP LEFT BEFORE THIS PAGE CAN SHIP =================
+    <!-- THE SOCIAL CARD IS IN. `assets/og-highwater.webp` and its .jpg were
+         made from Steve's 1200x630 capture on 2026-08-21, converted OUT of the
+         Mac display profile before being stripped, which is the trap
+         CONTRIBUTING.md warns about: every sampled pixel moved up 10 to 11
+         levels, so skipping it would have shipped a card visibly darker than
+         the PNG on his screen.
 
-         The social card image does not exist yet, and THREE things below point
-         at it. Capture a 1200x630 frame of the scene, save it as
-         assets/og-highwater.webp with a .jpg beside it, then delete the
-         `robots` line further down. Nothing else needs touching.
+         The WebP is cwebp -q 92 -sharp_yuv at 24.0 KB. `-sharp_yuv` is there
+         for the buoy: lossy WebP is always 4:2:0, and the buoy is a 20 px
+         saturated orange object, so its error is chroma rather than ringing and
+         does not improve with quality (0.0127 at q88, 0.0112 at q97). Sharp YUV
+         takes it to 0.0103 for no extra bytes. Lossless would have cost 136.6 KB
+         to fix nothing else.
 
-         The three dependants, so none is missed:
-           1. og:image and twitter:image in this file
-           2. the home page card in www/index.html (an <img> tag, so a missing
-              file is a broken image on the site's front door)
-           3. the `noindex` below
-
-         HOW TO TAKE IT:
-           1. Size the browser window to about 1.9:1 rather than capturing wide
-              and cropping. `camera.fov` is VERTICAL, so a wider window shows
-              more sea either side at the same height, while a crop cuts the top
-              off the wall.
-           2. `oceanCapture()` in the console. It pins the renderer to full
-              resolution and takes the home button out of shot. The adaptive
-              scale can sit as low as 0.60 and takes half a minute to climb
-              back, and t=73 is the heaviest frame in the arc, so without this
-              the one frame worth photographing is the one most likely to be
-              upscaled from 60 per cent.
-           3. `oceanSetArc(73)`, then capture. t=72 to t=74 is the window: the
-              wall is 40 to 57 per cent of the sky there, close enough to read
-              as a wall and not yet so close that it is an abstract grey field.
-           4. `oceanCapture(false)` to put the button and the adaptive scale
-              back, if you carry on watching.
-
-         CONTRIBUTING.md has the note on converting a Mac screenshot so it
-         survives the trip.
-         ========================================================================== -->
-    <meta name="robots" content="noindex, nofollow">
+         THE `noindex` IS GONE AS OF 2026-08-21 and there is deliberately no
+         `robots` tag here at all, which is the same as every other experience:
+         the site's default is indexable, `robots.txt` says `Allow: /`, and the
+         page is in `sitemap.xml` and `llms.txt`. A `robots` meta tag reappearing
+         on this page would mean somebody meant to hide it. -->
 
     <meta name="description" content="Ninety seconds at the water's edge in 3D, beginning on an ordinary bright afternoon. The sky closes over, the surf keeps rising, and the sea does not stay where it belongs. Plays without sound in any modern browser.">
     <meta name="theme-color" content="#8fb6cc">
@@ -84,7 +69,7 @@
     <!-- WRITTEN FOR THE FRAME RECOMMENDED ABOVE AND NOT YET CHECKED AGAINST A
          REAL CAPTURE. Please read it against the picture before shipping: alt
          text describing a different image is worse than none. -->
-    <meta property="og:image:alt" content="A view out to sea from the water's edge under a dark storm sky: a wall of grey water crosses the whole frame a short way offshore with a white broken edge along its front, the beach in the foreground is bare where the sea has drawn back, and a branching fork of lightning stands in the cloud above.">
+    <meta property="og:image:alt" content="A view out to sea under a heavy grey storm sky. A single branching fork of lightning comes down left of centre, from the top of the frame to the horizon. The sea below is grey and heaving in long smooth swells, and a small orange and white navigation buoy stands just right of centre near the horizon, dwarfed by the water around it.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
@@ -94,7 +79,7 @@
          has no type property, so there was never anywhere to offer an
          alternative here anyway. -->
     <meta name="twitter:image" content="https://www.scenexp.com/highwater/assets/og-highwater.webp?v=1">
-    <meta name="twitter:image:alt" content="A view out to sea from the water's edge under a dark storm sky: a wall of grey water crosses the whole frame a short way offshore with a white broken edge along its front, the beach in the foreground is bare where the sea has drawn back, and a branching fork of lightning stands in the cloud above.">
+    <meta name="twitter:image:alt" content="A view out to sea under a heavy grey storm sky. A single branching fork of lightning comes down left of centre, from the top of the frame to the horizon. The sea below is grey and heaving in long smooth swells, and a small orange and white navigation buoy stands just right of centre near the horizon, dwarfed by the water around it.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
@@ -149,10 +134,10 @@
                 turns. The sky closes over into a storm base, lightning starts
                 to work along it, the swell builds until the crests stand above
                 the horizon line, and the sea eventually stops behaving.</p>
-            <p>Please know before you start that this one is meant to unsettle
-                you, and that the sea comes over you at the end. It plays
-                without sound, so you are welcome to watch it anywhere, and you
-                can watch it again as many times as you wish.</p>
+            <p>It does not stay an ordinary afternoon, and you may find it
+                unsettling. The sea comes over you at the end. It plays without
+                sound, so you are welcome to watch it anywhere, and you can
+                watch it again as many times as you wish.</p>
             <p>Most experiences on SceneXP honor a person or a business. This
                 one is a study of water, built to find out whether a browser
                 could be made to feel like standing somewhere you should not be
@@ -193,11 +178,10 @@
                 Ninety seconds at the water's edge, beginning on an ordinary bright afternoon.
             </p>
             <p class="warning">
-                Please know before you start that this one is meant to unsettle you.
-                The weather turns, the surf keeps rising, and the sea comes over you
-                at the end. There is lightning, so the screen flashes from time to
-                time. It plays without sound, so you are welcome to watch it
-                anywhere.
+                It does not stay one, and you may find it unsettling. The weather
+                turns, the surf keeps rising, and the sea comes over you at the
+                end. There is lightning, so the screen flashes from time to time.
+                It plays without sound, so you are welcome to watch it anywhere.
             </p>
             <button id="begin" type="button" class="primary">Begin</button>
             <p class="note">You can watch it again as many times as you wish.</p>
