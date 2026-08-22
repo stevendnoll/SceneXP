@@ -1226,6 +1226,79 @@ describe('the mesh', () => {
         }
     });
 
+    test('NO FOAM EDGE IS A CLEAN THRESHOLD ON AN INTERPOLATED FIELD', () => {
+        // THE ARTEFACT STEVE CAUGHT ON THE TSUNAMI. `crest` and `fold` ride in
+        // vSurf, so they are computed at the vertices and interpolated, and the
+        // iso-line of a linearly interpolated field is a POLYLINE through the
+        // mesh cells rather than a curve. Everywhere in the storm the cells are
+        // far too small to see. On the face of the wall they measure 12 px by 20
+        // to 36 px, and the foam boundary read as a contour map: straight
+        // segments, sharp corners, flat plateaus between them.
+        //
+        // This is the same disease the pulse had, and the cure there was to move
+        // the work per pixel. The noise was already in this shader and was only
+        // ever asked how MUCH foam to draw, never where to stop, so the fill was
+        // ragged and the boundary was not.
+        //
+        // The rule that keeps it from coming back: a smoothstep in the foam is
+        // reading a field it cannot resolve, so its edge has to be displaced by
+        // the per-pixel grain. A term added later without it puts the facets
+        // straight back, and only on the one shot where anybody would see them.
+        const fragment = __test__.FRAGMENT_BODY.replace(/\/\/.*$/gm, '');
+        // Pulled out by balancing brackets rather than by a regex, because the
+        // arguments contain their own parentheses and a lazy match quietly stops
+        // at the first one. The version of this test that used a regex passed
+        // while silently skipping the break threshold, which is the widest edge
+        // on screen and the one most worth catching.
+        const callsTo = (name, src) => {
+            const out = [];
+            let at = src.indexOf(`${name}(`);
+            while (at !== -1) {
+                let depth = 0;
+                let i = at + name.length;
+                for (; i < src.length; i++) {
+                    if (src[i] === '(') depth++;
+                    else if (src[i] === ')' && --depth === 0) break;
+                }
+                out.push(src.slice(at + name.length + 1, i));
+                at = src.indexOf(`${name}(`, i);
+            }
+            return out;
+        };
+        // The three fields that arrive interpolated. `depth` and `viewDistance`
+        // are not among them: one is per row and flat across a cell, the other
+        // is recomputed per pixel from cameraPosition, so neither can facet.
+        const interpolated = ['breaking', 'crest', 'fold'];
+        const edges = callsTo('smoothstep', fragment)
+            .filter((args) => interpolated.some((v) => new RegExp(`\\b${v}\\b`).test(args)));
+        expect(edges.length).toBe(3);
+        for (const args of edges) {
+            const label = args.replace(/\s+/g, ' ').trim().slice(0, 46);
+            expect(`${label} :: ${/\btear\b/.test(args)}`).toBe(`${label} :: true`);
+        }
+        // And the displacement is the grain, not a constant, or every edge in
+        // the frame would move together and the facets would simply shift.
+        expect(fragment).toMatch(/float\s+tear\s*=\s*uFoamEdgeTear\s*\*\s*\(\s*n\s*-/);
+    });
+
+    test('the edge tear is scaled by each ramp it is applied to', () => {
+        // One knob, three ramps of different widths. Handing the same absolute
+        // offset to all of them would be nearly nothing on the wide one and
+        // would swamp the narrow one, so each is scaled by its own ramp and the
+        // number means the same thing everywhere: how far, as a fraction of a
+        // ramp, the edge may wander. Enough to break a facet, not so much that
+        // the surf line turns to static.
+        expect(WATER.foamEdgeTear).toBeGreaterThan(0.3);
+        expect(WATER.foamEdgeTear).toBeLessThan(1.5);
+        const fragment = __test__.FRAGMENT_BODY.replace(/\/\/.*$/gm, '');
+        // The fold ramp is 0.04 to 0.30, so its tear carries that width.
+        expect(fragment).toMatch(/fold\s*\+\s*0\.26\s*\*\s*tear/);
+        // The crest ramp runs from its threshold to 1, so its width is derived
+        // rather than written down, which is what keeps the two in step when the
+        // threshold moves.
+        expect(fragment).toMatch(/crest\s*\+\s*\(\s*1\.0\s*-\s*uFoamCrestThreshold\s*\)\s*\*\s*tear/);
+    });
+
     test('NO ONE COMPONENT SPEAKS FOR THE SEA', () => {
         // The foam pulse used to be built from aPhase[0], on the reasoning that
         // the longest wave is the one that reads as arriving. That was true

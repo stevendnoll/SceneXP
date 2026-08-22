@@ -345,7 +345,12 @@ function loop(now) {
     updateSand(delta, storm);
 
     renderer.render(scene, camera);
-    state.wash = washEnvelope(state.wash, storm.engulf, delta, OCEAN_CONFIG.storm);
+    // THE FLOOR IS WHY THE ENDING IS NOT A HOLE. Past a certain depth the sea is
+    // over the eye with nothing under it to draw, so the white-out holds instead
+    // of draining to zero and hands the frame straight to the fade. It cannot
+    // fire during the storm: see `washFloorAt`.
+    state.wash = washEnvelope(state.wash, storm.engulf, delta, OCEAN_CONFIG.storm,
+        storm.washFloor);
     paintOverlay(state.wash.wash, storm.fade);
 
     // THE ONE SCENE IN THIS PROJECT THAT CAN HONESTLY STOP DRAWING. Once the

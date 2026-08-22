@@ -181,6 +181,44 @@ export function engulfAt(surfaceY, config = OCEAN_CONFIG) {
     return smoothstep(eye, eye + wash, surfaceY);
 }
 
+/** How much white the release is NOT allowed to give back, 0 none and 1 all.
+ *
+ *  THE SEA IS A SURFACE AND NOT A VOLUME. Every ray this scene draws downward
+ *  and seaward meets the water only while the water is below the eye. Once the
+ *  tsunami is standing overhead there is nothing under the horizon line for a
+ *  ray to hit, so it reaches the sky dome, and the dome's lower half is one flat
+ *  colour because `oceanSkyColor` clamps dir.y at zero. The bottom four tenths
+ *  of the frame therefore went a dead uniform grey, and the release envelope
+ *  handed it to the visitor for about five seconds: the white-out reached zero a
+ *  fifth of a second before the fade began, and the fade needs six seconds to
+ *  close. Nothing was wrong with either curve. They were simply both letting go
+ *  of a picture that had nothing left in it.
+ *
+ *  KEYED ON DEPTH AND NOT ON THE CLOCK, which matters twice. It cannot be
+ *  knocked out of place by retiming the arc, and it does not have to know that a
+ *  tsunami is what put the water there.
+ *
+ *  IT CANNOT FIRE DURING THE STORM, and that is the constraint that decided the
+ *  two numbers rather than taste. The deepest a storm bore can possibly put the
+ *  eye is 0.72 m under: the highest still level at the camera through the arc,
+ *  plus half the tide range, plus the fattest bore `sand.swash.maxBoreDepth` can
+ *  make at the biggest swell. `washFloorFromMetres` is 2.5, which clears that by
+ *  three and a half times. So the white-out still drains fully between every
+ *  wave in the storm and the visitor never loses sight of the next one, which is
+ *  the note this whole envelope was built to answer.
+ *
+ *  The tide is the half of that worst case which is easy to leave out, and the
+ *  first sizing of these numbers did leave it out: it gave 0.44 m and a margin
+ *  that looked like three and a half times when it was barely two.
+ *
+ *  Takes the same `surfaceY` as `engulfAt`, in the same metres as
+ *  `camera.height`, so the two can never disagree about where the water is. */
+export function washFloorAt(surfaceY, config = OCEAN_CONFIG) {
+    const eye = config.camera.height;
+    const { washFloorFromMetres, washFloorToMetres } = config.storm;
+    return smoothstep(eye + washFloorFromMetres, eye + washFloorToMetres, surfaceY);
+}
+
 /** Smooth the white-out over time: fast on, slow off.
  *
  *  A WAVE HITTING YOU IS FAST AND DRAINING OFF IS NOT, so this is deliberately
@@ -214,8 +252,11 @@ export function engulfAt(surfaceY, config = OCEAN_CONFIG) {
  *  Pure, with both previous values passed in, so the frame loop owns the state
  *  and this stays testable. BOTH EDGES ARE LINEAR, so the release reaches
  *  exactly zero, which an exponential never would: an exponential leaves a
- *  percent of white on the screen forever, which was the first bug here. */
-export function washEnvelope(previous, target, deltaSeconds, storm = OCEAN_CONFIG.storm) {
+ *  percent of white on the screen forever, which was the first bug here.
+ *
+ *  `floor` is the one exception to that, and it defaults to zero so every caller
+ *  that does not care is unaffected. See `washFloorAt` for what it is for. */
+export function washEnvelope(previous, target, deltaSeconds, storm = OCEAN_CONFIG.storm, floor = 0) {
     const prev = previous && typeof previous === 'object'
         ? previous : { wash: 0, target: 0, attacking: false };
     const delta = Math.max(0, deltaSeconds);
@@ -253,7 +294,18 @@ export function washEnvelope(previous, target, deltaSeconds, storm = OCEAN_CONFI
     } else {
         wash = Math.max(0, prev.wash - delta / release);
     }
-    return { wash, target, attacking };
+
+    // THE FLOOR IS APPLIED TO BOTH EDGES AND NOT ONLY TO THE RELEASE. It has to
+    // catch the attack too, because the attack clamps at `target`, and a target
+    // that has dipped below the floor would otherwise pull the screen back open
+    // for the frames it took to climb again.
+    //
+    // No rate limit on the way up to it, and it does not need one: the floor is
+    // a smoothstep on the water's own height, which is continuous, so it can
+    // only arrive as fast as the sea rises. At the ending that is a metre and a
+    // bit of climb, which is about a third of a second of screen time.
+    const held = Math.max(0, Math.min(1, Number.isFinite(floor) ? floor : 0));
+    return { wash: Math.max(wash, held), target, attacking };
 }
 
 /** Where the tsunami front is, as a z, and how much water is standing behind it.
@@ -444,6 +496,9 @@ export function stormStateAt(seconds, config = OCEAN_CONFIG, surfaceY = null) {
         front,
         lull: lullFrontAt(seconds, storm),
         engulf: engulfAt(surface, config),
+        // Read from the same surface as the engulfment, so the white-out and the
+        // thing that refuses to let go of it can never disagree.
+        washFloor: washFloorAt(surface, config),
         fade: fadeAt(seconds, storm),
         // The arc is over when the fade is complete, which is the moment main.js
         // is allowed to stop drawing. This is the only scene in the project that

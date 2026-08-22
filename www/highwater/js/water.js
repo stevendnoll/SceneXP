@@ -897,6 +897,7 @@ uniform float uRoughness;
 uniform float uFoamBreakThreshold;
 uniform float uFoamCrestThreshold;
 uniform float uFoamNoiseScale;
+uniform float uFoamEdgeTear;
 uniform float uFoamDrift;
 uniform float uDeepReference;
 uniform float uFoamLag;
@@ -1002,7 +1003,29 @@ const FRAGMENT_BODY = `
     float trail = oceanPulse(vPulse, uFoamLag, uFoamTrail);
     float sheet = oceanPulse(vPulse, uFoamLag + uFoamSheetLag, uFoamSheetTrail);
 
-    float b = smoothstep(uFoamBreakThreshold, uFoamBreakThreshold + 0.45, breaking);
+    // THE EDGE IS TORN PER PIXEL, AND UNTIL THIS LINE IT WAS FACETED PER VERTEX.
+    // This is the same disease the pulse had and it was cured there and not
+    // here: crest and fold ride in vSurf, so they are computed at the vertices
+    // and linearly interpolated, and the iso-line of a linearly interpolated
+    // field is a POLYLINE through the mesh cells. Everywhere in the storm the
+    // cells are small enough that nobody could see it. On the face of the
+    // tsunami they are 12 px by 20 to 36 px, measured, and the foam boundary
+    // read as a contour map: straight segments, sharp corners, flat plateaus.
+    //
+    // The noise was already here and was only ever asked how MUCH foam, never
+    // WHERE it ends, so the boundary stayed a clean facet no matter how ragged
+    // the fill on either side of it was. Displacing the threshold moves the
+    // iso-line itself, which is the only thing that can break a straight edge.
+    //
+    // Scaled by each term's own ramp width below, so this one number means the
+    // same thing in all three places: how far, as a fraction of a ramp, the edge
+    // is allowed to wander. The grain has the spatial frequency to do it: the
+    // coarse octave is half a metre and the mid octave lands around 9 px on the
+    // wall, against a 12 px cell, so it tears rather than merely wobbling.
+    float tear = uFoamEdgeTear * (n - 0.5);
+
+    float b = smoothstep(uFoamBreakThreshold, uFoamBreakThreshold + 0.45,
+        breaking + 0.45 * tear);
     float arriving = b * trail;
     float breakFoam = arriving * mix(clamp(0.35 + 0.9 * n, 0.0, 1.0), 1.0, arriving * arriving);
     // THE FOLD IS A LIP, NOT A FLASH. It is the best trigger in the file, since
@@ -1031,8 +1054,9 @@ const FRAGMENT_BODY = `
     // by about a fifth and the worst one did not move. Said plainly, because
     // the honest reading is that the envelope fixed the term that was flashing
     // and the remaining worst case belongs to something else.
-    float foldFoam = smoothstep(0.04, 0.30, fold) * trail * (0.55 + 0.45 * n) * 0.78;
-    float crestFoam = smoothstep(uFoamCrestThreshold, 1.0, crest) * (0.4 + 0.6 * n) * 0.8;
+    float foldFoam = smoothstep(0.04, 0.30, fold + 0.26 * tear) * trail * (0.55 + 0.45 * n) * 0.78;
+    float crestFoam = smoothstep(uFoamCrestThreshold, 1.0,
+        crest + (1.0 - uFoamCrestThreshold) * tear) * (0.4 + 0.6 * n) * 0.8;
     // The sheet the last wave left, on the broad pulse rather than the tight
     // one, so it lingers and fades where the break itself has already gone.
     float bedFoam = vFoam.z * sheet * (0.25 + 0.75 * n) * 0.85;
@@ -1308,6 +1332,7 @@ function buildMaterial(config, sky = null) {
         uFoamBreakThreshold: { value: water.foamBreakThreshold },
         uFoamCrestThreshold: { value: water.foamCrestThreshold },
         uFoamNoiseScale: { value: water.foamNoiseScale },
+        uFoamEdgeTear: { value: water.foamEdgeTear },
         uFoamDrift: { value: water.foamDriftSpeed },
         uFoamLag: { value: water.foamLag },
         uFoamTrail: { value: water.foamTrail },

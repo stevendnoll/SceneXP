@@ -710,6 +710,25 @@ export const OCEAN_CONFIG = deepFreeze({
         // the screen in one blob. Foam has to be smaller than the thing it is
         // sitting on or it stops reading as texture.
         foamNoiseScale: 2.2,
+        // How far the foam EDGE is allowed to wander, as a fraction of the ramp
+        // it sits on. Zero is a clean threshold and is what shipped first.
+        //
+        // IT IS AN ARTEFACT FIX BEFORE IT IS A LOOK. `crest` and `fold` are
+        // computed per vertex and interpolated, so the line where the foam ends
+        // is a polyline through the mesh cells rather than a curve. Nothing in
+        // the storm is close enough for that to show. The face of the tsunami is:
+        // its cells measure 12 px across by 20 to 36 px down, and the foam on it
+        // read as a contour map, with straight segments and sharp corners and
+        // flat plateaus between them. The noise in the shader was already there
+        // but was only being asked how much foam to draw, never where to stop,
+        // so the fill was ragged and the boundary was not.
+        //
+        // 0.7 is a little over a third of a ramp either way, which is enough to
+        // break a 12 px facet without the surf line turning to static. The
+        // honest fix is to compute crest and fold per fragment, which costs a
+        // full Gerstner sum per pixel and is not worth it for a wall that is on
+        // screen for seven seconds.
+        foamEdgeTear: 0.7,
         foamDriftSpeed: 0.35,
 
         // THE FOAM HAS TO COME AND GO, which is a separate problem from where it
@@ -1888,6 +1907,45 @@ export const OCEAN_CONFIG = deepFreeze({
         // something has to turn it into a wave. A fifth of a second is about how
         // long a wall of whitewater takes to cover a face.
         washAttackSeconds: 0.22,
+        // AND THE RELEASE STOPS SHORT OF ZERO WHEN THE SEA IS OVER YOUR HEAD.
+        // These two are metres of water above the eye, and between them the
+        // white-out stops draining off the lens and holds.
+        //
+        // THE SEA IS A SURFACE AND NOT A VOLUME, which is the whole reason this
+        // exists. A ray leaving the camera downward and seaward meets the sheet
+        // only while the sheet is below the eye. Once the tsunami has put
+        // sixteen metres of water overhead, everything under the horizon line
+        // misses the sheet entirely and lands on the sky dome, whose lower half
+        // is a single flat colour (`oceanSkyColor` clamps dir.y at zero). So the
+        // bottom four tenths of the frame went a dead, uniform grey and stayed
+        // there for five seconds while the release ran to zero and the fade had
+        // barely started. `beach.nearZ` states the assumption that broke: the
+        // near strip "has always been below the bottom of the frame", which is
+        // true at 1.15 m of eye height and false at 17 m of water.
+        //
+        // DEPTH AND NOT TIME, so the floor cannot be knocked out of place by
+        // retiming the arc, and so it needs to know nothing about the tsunami.
+        // The gap it lives in is enormous. The deepest a storm bore can possibly
+        // put the eye is 0.72 m under: the highest still level at the camera
+        // through the arc, plus half the tide range on top of it, plus the
+        // fattest bore `sand.swash.maxBoreDepth` can make at the biggest swell.
+        // The ending puts it 16.20 m under.
+        //
+        // THE TIDE IS THE HALF OF THAT WORST CASE WHICH IS EASY TO FORGET. The
+        // first sizing of these two numbers left it out and came up with 0.44 m,
+        // which made the margin look like three and a half times when it was
+        // barely two. `surgeAt` is not the water level, it is one term in it,
+        // and `beach.nearZ` carries a note about the same mistake.
+        //
+        // So 2.5, which is three and a half times the real worst case. No wave
+        // in the storm can reach it, and the visitor never loses sight of the
+        // next one. Full by 6 m, which the ending crosses about half a second
+        // after the eye goes under, so the white hands straight to the fade with
+        // no readable gap between them. Raising the near edge costs the ending
+        // nothing: the water climbs from the eye to sixteen metres in a little
+        // over a second, so both edges are crossed almost together anyway.
+        washFloorFromMetres: 2.5,
+        washFloorToMetres: 6.0,
         // ---- The sky closing over -------------------------------------------
         //
         // 0 is the day the visit drew and 1 is the overcast lid in `sky.storm`.

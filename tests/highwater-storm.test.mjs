@@ -30,8 +30,8 @@ jest.unstable_mockModule('../www/highwater/js/config.min.js', async () => (
 const { OCEAN_CONFIG } = await import(CONFIG_URL);
 const {
     arcProgress, stageAt, stageProgress, curveAt, swellAt, leanAt, surgeAt,
-    engulfAt, washEnvelope, gloomAt, frontAt, frontLevelAt, surfaceAtCamera, fadeAt,
-    stormStateAt
+    engulfAt, washEnvelope, washFloorAt, gloomAt, frontAt, frontLevelAt,
+    surfaceAtCamera, fadeAt, stormStateAt
 } = await import(STORM_URL);
 const { bedHeightAt, tideOffset } = await import(WATER_URL);
 
@@ -384,6 +384,125 @@ describe('the water coming over the camera', () => {
         const runUp = (2 * 9.81 * bore) / a;
         const waterline = beach.shoreZ + peak / beach.slope;
         expect(waterline + runUp).toBeLessThan(beach.nearZ);
+    });
+});
+
+describe('the white-out is not allowed to open onto an empty world', () => {
+    // THE SEA IS A SURFACE AND NOT A VOLUME, and everything in this block is
+    // about the one moment that matters. Once the tsunami is standing overhead
+    // there is nothing under the horizon line for a ray to hit, so the bottom of
+    // the frame falls through to the sky dome, whose lower half is a single flat
+    // colour. Steve caught it in a screenshot: a dead grey plate across the
+    // bottom four tenths of the picture, held there for nearly five seconds
+    // while the release ran to zero and the fade had barely started.
+
+    /** The arc walked at 60 fps the way main.js walks it, with the floor either
+     *  in play or not, so the two can be compared on the same trace. */
+    const walk = (withFloor) => {
+        const step = 1 / 60;
+        let env = { wash: 0, target: 0, attacking: false };
+        const out = [];
+        for (let t = 0; t <= STORM.seconds; t += step) {
+            const surface = surfaceAtCamera(levelAt(t));
+            const floor = withFloor ? washFloorAt(surface) : 0;
+            env = washEnvelope(env, engulfAt(surface), step, STORM, floor);
+            out.push({ t, surface, wash: env.wash, fade: fadeAt(t) });
+        }
+        return out;
+    };
+
+    test('THE HOLE IS CLOSED, and the old code has to fail this', () => {
+        // The property, stated without naming a second: there is no frame where
+        // the sea is over the eye and the visitor can still read the bottom of
+        // the frame. `#wash` is a gradient anchored at the bottom edge, so it is
+        // densest exactly where the hole is; 0.88 is its alpha around the height
+        // the horizon line sits at, measured off the shipped screenshots.
+        const readable = (row) => (1 - 0.88 * row.wash) * (1 - row.fade);
+        const submerged = (row) => row.surface > camera.height;
+
+        const after = walk(true).filter((r) => submerged(r) && readable(r) > 0.12);
+        // Not zero. The water arriving over the eye is a wave breaking on
+        // somebody and it is the whole point of putting them there, so a beat of
+        // it has to survive. It is the five seconds afterwards that must not.
+        // A second is a floor on how short that beat may get rather than a
+        // description of where it sits, which is about four tenths.
+        expect(after.length / 60).toBeLessThan(1);
+
+        // AND THE SAME WALK WITHOUT THE FLOOR FAILS IT, by an order of
+        // magnitude. Without this line the test above would pass against a
+        // release that reaches zero and a fade that has not started, which is
+        // precisely the code that shipped the fault.
+        const before = walk(false).filter((r) => submerged(r) && readable(r) > 0.12);
+        expect(before.length / 60).toBeGreaterThan(4);
+    });
+
+    test('IT CANNOT FIRE DURING THE STORM, which is the constraint that sized it', () => {
+        // If this floor could reach into the storm it would hold the screen
+        // white between waves and cost the visitor the next one, which is the
+        // exact complaint `washEnvelope` was built to answer. So the margin is
+        // asserted rather than trusted.
+        //
+        // The deepest a storm bore can put the eye is the highest still level at
+        // the camera plus the fattest bore the sea can make, and the floor has
+        // to start well above that. Same ceiling the sheet-length test builds.
+        //
+        // THE TIDE IS PART OF THAT CEILING and leaving it out is the mistake
+        // this line exists to prevent. Sizing these numbers without it gave a
+        // worst case of 0.44 m rather than 0.72 and a margin that read as three
+        // and a half times when it was barely two. `surgeAt` is one term in the
+        // water level, not the water level.
+        const sample = [];
+        for (let t = 0; t < STORM.tsunami.startAt; t += 0.05) sample.push(t);
+        const stillest = Math.max(...sample.map((t) => surfaceAtCamera(levelAt(t))))
+            + OCEAN_CONFIG.water.tideRange / 2;
+        const bore = OCEAN_CONFIG.sand.swash.maxBoreDepth
+            * Math.max(...sample.map((t) => swellAt(t)));
+        const worst = stillest + bore;
+
+        // Nothing the storm can do reaches the floor at all.
+        expect(washFloorAt(worst)).toBe(0);
+        // And it is not scraping past. Three times over is the standard, which
+        // is what stops a later swell increase quietly eating the margin: the
+        // storm would start holding the screen white and nothing would fail.
+        expect(STORM.washFloorFromMetres).toBeGreaterThan(3 * (worst - camera.height));
+    });
+
+    test('the floor is full well before the sea stops rising', () => {
+        // It has to reach full white while the water is still climbing, or the
+        // hand-off to the fade has a readable gap in it and the fix does nothing.
+        const peak = Math.max(...everySecond().map((t) => surfaceAtCamera(levelAt(t))));
+        expect(washFloorAt(peak)).toBe(1);
+        expect(camera.height + STORM.washFloorToMetres).toBeLessThan(peak / 2);
+    });
+
+    test('the floor cannot be escaped by either edge of the envelope', () => {
+        // The release is the obvious one. The ATTACK is not, and it is a real
+        // hole: the attack clamps at `target`, so a target that dips below the
+        // floor would pull the screen back open for the frames it took to climb.
+        const step = 1 / 60;
+        let env = { wash: 0, target: 0, attacking: false };
+        for (let i = 0; i < 200; i++) env = washEnvelope(env, 0.2, step, STORM, 0.8);
+        expect(env.wash).toBeGreaterThanOrEqual(0.8);
+        // And a floor of zero has to leave the old behaviour untouched, since
+        // every frame of the storm runs through this path.
+        let plain = { wash: 0, target: 0, attacking: false };
+        let floored = { wash: 0, target: 0, attacking: false };
+        for (let i = 0; i < 200; i++) {
+            const target = i < 20 ? 1 : 0;
+            plain = washEnvelope(plain, target, step, STORM);
+            floored = washEnvelope(floored, target, step, STORM, 0);
+            expect(floored.wash).toBe(plain.wash);
+        }
+        expect(plain.wash).toBe(0);
+    });
+
+    test('the per-frame state carries the floor and reads it off the same surface', () => {
+        // The two must never disagree about where the water is, which is the
+        // reason `engulfAt` is driven from the sea rather than from the arc.
+        const surface = camera.height + 9;
+        const state = stormStateAt(STORM.tsunami.arriveAt, OCEAN_CONFIG, surface);
+        expect(state.washFloor).toBe(washFloorAt(surface));
+        expect(stormStateAt(10, OCEAN_CONFIG, camera.height - 1).washFloor).toBe(0);
     });
 });
 
