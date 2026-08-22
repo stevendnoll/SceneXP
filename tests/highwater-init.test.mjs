@@ -330,6 +330,73 @@ describe('the drop-off funnel', () => {
     });
 });
 
+describe('the QA console hooks stay off a visitor\'s page', () => {
+    // `installTuningAids` puts ten `window.ocean*` functions on the page, and
+    // one of them (`oceanSetArc`) walks straight to the ending of a ninety
+    // second story that has a shape to it. The gate is the only thing keeping
+    // them off scenexp.com, so it is asserted rather than assumed. No other
+    // experience in the repository installs a window global at all.
+    const withLocation = async (location, run) => {
+        const had = Object.prototype.hasOwnProperty.call(globalThis, 'window');
+        const previous = globalThis.window;
+        globalThis.window = { location };
+        try {
+            await run();
+        } finally {
+            if (had) globalThis.window = previous;
+            else delete globalThis.window;
+        }
+    };
+
+    test('the deployed site gets nothing', async () => {
+        jest.resetModules();
+        const { tuningAidsWanted } = await import('../www/highwater/js/main.js');
+        await withLocation({ hostname: 'www.scenexp.com', search: '' }, () => {
+            expect(tuningAidsWanted()).toBe(false);
+        });
+        // Nor does a query string that merely contains the letters.
+        await withLocation({ hostname: 'www.scenexp.com', search: '?ref=aqua' }, () => {
+            expect(tuningAidsWanted()).toBe(false);
+        });
+    });
+
+    test('a local server and an explicit ?qa both get them', async () => {
+        jest.resetModules();
+        const { tuningAidsWanted } = await import('../www/highwater/js/main.js');
+        // The screenshot pass runs here.
+        for (const hostname of ['localhost', '127.0.0.1', '[::1]']) {
+            await withLocation({ hostname, search: '' }, () => {
+                expect(tuningAidsWanted()).toBe(true);
+            });
+        }
+        // And the deployed page can be opened with the hooks on purpose.
+        for (const search of ['?qa', '?qa=1', '?v=2&qa']) {
+            await withLocation({ hostname: 'www.scenexp.com', search }, () => {
+                expect(tuningAidsWanted()).toBe(true);
+            });
+        }
+    });
+
+    test('the hooks are installed behind the gate and nowhere else', async () => {
+        // The property that matters is not that the gate returns the right
+        // boolean but that nothing assigns a global outside it. Asserted
+        // against the source, because installing them for real needs a whole
+        // WebGL scene, and this is the check that would fail if a future hook
+        // were added back at the top level of `init`.
+        const source = await readFile(
+            new URL('../www/highwater/js/main.js', import.meta.url), 'utf8');
+        const start = source.indexOf('function installTuningAids');
+        expect(start).toBeGreaterThan(-1);
+        const body = source.slice(start);
+        const assignments = source.match(/^\s*window\.\w+ =/gm) || [];
+        expect(assignments.length).toBeGreaterThan(0);
+        for (const line of assignments) {
+            expect(body).toContain(line.trim());
+        }
+        expect(source).toMatch(/if \(tuningAidsWanted\(\)\) installTuningAids\(\);/);
+    });
+});
+
 describe('the rest of the site knows the scene exists', () => {
     test('it is in the sitemap, llms.txt, the catalog and the directory page', async () => {
         const [sitemap, llms, directory, home] = await Promise.all([

@@ -368,7 +368,7 @@ export function lullFrontAt(seconds, storm = OCEAN_CONFIG.storm) {
  *  water.js applies it per row while building the profile, and it cannot import
  *  this file, because water.js knowing about a ninety second story is exactly the
  *  coupling that keeps being avoided here: the sea takes numbers and draws them.
- *  So the same smoothstep exists in both places and `ocean-storm.test.mjs`
+ *  So the same smoothstep exists in both places and `highwater-storm.test.mjs`
  *  asserts they agree across the whole sheet. Duplicating four characters of
  *  arithmetic is cheaper than a dependency, but only while something checks it.
  *

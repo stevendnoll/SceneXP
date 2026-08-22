@@ -663,10 +663,42 @@ async function init() {
     track('session-start', { device: state.mobile ? 'touch' : 'desktop' });
     sessionStart = Date.now();
 
-    // Tuning aids while the sea is being dialled in. It is far easier to say the
-    // break is at 22 metres and should be at 16 than to argue about a
-    // screenshot, and easier still to say a screenshot was taken at phase 0.84
-    // than to call it the orange one. Both go away with the scaffold.
+    // The console hooks for tuning and for the screenshot pass, which an
+    // ordinary visitor never gets. See `installTuningAids`.
+    if (tuningAidsWanted()) installTuningAids();
+}
+
+/** Whether this page should carry the QA console hooks.
+ *
+ *  True when the site is being served locally, which is where the screenshot
+ *  pass and every tuning session happen, and true anywhere with `?qa` on the
+ *  URL, which is how the same hooks are reached on the deployed page when
+ *  something needs checking there.
+ *
+ *  A VISITOR IS NOT MEANT TO FIND THESE. They are harmless in the sense that
+ *  they only reach the caller's own copy of the page, but `oceanSetArc` walks
+ *  straight to the ending, and this scene is ninety seconds with a shape to it.
+ *  Handing a stranger the last thirty seconds by way of a global is not a
+ *  kindness. No other experience in the repository installs a window global at
+ *  all, so the gate also puts this one back in line with the rest. */
+export function tuningAidsWanted() {
+    if (typeof window === 'undefined' || !window.location) return false;
+    const { hostname, search } = window.location;
+    if (search && /(^\?|&)qa(=|&|$)/.test(search)) return true;
+    return hostname === 'localhost'
+        || hostname === '127.0.0.1'
+        || hostname === '[::1]'
+        || hostname === '';
+}
+
+/** Tuning aids while the sea is being dialled in. It is far easier to say the
+ *  break is at 22 metres and should be at 16 than to argue about a screenshot,
+ *  and easier still to say a screenshot was taken at phase 0.84 than to call it
+ *  the orange one.
+ *
+ *  Gated by `tuningAidsWanted`, so this runs on a local server or behind `?qa`
+ *  and nowhere else. */
+function installTuningAids() {
     window.oceanBreakDistance = breakDistance;
     window.oceanSwashReach = swashReachMetres;
     window.oceanPhase = getPhase;
