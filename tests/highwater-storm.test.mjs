@@ -693,6 +693,69 @@ describe('the ending', () => {
         expect(crest).toBeGreaterThan(camera.height * 2);
     });
 
+    test('THE WALL TAKES SECONDS TO COME UP, AND THE SAME SECONDS AT ANY SPAN', () => {
+        // STEVE'S NOTE, 2026-08-24, and the one he had been circling since the
+        // 21st: the wall reached cruising height about two seconds after it
+        // appeared, so there was never a moment of not knowing how big it was
+        // going to get. That moment is where the excitement is.
+        //
+        // THE PROPERTY IS THAT IT IS IN SECONDS. The ramp used to be
+        // `smoothstep(0, 0.10, p)`, a tenth of however long the approach was, so
+        // retiming the arc silently retimed the ramp: the same 0.10 was 2.5 s
+        // against a 25 second approach and 2.2 s against 22. A viewer perceives
+        // the seconds. So the assertion is that stretching the approach does NOT
+        // stretch the ramp, which is exactly what the old form would fail.
+        const t = STORM.tsunami;
+        const rampOf = (storm) => {
+            const full = storm.tsunami.riseNear;
+            for (let s = storm.tsunami.startAt; s <= storm.seconds; s += 1 / 60) {
+                const f = frontAt(s, storm);
+                // 0.98 rather than 1: a smoothstep only reaches its top exactly
+                // at the edge, and floating point does not always agree it got
+                // there. What is being measured is where the ramp stops doing
+                // the work, not where the last bit rounds.
+                if (f && f.rise >= 0.98 * (t.riseFar + (full - t.riseFar)
+                    * ((s - storm.tsunami.startAt) / (storm.tsunami.arriveAt - storm.tsunami.startAt)))) {
+                    return s - storm.tsunami.startAt;
+                }
+            }
+            return Infinity;
+        };
+        const asShipped = rampOf(STORM);
+        // Long enough to watch it grow. Steve asked for four or five seconds.
+        expect(asShipped).toBeGreaterThanOrEqual(4);
+        expect(asShipped).toBeLessThanOrEqual(6);
+        // And it is the config number doing it rather than a coincidence. The
+        // walk above finds where the ramp stops carrying the height, which a
+        // smoothstep reaches slightly before its own edge, so this is within a
+        // second rather than exact. Measured at 4.13 against a configured 4.5.
+        expect(Math.abs(asShipped - t.riseSeconds)).toBeLessThan(1);
+
+        // AND NOW THE SAME ARC WITH A MUCH LONGER APPROACH. A ramp expressed as
+        // a fraction would grow with it. This one must not move.
+        const stretched = {
+            ...STORM,
+            tsunami: { ...t, arriveAt: t.arriveAt + 20 }
+        };
+        expect(rampOf(stretched)).toBeCloseTo(asShipped, 1);
+    });
+
+    test('the white line arrives before the wall it belongs to', () => {
+        // `frontFoam` exists to make the thing visible at distance, and it ramps
+        // faster than the height on purpose: what should appear on the horizon
+        // first is a line of broken water you can see but cannot yet size, with
+        // the wall growing underneath it. Getting these the other way round
+        // would show a full sized wall that then turned white.
+        const t = STORM.tsunami;
+        expect(t.foamSeconds).toBeLessThan(t.riseSeconds);
+        // And measured on the curves rather than on the two numbers, since that
+        // is what the shader is handed.
+        const at = (s) => frontAt(t.startAt + s, STORM);
+        const foamFull = at(t.foamSeconds).foam;
+        expect(foamFull).toBeCloseTo(t.frontFoam, 5);
+        expect(at(t.foamSeconds).rise).toBeLessThan(t.riseFar * 0.98);
+    });
+
     test('the front arrives while there is still scene left to see it in', () => {
         // A front that landed after the fade had finished would be a tsunami
         // nobody was shown, which is the same failure as not having one.

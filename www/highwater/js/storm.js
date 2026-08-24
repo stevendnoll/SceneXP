@@ -364,18 +364,20 @@ export function frontAt(seconds, storm = OCEAN_CONFIG.storm) {
         // spawns, which puts the fog's far edge at 850 m rather than 400, and a
         // wall at 403 m keeps 59% of its contrast rather than none.
         //
-        // The same comment also said the ramp was over inside a second. It is
-        // `smoothstep(0, 0.10, p)` across a 25 second approach, so it is two and
-        // a half. Measured, over those seconds the wall goes from nothing to
-        // about 53 px of apparent height, of which the fog leaves 38.
+        // AND IT IS NOW THE SUSPENSE RATHER THAN A COVER-UP. The comment above
+        // ended by saying the ramp was visible, that this was a choice, and that
+        // the lever was there if it ever read as growing rather than arriving.
+        // Steve watched it on 2026-08-24 and asked for the opposite: he wants to
+        // watch it grow, because not knowing how big it is going to get is where
+        // the excitement is. So the ramp is now four and a half seconds.
         //
-        // So this ramp IS visible: a wall growing out of empty horizon over two
-        // and a half seconds in air that is more than half clear. That may be
-        // fine, since it is the moment the thing announces itself, but it is a
-        // choice now rather than something the fog was covering up. Shortening
-        // the 0.10 is the lever if it ever reads as growing rather than as
-        // arriving, and see `storm.clarity` for the other half of the tradeoff.
-        rise: grown * smoothstep(0, 0.10, p),
+        // IN SECONDS AND NOT IN A FRACTION OF THE APPROACH, which is the other
+        // half of this change. It used to be `smoothstep(0, 0.10, p)`, a tenth
+        // of however long the approach happened to be, so retiming the arc moved
+        // it without anybody asking: the same 0.10 was 2.5 s at a 25 s approach
+        // and 2.2 s at 22 s. What a viewer perceives is the seconds, so that is
+        // what the config now holds.
+        rise: grown * smoothstep(t.startAt, t.startAt + t.riseSeconds, seconds),
         width: t.frontWidthFar + (t.frontWidthNear - t.frontWidthFar) * p,
         // How far back the raised water reaches before it tapers away. Carried
         // on the front rather than read from config by water.js, the same way
@@ -383,7 +385,13 @@ export function frontAt(seconds, storm = OCEAN_CONFIG.storm) {
         // is. See the note beside `p.lift` in water.js for why this is not
         // simply infinite.
         body: t.bodyMetres,
-        foam: t.frontFoam * smoothstep(0, 0.15, p),
+        // THE WHITE LINE ARRIVES BEFORE THE WALL DOES, on purpose. This is a
+        // shorter ramp than the height's, so what appears on the horizon first
+        // is a line of broken water, and the wall then grows underneath it. That
+        // is the right way round: `frontFoam` exists to make the thing VISIBLE
+        // at distance, and something you can see but cannot yet size is exactly
+        // the beat Steve asked for. Also in seconds, for the reason above.
+        foam: t.frontFoam * smoothstep(t.startAt, t.startAt + t.foamSeconds, seconds),
         // The sea BEHIND the front, as a swell multiplier. Full from the moment
         // it appears, because the wall is supposed to be already enormous when
         // it comes out of the fog rather than to grow on the way in.

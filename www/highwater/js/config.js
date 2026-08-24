@@ -2679,6 +2679,33 @@ export const OCEAN_CONFIG = deepFreeze({
             // at 400 m behind most of a fog, where the wall was worth 11 px:
             // they were on the clock but they were not on the screen.
             startAt: 67,
+            // HOW LONG THE WALL TAKES TO COME UP, in seconds, once it exists.
+            //
+            // This was a fraction of the approach until 2026-08-24 and lived in
+            // storm.js as a bare 0.10. Two problems with that. It was invisible
+            // from here, and it MOVED whenever the arc was retimed: the same
+            // 0.10 was 2.5 s against a 25 second approach and 2.2 s against 22.
+            // Nobody perceives a fraction of an approach. They perceive seconds.
+            //
+            // 4.5 SINCE STEVE ASKED TO WATCH IT GROW. At 2.2 s the wall was at
+            // cruising height almost as soon as it appeared, and he named the
+            // reason that costs something: not knowing how large it is going to
+            // get is where the excitement is, and arriving at full size skips
+            // it. Measured, over the first six seconds the fastest the wall
+            // grows on screen goes from 26.3 px/s to 17.7 px/s.
+            //
+            // IT ONLY AFFECTS THE FIRST FIVE SECONDS and nothing else moves. By
+            // t=72 the apparent height is identical either way, because from
+            // there on the growth is the distance closing and `riseNear` taking
+            // over rather than this ramp. Measured across 0.10, 0.18, 0.20 and
+            // 0.23 of the old fraction: every one converges by 72.
+            //
+            // Going much past 5 s starts eating the part that already works.
+            riseSeconds: 4.5,
+            // The white line comes up FASTER than the wall does, deliberately.
+            // See the note in `frontAt`: what should appear first is something
+            // you can see but cannot yet size.
+            foamSeconds: 3.3,
             // THIS IS ABOUT THE ENDING RATHER THAN ABOUT THE TSUNAMI. It sets
             // when the camera goes under, and everything after that moment is a
             // held white-out, because the sea is a surface and there is nothing
