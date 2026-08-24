@@ -702,8 +702,19 @@ async function init() {
  *  all, so the gate also puts this one back in line with the rest. */
 export function tuningAidsWanted() {
     if (typeof window === 'undefined' || !window.location) return false;
-    const { hostname, search } = window.location;
-    if (search && /(^\?|&)qa(=|&|$)/.test(search)) return true;
+    // THE HOSTNAME AND NOTHING ELSE. There was a `?qa` escape hatch here so the
+    // deployed page could be opened with the hooks on purpose, and it was
+    // removed on 2026-08-24 in the audit before release.
+    //
+    // Nothing behind these is sensitive: they read and write scene state and
+    // there is no account, no data and no secret anywhere near them. The reason
+    // to drop it is smaller and duller. It was a second way in that nobody
+    // needed, since the screenshot pass runs on a local server, and every extra
+    // door on a public page is a thing somebody has to reason about later.
+    //
+    // If a production hook is ever genuinely wanted, put it back deliberately
+    // rather than finding this comment and assuming it was an oversight.
+    const { hostname } = window.location;
     return hostname === 'localhost'
         || hostname === '127.0.0.1'
         || hostname === '[::1]'

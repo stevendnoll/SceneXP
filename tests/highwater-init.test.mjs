@@ -390,32 +390,40 @@ describe('the QA console hooks stay off a visitor\'s page', () => {
         }
     };
 
-    test('the deployed site gets nothing', async () => {
-        jest.resetModules();
-        const { tuningAidsWanted } = await import('../www/highwater/js/main.js');
-        await withLocation({ hostname: 'www.scenexp.com', search: '' }, () => {
-            expect(tuningAidsWanted()).toBe(false);
-        });
-        // Nor does a query string that merely contains the letters.
-        await withLocation({ hostname: 'www.scenexp.com', search: '?ref=aqua' }, () => {
-            expect(tuningAidsWanted()).toBe(false);
-        });
+    test('THE DEPLOYED SITE GETS NOTHING, AND NO QUERY STRING CHANGES THAT', () => {
+        // There used to be a `?qa` escape hatch so the live page could be
+        // opened with the tuning hooks on purpose. It was removed in the
+        // pre-release audit on 2026-08-24: nothing behind those hooks is
+        // sensitive, but it was a second way in that nobody needed, since the
+        // screenshot pass runs on a local server.
+        //
+        // The query strings below are the ones that used to work, kept
+        // deliberately. If somebody puts the hatch back without meaning to,
+        // this is what says so.
+        return (async () => {
+            jest.resetModules();
+            const { tuningAidsWanted } = await import('../www/highwater/js/main.js');
+            for (const search of ['', '?ref=aqua', '?qa', '?qa=1', '?v=2&qa']) {
+                await withLocation({ hostname: 'www.scenexp.com', search }, () => {
+                    expect(`${search || '(none)'}: ${tuningAidsWanted()}`)
+                        .toBe(`${search || '(none)'}: false`);
+                });
+            }
+        })();
     });
 
-    test('a local server and an explicit ?qa both get them', async () => {
+    test('a local server still gets them, however it is addressed', async () => {
         jest.resetModules();
         const { tuningAidsWanted } = await import('../www/highwater/js/main.js');
-        // The screenshot pass runs here.
-        for (const hostname of ['localhost', '127.0.0.1', '[::1]']) {
-            await withLocation({ hostname, search: '' }, () => {
-                expect(tuningAidsWanted()).toBe(true);
-            });
-        }
-        // And the deployed page can be opened with the hooks on purpose.
-        for (const search of ['?qa', '?qa=1', '?v=2&qa']) {
-            await withLocation({ hostname: 'www.scenexp.com', search }, () => {
-                expect(tuningAidsWanted()).toBe(true);
-            });
+        // The screenshot pass runs here, and a query string must not take them
+        // away either.
+        for (const hostname of ['localhost', '127.0.0.1', '[::1]', '']) {
+            for (const search of ['', '?qa', '?ref=aqua']) {
+                await withLocation({ hostname, search }, () => {
+                    expect(`${hostname || '(empty)'}${search}: ${tuningAidsWanted()}`)
+                        .toBe(`${hostname || '(empty)'}${search}: true`);
+                });
+            }
         }
     });
 

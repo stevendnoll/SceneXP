@@ -708,11 +708,6 @@ export function updateLightning(seconds, config = OCEAN_CONFIG) {
     return flash;
 }
 
-/** What the sky is doing right now, for anything that wants to read it. */
-export function flashLevel() {
-    return skyUniforms && skyUniforms.uFlash ? skyUniforms.uFlash.value : 0;
-}
-
 /** Fire a strike on the next frame, for a screenshot pass.
  *
  *  A STRIKE LASTS THREE HUNDRED MILLISECONDS AND QA HERE IS SCREENSHOT DRIVEN,
