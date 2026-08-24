@@ -122,6 +122,7 @@ function makeSkyUniforms() {
 const {
     strikeRateAt, flashesPerSecondCeiling, drawStrikeThreshold, flashPulse, flashLevelAt,
     planStrike, strikeDirection, generateBolt, boltRibbon, strikeEndpoints,
+    visibleHalfAngleDegrees, boltAzimuthLimit,
     initLightning, updateLightning, resetLightning, disposeLightning, __lightning
 } = await import(LIGHTNING_URL);
 
@@ -475,6 +476,126 @@ describe('the storm closes in rather than only getting busier', () => {
         for (let i = 0; i < 3; i++) {
             expect(dir[i]).toBeCloseTo(from[i] / length, 6);
         }
+    });
+});
+
+describe('a phone held upright still gets the channels', () => {
+    // `camera.fov` is vertical, so a portrait window is about 9.5 degrees either
+    // side of the axis against 33 on a monitor. Steve found the fault on an
+    // iPhone: the flashes were all there and almost none of the streaks were,
+    // because five channels in six were being drawn outside the picture.
+    const PORTRAIT = 393 / 852;
+    const LANDSCAPE = 16 / 9;
+    const DEG = Math.PI / 180;
+    const fov = OCEAN_CONFIG.camera.fov;
+
+    /** Where every channel of `count` strikes was aimed, in degrees. */
+    const channels = (limit, seed = 21, at = 60, count = 800) => {
+        const random = seeded(seed);
+        const out = [];
+        for (let i = 0; i < count; i++) {
+            const s = limit == null
+                ? planStrike(at, -Infinity, random, OCEAN_CONFIG)
+                : planStrike(at, -Infinity, random, OCEAN_CONFIG, false, limit);
+            if (s.drawBolt) out.push(Math.abs(s.azimuth) / DEG);
+        }
+        return out;
+    };
+
+    test('the visible half angle follows the window, not the field of view', () => {
+        const wide = visibleHalfAngleDegrees(fov, LANDSCAPE);
+        const tall = visibleHalfAngleDegrees(fov, PORTRAIT);
+        expect(wide).toBeGreaterThan(30);
+        expect(tall).toBeLessThan(11);
+        // A square window sees exactly the vertical field of view across.
+        expect(visibleHalfAngleDegrees(fov, 1)).toBeCloseTo(fov / 2, 6);
+    });
+
+    test('a wide screen is left exactly where it was', () => {
+        // The whole change has to be invisible on a monitor, which is the screen
+        // the storm was tuned on.
+        expect(boltAzimuthLimit(LANDSCAPE, OCEAN_CONFIG)).toBeGreaterThan(29);
+        expect(boltAzimuthLimit(2.33, OCEAN_CONFIG)).toBe(LIGHT.boltAzimuthDegrees);
+        expect(boltAzimuthLimit(LANDSCAPE, OCEAN_CONFIG))
+            .toBeLessThanOrEqual(LIGHT.boltAzimuthDegrees);
+    });
+
+    test('every channel a portrait window draws is inside that window', () => {
+        const limit = boltAzimuthLimit(PORTRAIT, OCEAN_CONFIG);
+        const edge = visibleHalfAngleDegrees(fov, PORTRAIT);
+        const aimed = channels(limit);
+        expect(aimed.length).toBeGreaterThan(50);
+        // Inside the frame, with the margin the fractal's own wander needs still
+        // to spare. This is the assertion the old code fails.
+        expect(Math.max(...aimed)).toBeLessThan(edge - LIGHT.boltFrameMarginDegrees + 1e-9);
+        // And the old code really does fail it: on the same draws, without a
+        // limit, most of the channels were aimed clean off the side of a phone.
+        const before = channels(null);
+        expect(before.filter((a) => a > edge).length / before.length)
+            .toBeGreaterThan(0.5);
+    });
+
+    test('the channels are moved rather than thinned out', () => {
+        // The count per strike is a property of `boltAzimuthDegrees` and
+        // `boltChance`, and narrowing the frame must not quietly cut it. A
+        // portrait visitor should see MORE channels than before, not fewer.
+        const limit = boltAzimuthLimit(PORTRAIT, OCEAN_CONFIG);
+        expect(channels(limit).length).toBe(channels(null).length);
+    });
+
+    test('a strike with no channel still comes from anywhere', () => {
+        // The flash from off the side of the view is the one that says the storm
+        // is wider than the window, and squeezing those would cost the scene the
+        // only cue it has that anything exists outside the frame.
+        const limit = boltAzimuthLimit(PORTRAIT, OCEAN_CONFIG);
+        const random = seeded(33);
+        let widest = 0;
+        for (let i = 0; i < 600; i++) {
+            const s = planStrike(60, -Infinity, random, OCEAN_CONFIG, false, limit);
+            if (!s.drawBolt) widest = Math.max(widest, Math.abs(s.azimuth) / DEG);
+        }
+        expect(widest).toBeGreaterThan(visibleHalfAngleDegrees(fov, PORTRAIT));
+        expect(widest).toBeLessThanOrEqual(LIGHT.azimuthDegrees);
+    });
+
+    test('the scene reads the window at the moment it plans a strike', () => {
+        // Turning the phone on its side has to widen the spread on the next
+        // strike rather than on the next visit, so the camera is read live.
+        const camera = {
+            position: { x: 0, y: 2.2, z: 12 },
+            fov: OCEAN_CONFIG.camera.fov,
+            aspect: PORTRAIT
+        };
+        const uniforms = makeSkyUniforms();
+        initLightning(makeScene(), camera, OCEAN_CONFIG,
+            { sky: { uniforms }, random: seeded(7) });
+        const edge = visibleHalfAngleDegrees(camera.fov, PORTRAIT);
+
+        const seen = new Set();
+        let drawn = 0;
+        for (let t = 0; t < OCEAN_CONFIG.storm.seconds; t += 1 / 60) {
+            updateLightning(t, OCEAN_CONFIG);
+            const live = __lightning.state().strike;
+            if (live && !seen.has(live)) {
+                seen.add(live);
+                if (live.drawBolt) {
+                    drawn++;
+                    expect(Math.abs(live.azimuth) / DEG).toBeLessThan(edge);
+                }
+            }
+        }
+        // A whole arc's worth of channels, all of them on screen.
+        expect(drawn).toBeGreaterThan(5);
+
+        camera.aspect = LANDSCAPE;
+        expect(__lightning.state().frameLimit).toBeGreaterThan(29);
+    });
+
+    test('a scene with no camera behaves exactly as it always did', () => {
+        // The tests drive this file without one, and so would any later caller.
+        const uniforms = makeSkyUniforms();
+        initLightning(makeScene(), null, OCEAN_CONFIG, { sky: { uniforms } });
+        expect(__lightning.state().frameLimit).toBe(LIGHT.boltAzimuthDegrees);
     });
 });
 

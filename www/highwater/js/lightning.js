@@ -115,6 +115,43 @@ export function flashesPerSecondCeiling(config = OCEAN_CONFIG) {
     return gap > 0 ? 1 / gap : Infinity;
 }
 
+/** Half the width of the frame, in degrees off the axis.
+ *
+ *  `camera.fov` is VERTICAL in Three, so the width of the picture is a property
+ *  of the window rather than of the scene: the same 40 degrees is 33 either side
+ *  on a 16:9 monitor and under 10 on a phone held upright. Anything that has to
+ *  land inside the frame has to ask this rather than assume the monitor. */
+export function visibleHalfAngleDegrees(fovDegrees, aspect) {
+    const a = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
+    const v = Math.max(1, Math.min(179, Number(fovDegrees) || 40)) * DEG / 2;
+    return Math.atan(Math.tan(v) * a) / DEG;
+}
+
+/** How far off the axis a drawn channel is allowed to sit, in degrees.
+ *
+ *  THE ONE THING THAT MADE THE STORM WORSE ON A PHONE. `boltAzimuthDegrees` is
+ *  30 and was measured on a wide monitor, so in portrait five channels in six
+ *  were being built outside the picture and a mobile visitor saw the flashes
+ *  with none of the streaks that earn them.
+ *
+ *  A margin subtracted rather than a fraction multiplied, because what is being
+ *  reserved is the channel's own lateral wander, which is an angle and roughly
+ *  the same one at every distance the arc uses. That also leaves a wide screen
+ *  exactly where it was: 16:9 gives 32.9 degrees here, the margin takes it to
+ *  29.4, and the `min` was already holding it at 30. The fraction is only a
+ *  floor for a window narrow enough that the margin would eat the whole frame.
+ *
+ *  See `planStrike` for what is done with it, which is to move the channels
+ *  rather than to thin them out. */
+export function boltAzimuthLimit(aspect, config = OCEAN_CONFIG, fovDegrees = null) {
+    const cfg = config.storm.lightning;
+    const fov = fovDegrees == null ? config.camera.fov : fovDegrees;
+    const half = visibleHalfAngleDegrees(fov, aspect);
+    const inset = Math.max(half * cfg.boltFrameMinFraction,
+        half - cfg.boltFrameMarginDegrees);
+    return Math.min(cfg.boltAzimuthDegrees, inset);
+}
+
 /** What the next strike costs, as a draw from the unit exponential.
  *
  *  THE RATE CHANGES THROUGH THE ARC, WHICH RULES OUT THE OBVIOUS DESIGN, and the
@@ -191,9 +228,14 @@ export function flashLevelAt(t, flashes, cfg) {
  *  distinction is the whole safety property. A strike is a group of one or two
  *  flashes, so spacing STRIKES apart still allows the second stroke of one and
  *  the first of the next to land back to back. Measuring flash to flash means the
- *  ceiling holds across the boundary between strikes as well as inside one. */
+ *  ceiling holds across the boundary between strikes as well as inside one.
+ *
+ *  `limitDegrees` is how much of the frame there actually is to draw a channel
+ *  in, from `boltAzimuthLimit`. It defaults to the config's own 30, so every
+ *  caller that does not care about the window gets what this always did. */
 export function planStrike(now, lastFlashAt, random = Math.random,
-    config = OCEAN_CONFIG, soft = false) {
+    config = OCEAN_CONFIG, soft = false,
+    limitDegrees = config.storm.lightning.boltAzimuthDegrees) {
     const cfg = config.storm.lightning;
     const reduced = cfg.reduced;
     const gap = cfg.minGapSeconds;
@@ -232,7 +274,38 @@ export function planStrike(now, lastFlashAt, random = Math.random,
     // rather than two competing.
     const drawBolt = inFrame && random() < curveAt(now, cfg.boltChance, config.storm);
 
-    return { flashes, azimuth, distance, drawBolt };
+    // THE CHANNELS ARE MOVED, NOT THINNED. Everything above this line is
+    // untouched by the window, so how OFTEN a channel is drawn stays a property
+    // of `boltAzimuthDegrees` and `boltChance` alone. What the squeeze does is
+    // take the azimuth of a strike that already has a channel and pull it in
+    // toward the axis by the ratio of what is visible to the 30 degrees the
+    // scene was tuned at, which maps a spread that was uniform across the frame
+    // on a monitor onto one that is uniform across the frame on a phone.
+    //
+    // ON THE WHOLE STRIKE AND NOT ON THE GEOMETRY, deliberately. The flash has
+    // to light the cloud the channel comes out of, so `strikeDirection` and
+    // `strikeEndpoints` must be reading the same azimuth. A wide screen squeezes
+    // by 1 and nothing here moves at all.
+    const squeeze = squeezeFactor(limitDegrees, cfg);
+    return {
+        flashes,
+        azimuth: drawBolt ? azimuth * squeeze : azimuth,
+        distance,
+        drawBolt,
+        squeeze
+    };
+}
+
+/** How hard a channel bearing azimuth is pulled toward the axis, 0 to 1.
+ *
+ *  Kept as a named function because `forceStrike`'s path can promote a strike to
+ *  one that draws a channel after `planStrike` has returned, and it has to apply
+ *  exactly this, exactly once. */
+function squeezeFactor(limitDegrees, cfg) {
+    const design = cfg.boltAzimuthDegrees;
+    if (!(design > 0)) return 1;
+    const limit = Math.max(0, Math.min(design, Number(limitDegrees)));
+    return Number.isFinite(limit) ? limit / design : 1;
 }
 
 /** A unit vector pointing from the eye toward a strike.
@@ -490,6 +563,10 @@ let boltPowers = null;
 let boltIndices = null;
 let flashLight = null;
 let eye = [0, 0, 0];
+// Kept live rather than read once, because the frame's WIDTH is the one part of
+// the camera that does move: a phone turned on its side, or a window dragged
+// narrow, changes `aspect` under us and the channels have to follow it.
+let cameraRef = null;
 let randomFn = Math.random;
 let softMotion = false;
 
@@ -505,6 +582,19 @@ let threshold = 0;
 // A distance pinned by `forceStrike`, for a screenshot pass. Cleared as soon as
 // it is used, so it can never quietly hold the whole storm at one distance.
 let forcedDistance = null;
+
+/** How much of the frame there is to put a channel in, right now.
+ *
+ *  Read at the moment a strike is planned rather than cached, so a phone turned
+ *  from portrait to landscape mid storm gets the wider spread on the very next
+ *  strike. Without a camera, which is how the tests drive this file, it is the
+ *  config's own number and nothing moves. */
+function frameLimitDegrees() {
+    if (!cameraRef || !Number.isFinite(cameraRef.aspect)) {
+        return settings.storm.lightning.boltAzimuthDegrees;
+    }
+    return boltAzimuthLimit(cameraRef.aspect, settings, cameraRef.fov);
+}
 
 /** How the flash is shaped right now, which reduced motion changes wholesale. */
 function envelope() {
@@ -531,6 +621,7 @@ export function initLightning(scene, camera, config = OCEAN_CONFIG, options = {}
     randomFn = options.random || Math.random;
     skyUniforms = (options.sky && options.sky.uniforms) || null;
     softMotion = Boolean(options.reducedMotion);
+    cameraRef = camera || null;
     if (camera && camera.position) {
         eye = [camera.position.x, camera.position.y, camera.position.z];
     }
@@ -661,10 +752,20 @@ export function updateLightning(seconds, config = OCEAN_CONFIG) {
     // limitation worth lifting: the flash covers the whole sky, so a second one
     // underneath it is invisible, and it is the rate limit's simplest guarantee.
     if (credit >= threshold && (!strike || clock > strike.endsAt)) {
-        strike = planStrike(clock, lastFlashAt, randomFn, settings, softMotion);
+        strike = planStrike(clock, lastFlashAt, randomFn, settings, softMotion,
+            frameLimitDegrees());
         if (forcedDistance != null) {
             strike.distance = forcedDistance;
-            strike.drawBolt = Math.abs(strike.azimuth) < cfg.boltAzimuthDegrees * DEG;
+            // A forced strike draws its channel whenever one would be in frame
+            // at all, skipping the `boltChance` roll, since the point of it is
+            // to photograph a channel. A strike that was already drawing one has
+            // had its azimuth squeezed and must not be squeezed twice, so only
+            // a promotion from no channel to a channel moves it.
+            if (!strike.drawBolt
+                && Math.abs(strike.azimuth) < cfg.boltAzimuthDegrees * DEG) {
+                strike.drawBolt = true;
+                strike.azimuth *= strike.squeeze;
+            }
             forcedDistance = null;
         }
         lastFlashAt = strike.flashes[strike.flashes.length - 1].at;
@@ -742,6 +843,7 @@ export function disposeLightning() {
     boltPowers = null;
     boltIndices = null;
     flashLight = null;
+    cameraRef = null;
     sceneRef = null;
     settings = null;
     skyUniforms = null;
@@ -755,5 +857,5 @@ export function disposeLightning() {
 /** Test seam, matching water.js and sky.js. Not used by the page. */
 export const __lightning = {
     state: () => ({ strike, clock, credit, threshold, lastFlashAt, boltMesh, flashLight,
-        boltGeometry, softMotion })
+        boltGeometry, softMotion, frameLimit: settings ? frameLimitDegrees() : null })
 };

@@ -2123,7 +2123,47 @@ export const OCEAN_CONFIG = deepFreeze({
             // and show only as a flash. That is most of what a real storm does.
             azimuthDegrees: 46,
             // A channel is only drawn inside this, and then only sometimes.
+            // THE 30 IS A DESKTOP NUMBER and the two below are what make it hold
+            // on a phone. See `boltFrameMarginDegrees`.
             boltAzimuthDegrees: 30,
+            // ---- KEEPING THE CHANNELS ON A PHONE ----------------------------
+            //
+            // `camera.fov` is VERTICAL, so the frame's WIDTH is whatever the
+            // aspect ratio makes it, and the 30 degrees above was measured on a
+            // wide monitor. Held upright, a phone sees about 9.6 degrees either
+            // side of the axis, so five out of every six channels the arc drew
+            // were landing outside the picture. Steve found this on an iPhone in
+            // portrait: plenty of flashes, almost no streaks, which is exactly
+            // the shape that fault makes.
+            //
+            // THE CHANNELS ARE MOVED, NOT ADDED. The count per strike is a
+            // property of `boltAzimuthDegrees` and `boltChance` and it is
+            // deliberately not touched here. What happens instead is that a
+            // strike which HAS a channel has its azimuth squeezed toward the
+            // axis by the ratio of the visible half angle to the 30 degrees
+            // above, so the same number of channels are drawn and a portrait
+            // visitor sees all of them rather than one in six. The flash goes
+            // with it, because the flash lights the cloud the channel comes out
+            // of and the two disagreeing looks like a rendering fault.
+            //
+            // Off frame strikes are untouched, so the storm is still wider than
+            // the window on every screen. Those are the flashes worth having.
+            //
+            // THE MARGIN IS FOR THE WANDER AND NOT FOR SAFETY. The azimuth
+            // places the TOP of the channel, and the fractal then wanders it
+            // sideways by up to `bolt.jitterMetres` and hangs branches off it,
+            // which is about 3 degrees of lateral travel at these distances. A
+            // channel whose axis sits exactly on the frame edge is therefore
+            // half outside it. Reserving that travel is also why this is an
+            // angle subtracted rather than a fraction multiplied: it costs a
+            // wide screen nothing (32.9 degrees at 16:9 stays above the 30 the
+            // scene was tuned at) and matters most where the frame is narrow.
+            boltFrameMarginDegrees: 3.5,
+            // A floor under the subtraction, so an absurdly tall thin window
+            // ends up with the channels merely central rather than with the
+            // limit at zero or below it. Never reached on any real device: an
+            // iPhone in portrait is held by the margin at about 6 degrees.
+            boltFrameMinFraction: 0.4,
             // THERE ARE TWO KINDS OF FLASH WITH NO CHANNEL AND ONLY ONE OF THEM
             // IS WORTH HAVING. A strike outside `boltAzimuthDegrees` is off the
             // side of the frame, and a flash from somewhere you cannot see is
