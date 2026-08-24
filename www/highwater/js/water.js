@@ -405,6 +405,16 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
         // the surface is: one of them putting the water somewhere the other does
         // not is exactly how the buoy ended up floating in mid air.
         lift: new Float32Array(rows),
+        // HOW STEEPLY THAT LIFT IS CHANGING, per row, in metres of rise per
+        // metre out to sea. Filled in a second pass below, because it is a
+        // central difference and the first pass has not written the neighbours
+        // yet.
+        //
+        // It is here rather than at either of its two call sites for the same
+        // reason `lift` is: the vertex shader tilts the normal by it and
+        // `waveSurfaceAt` pitches the buoy by it, and those two disagreeing is
+        // what floating in mid air looked like the first time.
+        liftSlope: new Float32Array(rows),
         breaking: new Float32Array(rows),
         foamBed: new Float32Array(rows),
         edge: new Float32Array(rows),
@@ -670,6 +680,29 @@ export function buildProfile(rowZ, elapsed, config = OCEAN_CONFIG, out = null, s
         // out over the same span the sheet is. One number, one water's edge.
     }
 
+    // THE FACE OF THE FRONT IS A SLOPE AND THE WAVE SUM CANNOT SEE IT. Every
+    // tangent the shader builds comes out of the Gerstner components, and the
+    // front is not a wave: it is a step in `lift`, held per row. So the slope
+    // has to be measured off the neighbours here and carried, or everything
+    // downstream believes the wall is level. That was true of the buoy until
+    // 2026-08-21 and true of the lighting until 2026-08-24.
+    //
+    // Central difference, and against the ROW POSITIONS rather than the row
+    // index, because the rows are not evenly spaced: they are laid out so a row
+    // is a constant number of pixels tall, which near the camera is centimetres
+    // apart and out at the fog limit is metres. Dividing by an index would
+    // report the far rows as a cliff and the near ones as flat.
+    //
+    // Rows run from the camera outward, so `rowZ` DECREASES as the index rises
+    // and the divisor is negative. That is not a bug to be corrected with an
+    // abs(): the sign is what says which way the wall leans.
+    for (let r = 0; r < rows; r++) {
+        const before = Math.max(0, r - 1);
+        const after = Math.min(rows - 1, r + 1);
+        const dz = rowZ[after] - rowZ[before];
+        p.liftSlope[r] = Math.abs(dz) > 1e-6 ? (p.lift[after] - p.lift[before]) / dz : 0;
+    }
+
     return p;
 }
 
@@ -734,6 +767,7 @@ attribute vec4 aAmp;
 attribute vec4 aWaveK;
 attribute vec4 aShore;
 attribute vec4 aSharp;
+attribute float aLiftSlope;
 varying vec4 vSurf;
 varying vec3 vFoam;
 varying vec2 vPulse;
@@ -836,6 +870,25 @@ const VERTEX_BODY = `
 
     vec3 tangentX = vec3(1.0 + dXdx, dYdx, dZdx);
     vec3 tangentZ = vec3(dXdz, dYdz, 1.0 + dZdz);
+    // AND THE LIFT IS PART OF THE SURFACE, which for a long time it was not.
+    // VERTEX_POSITION adds aShore.w to y in a later chunk, so the mesh had a
+    // seventeen metre wall in it and this normal, built from the wave sum alone,
+    // said the sea was flat. The tsunami was lit as a level sea: measured, the
+    // face reaches a slope of 1.594, which is 58 degrees of water shaded as
+    // though you were looking down at it.
+    //
+    // One line, because it is the honest place for it. The surface is
+    // P(x, z) = (x, 0, z) + wave(x, z) + (0, lift(z), 0), so d/dz picks up
+    // d(lift)/dz in y and nothing else changes. The cross product below then
+    // gives the true normal with no approximation and, being per vertex, it
+    // INTERPOLATES: the version of this that lived in the fragment shader and
+    // recovered the same slope from screen derivatives was constant within each
+    // triangle, and drew a horizontal band at every row boundary on the face of
+    // the wave.
+    //
+    // Costs one float per vertex on the upload. It buys an exact normal on the
+    // one shot in the scene that is entirely made of water standing up.
+    tangentZ.y += aLiftSlope;
     vec3 objectNormal = normalize(cross(tangentZ, tangentX));
 
     float jacobian = (1.0 + dXdx) * (1.0 + dZdz) - dZdx * dXdz;
@@ -897,7 +950,6 @@ uniform float uRoughness;
 uniform float uFoamBreakThreshold;
 uniform float uFoamCrestThreshold;
 uniform float uFoamNoiseScale;
-uniform float uFoamEdgeTear;
 uniform float uFoamDrift;
 uniform float uDeepReference;
 uniform float uFoamLag;
@@ -1003,29 +1055,37 @@ const FRAGMENT_BODY = `
     float trail = oceanPulse(vPulse, uFoamLag, uFoamTrail);
     float sheet = oceanPulse(vPulse, uFoamLag + uFoamSheetLag, uFoamSheetTrail);
 
-    // THE EDGE IS TORN PER PIXEL, AND UNTIL THIS LINE IT WAS FACETED PER VERTEX.
-    // This is the same disease the pulse had and it was cured there and not
-    // here: crest and fold ride in vSurf, so they are computed at the vertices
-    // and linearly interpolated, and the iso-line of a linearly interpolated
-    // field is a POLYLINE through the mesh cells. Everywhere in the storm the
-    // cells are small enough that nobody could see it. On the face of the
-    // tsunami they are 12 px by 20 to 36 px, measured, and the foam boundary
-    // read as a contour map: straight segments, sharp corners, flat plateaus.
+    // THE FOAM EDGE IS A FACET AND n CANNOT BE THE THING THAT BREAKS IT.
+    // crest and fold ride in vSurf, so they are computed at the vertices and
+    // linearly interpolated, and the iso-line of a linearly interpolated field
+    // is a POLYLINE through the mesh cells. That is the same disease the pulse
+    // had, cured there by passing the phasor and evaluating per pixel, and it is
+    // still here. On the face of the tsunami the cells are about 12 px by 20 to
+    // 36 px and the boundary reads as a contour map.
     //
-    // The noise was already here and was only ever asked how MUCH foam, never
-    // WHERE it ends, so the boundary stayed a clean facet no matter how ragged
-    // the fill on either side of it was. Displacing the threshold moves the
-    // iso-line itself, which is the only thing that can break a straight edge.
+    // The obvious cure is to displace each threshold by n instead of only
+    // scaling the fill by it, and IT WAS TRIED AND IT MADE THINGS WORSE. Shipped
+    // 2026-08-22 as foamEdgeTear, backed out 2026-08-24 after screenshot QA:
+    // the foam came back as hard polygonal islands with the smoothstep ramp
+    // visible as contour rings inside them, on the wall AND along the surf line
+    // through the whole storm.
     //
-    // Scaled by each term's own ramp width below, so this one number means the
-    // same thing in all three places: how far, as a fraction of a ramp, the edge
-    // is allowed to wander. The grain has the spatial frequency to do it: the
-    // coarse octave is half a metre and the mid octave lands around 9 px on the
-    // wall, against a 12 px cell, so it tears rather than merely wobbling.
-    float tear = uFoamEdgeTear * (n - 0.5);
-
-    float b = smoothstep(uFoamBreakThreshold, uFoamBreakThreshold + 0.45,
-        breaking + 0.45 * tear);
+    // The reason is in the octave weights, and it is arithmetic rather than
+    // taste. n is a blend in which the COARSE octave always carries the
+    // majority: the mid octave is faded out by midOctave past 24 m and the
+    // fine one by fineOctave past 26 m, while the base octave is half a metre
+    // and never fades. Measured against the 12 px column across the distances
+    // where foam is drawn, the share of the displacement coming from octaves
+    // COARSER than one cell runs 63% at 30 m, 74% at 50 m, 89% at 70 m, and
+    // never falls below 63% anywhere. A displacement that coarse does not
+    // roughen an edge, it picks up whole stretches of it and moves them, and
+    // over a field that is still faceted underneath that makes islands.
+    //
+    // So anything that fixes this has to feed on a grain FINER than a mesh cell,
+    // and the cell is a constant 12 px on screen at every distance while n is
+    // keyed to world size. Those two do not meet. The honest fix is per-fragment
+    // crest and fold, which costs a full Gerstner sum per pixel.
+    float b = smoothstep(uFoamBreakThreshold, uFoamBreakThreshold + 0.45, breaking);
     float arriving = b * trail;
     float breakFoam = arriving * mix(clamp(0.35 + 0.9 * n, 0.0, 1.0), 1.0, arriving * arriving);
     // THE FOLD IS A LIP, NOT A FLASH. It is the best trigger in the file, since
@@ -1054,9 +1114,8 @@ const FRAGMENT_BODY = `
     // by about a fifth and the worst one did not move. Said plainly, because
     // the honest reading is that the envelope fixed the term that was flashing
     // and the remaining worst case belongs to something else.
-    float foldFoam = smoothstep(0.04, 0.30, fold + 0.26 * tear) * trail * (0.55 + 0.45 * n) * 0.78;
-    float crestFoam = smoothstep(uFoamCrestThreshold, 1.0,
-        crest + (1.0 - uFoamCrestThreshold) * tear) * (0.4 + 0.6 * n) * 0.8;
+    float foldFoam = smoothstep(0.04, 0.30, fold) * trail * (0.55 + 0.45 * n) * 0.78;
+    float crestFoam = smoothstep(uFoamCrestThreshold, 1.0, crest) * (0.4 + 0.6 * n) * 0.8;
     // The sheet the last wave left, on the broad pulse rather than the tight
     // one, so it lingers and fades where the break itself has already gone.
     float bedFoam = vFoam.z * sheet * (0.25 + 0.75 * n) * 0.85;
@@ -1332,7 +1391,6 @@ function buildMaterial(config, sky = null) {
         uFoamBreakThreshold: { value: water.foamBreakThreshold },
         uFoamCrestThreshold: { value: water.foamCrestThreshold },
         uFoamNoiseScale: { value: water.foamNoiseScale },
-        uFoamEdgeTear: { value: water.foamEdgeTear },
         uFoamDrift: { value: water.foamDriftSpeed },
         uFoamLag: { value: water.foamLag },
         uFoamTrail: { value: water.foamTrail },
@@ -1398,13 +1456,27 @@ function writeAttributes() {
             amp: new Float32Array(count * 4),
             waveK: new Float32Array(count * 4),
             shore: new Float32Array(count * 4),
-            sharp: new Float32Array(count * 4)
+            sharp: new Float32Array(count * 4),
+            // ONE FLOAT WIDE AND THE ONLY ONE THAT IS. Everything else here is a
+            // vec4 because it carries one number per wave component, and this
+            // carries one number per row. Widening it to match would quadruple
+            // what it costs for three floats of padding.
+            //
+            // It costs about two and a half per cent on top of what the other
+            // five already send, which is the honest reason the lighting fix
+            // stopped trying to avoid it. The first version derived this from
+            // screen derivatives in the fragment shader purely to save the
+            // upload, and paid for it in horizontal bands down the wave face.
+            liftSlope: new Float32Array(count)
         };
         for (const name of ['phase', 'amp', 'waveK', 'shore', 'sharp']) {
             const attribute = new THREE.BufferAttribute(attributes[name], 4);
             attribute.setUsage(THREE.DynamicDrawUsage);
             geometry.setAttribute('a' + name.charAt(0).toUpperCase() + name.slice(1), attribute);
         }
+        const slope = new THREE.BufferAttribute(attributes.liftSlope, 1);
+        slope.setUsage(THREE.DynamicDrawUsage);
+        geometry.setAttribute('aLiftSlope', slope);
     }
     refreshAttributes();
 }
@@ -1450,10 +1522,12 @@ function refreshAttributes() {
             // PER ROW SINCE 2026-08-21, because the tsunami is a level that is
             // in a PLACE. See the note beside `p.lift` in `buildProfile`.
             attributes.shore[i + 3] = profile.lift[r];
+            // One float per vertex, not four. See the note where it is built.
+            attributes.liftSlope[base / 4 + c] = profile.liftSlope[r];
         }
     }
 
-    for (const name of ['aPhase', 'aAmp', 'aWaveK', 'aShore', 'aSharp']) {
+    for (const name of ['aPhase', 'aAmp', 'aWaveK', 'aShore', 'aSharp', 'aLiftSlope']) {
         const attribute = geometry.getAttribute(name);
         if (attribute) attribute.needsUpdate = true;
     }
@@ -1613,19 +1687,16 @@ export function waveSurfaceAt(x, z) {
     // THE FACE OF THE FRONT IS A SLOPE TOO, and leaving it out is the difference
     // between a buoy carried up a wall and a buoy taking a lift. The wave sum
     // above knows nothing about it, because the front is not a wave: it is a
-    // step in `lift`, held per row. So the gradient is read straight off the
-    // neighbouring rows rather than derived, which costs two array reads and is
-    // exact for the quantity the shader is actually handed.
+    // step in `lift`, held per row.
     //
-    // Rows run from the camera outward, so `rowZ` DECREASES as the index rises.
-    // Getting that backwards would pitch the buoy down the face instead of up
-    // it, which looks like the sea running the wrong way.
-    if (row > 0 && row < rowZ.length - 1) {
-        const dz = rowZ[row + 1] - rowZ[row - 1];
-        if (Math.abs(dz) > 1e-6) {
-            slopeZ += (profile.lift[row + 1] - profile.lift[row - 1]) / dz;
-        }
-    }
+    // Read from `profile.liftSlope` rather than measured again off the
+    // neighbours here. It used to be measured here, and then the lighting needed
+    // the same number and measured it a third way, in the fragment shader, off
+    // screen derivatives. That third one is what put horizontal bands down the
+    // face of the wave: a derivative taken across a triangle is constant within
+    // it, so the tilt stepped at every row boundary. One array, filled once,
+    // read by everything.
+    slopeZ += profile.liftSlope[row];
     return { y: y + lift, wave: y, lift, slopeX, slopeZ, row, depth: profile.depth[row] };
 }
 

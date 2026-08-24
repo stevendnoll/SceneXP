@@ -710,25 +710,25 @@ export const OCEAN_CONFIG = deepFreeze({
         // the screen in one blob. Foam has to be smaller than the thing it is
         // sitting on or it stops reading as texture.
         foamNoiseScale: 2.2,
-        // How far the foam EDGE is allowed to wander, as a fraction of the ramp
-        // it sits on. Zero is a clean threshold and is what shipped first.
+        // THERE WAS A `foamEdgeTear` HERE AND IT DID NOT SURVIVE CONTACT WITH A
+        // SCREENSHOT. It displaced the three foam thresholds by this same noise,
+        // to break up the polyline that a per-vertex `crest` and `fold` leave
+        // where the foam ends. Added 2026-08-22, backed out 2026-08-24: the surf
+        // came back as hard polygonal islands with contour rings inside them,
+        // worse than the faceting it was meant to hide, and on every frame of
+        // the storm rather than only on the wall.
         //
-        // IT IS AN ARTEFACT FIX BEFORE IT IS A LOOK. `crest` and `fold` are
-        // computed per vertex and interpolated, so the line where the foam ends
-        // is a polyline through the mesh cells rather than a curve. Nothing in
-        // the storm is close enough for that to show. The face of the tsunami is:
-        // its cells measure 12 px across by 20 to 36 px down, and the foam on it
-        // read as a contour map, with straight segments and sharp corners and
-        // flat plateaus between them. The noise in the shader was already there
-        // but was only being asked how much foam to draw, never where to stop,
-        // so the fill was ragged and the boundary was not.
+        // Keep the reason, because the idea will look good again. The grain here
+        // is one number but `n` in the shader is three octaves blended, and the
+        // two fine ones are faded out with distance while the coarse one, half a
+        // metre, never is. Weighed against the 12 px mesh column at the
+        // distances where foam is actually drawn, at least 63% of the
+        // displacement always came from octaves COARSER than a whole cell. That
+        // does not tear an edge. It carries pieces of it around.
         //
-        // 0.7 is a little over a third of a ramp either way, which is enough to
-        // break a 12 px facet without the surf line turning to static. The
-        // honest fix is to compute crest and fold per fragment, which costs a
-        // full Gerstner sum per pixel and is not worth it for a wall that is on
-        // screen for seven seconds.
-        foamEdgeTear: 0.7,
+        // So the grain that fixes this has to be finer than a cell, and a cell
+        // is a constant 12 px on screen at any distance while this number is in
+        // metres. The two cannot be reconciled by tuning. See water.js.
         foamDriftSpeed: 0.35,
 
         // THE FOAM HAS TO COME AND GO, which is a separate problem from where it

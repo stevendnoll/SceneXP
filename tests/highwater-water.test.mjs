@@ -19,6 +19,7 @@
 // attribute reads as zero, the sea goes flat, and nothing anywhere reports it.
 
 import { jest } from '@jest/globals';
+import { readFileSync } from 'node:fs';
 
 const CONFIG_URL = '../www/highwater/js/config.js';
 const WATER_URL = '../www/highwater/js/water.js';
@@ -30,6 +31,10 @@ jest.unstable_mockModule('../www/highwater/js/config.min.js', async () => (
 ));
 
 const { OCEAN_CONFIG } = await import(CONFIG_URL);
+// The tsunami's lighting is keyed on how steeply the lift changes along z, and
+// the safety argument for it is a property of the ARC rather than of the shader,
+// so the arc has to be asked rather than assumed.
+const { stormStateAt } = await import('../www/highwater/js/storm.js');
 // The glint test below needs the sky's own colour pipeline and gloom blend, so
 // the answer it checks is the one the screen actually gets rather than a second
 // implementation of tone mapping.
@@ -437,6 +442,8 @@ describe('the profile is the sea in one array', () => {
     test('every array is the size it claims to be', () => {
         const p = buildProfile(zs, 0);
         expect(p.depth).toHaveLength(rows);
+        expect(p.lift).toHaveLength(rows);
+        expect(p.liftSlope).toHaveLength(rows);
         expect(p.breaking).toHaveLength(rows);
         expect(p.foamBed).toHaveLength(rows);
         expect(p.edge).toHaveLength(rows);
@@ -878,6 +885,29 @@ describe('the mesh', () => {
         expect(body).toMatch(/dYdz\s*\+=\s*dY\s*\*\s*kz;/);
     });
 
+    test('AND THE OTHER PLACE THE SURFACE MOVES, which this test used to miss', () => {
+        // THE TEST ABOVE IS RIGHT AND WAS LOOKING IN ONE PLACE. It asserts that
+        // every term in the vertical displacement appears in its derivative, and
+        // then reads only `waveOffset.y +=` inside the wave loop. The surface
+        // moves in a second chunk as well: VERTEX_POSITION adds the lift with
+        // `transformed.y += aShore.w`, and that one had NO derivative anywhere
+        // for as long as it existed.
+        //
+        // So the sea was displaced correctly and lit as a flat plane, which is
+        // exactly the failure the test above describes in its own comment, and
+        // it sailed through because the term was a hundred lines away in a
+        // different string. Found by screenshot on 2026-08-24 rather than here.
+        //
+        // Counting rather than naming, so a second lift added later is covered
+        // without anybody remembering to come back and list it.
+        const lifts = [...__test__.VERTEX_POSITION.replace(/\/\/.*$/gm, '')
+            .matchAll(/transformed\.y\s*\+=\s*([^;]+);/g)];
+        expect(lifts.length).toBeGreaterThan(0);
+        const tilts = [...__test__.VERTEX_BODY.replace(/\/\/.*$/gm, '')
+            .matchAll(/tangent[XZ]\.y\s*\+=\s*([^;]+);/g)];
+        expect(tilts.length).toBe(lifts.length);
+    });
+
     test('THE SUN LOSES ITS GLINT PATH WHEN THE SKY LOSES ITS SUN', () => {
         // THE BUG THIS PROTECTS AGAINST, WHICH SHIPPED FOR WEEKS. By full gloom
         // the sky's own sun disc is gated out by cloud and nothing in the frame
@@ -1226,24 +1256,28 @@ describe('the mesh', () => {
         }
     });
 
-    test('NO FOAM EDGE IS A CLEAN THRESHOLD ON AN INTERPOLATED FIELD', () => {
-        // THE ARTEFACT STEVE CAUGHT ON THE TSUNAMI. `crest` and `fold` ride in
-        // vSurf, so they are computed at the vertices and interpolated, and the
-        // iso-line of a linearly interpolated field is a POLYLINE through the
-        // mesh cells rather than a curve. Everywhere in the storm the cells are
-        // far too small to see. On the face of the wall they measure 12 px by 20
-        // to 36 px, and the foam boundary read as a contour map: straight
-        // segments, sharp corners, flat plateaus between them.
+    test('NO FOAM THRESHOLD IS DISPLACED BY THE GRAIN, WHICH IS COARSER THAN A CELL', () => {
+        // A REGRESSION GUARD FOR A FIX THAT FAILED, WHICH IS WORTH MORE THAN THE
+        // FIX WOULD HAVE BEEN. `crest` and `fold` ride in vSurf, so they are
+        // computed at the vertices and interpolated, and the iso-line of an
+        // interpolated field is a polyline through the mesh cells. On the wall
+        // the foam boundary reads as a contour map because of it.
         //
-        // This is the same disease the pulse had, and the cure there was to move
-        // the work per pixel. The noise was already in this shader and was only
-        // ever asked how MUCH foam to draw, never where to stop, so the fill was
-        // ragged and the boundary was not.
+        // The obvious cure is to displace each threshold by `n`. It shipped on
+        // 2026-08-22 as `foamEdgeTear` and the screenshots on 2026-08-24 came
+        // back with hard polygonal islands, contour rings inside them, along the
+        // whole surf line rather than only on the wall. Backed out.
         //
-        // The rule that keeps it from coming back: a smoothstep in the foam is
-        // reading a field it cannot resolve, so its edge has to be displaced by
-        // the per-pixel grain. A term added later without it puts the facets
-        // straight back, and only on the one shot where anybody would see them.
+        // THE REASON IS ARITHMETIC AND IT IS WHY THIS TEST EXISTS. `n` is three
+        // octaves blended, the two fine ones fade out with distance and the
+        // coarse one is half a metre and never does. Against the 12 px column,
+        // the share of the displacement coming from octaves coarser than a whole
+        // cell is 63% at 30 m, 74% at 50 m, 89% at 70 m, and never less than 63%
+        // anywhere foam is drawn. A displacement coarser than the cell cannot
+        // roughen a facet. It relocates stretches of it, which is what made the
+        // islands. Anything that fixes this properly needs a grain finer than a
+        // cell, and a cell is a constant 12 px on screen while `n` is keyed to
+        // metres, so no value of any knob here reaches it.
         const fragment = __test__.FRAGMENT_BODY.replace(/\/\/.*$/gm, '');
         // Pulled out by balancing brackets rather than by a regex, because the
         // arguments contain their own parentheses and a lazy match quietly stops
@@ -1273,30 +1307,25 @@ describe('the mesh', () => {
             .filter((args) => interpolated.some((v) => new RegExp(`\\b${v}\\b`).test(args)));
         expect(edges.length).toBe(3);
         for (const args of edges) {
+            // The third argument only. The first two are the ramp, and moving a
+            // ramp is a different animal from shoving the field across a fixed
+            // one: what failed was displacing the FIELD.
+            //
+            // The assertion is that the field arrives bare, rather than merely
+            // that it arrives without the word `n` in it. The version that
+            // shipped the islands added `tear`, an intermediate, so a test that
+            // went looking for the grain by name would have waved it straight
+            // through. Anything at all added to the field is the same mistake
+            // wearing a different variable.
+            const field = (args.split(',')[2] ?? '').trim();
             const label = args.replace(/\s+/g, ' ').trim().slice(0, 46);
-            expect(`${label} :: ${/\btear\b/.test(args)}`).toBe(`${label} :: true`);
+            expect(`${label} :: ${field}`).toBe(`${label} :: ${
+                interpolated.find((v) => new RegExp(`\\b${v}\\b`).test(args))}`);
         }
-        // And the displacement is the grain, not a constant, or every edge in
-        // the frame would move together and the facets would simply shift.
-        expect(fragment).toMatch(/float\s+tear\s*=\s*uFoamEdgeTear\s*\*\s*\(\s*n\s*-/);
-    });
-
-    test('the edge tear is scaled by each ramp it is applied to', () => {
-        // One knob, three ramps of different widths. Handing the same absolute
-        // offset to all of them would be nearly nothing on the wide one and
-        // would swamp the narrow one, so each is scaled by its own ramp and the
-        // number means the same thing everywhere: how far, as a fraction of a
-        // ramp, the edge may wander. Enough to break a facet, not so much that
-        // the surf line turns to static.
-        expect(WATER.foamEdgeTear).toBeGreaterThan(0.3);
-        expect(WATER.foamEdgeTear).toBeLessThan(1.5);
-        const fragment = __test__.FRAGMENT_BODY.replace(/\/\/.*$/gm, '');
-        // The fold ramp is 0.04 to 0.30, so its tear carries that width.
-        expect(fragment).toMatch(/fold\s*\+\s*0\.26\s*\*\s*tear/);
-        // The crest ramp runs from its threshold to 1, so its width is derived
-        // rather than written down, which is what keeps the two in step when the
-        // threshold moves.
-        expect(fragment).toMatch(/crest\s*\+\s*\(\s*1\.0\s*-\s*uFoamCrestThreshold\s*\)\s*\*\s*tear/);
+        // And nothing is left behind to make it easy to put back by accident.
+        expect(fragment).not.toMatch(/\btear\b/);
+        expect(__test__.FRAGMENT_HEAD).not.toMatch(/uFoamEdgeTear/);
+        expect(WATER.foamEdgeTear).toBeUndefined();
     });
 
     test('NO ONE COMPONENT SPEAKS FOR THE SEA', () => {
@@ -1374,6 +1403,115 @@ describe('the mesh', () => {
         const colors = getWaterMesh().geometry.getAttribute('color');
         expect(colors.itemSize).toBe(4);
         expect(getWaterMesh().material.vertexColors).toBe(true);
+    });
+});
+
+describe('the tsunami is lit as the wall it is', () => {
+    // WHAT WAS WRONG, TWICE. The normal is the cross product of the two Gerstner
+    // tangents, and `transformed.y += aShore.w` happens in a later chunk, so the
+    // lift moved the geometry and never reached the normal. A face 58 degrees
+    // off the horizontal was shaded as level sea.
+    //
+    // The first fix recovered the slope in the FRAGMENT shader from screen
+    // derivatives, to avoid paying for an attribute. A derivative of a varying
+    // is constant within a triangle, so the tilt stepped at every row boundary
+    // and drew horizontal bands down the face of the wave. Steve caught it in
+    // one screenshot. The slope is now measured once per row and carried, so it
+    // interpolates like everything else.
+    const rows = OCEAN_CONFIG.water.rows;
+    const zs = rowPositions(rows);
+
+    test('THE LIGHTING CANNOT TOUCH THE STORM, and no threshold is what keeps it out', () => {
+        // The whole safety argument, and worth more than the fix. There is no
+        // configured threshold here and none is needed: the surge and the tide
+        // are LEVELS, they raise every row by the same amount, so their slope
+        // along z is identically zero and the tilt they ask for is identically
+        // nothing. Only the front varies with z, so the shader reaches for the
+        // wall without being told where the wall is, and there is no number that
+        // could be mis-sized the way the white-out floor nearly was.
+        //
+        // If anything ever gives the storm a z-varying water level this fails,
+        // and it should: the ordinary sea would start tilting.
+        let worstWithoutFront = 0;
+        for (let t = 0; t <= 90; t += 0.5) {
+            const sea = stormStateAt(t, OCEAN_CONFIG);
+            if (sea.front) continue;
+            const p = buildProfile(zs, t, OCEAN_CONFIG, null, sea);
+            for (let r = 0; r < rows; r++) {
+                worstWithoutFront = Math.max(worstWithoutFront, Math.abs(p.liftSlope[r]));
+            }
+        }
+        // Exactly zero, not nearly. A level has no slope.
+        expect(worstWithoutFront).toBe(0);
+    });
+
+    test('THE SLOPE IS PER METRE AND NOT PER ROW, which is not the same number', () => {
+        // The rows are deliberately not evenly spaced: they are laid out so each
+        // is a constant number of pixels tall, which here runs from about 13 m
+        // apart to about 4 m apart. So a central difference divided by the row
+        // INDEX is not a slope, it is a slope times a spacing that varies by
+        // more than threefold across the sheet.
+        //
+        // The check is against the front's own geometry rather than against a
+        // second implementation of the difference. A smoothstep climbing `rise`
+        // over `width` has a peak derivative of 1.5 * rise / (2 * width), and
+        // discrete rows can only undersample that peak, never exceed it.
+        let peak = 0;
+        let front = null;
+        for (let t = 60; t <= 90; t += 0.5) {
+            const sea = stormStateAt(t, OCEAN_CONFIG);
+            const p = buildProfile(zs, t, OCEAN_CONFIG, null, sea);
+            for (let r = 0; r < rows; r++) peak = Math.max(peak, Math.abs(p.liftSlope[r]));
+            if (sea.front && (!front || sea.front.rise > front.rise)) front = sea.front;
+        }
+        expect(front).toBeTruthy();
+        const analytic = 0.75 * front.rise / front.width;
+        // Undersampled, so below the analytic peak, but the same order. Dividing
+        // by the index instead put this at 8.4 against an analytic 1.6.
+        expect(peak).toBeLessThanOrEqual(analytic * 1.05);
+        expect(peak).toBeGreaterThan(analytic * 0.5);
+    });
+
+    test('the steepest part of the wall leans the way the water is going', () => {
+        // Rows run from the camera outward, so rowZ DECREASES as the index
+        // rises. Getting that backwards flips the normal on the face, which
+        // lights the wall from inside the wave. The taper behind the front has
+        // the opposite sign on purpose, so this asks about the STEEPEST slope
+        // rather than about all of them.
+        let steepest = 0;
+        for (let t = 60; t <= 90; t += 0.5) {
+            const p = buildProfile(zs, t, OCEAN_CONFIG, null, stormStateAt(t, OCEAN_CONFIG));
+            for (let r = 0; r < rows; r++) {
+                if (Math.abs(p.liftSlope[r]) > Math.abs(steepest)) steepest = p.liftSlope[r];
+            }
+        }
+        expect(steepest).toBeLessThan(0);
+    });
+
+    test('THE TILT IS ON THE TANGENT AND BEFORE THE CROSS PRODUCT, or it does nothing', () => {
+        // Adding it to the normal after the fact would be a different and wrong
+        // quantity, and adding it to the tangent afterwards would be ignored.
+        const body = __test__.VERTEX_BODY.replace(/\/\/.*$/gm, '');
+        expect(__test__.VERTEX_HEAD).toMatch(/attribute\s+float\s+aLiftSlope;/);
+        expect(body).toMatch(/tangentZ\.y\s*\+=\s*aLiftSlope;/);
+        expect(body.indexOf('tangentZ.y += aLiftSlope'))
+            .toBeLessThan(body.indexOf('cross(tangentZ, tangentX)'));
+        // And it is the z tangent, because the lift varies along z and not x.
+        expect(body).not.toMatch(/tangentX\.\w+\s*\+=\s*aLiftSlope/);
+    });
+
+    test('one array, read by the shader and by whatever is floating on it', () => {
+        // `waveSurfaceAt` pitches the buoy by this same slope. It used to
+        // measure its own off the neighbouring rows, and then the lighting
+        // measured a third one off screen derivatives, and the three could
+        // drift. A buoy that disagrees with the water is how the original
+        // aShore.w fault was found, so this stays a single source.
+        const source = readFileSync(
+            new URL('../www/highwater/js/water.js', import.meta.url), 'utf8');
+        const surface = source.slice(source.indexOf('export function waveSurfaceAt'));
+        expect(surface).toMatch(/slopeZ\s*\+=\s*profile\.liftSlope\[row\]/);
+        // Nobody recomputes it from `lift` behind the array's back.
+        expect(surface).not.toMatch(/profile\.lift\[\s*row\s*\+\s*1\s*\]/);
     });
 });
 
