@@ -111,7 +111,8 @@ const {
     sunDirectionAt, fresnelWater, srgbToLinear, linearToSrgb, toneMapACES, shownColor,
     twilightGlow, applyGloom,
     SKY_GLSL, SKY_UNIFORM_GLSL,
-    initSky, updateSky, setPhase, getPhase, getSkyState, skyUniforms, disposeSky, __sky
+    initSky, updateSky, setPhase, getPhase, getSkyState, skyUniforms, disposeSky,
+    resetSky, phaseGap, __sky
 } = sky;
 
 const SKY = OCEAN_CONFIG.sky;
@@ -819,5 +820,60 @@ describe('the drift is integrated, because the speed changes', () => {
         const before = skyUniforms().uCloudDrift.value.y;
         setPhase(0.20);
         expect(skyUniforms().uCloudDrift.value.y).toBeCloseTo(before, 9);
+    });
+
+    test('A REPLAY DRAWS A NEW HOUR AND NOT A SLIGHTLY DIFFERENT ONE', () => {
+        // Steve asked on 2026-08-24 for a second viewing to be worth something.
+        // The entry window is only 0.18 wide, so a plain redraw lands somewhere
+        // indistinguishable often enough to matter, and a visitor who presses
+        // "watch it again" and cannot tell the difference concludes it did
+        // nothing. `cycle.minReplayStep` is the floor on how far it must move.
+        initSky(makeScene(), null, OCEAN_CONFIG, { phase: 0.47 });
+        // A generator that keeps offering the phase we are already on, then one
+        // that is far enough away. Without the rejection loop the first offer
+        // would be taken and the sky would not move at all.
+        const draws = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.0];
+        let i = 0;
+        const canned = () => draws[Math.min(i++, draws.length - 1)];
+        const before = getPhase();
+        const after = resetSky(canned);
+        expect(phaseGap(after, before)).toBeGreaterThanOrEqual(CYCLE.minReplayStep);
+        expect(getPhase()).toBe(after);
+        // And it landed inside the window it is supposed to draw from.
+        const window = CYCLE.entry[0];
+        expect(after).toBeGreaterThanOrEqual(window.from);
+        expect(after).toBeLessThanOrEqual(window.to);
+    });
+
+    test('the redraw gives up rather than hanging when it cannot get clear', () => {
+        // A window narrower than the step has no answer, and the honest
+        // behaviour is to take the draw rather than to spin. This is the case
+        // that turns a config typo into a locked tab.
+        const narrow = {
+            ...OCEAN_CONFIG,
+            cycle: { ...CYCLE, entry: [{ from: 0.50, to: 0.50, weight: 1 }], minReplayStep: 0.4 }
+        };
+        initSky(makeScene(), null, narrow, { phase: 0.5 });
+        const after = resetSky(() => 0.5);
+        expect(after).toBeCloseTo(0.5, 6);
+    });
+
+    test('resetting a sky that was never built does nothing and does not throw', () => {
+        disposeSky();
+        expect(() => resetSky(() => 0.42)).not.toThrow();
+    });
+
+    test('THE REPLAY KEEPS THE SEA REFLECTING THE SKY THAT IS OVER IT', () => {
+        // The whole reason this goes through `setPhase` rather than re-running
+        // `initSky`. water.js compiles the sky's uniform OBJECTS into its own
+        // shader, so replacing them would leave the dome at the new hour and the
+        // reflection in the water at the old one, and the only clue would be the
+        // horizon going back to being a seam.
+        initSky(makeScene(), null, OCEAN_CONFIG, { phase: 0.40 });
+        const handedOut = skyUniforms();
+        const zenith = handedOut.uSkyZenith.value;
+        resetSky(() => 0.999);
+        expect(skyUniforms()).toBe(handedOut);
+        expect(skyUniforms().uSkyZenith.value).toBe(zenith);
     });
 });

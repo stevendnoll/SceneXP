@@ -120,6 +120,32 @@ describe('the page carries the metadata a share and a crawler need', () => {
         return m ? m[1] : null;
     };
 
+    test('THE ENDING COPY AND THE REPLAY HAVE TO AGREE ABOUT WHAT REPEATS', () => {
+        // The card used to read "It happens the same way every time", and that
+        // was exactly true while a replay held the hour the visit drew. Since
+        // 2026-08-24 it draws a fresh one, so the sentence quietly stopped being
+        // true and became a promise the scene breaks on the first rewatch.
+        //
+        // Paired rather than asserted on its own, because either half moving is
+        // the bug. Someone reverting the re-roll should be told the copy is now
+        // wrong in the other direction, and someone rewriting the copy should be
+        // told what it is carrying.
+        const note = html.match(/<p class="ending-note">([^<]*)<\/p>/);
+        expect(note).not.toBeNull();
+        const rerolls = /\bresetSky\(\)/.test(main);
+        if (rerolls) {
+            expect(note[1]).not.toMatch(/happens the same way/i);
+        } else {
+            expect(note[1]).toMatch(/happens the same way/i);
+        }
+        // AND THE FATALISM SURVIVES WHICHEVER WAY THAT WENT. The line is not
+        // decoration: the outcome being fixed is the whole point of the piece,
+        // and a rewrite that drops it costs more than the sentence is worth.
+        expect(note[1]).toMatch(/same way every time/i);
+        // House style, and this is the one line most likely to attract one.
+        expect(note[1]).not.toMatch(/[—;]/);
+    });
+
     test('the identity block is present and points at this folder', () => {
         expect(html).toContain(`<link rel="canonical" href="${BASE}">`);
         expect(meta('og:url')).toBe(BASE);

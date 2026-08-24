@@ -907,6 +907,69 @@ export function setPhase(next) {
     return phase;
 }
 
+/** Draw a fresh hour for a second watch.
+ *
+ *  The sky used to be the one thing a replay deliberately did NOT reset, so a
+ *  second run was the same afternoon. Steve asked on 2026-08-24 for a rewatch to
+ *  be worth something, and this is the cheapest honest way to give it: no new
+ *  geometry, nothing new to draw, and it changes the composition rather than
+ *  adding a prop to it.
+ *
+ *  BE HONEST ABOUT HOW MUCH THIS MOVES. `cycle.entry` is one narrow window,
+ *  0.38 to 0.56, because Steve had previously asked for the time of day to stop
+ *  wandering. Inside it the sun runs 39 to 58 degrees up and the azimuth swings
+ *  about 15 degrees, so what actually changes is WHERE THE GLINT PATH SITS, by
+ *  a few hundred pixels. Exposure moves between 0.95 and 0.99. It is a different
+ *  afternoon, not a different day, and widening it is a separate decision that
+ *  belongs in config rather than here.
+ *
+ *  Goes through `setPhase` rather than re-running `initSky`, which is what keeps
+ *  the sea reflecting the sky that is actually over it: see the note there.
+ *
+ *  `random` is injected, matching `entryPhase` and `initSky`. */
+export function resetSky(random = Math.random) {
+    if (!uniforms) return phase;
+    elapsed = 0;
+    drifted = 0;
+    // The gloom goes with it. `updateSky` will put the arc's own back on the
+    // first frame, and leaving the storm's version here would mean a replay
+    // opened on the sky the tsunami arrived under.
+    lastGloom = 0;
+    return setPhase(drawApartFrom(phase, random));
+}
+
+/** A phase from the entry windows that is far enough from the last one to see.
+ *
+ *  WITHOUT THIS THE FEATURE READS AS BROKEN ABOUT A THIRD OF THE TIME. The
+ *  window is 0.18 wide, so a plain redraw lands within a couple of hundredths of
+ *  where it already was often enough to notice, and a visitor who presses
+ *  "watch it again" and gets a frame they cannot tell apart concludes nothing
+ *  happened. `cycle.minReplayStep` is the smallest move that is visible on the
+ *  water, measured against the glint path rather than guessed.
+ *
+ *  Rejection sampling with a hard try limit, rather than mapping a draw onto the
+ *  allowed sub-intervals. The exact version is not worth it here: it has to
+ *  handle any number of windows of any width, including ones narrower than the
+ *  step, where there is no correct answer and the honest behaviour is to give up
+ *  and take the draw. Falling back after eight tries does that in one line. */
+function drawApartFrom(current, random) {
+    const cycle = settings.cycle || {};
+    const step = cycle.minReplayStep > 0 ? cycle.minReplayStep : 0;
+    let drawn = entryPhase(random, cycle);
+    if (step <= 0) return drawn;
+    for (let i = 0; i < 8 && phaseGap(drawn, current) < step; i++) {
+        drawn = entryPhase(random, cycle);
+    }
+    return drawn;
+}
+
+/** How far apart two phases are, the short way round, so 0.98 and 0.02 are
+ *  close rather than nearly a whole day apart. */
+export function phaseGap(a, b) {
+    const raw = Math.abs(wrapPhase(a) - wrapPhase(b));
+    return Math.min(raw, 1 - raw);
+}
+
 /** The current look, for anything that wants to read the light without
  *  reaching into THREE objects to get it. The sand's wet band will want this. */
 export function getSkyState() { return skyStateAt(phase, settings.sky); }

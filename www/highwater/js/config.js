@@ -3089,6 +3089,23 @@ export const OCEAN_CONFIG = deepFreeze({
         // them, which is how the scene gets QA'd at dusk without shipping dusk.
         entry: [
             { from: 0.38, to: 0.56, weight: 1 }
-        ]
+        ],
+        // HOW FAR A REPLAY HAS TO MOVE THE SUN, as a fraction of the day.
+        //
+        // A second watch draws a fresh hour since 2026-08-24, and a plain redraw
+        // out of an 0.18 wide window lands somewhere indistinguishable often
+        // enough to matter: roughly a third of replays would come back with the
+        // glint path where it already was, and a visitor who presses "watch it
+        // again" and cannot tell concludes it did nothing.
+        //
+        // 0.05 is about 4 degrees of azimuth, which at the 20.2 pixels per
+        // degree this frame runs at moves the highlight on the water by around
+        // eighty pixels. Below about 0.03 the change stops being findable
+        // without two screenshots side by side.
+        //
+        // It cannot be much larger than a third of the window or the draw starts
+        // bouncing off the ends and biasing toward them. The window is 0.18, so
+        // 0.06 is the practical ceiling.
+        minReplayStep: 0.05
     }
 });

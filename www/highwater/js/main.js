@@ -53,7 +53,8 @@ import {
     setProfileHz, profileRate
 } from './water.min.js';
 import {
-    initSky, updateSky, disposeSky, skyUniforms, getPhase, setPhase, SKY_GLSL, SKY_UNIFORM_GLSL
+    initSky, updateSky, disposeSky, skyUniforms, getPhase, setPhase, resetSky,
+    SKY_GLSL, SKY_UNIFORM_GLSL
 } from './sky.min.js';
 import {
     initSand, updateSand, addBreaks, surfaceWithSwash, resetSand, disposeSand,
@@ -443,9 +444,16 @@ function finish() {
  *  at low water, where no wave breaks over the visitor at all. Somebody pressing
  *  "watch it again" and getting a weaker storm is the worst answer available.
  *
- *  The sky is deliberately NOT reset. It holds the hour the visit drew and the
- *  gloom follows the arc, so a second run is the same afternoon rather than a
- *  different one. */
+ *  THE SKY IS THE ONE THING THAT DELIBERATELY DOES NOT GO BACK. It used to: the
+ *  note here said a second run was the same afternoon rather than a different
+ *  one, and that was a reasonable call while the only thing a rewatch offered
+ *  was the story again. Steve asked on 2026-08-24 for a second viewing to be
+ *  worth something, and a fresh hour is the cheapest honest answer, since it
+ *  changes the composition rather than adding a prop to it.
+ *
+ *  Everything else on this list resets so the second watch is the SAME STORM.
+ *  This one is here so it is not the same light. See `resetSky` for how far it
+ *  really moves, which is the glint path and not the mood. */
 function replayArc() {
     // THE CLOSEST THING THIS PROJECT HAS TO A MEASURE OF DELIGHT. The stated
     // goal for every scene on the site is that somebody enjoys it enough to pass
@@ -467,6 +475,12 @@ function replayArc() {
     // first one was.
     resetLightning();
     resetBuoy();
+    // AND THE SKY DRAWS A FRESH HOUR, which is the one thing on this list that
+    // is not about putting the scene back exactly as it was. Everything above
+    // resets so the second watch is the same storm. This is here so it is not
+    // the same afternoon: see `resetSky` for how far it actually moves, which is
+    // the glint path rather than the mood.
+    resetSky();
     state.finished = false;
     state.lastTime = 0;
     if (ending) {
