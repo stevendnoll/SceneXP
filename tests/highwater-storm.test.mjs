@@ -432,8 +432,23 @@ describe('the white-out is not allowed to open onto an empty world', () => {
         // magnitude. Without this line the test above would pass against a
         // release that reaches zero and a fade that has not started, which is
         // precisely the code that shipped the fault.
+        //
+        // ASKED AS A RATIO SINCE 2026-08-24, and the reason is worth keeping.
+        // This used to assert the unfloored walk left more than 4 s of readable
+        // submerged frames, which it did: 6.00 s against 0.33 s. Then the arc
+        // was retimed to end as the wave arrives, the tail after the hit went
+        // from 8.25 s to 3.0 s, and the unfloored number fell to 2.47 s. The
+        // test failed while nothing it was protecting had changed.
+        //
+        // The absolute number was never the property. It was a measurement of
+        // how long the tail happened to be, and the tail is exactly the thing a
+        // retune is allowed to move. What must stay true is that the floor is
+        // doing the work, so that is what is asked.
         const before = walk(false).filter((r) => submerged(r) && readable(r) > 0.12);
-        expect(before.length / 60).toBeGreaterThan(4);
+        expect(before.length).toBeGreaterThan(after.length * 4);
+        // And there is a real hole to close in the first place, or the ratio
+        // above could be satisfied by two numbers that are both nearly nothing.
+        expect(before.length / 60).toBeGreaterThan(1.5);
     });
 
     test('IT CANNOT FIRE DURING THE STORM, which is the constraint that sized it', () => {
@@ -513,7 +528,19 @@ describe('the ending', () => {
         expect(fadeAt(STORM.seconds)).toBe(1);
         expect(fadeAt(STORM.seconds + 100)).toBe(1);
         // Long enough to read as an ending rather than as a page dying.
-        expect(STORM.fadeSeconds).toBeGreaterThanOrEqual(4);
+        //
+        // THIS SAID 4 UNTIL 2026-08-24 and the floor came down deliberately.
+        // The fade used to have to cover the white-out clearing and a beat of
+        // standing under the wave, and neither happens any more: the white-out
+        // floor holds the screen closed once the sea is over the eye, because
+        // there is no underside of the sea to clear to. So the last four
+        // seconds were a dim white rectangle, which is what Steve reported.
+        //
+        // 2.5 is the real floor and it is set by two things. `washReleaseSeconds`
+        // is 0.9, so the fade has to outlast the white-out arriving rather than
+        // fight it in the same half second, and anything under about two seconds
+        // stops reading as an ending and starts reading as a cut.
+        expect(STORM.fadeSeconds).toBeGreaterThanOrEqual(2.5);
     });
 
     test('THE FADE IS OVER THE TSUNAMI, NOT OVER AN EMPTY BEACH', () => {
@@ -554,7 +581,51 @@ describe('the ending', () => {
         expect(covered - appears).toBeGreaterThanOrEqual(10);
         // And the hit lands BEFORE the fade, or the payoff arrives on a screen
         // that is already going black.
-        expect(covered).toBeLessThan(STORM.seconds - STORM.fadeSeconds);
+        //
+        // ASKED OF THE PICTURE RATHER THAN OF THE CLOCK, since 2026-08-24. This
+        // used to compare `covered` against the fade's start time, and the arc
+        // now puts them 0.1 s apart on purpose: Steve asked for the scene to end
+        // as the wave arrives rather than to sit on a held white-out for eight
+        // seconds afterwards. Against a boundary that tight, a comparison of two
+        // times is not measuring anything, it is measuring rounding.
+        //
+        // How much of the screen the fade has taken at the moment of the hit is
+        // the thing the assertion was always about, and it still catches the bug
+        // it was written for, where the hit landed seven seconds INTO the fade.
+        expect(fadeAt(covered)).toBeLessThan(0.1);
+    });
+
+    test('THE BEACH IS BARE BEFORE THE WALL SHOWS UP, which is the whole warning', () => {
+        // STEVE'S NOTE, 2026-08-24. A sea walking backwards down the beach is
+        // the only warning a real tsunami gives, and it only works as one if it
+        // happens on its own. The arc used to bottom the drawback out at 66 with
+        // the front spawning at 60, so the wall was already climbing out of the
+        // fog while the water was still going out and the two read as one event.
+        //
+        // Asserted on the WATERLINE rather than on the surge, because that is
+        // what a visitor sees: metres of sand where there was sea. The waterline
+        // for a given level sits at `shoreZ + level / slope`.
+        const restZ = beach.shoreZ;
+        const waterlineAt = (t) => beach.shoreZ + surgeAt(t) / beach.slope;
+        const bare = everySecond().find((t) => waterlineAt(t) - restZ <= -4);
+        expect(bare).toBeDefined();
+
+        // And the wall is not on screen yet when that happens. `startAt` is the
+        // honest test of it: before that instant there is no front at all, so
+        // nothing about fog or apparent size can rescue a bad ordering.
+        expect(STORM.tsunami.startAt).toBeGreaterThan(bare);
+        // Enough of a gap to be a beat rather than a technicality. Measured at
+        // about 3 s from the beach going bare to the front spawning, and about
+        // 6 s to the wall being worth 40 px on screen.
+        expect(STORM.tsunami.startAt - bare).toBeGreaterThanOrEqual(2.5);
+
+        // The stage table has to agree, since it is the readable statement of
+        // the arc and it disagreed with the arc for two rounds.
+        const stages = STORM.stages;
+        const drawback = stages.find((s) => s.name === 'drawback').from;
+        const tsunami = stages.find((s) => s.name === 'tsunami').from;
+        expect(drawback).toBeLessThan(tsunami);
+        expect(tsunami).toBeLessThanOrEqual(STORM.tsunami.startAt);
     });
 
     test('THE FRONT IS THE SAME SHAPE IN BOTH FILES', () => {
@@ -627,17 +698,22 @@ describe('the ending', () => {
         // nobody was shown, which is the same failure as not having one.
         const t = STORM.tsunami;
         expect(t.arriveAt).toBeLessThan(STORM.seconds);
-        // THE WALL APPEARS AS THE WATER GOES, and these two coinciding is the
-        // point rather than an accident: the sea leaves and the reason it is
-        // leaving comes out of the fog behind it in the same second. This used
-        // to demand the front appear strictly after the drawback started, which
-        // read as caution and was really just the old timing written down.
-        expect(t.startAt).toBeGreaterThanOrEqual(
-            STORM.stages.find((s) => s.name === 'drawback').from
-        );
-        expect(t.startAt).toBeLessThan(
-            STORM.stages.find((s) => s.name === 'drawback').from + 4
-        );
+        // THE ORDERING LIVES SOMEWHERE ELSE NOW, in "THE BEACH IS BARE BEFORE
+        // THE WALL SHOWS UP". This test used to own it and it went back and
+        // forth twice, which is the useful part of the story:
+        //
+        //   first  the front had to appear strictly AFTER the drawback began
+        //   then   that was called caution and loosened to within 4 s of it,
+        //          on the reasoning that the two coinciding was the point
+        //   now    Steve watched it and said the coincidence spends the
+        //          drawback, which is the only warning a real one gives
+        //
+        // The second version was the old timing written down and defended, and
+        // it is why this test blocked the retune rather than helping it. So the
+        // ordering is asserted once, on the WATERLINE, which is the thing a
+        // visitor actually sees, and this test is left doing only the job its
+        // name claims.
+        //
         // At least a few seconds of it on screen before the black starts.
         expect(STORM.seconds - STORM.fadeSeconds).toBeGreaterThan(t.arriveAt - 12);
     });

@@ -1691,8 +1691,14 @@ export const OCEAN_CONFIG = deepFreeze({
             // seconds of a flat, silent ocean after ninety seconds of building
             // storm is the loudest thing in the arc, and it costs one keyframe.
             { from: 52,  name: 'lull' },       // the sea stops, and that is worse
-            { from: 60,  name: 'drawback' },   // then it goes the wrong way
-            { from: 76,  name: 'tsunami' }
+            { from: 59,  name: 'drawback' },   // then it goes the wrong way
+            // 67 AND NOT 76, WHICH IS WHERE THE TABLE ALWAYS MEANT IT. This read
+            // 76 while `tsunami.startAt` was 60, so the wall had been climbing
+            // out of the fog for sixteen seconds before the arc admitted a
+            // tsunami had started. The names only feed telemetry, so nothing
+            // rendered wrong, but the table is the readable statement of the arc
+            // and it disagreed with the arc.
+            { from: 67,  name: 'tsunami' }
         ],
         // ---- The swell ------------------------------------------------------
         //
@@ -1831,17 +1837,32 @@ export const OCEAN_CONFIG = deepFreeze({
             { at: 52,  value: 0.55 },
             // Back to an ordinary water level for the lull, so the sea is flat
             // AND normal. A lull on a raised sea would still look like weather.
-            { at: 57,  value: 0.05 },
-            { at: 60,  value: 0.00 },   // the sea is flat AND at its own level
-            { at: 66,  value: -0.90 },  // drawback, and the beach is bare
+            { at: 56,  value: 0.05 },
+            { at: 59,  value: 0.00 },   // the sea is flat AND at its own level
+            // THE BEACH HAS TO BE BARE BEFORE THE WALL SHOWS UP, and until
+            // 2026-08-24 it was not. The drawback used to bottom out at 66 and
+            // `tsunami.startAt` was 60, so the wall came up out of the fog while
+            // the water was still going out, and the two read as one event. The
+            // drawback is the tell. It only works if it happens ALONE.
+            //
+            // Now it is done by 64 and the wall does not appear until 67, which
+            // leaves the bare beach on screen by itself for about four seconds
+            // before anything else happens. Nothing was compressed to buy that:
+            // it came out of the eight second tail at the end that nobody was
+            // watching. See `tsunami.startAt` and `fadeSeconds`.
+            { at: 64,  value: -0.90 },  // drawback, and the beach is bare
             // THE RECOVERY HAS TO TRAVEL WITH THE FRONT. It used to lag it, so
             // when the front arrived carrying 1.70 m the water at the camera
             // came out below the eye: the tsunami reached the visitor and did
             // not cover them, because the sea underneath it was still drawn
             // back. The drawback ends when the thing that caused it arrives.
-            { at: 74,  value: -0.85 },
-            { at: 79,  value: 0.10 },
-            { at: 83,  value: 0.30 },
+            //
+            // SO THESE THREE MOVE WHENEVER `tsunami.arriveAt` MOVES. They were
+            // 74 / 79 / 83 against an arrival at 85 and are now shifted by the
+            // same four seconds the arrival was.
+            { at: 78,  value: -0.85 },
+            { at: 83,  value: 0.10 },
+            { at: 87,  value: 0.30 },
             { at: 90,  value: 0.35 }
         ],
         // How far either side of eye level the white-out ramps, in metres. A
@@ -2559,11 +2580,14 @@ export const OCEAN_CONFIG = deepFreeze({
             //   t=28-50   the crests clear eye level, so it starts vanishing
             //             behind swells for seconds at a time. NO CODE DOES
             //             THIS. It falls out of the sea being tall enough.
-            //   t=52-60   the lull. The sea goes flat and hands it back,
+            //   t=52-59   the lull. The sea goes flat and hands it back,
             //             upright and still flashing, which is the eeriest
             //             beat in the arc and until now had nothing in it.
-            //   t=60-72   the drawback takes it down with everything else.
-            //   t~72      the front reaches it and rolls it under.
+            //   t=59-64   the drawback takes it down with everything else, and
+            //             since 2026-08-24 that happens with nothing else on
+            //             screen: the wall does not spawn until 67.
+            //   t~80      the front reaches it and rolls it under. Measured
+            //             against `tsunami.startAt` 67 and `arriveAt` 89.
             //
             // `lostMetres` is how far the front travels PAST it before there is
             // nothing left to draw. Measured in metres rather than seconds
@@ -2626,37 +2650,61 @@ export const OCEAN_CONFIG = deepFreeze({
             // crosses the camera at about t=112 now, which leaves the white-out,
             // its clearing, and a second of standing under the thing before the
             // black starts.
-            // APPEARS EXACTLY AS THE WATER STARTS TO GO. Steve asked for a wall
-            // visible in the distance while the sea recedes, and 88 is the second
-            // the surge turns negative, so the two are the same beat: the water
-            // leaves, and the reason it is leaving comes out of the fog behind it.
-            // STARTS THE SECOND THE WATER DOES. Steve asked for the swell to
-            // begin forming as soon as the sea starts to go, and it already did:
-            // what was missing was being able to SEE it, which was the fog. Now
-            // that the air opens during the lull, the two are one beat.
-            startAt: 60,
-            // 85 SINCE 2026-08-21, AND IT IS ABOUT THE ENDING RATHER THAN THE
-            // TSUNAMI. Once the rise actually lifted the mesh, the camera went
-            // under at t=78.1 and the closing fade does not begin until 84.1,
-            // which left SEVEN AND A HALF SECONDS of sitting under water with a
-            // clear view of it and nothing happening. Measured:
+            // IT COMES AFTER THE DRAWBACK NOW, AND FOR TWO ROUNDS IT DID NOT.
+            // The two notes above are the history: the wall was first put here
+            // so it would appear "exactly as the water starts to go", the two
+            // events deliberately made one beat.
             //
-            //     arriveAt   camera covered   clear seconds under water
-            //        80          t=78.1                7.5
-            //        83            80.8                4.8
-            //        85            82.6                3.0   <- is
-            //        86            83.5                2.1
+            // That was the wrong call and Steve named it on 2026-08-24. The
+            // drawback IS the tell. A sea walking backwards down the beach is
+            // the only warning a real one gives, and it only works as a warning
+            // if it happens on its own, before there is anything else in frame
+            // to look at. Sharing the beat with the wall spent it.
             //
-            // 85 puts the hit 1.5 s before the fade begins, which is about how
-            // long the white-out takes to release, so the sequence reads as one
-            // move: the water arrives, the white clears just far enough to show
-            // you are under it, and the black takes over.
+            // So the order is now the order the stage table always claimed:
+            // the surf goes quiet, THEN the water leaves, THEN the wall comes
+            // out of the fog behind it.
             //
-            // 86 was measured and not taken. It lands the payoff 0.6 s before
-            // the fade, so the white-out would still be at full strength when
-            // the screen starts going dark, and the note above about the hit
-            // landing BEFORE the fade rather than during it is the reason that
-            // note exists.
+            // WHAT THE SIX SECONDS COST, MEASURED, because the approach is the
+            // part of this scene that works hardest and shortening it is not
+            // free. The wall spends its life between 40 px, about a readable
+            // line on the horizon, and 400 px, about half the frame:
+            //
+            //     startAt 60, arriveAt 85    16.1 s in that band
+            //     startAt 67, arriveAt 89    14.4 s in that band
+            //
+            // So it costs 1.7 s of watching out of 16, and it buys about four
+            // seconds of bare beach with nothing else happening. The reason it
+            // is cheap is that the first seconds of the old approach were spent
+            // at 400 m behind most of a fog, where the wall was worth 11 px:
+            // they were on the clock but they were not on the screen.
+            startAt: 67,
+            // THIS IS ABOUT THE ENDING RATHER THAN ABOUT THE TSUNAMI. It sets
+            // when the camera goes under, and everything after that moment is a
+            // held white-out, because the sea is a surface and there is nothing
+            // beneath it to draw. So the number to keep small is the gap between
+            // the hit and the black.
+            //
+            // Re-measured 2026-08-24 against `seconds` 90 and `fadeSeconds` 3,
+            // which put the fade at 87 to 90:
+            //
+            //     arriveAt   approach   camera covered   hit to black
+            //        85        18 s        t=83.3           6.7 s
+            //        86        19 s          84.2           5.8
+            //        87        20 s          85.1           4.9
+            //        88        21 s          86.0           4.0
+            //        89        22 s          86.9           3.1   <- is
+            //        90        23 s          87.8           2.2
+            //
+            // 89 is the last row where the hit still lands with the screen at
+            // full brightness. At 90 the fade has already taken 17% of it, and
+            // the payoff would arrive on a picture that is on its way out.
+            //
+            // THE TABLE THAT USED TO BE HERE WAS WRONG AND IS WORTH A LINE. It
+            // was measured against a fade of 6 and claimed 85 left 3.0 clear
+            // seconds under water. Re-measured it was 1.4, because it counted
+            // from the fade's start rather than from the point the picture had
+            // actually gone. A table in a comment is an assertion nobody runs.
             //
             // STEVE ASKED FOR THE FRONT TO SPAWN FURTHER OUT and it cannot:
             // `fromZ` is -395 and the sheet itself ends at -404, so there is
@@ -2664,7 +2712,31 @@ export const OCEAN_CONFIG = deepFreeze({
             // the same thing from the visitor's side and costs nothing, and it
             // buys five more seconds of watching the wall come in, which is the
             // part of this scene that works hardest.
-            arriveAt: 85,
+            // 89 SINCE 2026-08-24, and the whole block above is about 85 against
+            // a fade that began at 84. MEASURED AGAINST THE NEW NUMBERS: the hit
+            // lands at t=87.0 and the fade begins at t=87.0 as well, so the
+            // black starts as the water closes over rather than 1.5 s later.
+            //
+            // That gap is deliberately gone and is not the same call the block
+            // above made. It was worth 1.5 s when the white-out cleared and
+            // showed you standing under the thing. It no longer clears, so the
+            // 1.5 s was 1.5 s of held white rectangle. Steve asked for the arc
+            // to end as the wave arrives and this is what that means.
+            //
+            // There is still room to see it coming: the wall is 643 px of a 940
+            // px frame at t=85 and fills the frame by 86.
+            //
+            // It moved because `startAt` did. Holding the arrival at 85 while
+            // the spawn went to 67 would have cut the approach to 18 s, and the
+            // approach is the part of this scene that works hardest.
+            //
+            // The other half of the ending note below is now stale in one
+            // direction worth stating plainly: it says the sequence is the
+            // white-out, its clearing, and a second of standing under the thing.
+            // The clearing no longer happens, because the white-out floor holds
+            // it closed once the sea is over the eye. There is nothing under
+            // there to clear TO: see `storm.washFloorFromMetres`.
+            arriveAt: 89,
             // THE FRONT CARRIES THE WATER NOW, NOT THE SURGE. The surge used to
             // ramp to 1.55 at the end and the front added its own rise on top,
             // which is two systems raising the same sea and a level of 3 m if
@@ -2729,11 +2801,18 @@ export const OCEAN_CONFIG = deepFreeze({
             //     263m  83     15%       84m  308     57%
             //     197m 118     22%       31m  778    100%
             //
-            // Which is about 2.6 times the wall that shipped before 2026-08-21,
-            // and it fills the frame at t=76 rather than t=78. `swellBehind`
-            // also went 2.9 -> 4.5 in this pass, once the fold behind the front
-            // had actually been measured rather than guessed at: see the note
-            // there. The eye is still covered at t=78.1.
+            // Which is about 2.6 times the wall that shipped before 2026-08-21.
+            // `swellBehind` also went 2.9 -> 4.5 in this pass, once the fold
+            // behind the front had actually been measured rather than guessed
+            // at: see the note there.
+            //
+            // THE DISTANCES ABOVE STILL HOLD AND THE TIMES IN THIS BLOCK DO NOT.
+            // It was written against an arc that spawned the front at 60 and
+            // arrived at 85, and said the wall filled the frame at t=76 and the
+            // eye was covered at t=78.1. The arc was retimed on 2026-08-24 so
+            // the drawback gets its own beat: the frame fills at about t=86 and
+            // the eye is covered at t=86.9. Nothing about the wall's SIZE moved,
+            // which is why the table is still the useful part of this note.
             //
             // 9.0 AND 13.0 EARLIER THE SAME DAY, AFTER MEASURING THE APPROACH
             // ACTUALLY LOOKED LIKE. Steve said the wall was visible and
@@ -2903,7 +2982,29 @@ export const OCEAN_CONFIG = deepFreeze({
             // reading it as metres overstates the wall by half.
             swellBehind: 4.50
         },
-        fadeSeconds: 6
+        // THE SCENE ENDS WHEN THE WAVE ARRIVES, and it used to run on for eight
+        // seconds afterwards. The fade is the last `fadeSeconds` of `seconds`,
+        // so at 6 it ran 84 to 90 against a hit at 82.75: nearly two seconds of
+        // held white-out and then six of it going dark, all of it after the last
+        // thing worth seeing had happened.
+        //
+        // There is genuinely nothing left to show. Once the sea is over the eye
+        // the white-out floor holds the screen closed, because the sea is a
+        // surface and there is no underside to draw: see
+        // `storm.washFloorFromMetres`. So the tail was a dim white rectangle for
+        // long enough to notice, which is what Steve reported on 2026-08-24 and
+        // what the earlier "too long underwater" note had been circling.
+        //
+        // 3 against `seconds` 90 puts the fade at 87 to 90 with the hit at about
+        // 86.8, so the black starts as the water closes over rather than after
+        // it. Those five recovered seconds are what paid for the drawback beat
+        // at the other end: see `tsunami.startAt`.
+        //
+        // It cannot go much below 3. `washReleaseSeconds` is 0.9 and the fade
+        // has to outlast the white-out arriving or the two fight each other in
+        // the same half second, and a fade under about two seconds reads as a
+        // cut rather than as an ending.
+        fadeSeconds: 3
     },
 
     // ---- The cycle ----------------------------------------------------------

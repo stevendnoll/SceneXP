@@ -299,8 +299,14 @@ describe('the drop-off funnel', () => {
             const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
             const { nextStageIndex } = await import('../www/highwater/js/main.js');
             // A whole second of frames inside one stage, after it was reported.
-            const inDrawback = 65;
-            const reached = OCEAN_CONFIG.storm.stages.findIndex((st) => st.name === 'drawback');
+            // Derived rather than written down, for the same reason as the test
+            // below: a literal here was two seconds from falling out of the
+            // stage it names when the arc was retimed on 2026-08-24.
+            const stages = OCEAN_CONFIG.storm.stages;
+            const reached = stages.findIndex((st) => st.name === 'drawback');
+            const after = stages[reached + 1];
+            const inDrawback =
+                (stages[reached].from + (after ? after.from : OCEAN_CONFIG.storm.seconds)) / 2;
             for (let i = 0; i < 60; i++) {
                 expect(nextStageIndex(inDrawback + i / 60, reached, OCEAN_CONFIG)).toBe(-1);
             }
@@ -314,10 +320,20 @@ describe('the drop-off funnel', () => {
         const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
         const { nextStageIndex } = await import('../www/highwater/js/main.js');
         const stages = OCEAN_CONFIG.storm.stages;
-        const first = nextStageIndex(73, 0, OCEAN_CONFIG);
+        // TAKEN FROM THE TABLE RATHER THAN WRITTEN DOWN. This read a literal 73,
+        // which sat inside `drawback` when it was written and moved into
+        // `tsunami` the moment the arc was retimed on 2026-08-24. The property
+        // has nothing to do with 73: it is that jumping the clock reports the
+        // stage you LAND in and not every one you skipped over. Any time inside
+        // any stage past the first proves it, so the time is derived from the
+        // stage it is meant to be inside.
+        const target = stages.findIndex((s) => s.name === 'drawback');
+        const next = stages[target + 1];
+        const inside = (stages[target].from + (next ? next.from : OCEAN_CONFIG.storm.seconds)) / 2;
+        const first = nextStageIndex(inside, 0, OCEAN_CONFIG);
         expect(stages[first].name).toBe('drawback');
         // And nothing further from the same position.
-        expect(nextStageIndex(73, first, OCEAN_CONFIG)).toBe(-1);
+        expect(nextStageIndex(inside, first, OCEAN_CONFIG)).toBe(-1);
     });
 
     test('nothing is reported before the story starts', async () => {
