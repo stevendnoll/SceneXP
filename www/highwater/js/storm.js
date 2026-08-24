@@ -353,10 +353,28 @@ export function frontAt(seconds, storm = OCEAN_CONFIG.storm) {
         // THE FADE IN IS SHORT ON PURPOSE. It used to ramp over the first
         // quarter of the approach, which meant the wall came out of the fog at
         // half the height the OLD constant rise had, and Steve read it correctly
-        // as having got smaller. It is fully formed inside a second now. Nothing
-        // pops, because at four hundred metres it is behind the fog anyway; the
-        // ramp is only here so the step does not spring into existence on a
-        // frame where somebody happens to be looking at the horizon.
+        // as having got smaller. The ramp is only here so the step does not
+        // spring into existence on a frame where somebody happens to be looking
+        // at the horizon.
+        //
+        // IT IS NOT HIDDEN BY FOG AND THIS COMMENT USED TO SAY IT WAS. The claim
+        // was that four hundred metres is behind the fog anyway, and it was true
+        // when it was written and stopped being true the day the clarity curve
+        // arrived. Clarity is already 0.75 at t=60, the same second the front
+        // spawns, which puts the fog's far edge at 850 m rather than 400, and a
+        // wall at 403 m keeps 59% of its contrast rather than none.
+        //
+        // The same comment also said the ramp was over inside a second. It is
+        // `smoothstep(0, 0.10, p)` across a 25 second approach, so it is two and
+        // a half. Measured, over those seconds the wall goes from nothing to
+        // about 53 px of apparent height, of which the fog leaves 38.
+        //
+        // So this ramp IS visible: a wall growing out of empty horizon over two
+        // and a half seconds in air that is more than half clear. That may be
+        // fine, since it is the moment the thing announces itself, but it is a
+        // choice now rather than something the fog was covering up. Shortening
+        // the 0.10 is the lever if it ever reads as growing rather than as
+        // arriving, and see `storm.clarity` for the other half of the tradeoff.
         rise: grown * smoothstep(0, 0.10, p),
         width: t.frontWidthFar + (t.frontWidthNear - t.frontWidthFar) * p,
         // How far back the raised water reaches before it tapers away. Carried
