@@ -10,7 +10,13 @@
  */
 import { jest } from '@jest/globals';
 
-const SLUGS = ['dad', 'family', 'roqui', 'seedtoseed', 'interstate', 'steve', 'gavin', 'jamar', 'mandelbrot', 'earthdefense'];
+// MUST MATCH THE CATALOG IN www/js/directory.js, IN ORDER. The module pairs
+// each catalog entry with a card looked up by slug, so an entry missing from
+// this fixture is an entry whose card comes back null, and the count in the
+// status line is taken straight from the catalog's length. Both assertions
+// below read that count, which is what makes a stale list here fail loudly
+// rather than quietly under-test the search.
+const SLUGS = ['dad', 'family', 'roqui', 'seedtoseed', 'interstate', 'steve', 'gavin', 'jamar', 'mandelbrot', 'earthdefense', 'highwater'];
 
 function makeDom({ withMarkup = true } = {}) {
   const dom = {

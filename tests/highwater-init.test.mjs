@@ -1,0 +1,486 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * Integration smoke for High Water, plus the page furniture.
+ *
+ * TWO HALVES, AND THE SECOND ONE IS THE UNUSUAL PART. The first is the ordinary
+ * init test every experience ships: build the whole scene under the chainable
+ * THREE proxy so that a missing import, a renamed export, or a reference left
+ * behind by a refactor throws here rather than on the live site. Nothing
+ * renders, but every function a real page load would call does run.
+ *
+ * The second half asserts the metadata. No other suite on the site does this,
+ * and the furniture is exactly the sort of thing that is written once, is never
+ * looked at again, and quietly rots: an og:image pointing at a file that was
+ * renamed, a canonical left on the previous folder name, a scene added to the
+ * catalog but not the sitemap. All of that is invisible in a browser and
+ * expensive in a share preview, and all of it is a string comparison away from
+ * being caught. Generalising this over every experience would be worth doing.
+ *
+ * THE FOLDER IS www/highwater AND THE CODE INSIDE IT STILL SAYS `ocean`. That
+ * is deliberate rather than half-finished work: the folder was renamed on
+ * 2026-08-21 and `OCEAN_CONFIG`, the `window.ocean*` QA hooks, and the sibling
+ * suites' filenames were all left alone on purpose, so that a QA session in
+ * progress kept working. Do not "fix" it piecemeal.
+ */
+import { jest } from '@jest/globals';
+import { readFile } from 'node:fs/promises';
+import { installThree, installCanvas, installBrowserGlobals, uninstallAll } from './helpers/three-stub.mjs';
+
+const PAGE = new URL('../www/highwater/index.html', import.meta.url);
+const ORIGIN = 'https://www.scenexp.com';
+const BASE = `${ORIGIN}/highwater/`;
+
+// ---------------------------------------------------------------------------
+// The scene builds
+// ---------------------------------------------------------------------------
+
+describe('the whole sea builds without a browser', () => {
+    beforeEach(() => {
+        installThree();
+        installCanvas();
+        installBrowserGlobals();
+    });
+    afterEach(() => { uninstallAll(); });
+
+    test('sky, sand, water and lightning all initialise in the page order', async () => {
+        jest.resetModules();
+        // The BUILT modules, because main.js resolves its imports to the
+        // .min.js files and module state has to be shared with what is driven
+        // here. This is why `npm run build` runs before `npm test`.
+        const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
+        const sky = await import('../www/highwater/js/sky.min.js');
+        const sand = await import('../www/highwater/js/sand.min.js');
+        const water = await import('../www/highwater/js/water.min.js');
+        const lightning = await import('../www/highwater/js/lightning.min.js');
+
+        const scene = { children: [], add(o) { this.children.push(o); }, remove() {} };
+
+        // EXACTLY THE ORDER main.js USES, and the order is load bearing: both
+        // sheets compile the sky's own program into their shaders, so the sky
+        // has to exist before either of them asks for its uniforms.
+        sky.initSky(scene, null, OCEAN_CONFIG, { renderer: null });
+        const handover = {
+            uniformGlsl: sky.SKY_UNIFORM_GLSL,
+            glsl: sky.SKY_GLSL,
+            uniforms: sky.skyUniforms()
+        };
+        expect(handover.glsl).toContain('oceanSkyColor');
+        expect(handover.uniforms.uFlash).toBeDefined();
+
+        sand.initSand(scene, OCEAN_CONFIG, { mobile: false, sky: handover });
+        water.initWater(scene, OCEAN_CONFIG, { mobile: false, sky: handover });
+        lightning.initLightning(scene, null, OCEAN_CONFIG,
+            { sky: handover, reducedMotion: false });
+
+        // Every module put something in the scene and nothing threw.
+        expect(scene.children.length).toBeGreaterThanOrEqual(4);
+
+        // And the arc runs. Walked rather than spot checked, because a throw
+        // thirty seconds in is exactly the failure this suite exists to catch
+        // and a single tick would sail past it.
+        for (let t = 0; t <= 90; t += 1.5) {
+            expect(() => lightning.updateLightning(t, OCEAN_CONFIG)).not.toThrow();
+        }
+
+        lightning.disposeLightning();
+    });
+
+    test('the storm arc is self-consistent end to end', async () => {
+        jest.resetModules();
+        const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
+        const storm = await import('../www/highwater/js/storm.min.js');
+        for (let t = 0; t <= OCEAN_CONFIG.storm.seconds; t++) {
+            const s = storm.stormStateAt(t, OCEAN_CONFIG, 0);
+            expect(Number.isFinite(s.swell)).toBe(true);
+            expect(Number.isFinite(s.surge)).toBe(true);
+            expect(Number.isFinite(s.gloom)).toBe(true);
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The furniture
+// ---------------------------------------------------------------------------
+
+describe('the page carries the metadata a share and a crawler need', () => {
+    let html;
+    let main;
+    beforeAll(async () => {
+        html = await readFile(PAGE, 'utf8');
+        main = await readFile(new URL('../www/highwater/js/main.js', import.meta.url), 'utf8');
+    });
+
+    /** The content of a meta tag, whichever attribute order it was written in. */
+    const meta = (key) => {
+        const m = html.match(
+            new RegExp(`<meta[^>]*(?:property|name)="${key}"[^>]*content="([^"]*)"`, 'i')
+        ) || html.match(
+            new RegExp(`<meta[^>]*content="([^"]*)"[^>]*(?:property|name)="${key}"`, 'i')
+        );
+        return m ? m[1] : null;
+    };
+
+    test('THE ENDING COPY AND THE REPLAY HAVE TO AGREE ABOUT WHAT REPEATS', () => {
+        // The card used to read "It happens the same way every time", and that
+        // was exactly true while a replay held the hour the visit drew. Since
+        // 2026-08-24 it draws a fresh one, so the sentence quietly stopped being
+        // true and became a promise the scene breaks on the first rewatch.
+        //
+        // Paired rather than asserted on its own, because either half moving is
+        // the bug. Someone reverting the re-roll should be told the copy is now
+        // wrong in the other direction, and someone rewriting the copy should be
+        // told what it is carrying.
+        const note = html.match(/<p class="ending-note">([^<]*)<\/p>/);
+        expect(note).not.toBeNull();
+        const rerolls = /\bresetSky\(\)/.test(main);
+        if (rerolls) {
+            expect(note[1]).not.toMatch(/happens the same way/i);
+        } else {
+            expect(note[1]).toMatch(/happens the same way/i);
+        }
+        // AND THE FATALISM SURVIVES WHICHEVER WAY THAT WENT. The line is not
+        // decoration: the outcome being fixed is the whole point of the piece,
+        // and a rewrite that drops it costs more than the sentence is worth.
+        expect(note[1]).toMatch(/same way every time/i);
+        // House style, and this is the one line most likely to attract one.
+        expect(note[1]).not.toMatch(/[—;]/);
+    });
+
+    test('the identity block is present and points at this folder', () => {
+        expect(html).toContain(`<link rel="canonical" href="${BASE}">`);
+        expect(meta('og:url')).toBe(BASE);
+        expect(meta('og:title')).toBe('High Water');
+        expect(meta('og:type')).toBe('website');
+        expect(meta('og:site_name')).toBe('SceneXP');
+        expect(meta('twitter:card')).toBe('summary_large_image');
+        expect(meta('twitter:title')).toBe('High Water');
+        expect(html).toMatch(/<title>High Water<\/title>/);
+        expect(meta('author')).toBe('Steve Noll');
+        expect(meta('description')).toBeTruthy();
+    });
+
+    test('EXACTLY ONE og:image, because Apple renders every one it finds', () => {
+        // Two og:image tags put two identical cards in a friend's message
+        // thread. earthdefense shipped that once and it is the reason this
+        // assertion exists on the newest page rather than the oldest.
+        const images = html.match(/<meta property="og:image"/g) || [];
+        expect(images).toHaveLength(1);
+    });
+
+    test('the card is declared at the size every renderer expects', () => {
+        expect(meta('og:image:width')).toBe('1200');
+        expect(meta('og:image:height')).toBe('630');
+        expect(meta('og:image:type')).toBe('image/webp');
+    });
+
+    test('every image reference on the site names the same file', () => {
+        // THE ONE THAT WOULD ACTUALLY GO WRONG. The card lives in three places
+        // (og:image, twitter:image, and the home page card's <img>), and a
+        // cache-busting bump applied to two of the three is a silent
+        // inconsistency nobody would see until a share looked stale.
+        const image = meta('og:image');
+        expect(image).toBe(`${BASE}assets/og-highwater.webp?v=1`);
+        expect(meta('twitter:image')).toBe(image);
+    });
+
+    test('alt text is present on the card and matches between the two blocks', () => {
+        // A share preview is often the only thing a screen reader user gets.
+        const alt = meta('og:image:alt');
+        expect(alt).toBeTruthy();
+        expect(alt.length).toBeGreaterThan(60);
+        expect(meta('twitter:image:alt')).toBe(alt);
+    });
+
+    test('the JSON-LD parses and agrees with the tags around it', () => {
+        const block = html.match(
+            /<script type="application\/ld\+json">([\s\S]*?)<\/script>/
+        );
+        expect(block).not.toBeNull();
+        const data = JSON.parse(block[1]);
+        expect(data['@context']).toBe('https://schema.org');
+        expect(data.url).toBe(BASE);
+        expect(data.name).toBe(meta('og:title'));
+        expect(data.inLanguage).toBe('en-US');
+    });
+
+    test('the security and accessibility furniture is all still here', () => {
+        // These are house rules rather than preferences, so they are asserted
+        // rather than trusted. The CSP in particular is the reason there is no
+        // inline style or script anywhere in this experience.
+        expect(html).toContain("default-src 'self'");
+        expect(html).toContain("object-src 'none'");
+        expect(html).not.toMatch(/<style[\s>]/);
+        // A <script> with a src is the pattern; a <script> with a body is not.
+        const inlineScript = html.match(/<script(?![^>]*(?:src=|type="application\/ld))[^>]*>/g);
+        expect(inlineScript).toBeNull();
+        expect(html).toContain('class="skip-link"');
+        expect(html).toContain('id="home-btn"');
+        expect(html).toContain('noscript-fallback');
+        expect(html).toContain('data-ui-theme="surf"');
+        expect(html).toContain('rel="icon"');
+    });
+
+    test('every floating control the page declares is one the script reveals', () => {
+        // THE BUG THIS EXISTS FOR, AND IT SHIPPED. `.ui-float` is `display: none`
+        // in the shared stylesheet and only `.ui-float.visible` is shown, which
+        // is how the other experiences keep their chrome off the screen until
+        // there is a world behind it. The home button was added to this page
+        // with the correct markup and correct classes, and main.js never added
+        // `visible`, so it was on the page and invisible. Nothing failed,
+        // nothing warned, and it took somebody opening the scene to notice.
+        //
+        // A source-text check rather than a rendered one, which is weaker than
+        // it looks on paper and is the right trade here: driving main.js needs a
+        // canvas, a WebGL context and a full THREE, and the actual failure mode
+        // is one missing line rather than anything subtle.
+        expect(html).toContain('class="ui-float menu-btn"');
+        expect(main).toMatch(/querySelectorAll\('\.ui-float'\)/);
+        expect(main).toMatch(/classList\.add\('visible'\)/);
+    });
+
+    test('the moments worth counting are counted', () => {
+        // Not an assertion that telemetry is correct, which this cannot see.
+        // It is an assertion that the four events the site's own reporting
+        // expects from this page are still being sent, because they are easy to
+        // drop in a refactor and their absence looks exactly like a scene
+        // nobody visited.
+        //
+        // MATCHED AS A CALL AND NOT AS A STRING. The first version of this
+        // looked for the event name alone, which meant renaming `track` to
+        // anything at all left it passing: the literal was still in the file,
+        // just no longer being sent anywhere. Caught by deliberately breaking
+        // it, which is the only way that class of weak assertion ever surfaces.
+        for (const event of ['session-start', 'begin-watching', 'arc-complete', 'replay']) {
+            expect(main).toMatch(new RegExp(`\\btrack\\(\\s*'${event}'`));
+        }
+        // The stage checkpoints are built from the stage name, so they are one
+        // template literal rather than five names.
+        expect(main).toMatch(/\btrack\(\s*`reached-\$\{/);
+        expect(main).toMatch(/\btrackFinal\(\s*'session-end'/);
+        expect(main).toMatch(/import \{[^}]*\btrack\b[^}]*\} from '\.\.\/\.\.\/shared\/js\/telemetry-1\.0\.0\.min\.js'/);
+    });
+
+    test('the content warning is on the card and is not negotiable', () => {
+        // Ninety seconds that set out to frighten somebody and end with the sea
+        // closing over their head. That is a thing a visitor is owed in
+        // advance, and the flashing is a thing a photosensitive visitor is owed
+        // in advance. Neither line is furniture and neither comes out.
+        //
+        // ASSERTED AS SUBSTANCE AND NOT AS WORDING, which the first version got
+        // wrong. It pinned the literal phrase "meant to unsettle you", so the
+        // first time somebody improved the prose the suite failed for a reason
+        // that had nothing to do with the visitor. Worse, a test like that
+        // quietly discourages the edit. What must never change is WHAT A
+        // VISITOR IS TOLD; how gracefully it is put is meant to keep improving.
+        //
+        // Four things are owed, and each is matched against the several honest
+        // ways of saying it:
+        //
+        //   that it is a warning at all
+        //   that the sea closes over them, which is the ending
+        //   that the screen flashes, which is the photosensitivity risk
+        //   that it is silent, so they know they can watch it anywhere
+        const card = html.slice(html.indexOf('id="welcome"'), html.indexOf('id="wash"'));
+        expect(card).toMatch(/unsettl|disturb|frighten|upsett/i);
+        expect(card).toMatch(/comes over you|over your head|closes over|takes you under/i);
+        expect(card).toMatch(/lightning/i);
+        expect(card).toMatch(/flash/i);
+        expect(card).toMatch(/without sound|no sound|silent/i);
+    });
+});
+
+describe('the drop-off funnel', () => {
+    // Steve asked for a checkpoint every thirty seconds so we could see where
+    // people leave. These hang on the arc's own six named stages instead, which
+    // costs no second schedule, reads as a sentence at the far end, and survives
+    // the arc being retimed (it has been three minutes, then two, then ninety
+    // seconds, and every hardcoded second in these suites went stale each time).
+
+    test('one watch reports every stage exactly once, in order', async () => {
+        jest.resetModules();
+        const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
+        const { nextStageIndex } = await import('../www/highwater/js/main.js');
+        const stages = OCEAN_CONFIG.storm.stages;
+
+        let reached = 0;
+        const fired = [];
+        for (let t = 0; t <= OCEAN_CONFIG.storm.seconds; t += 1 / 60) {
+            const i = nextStageIndex(t, reached, OCEAN_CONFIG);
+            if (i >= 0) { reached = i; fired.push(stages[i].name); }
+        }
+        // Every stage but the first, which begins at zero and would only repeat
+        // `begin-watching` under a different name.
+        expect(fired).toEqual(stages.slice(1).map((st) => st.name));
+    });
+
+    test('IT CANNOT FIRE TWICE, WHICH IS THE POINT', () => {
+        // This runs on every animation frame. A version that reported the
+        // CURRENT stage rather than a CHANGE of stage would send sixty
+        // telemetry requests a second, aimed at the site's own server, and it
+        // would look perfectly fine from inside the browser. That is the guard
+        // most likely to be refactored away by somebody tidying the caller, and
+        // this is what should stop them.
+        return (async () => {
+            jest.resetModules();
+            const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
+            const { nextStageIndex } = await import('../www/highwater/js/main.js');
+            // A whole second of frames inside one stage, after it was reported.
+            // Derived rather than written down, for the same reason as the test
+            // below: a literal here was two seconds from falling out of the
+            // stage it names when the arc was retimed on 2026-08-24.
+            const stages = OCEAN_CONFIG.storm.stages;
+            const reached = stages.findIndex((st) => st.name === 'drawback');
+            const after = stages[reached + 1];
+            const inDrawback =
+                (stages[reached].from + (after ? after.from : OCEAN_CONFIG.storm.seconds)) / 2;
+            for (let i = 0; i < 60; i++) {
+                expect(nextStageIndex(inDrawback + i / 60, reached, OCEAN_CONFIG)).toBe(-1);
+            }
+        })();
+    });
+
+    test('a jump in the clock leaves one mark, not a fake session', async () => {
+        // `oceanSetArc(73)` is a QA hook. Reporting every stage it skipped would
+        // put a complete, entirely fictional watch into the log.
+        jest.resetModules();
+        const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
+        const { nextStageIndex } = await import('../www/highwater/js/main.js');
+        const stages = OCEAN_CONFIG.storm.stages;
+        // TAKEN FROM THE TABLE RATHER THAN WRITTEN DOWN. This read a literal 73,
+        // which sat inside `drawback` when it was written and moved into
+        // `tsunami` the moment the arc was retimed on 2026-08-24. The property
+        // has nothing to do with 73: it is that jumping the clock reports the
+        // stage you LAND in and not every one you skipped over. Any time inside
+        // any stage past the first proves it, so the time is derived from the
+        // stage it is meant to be inside.
+        const target = stages.findIndex((s) => s.name === 'drawback');
+        const next = stages[target + 1];
+        const inside = (stages[target].from + (next ? next.from : OCEAN_CONFIG.storm.seconds)) / 2;
+        const first = nextStageIndex(inside, 0, OCEAN_CONFIG);
+        expect(stages[first].name).toBe('drawback');
+        // And nothing further from the same position.
+        expect(nextStageIndex(inside, first, OCEAN_CONFIG)).toBe(-1);
+    });
+
+    test('nothing is reported before the story starts', async () => {
+        jest.resetModules();
+        const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
+        const { nextStageIndex } = await import('../www/highwater/js/main.js');
+        // The arc clock is held at zero while the welcome card is up, and the
+        // opening stage is index 0, so there is nothing above `reached`.
+        expect(nextStageIndex(0, 0, OCEAN_CONFIG)).toBe(-1);
+    });
+});
+
+describe('the QA console hooks stay off a visitor\'s page', () => {
+    // `installTuningAids` puts ten `window.ocean*` functions on the page, and
+    // one of them (`oceanSetArc`) walks straight to the ending of a ninety
+    // second story that has a shape to it. The gate is the only thing keeping
+    // them off scenexp.com, so it is asserted rather than assumed. No other
+    // experience in the repository installs a window global at all.
+    const withLocation = async (location, run) => {
+        const had = Object.prototype.hasOwnProperty.call(globalThis, 'window');
+        const previous = globalThis.window;
+        globalThis.window = { location };
+        try {
+            await run();
+        } finally {
+            if (had) globalThis.window = previous;
+            else delete globalThis.window;
+        }
+    };
+
+    test('THE DEPLOYED SITE GETS NOTHING, AND NO QUERY STRING CHANGES THAT', () => {
+        // There used to be a `?qa` escape hatch so the live page could be
+        // opened with the tuning hooks on purpose. It was removed in the
+        // pre-release audit on 2026-08-24: nothing behind those hooks is
+        // sensitive, but it was a second way in that nobody needed, since the
+        // screenshot pass runs on a local server.
+        //
+        // The query strings below are the ones that used to work, kept
+        // deliberately. If somebody puts the hatch back without meaning to,
+        // this is what says so.
+        return (async () => {
+            jest.resetModules();
+            const { tuningAidsWanted } = await import('../www/highwater/js/main.js');
+            for (const search of ['', '?ref=aqua', '?qa', '?qa=1', '?v=2&qa']) {
+                await withLocation({ hostname: 'www.scenexp.com', search }, () => {
+                    expect(`${search || '(none)'}: ${tuningAidsWanted()}`)
+                        .toBe(`${search || '(none)'}: false`);
+                });
+            }
+        })();
+    });
+
+    test('a local server still gets them, however it is addressed', async () => {
+        jest.resetModules();
+        const { tuningAidsWanted } = await import('../www/highwater/js/main.js');
+        // The screenshot pass runs here, and a query string must not take them
+        // away either.
+        for (const hostname of ['localhost', '127.0.0.1', '[::1]', '']) {
+            for (const search of ['', '?qa', '?ref=aqua']) {
+                await withLocation({ hostname, search }, () => {
+                    expect(`${hostname || '(empty)'}${search}: ${tuningAidsWanted()}`)
+                        .toBe(`${hostname || '(empty)'}${search}: true`);
+                });
+            }
+        }
+    });
+
+    test('the hooks are installed behind the gate and nowhere else', async () => {
+        // The property that matters is not that the gate returns the right
+        // boolean but that nothing assigns a global outside it. Asserted
+        // against the source, because installing them for real needs a whole
+        // WebGL scene, and this is the check that would fail if a future hook
+        // were added back at the top level of `init`.
+        const source = await readFile(
+            new URL('../www/highwater/js/main.js', import.meta.url), 'utf8');
+        const start = source.indexOf('function installTuningAids');
+        expect(start).toBeGreaterThan(-1);
+        const body = source.slice(start);
+        const assignments = source.match(/^\s*window\.\w+ =/gm) || [];
+        expect(assignments.length).toBeGreaterThan(0);
+        for (const line of assignments) {
+            expect(body).toContain(line.trim());
+        }
+        expect(source).toMatch(/if \(tuningAidsWanted\(\)\) installTuningAids\(\);/);
+    });
+});
+
+describe('the rest of the site knows the scene exists', () => {
+    test('it is in the sitemap, llms.txt, the catalog and the directory page', async () => {
+        const [sitemap, llms, directory, home] = await Promise.all([
+            readFile(new URL('../www/sitemap.xml', import.meta.url), 'utf8'),
+            readFile(new URL('../www/llms.txt', import.meta.url), 'utf8'),
+            readFile(new URL('../www/js/directory.js', import.meta.url), 'utf8'),
+            readFile(new URL('../www/index.html', import.meta.url), 'utf8')
+        ]);
+        expect(sitemap).toContain(`<loc>${BASE}</loc>`);
+        expect(llms).toContain(BASE);
+        expect(directory).toContain("slug: 'highwater'");
+        expect(directory).toContain("url: 'highwater/'");
+        // The catalog and the cards are paired by slug at runtime, so an entry
+        // in one without the other is a card that never filters or a filter
+        // that targets nothing.
+        expect(home).toContain('data-slug="highwater"');
+        expect(home).toContain('href="/highwater/"');
+        expect(home).toContain(`"url": "${BASE}"`);
+    });
+
+    test('the ItemList positions run 1..n with no gap or repeat', async () => {
+        // Adding a scene means renumbering every entry below it, which is
+        // exactly the sort of hand edit that lands a second "position": 4.
+        const home = await readFile(new URL('../www/index.html', import.meta.url), 'utf8');
+        const positions = [...home.matchAll(/"position": (\d+),/g)].map((m) => Number(m[1]));
+        expect(positions.length).toBeGreaterThan(0);
+        expect([...positions].sort((a, b) => a - b))
+            .toEqual(positions.map((_, i) => i + 1));
+    });
+
+    test('robots.txt lets crawlers in and names the sitemap', async () => {
+        const robots = await readFile(new URL('../www/robots.txt', import.meta.url), 'utf8');
+        expect(robots).toMatch(/^Allow: \/$/m);
+        expect(robots).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
+        expect(robots).not.toMatch(/^Disallow: \/highwater/m);
+    });
+});

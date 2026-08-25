@@ -1,0 +1,242 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed.
+ *
+ * experience.css - High Water.
+ *
+ * Enough to get the canvas filling the viewport, plus the three things that sit
+ * over it: the welcome card, the white-out, and the ending.
+ *
+ * THE SHARED SHEET LOADS FIRST AND THIS ONE SECOND, which is the order the
+ * cascade needs. `shared/css/styles-1.0.0.css` sets a universal reset and a dark
+ * body, and this scene wants a pale sky behind a slow first frame, so the
+ * background below has to be the later rule. Everything in the cards carries its
+ * own margin, colour and font already, so the reset has nothing of theirs to
+ * take away.
+ *
+ * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block.
+ * The page runs a strict same-origin CSP with style-src 'self', which blocks
+ * inline styles outright, and the failure is silent apart from a console
+ * message: the page simply renders unstyled. The same rule applies to
+ * JavaScript, which is why every experience keeps a js/main.js rather than a
+ * script block. */
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    /* Matches the scene background, so a slow first frame is a calm sky rather
+       than a white flash. */
+    background: #8fb6cc;
+}
+
+#scene {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* ---- The welcome card -------------------------------------------------------
+ *
+ * DARK OVER A BRIGHT SEA. The scene opens at midday under a clear sky, which is
+ * close to the brightest thing a screen can show, so light text on a scrim is
+ * the only combination that stays readable across the whole frame. The scrim is
+ * also doing the honest work of saying "this is not the experience yet".
+ *
+ * It stays out of the way of the horizon as far as it can. The composition
+ * behind it is the reason anybody is here. */
+#welcome {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: linear-gradient(180deg, rgba(6, 20, 27, 0.62) 0%, rgba(6, 20, 27, 0.78) 100%);
+    opacity: 1;
+    transition: opacity 650ms ease;
+    font: 400 1rem/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #e8eef1;
+}
+
+#welcome[hidden] {
+    display: none;
+}
+
+#welcome .card {
+    max-width: 34rem;
+    text-align: center;
+}
+
+#welcome h1 {
+    margin: 0 0 0.75rem;
+    font-size: clamp(1.9rem, 6vw, 3rem);
+    font-weight: 300;
+    letter-spacing: 0.02em;
+}
+
+#welcome .lede {
+    margin: 0 0 1.25rem;
+    font-size: clamp(1rem, 2.6vw, 1.15rem);
+    color: #cfdde3;
+}
+
+/* The one paragraph on this page that cannot be skimmed past, so it is set apart
+   rather than run in with the rest. A rule down the side does that without
+   shouting, which suits the tone better than a warning box would. */
+#welcome .warning {
+    margin: 0 auto 1.75rem;
+    max-width: 30rem;
+    padding: 0.85rem 1.1rem;
+    text-align: left;
+    border-left: 2px solid #6f8b96;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 0 0.35rem 0.35rem 0;
+    color: #b9ccd4;
+    font-size: 0.95rem;
+}
+
+#welcome .note {
+    margin: 1.1rem 0 0;
+    font-size: 0.85rem;
+    color: #8ea3ac;
+}
+
+/* ---- Buttons ----------------------------------------------------------------
+ *
+ * Shared shape between Begin and Watch it again, so the page has one button
+ * rather than two. Generous hit areas: this scene gets watched on phones held at
+ * arm's length. */
+#welcome .primary,
+#replay {
+    font: inherit;
+    color: #e8eef1;
+    background: transparent;
+    border: 1px solid #5c6d75;
+    border-radius: 2rem;
+    cursor: pointer;
+    transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+#welcome .primary:hover,
+#welcome .primary:focus-visible,
+#replay:hover,
+#replay:focus-visible {
+    background: rgba(232, 238, 241, 0.10);
+    border-color: #9fb0b8;
+}
+
+#welcome .primary:focus-visible,
+#replay:focus-visible {
+    outline: 2px solid #9fb0b8;
+    outline-offset: 3px;
+}
+
+#welcome .primary {
+    padding: 0.8rem 2.6rem;
+    font-size: 1.05rem;
+    border-color: #93aeb9;
+    background: rgba(232, 238, 241, 0.08);
+}
+
+/* ---- The arc's two overlays -------------------------------------------------
+ *
+ * THE WHITE-OUT IS NOT AN UNDERWATER VIEW, and that is a deliberate choice
+ * rather than a shortcut. A wave breaking over your head is an opaque wall of
+ * aerated water that arrives faster than the eye adapts, so it is a white wash
+ * over the whole frame and not a green room with fish in it. It is also why the
+ * camera never has to move for it, which keeps the no-bob promise intact.
+ *
+ * Both of these are driven from JavaScript by writing `style.opacity`, which is
+ * CSSOM rather than an inline style attribute and is therefore NOT blocked by
+ * style-src 'self'. The rule at the top of this file still holds: no rule lives
+ * outside a stylesheet. What JavaScript sets is one animated VALUE, the same way
+ * earthdefense and interstate already do. */
+#wash,
+#blackout {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+}
+
+#wash {
+    /* Brightest at the bottom, where the water actually arrives from, and
+       thinner at the top. A flat fill reads as a lens cap rather than as a sea. */
+    background:
+        radial-gradient(120% 90% at 50% 100%,
+            rgba(255, 255, 255, 0.97) 0%,
+            rgba(233, 243, 246, 0.93) 35%,
+            rgba(198, 222, 229, 0.80) 70%,
+            rgba(176, 205, 214, 0.62) 100%);
+}
+
+#blackout {
+    background: #000;
+}
+
+/* ---- The ending -------------------------------------------------------------
+ *
+ * Sits on top of the blackout, so it needs no background of its own. Faded in by
+ * JavaScript once the scene has stopped drawing. */
+#ending {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 2rem;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 900ms ease;
+    font: 400 1rem/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #e8eef1;
+}
+
+#ending[hidden] {
+    display: none;
+}
+
+.ending-line {
+    margin: 0;
+    font-size: clamp(1.4rem, 4.5vw, 2.1rem);
+    font-weight: 300;
+    letter-spacing: 0.01em;
+}
+
+.ending-note {
+    margin: 0;
+    max-width: 30rem;
+    color: #9fb0b8;
+}
+
+/* Shape and states come from the shared button block above. Only the sizing is
+   its own, because this one is the single thing on a black screen. */
+#replay {
+    margin-top: 0.5rem;
+    padding: 0.7rem 1.6rem;
+}
+
+/* Reduced motion gets the same scene without the transitions. The arc itself is
+   the thing that would need a real answer here, and that belongs with the
+   welcome screen rather than with a stylesheet. */
+@media (prefers-reduced-motion: reduce) {
+
+    #welcome,
+    #ending,
+    #welcome .primary,
+    #replay {
+        transition: none;
+    }
+}
+
+/* NO .fallback RULE HERE ANY MORE. The no-JS message used to be a bare
+   paragraph this file styled itself. It is now the house's `.noscript-fallback`
+   block, which carries a heading, three paragraphs and the site nav, and which
+   `../shared/css/no-js-1.0.0.min.css` styles the same way it does on the other
+   eleven experiences. Removed rather than left in place, because a dead rule
+   with a plausible name is the sort of thing somebody restores by accident. */

@@ -1,0 +1,10 @@
+<!-- ONE SHAPE, BECAUSE THE ONLY SIZE THAT MATTERS IS 16 PIXELS. The first
+     version had a curling wave, three foam lines and a fork of lightning in it,
+     which read fine at 32 and turned to mush in a browser tab. What is left is a
+     storm sky, one swell standing against it, and a single line of foam on its
+     crest: a silhouette, which is the one thing that survives being shrunk. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="High Water">
+  <rect width="32" height="32" rx="7" fill="#3f5058"/>
+  <path d="M0 15.5c5.2 0 7.6-7 14-7 5.4 0 8.4 4.4 12 4.4h6V32H0z" fill="#0d3a4a"/>
+  <path d="M0 15.5c5.2 0 7.6-7 14-7 5.4 0 8.4 4.4 12 4.4h6" fill="none" stroke="#a9dbe0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -6,6 +6,10 @@ Custom 3D experiences, right in your browser. Built with [Three.js](https://thre
 
 [![SceneXP.com, custom 3D experiences, right in your browser](www/assets/og-image.jpg)](https://www.scenexp.com/)
 
+Stand at the water's edge while the weather turns.
+
+[![A view out to sea under a low grey storm sky, with a branching fork of lightning coming down to the horizon and a small orange and white navigation buoy standing in the heaving grey swell](www/highwater/assets/og-highwater.jpg)](https://www.scenexp.com/highwater/)
+
 Defend Earth from the Martian fleet.
 
 [![A close-up of the Earth with Mars and the moon in the distance](www/earthdefense/assets/og-earthdefense.jpg)](https://www.scenexp.com/earthdefense/)
