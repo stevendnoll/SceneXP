@@ -1,9 +1,10 @@
 # Contributing to SceneXP
 
 Thank you for considering a contribution. New 3D experiences are warmly
-welcomed, and so are fixes and improvements to the site itself. Every
-experience on SceneXP honors a person, place, or business, and we would be
-delighted to host yours.
+welcomed, and so are fixes and improvements to the site itself. Most
+experiences on SceneXP honor a person, place, or business, and a few exist
+simply to show visitors something a browser can do. We would be delighted to
+host either kind.
 
 By participating you agree to our [code of conduct](CODE_OF_CONDUCT.md), and
 security concerns are best raised through the steps in
@@ -311,8 +312,11 @@ source of truth either way.
 
 ## House rules
 
-- **Honor someone.** Every experience celebrates a person, place, or
-  business. Kind worlds only, please.
+- **Honor someone, or show us something.** Most experiences here celebrate a
+  person, place, or business, and that remains the heart of the site. A world
+  that honors nobody in particular is just as welcome, as long as it gives
+  visitors an experience worth having. Earth Defense and High Water are both
+  built that way. Kind worlds only, please, whichever kind you bring.
 - **Security first.** Same-origin CSP, no third-party scripts, no trackers,
   no CDNs. Everything ships from this domain.
 - **Accessible and considerate.** Keyboard support, reduced-motion respect,

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="garden">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party
+         scripts/styles). No media-src: this scene plays no sound, so nothing
+         may load any. Adding one later would mean the scene had grown audio,
+         which is a decision rather than an oversight. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <!-- TEMPORARY, AND IT HAS A TASK NUMBER. This scene is under construction,
+         and a half-built garden should not be indexed. specs/garden/TASKS.md
+         M6-4 removes this tag and adds nothing in its place: the site default
+         is indexable, robots.txt says Allow: /, and every other experience
+         carries no robots tag at all. If this line survives to launch, the
+         page will be invisible to search and nobody will notice for weeks. -->
+    <meta name="robots" content="noindex, nofollow">
+
+    <meta name="description" content="Plant a garden of 3D fractal trees and watch it live through the years. Choose from twelve species or shape your own, then tend them through spring, summer, autumn, and winter as they grow. Runs in any modern browser with no app and no download.">
+    <!-- A leaf green, which is what the chrome should be tinted with while the
+         page is still the loading screen. The scene's own dominant colour
+         changes with the hour, so no single value could match it. -->
+    <meta name="theme-color" content="#8fbf76">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they cannot come from config.js and must stay literal absolute URLs
+         naming where this page is actually served (currently
+         www.scenexp.com/garden). When serving from a new domain, update the
+         URLs here: canonical, og:url, og:image, twitter:image, and the JSON-LD
+         id below. Everything else is relative or config-driven. -->
+    <link rel="canonical" href="https://www.scenexp.com/garden/">
+
+    <!-- Open Graph -->
+    <!-- THE IMAGE TAGS ARE MISSING ON PURPOSE. There is no social card yet
+         (TASKS.md M6-2 makes it, M6-3 wires it in). An og:image pointing at a
+         file that does not exist is worse than none at all, because a scraper
+         caches the failure. Exactly ONE og:image goes in here when it exists:
+         Apple's link preview renders every og:image it finds, so a second one
+         as a fallback puts two identical cards in a friend's message thread.
+         That bug shipped once already, on earthdefense. -->
+    <meta property="og:title" content="Fractal Garden">
+    <meta property="og:description" content="Plant a garden of fractal trees, then watch it live through the years. Choose a species or shape your own, and tend it through every season as it grows.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/garden/">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Twitter / X. The image tag joins this block in M6-3, naming the same
+         single WebP as og:image. -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Fractal Garden">
+    <meta name="twitter:description" content="Plant a garden of fractal trees, then watch it live through the years. Every season passes, and the trees remember you.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/garden/#website",
+      "url": "https://www.scenexp.com/garden/",
+      "name": "Fractal Garden",
+      "description": "An interactive 3D scene. Plant fractal trees in an open plot and tend them across the years as the seasons and the weather turn.",
+      "inLanguage": "en-US"
+    }
+    </script>
+
+    <title>Fractal Garden</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
+    <link rel="preload" href="css/experience.min.css?v=2" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <!-- The shared sheet FIRST and the experience sheet second, which is the
+         order the cascade needs: the shared one sets a universal reset and a
+         dark body, and this scene wants a soft daylight behind a slow first
+         frame. -->
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
+    <link rel="stylesheet" href="css/experience.min.css?v=2">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback
+         layout. A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text intro and links to the classic site. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Fractal Garden</h1>
+            <p>This is an interactive 3D scene, and it needs JavaScript to
+                draw. It begins as an open plot of grassland. You choose a spot,
+                pick one of twelve trees or shape your own with a handful of
+                sliders, and it goes into the ground as a sapling.</p>
+            <p>Then time does the work. Every day and night cycle is a year, and
+                the sun's own hours are the seasons: dawn is spring, noon is
+                summer, dusk is autumn, and midnight is winter. Leaves bud,
+                deepen, turn, and fall. Snow arrives in the small hours and
+                melts as the light comes back. The trees grow a little older
+                every year, and your garden is still there when you return.</p>
+            <p>The one thing they ask for is water. A tree left dry through
+                enough summers begins to wilt, though it is never truly gone,
+                and the first watering puts buds back on the branches within
+                seconds.</p>
+            <p>Most experiences on SceneXP honor a person or a business. This
+                one is a garden you plant and tend yourself.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">FRACTAL GARDEN</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- The welcome overlay. Dismissed by a click, a tap, Enter, or Space, the
+         same as the other composed-view experiences. The plot is already alive
+         behind it, so this sits over a real morning rather than a still frame.
+         M3-6 adds one polite line here for browsers that cannot save a garden
+         (private windows, blocked storage). -->
+    <div id="blocker">
+        <div id="instructions">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">An open plot, and as many years as you care to spend on it</p>
+            <p class="click-prompt">Click to begin</p>
+            <div class="controls-hint">
+                <span>PLANT</span> Tap an empty patch of grass to choose a tree.
+                <span>LOOK</span> Drag to pan and tilt, pinch or use the buttons to zoom.
+                <span>TEND</span> Tap a tree to see how it is doing and to water it.
+                <span>REMEMBER</span> Your garden is saved in this browser and waits for you.
+            </div>
+            <!-- Filled in only when the browser will not let the page save.
+                 Empty and silent otherwise. -->
+            <p id="storage-note" class="storage-note"></p>
+        </div>
+    </div>
+
+    <!-- Floating controls. The Home button returns to the serving site's root
+         in the same tab (applySiteLinks keeps it in sync with
+         GARDEN_CONFIG.site.home). Note it is display:none until main.js adds
+         .visible on load, which is true of every .ui-float element on the
+         site: correct markup on its own renders an invisible button. -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+
+    <!-- Start over. Behind a confirmation, because it is the visitor's garden
+         and there is no undo. -->
+    <button id="reset-btn" class="ui-float menu-btn reset-btn" type="button"
+        title="Start a new garden"
+        aria-label="Start a new garden">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12a8 8 0 1 1-2.5-5.8" stroke-linecap="round" fill="none" />
+            <path d="M20 4v4.5h-4.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+        </svg>
+    </button>
+
+    <!-- The season, the year, and the weather. A status readout only, never a
+         click target, in the same tradition as the depth chip in
+         www/mandelbrot. -->
+    <div id="season-chip" class="season-chip" role="status" aria-live="polite"></div>
+
+    <!-- Short confirmations: a tree planted, a tree watered, a plot full. -->
+    <div id="garden-toast" class="garden-toast" role="status" aria-live="polite"></div>
+
+    <!-- THE PLANT MODAL. The species grid is a real radio group and the
+         sliders are real range inputs, so the whole thing works from the
+         keyboard and reads correctly to a screen reader. The preview canvas is
+         drawn into by the main renderer through a scissor rectangle, so no
+         second WebGL context is ever created. -->
+    <div id="plant-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="plant-heading">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container plant-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <h2 id="plant-heading" class="plant-heading">Choose a tree</h2>
+
+            <div class="plant-layout">
+                <fieldset class="species-fieldset">
+                    <legend class="visually-hidden">Species</legend>
+                    <div id="species-grid" class="species-grid"></div>
+                </fieldset>
+
+                <div class="plant-side">
+                    <canvas id="preview-canvas" class="preview-canvas" aria-hidden="true"></canvas>
+                    <p id="plant-title" class="plant-title"></p>
+                    <p id="plant-note" class="plant-note"></p>
+                </div>
+            </div>
+
+            <details class="customise">
+                <summary>Customise this tree</summary>
+                <div id="slider-list" class="slider-list"></div>
+            </details>
+
+            <button id="plant-confirm" type="button" class="piece-enter">Plant it here</button>
+        </div>
+    </div>
+
+    <!-- THE TREE CARD. Health is stated in words as well as shown, because
+         colour is never the only carrier of anything here. -->
+    <div id="tree-card" class="hidden" role="dialog" aria-modal="true" aria-labelledby="tree-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container tree-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <h2 id="tree-title" class="piece-title"></h2>
+            <div id="tree-body" class="tree-body"></div>
+            <div class="tree-actions">
+                <button id="tree-water" type="button" class="piece-enter">Water it</button>
+                <button id="tree-remove" type="button" class="tree-remove">Remove this tree</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="scene"
+        aria-label="A 3D plot of open grassland where fractal trees can be planted and tended through the seasons"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,18 @@
+<!-- ONE SHAPE, BECAUSE THE ONLY SIZE THAT MATTERS IS 16 PIXELS. The obvious
+     favicon for a fractal tree scene is a bare branching skeleton, and it turns
+     to grey mush the moment a browser tab shrinks it: at 16 pixels a twig is a
+     third of a pixel wide. What survives is a silhouette, so this is a solid
+     canopy over a short trunk, with two forks reading as notches in the
+     outline rather than as separate strokes. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Fractal Garden">
+  <rect width="32" height="32" rx="7" fill="#1f3a1c"/>
+  <!-- Trunk and the first fork, drawn as one stroke so it stays connected
+       when the whole thing is a handful of pixels. -->
+  <path d="M16 27v-7M16 21l-4-4M16 21l4-4" fill="none" stroke="#5d8a4a" stroke-width="2.6"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- The canopy: three overlapping lobes, which reads as foliage at size and
+       as a tree crown when it is large enough to see. -->
+  <path d="M16 4c4.4 0 7.6 2.9 7.6 6.6 0 4.2-3.4 7.4-7.6 7.4S8.4 14.8 8.4 10.6C8.4 6.9 11.6 4 16 4z"
+    fill="#8fbf76"/>
+  <path d="M10.6 9.4c2.4-1.6 4.6.6 3.4 3.2-1.1 2.4-4.4 2.6-5.4.4-.8-1.7.2-2.8 2-3.6z" fill="#a9d191"/>
+</svg>

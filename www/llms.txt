@@ -1,9 +1,10 @@
 # SceneXP
 
 > SceneXP.com hosts custom 3D experiences built with Three.js and browser-native
-> HTML, CSS, and JavaScript. Each experience is a small explorable world, almost
-> always made to honor a person, place, or business. Everything runs in the browser with no app
-> or download, and the project is open source under the MIT license.
+> HTML, CSS, and JavaScript. Most are made to honor a person, place, or business,
+> and a few exist simply to show visitors something a browser can do. Everything
+> runs in the browser with no app or download, and the project is open source
+> under the MIT license.
 
 ## Pages
 

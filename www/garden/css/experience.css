@@ -1,0 +1,507 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed.
+ *
+ * experience.css - Fractal Garden.
+ *
+ * Loaded AFTER ../shared/css/styles-1.0.0.css, which is the order the cascade
+ * needs: the shared sheet sets a universal reset and a dark body, and this
+ * scene wants a soft daylight behind a slow first frame, so the background
+ * below has to be the later rule.
+ *
+ * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block.
+ * The page runs a strict same-origin CSP with style-src 'self', which blocks
+ * inline styles outright, and the failure is silent apart from a console
+ * message: the page simply renders unstyled. The same rule applies to
+ * JavaScript, which is why this experience keeps a js/main.js rather than a
+ * script block.
+ *
+ * BUMP THE ?v= QUERY ON BOTH LINES IN index.html when this file changes. A
+ * stale stylesheet over fresh markup does not look like a caching problem, it
+ * looks like a broken layout.
+ *
+ * The pan and zoom row needs nothing from this file. The shared sheet already
+ * carries `.pan-controls.always-on.visible { display: flex }` for experiences
+ * whose composed frame crops at every aspect, which is this one: a 24 metre
+ * plot is wider than any screen. main.js opts in by passing `alwaysOn: true`
+ * and the 'always-on' extra class to the shared part.
+ *
+ * Growing here as the milestones land: the plant modal and its species grid
+ * (M2-9), the live preview viewport (M2-10), the season chip (M1-8), the tree
+ * card (M5-5), and the thirst marker (M5-8).
+ */
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    /* Close to the scene's own daylight sky, so a slow first frame is a calm
+       morning rather than a white flash or a black one. The sky changes colour
+       with the hour and this cannot follow it, so it is deliberately the
+       friendliest of the hours rather than an average of them. */
+    background: #a8c8e0;
+}
+
+#scene {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* The canvas is the tap surface for planting and for the pan and pinch
+       gestures. Turning off the browser's own touch handling here is what
+       stops a swipe across the plot from scrolling the page underneath it. */
+    touch-action: none;
+}
+
+/* ---- The season chip --------------------------------------------------------
+ *
+ * Bottom centre, in the tradition of the depth chip in www/mandelbrot. It is a
+ * STATUS READOUT AND NEVER A CLICK TARGET, so pointer events pass straight
+ * through to the garden: a chip that swallowed a planting tap because the
+ * visitor happened to aim at it would be a small and infuriating bug.
+ *
+ * The pan and zoom row also lives bottom centre and is on at EVERY aspect in
+ * this scene (a 24 metre plot is wider than any screen), so unlike Gavin's
+ * chip this one steps up above the row in landscape as well as portrait.
+ * .pan-controls is 54px of button anchored 24px from the bottom, so 90px plus
+ * the safe area clears it with a little breath.
+ */
+.season-chip {
+    position: fixed;
+    bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.45rem 1.1rem;
+    background: rgba(20, 20, 20, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    letter-spacing: 0.3px;
+    border-radius: 999px;
+    white-space: nowrap;
+    z-index: 110;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.season-chip.visible {
+    opacity: 1;
+}
+
+/* Reduced motion asks for less movement, not for less information. The chip
+   still updates, it simply stops fading while it does. */
+@media (prefers-reduced-motion: reduce) {
+
+    .season-chip,
+    .garden-toast {
+        transition: none;
+    }
+}
+
+/* ---- The reset button -------------------------------------------------------
+ *
+ * The shared .menu-btn anchors every floating button to the top right corner,
+ * which is where the Home button already is. This one steps left by a button
+ * plus a gap so the two sit as a pair rather than on top of each other.
+ */
+.reset-btn {
+    right: 82px;
+    background: rgba(20, 20, 20, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.storage-note {
+    margin: 0.8rem 0 0;
+    font-family: var(--font-system);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--ui-subtitle);
+}
+
+/* ---- Toasts ---------------------------------------------------------------- */
+
+.garden-toast {
+    position: fixed;
+    top: calc(18px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 1.15rem;
+    max-width: min(90vw, 30rem);
+    background: rgba(16, 26, 14, 0.88);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.5);
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    font-size: 0.9rem;
+    text-align: center;
+    border-radius: 12px;
+    z-index: 200;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+}
+
+.garden-toast.visible {
+    opacity: 1;
+}
+
+/* ---- The modal shell --------------------------------------------------------
+ *
+ * THERE IS NO GENERIC `.hidden` RULE IN THE SHARED STYLESHEET. Every one of
+ * them is scoped to a specific id (`#dialog-modal.hidden`, `#piece-modal.hidden`
+ * and so on), so a new modal with a new id carries the class and is not hidden
+ * by anything. That is not a small cosmetic miss: it means BOTH of this scene's
+ * modals were on screen from the first frame, the close buttons appeared dead
+ * (the handler ran, added a class, and nothing matched it), and two
+ * `.modal-backdrop` elements at 92 percent opacity sat over the whole page, so
+ * the garden itself looked like a black screen.
+ *
+ * The same trap as `.ui-float` needing `.visible`: the shared sheet gives you
+ * the PARTS, and each experience is responsible for wiring its own ids to
+ * them. `tests/garden-ui.test.mjs` now checks that every id this scene hides
+ * from JavaScript has a rule that actually hides it.
+ *
+ * The layout below is copied from the shared `#dialog-modal` family so the
+ * chrome matches the rest of the site, and the three colour overrides after it
+ * are because the generic `.modal-backdrop` and `.modal-container` carry
+ * another experience's palette.
+ */
+
+#plant-modal,
+#tree-card {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+}
+
+#plant-modal.hidden,
+#tree-card.hidden {
+    display: none;
+}
+
+/* The generic .modal-backdrop is a near-opaque near-black. A garden wants to
+   stay visible behind its own dialogs. */
+#plant-modal .modal-backdrop,
+#tree-card .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(9, 17, 8, 0.58);
+    backdrop-filter: blur(3px);
+    cursor: pointer;
+}
+
+/* The generic .modal-container is bordered in another experience's orange. */
+#plant-modal .modal-container,
+#tree-card .modal-container {
+    position: relative;
+    background: rgba(16, 26, 14, 0.96);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.55);
+    border-radius: 14px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+    overflow: visible;
+}
+
+#plant-modal .modal-close,
+#tree-card .modal-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.5);
+    border-radius: 50%;
+    color: var(--ui-title);
+    font-size: 1.4rem;
+    line-height: 1;
+    z-index: 10;
+}
+
+#plant-modal .modal-close:hover,
+#tree-card .modal-close:hover {
+    background: rgba(var(--ui-accent-rgb), 0.3);
+    transform: none;
+}
+
+/* ---- The plant modal -------------------------------------------------------
+ *
+ * Built on the shared modal PARTS (.modal-backdrop, .modal-container,
+ * .modal-close), wired to this scene's ids above. What is added here is the
+ * species grid, the preview, and the slider rows.
+ */
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.plant-card {
+    max-width: min(94vw, 46rem);
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 1.4rem 1.5rem 1.5rem;
+}
+
+.plant-heading {
+    margin: 0 0 0.9rem;
+    font-family: var(--font-system);
+    font-size: 1.15rem;
+    color: var(--ui-title);
+}
+
+.plant-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+@media (min-width: 44rem) {
+    .plant-layout {
+        grid-template-columns: 1.5fr 1fr;
+    }
+}
+
+.species-fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+
+.species-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 0.5rem;
+}
+
+/* Each option is a real radio input inside its label. The input is visually
+   hidden but never display:none, so it keeps its place in the tab order and
+   still reports its checked state. */
+.species-option {
+    position: relative;
+    display: block;
+    padding: 0.55rem 0.6rem 0.6rem 2.1rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.04);
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.species-option input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+}
+
+.species-swatch {
+    position: absolute;
+    left: 0.6rem;
+    top: 0.7rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    background: var(--bark, #888);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.species-name {
+    display: block;
+    font-family: var(--font-system);
+    font-size: 0.9rem;
+    color: var(--ui-title);
+}
+
+.species-meta {
+    display: block;
+    margin-top: 0.15rem;
+    font-family: var(--font-system);
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: var(--ui-subtitle);
+}
+
+.species-option:hover {
+    border-color: rgba(var(--ui-accent-rgb), 0.6);
+}
+
+/* The selected state is a border AND a background, never colour alone, and
+   the focus ring is kept rather than removed. */
+.species-option:has(input:checked) {
+    border-color: var(--ui-accent);
+    background: rgba(var(--ui-accent-rgb), 0.16);
+}
+
+.species-option:has(input:focus-visible) {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+}
+
+.plant-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.preview-canvas {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.plant-title {
+    margin: 0.2rem 0 0;
+    font-family: var(--font-system);
+    font-size: 1rem;
+    color: var(--ui-accent-strong);
+}
+
+.plant-note {
+    margin: 0;
+    font-family: var(--font-system);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--ui-subtitle);
+}
+
+.customise {
+    margin: 1rem 0 0.2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    padding-top: 0.8rem;
+}
+
+.customise summary {
+    cursor: pointer;
+    font-family: var(--font-system);
+    font-size: 0.88rem;
+    color: var(--ui-accent-strong);
+}
+
+.slider-list {
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 0.8rem;
+}
+
+.slider-row {
+    display: grid;
+    grid-template-columns: 8rem 1fr 6rem;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+@media (max-width: 30rem) {
+    .slider-row {
+        grid-template-columns: 1fr 5.5rem;
+        grid-template-areas: "label readout" "input input";
+    }
+
+    .slider-label {
+        grid-area: label;
+    }
+
+    .slider-readout {
+        grid-area: readout;
+    }
+
+    .slider-input {
+        grid-area: input;
+    }
+}
+
+.slider-label,
+.slider-readout {
+    font-family: var(--font-system);
+    font-size: 0.8rem;
+    color: var(--ui-subtitle);
+}
+
+.slider-readout {
+    text-align: right;
+    color: var(--ui-accent-strong);
+}
+
+.slider-input {
+    width: 100%;
+    accent-color: var(--ui-accent);
+}
+
+#plant-confirm {
+    margin-top: 1rem;
+    width: 100%;
+}
+
+#plant-confirm:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ---- The tree card --------------------------------------------------------- */
+
+.tree-card {
+    max-width: min(92vw, 22rem);
+    padding: 1.3rem 1.4rem 1.4rem;
+}
+
+.tree-body {
+    margin: 0.5rem 0 1rem;
+}
+
+.tree-line {
+    margin: 0 0 0.3rem;
+    font-family: var(--font-system);
+    font-size: 0.88rem;
+    color: var(--ui-subtitle);
+}
+
+/* Health is carried by the words in the card first. This tints the second
+   line to match, as a reinforcement rather than as the message. */
+.tree-body[data-band="wilting"] .tree-line:nth-child(2) {
+    color: #e0c36a;
+}
+
+.tree-body[data-band="failing"] .tree-line:nth-child(2) {
+    color: #dc9a5c;
+}
+
+.tree-body[data-band="bare"] .tree-line:nth-child(2) {
+    color: #cf8080;
+}
+
+.tree-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.tree-remove {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    padding: 0.45rem 1rem;
+    font-family: var(--font-system);
+    font-size: 0.8rem;
+    color: var(--ui-subtitle);
+    cursor: pointer;
+}
+
+.tree-remove:hover {
+    border-color: rgba(255, 255, 255, 0.5);
+    color: var(--ui-title);
+}
