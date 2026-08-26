@@ -282,3 +282,64 @@ test('the tint warms and cools without turning a leaf into a different plant', (
     expect(grn(cool)).toBe(grn(green));
     expect(tintColor(green, 0)).toBe(green);
 });
+
+// ---- Leaves ride the branch they grow on ------------------------------------
+//
+// THE BUG THIS EXISTS TO STOP. The leaf shader's only wind term was a one-sided
+// flutter at 12 percent of the branch amplitude, and it never applied the
+// branch's own sway at all. So branches moved and leaves hung in the air where
+// the branch used to be. Because a canopy hides its own twigs, the whole tree
+// read as standing still, and QA reported it as "the trees do not sway" rather
+// than as "the leaves are detached", which is how a bug like this hides.
+//
+// Same family as the growth bug in M2-7, and for the same underlying reason: a
+// leaf's position lives in its instance matrix, baked at rest, so nothing the
+// bark does reaches it unless it is handed over explicitly.
+
+test('every leaf carries a sway weight, and none of them is zero', () => {
+    for (const species of SPECIES) {
+        const resolved = resolveSpecies(species.id, DEFAULT_CUSTOM);
+        const skeleton = buildSkeleton(resolved, SEED);
+        const leaves = buildLeaves(skeleton, resolved, SEED);
+        expect(leaves.length).toBeGreaterThan(0);
+        for (const leaf of leaves) {
+            expect(Number.isFinite(leaf.sway)).toBe(true);
+            // Zero would mean a leaf pinned in space while its branch moved.
+            expect(leaf.sway).toBeGreaterThan(0);
+            expect(leaf.sway).toBeLessThanOrEqual(1);
+        }
+    }
+});
+
+test('a leaf sways by the same rule its own segment does', () => {
+    // The two weights have to be computed the same way from the same segment,
+    // or the canopy drifts off the wood by however much they disagree.
+    const resolved = resolveSpecies('sugar-maple', DEFAULT_CUSTOM);
+    const skeleton = buildSkeleton(resolved, SEED);
+    const leaves = buildLeaves(skeleton, resolved, SEED);
+    const height = skeleton.height;
+
+    for (const leaf of leaves.slice(0, 200)) {
+        // Recover the segment this leaf sits on: it is the one whose span
+        // contains the leaf, and every leaf lies on its segment's line.
+        const seg = skeleton.segments.find((s) =>
+            leaf.y >= Math.min(s.y0, s.y1) - 1e-9 && leaf.y <= Math.max(s.y0, s.y1) + 1e-9
+            && Math.abs((s.x1 - s.x0) * (leaf.z - s.z0) - (s.z1 - s.z0) * (leaf.x - s.x0)) < 1e-6);
+        if (!seg) continue;
+        const depthWeight = Math.pow(seg.depth / Math.max(1, skeleton.maxDepth), 1.5);
+        const expected = depthWeight * (0.25 + 0.75 * Math.min(1, leaf.y / height));
+        expect(leaf.sway).toBeCloseTo(expected, 9);
+    }
+});
+
+test('leaves higher and further out sway more than inner ones', () => {
+    // The property, not the formula: whatever the weights are, a leaf at the
+    // top of the crown must move more than one down by the trunk.
+    const resolved = resolveSpecies('bur-oak', DEFAULT_CUSTOM);
+    const skeleton = buildSkeleton(resolved, SEED);
+    const leaves = buildLeaves(skeleton, resolved, SEED);
+    const sorted = [...leaves].sort((a, b) => a.y - b.y);
+    const low = sorted.slice(0, 50).reduce((t, l) => t + l.sway, 0) / 50;
+    const high = sorted.slice(-50).reduce((t, l) => t + l.sway, 0) / 50;
+    expect(high).toBeGreaterThan(low);
+});

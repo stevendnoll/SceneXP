@@ -39,23 +39,17 @@ import { GARDEN_CONFIG } from './config.min.js';
 import { makeRandom, resolveSpecies, SPECIES, speciesById } from './species.min.js';
 import { phenologyAt, seasonAt, clamp01 } from './clock.min.js';
 import { mixColor, packColor, unpackColor } from './sky.min.js';
-import { buildSkeleton, bakeGeometry, buildLeaves, leafClusterTexture } from './tree.min.js';
-import { worldHeightAt } from './terrain.min.js';
+import { buildSkeleton, bakeGeometry, buildLeaves, leafClusterTexture, patchVertex } from './tree.min.js';
+import { worldHeightAt, openingHalfWidthAt } from './terrain.min.js';
+
+// THE CLEARING'S OPENING LIVES IN terrain.js and is re-exported here, which is
+// where everybody looks for it and where it was defined until the lake needed
+// it too. `pondBasinAt` has to know how wide the gap is at the pond's own z, so
+// the water can be derived from the opening rather than being a second number
+// kept in step by hand, and terrain cannot import forest without a cycle.
+export { openingHalfWidthAt };
 
 // ---- The shape of the clearing (pure) --------------------------------------
-
-/**
- * How wide the northern opening is at a given depth.
- *
- * It widens as it goes, so the view funnels outward instead of running down a
- * corridor. Zero south of the opening's start, because the wood closes behind
- * the plot.
- */
-export function openingHalfWidthAt(z, clearing = GARDEN_CONFIG.world.clearing) {
-    if (z > clearing.openFromZ) return 0;
-    const depth = clearing.openFromZ - z;
-    return clearing.openHalfWidth + depth * clearing.openSpread;
-}
 
 /**
  * How thick the wood is at a point, 0 to 1.
@@ -111,9 +105,10 @@ export function forestDensityAt(x, z, config = GARDEN_CONFIG) {
  * Pure, so the rule can be asserted against the camera numbers instead of
  * spotted in a screenshot.
  */
-export function clearsCamera(x, z, config = GARDEN_CONFIG) {
+export function clearsCamera(x, z, config = GARDEN_CONFIG, clearance = null) {
     const keep = config.world.nearTreeline.cameraKeepOut;
     if (!keep) return true;
+    const want = clearance === null ? keep.clearance : clearance;
     const z0 = config.camera.position.z;
     const z1 = Math.max(z0, keep.dollyToZ);
     // Horizontal distance to the segment the eye travels along.
@@ -121,7 +116,7 @@ export function clearsCamera(x, z, config = GARDEN_CONFIG) {
     if (z < z0) distance = Math.hypot(x, z0 - z);
     else if (z > z1) distance = Math.hypot(x, z - z1);
     else distance = Math.abs(x);
-    return distance >= keep.clearance;
+    return distance >= want;
 }
 
 /**
@@ -147,6 +142,21 @@ export function scatter(spacing, jitter, seed, accept, config = GARDEN_CONFIG) {
             const density = forestDensityAt(x, z, config);
             if (density <= 0) { random(); continue; }
             if (random() > density) continue;
+            // THE KEEP-OUT LIVES HERE, NOT AT THE CALL SITE. `scatter` already
+            // had an `accept` hook for this and `initForest` passed null, so
+            // the far wood was free to stand next to the camera and one of its
+            // impostors filled the left fifth of the frame. A rule the caller
+            // has to remember is a rule that gets forgotten.
+            //
+            // The far tier needs a WIDER berth than the near treeline, and the
+            // reason is what they are made of: a fractal tree at 15 m is
+            // see-through, while an impostor is a solid crossed quad and reads
+            // as a wall. See farForest.minCameraDistance.
+            if (!clearsCamera(x, z, config, config.world.farForest.minCameraDistance)) continue;
+            // The flat tier starts where the real trees stop. Inside this it
+            // would be doing middle-distance work it was never built for, which
+            // is what made it read as a row of cut-outs.
+            if (Math.hypot(x, z) < config.world.farForest.minRadius) continue;
             const point = { x, z, density, r1: random(), r2: random(), r3: random() };
             if (!accept || accept(point)) out.push(point);
         }
@@ -209,7 +219,9 @@ function buildCanopyTexture(size, seed, evergreen) {
     const mid = size / 2;
 
     // Trunk and main limbs, fully opaque so they survive any threshold.
-    ctx.strokeStyle = 'rgba(255,255,255,1)';
+    // Red, so the GREEN channel is 0 here and the shader can tell wood from
+    // leaf. The alpha stays 1 so the branches survive the winter threshold.
+    ctx.strokeStyle = 'rgba(255,0,0,1)';
     ctx.lineCap = 'round';
     ctx.lineWidth = size * 0.045;
     ctx.beginPath();
@@ -325,6 +337,10 @@ function bakeLeafCards(leaves, limit, scale) {
     const position = new Float32Array(used.length * 12);
     const normal = new Float32Array(used.length * 12);
     const uv = new Float32Array(used.length * 8);
+    // The same weight the bark bakes, so a leaf moves with the branch holding
+    // it. Baked per VERTEX here rather than per instance, because unlike the
+    // planted trees these cards live inside the shared geometry.
+    const sway = new Float32Array(used.length * 4);
     const index = new Uint32Array(used.length * 6);
 
     used.forEach((leaf, i) => {
@@ -348,6 +364,7 @@ function bakeLeafCards(leaves, limit, scale) {
             normal[o + 2] = nz;
             uv[i * 8 + c * 2] = (cxs + 1) / 2;
             uv[i * 8 + c * 2 + 1] = (cys + 1) / 2;
+            sway[i * 4 + c] = leaf.sway;
         });
         const v = i * 4;
         const o = i * 6;
@@ -359,6 +376,7 @@ function bakeLeafCards(leaves, limit, scale) {
     geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setAttribute('aSway', new THREE.BufferAttribute(sway, 1));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     return { geometry: geo, cards: used.length };
 }
@@ -385,6 +403,50 @@ function buildCrossedQuad() {
     return geo;
 }
 
+// ---- The wood sways (M8-5) --------------------------------------------------
+
+/**
+ * The same displacement the planted trees use, on the wood outside the wall.
+ *
+ * ---- THE TRAP THIS IS BUILT AROUND ----
+ *
+ * INSTANCES SHARE ONE GEOMETRY, SO THEY SHARE ONE PHASE. The bark shader takes
+ * its phase from vertex position in LOCAL space, which is correct for a single
+ * tree and identical for every instance drawn from the same geometry. A hundred
+ * trees would sway in perfect unison and read as one object breathing rather
+ * than as a wood.
+ *
+ * `aTreePhase` is the fix: one offset per instance, added into the wave. It is
+ * cheap, and what makes it worth this much comment is that **it is invisible in
+ * a still frame**. Every screenshot of a lockstep wood looks perfect, so the
+ * test is the gate here, not the picture.
+ *
+ * Note the displacement is added in LOCAL space, before the instance matrix, so
+ * an instance scaled to 1.25 sways 1.25 times as far without being told to.
+ */
+const SWAY_HEAD = `
+uniform vec3  uWind;
+uniform float uTime;
+uniform float uSwayScale;
+attribute float aSway;
+attribute float aTreePhase;
+`;
+
+const SWAY_BODY = `
+    float woodWP = uTime * 1.35 + aTreePhase + transformed.y * 0.42;
+    transformed += vec3(uWind.x, 0.0, uWind.z)
+        * (sin(woodWP) * 0.62 + sin(woodWP * 1.73 + 1.3) * 0.38)
+        * aSway * uSwayScale;
+`;
+
+/** One phase per tree, seeded, so the wood is the same wood on every visit. */
+function treePhases(count, seed) {
+    const random = makeRandom(seed);
+    const out = new Float32Array(Math.max(1, count));
+    for (let i = 0; i < count; i++) out[i] = random() * Math.PI * 2;
+    return out;
+}
+
 // ---- Imperative side -------------------------------------------------------
 
 let sceneRef = null;
@@ -400,6 +462,12 @@ const disposables = [];
 function buildFarTier(points, isEvergreen, config, seedOffset) {
     const F = config.world.farForest;
     const texture = buildCanopyTexture(F.textureSize, config.world.seed + seedOffset, isEvergreen);
+    // ONE MATERIAL COLOUR TINTED THE TRUNK AS WELL AS THE LEAVES, so the whole
+    // impostor went green and the perimeter wood grew green trunks. The canopy
+    // texture now marks wood in its GREEN channel (wood is drawn red, foliage
+    // white), and the fragment mixes bark against season by that mask. The
+    // alpha still carries the shape, so the winter alphaTest erosion is
+    // untouched.
     const material = new THREE.MeshLambertMaterial({
         color: 0xffffff,
         map: texture,
@@ -407,6 +475,31 @@ function buildFarTier(points, isEvergreen, config, seedOffset) {
         alphaTest: F.leafyAlphaTest,
         side: THREE.DoubleSide
     });
+    material.userData.season = { value: new THREE.Vector3(1, 1, 1) };
+    material.userData.bark = { value: new THREE.Vector3(...unpackColor(F.barkColor)) };
+    material.customProgramCacheKey = () => 'garden-canopy';
+    material.onBeforeCompile = (shader) => {
+        shader.uniforms.uCanopySeason = material.userData.season;
+        shader.uniforms.uCanopyBark = material.userData.bark;
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', `#include <common>
+uniform vec3 uCanopySeason;
+uniform vec3 uCanopyBark;`)
+            .replace('#include <map_fragment>', `#include <map_fragment>
+    // The mask: 1 where the texture drew foliage, 0 where it drew wood.
+    //
+    // ASSIGNED, NOT MULTIPLIED, and the difference is the whole fix. The
+    // texture's RGB is the MASK, not a colour: wood is drawn pure red so its
+    // green channel reads 0. map_fragment has already multiplied that red
+    // into diffuseColor, so multiplying again by the bark colour left
+    // (bark.r, 0, 0) and the perimeter wood grew CRIMSON trunks, with red
+    // slashes wherever a limb stuck out past the foliage. Overwriting throws
+    // the mask's own colour away, which is what it was always for. The alpha
+    // survives, so the winter alphaTest erosion is untouched, and the
+    // per-instance shade still lands afterwards in color_fragment.
+    float canopyLeaf = texture2D(map, vMapUv).g;
+    diffuseColor.rgb = mix(uCanopyBark, uCanopySeason, canopyLeaf);`);
+    };
 
     const mesh = new THREE.InstancedMesh(buildCrossedQuad(), material, Math.max(1, points.length));
     mesh.name = isEvergreen ? 'forest-evergreen' : 'forest-deciduous';
@@ -477,7 +570,8 @@ export function initForest(scene, config = GARDEN_CONFIG, options = {}) {
         counts: {
             evergreen: evergreenPoints.length,
             deciduous: deciduousPoints.length,
-            near: nearTrees.length,
+            near: nearTrees.reduce((total, t) => total + t.count, 0),
+            nearGroups: nearTrees.length,
             bushes: bushes ? bushes.count : 0,
             flowers: flowers ? flowers.count : 0
         }
@@ -497,108 +591,130 @@ export function initForest(scene, config = GARDEN_CONFIG, options = {}) {
  */
 function buildNearTreeline(scene, config, options) {
     const N = config.world.nearTreeline;
-    const count = options.mobile ? N.countMobile : N.count;
-    const random = makeRandom(config.world.seed ^ 0x51DE);
+    const mobile = !!options.mobile;
 
-    // Species that suit a wild wood rather than a planted garden.
+    // Species that suit a wild wood rather than a planted garden. Ordered, so
+    // a tier that uses fewer of them uses the same first few every time.
     const wild = ['bur-oak', 'paper-birch', 'scots-pine', 'blue-spruce', 'copper-beech']
         .map((id) => speciesById(id)).filter(Boolean);
 
-    const placed = [];
-    let guard = 0;
-    while (placed.length < count && guard++ < count * 60) {
-        const angle = random() * Math.PI * 2;
-        const radius = N.minRadius + random() * (N.maxRadius - N.minRadius);
-        const x = Math.cos(angle) * radius;
-        const z = Math.sin(angle) * radius;
-        if (forestDensityAt(x, z, config) < 0.35) continue;
-        // Never inside the eye's own clearance. See `clearsCamera`.
-        if (!clearsCamera(x, z, config)) continue;
-        if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < 4.5)) continue;
-        placed.push({ x, z, pick: Math.floor(random() * wild.length), r: random() });
-    }
+    nearTrees = [];
+    N.tiers.forEach((tier, tierIndex) => {
+        const count = mobile ? tier.countMobile : tier.count;
+        const species = wild.slice(0, Math.min(tier.species, wild.length));
+        // One generator per tier, seeded from the tier, so adding or resizing a
+        // tier cannot reshuffle the ones beside it.
+        const random = makeRandom(config.world.seed ^ (0x51DE + tierIndex * 0x9E37));
 
-    // One baked geometry per species, shared by every instance of it.
-    const geometries = wild.map((species, i) => {
-        const resolved = resolveSpecies(species.id, undefined);
-        // Reduced recursion: at 25 m the last two orders of twig are invisible
-        // and cost most of the triangles.
-        resolved.depth = Math.max(4, resolved.depth - config.world.nearTreeline.depthReduction);
-        const skeleton = buildSkeleton(resolved, config.world.seed + i * 7919, {
-            maxSegments: Math.round(config.tree.maxSegments * 0.45)
-        });
-        const leaves = bakeLeafCards(
-            buildLeaves(skeleton, resolved, config.world.seed + i * 7919),
-            N.leafCards, N.leafScale);
-        return { geometry: bakeGeometry(skeleton), species, resolved, skeleton, leaves };
-    });
-
-    nearTrees = geometries.map((entry, i) => {
-        const mine = placed.filter((p) => p.pick === i);
-        const material = new THREE.MeshLambertMaterial({ color: entry.species.bark });
-        const mesh = new THREE.InstancedMesh(entry.geometry, material, Math.max(1, mine.length));
-        mesh.name = `treeline-${entry.species.id}`;
-        mesh.castShadow = false;
-        mesh.receiveShadow = true;
-        mesh.frustumCulled = false;
-
-        const m = new THREE.Matrix4();
-        const q = new THREE.Quaternion();
-        const e = new THREE.Euler();
-        const p = new THREE.Vector3();
-        const s = new THREE.Vector3();
-        mine.forEach((point, j) => {
-            const scale = N.minScale + point.r * (N.maxScale - N.minScale);
-            p.set(point.x, worldHeightAt(point.x, point.z), point.z);
-            e.set(0, point.r * Math.PI * 2, 0);
-            q.setFromEuler(e);
-            s.setScalar(scale);
-            m.compose(p, q, s);
-            mesh.setMatrixAt(j, m);
-        });
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.count = mine.length;
-
-        disposables.push(entry.geometry, material);
-        scene.add(mesh);
-
-        // ---- The canopy, on the same transforms ----------------------------
-        // A second instanced mesh sharing the bark mesh's matrices exactly, so
-        // the leaves cannot drift from the branches they sit on.
-        let leafMesh = null;
-        if (entry.leaves) {
-            // The SAME mask the planted trees wear, from tree.js. Two canopy
-            // textures would be two answers to what a leaf clump looks like,
-            // and the join between the plot and the wood is exactly where a
-            // disagreement would show.
-            const texture = leafClusterTexture();
-            const leafMaterial = new THREE.MeshLambertMaterial({
-                color: 0xffffff,
-                map: texture,
-                transparent: false,
-                alphaTest: config.world.farForest.leafyAlphaTest,
-                side: THREE.DoubleSide
-            });
-            leafMesh = new THREE.InstancedMesh(
-                entry.leaves.geometry, leafMaterial, Math.max(1, mine.length));
-            leafMesh.name = `treeline-leaves-${entry.species.id}`;
-            leafMesh.castShadow = false;
-            leafMesh.receiveShadow = false;
-            leafMesh.frustumCulled = false;
-            leafMesh.instanceMatrix.array.set(mesh.instanceMatrix.array);
-            leafMesh.instanceMatrix.needsUpdate = true;
-            leafMesh.count = mine.length;
-            // The geometry and material are ours; the mask is shared and
-            // outlives us, so it is deliberately not in this list.
-            disposables.push(entry.leaves.geometry, leafMaterial);
-            scene.add(leafMesh);
+        const placed = [];
+        let guard = 0;
+        while (placed.length < count && guard++ < count * 80) {
+            const angle = random() * Math.PI * 2;
+            const radius = tier.minRadius + random() * (tier.maxRadius - tier.minRadius);
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            if (forestDensityAt(x, z, config) < 0.35) continue;
+            // Never inside the eye's own clearance. See `clearsCamera`.
+            if (!clearsCamera(x, z, config)) continue;
+            // Spacing scales with the tier, because a wood that is sparse near
+            // the eye and packed further out reads as a wall behind a lawn.
+            const gap = 3.2 + tierIndex * 1.4;
+            if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < gap)) continue;
+            placed.push({ x, z, pick: Math.floor(random() * species.length), r: random() });
         }
 
-        return {
-            mesh, leafMesh, species: entry.species, resolved: entry.resolved,
-            evergreen: !!entry.species.evergreen, count: mine.length,
-            cards: entry.leaves ? entry.leaves.cards : 0
-        };
+        // One baked geometry per species PER TIER. Recursion is what costs and
+        // distance is what hides it, so the far tiers are cut deeper.
+        const geometries = species.map((entry, i) => {
+            const resolved = resolveSpecies(entry.id, undefined);
+            resolved.depth = Math.max(3, resolved.depth - tier.depthReduction);
+            const skeleton = buildSkeleton(resolved, config.world.seed + i * 7919 + tierIndex * 131, {
+                maxSegments: Math.round(config.tree.maxSegments * 0.45)
+            });
+            const leaves = bakeLeafCards(
+                buildLeaves(skeleton, resolved, config.world.seed + i * 7919),
+                N.leafCards, N.leafScale);
+            return { geometry: bakeGeometry(skeleton), species: entry, resolved, skeleton, leaves };
+        });
+
+        geometries.forEach((entry, i) => {
+            const mine = placed.filter((point) => point.pick === i);
+            if (!mine.length) return;
+            // One phase per tree, shared between this tree's bark and its
+            // leaves so the canopy never drifts off the branch under it.
+            const phases = treePhases(mine.length, config.world.seed ^ (0x5A11 + tierIndex * 977 + i));
+            const swayUniforms = {
+                uWind: { value: new THREE.Vector3(0, 0, 0) },
+                uTime: { value: 0 },
+                uSwayScale: { value: entry.resolved.matureHeight * config.tree.swayPerMetre }
+            };
+
+            const material = patchVertex(
+                new THREE.MeshLambertMaterial({ color: entry.species.bark }),
+                swayUniforms, SWAY_HEAD, SWAY_BODY, 'garden-wood-bark');
+            entry.geometry.setAttribute('aTreePhase',
+                new THREE.InstancedBufferAttribute(phases, 1));
+            const mesh = new THREE.InstancedMesh(entry.geometry, material, mine.length);
+            mesh.name = `treeline-${tierIndex}-${entry.species.id}`;
+            mesh.castShadow = false;
+            mesh.receiveShadow = true;
+            mesh.frustumCulled = false;
+
+            const m = new THREE.Matrix4();
+            const q = new THREE.Quaternion();
+            const e = new THREE.Euler();
+            const p = new THREE.Vector3();
+            const sc = new THREE.Vector3();
+            mine.forEach((point, j) => {
+                const scale = N.minScale + point.r * (N.maxScale - N.minScale);
+                p.set(point.x, worldHeightAt(point.x, point.z), point.z);
+                e.set(0, point.r * Math.PI * 2, 0);
+                q.setFromEuler(e);
+                sc.setScalar(scale);
+                m.compose(p, q, sc);
+                mesh.setMatrixAt(j, m);
+            });
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.count = mine.length;
+            disposables.push(entry.geometry, material);
+            scene.add(mesh);
+
+            // ---- The canopy, on the same transforms ------------------------
+            // A second instanced mesh sharing the bark mesh's matrices exactly,
+            // so the leaves cannot drift from the branches they sit on.
+            let leafMesh = null;
+            if (entry.leaves) {
+                const texture = leafClusterTexture();
+                const leafMaterial = patchVertex(new THREE.MeshLambertMaterial({
+                    color: 0xffffff,
+                    map: texture,
+                    transparent: false,
+                    alphaTest: config.world.farForest.leafyAlphaTest,
+                    side: THREE.DoubleSide
+                }), swayUniforms, SWAY_HEAD, SWAY_BODY, 'garden-wood-leaf');
+                entry.leaves.geometry.setAttribute('aTreePhase',
+                    new THREE.InstancedBufferAttribute(phases, 1));
+                leafMesh = new THREE.InstancedMesh(entry.leaves.geometry, leafMaterial, mine.length);
+                leafMesh.name = `treeline-leaves-${tierIndex}-${entry.species.id}`;
+                leafMesh.castShadow = false;
+                leafMesh.receiveShadow = false;
+                leafMesh.frustumCulled = false;
+                leafMesh.instanceMatrix.array.set(mesh.instanceMatrix.array);
+                leafMesh.instanceMatrix.needsUpdate = true;
+                leafMesh.count = mine.length;
+                // The geometry and material are ours; the mask is shared and
+                // outlives us, so it is deliberately not in this list.
+                disposables.push(entry.leaves.geometry, leafMaterial);
+                scene.add(leafMesh);
+            }
+
+            nearTrees.push({
+                mesh, leafMesh, species: entry.species, resolved: entry.resolved,
+                evergreen: !!entry.species.evergreen, count: mine.length,
+                cards: entry.leaves ? entry.leaves.cards : 0, tier: tierIndex,
+                sway: swayUniforms, phases
+            });
+        });
     });
 }
 
@@ -749,16 +865,20 @@ export function bloomAt(hour, config = GARDEN_CONFIG) {
  * @param {number} hour
  * @param {number} snowCoverage
  */
-export function updateForest(hour, snowCoverage = 0, config = GARDEN_CONFIG) {
+export function updateForest(hour, snowCoverage = 0, wind = null, elapsed = 0, config = GARDEN_CONFIG) {
     if (!deciduous) return;
     const F = config.world.farForest;
     const snow = clamp01(snowCoverage);
     const snowColor = config.terrain.snowColor;
 
+    // THE SEASON GOES TO THE FOLIAGE ONLY. Writing it to material.color tinted
+    // the trunks too, which is how the perimeter wood grew green trunks. The
+    // material colour stays white and the mask in the shader decides which
+    // pixels are wood and which are leaf.
     const decColour = packColor(mixColor(forestColorAt(hour, false, config), snowColor, snow * 0.55));
     const evgColour = packColor(mixColor(forestColorAt(hour, true, config), snowColor, snow * 0.4));
-    deciduous.material.color.setHex(decColour);
-    evergreen.material.color.setHex(evgColour);
+    setSeason(deciduous.material, decColour);
+    setSeason(evergreen.material, evgColour);
 
     // The canopy erodes rather than fading. See the note at the top of the
     // file: opaque branches survive the threshold, softer leaves do not.
@@ -766,6 +886,12 @@ export function updateForest(hour, snowCoverage = 0, config = GARDEN_CONFIG) {
     deciduous.material.alphaTest = F.leafyAlphaTest + (F.bareAlphaTest - F.leafyAlphaTest) * bare;
 
     for (const tree of nearTrees) {
+        // THE SAME WIND VECTOR THE PLANTED TREES READ. One source, so nothing
+        // in frame can disagree about the weather.
+        if (tree.sway) {
+            if (wind) tree.sway.uWind.value.set(wind.x, 0, wind.z);
+            tree.sway.uTime.value = elapsed;
+        }
         tree.mesh.material.color.setHex(
             packColor(mixColor(tree.species.bark, snowColor, snow * 0.35)));
 
@@ -801,11 +927,26 @@ export function updateForest(hour, snowCoverage = 0, config = GARDEN_CONFIG) {
     }
 }
 
+/** Push a season colour into a canopy material's own uniform. */
+function setSeason(material, hex) {
+    const rgb = unpackColor(hex);
+    if (material.userData.season) material.userData.season.value.set(rgb[0], rgb[1], rgb[2]);
+    // Snow whitens the wood a little too, which is what a snowy wood does.
+    if (material.userData.bark) {
+        const bark = unpackColor(GARDEN_CONFIG.world.farForest.barkColor);
+        material.userData.bark.value.set(bark[0], bark[1], bark[2]);
+    }
+}
+
 export function getForestMeshes() {
     return [evergreen, deciduous, bushes, flowers,
         ...nearTrees.map((t) => t.mesh),
         ...nearTrees.map((t) => t.leafMesh)].filter(Boolean);
 }
+
+// The tree groups, for the suite. `getForestMeshes` returns meshes and the
+// sway lives on the group beside them.
+export const __test__ = { nearTrees: () => nearTrees };
 
 export function disposeForest() {
     for (const mesh of getForestMeshes()) {

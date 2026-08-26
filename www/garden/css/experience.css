@@ -515,6 +515,26 @@ body {
     padding-right: 2.9rem;
 }
 
+/* The shared `.piece-title` is a GALLERY DISPLAY STYLE from another experience:
+   1.8rem at weight 700 with 0.25rem beneath it. That is defensible for a
+   species name and wrong for a sentence. On "Start a new garden?" it wrapped to
+   two crowded lines in a 22rem card and then sat almost on top of its own body
+   text, while the plant modal two clicks away uses `.plant-heading` at 1.15rem.
+   Two dialogs in one scene should not be set in two different voices. */
+.reset-card .piece-title {
+    margin: 0 0 0.7rem;
+    font-family: var(--font-system);
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    line-height: 1.3;
+}
+
+.reset-card .tree-line {
+    margin: 0 0 1.1rem;
+    line-height: 1.5;
+}
+
 .tree-body {
     margin: 0.5rem 0 1rem;
 }

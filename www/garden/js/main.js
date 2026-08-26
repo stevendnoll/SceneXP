@@ -824,12 +824,12 @@ function animate() {
     const hour = hourAt(state.elapsedSeconds);
     const snow = snowCoverageAt(hour);
 
-    stepWeather(weather, delta, hour, Math.random, state.reducedMotion);
+    stepWeather(weather, delta, hour, state.elapsedSeconds, Math.random, state.reducedMotion);
     const flash = updatePrecipitation(delta, state.elapsedSeconds, weather, snow, Math.random);
 
     updateSky(hour, delta, snow, weather.gloom, flash);
     updateTerrain(hour, snow);
-    updateForest(hour, snow);
+    updateForest(hour, snow, weather.wind, state.elapsedSeconds);
     updateVista(hour, state.elapsedSeconds, snow, weather.gloom, camera);
     updateWildlife(hour, state.elapsedSeconds, snow);
     updateGarden(delta, state.elapsedSeconds, {

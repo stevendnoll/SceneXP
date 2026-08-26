@@ -155,3 +155,30 @@ test('the welcome legend is rows, not a ragged paragraph', () => {
     expect((HTML.match(/<li><span>/g) || []).length).toBeGreaterThanOrEqual(4);
     expect(CSS).toMatch(/\.controls-hint[^{]*\{[^}]*list-style:\s*none/);
 });
+
+// ---- Two dialogs, one voice ------------------------------------------------
+
+test('the reset dialog is not set in another experience gallery style', () => {
+    // The shared `.piece-title` is a display style: 1.8rem at weight 700 with
+    // 0.25rem beneath it. Defensible for a species name, wrong for a sentence.
+    // On "Start a new garden?" it wrapped to two crowded lines in a 22rem card
+    // and sat almost on top of its own body text, while the plant modal two
+    // clicks away is set at 1.15rem. Two dialogs in one scene should not be in
+    // two different voices.
+    const block = CSS.slice(CSS.indexOf('.reset-card .piece-title {\n    margin'));
+    const rule = block.slice(0, block.indexOf('}'));
+    expect(rule).toMatch(/font-size:\s*1\.15rem/);
+    expect(rule).toMatch(/font-family:\s*var\(--font-system\)/);
+    // Room between the question and the sentence answering it.
+    expect(rule).toMatch(/margin:\s*0 0 0\.7rem/);
+});
+
+test('the two modal headings are set at the same size', () => {
+    const size = (selector) => {
+        const at = CSS.indexOf(selector);
+        const rule = CSS.slice(at, CSS.indexOf('}', at));
+        const m = rule.match(/font-size:\s*([\d.]+)rem/);
+        return m ? Number(m[1]) : null;
+    };
+    expect(size('.plant-heading {')).toBe(size('.reset-card .piece-title {\n    margin'));
+});

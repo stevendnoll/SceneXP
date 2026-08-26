@@ -230,6 +230,13 @@ export const GARDEN_CONFIG = deepFreeze({
         // smaller still. Doubling puts a card near eleven pixels, which is wide
         // enough for neighbours to overlap into a canopy mass instead of
         // reading as separate dots.
+        // How far a tree's tip swings, as a fraction of its own height, at a
+        // wind of 1.0 and the top of the sine. 0.1 keeps a 10 m tree moving
+        // exactly as far as it did before this number existed, and makes every
+        // other tree agree with it: a 3 m maple now swings 0.30 m rather than
+        // the full 1.0 m it used to, which was a third of the whole tree.
+        swayPerMetre: 0.1,
+
         leafCardScale: 2.0,
         // Against mask alpha that runs 0.62 to 0.92 in a single blob. Low
         // enough that one blob survives on its own, high enough that the soft
@@ -349,11 +356,24 @@ export const GARDEN_CONFIG = deepFreeze({
             // The northern opening. It widens with distance so the view
             // funnels outward rather than running down a corridor.
             openFromZ: -14,
-            openHalfWidth: 15,
-            openSpread: 0.30,
+            // THE LAKE CAN ONLY BE AS WIDE AS THE GAP IT SITS IN, which is what
+            // turned "make the pond a lake" into a change to the clearing. At
+            // 15 and 0.30 the opening was 21 m either side at the water's
+            // depth, so a lake filling it spanned 37 percent of frame width and
+            // still read as a pond. At 20 and 0.42 the gap is 31.8 m and the
+            // water spans about 61 percent, which is a lake.
+            //
+            // Widening the gap also suits M8: it takes wood out of the one
+            // direction the scene is composed to look along, and PRD Addendum B
+            // wants sky between the trees rather than a wall of them.
+            openHalfWidth: 20,
+            openSpread: 0.42,
 
             // How far out the wood is drawn at all.
-            outerRadius: 125
+            // Out to the fog ceiling. Past about 135 m a tree shows at less
+            // than 63 percent and we would be re-walking the M7-5 mountain
+            // trap: painting trees the colour of the sky behind them.
+            outerRadius: 135
         },
 
         // Gentle relief beyond the plot. Zero at the plot boundary (so the
@@ -385,6 +405,26 @@ export const GARDEN_CONFIG = deepFreeze({
         // a tree covers about 60 pixels, and 120 of them at 3k each is 360k
         // triangles on their own, against a whole-scene budget of 400k.
         farForest: {
+            // HOW CLOSE A SOLID IMPOSTOR MAY COME TO THE EYE. The near treeline
+            // gets 12 m and that is right for it: a fractal tree at 12 m is
+            // see-through. An impostor is a crossed quad with an opaque canopy,
+            // so at the same distance it is a wall, and one of them filled the
+            // left fifth of the frame. Measured: at 18 m tall (this tier's
+            // maximum) a tree subtends about 40 degrees of the 60 degree frame
+            // at 25 m, and the whole frame at 16 m.
+            minCameraDistance: 26,
+            // THE FLAT TIER IS A HORIZON CLOSER NOW, NOT A WOOD. It used to
+            // start at the clearing edge and do middle-distance work it was
+            // never built for, which is why it read as a row of cut-outs. M8-4
+            // gives that ground to real trees and this starts where they stop.
+            // Back IN to 30 m, to meet the real trees where they stop. Pushing
+            // this out to 52 left the middle distance to deeply cut fractal
+            // trees, and they are worse at that distance than the flat ones
+            // they replaced: see the note on nearTreeline.tiers.
+            minRadius: 30,
+            // Trunks and limbs. The canopy texture marks wood in its green
+            // channel so the season can tint the leaves without tinting this.
+            barkColor: 0x4a3b2c,
             spacing: 5.2,
             spacingMobile: 7.4,
             jitter: 0.42,
@@ -408,11 +448,52 @@ export const GARDEN_CONFIG = deepFreeze({
         // silhouette is what the eye reads. These carry the join: without
         // them the impostor wood starts abruptly.
         nearTreeline: {
-            count: 16,
-            countMobile: 9,
-            minRadius: 17,
-            maxRadius: 38,
-            depthReduction: 2,
+            // ---- THE MIDDLE DISTANCE IS REAL TREES NOW (M8-4) ---------------
+            // Three tiers, cut deeper the further out they stand, because
+            // recursion is what costs and distance is what hides it. Measured
+            // cost per tree, averaged over the twelve species, bark triangles
+            // plus two per leaf card:
+            //
+            //   -1  2,683    -2  1,395    -3  711    -4  424
+            //
+            // And the budget is tighter than PRD Addendum B guessed. Measured
+            // rather than estimated: 16 mature planted trees are 276,896 of the
+            // 400,000, the impostors 5,324, and the rest of the scene about
+            // 34,961. That leaves 82,819 for this wood once the old 16-tree
+            // treeline gives its 22,320 back. These tiers come to 79,153 for
+            // 115 trees, which is a fifth of the 1,331 impostors they replace.
+            //
+            // A fifth is the right scene, not a compromise. A dense mat is what
+            // you need when the trees are cardboard and their job is to fill a
+            // hole. When the trees are the subject you want sky between them.
+            // FEW, NEAR, AND LIGHTLY CUT. The first version of this ran 104
+            // trees out to 52 m at cuts of -2, -3 and -4, and QA called it a
+            // tangled mess, which it was. Measured why, and it is not the count:
+            //
+            //   cut   segments   leaf cards   leaves per segment
+            //    -1      276        546             2.0
+            //    -2      109        216             2.0
+            //    -3       48         94             2.0
+            //    -4       24         45             2.0
+            //
+            // The ratio never moves, so a deep cut does not strip foliage
+            // relative to wood. WHAT IT STRIPS IS THE FINE STRUCTURE. A real
+            // tree's silhouette is made of thousands of twigs; cut to 48
+            // segments you keep the long structural branches and delete
+            // everything that would have hidden them, so you get an antenna.
+            //
+            // The conclusion that follows: **past about 30 m a deeply cut
+            // fractal tree is strictly worse than an impostor**, which at least
+            // has a coherent canopy. So the real trees stop at 30 m and the flat
+            // wood starts there. 26 trees where there were 104.
+            tiers: [
+                { count: 12, countMobile: 7, minRadius: 16, maxRadius: 24, depthReduction: 1, species: 5 },
+                { count: 14, countMobile: 8, minRadius: 24, maxRadius: 30, depthReduction: 2, species: 5 }
+            ],
+            // What the tiers above are allowed to add up to, asserted, so a
+            // tier that grows has to be paid for out of another one. 104 trees
+            // come to 72,392, which leaves the whole scene near 390,000.
+            triangleBudget: 75000,
             minScale: 0.75,
             maxScale: 1.25,
 
@@ -424,8 +505,14 @@ export const GARDEN_CONFIG = deepFreeze({
             // all that survives: 400 cards is 800 triangles per species, and
             // 16 instances of that is 12,800 against the 60k of headroom
             // Addendum A left spare.
-            leafCards: 400,
-            leafScale: 2.4,
+            // RAISED, because the cap was biting exactly where it hurt. A tree
+            // at -1 has 546 leaf clumps and only 400 were being kept, so the
+            // lightest cut was also the one being thinned most. And the cards
+            // were 6 to 11 px at 30 m, too small to merge into a canopy: at 3.6
+            // a bur oak's clump is 0.61 m, about 16 px, which reads as foliage
+            // rather than as specks on a wire.
+            leafCards: 700,
+            leafScale: 3.6,
 
             // ---- THE CAMERA STANDS INSIDE THIS RING ----------------------
             // The ring is measured from the plot centre and runs 17 to 38 m.
@@ -458,18 +545,48 @@ export const GARDEN_CONFIG = deepFreeze({
         // Sat in the northern opening, offset east so the low morning sun lays
         // its glitter path back toward the viewer.
         pond: {
-            x: -4,
-            z: -34,
-            halfWidth: 15,
-            halfDepth: 10,
+            // CENTRED, because a lake that fills the opening has water under
+            // wherever the sun happens to be. The old offset of -4 existed to
+            // lay the morning glitter path back toward the viewer, and it cost
+            // 4 m of width to do it: with water spanning the whole gap the
+            // glint lands on the lake regardless, so the reason has dissolved.
+            x: 0,
+            // Further out and much deeper front to back. A horizontal plane at
+            // this angle is compressed brutally (PRD A.1), so depth in z is
+            // what buys height in frame: 10 to 16 takes the water from about
+            // 4.3 percent of frame height to 5.5.
+            z: -42,
+            halfDepth: 16,
+            // There is NO halfWidth here on purpose. It is derived from the
+            // opening by `pondHalfWidth` in terrain.js, so the water cannot be
+            // given a width that puts trees in it. This is the band of dry
+            // ground left between the water and the wood.
+            shoreMargin: 2.0,
             // How far the ground is dug out, and how much of that is filled.
             // Less than full, so there is a band of damp shore.
             depth: 1.9,
-            fill: 0.45,
+            // HOW FAR BELOW THE RIM THE WATER SITS, as a fraction of the dig.
+            // This decides how much of the basin is actually WET, and it reads
+            // backwards: a LOWER number is a FULLER lake. Measured water
+            // half-width against the 29 m basin, and share of frame width:
+            //
+            //   0.45  15.5 m  33%   (what read as a pond)
+            //   0.30  18.5 m  39%
+            //   0.15  21.8 m  46%
+            //   0.06  24.7 m  52%
+            //
+            // 0.15 still leaves a 7 m band of damp shore, which is what stops
+            // the water meeting the grass in a hard line.
+            fill: 0.15,
             // Still water, so the ripples are small and slow.
-            rippleScale: 0.9,
+            // THE PLANE IS NOW THREE TIMES THE OLD SIZE and the ripple scale
+            // did not move with it, so the pattern repeated about eight times
+            // across the water and read as diagonal stripes on fabric. Finer
+            // and shallower: at this distance a ripple should disturb the
+            // reflection, not draw a pattern in it.
+            rippleScale: 2.6,
             rippleSpeed: 0.28,
-            rippleHeight: 0.035,
+            rippleHeight: 0.018,
             bodyColor: 0x24402f,
             // How reflective the surface is when looked at straight down. Real
             // water is about 2 percent, and the Fresnel term takes it to
@@ -504,6 +621,12 @@ export const GARDEN_CONFIG = deepFreeze({
         // That is most of the difference between a place that is secret and a
         // place that is merely empty.
         path: {
+            // THE EYE SHOULD STAY ON THE TREES. Both of these were built to
+            // lead it out of the clearing, which is the opposite of what the
+            // scene is now for. Off by a flag rather than by a deletion: this
+            // is prototype work and PRD Addendum B.5 says so.
+            enabled: false,
+            gateEnabled: false,
             width: 1.6,
             // Waypoints from the gate in the north wall, past the pond's near
             // shore, and away into the trees.
@@ -534,6 +657,23 @@ export const GARDEN_CONFIG = deepFreeze({
         // where a silhouette reads at any size. The sizes are honestly
         // exaggerated: these butterflies have a 30 cm wingspan.
         wildlife: {
+            // ONE FLAG PER CREATURE, AND THEY GATE CONSTRUCTION RATHER THAN
+            // VISIBILITY. A creature that is off is never built, so it costs no
+            // geometry, no instance matrices and no per-frame walk.
+            //
+            // The butterflies, birds and bats are moving things that pull the
+            // eye off the only motion that matters. The fireflies stay: they
+            // are static points of light at dusk, so they add depth without
+            // competing, which is the distinction the other three fail. The
+            // code for all four stays in `wildlife.js` in full working order,
+            // because this is a prototype and any of them may come back.
+            enabled: {
+                butterflies: false,
+                birds: false,
+                bats: false,
+                fireflies: true
+            },
+
             butterflies: {
                 count: 14, countMobile: 7, size: 0.3,
                 // Wings are a white alpha mask, so these tint it. A brood of
@@ -561,11 +701,21 @@ export const GARDEN_CONFIG = deepFreeze({
 
         // ---- Undergrowth ----------------------------------------------------
         undergrowth: {
-            bushes: 260,
-            bushesMobile: 120,
+            // NINETY PERCENT OF THE SCRUB IS GONE, and this is the number that
+            // did it rather than a deletion. They were solving M7-4's "the wall
+            // looks dropped onto a lawn", and PRD Addendum B answers that with
+            // a wood of individually legible trees instead. What is left is
+            // enough to break the line where the wall meets the meadow.
+            // Restoring them is this number and nothing else.
+            bushes: 26,
+            bushesMobile: 12,
             bushRadius: { min: 13.5, max: 30 },
-            flowers: 900,
-            flowersMobile: 380,
+            // WAY DOWN FROM 900. At that count they stopped reading as drifts
+            // of flowers and became a rash of confetti across the whole meadow.
+            // Worth noticing as a pattern: the fix for "these look wrong" is
+            // not always more detail, sometimes it is fewer of them.
+            flowers: 180,
+            flowersMobile: 80,
             flowerRadius: { min: 13, max: 26 },
             // Wildflower colours, drawn from a seeded pick per plant.
             palette: [0xe8d05a, 0xd98ab0, 0xe6e4dd, 0xa88fd0, 0xe07a55]
@@ -578,8 +728,13 @@ export const GARDEN_CONFIG = deepFreeze({
         // downstream reads them: branch sway, leaf flutter, fall rate,
         // precipitation drift, and how fast a tree drinks.
         states: {
-            sunny: { gloom: 0.00, wind: 0.16, rain: 0.00 },
-            cloudy: { gloom: 0.42, wind: 0.30, rain: 0.00 },
+            // THE CALM STATES CARRY A WORKING BREEZE. At 0.16 a sunny hour
+            // moved a 10 m tree's tip about 5 px at the composed camera, and a
+            // quarter of all weather sat at or below that, which is the "no
+            // noticeable sway" QA found. The windy and stormy numbers are
+            // unchanged: the problem was never the top of the range.
+            sunny: { gloom: 0.00, wind: 0.30, rain: 0.00 },
+            cloudy: { gloom: 0.42, wind: 0.42, rain: 0.00 },
             windy: { gloom: 0.24, wind: 1.00, rain: 0.12 },
             stormy: { gloom: 0.88, wind: 0.72, rain: 1.00 }
         },
@@ -593,6 +748,41 @@ export const GARDEN_CONFIG = deepFreeze({
             summer: { sunny: 0.60, cloudy: 0.20, windy: 0.10, stormy: 0.10 },
             autumn: { sunny: 0.25, cloudy: 0.30, windy: 0.30, stormy: 0.15 },
             winter: { sunny: 0.30, cloudy: 0.35, windy: 0.20, stormy: 0.15 }
+        },
+
+        // ---- Gusts --------------------------------------------------------
+        // THE SWAY IS THE SUBJECT OF THIS SCENE, AND A STEADY OSCILLATION IS
+        // NOT INTERESTING. Before this, wind strength was one number per
+        // weather state, blended over 8 seconds and then held for the whole 20
+        // to 45 second dwell, so the wood moved at a constant amplitude for
+        // half a minute at a time. This is the envelope that makes it surge and
+        // settle. See PRD Addendum B.2.
+        //
+        // Three sines at periods that do not divide, so the pattern never
+        // audibly repeats. Measured over 400,000 samples at these values:
+        //
+        //   mean 0.98    range 0.50 to 1.60, a 3.2:1 swing
+        //   p10 0.65     p50 0.96     p90 1.33
+        //   55 percent of the time is spent below the old constant
+        //   a surge past 1.25x arrives about every 12 seconds
+        //
+        // The mean sits at 0.98 ON PURPOSE: it means every wind number tuned
+        // before gusts existed still means what it meant. The peak is held at
+        // 1.6 for a reason too, since the bark shader's displacement is
+        // proportional to wind and is NOT scaled by tree size, so a large
+        // multiplier bends a 3 m maple further than a 3 m maple can bend.
+        gust: {
+            periods: [6.7, 15.3, 29.1],
+            weights: [0.50, 0.32, 0.18],
+            // Above 1 lengthens the lulls and sharpens the surges. Lulls are
+            // what make a gust read as a gust.
+            shape: 1.25,
+            floor: 0.50,
+            peak: 1.60,
+            // Reduced motion damps the envelope toward steady rather than
+            // removing it. The movement is the content here, so 0 would be
+            // taking the scene away. See PRD Addendum B.2 and task M8-9.
+            reducedDamp: 0.45
         },
 
         dwell: { min: 20, max: 45 },

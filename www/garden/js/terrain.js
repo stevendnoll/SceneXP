@@ -107,10 +107,62 @@ export function outerWavesAt(x, z, world = GARDEN_CONFIG.world) {
  * to a level puts the shoreline where the ground crosses the water, which
  * makes it irregular for free, because the meadow's own waves run through it.
  */
+/**
+ * How wide the northern opening is at a given depth.
+ *
+ * It widens as it goes, so the view funnels outward instead of running down a
+ * corridor. Zero south of the opening's start, because the wood closes behind
+ * the plot.
+ */
+export function openingHalfWidthAt(z, clearing = GARDEN_CONFIG.world.clearing) {
+    if (z > clearing.openFromZ) return 0;
+    const depth = clearing.openFromZ - z;
+    return clearing.openHalfWidth + depth * clearing.openSpread;
+}
+
+/**
+ * How wide the lake is, derived from the opening it sits in.
+ *
+ * NOT A SECOND NUMBER. The water is as wide as the gap in the wood at its own
+ * depth, less its own shore, so it CANNOT be set to a width that puts trees in
+ * it. The M7-6 test that says no tree may stand where the basin is dug then
+ * holds by construction rather than by two numbers being kept in step, which is
+ * the arrangement that failed the first time: the pond was fitted by hand,
+ * overlapped the treeline, and only a test sampling the ellipse caught it.
+ */
+let pondWidthCache = null;
+export function pondHalfWidth(world = GARDEN_CONFIG.world) {
+    if (pondWidthCache && pondWidthCache.world === world) return pondWidthCache.value;
+    const P = world.pond;
+    if (!P) return 0;
+
+    // MEASURED ACROSS THE WHOLE SPAN, NOT JUST AT THE MIDDLE. The obvious
+    // version takes the gap at the pond's own z and stops, and it is wrong in a
+    // way that hides: the opening narrows toward the camera faster than the
+    // ellipse does, so the tightest point is not the widest point. Deriving at
+    // the centre alone left 1.28 m of clearance where 2 m was asked for, and it
+    // cleared only because the numbers happened to suit. Solving for the
+    // binding depth means the shore margin is a promise rather than a hope.
+    let widest = Infinity;
+    const step = Math.max(0.1, P.halfDepth / 200);
+    for (let z = P.z - P.halfDepth; z <= P.z + P.halfDepth; z += step) {
+        const t = (z - P.z) / P.halfDepth;
+        // How much of the full half-width the ellipse actually uses here.
+        const share = Math.sqrt(Math.max(0, 1 - t * t));
+        if (share <= 1e-6) continue;
+        const room = openingHalfWidthAt(z, world.clearing) - Math.abs(P.x) - P.shoreMargin;
+        widest = Math.min(widest, room / share);
+    }
+
+    const value = Math.max(0, Number.isFinite(widest) ? widest : 0);
+    pondWidthCache = { world, value };
+    return value;
+}
+
 export function pondBasinAt(x, z, world = GARDEN_CONFIG.world) {
     const P = world.pond;
     if (!P) return 0;
-    const dx = (x - P.x) / P.halfWidth;
+    const dx = (x - P.x) / pondHalfWidth(world);
     const dz = (z - P.z) / P.halfDepth;
     const r = Math.hypot(dx, dz);
     if (r >= 1) return 0;

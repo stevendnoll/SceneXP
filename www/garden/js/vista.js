@@ -37,7 +37,7 @@ import {
     SKY_GLSL, skyStateAt, applyGloom, lightingAt, directionAt,
     shownColor, unpackColor, mixColor, packColor
 } from './sky.min.js';
-import { worldHeightAt, outerWavesAt, pondWaterLevel } from './terrain.min.js';
+import { worldHeightAt, outerWavesAt, pondWaterLevel, pondHalfWidth } from './terrain.min.js';
 
 // ---- Shaders ---------------------------------------------------------------
 
@@ -102,12 +102,32 @@ varying vec2 vPondUv;
 
 // Two crossing wave trains rather than one, so the surface never shows an
 // obvious direction. Still water, so the amplitudes are small.
+/**
+ * The ripple normal.
+ *
+ * THREE WAVES AT AWKWARD ANGLES, NOT A PRODUCT OF AXIS-ALIGNED SINES. The old
+ * version multiplied a sine in x by a cosine in y, which is separable, and a
+ * separable function draws a GRID. On a small pond that read as ripples; on a
+ * lake three times the size it read as a crosshatch woven into the water, and
+ * making the scale finer only made the weave finer.
+ *
+ * Directions chosen so their ratios are not simple fractions, so the three
+ * never line up into a repeating cell within the size of the water.
+ */
 vec3 pondNormal(vec2 p, float t) {
-    float a = sin(p.x * uRippleScale + t * 0.9) * cos(p.y * uRippleScale * 0.8 - t * 0.7);
-    float b = sin((p.x + p.y) * uRippleScale * 1.7 - t * 1.3);
-    float dx = uRippleHeight * (cos(p.x * uRippleScale + t * 0.9) * 0.9 + b * 0.5);
-    float dz = uRippleHeight * (a * 0.7 + cos((p.x + p.y) * uRippleScale * 1.7 - t * 1.3) * 0.5);
-    return normalize(vec3(-dx, 1.0, -dz));
+    vec2 d1 = vec2(0.94, 0.34);
+    vec2 d2 = vec2(-0.42, 0.91);
+    vec2 d3 = vec2(0.71, -0.70);
+    float w1 = sin(dot(p, d1) * uRippleScale + t * 0.9);
+    float w2 = sin(dot(p, d2) * uRippleScale * 1.63 - t * 1.17);
+    float w3 = sin(dot(p, d3) * uRippleScale * 2.41 + t * 1.61);
+    // The slope is the derivative of the sum, so each wave pushes along its own
+    // direction rather than along x or y.
+    vec2 slope = d1 * cos(dot(p, d1) * uRippleScale + t * 0.9) * 0.55
+               + d2 * cos(dot(p, d2) * uRippleScale * 1.63 - t * 1.17) * 0.30 * 1.63
+               + d3 * cos(dot(p, d3) * uRippleScale * 2.41 + t * 1.61) * 0.15 * 2.41;
+    slope *= uRippleHeight * (0.85 + 0.15 * (w1 + w2 + w3) * 0.33);
+    return normalize(vec3(-slope.x, 1.0, -slope.y));
 }
 
 void main() {
@@ -244,7 +264,12 @@ function buildRidge(layer, index, config) {
 
 function buildPond(config) {
     const P = config.world.pond;
-    const geo = new THREE.PlaneGeometry(P.halfWidth * 2, P.halfDepth * 2, 1, 1);
+    // THE WIDTH IS DERIVED, NOT A CONFIG KEY. Reading `P.halfWidth` here after
+    // it moved into `pondHalfWidth()` built the plane NaN metres wide, and a
+    // NaN plane draws nothing at all: the lake simply was not there. Nothing
+    // threw, and the whole suite stayed green, because under the test stub a
+    // geometry is a proxy and NaN is just another number it absorbs.
+    const geo = new THREE.PlaneGeometry(pondHalfWidth(config.world) * 2, P.halfDepth * 2, 1, 1);
     geo.rotateX(-Math.PI / 2);
 
     const uniforms = {
@@ -378,11 +403,19 @@ export function initVista(scene, camera, config = GARDEN_CONFIG) {
     pond = buildPond(config);
     scene.add(pond.mesh);
 
-    pathMesh = buildPath(config);
-    scene.add(pathMesh);
-
-    gateGroup = buildGate(config);
-    scene.add(gateGroup);
+    // BOTH OF THESE WERE BUILT TO LEAD THE EYE OUT OF THE CLEARING, which is
+    // the opposite of what the scene is now for. Off by a flag rather than by a
+    // deletion, and gating CONSTRUCTION rather than visibility so nothing is
+    // built and then hidden. See PRD Addendum B.1.
+    const P = config.world.path;
+    if (P.enabled) {
+        pathMesh = buildPath(config);
+        scene.add(pathMesh);
+    }
+    if (P.gateEnabled) {
+        gateGroup = buildGate(config);
+        scene.add(gateGroup);
+    }
 
     return { ridges, pond, pathMesh, gateGroup };
 }

@@ -77,7 +77,11 @@ export const SPECIES = [
         evergreen: false,
         bark: 0x5a3630,
         barkName: 'Dark red',
-        foliage: { spring: 0x8fae52, summer: 0x4f7c34, autumn: 0xb02a1e },
+        // A RED-LEAF CULTIVAR, which is what people picture when they hear
+        // Japanese Maple: dark red through spring and summer rather than green.
+        // The species note already said "crimson before anything else has
+        // thought about it" and the palette did not agree with it.
+        foliage: { spring: 0x9c4436, summer: 0x7a2f2b, autumn: 0xc22a18 },
         params: {
             depth: 6, branches: 2, thirdChance: 0.35, lengthRatio: 0.74,
             radiusRatio: 0.70, divergence: 42, gravitropism: 0.05, taper: 0.82,

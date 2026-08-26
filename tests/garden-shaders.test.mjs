@@ -258,3 +258,139 @@ test('the plot and the wood share one leaf mask', () => {
     expect(forest).toMatch(/import\s*\{[^}]*leafClusterTexture[^}]*\}\s*from\s*'\.\/tree\.min\.js'/);
     expect(forest).not.toMatch(/function buildLeafClusterTexture/);
 });
+
+// ---- The canopy has to move with the wood ----------------------------------
+
+test('the leaf shader applies the branch sway, not just its own flutter', () => {
+    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const leafBody = tree.slice(tree.indexOf('const LEAF_BODY'));
+    const body = leafBody.slice(0, leafBody.indexOf('`;'));
+    // The per-leaf weight has to reach the displacement, not merely exist.
+    expect(body).toMatch(/aLeafSway/);
+    expect(body).toMatch(/uWind[\s\S]{0,400}aLeafSway/);
+});
+
+test('the branch sway is the SAME expression in both shaders', () => {
+    // If these two ever drift, the canopy slides off the branches by exactly
+    // the difference, and it would look like a canopy that lags rather than
+    // like two expressions disagreeing. Compare the coefficients that define
+    // the motion rather than the whole line, since the two differ in where they
+    // read their height from.
+    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const grab = (marker) => {
+        const block = tree.slice(tree.indexOf(marker));
+        return block.slice(0, block.indexOf('`;'));
+    };
+    const coeffs = (src) => {
+        const m = src.match(/sin\(\w+\) \* 0\.62 \+ sin\(\w+ \* 1\.73 \+ 1\.3\) \* 0\.38/);
+        return m ? m[0].replace(/\w+WP|\w+BWP/g, 'P') : null;
+    };
+    const bark = coeffs(grab('const BARK_BODY'));
+    const leaf = coeffs(grab('const LEAF_BODY'));
+    expect(bark).not.toBeNull();
+    expect(leaf).not.toBeNull();
+    expect(leaf).toBe(bark);
+
+    // And both must run at the same rate, or the canopy beats against the wood.
+    expect(grab('const BARK_BODY')).toMatch(/uTime \* 1\.35 \+ uPhase/);
+    expect(grab('const LEAF_BODY')).toMatch(/uTime \* 1\.35 \+ uPhase/);
+});
+
+test('sway is scaled by the tree, in both shaders', () => {
+    // Without uSwayScale the displacement is absolute, so at wind 1.0 a 3 m
+    // maple swung a third of its own height while a 14 m redwood moved 7
+    // percent of its. That reads as one tree thrashing while the rest barely
+    // stir, which is not what one wind looks like.
+    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    for (const marker of ['const BARK_BODY', 'const LEAF_BODY']) {
+        const block = tree.slice(tree.indexOf(marker));
+        expect(block.slice(0, block.indexOf('`;'))).toMatch(/uSwayScale \* uScale/);
+    }
+});
+
+// ---- The wood is not the leaves --------------------------------------------
+
+test('the season tints foliage only, so the perimeter wood keeps brown trunks', () => {
+    // THE BUG THIS EXISTS TO STOP. The far tier drew trunk, limbs and canopy
+    // into one white texture and then set `material.color` to the season, which
+    // tinted every pixel of it. The perimeter wood grew green trunks.
+    const forest = readFileSync(join(DIR, 'forest.js'), 'utf8');
+
+    // Wood is drawn in RED so its green channel is 0 and the shader can tell
+    // wood from leaf. If this ever goes back to white the mask is all 1s and
+    // the trunks silently go green again with nothing failing.
+    const texture = forest.slice(forest.indexOf('function buildCanopyTexture'));
+    expect(texture.slice(0, texture.indexOf('\n}'))).toMatch(/strokeStyle = 'rgba\(255,\s*0,\s*0,\s*1\)'/);
+
+    // The mix has to read that channel and use a bark colour.
+    expect(forest).toMatch(/texture2D\(map, vMapUv\)\.g/);
+    expect(forest).toMatch(/mix\(uCanopyBark, uCanopySeason/);
+
+    // And the season must NOT be written to the material colour any more.
+    const update = forest.slice(forest.indexOf('export function updateForest'));
+    const body = update.slice(0, update.indexOf('\n}'));
+    expect(body).not.toMatch(/deciduous\.material\.color\.setHex/);
+    expect(body).toMatch(/setSeason\(deciduous\.material/);
+});
+
+test('the canopy material names its own program cache key', () => {
+    // three's default cache key is `onBeforeCompile.toString()`. Two materials
+    // sharing an injector stringify identically and the second is handed the
+    // first one's compiled program, which cost this project a day once already.
+    const forest = readFileSync(join(DIR, 'forest.js'), 'utf8');
+    expect(forest).toMatch(/customProgramCacheKey\s*=\s*\(\)\s*=>\s*'garden-canopy'/);
+});
+
+test('no backtick survives inside an injected GLSL block', () => {
+    // A BACKTICK IN A GLSL COMMENT ENDS THE TEMPLATE LITERAL, and the failure
+    // is "SyntaxError: missing ) after argument list" pointing at a line that
+    // looks fine. This is in the decision log from 2026-08-25 and I walked
+    // into it again while writing a comment about map_fragment. Read as text
+    // so this reports the real problem, since a suite that IMPORTS the broken
+    // module just fails to load and says nothing useful.
+    for (const file of readdirSync(DIR).filter((f) => f.endsWith('.js') && !f.endsWith('.min.js'))) {
+        const src = readFileSync(join(DIR, file), 'utf8');
+        for (const m of src.matchAll(/\.replace\('#include <[^']+>',\s*`([\s\S]*?)`\)/g)) {
+            expect(`${file}: ${m[1].includes('`') ? 'BACKTICK INSIDE GLSL' : 'clean'}`).toBe(`${file}: clean`);
+        }
+    }
+});
+
+test('the canopy mask is assigned, not multiplied', () => {
+    // The texture RGB here is a MASK, not a colour. map_fragment has already
+    // multiplied it into diffuseColor, so `*=` multiplies the mask in twice:
+    // wood is drawn pure red, so bark came out (bark.r, 0, 0) and the whole
+    // perimeter wood grew CRIMSON trunks with red slashes through the canopies.
+    const forest = readFileSync(join(DIR, 'forest.js'), 'utf8');
+    expect(forest).toMatch(/diffuseColor\.rgb = mix\(uCanopyBark, uCanopySeason/);
+    expect(forest).not.toMatch(/diffuseColor\.rgb \*= mix\(uCanopyBark/);
+});
+
+test('colours reach the tree shaders in linear, not as sRGB digits', () => {
+    // three renders in linear and encodes at output. material.color.setHex()
+    // converts, and the pond shader converts explicitly, but this one wrote the
+    // hex's sRGB digits straight into diffuseColor. Every leaf rendered lighter
+    // and flatter than the colour it was authored as, which a green forgives
+    // and a dark red does not: the Japanese Maple came out salmon pink.
+    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const fn = tree.slice(tree.indexOf('function setVec'));
+    expect(fn.slice(0, fn.indexOf('\n}'))).toMatch(/srgbToLinear/);
+});
+
+test('every injected material names its own program cache key, and no two share one', () => {
+    // three's default cache key is `onBeforeCompile.toString()`. `patchVertex`
+    // is ONE shared helper, so two materials that pass through it stringify
+    // identically and the second is handed the first one's compiled program:
+    // floods of "uniform location not for current program", the wrong
+    // attributes demanded of the wrong geometry, and uniforms that never reach
+    // a shader at all. That is in the decision log from 2026-08-25 and it cost
+    // a day. The keys are the whole defence, so they have to be distinct.
+    const keys = [];
+    for (const file of readdirSync(DIR).filter((f) => f.endsWith('.js') && !f.endsWith('.min.js'))) {
+        const src = readFileSync(join(DIR, file), 'utf8');
+        for (const m of src.matchAll(/patchVertex\([\s\S]{0,400}?,\s*'([a-z0-9-]+)'\s*\)/g)) keys.push(m[1]);
+        for (const m of src.matchAll(/customProgramCacheKey\s*=\s*\(\)\s*=>\s*'([a-z0-9-]+)'/g)) keys.push(m[1]);
+    }
+    expect(keys.length).toBeGreaterThan(3);
+    expect(new Set(keys).size).toBe(keys.length);
+});

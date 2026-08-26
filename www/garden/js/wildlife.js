@@ -140,62 +140,75 @@ export function initWildlife(scene, config = GARDEN_CONFIG, options = {}) {
     const W = config.world.wildlife;
     const mobile = !!options.mobile;
     const seed = config.world.seed;
+    // THE FLAGS GATE CONSTRUCTION, NOT VISIBILITY. A creature that is off is
+    // never built, so it costs no geometry, no instance matrices and no
+    // per-frame walk. Hiding one would leave every one of those still being
+    // paid for, which is the usual way a "removed" feature keeps its bill.
+    const on = (W.enabled || {});
 
     // ---- Butterflies -------------------------------------------------------
     // A crossed pair of quads so a wing shows from any angle, flown through
     // the near foreground where 30 cm still covers a dozen pixels.
-    const wingMask = butterflyTexture();
-    butterflies = buildFlyer(
-        mobile ? W.butterflies.countMobile : W.butterflies.count,
-        butterflyGeometry(),
-        new THREE.MeshLambertMaterial({
-            color: 0xffffff, map: wingMask, alphaTest: 0.45,
-            side: THREE.DoubleSide, transparent: true, opacity: 1
-        }),
-        W.butterflies.box, seed ^ 0xB47);
-    butterflies.mesh.name = 'butterflies';
-    if (wingMask) disposables.push(wingMask);
-    // NOT ALL ONE COLOUR. A dozen identical white flyers read as one repeated
-    // prop; a mixed brood reads as insects. The tint already on each path is
-    // reused, so nothing new has to be seeded.
-    tintFlyers(butterflies, W.butterflies.palette);
-    scene.add(butterflies.mesh);
+    if (on.butterflies) {
+        const wingMask = butterflyTexture();
+        butterflies = buildFlyer(
+            mobile ? W.butterflies.countMobile : W.butterflies.count,
+            butterflyGeometry(),
+            new THREE.MeshLambertMaterial({
+                color: 0xffffff, map: wingMask, alphaTest: 0.45,
+                side: THREE.DoubleSide, transparent: true, opacity: 1
+            }),
+            W.butterflies.box, seed ^ 0xB47);
+        butterflies.mesh.name = 'butterflies';
+        if (wingMask) disposables.push(wingMask);
+        // NOT ALL ONE COLOUR. A dozen identical white flyers read as one repeated
+        // prop; a mixed brood reads as insects. The tint already on each path is
+        // reused, so nothing new has to be seeded.
+        tintFlyers(butterflies, W.butterflies.palette);
+        scene.add(butterflies.mesh);
+    }
 
     // ---- Fireflies ---------------------------------------------------------
     // MeshBasicMaterial and fog off: a firefly is a light, so it must not be
     // lit by the scene and must not dim with distance.
-    fireflies = buildFlyer(
-        mobile ? W.fireflies.countMobile : W.fireflies.count,
-        new THREE.SphereGeometry(W.fireflies.size, 5, 4),
-        new THREE.MeshBasicMaterial({
-            color: W.fireflies.color, transparent: true, opacity: 1, fog: false
-        }),
-        W.fireflies.box, seed ^ 0xF11E);
-    fireflies.mesh.name = 'fireflies';
-    scene.add(fireflies.mesh);
+    if (on.fireflies) {
+        fireflies = buildFlyer(
+            mobile ? W.fireflies.countMobile : W.fireflies.count,
+            new THREE.SphereGeometry(W.fireflies.size, 5, 4),
+            new THREE.MeshBasicMaterial({
+                color: W.fireflies.color, transparent: true, opacity: 1, fog: false
+            }),
+            W.fireflies.box, seed ^ 0xF11E);
+        fireflies.mesh.name = 'fireflies';
+        scene.add(fireflies.mesh);
+    }
 
     // ---- Birds -------------------------------------------------------------
     // Drawn against the sky, so a silhouette reads at any size.
-    birds = buildFlyer(
-        mobile ? W.birds.countMobile : W.birds.count,
-        wingGeometry(),
-        new THREE.MeshBasicMaterial({
-            color: W.birds.color, side: THREE.DoubleSide, transparent: true, opacity: 1, fog: false
-        }),
-        W.birds.box, seed ^ 0xB12D);
-    birds.mesh.name = 'birds';
-    scene.add(birds.mesh);
+    if (on.birds) {
+        birds = buildFlyer(
+            mobile ? W.birds.countMobile : W.birds.count,
+            wingGeometry(),
+            new THREE.MeshBasicMaterial({
+                color: W.birds.color, side: THREE.DoubleSide, transparent: true, opacity: 1, fog: false
+            }),
+            W.birds.box, seed ^ 0xB12D);
+        birds.mesh.name = 'birds';
+        scene.add(birds.mesh);
+    }
 
     // ---- Bats --------------------------------------------------------------
-    bats = buildFlyer(
-        mobile ? W.bats.countMobile : W.bats.count,
-        wingGeometry(),
-        new THREE.MeshBasicMaterial({
-            color: W.bats.color, side: THREE.DoubleSide, transparent: true, opacity: 1, fog: false
-        }),
-        W.bats.box, seed ^ 0xBA75);
-    bats.mesh.name = 'bats';
-    scene.add(bats.mesh);
+    if (on.bats) {
+        bats = buildFlyer(
+            mobile ? W.bats.countMobile : W.bats.count,
+            wingGeometry(),
+            new THREE.MeshBasicMaterial({
+                color: W.bats.color, side: THREE.DoubleSide, transparent: true, opacity: 1, fog: false
+            }),
+            W.bats.box, seed ^ 0xBA75);
+        bats.mesh.name = 'bats';
+        scene.add(bats.mesh);
+    }
 
     return { butterflies, fireflies, birds, bats };
 }
@@ -329,7 +342,11 @@ function driveFlyer(group, time, presence, config, options = {}) {
  * @param {number} snowCoverage  nothing flies in a snowstorm
  */
 export function updateWildlife(hour, elapsed, snowCoverage = 0, config = GARDEN_CONFIG) {
-    if (!butterflies) return;
+    // ONE GUARD PER CREATURE, NEVER ONE FOR ALL OF THEM. This used to read
+    // `if (!butterflies) return`, which was harmless while everything was
+    // always built and became a bug the moment one creature could be switched
+    // off on its own: the butterflies going would have taken the fireflies with
+    // them, silently. `driveFlyer` already tolerates a null group.
     const W = config.world.wildlife;
     const calm = 1 - clamp01(snowCoverage);
 
@@ -345,6 +362,7 @@ export function updateWildlife(hour, elapsed, snowCoverage = 0, config = GARDEN_
     driveFlyer(bats, elapsed * 1.5, presenceAt(hour, WINDOWS.bats), config, { size: W.bats.size });
 
     // ---- Fireflies: position, and a blink each --------------------------
+    if (!fireflies) return;
     const presence = presenceAt(hour, WINDOWS.fireflies) * calm;
     fireflies.mesh.visible = presence > 0.01;
     if (fireflies.mesh.visible) {

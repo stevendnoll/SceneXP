@@ -39,7 +39,7 @@
 
 import { GARDEN_CONFIG } from './config.min.js';
 import { makeRandom, tintColor } from './species.min.js';
-import { unpackColor } from './sky.min.js';
+import { unpackColor, srgbToLinear } from './sky.min.js';
 
 // ---- Small vector helpers (pure, no THREE) ---------------------------------
 
@@ -223,8 +223,19 @@ export function buildLeaves(skeleton, params, seed) {
             const radial = Math.hypot(x, z);
             const exposure = Math.min(1, (y / height) * 0.6 + (radial / (height * 0.5)) * 0.4);
 
+            // THE SAME SWAY WEIGHT THE BARK BAKES, computed the same way from
+            // the same segment. A leaf that did not carry this would sit still
+            // while the branch holding it moved, which is exactly what shipped:
+            // the leaf shader's only wind term was a 12 percent one-sided
+            // flutter and it never applied the branch's own displacement at
+            // all. Same family as the growth bug in M2-7, and for the same
+            // underlying reason: a leaf's position lives in its instance
+            // matrix, baked at rest, so nothing the bark does reaches it.
+            const depthWeight = Math.pow(s.depth / Math.max(1, skeleton.maxDepth), 1.5);
+            const sway = depthWeight * (0.25 + 0.75 * Math.min(1, y / height));
+
             leaves.push({
-                x, y, z,
+                x, y, z, sway,
                 // Splayed off the branch, seeded so a canopy is not a hedgehog.
                 yaw: random() * Math.PI * 2,
                 pitch: (random() - 0.5) * 1.5,
@@ -363,6 +374,7 @@ uniform float uThick;
 uniform vec3  uWind;
 uniform float uTime;
 uniform float uPhase;
+uniform float uSwayScale;
 attribute vec3 aOrigin;
 attribute vec3 aRadial;
 attribute float aRadius;
@@ -381,7 +393,16 @@ const BARK_BODY = `
 
     float barkWP = uTime * 1.35 + uPhase + transformed.y * 0.42;
     vec3 barkGust = vec3(uWind.x, 0.0, uWind.z);
-    transformed += barkGust * (sin(barkWP) * 0.62 + sin(barkWP * 1.73 + 1.3) * 0.38) * aSway;
+    // uSwayScale IS THE TREE'S OWN HEIGHT, AND WITHOUT IT EVERY TREE MOVED THE
+    // SAME NUMBER OF METRES. aSway is normalised 0 to 1, so the displacement
+    // used to be absolute: at wind 1.0 a 3 m Japanese Maple's tip swung a full
+    // third of its height while a 14 m Coast Redwood's moved 7 percent of its.
+    // Read as one tree thrashing while the rest barely stirred, which is not
+    // what one wind looks like. Multiplying by uScale as well means a sapling
+    // sways like a sapling rather than like the tree it will become.
+    transformed += barkGust
+        * (sin(barkWP) * 0.62 + sin(barkWP * 1.73 + 1.3) * 0.38)
+        * aSway * uSwayScale * uScale;
 
     vBarkNormal = aRadial;
     vBarkHeight = transformed.y;
@@ -401,6 +422,8 @@ attribute float aBirth;
 attribute float aDrop;
 attribute float aTint;
 attribute float aPhase;
+attribute float aLeafSway;
+uniform float uSwayScale;
 varying float vLeafTint;
 varying float vLeafFall;
 varying float vLeafBud;
@@ -460,6 +483,18 @@ const LEAF_BODY = `
     // Pull the whole leaf back toward the trunk by however much the tree is
     // short of mature. This is the line that keeps the canopy on the tree.
     leafWorld += instanceMatrix[3].xyz * (uScale - 1.0);
+
+    // THE LINE THAT KEEPS THE CANOPY ON THE MOVING BRANCH. Everything above is
+    // the leaf's own flutter; this is the branch underneath it going past. It
+    // has to be the SAME expression the bark uses, evaluated at this leaf's own
+    // height, or the canopy drifts off the wood it is attached to. Without it
+    // the branches swayed and the leaves hung in the air where the branch used
+    // to be, and because a canopy hides its own twigs the whole tree read as
+    // standing still.
+    float leafBWP = uTime * 1.35 + uPhase + (instanceMatrix[3].y * uScale) * 0.42;
+    leafWorld += vec3(uWind.x, 0.0, uWind.z)
+        * (sin(leafBWP) * 0.62 + sin(leafBWP * 1.73 + 1.3) * 0.38)
+        * aLeafSway * uSwayScale * uScale;
     transformed += (leafRotT * leafWorld) / leafISC;
     #else
     transformed += leafWorld;
@@ -493,7 +528,18 @@ const LEAF_BODY = `
  * Every distinct shader source needs its own key. Two trees sharing a key is
  * correct and wanted: same source, different uniform values, one program.
  */
-function patchVertex(material, uniforms, head, body, key) {
+/**
+ * Splice a vertex-shader block into a stock material.
+ *
+ * EXPORTED so the wood outside the wall uses the SAME mechanism the planted
+ * trees do. Two injectors would be two answers to how a branch bends.
+ *
+ * `key` is not optional and not decoration: three's default program cache key
+ * is literally `onBeforeCompile.toString()`, so two materials sharing this
+ * helper stringify identically and the second is handed the first one's
+ * compiled program. That cost this project a day once already.
+ */
+export function patchVertex(material, uniforms, head, body, key) {
     material.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, uniforms);
         shader.vertexShader = shader.vertexShader
@@ -533,7 +579,10 @@ export function createTree(resolved, seed, options = {}) {
         uThick: { value: T.saplingThickness },
         uWind: { value: new THREE.Vector3(0, 0, 0) },
         uTime: { value: 0 },
-        uPhase: { value: (seed % 1000) / 1000 * Math.PI * 2 }
+        uPhase: { value: (seed % 1000) / 1000 * Math.PI * 2 },
+        // The tree's own size, so sway is a fraction of the tree rather than a
+        // number of metres. See the note in BARK_BODY.
+        uSwayScale: { value: resolved.matureHeight * T.swayPerMetre }
     };
 
     const barkGeo = bakeGeometry(skeleton);
@@ -561,6 +610,7 @@ export function createTree(resolved, seed, options = {}) {
         uDrop: { value: 0 },
         uBud: { value: 0 },
         uWind: barkUniforms.uWind,
+        uSwayScale: barkUniforms.uSwayScale,
         uTime: barkUniforms.uTime,
         uPhase: barkUniforms.uPhase,
         uTremble: { value: resolved.tremble || 0 },
@@ -604,6 +654,7 @@ export function createTree(resolved, seed, options = {}) {
     const drop = new Float32Array(Math.max(1, count));
     const tint = new Float32Array(Math.max(1, count));
     const phase = new Float32Array(Math.max(1, count));
+    const leafSway = new Float32Array(Math.max(1, count));
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const e = new THREE.Euler();
@@ -626,12 +677,14 @@ export function createTree(resolved, seed, options = {}) {
         drop[i] = leaf.drop;
         tint[i] = leaf.tint;
         phase[i] = leaf.phase;
+        leafSway[i] = leaf.sway;
     }
     leafMesh.instanceMatrix.needsUpdate = true;
     leafGeo.setAttribute('aBirth', new THREE.InstancedBufferAttribute(birth, 1));
     leafGeo.setAttribute('aDrop', new THREE.InstancedBufferAttribute(drop, 1));
     leafGeo.setAttribute('aTint', new THREE.InstancedBufferAttribute(tint, 1));
     leafGeo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phase, 1));
+    leafGeo.setAttribute('aLeafSway', new THREE.InstancedBufferAttribute(leafSway, 1));
     // The instanced bounding sphere is computed from the card, not the canopy,
     // so a tree would be culled the moment its origin left the frustum.
     leafMesh.boundingSphere = new THREE.Sphere(
@@ -845,8 +898,24 @@ export function updateTree(tree, view, resolved) {
     }
 }
 
+/**
+ * A colour into a shader uniform, CONVERTED TO LINEAR on the way.
+ *
+ * three renders in linear and encodes at output. `material.color.setHex()`
+ * converts for you and the pond shader converts explicitly with
+ * `gardenSrgbToLinear`, but this went in raw: the sRGB digits of the hex were
+ * written straight into `diffuseColor`, which the renderer then treats as
+ * linear. The effect is that every leaf colour rendered LIGHTER and FLATTER
+ * than the hex it was authored as, and it only became obvious when a dark red
+ * Japanese Maple came out salmon pink. A green is forgiving about this. A
+ * saturated dark colour is not.
+ *
+ * Same family as the ocean's "colour solves need the encode": the pipeline has
+ * four stages and skipping one does not fail, it just quietly renders a
+ * different colour than the one written down.
+ */
 function setVec(vec, hex) {
-    const [r, g, b] = unpackColor(hex);
+    const [r, g, b] = unpackColor(hex).map(srgbToLinear);
     vec.set(r, g, b);
 }
 

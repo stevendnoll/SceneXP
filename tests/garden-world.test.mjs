@@ -14,11 +14,12 @@
  */
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
 import {
-    heightAt, outerWavesAt, outerReliefAt, worldHeightAt, pondBasinAt, pondWaterLevel
+    heightAt, outerWavesAt, outerReliefAt, worldHeightAt, pondBasinAt, pondWaterLevel,
+    pondHalfWidth
 } from '../www/garden/js/terrain.js';
 import {
-    forestDensityAt, openingHalfWidthAt, scatter, forestColorAt, barenessAt, bloomAt,
-    clearsCamera
+    forestDensityAt, scatter, forestColorAt, barenessAt, bloomAt,
+    clearsCamera, openingHalfWidthAt
 } from '../www/garden/js/forest.js';
 import { presenceAt, WINDOWS } from '../www/garden/js/wildlife.js';
 import { luminanceOf } from '../www/garden/js/sky.js';
@@ -170,13 +171,13 @@ test('the pond is a basin, not a plane laid on a field', () => {
     // Water sitting flat on flat ground has no shoreline: its edge is wherever
     // the mesh stops, and it reads as a mirror dropped on the grass.
     expect(pondBasinAt(W.pond.x, W.pond.z)).toBeCloseTo(W.pond.depth, 6);
-    expect(pondBasinAt(W.pond.x + W.pond.halfWidth + 1, W.pond.z)).toBe(0);
+    expect(pondBasinAt(W.pond.x + pondHalfWidth() + 1, W.pond.z)).toBe(0);
     expect(pondBasinAt(0, 0)).toBe(0);
 
     // The dig is smooth all the way to the rim, so no crease catches a low sun.
     let prev = W.pond.depth + 1;
     for (let d = 0; d <= 1; d += 0.05) {
-        const v = pondBasinAt(W.pond.x + d * W.pond.halfWidth, W.pond.z);
+        const v = pondBasinAt(W.pond.x + d * pondHalfWidth(), W.pond.z);
         expect(v).toBeLessThanOrEqual(prev + 1e-9);
         prev = v;
     }
@@ -187,7 +188,7 @@ test('the water sits below its banks, so there is a shore', () => {
     // Deeper than the water at the middle: the pond is filled, not brimming.
     expect(worldHeightAt(W.pond.x, W.pond.z)).toBeLessThan(level);
     // And dry ground just outside it.
-    expect(worldHeightAt(W.pond.x + W.pond.halfWidth + 3, W.pond.z)).toBeGreaterThan(level);
+    expect(worldHeightAt(W.pond.x + pondHalfWidth() + 3, W.pond.z)).toBeGreaterThan(level);
 });
 
 test('the pond sits in the opening, not in the wood', () => {
@@ -196,7 +197,7 @@ test('the pond sits in the opening, not in the wood', () => {
     // corners of the box are dry ground and testing them asks the wrong
     // question. Anywhere the basin is dug, the wood must not be.
     const wet = [];
-    for (let x = W.pond.x - W.pond.halfWidth; x <= W.pond.x + W.pond.halfWidth; x += 0.5) {
+    for (let x = W.pond.x - pondHalfWidth(); x <= W.pond.x + pondHalfWidth(); x += 0.5) {
         for (let z = W.pond.z - W.pond.halfDepth; z <= W.pond.z + W.pond.halfDepth; z += 0.5) {
             if (pondBasinAt(x, z) > 0) wet.push([x, z]);
         }
@@ -287,20 +288,53 @@ test('nobody appears or vanishes in a single frame', () => {
 // frame, so a keep-out that only knew about z = 22 would leave a tree standing
 // exactly where a phone ends up.
 
-test('the ring really does contain the camera, which is why the rule is needed', () => {
-    const N = W.nearTreeline;
+test('the tiers really do contain the camera, which is why the rule is needed', () => {
+    // The wood is tiered now (M8-4), so the question is asked of the whole
+    // span rather than of one band: the eye at z = 22 stands inside it.
+    const tiers = W.nearTreeline.tiers;
     const camZ = GARDEN_CONFIG.camera.position.z;
-    expect(camZ).toBeGreaterThan(N.minRadius);
-    expect(camZ).toBeLessThan(N.maxRadius);
+    const inner = Math.min(...tiers.map((t) => t.minRadius));
+    const outer = Math.max(...tiers.map((t) => t.maxRadius));
+    expect(camZ).toBeGreaterThan(inner);
+    expect(camZ).toBeLessThan(outer);
+});
+
+test('the tiers tile the middle distance with no gap and no overlap', () => {
+    // A gap would be a ring of bare meadow through the wood; an overlap would
+    // pay twice for the same ground.
+    const tiers = W.nearTreeline.tiers;
+    for (let i = 1; i < tiers.length; i++) {
+        expect(tiers[i].minRadius).toBe(tiers[i - 1].maxRadius);
+    }
+    // And the flat tier picks up exactly where the real trees stop.
+    expect(W.farForest.minRadius).toBe(tiers[tiers.length - 1].maxRadius);
+});
+
+test('recursion is cut deeper the further out a tier stands', () => {
+    // Recursion is what costs and distance is what hides it. If this ever
+    // inverts, the wood is paying most for the trees it can least resolve.
+    const tiers = W.nearTreeline.tiers;
+    for (let i = 1; i < tiers.length; i++) {
+        expect(tiers[i].depthReduction).toBeGreaterThan(tiers[i - 1].depthReduction);
+    }
 });
 
 test('no tree may stand anywhere along the eye or its dolly', () => {
     const N = W.nearTreeline;
     // Every radius the generator can pick, straight down the axis the camera
     // occupies. Not one of them may be legal.
-    for (let z = N.minRadius; z <= N.maxRadius; z += 0.5) {
+    const inner = Math.min(...N.tiers.map((t) => t.minRadius));
+    const outer = Math.max(...N.tiers.map((t) => t.maxRadius));
+    // Up to the far end of the dolly. PAST that a tree is BEHIND the eye at
+    // every aspect, and forbidding it there would carve a hole in the wood for
+    // no reason: the outer tier now reaches 52 m, past the 39 m the dolly ends
+    // at, which the old flat ring never did.
+    const behind = N.cameraKeepOut.dollyToZ;
+    for (let z = inner; z <= Math.min(outer, behind); z += 0.5) {
         expect(clearsCamera(0, z)).toBe(false);
     }
+    // And the first legal spot on the axis really is behind the eye.
+    expect(clearsCamera(0, behind + N.cameraKeepOut.clearance)).toBe(true);
     // And the portrait extreme, past the ring's own outer edge.
     expect(clearsCamera(0, 34.84)).toBe(false);
     expect(clearsCamera(0, GARDEN_CONFIG.camera.position.z)).toBe(false);
@@ -313,13 +347,15 @@ test('the keep-out is a corridor, not a hole in the whole wood', () => {
     expect(clearsCamera(22, 14)).toBe(true);
     expect(clearsCamera(0, -40)).toBe(true);
 
-    // And there must still be somewhere to plant a wood. Counted over the ring
-    // the generator actually samples.
+    // And there must still be somewhere to plant a wood. Counted over the whole
+    // span the tiers actually sample.
     let legal = 0;
     let total = 0;
+    const inner = Math.min(...W.nearTreeline.tiers.map((t) => t.minRadius));
+    const outer = Math.max(...W.nearTreeline.tiers.map((t) => t.maxRadius));
     for (let a = 0; a < 720; a++) {
         const angle = (a / 720) * Math.PI * 2;
-        for (let r = W.nearTreeline.minRadius; r <= W.nearTreeline.maxRadius; r += 1) {
+        for (let r = inner; r <= outer; r += 1) {
             const x = Math.cos(angle) * r;
             const z = Math.sin(angle) * r;
             if (forestDensityAt(x, z) < 0.35) continue;
@@ -331,4 +367,146 @@ test('the keep-out is a corridor, not a hole in the whole wood', () => {
     // Comfortably more than the sixteen placements, with room for the 4.5 m
     // minimum separation between them.
     expect(legal / total).toBeGreaterThan(0.7);
+});
+
+// ---- The lake (M8-2) -------------------------------------------------------
+//
+// The water is DERIVED from the gap in the wood it sits in, not fitted to it by
+// hand. That is the whole point: the first pond was fitted by hand, overlapped
+// the treeline, and would have had trees standing in the water. Only a test
+// sampling the ellipse caught it, and the first version of THAT test sampled
+// the bounding box, whose corners are dry ground, so it asked the wrong
+// question and passed.
+
+test('the lake has no width of its own to get wrong', () => {
+    // If a halfWidth ever reappears in config it is a second number that has to
+    // be kept in step with the opening, which is the arrangement that failed.
+    expect(W.pond.halfWidth).toBeUndefined();
+    expect(W.pond.shoreMargin).toBeGreaterThan(0);
+    expect(pondHalfWidth()).toBeGreaterThan(0);
+});
+
+test('the shore margin is kept at the BINDING depth, not just at the middle', () => {
+    // The opening narrows toward the camera faster than the ellipse does, so
+    // the tightest point is not the widest point. Deriving at the pond's own z
+    // alone left 1.28 m where 2 m was asked for: it cleared, but only because
+    // the numbers happened to suit.
+    const P = W.pond;
+    const hw = pondHalfWidth();
+    let tightest = Infinity;
+    for (let z = P.z - P.halfDepth; z <= P.z + P.halfDepth; z += 0.1) {
+        const t = (z - P.z) / P.halfDepth;
+        const share = Math.sqrt(Math.max(0, 1 - t * t));
+        if (share <= 1e-6) continue;
+        const edge = Math.abs(P.x) + hw * share;
+        tightest = Math.min(tightest, openingHalfWidthAt(z) - edge);
+    }
+    // Never negative (trees in the water) and never less than asked for.
+    expect(tightest).toBeGreaterThanOrEqual(P.shoreMargin - 0.05);
+});
+
+test('widening the wood narrows the lake, with no edit to the lake', () => {
+    // The property that makes the derivation worth having. A clearing change
+    // must move the water on its own, or the two will drift the first time
+    // anybody retunes the opening.
+    const narrow = structuredClone(GARDEN_CONFIG.world);
+    narrow.clearing.openHalfWidth = GARDEN_CONFIG.world.clearing.openHalfWidth - 8;
+    expect(pondHalfWidth(narrow)).toBeLessThan(pondHalfWidth());
+
+    const wide = structuredClone(GARDEN_CONFIG.world);
+    wide.clearing.openHalfWidth = GARDEN_CONFIG.world.clearing.openHalfWidth + 8;
+    expect(pondHalfWidth(wide)).toBeGreaterThan(pondHalfWidth());
+});
+
+test('the lake reads as a band across the view, not as a dot in it', () => {
+    // Measured at the composed camera rather than judged: a 60 degree vertical
+    // frame at a 1.5 aspect is about 81.4 degrees across, and the water sits
+    // 48 to 80 m out. It was 37 percent of frame width as a pond.
+    const P = W.pond;
+    const distance = GARDEN_CONFIG.camera.position.z - P.z;
+    const halfH = Math.atan(Math.tan((GARDEN_CONFIG.camera.fov / 2) * Math.PI / 180) * 1.5);
+    const span = 2 * Math.atan(pondHalfWidth() / distance);
+    expect(span / (2 * halfH)).toBeGreaterThan(0.5);
+});
+
+// ---- Nothing may crowd the eye (QA 2026-08-26) ------------------------------
+
+test('the FAR wood respects the camera too, and needs a wider berth than the near one', () => {
+    // THE BUG THIS EXISTS TO STOP. `scatter` had an `accept` hook for exactly
+    // this and `initForest` passed null, so the keep-out written for the near
+    // treeline never reached the tier that most needed it. One impostor stood
+    // about 16 m from the eye and filled the left fifth of the frame.
+    //
+    // The two tiers need DIFFERENT clearances and the reason is what they are
+    // made of: a fractal tree at 12 m is see-through, an impostor is a solid
+    // crossed quad and reads as a wall.
+    const F = W.farForest;
+    expect(F.minCameraDistance).toBeGreaterThan(W.nearTreeline.cameraKeepOut.clearance);
+
+    const cam = GARDEN_CONFIG.camera.position;
+    const points = scatter(F.spacing, F.jitter, W.seed, null);
+    expect(points.length).toBeGreaterThan(200);
+    for (const p of points) {
+        expect(Math.hypot(p.x - cam.x, p.z - cam.z)).toBeGreaterThanOrEqual(F.minCameraDistance - 1e-9);
+    }
+});
+
+test('no impostor the visitor can actually SEE fills the frame', () => {
+    // Stated as the thing a viewer experiences, and measured over the trees the
+    // generator really places rather than over an abstract minimum distance.
+    // Only trees IN FRONT of the eye and inside the frame sideways count: the
+    // nearest tree of all sits 27 m away and directly behind the camera, which
+    // is why a plain nearest-distance check answers the wrong question.
+    const F = W.farForest;
+    const cam = GARDEN_CONFIG.camera.position;
+    const toDeg = 180 / Math.PI;
+    const halfWide = Math.atan(Math.tan((GARDEN_CONFIG.camera.fov / 2) / toDeg) * 1.5) * toDeg;
+
+    let worst = 0;
+    for (const p of scatter(F.spacing, F.jitter, W.seed, null)) {
+        const ahead = cam.z - p.z;
+        if (ahead <= 0) continue;
+        if (Math.atan2(Math.abs(p.x), ahead) * toDeg > halfWide) continue;
+        const d = Math.hypot(p.x, ahead);
+        worst = Math.max(worst, (Math.atan((F.maxHeight - cam.y) / d) + Math.atan(cam.y / d)) * toDeg);
+    }
+    // The blocking complaint was a tree filling the whole 60 degree frame.
+    expect(worst).toBeGreaterThan(0);
+    expect(worst).toBeLessThan(GARDEN_CONFIG.camera.fov * 0.6);
+});
+
+test('no tier is cut so deep that its trees become antennae', () => {
+    // MEASURED, and this is the finding that reshaped the wood. Leaf cards per
+    // segment is a constant 2.0 at every cut, so a deep cut does not strip
+    // foliage relative to wood. What it strips is the FINE STRUCTURE: at -3 a
+    // tree is 48 segments and 94 clumps, so the long structural branches have
+    // nothing left to hide them and the tree reads as a wire.
+    //
+    //   -1  276 segments   -2  109   -3  48   -4  24
+    //
+    // Past -2 they stop being trees, which is why the real wood now stops at
+    // 30 m and the flat tier takes over there.
+    for (const tier of W.nearTreeline.tiers) {
+        expect(tier.depthReduction).toBeLessThanOrEqual(2);
+    }
+});
+
+test('the lake is mostly water, not mostly bank', () => {
+    // `fill` is how far BELOW the rim the water sits, so it reads backwards: a
+    // lower number is a fuller lake. At 0.45 only the middle third of the basin
+    // was wet and it still read as a pond. This asserts the WATER, which is the
+    // part anybody can see, rather than the dig.
+    const P = W.pond;
+    const smooth = (t) => t * t * (3 - 2 * t);
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 60; i++) {
+        const mid = (lo + hi) / 2;
+        if (smooth(1 - mid) > P.fill) lo = mid; else hi = mid;
+    }
+    const waterShare = lo;
+    expect(waterShare).toBeGreaterThan(0.7);
+    // And a real band of damp shore is still left, or the water meets the grass
+    // in a hard line.
+    expect((1 - waterShare) * pondHalfWidth()).toBeGreaterThan(3);
 });

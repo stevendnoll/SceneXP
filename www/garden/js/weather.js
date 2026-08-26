@@ -81,6 +81,34 @@ export function precipFor(rainRate, hour, config = GARDEN_CONFIG) {
     return 'rain';
 }
 
+/**
+ * The gust envelope: what multiplies wind strength at a moment.
+ *
+ * A PURE FUNCTION OF THE GARDEN CLOCK, with no randomness in it at all. That is
+ * not tidiness, it is the same rule the rest of the scene lives by: the garden
+ * is reproducible from `elapsedSeconds`, so a visitor who reloads at the same
+ * clock gets the same weather doing the same thing. Randomness here would also
+ * make the envelope untestable except by watching it, which is exactly how you
+ * end up shipping a gust that never arrives.
+ *
+ * Three sines at periods that do not divide, summed with weights that add to 1
+ * so the sum lands in -1 to 1, then shaped so the lulls run longer than the
+ * surges. A gust is only a gust because of the quiet before it.
+ *
+ * Returns a MULTIPLIER, not a strength. It is applied to the state's own wind
+ * number so that everything tuned before gusts existed still means what it
+ * meant, which is what holding the mean at 0.98 buys.
+ */
+export function gustAt(elapsed, config = GARDEN_CONFIG) {
+    const G = config.weather.gust;
+    let raw = 0;
+    for (let i = 0; i < G.periods.length; i++) {
+        raw += G.weights[i] * Math.sin((elapsed * Math.PI * 2) / G.periods[i] + i * 1.7 + i * i * 0.7);
+    }
+    const shaped = Math.pow(clamp01((raw + 1) / 2), G.shape);
+    return G.floor + (G.peak - G.floor) * shaped;
+}
+
 /** Blend two states' numbers. */
 export function blendStates(a, b, t, config = GARDEN_CONFIG) {
     const A = config.weather.states[a];
@@ -101,6 +129,7 @@ export function createWeather(startState = 'sunny') {
         angle: 0.8,
         gloom: 0,
         windStrength: 0,
+        gust: 1,
         rain: 0,
         wind: { x: 0, z: 0 },
         precip: 'none'
@@ -113,10 +142,11 @@ export function createWeather(startState = 'sunny') {
  * @param {object} w        from createWeather
  * @param {number} dt       real seconds
  * @param {number} hour     in-world hour
+ * @param {number} elapsed  the garden clock, which the gust envelope rides
  * @param {function} random injected, never called from a pure function
  * @param {boolean} reduced prefers-reduced-motion
  */
-export function stepWeather(w, dt, hour, random = Math.random, reduced = false, config = GARDEN_CONFIG) {
+export function stepWeather(w, dt, hour, elapsed = 0, random = Math.random, reduced = false, config = GARDEN_CONFIG) {
     const W = config.weather;
     const span = reduced ? W.reducedTransitionSeconds : W.transitionSeconds;
 
@@ -135,11 +165,21 @@ export function stepWeather(w, dt, hour, random = Math.random, reduced = false, 
 
     const blended = blendStates(w.from, w.state, w.transition, config);
     w.gloom = blended.gloom;
-    w.windStrength = blended.wind;
     w.rain = blended.rain;
 
+    // THE ENVELOPE IS PUBLISHED FROM HERE AND NOWHERE ELSE, for the same reason
+    // the vector is: two modules deciding how hard it is gusting would disagree
+    // by a frame at best. Downstream reads `wind` and gets the gust for free.
+    // Reduced motion damps it toward steady rather than removing it.
+    const gust = gustAt(elapsed, config);
+    w.gust = reduced ? 1 + (gust - 1) * W.gust.reducedDamp : gust;
+    w.windStrength = blended.wind * w.gust;
+
     // The wind swings round slowly rather than jumping, so a change of state
-    // is a change of strength rather than of direction.
+    // is a change of strength rather than of direction. THE GUST MULTIPLIES
+    // STRENGTH AND NEVER TOUCHES THE ANGLE: gusting the angle would swing the
+    // whole wood sideways in unison, which reads as one object rather than as
+    // many trees.
     w.angle += W.turnRate * dt * (reduced ? 0.4 : 1);
     w.wind.x = Math.cos(w.angle) * w.windStrength;
     w.wind.z = Math.sin(w.angle) * w.windStrength;
