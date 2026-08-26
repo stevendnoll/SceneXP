@@ -39,7 +39,7 @@ import { GARDEN_CONFIG } from './config.min.js';
 import { makeRandom, resolveSpecies, SPECIES, speciesById } from './species.min.js';
 import { phenologyAt, seasonAt, clamp01 } from './clock.min.js';
 import { mixColor, packColor, unpackColor } from './sky.min.js';
-import { buildSkeleton, bakeGeometry } from './tree.min.js';
+import { buildSkeleton, bakeGeometry, buildLeaves } from './tree.min.js';
 import { worldHeightAt } from './terrain.min.js';
 
 // ---- The shape of the clearing (pure) --------------------------------------
@@ -92,6 +92,36 @@ export function forestDensityAt(x, z, config = GARDEN_CONFIG) {
     }
 
     return ramp;
+}
+
+/**
+ * Is this spot far enough from the eye to stand a tree in?
+ *
+ * THE CAMERA STANDS INSIDE THE NEAR TREELINE'S RING. The ring is measured from
+ * the plot centre and the eye is at z = 22, so "17 to 38 metres from the middle
+ * of the garden" includes the ground the visitor is standing on. A tree placed
+ * there is not a distant tree that happens to be large, it is a tree the camera
+ * is inside, and all the visitor sees is the underside of its branches spread
+ * across the frame.
+ *
+ * Measured against the dolly SEGMENT rather than the composed position, because
+ * a portrait phone slides the eye back along +z and a keep-out that only knew
+ * about the desktop framing would let a tree sit exactly where a phone ends up.
+ *
+ * Pure, so the rule can be asserted against the camera numbers instead of
+ * spotted in a screenshot.
+ */
+export function clearsCamera(x, z, config = GARDEN_CONFIG) {
+    const keep = config.world.nearTreeline.cameraKeepOut;
+    if (!keep) return true;
+    const z0 = config.camera.position.z;
+    const z1 = Math.max(z0, keep.dollyToZ);
+    // Horizontal distance to the segment the eye travels along.
+    let distance;
+    if (z < z0) distance = Math.hypot(x, z0 - z);
+    else if (z > z1) distance = Math.hypot(x, z - z1);
+    else distance = Math.abs(x);
+    return distance >= keep.clearance;
 }
 
 /**
@@ -225,6 +255,147 @@ function buildCanopyTexture(size, seed, evergreen) {
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
+}
+
+/**
+ * A clump of leaves, drawn once into a canvas.
+ *
+ * Same trick as the canopy silhouette and for the same reason: white so the
+ * season can tint it, and soft alpha so `alphaTest` erodes it away for winter.
+ * Unlike the canopy texture there is no trunk in it, because these sit ON a
+ * real trunk that is already drawn.
+ */
+function buildLeafClusterTexture(size, seed) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const random = makeRandom(seed);
+
+    ctx.clearRect(0, 0, size, size);
+    const mid = size / 2;
+    for (let i = 0; i < 9; i++) {
+        const a = random() * Math.PI * 2;
+        const rr = Math.sqrt(random()) * 0.30;
+        const cx = mid + Math.cos(a) * rr * size;
+        const cy = mid + Math.sin(a) * rr * size;
+        const r = size * (0.11 + random() * 0.10);
+        ctx.fillStyle = `rgba(255,255,255,${0.48 + random() * 0.30})`;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, r, r * (0.62 + random() * 0.4), a, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+/**
+ * One blossom on a stem, drawn once.
+ *
+ * The quad is anchored at its base, so v runs from the ground up: stem in the
+ * lower half, head in the upper. White, for the same reason everything else
+ * here is white, so the per-plant colour does the work.
+ */
+function buildFlowerTexture(size, seed) {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const random = makeRandom(seed);
+
+    ctx.clearRect(0, 0, size, size);
+    const mid = size / 2;
+    // The stem. Thin, and dimmer than the head so the threshold takes it last.
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.lineWidth = Math.max(1, size * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(mid, size);
+    ctx.lineTo(mid, size * 0.42);
+    ctx.stroke();
+
+    // Petals round a centre, sitting at the top of the stem.
+    ctx.fillStyle = 'rgba(255,255,255,1)';
+    const petals = 5;
+    const headY = size * 0.34;
+    for (let i = 0; i < petals; i++) {
+        const a = (i / petals) * Math.PI * 2 + random() * 0.2;
+        ctx.beginPath();
+        ctx.ellipse(mid + Math.cos(a) * size * 0.17, headY + Math.sin(a) * size * 0.17,
+            size * 0.13, size * 0.10, a, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(mid, headY, size * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+/**
+ * Merge a skeleton's leaves into ONE geometry of camera-agnostic cards.
+ *
+ * The planted trees instance a single card per leaf, which cannot be reused
+ * here: an InstancedMesh cannot itself be instanced, and the treeline needs one
+ * draw call per species rather than one per tree. So the cards are baked into
+ * the shared per-species geometry instead, and the whole canopy rides the tree's
+ * own instance matrix.
+ *
+ * Sampled down to `leafCards`, because at 17 m and beyond the eye is reading a
+ * silhouette and paying full canopy density for it would be the most expensive
+ * thing outside the wall.
+ */
+function bakeLeafCards(leaves, limit, scale) {
+    const stride = Math.max(1, Math.ceil(leaves.length / limit));
+    const used = [];
+    for (let i = 0; i < leaves.length; i += stride) used.push(leaves[i]);
+    if (!used.length) return null;
+
+    const position = new Float32Array(used.length * 12);
+    const normal = new Float32Array(used.length * 12);
+    const uv = new Float32Array(used.length * 8);
+    const index = new Uint32Array(used.length * 6);
+
+    used.forEach((leaf, i) => {
+        const s = leaf.size * scale * 0.5;
+        const cy = Math.cos(leaf.yaw), sy = Math.sin(leaf.yaw);
+        const cp = Math.cos(leaf.pitch), sp = Math.sin(leaf.pitch);
+        // Card axes: right and up, rotated by yaw about Y then pitch about X.
+        const rx = cy, ry = 0, rz = -sy;
+        const ux = sy * sp, uy = cp, uz = cy * sp;
+        // The face normal is right x up, which the lighting needs to be honest.
+        const nx = ry * uz - rz * uy, ny = rz * ux - rx * uz, nz = rx * uy - ry * ux;
+
+        const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+        corners.forEach(([cxs, cys], c) => {
+            const o = i * 12 + c * 3;
+            position[o] = leaf.x + (rx * cxs + ux * cys) * s;
+            position[o + 1] = leaf.y + (ry * cxs + uy * cys) * s;
+            position[o + 2] = leaf.z + (rz * cxs + uz * cys) * s;
+            normal[o] = nx;
+            normal[o + 1] = ny;
+            normal[o + 2] = nz;
+            uv[i * 8 + c * 2] = (cxs + 1) / 2;
+            uv[i * 8 + c * 2 + 1] = (cys + 1) / 2;
+        });
+        const v = i * 4;
+        const o = i * 6;
+        index[o] = v; index[o + 1] = v + 1; index[o + 2] = v + 2;
+        index[o + 3] = v; index[o + 4] = v + 2; index[o + 5] = v + 3;
+    });
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setIndex(new THREE.BufferAttribute(index, 1));
+    return { geometry: geo, cards: used.length };
 }
 
 /** Two quads crossed at right angles: volume from any angle for four
@@ -376,6 +547,8 @@ function buildNearTreeline(scene, config, options) {
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         if (forestDensityAt(x, z, config) < 0.35) continue;
+        // Never inside the eye's own clearance. See `clearsCamera`.
+        if (!clearsCamera(x, z, config)) continue;
         if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < 4.5)) continue;
         placed.push({ x, z, pick: Math.floor(random() * wild.length), r: random() });
     }
@@ -389,7 +562,10 @@ function buildNearTreeline(scene, config, options) {
         const skeleton = buildSkeleton(resolved, config.world.seed + i * 7919, {
             maxSegments: Math.round(config.tree.maxSegments * 0.45)
         });
-        return { geometry: bakeGeometry(skeleton), species, resolved, skeleton };
+        const leaves = bakeLeafCards(
+            buildLeaves(skeleton, resolved, config.world.seed + i * 7919),
+            N.leafCards, N.leafScale);
+        return { geometry: bakeGeometry(skeleton), species, resolved, skeleton, leaves };
     });
 
     nearTrees = geometries.map((entry, i) => {
@@ -420,7 +596,39 @@ function buildNearTreeline(scene, config, options) {
 
         disposables.push(entry.geometry, material);
         scene.add(mesh);
-        return { mesh, species: entry.species, resolved: entry.resolved, count: mine.length };
+
+        // ---- The canopy, on the same transforms ----------------------------
+        // A second instanced mesh sharing the bark mesh's matrices exactly, so
+        // the leaves cannot drift from the branches they sit on.
+        let leafMesh = null;
+        if (entry.leaves) {
+            const texture = buildLeafClusterTexture(64, config.world.seed ^ (0x1EAF + i));
+            const leafMaterial = new THREE.MeshLambertMaterial({
+                color: 0xffffff,
+                map: texture,
+                transparent: false,
+                alphaTest: config.world.farForest.leafyAlphaTest,
+                side: THREE.DoubleSide
+            });
+            leafMesh = new THREE.InstancedMesh(
+                entry.leaves.geometry, leafMaterial, Math.max(1, mine.length));
+            leafMesh.name = `treeline-leaves-${entry.species.id}`;
+            leafMesh.castShadow = false;
+            leafMesh.receiveShadow = false;
+            leafMesh.frustumCulled = false;
+            leafMesh.instanceMatrix.array.set(mesh.instanceMatrix.array);
+            leafMesh.instanceMatrix.needsUpdate = true;
+            leafMesh.count = mine.length;
+            disposables.push(entry.leaves.geometry, leafMaterial);
+            if (texture) disposables.push(texture);
+            scene.add(leafMesh);
+        }
+
+        return {
+            mesh, leafMesh, species: entry.species, resolved: entry.resolved,
+            evergreen: !!entry.species.evergreen, count: mine.length,
+            cards: entry.leaves ? entry.leaves.cards : 0
+        };
     });
 }
 
@@ -491,10 +699,16 @@ function buildUndergrowth(scene, config, options) {
     // THEY BLOOM AND GO OVER. `updateForest` scales them to nothing outside
     // spring and summer, so a winter meadow is bare rather than dotted with
     // colour that has no business being there.
+    // A CROSSED QUAD WITHOUT A MASK IS A COLOURED SQUARE. Untextured, these
+    // read in the QA screenshots as confetti or scraps of litter dropped round
+    // the wall, which is the opposite of what flowers by a path are for. The
+    // blossom shape has to come from alpha, exactly as the canopy's does.
     const flowerGeo = buildCrossedQuad();
+    const flowerTexture = buildFlowerTexture(32, config.world.seed ^ 0xF10);
     const flowerMaterial = new THREE.MeshLambertMaterial({
-        color: 0xffffff, side: THREE.DoubleSide
+        color: 0xffffff, map: flowerTexture, alphaTest: 0.42, side: THREE.DoubleSide
     });
+    if (flowerTexture) disposables.push(flowerTexture);
     flowers = new THREE.InstancedMesh(flowerGeo, flowerMaterial, Math.max(1, flowerCount));
     flowers.name = 'wildflowers';
     flowers.frustumCulled = false;
@@ -584,6 +798,17 @@ export function updateForest(hour, snowCoverage = 0, config = GARDEN_CONFIG) {
     for (const tree of nearTrees) {
         tree.mesh.material.color.setHex(
             packColor(mixColor(tree.species.bark, snowColor, snow * 0.35)));
+
+        // The treeline turns with the same phenology the far wood does, and
+        // sheds the same way, so the two tiers can never disagree about the
+        // season. An evergreen keeps its needles: it dulls, it does not erode.
+        if (!tree.leafMesh) continue;
+        const leafColour = forestColorAt(hour, tree.evergreen, config);
+        tree.leafMesh.material.color.setHex(
+            packColor(mixColor(leafColour, snowColor, snow * (tree.evergreen ? 0.4 : 0.55))));
+        tree.leafMesh.material.alphaTest = tree.evergreen
+            ? F.leafyAlphaTest
+            : F.leafyAlphaTest + (F.bareAlphaTest - F.leafyAlphaTest) * bare;
     }
 
     // Scrub follows the deciduous wood, and takes snow more heavily because it
@@ -608,7 +833,8 @@ export function updateForest(hour, snowCoverage = 0, config = GARDEN_CONFIG) {
 
 export function getForestMeshes() {
     return [evergreen, deciduous, bushes, flowers,
-        ...nearTrees.map((t) => t.mesh)].filter(Boolean);
+        ...nearTrees.map((t) => t.mesh),
+        ...nearTrees.map((t) => t.leafMesh)].filter(Boolean);
 }
 
 export function disposeForest() {

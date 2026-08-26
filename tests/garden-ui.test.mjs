@@ -107,3 +107,51 @@ test('the stylesheet cache query moves when the stylesheet does', () => {
     expect(queries).toHaveLength(2);
     expect(queries[0]).toBe(queries[1]);
 });
+
+// ---- The one irreversible action -------------------------------------------
+//
+// Clearing the garden used to ask through a native `confirm()`: unstyled, at
+// the top of the window, prefixed "localhost:8000 says", and unreachable by the
+// Escape and backdrop handling every other dialog here uses. Its copy also read
+// "This clears all 1 of your trees", which is what counting without reading
+// produces.
+
+test('nothing in the garden asks through browser chrome', () => {
+    // window.confirm, alert and prompt are all somebody else's UI.
+    expect(JS).not.toMatch(/\bwindow\.(confirm|alert|prompt)\s*\(/);
+});
+
+test('the reset dialog is wired to the shared parts by id, like the others', () => {
+    // THE TRAP FROM 2026-08-25: the shared stylesheet has no generic rules, so
+    // a new modal id inherits no hiding, no positioning, and a near-opaque
+    // backdrop that blacks out the scene. Each of these is the symptom that
+    // followed last time.
+    expect(HTML).toMatch(/id="reset-modal"[^>]*class="hidden"/);
+    expect(ALL_CSS).toMatch(/#reset-modal\.hidden\s*(,[^{]*)?\{[^}]*display:\s*none/);
+    expect(ALL_CSS).toMatch(/#reset-modal[^{]*\{[^}]*position:\s*fixed/);
+    expect(ALL_CSS).toMatch(/#reset-modal \.modal-backdrop/);
+});
+
+test('the reset copy counts one tree the way a person would', async () => {
+    const { resetPrompt } = await import('../www/garden/js/ui.js');
+    expect(resetPrompt(1)).toBe(
+        'This clears your only tree and starts a new garden. There is no undo.');
+    expect(resetPrompt(7)).toContain('all 7 of your trees');
+    // House style, which applies to every string a visitor can read.
+    for (const n of [1, 2, 16]) expect(resetPrompt(n)).not.toMatch(/[—;]/);
+});
+
+test('a long species name cannot run under the close button', () => {
+    // "Coast Redwood" wore the close cross through its second word, because
+    // .modal-close is absolutely positioned over the container's top right and
+    // the title had nothing telling it to stop short.
+    expect(CSS).toMatch(/\.tree-card \.piece-title[^{]*\{[^}]*padding-right/);
+});
+
+test('the welcome legend is rows, not a ragged paragraph', () => {
+    // As loose inline spans the four label-and-sentence pairs wrapped wherever
+    // they landed, stranding PLANT and TEND mid-sentence.
+    expect(HTML).toMatch(/<ul class="controls-hint">/);
+    expect((HTML.match(/<li><span>/g) || []).length).toBeGreaterThanOrEqual(4);
+    expect(CSS).toMatch(/\.controls-hint[^{]*\{[^}]*list-style:\s*none/);
+});

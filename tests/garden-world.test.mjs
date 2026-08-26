@@ -17,7 +17,8 @@ import {
     heightAt, outerWavesAt, outerReliefAt, worldHeightAt, pondBasinAt, pondWaterLevel
 } from '../www/garden/js/terrain.js';
 import {
-    forestDensityAt, openingHalfWidthAt, scatter, forestColorAt, barenessAt, bloomAt
+    forestDensityAt, openingHalfWidthAt, scatter, forestColorAt, barenessAt, bloomAt,
+    clearsCamera
 } from '../www/garden/js/forest.js';
 import { presenceAt, WINDOWS } from '../www/garden/js/wildlife.js';
 import { luminanceOf } from '../www/garden/js/sky.js';
@@ -271,4 +272,63 @@ test('nobody appears or vanishes in a single frame', () => {
             prev = now;
         }
     }
+});
+
+// ---- The camera stands inside the near treeline's ring ----------------------
+//
+// THE BUG THIS EXISTS TO STOP: `nearTreeline` scatters on a ring measured from
+// the PLOT CENTRE, 17 to 38 m out, and the eye sits at z = 22. The band
+// therefore includes the ground the visitor is standing on, so the generator
+// was free to put a 17 m tree a couple of metres in front of the camera. It did,
+// and it is in 14 of the 21 QA screenshots as a bare armature across the frame.
+//
+// The trap in fixing it is measuring against the COMPOSED camera position: a
+// portrait phone dollies the eye straight back down +z, to 34.84 on a 320 px
+// frame, so a keep-out that only knew about z = 22 would leave a tree standing
+// exactly where a phone ends up.
+
+test('the ring really does contain the camera, which is why the rule is needed', () => {
+    const N = W.nearTreeline;
+    const camZ = GARDEN_CONFIG.camera.position.z;
+    expect(camZ).toBeGreaterThan(N.minRadius);
+    expect(camZ).toBeLessThan(N.maxRadius);
+});
+
+test('no tree may stand anywhere along the eye or its dolly', () => {
+    const N = W.nearTreeline;
+    // Every radius the generator can pick, straight down the axis the camera
+    // occupies. Not one of them may be legal.
+    for (let z = N.minRadius; z <= N.maxRadius; z += 0.5) {
+        expect(clearsCamera(0, z)).toBe(false);
+    }
+    // And the portrait extreme, past the ring's own outer edge.
+    expect(clearsCamera(0, 34.84)).toBe(false);
+    expect(clearsCamera(0, GARDEN_CONFIG.camera.position.z)).toBe(false);
+});
+
+test('the keep-out is a corridor, not a hole in the whole wood', () => {
+    // The flanking treeline is what the composition is built on, so the rule
+    // has to leave it alone. If this ever fails the frame loses its edges.
+    expect(clearsCamera(-20, 20)).toBe(true);
+    expect(clearsCamera(22, 14)).toBe(true);
+    expect(clearsCamera(0, -40)).toBe(true);
+
+    // And there must still be somewhere to plant a wood. Counted over the ring
+    // the generator actually samples.
+    let legal = 0;
+    let total = 0;
+    for (let a = 0; a < 720; a++) {
+        const angle = (a / 720) * Math.PI * 2;
+        for (let r = W.nearTreeline.minRadius; r <= W.nearTreeline.maxRadius; r += 1) {
+            const x = Math.cos(angle) * r;
+            const z = Math.sin(angle) * r;
+            if (forestDensityAt(x, z) < 0.35) continue;
+            total++;
+            if (clearsCamera(x, z)) legal++;
+        }
+    }
+    expect(total).toBeGreaterThan(0);
+    // Comfortably more than the sixteen placements, with room for the 4.5 m
+    // minimum separation between them.
+    expect(legal / total).toBeGreaterThan(0.7);
 });

@@ -119,6 +119,46 @@ body {
     color: var(--ui-subtitle);
 }
 
+/* ---- The welcome legend -----------------------------------------------------
+ *
+ * The shared stylesheet styles the LABELS (.controls-hint span) and nothing
+ * else, which is fine for one line and falls apart at four: as loose inline
+ * spans the pairs wrapped wherever they happened to land, stranding PLANT and
+ * TEND in the middle of sentences and reading as broken text. So the rows are
+ * a list here, and the label gets a column of its own so the sentences align.
+ */
+.controls-hint {
+    list-style: none;
+    display: grid;
+    gap: 0.55rem;
+    max-width: 36rem;
+    margin: 1.4rem auto 0;
+    text-align: left;
+    line-height: 1.45;
+}
+
+.controls-hint li {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    align-items: baseline;
+    column-gap: 0.6rem;
+}
+
+.controls-hint span {
+    margin: 0;
+    justify-self: start;
+    font-size: 0.68rem;
+}
+
+/* Below the column split the label sits on its own line above its sentence,
+   which is still a legend and never a ragged block. */
+@media (max-width: 30rem) {
+    .controls-hint li {
+        grid-template-columns: 1fr;
+        row-gap: 0.15rem;
+    }
+}
+
 /* ---- Toasts ---------------------------------------------------------------- */
 
 .garden-toast {
@@ -168,7 +208,8 @@ body {
  */
 
 #plant-modal,
-#tree-card {
+#tree-card,
+#reset-modal {
     position: fixed;
     inset: 0;
     z-index: 200;
@@ -179,14 +220,16 @@ body {
 }
 
 #plant-modal.hidden,
-#tree-card.hidden {
+#tree-card.hidden,
+#reset-modal.hidden {
     display: none;
 }
 
 /* The generic .modal-backdrop is a near-opaque near-black. A garden wants to
    stay visible behind its own dialogs. */
 #plant-modal .modal-backdrop,
-#tree-card .modal-backdrop {
+#tree-card .modal-backdrop,
+#reset-modal .modal-backdrop {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -198,7 +241,8 @@ body {
 
 /* The generic .modal-container is bordered in another experience's orange. */
 #plant-modal .modal-container,
-#tree-card .modal-container {
+#tree-card .modal-container,
+#reset-modal .modal-container {
     position: relative;
     background: rgba(16, 26, 14, 0.96);
     border: 1px solid rgba(var(--ui-accent-rgb), 0.55);
@@ -208,7 +252,8 @@ body {
 }
 
 #plant-modal .modal-close,
-#tree-card .modal-close {
+#tree-card .modal-close,
+#reset-modal .modal-close {
     position: absolute;
     top: 8px;
     right: 8px;
@@ -224,7 +269,8 @@ body {
 }
 
 #plant-modal .modal-close:hover,
-#tree-card .modal-close:hover {
+#tree-card .modal-close:hover,
+#reset-modal .modal-close:hover {
     background: rgba(var(--ui-accent-rgb), 0.3);
     transform: none;
 }
@@ -454,9 +500,19 @@ body {
 
 /* ---- The tree card --------------------------------------------------------- */
 
-.tree-card {
+.tree-card,
+.reset-card {
     max-width: min(92vw, 22rem);
     padding: 1.3rem 1.4rem 1.4rem;
+}
+
+/* The close button is absolutely positioned at the top right of the container,
+   so it sits OVER the title unless the title is told to stop short of it. A
+   long species name ran straight under it ("Coast Redwood" with the cross
+   through the second word). 36px button plus its 8px offset plus a gap. */
+.tree-card .piece-title,
+.reset-card .piece-title {
+    padding-right: 2.9rem;
 }
 
 .tree-body {

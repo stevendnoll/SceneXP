@@ -74,7 +74,7 @@
     <title>Fractal Garden</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
-    <link rel="preload" href="css/experience.min.css?v=2" as="style">
+    <link rel="preload" href="css/experience.min.css?v=3" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -84,7 +84,7 @@
          dark body, and this scene wants a soft daylight behind a slow first
          frame. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
-    <link rel="stylesheet" href="css/experience.min.css?v=2">
+    <link rel="stylesheet" href="css/experience.min.css?v=3">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -147,12 +147,15 @@
             <p class="title">WELCOME</p>
             <p class="subtitle">An open plot, and as many years as you care to spend on it</p>
             <p class="click-prompt">Click to begin</p>
-            <div class="controls-hint">
-                <span>PLANT</span> Tap an empty patch of grass to choose a tree.
-                <span>LOOK</span> Drag to pan and tilt, pinch or use the buttons to zoom.
-                <span>TEND</span> Tap a tree to see how it is doing and to water it.
-                <span>REMEMBER</span> Your garden is saved in this browser and waits for you.
-            </div>
+            <!-- One row per idea. As loose inline spans these reflowed into a
+                 ragged block with the labels stranded mid-line, which read as
+                 broken text rather than as a legend. -->
+            <ul class="controls-hint">
+                <li><span>PLANT</span> Tap an empty patch of grass to choose a tree.</li>
+                <li><span>LOOK</span> Drag to pan and tilt, pinch or use the buttons to zoom.</li>
+                <li><span>TEND</span> Tap a tree to see how it is doing and to water it.</li>
+                <li><span>REMEMBER</span> Your garden is saved in this browser and waits for you.</li>
+            </ul>
             <!-- Filled in only when the browser will not let the page save.
                  Empty and silent otherwise. -->
             <p id="storage-note" class="storage-note"></p>
@@ -218,7 +221,7 @@
             </div>
 
             <details class="customise">
-                <summary>Customise this tree</summary>
+                <summary>Customize this tree</summary>
                 <div id="slider-list" class="slider-list"></div>
             </details>
 
@@ -237,6 +240,25 @@
             <div class="tree-actions">
                 <button id="tree-water" type="button" class="piece-enter">Water it</button>
                 <button id="tree-remove" type="button" class="tree-remove">Remove this tree</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CLEARING THE GARDEN ASKS HERE, NOT IN THE BROWSER. This is the only
+         irreversible action in the scene, and a native confirm() was the one
+         piece of unstyled browser chrome in it. Note the ids below are wired
+         to the shared modal parts in experience.css: a new modal id inherits
+         no hiding, no positioning, and a near-opaque backdrop. -->
+    <div id="reset-modal" class="hidden" role="dialog" aria-modal="true"
+        aria-labelledby="reset-title" aria-describedby="reset-body">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container reset-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <h2 id="reset-title" class="piece-title">Start a new garden?</h2>
+            <p id="reset-body" class="tree-line"></p>
+            <div class="tree-actions">
+                <button id="reset-confirm" type="button" class="piece-enter">Clear the plot</button>
+                <button id="reset-cancel" type="button" class="tree-remove">Keep my garden</button>
             </div>
         </div>
     </div>

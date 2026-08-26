@@ -220,12 +220,38 @@ export const GARDEN_CONFIG = deepFreeze({
         // slider. A ten metre tree with a 28 cm radius trunk is about right.
         trunkRadiusRatio: 0.028,
         // How many levels of branching carry leaves, counted in from the tips.
-        leafLevels: 3,
+        //
+        // THIS NUMBER DECIDES WHEN A PLANTED TREE FIRST HAS ANY LEAVES AT ALL,
+        // which is not obvious from reading it. Leaves ride the branch that
+        // carries them, and the outermost orders are the last to be born, so at
+        // 3 levels the first leaf on every species arrived at growth 0.57 to
+        // 0.62: more than half of the eighteen minutes from planting to
+        // maturity spent looking at a bare stick. Measured cost of going wider,
+        // worst case per tree against the 4,000 card budget:
+        //
+        //   3 levels  2,156 cards  first leaf at growth 0.57 to 0.62
+        //   5 levels  2,276 cards  first leaf at growth 0.32 to 0.39
+        //   6 levels  2,292 cards  first leaf at growth 0.19 to 0.28
+        //
+        // Five costs 5 percent and buys back about a third of the wait. Six was
+        // not taken: on the depth-7 species it puts leaves on the first order
+        // out of the trunk, and a bare lower trunk is most of what makes a
+        // redwood read as a redwood.
+        leafLevels: 5,
         // What a newly planted sapling looks like: a fraction of mature size,
         // and proportionally MORE slender rather than less, because that is
         // what a young tree is.
-        saplingScale: 0.14,
-        saplingThickness: 0.55
+        //
+        // MEASURED AT THE COMPOSED CAMERA, which is 23.09 m from the middle of
+        // the plot (hypot of z 22 and eye height 7) across a 60 degree vertical
+        // frame. At 0.14 a planted Japanese Maple stood 0.42 m and covered 1.7
+        // percent of frame height, and a Coast Redwood's trunk came out about
+        // two pixels wide: the QA screenshots show a hairline, which is the
+        // honest rendering of an honest number and still reads as nothing
+        // happening. At 0.24 the maple is 0.72 m and the redwood trunk is near
+        // five pixels, which is a small tree rather than a scratch.
+        saplingScale: 0.24,
+        saplingThickness: 0.72
     },
 
     // ---- Growth, water, and health ------------------------------------------
@@ -371,7 +397,38 @@ export const GARDEN_CONFIG = deepFreeze({
             maxRadius: 38,
             depthReduction: 2,
             minScale: 0.75,
-            maxScale: 1.25
+            maxScale: 1.25,
+
+            // How many leaf cards one treeline skeleton carries. THESE TREES
+            // NEED FOLIAGE OR THEY ARE THE ONLY BARE THING IN A SUMMER FRAME,
+            // and a bare armature at this distance reads as broken scenery
+            // rather than as a tree. Sampled down from the full leaf set the
+            // planted trees use, because at 17 m and beyond the silhouette is
+            // all that survives: 400 cards is 800 triangles per species, and
+            // 16 instances of that is 12,800 against the 60k of headroom
+            // Addendum A left spare.
+            leafCards: 400,
+            leafScale: 2.4,
+
+            // ---- THE CAMERA STANDS INSIDE THIS RING ----------------------
+            // The ring is measured from the plot centre and runs 17 to 38 m.
+            // The camera sits at z = 22 and a portrait phone dollies it
+            // straight back down the +z axis, so the eye travels through the
+            // band rather than sitting outside it. Without a keep-out the
+            // generator is free to plant a 17 m tree a couple of metres in
+            // front of the eye, and the visitor spends the whole visit looking
+            // up through one trunk's branches.
+            //
+            // `dollyToZ` is where the dolly ends at the narrowest aspect worth
+            // supporting: z = focusZ + minHalfWidth / (tan(portraitFov / 2) *
+            // aspect), which is 9 / (0.7265 * 0.32) = 38.7. `clearance` is a
+            // horizontal distance from that whole segment, set wider than a
+            // mature crown's radius so the eye stays outside the drip line
+            // rather than merely outside the trunk.
+            cameraKeepOut: {
+                dollyToZ: 39,
+                clearance: 12
+            }
         },
 
         // ---- The pond -------------------------------------------------------
@@ -462,6 +519,10 @@ export const GARDEN_CONFIG = deepFreeze({
         wildlife: {
             butterflies: {
                 count: 14, countMobile: 7, size: 0.3,
+                // Wings are a white alpha mask, so these tint it. A brood of
+                // one colour reads as a repeated prop rather than as insects,
+                // and pure white read as scraps of paper over the grass.
+                palette: [0xf2d97a, 0xe8a45c, 0xf0efe6, 0xc7d6ec, 0xdf8f6e],
                 // The near foreground: between the camera (z = 22) and the
                 // plot, low enough to be among the flowers.
                 box: { x0: -11, x1: 11, y0: 1.1, y1: 3.2, z0: 2, z1: 19, rx: 5, ry: 0.9, rz: 4 }

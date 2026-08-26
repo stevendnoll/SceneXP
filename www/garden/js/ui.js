@@ -39,11 +39,17 @@ let cardBody = null;
 let cardWater = null;
 let cardRemove = null;
 
+let resetEl = null;
+let resetBody = null;
+let resetConfirm = null;
+let resetCancel = null;
+
 let returnFocus = null;
 let onPlantChosen = null;
 let onCustomChanged = null;
 let onWaterChosen = null;
 let onRemoveChosen = null;
+let onResetConfirmed = null;
 
 let selection = { species: SPECIES[0].id, custom: { ...DEFAULT_CUSTOM } };
 let cardEntry = null;
@@ -84,6 +90,7 @@ export function initUi(handlers = {}) {
     onCustomChanged = handlers.onCustomChange;
     onWaterChosen = handlers.onWater;
     onRemoveChosen = handlers.onRemove;
+    onResetConfirmed = handlers.onReset;
 
     chipEl = document.getElementById('season-chip');
 
@@ -100,6 +107,11 @@ export function initUi(handlers = {}) {
     cardBody = document.getElementById('tree-body');
     cardWater = document.getElementById('tree-water');
     cardRemove = document.getElementById('tree-remove');
+
+    resetEl = document.getElementById('reset-modal');
+    resetBody = document.getElementById('reset-body');
+    resetConfirm = document.getElementById('reset-confirm');
+    resetCancel = document.getElementById('reset-cancel');
 
     buildSpeciesGrid();
     buildSliders();
@@ -120,21 +132,67 @@ export function initUi(handlers = {}) {
         if (onRemoveChosen && entry) onRemoveChosen(entry);
     });
 
-    for (const el of [modalEl, cardEl]) {
+    if (resetCancel) resetCancel.addEventListener('click', () => closeResetModal());
+    if (resetConfirm) resetConfirm.addEventListener('click', () => {
+        closeResetModal();
+        if (onResetConfirmed) onResetConfirmed();
+    });
+
+    for (const el of [modalEl, cardEl, resetEl]) {
         if (!el) continue;
         el.querySelectorAll('[data-close]').forEach((c) =>
             c.addEventListener('click', () => {
-                if (el === modalEl) closePlantModal(); else closeTreeCard();
+                if (el === modalEl) closePlantModal();
+                else if (el === cardEl) closeTreeCard();
+                else closeResetModal();
             }));
     }
 
     document.addEventListener('keydown', (event) => {
         if (event.code !== 'Escape') return;
-        if (isPlantOpen()) closePlantModal();
+        // Innermost first: the reset dialog can open over the tree card.
+        if (isResetOpen()) closeResetModal();
+        else if (isPlantOpen()) closePlantModal();
         else if (isCardOpen()) closeTreeCard();
     });
 
-    return { modalEl, cardEl, chipEl };
+    return { modalEl, cardEl, resetEl, chipEl };
+}
+
+// ---- The reset dialog ------------------------------------------------------
+
+/**
+ * Clearing the garden asks in the page, not in the browser.
+ *
+ * A NATIVE `confirm()` IS THE ONE PIECE OF SOMEBODY ELSE'S UI IN THE SCENE. It
+ * arrives unstyled at the top of the window, says "localhost:8000 says", and
+ * cannot be reached by the same Escape and backdrop handling everything else
+ * here uses. For the one irreversible action in the garden it is also the least
+ * reassuring surface available.
+ */
+export function resetPrompt(trees) {
+    // "all 1 of your trees" is what counting without reading produces.
+    const subject = trees === 1 ? 'your only tree' : `all ${trees} of your trees`;
+    return `This clears ${subject} and starts a new garden. There is no undo.`;
+}
+
+export function openResetModal(trees) {
+    if (!resetEl) return false;
+    if (resetBody) resetBody.textContent = resetPrompt(trees);
+    returnFocus = typeof document !== 'undefined' ? document.activeElement : null;
+    resetEl.classList.remove('hidden');
+    if (resetCancel && resetCancel.focus) resetCancel.focus();
+    return true;
+}
+
+export function closeResetModal() {
+    if (!resetEl) return;
+    resetEl.classList.add('hidden');
+    restoreFocus();
+}
+
+export function isResetOpen() {
+    return !!resetEl && !resetEl.classList.contains('hidden');
 }
 
 // ---- The species grid ------------------------------------------------------
@@ -340,7 +398,7 @@ export function getCardEntry() {
 }
 
 export function anyModalOpen() {
-    return isPlantOpen() || isCardOpen();
+    return isPlantOpen() || isCardOpen() || isResetOpen();
 }
 
 function restoreFocus() {
@@ -372,6 +430,10 @@ export function __resetUi() {
     modalEl = null;
     cardEl = null;
     cardEntry = null;
+    resetEl = null;
+    resetBody = null;
+    resetConfirm = null;
+    resetCancel = null;
     toastEl = null;
     selection = { species: SPECIES[0].id, custom: { ...DEFAULT_CUSTOM } };
 }

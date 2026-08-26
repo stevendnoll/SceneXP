@@ -46,7 +46,7 @@ import {
 import {
     initUi, updateHud, showHud, openPlantModal, isPlantOpen,
     openTreeCard, closeTreeCard, isCardOpen, refreshTreeCard, getCardEntry,
-    anyModalOpen, getPreviewCanvas, toast
+    anyModalOpen, getPreviewCanvas, toast, openResetModal
 } from './ui.min.js';
 import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
 import {
@@ -165,7 +165,8 @@ async function init() {
         onPlant: handlePlant,
         onCustomChange: handleCustomChange,
         onWater: handleWater,
-        onRemove: handleRemove
+        onRemove: handleRemove,
+        onReset: applyReset
     });
     setupEventListeners();
 
@@ -654,11 +655,16 @@ function handleRemove(entry) {
 
 function handleReset() {
     const trees = getTrees().length;
-    if (trees > 0 && typeof window.confirm === 'function') {
-        const ok = window.confirm(
-            `This clears all ${trees} of your trees and starts a new garden. There is no undo.`);
-        if (!ok) return;
-    }
+    // An empty plot has nothing to lose, so it clears without being asked.
+    // Otherwise the scene's own dialog asks, and the answer arrives back
+    // through onReset. If the markup is ever missing, clearing still works
+    // rather than becoming unreachable.
+    if (trees > 0 && openResetModal(trees)) return;
+    applyReset();
+}
+
+function applyReset() {
+    const trees = getTrees().length;
     clearGarden();
     state.elapsedSeconds = startSeconds();
     try {
@@ -720,7 +726,15 @@ function rebuildPreview() {
     if (!previewResolved) return;
     // A fixed seed, so moving a slider shows the effect of the slider rather
     // than a different tree. The planted tree gets its own seed.
-    previewTree = createTree(previewResolved, 0x5EED, { mobile: true });
+    //
+    // THE BUDGET FOLLOWS THE DEVICE, NOT THE THUMBNAIL. Hardcoding the mobile
+    // cap here meant a desktop visitor was shown a tree the desktop would never
+    // plant: the cap truncates the LAST-BORN segments, which are the outer
+    // canopy, so the Coast Redwood lost 728 segments down to 480 and previewed
+    // as a spindly pale thing rather than as the giant its own description
+    // promises. The small species were all under the cap, which is why only the
+    // large ones looked wrong.
+    previewTree = createTree(previewResolved, 0x5EED, { mobile: state.mobile });
     previewScene.add(previewTree.group);
 
     const h = previewResolved.matureHeight;

@@ -112,6 +112,18 @@ function pathAt(p, t, out) {
     return out;
 }
 
+/** Give a flock per-instance colours from a palette, picked by each path's own
+ *  seeded tint so the assignment is stable across visits. */
+function tintFlyers(group, palette) {
+    if (!group || !palette || !palette.length) return;
+    const colour = new THREE.Color();
+    for (let i = 0; i < group.count; i++) {
+        colour.setHex(palette[Math.floor(group.paths[i].tint * palette.length) % palette.length]);
+        group.mesh.setColorAt(i, colour);
+    }
+    if (group.mesh.instanceColor) group.mesh.instanceColor.needsUpdate = true;
+}
+
 function buildFlyer(count, geometry, material, box, seed) {
     const random = makeRandom(seed);
     const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, count));
@@ -132,14 +144,21 @@ export function initWildlife(scene, config = GARDEN_CONFIG, options = {}) {
     // ---- Butterflies -------------------------------------------------------
     // A crossed pair of quads so a wing shows from any angle, flown through
     // the near foreground where 30 cm still covers a dozen pixels.
+    const wingMask = butterflyTexture();
     butterflies = buildFlyer(
         mobile ? W.butterflies.countMobile : W.butterflies.count,
-        wingGeometry(),
+        butterflyGeometry(),
         new THREE.MeshLambertMaterial({
-            color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 1
+            color: 0xffffff, map: wingMask, alphaTest: 0.45,
+            side: THREE.DoubleSide, transparent: true, opacity: 1
         }),
         W.butterflies.box, seed ^ 0xB47);
     butterflies.mesh.name = 'butterflies';
+    if (wingMask) disposables.push(wingMask);
+    // NOT ALL ONE COLOUR. A dozen identical white flyers read as one repeated
+    // prop; a mixed brood reads as insects. The tint already on each path is
+    // reused, so nothing new has to be seeded.
+    tintFlyers(butterflies, W.butterflies.palette);
     scene.add(butterflies.mesh);
 
     // ---- Fireflies ---------------------------------------------------------
@@ -191,6 +210,77 @@ function wingGeometry() {
     geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
     geo.computeVertexNormals();
     return geo;
+}
+
+/**
+ * A butterfly: the same dihedral pair, but as quads carrying UVs.
+ *
+ * A BARE TRIANGLE IS A PAPER DART, NOT A BUTTERFLY. Against the lawn the
+ * untextured version read as scattered litter in the QA screenshots, which is
+ * the one thing a garden must never look like. The silhouette has to come from
+ * an alpha mask, because at a 30 cm wingspan there is no room to spend
+ * triangles on the shape of a wing.
+ *
+ * The spine is at u = 0.5 and each wing runs out to its own edge of the
+ * texture, so one drawn butterfly maps across both halves.
+ */
+function butterflyGeometry() {
+    const geo = new THREE.BufferGeometry();
+    const position = new Float32Array([
+        // Left wing, hinged at the spine.
+        0, 0, -0.55, 0, 0, 0.55, -1, 0.25, 0.55, -1, 0.25, -0.55,
+        // Right wing.
+        0, 0, -0.55, 0, 0, 0.55, 1, 0.25, 0.55, 1, 0.25, -0.55
+    ]);
+    const uv = new Float32Array([
+        0.5, 0, 0.5, 1, 0, 1, 0, 0,
+        0.5, 0, 0.5, 1, 1, 1, 1, 0
+    ]);
+    const index = new Uint16Array([0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6]);
+    geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setIndex(new THREE.BufferAttribute(index, 1));
+    geo.computeVertexNormals();
+    return geo;
+}
+
+/**
+ * The wing mask, drawn once. White, so an instance colour can tint it.
+ *
+ * Four rounded shapes and a body: forewing and hindwing either side of a spine
+ * at the middle of the canvas.
+ */
+function butterflyTexture(size = 64) {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, size, size);
+    const mid = size / 2;
+
+    ctx.fillStyle = 'rgba(255,255,255,1)';
+    for (const side of [-1, 1]) {
+        // Forewing: the long one, swept back toward the tail.
+        ctx.beginPath();
+        ctx.ellipse(mid + side * size * 0.27, size * 0.34,
+            size * 0.24, size * 0.17, side * -0.42, 0, Math.PI * 2);
+        ctx.fill();
+        // Hindwing: rounder and smaller.
+        ctx.beginPath();
+        ctx.ellipse(mid + side * size * 0.20, size * 0.68,
+            size * 0.17, size * 0.15, side * 0.30, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    // The body, which is what stops the two wings reading as two blobs.
+    ctx.beginPath();
+    ctx.ellipse(mid, size * 0.5, size * 0.035, size * 0.30, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
 }
 
 const _pos = { set: () => { } };
