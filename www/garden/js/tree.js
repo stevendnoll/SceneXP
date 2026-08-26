@@ -569,8 +569,15 @@ export function createTree(resolved, seed, options = {}) {
 
     const leafGeo = buildLeafCard();
     const count = leaves.length;
+    // The mask carries the leaf shape. Note that `wrapLeafFragment` writes only
+    // `diffuseColor.rgb` and hooks `#include <map_fragment>`, so the texture's
+    // ALPHA passes through it untouched and reaches `alphatest_fragment`. That
+    // is why this needs no shader change: the seam was always there.
+    const leafTexture = leafClusterTexture();
     const leafMaterial = new THREE.MeshStandardMaterial({
         color: 0xffffff,
+        map: leafTexture,
+        alphaTest: T.leafAlphaTest,
         roughness: 0.85,
         metalness: 0,
         side: THREE.DoubleSide
@@ -581,8 +588,15 @@ export function createTree(resolved, seed, options = {}) {
     const leafMesh = new THREE.InstancedMesh(leafGeo, leafMaterial, Math.max(1, count));
     leafMesh.castShadow = true;
     leafMesh.receiveShadow = true;
+    // THE DEPTH MATERIAL NEEDS THE SAME MASK AND THRESHOLD. Without them the
+    // leaves stop being rectangles while their shadows carry on being
+    // rectangles, which is more obviously wrong than the original bug.
     leafMesh.customDepthMaterial = patchVertex(
-        new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }),
+        new THREE.MeshDepthMaterial({
+            depthPacking: THREE.RGBADepthPacking,
+            map: leafTexture,
+            alphaTest: T.leafAlphaTest
+        }),
         leafUniforms, LEAF_HEAD, LEAF_BODY, 'garden-leaf-depth'
     );
 
@@ -601,7 +615,11 @@ export function createTree(resolved, seed, options = {}) {
         p.set(leaf.x, leaf.y, leaf.z);
         e.set(leaf.pitch, leaf.yaw, 0);
         q.setFromEuler(e);
-        s.set(leaf.size, leaf.size, leaf.size);
+        // The mask paints roughly the middle half of the quad, so a card sized
+        // as before would read SMALLER than the bare rectangle it replaces.
+        // See the note on tree.leafCardScale.
+        const card = leaf.size * T.leafCardScale;
+        s.set(card, card, card);
         m.compose(p, q, s);
         leafMesh.setMatrixAt(i, m);
         birth[i] = leaf.birth;
@@ -636,8 +654,16 @@ export function createTree(resolved, seed, options = {}) {
     };
 }
 
-/** A crossed pair of quads, so a leaf cluster has volume from any angle
- *  without needing a texture or an alpha test. */
+/**
+ * A crossed pair of quads, so a leaf cluster has volume from any angle.
+ *
+ * IT CARRIES UVs BECAUSE THE SHAPE COMES FROM AN ALPHA MASK. This used to be a
+ * bare quad, on the reasoning that a clustered card needs no texture, and at
+ * the composed camera the QA screenshots showed the result plainly: a mature
+ * canopy of hard-edged rectangles with sky straight through it. A leaf card is
+ * about five pixels across from 23 m, and at five pixels the only thing that
+ * separates foliage from confetti is its outline.
+ */
 function buildLeafCard() {
     const geo = new THREE.BufferGeometry();
     const h = 0.5;
@@ -649,11 +675,59 @@ function buildLeafCard() {
         0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
         1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0
     ]);
+    const uv = new Float32Array([
+        0, 0, 1, 0, 1, 1, 0, 1,
+        0, 0, 1, 0, 1, 1, 0, 1
+    ]);
     const index = new Uint16Array([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]);
     geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     return geo;
+}
+
+/**
+ * The leaf mask: a clump of leaves drawn once into a canvas.
+ *
+ * ONE TEXTURE FOR THE WHOLE SCENE, cached and never disposed. Every planted
+ * tree and every tier of the wood outside the wall shares it, so a canopy
+ * cannot disagree with itself about what a leaf clump looks like, and sixteen
+ * trees cost one 64 by 64 upload rather than sixteen. Callers must NOT dispose
+ * it: it outlives any one tree.
+ *
+ * White, so the season's colour can tint it, and with soft alpha so the same
+ * `alphaTest` erosion the far wood uses can strip it for winter. There is no
+ * trunk in it, unlike the far forest's canopy silhouette, because these sit on
+ * real branches that are already drawn.
+ */
+let leafMask = null;
+export function leafClusterTexture(size = 64) {
+    if (leafMask) return leafMask;
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const random = makeRandom(0x1EAF5);
+
+    ctx.clearRect(0, 0, size, size);
+    const mid = size / 2;
+    for (let i = 0; i < 9; i++) {
+        const a = random() * Math.PI * 2;
+        const rr = Math.sqrt(random()) * 0.30;
+        const r = size * (0.11 + random() * 0.10);
+        ctx.fillStyle = `rgba(255,255,255,${0.62 + random() * 0.30})`;
+        ctx.beginPath();
+        ctx.ellipse(mid + Math.cos(a) * rr * size, mid + Math.sin(a) * rr * size,
+            r, r * (0.62 + random() * 0.4), a, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    leafMask = new THREE.CanvasTexture(canvas);
+    leafMask.colorSpace = THREE.SRGBColorSpace;
+    return leafMask;
 }
 
 /** Bark colour: snow on the upward faces, and a grey cast as health goes. */

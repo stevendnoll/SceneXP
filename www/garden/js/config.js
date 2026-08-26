@@ -219,6 +219,23 @@ export const GARDEN_CONFIG = deepFreeze({
         // Trunk radius as a fraction of the tree's height, before the trunk
         // slider. A ten metre tree with a 28 cm radius trunk is about right.
         trunkRadiusRatio: 0.028,
+        // ---- The leaf card --------------------------------------------------
+        // A leaf card is a crossed quad wearing an alpha mask, and these two
+        // numbers are what make it read as foliage rather than as confetti.
+        //
+        // MEASURED: at the composed camera's 23.09 m a 0.16 m card covers about
+        // five pixels. Five pixels of hard-edged rectangle is the "canopy of
+        // cards" the QA screenshots caught. The mask paints roughly the middle
+        // half of the quad, so keeping the old size would have made the leaves
+        // smaller still. Doubling puts a card near eleven pixels, which is wide
+        // enough for neighbours to overlap into a canopy mass instead of
+        // reading as separate dots.
+        leafCardScale: 2.0,
+        // Against mask alpha that runs 0.62 to 0.92 in a single blob. Low
+        // enough that one blob survives on its own, high enough that the soft
+        // edges do not leave a halo.
+        leafAlphaTest: 0.45,
+
         // How many levels of branching carry leaves, counted in from the tips.
         //
         // THIS NUMBER DECIDES WHEN A PLANTED TREE FIRST HAS ANY LEAVES AT ALL,

@@ -39,7 +39,7 @@ import { GARDEN_CONFIG } from './config.min.js';
 import { makeRandom, resolveSpecies, SPECIES, speciesById } from './species.min.js';
 import { phenologyAt, seasonAt, clamp01 } from './clock.min.js';
 import { mixColor, packColor, unpackColor } from './sky.min.js';
-import { buildSkeleton, bakeGeometry, buildLeaves } from './tree.min.js';
+import { buildSkeleton, bakeGeometry, buildLeaves, leafClusterTexture } from './tree.min.js';
 import { worldHeightAt } from './terrain.min.js';
 
 // ---- The shape of the clearing (pure) --------------------------------------
@@ -249,41 +249,6 @@ function buildCanopyTexture(size, seed, evergreen) {
         ctx.fillStyle = `rgba(255,255,255,${0.42 + random() * 0.26})`;
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    return texture;
-}
-
-/**
- * A clump of leaves, drawn once into a canvas.
- *
- * Same trick as the canopy silhouette and for the same reason: white so the
- * season can tint it, and soft alpha so `alphaTest` erodes it away for winter.
- * Unlike the canopy texture there is no trunk in it, because these sit ON a
- * real trunk that is already drawn.
- */
-function buildLeafClusterTexture(size, seed) {
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    const random = makeRandom(seed);
-
-    ctx.clearRect(0, 0, size, size);
-    const mid = size / 2;
-    for (let i = 0; i < 9; i++) {
-        const a = random() * Math.PI * 2;
-        const rr = Math.sqrt(random()) * 0.30;
-        const cx = mid + Math.cos(a) * rr * size;
-        const cy = mid + Math.sin(a) * rr * size;
-        const r = size * (0.11 + random() * 0.10);
-        ctx.fillStyle = `rgba(255,255,255,${0.48 + random() * 0.30})`;
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, r, r * (0.62 + random() * 0.4), a, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -602,7 +567,11 @@ function buildNearTreeline(scene, config, options) {
         // the leaves cannot drift from the branches they sit on.
         let leafMesh = null;
         if (entry.leaves) {
-            const texture = buildLeafClusterTexture(64, config.world.seed ^ (0x1EAF + i));
+            // The SAME mask the planted trees wear, from tree.js. Two canopy
+            // textures would be two answers to what a leaf clump looks like,
+            // and the join between the plot and the wood is exactly where a
+            // disagreement would show.
+            const texture = leafClusterTexture();
             const leafMaterial = new THREE.MeshLambertMaterial({
                 color: 0xffffff,
                 map: texture,
@@ -619,8 +588,9 @@ function buildNearTreeline(scene, config, options) {
             leafMesh.instanceMatrix.array.set(mesh.instanceMatrix.array);
             leafMesh.instanceMatrix.needsUpdate = true;
             leafMesh.count = mine.length;
+            // The geometry and material are ours; the mask is shared and
+            // outlives us, so it is deliberately not in this list.
             disposables.push(entry.leaves.geometry, leafMaterial);
-            if (texture) disposables.push(texture);
             scene.add(leafMesh);
         }
 

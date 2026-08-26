@@ -202,3 +202,59 @@ test('injected shader bodies target chunks that three actually has', () => {
             .toBe(`${target} present in three: true`);
     }
 });
+
+// ---- The leaf mask ---------------------------------------------------------
+//
+// A leaf card is about five pixels across at the composed camera, and at five
+// pixels the outline is the only thing separating foliage from confetti. The
+// cards shipped as bare quads with no UVs and no map, and the QA screenshots of
+// the first mature tree showed exactly that: a canopy of hard-edged rectangles
+// with sky through it.
+//
+// These are text assertions for the same reason the rest of this file is: under
+// the test stub a material is a proxy and a texture is a number, so the only
+// honest place to check that a map was actually asked for is the source.
+
+test('a leaf card carries the UVs its mask needs', () => {
+    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const card = tree.slice(tree.indexOf('function buildLeafCard'));
+    const body = card.slice(0, card.indexOf('\n}'));
+    expect(body).toMatch(/setAttribute\(\s*'uv'/);
+});
+
+test('both leaf materials wear the mask, or the shadows outlive the shape', () => {
+    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    // Anchored past the leaf texture, because the BARK material and the BARK
+    // depth material are both declared first and rightly carry no mask. An
+    // unanchored indexOf finds those and passes while the leaves stay bare,
+    // which it duly did on the first run of this test.
+    const leafSide = tree.slice(tree.indexOf('const leafTexture'));
+    // The lit material.
+    const lit = leafSide.slice(leafSide.indexOf('new THREE.MeshStandardMaterial'));
+    expect(lit.slice(0, lit.indexOf('});'))).toMatch(/map:\s*leafTexture[\s\S]*alphaTest:/);
+    // And the depth material, which draws the shadow. A mask on one and not the
+    // other is more obviously wrong than the bug it replaces.
+    const depth = leafSide.slice(leafSide.indexOf('new THREE.MeshDepthMaterial'));
+    expect(depth.slice(0, depth.indexOf('}),'))).toMatch(/map:\s*leafTexture[\s\S]*alphaTest:/);
+});
+
+test('the alpha survives the fragment wrap that runs before the threshold', () => {
+    // THE WHOLE FIX RESTS ON THIS. `wrapLeafFragment` hooks map_fragment and
+    // must write only diffuseColor.rgb: assigning the whole vec4 would drop the
+    // mask's alpha before alphatest_fragment ever sees it, and the leaves would
+    // silently go back to being rectangles with no error anywhere.
+    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const wrap = tree.slice(tree.indexOf('function wrapLeafFragment'));
+    const body = wrap.slice(0, wrap.indexOf('\n}'));
+    expect(body).toContain('#include <map_fragment>');
+    expect(body).toMatch(/diffuseColor\.rgb\s*=/);
+    expect(body).not.toMatch(/diffuseColor\s*=/);
+});
+
+test('the plot and the wood share one leaf mask', () => {
+    // Two canopy textures would be two answers to what a leaf clump looks like,
+    // and the join between the plot and the treeline is where that would show.
+    const forest = readFileSync(join(DIR, 'forest.js'), 'utf8');
+    expect(forest).toMatch(/import\s*\{[^}]*leafClusterTexture[^}]*\}\s*from\s*'\.\/tree\.min\.js'/);
+    expect(forest).not.toMatch(/function buildLeafClusterTexture/);
+});
