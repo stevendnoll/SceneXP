@@ -38,8 +38,7 @@ import { createWeather, stepWeather, weatherWords } from './weather.min.js';
 import { initPrecipitation, updatePrecipitation, disposePrecipitation } from './precip.min.js';
 import { resolveSpecies } from './species.min.js';
 import {
-    dollyView, tiltedLookY, applyDollyDelta, dollyLimits, getDolly, getTilt,
-    resetView, initViewControls, updateViewControls, disposeViewControls
+    dollyView, applyDollyDelta, dollyLimits, getDolly, resetView
 } from './view.min.js';
 import { createTree, updateTree, disposeTree } from './tree.min.js';
 import {
@@ -325,7 +324,7 @@ function applyView() {
     const view = dollyView(getDolly(), composedView());
     camera.position.set(cam.position.x, view.y, view.z);
     viewTarget.x = cam.lookAt.x;
-    viewTarget.y = tiltedLookY(view, getTilt());
+    viewTarget.y = view.lookY;
     viewTarget.z = view.lookZ;
     camera.lookAt(viewTarget.x, viewTarget.y, viewTarget.z);
 }
@@ -540,15 +539,14 @@ function setupEventListeners() {
             onDelta: applyDollyDelta,
             limits: dollyLimits
         },
+        // The look controls together at the bottom centre, the lens stacked in
+        // its own corner. Both are the shared part's own buttons, so W and S
+        // light the tilt pair and there is exactly ONE tilt axis.
+        tiltButtons: true,
+        zoomContainerClass: 'garden-zoom',
         alwaysOn: true,
         extraClass: 'always-on',
         surface: canvas,
-        onFirstUse: (kind) => track(`view-${kind}`),
-        signal
-    });
-
-    // AFTER the part, because this reads the row the part builds.
-    initViewControls({
         onFirstUse: (kind) => track(`view-${kind}`),
         signal
     });
@@ -930,9 +928,8 @@ function animate() {
         if (entry) refreshTreeCard(ageYears(entry.record, state.elapsedSeconds));
     }
 
-    // The camera, in order: our own dolly and tilt first, then the shared
-    // part's yaw and tilt refining the aim on top of it.
-    updateViewControls(delta);
+    // The camera, in order: our own dolly first, then the shared part's yaw
+    // and tilt refining the aim on top of it.
     applyView();
     updatePortraitControls(delta);
 
@@ -964,7 +961,6 @@ export function getWeather() { return weather; }
 
 function cleanup() {
     stop();
-    disposeViewControls();
     disposePrecipitation();
     disposeForest();
     disposeVista();

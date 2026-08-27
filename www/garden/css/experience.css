@@ -583,21 +583,14 @@ body {
 }
 
 /* ---- The view controls (M9-7) ---------------------------------------------
-   The shared pan part builds one row of four at the bottom centre:
+   The shared part builds both groups, from `tiltButtons` and
+   `zoomContainerClass`: one four-button look cluster at the bottom centre,
 
-       [pan left] [zoom out] [zoom in] [pan right]
+       [pan left] [look up] [look down] [pan right]
 
-   The garden wants the LOOK controls together and the zoom somewhere a thumb
-   can still reach, so view.js reparents the zoom pair into .garden-zoom and
-   drops its own tilt buttons into the gap. The result is one four-button look
-   cluster at the bottom centre and a vertical zoom stack at the bottom right,
-   which is the idiom every map application already taught the visitor.
-
-   THE ZOOM PAIR IS MOVED, NOT REBUILT. Listeners travel with a node, so the
-   pinch gesture, the arrow keys and the hold behaviour all still belong to the
-   shared part. Dropping `zoom` from its options instead would have silently
-   killed the pinch, which is the gesture that matters most on the one device
-   that has it. */
+   and the zoom pair stacked here at the bottom right, plus on top, which is
+   the idiom every map application already taught the visitor. Both stay inside
+   thumb reach, which the top corners of a phone are not. */
 .garden-zoom {
     position: fixed;
     right: calc(20px + env(safe-area-inset-right, 0px));
@@ -609,10 +602,10 @@ body {
     pointer-events: none;
 }
 
-/* The house chrome is display:none until JS adds .visible, and this container
-   is built by JS at a point where the reveal has already run, so it carries
-   .visible from birth. Without the rule it would inherit .ui-float's hidden
-   state and the zoom would simply not be there. */
+/* The house chrome is display:none until JS adds .visible. The part builds
+   this container before main.js's reveal sweep runs, so the sweep finds it and
+   both groups appear together. Without the rule it would inherit .ui-float's
+   hidden state and the zoom would simply not be there. */
 .garden-zoom.visible {
     display: flex;
 }

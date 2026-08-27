@@ -20,6 +20,8 @@
  * ray reports finding, which is main.js's own input.
  */
 import { jest } from '@jest/globals';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 
@@ -407,23 +409,48 @@ describe('a portrait phone', () => {
     expect(reported().filter((action) => action === 'portrait-pan')).toHaveLength(1);
   });
 
-  test('a rotation into portrait brings the view controls to life', async () => {
+  test('THE VIEW CONTROLS ARE ON IN LANDSCAPE TOO, as in jamar', async () => {
+    // This test used to assert the opposite, and the opposite was the bug QA
+    // reported: gavin was the only one of the four view-only scenes that left
+    // `alwaysOn` off, so the shared CSS hid the row at every landscape aspect
+    // and a desktop visitor had no on-screen controls at all. The keyboard
+    // and, since the shared part learned about the mouse, a drag both worked,
+    // with nothing on screen to say so.
     await bootGavin();                          // starts landscape
 
-    // Landscape needs no pan row: the composed frame already fits, and the
-    // keyboard controls stay inert.
     fire(dom.windowStub, 'keydown', { code: 'KeyA' });
-    expect(reported()).not.toContain('portrait-pan');
+    expect(reported()).toContain('portrait-pan');
 
+    // And it survives a rotation, which is what proves the resize reached the
+    // controls rather than only resizing the renderer.
+    fire(dom.windowStub, 'keyup', { code: 'KeyA' });
     dom.windowStub.innerWidth = 390;
     dom.windowStub.innerHeight = 844;
     fire(dom.windowStub, 'resize');
+    fire(dom.windowStub, 'keydown', { code: 'KeyD' });
+    expect(reported().filter((a) => a === 'portrait-pan')).toHaveLength(1);
+  });
 
-    // The same key now pans, which is what proves the resize reached the
-    // portrait controls rather than only resizing the renderer.
-    fire(dom.windowStub, 'keyup', { code: 'KeyA' });
-    fire(dom.windowStub, 'keydown', { code: 'KeyA' });
-    expect(reported()).toContain('portrait-pan');
+  test('gavin asks for the row on the same terms jamar and sunnyvalejenn do', async () => {
+    // The three view-only scenes should not drift apart on this again. The
+    // pair that matters is `alwaysOn` plus the `always-on` class: the flag
+    // makes the inputs live at every aspect and the class is what the shared
+    // CSS keys the row's visibility off, so ONE WITHOUT THE OTHER is a scene
+    // that answers the keyboard and shows no buttons, which is the state
+    // gavin was found in.
+    const options = {};
+    for (const scene of ['gavin', 'jamar', 'sunnyvalejenn']) {
+      const src = readFileSync(join(process.cwd(), 'www', scene, 'js', 'main.js'), 'utf8');
+      const call = src.match(/initPortraitControls\(\{[\s\S]*?\n {4}\}\)/);
+      expect(call).not.toBeNull();
+      options[scene] = call[0];
+      expect(options[scene]).toMatch(/alwaysOn:\s*true/);
+      expect(options[scene]).toMatch(/extraClass:\s*'always-on'/);
+      // The zoom anchor has to follow the orientation, or a landscape zoom
+      // hangs off the portrait FOV and jumps the moment it is touched.
+      expect(options[scene]).toMatch(/landscapeFov:/);
+      expect(options[scene]).toMatch(/surface:\s*canvas/);
+    }
   });
 });
 

@@ -778,3 +778,333 @@ describe('zoom delegation', () => {
     expect(d.onDelta).not.toHaveBeenCalled(); // the dive was left alone
   });
 });
+
+// ---- Mouse drag ------------------------------------------------------------
+//
+// The part used to return early on `pointerType === 'mouse'`, so on every
+// machine without a touchscreen the on-canvas drag did nothing at all. Four
+// experiences shipped with legends telling desktop visitors to drag.
+
+const mouse = (surface, type, id, x, y, extra = {}) =>
+  surface.fire(type, {
+    pointerId: id, pointerType: 'mouse', button: 0, clientX: x, clientY: y,
+    cancelable: true, preventDefault() { this.defaultPrevented = true; }, ...extra
+  });
+
+describe('mouse drag', () => {
+  test('A MOUSE DRAG LOOKS AROUND, on the same axes a swipe uses', async () => {
+    const surface = makeSurface();
+    const { m } = await setup({ surface, zoom: ZOOM, pan: { ...PAN, maxTilt: 0.4 } });
+
+    mouse(surface, 'pointerdown', 1, 200, 400);
+    // The tap slop is spent first, so a wobbly click never nudges the view.
+    mouse(surface, 'pointermove', 1, 203, 402);
+    expect(m.getPanAngle()).toBe(0);
+    expect(m.getTiltAngle()).toBe(0);
+
+    // Past the slop it drags, scene-follows-pointer: dragging left reveals
+    // what was cropped off the right, so the camera turns the other way.
+    mouse(surface, 'pointermove', 1, 260, 400);
+    mouse(surface, 'pointermove', 1, 320, 400);
+    expect(m.getPanAngle()).toBeLessThan(0);
+
+    // And vertical drags tilt, the axis the keys share.
+    const yawOnly = m.getPanAngle();
+    mouse(surface, 'pointermove', 1, 320, 300);
+    expect(m.getTiltAngle()).toBeLessThan(0);
+    expect(m.getPanAngle()).toBe(yawOnly);
+    mouse(surface, 'pointerup', 1, 320, 300);
+  });
+
+  test('a mouse drag scales the same way a finger drag does', async () => {
+    // Same pixels, same result, or the two input paths have drifted and a
+    // desktop visitor gets a different scene from a phone one.
+    const a = makeSurface();
+    const withMouse = await setup({ surface: a, zoom: ZOOM, pan: { ...PAN, maxTilt: 0.4 } });
+    mouse(a, 'pointerdown', 1, 200, 400);
+    mouse(a, 'pointermove', 1, 220, 400);
+    mouse(a, 'pointermove', 1, 300, 340);
+
+    const b = makeSurface();
+    const withTouch = await setup({ surface: b, zoom: ZOOM, pan: { ...PAN, maxTilt: 0.4 } });
+    touch(b, 'pointerdown', 1, 200, 400);
+    touch(b, 'pointermove', 1, 220, 400);
+    touch(b, 'pointermove', 1, 300, 340);
+
+    expect(withMouse.m.getPanAngle()).toBeCloseTo(withTouch.m.getPanAngle(), 12);
+    expect(withMouse.m.getTiltAngle()).toBeCloseTo(withTouch.m.getTiltAngle(), 12);
+  });
+
+  test('a plain click is not a drag, and is never claimed', async () => {
+    // The experiences ask gestureClaimedTap() before opening a prop or
+    // planting a tree. If a click claimed itself, nothing would ever open.
+    const surface = makeSurface();
+    const { m } = await setup({ surface, zoom: ZOOM });
+    mouse(surface, 'pointerdown', 1, 200, 400);
+    mouse(surface, 'pointermove', 1, 202, 401);   // inside the slop
+    mouse(surface, 'pointerup', 1, 202, 401);
+    expect(m.gestureClaimedTap()).toBe(false);
+    expect(m.getPanAngle()).toBe(0);
+
+    // A real drag does claim it, so the release does not also plant a tree.
+    mouse(surface, 'pointerdown', 2, 200, 400);
+    mouse(surface, 'pointermove', 2, 260, 400);
+    mouse(surface, 'pointermove', 2, 300, 400);
+    mouse(surface, 'pointerup', 2, 300, 400);
+    expect(m.gestureClaimedTap()).toBe(true);
+  });
+
+  test('only the primary button drags, and it stops the text selection', async () => {
+    const surface = makeSurface();
+    const { m } = await setup({ surface, zoom: ZOOM });
+
+    // A right-button drag belongs to the browser.
+    mouse(surface, 'pointerdown', 1, 200, 400, { button: 2 });
+    mouse(surface, 'pointermove', 1, 300, 400);
+    expect(m.getPanAngle()).toBe(0);
+
+    // The primary press cancels its default, or dragging across a canvas
+    // starts a selection in the page and the cursor turns into an I-beam.
+    const event = {
+      pointerId: 2, pointerType: 'mouse', button: 0, clientX: 200, clientY: 400,
+      cancelable: true, defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; }
+    };
+    surface.fire('pointerdown', event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+});
+
+// ---- Wheel zoom ------------------------------------------------------------
+
+describe('wheel zoom', () => {
+  const wheel = (surface, deltaY, extra = {}) => {
+    const event = {
+      deltaY, deltaMode: 0, cancelable: true, defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; }, ...extra
+    };
+    surface.fire('wheel', event);
+    return event;
+  };
+
+  test('SCROLL UP ZOOMS IN, scroll down zooms out', async () => {
+    const surface = makeSurface();
+    const { m } = await setup({ surface, zoom: ZOOM });
+    wheel(surface, -100);
+    // Zooming in narrows the FOV, so the offset goes negative.
+    expect(m.getZoomOffset()).toBeLessThan(0);
+    const inAt = m.getZoomOffset();
+    wheel(surface, 100);
+    expect(m.getZoomOffset()).toBeGreaterThan(inAt);
+  });
+
+  test('the page must not scroll out from under the scene', async () => {
+    const surface = makeSurface();
+    await setup({ surface, zoom: ZOOM });
+    expect(wheel(surface, -100).defaultPrevented).toBe(true);
+  });
+
+  test('deltaMode is honoured, or a line-mode wheel does nothing', async () => {
+    // Firefox reports LINES on some platforms, where a raw 3 taken as pixels
+    // is three hundredths of a notch: a wheel that appears not to work.
+    const lines = makeSurface();
+    const byLine = await setup({ surface: lines, zoom: ZOOM });
+    wheel(lines, -3, { deltaMode: 1 });
+
+    const pixels = makeSurface();
+    const byPixel = await setup({ surface: pixels, zoom: ZOOM });
+    wheel(pixels, -48, { deltaMode: 0 });   // 3 lines at 16 px each
+
+    expect(byLine.m.getZoomOffset()).toBeCloseTo(byPixel.m.getZoomOffset(), 12);
+    expect(byLine.m.getZoomOffset()).toBeLessThan(0);
+  });
+
+  test('page-mode deltas are honoured too', async () => {
+    // deltaMode 2 is rare, but it is documented as handled and an undocumented
+    // "handled" is how a wheel comes to do nothing on one browser.
+    const pages = makeSurface();
+    const byPage = await setup({ surface: pages, zoom: ZOOM }, { width: 400, height: 800 });
+    wheel(pages, -1, { deltaMode: 2 });
+    expect(byPage.m.getZoomOffset()).toBeLessThan(0);
+  });
+
+  test('one fling cannot cross the whole travel', async () => {
+    // A trackpad fling can report thousands of pixels in a single event, and
+    // one frame that crosses the range reads as a teleport rather than a zoom.
+    const surface = makeSurface();
+    const { m } = await setup({ surface, zoom: ZOOM });
+    wheel(surface, -100);
+    const oneNotch = -m.getZoomOffset();
+    const huge = makeSurface();
+    const flung = await setup({ surface: huge, zoom: ZOOM });
+    wheel(huge, -40000);
+    expect(-flung.m.getZoomOffset()).toBeLessThan(oneNotch * 4);
+  });
+
+  test('the wheel reaches a zoom delegate in the units a pinch speaks', async () => {
+    // One path for every zoom input, so a delegate needs no wheel-specific
+    // code and cannot disagree with the pinch about which way is in.
+    const surface = makeSurface();
+    const deltas = [];
+    await setup({
+      surface,
+      zoom: { ...ZOOM, wheel: 0.25 },
+      zoomDelegate: { onDelta: (d) => deltas.push(d), limits: () => ({ atIn: false, atOut: false }) }
+    });
+    wheel(surface, -100);
+    expect(deltas).toHaveLength(1);
+    expect(deltas[0]).toBeCloseTo(0.25, 9);
+    wheel(surface, 200);
+    expect(deltas[1]).toBeCloseTo(-0.5, 9);
+  });
+
+  test('a scene with no zoom ignores the wheel entirely', async () => {
+    const surface = makeSurface();
+    const { m } = await setup({ surface });     // no zoom options
+    expect(wheel(surface, -100).defaultPrevented).toBe(false);
+    expect(m.getZoomOffset()).toBe(0);
+  });
+});
+
+// ---- The tilt buttons ------------------------------------------------------
+
+describe('tilt buttons', () => {
+  test('a scene that does not ask for them gets the row it always had', async () => {
+    // Four experiences were shipped against this layout before the option
+    // existed, and none of them may grow a button because the garden wanted
+    // two.
+    const { container } = await setup({ zoom: ZOOM });
+    expect(container.children.map((b) => b.attrs['aria-label']))
+      .toEqual(['Pan left', 'Zoom out', 'Zoom in', 'Pan right']);
+  });
+
+  test('the pair sits between the arrows, so the look controls read together', async () => {
+    const { container } = await setup({ zoom: ZOOM, tiltButtons: true, pan: { ...PAN, maxTilt: 0.4 } });
+    expect(container.children.map((b) => b.attrs['aria-label']))
+      .toEqual(['Pan left', 'Look up', 'Look down', 'Zoom out', 'Zoom in', 'Pan right']);
+  });
+
+  test('a scene with the tilt axis switched off gets no tilt buttons', async () => {
+    // A button that cannot move anything is worse than no button.
+    const { container } = await setup({ zoom: ZOOM, tiltButtons: true, pan: { ...PAN, maxTilt: 0 } });
+    expect(container.children.map((b) => b.attrs['aria-label']))
+      .toEqual(['Pan left', 'Zoom out', 'Zoom in', 'Pan right']);
+  });
+
+  test('W AND S LIGHT THE BUTTONS THEY MOVE, and let go of them', async () => {
+    // The reported symptom: A and D highlighted their arrows and W and S
+    // moved the view without highlighting anything, because the tilt holds
+    // resolved their button to null.
+    const { m, buttons } = await setup({ zoom: ZOOM, tiltButtons: true, pan: { ...PAN, maxTilt: 0.4 } });
+    const up = buttons['Look up'];
+    const down = buttons['Look down'];
+
+    globalThis.window.fire('keydown', { code: 'KeyW', repeat: false });
+    expect(up.classList.contains('held')).toBe(true);
+    m.updatePortraitControls(0.2);
+    expect(m.getTiltAngle()).toBeGreaterThan(0);
+
+    // Releasing has to clear the class as well as the hold. KEY_HOLDS has no
+    // entry for W, so the keyup path returns before it reaches the generic
+    // clear, and the button would stay lit forever.
+    globalThis.window.fire('keyup', { code: 'KeyW' });
+    expect(up.classList.contains('held')).toBe(false);
+    const held = m.getTiltAngle();
+    m.updatePortraitControls(0.2);
+    expect(m.getTiltAngle()).toBe(held);
+
+    globalThis.window.fire('keydown', { code: 'KeyS', repeat: false });
+    expect(down.classList.contains('held')).toBe(true);
+    globalThis.window.fire('keyup', { code: 'KeyS' });
+    expect(down.classList.contains('held')).toBe(false);
+
+    // And Shift with the arrows reaches the same pair.
+    globalThis.window.fire('keydown', { code: 'ArrowUp', shiftKey: true, repeat: false });
+    expect(up.classList.contains('held')).toBe(true);
+    globalThis.window.fire('keyup', { code: 'ArrowUp' });
+    expect(up.classList.contains('held')).toBe(false);
+  });
+
+  test('pressing a tilt button tilts, and it dims at its own clamp', async () => {
+    const maxTilt = 0.4;
+    const { m, buttons } = await setup({ zoom: ZOOM, tiltButtons: true, pan: { ...PAN, maxTilt } });
+    const up = buttons['Look up'];
+
+    press(up);
+    expect(up.classList.contains('held')).toBe(true);
+    m.updatePortraitControls(0.5);
+    expect(m.getTiltAngle()).toBeGreaterThan(0);
+    expect(m.getTiltAngle()).toBeLessThan(maxTilt);
+
+    m.updatePortraitControls(5);
+    expect(m.getTiltAngle()).toBeCloseTo(maxTilt, 9);
+    expect(up.classList.contains('at-limit')).toBe(true);
+    release(up);
+  });
+});
+
+// ---- The zoom pair in its own group ----------------------------------------
+
+describe('zoomContainerClass', () => {
+  test('the pair moves out, PLUS ON TOP, and the row keeps the rest', async () => {
+    const { container } = await setup({
+      zoom: ZOOM, tiltButtons: true, pan: { ...PAN, maxTilt: 0.4 },
+      zoomContainerClass: 'my-zoom'
+    });
+    expect(container.children.map((b) => b.attrs['aria-label']))
+      .toEqual(['Pan left', 'Look up', 'Look down', 'Pan right']);
+
+    const stack = globalThis.document.body.children[1];
+    expect(stack.classList.contains('ui-float')).toBe(true);
+    expect(stack.classList.contains('my-zoom')).toBe(true);
+    // Stacked vertically, in on top: the map idiom, and it agrees with the
+    // direction it moves the view.
+    expect(stack.children.map((b) => b.attrs['aria-label'])).toEqual(['Zoom in', 'Zoom out']);
+  });
+
+  test('the moved pair still carries the zoom, the keys and the pinch', async () => {
+    const surface = makeSurface();
+    const { m, container } = await setup({
+      surface, zoom: ZOOM, zoomContainerClass: 'my-zoom'
+    });
+    const stack = globalThis.document.body.children[1];
+    const [zoomIn] = stack.children;
+
+    press(zoomIn);
+    m.updatePortraitControls(0.5);
+    expect(m.getZoomOffset()).toBeLessThan(0);
+    release(zoomIn);
+
+    // The arrow keys and the pinch both gate on the buttons existing, so a
+    // scene that moved them must not have lost either.
+    globalThis.window.fire('keydown', { code: 'ArrowUp', repeat: false });
+    m.updatePortraitControls(0.5);
+    globalThis.window.fire('keyup', { code: 'ArrowUp' });
+    const afterKeys = m.getZoomOffset();
+    expect(afterKeys).toBeLessThan(0);
+
+    touch(surface, 'pointerdown', 1, 100, 400);
+    touch(surface, 'pointerdown', 2, 300, 400);
+    touch(surface, 'pointermove', 1, 80, 400);
+    touch(surface, 'pointermove', 2, 320, 400);
+    expect(m.getZoomOffset()).not.toBe(afterKeys);
+
+    // And the row itself is unchanged apart from the two that left.
+    expect(container.children.map((b) => b.attrs['aria-label']))
+      .toEqual(['Pan left', 'Pan right']);
+  });
+
+  test('re-initialising does not leave a second zoom group behind', async () => {
+    // The part rebuilds its DOM when an experience re-inits, and a container
+    // it forgot to remove would stack duplicates in the corner.
+    const { m } = await setup({ zoom: ZOOM, zoomContainerClass: 'my-zoom' });
+    expect(globalThis.document.body.children).toHaveLength(2);
+    m.initPortraitControls({
+      getCamera: () => makeCamera(), lookAt: LOOK_AT, baseFov: BASE_FOV,
+      pan: PAN, zoom: ZOOM, zoomContainerClass: 'my-zoom'
+    });
+    expect(globalThis.document.body.children).toHaveLength(2);
+    m.disposePortraitControls();
+    expect(globalThis.document.body.children).toHaveLength(0);
+  });
+});

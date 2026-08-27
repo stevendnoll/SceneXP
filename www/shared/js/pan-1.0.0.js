@@ -19,6 +19,15 @@
  * [baseFov - maxIn, baseFov + maxOut]. The zoom pair only renders when
  * zoom options are provided, so a pan-only experience stays two arrows.
  *
+ * `tiltButtons: true` adds a look-up and look-down pair, giving the full
+ * row [◀] [▲] [▼] [−] [+] [▶]. Without it the tilt axis is still there,
+ * on W/S and Shift+arrows, and simply has no buttons, which is how every
+ * scene worked before the option existed. `zoomContainerClass` moves the
+ * zoom pair into its own `.ui-float` group with that class, stacked with
+ * ZOOM IN ON TOP, for a scene that wants the look controls together and
+ * the lens somewhere else. Both default off, so an experience that asks
+ * for neither gets exactly the row it always had.
+ *
  * The part builds its own DOM: a `.ui-float.pan-controls` container, so
  * the experience's load fade-in reveals it alongside the other floats,
  * while a CSS orientation media query (www/shared/css/styles-1.0.0.css) keeps it
@@ -31,18 +40,29 @@
  * phone back to landscape resets every control so the composed frame
  * returns exactly as designed.
  *
- * Touch gestures: when the experience passes its renderer canvas as
- * `surface`, the offsets also answer direct touch. A one finger drag
- * moves the view so the scene follows the finger, scaled to the current
- * lens: horizontal drags yaw (a full-width swipe sweeps about one
- * frame), and vertical drags TILT the camera up and down, an axis the
- * buttons do not offer, clamped to ±pan.maxTilt radians from the
- * composed aim (maxTilt: 0 turns the tilt off). A two finger pinch
- * rescales the FOV in tan space so the framed content tracks the finger
- * spread, and the pinch centroid keeps panning both axes. The
- * same clamps, limit dimming, gating, and orientation resets apply, so
- * the gestures can never reach a view the buttons cannot. A drag or
- * pinch claims the touch sequence: the experience's own tap handlers on
+ * Drag and wheel: when the experience passes its renderer canvas as
+ * `surface`, the offsets also answer direct pointer input. A one finger
+ * or one MOUSE BUTTON drag moves the view so the scene follows the
+ * pointer, scaled to the current lens: horizontal drags yaw (a
+ * full-width sweep is about one frame), and vertical drags TILT the
+ * camera up and down, clamped to ±pan.maxTilt radians from the composed
+ * aim (maxTilt: 0 turns the tilt off). The mouse takes the same path as
+ * the finger, on the same axes and the same clamps, because a desktop
+ * visitor needs to look around exactly as much as a phone does. Only the
+ * primary button drags, and a plain click travels under the tap slop so
+ * it is never claimed.
+ *
+ * The wheel zooms, scroll up for in, through the same path a pinch takes
+ * (so a `zoomDelegate` needs no wheel-specific code). `zoom.wheel` is how
+ * many doublings one notch buys. `deltaMode` is honored, so a trackpad's
+ * small continuous deltas and Firefox's line-mode deltas both behave, and
+ * a single fling event is capped rather than crossing the whole travel.
+ *
+ * A two finger pinch rescales the FOV in tan space so the framed content
+ * tracks the finger spread, and the pinch centroid keeps panning both
+ * axes. The same clamps, limit dimming, gating, and orientation resets
+ * apply, so no gesture can reach a view the buttons cannot. A drag or
+ * pinch claims the sequence: the experience's own tap handlers on
  * the same canvas should ask gestureClaimedTap() and let that tap pass
  * (pointer events fire before the touch events they spawn, so the claim
  * is always in place by the time click or touchend handlers run). The
@@ -58,7 +78,10 @@
  *       lookAt: CONFIG.camera.lookAt,        // the composed focus point
  *       baseFov: CONFIG.camera.portrait.fov, // required for zoom
  *       pan: CONFIG.camera.portrait.pan,     // { speed, maxAngle, maxTilt }
- *       zoom: CONFIG.camera.portrait.zoom,   // { speed, maxIn, maxOut }, optional
+ *       zoom: CONFIG.camera.portrait.zoom,   // { speed, maxIn, maxOut, wheel? }
+ *       tiltButtons: true,                   // optional: add [▲] [▼] to the row
+ *       zoomContainerClass: 'my-zoom',       // optional: zoom pair in its own
+ *                                            // .ui-float group, in on top
  *       zoomDelegate: {                      // optional: the experience owns
  *           onDelta(d) { ... },              // what zooming MEANS. All zoom
  *           limits() { return { atIn, atOut }; }  // inputs (buttons, keys,
@@ -76,8 +99,9 @@
  *       extraClass: 'my-variant',            // optional extra class on the container
  *       onFirstUse: (kind) => track(`portrait-${kind}`),  // optional, once per kind:
  *                                            // 'pan' | 'zoom' (buttons/keys),
- *                                            // 'tilt' (keys only),
- *                                            // 'swipe' | 'pinch' (gestures)
+ *                                            // 'tilt' (keys and buttons),
+ *                                            // 'swipe' | 'pinch' (drag/pinch),
+ *                                            // 'wheel'
  *       signal                               // optional AbortSignal for teardown
  *   });
  *   // then, each frame of the render loop:
@@ -137,6 +161,12 @@ let _appliedZoom = false;   // the camera currently carries a non-zero FOV offse
 let _used = {};             // first-use telemetry, one flag per input kind
 let _isPortrait = false;
 
+// Wheel zoom. `_wheelStep` is how much "in" one notch buys, in the same
+// doublings the pinch speaks, so a delegate needs no wheel-specific code.
+let _wheelStep = 0.12;
+const WHEEL_NOTCH_PX = 100; // what one detent reports on most mice
+const WHEEL_LINE_PX = 16;   // deltaMode 1 reports lines, not pixels
+
 // Touch gesture state (only live when init received a surface).
 const TAP_SLOP_PX = 8;      // travel below this still reads as a tap
 let _surface = null;        // the element the swipe/pinch listeners hang on
@@ -147,10 +177,13 @@ let _pinchDist = 0;         // finger spread at the last two-pointer move (0 = r
 
 // DOM, built by initPortraitControls.
 let _container = null;
+let _zoomContainer = null;  // only when zoomContainerClass asks for one
 let _panLeftBtn = null;
 let _panRightBtn = null;
 let _zoomInBtn = null;
 let _zoomOutBtn = null;
+let _tiltUpBtn = null;
+let _tiltDownBtn = null;
 
 // Scratch vectors, created lazily so merely importing this module never
 // touches the THREE global (keeps Node-side unit tests side-effect free).
@@ -207,6 +240,14 @@ function syncLimitClasses() {
     if (_zoomOutBtn) _zoomOutBtn.classList.toggle('at-limit', _fovOffset >= _maxOut - 1e-4);
 }
 
+/** The tilt pair dims on its own clamp. Separate from the above because the
+ *  tilt moves every frame while a key is held rather than only when an offset
+ *  changes, so this is called from the frame update. */
+function syncTiltClasses() {
+    if (_tiltUpBtn) _tiltUpBtn.classList.toggle('at-limit', _tilt >= _maxTilt - 1e-4);
+    if (_tiltDownBtn) _tiltDownBtn.classList.toggle('at-limit', _tilt <= -_maxTilt + 1e-4);
+}
+
 // ---- Touch gestures on the scene itself ------------------------------------
 
 /** The camera's live vertical FOV in degrees, the lens both drag axes
@@ -260,9 +301,9 @@ function applyGestureTilt(dy) {
  *  tracking the finger spread linearly, like every native pinch. In
  *  delegate mode the factor is handed over as log2 (a full spread
  *  doubling = 1.0 "in") and the FOV is left alone. */
-function applyGesturePinch(factor) {
+function applyZoomFactor(factor, kind) {
     if (!(_zoomInBtn || _zoomOutBtn) || !(factor > 0)) return;
-    firstUse('pinch');
+    firstUse(kind);
     if (_zoomDelegate) {
         _zoomDelegate.onDelta(Math.log2(factor));
         syncLimitClasses();
@@ -277,6 +318,42 @@ function applyGesturePinch(factor) {
     }
 }
 
+function applyGesturePinch(factor) {
+    applyZoomFactor(factor, 'pinch');
+}
+
+/**
+ * A wheel notch, in the same units a pinch speaks: "doublings in".
+ *
+ * ONE PATH FOR EVERY ZOOM INPUT, which is what keeps the wheel honest in
+ * delegate mode without the delegate needing to know a wheel exists.
+ *
+ * `deltaMode` has to be read. A mouse reports pixels and about 100 of
+ * them a notch, a trackpad reports small continuous pixel values, and
+ * Firefox on some platforms reports LINES instead, where a raw 3 would be
+ * three notches' worth of nothing if it were taken as pixels.
+ */
+function wheelDoublings(event) {
+    let pixels = event.deltaY;
+    if (event.deltaMode === 1) pixels *= WHEEL_LINE_PX;
+    else if (event.deltaMode === 2) pixels *= (window.innerHeight || 800);
+    // Scroll up is deltaY < 0 and means zoom IN, which is positive here.
+    const units = (-pixels / WHEEL_NOTCH_PX) * _wheelStep;
+    // A fling can report thousands of pixels in a single event, and one
+    // frame that crosses the whole travel reads as a teleport.
+    const cap = _wheelStep * 3;
+    return Math.max(-cap, Math.min(cap, units));
+}
+
+function onWheel(event) {
+    if (!controlsActive() || !(_zoomInBtn || _zoomOutBtn)) return;
+    // The page must not scroll underneath the scene.
+    if (event.cancelable !== false) event.preventDefault();
+    const units = wheelDoublings(event);
+    if (!units) return;
+    applyZoomFactor(Math.pow(2, units), 'wheel');
+}
+
 function onGesturePointerDown(event) {
     // A fresh press starts a clean sequence; this includes a mouse press,
     // so a leftover claim can never eat a later click on a hybrid device.
@@ -284,7 +361,20 @@ function onGesturePointerDown(event) {
         _gestureMoved = false;
         _tapClaimed = false;
     }
-    if (event.pointerType === 'mouse') return;
+    // A MOUSE DRAG LOOKS AROUND THE SAME WAY A SWIPE DOES. This used to
+    // return here, which left every desktop visitor with no drag at all
+    // while the experiences' own legends told them to drag. Same axes,
+    // same clamps, same tap slop, so a mouse and a finger reach exactly
+    // the same views. A plain click still travels under the slop and is
+    // never claimed, so click-to-open handlers are unaffected.
+    if (event.pointerType === 'mouse') {
+        // The primary button only: a right or middle drag belongs to the
+        // browser, and the context menu is somebody else's business.
+        if (event.button !== 0) return;
+        // Without this a drag across a canvas starts a text selection in
+        // the page around it and the cursor turns into an I-beam.
+        if (event.cancelable !== false) event.preventDefault();
+    }
     _pointers.set(event.pointerId, {
         x: event.clientX, y: event.clientY,
         startX: event.clientX, startY: event.clientY
@@ -403,8 +493,10 @@ const KEY_HOLDS = {
     ArrowDown: { axis: 'zoom', dir: -1, btn: () => _zoomOutBtn }
 };
 
-const TILT_UP_HOLD = { axis: 'tilt', dir: 1, btn: () => null };
-const TILT_DOWN_HOLD = { axis: 'tilt', dir: -1, btn: () => null };
+// The tilt buttons are optional, so these resolve to null in a scene that
+// did not ask for them and the key holds still work exactly as before.
+const TILT_UP_HOLD = { axis: 'tilt', dir: 1, btn: () => _tiltUpBtn };
+const TILT_DOWN_HOLD = { axis: 'tilt', dir: -1, btn: () => _tiltDownBtn };
 
 /** The hold a key press maps to. W/S always tilt; holding Shift re-aims
  *  the Up/Down arrows from zoom to tilt (plain arrows keep the zoom). */
@@ -468,6 +560,9 @@ export function initPortraitControls(options = {}) {
         if (typeof zoom.speed === 'number' && zoom.speed > 0) _zoomSpeed = zoom.speed;
         _maxIn = typeof zoom.maxIn === 'number' && zoom.maxIn > 0 ? zoom.maxIn : 0;
         _maxOut = typeof zoom.maxOut === 'number' && zoom.maxOut > 0 ? zoom.maxOut : 0;
+        // Doublings-in per wheel notch. A delegate counts in its own units, so
+        // this is the one number that says how fast a wheel crosses them.
+        if (typeof zoom.wheel === 'number' && zoom.wheel > 0) _wheelStep = zoom.wheel;
     } else {
         _baseFov = 0;
         _maxIn = 0;
@@ -488,6 +583,12 @@ export function initPortraitControls(options = {}) {
 
     // Fresh state (and no duplicate buttons) if an experience re-inits.
     if (_container && _container.parentNode) _container.parentNode.removeChild(_container);
+    if (_zoomContainer && _zoomContainer.parentNode) {
+        _zoomContainer.parentNode.removeChild(_zoomContainer);
+    }
+    _zoomContainer = null;
+    _tiltUpBtn = null;
+    _tiltDownBtn = null;
     _holdPan = 0;
     _holdZoom = 0;
     _holdTilt = 0;
@@ -510,18 +611,50 @@ export function initPortraitControls(options = {}) {
     _container.setAttribute('role', 'group');
     _container.setAttribute('aria-label', 'Pan and zoom the view');
 
-    // Arrows on the outside, zoom pair in the middle: [◀] [−] [+] [▶]
+    // The row reads: [◀] [▲] [▼] [−] [+] [▶], with any piece a scene did not
+    // ask for simply absent. With no tilt buttons and no separate zoom
+    // container that reduces to the original [◀] [−] [+] [▶].
     _panLeftBtn = makeButton('Pan left', 'M14.5 6l-6 6 6 6', 'pan', -1, signal);
     _container.appendChild(_panLeftBtn);
+
+    // The tilt pair, for scenes that want the look controls on screen rather
+    // than only on W and S. A scene with the tilt axis switched off gets none,
+    // because a button that cannot move anything is worse than no button.
+    if (options.tiltButtons === true && _maxTilt > 0) {
+        _tiltUpBtn = makeButton('Look up', 'M6 14.5l6-6 6 6', 'tilt', 1, signal);
+        _tiltDownBtn = makeButton('Look down', 'M6 9.5l6 6 6-6', 'tilt', -1, signal);
+        _container.appendChild(_tiltUpBtn);
+        _container.appendChild(_tiltDownBtn);
+    }
+
     if (zoomEnabled) {
         _zoomOutBtn = makeButton('Zoom out', 'M5 12h14', 'zoom', -1, signal);
         _zoomInBtn = makeButton('Zoom in', 'M12 5v14M5 12h14', 'zoom', 1, signal);
-        _container.appendChild(_zoomOutBtn);
-        _container.appendChild(_zoomInBtn);
+        // A scene that wants the look controls together and the zoom somewhere
+        // else gets its own container for the pair, stacked, PLUS ON TOP:
+        // vertically that is the idiom every map application already taught
+        // the visitor, and it agrees with the direction it moves the view.
+        const zoomClass = typeof options.zoomContainerClass === 'string'
+            ? options.zoomContainerClass.trim() : '';
+        if (zoomClass) {
+            _zoomContainer = document.createElement('div');
+            _zoomContainer.className = `ui-float ${zoomClass}`;
+            _zoomContainer.setAttribute('role', 'group');
+            _zoomContainer.setAttribute('aria-label', 'Zoom the view');
+            _zoomContainer.appendChild(_zoomInBtn);
+            _zoomContainer.appendChild(_zoomOutBtn);
+        } else {
+            _container.appendChild(_zoomOutBtn);
+            _container.appendChild(_zoomInBtn);
+        }
     }
+
     _panRightBtn = makeButton('Pan right', 'M9.5 6l6 6-6 6', 'pan', 1, signal);
     _container.appendChild(_panRightBtn);
     document.body.appendChild(_container);
+    // After the row, so the experience's own .ui-float reveal sweep finds it
+    // too and both groups appear together.
+    if (_zoomContainer) document.body.appendChild(_zoomContainer);
 
     window.addEventListener('keydown', (event) => {
         const hold = keyHoldFor(event);
@@ -534,9 +667,19 @@ export function initPortraitControls(options = {}) {
     }, { signal });
     window.addEventListener('keyup', (event) => {
         // A tilt hold must stop on the bare key: Shift may have lifted
-        // before the arrow did, and stopHold ignores inactive holds.
-        if (event.code === 'KeyW' || event.code === 'ArrowUp') stopHold('tilt', 1);
-        if (event.code === 'KeyS' || event.code === 'ArrowDown') stopHold('tilt', -1);
+        // before the arrow did, and stopHold ignores inactive holds. The
+        // BUTTON HAS TO BE RELEASED HERE TOO, because KEY_HOLDS below has no
+        // entry for W or S and so returns before it can clear anything. That
+        // did not matter while the tilt had no buttons, and became a control
+        // stuck in its pressed state the moment it did.
+        if (event.code === 'KeyW' || event.code === 'ArrowUp') {
+            stopHold('tilt', 1);
+            if (_tiltUpBtn) _tiltUpBtn.classList.remove('held');
+        }
+        if (event.code === 'KeyS' || event.code === 'ArrowDown') {
+            stopHold('tilt', -1);
+            if (_tiltDownBtn) _tiltDownBtn.classList.remove('held');
+        }
         const hold = KEY_HOLDS[event.code];
         if (!hold) return;
         stopHold(hold.axis, hold.dir);
@@ -566,6 +709,8 @@ export function initPortraitControls(options = {}) {
         _surface.addEventListener('pointermove', onGesturePointerMove, { signal });
         ['pointerup', 'pointercancel'].forEach((type) =>
             _surface.addEventListener(type, onGesturePointerUp, { signal }));
+        // Not passive: the page must not scroll out from under the scene.
+        _surface.addEventListener('wheel', onWheel, { passive: false, signal });
     }
 
     window.addEventListener('resize', refreshOrientation, { signal });
@@ -588,8 +733,10 @@ export function updatePortraitControls(deltaTime) {
             }
         }
         if (_holdTilt !== 0 && _maxTilt > 0) {
-            // Keyboard tilt shares the pan speed: the same slow look-around.
+            // Keys and the tilt buttons share the pan speed: the same slow
+            // look-around, whichever way the visitor asked for it.
             _tilt = Math.min(_maxTilt, Math.max(-_maxTilt, _tilt + _holdTilt * _panSpeed * deltaTime));
+            syncTiltClasses();
         }
         if (_holdZoom !== 0) {
             if (_zoomDelegate) {
@@ -690,7 +837,12 @@ export function gestureClaimedTap() {
  *  init signal are released by aborting it. */
 export function disposePortraitControls() {
     if (_container && _container.parentNode) _container.parentNode.removeChild(_container);
-    _container = _panLeftBtn = _panRightBtn = _zoomInBtn = _zoomOutBtn = null;
+    if (_zoomContainer && _zoomContainer.parentNode) {
+        _zoomContainer.parentNode.removeChild(_zoomContainer);
+    }
+    _container = _zoomContainer = null;
+    _panLeftBtn = _panRightBtn = _zoomInBtn = _zoomOutBtn = null;
+    _tiltUpBtn = _tiltDownBtn = null;
     _getCamera = null;
     _lookAt = null;
     _zoomDelegate = null;

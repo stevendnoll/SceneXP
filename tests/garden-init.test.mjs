@@ -486,65 +486,102 @@ test('the look controls end up in one row, in reading order', async () => {
     expect(labels(lookRow())).toEqual(['Pan left', 'Look up', 'Look down', 'Pan right']);
 });
 
-test('THE ZOOM PAIR IS MOVED, NOT REBUILT', async () => {
-    // Listeners travel with a node, so reparenting keeps the pinch, the arrow
-    // keys and the hold behaviour belonging to the shared part. Rebuilding
-    // them here, or dropping `zoom` from the part's options, would have taken
-    // the pinch with it: applyGesturePinch returns early when neither zoom
-    // button exists, which is a silent loss on the one device that has it.
+test('the zoom pair lives in its own corner, plus on top', async () => {
+    // Plus on top is the map idiom and also the honest one: up moves the eye
+    // closer, the same way the tilt pair above it does. The shared part builds
+    // the row the other way round for a horizontal layout, so this order is
+    // `zoomContainerClass` doing its job.
     await bootGarden();
     const stack = zoomStack();
-    // Plus on top, which is the map idiom and also the honest one: up moves
-    // the eye closer. The part builds them the other way round for a
-    // horizontal row, so this order is the reversal doing its job.
     expect(labels(stack)).toEqual(['Zoom in', 'Zoom out']);
 
-    // The proof that these are the part's own nodes rather than copies: they
-    // still carry the listeners it attached, which nothing in view.js adds.
+    // They are the SHARED PART's buttons, carrying its hold listeners, which
+    // is what keeps the pinch and the arrow keys working. Building a private
+    // pair here instead would have taken the pinch with it, since
+    // applyGesturePinch returns early when neither zoom button exists.
     for (const btn of stack.children) {
         expect(btn.listeners.has('pointerdown')).toBe(true);
         expect(btn.parentNode).toBe(stack);
     }
+    // And it is a .ui-float, so main.js's reveal sweep finds it and the two
+    // groups appear together rather than one of them staying invisible.
+    expect(stack.classList.contains('ui-float')).toBe(true);
+    expect(stack.classList.contains('visible')).toBe(true);
 });
 
-test('holding a tilt button moves the aim, and stops at the limit', async () => {
-    const main = await bootGarden();
-    const D = GARDEN_CONFIG.camera.dolly;
+test('holding a tilt button tilts, and stops at the limit', async () => {
+    await bootGarden();
+    // THE BUILT MODULE, because main.js resolves its imports to the .min files
+    // and the tilt lives in the shared part's own state.
+    const pan = await import('../www/shared/js/pan-1.0.0.min.js');
+    const maxTilt = GARDEN_CONFIG.camera.portrait.pan.maxTilt;
     const [, up, down] = lookRow().children;
 
-    const level = main.__test__.viewTarget().y;
+    expect(pan.getTiltAngle()).toBe(0);
     fire(up, 'pointerdown', { pointerId: 1 });
     expect(up.classList.contains('held')).toBe(true);
     stepFrames(20);
-    expect(main.__test__.viewTarget().y).toBeGreaterThan(level);
+    expect(pan.getTiltAngle()).toBeGreaterThan(0);
 
     // It runs out rather than running away, and says so.
-    stepFrames(120);
+    stepFrames(200);
+    expect(pan.getTiltAngle()).toBeCloseTo(maxTilt, 6);
     expect(up.classList.contains('at-limit')).toBe(true);
-    const ceiling = main.__test__.viewTarget().y;
-    stepFrames(60);
-    expect(main.__test__.viewTarget().y).toBeCloseTo(ceiling, 9);
 
     // Releasing stops it, and the other direction comes back down.
     fire(up, 'pointerup', { pointerId: 1 });
     expect(up.classList.contains('held')).toBe(false);
     fire(down, 'pointerdown', { pointerId: 2 });
     stepFrames(30);
-    expect(main.__test__.viewTarget().y).toBeLessThan(ceiling);
+    expect(pan.getTiltAngle()).toBeLessThan(maxTilt);
     fire(down, 'pointerup', { pointerId: 2 });
+});
+
+test('W AND S LIGHT THE SAME BUTTONS THEY MOVE', async () => {
+    // The symptom that sent tilt back to the shared part: A and D lit the pan
+    // arrows because the part owned both, while W and S moved the view without
+    // lighting anything, because the buttons were the garden's and the keys
+    // were the part's. Two controls for one axis, and the highlight was the
+    // tell. There is one axis now.
+    await bootGarden();
+    const pan = await import('../www/shared/js/pan-1.0.0.min.js');
+    const [left, up, down, right] = lookRow().children;
+
+    for (const [code, btn, others] of [
+        ['KeyW', up, [down, left, right]],
+        ['KeyS', down, [up, left, right]],
+        ['KeyA', left, [up, down, right]],
+        ['KeyD', right, [up, down, left]]
+    ]) {
+        fire(dom.windowStub, 'keydown', { code, shiftKey: false, repeat: false });
+        expect(btn.classList.contains('held')).toBe(true);
+        for (const other of others) expect(other.classList.contains('held')).toBe(false);
+        fire(dom.windowStub, 'keyup', { code });
+        expect(btn.classList.contains('held')).toBe(false);
+    }
+
+    // And Shift with the arrows reaches the same pair, which is the path an
+    // arrow-key visitor has.
+    fire(dom.windowStub, 'keydown', { code: 'ArrowUp', shiftKey: true, repeat: false });
+    expect(up.classList.contains('held')).toBe(true);
+    stepFrames(10);
+    expect(pan.getTiltAngle()).toBeGreaterThan(0);
+    fire(dom.windowStub, 'keyup', { code: 'ArrowUp' });
+    expect(up.classList.contains('held')).toBe(false);
 });
 
 test('a tilt button that loses focus stops tilting', async () => {
     // A control that keeps running after the page has taken focus elsewhere is
-    // a stuck camera, and there is no way for the visitor to unstick it.
-    const main = await bootGarden();
+    // a stuck camera, and the visitor has no way to unstick it.
+    await bootGarden();
+    const pan = await import('../www/shared/js/pan-1.0.0.min.js');
     const up = lookRow().children[1];
     fire(up, 'pointerdown', { pointerId: 1 });
     stepFrames(5);
     fire(up, 'blur');
-    const held = main.__test__.viewTarget().y;
+    const held = pan.getTiltAngle();
     stepFrames(30);
-    expect(main.__test__.viewTarget().y).toBeCloseTo(held, 9);
+    expect(pan.getTiltAngle()).toBeCloseTo(held, 9);
 });
 
 test('THE ZOOM IS A DOLLY: holding it moves the camera, not the lens', async () => {

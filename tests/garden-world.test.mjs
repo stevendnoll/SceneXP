@@ -23,7 +23,7 @@ import {
 } from '../www/garden/js/forest.js';
 import { presenceAt, WINDOWS } from '../www/garden/js/wildlife.js';
 import { luminanceOf } from '../www/garden/js/sky.js';
-import { dollyView, dollyTrackZ, tiltedLookY } from '../www/garden/js/view.js';
+import { dollyView, dollyTrackZ } from '../www/garden/js/view.js';
 
 const PLOT = GARDEN_CONFIG.plot;
 const HALF = PLOT.halfSize;
@@ -625,28 +625,11 @@ test('A TALL WINDOW CANNOT MAKE ZOOMING OUT MOVE THE CAMERA FORWARD', () => {
     expect(dollyTrackZ(near - 4).near).toBe(near - 4);
 });
 
-// ---- Tilt (M9-7) -----------------------------------------------------------
-
-test('A TILT IS AN ANGLE, so it means the same at both ends of the track', () => {
-    // Raising the aim target by a fixed height would swing the view wildly
-    // from 6 m out and barely move it from 40 m out, because the same rise is
-    // a different angle at a different range.
-    const angleOf = (view, tilt) => {
-        const lookY = tiltedLookY(view, tilt);
-        return Math.atan2(lookY - view.y, Math.abs(view.z - view.lookZ));
-    };
-    const close = dollyView(1, COMPOSED);
-    const far = dollyView(-1, COMPOSED);
-    const tilt = GARDEN_CONFIG.camera.dolly.maxTilt;
-
-    const swung = angleOf(close, tilt) - angleOf(close, 0);
-    const swungFar = angleOf(far, tilt) - angleOf(far, 0);
-    expect(swung).toBeCloseTo(tilt, 6);
-    expect(swungFar).toBeCloseTo(tilt, 6);
-
-    // And zero tilt leaves the composed aim exactly alone.
-    expect(tiltedLookY(close, 0)).toBe(close.lookY);
-});
+// Tilt is NOT tested here any more. It belongs to the shared pan part, which
+// applies it by rotating the aim direction rather than by moving the target,
+// so it composes with the dolly by construction. See tests/shared-pan.test.mjs
+// for the property, and the M9 log for why the garden stopped keeping a second
+// tilt axis of its own.
 
 test('the dolly deltas clamp, and a NaN cannot strand the camera', async () => {
     const view = await import('../www/garden/js/view.js');
@@ -675,5 +658,4 @@ test('the dolly deltas clamp, and a NaN cannot strand the camera', async () => {
     expect(view.getDolly()).toBe(-1);
     view.resetView();
     expect(view.getDolly()).toBe(0);
-    expect(view.getTilt()).toBe(0);
 });

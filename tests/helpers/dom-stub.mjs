@@ -116,6 +116,16 @@ function findByClass(root, name) {
   return null;
 }
 
+/** Every descendant carrying a class, in document order. */
+function allByClass(root, name, found = []) {
+  if (!root || !Array.isArray(root.children)) return found;
+  for (const child of root.children) {
+    if (child && child.classList && child.classList.contains(name)) found.push(child);
+    allByClass(child, name, found);
+  }
+  return found;
+}
+
 /** Take a node out of whatever parent it is in, so a move is a move. */
 function detach(node) {
   const parent = node && (node.parentNode || node.parentElement);
@@ -303,7 +313,18 @@ export function installDom({ innerWidth = 1280, innerHeight = 800 } = {}) {
       if (!bySelector.has(sel)) bySelector.set(sel, makeElement('div'));
       return bySelector.get(sel);
     },
-    querySelectorAll() { return []; },
+    // THE REVEAL SWEEP RUNS THROUGH HERE. Every experience hides its chrome
+    // with .ui-float until JS adds .visible, in one
+    // `querySelectorAll('.ui-float')` pass, and returning an empty list made
+    // that pass a no-op under test. So no suite could tell a scene that
+    // reveals its controls from one that leaves them invisible, which is a
+    // house bug this project has already shipped once.
+    querySelectorAll(sel) {
+      if (typeof sel === 'string' && /^\.[\w-]+$/.test(sel)) {
+        return allByClass(documentStub.body, sel.slice(1));
+      }
+      return [];
+    },
     addEventListener(type, fn, opts) {
       if (!documentListeners.has(type)) documentListeners.set(type, new Set());
       documentListeners.get(type).add(fn);

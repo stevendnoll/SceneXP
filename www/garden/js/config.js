@@ -202,6 +202,10 @@ export const GARDEN_CONFIG = deepFreeze({
                 // counts in. A held button crosses the whole track in about
                 // three and a half seconds.
                 speed: 0.55,
+                // Doublings of "in" per wheel notch. The whole track is 2.0
+                // units wide, so this is about 17 notches end to end, which is
+                // a comfortable flick rather than a jump.
+                wheel: 0.12,
                 // Kept so the shared part still renders the zoom pair, which
                 // is what carries the pinch gesture and the arrow keys. The
                 // numbers themselves are unused in delegate mode.
@@ -239,13 +243,8 @@ export const GARDEN_CONFIG = deepFreeze({
             // enough window composes past 40, at which point an unclamped
             // "out" would move the camera FORWARD.
             //
-            // How far the aim can be tilted by the on-screen buttons, radians.
-            // The shared part's swipe and W/S tilt still compose on top of
-            // this, so a visitor using both gets both. That is what two
-            // controls on one axis do when neither knows about the other, and
-            // it is harmless: each alone reaches 18 degrees.
-            maxTilt: 0.32,
-            tiltSpeed: 0.42
+            // Tilt is NOT here. The shared part owns it, on `portrait.pan`
+            // above, so the buttons, W and S, and a drag are all one axis.
         }
     },
 
