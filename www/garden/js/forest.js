@@ -341,6 +341,8 @@ function bakeLeafCards(leaves, limit, scale) {
     // it. Baked per VERTEX here rather than per instance, because unlike the
     // planted trees these cards live inside the shared geometry.
     const sway = new Float32Array(used.length * 4);
+    // A flutter phase per card, so no two clumps in one tree beat together.
+    const flutter = new Float32Array(used.length * 4);
     const index = new Uint32Array(used.length * 6);
 
     used.forEach((leaf, i) => {
@@ -365,6 +367,7 @@ function bakeLeafCards(leaves, limit, scale) {
             uv[i * 8 + c * 2] = (cxs + 1) / 2;
             uv[i * 8 + c * 2 + 1] = (cys + 1) / 2;
             sway[i * 4 + c] = leaf.sway;
+            flutter[i * 4 + c] = leaf.phase;
         });
         const v = i * 4;
         const o = i * 6;
@@ -377,6 +380,7 @@ function bakeLeafCards(leaves, limit, scale) {
     geo.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setAttribute('aSway', new THREE.BufferAttribute(sway, 1));
+    geo.setAttribute('aFlutter', new THREE.BufferAttribute(flutter, 1));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     return { geometry: geo, cards: used.length };
 }
@@ -428,15 +432,36 @@ const SWAY_HEAD = `
 uniform vec3  uWind;
 uniform float uTime;
 uniform float uSwayScale;
+uniform float uMotion;
+uniform float uFlutterRate;
+uniform float uFlutterAlong;
+uniform float uFlutterCross;
 attribute float aSway;
 attribute float aTreePhase;
+`;
+
+// The bark carries no flutter phase, so its block stops at the sway. Declaring
+// aFlutter on a geometry that does not have it is an attribute the driver
+// quietly feeds zeros, which is worse than not asking.
+const LEAF_SWAY_HEAD = SWAY_HEAD + `
+attribute float aFlutter;
 `;
 
 const SWAY_BODY = `
     float woodWP = uTime * 1.35 + aTreePhase + transformed.y * 0.42;
     transformed += vec3(uWind.x, 0.0, uWind.z)
         * (sin(woodWP) * 0.62 + sin(woodWP * 1.73 + 1.3) * 0.38)
-        * aSway * uSwayScale;
+        * aSway * uSwayScale * uMotion;
+`;
+
+// The wood's canopy flutters on the same terms the garden's does, at its own
+// rate and across the wind as well as along it. Two motions at one frequency
+// read as one motion, in a wood exactly as on a planted tree.
+const LEAF_SWAY_BODY = SWAY_BODY + `
+    float woodLP = uTime * uFlutterRate + aFlutter;
+    transformed += (vec3(uWind.x, 0.0, uWind.z) * sin(woodLP) * uFlutterAlong
+        + vec3(-uWind.z, 0.0, uWind.x) * sin(woodLP * 1.37 + aFlutter * 2.1) * uFlutterCross)
+        * uMotion;
 `;
 
 /** One phase per tree, seeded, so the wood is the same wood on every visit. */
@@ -595,7 +620,19 @@ function buildNearTreeline(scene, config, options) {
 
     // Species that suit a wild wood rather than a planted garden. Ordered, so
     // a tier that uses fewer of them uses the same first few every time.
-    const wild = ['bur-oak', 'paper-birch', 'scots-pine', 'blue-spruce', 'copper-beech']
+    //
+    // ALL FIVE ARE DECIDUOUS, ON PURPOSE. Scots Pine and Blue Spruce used to be
+    // in here and they are genuinely evergreen, but they did not READ as
+    // conifers: only the spruce is conical, both wear the same generic leaf
+    // clump mask, and at a reduced recursion neither keeps the habit that would
+    // tell you what it is. A wood of trees that are secretly evergreen is worse
+    // than a wood that plainly is not, and a fully deciduous wood buys the
+    // thing this scene is about: in winter it goes to bare branches, and bare
+    // branches in a gust are the best the sway ever looks.
+    //
+    // The horizon still has conifers. The flat tier is 42 percent evergreen by
+    // `farForest.evergreenShare`, which is where dark winter mass belongs.
+    const wild = ['bur-oak', 'paper-birch', 'quaking-aspen', 'sugar-maple', 'copper-beech']
         .map((id) => speciesById(id)).filter(Boolean);
 
     nearTrees = [];
@@ -646,7 +683,11 @@ function buildNearTreeline(scene, config, options) {
             const swayUniforms = {
                 uWind: { value: new THREE.Vector3(0, 0, 0) },
                 uTime: { value: 0 },
-                uSwayScale: { value: entry.resolved.matureHeight * config.tree.swayPerMetre }
+                uSwayScale: { value: entry.resolved.matureHeight * config.tree.swayPerMetre },
+                uMotion: { value: 1 },
+                uFlutterRate: { value: config.tree.leafFlutter.rate },
+                uFlutterAlong: { value: config.tree.leafFlutter.along },
+                uFlutterCross: { value: config.tree.leafFlutter.cross }
             };
 
             const material = patchVertex(
@@ -691,7 +732,7 @@ function buildNearTreeline(scene, config, options) {
                     transparent: false,
                     alphaTest: config.world.farForest.leafyAlphaTest,
                     side: THREE.DoubleSide
-                }), swayUniforms, SWAY_HEAD, SWAY_BODY, 'garden-wood-leaf');
+                }), swayUniforms, LEAF_SWAY_HEAD, LEAF_SWAY_BODY, 'garden-wood-leaf');
                 entry.leaves.geometry.setAttribute('aTreePhase',
                     new THREE.InstancedBufferAttribute(phases, 1));
                 leafMesh = new THREE.InstancedMesh(entry.leaves.geometry, leafMaterial, mine.length);
@@ -865,7 +906,7 @@ export function bloomAt(hour, config = GARDEN_CONFIG) {
  * @param {number} hour
  * @param {number} snowCoverage
  */
-export function updateForest(hour, snowCoverage = 0, wind = null, elapsed = 0, config = GARDEN_CONFIG) {
+export function updateForest(hour, snowCoverage = 0, wind = null, elapsed = 0, motion = 1, config = GARDEN_CONFIG) {
     if (!deciduous) return;
     const F = config.world.farForest;
     const snow = clamp01(snowCoverage);
@@ -891,6 +932,7 @@ export function updateForest(hour, snowCoverage = 0, wind = null, elapsed = 0, c
         if (tree.sway) {
             if (wind) tree.sway.uWind.value.set(wind.x, 0, wind.z);
             tree.sway.uTime.value = elapsed;
+            tree.sway.uMotion.value = motion;
         }
         tree.mesh.material.color.setHex(
             packColor(mixColor(tree.species.bark, snowColor, snow * 0.35)));
@@ -902,9 +944,18 @@ export function updateForest(hour, snowCoverage = 0, wind = null, elapsed = 0, c
         const leafColour = forestColorAt(hour, tree.evergreen, config);
         tree.leafMesh.material.color.setHex(
             packColor(mixColor(leafColour, snowColor, snow * (tree.evergreen ? 0.4 : 0.55))));
+        // THE WOOD'S OWN BARE THRESHOLD, not the flat tier's. The flat tier
+        // draws its trunk and limbs INTO the canopy texture, so its threshold
+        // has to stop short of erasing them: 0.82 takes the leaves and leaves
+        // the branches. This mask has no wood in it at all, because the
+        // branches here are real geometry, so it can and must go all the way.
+        // At 0.82 the mask's own 0.62 to 0.92 alpha left about a third of the
+        // canopy standing through deep winter, which is why the wood kept full
+        // tan crowns under snow when M7-2 and M3-3 both call for bare.
+        const N = config.world.nearTreeline;
         tree.leafMesh.material.alphaTest = tree.evergreen
             ? F.leafyAlphaTest
-            : F.leafyAlphaTest + (F.bareAlphaTest - F.leafyAlphaTest) * bare;
+            : F.leafyAlphaTest + (N.bareAlphaTest - F.leafyAlphaTest) * bare;
     }
 
     // Scrub follows the deciduous wood, and takes snow more heavily because it

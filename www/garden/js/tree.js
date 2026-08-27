@@ -375,6 +375,7 @@ uniform vec3  uWind;
 uniform float uTime;
 uniform float uPhase;
 uniform float uSwayScale;
+uniform float uMotion;
 attribute vec3 aOrigin;
 attribute vec3 aRadial;
 attribute float aRadius;
@@ -402,7 +403,7 @@ const BARK_BODY = `
     // sways like a sapling rather than like the tree it will become.
     transformed += barkGust
         * (sin(barkWP) * 0.62 + sin(barkWP * 1.73 + 1.3) * 0.38)
-        * aSway * uSwayScale * uScale;
+        * aSway * uSwayScale * uScale * uMotion;
 
     vBarkNormal = aRadial;
     vBarkHeight = transformed.y;
@@ -418,6 +419,10 @@ uniform float uTime;
 uniform float uPhase;
 uniform float uTremble;
 uniform float uScale;
+uniform float uFlutterRate;
+uniform float uFlutterAlong;
+uniform float uFlutterCross;
+uniform float uMotion;
 attribute float aBirth;
 attribute float aDrop;
 attribute float aTint;
@@ -457,8 +462,16 @@ const LEAF_BODY = `
 
     transformed *= leafOpen;
 
-    float leafLP = uTime * (1.6 + uTremble) + aPhase;
-    vec3 leafWorld = vec3(uWind.x, 0.0, uWind.z) * (sin(leafLP) * 0.5 + 0.5) * 0.12;
+    // TWO MOTIONS, NOT ONE. This runs at its own rate, well clear of the
+    // branch's 1.35, and it swings BOTH WAYS: the old sin * 0.5 + 0.5 never
+    // came back through rest, so at a steady wind it was a static offset with a
+    // wobble on it. uFlutterCross pushes across the wind as well as along it,
+    // which is a leaf turning rather than a leaf sliding.
+    float leafLP = uTime * (uFlutterRate + uTremble) + aPhase;
+    vec3 leafAlong = vec3(uWind.x, 0.0, uWind.z);
+    vec3 leafAcross = vec3(-uWind.z, 0.0, uWind.x);
+    vec3 leafWorld = (leafAlong * sin(leafLP) * uFlutterAlong
+        + leafAcross * sin(leafLP * 1.37 + aPhase * 2.1) * uFlutterCross) * uMotion;
     leafWorld.y -= leafFall * 1.6 * uScale;
     leafWorld.x += leafFall * (sin(aPhase * 3.1) * 0.9);
     leafWorld.z += leafFall * (cos(aPhase * 2.3) * 0.9);
@@ -494,7 +507,7 @@ const LEAF_BODY = `
     float leafBWP = uTime * 1.35 + uPhase + (instanceMatrix[3].y * uScale) * 0.42;
     leafWorld += vec3(uWind.x, 0.0, uWind.z)
         * (sin(leafBWP) * 0.62 + sin(leafBWP * 1.73 + 1.3) * 0.38)
-        * aLeafSway * uSwayScale * uScale;
+        * aLeafSway * uSwayScale * uScale * uMotion;
     transformed += (leafRotT * leafWorld) / leafISC;
     #else
     transformed += leafWorld;
@@ -582,7 +595,9 @@ export function createTree(resolved, seed, options = {}) {
         uPhase: { value: (seed % 1000) / 1000 * Math.PI * 2 },
         // The tree's own size, so sway is a fraction of the tree rather than a
         // number of metres. See the note in BARK_BODY.
-        uSwayScale: { value: resolved.matureHeight * T.swayPerMetre }
+        uSwayScale: { value: resolved.matureHeight * T.swayPerMetre },
+        // 1 normally, damped by reduced motion. Never 0: see config.tree.
+        uMotion: { value: 1 }
     };
 
     const barkGeo = bakeGeometry(skeleton);
@@ -611,6 +626,10 @@ export function createTree(resolved, seed, options = {}) {
         uBud: { value: 0 },
         uWind: barkUniforms.uWind,
         uSwayScale: barkUniforms.uSwayScale,
+        uMotion: barkUniforms.uMotion,
+        uFlutterRate: { value: T.leafFlutter.rate },
+        uFlutterAlong: { value: T.leafFlutter.along },
+        uFlutterCross: { value: T.leafFlutter.cross },
         uTime: barkUniforms.uTime,
         uPhase: barkUniforms.uPhase,
         uTremble: { value: resolved.tremble || 0 },
@@ -875,6 +894,9 @@ export function updateTree(tree, view, resolved) {
     b.uThick.value = T.saplingThickness + (1 - T.saplingThickness) * Math.pow(view.growth, 0.75);
     b.uTime.value = view.time;
     b.uWind.value.set(view.wind.x, 0, view.wind.z);
+    // Shared with the leaf material, so a damped tree cannot have undamped
+    // leaves. Absent means full motion, never none.
+    b.uMotion.value = view.motion === undefined ? 1 : view.motion;
 
     l.uLeafScale.value = view.leaf;
     l.uDrop.value = view.drop;

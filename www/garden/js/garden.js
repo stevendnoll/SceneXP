@@ -148,7 +148,10 @@ export function viewFor(record, hour, options = {}) {
         bud: clamp01(record.bud || 0),
         snow: options.snow || 0,
         wind: options.wind || { x: 0, z: 0 },
-        time: options.time || 0
+        time: options.time || 0,
+        // Reduced motion damps the sway rather than removing it, because in
+        // this scene the movement is the content. Absent means full motion.
+        motion: options.motion === undefined ? 1 : options.motion
     };
 }
 

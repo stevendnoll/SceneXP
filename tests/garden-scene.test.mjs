@@ -17,6 +17,8 @@
  * real geometry: a group is either an object or it is null, and that is the
  * whole question being asked.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { installThree, installCanvas, uninstallAll } from './helpers/three-stub.mjs';
 
 let GARDEN_CONFIG;
@@ -338,6 +340,15 @@ function measureWood(run) {
     class Attr {
         constructor(array, itemSize) { this.array = array; this.itemSize = itemSize; }
     }
+    // Real enough to read a threshold back off. Everything else stays absorbed.
+    class Mat {
+        constructor(params = {}) {
+            Object.assign(this, params);
+            this.userData = {};
+            this.color = { hex: 0, setHex(v) { this.hex = v; } };
+        }
+        dispose() { }
+    }
     // Real enough to read a uniform back out of. Everything else stays absorbed.
     class Vec3 {
         constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
@@ -351,6 +362,7 @@ function measureWood(run) {
             if (key === 'BufferGeometry') return Geo;
             if (key === 'BufferAttribute' || key === 'InstancedBufferAttribute') return Attr;
             if (key === 'Vector3') return Vec3;
+            if (key === 'MeshLambertMaterial' || key === 'MeshStandardMaterial') return Mat;
             if (key === 'InstancedMesh') {
                 return class Recorder {
                     constructor(geometry, material, count) {
@@ -472,4 +484,58 @@ test('the wood reads the same wind vector the garden does', () => {
         expect(entry.sway.uWind.value.z).toBe(-0.3);
     }
     disposeForest();
+});
+
+// ---- The wood is deciduous and goes bare (QA 2026-08-26) -------------------
+
+test('nothing in the fractal wood is secretly an evergreen', () => {
+    // Scots Pine and Blue Spruce were in here and are genuinely evergreen, but
+    // they did not READ as conifers: only the spruce is conical, both wear the
+    // same generic leaf clump mask, and at a reduced recursion neither keeps
+    // the habit that would tell you what it is. A wood of trees that are
+    // secretly evergreen is worse than a wood that plainly is not.
+    initForest(recordingScene(), GARDEN_CONFIG, { mobile: false });
+    for (const entry of nearTreeEntries()) {
+        expect(`${entry.species.id}: ${entry.evergreen}`).toBe(`${entry.species.id}: false`);
+    }
+    // The horizon still has conifers, which is where dark winter mass belongs.
+    expect(GARDEN_CONFIG.world.farForest.evergreenShare).toBeGreaterThan(0.2);
+    disposeForest();
+});
+
+test('the wood goes properly bare in deep winter', () => {
+    // M7-2 and M3-3 both call for bare, and it was not happening: the threshold
+    // was the flat tier's 0.82 while this mask paints 0.62 to 0.92, so about a
+    // third of the canopy stood through winter and overlapping clumps kept more.
+    // Through the recorder: under the plain stub a material is absorbed and a
+    // threshold cannot be read back off it.
+    measureWood(() => initForest(recordingScene(), GARDEN_CONFIG, { mobile: false }));
+    const N = GARDEN_CONFIG.world.nearTreeline;
+
+    // Hour 2 is deep winter, fully turned and fully dropped.
+    updateForest(2, 1, { x: 0, z: 0 }, 0);
+    for (const entry of nearTreeEntries()) {
+        if (!entry.leafMesh) continue;
+        expect(entry.leafMesh.material.alphaTest).toBeCloseTo(N.bareAlphaTest, 6);
+    }
+    // And in full leaf it is the leafy threshold, or summer would be thin.
+    updateForest(12, 0, { x: 0, z: 0 }, 0);
+    for (const entry of nearTreeEntries()) {
+        if (!entry.leafMesh) continue;
+        expect(entry.leafMesh.material.alphaTest)
+            .toBeCloseTo(GARDEN_CONFIG.world.farForest.leafyAlphaTest, 6);
+    }
+    disposeForest();
+});
+
+test('the bare threshold really does clear the mask it has to erase', () => {
+    // The number that matters, tied to the texture rather than asserted on its
+    // own: if the mask is ever repainted brighter than the threshold, the wood
+    // silently keeps its winter canopy again and nothing else fails.
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'tree.js'), 'utf8');
+    const fn = src.slice(src.indexOf('export function leafClusterTexture'));
+    const m = fn.slice(0, fn.indexOf('\n}')).match(/rgba\(255,255,255,\$\{([\d.]+) \+ random\(\) \* ([\d.]+)\}\)/);
+    expect(m).not.toBeNull();
+    const brightest = Number(m[1]) + Number(m[2]);
+    expect(GARDEN_CONFIG.world.nearTreeline.bareAlphaTest).toBeGreaterThan(brightest);
 });

@@ -653,6 +653,18 @@ function handleRemove(entry) {
     save();
 }
 
+/**
+ * How much movement the visitor asked for, 1 or damped.
+ *
+ * THE FLAG INVERTS HERE. Everywhere else on the site it removes movement; in
+ * this scene the movement IS the content, so it damps toward a drift instead.
+ * The clock is untouched, which M4-9 asserts: reduced motion asks for less
+ * movement, never for less garden.
+ */
+function motionScale() {
+    return state.reducedMotion ? GARDEN_CONFIG.tree.reducedMotion : 1;
+}
+
 function handleReset() {
     const trees = getTrees().length;
     // An empty plot has nothing to lose, so it clears without being asked.
@@ -829,13 +841,14 @@ function animate() {
 
     updateSky(hour, delta, snow, weather.gloom, flash);
     updateTerrain(hour, snow);
-    updateForest(hour, snow, weather.wind, state.elapsedSeconds);
+    updateForest(hour, snow, weather.wind, state.elapsedSeconds, motionScale());
     updateVista(hour, state.elapsedSeconds, snow, weather.gloom, camera);
     updateWildlife(hour, state.elapsedSeconds, snow);
     updateGarden(delta, state.elapsedSeconds, {
         rain: weather.rain,
         snow,
-        wind: weather.wind
+        wind: weather.wind,
+        motion: motionScale()
     });
     updateHud(yearAt(state.elapsedSeconds), state.elapsedSeconds, weatherWords(weather));
     if (isCardOpen()) {

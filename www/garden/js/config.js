@@ -237,6 +237,31 @@ export const GARDEN_CONFIG = deepFreeze({
         // the full 1.0 m it used to, which was a third of the whole tree.
         swayPerMetre: 0.1,
 
+        // ---- Leaf flutter (M8-7) --------------------------------------------
+        // A LEAF AND ITS BRANCH ARE TWO MOTIONS, and at one frequency they read
+        // as one. The branch runs at 1.35 rad/s; the flutter ran at 1.6, close
+        // enough that the two beat slowly and the canopy looked like a rigid
+        // thing being pushed. It was also ONE-SIDED, sin * 0.5 + 0.5, so it
+        // never came back through rest: at a steady wind that is a static
+        // offset with a wobble on it rather than a flutter.
+        //
+        // 4.6 against 1.35 is a ratio of 3.4, which never lines up, and `cross`
+        // adds a component ACROSS the wind so a leaf turns rather than only
+        // sliding. Both ride uWind, so they ride the gust envelope for free.
+        leafFlutter: {
+            rate: 4.6,
+            along: 0.16,
+            cross: 0.11
+        },
+
+        // ---- Reduced motion (M8-9) ------------------------------------------
+        // THIS INVERTS THE HOUSE RULE ON PURPOSE. Everywhere else on the site
+        // the flag removes movement. Here the movement IS the content, so
+        // removing it would be taking the scene away. What is left is a gentle
+        // drift. The clock is untouched either way: reduced motion asks for
+        // less movement, never for less garden.
+        reducedMotion: 0.35,
+
         leafCardScale: 2.0,
         // Against mask alpha that runs 0.62 to 0.92 in a single blob. Low
         // enough that one blob survives on its own, high enough that the soft
@@ -511,6 +536,13 @@ export const GARDEN_CONFIG = deepFreeze({
             // were 6 to 11 px at 30 m, too small to merge into a canopy: at 3.6
             // a bur oak's clump is 0.61 m, about 16 px, which reads as foliage
             // rather than as specks on a wire.
+            // Erases the canopy OUTRIGHT in deep winter. The flat tier stops
+            // at 0.82 because its trunk and limbs are painted into the same
+            // texture and must survive; this mask holds nothing but foliage,
+            // since the branches here are real geometry. Left at 0.82 the
+            // mask's own 0.62 to 0.92 alpha kept about a third of the canopy
+            // through winter, and overlapping clumps kept more.
+            bareAlphaTest: 0.99,
             leafCards: 700,
             leafScale: 3.6,
 

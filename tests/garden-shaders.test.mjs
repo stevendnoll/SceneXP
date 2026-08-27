@@ -20,6 +20,7 @@
  * reserved word" and nothing at all about which word or why it was reserved.
  */
 import { readFileSync, readdirSync } from 'node:fs';
+import { GARDEN_CONFIG } from '../www/garden/js/config.js';
 import { join } from 'node:path';
 
 const DIR = join(process.cwd(), 'www', 'garden', 'js');
@@ -393,4 +394,94 @@ test('every injected material names its own program cache key, and no two share 
     }
     expect(keys.length).toBeGreaterThan(3);
     expect(new Set(keys).size).toBe(keys.length);
+});
+
+// ---- Leaf flutter and the motion damp (M8-7, M8-9) -------------------------
+
+test('the leaf flutter is a SECOND motion, not the branch one repeated', () => {
+    // Two motions at one frequency read as one motion. The branch runs at 1.35
+    // and the flutter used to run at 1.6, close enough that the two beat slowly
+    // and the canopy looked like a rigid thing being pushed.
+    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const leaf = tree.slice(tree.indexOf('const LEAF_BODY'));
+    const body = leaf.slice(0, leaf.indexOf('`;'));
+
+    // Its own rate, from config, not a literal near the branch's.
+    expect(body).toMatch(/uTime \* \(uFlutterRate/);
+    // And well clear of the branch. Read both numbers rather than trusting one.
+    const rate = GARDEN_CONFIG.tree.leafFlutter.rate;
+    expect(rate / 1.35).toBeGreaterThan(2.5);
+
+    // TWO-SIDED. `sin * 0.5 + 0.5` never comes back through rest, so at a
+    // steady wind it is a static offset with a wobble on it, not a flutter.
+    expect(body).not.toMatch(/sin\(leafLP\) \* 0\.5 \+ 0\.5/);
+    // And it pushes ACROSS the wind as well as along it, which is a leaf
+    // turning rather than a leaf sliding.
+    expect(body).toMatch(/uFlutterCross/);
+});
+
+test('the wood flutters on the same terms the garden does', () => {
+    const forest = readFileSync(join(DIR, 'forest.js'), 'utf8');
+    expect(forest).toMatch(/uFlutterRate/);
+    expect(forest).toMatch(/uFlutterCross/);
+    // The bark block must NOT declare the leaf-only attribute: a geometry that
+    // does not have it gets fed zeros by the driver, silently.
+    const bark = forest.slice(forest.indexOf('const SWAY_HEAD'));
+    expect(bark.slice(0, bark.indexOf('`;'))).not.toMatch(/aFlutter/);
+});
+
+test('reduced motion damps every moving term, and removes none of them', () => {
+    // THIS INVERTS THE HOUSE RULE ON PURPOSE, so it is asserted rather than
+    // left to a reader's judgement. The movement is the content here.
+    expect(GARDEN_CONFIG.tree.reducedMotion).toBeGreaterThan(0);
+    expect(GARDEN_CONFIG.tree.reducedMotion).toBeLessThan(1);
+    expect(GARDEN_CONFIG.weather.gust.reducedDamp).toBeGreaterThan(0);
+    expect(GARDEN_CONFIG.weather.gust.reducedDamp).toBeLessThan(1);
+
+    // NAMED ONE BY ONE, on purpose. Two earlier versions of this scanned the
+    // shader text for "motion terms" and both produced false positives,
+    // because a motion term is not syntactically distinguishable from a static
+    // one: `sin(aPhase * 3.1)` in the leaf-fall scatter is a per-leaf CONSTANT,
+    // and `vec3 barkGust = vec3(uWind.x, ...)` is a declaration rather than a
+    // displacement. Listing them is duller and it is right.
+    //
+    // A term added later will not be caught here. That is the cost, and the
+    // reason it is acceptable: the damp is one multiply at the end of a line,
+    // and this file is where somebody adding one will look.
+    const body = (file, marker) => {
+        const src = readFileSync(join(DIR, file), 'utf8');
+        const block = src.slice(src.indexOf(marker));
+        return block.slice(0, block.indexOf('`;'));
+    };
+    const damped = (text, needle) => {
+        const at = text.indexOf(needle);
+        expect(at).toBeGreaterThanOrEqual(0);
+        const statement = text.slice(at, text.indexOf(';', at));
+        expect(`${needle.slice(0, 24)}: ${statement.includes('uMotion') ? 'damped' : 'UNDAMPED'}`)
+            .toBe(`${needle.slice(0, 24)}: damped`);
+    };
+
+    // The planted trees: branch sway, leaf flutter, and the branch sway the
+    // leaves inherit so the canopy travels with the wood under it.
+    damped(body('tree.js', 'const BARK_BODY'), 'transformed += barkGust');
+    damped(body('tree.js', 'const LEAF_BODY'), 'vec3 leafWorld = (leafAlong');
+    damped(body('tree.js', 'const LEAF_BODY'), 'leafWorld += vec3(uWind.x');
+    // The wood: the same two.
+    damped(body('forest.js', 'const SWAY_BODY'), 'transformed += vec3(uWind.x');
+    damped(body('forest.js', 'const LEAF_SWAY_BODY'), 'transformed += (vec3(uWind.x');
+});
+
+test('reduced motion still never reaches the clock', () => {
+    // M4-9's rule, restated because M8-9 changes what the flag does everywhere
+    // else it is read. Less movement, never less garden.
+    //
+    // The check is on ASSIGNMENTS to the clock, not on lines that mention both.
+    // A first version failed on `stepWeather(..., state.elapsedSeconds, ...,
+    // state.reducedMotion)`, which passes the two side by side and is exactly
+    // what the code should look like.
+    const main = readFileSync(join(DIR, 'main.js'), 'utf8');
+    for (const line of main.split('\n')) {
+        if (!/elapsedSeconds\s*[-+*/]?=[^=]/.test(line)) continue;
+        expect(`${line.trim()}`).not.toMatch(/reduced|motionScale/i);
+    }
 });
