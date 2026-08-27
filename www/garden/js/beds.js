@@ -231,20 +231,19 @@ function buildBedMesh(config, capacity) {
 
     material.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, uniforms);
-        // The world position, for the mottle below. Every injected local is
-        // prefixed: an injected block lands in a scope holding hundreds of
-        // names that are not ours.
-        shader.vertexShader = 'varying vec3 vBedWorld;\n' + shader.vertexShader.replace(
-            '#include <begin_vertex>', `
-    #include <begin_vertex>
-    vBedWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
-`);
+        // FRAGMENT ONLY, ON PURPOSE. A previous version also injected a
+        // `varying vec3 vBedWorld` into the vertex shader to drive a world
+        // space mottle, and the batch of screenshots after it came back with
+        // two of four beds simply not drawn. Nothing in Node could see it: the
+        // instance counts, the matrices and the geometry all measured correct,
+        // batched and incrementally. A vertex injection into a shared three
+        // chunk is the one thing here a green suite cannot check, so it is out
+        // until there is a reason to want it back that is worth the risk.
         shader.fragmentShader = `
 uniform vec3 uMulch;
 uniform vec3 uSnowColor;
 uniform float uSnow;
 uniform float uSnowMix;
-varying vec3 vBedWorld;
 ` + shader.fragmentShader.replace('#include <map_fragment>', `
     #include <map_fragment>
     // The bed takes the season the ground takes. A bed that stayed brown
@@ -256,11 +255,7 @@ varying vec3 vBedWorld;
     // in QA it read as a row of little pale slabs. It is also the tap target,
     // and a target that disappears in winter takes the whole care loop with
     // it for a quarter of the year.
-    vec3 bedCoat = mix(uMulch, uSnowColor, uSnow * uSnowMix);
-    // A slow mottle so neither state is one flat swatch. World space, so no
-    // two beds carry the same pattern.
-    float bedMottle = sin(vBedWorld.x * 5.3) * sin(vBedWorld.z * 4.1) * 0.5 + 0.5;
-    diffuseColor.rgb = bedCoat * (0.88 + 0.24 * bedMottle);
+    diffuseColor.rgb = mix(uMulch, uSnowColor, uSnow * uSnowMix);
 `);
     };
     // three's default program cache key is onBeforeCompile.toString(), so every

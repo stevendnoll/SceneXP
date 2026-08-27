@@ -68,7 +68,18 @@ const state = {
     reducedMotion: false,
     storageAvailable: true,
     lastTime: 0,
-    elapsedSeconds: 0
+    // THE GARDEN'S CALENDAR. Season, year, sun, snow, growth, thirst and
+    // health all derive from it, and it is what gets persisted. It does not
+    // move until the visitor has dismissed the welcome card: a year should not
+    // pass while somebody is still reading what the place is.
+    elapsedSeconds: 0,
+    // THE ANIMATION CLOCK, which always moves. Sway, flutter, falling rain and
+    // drifting fireflies ride this instead, so the welcome frame is alive
+    // while the calendar holds. Never persisted and never read by any rule:
+    // freezing it would not pause the garden, it would photograph it, and a
+    // photograph of rain is streaks hanging motionless in the air, which reads
+    // as broken rather than as still.
+    sceneSeconds: 0
 };
 
 const quality = {
@@ -403,6 +414,10 @@ function loadRaw() {
     }
 }
 
+// Set once the page is going away, and never cleared: there is no coming back
+// from teardown, and a write after it could only erase the garden.
+let tornDown = false;
+
 /**
  * Write the garden, unless somebody has just deleted it.
  *
@@ -419,7 +434,10 @@ function loadRaw() {
  * removes the key, so starting a new garden saves normally from then on.
  */
 function save() {
-    if (!state.storageAvailable) return;
+    // NOTHING MAY BE WRITTEN AFTER TEARDOWN. Teardown is what empties the tree
+    // list, so a save that runs afterwards can only ever put an empty garden
+    // over a real one. See cleanup().
+    if (tornDown || !state.storageAvailable) return;
     try {
         if (storageSeen && localStorage.getItem(GARDEN_CONFIG.storage.key) === null) {
             return;
@@ -925,30 +943,43 @@ function animate() {
         : Math.min((now - state.lastTime) / 1000, GARDEN_CONFIG.clock.maxFrameSeconds);
     state.lastTime = now;
 
-    // THE ONLY PLACE THE GARDEN'S CLOCK MOVES.
-    state.elapsedSeconds += delta;
+    // THE ONLY PLACE EITHER CLOCK MOVES. The animation clock always advances;
+    // the calendar waits for the visitor to begin.
+    const tending = !blocker || blocker.classList.contains('hidden');
+    const gardenDelta = tending ? delta : 0;
+    state.sceneSeconds += delta;
+    state.elapsedSeconds += gardenDelta;
 
     adaptQuality(delta);
 
     const hour = hourAt(state.elapsedSeconds);
     const snow = snowCoverageAt(hour);
 
+    // The weather still turns behind the welcome card, because a static sky is
+    // as dead as a static tree. Its GUST envelope stays on the calendar, which
+    // holds it steady until the visitor begins: the envelope is a pure
+    // function of `elapsedSeconds` by design, so a reload at the same clock
+    // gusts identically, and that is worth more than a moving amplitude for
+    // the few seconds a welcome card is up.
     stepWeather(weather, delta, hour, state.elapsedSeconds, Math.random, state.reducedMotion);
     // `fall` is what the weather actually DREW this frame. The sky takes the
     // flash and the chip takes the two rates, so nothing downstream decides
     // for itself what the weather is doing.
-    const fall = updatePrecipitation(delta, state.elapsedSeconds, weather, snow, Math.random, hour);
+    const fall = updatePrecipitation(delta, state.sceneSeconds, weather, snow, Math.random, hour);
 
     updateSky(hour, delta, snow, weather.gloom, fall.flash);
     updateTerrain(hour, snow);
-    updateForest(hour, snow, weather.wind, state.elapsedSeconds, motionScale());
-    updateVista(hour, state.elapsedSeconds, snow, weather.gloom, camera);
-    updateWildlife(hour, state.elapsedSeconds, snow);
-    updateGarden(delta, state.elapsedSeconds, {
+    updateForest(hour, snow, weather.wind, state.sceneSeconds, motionScale());
+    updateVista(hour, state.sceneSeconds, snow, weather.gloom, camera);
+    updateWildlife(hour, state.sceneSeconds, snow);
+    updateGarden(gardenDelta, state.elapsedSeconds, {
         rain: weather.rain,
         snow,
         wind: weather.wind,
         motion: motionScale(),
+        // The trees sway on the animation clock while their growth, thirst and
+        // health wait on `gardenDelta` above.
+        time: state.sceneSeconds,
         // Pixels per radian of vertical field. The water level holds a size on
         // screen rather than in metres, so it needs the lens and the viewport,
         // both of which move: the composed FOV differs by orientation and the
@@ -995,6 +1026,20 @@ export function getWeather() { return weather; }
 // ---- Cleanup / state -------------------------------------------------------
 
 function cleanup() {
+    // THE LAST WRITE COMES FIRST, AND THEN NOTHING WRITES AGAIN.
+    //
+    // `pagehide` carries two listeners here and they fire in REGISTRATION
+    // order: this one, and then the one that saves. So once teardown learned
+    // to dispose the garden (M10-5), every page exit cleared the tree list and
+    // the save that followed wrote the empty result straight over the
+    // visitor's garden. A hard refresh lost everything they had planted.
+    //
+    // The ordering is made explicit rather than left to the order two
+    // listeners happen to be added in, because that coupling is invisible at
+    // both call sites and this is the second bug in this file to come out of
+    // the pagehide pair (see save()).
+    save();
+    tornDown = true;
     stop();
     disposeGarden();
     disposePrecipitation();
@@ -1061,7 +1106,7 @@ if (typeof document !== 'undefined') {
 }
 
 export const __test__ = {
-    bufToHex, quality, state, placeCamera, animate, needsWater,
+    bufToHex, quality, state, placeCamera, animate, needsWater, save,
     // The camera and the aim it is handed, for the view-control tests. Under
     // the THREE stub every number read back off the camera is zero, so what
     // these are good for is the AIM OBJECT, which is ours and holds real

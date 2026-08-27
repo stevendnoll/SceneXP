@@ -723,3 +723,30 @@ test('the beds take the season, and the snow reaches them', () => {
     expect(uniforms.uSnow.value).toBeCloseTo(0.75, 6);
     disposeBeds();
 });
+
+test('EVERY PLANTED TREE HAS A BED, through the real planting path', () => {
+    // QA found trees standing with a water level and no mulch under them. The
+    // level and the bed are two instanced meshes synced in one loop, so a
+    // count that can differ between them is the whole question.
+    const cells = [[-4, 2], [-1, -3], [2, 1], [4, -2], [0, 4], [-3, 0]];
+    const seen = [];
+    measureWood(() => {
+        builtGarden.initGarden(recordingScene(), { mobile: false });
+        for (const [gx, gz] of cells) {
+            const entry = builtGarden.plantTree('bur-oak', undefined, gx, gz, 0, () => 0.5);
+            seen.push({
+                planted: !!entry,
+                trees: builtGarden.getTrees().length,
+                beds: builtBeds.getBedMesh().count,
+                levels: builtBeds.getLevelMesh().count
+            });
+        }
+    });
+    for (const row of seen) {
+        expect(row.planted).toBe(true);
+        expect(row.beds).toBe(row.trees);
+        expect(row.levels).toBe(row.trees);
+    }
+    expect(seen[seen.length - 1].trees).toBe(cells.length);
+    builtGarden.disposeGarden();
+});

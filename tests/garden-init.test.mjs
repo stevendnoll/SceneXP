@@ -43,6 +43,14 @@ async function bootGarden() {
     return main;
 }
 
+/** Dismiss the welcome card. THE CALENDAR DOES NOT RUN UNTIL THIS HAPPENS, so
+ *  every test that measures elapsed time has to begin here or it is measuring
+ *  a clock that was never going to move. */
+function beginTending() {
+    fire(dom.el('blocker'), 'click');
+    expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
+}
+
 /** Step the most recently registered animation loop n times, advancing the
  *  clock by ms between frames. */
 function stepFrames(n, ms = 16) {
@@ -111,15 +119,21 @@ test('the first frame of a session contributes no time at all', async () => {
     // epoch. Deterministic regardless of how the timer mock reports the clock.
     // A fresh garden opens at the start hour, so "no time has passed" means
     // still sitting exactly there.
+    beginTending();
     stepFrames(1);
     expect(main.getState().elapsedSeconds).toBe(startSeconds());
 });
 
 test('a hidden tab does not age the garden', async () => {
     const main = await bootGarden();
+    beginTending();
 
+    const opening = main.getState().elapsedSeconds;
     stepFrames(30);
     const before = main.getState().elapsedSeconds;
+    // The clock really is running, or everything below passes by measuring
+    // something that was standing still anyway.
+    expect(before).toBeGreaterThan(opening);
 
     // Away for a simulated minute.
     dom.documentStub.hidden = true;
@@ -146,16 +160,21 @@ test('no single frame can advance the clock past the cap', async () => {
     const main = await bootGarden();
     const { GARDEN_CONFIG } = await import('../www/garden/js/config.js');
     const cap = GARDEN_CONFIG.clock.maxFrameSeconds;
+    beginTending();
 
     // Measured as a DELTA, because a fresh garden no longer starts at zero.
     const before = main.getState().elapsedSeconds;
     // Ten frames, each separated by a stall far longer than the cap.
     stepFrames(10, 5000);
-    expect(main.getState().elapsedSeconds - before).toBeLessThanOrEqual(cap * 10);
+    const moved = main.getState().elapsedSeconds - before;
+    expect(moved).toBeLessThanOrEqual(cap * 10);
+    // And it moved at all, or the cap is being checked against a still clock.
+    expect(moved).toBeGreaterThan(0);
 });
 
 test('a new garden opens at sunrise in spring, not at midnight in winter', async () => {
     const main = await bootGarden();
+    beginTending();
     stepFrames(10);
     // Hour zero is the deep of winter, under snow, with the watering window
     // shut. A garden should not be handed over in the dark.
@@ -175,6 +194,39 @@ test('the chip counts years from one', async () => {
     expect(chipText(0, 12)).toBe('Summer, year 1');
     expect(chipText(3.4, 6)).toBe('Spring, year 4');
     expect(chipText(9.99, 18)).toBe('Autumn, year 10');
+});
+
+test('THE YEAR DOES NOT PASS WHILE THE WELCOME CARD IS UP', async () => {
+    // A visitor reading what the place is should not come back to find a
+    // season gone. The calendar waits for them to begin.
+    const main = await bootGarden();
+    const opening = main.getState().elapsedSeconds;
+
+    stepFrames(240);                       // four seconds of frames
+    expect(main.getState().elapsedSeconds).toBe(opening);
+    expect(dom.el('season-chip').textContent).toMatch(/^Spring, year 1/);
+
+    // And it starts the moment they do.
+    beginTending();
+    stepFrames(60);
+    expect(main.getState().elapsedSeconds).toBeGreaterThan(opening);
+});
+
+test('BUT THE SCENE IS NOT A PHOTOGRAPH while it waits', async () => {
+    // Freezing everything would not pause the garden, it would photograph it,
+    // and a photograph of rain is streaks hanging motionless in the air. The
+    // animation clock runs from the first frame so the trees sway and the
+    // weather falls behind the card, while the calendar holds.
+    const main = await bootGarden();
+    const state = main.getState();
+    expect(state.sceneSeconds).toBeDefined();
+
+    const before = main.getState().sceneSeconds;
+    stepFrames(120);
+    const after = main.getState();
+    expect(after.sceneSeconds).toBeGreaterThan(before);
+    // The two clocks are genuinely separate: one moved and one did not.
+    expect(after.elapsedSeconds).toBe(state.elapsedSeconds);
 });
 
 // ---- The whole loop --------------------------------------------------------
@@ -282,6 +334,46 @@ test('deleting the saved garden by hand actually deletes it', async () => {
     // Nothing was written back.
     expect(globalThis.localStorage.getItem(KEY)).toBeNull();
     expect(main.getState().running).toBe(false);
+});
+
+test('A REFRESH DOES NOT LOSE THE GARDEN', async () => {
+    // The bug this exists for lost every visitor their trees on every page
+    // exit. `pagehide` carries two listeners and they fire in REGISTRATION
+    // order: teardown first, then the save. Once teardown learned to dispose
+    // the garden it emptied the tree list, and the save that followed wrote
+    // the empty result straight over what had been planted.
+    //
+    // Nothing caught it because every existing test either checked the save
+    // path or the teardown path, never the two in the order the browser runs
+    // them.
+    const main = await bootGarden();
+    const ui = await import('../www/garden/js/ui.min.js');
+    const KEY = 'scenexp-garden-v1';
+
+    stepFrames(60);
+    ui.openPlantModal({ full: false });
+    fire(dom.el('plant-confirm'), 'click');
+    stepFrames(10);
+
+    const planted = JSON.parse(globalThis.localStorage.getItem(KEY));
+    expect(planted.trees).toHaveLength(1);
+
+    // Now leave the page, exactly as a refresh does.
+    dom.documentStub.hidden = true;
+    dom.documentStub.visibilityState = 'hidden';
+    fire(dom.documentStub, 'visibilitychange');
+    fire(dom.windowStub, 'pagehide');
+    expect(main.getState().running).toBe(false);
+
+    // The tree is STILL THERE for the next visit.
+    const after = JSON.parse(globalThis.localStorage.getItem(KEY));
+    expect(after.trees).toHaveLength(1);
+    expect(after.trees[0].species).toBe(planted.trees[0].species);
+
+    // And a late save cannot undo that: after teardown there is nothing left
+    // to write except an empty garden.
+    main.__test__.save?.();
+    expect(JSON.parse(globalThis.localStorage.getItem(KEY)).trees).toHaveLength(1);
 });
 
 test('a fresh garden starts at the start hour, and saving still works from nothing', async () => {

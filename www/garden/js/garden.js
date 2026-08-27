@@ -442,7 +442,11 @@ export function updateGarden(dt, elapsedSeconds, context = {}, config = GARDEN_C
             evergreen: entry.resolved.evergreen,
             snow,
             wind,
-            time: elapsedSeconds
+            // The animation clock when the conductor supplies one, so a tree
+            // can sway while the calendar is held. Falls back to the calendar,
+            // which is what every caller without a welcome card to wait on
+            // wants.
+            time: context.time === undefined ? elapsedSeconds : context.time
         }), entry.resolved);
 
     }

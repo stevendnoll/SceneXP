@@ -657,9 +657,13 @@ test('the bed takes the season, and stops short of vanishing into it', () => {
     // Assigned, not multiplied by the map. `map_fragment` has already folded
     // the map into diffuseColor, and multiplying a second time is the
     // crimson-trunk bug. The mottle that DOES multiply is a shade, not a mask.
-    expect(beds).toMatch(/diffuseColor\.rgb = bedCoat \* \(0\.88/);
-    // The mottle rides world space, or every bed wears the same pattern.
-    expect(beds).toMatch(/vBedWorld = \(modelMatrix \* instanceMatrix/);
+    expect(beds).toMatch(/diffuseColor\.rgb = mix\(uMulch/);
+    // AND NOTHING IS INJECTED INTO THE VERTEX SHADER. A world-space mottle
+    // that needed a varying went in, and the next batch of screenshots came
+    // back with two of four beds not drawn at all, with every count, matrix
+    // and clearance measuring correct in Node. Until that is understood, this
+    // material touches the fragment stage only.
+    expect(beds).not.toMatch(/shader\.vertexShader/);
 });
 
 test('THE WATER LEVEL HOLDS A SIZE ON SCREEN, not in metres', () => {
