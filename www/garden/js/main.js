@@ -29,7 +29,8 @@ import { GARDEN_CONFIG } from './config.min.js';
 import { hourAt, yearAt, seasonAt, snowCoverageAt, startSeconds } from './clock.min.js';
 import { initSky, updateSky, disposeSky } from './sky.min.js';
 import {
-    initTerrain, updateTerrain, disposeTerrain, getGroundMesh, snapToGrid, nearestFreeCell
+    initTerrain, updateTerrain, disposeTerrain, getGroundMesh, snapToGrid,
+    nearestFreeCell, cellCenter, heightAt
 } from './terrain.min.js';
 import { initForest, updateForest, disposeForest } from './forest.min.js';
 import { initVista, updateVista, disposeVista } from './vista.min.js';
@@ -40,11 +41,12 @@ import { resolveSpecies } from './species.min.js';
 import {
     dollyView, applyDollyDelta, dollyLimits, getDolly, resetView
 } from './view.min.js';
+import { pickBase } from './beds.min.js';
 import { createTree, updateTree, disposeTree } from './tree.min.js';
 import {
     initGarden, plantTree, restoreTrees, removeTree, clearGarden, waterTree,
     updateGarden, getTrees, getOccupied, isFull, capacity, ageYears,
-    entryForObject, serialize, hydrate, needsWater
+    serialize, hydrate, needsWater, disposeGarden
 } from './garden.min.js';
 import {
     initUi, updateHud, showHud, openPlantModal, isPlantOpen,
@@ -601,31 +603,47 @@ function applySiteLinks() {
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
-const tolPointer = new THREE.Vector2();
-const TAP_TOLERANCE_PX = 26;
+const basePoint = new THREE.Vector3();
+const baseEdge = new THREE.Vector3();
 
 /** Nearest tree under a screen point, with the house tap tolerance so a
  *  sapling is reachable with a fingertip. */
-function pickTree(clientX, clientY) {
-    const targets = getTrees().map((t) => t.tree.group);
-    if (!targets.length || !camera) return null;
-    pointer.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
-    raycaster.setFromCamera(pointer, camera);
-    let hits = raycaster.intersectObjects(targets, true);
-    if (hits.length) return entryForObject(hits[0].object);
+/**
+ * Every planted tree's base, projected to CSS pixels.
+ *
+ * THE BED IS NEVER RAYCAST (M10-3). A bed is a disc lying on the ground and the
+ * camera looks along that ground at about 17 degrees, so at the back of the
+ * plot it is five pixels tall: a ray against it is a coin toss. Its base point
+ * is projected instead, and `pickBase` chooses the nearest one within a radius
+ * that follows the drawn bed.
+ *
+ * `radiusPx` is the bed's own projected half-width, so the target matches what
+ * the visitor sees. Both numbers come from the same projection, so they cannot
+ * disagree about where a bed is.
+ */
+function projectBases() {
+    const bases = [];
+    if (!camera) return bases;
+    const B = GARDEN_CONFIG.garden.bed;
+    const halfW = window.innerWidth / 2;
+    const halfH = window.innerHeight / 2;
 
-    const rx = (TAP_TOLERANCE_PX * 2) / window.innerWidth;
-    const ry = (TAP_TOLERANCE_PX * 2) / window.innerHeight;
-    for (const rf of [0.5, 1]) {
-        for (let i = 0; i < 8; i++) {
-            const ang = (i / 8) * Math.PI * 2;
-            tolPointer.set(pointer.x + Math.cos(ang) * rx * rf, pointer.y + Math.sin(ang) * ry * rf);
-            raycaster.setFromCamera(tolPointer, camera);
-            hits = raycaster.intersectObjects(targets, true);
-            if (hits.length) return entryForObject(hits[0].object);
-        }
+    for (const entry of getTrees()) {
+        const { x, z } = cellCenter(entry.record.gx, entry.record.gz);
+        basePoint.set(x, heightAt(x, z), z);
+        baseEdge.set(x + B.radius, heightAt(x, z), z);
+        basePoint.project(camera);
+        baseEdge.project(camera);
+        // Behind the eye: `project` still returns numbers there, and they are
+        // mirrored, so a tree behind the camera would otherwise pick as though
+        // it were in front of it.
+        if (basePoint.z > 1) { bases.push({ entry, behind: true }); continue; }
+        const sx = (basePoint.x + 1) * halfW;
+        const sy = (1 - basePoint.y) * halfH;
+        const ex = (baseEdge.x + 1) * halfW;
+        bases.push({ entry, x: sx, y: sy, radiusPx: Math.abs(ex - sx) });
     }
-    return null;
+    return bases;
 }
 
 function pickGround(clientX, clientY) {
@@ -641,9 +659,16 @@ function handleSceneTap(clientX, clientY) {
     if (!state.loaded || anyModalOpen()) return;
     if (blocker && !blocker.classList.contains('hidden')) return;
 
-    // A tree outranks the ground: tapping a trunk should never plant a second
-    // tree behind it.
-    const tree = pickTree(clientX, clientY);
+    // THE BED DECIDES, AND NOTHING ELSE DOES. A tap on a mulch bed tends that
+    // tree; a tap anywhere else plants. The canopy used to outrank the ground,
+    // which meant that the fuller the plot got, the more of the ground a
+    // visitor wanted was behind a tree.
+    //
+    // The consequence is deliberate: TAPPING A TREE'S LEAVES NOW PLANTS A TREE
+    // BEHIND IT. That is what makes the interaction unambiguous rather than a
+    // side effect of it, and there is a test that says so, because this is the
+    // rule somebody will quietly put back.
+    const tree = pickBase(clientX, clientY, projectBases());
     if (tree) {
         openTreeCard(tree, ageYears(tree.record, state.elapsedSeconds));
         track('tree-opened', { species: tree.record.species });
@@ -681,7 +706,10 @@ function handlePlant(selection) {
         cell.gx, cell.gz, state.elapsedSeconds);
     pendingCell = null;
     if (!entry) { toast('That spot is taken.'); return; }
-    toast(`${entry.resolved.name} planted. It will take about four years to fill out.`);
+    // The copy names no number on purpose. A tree goes in already part grown
+    // (M10-1) and the exact remaining years move with one config value, so a
+    // sentence with a figure in it would go stale the first time that changes.
+    toast(`${entry.resolved.name} planted as a young sapling. Water it through the summers and it will fill out.`);
     track('tree-planted', {
         species: entry.record.species,
         customised: isCustomised(selection.custom) ? 1 : 0
@@ -961,6 +989,7 @@ export function getWeather() { return weather; }
 
 function cleanup() {
     stop();
+    disposeGarden();
     disposePrecipitation();
     disposeForest();
     disposeVista();

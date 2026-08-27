@@ -640,3 +640,45 @@ test('the width lint can actually see the bug it exists for', () => {
     // And a call it does not model is left alone rather than guessed at.
     expect(widthOfExpression('mix(a, b, t)', {})).toBe(UNKNOWN);
 });
+
+// ---- The bed and the water level (M10) -------------------------------------
+
+test('the bed takes the season the ground takes', () => {
+    // A bed that stayed brown through a covered winter would be the only bare
+    // earth in the frame, and the ground's own snow blend is a fragment away.
+    const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
+    expect(beds).toMatch(/uniform float uSnow;/);
+    expect(beds).toMatch(/mix\(uMulch, uSnowColor, uSnow\)/);
+    // Assigned, not multiplied. `map_fragment` has already folded the map into
+    // diffuseColor, and multiplying a second time is the crimson-trunk bug.
+    expect(beds).toMatch(/diffuseColor\.rgb = mix\(uMulch/);
+});
+
+test('THE WATER LEVEL IS UNLIT, or it vanishes exactly when it is needed', () => {
+    // Same reason the droplet it replaces was MeshBasicMaterial: a readout has
+    // to be legible at midnight, and midnight here is a whole season.
+    const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
+    const block = beds.slice(beds.indexOf('function buildLevelMesh'));
+    const body = block.slice(0, block.indexOf('\n}\n'));
+    expect(body).toMatch(/new THREE\.ShaderMaterial/);
+    expect(body).not.toMatch(/MeshLambertMaterial|MeshStandardMaterial|MeshPhongMaterial/);
+    expect(body).toMatch(/fog: false/);
+});
+
+test('the level is quiet when full, in the shader as well as the rule', () => {
+    // `levelUrgency` decides how loud, and the fragment has to actually spend
+    // it. A shader that ignored it would put sixteen bright bars in a frame
+    // that Addendum B cleared on purpose.
+    const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
+    const frag = beds.slice(beds.indexOf('const LEVEL_FRAG'));
+    const body = frag.slice(0, frag.indexOf('`;'));
+    expect(body).toMatch(/alpha = uOpacity \* \(0\.35 \+ 0\.65 \* vBedUrgency\)/);
+    expect(body).toMatch(/step\(vBedUv\.x, vBedFill\)/);
+});
+
+test('the bed material names its own program cache key', () => {
+    // three's default key is onBeforeCompile.toString(), so a new injected
+    // material without one can be handed another's compiled program.
+    const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
+    expect(beds).toMatch(/customProgramCacheKey = \(\) => 'garden-bed'/);
+});

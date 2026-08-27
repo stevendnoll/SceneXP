@@ -264,6 +264,12 @@ test('deleting the saved garden by hand actually deletes it', async () => {
     stepFrames(10);
     expect(globalThis.localStorage.getItem(KEY)).toBeTruthy();
 
+    // The tree really is in this session, which is what makes the save guard
+    // interesting: there IS something worth writing and it must not be written.
+    // Checked here rather than after the teardown below, because `pagehide`
+    // disposes the whole scene, the garden included.
+    expect(garden.getTrees()).toHaveLength(1);
+
     // The visitor opens devtools and removes it.
     globalThis.localStorage.removeItem(KEY);
 
@@ -276,9 +282,6 @@ test('deleting the saved garden by hand actually deletes it', async () => {
     // Nothing was written back.
     expect(globalThis.localStorage.getItem(KEY)).toBeNull();
     expect(main.getState().running).toBe(false);
-    // The tree is still in this session; what matters is that nothing was
-    // written back for the NEXT one to find.
-    expect(garden.getTrees()).toHaveLength(1);
 });
 
 test('a fresh garden starts at the start hour, and saving still works from nothing', async () => {

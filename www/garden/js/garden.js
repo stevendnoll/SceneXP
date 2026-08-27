@@ -35,6 +35,7 @@ import {
 import { resolveSpecies, clampCustom, speciesById, newSeed, DEFAULT_CUSTOM } from './species.min.js';
 import { createTree, updateTree, disposeTree } from './tree.min.js';
 import { heightAt, cellCenter, cellKey, cellInPlot } from './terrain.min.js';
+import { initBeds, syncBeds, updateBeds, disposeBeds } from './beds.min.js';
 
 // ---- Derived constants (pure) ----------------------------------------------
 
@@ -159,6 +160,18 @@ export function viewFor(record, hour, options = {}) {
 
 let nextId = 1;
 
+/**
+ * The growth a newly planted tree starts at.
+ *
+ * DERIVED FROM THE AGE RATHER THAN WRITTEN DOWN, so the two numbers cannot
+ * drift: growth advances at exactly `1 / maturityYears` per year at full
+ * health, so an age is a growth. See `config.garden.plantAgeYears`.
+ */
+export function plantingGrowth(config = GARDEN_CONFIG) {
+    const G = config.garden;
+    return clamp01((G.plantAgeYears || 0) / G.maturityYears);
+}
+
 export function createRecord(speciesId, custom, gx, gz, plantedAt, seed) {
     return {
         id: `t${nextId++}`,
@@ -167,7 +180,10 @@ export function createRecord(speciesId, custom, gx, gz, plantedAt, seed) {
         gx, gz,
         custom: clampCustom(custom),
         plantedAt,
-        growth: 0,
+        // ONLY THIS FIELD STARTS FORWARD. Everything below it starts where a
+        // brand new tree starts, because `plantedAt` drives the decline
+        // schedule and backdating that would plant a thirsty tree.
+        growth: plantingGrowth(),
         moisture: 1,
         health: 1,
         bud: 0,
@@ -279,6 +295,7 @@ let sceneRef = null;
 let optionsRef = { mobile: false };
 
 export function initGarden(scene, options = {}) {
+    initBeds(scene, GARDEN_CONFIG, options);
     sceneRef = scene;
     optionsRef = options;
 }
@@ -299,64 +316,32 @@ export function capacity(config = GARDEN_CONFIG) {
     return optionsRef.mobile ? config.plot.maxTreesMobile : config.plot.maxTrees;
 }
 
-/**
- * The thirst marker: a small droplet that appears over a tree with an empty
- * tank.
- *
- * THE ONLY UNPROMPTED THING ON SCREEN, and it is deliberately dull. It does
- * not pulse, flash, spin, or make a noise. A garden of twenty thirsty trees
- * should look like a garden that needs attention, not like an inbox. It is
- * also the only way to know which tree needs water without tapping all of
- * them, so leaving it out would have made the care loop a guessing game.
- *
- * MeshBasicMaterial on purpose: a marker has to read at midnight as well as at
- * noon, and anything lit would disappear exactly when the garden is hardest to
- * read.
- */
-function buildThirstMarker() {
-    const geo = new THREE.SphereGeometry(0.16, 10, 8);
-    // Squashed into a teardrop, point up.
-    geo.scale(1, 1.5, 1);
-    const material = new THREE.MeshBasicMaterial({
-        color: 0x8fd3f4,
-        transparent: true,
-        opacity: 0.85,
-        depthWrite: false,
-        fog: false
-    });
-    const mesh = new THREE.Mesh(geo, material);
-    mesh.name = 'thirst';
-    mesh.visible = false;
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
-    // It is a readout rather than a target: tapping where it floats should
-    // still open the tree underneath it.
-    mesh.raycast = () => { };
-    return mesh;
-}
-
 /** Build the meshes for a record and stand it on the ground. */
 function materialise(record) {
     const resolved = resolveSpecies(record.species, record.custom);
     const built = createTree(resolved, record.seed, optionsRef);
     const { x, z } = cellCenter(record.gx, record.gz);
     built.group.position.set(x, heightAt(x, z), z);
-    const marker = buildThirstMarker();
-    built.group.add(marker);
     if (sceneRef) sceneRef.add(built.group);
-    const entry = { record, resolved, tree: built, marker };
+    const entry = { record, resolved, tree: built };
     trees.push(entry);
     occupied.add(cellKey(record.gx, record.gz));
+    // The beds are one instanced mesh, so the whole buffer is rebuilt whenever
+    // the list changes. Never per frame: a bed does not move once it is laid,
+    // and the level's fill rides an attribute rather than a matrix.
+    syncBeds(trees, GARDEN_CONFIG);
     return entry;
 }
 
 /**
  * How tall a tree is right now, in metres.
  *
- * The SAME curve the bark shader uses for `uScale`, because the marker has to
- * float above the tree the visitor can see rather than above the tree it will
- * eventually be. Two curves that had to agree would drift, and the symptom
- * would be a droplet buried in a canopy.
+ * THE ONE STATEMENT OF A TREE'S HEIGHT, and the same curve the bark shader
+ * uses for `uScale`. It was written to float the thirst marker above a canopy
+ * rather than above the tree the canopy will eventually be; that marker is
+ * gone (M10-5) and this outlived it, because the question "how big is this
+ * thing actually" is what M10-1 is about and a test that recomputed the curve
+ * would only be restating the code it was checking.
  */
 export function currentHeight(record, resolved, config = GARDEN_CONFIG) {
     const T = config.tree;
@@ -386,17 +371,22 @@ export function removeTree(entry) {
     trees.splice(i, 1);
     occupied.delete(cellKey(entry.record.gx, entry.record.gz));
     if (sceneRef) sceneRef.remove(entry.tree.group);
-    if (entry.marker) {
-        entry.marker.geometry.dispose();
-        entry.marker.material.dispose();
-    }
     disposeTree(entry.tree);
+    syncBeds(trees, GARDEN_CONFIG);
     return true;
 }
 
 export function clearGarden() {
     while (trees.length) removeTree(trees[trees.length - 1]);
     nextId = 1;
+}
+
+/** Teardown, paired with initGarden. The beds are built in there, so they come
+ *  down from here rather than leaving main.js to know they exist. */
+export function disposeGarden() {
+    clearGarden();
+    disposeBeds();
+    sceneRef = null;
 }
 
 /**
@@ -455,15 +445,11 @@ export function updateGarden(dt, elapsedSeconds, context = {}, config = GARDEN_C
             time: elapsedSeconds
         }), entry.resolved);
 
-        if (entry.marker) {
-            entry.marker.visible = needsWater(r.moisture, config);
-            if (entry.marker.visible) {
-                const bob = optionsRef.reducedMotion
-                    ? 0 : Math.sin(elapsedSeconds * 1.1 + r.gx) * 0.07;
-                entry.marker.position.y = currentHeight(r, entry.resolved, config) + 0.75 + bob;
-            }
-        }
     }
+
+    // The beds take the season and the levels take each tree's tank. One pass
+    // over the instance attributes rather than a mesh per tree.
+    updateBeds(trees, snow, config);
 }
 
 /** Ages in whole years, for the tree card. */
@@ -474,17 +460,6 @@ export function ageYears(record, elapsedSeconds, config = GARDEN_CONFIG) {
 /** The meshes a tap can hit, for the raycaster. */
 export function getPickTargets() {
     return trees.map((t) => t.tree.group);
-}
-
-/** Walk up from a hit object to the entry that owns it. */
-export function entryForObject(object) {
-    let o = object;
-    while (o) {
-        const found = trees.find((t) => t.tree.group === o);
-        if (found) return found;
-        o = o.parent;
-    }
-    return null;
 }
 
 export function seasonNow(elapsedSeconds, config = GARDEN_CONFIG) {

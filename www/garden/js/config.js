@@ -357,6 +357,96 @@ export const GARDEN_CONFIG = deepFreeze({
         // It never goes backwards.
         minGrowthHealth: 0.15,
 
+        // ---- You plant a sapling, not a seed (M10-1) -------------------------
+        // A tree planted at age zero is not merely small, it is BARE: the first
+        // leaves do not arrive until growth 0.32, so a fresh planting was a
+        // colourless twig for the first ninety seconds. That is what QA meant
+        // by "the saplings are not even visible".
+        //
+        // ONLY THE GROWTH STARTS FORWARD. `plantedAt`, `health`, `moisture` and
+        // `lastWateredAt` all still start where they started, because the
+        // decline schedule is measured from `plantedAt` and backdating it would
+        // hand the visitor a tree already part-way through its first drought.
+        // The story is a nursery-grown sapling rather than a seed, which is
+        // also what a person actually buys.
+        //
+        // Measured height as a percentage of mature, which is what the note was
+        // about rather than the growth number:
+        //
+        //     age 0    24 percent, and bare
+        //     age 1    34
+        //     age 2    56          <- here
+        //     age 3    80
+        //     age 4.5  100
+        //
+        // TWO IS DELIBERATE AND THREE WAS ASKED FOR. At three a Bur Oak goes
+        // into the ground at 11.2 m of its 14 and there is almost nothing left
+        // to watch, which gives away the one thing the care loop pays for. Two
+        // is plainly a young tree, carries leaves from the first frame, and
+        // leaves nearly half the arc still to come. See PRD Addendum D.1: this
+        // is a screenshot decision and the number is here to be moved.
+        plantAgeYears: 2,
+
+        // ---- The mulch bed (M10-2, M10-3, M10-4) ----------------------------
+        // A round bed of raised mulch under every planted tree. It grounds a
+        // sapling that would otherwise look pasted onto a lawn, it carries the
+        // water level, and above all IT IS THE TREE'S TAP TARGET.
+        bed: {
+            // 1.1 m across against a 1.5 m planting grid, so two beds on
+            // adjacent cells leave 0.4 m of grass between them and can never
+            // overlap. That is what makes the tap unambiguous by construction
+            // rather than by tuning.
+            radius: 0.55,
+            taper: 0.86,        // top radius as a fraction of the bottom
+            segments: 20,
+            // The bed spans from `skirt` below the lowest ground it covers to
+            // `lip` above the highest, so nothing buries and nothing floats.
+            // Capped, or the steepest corner of the plot draws a pillar.
+            lip: 0.10,
+            skirt: 0.06,
+            maxHeight: 0.60,
+            color: 0x4a3527,
+
+            // ---- Picking ----------------------------------------------------
+            // THE BED IS NEVER RAYCAST. Measured on a 1280x800 frame, a bed of
+            // this radius is 60 x 30 px at the near edge of the plot, 36 x 11
+            // in the middle and 24 x 5 at the far edge, because the camera
+            // looks along the ground at about 17 degrees. Five pixels tall is
+            // not a touch target and a bigger bed cannot fix it: at 1.5 m
+            // spacing, one tappable at the back would swallow its neighbours
+            // at the front. So the pick is done in screen space against the
+            // projected base points. See beds.js.
+            //
+            // The radius follows the drawn bed, with a floor so the back row
+            // stays reachable. Measured, the floor binds everywhere except the
+            // front of the plot: half-widths run 30 px near, 18 mid and 12 far,
+            // so most beds get a slightly generous target. That costs little,
+            // because `nearestFreeCell` already snaps a planting tap to the
+            // nearest spot that works and planting never needed pixel
+            // precision in the first place.
+            minPickPx: 22,
+            pickScale: 1.0,
+
+            // ---- The water level --------------------------------------------
+            // An upright camera-facing bar at the front of the bed. Always
+            // present, always showing how full the tank is, so the whole garden
+            // can be read at a glance instead of only the trees that have
+            // already crossed a threshold.
+            levelWidth: 0.62,
+            levelHeight: 0.085,
+            levelLift: 0.05,
+            levelOpacity: 0.92,
+            levelTrackColor: 0x1e2a30,
+            levelFullColor: 0x6fb3d4,
+            levelEmptyColor: 0xd9a05b,
+            // QUIET WHEN FULL. Addendum B took everything out of this frame
+            // that competed with the swaying, and this milestone puts sixteen
+            // small readouts back in. A level stays nearly transparent until
+            // the tank is down to here, so a healthy garden looks like a garden
+            // and only a thirsty one looks like it wants something.
+            noticeAbove: 0.55
+        },
+
         moisture: {
             // A full tank lasts exactly one thirst window, so a diligent
             // visitor waters each tree about once a year and a slightly late

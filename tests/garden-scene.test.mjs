@@ -28,6 +28,7 @@ let createTree, disposeTree, resolveSpecies;
 let updateVista, snowCoverageAt;
 let pondHalfWidth;
 let initForest, disposeForest, updateForest, getForestMeshes, __forest;
+let initBeds, disposeBeds, syncBeds, updateBeds, __beds;
 
 /** A scene that only records what was put in it. */
 function recordingScene() {
@@ -47,6 +48,7 @@ beforeAll(async () => {
     // forest.js paints its canopy and leaf masks into a canvas at build time.
     installCanvas();
     ({ GARDEN_CONFIG } = await import('../www/garden/js/config.js'));
+    ({ initBeds, disposeBeds, syncBeds, updateBeds, __test__: __beds } = await import('../www/garden/js/beds.js'));
     ({ initWildlife, updateWildlife, disposeWildlife } =
         await import('../www/garden/js/wildlife.js'));
     ({ initVista, disposeVista } = await import('../www/garden/js/vista.js'));
@@ -370,7 +372,15 @@ function measureWood(run) {
                         this.material = material;
                         this.count = count;
                         this.name = '';
-                        this.instanceMatrix = { array: new Float32Array(Math.max(1, count) * 16), needsUpdate: false };
+                        // `count` as well as the array: real three exposes it
+                        // on the attribute and code reads it to find the
+                        // buffer's capacity. Without it that read is undefined
+                        // and every clamp derived from it comes out NaN.
+                        this.instanceMatrix = {
+                            array: new Float32Array(Math.max(1, count) * 16),
+                            count,
+                            needsUpdate: false
+                        };
                         meshes.push(this);
                     }
                     setMatrixAt() { }
@@ -538,4 +548,123 @@ test('the bare threshold really does clear the mask it has to erase', () => {
     expect(m).not.toBeNull();
     const brightest = Number(m[1]) + Number(m[2]);
     expect(GARDEN_CONFIG.world.nearTreeline.bareAlphaTest).toBeGreaterThan(brightest);
+});
+
+// ---- The beds pay their way (M10-6) ----------------------------------------
+//
+// Addendum B cleared this frame of everything that competed with the swaying,
+// and M10 puts a bed and a water level under every tree. The cost has to be a
+// number rather than a hope, and the shared stub cannot count, so the beds are
+// built under the same real-geometry harness the wood is measured with.
+
+test('THE BEDS AND THE LEVELS ARE TWO DRAW CALLS, not thirty two', () => {
+    const meshes = measureWood(() => {
+        initBeds(recordingScene(), GARDEN_CONFIG, { mobile: false });
+    });
+
+    // One instanced mesh each, whatever the plot holds.
+    expect(meshes).toHaveLength(2);
+    expect(meshes.map((m) => m.name).sort()).toEqual(['mulch-beds', 'water-levels']);
+
+    // Sized for the plot's capacity.
+    for (const mesh of meshes) {
+        expect(mesh.instanceMatrix.array.length / 16).toBe(GARDEN_CONFIG.plot.maxTrees);
+        // And starting EMPTY: an instanced mesh whose count is its capacity
+        // draws sixteen beds into a garden that has none.
+        expect(mesh.count).toBe(0);
+    }
+    disposeBeds();
+});
+
+test('the beds cost a rounding error against the scene budget', () => {
+    // A twenty-sided truncated cone is 40 side triangles plus two caps of 20,
+    // so about 80 a bed, and a level is two. Against a scene measured near
+    // 371,600 of its 400,000 this has to be invisible or the milestone has
+    // quietly spent the wood's headroom on interface.
+    const B = GARDEN_CONFIG.garden.bed;
+    const perBed = B.segments * 4;
+    const perLevel = 2;
+    const total = GARDEN_CONFIG.plot.maxTrees * (perBed + perLevel);
+    expect(total).toBeLessThan(2000);
+});
+
+test('a mobile plot builds a smaller bed buffer, not the desktop one', () => {
+    const meshes = measureWood(() => {
+        initBeds(recordingScene(), GARDEN_CONFIG, { mobile: true });
+    });
+    for (const mesh of meshes) {
+        expect(mesh.instanceMatrix.array.length / 16).toBe(GARDEN_CONFIG.plot.maxTreesMobile);
+    }
+    expect(GARDEN_CONFIG.plot.maxTreesMobile).toBeLessThan(GARDEN_CONFIG.plot.maxTrees);
+    disposeBeds();
+});
+
+test('SYNCING THE BEDS TRACKS THE TREE LIST, and clamps to the buffer', () => {
+    // The beds are one instanced mesh, so "how many are drawn" is a number that
+    // has to be maintained. An instanced mesh whose count is left at capacity
+    // draws sixteen beds into a garden holding three, and nothing throws.
+    let counted = [];
+    const meshes = measureWood(() => {
+        initBeds(recordingScene(), GARDEN_CONFIG, { mobile: false });
+        const at = (gx, gz, moisture) => ({ record: { gx, gz, moisture } });
+        counted.push(syncBeds([]));
+        counted.push(syncBeds([at(0, 0, 1), at(1, 0, 1), at(-2, 3, 1)]));
+        // More trees than the plot can hold cannot overrun the buffer.
+        const many = [];
+        for (let i = 0; i < GARDEN_CONFIG.plot.maxTrees + 8; i++) many.push(at(i % 5, i % 7, 1));
+        counted.push(syncBeds(many));
+    });
+
+    expect(counted).toEqual([0, 3, GARDEN_CONFIG.plot.maxTrees]);
+    for (const mesh of meshes) expect(mesh.count).toBe(GARDEN_CONFIG.plot.maxTrees);
+    disposeBeds();
+});
+
+test('the level reads each tree\'s own tank, and only the live ones', () => {
+    // The fill and the urgency ride per-instance attributes rather than a
+    // uniform, which is the only way one draw call can show sixteen different
+    // tanks. These are real typed arrays under the measurement harness, so the
+    // numbers can actually be read back.
+    const B = GARDEN_CONFIG.garden.bed;
+    let levels;
+    measureWood(() => {
+        initBeds(recordingScene(), GARDEN_CONFIG, { mobile: false });
+        const entries = [
+            { record: { gx: 0, gz: 0, moisture: 1 } },      // full
+            { record: { gx: 2, gz: 0, moisture: 0.3 } },    // getting on
+            { record: { gx: -2, gz: 1, moisture: 0 } }      // empty
+        ];
+        syncBeds(entries);
+        updateBeds(entries, 0);
+        levels = __beds.levelAttributes();
+    });
+
+    const fill = levels.fill.array;
+    const urgency = levels.urgency.array;
+    expect(fill[0]).toBeCloseTo(1, 6);
+    expect(fill[1]).toBeCloseTo(0.3, 6);
+    expect(fill[2]).toBe(0);
+
+    // Quiet when full, loudest when empty, and the middle one is in between.
+    expect(urgency[0]).toBe(0);
+    expect(urgency[2]).toBe(1);
+    expect(urgency[1]).toBeGreaterThan(0);
+    expect(urgency[1]).toBeLessThan(1);
+    expect(B.noticeAbove).toBeGreaterThan(0.3);   // the middle case is inside the ramp
+    disposeBeds();
+});
+
+test('the beds take the season, and the snow reaches them', () => {
+    // A bed that stayed brown through a covered winter would be the only bare
+    // earth in the frame. The uniform is the only path the season has.
+    let uniforms;
+    measureWood(() => {
+        initBeds(recordingScene(), GARDEN_CONFIG, { mobile: false });
+        const entries = [{ record: { gx: 0, gz: 0, moisture: 1 } }];
+        syncBeds(entries);
+        updateBeds(entries, 0.75);
+        uniforms = __beds.uniforms();
+    });
+    expect(uniforms.uSnow.value).toBeCloseTo(0.75, 6);
+    disposeBeds();
 });
