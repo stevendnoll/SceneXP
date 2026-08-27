@@ -448,8 +448,9 @@ export function updateGarden(dt, elapsedSeconds, context = {}, config = GARDEN_C
     }
 
     // The beds take the season and the levels take each tree's tank. One pass
-    // over the instance attributes rather than a mesh per tree.
-    updateBeds(trees, snow, config);
+    // over the instance attributes rather than a mesh per tree. The level's
+    // pixel floor needs the lens, which only the conductor knows.
+    updateBeds(trees, snow, context.pxPerRadian || 0, config);
 }
 
 /** Ages in whole years, for the tree card. */

@@ -406,6 +406,12 @@ export const GARDEN_CONFIG = deepFreeze({
             skirt: 0.06,
             maxHeight: 0.60,
             color: 0x4a3527,
+            // How far toward the snow a covered bed goes. NOT ALL THE WAY: at
+            // 1.0 it came out a flat uniform white against ground that carries
+            // a thaw pattern and a grass mottle, and QA read the beds as a row
+            // of pale slabs. It is also the tap target, so a bed that vanishes
+            // under snow takes the care loop with it for a quarter of the year.
+            snowMix: 0.78,
 
             // ---- Picking ----------------------------------------------------
             // THE BED IS NEVER RAYCAST. Measured on a 1280x800 frame, a bed of
@@ -432,8 +438,18 @@ export const GARDEN_CONFIG = deepFreeze({
             // present, always showing how full the tank is, so the whole garden
             // can be read at a glance instead of only the trees that have
             // already crossed a threshold.
-            levelWidth: 0.62,
-            levelHeight: 0.085,
+            // Measured on a 941 px frame: at these metres alone the bar was
+            // 24 x 3.3 px in the middle of the plot and 17 x 2.3 at the back,
+            // and three pixels cannot show a fraction of anything. So it has a
+            // FLOOR IN PIXELS as well, which holds it near 31 x 7 px right
+            // across the plot and lets it grow past that once the dolly brings
+            // the eye close. Seven is chosen against the 1.5 m planting grid:
+            // two adjacent trees are 41 px apart at the back of the plot, and
+            // at this aspect a 7 px bar is 31 px wide, so neighbours never
+            // collide.
+            levelWidth: 0.44,
+            levelHeight: 0.10,
+            minLevelPx: 7,
             levelLift: 0.05,
             levelOpacity: 0.92,
             levelTrackColor: 0x1e2a30,

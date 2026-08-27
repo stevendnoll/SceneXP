@@ -144,12 +144,16 @@ export function levelUrgency(moisture, config = GARDEN_CONFIG) {
 let bedMesh = null;
 let levelMesh = null;
 let bedUniforms = null;
+let levelUniforms = null;
 let sceneRef = null;
 let fillAttr = null;
 let urgencyAttr = null;
 let scratch = null;
 
 const LEVEL_VERT = `
+uniform float uPxPerRad;
+uniform float uMinPx;
+uniform float uWorldHeight;
 attribute float aFill;
 attribute float aUrgency;
 varying vec2 vBedUv;
@@ -165,7 +169,18 @@ void main() {
     // step. A strip lying flat on the bed would be nearly edge-on at this
     // camera's 17 degrees, which is to say a line.
     vec4 mv = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-    mv.xy += position.xy;
+
+    // IT HAS A FLOOR IN PIXELS, BECAUSE IT IS A READOUT AND NOT A PROP. Sized
+    // in metres alone it measured 24 x 3.3 px at the middle of the plot and
+    // 17 x 2.3 at the back, and three pixels cannot show a fraction of
+    // anything. This grows the quad, uniformly so the shape holds, until it is
+    // at least uMinPx tall, and leaves it alone once the eye is close enough
+    // that its own size is bigger. The floor is what a visitor reads across
+    // the plot; the world size is what makes it grow when they come and look.
+    float bedDepth = max(0.001, -mv.z);
+    float bedPx = (uWorldHeight * uPxPerRad) / bedDepth;
+    float bedGrow = max(1.0, uMinPx / max(0.0001, bedPx));
+    mv.xy += position.xy * bedGrow;
     gl_Position = projectionMatrix * mv;
 }
 `;
@@ -208,22 +223,44 @@ function buildBedMesh(config, capacity) {
     const uniforms = {
         uMulch: { value: new THREE.Vector3() },
         uSnowColor: { value: new THREE.Vector3() },
-        uSnow: { value: 0 }
+        uSnow: { value: 0 },
+        uSnowMix: { value: B.snowMix }
     };
     setVec(uniforms.uMulch.value, B.color);
     setVec(uniforms.uSnowColor.value, config.terrain.snowColor);
 
     material.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, uniforms);
+        // The world position, for the mottle below. Every injected local is
+        // prefixed: an injected block lands in a scope holding hundreds of
+        // names that are not ours.
+        shader.vertexShader = 'varying vec3 vBedWorld;\n' + shader.vertexShader.replace(
+            '#include <begin_vertex>', `
+    #include <begin_vertex>
+    vBedWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+`);
         shader.fragmentShader = `
 uniform vec3 uMulch;
 uniform vec3 uSnowColor;
 uniform float uSnow;
+uniform float uSnowMix;
+varying vec3 vBedWorld;
 ` + shader.fragmentShader.replace('#include <map_fragment>', `
     #include <map_fragment>
     // The bed takes the season the ground takes. A bed that stayed brown
     // through a covered winter would be the only bare earth in the frame.
-    diffuseColor.rgb = mix(uMulch, uSnowColor, uSnow);
+    //
+    // BUT IT STOPS SHORT OF THE SNOW, and that is a functional line rather
+    // than a decorative one. Taken all the way it came out a flat, uniform
+    // white against ground that carries a thaw pattern and a grass mottle, so
+    // in QA it read as a row of little pale slabs. It is also the tap target,
+    // and a target that disappears in winter takes the whole care loop with
+    // it for a quarter of the year.
+    vec3 bedCoat = mix(uMulch, uSnowColor, uSnow * uSnowMix);
+    // A slow mottle so neither state is one flat swatch. World space, so no
+    // two beds carry the same pattern.
+    float bedMottle = sin(vBedWorld.x * 5.3) * sin(vBedWorld.z * 4.1) * 0.5 + 0.5;
+    diffuseColor.rgb = bedCoat * (0.88 + 0.24 * bedMottle);
 `);
     };
     // three's default program cache key is onBeforeCompile.toString(), so every
@@ -259,7 +296,14 @@ function buildLevelMesh(config, capacity) {
         uEmpty: { value: new THREE.Vector3() },
         uFull: { value: new THREE.Vector3() },
         uTrack: { value: new THREE.Vector3() },
-        uOpacity: { value: B.levelOpacity }
+        uOpacity: { value: B.levelOpacity },
+        // Pixels per radian of vertical field, which is the one number that
+        // turns a world size into a screen size. It moves with the viewport
+        // and with the orientation's composed FOV, so it is published every
+        // frame rather than captured here.
+        uPxPerRad: { value: 800 },
+        uMinPx: { value: B.minLevelPx },
+        uWorldHeight: { value: B.levelHeight }
     };
     setVec(uniforms.uEmpty.value, B.levelEmptyColor);
     setVec(uniforms.uFull.value, B.levelFullColor);
@@ -294,6 +338,7 @@ export function initBeds(scene, config = GARDEN_CONFIG, options = {}) {
     bedMesh = beds.mesh;
     bedUniforms = beds.uniforms;
     levelMesh = levels.mesh;
+    levelUniforms = levels.uniforms;
     scratch = {
         matrix: new THREE.Matrix4(),
         position: new THREE.Vector3(),
@@ -344,10 +389,18 @@ export function syncBeds(entries, config = GARDEN_CONFIG) {
     return n;
 }
 
-/** Per frame: the season on the beds, and each tree's tank on its level. */
-export function updateBeds(entries, snowCoverage = 0, config = GARDEN_CONFIG) {
+/**
+ * Per frame: the season on the beds, and each tree's tank on its level.
+ *
+ * `pxPerRadian` is the viewport height over the camera's vertical field in
+ * radians, and it is what keeps the level legible at every distance. It is
+ * passed in rather than derived because this module has no camera and no
+ * window, which is also what keeps it testable.
+ */
+export function updateBeds(entries, snowCoverage = 0, pxPerRadian = 0, config = GARDEN_CONFIG) {
     if (!bedMesh || !bedUniforms) return;
     bedUniforms.uSnow.value = clamp01(snowCoverage);
+    if (levelUniforms && pxPerRadian > 0) levelUniforms.uPxPerRad.value = pxPerRadian;
     const n = Math.min(entries.length, levelMesh ? levelMesh.count : 0);
     for (let i = 0; i < n; i++) {
         const m = entries[i].record.moisture;
@@ -369,6 +422,7 @@ export function getLevelMesh() { return levelMesh; }
 // exposes its tree list.
 export const __test__ = {
     uniforms: () => bedUniforms,
+    levelUniforms: () => levelUniforms,
     levelAttributes: () => ({ fill: fillAttr, urgency: urgencyAttr })
 };
 
@@ -382,6 +436,7 @@ export function disposeBeds() {
     bedMesh = null;
     levelMesh = null;
     bedUniforms = null;
+    levelUniforms = null;
     fillAttr = null;
     urgencyAttr = null;
     scratch = null;

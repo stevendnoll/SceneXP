@@ -643,15 +643,45 @@ test('the width lint can actually see the bug it exists for', () => {
 
 // ---- The bed and the water level (M10) -------------------------------------
 
-test('the bed takes the season the ground takes', () => {
+test('the bed takes the season, and stops short of vanishing into it', () => {
     // A bed that stayed brown through a covered winter would be the only bare
-    // earth in the frame, and the ground's own snow blend is a fragment away.
+    // earth in the frame. A bed that went ALL THE WAY to snow read as a pale
+    // slab in QA and, worse, stopped being findable: it is the tap target, and
+    // one that disappears in winter takes the care loop with it for a quarter
+    // of the year.
     const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
     expect(beds).toMatch(/uniform float uSnow;/);
-    expect(beds).toMatch(/mix\(uMulch, uSnowColor, uSnow\)/);
-    // Assigned, not multiplied. `map_fragment` has already folded the map into
-    // diffuseColor, and multiplying a second time is the crimson-trunk bug.
-    expect(beds).toMatch(/diffuseColor\.rgb = mix\(uMulch/);
+    expect(beds).toMatch(/mix\(uMulch, uSnowColor, uSnow \* uSnowMix\)/);
+    expect(GARDEN_CONFIG.garden.bed.snowMix).toBeGreaterThan(0.5);
+    expect(GARDEN_CONFIG.garden.bed.snowMix).toBeLessThan(1);
+    // Assigned, not multiplied by the map. `map_fragment` has already folded
+    // the map into diffuseColor, and multiplying a second time is the
+    // crimson-trunk bug. The mottle that DOES multiply is a shade, not a mask.
+    expect(beds).toMatch(/diffuseColor\.rgb = bedCoat \* \(0\.88/);
+    // The mottle rides world space, or every bed wears the same pattern.
+    expect(beds).toMatch(/vBedWorld = \(modelMatrix \* instanceMatrix/);
+});
+
+test('THE WATER LEVEL HOLDS A SIZE ON SCREEN, not in metres', () => {
+    // Sized in metres alone it measured 24 x 3.3 px in the middle of the plot
+    // and 17 x 2.3 at the back, and three pixels cannot show a fraction of
+    // anything. It is a readout, so it has a floor in pixels.
+    const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
+    const vert = beds.slice(beds.indexOf('const LEVEL_VERT'));
+    const body = vert.slice(0, vert.indexOf('`;'));
+    expect(body).toMatch(/uniform float uPxPerRad;/);
+    expect(body).toMatch(/bedGrow = max\(1\.0, uMinPx/);
+    // Uniform, so the bar keeps its shape rather than stretching.
+    expect(body).toMatch(/mv\.xy \+= position\.xy \* bedGrow;/);
+
+    // And the floor is a size somebody can actually read a fraction off.
+    const B = GARDEN_CONFIG.garden.bed;
+    expect(B.minLevelPx).toBeGreaterThanOrEqual(6);
+    // Wide enough to read, narrow enough that two trees on adjacent cells
+    // never collide: they are 41 px apart at the back of the plot.
+    const barWidth = B.minLevelPx * (B.levelWidth / B.levelHeight);
+    expect(barWidth).toBeGreaterThan(24);
+    expect(barWidth).toBeLessThan(41);
 });
 
 test('THE WATER LEVEL IS UNLIT, or it vanishes exactly when it is needed', () => {

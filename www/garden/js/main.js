@@ -948,7 +948,14 @@ function animate() {
         rain: weather.rain,
         snow,
         wind: weather.wind,
-        motion: motionScale()
+        motion: motionScale(),
+        // Pixels per radian of vertical field. The water level holds a size on
+        // screen rather than in metres, so it needs the lens and the viewport,
+        // both of which move: the composed FOV differs by orientation and the
+        // window can be resized at any moment.
+        pxPerRadian: camera
+            ? window.innerHeight / (camera.fov * Math.PI / 180)
+            : 0
     });
     updateHud(yearAt(state.elapsedSeconds), state.elapsedSeconds, weatherWords(weather, fall));
     if (isCardOpen()) {

@@ -29,6 +29,7 @@ let updateVista, snowCoverageAt;
 let pondHalfWidth;
 let initForest, disposeForest, updateForest, getForestMeshes, __forest;
 let initBeds, disposeBeds, syncBeds, updateBeds, __beds;
+let builtGarden, builtBeds;
 
 /** A scene that only records what was put in it. */
 function recordingScene() {
@@ -49,6 +50,10 @@ beforeAll(async () => {
     installCanvas();
     ({ GARDEN_CONFIG } = await import('../www/garden/js/config.js'));
     ({ initBeds, disposeBeds, syncBeds, updateBeds, __test__: __beds } = await import('../www/garden/js/beds.js'));
+    // The BUILT pair, for the wiring test below: garden.js resolves its own
+    // imports to the .min files, so only these two share one beds instance.
+    builtGarden = await import('../www/garden/js/garden.min.js');
+    builtBeds = await import('../www/garden/js/beds.min.js');
     ({ initWildlife, updateWildlife, disposeWildlife } =
         await import('../www/garden/js/wildlife.js'));
     ({ initVista, disposeVista } = await import('../www/garden/js/vista.js'));
@@ -651,6 +656,56 @@ test('the level reads each tree\'s own tank, and only the live ones', () => {
     expect(urgency[1]).toBeGreaterThan(0);
     expect(urgency[1]).toBeLessThan(1);
     expect(B.noticeAbove).toBeGreaterThan(0.3);   // the middle case is inside the ramp
+    disposeBeds();
+});
+
+test('THE LENS REACHES THE LEVEL, or its pixel floor is measured against nothing', () => {
+    // The level holds a size on SCREEN, so it needs pixels per radian, which
+    // depends on the viewport and on the composed FOV and therefore moves.
+    // Without it the uniform keeps its build-time default and the bar quietly
+    // drifts off its intended size at every window size but one, which is the
+    // kind of wrong that never looks broken.
+    let uniforms;
+    measureWood(() => {
+        initBeds(recordingScene(), GARDEN_CONFIG, { mobile: false });
+        const entries = [{ record: { gx: 0, gz: 0, moisture: 1 } }];
+        syncBeds(entries);
+        updateBeds(entries, 0, 898.6);
+        uniforms = __beds.levelUniforms();
+    });
+    expect(uniforms.uPxPerRad.value).toBeCloseTo(898.6, 6);
+    expect(uniforms.uMinPx.value).toBe(GARDEN_CONFIG.garden.bed.minLevelPx);
+    // The world height the floor is compared against has to be the bar's own,
+    // or the comparison is between two different bars.
+    expect(uniforms.uWorldHeight.value).toBe(GARDEN_CONFIG.garden.bed.levelHeight);
+    disposeBeds();
+});
+
+test('THE LENS TRAVELS THE WHOLE CHAIN, conductor to shader', () => {
+    // The two ends were each pinned and the WIRE BETWEEN THEM was not: cutting
+    // `context.pxPerRadian` out of updateGarden left every suite green. So this
+    // drives the BUILT modules, the way the boot suite does, because that is
+    // the only way garden and beds share one instance of the state.
+    const scene = recordingScene();
+    builtGarden.initGarden(scene, { mobile: false });
+    builtGarden.updateGarden(1 / 60, 0, { pxPerRadian: 742 });
+    expect(builtBeds.__test__.levelUniforms().uPxPerRad.value).toBe(742);
+    builtGarden.disposeGarden();
+});
+
+test('a frame with no lens leaves the level alone rather than zeroing it', () => {
+    // updateBeds is also driven from places that have no camera. A zero must
+    // not reach the shader, where it would divide the bar to nothing.
+    let uniforms;
+    measureWood(() => {
+        initBeds(recordingScene(), GARDEN_CONFIG, { mobile: false });
+        const entries = [{ record: { gx: 0, gz: 0, moisture: 1 } }];
+        syncBeds(entries);
+        updateBeds(entries, 0, 900);
+        updateBeds(entries, 0, 0);
+        uniforms = __beds.levelUniforms();
+    });
+    expect(uniforms.uPxPerRad.value).toBe(900);
     disposeBeds();
 });
 

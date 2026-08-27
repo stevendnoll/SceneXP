@@ -264,3 +264,17 @@ test('the bed and the level are never ray targets', async () => {
     const noops = src.match(/raycast = \(\) => \{ \};/g) || [];
     expect(noops.length).toBe(2);
 });
+
+test('the conductor is the one that knows the lens', async () => {
+    // The last link in the chain, and the only one that cannot be driven here:
+    // under the THREE stub `camera.fov` is a proxy, so the arithmetic below
+    // comes out NaN and nothing can be read back off it. The other two links
+    // are behavioural (see garden-scene.test.mjs).
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'main.js'), 'utf8');
+    // Viewport height over the vertical field in radians, both of which move:
+    // the composed FOV differs by orientation and a window can be resized.
+    expect(src).toMatch(/pxPerRadian:/);
+    expect(src).toMatch(/window\.innerHeight \/ \(camera\.fov \* Math\.PI \/ 180\)/);
+});
