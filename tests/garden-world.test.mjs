@@ -23,6 +23,7 @@ import {
 } from '../www/garden/js/forest.js';
 import { presenceAt, WINDOWS } from '../www/garden/js/wildlife.js';
 import { luminanceOf } from '../www/garden/js/sky.js';
+import { dollyView, dollyTrackZ, tiltedLookY } from '../www/garden/js/view.js';
 
 const PLOT = GARDEN_CONFIG.plot;
 const HALF = PLOT.halfSize;
@@ -321,23 +322,53 @@ test('recursion is cut deeper the further out a tier stands', () => {
 
 test('no tree may stand anywhere along the eye or its dolly', () => {
     const N = W.nearTreeline;
-    // Every radius the generator can pick, straight down the axis the camera
-    // occupies. Not one of them may be legal.
-    const inner = Math.min(...N.tiers.map((t) => t.minRadius));
+    // THE TRACK IS READ, NOT RESTATED. Before M9-5 the eye only ever sat
+    // between the composed z and the portrait dolly's end, and this test wrote
+    // that number down. The dolly moved both ends, and a test holding its own
+    // copy of them would have gone on passing while trees stood in the frame.
+    const track = dollyTrackZ(Math.max(GARDEN_CONFIG.camera.position.z, N.cameraKeepOut.dollyToZ));
     const outer = Math.max(...N.tiers.map((t) => t.maxRadius));
-    // Up to the far end of the dolly. PAST that a tree is BEHIND the eye at
-    // every aspect, and forbidding it there would carve a hole in the wood for
-    // no reason: the outer tier now reaches 52 m, past the 39 m the dolly ends
-    // at, which the old flat ring never did.
-    const behind = N.cameraKeepOut.dollyToZ;
-    for (let z = inner; z <= Math.min(outer, behind); z += 0.5) {
+
+    // Every radius the generator can pick, straight down the axis the camera
+    // occupies, from the close end of the track to the far one. Not one of
+    // them may be legal.
+    for (let z = track.near; z <= Math.min(outer, track.far); z += 0.5) {
         expect(clearsCamera(0, z)).toBe(false);
     }
-    // And the first legal spot on the axis really is behind the eye.
-    expect(clearsCamera(0, behind + N.cameraKeepOut.clearance)).toBe(true);
-    // And the portrait extreme, past the ring's own outer edge.
+    // And the first legal spot on the axis really is behind the far end.
+    expect(clearsCamera(0, track.far + N.cameraKeepOut.clearance)).toBe(true);
+    expect(clearsCamera(0, track.far + N.cameraKeepOut.clearance - 0.5)).toBe(false);
+    // The portrait extreme, and the composed position itself.
     expect(clearsCamera(0, 34.84)).toBe(false);
     expect(clearsCamera(0, GARDEN_CONFIG.camera.position.z)).toBe(false);
+});
+
+test('THE KEEP-OUT COVERS EVERY POINT THE DOLLY CAN REACH', () => {
+    // The coupling M9-5 was written down in advance of: `clearsCamera` used to
+    // measure against z 22 to 39 because that was everywhere the camera had
+    // ever been, and a longer track puts trees that were safely behind the eye
+    // directly in front of it.
+    //
+    // Walk the dolly parameter rather than the segment, so this asserts the
+    // property the camera actually has rather than the arithmetic that
+    // implements it.
+    const clearance = W.nearTreeline.cameraKeepOut.clearance;
+    const composed = { z: GARDEN_CONFIG.camera.position.z, y: 7, lookY: 2.5, lookZ: -2 };
+    for (let t = -1; t <= 1.0001; t += 0.02) {
+        const eye = dollyView(t, composed);
+        // Anything nearer than the clearance to where the eye stands must be
+        // forbidden, in every direction, all the way round.
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+            const r = clearance * 0.9;
+            expect(clearsCamera(Math.cos(a) * r, eye.z + Math.sin(a) * r)).toBe(false);
+        }
+    }
+
+    // And a portrait phone, whose composed z is dollied back on its own and
+    // whose track is therefore longer at the far end than the desktop's.
+    const tall = { ...composed, z: 41 };
+    expect(dollyTrackZ(tall.z).far).toBe(41);
+    expect(clearsCamera(0, dollyView(-1, tall).z)).toBe(false);
 });
 
 test('the keep-out is a corridor, not a hole in the whole wood', () => {
@@ -509,4 +540,140 @@ test('the lake is mostly water, not mostly bank', () => {
     // And a real band of damp shore is still left, or the water meets the grass
     // in a hard line.
     expect((1 - waterShare) * pondHalfWidth()).toBeGreaterThan(3);
+});
+
+// ---- The dolly (M9-5) ------------------------------------------------------
+//
+// The zoom was a LENS and both views QA asked for are POSITIONS. Measured, the
+// old control ran 60 degrees to 34 in (1.9x magnification) and to 76 out
+// (1.35x wider), from an eye that never left (0, 7, 22). A crop from a fixed
+// point has no parallax and cannot put anybody among the trees.
+
+const COMPOSED = {
+    z: GARDEN_CONFIG.camera.position.z,
+    y: GARDEN_CONFIG.camera.position.y,
+    lookY: GARDEN_CONFIG.camera.lookAt.y,
+    lookZ: GARDEN_CONFIG.camera.lookAt.z
+};
+
+test('the dolly zero is exactly the composed viewpoint', () => {
+    // Not approximately. The whole scene is framed for this one view, and a
+    // track that missed it by a few centimetres would mean the garden never
+    // showed the picture it was designed around.
+    const at0 = dollyView(0, COMPOSED);
+    expect(at0.z).toBe(COMPOSED.z);
+    expect(at0.y).toBe(COMPOSED.y);
+    expect(at0.lookY).toBe(COMPOSED.lookY);
+    expect(at0.lookZ).toBe(COMPOSED.lookZ);
+});
+
+test('THE CLOSE END REALLY IS AMONGST THE TREES', () => {
+    const plotHalf = GARDEN_CONFIG.plot.halfSize !== undefined
+        ? GARDEN_CONFIG.plot.halfSize : 12;
+    const inside = dollyView(1, COMPOSED);
+    // Inside the wall, not merely nearer to it. This is the claim the request
+    // makes and the one a bigger magnification could never satisfy.
+    expect(inside.z).toBeLessThan(plotHalf);
+    // At something like eye height rather than the composed 7 m, or it is a
+    // low-flying drone rather than a person standing in a garden.
+    expect(inside.y).toBeLessThan(3);
+    // And clear of the ground. The plot's relief runs to +0.86 m.
+    expect(inside.y).toBeGreaterThan(0.86 + 1);
+});
+
+test('the far end is high enough to be a view from above', () => {
+    const above = dollyView(-1, COMPOSED);
+    expect(above.y).toBeGreaterThan(20);
+    expect(above.z).toBeGreaterThan(COMPOSED.z);
+
+    // The whole plot has to be inside the frame from up there, or it is a
+    // view from above of something else. Measured as the angle off the aim
+    // axis for the plot's near and far edges, against the half-frame.
+    const halfFov = (GARDEN_CONFIG.camera.fov / 2) * Math.PI / 180;
+    const aim = Math.atan2(above.y - above.lookY, above.z - above.lookZ);
+    for (const edge of [12, -12]) {
+        const angle = Math.atan2(above.y, above.z - edge);
+        expect(Math.abs(angle - aim)).toBeLessThan(halfFov);
+    }
+});
+
+test('the track moves the eye monotonically, and never past its ends', () => {
+    let previousZ = -Infinity;
+    for (let t = 1; t >= -1.0001; t -= 0.02) {
+        const view = dollyView(t, COMPOSED);
+        expect(view.z).toBeGreaterThanOrEqual(previousZ - 1e-9);
+        previousZ = view.z;
+    }
+    // Past the ends it clamps rather than running away, which matters because
+    // the deltas arrive from a held button and a pinch that do not know where
+    // the track stops.
+    expect(dollyView(5, COMPOSED)).toEqual(dollyView(1, COMPOSED));
+    expect(dollyView(-5, COMPOSED)).toEqual(dollyView(-1, COMPOSED));
+});
+
+test('A TALL WINDOW CANNOT MAKE ZOOMING OUT MOVE THE CAMERA FORWARD', () => {
+    // `framingFor` dollies a portrait phone back on its own, and a narrow
+    // enough window composes past the far end of the track. Unclamped, asking
+    // to pull back would then move the eye toward the plot.
+    const far = GARDEN_CONFIG.camera.dolly.far.z;
+    const tall = { ...COMPOSED, z: far + 8 };
+    expect(dollyView(-1, tall).z).toBeGreaterThanOrEqual(tall.z);
+    expect(dollyTrackZ(tall.z).far).toBe(tall.z);
+    // And the same at the other end, for a window composed nearer than the
+    // close end could ever be.
+    const near = GARDEN_CONFIG.camera.dolly.near.z;
+    expect(dollyTrackZ(near - 4).near).toBe(near - 4);
+});
+
+// ---- Tilt (M9-7) -----------------------------------------------------------
+
+test('A TILT IS AN ANGLE, so it means the same at both ends of the track', () => {
+    // Raising the aim target by a fixed height would swing the view wildly
+    // from 6 m out and barely move it from 40 m out, because the same rise is
+    // a different angle at a different range.
+    const angleOf = (view, tilt) => {
+        const lookY = tiltedLookY(view, tilt);
+        return Math.atan2(lookY - view.y, Math.abs(view.z - view.lookZ));
+    };
+    const close = dollyView(1, COMPOSED);
+    const far = dollyView(-1, COMPOSED);
+    const tilt = GARDEN_CONFIG.camera.dolly.maxTilt;
+
+    const swung = angleOf(close, tilt) - angleOf(close, 0);
+    const swungFar = angleOf(far, tilt) - angleOf(far, 0);
+    expect(swung).toBeCloseTo(tilt, 6);
+    expect(swungFar).toBeCloseTo(tilt, 6);
+
+    // And zero tilt leaves the composed aim exactly alone.
+    expect(tiltedLookY(close, 0)).toBe(close.lookY);
+});
+
+test('the dolly deltas clamp, and a NaN cannot strand the camera', async () => {
+    const view = await import('../www/garden/js/view.js');
+    view.resetView();
+    expect(view.getDolly()).toBe(0);
+    expect(view.dollyLimits()).toEqual({ atIn: false, atOut: false });
+
+    // Deltas arrive from a held button at zoom.speed a second and from a pinch
+    // as log2 of the spread, so nothing upstream knows where the track stops.
+    view.applyDollyDelta(0.4);
+    expect(view.getDolly()).toBeCloseTo(0.4, 9);
+    view.applyDollyDelta(9);
+    expect(view.getDolly()).toBe(1);
+    expect(view.dollyLimits().atIn).toBe(true);
+    view.applyDollyDelta(-9);
+    expect(view.getDolly()).toBe(-1);
+    expect(view.dollyLimits().atOut).toBe(true);
+
+    // A pinch of zero spread is log2(0), which is -Infinity, and one bad frame
+    // of it would leave the camera somewhere it could never be steered back
+    // from. NaN is the same story through a different door.
+    view.resetView();
+    view.applyDollyDelta(NaN);
+    expect(view.getDolly()).toBe(0);
+    view.applyDollyDelta(-Infinity);
+    expect(view.getDolly()).toBe(-1);
+    view.resetView();
+    expect(view.getDolly()).toBe(0);
+    expect(view.getTilt()).toBe(0);
 });

@@ -581,3 +581,69 @@ body {
     border-color: rgba(255, 255, 255, 0.5);
     color: var(--ui-title);
 }
+
+/* ---- The view controls (M9-7) ---------------------------------------------
+   The shared pan part builds one row of four at the bottom centre:
+
+       [pan left] [zoom out] [zoom in] [pan right]
+
+   The garden wants the LOOK controls together and the zoom somewhere a thumb
+   can still reach, so view.js reparents the zoom pair into .garden-zoom and
+   drops its own tilt buttons into the gap. The result is one four-button look
+   cluster at the bottom centre and a vertical zoom stack at the bottom right,
+   which is the idiom every map application already taught the visitor.
+
+   THE ZOOM PAIR IS MOVED, NOT REBUILT. Listeners travel with a node, so the
+   pinch gesture, the arrow keys and the hold behaviour all still belong to the
+   shared part. Dropping `zoom` from its options instead would have silently
+   killed the pinch, which is the gesture that matters most on the one device
+   that has it. */
+.garden-zoom {
+    position: fixed;
+    right: calc(20px + env(safe-area-inset-right, 0px));
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 110;
+    pointer-events: none;
+}
+
+/* The house chrome is display:none until JS adds .visible, and this container
+   is built by JS at a point where the reveal has already run, so it carries
+   .visible from birth. Without the rule it would inherit .ui-float's hidden
+   state and the zoom would simply not be there. */
+.garden-zoom.visible {
+    display: flex;
+}
+
+/* On a short landscape window the two stacks would meet the season chip and
+   the bottom of the frame. Tighten both rather than letting them overlap. */
+@media (max-height: 520px) {
+    .garden-zoom {
+        gap: 8px;
+        bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .garden-zoom .pan-btn,
+    .pan-controls .pan-btn {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+/* Four circles at 54px plus three 16px gaps is 264px, which fits the narrowest
+   phone in use with room either side. The zoom stack sits clear of it in the
+   corner. Below that, shrink rather than wrap: a wrapped control row reads as
+   broken. */
+@media (max-width: 380px) {
+    .pan-controls .pan-btn,
+    .garden-zoom .pan-btn {
+        width: 46px;
+        height: 46px;
+    }
+
+    .pan-controls {
+        gap: 10px;
+    }
+}

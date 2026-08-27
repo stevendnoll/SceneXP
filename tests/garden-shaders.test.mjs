@@ -485,3 +485,158 @@ test('reduced motion still never reaches the clock', () => {
         expect(`${line.trim()}`).not.toMatch(/reduced|motionScale/i);
     }
 });
+
+// ---- Vector widths (M9-4) --------------------------------------------------
+//
+// THIS IS THE LINT THAT WOULD HAVE SAVED THE WHOLE RAIN SYSTEM.
+//
+// `RAIN_VERT` shipped with `p.xz += lean * fall * 0.12`, where `lean` is a
+// vec3. GLSL ES has no such assignment: the operands of += must be the same
+// size, or one of them a scalar. So the rain program never compiled, the rain
+// mesh never drew a single pixel in any weather at any hour, and the only
+// precipitation anybody ever saw was snow. It was reported in QA as "rain looks
+// like snow", which is exactly what a missing shader looks like from the
+// outside, and the suite stayed green throughout because a shader is a string
+// here and a string always compiles.
+//
+// This does not typecheck GLSL. It walks assignments whose two sides both have
+// a width it can work out with certainty, and says so when they differ. Where
+// it cannot be certain, of a call it does not know or a ternary, it says
+// nothing rather than guessing: a lint that needs a list of exceptions is the
+// wrong generalisation, which this file has already learned once.
+
+const SWIZZLE = /^[xyzwrgbastpq]+$/;
+const UNKNOWN = -1;
+const MIXED = -2;
+
+/** Widths three itself puts in scope, which no local declaration will show. */
+const BUILTIN_WIDTHS = {
+    position: 3, normal: 3, uv: 2, transformed: 3, objectNormal: 3,
+    transformedNormal: 3, gl_Position: 4, gl_FragColor: 4, gl_PointCoord: 2,
+    gl_FragCoord: 4, gl_PointSize: 1, diffuseColor: 4, vViewPosition: 3,
+    mvPosition: 4, worldPosition: 4
+};
+
+function declaredWidths(body) {
+    const widths = { ...BUILTIN_WIDTHS };
+    const decl = /\b(?:uniform|attribute|varying|in|out|const)?\s*\b(float|int|bool|vec2|vec3|vec4)\s+([A-Za-z_]\w*)/g;
+    let m;
+    while ((m = decl.exec(body)) !== null) {
+        widths[m[2]] = m[1].startsWith('vec') ? Number(m[1].slice(3)) : 1;
+    }
+    return widths;
+}
+
+/** Split an expression on top-level operators, so a vec3(a, b * c) stays whole. */
+function splitTopLevel(expr, operators) {
+    const parts = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < expr.length; i++) {
+        const c = expr[i];
+        if (c === '(') depth++;
+        else if (c === ')') depth--;
+        else if (depth === 0 && operators.includes(c)) {
+            // A leading sign is not an operator, it is part of the term.
+            if (expr.slice(start, i).trim() === '') continue;
+            parts.push(expr.slice(start, i).trim());
+            start = i + 1;
+        }
+    }
+    parts.push(expr.slice(start).trim());
+    return parts.filter((p) => p !== '');
+}
+
+function combineWidths(widths) {
+    if (widths.includes(MIXED)) return MIXED;
+    if (widths.includes(UNKNOWN)) return UNKNOWN;
+    // A scalar broadcasts against anything, so only the vectors have to agree.
+    const vectors = widths.filter((n) => n > 1);
+    if (vectors.length === 0) return 1;
+    if (vectors.some((n) => n !== vectors[0])) return MIXED;
+    return vectors[0];
+}
+
+function widthOfExpression(expr, widths) {
+    const text = expr.trim();
+    if (text === '') return UNKNOWN;
+
+    const terms = splitTopLevel(text, '+-');
+    if (terms.length > 1) return combineWidths(terms.map((t) => widthOfExpression(t, widths)));
+    const factors = splitTopLevel(text, '*/');
+    if (factors.length > 1) return combineWidths(factors.map((f) => widthOfExpression(f, widths)));
+
+    if (/^\(.*\)$/.test(text)) return widthOfExpression(text.slice(1, -1), widths);
+    if (/^[-+]?[0-9.]+$/.test(text)) return 1;
+    const constructor = text.match(/^(vec[234]|float|int)\s*\(/);
+    if (constructor) return constructor[1].startsWith('vec') ? Number(constructor[1].slice(3)) : 1;
+    if (text.includes('(')) return UNKNOWN;          // a call this lint does not model
+    const swizzle = text.match(/^[A-Za-z_]\w*\.([A-Za-z]+)$/);
+    if (swizzle) return SWIZZLE.test(swizzle[1]) ? swizzle[1].length : UNKNOWN;
+    if (/^[A-Za-z_]\w*$/.test(text)) return widths[text] === undefined ? UNKNOWN : widths[text];
+    return UNKNOWN;
+}
+
+function widthOffences() {
+    const offences = [];
+    for (const block of glslBlocks()) {
+        const widths = declaredWidths(block.body);
+        block.body.split('\n').forEach((raw, i) => {
+            const line = raw.replace(/\/\/.*/, '').trim();
+            if (!line || line.includes('?') || line.includes('#')) return;
+            const m = line.match(
+                /^(?:(float|int|bool|vec2|vec3|vec4)\s+)?([A-Za-z_]\w*(?:\.[A-Za-z]+)?)\s*([-+*/]?=)\s*(.+?);?$/);
+            if (!m || m[3] === '==') return;
+
+            let left;
+            if (m[1]) {
+                left = m[1].startsWith('vec') ? Number(m[1].slice(3)) : 1;
+            } else {
+                const swizzle = m[2].match(/^[A-Za-z_]\w*\.([A-Za-z]+)$/);
+                if (swizzle) {
+                    if (!SWIZZLE.test(swizzle[1])) return;
+                    left = swizzle[1].length;
+                } else {
+                    left = widths[m[2]];
+                }
+            }
+            if (left === undefined) return;
+
+            const right = widthOfExpression(m[4], widths);
+            const where = `${block.file}:${block.line + i}`;
+            if (right === MIXED) {
+                offences.push(`${where} mixes vector widths on the right: ${line}`);
+            } else if (right !== UNKNOWN && right !== 1 && right !== left) {
+                offences.push(`${where} assigns a vec${right} to a vec${left}: ${line}`);
+            }
+        });
+    }
+    return offences;
+}
+
+test('no shader assigns a vector to a differently sized one', () => {
+    expect(widthOffences()).toEqual([]);
+});
+
+test('the width lint can actually see the bug it exists for', () => {
+    // A guard on the guard, in the shape this file already uses for the block
+    // extractor. A lint that reports nothing because it stopped matching is
+    // worse than no lint, and this one is deliberately quiet wherever it is
+    // unsure, so quiet is its normal state.
+    const widths = declaredWidths(`
+        uniform vec3 uWind;
+        attribute float aTop;
+        void main() { vec3 p = position; }
+    `);
+    expect(widths.uWind).toBe(3);
+    expect(widths.aTop).toBe(1);
+
+    // The exact line that shipped.
+    expect(widthOfExpression('lean * fall * 0.12', { lean: 3, fall: 1 })).toBe(3);
+    // A scalar broadcasts and must never be reported.
+    expect(widthOfExpression('vec2(1.0, 2.0) * aTop', { aTop: 1 })).toBe(2);
+    // Two different vectors in one expression are wrong wherever they land.
+    expect(widthOfExpression('vec2(1.0) + vec3(1.0)', {})).toBe(MIXED);
+    // And a call it does not model is left alone rather than guessed at.
+    expect(widthOfExpression('mix(a, b, t)', {})).toBe(UNKNOWN);
+});

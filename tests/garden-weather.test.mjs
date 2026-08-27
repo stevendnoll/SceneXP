@@ -12,7 +12,11 @@ import {
     blendStates, createWeather, stepWeather, weatherWords, gustAt
 } from '../www/garden/js/weather.js';
 import { makeRandom } from '../www/garden/js/species.js';
-import { flashAt, accumulateStrikes } from '../www/garden/js/precip.js';
+import {
+    flashAt, accumulateStrikes, strikeFactorAt, fallRates, fallOpacity
+} from '../www/garden/js/precip.js';
+import { flashLighting, lightingAt } from '../www/garden/js/sky.js';
+import { solarAt } from '../www/garden/js/clock.js';
 
 // ---- Selection -------------------------------------------------------------
 
@@ -160,12 +164,78 @@ test('the weather actually changes, and reduced motion slows it without stopping
     expect(states.size).toBeGreaterThan(2);
 });
 
-test('the chip says what the weather is doing', () => {
-    expect(weatherWords({ precip: 'snow', state: 'stormy', gloom: 1, from: 'stormy', transition: 1 })).toBe('snow');
-    expect(weatherWords({ precip: 'rain', state: 'stormy', gloom: 1, from: 'stormy', transition: 1 })).toBe('rain');
-    expect(weatherWords({ precip: 'none', state: 'windy', gloom: 0.2, from: 'windy', transition: 1 })).toBe('windy');
-    expect(weatherWords({ precip: 'none', state: 'cloudy', gloom: 0.5, from: 'cloudy', transition: 1 })).toBe('cloudy');
-    expect(weatherWords({ precip: 'none', state: 'sunny', gloom: 0, from: 'sunny', transition: 1 })).toBe('clear');
+// ---- The season chip (M9-3) ------------------------------------------------
+//
+// The chip used to read the STATE MACHINE while the scene drew from two other
+// sources, so it could and did contradict the frame. It now reads the rates
+// `updatePrecipitation` actually used.
+
+const CALM = { windStrength: 0.2, gloom: 0 };
+const NOTHING = { rain: 0, snow: 0 };
+
+test('the chip names what is falling, from the rates that were drawn', () => {
+    expect(weatherWords({ ...CALM }, { rain: 0.8, snow: 0 })).toBe('rain');
+    expect(weatherWords({ ...CALM }, { rain: 0, snow: 0.8 })).toBe('snow');
+    // Sleet is the state of both systems running, which is exactly how
+    // fallRates describes it, so the chip needs no separate notion of sleet.
+    expect(weatherWords({ ...CALM }, { rain: 0.5, snow: 0.3 })).toBe('sleet');
+    expect(weatherWords({ ...CALM }, NOTHING)).toBe('clear');
+});
+
+test('THE CHIP SAYS SNOW OVER THE WINTER SNOWFALL, whatever the state is', () => {
+    // The frame this exists for is garden-8.png: "Winter, year 13 · cloudy"
+    // over heavy falling snow and a fully covered ground. The winter snowfall
+    // arrives from the CALENDAR and never touches `weather.rain`, which is all
+    // the old chip read, so no threshold tweak anywhere could have caught it.
+    const cloudyWinter = {
+        state: 'cloudy', from: 'cloudy', transition: 1,
+        precip: 'none', rain: 0, gloom: 0.42, windStrength: 0.3
+    };
+    // Mid-accumulation, which is what garden-8 shows.
+    const fall = fallRates(cloudyWinter, 0.5);
+    expect(fall.snow).toBeGreaterThan(0);
+    expect(weatherWords(cloudyWinter, fall)).toBe('snow');
+
+    // And the melt, which is the spring half of the same bug (garden-11.png).
+    const springMelt = { ...cloudyWinter, state: 'windy', from: 'windy' };
+    expect(weatherWords(springMelt, fallRates(springMelt, 0.4))).toBe('snow');
+
+    // Full cover with nothing in the air is NOT snowfall, and the chip must
+    // not claim it is. This is the assertion that fails if the strict
+    // inequalities in fallRates are ever loosened.
+    expect(fallRates(cloudyWinter, 1).snow).toBe(0);
+    expect(weatherWords(cloudyWinter, fallRates(cloudyWinter, 1))).toBe('cloudy');
+});
+
+test('the chip never announces precipitation the renderer did not switch on', () => {
+    // The old chip called it rain above 0.01 while the mesh appeared at 0.02.
+    const min = GARDEN_CONFIG.weather.precipitation.visibleRate;
+    expect(weatherWords({ ...CALM }, { rain: min * 0.99, snow: 0 })).toBe('clear');
+    expect(weatherWords({ ...CALM }, { rain: min, snow: 0 })).toBe('rain');
+});
+
+test('WINDY IS A WIND SPEED, not a state name', () => {
+    const W = GARDEN_CONFIG.weather;
+    // A cloudy state at a full gust really is windier than a windy state in a
+    // lull, and before M9-3 the chip called the first one cloudy.
+    const cloudyGust = W.states.cloudy.wind * W.gust.peak;
+    const windyLull = W.states.windy.wind * W.gust.floor;
+    expect(cloudyGust).toBeGreaterThan(windyLull);
+
+    expect(weatherWords({ windStrength: cloudyGust, gloom: 0.42 }, NOTHING)).toBe('windy');
+    expect(weatherWords({ windStrength: windyLull, gloom: 0.24 }, NOTHING)).not.toBe('windy');
+
+    // And no sunny hour can ever reach it, gust or no gust, or the chip would
+    // read "windy" on a still summer afternoon.
+    expect(W.states.sunny.wind * W.gust.peak).toBeLessThan(W.windyAbove);
+});
+
+test('both halves are named when both are true', () => {
+    // A gusty shower is windy AND it is rain. Dropping either is how a chip
+    // starts disagreeing with the frame again.
+    const gusty = { windStrength: 1.4, gloom: 0.88 };
+    expect(weatherWords(gusty, { rain: 0.9, snow: 0 })).toBe('windy rain');
+    expect(weatherWords(gusty, { rain: 0.4, snow: 0.3 })).toBe('windy sleet');
 });
 
 // ---- Lightning -------------------------------------------------------------
@@ -196,6 +266,145 @@ test('the strike rate uses an accumulator, and is capped', () => {
     let capped = 0;
     for (let i = 0; i < 60; i++) capped = accumulateStrikes(capped, 1 / 60, 1000);
     expect(capped).toBeCloseTo(L.maxFlashesPerSecond, 6);
+});
+
+// ---- The flash is a ratio (M9-1) -------------------------------------------
+
+test('A FLASH LIFTS THE FILL BY THE SAME RATIO AT EVERY HOUR', () => {
+    // The defect: the lift used to be `ambient + flash * 1.6`, an ABSOLUTE
+    // amount laid onto a fill that runs about 4.3 to 1 across the day, so one
+    // flash was a modest brightening at noon and a white-out at midnight.
+    const peak = GARDEN_CONFIG.weather.lightning.peak;
+    const hours = [0, 3, 6, 9, 12, 15, 18, 21];
+    const ratios = hours.map((h) => {
+        const base = lightingAt(h, 0, 0.88);
+        const lit = flashLighting(base, peak);
+        return lit.ambient / base.ambient;
+    });
+    for (const r of ratios) expect(r).toBeCloseTo(ratios[0], 9);
+
+    // And the ratio is the one the flash had at the hour it was tuned at,
+    // stormy noon, so nothing about a daytime storm changes.
+    const noon = lightingAt(12, 0, 0.88);
+    expect(flashLighting(noon, peak).ambient / noon.ambient).toBeCloseTo(3.68, 2);
+});
+
+test('the midnight flash no longer overwhelms the midnight frame', () => {
+    const peak = GARDEN_CONFIG.weather.lightning.peak;
+    // Stormy midnight with no snow down is the worst case: the darkest fill
+    // the garden ever has, under the one state that makes lightning.
+    const midnight = lightingAt(0, 0, 0.88);
+    const noon = lightingAt(12, 0, 0.88);
+
+    // What a white-out IS: the frame jumping by a far larger factor at the
+    // dark end than at the end the effect was tuned at. The old absolute lift
+    // was 5.5 times as violent at midnight as it was at noon.
+    const oldRatio = (l) => (l.ambient + peak * 1.6) / l.ambient;
+    const nowRatio = (l) => flashLighting(l, peak).ambient / l.ambient;
+    expect(oldRatio(midnight)).toBeGreaterThan(9);
+    expect(oldRatio(midnight) / oldRatio(noon)).toBeGreaterThan(2.4);
+    expect(nowRatio(midnight) / nowRatio(noon)).toBeCloseTo(1, 9);
+
+    // And a flashed night is still plainly a night, measured on the TOTAL
+    // light reaching the ground rather than on the fill alone. The fill is
+    // only a part of it, and at noon the sun dwarfs it.
+    const total = (l, flash) => {
+        const lit = flashLighting(l, flash);
+        return lit.ambient + lit.hemi + l.sunIntensity + l.moonIntensity;
+    };
+    expect(total(midnight, peak)).toBeLessThan(total(noon, 0));
+    // The flash is still an event, though. A storm with the electricity taken
+    // out is a worse scene, not a gentler one.
+    expect(total(midnight, peak)).toBeGreaterThan(total(midnight, 0) * 1.5);
+});
+
+test('no flash means no lift, at any hour', () => {
+    for (const h of [0, 6, 12, 18]) {
+        const base = lightingAt(h, 0.5, 0.4);
+        const lit = flashLighting(base, 0);
+        expect(lit.ambient).toBeCloseTo(base.ambient, 12);
+        expect(lit.hemi).toBeCloseTo(base.hemi, 12);
+    }
+});
+
+// ---- Lightning follows the sun (M9-2) --------------------------------------
+
+test('the strike rate tapers off with the sun and is floored at night', () => {
+    const L = GARDEN_CONFIG.weather.lightning;
+
+    // Walk a whole year of hours rather than restating the formula, and check
+    // the shape: monotonic with elevation, full in the middle of the day,
+    // floored in the deep of the night.
+    let brightest = 0;
+    let darkest = 1;
+    for (let h = 0; h < 24; h += 0.05) {
+        const f = strikeFactorAt(h);
+        expect(f).toBeGreaterThanOrEqual(L.nightRate - 1e-9);
+        expect(f).toBeLessThanOrEqual(1 + 1e-9);
+        if (solarAt(h).elevation > L.dayAboveElevation) brightest = Math.max(brightest, f);
+        if (solarAt(h).elevation < L.nightBelowElevation) darkest = Math.min(darkest, f);
+    }
+    expect(strikeFactorAt(12)).toBeCloseTo(1, 6);
+    expect(strikeFactorAt(0)).toBeCloseTo(L.nightRate, 6);
+    expect(brightest).toBeCloseTo(1, 6);
+    expect(darkest).toBeCloseTo(L.nightRate, 6);
+
+    // Smooth, not a branch on an hour: no two adjacent minutes may jump.
+    let biggestStep = 0;
+    for (let h = 0; h < 24; h += 1 / 60) {
+        biggestStep = Math.max(biggestStep, Math.abs(strikeFactorAt(h) - strikeFactorAt(h + 1 / 60)));
+    }
+    expect(biggestStep).toBeLessThan(0.02);
+});
+
+test('a night storm gets far fewer strikes than a day storm', () => {
+    // The claim the request actually makes, measured over a storm's own dwell
+    // rather than asserted about the factor.
+    const L = GARDEN_CONFIG.weather.lightning;
+    const dwell = GARDEN_CONFIG.weather.dwell.max;
+    const perStorm = (hour) => (L.strikesPerMinute / 60) * strikeFactorAt(hour) * dwell;
+
+    expect(perStorm(12)).toBeGreaterThan(9);
+    // Most night storms carry one flash or none.
+    expect(perStorm(0)).toBeLessThan(1.5);
+    expect(perStorm(0) / perStorm(12)).toBeCloseTo(L.nightRate, 6);
+});
+
+// ---- What is falling (M9-4) ------------------------------------------------
+
+test('SLEET IS A MIXTURE, not both systems at full rate', () => {
+    const P = GARDEN_CONFIG.weather.precipitation;
+    const sleeting = { precip: 'sleet', rain: 1 };
+    const fall = fallRates(sleeting, 0);
+
+    // Both are on, which is what makes it sleet.
+    expect(fall.rain).toBeGreaterThan(P.visibleRate);
+    expect(fall.snow).toBeGreaterThan(P.visibleRate);
+    // Neither is at the full rate, which is what it used to do: the old code
+    // handed `weather.rain` to each, so sleet drew a downpour and a blizzard
+    // on top of each other and the white points won.
+    expect(fall.rain).toBeLessThan(1);
+    expect(fall.snow).toBeLessThan(1);
+    // And it is mostly wet, or it is just snow again.
+    expect(fall.rain).toBeGreaterThan(fall.snow);
+});
+
+test('light rain is drawn as light rain rather than as nothing', () => {
+    const P = GARDEN_CONFIG.weather.precipitation;
+    const light = GARDEN_CONFIG.weather.states.windy.rain;
+    const heavy = GARDEN_CONFIG.weather.states.stormy.rain;
+
+    const lightOpacity = fallOpacity(light, P.rainOpacityPeak, P.rainOpacityCurve);
+    const heavyOpacity = fallOpacity(heavy, P.rainOpacityPeak, P.rainOpacityCurve);
+
+    // The old linear `rain * 0.5` drew the windy state's 0.12 at six percent,
+    // which is not visible against a lawn at any hour.
+    expect(light * 0.5).toBeLessThan(0.07);
+    expect(lightOpacity).toBeGreaterThan(0.15);
+    // But it is still plainly lighter than a storm, or the curve has just
+    // turned every shower into a downpour.
+    expect(lightOpacity).toBeLessThan(heavyOpacity * 0.5);
+    expect(fallOpacity(0, P.rainOpacityPeak, P.rainOpacityCurve)).toBe(0);
 });
 
 // ---- Gusts (M8-6) ----------------------------------------------------------

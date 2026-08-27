@@ -774,7 +774,16 @@ function buildLeafCard() {
  * real branches that are already drawn.
  */
 let leafMask = null;
-export function leafClusterTexture(size = 64) {
+// 256 RATHER THAN 64, BECAUSE THE VISITOR CAN NOW WALK UP TO IT (M9-5). Every
+// radius below is a fraction of `size`, so the drawing and its alpha
+// distribution are unchanged and `bareAlphaTest` still means what it meant.
+// What changes is how close the eye can get before the blob turns to mush.
+// Measured against a 1280x800 frame: the widest leaf card in the scene, a Bur
+// Oak's at 0.425 m, covered 14.7 px at the composed camera and covers 94 px on
+// a tree 3.4 m from the eye at the close end of the dolly. At 64 the painted
+// blob is about 32 texels, so that was a threefold magnification of a thumbnail.
+// One cached texture serves the whole scene, so this costs 256 KB of VRAM once.
+export function leafClusterTexture(size = 256) {
     if (leafMask) return leafMask;
     if (typeof document === 'undefined') return null;
     const canvas = document.createElement('canvas');

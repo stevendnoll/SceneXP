@@ -37,6 +37,10 @@ import { initWildlife, updateWildlife, disposeWildlife } from './wildlife.min.js
 import { createWeather, stepWeather, weatherWords } from './weather.min.js';
 import { initPrecipitation, updatePrecipitation, disposePrecipitation } from './precip.min.js';
 import { resolveSpecies } from './species.min.js';
+import {
+    dollyView, tiltedLookY, applyDollyDelta, dollyLimits, getDolly, getTilt,
+    resetView, initViewControls, updateViewControls, disposeViewControls
+} from './view.min.js';
 import { createTree, updateTree, disposeTree } from './tree.min.js';
 import {
     initGarden, plantTree, restoreTrees, removeTree, clearGarden, waterTree,
@@ -261,6 +265,35 @@ export function framingFor(aspect, cam = GARDEN_CONFIG.camera) {
     return { fov, z };
 }
 
+/**
+ * The composed viewpoint, in the shape `dollyView` wants. The dolly's zero.
+ */
+function composedView() {
+    const cam = GARDEN_CONFIG.camera;
+    const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+    return {
+        z: framingFor(aspect, cam).z,
+        y: cam.position.y,
+        lookY: cam.lookAt.y,
+        lookZ: cam.lookAt.z
+    };
+}
+
+/**
+ * THE ONE OBJECT THE AIM LIVES IN, and it is deliberately not the frozen
+ * config. The shared pan part reads `lookAt.x/y/z` off whatever object it was
+ * handed, every frame, so handing it this one means the dolly and the tilt
+ * re-aim the composed view and the part's own yaw and tilt compose on top for
+ * free. Handing it `GARDEN_CONFIG.camera.lookAt` instead, as this used to,
+ * meant the part would drag the aim back to the composed point every frame and
+ * undo the dolly.
+ */
+const viewTarget = {
+    x: GARDEN_CONFIG.camera.lookAt.x,
+    y: GARDEN_CONFIG.camera.lookAt.y,
+    z: GARDEN_CONFIG.camera.lookAt.z
+};
+
 function placeCamera() {
     const cam = GARDEN_CONFIG.camera;
     const aspect = window.innerWidth / Math.max(1, window.innerHeight);
@@ -270,12 +303,31 @@ function placeCamera() {
         camera.up.set(0, 1, 0);
     }
 
-    const { fov, z } = framingFor(aspect, cam);
+    const { fov } = framingFor(aspect, cam);
     camera.fov = fov;
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
-    camera.position.set(cam.position.x, cam.position.y, z);
-    camera.lookAt(cam.lookAt.x, cam.lookAt.y, cam.lookAt.z);
+    applyView();
+}
+
+/**
+ * Put the camera where the dolly and the tilt say, and aim it.
+ *
+ * Runs every frame, BEFORE `updatePortraitControls`. That ordering is the whole
+ * of the double-ownership question: this sets the composed position and aim,
+ * and the part then either refines the aim with its own yaw and tilt or leaves
+ * it exactly as found. Either way the last word about the aim is correct, and
+ * neither owner has to know what the other did.
+ */
+function applyView() {
+    if (!camera) return;
+    const cam = GARDEN_CONFIG.camera;
+    const view = dollyView(getDolly(), composedView());
+    camera.position.set(cam.position.x, view.y, view.z);
+    viewTarget.x = cam.lookAt.x;
+    viewTarget.y = tiltedLookY(view, getTilt());
+    viewTarget.z = view.lookZ;
+    camera.lookAt(viewTarget.x, viewTarget.y, viewTarget.z);
 }
 
 // ---- Quality adaptation ----------------------------------------------------
@@ -475,14 +527,28 @@ function setupEventListeners() {
     // different fov per orientation and the zoom anchor has to follow it.
     initPortraitControls({
         getCamera: () => camera,
-        lookAt: GARDEN_CONFIG.camera.lookAt,
+        // The mutable one, not the frozen config. See viewTarget.
+        lookAt: viewTarget,
         baseFov: GARDEN_CONFIG.camera.portrait.fov,
         landscapeFov: GARDEN_CONFIG.camera.fov,
         pan: GARDEN_CONFIG.camera.portrait.pan,
+        // The zoom pair still renders, because it is what carries the pinch
+        // and the arrow keys. `zoomDelegate` takes what it means: every zoom
+        // input arrives here as a signed delta and the FOV is never touched.
         zoom: GARDEN_CONFIG.camera.portrait.zoom,
+        zoomDelegate: {
+            onDelta: applyDollyDelta,
+            limits: dollyLimits
+        },
         alwaysOn: true,
         extraClass: 'always-on',
         surface: canvas,
+        onFirstUse: (kind) => track(`view-${kind}`),
+        signal
+    });
+
+    // AFTER the part, because this reads the row the part builds.
+    initViewControls({
         onFirstUse: (kind) => track(`view-${kind}`),
         signal
     });
@@ -687,6 +753,11 @@ function applyReset() {
     // guard in save() would see a vanished key forever and never write again.
     storageSeen = false;
     closeTreeCard();
+    // A new garden gets the composed viewpoint back too. Leaving the visitor
+    // up at the birds-eye end looking down at an empty plot is not the frame
+    // this scene opens on.
+    resetView();
+    applyView();
     toast('A new garden, and a fresh plot of grass.');
     track('garden-cleared', { trees });
 }
@@ -837,9 +908,12 @@ function animate() {
     const snow = snowCoverageAt(hour);
 
     stepWeather(weather, delta, hour, state.elapsedSeconds, Math.random, state.reducedMotion);
-    const flash = updatePrecipitation(delta, state.elapsedSeconds, weather, snow, Math.random);
+    // `fall` is what the weather actually DREW this frame. The sky takes the
+    // flash and the chip takes the two rates, so nothing downstream decides
+    // for itself what the weather is doing.
+    const fall = updatePrecipitation(delta, state.elapsedSeconds, weather, snow, Math.random, hour);
 
-    updateSky(hour, delta, snow, weather.gloom, flash);
+    updateSky(hour, delta, snow, weather.gloom, fall.flash);
     updateTerrain(hour, snow);
     updateForest(hour, snow, weather.wind, state.elapsedSeconds, motionScale());
     updateVista(hour, state.elapsedSeconds, snow, weather.gloom, camera);
@@ -850,14 +924,16 @@ function animate() {
         wind: weather.wind,
         motion: motionScale()
     });
-    updateHud(yearAt(state.elapsedSeconds), state.elapsedSeconds, weatherWords(weather));
+    updateHud(yearAt(state.elapsedSeconds), state.elapsedSeconds, weatherWords(weather, fall));
     if (isCardOpen()) {
         const entry = getCardEntry();
         if (entry) refreshTreeCard(ageYears(entry.record, state.elapsedSeconds));
     }
 
-    // After everything else, because the pan part re-applies its offsets on
-    // top of whatever placeCamera composed and must have the last word.
+    // The camera, in order: our own dolly and tilt first, then the shared
+    // part's yaw and tilt refining the aim on top of it.
+    updateViewControls(delta);
+    applyView();
     updatePortraitControls(delta);
 
     if (renderer && scene && camera) renderer.render(scene, camera);
@@ -888,6 +964,7 @@ export function getWeather() { return weather; }
 
 function cleanup() {
     stop();
+    disposeViewControls();
     disposePrecipitation();
     disposeForest();
     disposeVista();
@@ -951,4 +1028,13 @@ if (typeof document !== 'undefined') {
     }
 }
 
-export const __test__ = { bufToHex, quality, state, placeCamera, animate, needsWater };
+export const __test__ = {
+    bufToHex, quality, state, placeCamera, animate, needsWater,
+    // The camera and the aim it is handed, for the view-control tests. Under
+    // the THREE stub every number read back off the camera is zero, so what
+    // these are good for is the AIM OBJECT, which is ours and holds real
+    // numbers, and identity checks on the camera itself.
+    camera: () => camera,
+    viewTarget: () => viewTarget,
+    applyView
+};

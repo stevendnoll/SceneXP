@@ -74,7 +74,7 @@
     <title>Fractal Garden</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
-    <link rel="preload" href="css/experience.min.css?v=4" as="style">
+    <link rel="preload" href="css/experience.min.css?v=5" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -84,7 +84,7 @@
          dark body, and this scene wants a soft daylight behind a slow first
          frame. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
-    <link rel="stylesheet" href="css/experience.min.css?v=4">
+    <link rel="stylesheet" href="css/experience.min.css?v=5">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -152,7 +152,13 @@
                  broken text rather than as a legend. -->
             <ul class="controls-hint">
                 <li><span>PLANT</span> Tap an empty patch of grass to choose a tree.</li>
-                <li><span>LOOK</span> Drag to pan and tilt, pinch or use the buttons to zoom.</li>
+                <!-- M9-8. This used to read "Drag to pan and tilt, pinch or
+                     use the buttons to zoom", which was false on every machine
+                     without a touchscreen: the shared part's gesture handler
+                     returns early on a mouse pointer, so a desktop drag does
+                     nothing at all. The buttons are the one instruction that
+                     is true everywhere, so they lead. -->
+                <li><span>LOOK</span> Use the arrows to look around, and the plus and minus to move closer or further away. On a touchscreen you can swipe and pinch instead.</li>
                 <li><span>TEND</span> Tap a tree to see how it is doing and to water it.</li>
                 <li><span>REMEMBER</span> Your garden is saved in this browser and waits for you.</li>
             </ul>

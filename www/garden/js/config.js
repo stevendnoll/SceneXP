@@ -196,12 +196,56 @@ export const GARDEN_CONFIG = deepFreeze({
                 maxTilt: 0.32
             },
             zoom: {
-                speed: 18,
-                // Generous outward, because that is what frames a large tree
-                // planted close to the camera.
+                // In units of the dolly parameter per second, because the
+                // garden delegates the zoom (see `dolly` below) and the shared
+                // part's own note says the units are whatever the experience
+                // counts in. A held button crosses the whole track in about
+                // three and a half seconds.
+                speed: 0.55,
+                // Kept so the shared part still renders the zoom pair, which
+                // is what carries the pinch gesture and the arrow keys. The
+                // numbers themselves are unused in delegate mode.
                 maxIn: 26,
                 maxOut: 16
             }
+        },
+
+        // ---- The dolly ------------------------------------------------------
+        // THE ZOOM USED TO BE A LENS AND WHAT WAS ASKED FOR WAS A MOVE. From a
+        // fixed eye at (0, 7, 22) the control narrowed the field of view, which
+        // is a crop: a bigger picture of exactly the same view, with no
+        // parallax and no sense of being anywhere different. Measured, it ran
+        // 60 degrees to 34 (1.9x magnification) and out to 76 (1.35x wider),
+        // and neither end is "amongst the trees" or "the plot from above",
+        // because both of those are POSITIONS.
+        //
+        // One parameter, -1 to +1, with 0 at the composed viewpoint the whole
+        // scene is framed for. The lens is left alone.
+        //
+        // `near.z` is 6, which is INSIDE the plot (it runs -12 to +12), so the
+        // close end really does stand the visitor among their own trees. The
+        // eye clears the ground with 1.3 m to spare at the highest relief the
+        // plot has, and it passes over the wall rather than through it.
+        //
+        // `far` rises much more than it retreats, because height is what makes
+        // an overhead view and distance only makes a small one. From (0, 26,
+        // 40) aimed at (0, 3, -14) the whole 24 m plot sits inside the middle
+        // of the frame with a band of sky still showing above the hills.
+        dolly: {
+            near: { z: 6, y: 2.2, lookY: 3.2, lookZ: -2 },
+            far: { z: 40, y: 26, lookY: 3.0, lookZ: -14 },
+            // Both ends are clamped against the composed z rather than trusted:
+            // `framingFor` dollies a portrait phone back on its own, and a tall
+            // enough window composes past 40, at which point an unclamped
+            // "out" would move the camera FORWARD.
+            //
+            // How far the aim can be tilted by the on-screen buttons, radians.
+            // The shared part's swipe and W/S tilt still compose on top of
+            // this, so a visitor using both gets both. That is what two
+            // controls on one axis do when neither knows about the other, and
+            // it is harmless: each alone reaches 18 degrees.
+            maxTilt: 0.32,
+            tiltSpeed: 0.42
         }
     },
 
@@ -562,6 +606,11 @@ export const GARDEN_CONFIG = deepFreeze({
             // mature crown's radius so the eye stays outside the drip line
             // rather than merely outside the trunk.
             cameraKeepOut: {
+                // THE EYE NOW TRAVELS A LONGER TRACK THAN THIS NUMBER KNEW
+                // ABOUT. It used to describe the portrait dolly alone, z 22 to
+                // 39, because that was everywhere the camera had ever been.
+                // `clearsCamera` reads the dolly track's own ends as well, so
+                // this is the backstop rather than the whole story.
                 dollyToZ: 39,
                 clearance: 12
             }
@@ -825,14 +874,32 @@ export const GARDEN_CONFIG = deepFreeze({
         // How fast the wind swings round, in radians per second.
         turnRate: 0.05,
 
+        // ---- What the season chip is allowed to say -------------------------
+        // "WINDY" IS A WIND SPEED HERE, NOT A STATE NAME. Since gusts arrived
+        // the envelope runs 0.50 to 1.60, so cloudy at a full gust (0.42 x 1.60
+        // = 0.67) is windier than windy in a lull (1.00 x 0.50 = 0.50), and a
+        // chip reading the state name called the first one cloudy and the
+        // second one windy. 0.55 is above every sunny hour (peak 0.48) and
+        // above cloudy except in the top eighth of its gusts, so a calm state
+        // reads as windy only when it genuinely is.
+        windyAbove: 0.55,
+        cloudyAbove: 0.35,
+
         // Rain or snow is decided by a smooth temperature rather than by the
         // name of the season, so an early spring storm can fall as sleet and
         // the change is a gradient instead of a switch on a calendar boundary.
         temperature: { coldest: -5, warmest: 27, snowBelow: 0.5, sleetBelow: 4 },
 
         precipitation: {
-            rainDrops: 2400,
-            rainDropsMobile: 800,
+            // THESE NUMBERS HAVE NEVER BEEN SEEN. `RAIN_VERT` carried a
+            // `vec2 += vec3` (M9-4 in the log), which is a GLSL type error, so
+            // the rain program never compiled and the rain mesh never drew a
+            // pixel in any weather at any hour. Every rain number below was
+            // therefore tuned against nothing. They are a considered starting
+            // point rather than a measured one, and this is the first place to
+            // look when the first screenshot of working rain comes back.
+            rainDrops: 4000,
+            rainDropsMobile: 1400,
             snowFlakes: 1800,
             snowFlakesMobile: 600,
             // The box of weather that travels with the viewer.
@@ -841,7 +908,40 @@ export const GARDEN_CONFIG = deepFreeze({
             rainSpeed: 26,
             snowSpeed: 2.4,
             rainColor: 0xa9c2d4,
-            snowColor: 0xf2f7ff
+            snowColor: 0xf2f7ff,
+
+            // A STREAK READS AS RAIN BECAUSE OF ITS LENGTH AND ITS LEAN, not
+            // its colour. 0.85 m at 26 m/s is about a 33 ms exposure, which is
+            // shorter than any camera anybody associates with rain.
+            rainLength: 1.6,
+            // The lean has a FLOOR, because rain leaning only in proportion to
+            // the wind falls vertically in a lull and vertical lines do not
+            // read as rain at all. Base 0.28 is about 16 degrees off vertical
+            // with no wind at all, and a full gust adds another 27.
+            leanBase: 0.28,
+            leanWind: 0.42,
+
+            // Opacity is NOT linear in the rate. The windy state carries 0.12
+            // deliberately, as light rain, and a linear curve draws light rain
+            // as nothing: at the old `rain * 0.5` it was a 6 percent wash.
+            // The power curve lifts the bottom of the range without touching
+            // the top, so light rain looks like light rain.
+            rainOpacityCurve: 0.55,
+            rainOpacityPeak: 0.55,
+            snowOpacityPeak: 0.85,
+
+            // SLEET IS A MIXTURE, NOT BOTH AT ONCE. It used to hand the full
+            // rate to the rain system AND the full rate to the snow system, so
+            // it drew a downpour and a blizzard on top of each other, and a
+            // 2.6 px round white point beats a 1 px translucent line every
+            // time. Mostly wet with a scatter of white through it.
+            sleetWet: 0.75,
+            sleetWhite: 0.35,
+
+            // The rate below which a system is not switched on. THE CHIP READS
+            // THIS SAME NUMBER, so the words can never describe weather that
+            // is not being drawn. See weatherWords.
+            visibleRate: 0.02
         },
 
         lightning: {
@@ -856,6 +956,39 @@ export const GARDEN_CONFIG = deepFreeze({
             reducedRate: 0.25,
             reducedPeak: 0.22,
             peak: 0.85,
+
+            // ---- The flash is a RATIO, not an amount ------------------------
+            // It used to ADD a fixed 1.6 to ambient and 1.2 to hemi, onto a
+            // fill that runs about 4.3 to 1 across the day (see M1-5). So the
+            // identical flash was a modest lift at noon and a white-out at
+            // midnight, and since winter here IS midnight the worst case was
+            // also a quarter of the year.
+            //
+            // These gains are solved so that the flash at STORMY NOON, the
+            // hour it was originally tuned at, lifts the fill by exactly what
+            // it lifted before: ambient 0.508 to 1.868 (3.68x) and hemi 0.673
+            // to 1.693 (2.52x) at the 0.85 peak. Every darker hour now gets
+            // the same RATIO instead of the same amount. At stormy midnight
+            // under snow the old code lifted ambient 6.1x, and with no snow
+            // down 9.2x.
+            flashGain: { sky: 2.4, ambient: 3.15, hemi: 1.79 },
+
+            // ---- Lightning tapers off with the sun --------------------------
+            // Requested as "no lightning at night", which a floor of 0 gives
+            // exactly. It is a TAPER instead, and the reason is worth keeping:
+            // the seasons here are the sun's own hours, so night is all of
+            // winter and the dark ends of autumn and spring. A hard cut makes
+            // lightning a summer-afternoon event only and takes the storms out
+            // of the season the specs call the windiest.
+            //
+            // At maxElevation 58 these thresholds put the full rate between
+            // 06:48 and 17:12 and the floor between 18:24 and 05:36. At 0.12
+            // the floor is 1.7 strikes a minute against a 20 to 45 second
+            // dwell, so most night storms carry one flash or none, which is
+            // distant weather rather than a strobe.
+            nightRate: 0.12,
+            nightBelowElevation: -6,
+            dayAboveElevation: 12,
             attackSeconds: 0.04,
             decaySeconds: 0.42,
             // Strikes stay distant and above the horizon. Nothing in this

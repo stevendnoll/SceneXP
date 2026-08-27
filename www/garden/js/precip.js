@@ -21,6 +21,7 @@
 import { GARDEN_CONFIG } from './config.min.js';
 import { makeRandom } from './species.min.js';
 import { unpackColor } from './sky.min.js';
+import { solarAt, clamp01, smoothstep } from './clock.min.js';
 
 // ---- Shaders ---------------------------------------------------------------
 
@@ -30,6 +31,8 @@ uniform float uHeight;
 uniform vec3 uWind;
 uniform float uSpeed;
 uniform float uLength;
+uniform float uLeanBase;
+uniform float uLeanWind;
 attribute float aTop;
 attribute float aOffset;
 varying float vFade;
@@ -40,9 +43,15 @@ void main() {
     float fall = mod(p.y - uTime * uSpeed + aOffset * uHeight, uHeight);
     p.y = fall;
     // The streak leans with the wind, and its top trails behind its bottom.
-    vec3 lean = vec3(uWind.x, 0.0, uWind.z) * 0.35;
-    p += (lean * uLength + vec3(0.0, uLength, 0.0)) * aTop;
-    p.xz += lean * fall * 0.12;
+    // THE LEAN HAS A FLOOR: scaling it by the wind alone drops rain vertically
+    // in a lull, and a vertical line does not read as rain.
+    float rainMag = length(vec2(uWind.x, uWind.z));
+    vec2 rainDir = rainMag > 0.001 ? vec2(uWind.x, uWind.z) / rainMag : vec2(0.0, 1.0);
+    vec2 lean = rainDir * (uLeanBase + uLeanWind * min(rainMag, 1.6));
+    p += vec3(lean.x * uLength, uLength, lean.y * uLength) * aTop;
+    // The whole column drifts downwind as it falls, and that one tracks the
+    // real wind rather than the leaning floor.
+    p.xz += vec2(uWind.x, uWind.z) * fall * 0.12;
     vFade = smoothstep(0.0, 0.15, fall / uHeight);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
@@ -197,7 +206,9 @@ function buildRain(count, P, config) {
         uHeight: { value: P.height },
         uWind: { value: new THREE.Vector3() },
         uSpeed: { value: P.rainSpeed },
-        uLength: { value: 0.85 },
+        uLength: { value: P.rainLength },
+        uLeanBase: { value: P.leanBase },
+        uLeanWind: { value: P.leanWind },
         uColor: { value: new THREE.Vector3(...unpackColor(P.rainColor)) },
         uOpacity: { value: 0 }
     };
@@ -306,6 +317,68 @@ export function flashAt(age, config = GARDEN_CONFIG) {
 }
 
 /**
+ * How much of the full strike rate an hour gets, 0 to 1.
+ *
+ * Thunderstorms are convective and daytime, so the rate follows the sun rather
+ * than the calendar. A SMOOTH FUNCTION OF SOLAR ELEVATION rather than a branch
+ * on an hour, for the same reason `temperatureAt` is: a threshold on the clock
+ * would switch the whole sky's behaviour between two adjacent frames.
+ *
+ * `nightRate` is the floor, and setting it to 0 makes this the hard cut the
+ * request originally asked for. It is a taper because night in this garden is
+ * all of winter, and a hard cut takes lightning out of three of the four
+ * seasons rather than out of the dark.
+ */
+export function strikeFactorAt(hour, config = GARDEN_CONFIG) {
+    const L = config.weather.lightning;
+    const elevation = solarAt(hour, config.sun).elevation;
+    const span = L.dayAboveElevation - L.nightBelowElevation;
+    const t = span > 0 ? clamp01((elevation - L.nightBelowElevation) / span) : 1;
+    return L.nightRate + (1 - L.nightRate) * smoothstep(t);
+}
+
+/**
+ * How hard the rain and the snow are falling, given the weather and the
+ * calendar. 0 to 1 each, and BOTH can be non-zero at once, which is sleet.
+ *
+ * THIS IS THE ONLY PLACE THAT DECIDES WHAT IS FALLING, and that is the point of
+ * it being a pure function rather than four lines inside the frame update. The
+ * season chip used to answer the same question separately, off the weather
+ * state alone, and so reported "cloudy" over a blizzard: the winter snowfall
+ * arrives from the CALENDAR and never touches `weather.rain`. One source, and
+ * the chip now reads this.
+ */
+export function fallRates(weather, snowCoverage = 0, config = GARDEN_CONFIG) {
+    const P = config.weather.precipitation;
+    const rate = weather.rain || 0;
+    const kind = weather.precip;
+
+    let rain = kind === 'rain' ? rate : 0;
+    let snow = kind === 'snow' ? rate : 0;
+    // SLEET IS A MIXTURE, not both systems at full rate. Handing the whole rate
+    // to each drew a downpour and a blizzard on top of each other, and the
+    // white points won on sheer legibility, so sleet read as plain snow.
+    if (kind === 'sleet') {
+        rain = rate * P.sleetWet;
+        snow = rate * P.sleetWhite;
+    }
+
+    // The winter snowfall is a SCHEDULED event rather than a weather one, so it
+    // falls whatever the state machine is doing. Melting counts: coverage is
+    // strictly between 0 and 1 on the way down as well as on the way up.
+    if (snowCoverage > 0 && snowCoverage < 1) snow = Math.max(snow, 0.7);
+
+    return { rain, snow };
+}
+
+/** Opacity for a fall rate. NOT LINEAR: the windy state's 0.12 is deliberately
+ *  light rain, and a linear curve draws light rain as nothing. */
+export function fallOpacity(rate, peak, curve) {
+    if (!(rate > 0)) return 0;
+    return Math.pow(clamp01(rate), curve) * peak;
+}
+
+/**
  * Whether a strike happens this frame, and the rate cap that governs it.
  *
  * THE ACCUMULATOR IS THE POINT. Drawing a gap from the current rate is wrong
@@ -359,12 +432,16 @@ function drawBolt(random, config) {
  * @param {object} weather from weather.js
  * @param {number} snowCoverage from the calendar, so winter snow falls even
  *        when the weather is merely cloudy
- * @returns {number} the flash level, for the sky
+ * @param {number} hour the in-world hour, which the strike rate follows
+ * @returns {{flash: number, rain: number, snow: number}} what was actually
+ *          drawn this frame. The sky takes the flash and the season chip takes
+ *          the two rates, so nothing downstream has to decide for itself what
+ *          the weather is doing.
  */
-export function updatePrecipitation(dt, time, weather, snowCoverage, random = Math.random, config = GARDEN_CONFIG) {
-    if (!rain || !cameraRef) return 0;
+export function updatePrecipitation(dt, time, weather, snowCoverage, random = Math.random, hour = 12, config = GARDEN_CONFIG) {
     const P = config.weather.precipitation;
     const L = config.weather.lightning;
+    if (!rain || !cameraRef) return { flash: 0, rain: 0, snow: 0 };
 
     // The box travels with the viewer, so the visitor is always inside the
     // weather and nothing has to be respawned to keep them there.
@@ -373,27 +450,28 @@ export function updatePrecipitation(dt, time, weather, snowCoverage, random = Ma
     snow.mesh.position.set(cam.x, 0, cam.z);
     bolt.mesh.position.set(cam.x, 0, cam.z);
 
-    const falling = weather.precip;
-    const wetRate = falling === 'rain' || falling === 'sleet' ? weather.rain : 0;
-    // Snow falls when the weather says so OR when the calendar does, because
-    // the winter snowfall is a scheduled event rather than a weather one.
-    const snowRate = Math.max(falling === 'snow' || falling === 'sleet' ? weather.rain : 0,
-        snowCoverage > 0 && snowCoverage < 1 ? 0.7 : 0);
+    const rates = fallRates(weather, snowCoverage, config);
+    const wetRate = rates.rain;
+    const snowRate = rates.snow;
 
     rain.uniforms.uTime.value = time;
     rain.uniforms.uWind.value.set(weather.wind.x, 0, weather.wind.z);
-    rain.uniforms.uOpacity.value = wetRate * 0.5;
-    rain.mesh.visible = wetRate > 0.02;
+    rain.uniforms.uOpacity.value = fallOpacity(wetRate, P.rainOpacityPeak, P.rainOpacityCurve);
+    rain.mesh.visible = wetRate >= P.visibleRate;
 
     snow.uniforms.uTime.value = time;
     snow.uniforms.uWind.value.set(weather.wind.x, 0, weather.wind.z);
-    snow.uniforms.uOpacity.value = snowRate * 0.85;
-    snow.mesh.visible = snowRate > 0.02;
+    snow.uniforms.uOpacity.value = fallOpacity(snowRate, P.snowOpacityPeak, P.rainOpacityCurve);
+    snow.mesh.visible = snowRate >= P.visibleRate;
 
     // ---- Lightning ---------------------------------------------------------
     const stormy = weather.state === 'stormy' || weather.from === 'stormy';
     const strength = stormy ? weather.gloom : 0;
+    // THE TAPER GOES IN BEFORE THE ACCUMULATOR, not after. The accumulator is
+    // what keeps a varying rate's distribution honest, so scaling the rate it
+    // is given is correct and scaling what it produces would defeat it.
     const rate = (strength > 0.5 ? L.strikesPerMinute / 60 : 0)
+        * strikeFactorAt(hour, config)
         * (reducedMotion ? L.reducedRate : 1);
 
     strikeAccum = accumulateStrikes(strikeAccum, dt, rate, config);
@@ -410,7 +488,7 @@ export function updatePrecipitation(dt, time, weather, snowCoverage, random = Ma
     bolt.uniforms.uOpacity.value = Math.min(1, flashLevel * 2.2);
     if (flashLevel < 0.01) bolt.mesh.visible = false;
 
-    return flashLevel;
+    return { flash: flashLevel, rain: wetRate, snow: snowRate };
 }
 
 export function disposePrecipitation() {

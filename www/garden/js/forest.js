@@ -41,6 +41,9 @@ import { phenologyAt, seasonAt, clamp01 } from './clock.min.js';
 import { mixColor, packColor, unpackColor } from './sky.min.js';
 import { buildSkeleton, bakeGeometry, buildLeaves, leafClusterTexture, patchVertex } from './tree.min.js';
 import { worldHeightAt, openingHalfWidthAt } from './terrain.min.js';
+// One statement of where the eye can go, read rather than copied. view.js
+// depends on nothing but the config and the clock, so there is no cycle.
+import { dollyTrackZ } from './view.min.js';
 
 // THE CLEARING'S OPENING LIVES IN terrain.js and is re-exported here, which is
 // where everybody looks for it and where it was defined until the lake needed
@@ -98,9 +101,19 @@ export function forestDensityAt(x, z, config = GARDEN_CONFIG) {
  * is inside, and all the visitor sees is the underside of its branches spread
  * across the frame.
  *
- * Measured against the dolly SEGMENT rather than the composed position, because
- * a portrait phone slides the eye back along +z and a keep-out that only knew
- * about the desktop framing would let a tree sit exactly where a phone ends up.
+ * Measured against the whole SEGMENT the eye can travel rather than against any
+ * one point on it, because a portrait phone slides the eye back along +z and a
+ * keep-out that only knew about the desktop framing would let a tree sit
+ * exactly where a phone ends up.
+ *
+ * THE SEGMENT GREW WHEN THE ZOOM BECAME A DOLLY (M9-5), and this is the coupling
+ * that was written down before it could bite. This used to read
+ * `cameraKeepOut.dollyToZ` alone, z 22 to 39, because that was everywhere the
+ * camera had ever been. The dolly track runs from inside the plot out to well
+ * behind the composed viewpoint, so a rule that did not know about it would
+ * leave trees standing where the eye can now go. `dollyTrackZ` in view.js is
+ * the single statement of the track's ends and this reads it rather than
+ * keeping a second copy of the numbers.
  *
  * Pure, so the rule can be asserted against the camera numbers instead of
  * spotted in a screenshot.
@@ -109,8 +122,13 @@ export function clearsCamera(x, z, config = GARDEN_CONFIG, clearance = null) {
     const keep = config.world.nearTreeline.cameraKeepOut;
     if (!keep) return true;
     const want = clearance === null ? keep.clearance : clearance;
-    const z0 = config.camera.position.z;
-    const z1 = Math.max(z0, keep.dollyToZ);
+    // The composed z at the widest frame, plus the dolly's own two ends. The
+    // portrait framing pushes the composed z further back than this on a tall
+    // window, and `dollyTrackZ` clamps to it, so `dollyToZ` is the backstop
+    // for that rather than the whole story.
+    const track = dollyTrackZ(Math.max(config.camera.position.z, keep.dollyToZ), config);
+    const z0 = track.near;
+    const z1 = track.far;
     // Horizontal distance to the segment the eye travels along.
     let distance;
     if (z < z0) distance = Math.hypot(x, z0 - z);

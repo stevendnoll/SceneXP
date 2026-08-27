@@ -105,6 +105,31 @@ function makeStyle() {
   };
 }
 
+/** Depth-first search for the first descendant carrying a class. */
+function findByClass(root, name) {
+  if (!root || !Array.isArray(root.children)) return null;
+  for (const child of root.children) {
+    if (child && child.classList && child.classList.contains(name)) return child;
+    const deeper = findByClass(child, name);
+    if (deeper) return deeper;
+  }
+  return null;
+}
+
+/** Take a node out of whatever parent it is in, so a move is a move. */
+function detach(node) {
+  const parent = node && (node.parentNode || node.parentElement);
+  if (parent && Array.isArray(parent.children)) {
+    parent.children = parent.children.filter((x) => x !== node);
+  }
+}
+
+function adopt(parent, node) {
+  if (!node) return;
+  node.parentElement = parent;
+  node.parentNode = parent;
+}
+
 function makeElement(tag = 'div') {
   const listeners = new Map(); // type -> Set<fn>
   const el = {
@@ -115,6 +140,7 @@ function makeElement(tag = 'div') {
     classList: makeClassList(),
     children: [],
     parentElement: null,
+    parentNode: null,
     textContent: '',
     innerHTML: '',
     value: '',
@@ -143,9 +169,26 @@ function makeElement(tag = 'div') {
     getAttribute(k) { return k in el.attributes ? el.attributes[k] : null; },
     removeAttribute(k) { delete el.attributes[k]; },
     hasAttribute(k) { return k in el.attributes; },
-    appendChild(c) { el.children.push(c); if (c) c.parentElement = el; return c; },
-    removeChild(c) { el.children = el.children.filter((x) => x !== c); return c; },
-    insertBefore(c) { el.children.push(c); if (c) c.parentElement = el; return c; },
+    // APPENDING A NODE THAT ALREADY HAS A PARENT MOVES IT, which is what the
+    // real DOM does and what any code that reparents a widget depends on.
+    // Without the detach a node ends up in its old parent's children as well,
+    // and a test asserting a row's contents reads a row that never existed.
+    appendChild(c) { detach(c); el.children.push(c); adopt(el, c); return c; },
+    removeChild(c) {
+      el.children = el.children.filter((x) => x !== c);
+      if (c) { c.parentElement = null; c.parentNode = null; }
+      return c;
+    },
+    // The reference node is honoured, or insertion order is not a thing a test
+    // can check and every layout assertion passes by accident.
+    insertBefore(c, ref) {
+      detach(c);
+      const at = ref ? el.children.indexOf(ref) : -1;
+      if (at >= 0) el.children.splice(at, 0, c);
+      else el.children.push(c);
+      adopt(el, c);
+      return c;
+    },
     remove() { el.parentElement?.removeChild?.(el); },
     querySelector(sel) { return el._selMemo?.get(sel) ?? memoChild(el, sel); },
     querySelectorAll() { return []; },
@@ -160,6 +203,20 @@ function makeElement(tag = 'div') {
     getContext(type) { return type === '2d' ? make2dContext() : chainable(); },
     toDataURL() { return 'data:,'; },
   };
+  // `className` AND `classList` ARE THE SAME STATE. As two plain fields they
+  // drift the moment any code sets one and reads the other, and a class
+  // assigned by `el.className = 'a b'` is then invisible to `contains('a')`,
+  // to a class-based querySelector, and to every assertion written against
+  // either. The shared parts set className; the experiences use classList.
+  Object.defineProperty(el, 'className', {
+    enumerable: true,
+    configurable: true,
+    get() { return el.classList.values().join(' '); },
+    set(value) {
+      el.classList.values().forEach((name) => el.classList.remove(name));
+      String(value).split(/\s+/).filter(Boolean).forEach((name) => el.classList.add(name));
+    },
+  });
   return el;
 }
 
@@ -232,7 +289,17 @@ export function installDom({ innerWidth = 1280, innerHeight = 800 } = {}) {
       if (!byId.has(id)) byId.set(id, makeElement('div'));
       return byId.get(id);
     },
+    // A REAL SEARCH FIRST, then the auto-vivify fallback the rest of the
+    // suites lean on. Code that builds a widget and then goes looking for it
+    // by class was finding a fresh empty div and quietly working on nothing,
+    // which is a test passing while the thing under test did not happen.
+    // Only simple `.class` selectors are searched, which is all any experience
+    // uses on the document.
     querySelector(sel) {
+      if (typeof sel === 'string' && /^\.[\w-]+$/.test(sel)) {
+        const found = findByClass(documentStub.body, sel.slice(1));
+        if (found) return found;
+      }
       if (!bySelector.has(sel)) bySelector.set(sel, makeElement('div'));
       return bySelector.get(sel);
     },

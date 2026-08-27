@@ -331,6 +331,33 @@ export function lightingAt(hour, snowCoverage = 0, gloom = 0, config = GARDEN_CO
     };
 }
 
+/**
+ * What a lightning flash does to the fill, as a pair of MULTIPLIERS.
+ *
+ * THE FLASH IS A RATIO, NOT AN AMOUNT, and getting that wrong is the whole of
+ * M9-1. The first version added a fixed 1.6 to ambient and 1.2 to hemi. Those
+ * are absolute numbers laid onto a fill that runs about 4.3 to 1 between noon
+ * and midnight, so one flash was a modest brightening at noon and a white-out
+ * at midnight. Winter in this garden IS midnight, so the worst case was also a
+ * quarter of the year.
+ *
+ * This is the same mistake M1-5 fixed in the other direction: the sky and the
+ * light rig each deriving brightness their own way and disagreeing at one hour.
+ * The cure is the same. Lift what is there rather than adding to it, and the
+ * flash cannot disagree with the hour at any hour.
+ *
+ * Pure, and separate from `lightingAt`, because the property worth asserting is
+ * a comparison BETWEEN hours and a function that takes an hour cannot state it.
+ */
+export function flashLighting(light, flash = 0, config = GARDEN_CONFIG) {
+    const F = config.weather.lightning.flashGain;
+    const f = flash > 0 ? flash : 0;
+    return {
+        ambient: light.ambient * (1 + f * F.ambient),
+        hemi: light.hemi * (1 + f * F.hemi)
+    };
+}
+
 /** How visible the stars are: gone while the sun is up, full once it is well
  *  down. Separate from the light rig because the fade is a property of the
  *  sky rather than of anything the lights do. */
@@ -626,7 +653,9 @@ export function updateSky(hour, deltaSeconds = 0, snowCoverage = 0, gloom = 0, f
     setVec3FromHex(u.uHorizon.value, sky.horizon);
     // A lightning flash lights the whole cloud base rather than a point, so it
     // arrives as a lift on the sky's own brightness rather than as an object.
-    u.uLum.value = sky.lum * (1 + flash * 2.4);
+    // This term was always RELATIVE and was always right. The two lights below
+    // were not. See flashLighting.
+    u.uLum.value = sky.lum * (1 + flash * config.weather.lightning.flashGain.sky);
 
     const sunDir = directionAt(light.sunElevation, light.sunAzimuth);
     const moonDir = directionAt(light.moonElevation, light.moonAzimuth);
@@ -640,11 +669,13 @@ export function updateSky(hour, deltaSeconds = 0, snowCoverage = 0, gloom = 0, f
     u.uMoonUp.value = clamp01((light.moonElevation + 4) / 8);
     u.uStarFade.value = starFadeAt(hour, S.stars, config.sun);
 
-    // The lights. The flash adds to the fill rather than to the sun, because
-    // what a distant strike actually does is light the sky, and the sky is the
-    // fill.
-    ambientLight.intensity = light.ambient + flash * 1.6;
-    hemiLight.intensity = light.hemi + flash * 1.2;
+    // The lights. The flash lifts the fill rather than the sun, because what a
+    // distant strike actually does is light the sky, and the sky is the fill.
+    // It SCALES the fill rather than adding to it, so a midnight flash is as
+    // bright relative to midnight as a noon flash is relative to noon.
+    const lit = flashLighting(light, flash, config);
+    ambientLight.intensity = lit.ambient;
+    hemiLight.intensity = lit.hemi;
     hemiLight.color.setHex(light.hemiSky);
     hemiLight.groundColor.setHex(light.hemiGround);
 

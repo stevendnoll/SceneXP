@@ -188,12 +188,44 @@ export function stepWeather(w, dt, hour, elapsed = 0, random = Math.random, redu
     return w;
 }
 
-/** A one-line description, for the season chip. */
-export function weatherWords(w) {
-    if (w.precip === 'snow') return 'snow';
-    if (w.precip === 'sleet') return 'sleet';
-    if (w.precip === 'rain') return 'rain';
-    if (w.state === 'windy' || (w.transition < 0.5 && w.from === 'windy')) return 'windy';
-    if (w.gloom > 0.35) return 'cloudy';
+/**
+ * A one-line description, for the season chip.
+ *
+ * IT REPORTS WHAT WAS DRAWN, NOT WHAT THE STATE MACHINE INTENDED, and that is
+ * the whole of M9-3. The old version read `w.precip` and the state name, and so
+ * was wrong in three separate ways at once:
+ *
+ *   - The winter snowfall arrives from the CALENDAR and never touches
+ *     `w.rain`, so a blizzard under a cloudy state was announced as "cloudy".
+ *   - Its threshold was 0.01 while the renderer's was 0.02, so it announced
+ *     rain that was not switched on.
+ *   - "Windy" was a state NAME, and since gusts arrived a cloudy surge is
+ *     windier than a windy lull.
+ *
+ * So it now takes `fall`, the rates `updatePrecipitation` actually used, and
+ * reads the published wind STRENGTH rather than the state it came from.
+ *
+ * BOTH HALVES ARE NAMED WHEN BOTH ARE TRUE. A gusty shower is windy and it is
+ * rain, the chip has room for both, and dropping either one is how a chip
+ * starts disagreeing with the frame again.
+ *
+ * @param {object} w    from stepWeather
+ * @param {object} fall {rain, snow} from updatePrecipitation
+ */
+export function weatherWords(w, fall = null, config = GARDEN_CONFIG) {
+    const W = config.weather;
+    const min = W.precipitation.visibleRate;
+    const rain = fall && fall.rain >= min;
+    const snow = fall && fall.snow >= min;
+    const windy = (w.windStrength || 0) >= W.windyAbove;
+
+    let falling = '';
+    if (rain && snow) falling = 'sleet';
+    else if (snow) falling = 'snow';
+    else if (rain) falling = 'rain';
+
+    if (falling) return windy ? `windy ${falling}` : falling;
+    if (windy) return 'windy';
+    if (w.gloom > W.cloudyAbove) return 'cloudy';
     return 'clear';
 }

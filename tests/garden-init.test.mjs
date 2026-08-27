@@ -17,6 +17,8 @@
  * code, and it fails if the `state.lastTime = 0` line in start() is removed.
  */
 import { jest } from '@jest/globals';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 
@@ -452,4 +454,157 @@ test('a recovered device reaches back up, slowly', async () => {
     // And it never overshoots the device's own ratio.
     const nearlyThere = { frame: 0.0167, best: 0.0167, scale: 0.99, since: 99, frames: 600 };
     expect(nextPixelScale(nearlyThere, GARDEN_CONFIG)).toBe(1);
+});
+
+// ---- The view controls (M9-5, M9-7) ----------------------------------------
+//
+// The shared pan part builds one row of four in a fixed order and offers no
+// seam for a fifth button, so view.js reparents its zoom pair out to a corner
+// and drops the missing tilt pair into the gap. These assert the DOM that
+// comes out, because that layout is the whole deliverable and it is exactly
+// the kind of thing that silently stops happening when a shared part changes.
+
+let GARDEN_CONFIG;
+beforeEach(async () => {
+    ({ GARDEN_CONFIG } = await import('../www/garden/js/config.js'));
+});
+
+function lookRow() {
+    return globalThis.document.querySelector('.pan-controls');
+}
+
+function zoomStack() {
+    return globalThis.document.querySelector('.garden-zoom');
+}
+
+function labels(el) {
+    return (el ? el.children : []).map((c) => c.getAttribute('aria-label'));
+}
+
+test('the look controls end up in one row, in reading order', async () => {
+    await bootGarden();
+    expect(labels(lookRow())).toEqual(['Pan left', 'Look up', 'Look down', 'Pan right']);
+});
+
+test('THE ZOOM PAIR IS MOVED, NOT REBUILT', async () => {
+    // Listeners travel with a node, so reparenting keeps the pinch, the arrow
+    // keys and the hold behaviour belonging to the shared part. Rebuilding
+    // them here, or dropping `zoom` from the part's options, would have taken
+    // the pinch with it: applyGesturePinch returns early when neither zoom
+    // button exists, which is a silent loss on the one device that has it.
+    await bootGarden();
+    const stack = zoomStack();
+    // Plus on top, which is the map idiom and also the honest one: up moves
+    // the eye closer. The part builds them the other way round for a
+    // horizontal row, so this order is the reversal doing its job.
+    expect(labels(stack)).toEqual(['Zoom in', 'Zoom out']);
+
+    // The proof that these are the part's own nodes rather than copies: they
+    // still carry the listeners it attached, which nothing in view.js adds.
+    for (const btn of stack.children) {
+        expect(btn.listeners.has('pointerdown')).toBe(true);
+        expect(btn.parentNode).toBe(stack);
+    }
+});
+
+test('holding a tilt button moves the aim, and stops at the limit', async () => {
+    const main = await bootGarden();
+    const D = GARDEN_CONFIG.camera.dolly;
+    const [, up, down] = lookRow().children;
+
+    const level = main.__test__.viewTarget().y;
+    fire(up, 'pointerdown', { pointerId: 1 });
+    expect(up.classList.contains('held')).toBe(true);
+    stepFrames(20);
+    expect(main.__test__.viewTarget().y).toBeGreaterThan(level);
+
+    // It runs out rather than running away, and says so.
+    stepFrames(120);
+    expect(up.classList.contains('at-limit')).toBe(true);
+    const ceiling = main.__test__.viewTarget().y;
+    stepFrames(60);
+    expect(main.__test__.viewTarget().y).toBeCloseTo(ceiling, 9);
+
+    // Releasing stops it, and the other direction comes back down.
+    fire(up, 'pointerup', { pointerId: 1 });
+    expect(up.classList.contains('held')).toBe(false);
+    fire(down, 'pointerdown', { pointerId: 2 });
+    stepFrames(30);
+    expect(main.__test__.viewTarget().y).toBeLessThan(ceiling);
+    fire(down, 'pointerup', { pointerId: 2 });
+});
+
+test('a tilt button that loses focus stops tilting', async () => {
+    // A control that keeps running after the page has taken focus elsewhere is
+    // a stuck camera, and there is no way for the visitor to unstick it.
+    const main = await bootGarden();
+    const up = lookRow().children[1];
+    fire(up, 'pointerdown', { pointerId: 1 });
+    stepFrames(5);
+    fire(up, 'blur');
+    const held = main.__test__.viewTarget().y;
+    stepFrames(30);
+    expect(main.__test__.viewTarget().y).toBeCloseTo(held, 9);
+});
+
+test('THE ZOOM IS A DOLLY: holding it moves the camera, not the lens', async () => {
+    const main = await bootGarden();
+    // Plus first: the stack reads top to bottom, in on top.
+    const [zoomIn, zoomOut] = zoomStack().children;
+
+    // The FOV is never touched, and that claim is checked in the SOURCE rather
+    // than on the camera: under the THREE stub `camera.fov` is a proxy and
+    // every read of it is a different object, so nothing about it can be
+    // compared. Passing `zoomDelegate` is what makes the shared part bypass
+    // its whole FOV path, and it is the one line that decides it.
+    const mainSrc = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'main.js'), 'utf8');
+    expect(mainSrc).toMatch(/zoomDelegate:\s*\{/);
+    const panSrc = readFileSync(join(process.cwd(), 'www', 'shared', 'js', 'pan-1.0.0.js'), 'utf8');
+    // The delegate branch returns before `_fovOffset` is ever written.
+    expect(panSrc).toMatch(/if \(_zoomDelegate\) \{[\s\S]{0,240}?onDelta/);
+
+    fire(zoomIn, 'pointerdown', { pointerId: 1 });
+    stepFrames(120);
+    // The near end of the track is reached and reported.
+    expect(zoomIn.classList.contains('at-limit')).toBe(true);
+    fire(zoomIn, 'pointerup', { pointerId: 1 });
+
+    // The aim moves with the eye, so the two ends are different views rather
+    // than the same view at two magnifications.
+    const near = { ...main.__test__.viewTarget() };
+    fire(zoomOut, 'pointerdown', { pointerId: 2 });
+    stepFrames(240);
+    expect(zoomOut.classList.contains('at-limit')).toBe(true);
+    expect(main.__test__.viewTarget().z).not.toBeCloseTo(near.z, 3);
+    fire(zoomOut, 'pointerup', { pointerId: 2 });
+});
+
+test('the shared part is handed the aim the dolly moves, not the frozen config', async () => {
+    // THIS IS A TEXT ASSERTION ON PURPOSE, and the first version of it was a
+    // behavioural one that passed with the bug deliberately reintroduced.
+    //
+    // The hazard is real: the part composes its yaw and tilt from
+    // `_lookAt - camera.position`, so handing it the frozen config would throw
+    // away the dolly's aim the moment anybody pans. But it only reads the aim
+    // when one of ITS offsets is engaged, and under the stub the argument it
+    // then passes to camera.lookAt is a proxy holding no numbers. So there is
+    // nothing to observe from here, and the honest check is the line that
+    // decides it plus the line in the part that depends on it.
+    const main = await bootGarden();
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'main.js'), 'utf8');
+    const call = src.match(/initPortraitControls\(\{[\s\S]*?\n {4}\}\)/);
+    expect(call).not.toBeNull();
+    expect(call[0]).toMatch(/lookAt:\s*viewTarget\b/);
+    expect(call[0]).not.toMatch(/lookAt:\s*GARDEN_CONFIG/);
+
+    // And the part re-reads that object every frame, which is the only reason
+    // handing over a mutable one works at all. If this line ever changes to
+    // copy the aim at init, the garden's dolly stops reaching the part and
+    // nothing here or anywhere else would say so.
+    const pan = readFileSync(join(process.cwd(), 'www', 'shared', 'js', 'pan-1.0.0.js'), 'utf8');
+    expect(pan).toMatch(/_dirVec\.set\(_lookAt\.x, _lookAt\.y, _lookAt\.z\)/);
+
+    // The object main mutates is the one it built, and it is not the frozen
+    // config's, so writing to it can never mutate the config.
+    expect(main.__test__.viewTarget()).not.toBe(GARDEN_CONFIG.camera.lookAt);
 });
