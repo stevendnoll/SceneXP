@@ -955,13 +955,17 @@ function animate() {
     const hour = hourAt(state.elapsedSeconds);
     const snow = snowCoverageAt(hour);
 
-    // The weather still turns behind the welcome card, because a static sky is
-    // as dead as a static tree. Its GUST envelope stays on the calendar, which
-    // holds it steady until the visitor begins: the envelope is a pure
-    // function of `elapsedSeconds` by design, so a reload at the same clock
-    // gusts identically, and that is worth more than a moving amplitude for
-    // the few seconds a welcome card is up.
-    stepWeather(weather, delta, hour, state.elapsedSeconds, Math.random, state.reducedMotion);
+    // THE WEATHER IS PART OF THE CALENDAR, so it waits too.
+    //
+    // An earlier version let it turn behind the welcome card, on the theory
+    // that a static sky is as dead as a static tree. That is true of a sky
+    // nobody chose and false of this one: the opening frame is a clear spring
+    // morning, it is the first thing anybody sees, and it should be that every
+    // time rather than whatever the state machine happened to roll while they
+    // were reading. Held on `gardenDelta`, the state stays sunny, the
+    // transition stays settled, and the wind holds one steady direction and
+    // strength, so the trees go on swaying in a morning that does not change.
+    stepWeather(weather, gardenDelta, hour, state.elapsedSeconds, Math.random, state.reducedMotion);
     // `fall` is what the weather actually DREW this frame. The sky takes the
     // flash and the chip takes the two rates, so nothing downstream decides
     // for itself what the weather is doing.

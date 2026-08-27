@@ -212,6 +212,34 @@ test('THE YEAR DOES NOT PASS WHILE THE WELCOME CARD IS UP', async () => {
     expect(main.getState().elapsedSeconds).toBeGreaterThan(opening);
 });
 
+test('THE WEATHER HOLDS BEHIND THE WELCOME CARD TOO', async () => {
+    // The opening frame is a clear spring morning and it is the first thing
+    // anybody sees. It should be that every time, not whatever the state
+    // machine rolled while they were reading the card.
+    const main = await bootGarden();
+    const opening = main.getWeather();
+    expect(opening.state).toBe('sunny');
+
+    stepFrames(240);
+    const held = main.getWeather();
+    // `held` is what accumulates toward the next draw, so a state machine that
+    // is running shows it even before the state itself changes.
+    expect(held.held).toBe(0);
+    expect(held.state).toBe('sunny');
+    expect(held.transition).toBe(1);
+    expect(held.rain).toBe(0);
+    expect(held.gloom).toBe(0);
+    expect(dom.el('season-chip').textContent).toBe('Spring, year 1 · clear');
+
+    // The wind still blows, though, or the trees have nothing to sway in.
+    expect(Math.hypot(held.wind.x, held.wind.z)).toBeGreaterThan(0);
+
+    // And the machine starts the moment the visitor does.
+    beginTending();
+    stepFrames(60);
+    expect(main.getWeather().held).toBeGreaterThan(0);
+});
+
 test('BUT THE SCENE IS NOT A PHOTOGRAPH while it waits', async () => {
     // Freezing everything would not pause the garden, it would photograph it,
     // and a photograph of rain is streaks hanging motionless in the air. The
