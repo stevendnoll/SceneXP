@@ -18,11 +18,9 @@
  *   does not break a test anywhere else: it just means the birch that greets a
  *   returning visitor tomorrow is a different birch.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
 import { SPECIES, DEFAULT_CUSTOM, resolveSpecies, makeRandom, clampCustom, sliderWords, tintColor, speciesById } from '../www/garden/js/species.js';
-import { buildSkeleton, buildLeaves, buildFruit, sidesForDepth } from '../www/garden/js/tree.js';
+import { buildSkeleton, buildLeaves, buildFruit, sidesForDepth, FRUIT_SHAPES, fruitClusterSpan } from '../www/garden/js/tree.js';
 import { fruitStageAt, phenologyAt } from '../www/garden/js/clock.js';
 
 const SEED = 20260825;
@@ -514,23 +512,12 @@ function pxAcross(metres, y, z) {
     return 2 * Math.atan(metres / (2 * distance)) * pxPerRadian;
 }
 
-// Read straight off the drawing in `blossomFruitTexture`, so repainting the
-// mask smaller cannot quietly shrink the fruit back out of sight.
-function clusterShare() {
-    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'tree.js'), 'utf8');
-    const block = src.slice(src.indexOf('const bodies = ['), src.indexOf(']', src.indexOf('const bodies = [')));
-    const bodies = [...block.matchAll(/x:\s*(-?[\d.]+),\s*y:\s*(-?[\d.]+),\s*r:\s*([\d.]+)/g)]
-        .map((m) => ({ x: Number(m[1]), r: Number(m[3]) }));
-    expect(bodies.length).toBeGreaterThan(1);
-    const left = Math.min(...bodies.map((b) => b.x - b.r));
-    const right = Math.max(...bodies.map((b) => b.x + b.r));
-    return right - left;
-}
-
 test('a fruit cluster is big enough on screen to be seen at all', () => {
-    const share = clusterShare();
+    // MEASURED OFF THE DRAWING, not off the config, so that repainting a mask
+    // smaller cannot quietly shrink the fruit back out of sight.
     for (const id of ['apple', 'pear', 'orange', 'cherry']) {
         const r = resolveSpecies(id, DEFAULT_CUSTOM);
+        const share = fruitClusterSpan(r.fruit.shape);
         const cluster = GARDEN_CONFIG.garden.fruit.size * r.fruitSize * share;
         const y = r.matureHeight * 0.6;
 
@@ -554,6 +541,78 @@ test('a fruit cluster does not outgrow the canopy it hangs in', () => {
         // And small against its own tree, or the tree reads as a toy.
         expect(card / r.matureHeight).toBeLessThan(0.14);
     }
+});
+
+// ---- The cluster has to read as SEVERAL fruit (M12-7) ----------------------
+
+/**
+ * WHY THIS IS A TEST AND NOT AN EYE. The first mask drew three equal circles
+ * close enough to touch, and the QA note that came back was "the shapes look a
+ * little off": what had actually shipped was one blob per card, in four
+ * colours, with a wedge of converging stalks above it. Nothing in the counts,
+ * the schedule, the colours or the pixel sizes was wrong, and all of them
+ * passed. The property those tests could not see is that the cluster has to
+ * have GAPS in it, so it is written down here.
+ */
+test('the fruit in a cluster do not touch each other', () => {
+    for (const id of ['apple', 'pear', 'orange', 'cherry']) {
+        const r = resolveSpecies(id, DEFAULT_CUSTOM);
+        const shape = FRUIT_SHAPES[r.fruit.shape];
+        const card = GARDEN_CONFIG.garden.fruit.size * r.fruitSize;
+        const y = r.matureHeight * 0.6;
+        const bodies = shape.bodies;
+        for (let i = 0; i < bodies.length; i++) {
+            for (let j = i + 1; j < bodies.length; j++) {
+                const a = bodies[i];
+                const b = bodies[j];
+                // Widest part against widest part, which is the belly of a pear
+                // and the whole of a sphere. A neck is narrower than the belly
+                // it grows out of, so this is the conservative comparison.
+                const gap = Math.hypot(a.x - b.x, a.y - b.y) - (a.r + b.r);
+                const px = pxAcross(gap * card, y, 0);
+                expect(`${id} ${i}-${j}`).toBe(px >= 1 ? `${id} ${i}-${j}` : `${id} ${i}-${j} MERGED`);
+            }
+        }
+    }
+});
+
+test('every fruit tree has its own drawing, and it fits on the card', () => {
+    const seen = new Set();
+    for (const id of ['apple', 'pear', 'orange', 'cherry']) {
+        const r = resolveSpecies(id, DEFAULT_CUSTOM);
+        const shape = FRUIT_SHAPES[r.fruit.shape];
+        expect(`${id}: ${shape ? 'drawn' : 'MISSING'}`).toBe(`${id}: drawn`);
+        // No two species share a silhouette, or the shapes are decoration.
+        const key = JSON.stringify(shape.bodies);
+        expect(seen.has(key)).toBe(false);
+        seen.add(key);
+
+        // A body that runs off the card is sliced flat by the card's own edge,
+        // which is a straight line across a piece of fruit and reads as a
+        // rendering fault rather than as a shape.
+        const tall = shape.kind === 'pear' ? shape.axis + shape.neck : (shape.squash || 1);
+        for (const b of shape.bodies) {
+            expect(Math.abs(b.x) + b.r).toBeLessThan(0.5);
+            expect(b.y + b.r * (shape.squash || 1)).toBeLessThan(1);
+            expect(b.y - b.r * tall).toBeGreaterThan(shape.node);
+        }
+        expect(shape.node).toBeGreaterThan(0);
+    }
+});
+
+test('a cherry is mostly stalk and an orange has almost none', () => {
+    // The one cue each of those two has at eight pixels. A cherry's pedicel is
+    // longer than the fruit is wide and a citrus sits tight against the twig,
+    // so if these ever swap places the two trees stop being tellable apart.
+    const cherry = FRUIT_SHAPES.cherry;
+    const lowest = Math.max(...cherry.bodies.map((b) => b.y - b.r * cherry.enter));
+    const widest = Math.max(...cherry.bodies.map((b) => b.r * 2));
+    expect(lowest - cherry.node).toBeGreaterThan(widest * 1.5);
+
+    const orange = FRUIT_SHAPES.orange;
+    const oLowest = Math.max(...orange.bodies.map((b) => b.y - b.r * orange.enter));
+    const oWidest = Math.max(...orange.bodies.map((b) => b.r * 2));
+    expect(oLowest - orange.node).toBeLessThan(oWidest);
 });
 
 test('true scale would have been invisible, which is why it is not used', () => {

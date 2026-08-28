@@ -706,27 +706,275 @@ varying float vRipe;`)
     // orange spends most of its year green, so the colour is a mix driven by
     // the schedule rather than a constant that switches on.
     vec3 frCol = mix(uBlossomColor, mix(uUnripeColor, uRipeColor, vRipe), vStage);
+    // ROUNDNESS COMES OUT OF THE BLUE CHANNEL, and only for fruit. The card is
+    // a flat quad facing the camera, so every lamp in the scene lights it
+    // evenly and an apple is a disc of one colour however good its outline is.
+    // The mask bakes a sphere's falloff into the channel the two alphas left
+    // empty, so this costs one multiply. A petal is flat and keeps its flat
+    // colour, which is also why this is mixed rather than applied outright.
+    frCol *= mix(1.0, 0.72 + 0.54 * frTex.b, vStage);
     frCol = mix(frCol, uSnowColor, uSnow * 0.30);
     diffuseColor.rgb = frCol;`);
     };
 }
 
 /**
- * The blossom and fruit mask, drawn once into a canvas and shared by the scene.
+ * What each fruit tree actually hangs on its branches.
  *
- * TWO SHAPES, TWO CHANNELS, ONE UPLOAD. Blossom goes in red and fruit in green,
- * composited with `lighter` so drawing one does not erase the other where they
- * overlap. Cached and never disposed, exactly like `leafClusterTexture`, so
- * sixteen trees cost one upload and no two of them can disagree about what a
- * blossom looks like. Callers must NOT dispose it.
+ * ONE ROUND BLOB IS NOT FOUR DIFFERENT FRUITS, and the first pass drew exactly
+ * that: one shared cluster of three equal circles whose three stalks met at a
+ * single point near the top of the card. Two faults came out of it, both
+ * visible in the screenshots rather than in any number. The stalks filled in
+ * as a solid wedge, so the card read as an arrowhead with a lump on the end,
+ * and the three circles touched, so there was never more than one silhouette
+ * to see. An apple tree, a pear tree and a cherry tree carried the same shape
+ * in three different colours.
+ *
+ * So the shape is per species now, and each one is chosen for the single cue
+ * that survives being eight pixels across:
+ *
+ *   apple    round, a shade wider than tall, with the stem well cut into the
+ *            crown. Two out on the shoulders and a smaller one set back
+ *            behind them, which is how a cluster hangs once it has thinned.
+ *   pear     pyriform, and it is the one fruit here a person can name from the
+ *            outline alone, so it gets the neck it has earned. Pears hang in
+ *            twos far more often than in threes.
+ *   orange   the truest sphere of the four, on the shortest stalk, because a
+ *            citrus sits tight against the twig rather than swinging under it.
+ *   cherry   small bodies on LONG thin pedicels. The stalk is the recognisable
+ *            half of a cherry, it is longer than the fruit is wide, and the
+ *            fruit itself is the smallest thing in this orchard.
+ *
+ * `x` and `r` are shares of the card WIDTH and `y` a share of its HEIGHT
+ * measured from the top, since the canvas is flipped on upload. `r` is always
+ * the HALF-WIDTH OF THE WIDEST PART, which is what keeps `fruitClusterSpan`
+ * honest for a pear as well as for a sphere.
+ *
+ * BODIES MUST NOT TOUCH. Two circles that overlap at 128 px are one blob at
+ * the 8 px mip this card spends most of its life at, which is the whole of the
+ * old fault, so `tests/garden-tree.test.mjs` asserts the gaps.
+ */
+export const FRUIT_SHAPES = {
+    apple: {
+        // A SHORT STALK IS PART OF THE SHAPE. Drawn at the cherry's length the
+        // apples came out as cherries, which is the whole argument for the
+        // table: the four differ as much in how they hang as in their outline.
+        kind: 'round', node: 0.210, stalk: 0.018, enter: 0.92,
+        squash: 0.90, dimple: 0.36,
+        bodies: [
+            { x: -0.185, y: 0.600, r: 0.130 },
+            { x: 0.180, y: 0.560, r: 0.120 },
+            { x: -0.020, y: 0.335, r: 0.095 }
+        ]
+    },
+    pear: {
+        // `axis` is the neck length in half-widths and `neck` the half-width at
+        // the top of it, both as a share of `r`. Together they set the profile
+        // at a height of about 1.5 widths, which is a dessert pear.
+        kind: 'pear', node: 0.120, stalk: 0.014, enter: 1.92,
+        axis: 1.70, neck: 0.32,
+        bodies: [
+            { x: -0.135, y: 0.585, r: 0.115 },
+            { x: 0.150, y: 0.520, r: 0.100 }
+        ]
+    },
+    orange: {
+        kind: 'round', node: 0.300, stalk: 0.020, enter: 0.86,
+        squash: 0.95, dimple: 0,
+        bodies: [
+            { x: -0.160, y: 0.560, r: 0.130 },
+            { x: 0.170, y: 0.480, r: 0.115 }
+        ]
+    },
+    cherry: {
+        kind: 'round', node: 0.090, stalk: 0.011, enter: 0.88,
+        squash: 0.96, dimple: 0.34,
+        bodies: [
+            { x: -0.150, y: 0.700, r: 0.105 },
+            { x: 0.135, y: 0.615, r: 0.097 }
+        ]
+    }
+};
+
+/**
+ * How much of the card's width the drawn cluster spans.
+ *
+ * Exported because the pixel test that keeps fruit visible has to measure the
+ * DRAWING rather than the config, or repainting a mask smaller would quietly
+ * shrink the fruit back out of sight, which is how it was invisible the first
+ * time. Reading the table is the same guarantee the old regex over this file
+ * gave, minus the regex.
+ */
+export function fruitClusterSpan(shape) {
+    const s = FRUIT_SHAPES[shape] || FRUIT_SHAPES.apple;
+    return Math.max(...s.bodies.map((b) => b.x + b.r))
+        - Math.min(...s.bodies.map((b) => b.x - b.r));
+}
+
+/**
+ * Trace one fruit's outline, leaving the path open for `fill` or `clip`.
+ *
+ * A pear is A CHAIN OF OVERLAPPING CIRCLES rather than a bezier, because the
+ * profile is far easier to read as arithmetic than as four control points, and
+ * the union of the arcs fills exactly the same silhouette under the nonzero
+ * rule that a single closed outline would.
+ */
+function traceFruitBody(ctx, shape, b, size, mid, grow = 1) {
+    const cx = mid + b.x * size;
+    const cy = b.y * size;
+    const r = b.r * size;
+    ctx.beginPath();
+    if (shape.kind === 'pear') {
+        const neckY = cy - shape.axis * r;
+        for (let i = 0; i <= 12; i++) {
+            const s = i / 12;
+            const y = neckY + (cy - neckY) * s;
+            // Slow at the neck, quick into the belly. The exponent is the only
+            // thing here that decides whether it reads as a pear or as a bulb.
+            const rad = r * (shape.neck + (1 - shape.neck) * Math.pow(s, 1.6));
+            ctx.moveTo(cx + rad * grow, y);
+            ctx.arc(cx, y, rad * grow, 0, Math.PI * 2);
+        }
+        return;
+    }
+    ctx.ellipse(cx, cy, r * grow, r * shape.squash * grow, 0, 0, Math.PI * 2);
+}
+
+/**
+ * The fruit half of the mask, painted on its own canvas.
+ *
+ * ITS OWN CANVAS IS NOT TIDINESS, it is what buys the two effects below. The
+ * shared mask composites with `lighter` so that blossom and fruit cannot erase
+ * each other, and `lighter` also means a gradient would ADD to whatever it was
+ * drawn over and a cut would do nothing at all. On a layer of its own the fruit
+ * can use `destination-out` for the stem well and a clipped gradient for the
+ * roundness, and the finished layer still arrives at the shared canvas as one
+ * `lighter` composite.
+ */
+function drawFruitLayer(shape, size) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const mid = size / 2;
+
+    // ---- The bodies, in GREEN ----------------------------------------------
+    ctx.fillStyle = 'rgb(0,255,0)';
+    for (const b of shape.bodies) {
+        traceFruitBody(ctx, shape, b, size, mid);
+        ctx.fill();
+    }
+
+    // ---- Roundness, painted into the BLUE channel ---------------------------
+    // THE CARD IS A FLAT QUAD AND NOTHING WILL EVER LIGHT IT AS A SPHERE. Its
+    // normal faces the camera, so a lit apple is a disc of one colour, which is
+    // the other half of why the old cluster read as a blob. Rather than pay for
+    // a normal map on a card that is nine pixels across, the shading is BAKED
+    // into the one channel this mask has spare: red carries the blossom, green
+    // carries the fruit, and blue was empty. `wrapFruitFragment` multiplies by
+    // it, and the whole effect costs nothing beyond a mix.
+    ctx.globalCompositeOperation = 'lighter';
+    for (const b of shape.bodies) {
+        const cx = mid + b.x * size;
+        const cy = b.y * size;
+        const r = b.r * size;
+        // Sun from over the visitor's left shoulder. The pear's gradient is
+        // stretched up its neck, or the neck sits outside the falloff entirely
+        // and comes back flat.
+        const pear = shape.kind === 'pear';
+        const fx = cx - r * (pear ? 0.32 : 0.34);
+        const fy = cy - r * (pear ? 0.85 : 0.36);
+        const g = ctx.createRadialGradient(
+            fx, fy, r * 0.05,
+            cx, cy - (pear ? r * 0.50 : 0), r * (pear ? 1.90 : 1.30));
+        // Stops chosen AFTER the sRGB decode the sampler applies, not before:
+        // 190 arrives at the shader as 0.53 and 105 as 0.14, which puts the
+        // body between about 0.8 and 1.26 of its own colour.
+        g.addColorStop(0, 'rgb(0,0,255)');
+        g.addColorStop(0.45, 'rgb(0,0,190)');
+        g.addColorStop(1, 'rgb(0,0,105)');
+        ctx.save();
+        // CLIPPED WIDE, ON PURPOSE. A card this small is sampled from a mip of
+        // 8 px or so, where every texel over the edge of a fruit averages in
+        // the empty space around it. Stopping the shading exactly at the
+        // silhouette therefore does not give a clean edge, it gives a fruit
+        // that dims as it recedes, and this scene has already spent a lot of
+        // care on fruit being a different colour from the leaves. Painting the
+        // falloff a little past the outline costs nothing (the green channel
+        // is zero out there, so none of it is ever drawn) and keeps the
+        // average honest at every level.
+        traceFruitBody(ctx, shape, b, size, mid, 1.16);
+        ctx.clip();
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, size, size);
+        ctx.restore();
+    }
+
+    // ---- The stem well, cut out of the crown --------------------------------
+    // An apple and a cherry are both dimpled where the stalk goes in, and at
+    // this size that notch is most of what separates them from a berry.
+    if (shape.dimple) {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = 'rgb(0,0,0)';
+        for (const b of shape.bodies) {
+            const cx = mid + b.x * size;
+            const cy = b.y * size;
+            const r = b.r * size;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy - r * shape.squash, r * shape.dimple,
+                r * shape.dimple * 0.62, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // ---- Pedicels, drawn LAST so they can end inside the well ----------------
+    // CURVED, AND SPREAD AT THE TOP. Three straight lines converging on one
+    // point is a wedge, and a wedge is what the old card looked like from any
+    // distance at which the fruit itself was small. Each stalk leaves the spur
+    // near its own fruit's side and bends outward under the weight, which is
+    // both what a pedicel does and what keeps the top of the card open.
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = 'rgb(0,255,0)';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = shape.stalk * size;
+    for (const b of shape.bodies) {
+        const x0 = mid + b.x * 0.30 * size;
+        const y0 = shape.node * size;
+        const x1 = mid + b.x * size;
+        const y1 = (b.y - b.r * shape.enter) * size;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(x0 + (x1 - x0) * 0.22, y0 + (y1 - y0) * 0.70, x1, y1);
+        ctx.stroke();
+    }
+    return canvas;
+}
+
+/**
+ * The blossom and fruit mask, drawn once per fruit shape and shared by the
+ * scene.
+ *
+ * TWO SHAPES, TWO CHANNELS, ONE UPLOAD PER SPECIES THAT BEARS. Blossom goes in
+ * red and fruit in green, composited with `lighter` so drawing one does not
+ * erase the other where they overlap, and blue carries the shading. Cached and
+ * never disposed, exactly like `leafClusterTexture`, so sixteen apple trees
+ * still cost one upload and no two of them can disagree about what an apple
+ * looks like. Callers must NOT dispose it.
+ *
+ * THE BLOSSOM IS THE SAME DRAWING IN EVERY ONE OF THEM, deliberately. Five
+ * petals at this size is five petals, the four species already differ by
+ * colour, and one shared flower is what lets a tree flower and fruit from a
+ * single mesh and a single draw call.
  *
  * The card is anchored at its BASE and `CanvasTexture` flips y by default, so
  * canvas row 0 is the top of the card. Hence the stalk at the top and the fruit
  * hanging below it, which is the way round fruit actually hangs.
  */
-let fruitMask = null;
-export function blossomFruitTexture(size = 128) {
-    if (fruitMask) return fruitMask;
+const fruitMasks = new Map();
+export function blossomFruitTexture(shape = 'apple', size = 128) {
+    const key = FRUIT_SHAPES[shape] ? shape : 'apple';
+    if (fruitMasks.has(key)) return fruitMasks.get(key);
     if (typeof document === 'undefined') return null;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -757,45 +1005,27 @@ export function blossomFruitTexture(size = 128) {
         }
     }
 
-    // ---- Fruit, in GREEN: a CLUSTER of three on a shared stalk ---------------
-    // THREE RATHER THAN ONE, AND THAT IS A LEGIBILITY DECISION BEFORE IT IS A
-    // BOTANICAL ONE. A single fruit drawn at life size is 2.8 px at the
+    // ---- Fruit, in GREEN: a CLUSTER, never a single fruit --------------------
+    // TWO OR THREE RATHER THAN ONE, AND THAT IS A LEGIBILITY DECISION BEFORE
+    // IT IS A BOTANICAL ONE. A single fruit drawn at life size is 2.8 px at the
     // composed camera, which is below the size at which anything reads at all,
     // and the first version of this drew one fruit filling less than half a
     // card and measured 1.6 px. See the note on `garden.fruit.size`.
     //
-    // It is also true: apples, pears and cherries all set in clusters of two to
-    // five. So the card is a cluster exactly as a leaf card is a clump of nine
-    // leaves, the individual fruit inside it stay close to life size relative
-    // to the cluster, and what carries at distance is the mass rather than the
-    // outline of any one of them.
-    ctx.fillStyle = 'rgba(0,255,0,1)';
-    ctx.strokeStyle = 'rgba(0,255,0,1)';
-    ctx.lineCap = 'round';
-    ctx.lineWidth = size * 0.022;
+    // It is also true: apples, pears, oranges and cherries all set in clusters
+    // of two to five. So the card is a cluster exactly as a leaf card is a
+    // clump of nine leaves, the individual fruit inside it stay close to life
+    // size relative to the cluster, and what carries at distance is the mass
+    // and the colour rather than the outline of any one of them. What the
+    // shapes in `FRUIT_SHAPES` buy is the near view, where the outline is
+    // suddenly all a visitor can see.
+    const layer = drawFruitLayer(FRUIT_SHAPES[key], size);
+    if (layer) ctx.drawImage(layer, 0, 0);
 
-    // A loose triangle, lower two and one above, which is how a cluster hangs.
-    const bodies = [
-        { x: -0.155, y: 0.640, r: 0.135 },
-        { x: 0.150, y: 0.605, r: 0.125 },
-        { x: -0.010, y: 0.400, r: 0.115 }
-    ];
-    // Stalks first, so the bodies sit over them.
-    for (const b of bodies) {
-        ctx.beginPath();
-        ctx.moveTo(mid, size * 0.115);
-        ctx.lineTo(mid + b.x * size, (b.y - b.r * 0.55) * size);
-        ctx.stroke();
-    }
-    for (const b of bodies) {
-        ctx.beginPath();
-        ctx.arc(mid + b.x * size, b.y * size, b.r * size, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    fruitMask = new THREE.CanvasTexture(canvas);
-    fruitMask.colorSpace = THREE.SRGBColorSpace;
-    return fruitMask;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    fruitMasks.set(key, texture);
+    return texture;
 }
 
 /**
@@ -1027,7 +1257,10 @@ export function createTree(resolved, seed, options = {}) {
         };
 
         const fruitGeo = buildLeafCard();
-        const fruitTexture = blossomFruitTexture();
+        // A tree that flowers and sets nothing (the dogwood) has no shape of its
+        // own and needs none: the blossom drawing is shared, and its fruit share
+        // is zero, so the green channel it is handed is never sampled.
+        const fruitTexture = blossomFruitTexture(resolved.fruit && resolved.fruit.shape);
         fruitMaterial = new THREE.MeshStandardMaterial({
             color: 0xffffff,
             map: fruitTexture,
@@ -1102,6 +1335,10 @@ export function createTree(resolved, seed, options = {}) {
         skeleton,
         leafCount: count,
         fruitCount,
+        // Which drawing from `FRUIT_SHAPES` this tree was handed, for the debug
+        // probe. Two species quietly sharing a mask is invisible in a
+        // screenshot and one line here.
+        fruitShape: (resolved.fruit && resolved.fruit.shape) || 'none',
         counts: barkGeo.userData.counts
     };
 }

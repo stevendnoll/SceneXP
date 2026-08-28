@@ -145,7 +145,11 @@ export const SPECIES = [
         // canopy measured a colour distance of 94 against the cherry's 113
         // minimum and the fruit simply could not be picked out. A developing
         // apple really is paler and yellower than the leaves around it.
-        fruit: { unripe: 0xa8bd5e, ripe: 0xc62f27, size: 1.0 },
+        // `shape` picks a drawing from `FRUIT_SHAPES` in tree.js, and `size` is
+        // a multiplier on the card. The two move together: this dropped from
+        // 1.00 to 0.95 when the apple got its third fruit set back behind the
+        // other two, so a wider cluster did not arrive as a bigger one.
+        fruit: { unripe: 0xa8bd5e, ripe: 0xc62f27, size: 0.95, shape: 'apple' },
         // RIPENS BEFORE THE LEAVES TURN, which is both what apples do and where
         // all the contrast is. The first pass ripened 14.5 to 17.5 against a
         // leaf turn of 15 to 18, so fruit and canopy changed colour together
@@ -194,7 +198,7 @@ export const SPECIES = [
         // which measured 59 against it: a green orange on a green orange tree
         // was invisible for the seven hours it spends swelling. A developing
         // orange really is a lighter, more olive green than those glossy leaves.
-        fruit: { unripe: 0x7d9c45, ripe: 0xe8791a, size: 0.85 },
+        fruit: { unripe: 0x7d9c45, ripe: 0xe8791a, size: 0.85, shape: 'orange' },
         // CITRUS RUNS ON ITS OWN CLOCK AND THAT IS THE POINT OF IT. It flowers
         // in spring, carries green fruit all summer, and RIPENS THROUGH THE
         // WINTER: `holdEnd` at 2.5 and `dropEnd` at 4.0 are past midnight, which
@@ -228,7 +232,10 @@ export const SPECIES = [
         // Pale green to gold. Same fix as the apple's: the first pass used
         // 0x7d9245, a leaf green, and a green pear on a green pear tree was
         // indistinguishable for half its time on the branch.
-        fruit: { unripe: 0xa3b459, ripe: 0xd3bb5a, size: 1.05 },
+        // THE ONLY ONE OF THE FOUR THAT IS TALLER THAN IT IS WIDE, so the pear
+        // spends part of its card on the neck rather than on width. 1.05 to
+        // 1.08 buys that back without the cluster growing on screen.
+        fruit: { unripe: 0xa3b459, ripe: 0xd3bb5a, size: 1.08, shape: 'pear' },
         // Half an hour ahead of the apple in blossom, which is true, and which
         // is there so that two fruit trees side by side do not flower in
         // lockstep. AND AN HOUR AHEAD OF IT IN RIPENING, which is also true:
@@ -276,7 +283,12 @@ export const SPECIES = [
         // ornamental doubles carrying essentially no fruit. This is Prunus
         // avium, a sweet cherry, and it keeps its cherries.
         blossom: 0xf6cdd8,
-        fruit: { unripe: 0x9db35a, ripe: 0x7a1228, size: 0.70 },
+        // A CHERRY IS MOSTLY STALK, which is the fix that 0.70 to 0.85 pays
+        // for. The card now spends its top half on two long pedicels, so at
+        // 0.70 the pair of cherries underneath them measured 2.6 px and the
+        // tree read as speckled rather than as bearing. The fruit itself is
+        // still the smallest of the four, which is correct.
+        fruit: { unripe: 0x9db35a, ripe: 0x7a1228, size: 0.85, shape: 'cherry' },
         // IT BLOOMS BEFORE THE LEAVES DO, AND THAT IS THE WHOLE TRICK. Peak is
         // `bloomFull` 4.5, which is an hour and a half before leaf bud break at
         // `season.phenology.budEnd` 6.0, so a cherry here is a cloud of blossom

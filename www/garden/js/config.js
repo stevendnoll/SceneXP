@@ -580,16 +580,19 @@ export const GARDEN_CONFIG = deepFreeze({
             // takes. So a fruit card is a CLUSTER of three, drawn a little over
             // life size, and it lands in the same range.
             //
-            // The mask spends 57 percent of the card on the fruit cluster and
-            // 82 on the blossom. Measured at 0.50 with the per-species
-            // multipliers in species.js, on a 1280x800 frame, tree at the
-            // middle of the plot:
+            // The mask spends 82 percent of the card on the blossom and
+            // between 49 and 62 percent on the fruit cluster, which is now a
+            // different drawing per species (`FRUIT_SHAPES` in tree.js). A
+            // pear spends part of its card on the neck and a cherry most of
+            // its own on two long stalks, so the share is theirs rather than
+            // shared. Measured at 0.50 with the per-species multipliers in
+            // species.js, on a 1280x800 frame, tree at the middle of the plot:
             //
             //              cluster   at back edge   one fruit   blossom
-            //     apple      9.6 px      6.3 px       4.6 px     13.9 px
-            //     pear      10.2         6.6          4.9        14.8
-            //     orange     8.2         5.4          3.9        11.9
-            //     cherry     6.8         4.4          3.3         9.9
+            //     apple     10.0 px      6.5 px       4.2 px     13.3 px
+            //     pear       9.3         6.1          4.3        15.3
+            //     orange     8.3         5.5          3.8        11.9
+            //     cherry     7.2         4.6          3.1        12.0
             //
             // Individual fruit stay a few pixels, exactly as individual leaves
             // inside a leaf clump do, and nobody counts those either. What

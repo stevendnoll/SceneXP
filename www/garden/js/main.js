@@ -1121,6 +1121,10 @@ function installDebugProbe() {
             const m = t.fruitMesh;
             return {
                 species: e.record.species,
+                // Which drawing it was handed. Two trees sharing a mask when
+                // they should not is invisible in a screenshot and obvious
+                // here.
+                shape: t.fruitShape || 'none',
                 growth: +e.record.growth.toFixed(3),
                 health: +e.record.health.toFixed(3),
                 instances: t.fruitCount,
