@@ -30,7 +30,7 @@
 
 import { GARDEN_CONFIG } from './config.min.js';
 import {
-    hourAt, inThirstWindow, phenologyAt, seasonAt, clamp01
+    hourAt, inThirstWindow, phenologyAt, fruitStageAt, seasonAt, clamp01, smoothstep
 } from './clock.min.js';
 import { resolveSpecies, clampCustom, speciesById, newSeed, DEFAULT_CUSTOM } from './species.min.js';
 import { createTree, updateTree, disposeTree } from './tree.min.js';
@@ -66,15 +66,35 @@ export function growthRate(health, config = GARDEN_CONFIG) {
     return perSecond * (0.15 + 0.85 * Math.pow(h, 1.5));
 }
 
-/** Moisture after a step. Drains only inside the thirst window; rain fills at
- *  any hour, because rain does not check a calendar. */
-export function moistureAfter(moisture, dt, hour, rainRate = 0, config = GARDEN_CONFIG) {
+/**
+ * Moisture after a step. Drains inside the thirst window, and NOTHING PUTS IT
+ * BACK except the visitor.
+ *
+ * THE WEATHER USED TO WATER THE GARDEN FOR YOU, AND IT DID IT TWICE OVER.
+ * Measured over 400 in-world years against the shipped config, precipitation
+ * delivered 2.39 tank-fills a year (rain 1.51, snow 0.67, sleet 0.21) against a
+ * drain of exactly 1.00. So the care loop was not weak, it was arithmetically
+ * dead, and had been since the rain shader started compiling. Snow was part of
+ * it: this function was handed `weather.rain` and added it whatever the
+ * temperature had made of it, so a blizzard filled a tank.
+ *
+ * ONE TERM LEAVES AND ALL THREE GO WITH IT. `garden.moisture.rainFill` is
+ * deleted rather than zeroed, because a live-looking knob that does nothing is
+ * how somebody loses an afternoon later.
+ *
+ * AND IT IS TRUE, which is the only reason to prefer it to cutting the rain. A
+ * newly planted nursery tree sits in a root ball of imported compost that is
+ * drier and better drained than the ground around it, so rain runs off it and
+ * past it. Every nursery in the world tells you to water a new tree by hand
+ * through its first summers regardless of rainfall, and the first few years of
+ * a young tree is exactly what this scene is about. The tree card says so.
+ */
+export function moistureAfter(moisture, dt, hour, config = GARDEN_CONFIG) {
     const M = config.garden.moisture;
     let m = moisture;
     if (inThirstWindow(hour, config.season.thirst)) {
         m -= dt / (thirstSecondsPerYear(config) * M.windowsPerFill);
     }
-    if (rainRate > 0) m += rainRate * M.rainFill * dt;
     return clamp01(m);
 }
 
@@ -110,6 +130,33 @@ export function needsWater(moisture, config = GARDEN_CONFIG) {
 }
 
 /**
+ * How much of a crop a tree has earned, 0 to 1.
+ *
+ * TWO GATES, AND THEY ARE THE REASON FRUIT IS WORTH BUILDING AT ALL. Taking the
+ * free water out of `moistureAfter` leaves the honest question of what showing
+ * up buys the visitor, and this is the answer: fruit is the first thing in this
+ * garden that care BUYS rather than merely preserves.
+ *
+ *   - GROWTH. A sapling does not fruit. Planting growth is 0.444, so a first
+ *     blossom at `bearFrom` is a little under an in-world year of watching away,
+ *     which is real orchard timing at this scene's scale.
+ *   - HEALTH. A neglected tree does not fruit either. Nothing at or below the
+ *     `failing` band, and `cropFrom` is deliberately the same 0.25 that band is
+ *     drawn at, so the crop and the words the tree card already uses agree by
+ *     construction rather than by coincidence.
+ *
+ * It thins the SET rather than shrinking every fruit, in the shader, against a
+ * per-instance draw. A half-crop tree is a scattering of full-sized apples,
+ * which is a poor year. A full count of half-sized ones is a rendering fault.
+ */
+export function cropAt(growth, health, config = GARDEN_CONFIG) {
+    const F = config.garden.fruit;
+    const bear = smoothstep((clamp01(growth) - F.bearFrom) / (F.bearFull - F.bearFrom));
+    const crop = clamp01((clamp01(health) - F.cropFrom) / (F.cropFull - F.cropFrom));
+    return bear * crop;
+}
+
+/**
  * How much of the canopy is on the ground, taking the season and the tree's
  * health together.
  *
@@ -136,10 +183,15 @@ export function viewFor(record, hour, options = {}) {
     const phen = phenologyAt(hour, evergreen);
     const health = clamp01(record.health);
     const drop = dropFor(phen.drop, health);
+    const growth = clamp01(record.growth);
 
     return {
-        growth: clamp01(record.growth),
+        growth,
         health,
+        // Where the tree is in its blossom and fruit year, and how much of a
+        // crop it has earned. Null for the twelve species that carry neither.
+        fruit: options.schedule ? fruitStageAt(hour, options.schedule) : null,
+        crop: cropAt(growth, health),
         // A struggling canopy is thin as well as dull.
         leaf: phen.leaf * (0.4 + 0.6 * health),
         color: phen.color,
@@ -412,7 +464,6 @@ export function waterTree(entry, elapsedSeconds, config = GARDEN_CONFIG) {
 /** Every tree, one frame. */
 export function updateGarden(dt, elapsedSeconds, context = {}, config = GARDEN_CONFIG) {
     const hour = hourAt(elapsedSeconds, config.clock.cycleSeconds);
-    const rain = context.rain || 0;
     const snow = context.snow || 0;
     const wind = context.wind || { x: 0, z: 0 };
     const B = config.garden.bud;
@@ -420,7 +471,7 @@ export function updateGarden(dt, elapsedSeconds, context = {}, config = GARDEN_C
     for (const entry of trees) {
         const r = entry.record;
 
-        r.moisture = moistureAfter(r.moisture, dt, hour, rain, config);
+        r.moisture = moistureAfter(r.moisture, dt, hour, config);
         r.health = healthAfter(r.health, r.moisture, dt, hour, config);
         r.growth = clamp01(r.growth + growthRate(r.health, config) * dt);
 
@@ -440,6 +491,7 @@ export function updateGarden(dt, elapsedSeconds, context = {}, config = GARDEN_C
 
         updateTree(entry.tree, viewFor(r, hour, {
             evergreen: entry.resolved.evergreen,
+            schedule: entry.resolved.schedule,
             snow,
             wind,
             // The animation clock when the conductor supplies one, so a tree

@@ -16,7 +16,7 @@
  */
 
 import { GARDEN_CONFIG } from './config.min.js';
-import { seasonAt, wrapHour, clamp01 } from './clock.min.js';
+import { seasonAt, wrapHour, clamp01, SPRING } from './clock.min.js';
 
 export const STATES = ['sunny', 'cloudy', 'windy', 'stormy'];
 
@@ -126,6 +126,11 @@ export function createWeather(startState = 'sunny') {
         transition: 1,       // 1 means settled
         held: 0,
         dwell: 30,
+        // The season last seen, so a BOUNDARY can be told from being inside a
+        // season. Starts null on purpose: the first frame records the season
+        // without acting on it, so resuming a saved garden already inside
+        // spring does not clear a storm the visitor left running.
+        season: null,
         angle: 0.8,
         gloom: 0,
         windStrength: 0,
@@ -150,13 +155,41 @@ export function stepWeather(w, dt, hour, elapsed = 0, random = Math.random, redu
     const W = config.weather;
     const span = reduced ? W.reducedTransitionSeconds : W.transitionSeconds;
 
+    // ---- Spring opens clear (M12-4) ---------------------------------------
+    // A DELIBERATE EXCEPTION TO THE MEMORYLESS DRAW, and the only one. The best
+    // frame this scene has is a clear spring sunrise, and whether a visitor got
+    // one was a coin toss: the machine rolls a fresh state every 20 to 45
+    // seconds and does not know what month it is. The opening frame of the
+    // whole experience is a clear spring morning, and until now that was the
+    // only clear spring morning anybody was guaranteed.
+    //
+    // It arrives through the ORDINARY TRANSITION rather than snapping, so a
+    // storm at the end of winter clears INTO the spring instead of being cut
+    // off, and the dwell is long enough to carry past sunrise at hour 6.
+    //
+    // Only on the boundary, never merely because it is spring: `w.season`
+    // starts null so the first frame records without acting, which is what
+    // stops a resumed garden having its weather rewritten.
+    const season = seasonAt(hour);
+    if (season !== w.season) {
+        const first = w.season === null;
+        w.season = season;
+        if (!first && season === SPRING) {
+            w.from = w.state;
+            w.state = 'sunny';
+            w.transition = 0;
+            w.held = 0;
+            w.dwell = W.springClearHours * (config.clock.cycleSeconds / 24);
+        }
+    }
+
     if (w.transition < 1) {
         w.transition = Math.min(1, w.transition + dt / span);
     } else {
         w.held += dt;
         if (w.held >= w.dwell) {
             w.from = w.state;
-            w.state = nextState(w.state, seasonAt(hour), random(), config);
+            w.state = nextState(w.state, season, random(), config);
             w.dwell = dwellFor(random(), config);
             w.held = 0;
             w.transition = 0;
@@ -186,6 +219,41 @@ export function stepWeather(w, dt, hour, elapsed = 0, random = Math.random, redu
 
     w.precip = precipFor(w.rain, hour, config);
     return w;
+}
+
+/**
+ * How closed the sky is, 0 for clear and 1 for a solid lid.
+ *
+ * ONE CLOUD NUMBER, PUBLISHED ONCE A FRAME, for exactly the reason there is one
+ * wind vector: two modules deciding how cloudy it is would disagree, and here
+ * the two things that must agree are a CAPTION AND A PICTURE. The stars, the
+ * moon and the season chip all read this, so the scene can no longer tell a
+ * visitor it is cloudy while they look straight through the cloud at a full
+ * starfield, which is what garden-20 caught.
+ *
+ * IT TAKES `fall` FOR THE SAME REASON `weatherWords` DOES, and this is the case
+ * that gloom alone gets wrong. The winter snowfall is a CALENDAR event: it never
+ * touches `weather.rain` and so never moves `gloom`, so a still, clear-state
+ * blizzard has a gloom of zero. Reading gloom alone would leave that night's
+ * stars switched on behind the snow, which is garden-16.
+ *
+ * The floor SCALES with the rate rather than being a switch, so a light shower
+ * does not close the sky as hard as a storm does and the calendar snowfall
+ * (pinned at 0.7 by `fallRates`) lands comfortably past overcast.
+ *
+ * @param {number} gloom from stepWeather
+ * @param {object} fall  {rain, snow} from updatePrecipitation
+ */
+export function overcastAt(gloom, fall = null, config = GARDEN_CONFIG) {
+    const W = config.weather;
+    let cover = clamp01(gloom);
+    if (fall) {
+        const falling = Math.max(fall.rain || 0, fall.snow || 0);
+        if (falling >= W.precipitation.visibleRate) {
+            cover = Math.max(cover, clamp01(falling) * W.fallingOvercast);
+        }
+    }
+    return cover;
 }
 
 /**

@@ -829,3 +829,98 @@ test('A BED SURVIVES REMOVING OTHER TREES AND PLANTING NEW ONES', () => {
     expect(seen.map((r) => r.trees)).toEqual([7, 4, 9, 0, 5]);
     builtGarden.disposeGarden();
 });
+
+
+// ---- The horizon wood sheds by mask, not by threshold (M11-3) --------------
+
+/**
+ * WHY THE THRESHOLD COULD NEVER HAVE WORKED, IN ARITHMETIC.
+ *
+ * `buildCanopyTexture` draws 34 foliage blobs over an opaque trunk. Canvas is
+ * source-over, `a = a_dst + a_src * (1 - a_dst)`, so overlapping blobs
+ * ACCUMULATE. The old winter threshold was 0.82 and the blobs are drawn at 0.42
+ * to 0.68, which looks safely under it and is not: three deep reaches 0.97.
+ * What winter removed was the fringe. What it kept was a solid tan core, in
+ * full leaf, under snow, which is garden-16 and garden-17.
+ *
+ * Read off the drawing source rather than hardcoded, so repainting the mask
+ * brighter cannot quietly restore the bug.
+ */
+function canopyBlobAlpha() {
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'forest.js'), 'utf8');
+    const fn = src.slice(src.indexOf('function buildCanopyTexture'));
+    const m = fn.slice(0, fn.indexOf('\n}')).match(/rgba\(255,255,255,\$\{([\d.]+) \+ random\(\) \* ([\d.]+)\}\)/);
+    expect(m).not.toBeNull();
+    return { low: Number(m[1]), high: Number(m[1]) + Number(m[2]) };
+}
+
+test('overlapping canopy blobs composite past any threshold that spares the branches', () => {
+    const { low, high } = canopyBlobAlpha();
+    const over = (a, b) => a + b * (1 - a);
+
+    // Measured from the drawing source: 0.42 to 0.68 for one blob, 0.66 to
+    // 0.90 for two, 0.80 to 0.97 for three, 0.89 to 0.99 for four. A single
+    // blob is comfortably under a winter threshold of 0.82. Two already clears
+    // it at the bright end, three clears it almost everywhere, and four clears
+    // it outright even from the dimmest blobs the mask draws. A crown of 34
+    // blobs at radius 0.34 of the texture is several deep through its middle.
+    expect(high).toBeLessThan(0.82);
+    expect(over(high, high)).toBeGreaterThan(0.82);
+    expect(over(over(high, low), low)).toBeGreaterThan(0.82);
+    expect(over(over(over(low, low), low), low)).toBeGreaterThan(0.82);
+
+    // Which is why the number is GONE rather than raised: the trunk and limbs
+    // in the same texture are opaque and must survive, but the tier is far, so
+    // the mipmap chain averages a thin branch line down below any threshold
+    // high enough to eat a 0.97 core. There is no single number.
+    expect(GARDEN_CONFIG.world.farForest.bareAlphaTest).toBeUndefined();
+});
+
+test('winter takes every leaf pixel and no wood pixel, at every density of overlap', () => {
+    // The shipped rule, lifted out of the fragment source and evaluated here,
+    // rather than a restatement of it. Wood is drawn RED so its green channel
+    // reads 0; foliage is white so its green reads 1.
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'forest.js'), 'utf8');
+    expect(src).toContain('diffuseColor.a *= mix(1.0, 1.0 - uCanopyBare, canopyLeaf);');
+
+    const shown = (alpha, leaf, bare) => alpha * (1 + (1 - bare - 1) * leaf);
+    const threshold = GARDEN_CONFIG.world.farForest.leafyAlphaTest;
+
+    // Deep winter: nothing with any foliage in it survives, whatever its alpha,
+    // which is the property the accumulating alpha destroyed.
+    for (let a = 0.4; a <= 1.0001; a += 0.02) {
+        expect(shown(a, 1, 1)).toBeLessThan(threshold);
+    }
+    // And the branches are untouched at every bareness, or the wood vanishes
+    // with its leaves and the horizon opens up in January.
+    for (let bare = 0; bare <= 1.0001; bare += 0.05) {
+        expect(shown(1, 0, bare)).toBe(1);
+        expect(shown(1, 0, bare)).toBeGreaterThan(threshold);
+    }
+    // Full leaf is an identity, so summer is exactly what it was.
+    for (let a = 0.4; a <= 1.0001; a += 0.05) {
+        expect(shown(a, 1, 0)).toBeCloseTo(a, 10);
+    }
+});
+
+test('the far tier threshold no longer moves with the season', () => {
+    // It used to be written every frame from `barenessAt`. If somebody puts
+    // that back, the mask and the threshold are both trying to shed the wood
+    // and the wood over-thins in summer as well as under-shedding in winter.
+    measureWood(() => initForest(recordingScene(), GARDEN_CONFIG, { mobile: false }));
+    const leafy = GARDEN_CONFIG.world.farForest.leafyAlphaTest;
+    const far = getForestMeshes().find((m) => m && m.name === 'forest-deciduous');
+    expect(far).toBeTruthy();
+    for (const hour of [2, 6, 12, 18, 21]) {
+        updateForest(hour, hour === 2 ? 1 : 0, { x: 0, z: 0 }, 0);
+        expect(far.material.alphaTest).toBeCloseTo(leafy, 6);
+    }
+    // And the bareness really is being written, or nothing sheds at all.
+    updateForest(12, 0, { x: 0, z: 0 }, 0);
+    const summer = far.material.userData.bare.value;
+    updateForest(2, 1, { x: 0, z: 0 }, 0);
+    const winter = far.material.userData.bare.value;
+    expect(summer).toBeCloseTo(0, 6);
+    expect(winter).toBeCloseTo(1, 6);
+    disposeForest();
+});

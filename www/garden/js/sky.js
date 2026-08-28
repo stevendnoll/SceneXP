@@ -257,11 +257,18 @@ export function directionAt(elevationDegrees, azimuthDegrees) {
  *
  * Both are config terms rather than shader constants precisely so they can be
  * moved during QA without a rebuild of anything else.
+ *
+ * `cloud` is separate from `gloom` and defaults to it. Gloom is how STORM
+ * COLOURED the sky is and drives the palette. Cloud is how CLOSED it is, from
+ * `weather.overcastAt`, and it is the greater of the gloom and whatever is
+ * actually falling. They differ in exactly one case and it is a real one: the
+ * winter snowfall is a calendar event, so a clear-state blizzard has gloom 0.
  */
-export function lightingAt(hour, snowCoverage = 0, gloom = 0, config = GARDEN_CONFIG) {
+export function lightingAt(hour, snowCoverage = 0, gloom = 0, cloud = null, config = GARDEN_CONFIG) {
     const L = config.sky.lighting;
     const S = config.sky.storm;
     const g = clamp01(gloom);
+    const c = cloud == null ? g : clamp01(cloud);
     const sun = solarAt(hour, config.sun);
     const moon = lunarAt(hour, config.sun);
     const snow = clamp01(snowCoverage);
@@ -293,7 +300,16 @@ export function lightingAt(hour, snowCoverage = 0, gloom = 0, config = GARDEN_CO
     // garden looks like evening arrived early.
     const sunIntensity = Math.pow(sunFall, 0.7) * L.sunPeak * (1 - (1 - S.sunScale) * g);
 
-    const moonIntensity = moonUp * L.moonPeak * (1 + L.winterFloor.moonBoost * winterness);
+    // AN OVERCAST SKY TAKES THE MOONLIGHT TOO, and this line spent four
+    // milestones not knowing it. The sun directly above already loses its
+    // delivery to the gloom while keeping its direction, which is the note
+    // beside it. The moon did not, so a stormy midnight was a black lid of a
+    // sky with full moonlight raking across the grass underneath it. Same
+    // treatment, same constant, and it reads `cloud` rather than `gloom` so a
+    // calendar blizzard dims it as well.
+    const moonIntensity = moonUp * L.moonPeak
+        * (1 + L.winterFloor.moonBoost * winterness)
+        * (1 - (1 - S.sunScale) * c);
 
     // From the sky rather than from the sun. See skyDaylightAt: keying this off
     // the sun's elevation puts less light on the ground at sunrise than at
@@ -366,6 +382,32 @@ export function starFadeAt(hour, stars = GARDEN_CONFIG.sky.stars, sunCfg = GARDE
     const t = (elevation - stars.hiddenAboveElevation)
         / (stars.fullBelowElevation - stars.hiddenAboveElevation);
     return smoothstep(t);
+}
+
+/**
+ * How much of the sky the cloud has taken, 0 for none and 1 for all of it.
+ *
+ * DELIBERATELY NOT FOLDED INTO `starFadeAt`. That function answers "is the sun
+ * down", which is a real and separately testable question with its own tests
+ * standing on it. This answers "can anything be seen through the sky at all",
+ * and the two multiply at the call site. Keeping them apart is also what lets
+ * the MOON read the same number without inheriting the star fade.
+ *
+ * The ramp is steep on purpose. Cloudy sits at gloom 0.42 and stormy at 0.88, so
+ * a linear fade would leave a cloudy night at 58 percent stars, and cloudy is
+ * the most common non-clear state in the cycle. Fully open below 0.12 and fully
+ * shut by 0.40 puts sunny at full stars, windy (0.24) at about half, which is a
+ * night of broken cloud and worth having, and cloudy and stormy at none.
+ */
+export function starHidingAt(cloud, stars = GARDEN_CONFIG.sky.stars) {
+    const t = (clamp01(cloud) - stars.clearBelow) / (stars.overcastAbove - stars.clearBelow);
+    return smoothstep(t);
+}
+
+/** What survives the cloud, as a multiplier. The stars and both moon terms take
+ *  this, so a sky that is a lid is a lid for everything behind it. */
+export function skyOpennessAt(cloud, stars = GARDEN_CONFIG.sky.stars) {
+    return 1 - starHidingAt(cloud, stars);
 }
 
 // ---- Shaders ---------------------------------------------------------------
@@ -640,14 +682,19 @@ function configureShadow(light, shadow, mobile) {
  * @param {number} hour          in-world hour, 0 to 24
  * @param {number} deltaSeconds  real seconds since the last frame
  * @param {number} snowCoverage  0 to 1, from clock.snowCoverageAt
+ * @param {number} gloom         how storm-coloured the sky is
+ * @param {number} flash         lightning, 0 to 1
+ * @param {number} cloud         from weather.overcastAt. NOT the same as gloom:
+ *                               the winter snowfall is a calendar event and
+ *                               closes the sky without ever touching gloom.
  */
-export function updateSky(hour, deltaSeconds = 0, snowCoverage = 0, gloom = 0, flash = 0, config = GARDEN_CONFIG) {
+export function updateSky(hour, deltaSeconds = 0, snowCoverage = 0, gloom = 0, flash = 0, cloud = 0, config = GARDEN_CONFIG) {
     if (!domeMaterial) return null;
     const S = config.sky;
     const u = domeMaterial.uniforms;
 
     const sky = applyGloom(skyStateAt(hour, S.keys), gloom, S);
-    const light = lightingAt(hour, snowCoverage, gloom, config);
+    const light = lightingAt(hour, snowCoverage, gloom, cloud, config);
 
     setVec3FromHex(u.uZenith.value, sky.zenith);
     setVec3FromHex(u.uHorizon.value, sky.horizon);
@@ -667,7 +714,17 @@ export function updateSky(hour, deltaSeconds = 0, snowCoverage = 0, gloom = 0, f
     // the glow lingers for a moment after the disc has set.
     u.uSunUp.value = clamp01((light.sunElevation + 6) / 8);
     u.uMoonUp.value = clamp01((light.moonElevation + 4) / 8);
-    u.uStarFade.value = starFadeAt(hour, S.stars, config.sun);
+
+    // CLOUD IS A LID, AND A LID IS OPAQUE TO EVERYTHING BEHIND IT. The stars
+    // used to be a function of the sun's elevation and nothing else, so they
+    // came out on schedule through rain, snow and a sky the season chip was
+    // itself calling cloudy. The moon had the same fault one layer down: its
+    // disc and its halo are ADDED over the gloomed sky, so a storm produced a
+    // black lid with a bright moon painted on it.
+    const open = skyOpennessAt(cloud, S.stars);
+    u.uStarFade.value = starFadeAt(hour, S.stars, config.sun) * open;
+    u.uMoonDisc.value = S.moon.discStrength * open;
+    u.uMoonGlow.value = S.moon.glowStrength * open;
 
     // The lights. The flash lifts the fill rather than the sun, because what a
     // distant strike actually does is light the sky, and the sky is the fill.

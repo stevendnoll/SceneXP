@@ -271,6 +271,114 @@ export function phenologyAt(hour, evergreen = false, season = GARDEN_CONFIG.seas
     return { bud: 1, leaf: 1, color: 1, drop: smoothstep(clamp01(t)) };
 }
 
+// ---- Fruit and blossom (pure) ----------------------------------------------
+
+/**
+ * Where a fruit tree is in its year: blossom, fruit size, ripeness, and drop.
+ *
+ * A SIBLING OF `phenologyAt`, ON THE SAME CLOCK AND IN THE SAME UNITS. The
+ * garden's day is its year, so every key below is an hour, and blossom and leaf
+ * are two SEPARATE schedules over those hours. That separation is the whole
+ * reason the cherry is worth having: it blooms at hour 4.5, which is an hour and
+ * a half before leaf bud break at `phenology.budEnd`, so a cherry in this garden
+ * flowers on BARE WOOD with sky showing through it, which is the thing people
+ * actually adore about cherry blossom. An apple flowers at 7.0 into a canopy
+ * that is already greening. Same machinery, and they look nothing alike.
+ *
+ * EVERYTHING IS MEASURED FROM `bloomStart`, WHICH IS WHAT RETIRES THE WRAP. The
+ * orange holds ripe fruit from hour 20 to hour 2.5, straight through midwinter,
+ * and expressed in absolute hours that interval runs backwards and every
+ * comparison in here would need a special case. Rebased on the tree's own year
+ * it is monotonic, so there is one code path and the orange is not a branch.
+ *
+ * WHAT IS CONTINUOUS IS WHAT IS DRAWN, and that is the property to test rather
+ * than each field on its own. `size` steps to zero the moment the last fruit has
+ * fallen and `drop` resets at the turn of the tree's year, but `drop` is already
+ * 1 at the first of those and `size` is already 0 at the second, so the drawn
+ * quantity, `size` against the un-fallen share, never jumps. Asserting the four
+ * fields are individually continuous would be asserting something false about a
+ * tree that is empty either side of the boundary.
+ *
+ * @param {number} hour     in-world hour, 0 to 24
+ * @param {object} schedule the species' own key hours
+ * @param {object} shape    shared tuning, config.garden.fruit
+ * @returns {{bloom:number, size:number, ripe:number, drop:number}}
+ */
+export function fruitStageAt(hour, schedule, shape = GARDEN_CONFIG.garden.fruit) {
+    if (!schedule) return { bloom: 0, size: 0, ripe: 0, drop: 1 };
+
+    // Rebased on this tree's own year. `at` is monotonically increasing across
+    // the schedule by construction, because the keys are written in order.
+    const at = (h) => wrapHour(h - schedule.bloomStart);
+    const t = at(hour);
+
+    const bloomFull = at(schedule.bloomFull);
+    const bloomFade = at(schedule.bloomFade);
+    const bloomEnd = at(schedule.bloomEnd);
+    const setEnd = at(schedule.setEnd);
+    const swellEnd = at(schedule.swellEnd);
+    const ripenEnd = at(schedule.ripenEnd);
+    const holdEnd = at(schedule.holdEnd);
+    const dropEnd = at(schedule.dropEnd);
+
+    // ---- Blossom: opens, holds, falls -------------------------------------
+    let bloom = 0;
+    if (t < bloomFull) bloom = smoothstep(t / bloomFull);
+    else if (t < bloomFade) bloom = 1;
+    else if (t < bloomEnd) bloom = 1 - smoothstep((t - bloomFade) / (bloomEnd - bloomFade));
+
+    // A BLOSSOM-ONLY SPECIES IS A REAL CASE, not a degenerate one. The
+    // Flowering Dogwood has been carrying a `blossom` colour since M2 with
+    // nothing to draw it, and its own note in the plant modal calls it "the only
+    // tree here that blossoms". It flowers here and sets nothing, and the
+    // schedule says so by simply having no fruit keys.
+    if (schedule.dropEnd == null) return { bloom, size: 0, ripe: 0, drop: 1 };
+
+    // ---- Fruit: set small, swell, then hold full --------------------------
+    // TWO SEGMENTS, NOT ONE, and the first is why. Newly set fruit is small and
+    // sparse rather than absent, so a single ramp from nothing to full over six
+    // hours would spend the whole of high summer at a size that reads as an
+    // artefact. It rises quickly to `setSize` and then grows.
+    let size = 0;
+    if (t >= bloomEnd && t < setEnd) {
+        size = shape.setSize * smoothstep((t - bloomEnd) / (setEnd - bloomEnd));
+    } else if (t >= setEnd && t < dropEnd) {
+        size = shape.setSize + (1 - shape.setSize)
+            * smoothstep(Math.min(1, (t - setEnd) / (swellEnd - setEnd)));
+    }
+
+    // ---- Ripeness: a colour, and it keeps its value while the fruit hangs --
+    let ripe = 0;
+    if (t >= swellEnd && t < dropEnd) {
+        ripe = smoothstep(Math.min(1, (t - swellEnd) / (ripenEnd - swellEnd)));
+    }
+
+    // ---- The drop, which the shader stages per fruit against aDrop ---------
+    let drop = 0;
+    if (t >= holdEnd && t < dropEnd) drop = smoothstep((t - holdEnd) / (dropEnd - holdEnd));
+    else if (t >= dropEnd) drop = 1;
+
+    return { bloom, size, ripe, drop };
+}
+
+/**
+ * What the tree is doing, in words, for the tree card.
+ *
+ * COLOUR IS NEVER THE ONLY CARRIER of what anything in this scene is doing, the
+ * same rule `HEALTH_WORDS` and `sliderWords` already follow, so a visitor who
+ * cannot see an orange pixel is still told there is ripe fruit on the tree.
+ */
+export function fruitWords(stage, hasFruit = true) {
+    if (!stage) return '';
+    if (stage.bloom > 0.15) return 'In blossom';
+    if (!hasFruit) return '';
+    if (stage.drop >= 1 || stage.size <= 0.02) return '';
+    if (stage.drop > 0.05) return 'Dropping its fruit';
+    if (stage.ripe > 0.85) return 'Fruit ripe';
+    if (stage.ripe > 0.05) return 'Fruit ripening';
+    return 'Fruit swelling';
+}
+
 // ---- Small shared helpers --------------------------------------------------
 
 export function clamp01(t) {

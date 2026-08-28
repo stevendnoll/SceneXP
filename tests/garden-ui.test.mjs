@@ -21,6 +21,9 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { cardLines } from '../www/garden/js/ui.js';
+import { createRecord } from '../www/garden/js/garden.js';
+import { resolveSpecies, speciesById } from '../www/garden/js/species.js';
 
 const ROOT = process.cwd();
 const HTML = readFileSync(join(ROOT, 'www', 'garden', 'index.html'), 'utf8');
@@ -181,4 +184,59 @@ test('the two modal headings are set at the same size', () => {
         return m ? Number(m[1]) : null;
     };
     expect(size('.plant-heading {')).toBe(size('.reset-card .piece-title {\n    margin'));
+});
+
+
+// ---- The tree card says what the tree is doing (M11-4, M11-10) -------------
+
+function lines(id, patch = {}, hour = 12, context = {}) {
+    const record = { ...createRecord(id, 0, 0, { x: 0, z: 0 }), ...patch };
+    return cardLines(record, resolveSpecies(id, undefined), 3, { hour, ...context });
+}
+
+test('a fruit tree is told what stage it is at, in words', () => {
+    // Colour is never the only carrier of anything in this scene, the same rule
+    // HEALTH_WORDS and sliderWords already follow, so a visitor who cannot see
+    // an orange pixel is still told there is ripe fruit on the tree.
+    const bloomHour = speciesById('cherry').schedule.bloomFull;
+    expect(lines('cherry', { growth: 1 }, bloomHour).doing).toBe('In blossom');
+    expect(lines('apple', { growth: 1 }, 17.5).doing).toBe('Fruit ripe');
+    // And the line is IN the body, not merely computed beside it.
+    expect(lines('apple', { growth: 1 }, 17.5).texts).toContain('Fruit ripe');
+});
+
+test('a tree with nothing to say says nothing', () => {
+    // Out of season, and for the twelve species that carry no schedule at all.
+    expect(lines('apple', { growth: 1 }, 23).doing).toBe('');
+    expect(lines('bur-oak', { growth: 1 }, 12).doing).toBe('');
+    expect(lines('bur-oak', { growth: 1 }, 12).texts.length).toBe(3);
+});
+
+test('the card explains why a tree is thirsty in the rain', () => {
+    // M11-4 took the free water out, so a visitor will eventually tap a tree
+    // during a downpour and find it thirsty. The line is true rather than an
+    // apology: a nursery root ball is drier and better drained than the ground
+    // around it, so rain runs off it and past it.
+    const wet = lines('apple', { moisture: 0.05 }, 12, { falling: true });
+    expect(wet.runoff).toContain('root ball');
+    expect(wet.texts).toContain(wet.runoff);
+
+    // BOTH HALVES HAVE TO BE TRUE. A well watered tree in the rain is not
+    // confused about anything, and a thirsty tree in clear weather has nothing
+    // to explain.
+    expect(lines('apple', { moisture: 1 }, 12, { falling: true }).runoff).toBe('');
+    expect(lines('apple', { moisture: 0.05 }, 12, { falling: false }).runoff).toBe('');
+});
+
+test('the card body survives a line count that moves', () => {
+    // The old refresh wrote into the paragraphs that already existed and
+    // stopped at whichever list ran out first, which was correct only while the
+    // card had exactly three lines every time. It now has three, four or five.
+    const plain = lines('bur-oak', { growth: 1 }, 12).texts.length;
+    const blossom = lines('cherry', { growth: 1 }, speciesById('cherry').schedule.bloomFull).texts.length;
+    const both = lines('cherry', { growth: 1, moisture: 0 },
+        speciesById('cherry').schedule.bloomFull, { falling: true }).texts.length;
+    expect(plain).toBe(3);
+    expect(blossom).toBe(4);
+    expect(both).toBe(5);
 });

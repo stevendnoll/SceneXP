@@ -430,7 +430,7 @@ export function initVista(scene, camera, config = GARDEN_CONFIG) {
  */
 export function updateVista(hour, elapsed, snowCoverage = 0, gloom = 0, camera = null, config = GARDEN_CONFIG) {
     const sky = applyGloom(skyStateAt(hour, config.sky.keys), gloom, config.sky);
-    const light = lightingAt(hour, snowCoverage, gloom, config);
+    const light = lightingAt(hour, snowCoverage, gloom, null, config);
     const snow = clamp01(snowCoverage);
 
     // The ridge haze is the sky's horizon AS SHOWN, not the raw keyframe: it

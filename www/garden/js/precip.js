@@ -21,7 +21,7 @@
 import { GARDEN_CONFIG } from './config.min.js';
 import { makeRandom } from './species.min.js';
 import { unpackColor } from './sky.min.js';
-import { solarAt, clamp01, smoothstep } from './clock.min.js';
+import { solarAt, clamp01, smoothstep, isSnowingAt, seasonAt, WINTER } from './clock.min.js';
 
 // ---- Shaders ---------------------------------------------------------------
 
@@ -331,6 +331,18 @@ export function flashAt(age, config = GARDEN_CONFIG) {
  */
 export function strikeFactorAt(hour, config = GARDEN_CONFIG) {
     const L = config.weather.lightning;
+    // WINTER IS SILENT, AND IT IS A SEASON GATE RATHER THAN A DEEPER TAPER.
+    // "No lightning in winter" is a different request from "no lightning at
+    // night" (M9) and it has a cleaner answer, because winter IS a season here
+    // and can simply be named. Deepening the elevation taper instead would take
+    // the storms out of autumn and spring nights as well, which is exactly what
+    // the taper was chosen over a cut to protect.
+    //
+    // The weights already stop winter DRAWING a storm. This stops one that
+    // crossed the boundary from late autumn from flashing, which the weights
+    // cannot: a dwell runs up to 45 seconds against a 60 second winter.
+    if (seasonAt(hour) === WINTER) return L.winterRate;
+
     const elevation = solarAt(hour, config.sun).elevation;
     const span = L.dayAboveElevation - L.nightBelowElevation;
     const t = span > 0 ? clamp01((elevation - L.nightBelowElevation) / span) : 1;
@@ -348,7 +360,7 @@ export function strikeFactorAt(hour, config = GARDEN_CONFIG) {
  * arrives from the CALENDAR and never touches `weather.rain`. One source, and
  * the chip now reads this.
  */
-export function fallRates(weather, snowCoverage = 0, config = GARDEN_CONFIG) {
+export function fallRates(weather, hour = 12, config = GARDEN_CONFIG) {
     const P = config.weather.precipitation;
     const rate = weather.rain || 0;
     const kind = weather.precip;
@@ -364,9 +376,21 @@ export function fallRates(weather, snowCoverage = 0, config = GARDEN_CONFIG) {
     }
 
     // The winter snowfall is a SCHEDULED event rather than a weather one, so it
-    // falls whatever the state machine is doing. Melting counts: coverage is
-    // strictly between 0 and 1 on the way down as well as on the way up.
-    if (snowCoverage > 0 && snowCoverage < 1) snow = Math.max(snow, 0.7);
+    // falls whatever the state machine is doing.
+    //
+    // IT ASKS `isSnowingAt`, AND THAT IS THE WHOLE OF M12-3. This used to test
+    // `snowCoverage > 0 && snowCoverage < 1`, with a comment saying plainly
+    // that melting counted. Coverage is strictly between 0 and 1 during the
+    // MELT, hours 3 to 5, which is the first third of SPRING, so the garden
+    // snowed hard all the way through its own thaw. The condition was written
+    // to mean "snow is accumulating" and it also matched "snow is
+    // disappearing", which is the opposite event.
+    //
+    // `isSnowingAt` was correct, was tested, and had NO CALLER. The scene held
+    // two answers to "is it snowing" and the one nobody ran was the right one.
+    // There is one now, and the melt goes back to being what the config comment
+    // beside it always said it was: the thaw, and the arrival of spring.
+    if (isSnowingAt(hour, config.season)) snow = Math.max(snow, 0.7);
 
     return { rain, snow };
 }
@@ -430,7 +454,15 @@ function drawBolt(random, config) {
 
 /**
  * @param {object} weather from weather.js
- * @param {number} snowCoverage from the calendar, so winter snow falls even
+ * NO `snowCoverage` ARGUMENT ANY MORE. It existed only to tell `fallRates`
+ * whether the scheduled winter snow was falling, and it got the answer wrong:
+ * coverage is strictly between 0 and 1 during the MELT as well as the
+ * accumulation, so the garden snowed through its own thaw. `fallRates` asks
+ * `isSnowingAt` now, so the coverage is nobody's business here. Removed rather
+ * than left unused, for the same reason `rainFill` was deleted rather than
+ * zeroed: a live-looking argument that does nothing is a trap for later.
+ *
+ * @param {number} hour     in-world hour, which decides what is falling
  *        when the weather is merely cloudy
  * @param {number} hour the in-world hour, which the strike rate follows
  * @returns {{flash: number, rain: number, snow: number}} what was actually
@@ -438,7 +470,7 @@ function drawBolt(random, config) {
  *          the two rates, so nothing downstream has to decide for itself what
  *          the weather is doing.
  */
-export function updatePrecipitation(dt, time, weather, snowCoverage, random = Math.random, hour = 12, config = GARDEN_CONFIG) {
+export function updatePrecipitation(dt, time, weather, random = Math.random, hour = 12, config = GARDEN_CONFIG) {
     const P = config.weather.precipitation;
     const L = config.weather.lightning;
     if (!rain || !cameraRef) return { flash: 0, rain: 0, snow: 0 };
@@ -450,7 +482,7 @@ export function updatePrecipitation(dt, time, weather, snowCoverage, random = Ma
     snow.mesh.position.set(cam.x, 0, cam.z);
     bolt.mesh.position.set(cam.x, 0, cam.z);
 
-    const rates = fallRates(weather, snowCoverage, config);
+    const rates = fallRates(weather, hour, config);
     const wetRate = rates.rain;
     const snowRate = rates.snow;
 

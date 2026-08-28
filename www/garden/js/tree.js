@@ -250,6 +250,55 @@ export function buildLeaves(skeleton, params, seed) {
     return leaves;
 }
 
+/**
+ * The anchors a tree's blossom and fruit hang from.
+ *
+ * A FRUIT ANCHOR IS A LEAF ANCHOR, thinned. Building a second set from the
+ * skeleton would be a second answer to the question of where the outside of a
+ * canopy is, and the two would drift the first time anybody touched
+ * `leafLevels`. It also means `birth` comes across for free, and `birth` is the
+ * one field here that MUST NOT be lost: `step(aBirth, uGrowth)` is what stops a
+ * leaf appearing on a branch that has not been born yet, and an apple hanging in
+ * the air off the end of an unborn twig is the same defect with a much bigger
+ * silhouette than a leaf has.
+ *
+ * ONE SET SERVES BOTH, at BLOSSOM density, because blossom is far denser than
+ * fruit: most flowers never set. `aRole` is what picks the share that do, so the
+ * fruit is a subset of the flowers rather than an independent scattering, which
+ * is both true and cheaper than two meshes.
+ */
+export function buildFruit(leaves, resolved, seed, config = GARDEN_CONFIG) {
+    if (!resolved || !resolved.schedule) return null;
+    const F = config.garden.fruit;
+    const random = makeRandom((seed ^ 0x5EEDF00D) >>> 0);
+    const anchors = [];
+
+    for (const leaf of leaves) {
+        if (random() > F.blossomDensity) continue;
+        anchors.push({
+            x: leaf.x, y: leaf.y, z: leaf.z,
+            // The same sway weight the branch under it carries. See buildLeaves.
+            sway: leaf.sway,
+            birth: leaf.birth,
+            // Scattered rather than keyed to exposure, unlike a leaf. Petals do
+            // not come off a cherry from the outside in.
+            drop: random(),
+            crop: random(),
+            role: random(),
+            phase: random() * Math.PI * 2,
+            yaw: random() * Math.PI * 2
+        });
+    }
+
+    return {
+        anchors,
+        // A species can flower and set nothing. The Flowering Dogwood does, and
+        // has claimed to since M2. Its share is zero, so `aRole` never lets an
+        // instance through into the fruit stage.
+        fruitShare: resolved.fruit ? Math.min(1, F.density / F.blossomDensity) : 0
+    };
+}
+
 /** Total triangle count a skeleton will bake to, for the budget checks. */
 export function sidesForDepth(depth) {
     return Math.max(3, GARDEN_CONFIG.tree.trunkSides - depth);
@@ -518,6 +567,237 @@ const LEAF_BODY = `
     vLeafBud = leafBud;
 `;
 
+// ---- Blossom and fruit -----------------------------------------------------
+
+const FRUIT_HEAD = `
+uniform float uGrowth;
+uniform float uBloom;
+uniform float uFruitSize;
+uniform float uRipe;
+uniform float uFruitDrop;
+uniform float uCrop;
+uniform float uFruitShare;
+uniform float uPetalDrift;
+uniform vec3  uWind;
+uniform float uTime;
+uniform float uPhase;
+uniform float uScale;
+uniform float uSwayScale;
+uniform float uMotion;
+attribute float aBirth;
+attribute float aDrop;
+attribute float aCrop;
+attribute float aRole;
+attribute float aPhase;
+attribute float aFruitSway;
+varying float vStage;
+varying float vRipe;
+`;
+
+// FRUIT HANGS WHERE A LEAF HANGS AND MOVES HOW A LEAF MOVES, so this is the
+// leaf program with three terms changed and one removed. What it must keep,
+// exactly, is the growth pull-back and the branch sway at the bottom: both are
+// the answer to the same trap that has now caught this scene twice (M2-7,
+// M8-6), which is that an instanced card's position is baked at rest and
+// NOTHING the bark shader does reaches it unless it is handed over.
+//
+// What it drops is the flutter. A leaf turns edge-on in a gust and an apple
+// does not, so fruit gets one slow swing on its stalk instead.
+const FRUIT_BODY = `
+    float frBorn = step(aBirth, uGrowth);
+    // THE CROP GATE THINS THE SET RATHER THAN SHRINKING EVERY FRUIT. A tree at
+    // half health carrying a full count of half-sized apples reads as a
+    // rendering fault; one carrying half as many full-sized apples reads as a
+    // poor year, which is what it is.
+    float frKept = step(aCrop, uCrop);
+    // Blossom uses every anchor. Fruit uses the share of the flowers that set.
+    float frIsFruit = step(aRole, uFruitShare);
+    float frFall = clamp((uFruitDrop - aDrop) / 0.16, 0.0, 1.0);
+
+    // BLOSSOM AND FRUIT NEVER COEXIST, and that is what lets one mesh and one
+    // draw call carry both. Every schedule in species.js sets bloomEnd and
+    // the start of fruit set to the SAME HOUR, with both sizes at zero there,
+    // so this max() is never blending two things and the stage swap below has
+    // nothing on screen to pop.
+    float frFruitOpen = uFruitSize * frIsFruit;
+    float frOpen = max(uBloom, frFruitOpen) * frBorn * frKept * (1.0 - frFall);
+    // A young tree's fruit is smaller as well as scarcer.
+    frOpen *= mix(0.6, 1.0, uScale);
+
+    transformed *= frOpen;
+
+    // 0 while the blossom is out, 1 once there is fruit. Both are zero out of
+    // season, when nothing is drawn and it does not matter which this says.
+    vStage = step(uBloom, frFruitOpen);
+    vRipe = uRipe;
+
+    vec3 frWorld = vec3(0.0);
+    // One slow swing on the stalk, both ways through rest, well clear of the
+    // branch's 1.35 and of the leaf flutter's rate.
+    float frLP = uTime * 0.9 + aPhase;
+    frWorld += vec3(uWind.x, 0.0, uWind.z) * sin(frLP) * 0.045 * uMotion;
+    // Coming off. PETALS DRIFT AND FRUIT DOES NOT, which is the whole of
+    // uPetalDrift: a cherry petal fall is the most recognisable thing the
+    // tree does and it wants the sideways travel a leaf gets, while a windfall
+    // apple goes more or less straight down.
+    frWorld.y -= frFall * 1.5 * uScale;
+    frWorld.x += frFall * sin(aPhase * 3.1) * 0.9 * uPetalDrift;
+    frWorld.z += frFall * cos(aPhase * 2.3) * 0.9 * uPetalDrift;
+
+    #ifdef USE_INSTANCING
+    // Prefixed for the reason spelled out in LEAF_BODY: this block is spliced
+    // into the middle of three's own main() with hundreds of names in scope.
+    mat3 frIM = mat3(instanceMatrix);
+    float frISC = max(length(frIM[0]), 0.0001);
+    mat3 frRot = frIM / frISC;
+    mat3 frRotT = mat3(frRot[0][0], frRot[1][0], frRot[2][0],
+                       frRot[0][1], frRot[1][1], frRot[2][1],
+                       frRot[0][2], frRot[1][2], frRot[2][2]);
+    frWorld += instanceMatrix[3].xyz * (uScale - 1.0);
+
+    // THE LINE THAT KEEPS THE BLOSSOM ON THE MOVING BRANCH. Identical
+    // expression to the leaves', evaluated at this anchor's own height, because
+    // they are on the same branches and any difference at all would show as
+    // blossom sliding through its own canopy.
+    float frBWP = uTime * 1.35 + uPhase + (instanceMatrix[3].y * uScale) * 0.42;
+    frWorld += vec3(uWind.x, 0.0, uWind.z)
+        * (sin(frBWP) * 0.62 + sin(frBWP * 1.73 + 1.3) * 0.38)
+        * aFruitSway * uSwayScale * uScale * uMotion;
+    transformed += (frRotT * frWorld) / frISC;
+    #else
+    transformed += frWorld;
+    #endif
+`;
+
+/**
+ * Blossom and fruit colour, and the shape swap.
+ *
+ * TWO SHAPES IN ONE TEXTURE, ONE PER CHANNEL, rather than two tiles of an
+ * atlas. A UV rect would have to be slid in the vertex shader, which means
+ * reaching into three's own uv chunk, and it would bleed one tile into the
+ * other at the coarse mip levels this card spends most of its life at. Picking
+ * a channel has neither problem and costs one mix.
+ */
+function wrapFruitFragment(previous) {
+    return (shader) => {
+        if (previous) previous(shader);
+        const u = shader.uniforms;
+        u.uBlossomColor = u.uBlossomColor || { value: new THREE.Vector3(1, 1, 1) };
+        u.uUnripeColor = u.uUnripeColor || { value: new THREE.Vector3(0.4, 0.6, 0.2) };
+        u.uRipeColor = u.uRipeColor || { value: new THREE.Vector3(0.7, 0.2, 0.1) };
+        u.uSnow = u.uSnow || { value: 0 };
+        u.uSnowColor = u.uSnowColor || { value: new THREE.Vector3(0.9, 0.92, 0.95) };
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', `#include <common>
+uniform vec3 uBlossomColor;
+uniform vec3 uUnripeColor;
+uniform vec3 uRipeColor;
+uniform vec3 uSnowColor;
+uniform float uSnow;
+varying float vStage;
+varying float vRipe;`)
+            .replace('#include <map_fragment>', `#include <map_fragment>
+    vec4 frTex = texture2D(map, vMapUv);
+    // Blossom is drawn into the RED channel and fruit into the GREEN, so the
+    // stage picks a mask. The alpha the sampler carries is the union of the two
+    // and is deliberately thrown away here.
+    diffuseColor.a = mix(frTex.r, frTex.g, vStage);
+    // GREEN TO RIPE, NEVER FLAT RIPE. A summer apple is a green apple and an
+    // orange spends most of its year green, so the colour is a mix driven by
+    // the schedule rather than a constant that switches on.
+    vec3 frCol = mix(uBlossomColor, mix(uUnripeColor, uRipeColor, vRipe), vStage);
+    frCol = mix(frCol, uSnowColor, uSnow * 0.30);
+    diffuseColor.rgb = frCol;`);
+    };
+}
+
+/**
+ * The blossom and fruit mask, drawn once into a canvas and shared by the scene.
+ *
+ * TWO SHAPES, TWO CHANNELS, ONE UPLOAD. Blossom goes in red and fruit in green,
+ * composited with `lighter` so drawing one does not erase the other where they
+ * overlap. Cached and never disposed, exactly like `leafClusterTexture`, so
+ * sixteen trees cost one upload and no two of them can disagree about what a
+ * blossom looks like. Callers must NOT dispose it.
+ *
+ * The card is anchored at its BASE and `CanvasTexture` flips y by default, so
+ * canvas row 0 is the top of the card. Hence the stalk at the top and the fruit
+ * hanging below it, which is the way round fruit actually hangs.
+ */
+let fruitMask = null;
+export function blossomFruitTexture(size = 128) {
+    if (fruitMask) return fruitMask;
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const random = makeRandom(0xB105);
+
+    ctx.clearRect(0, 0, size, size);
+    ctx.globalCompositeOperation = 'lighter';
+    const mid = size / 2;
+
+    // ---- Blossom, in RED: a small cluster of five-petal flowers -------------
+    ctx.fillStyle = 'rgba(255,0,0,1)';
+    for (let i = 0; i < 5; i++) {
+        const a = random() * Math.PI * 2;
+        const rr = Math.sqrt(random()) * 0.26;
+        const cx = mid + Math.cos(a) * rr * size;
+        const cy = mid + Math.sin(a) * rr * size;
+        const petal = size * (0.070 + random() * 0.030);
+        const spin = random() * Math.PI * 2;
+        for (let k = 0; k < 5; k++) {
+            const t = spin + (k / 5) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.arc(cx + Math.cos(t) * petal * 0.95, cy + Math.sin(t) * petal * 0.95,
+                petal * 0.62, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // ---- Fruit, in GREEN: a CLUSTER of three on a shared stalk ---------------
+    // THREE RATHER THAN ONE, AND THAT IS A LEGIBILITY DECISION BEFORE IT IS A
+    // BOTANICAL ONE. A single fruit drawn at life size is 2.8 px at the
+    // composed camera, which is below the size at which anything reads at all,
+    // and the first version of this drew one fruit filling less than half a
+    // card and measured 1.6 px. See the note on `garden.fruit.size`.
+    //
+    // It is also true: apples, pears and cherries all set in clusters of two to
+    // five. So the card is a cluster exactly as a leaf card is a clump of nine
+    // leaves, the individual fruit inside it stay close to life size relative
+    // to the cluster, and what carries at distance is the mass rather than the
+    // outline of any one of them.
+    ctx.fillStyle = 'rgba(0,255,0,1)';
+    ctx.strokeStyle = 'rgba(0,255,0,1)';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = size * 0.022;
+
+    // A loose triangle, lower two and one above, which is how a cluster hangs.
+    const bodies = [
+        { x: -0.155, y: 0.640, r: 0.135 },
+        { x: 0.150, y: 0.605, r: 0.125 },
+        { x: -0.010, y: 0.400, r: 0.115 }
+    ];
+    // Stalks first, so the bodies sit over them.
+    for (const b of bodies) {
+        ctx.beginPath();
+        ctx.moveTo(mid, size * 0.115);
+        ctx.lineTo(mid + b.x * size, (b.y - b.r * 0.55) * size);
+        ctx.stroke();
+    }
+    for (const b of bodies) {
+        ctx.beginPath();
+        ctx.arc(mid + b.x * size, b.y * size, b.r * size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    fruitMask = new THREE.CanvasTexture(canvas);
+    fruitMask.colorSpace = THREE.SRGBColorSpace;
+    return fruitMask;
+}
+
 /**
  * Give a material the garden's vertex program.
  *
@@ -712,16 +992,116 @@ export function createTree(resolved, seed, options = {}) {
 
     group.add(leafMesh);
 
+    // ---- Blossom and fruit -------------------------------------------------
+    // Only for the species that carry a schedule, so twelve of the sixteen pay
+    // nothing at all: no mesh, no material, no draw call.
+    let fruitMesh = null;
+    let fruitMaterial = null;
+    let fruitUniforms = null;
+    let fruitCount = 0;
+    const fruit = buildFruit(leaves, resolved, seed);
+
+    if (fruit && fruit.anchors.length) {
+        fruitCount = fruit.anchors.length;
+        // SHARED BY REFERENCE, NOT COPIED, and that is the Addendum B invariant
+        // rather than a tidiness. One wind vector, one clock, one phase, one
+        // growth: copies would agree until the day somebody updated one of
+        // them, and the symptom would be blossom sliding through its own
+        // canopy in a gust.
+        fruitUniforms = {
+            uGrowth: barkUniforms.uGrowth,
+            uWind: barkUniforms.uWind,
+            uTime: barkUniforms.uTime,
+            uPhase: barkUniforms.uPhase,
+            uScale: barkUniforms.uScale,
+            uSwayScale: barkUniforms.uSwayScale,
+            uMotion: barkUniforms.uMotion,
+            uBloom: { value: 0 },
+            uFruitSize: { value: 0 },
+            uRipe: { value: 0 },
+            uFruitDrop: { value: 0 },
+            uCrop: { value: 0 },
+            uFruitShare: { value: fruit.fruitShare },
+            // 1 while the petals are coming off, small once it is fruit.
+            uPetalDrift: { value: 1 }
+        };
+
+        const fruitGeo = buildLeafCard();
+        const fruitTexture = blossomFruitTexture();
+        fruitMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            map: fruitTexture,
+            // The mask is drawn at full opacity, so this is a shape threshold
+            // rather than an erosion. Nothing here fades the way a canopy does.
+            alphaTest: 0.5,
+            roughness: 0.62,
+            metalness: 0,
+            side: THREE.DoubleSide
+        });
+        patchVertex(fruitMaterial, fruitUniforms, FRUIT_HEAD, FRUIT_BODY, 'garden-fruit');
+        fruitMaterial.onBeforeCompile = wrapFruitFragment(fruitMaterial.onBeforeCompile);
+
+        fruitMesh = new THREE.InstancedMesh(fruitGeo, fruitMaterial, fruitCount);
+        fruitMesh.name = `fruit-${resolved.id}`;
+        // NO SHADOW, DELIBERATELY. A shadow pass would need a second patched
+        // depth material per fruit tree for cards that are a few pixels across
+        // and sit inside a canopy that is already shadowing the ground.
+        fruitMesh.castShadow = false;
+        fruitMesh.receiveShadow = true;
+        fruitMesh.raycast = () => {};
+
+        const fBirth = new Float32Array(fruitCount);
+        const fDrop = new Float32Array(fruitCount);
+        const fCrop = new Float32Array(fruitCount);
+        const fRole = new Float32Array(fruitCount);
+        const fPhase = new Float32Array(fruitCount);
+        const fSway = new Float32Array(fruitCount);
+        const fSize = GARDEN_CONFIG.garden.fruit.size * (resolved.fruitSize || 1);
+
+        for (let i = 0; i < fruitCount; i++) {
+            const a = fruit.anchors[i];
+            p.set(a.x, a.y, a.z);
+            e.set(0, a.yaw, 0);
+            q.setFromEuler(e);
+            s.set(fSize, fSize, fSize);
+            m.compose(p, q, s);
+            fruitMesh.setMatrixAt(i, m);
+            fBirth[i] = a.birth;
+            fDrop[i] = a.drop;
+            fCrop[i] = a.crop;
+            fRole[i] = a.role;
+            fPhase[i] = a.phase;
+            fSway[i] = a.sway;
+        }
+        fruitMesh.instanceMatrix.needsUpdate = true;
+        fruitGeo.setAttribute('aBirth', new THREE.InstancedBufferAttribute(fBirth, 1));
+        fruitGeo.setAttribute('aDrop', new THREE.InstancedBufferAttribute(fDrop, 1));
+        fruitGeo.setAttribute('aCrop', new THREE.InstancedBufferAttribute(fCrop, 1));
+        fruitGeo.setAttribute('aRole', new THREE.InstancedBufferAttribute(fRole, 1));
+        fruitGeo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(fPhase, 1));
+        fruitGeo.setAttribute('aFruitSway', new THREE.InstancedBufferAttribute(fSway, 1));
+        // Same reason as the leaves': the instanced bounding sphere comes from
+        // one card, so the whole canopy would cull the moment the origin left.
+        fruitMesh.boundingSphere = new THREE.Sphere(
+            new THREE.Vector3(0, skeleton.height * 0.6, 0), skeleton.height);
+        fruitMesh.frustumCulled = false;
+        group.add(fruitMesh);
+    }
+
     return {
         group,
         bark,
         leafMesh,
+        fruitMesh,
         barkUniforms,
         leafUniforms,
+        fruitUniforms,
         barkMaterial,
         leafMaterial,
+        fruitMaterial,
         skeleton,
         leafCount: count,
+        fruitCount,
         counts: barkGeo.userData.counts
     };
 }
@@ -927,6 +1307,33 @@ export function updateTree(tree, view, resolved) {
         setVec(u.uSummerColor.value, tintColor(resolved.foliage.summer, resolved.tint));
         setVec(u.uAutumnColor.value, tintColor(resolved.foliage.autumn, resolved.tint));
     }
+
+    // ---- Blossom and fruit -------------------------------------------------
+    // Four more uniform writes, and only on the four species that have any.
+    if (tree.fruitUniforms && view.fruit) {
+        const f = tree.fruitUniforms;
+        const stage = view.fruit;
+        f.uBloom.value = stage.bloom;
+        f.uFruitSize.value = stage.size;
+        f.uRipe.value = stage.ripe;
+        f.uFruitDrop.value = stage.drop;
+        f.uCrop.value = view.crop;
+        // PETALS DRIFT AND FRUIT DOES NOT. The blossom stage gets the full
+        // sideways travel a falling leaf gets, and a windfall apple goes
+        // more or less straight down.
+        f.uPetalDrift.value = stage.bloom > 0 ? 1 : 0.18;
+
+        const fruitShader = tree.fruitMaterial.userData.shader;
+        if (fruitShader) {
+            const u = fruitShader.uniforms;
+            u.uSnow.value = view.snow;
+            setVec(u.uBlossomColor.value, resolved.blossom || 0xffffff);
+            if (resolved.fruit) {
+                setVec(u.uUnripeColor.value, resolved.fruit.unripe);
+                setVec(u.uRipeColor.value, resolved.fruit.ripe);
+            }
+        }
+    }
 }
 
 /**
@@ -958,4 +1365,11 @@ export function disposeTree(tree) {
     tree.leafMaterial.dispose();
     if (tree.bark.customDepthMaterial) tree.bark.customDepthMaterial.dispose();
     if (tree.leafMesh.customDepthMaterial) tree.leafMesh.customDepthMaterial.dispose();
+    // The geometry and the material are this tree's own. The MASK is shared by
+    // the whole scene and outlives any one tree, so it is deliberately not
+    // disposed here, exactly as with `leafClusterTexture`.
+    if (tree.fruitMesh) {
+        tree.fruitMesh.geometry.dispose();
+        tree.fruitMaterial.dispose();
+    }
 }

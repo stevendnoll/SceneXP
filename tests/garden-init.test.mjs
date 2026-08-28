@@ -306,6 +306,10 @@ test('the garden can be planted, watered, saved, and cleared', async () => {
     fire(dom.el('tree-water'), 'click');
     stepFrames(10);
     expect(entry.record.moisture).toBeGreaterThan(0.9);
+    // AND THE CARD CLOSES BEHIND IT (M12-1). Watering is a one-shot: the toast
+    // confirms it and the tree's own water level shows the result in the scene,
+    // so the card has nothing left to say and is standing in front of it.
+    expect(ui.isCardOpen()).toBe(false);
     expect(entry.record.budActive).toBe(true);
     stepFrames(120);
     expect(entry.record.bud).toBeGreaterThan(0.5);
@@ -322,6 +326,8 @@ test('the garden can be planted, watered, saved, and cleared', async () => {
     stepFrames(3000);
     expect(main.getState().running).toBe(true);
 
+    // Reopened, because watering closed it.
+    ui.openTreeCard(entry, 3);
     fire(dom.el('tree-remove'), 'click');
     expect(garden.getTrees()).toHaveLength(0);
 });

@@ -35,7 +35,7 @@ import {
 import { initForest, updateForest, disposeForest } from './forest.min.js';
 import { initVista, updateVista, disposeVista } from './vista.min.js';
 import { initWildlife, updateWildlife, disposeWildlife } from './wildlife.min.js';
-import { createWeather, stepWeather, weatherWords } from './weather.min.js';
+import { createWeather, stepWeather, weatherWords, overcastAt } from './weather.min.js';
 import { initPrecipitation, updatePrecipitation, disposePrecipitation } from './precip.min.js';
 import { resolveSpecies } from './species.min.js';
 import {
@@ -79,8 +79,24 @@ const state = {
     // freezing it would not pause the garden, it would photograph it, and a
     // photograph of rain is streaks hanging motionless in the air, which reads
     // as broken rather than as still.
-    sceneSeconds: 0
+    sceneSeconds: 0,
+    // WHETHER ANYTHING IS ACTUALLY FALLING, from the last frame's `fall`. The
+    // tree card needs it for one line of copy and can be opened by a tap at any
+    // moment, so it is latched here rather than threaded through the pick path.
+    // The rate the renderer used, never the state machine's intent: same rule
+    // the season chip follows, and for the same reason.
+    falling: false
 };
+
+/**
+ * What the tree card needs and cannot derive from a tree's record.
+ *
+ * The hour, for the blossom and fruit stage, and whether it is raining, for the
+ * line that explains why a young tree is still thirsty in a downpour.
+ */
+function cardContext() {
+    return { hour: hourAt(state.elapsedSeconds), falling: state.falling };
+}
 
 const quality = {
     ceiling: 1, scale: 1, frame: 0, best: Infinity, since: 0, frames: 0
@@ -171,7 +187,7 @@ async function init() {
 
     const openingHour = hourAt(state.elapsedSeconds);
     const openingSnow = snowCoverageAt(openingHour);
-    updateSky(openingHour, 0, openingSnow, 0, 0);
+    updateSky(openingHour, 0, openingSnow, 0, 0, 0);
     updateTerrain(openingHour, openingSnow);
     updateForest(openingHour, openingSnow);
     updateVista(openingHour, state.elapsedSeconds, openingSnow, 0, camera);
@@ -689,7 +705,7 @@ function handleSceneTap(clientX, clientY) {
     // rule somebody will quietly put back.
     const tree = pickBase(clientX, clientY, projectBases());
     if (tree) {
-        openTreeCard(tree, ageYears(tree.record, state.elapsedSeconds));
+        openTreeCard(tree, ageYears(tree.record, state.elapsedSeconds), cardContext());
         track('tree-opened', { species: tree.record.species });
         return;
     }
@@ -752,7 +768,12 @@ function handleWater() {
         ? 'Watered. Look for new buds along the branches.'
         : 'Watered. It looks pleased.');
     track('tree-watered', { revived: result === 'revived' ? 1 : 0 });
-    refreshTreeCard(ageYears(entry.record, state.elapsedSeconds));
+    // AND THE CARD GETS OUT OF THE WAY. Watering is a one-shot: there is
+    // nothing further to do on this card, the toast has already confirmed it,
+    // and the tree's own water level is on its bed in the scene, which is where
+    // the visitor is looking. `closeTreeCard` restores focus, so this is also
+    // the only ordering that leaves the keyboard somewhere sensible.
+    closeTreeCard();
     save();
 }
 
@@ -970,15 +991,26 @@ function animate() {
     // `fall` is what the weather actually DREW this frame. The sky takes the
     // flash and the chip takes the two rates, so nothing downstream decides
     // for itself what the weather is doing.
-    const fall = updatePrecipitation(delta, state.sceneSeconds, weather, snow, Math.random, hour);
+    const fall = updatePrecipitation(delta, state.sceneSeconds, weather, Math.random, hour);
+    // ONE CLOUD NUMBER, COMPUTED HERE AND NOWHERE ELSE, for the same reason the
+    // wind vector is published once: the two things that have to agree about
+    // the sky are the season chip and the sky itself. It takes `fall` rather
+    // than `weather.gloom` alone because the winter snowfall arrives from the
+    // CALENDAR and never touches gloom, so a still, clear-state blizzard would
+    // otherwise keep every one of its stars.
+    const cloud = overcastAt(weather.gloom, fall);
+    state.falling = Math.max(fall.rain, fall.snow)
+        >= GARDEN_CONFIG.weather.precipitation.visibleRate;
 
-    updateSky(hour, delta, snow, weather.gloom, fall.flash);
+    updateSky(hour, delta, snow, weather.gloom, fall.flash, cloud);
     updateTerrain(hour, snow);
     updateForest(hour, snow, weather.wind, state.sceneSeconds, motionScale());
     updateVista(hour, state.sceneSeconds, snow, weather.gloom, camera);
     updateWildlife(hour, state.sceneSeconds, snow);
     updateGarden(gardenDelta, state.elapsedSeconds, {
-        rain: weather.rain,
+        // NO `rain` HERE ANY MORE. The garden used to be handed the rain rate
+        // and it filled every tank with it, whatever the temperature had made
+        // of it, which is how snow came to water trees. See moistureAfter.
         snow,
         wind: weather.wind,
         motion: motionScale(),
@@ -996,7 +1028,7 @@ function animate() {
     updateHud(yearAt(state.elapsedSeconds), state.elapsedSeconds, weatherWords(weather, fall));
     if (isCardOpen()) {
         const entry = getCardEntry();
-        if (entry) refreshTreeCard(ageYears(entry.record, state.elapsedSeconds));
+        if (entry) refreshTreeCard(ageYears(entry.record, state.elapsedSeconds), cardContext());
     }
 
     // The camera, in order: our own dolly first, then the shared part's yaw
@@ -1072,6 +1104,40 @@ function installDebugProbe() {
                 levelInScene: !!(level && level.parent)
             };
         },
+        /**
+         * Per fruit tree: is there a mesh, is it in the scene, did its program
+         * compile, and WHAT ARE THE FOUR STAGE UNIFORMS RIGHT NOW.
+         *
+         * Added because "the fruit is not visible" has at least four completely
+         * different causes and none of them can be told apart from a
+         * screenshot: the tree is too young (`crop` 0), it is the wrong hour
+         * (`bloom` and `size` both 0), the mesh never built, or it is drawn and
+         * simply too small to see. The last one is what it turned out to be,
+         * and five rounds of inference is the alternative to this row.
+         */
+        fruit: () => getTrees().filter((e) => e.tree && e.tree.fruitMesh).map((e) => {
+            const t = e.tree;
+            const u = t.fruitUniforms;
+            const m = t.fruitMesh;
+            return {
+                species: e.record.species,
+                growth: +e.record.growth.toFixed(3),
+                health: +e.record.health.toFixed(3),
+                instances: t.fruitCount,
+                crop: +u.uCrop.value.toFixed(3),
+                bloom: +u.uBloom.value.toFixed(3),
+                size: +u.uFruitSize.value.toFixed(3),
+                ripe: +u.uRipe.value.toFixed(3),
+                drop: +u.uFruitDrop.value.toFixed(3),
+                // Everything between "the data is right" and "it is on screen".
+                inScene: !!m.parent,
+                visible: !!m.visible,
+                materialVisible: !!(m.material && m.material.visible),
+                programFailed: !!(m.material && m.material.program
+                    && m.material.program.diagnostics
+                    && !m.material.program.diagnostics.runnable)
+            };
+        }),
         // Per tree: where its cell is, where the GROUND is there, where the
         // bed's top ended up, and where the tree's own group actually sits.
         // Those last two come from one `heightAt` call each and must agree: a
@@ -1137,7 +1203,7 @@ function installDebugProbe() {
             return counts;
         }
     };
-    console.log('[Garden] debug probe ready. Call __garden.report().');
+    console.log('[Garden] debug probe ready. Call __garden.report(), or __garden.fruit().');
     return true;
 }
 

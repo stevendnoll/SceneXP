@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * species.js - The twelve trees, the six sliders, and the seeded generator.
+ * species.js - The sixteen trees, the six sliders, and the seeded generator.
  *
  * Pure throughout. No THREE, no DOM.
  *
@@ -12,9 +12,21 @@
  *
  * BARK COLOUR IS A FIRST-CLASS PART OF THE CHOICE, not a detail. The grid is
  * ordered small to large so a visitor sees the range at a glance, and the
- * twelve cover nine distinct bark treatments: chalk white, silver grey, smooth
- * grey, dark grey, medium brown, deep furrowed brown, dark red, red brown, and
+ * sixteen cover twelve distinct bark treatments: chalk white, silver grey,
+ * smooth grey, dark grey, blocky dark grey, medium brown, scaly grey brown,
+ * deep furrowed brown, smooth pale grey, dark red, glossy banded red brown, and
  * orange red.
+ *
+ * FOUR OF THEM FRUIT, and they carry three extra fields for it: `blossom` is
+ * the flower colour, `fruit` is the unripe and ripe pair, and `schedule` is the
+ * tree's own year in the same hours `season.phenology` uses. Every one of those
+ * colours is the real one, which is the entire point of adding them: a pear
+ * that ripens red throws away the reason it is here. See PRD Addendum E.4.
+ *
+ * A FIFTH CARRIES `blossom` AND NO FRUIT. The Flowering Dogwood has had that
+ * colour since M2 with nothing to draw it, while its own note in the modal
+ * called it "the only tree here that blossoms". It now has a schedule with
+ * flower keys and no fruit keys, and the note is true.
  *
  * THE TALLEST IS 14 METRES AND THAT IS A CAMERA DECISION. See the note in
  * config.js beside `plot.maxTreeHeight`: a 22 metre tree cannot be framed
@@ -49,7 +61,7 @@ export function newSeed(random = Math.random) {
     return Math.floor(random() * 0xFFFFFFFF) >>> 0;
 }
 
-// ---- The twelve ------------------------------------------------------------
+// ---- The sixteen -----------------------------------------------------------
 
 /**
  * Every species, ordered small to large.
@@ -96,6 +108,11 @@ export const SPECIES = [
         matureHeight: 4.0,
         evergreen: false,
         blossom: 0xf6e8ec,
+        // NO FRUIT KEYS, ON PURPOSE. `fruitStageAt` reads the missing `dropEnd`
+        // as "this one flowers and sets nothing", so the dogwood gets the
+        // blossom half of M11-7 and none of the fruit half, for one row of data
+        // and no new code.
+        schedule: { bloomStart: 4.0, bloomFull: 5.5, bloomFade: 7.0, bloomEnd: 8.5 },
         bark: 0x8e8479,
         barkName: 'Smooth grey',
         foliage: { spring: 0x86a84e, summer: 0x497a35, autumn: 0x8d2f45 },
@@ -103,6 +120,45 @@ export const SPECIES = [
             depth: 6, branches: 2, thirdChance: 0.15, lengthRatio: 0.72,
             radiusRatio: 0.68, divergence: 62, gravitropism: -0.12, taper: 0.84,
             jitter: 0.18, leafSize: 0.15, leafDensity: 1.5
+        }
+    },
+    {
+        id: 'apple',
+        name: 'Apple',
+        size: 'Small',
+        note: 'Blossom that the whole spring turns up for, and something to pick before the leaves go.',
+        matureHeight: 4.5,
+        evergreen: false,
+        bark: 0x6a5546,
+        barkName: 'Grey brown, scaly',
+        foliage: { spring: 0x86a84e, summer: 0x4c7538, autumn: 0xc9a23e },
+        // White flushed pink, which is what an apple in flower actually is. The
+        // deep pink people remember is the BUD, before it opens.
+        blossom: 0xf7e4e6,
+        // Red over green, never flat red. `unripe` is the green it starts as and
+        // the shader mixes toward `ripe`, so a summer apple is a green apple
+        // and nobody has to be told.
+        //
+        // A LIGHT YELLOW GREEN, NOT A LEAF GREEN, and that is a legibility fix
+        // as well as a true one. The first pass used 0x7f9a4e, which is within
+        // a few points of this tree's own foliage, so a green apple on a green
+        // canopy measured a colour distance of 94 against the cherry's 113
+        // minimum and the fruit simply could not be picked out. A developing
+        // apple really is paler and yellower than the leaves around it.
+        fruit: { unripe: 0xa8bd5e, ripe: 0xc62f27, size: 1.0 },
+        // RIPENS BEFORE THE LEAVES TURN, which is both what apples do and where
+        // all the contrast is. The first pass ripened 14.5 to 17.5 against a
+        // leaf turn of 15 to 18, so fruit and canopy changed colour together
+        // and the red arrived onto ochre. Full colour at 15.5 puts a red apple
+        // on a canopy that is still 17 percent turned, which is to say green.
+        schedule: {
+            bloomStart: 5.0, bloomFull: 6.5, bloomFade: 7.5, bloomEnd: 8.5,
+            setEnd: 10.0, swellEnd: 12.0, ripenEnd: 15.5, holdEnd: 18.5, dropEnd: 20.0
+        },
+        params: {
+            depth: 6, branches: 2, thirdChance: 0.34, lengthRatio: 0.73,
+            radiusRatio: 0.70, divergence: 50, gravitropism: 0.02, taper: 0.81,
+            jitter: 0.28, leafSize: 0.14, leafDensity: 1.7
         }
     },
     {
@@ -122,6 +178,72 @@ export const SPECIES = [
         }
     },
     {
+        id: 'orange',
+        name: 'Orange',
+        size: 'Small',
+        note: 'Glossy all year, and it ripens through the middle of winter when nothing else is doing anything.',
+        matureHeight: 5.0,
+        evergreen: true,
+        bark: 0x8a7d6c,
+        barkName: 'Smooth pale grey',
+        foliage: { spring: 0x3f6f36, summer: 0x3d6b34, autumn: 0x3d6b34 },
+        blossom: 0xfdfbf0,
+        // "THE ORANGES ARE ONLY VISIBLE IN THE WINTER" was a QA note and it was
+        // the same defect the apple had, not the design working. Citrus foliage
+        // is very dark (0x3d6b34) and the first unripe green was 0x55823a,
+        // which measured 59 against it: a green orange on a green orange tree
+        // was invisible for the seven hours it spends swelling. A developing
+        // orange really is a lighter, more olive green than those glossy leaves.
+        fruit: { unripe: 0x7d9c45, ripe: 0xe8791a, size: 0.85 },
+        // CITRUS RUNS ON ITS OWN CLOCK AND THAT IS THE POINT OF IT. It flowers
+        // in spring, carries green fruit all summer, and RIPENS THROUGH THE
+        // WINTER: `holdEnd` at 2.5 and `dropEnd` at 4.0 are past midnight, which
+        // in this garden is midwinter. So there is orange fruit on a dark
+        // evergreen in the one season with nothing else to look at, and it is
+        // not a liberty. It is what the tree does. `fruitStageAt` rebases every
+        // key on `bloomStart`, which is what stops the wrap being a special case.
+        schedule: {
+            bloomStart: 6.0, bloomFull: 7.0, bloomFade: 8.0, bloomEnd: 9.0,
+            setEnd: 11.0, swellEnd: 16.0, ripenEnd: 20.0, holdEnd: 2.5, dropEnd: 4.0
+        },
+        params: {
+            depth: 6, branches: 2, thirdChance: 0.46, lengthRatio: 0.70,
+            radiusRatio: 0.71, divergence: 54, gravitropism: 0.04, taper: 0.80,
+            jitter: 0.24, leafSize: 0.13, leafDensity: 2.2
+        }
+    },
+    {
+        id: 'pear',
+        name: 'Pear',
+        size: 'Medium',
+        note: 'Upright and formal, first of the orchard into flower, and the best autumn colour of any of them.',
+        matureHeight: 7.5,
+        evergreen: false,
+        bark: 0x5c5147,
+        barkName: 'Dark grey, blocky',
+        // A RED BRONZE AUTUMN, and it is worth saying out loud: this is the one
+        // fruit tree that beats the Sugar Maple at its own trick.
+        foliage: { spring: 0x8fb055, summer: 0x46703a, autumn: 0xb2542c },
+        blossom: 0xfbf9f2,
+        // Pale green to gold. Same fix as the apple's: the first pass used
+        // 0x7d9245, a leaf green, and a green pear on a green pear tree was
+        // indistinguishable for half its time on the branch.
+        fruit: { unripe: 0xa3b459, ripe: 0xd3bb5a, size: 1.05 },
+        // Half an hour ahead of the apple in blossom, which is true, and which
+        // is there so that two fruit trees side by side do not flower in
+        // lockstep. AND AN HOUR AHEAD OF IT IN RIPENING, which is also true:
+        // pears come in before apples do. Cherry, then pear, then apple.
+        schedule: {
+            bloomStart: 4.5, bloomFull: 6.0, bloomFade: 7.0, bloomEnd: 8.0,
+            setEnd: 9.5, swellEnd: 11.5, ripenEnd: 14.5, holdEnd: 17.5, dropEnd: 19.5
+        },
+        params: {
+            depth: 7, branches: 2, thirdChance: 0.22, lengthRatio: 0.75,
+            radiusRatio: 0.69, divergence: 30, gravitropism: 0.30, taper: 0.85,
+            jitter: 0.20, leafSize: 0.14, leafDensity: 1.8
+        }
+    },
+    {
         id: 'paper-birch',
         name: 'Paper Birch',
         size: 'Medium',
@@ -135,6 +257,47 @@ export const SPECIES = [
             depth: 7, branches: 2, thirdChance: 0.20, lengthRatio: 0.75,
             radiusRatio: 0.68, divergence: 30, gravitropism: 0.26, taper: 0.86,
             jitter: 0.22, leafSize: 0.13, leafDensity: 1.7
+        }
+    },
+    {
+        id: 'cherry',
+        name: 'Cherry',
+        size: 'Medium',
+        note: 'It flowers on bare branches before anything has leaves, which is the whole reason anybody plants one.',
+        matureHeight: 8.0,
+        evergreen: false,
+        // ONE OF THE FEW TRUNKS HERE A PERSON COULD NAME WITH THE LEAVES OFF:
+        // glossy red brown with horizontal lenticel banding.
+        bark: 0x7a3b2c,
+        barkName: 'Glossy red brown, banded',
+        foliage: { spring: 0x8ab04f, summer: 0x467033, autumn: 0xd4571f },
+        // A Yoshino's pale pink, which is real. The deep pink of the park
+        // cherries is Prunus serrulata 'Kanzan' and similar, which are
+        // ornamental doubles carrying essentially no fruit. This is Prunus
+        // avium, a sweet cherry, and it keeps its cherries.
+        blossom: 0xf6cdd8,
+        fruit: { unripe: 0x9db35a, ripe: 0x7a1228, size: 0.70 },
+        // IT BLOOMS BEFORE THE LEAVES DO, AND THAT IS THE WHOLE TRICK. Peak is
+        // `bloomFull` 4.5, which is an hour and a half before leaf bud break at
+        // `season.phenology.budEnd` 6.0, so a cherry here is a cloud of blossom
+        // on bare wood with sky showing through it. Every other tree in the list
+        // flowers into a canopy that is already greening. Move this later and
+        // the tree stops being a cherry.
+        //
+        // Its petal fall is also the longest of the four at an hour and a half,
+        // because petals coming off a cherry in the wind is the most
+        // recognisable thing the tree does and it should not be over before the
+        // visitor has turned to look at it.
+        //
+        // Cherries ripen in high summer, well ahead of an apple.
+        schedule: {
+            bloomStart: 3.5, bloomFull: 4.5, bloomFade: 5.5, bloomEnd: 7.0,
+            setEnd: 8.5, swellEnd: 12.0, ripenEnd: 14.0, holdEnd: 15.5, dropEnd: 17.0
+        },
+        params: {
+            depth: 7, branches: 2, thirdChance: 0.28, lengthRatio: 0.75,
+            radiusRatio: 0.69, divergence: 36, gravitropism: 0.20, taper: 0.84,
+            jitter: 0.26, leafSize: 0.15, leafDensity: 1.8
         }
     },
     {
@@ -349,6 +512,8 @@ export function resolveSpecies(id, custom = DEFAULT_CUSTOM) {
         conical: !!species.conical,
         tremble: species.tremble || 0,
         blossom: species.blossom || 0,
+        fruit: species.fruit || null,
+        schedule: species.schedule || null,
         bark: species.bark,
         foliage: species.foliage,
 
@@ -365,6 +530,11 @@ export function resolveSpecies(id, custom = DEFAULT_CUSTOM) {
         trunkScale: c.trunk,
         leafSize: p.leafSize * c.leaf,
         leafDensity: p.leafDensity * c.density,
+        // Fruit takes the leaf slider's size but NOT the density slider's
+        // count. A visitor asking for an open, airy tree is asking about
+        // branches, and an apple tree that grows fewer apples because its
+        // canopy was thinned is not a thing.
+        fruitSize: (species.fruit ? species.fruit.size : 1) * c.leaf,
         tint: c.tint
     };
 }

@@ -28,7 +28,7 @@ import {
     unpackColor, packColor, mixColor,
     srgbToLinear, linearToSrgb, toneMapACES, shownColor, luminanceOf,
     bracketKeys, skyStateAt, skyDaylightAt, referenceLuminance,
-    directionAt, lightingAt, starFadeAt
+    directionAt, lightingAt, starFadeAt, starHidingAt, skyOpennessAt
 } from '../www/garden/js/sky.js';
 
 const SKY = GARDEN_CONFIG.sky;
@@ -279,4 +279,91 @@ test('stars are gone in daylight and full in the deep of the night', () => {
     const dusk = starFadeAt(18.6);
     expect(dusk).toBeGreaterThan(0);
     expect(dusk).toBeLessThan(1);
+});
+
+
+// ---- Cloud is a lid (M11-2) ------------------------------------------------
+
+/**
+ * `starFadeAt` answers "is the sun down". `starHidingAt` answers "can anything
+ * be seen through the sky at all". They multiply at the call site, and keeping
+ * them apart is what lets the MOON read the second without inheriting the
+ * first.
+ */
+test('an overcast sky has no stars in it, at any hour of the night', () => {
+    const S = SKY.stars;
+    // Midnight through to the far side of dawn: every hour the stars are out.
+    for (const hour of [21, 22, 23, 0, 1, 2, 3, 4]) {
+        const bare = starFadeAt(hour);
+        const shown = bare * skyOpennessAt(S.overcastAbove);
+        expect(shown).toBeCloseTo(0, 6);
+    }
+});
+
+test('a clear night is exactly as starry as it ever was', () => {
+    // The regression guard for every star test written before M11-2: at cloud
+    // zero the new term must be an identity, or this change quietly redecorates
+    // a sky nobody asked it to touch.
+    for (const hour of [20, 21, 22, 23, 0, 1, 2, 3, 4, 5]) {
+        expect(starFadeAt(hour) * skyOpennessAt(0)).toBeCloseTo(starFadeAt(hour), 10);
+    }
+});
+
+test('broken cloud keeps about half its stars', () => {
+    // The windy state, which is a real and worth-having night sky rather than
+    // a rounding of cloudy.
+    const windy = GARDEN_CONFIG.weather.states.windy.gloom;
+    const open = skyOpennessAt(windy);
+    expect(open).toBeGreaterThan(0.25);
+    expect(open).toBeLessThan(0.75);
+});
+
+test('the hiding ramp is monotonic and lands on both ends', () => {
+    const S = SKY.stars;
+    let last = -1;
+    for (let c = 0; c <= 1.0001; c += 0.02) {
+        const v = starHidingAt(c);
+        expect(v).toBeGreaterThanOrEqual(last - 1e-9);
+        last = v;
+    }
+    expect(starHidingAt(0)).toBe(0);
+    expect(starHidingAt(S.clearBelow)).toBeCloseTo(0, 6);
+    expect(starHidingAt(S.overcastAbove)).toBeCloseTo(1, 6);
+    expect(starHidingAt(1)).toBeCloseTo(1, 6);
+});
+
+/**
+ * THE MOON SPENT FOUR MILESTONES NOT KNOWING ABOUT THE WEATHER.
+ *
+ * `sunIntensity` loses its delivery to the gloom while keeping its direction,
+ * with a good note beside it about the difference between a storm and a sunset.
+ * `moonIntensity` on the very next line did not, so a stormy midnight was a
+ * black lid of a sky with full moonlight raking across the grass underneath.
+ */
+test('an overcast sky takes the moonlight as well as the sunlight', () => {
+    const clear = lightingAt(0, 0, 0, 0);
+    const storm = lightingAt(0, 0, 0.88, 0.88);
+    expect(clear.moonIntensity).toBeGreaterThan(0);
+    expect(storm.moonIntensity).toBeLessThan(clear.moonIntensity * 0.6);
+
+    // The same scaling the sun gets, so the two cannot drift apart.
+    const scale = GARDEN_CONFIG.sky.storm.sunScale;
+    expect(storm.moonIntensity / clear.moonIntensity)
+        .toBeCloseTo(1 - (1 - scale) * 0.88, 6);
+});
+
+test('a calendar blizzard dims the moon even though the gloom is zero', () => {
+    // Cloud and gloom differ in exactly one case and this is it. Passing gloom
+    // where cloud belongs would leave this at full strength.
+    const clear = lightingAt(0, 1, 0, 0);
+    const snowing = lightingAt(0, 1, 0, 0.56);
+    expect(snowing.moonIntensity).toBeLessThan(clear.moonIntensity);
+});
+
+test('cloud defaults to gloom for the callers that do not have one', () => {
+    // vista.js passes null. It must behave exactly as it did before M11-2.
+    for (const g of [0, 0.24, 0.42, 0.88]) {
+        expect(lightingAt(0, 0, g, null).moonIntensity)
+            .toBeCloseTo(lightingAt(0, 0, g, g).moonIntensity, 10);
+    }
 });

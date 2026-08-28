@@ -9,14 +9,14 @@
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
 import {
     STATES, weightsFor, nextState, dwellFor, temperatureAt, precipFor,
-    blendStates, createWeather, stepWeather, weatherWords, gustAt
+    blendStates, createWeather, stepWeather, weatherWords, gustAt, overcastAt
 } from '../www/garden/js/weather.js';
 import { makeRandom } from '../www/garden/js/species.js';
 import {
     flashAt, accumulateStrikes, strikeFactorAt, fallRates, fallOpacity
 } from '../www/garden/js/precip.js';
 import { flashLighting, lightingAt } from '../www/garden/js/sky.js';
-import { solarAt } from '../www/garden/js/clock.js';
+import { solarAt, hourAt, seasonAt, isSnowingAt, snowCoverageAt, WINTER } from '../www/garden/js/clock.js';
 
 // ---- Selection -------------------------------------------------------------
 
@@ -57,9 +57,17 @@ test('summer is the sunniest season and autumn the windiest', () => {
     expect(autumn.windy).toBeGreaterThan(summer.windy);
     expect(autumn.sunny).toBeLessThan(summer.sunny);
     // Every state is reachable in every season, or a season would quietly
-    // lose part of its weather.
-    for (const counts of [summer, autumn, winter]) {
+    // lose part of its weather. WITH ONE DELIBERATE EXCEPTION, M12-2: winter
+    // draws no storms, because lightning only happens in the stormy state and
+    // thunder in a snowy midwinter was the note. It costs winter nothing,
+    // because winter's weather event is the SCHEDULED SNOWFALL and that needs
+    // no storm behind it.
+    for (const counts of [summer, autumn]) {
         for (const s of STATES) expect(counts[s]).toBeGreaterThan(0);
+    }
+    for (const s of STATES) {
+        if (s === 'stormy') expect(winter[s]).toBe(0);
+        else expect(winter[s]).toBeGreaterThan(0);
     }
 });
 
@@ -196,15 +204,66 @@ test('THE CHIP SAYS SNOW OVER THE WINTER SNOWFALL, whatever the state is', () =>
     expect(fall.snow).toBeGreaterThan(0);
     expect(weatherWords(cloudyWinter, fall)).toBe('snow');
 
-    // And the melt, which is the spring half of the same bug (garden-11.png).
-    const springMelt = { ...cloudyWinter, state: 'windy', from: 'windy' };
-    expect(weatherWords(springMelt, fallRates(springMelt, 0.4))).toBe('snow');
+    // And out of the snowfall window the chip goes back to reading the state,
+    // rather than claiming a blizzard over bare ground.
+    expect(fallRates(cloudyWinter, 12).snow).toBe(0);
+    expect(weatherWords(cloudyWinter, fallRates(cloudyWinter, 12))).toBe('cloudy');
+});
 
-    // Full cover with nothing in the air is NOT snowfall, and the chip must
-    // not claim it is. This is the assertion that fails if the strict
-    // inequalities in fallRates are ever loosened.
-    expect(fallRates(cloudyWinter, 1).snow).toBe(0);
-    expect(weatherWords(cloudyWinter, fallRates(cloudyWinter, 1))).toBe('cloudy');
+// ---- One answer to "is it snowing" (M12-3) ---------------------------------
+
+/**
+ * THE SCENE HELD TWO ANSWERS AND THE CORRECT ONE HAD NO CALLER.
+ *
+ * `isSnowingAt` is correct, is tested, and was never wired to anything. What
+ * actually decided whether snow was drawn was a condition inside `fallRates`
+ * testing `snowCoverage > 0 && snowCoverage < 1`, with a comment saying plainly
+ * that melting counted. Coverage is strictly between 0 and 1 during the MELT,
+ * hours 3 to 5, WHICH IS THE FIRST THIRD OF SPRING, so the garden snowed hard
+ * all the way through its own thaw.
+ */
+test('the scene has exactly one answer to whether it is snowing', () => {
+    const still = {
+        state: 'cloudy', from: 'cloudy', transition: 1,
+        precip: 'none', rain: 0, gloom: 0.42, windStrength: 0.3
+    };
+    for (let h = 0; h < 24; h += 0.01) {
+        const drawn = fallRates(still, h).snow > 0;
+        expect(`${h.toFixed(2)}: ${drawn}`).toBe(`${h.toFixed(2)}: ${isSnowingAt(h)}`);
+    }
+});
+
+test('nothing falls during the thaw, which is the arrival of spring', () => {
+    const still = {
+        state: 'cloudy', from: 'cloudy', transition: 1,
+        precip: 'none', rain: 0, gloom: 0.42, windStrength: 0.3
+    };
+    // The melt runs hours 3 to 5, past the spring boundary at 3, on purpose:
+    // the thaw IS the arrival of spring. Snow lying and going, with nothing
+    // falling on it. THE OLD CONDITION SAID SNOW AT EVERY ONE OF THESE HOURS.
+    for (const h of [3.1, 3.5, 4, 4.5, 4.9]) {
+        expect(snowCoverageAt(h)).toBeGreaterThan(0);
+        expect(snowCoverageAt(h)).toBeLessThan(1);
+        expect(`${h}: ${fallRates(still, h).snow}`).toBe(`${h}: 0`);
+        expect(weatherWords(still, fallRates(still, h))).toBe('cloudy');
+    }
+    // And it does fall while the cover is BUILDING, which is the half of the
+    // pair the old condition could not tell apart from the half above.
+    for (const h of [23, 0, 1]) {
+        expect(snowCoverageAt(h)).toBeGreaterThan(0);
+        expect(snowCoverageAt(h)).toBeLessThan(1);
+        expect(fallRates(still, h).snow).toBeGreaterThan(0);
+    }
+});
+
+test('every flake in the scene falls in winter', () => {
+    const still = {
+        state: 'cloudy', from: 'cloudy', transition: 1,
+        precip: 'none', rain: 0, gloom: 0.42, windStrength: 0.3
+    };
+    for (let h = 0; h < 24; h += 0.05) {
+        if (fallRates(still, h).snow > 0) expect(seasonAt(h)).toBe(WINTER);
+    }
 });
 
 test('the chip never announces precipitation the renderer did not switch on', () => {
@@ -338,6 +397,9 @@ test('the strike rate tapers off with the sun and is floored at night', () => {
     let brightest = 0;
     let darkest = 1;
     for (let h = 0; h < 24; h += 0.05) {
+        // Winter is gated to zero outright by M12-2 and is a separate claim,
+        // asserted in its own test below. This one is about the TAPER.
+        if (seasonAt(h) === WINTER) continue;
         const f = strikeFactorAt(h);
         expect(f).toBeGreaterThanOrEqual(L.nightRate - 1e-9);
         expect(f).toBeLessThanOrEqual(1 + 1e-9);
@@ -345,16 +407,38 @@ test('the strike rate tapers off with the sun and is floored at night', () => {
         if (solarAt(h).elevation < L.nightBelowElevation) darkest = Math.min(darkest, f);
     }
     expect(strikeFactorAt(12)).toBeCloseTo(1, 6);
-    expect(strikeFactorAt(0)).toBeCloseTo(L.nightRate, 6);
+    // A NIGHT HOUR OUTSIDE WINTER, because winter is now gated to zero by
+    // M12-2 and hour 0 is midwinter. Late autumn is dark and still storms.
+    expect(strikeFactorAt(19.5)).toBeCloseTo(L.nightRate, 6);
     expect(brightest).toBeCloseTo(1, 6);
     expect(darkest).toBeCloseTo(L.nightRate, 6);
 
-    // Smooth, not a branch on an hour: no two adjacent minutes may jump.
+    // Smooth, not a branch on an hour: no two adjacent minutes may jump. THE
+    // ELEVATION TAPER IS WHAT THIS GUARDS, and it is why M9 chose a taper over
+    // a cut: night here is all of winter and both dark ends of autumn and
+    // spring, so a hard elevation cut takes lightning out of three seasons.
     let biggestStep = 0;
     for (let h = 0; h < 24; h += 1 / 60) {
+        if (seasonAt(h) === WINTER || seasonAt(h + 1 / 60) === WINTER) continue;
         biggestStep = Math.max(biggestStep, Math.abs(strikeFactorAt(h) - strikeFactorAt(h + 1 / 60)));
     }
     expect(biggestStep).toBeLessThan(0.02);
+});
+
+test('winter is silent, and it is the only season that is', () => {
+    // M12-2. The weights already stop winter DRAWING a storm, but a state
+    // entered in late autumn holds for a dwell of up to 45 seconds against a 60
+    // second winter, so the weights alone are not a guarantee. This is.
+    for (let h = 0; h < 24; h += 0.02) {
+        const factor = strikeFactorAt(h);
+        if (seasonAt(h) === WINTER) expect(factor).toBe(0);
+        else expect(factor).toBeGreaterThan(0);
+    }
+    // AND THE STEP AT THE BOUNDARY IS DELIBERATE. It is invisible because
+    // strikes are discrete events rather than a ramp, so a rate reaching zero
+    // has no seam to see, unlike the elevation taper above it.
+    expect(GARDEN_CONFIG.weather.lightning.winterRate).toBe(0);
+    expect(GARDEN_CONFIG.weather.weights.winter.stormy).toBe(0);
 });
 
 test('a night storm gets far fewer strikes than a day storm', () => {
@@ -365,9 +449,14 @@ test('a night storm gets far fewer strikes than a day storm', () => {
     const perStorm = (hour) => (L.strikesPerMinute / 60) * strikeFactorAt(hour) * dwell;
 
     expect(perStorm(12)).toBeGreaterThan(9);
-    // Most night storms carry one flash or none.
-    expect(perStorm(0)).toBeLessThan(1.5);
-    expect(perStorm(0) / perStorm(12)).toBeCloseTo(L.nightRate, 6);
+    // Most night storms carry one flash or none. Measured at a LATE AUTUMN
+    // night rather than midnight: midnight is midwinter and is now silent
+    // outright, which is a different claim tested above.
+    expect(perStorm(19.5)).toBeLessThan(1.5);
+    expect(perStorm(19.5) / perStorm(12)).toBeCloseTo(L.nightRate, 6);
+    // And the season that a hard elevation cut would have taken out with it
+    // still gets its night storms, which is the half M9 was protecting.
+    expect(perStorm(4)).toBeGreaterThan(0);
 });
 
 // ---- What is falling (M9-4) ------------------------------------------------
@@ -375,7 +464,7 @@ test('a night storm gets far fewer strikes than a day storm', () => {
 test('SLEET IS A MIXTURE, not both systems at full rate', () => {
     const P = GARDEN_CONFIG.weather.precipitation;
     const sleeting = { precip: 'sleet', rain: 1 };
-    const fall = fallRates(sleeting, 0);
+    const fall = fallRates(sleeting, 12);
 
     // Both are on, which is what makes it sleet.
     expect(fall.rain).toBeGreaterThan(P.visibleRate);
@@ -391,7 +480,12 @@ test('SLEET IS A MIXTURE, not both systems at full rate', () => {
 
 test('light rain is drawn as light rain rather than as nothing', () => {
     const P = GARDEN_CONFIG.weather.precipitation;
-    const light = GARDEN_CONFIG.weather.states.windy.rain;
+    // A LITERAL RATHER THAN `states.windy.rain`, WHICH IS NOW 0. M11-5 took the
+    // permanent drizzle off the windy state, so the only light rain left in the
+    // scene comes from the eight second blend into and out of a storm, and 0.12
+    // is squarely inside that. The property under test is the OPACITY CURVE,
+    // which is unchanged and still has to lift a light rate into visibility.
+    const light = 0.12;
     const heavy = GARDEN_CONFIG.weather.states.stormy.rain;
 
     const lightOpacity = fallOpacity(light, P.rainOpacityPeak, P.rainOpacityCurve);
@@ -577,4 +671,102 @@ test('the calm states carry a breeze, and the loud ones were left alone', () => 
     expect(S.sunny.wind).toBeLessThan(S.cloudy.wind);
     expect(S.cloudy.wind).toBeLessThan(S.stormy.wind);
     expect(S.stormy.wind).toBeLessThan(S.windy.wind);
+});
+
+
+// ---- One cloud number (M11-1, M11-5) ---------------------------------------
+
+/**
+ * THE CASE THE SHIPPED CODE GOT WRONG, and the reason `overcastAt` takes
+ * `fall` at all rather than reading `gloom` on its own.
+ *
+ * The winter snowfall is a CALENDAR event. `fallRates` pins it at 0.7
+ * regardless of the weather state, and it never touches `weather.rain`, so a
+ * clear-state blizzard reads gloom exactly 0. Before this, the stars were a
+ * function of the sun's elevation alone and came out on schedule behind the
+ * snow, which is the frame QA caught in garden-16.
+ */
+test('a calendar blizzard closes the sky even at gloom zero', () => {
+    const S = GARDEN_CONFIG.sky.stars;
+    const clear = overcastAt(0, { rain: 0, snow: 0 });
+    const blizzard = overcastAt(0, { rain: 0.7, snow: 0.7 });
+
+    expect(clear).toBe(0);
+    // Past overcast, so nothing survives it. Reading gloom alone would give 0.
+    expect(blizzard).toBeGreaterThan(S.overcastAbove);
+});
+
+test('the cloud number is the greater of the gloom and what is falling', () => {
+    // A storm is dark whether or not the rain has started, so gloom wins there.
+    expect(overcastAt(0.88, { rain: 0, snow: 0 })).toBeCloseTo(0.88, 6);
+    // And a sun shower does not close the sky, which is why the floor scales
+    // with the rate instead of being a switch.
+    expect(overcastAt(0, { rain: 0.15, snow: 0 }))
+        .toBeLessThan(GARDEN_CONFIG.sky.stars.overcastAbove);
+    // Below the rate the renderer draws at, nothing is falling as far as
+    // anything downstream is concerned. Same threshold the chip reads.
+    expect(overcastAt(0, { rain: 0.001, snow: 0 })).toBe(0);
+    // And a missing `fall` is simply the gloom, for the callers that have none.
+    expect(overcastAt(0.42)).toBeCloseTo(0.42, 6);
+});
+
+test('every weather state agrees with what the chip says about it', () => {
+    // The whole point of M11-1: a caption and a picture that cannot disagree.
+    // Cloudy or worse must close the sky, and clear must not.
+    const W = GARDEN_CONFIG.weather.states;
+    const S = GARDEN_CONFIG.sky.stars;
+    expect(overcastAt(W.sunny.gloom, null)).toBeLessThan(S.clearBelow);
+    expect(overcastAt(W.cloudy.gloom, null)).toBeGreaterThanOrEqual(S.overcastAbove);
+    expect(overcastAt(W.stormy.gloom, null)).toBeGreaterThanOrEqual(S.overcastAbove);
+});
+
+/**
+ * M11-5, AND IT IS MEASURED RATHER THAN DERIVED FROM THE WEIGHTS.
+ *
+ * Dwell, the eight second transition and the never-repeat rule all move this,
+ * so reading `weights.summer.stormy` and multiplying would be asserting
+ * arithmetic that the machine does not actually do.
+ *
+ * The number this replaces was 45.0 percent, roughly double a temperate
+ * climate, and 56 percent of it came from one config value: the windy state
+ * carried `rain: 0.12`, a permanent drizzle on a state weighted 0.10 to 0.30
+ * across the seasons.
+ */
+test('something falls out of the sky about a fifth of the year', () => {
+    const YEAR = GARDEN_CONFIG.clock.cycleSeconds;
+    const dt = 1 / 30;
+    const years = 120;
+    const random = makeRandom(0xDEC1DE);
+    const w = createWeather('sunny');
+    let elapsed = 0;
+    let wet = 0;
+    let gloomy = 0;
+    const steps = Math.round((years * YEAR) / dt);
+    for (let i = 0; i < steps; i++) {
+        elapsed += dt;
+        stepWeather(w, dt, hourAt(elapsed), elapsed, random, false);
+        if (w.rain >= GARDEN_CONFIG.weather.precipitation.visibleRate) wet += dt;
+        if (w.gloom > GARDEN_CONFIG.weather.cloudyAbove) gloomy += dt;
+    }
+    // 19.7 percent at M11-5, then 12.7 once M12-2 took winter's storms away.
+    // The two are separate changes with separate reasons and this is the
+    // running total of both.
+    const wetFraction = wet / (years * YEAR);
+    expect(wetFraction).toBeGreaterThan(0.08);
+    expect(wetFraction).toBeLessThan(0.18);
+
+    // AND THE GREY SKIES ARE STILL MOST OF WHAT THE SKY DOES, which is the half
+    // of this that is easy to break by reaching for the stormy weights instead.
+    // The gloom was never the problem: only the water was overdone.
+    expect(gloomy / (years * YEAR)).toBeGreaterThan(0.28);
+});
+
+test('the windy state is about wind', () => {
+    expect(GARDEN_CONFIG.weather.states.windy.rain).toBe(0);
+    // It is still the windiest thing in the cycle, or M11-5 took the wrong
+    // number out.
+    const W = GARDEN_CONFIG.weather.states;
+    for (const name of ['sunny', 'cloudy', 'stormy']) {
+        expect(W.windy.wind).toBeGreaterThan(W[name].wind);
+    }
 });

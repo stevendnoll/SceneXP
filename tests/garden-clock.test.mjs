@@ -13,12 +13,13 @@
  * typo.
  */
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
+import { speciesById } from '../www/garden/js/species.js';
 import {
     hourAt, yearAt, wrapHour, yearPhaseAt, startSeconds,
     seasonAt, seasonPhaseAt, inThirstWindow,
     solarAt, lunarAt,
     snowCoverageAt, isSnowingAt,
-    phenologyAt,
+    phenologyAt, fruitStageAt, fruitWords,
     SPRING, SUMMER, AUTUMN, WINTER
 } from '../www/garden/js/clock.js';
 
@@ -252,4 +253,174 @@ test('an evergreen holds its needles all year and only loses colour', () => {
     // Dullest at the coldest hour, which is midwinter, and untouched in summer.
     expect(phenologyAt(0, true).color).toBeCloseTo(GARDEN_CONFIG.season.phenology.evergreenWinterFade, 6);
     expect(phenologyAt(12, true).color).toBe(0);
+});
+
+
+// ---- Blossom and fruit (M11-6) ---------------------------------------------
+
+const FRUITING = ['apple', 'pear', 'orange', 'cherry'];
+const sched = (id) => speciesById(id).schedule;
+
+/** How much fruit is actually DRAWN: the size, against the share not fallen. */
+function shown(stage) {
+    return stage.size * (1 - stage.drop);
+}
+
+test('every fruit schedule runs its whole sequence once a year', () => {
+    for (const id of FRUITING) {
+        const schedule = sched(id);
+        let sawBloom = false;
+        let sawGreen = false;
+        let sawRipe = false;
+        let sawEmpty = false;
+        for (let h = 0; h < 24; h += 0.05) {
+            const st = fruitStageAt(h, schedule);
+            if (st.bloom > 0.9) sawBloom = true;
+            if (st.size > 0.5 && st.ripe < 0.05) sawGreen = true;
+            if (st.ripe > 0.95 && shown(st) > 0.5) sawRipe = true;
+            if (shown(st) < 0.01 && st.bloom < 0.01) sawEmpty = true;
+        }
+        expect(`${id} blossom`).toBe(sawBloom ? `${id} blossom` : `${id} NO blossom`);
+        expect(`${id} green`).toBe(sawGreen ? `${id} green` : `${id} NO green`);
+        expect(`${id} ripe`).toBe(sawRipe ? `${id} ripe` : `${id} NO ripe`);
+        expect(`${id} empty`).toBe(sawEmpty ? `${id} empty` : `${id} NEVER empty`);
+    }
+});
+
+test('blossom and fruit are never on the tree at the same time', () => {
+    // The invariant that lets one instanced mesh and one draw call carry both.
+    // If a schedule is ever retuned so they overlap, the stage swap in
+    // FRUIT_BODY starts blending two shapes and this is what says so.
+    for (const id of [...FRUITING, 'flowering-dogwood']) {
+        for (let h = 0; h < 24; h += 0.02) {
+            const st = fruitStageAt(h, sched(id));
+            expect(`${id}@${h.toFixed(2)}`)
+                .toBe(Math.min(st.bloom, shown(st)) < 1e-6 ? `${id}@${h.toFixed(2)}` : `OVERLAP ${id}@${h.toFixed(2)}`);
+        }
+    }
+});
+
+test('what is drawn is continuous, all the way round the year', () => {
+    // A stage that steps is a pop. The four fields are NOT individually
+    // continuous and are not meant to be: `size` drops to zero once the last
+    // fruit has fallen and `drop` resets at the turn of the tree's own year,
+    // but the tree is empty either side of both, so what is on screen never
+    // jumps. That product is the thing worth asserting.
+    for (const id of FRUITING) {
+        const schedule = sched(id);
+        const step = 0.01;
+        let prevShown = shown(fruitStageAt(0, schedule));
+        let prevBloom = fruitStageAt(0, schedule).bloom;
+        for (let h = step; h <= 24; h += step) {
+            const st = fruitStageAt(h % 24, schedule);
+            expect(Math.abs(shown(st) - prevShown)).toBeLessThan(0.05);
+            expect(Math.abs(st.bloom - prevBloom)).toBeLessThan(0.05);
+            prevShown = shown(st);
+            prevBloom = st.bloom;
+        }
+    }
+});
+
+/**
+ * THE ONE SCHEDULE FACT A LATER TUNING PASS COULD QUIETLY DESTROY.
+ *
+ * What people adore about cherry blossom is not the colour, it is the emptiness
+ * behind it: a cherry flowers BEFORE its leaves open, so the tree is a cloud of
+ * blossom on bare wood with sky showing through. Move the peak past bud break
+ * and the tree stops being a cherry.
+ */
+test('the cherry blooms on bare branches and the apple does not', () => {
+    const cherryPeak = speciesById('cherry').schedule.bloomFull;
+    const applePeak = speciesById('apple').schedule.bloomFull;
+
+    expect(cherryPeak).toBeLessThan(GARDEN_CONFIG.season.phenology.budEnd);
+    expect(fruitStageAt(cherryPeak, sched('cherry')).bloom).toBeGreaterThan(0.95);
+    // Barely out of bud, which is to say the tree reads as bare wood.
+    expect(phenologyAt(cherryPeak, false).leaf).toBeLessThan(0.12);
+
+    // The apple flowers into a canopy that is already greening, which is what
+    // makes the two look nothing alike doing the same thing. Measured: 0.09 of
+    // full leaf size under the cherry against 0.39 under the apple, a bit over
+    // four to one, and it is the RATIO that carries the difference in frame.
+    expect(applePeak).toBeGreaterThan(GARDEN_CONFIG.season.phenology.budEnd);
+    expect(phenologyAt(applePeak, false).leaf).toBeGreaterThan(0.35);
+    expect(phenologyAt(applePeak, false).leaf)
+        .toBeGreaterThan(phenologyAt(cherryPeak, false).leaf * 3);
+});
+
+test('the cherry holds its petals longest, because that is what it is for', () => {
+    const petalFall = (id) => {
+        const s = sched(id);
+        return wrapHour(s.bloomEnd - s.bloomFade);
+    };
+    for (const id of ['apple', 'pear', 'orange']) {
+        expect(petalFall('cherry')).toBeGreaterThan(petalFall(id));
+    }
+});
+
+/**
+ * THE ORANGE IS WHY `fruitStageAt` REBASES EVERY KEY ON `bloomStart`.
+ *
+ * Citrus ripens through the winter, and winter in this garden is MIDNIGHT, so
+ * the ripe window runs hour 20 to hour 2.5 and wraps. Written in absolute hours
+ * that interval runs backwards and every comparison would need a special case.
+ */
+test('the orange is ripe at midnight, which is midwinter', () => {
+    const st = fruitStageAt(0, sched('orange'));
+    expect(st.ripe).toBeGreaterThan(0.95);
+    expect(shown(st)).toBeGreaterThan(0.9);
+    expect(st.bloom).toBe(0);
+
+    // And it is the ONLY one, which is the whole reason it earns its place: the
+    // one season with nothing to look at gets fruit on a dark evergreen.
+    for (const id of ['apple', 'pear', 'cherry']) {
+        expect(`${id} at midnight`)
+            .toBe(shown(fruitStageAt(0, sched(id))) < 0.01 ? `${id} at midnight` : `${id} STILL FRUITING`);
+    }
+});
+
+test('cherries ripen in high summer, well before an apple', () => {
+    const ripeHour = (id) => {
+        const s = sched(id);
+        return s.ripenEnd;
+    };
+    expect(ripeHour('cherry')).toBeLessThan(ripeHour('apple'));
+    expect(ripeHour('cherry')).toBeLessThan(ripeHour('pear'));
+    // High summer is hours 9 to 15.
+    expect(ripeHour('cherry')).toBeLessThanOrEqual(15);
+});
+
+test('a tree that flowers and sets nothing is a real case, not a broken one', () => {
+    // The Flowering Dogwood has carried a blossom colour since M2 with nothing
+    // to draw it, while its own note in the plant modal called it "the only
+    // tree here that blossoms".
+    const dogwood = speciesById('flowering-dogwood');
+    expect(dogwood.schedule).toBeTruthy();
+    expect(dogwood.fruit).toBeUndefined();
+
+    let sawBloom = false;
+    for (let h = 0; h < 24; h += 0.05) {
+        const st = fruitStageAt(h, dogwood.schedule);
+        if (st.bloom > 0.9) sawBloom = true;
+        expect(st.size).toBe(0);
+    }
+    expect(sawBloom).toBe(true);
+});
+
+test('a species with no schedule is simply not fruiting', () => {
+    const st = fruitStageAt(12, null);
+    expect(st.bloom).toBe(0);
+    expect(shown(st)).toBe(0);
+});
+
+test('the stage is named in words, because colour is never the only carrier', () => {
+    const apple = sched('apple');
+    expect(fruitWords(fruitStageAt(apple.bloomFull, apple))).toBe('In blossom');
+    expect(fruitWords(fruitStageAt(apple.ripenEnd, apple))).toBe('Fruit ripe');
+    expect(fruitWords(fruitStageAt(12, apple))).toBe('Fruit swelling');
+    // Out of season it says nothing rather than saying something wrong.
+    expect(fruitWords(fruitStageAt(23, apple))).toBe('');
+    // And a blossom-only tree is never told it has fruit.
+    const dog = sched('flowering-dogwood');
+    expect(fruitWords(fruitStageAt(12, dog), false)).toBe('');
 });

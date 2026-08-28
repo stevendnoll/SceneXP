@@ -520,14 +520,18 @@ function buildFarTier(points, isEvergreen, config, seedOffset) {
     });
     material.userData.season = { value: new THREE.Vector3(1, 1, 1) };
     material.userData.bark = { value: new THREE.Vector3(...unpackColor(F.barkColor)) };
+    // Evergreens never shed, so theirs is pinned at 0 and never written.
+    material.userData.bare = { value: 0 };
     material.customProgramCacheKey = () => 'garden-canopy';
     material.onBeforeCompile = (shader) => {
         shader.uniforms.uCanopySeason = material.userData.season;
         shader.uniforms.uCanopyBark = material.userData.bark;
+        shader.uniforms.uCanopyBare = material.userData.bare;
         shader.fragmentShader = shader.fragmentShader
             .replace('#include <common>', `#include <common>
 uniform vec3 uCanopySeason;
-uniform vec3 uCanopyBark;`)
+uniform vec3 uCanopyBark;
+uniform float uCanopyBare;`)
             .replace('#include <map_fragment>', `#include <map_fragment>
     // The mask: 1 where the texture drew foliage, 0 where it drew wood.
     //
@@ -541,7 +545,30 @@ uniform vec3 uCanopyBark;`)
     // survives, so the winter alphaTest erosion is untouched, and the
     // per-instance shade still lands afterwards in color_fragment.
     float canopyLeaf = texture2D(map, vMapUv).g;
-    diffuseColor.rgb = mix(uCanopyBark, uCanopySeason, canopyLeaf);`);
+    diffuseColor.rgb = mix(uCanopyBark, uCanopySeason, canopyLeaf);
+
+    // WINTER TAKES THE LEAVES BY MASK, NOT BY THRESHOLD, and the difference is
+    // that this one works. Raising alphaTest for winter could not strip a
+    // crown because the canopy texture's 34 foliage blobs COMPOSITE: at alpha
+    // 0.42 to 0.68 each and source-over, two overlapping reach 0.90 and three
+    // reach 0.97, so the dense middle of every crown sat above the 0.82 that
+    // was meant to erase it. What winter removed was the fringe. What it kept
+    // was a solid tan core, in full leaf, under snow (garden-16, garden-17).
+    //
+    // And the threshold had a ceiling anyway. The trunk and limbs in this same
+    // texture are drawn opaque and must SURVIVE, but the tier is by definition
+    // far, so the mipmap chain averages a thin branch line's alpha down fast
+    // with distance. Any threshold high enough to eat a 0.97 blob core eats a
+    // mipped branch. There is no single number, which is why this is a mask.
+    //
+    // Scaling the leaf pixels' alpha is exact at every density of overlap and
+    // at every mip level: a 0.97 core and a 0.45 fringe cross below the
+    // threshold at the same bareness. Wood has canopyLeaf 0 and is untouched.
+    //
+    // THE ORDER IS WHAT MAKES IT FREE. Three runs map_fragment, then
+    // color_fragment, then alphatest_fragment, so an alpha written here is the
+    // alpha the test sees.
+    diffuseColor.a *= mix(1.0, 1.0 - uCanopyBare, canopyLeaf);`);
     };
 
     const mesh = new THREE.InstancedMesh(buildCrossedQuad(), material, Math.max(1, points.length));
@@ -939,10 +966,13 @@ export function updateForest(hour, snowCoverage = 0, wind = null, elapsed = 0, m
     setSeason(deciduous.material, decColour);
     setSeason(evergreen.material, evgColour);
 
-    // The canopy erodes rather than fading. See the note at the top of the
-    // file: opaque branches survive the threshold, softer leaves do not.
+    // THE THRESHOLD NO LONGER MOVES. It stays at `leafyAlphaTest` all year and
+    // the bareness goes into the MASK instead, in the fragment hook in
+    // buildFarTier, which has the whole argument beside it. In short: the
+    // canopy texture's blobs composite past any threshold that still leaves the
+    // branches standing, so no single number ever did both jobs.
     const bare = barenessAt(hour, config);
-    deciduous.material.alphaTest = F.leafyAlphaTest + (F.bareAlphaTest - F.leafyAlphaTest) * bare;
+    deciduous.material.userData.bare.value = bare;
 
     for (const tree of nearTrees) {
         // THE SAME WIND VECTOR THE PLANTED TREES READ. One source, so nothing

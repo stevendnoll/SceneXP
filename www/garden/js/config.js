@@ -499,11 +499,105 @@ export const GARDEN_CONFIG = deepFreeze({
             // visitor waters each tree about once a year and a slightly late
             // one is never punished for it.
             windowsPerFill: 1,
-            // How fast rain fills a tree, in tank-fractions per second of
-            // steady rain. A full storm refills a tree completely.
-            rainFill: 0.05,
+            // THERE IS NO `rainFill` AND THAT IS DELIBERATE. Precipitation used
+            // to deliver 2.39 tank-fills a year against a drain of 1.00, so the
+            // care loop was arithmetically dead. Nothing waters a tree now
+            // except the visitor, and the reasoning is in `moistureAfter`.
             // The thirst marker appears below this.
             thirstyBelow: 0.25
+        },
+
+        // ---- Blossom and fruit (M11-6, M11-7) -------------------------------
+        // Shared shape. The HOURS are per species and live in species.js beside
+        // the foliage colours, because an orange ripening through midwinter is
+        // a fact about oranges and not a global.
+        fruit: {
+            // How big newly set fruit is, as a fraction of ripe size. Not zero
+            // and not small: a single ramp from nothing to full across six
+            // in-world hours spends the whole of high summer at a size that
+            // reads as a rendering artefact rather than as a young fruit.
+            setSize: 0.30,
+
+            // ---- Fruit has to be EARNED, and these two gates are why the
+            // feature is worth building at all -------------------------------
+            // M11-4 took away the free water, which leaves the honest question
+            // of what showing up buys the visitor. This is the answer: fruit is
+            // the first thing in this scene that care BUYS rather than merely
+            // preserves.
+            //
+            // A SAPLING DOES NOT FRUIT. Planting growth is 0.444
+            // (`plantAgeYears` 2 over `maturityYears` 4.5), so a first blossom
+            // at 0.62 is a little under an in-world year of watching away. Real
+            // orchard trees take three to five years to bear, and this is the
+            // same promise at the scene's own scale.
+            bearFrom: 0.62,
+            bearFull: 0.85,
+
+            // A NEGLECTED TREE DOES NOT FRUIT EITHER. Nothing at or below the
+            // `failing` band, a full crop by 0.75. The lower number is
+            // deliberately `health.failingBelow` rather than a new one, so the
+            // crop and the words the tree card already uses agree by
+            // construction.
+            cropFrom: 0.25,
+            cropFull: 0.75,
+
+            // ---- Sized against the scene budget, not by eye ------------------
+            // These two are a share of the LEAF CARD count, and the first pass
+            // at 0.55 and 0.12 cost 43,776 triangles for sixteen cherries in
+            // blossom against a scene already measured near 371,600 of its
+            // 400,000. That is not a tuning question, it is the wood's entire
+            // remaining headroom spent on flowers.
+            //
+            // A BLOSSOM CARD IS A CLUSTER, WHICH IS WHAT MAKES THE SMALLER
+            // NUMBER FREE. The mask draws five flowers per card, exactly as a
+            // leaf card draws nine leaves, so one card per four or five leaf
+            // clusters is still hundreds of flowers on a tree. Measured at
+            // these values, worst case sixteen cherries in blossom: 303 cards
+            // a tree, 4,848 instances, 19,392 triangles. Under 5 percent of the
+            // budget, against 43,776 before.
+            //
+            // Fruit is per-card rather than per-cluster, so its number is the
+            // one that has to read as a real count. Measured: 40 apples on an
+            // apple tree, 48 oranges, 82 pears, 96 cherries. These two are the
+            // levers if it bites on mobile, not the feature.
+            density: 0.07,
+            // Blossom is far denser than fruit, because most flowers never set.
+            // Drawn from the same anchors, so this is a share of them.
+            blossomDensity: 0.22,
+            // ---- Metres across the CARD, and it is a PIXEL decision -----------
+            // SIZED IN PIXELS, NOT IN BOTANY, and the first pass got this
+            // exactly backwards. At 0.11 m the drawn fruit measured 1.6 px at
+            // the composed camera and a cherry measured 0.9, so the whole
+            // feature was invisible on the screen while being perfectly correct
+            // in the data. Third time in this scene: the mulch beds were 22x5
+            // px and the water level was 24x3.3.
+            //
+            // AND TRUE SCALE CANNOT WORK HERE, which is the part worth keeping.
+            // Measured on a 1280x800 frame with a tree at the middle of the
+            // plot, a LIFE-SIZE apple is 2.8 px and a life-size cherry is 0.7.
+            // The scene's own precedent is the answer: a leaf card is a clump
+            // of NINE leaves at 0.425 m and reads 14.7 px, which is what it
+            // takes. So a fruit card is a CLUSTER of three, drawn a little over
+            // life size, and it lands in the same range.
+            //
+            // The mask spends 57 percent of the card on the fruit cluster and
+            // 82 on the blossom. Measured at 0.50 with the per-species
+            // multipliers in species.js, on a 1280x800 frame, tree at the
+            // middle of the plot:
+            //
+            //              cluster   at back edge   one fruit   blossom
+            //     apple      9.6 px      6.3 px       4.6 px     13.9 px
+            //     pear      10.2         6.6          4.9        14.8
+            //     orange     8.2         5.4          3.9        11.9
+            //     cherry     6.8         4.4          3.3         9.9
+            //
+            // Individual fruit stay a few pixels, exactly as individual leaves
+            // inside a leaf clump do, and nobody counts those either. What
+            // carries at this distance is the CLUSTER and its colour.
+            //
+            // `tests/garden-tree.test.mjs` asserts these in PIXELS. A metre
+            // value on its own has never once been the thing that was wrong.
+            size: 0.50
         },
 
         health: {
@@ -637,14 +731,18 @@ export const GARDEN_CONFIG = deepFreeze({
             maxHeight: 18,
             // How much of the wood keeps its needles through winter.
             evergreenShare: 0.42,
-            // THE CANOPY IS THINNED BY RAISING alphaTest, NOT by swapping
-            // meshes. The texture is drawn with opaque branches and softer
-            // leaves, so lifting the threshold erodes the leaves first and
-            // leaves the branch structure behind. One material, one draw call,
-            // no transparency sorting, and a deciduous wood that genuinely
-            // goes bare in winter.
+            // ONE THRESHOLD, ALL YEAR. It used to be raised for winter on the
+            // theory that the texture's opaque branches would survive it while
+            // its softer leaves would not. THEY DID NOT: the 34 foliage blobs
+            // composite source-over, so where three overlap the alpha reaches
+            // 0.97 and the old winter value of 0.82 could not touch them, while
+            // any value that could would have eaten the mipped branches this
+            // threshold exists to protect. See the note in buildFarTier.
+            //
+            // The bareness now lives in the fragment mask, so `bareAlphaTest`
+            // is GONE rather than set to something. A live-looking knob that
+            // does nothing is how somebody loses an afternoon later.
             leafyAlphaTest: 0.34,
-            bareAlphaTest: 0.82,
             textureSize: 128
         },
 
@@ -950,9 +1048,22 @@ export const GARDEN_CONFIG = deepFreeze({
             // quarter of all weather sat at or below that, which is the "no
             // noticeable sway" QA found. The windy and stormy numbers are
             // unchanged: the problem was never the top of the range.
+            //
+            // THE WINDY STATE IS ABOUT WIND. It used to carry `rain: 0.12`, a
+            // permanent drizzle on a state weighted 0.10 to 0.30 across the
+            // seasons, and measured over 400 in-world years THAT ONE NUMBER WAS
+            // 56 PERCENT OF ALL THE PRECIPITATION IN THE SCENE. Something fell
+            // out of the sky 45 percent of the year, roughly double a temperate
+            // climate, and it is why the weather read as wet enough to be worth
+            // removing. At 0 the wet fraction is 19.7 percent and the grey skies
+            // are untouched at 42.8, because the gloom was never the problem.
+            //
+            // Held in reserve if QA still reads it as wet: cutting the stormy
+            // weights below by about a third reaches 15.0 percent. Four numbers,
+            // and it costs storms, so try this one first.
             sunny: { gloom: 0.00, wind: 0.30, rain: 0.00 },
             cloudy: { gloom: 0.42, wind: 0.42, rain: 0.00 },
-            windy: { gloom: 0.24, wind: 1.00, rain: 0.12 },
+            windy: { gloom: 0.24, wind: 1.00, rain: 0.00 },
             stormy: { gloom: 0.88, wind: 0.72, rain: 1.00 }
         },
 
@@ -964,7 +1075,17 @@ export const GARDEN_CONFIG = deepFreeze({
             spring: { sunny: 0.35, cloudy: 0.30, windy: 0.20, stormy: 0.15 },
             summer: { sunny: 0.60, cloudy: 0.20, windy: 0.10, stormy: 0.10 },
             autumn: { sunny: 0.25, cloudy: 0.30, windy: 0.30, stormy: 0.15 },
-            winter: { sunny: 0.30, cloudy: 0.35, windy: 0.20, stormy: 0.15 }
+            // WINTER DRAWS NO STORMS. Lightning only ever happens in the
+            // stormy state, and thunder in a snowy midwinter was the M12-2
+            // note. It costs the season nothing: winter's weather EVENT is the
+            // scheduled snowfall, which is a calendar thing and needs no storm
+            // behind it. The 0.15 goes to cloudy, where a winter sky belongs.
+            //
+            // This is not on its own a guarantee. A storm entered in late
+            // autumn holds for a dwell of up to 45 seconds against a 60 second
+            // winter, so `lightning.winterRate` below is what actually promises
+            // a silent winter.
+            winter: { sunny: 0.32, cloudy: 0.45, windy: 0.23, stormy: 0.00 }
         },
 
         // ---- Gusts --------------------------------------------------------
@@ -1003,6 +1124,20 @@ export const GARDEN_CONFIG = deepFreeze({
         },
 
         dwell: { min: 20, max: 45 },
+
+        // ---- How long a forced clear spring lasts (M12-4) -------------------
+        // IN HOURS RATHER THAN SECONDS, so it stays tied to the clock: change
+        // `cycleSeconds` and this still means "from the start of spring until
+        // just past sunrise" instead of quietly becoming a different fraction
+        // of the season.
+        //
+        // Spring runs hour 3 to 9 and sunrise is at 6, so 3.5 hours holds a
+        // clear sky from 3.00 to about 6.50 with the sunrise in the middle of
+        // it. That is 35 of the season's 60 seconds, which leaves the second
+        // half of spring rolling normally: this buys the sunrise, it does not
+        // turn spring into a static season.
+        springClearHours: 3.5,
+
         transitionSeconds: 8,
         // Reduced motion asks for less movement, not less weather. The states
         // still change, they simply stop arriving quickly.
@@ -1020,6 +1155,19 @@ export const GARDEN_CONFIG = deepFreeze({
         // reads as windy only when it genuinely is.
         windyAbove: 0.55,
         cloudyAbove: 0.35,
+
+        // ---- What closes the sky (M11-1) ------------------------------------
+        // How much cloud is implied by something actually falling, per unit of
+        // fall rate. `overcastAt` takes the greater of this and `gloom`, because
+        // THE WINTER SNOWFALL IS A CALENDAR EVENT and never moves gloom at all:
+        // a still, clear-state blizzard reads gloom 0 and would otherwise keep
+        // its stars, which is the frame garden-16 caught.
+        //
+        // 0.8 puts the calendar snowfall (pinned at 0.7 by `fallRates`) at 0.56,
+        // comfortably past `sky.stars.overcastAbove`, while a light shower at
+        // 0.15 lands at 0.12 and leaves a sun shower's sky open. Scaled rather
+        // than a switch, so drizzle and a downpour are not the same lid.
+        fallingOvercast: 0.8,
 
         // Rain or snow is decided by a smooth temperature rather than by the
         // name of the season, so an early spring storm can fall as sleet and
@@ -1125,6 +1273,20 @@ export const GARDEN_CONFIG = deepFreeze({
             nightRate: 0.12,
             nightBelowElevation: -6,
             dayAboveElevation: 12,
+
+            // ---- Winter is silent, and it is a SEASON gate ------------------
+            // "No lightning in winter" is a different request from "no
+            // lightning at night" and it has a cleaner answer, because winter
+            // IS a season and can simply be named. The elevation taper above
+            // stays exactly as it is: it protects the night storms of autumn
+            // and spring, which is what M9 chose it for.
+            //
+            // The weights already stop winter DRAWING a storm. This stops one
+            // that crossed the boundary from flashing, which the weights
+            // cannot. A rate reaching zero is invisible at the boundary because
+            // strikes are discrete events rather than a ramp, so there is no
+            // seam to see.
+            winterRate: 0,
             attackSeconds: 0.04,
             decaySeconds: 0.42,
             // Strikes stay distant and above the horizon. Nothing in this
@@ -1369,7 +1531,22 @@ export const GARDEN_CONFIG = deepFreeze({
             // twilight, near enough.
             hiddenAboveElevation: -4.0,
             fullBelowElevation: -14.0,
-            brightness: 1.15
+            brightness: 1.15,
+
+            // ---- What the cloud takes (M11-2) -------------------------------
+            // The two above answer "is the sun down". These answer "can anything
+            // be seen through the sky at all", and the two multiply. Read by
+            // `starHidingAt`, and applied to the moon's disc and halo as well,
+            // because a lid is a lid for everything behind it.
+            //
+            // STEEP ON PURPOSE. Cloudy sits at gloom 0.42 and stormy at 0.88, so
+            // a linear fade would leave a cloudy night at 58 percent stars, and
+            // cloudy is the most common non-clear state in the cycle. At 0.12
+            // and 0.40: sunny keeps every star, windy (0.24) keeps about half,
+            // which is a night of broken cloud and is worth having, and cloudy
+            // and stormy keep none.
+            clearBelow: 0.12,
+            overcastAbove: 0.40
         },
 
         // THREE'S FOG RUNS AFTER TONE MAPPING AND AFTER THE sRGB ENCODE, so

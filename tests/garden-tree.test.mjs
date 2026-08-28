@@ -18,9 +18,12 @@
  *   does not break a test anywhere else: it just means the birch that greets a
  *   returning visitor tomorrow is a different birch.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
-import { SPECIES, DEFAULT_CUSTOM, resolveSpecies, makeRandom, clampCustom, sliderWords, tintColor } from '../www/garden/js/species.js';
-import { buildSkeleton, buildLeaves, sidesForDepth } from '../www/garden/js/tree.js';
+import { SPECIES, DEFAULT_CUSTOM, resolveSpecies, makeRandom, clampCustom, sliderWords, tintColor, speciesById } from '../www/garden/js/species.js';
+import { buildSkeleton, buildLeaves, buildFruit, sidesForDepth } from '../www/garden/js/tree.js';
+import { fruitStageAt, phenologyAt } from '../www/garden/js/clock.js';
 
 const SEED = 20260825;
 
@@ -122,8 +125,12 @@ test('a tree is a function of its seed, and that is locked', () => {
     const EXPECTED = {
         'japanese-maple': 2389269509,
         'flowering-dogwood': 3800298273,
+        'apple': 3510848100,
         'olive': 3567027007,
+        'orange': 3022373954,
+        'pear': 1853214699,
         'paper-birch': 386799237,
+        'cherry': 2652351780,
         'bur-oak': 2543638504,
         'copper-beech': 2600671710,
         'weeping-willow': 691008386,
@@ -342,4 +349,330 @@ test('leaves higher and further out sway more than inner ones', () => {
     const low = sorted.slice(0, 50).reduce((t, l) => t + l.sway, 0) / 50;
     const high = sorted.slice(-50).reduce((t, l) => t + l.sway, 0) / 50;
     expect(high).toBeGreaterThan(low);
+});
+
+
+// ---- Blossom and fruit anchors (M11-7) -------------------------------------
+
+function fruitFor(id) {
+    const resolved = resolveSpecies(id, DEFAULT_CUSTOM);
+    const skeleton = buildSkeleton(resolved, SEED);
+    const leaves = buildLeaves(skeleton, resolved, SEED);
+    return { resolved, skeleton, leaves, fruit: buildFruit(leaves, resolved, SEED) };
+}
+
+test('only the species that carry a schedule build any anchors at all', () => {
+    for (const s of SPECIES) {
+        const { fruit } = fruitFor(s.id);
+        const expected = s.schedule ? 'anchors' : 'none';
+        expect(`${s.id}: ${fruit ? 'anchors' : 'none'}`).toBe(`${s.id}: ${expected}`);
+    }
+    // Five of the sixteen: the four fruit trees and the dogwood.
+    expect(SPECIES.filter((s) => s.schedule).length).toBe(5);
+});
+
+/**
+ * THE INVARIANT THAT MUST NOT BE LOST IN THE COPY.
+ *
+ * `step(aBirth, uGrowth)` is what stops a leaf appearing on a branch that has
+ * not been born yet. An apple hanging in the air off the end of an unborn twig
+ * is the same defect with a much bigger silhouette than a leaf has, and it is
+ * only avoided because a fruit anchor IS a leaf anchor rather than a second
+ * scattering built from the skeleton.
+ */
+test('every fruit anchor carries the birth of the branch it hangs on', () => {
+    for (const id of ['apple', 'pear', 'orange', 'cherry']) {
+        const { leaves, fruit } = fruitFor(id);
+        const births = new Set(leaves.map((l) => l.birth));
+        for (const a of fruit.anchors) {
+            expect(births.has(a.birth)).toBe(true);
+            expect(a.birth).toBeGreaterThanOrEqual(0);
+            expect(a.birth).toBeLessThan(1);
+        }
+    }
+});
+
+test('a fruit anchor sits exactly where a leaf does, and sways with it', () => {
+    // Not "near" a leaf: AT one. A second set built from the skeleton would be
+    // a second answer to where the outside of a canopy is, and the two would
+    // drift the first time anybody touched `leafLevels`.
+    const { leaves, fruit } = fruitFor('cherry');
+    const at = new Set(leaves.map((l) => `${l.x},${l.y},${l.z},${l.sway}`));
+    for (const a of fruit.anchors) {
+        expect(at.has(`${a.x},${a.y},${a.z},${a.sway}`)).toBe(true);
+    }
+});
+
+test('blossom is denser than fruit, because most flowers never set', () => {
+    const F = GARDEN_CONFIG.garden.fruit;
+    const { leaves, fruit } = fruitFor('apple');
+    // One set of anchors at BLOSSOM density, with `aRole` picking the share
+    // that go on to be fruit.
+    expect(fruit.anchors.length / leaves.length).toBeCloseTo(F.blossomDensity, 1);
+    expect(fruit.fruitShare).toBeLessThan(1);
+    expect(fruit.anchors.length * fruit.fruitShare / leaves.length).toBeCloseTo(F.density, 2);
+});
+
+test('a tree that flowers and sets nothing has a fruit share of zero', () => {
+    // The dogwood. `aRole` is a 0-to-1 draw and `step(aRole, 0)` lets nothing
+    // through, so no instance can ever reach the fruit stage.
+    const { fruit } = fruitFor('flowering-dogwood');
+    expect(fruit.fruitShare).toBe(0);
+    expect(fruit.anchors.length).toBeGreaterThan(0);
+});
+
+test('every fruit species carries a real colour for every stage it has', () => {
+    // The entire point of adding them: a pear that ripens red throws the
+    // reason away. Asserted as "present and distinct" rather than as hex
+    // values, which would just restate the table.
+    for (const id of ['apple', 'pear', 'orange', 'cherry']) {
+        const s = speciesById(id);
+        expect(typeof s.blossom).toBe('number');
+        expect(typeof s.fruit.unripe).toBe('number');
+        expect(typeof s.fruit.ripe).toBe('number');
+        // Green to ripe, never flat ripe: a summer apple is a green apple.
+        expect(s.fruit.unripe).not.toBe(s.fruit.ripe);
+    }
+    // And no two of them ripen to the same colour, or the choice is decorative.
+    const ripe = ['apple', 'pear', 'orange', 'cherry'].map((id) => speciesById(id).fruit.ripe);
+    expect(new Set(ripe).size).toBe(4);
+});
+
+test('the fruit species are still ordered small to large in the grid', () => {
+    // The modal shows the range at a glance, so the four slot in by mature
+    // height rather than being appended to the end of the list.
+    for (let i = 1; i < SPECIES.length; i++) {
+        expect(SPECIES[i].matureHeight).toBeGreaterThanOrEqual(SPECIES[i - 1].matureHeight);
+    }
+});
+
+
+// ---- What blossom costs (M11-11) -------------------------------------------
+
+test('a plot full of trees in blossom stays inside the scene budget', () => {
+    // Addendum B cleared this frame of everything that competed with the
+    // swaying, and M10 already put sixteen small pieces of interface back into
+    // it. A whole orchard in flower is the largest thing M11 adds, so it gets
+    // measured rather than assumed.
+    //
+    // Sized against a scene measured near 371,600 of its 400,000 triangles.
+    // The first pass at blossomDensity 0.55 cost 43,776 for sixteen cherries,
+    // which is more headroom than the scene has.
+    let worst = 0;
+    for (const s of SPECIES) {
+        if (!s.schedule) continue;
+        const { fruit } = fruitFor(s.id);
+        worst = Math.max(worst, fruit.anchors.length);
+    }
+    // Four triangles a card: the crossed pair that gives a cluster volume.
+    const triangles = worst * 4 * GARDEN_CONFIG.plot.maxTrees;
+    expect(triangles).toBeLessThan(20000);
+    // One extra draw call per fruit tree, and only for the five species that
+    // have a schedule. The other eleven pay nothing at all.
+    expect(SPECIES.filter((x) => x.schedule).length).toBeLessThan(SPECIES.length / 2);
+});
+
+test('a fruit tree carries a countable number of fruit, not a decoration', () => {
+    // The other half of the budget question. Thinning blossom is free because a
+    // card is a CLUSTER of five flowers, but a fruit card is one fruit, so this
+    // number is what a visitor actually counts.
+    const counts = {};
+    for (const id of ['apple', 'orange', 'pear', 'cherry']) {
+        const { fruit } = fruitFor(id);
+        counts[id] = Math.round(fruit.anchors.length * fruit.fruitShare);
+        expect(counts[id]).toBeGreaterThan(25);
+        expect(counts[id]).toBeLessThan(200);
+    }
+    // And a bigger tree carries more, which is the only ordering that reads.
+    expect(counts.cherry).toBeGreaterThan(counts.apple);
+});
+
+
+// ---- Fruit is sized in PIXELS (M12-5) --------------------------------------
+
+/**
+ * THE THIRD TIME THIS SCENE HAS SHIPPED SOMETHING TOO SMALL TO SEE, so this
+ * test is in pixels and not in metres.
+ *
+ * The mulch beds were 22x5 px and were reported missing for an afternoon while
+ * every count, matrix, span and code path measured correct. The water level was
+ * 24x3.3 px and was legible only when dollied in. Fruit was 1.6 px, and a cherry
+ * was 0.9, because it had been sized by botany: an apple is about 8 cm, so the
+ * card was about 11 cm.
+ *
+ * AND TRUE SCALE CANNOT WORK AT THIS CAMERA, which is the part that had to be
+ * measured rather than assumed. A life-size apple is 2.7 px from the composed
+ * viewpoint and a life-size cherry is 0.7. The scene's own answer is the leaf
+ * card: a clump of NINE leaves at 0.425 m, reading 14.7 px. So a fruit card is
+ * a cluster of three, a little over life size, and lands in the same range.
+ */
+function pxAcross(metres, y, z) {
+    // A 1280x800 frame, the composed camera, the shipped lens.
+    const pxPerRadian = 800 / (GARDEN_CONFIG.camera.fov * Math.PI / 180);
+    const eye = GARDEN_CONFIG.camera.position;
+    const distance = Math.hypot(eye.x - 0, eye.y - y, eye.z - z);
+    return 2 * Math.atan(metres / (2 * distance)) * pxPerRadian;
+}
+
+// Read straight off the drawing in `blossomFruitTexture`, so repainting the
+// mask smaller cannot quietly shrink the fruit back out of sight.
+function clusterShare() {
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'tree.js'), 'utf8');
+    const block = src.slice(src.indexOf('const bodies = ['), src.indexOf(']', src.indexOf('const bodies = [')));
+    const bodies = [...block.matchAll(/x:\s*(-?[\d.]+),\s*y:\s*(-?[\d.]+),\s*r:\s*([\d.]+)/g)]
+        .map((m) => ({ x: Number(m[1]), r: Number(m[3]) }));
+    expect(bodies.length).toBeGreaterThan(1);
+    const left = Math.min(...bodies.map((b) => b.x - b.r));
+    const right = Math.max(...bodies.map((b) => b.x + b.r));
+    return right - left;
+}
+
+test('a fruit cluster is big enough on screen to be seen at all', () => {
+    const share = clusterShare();
+    for (const id of ['apple', 'pear', 'orange', 'cherry']) {
+        const r = resolveSpecies(id, DEFAULT_CUSTOM);
+        const cluster = GARDEN_CONFIG.garden.fruit.size * r.fruitSize * share;
+        const y = r.matureHeight * 0.6;
+
+        // At the middle of the plot, comfortably readable.
+        expect(`${id} mid`).toBe(pxAcross(cluster, y, 0) >= 6 ? `${id} mid` : `${id} TOO SMALL`);
+        // And at the BACK edge, which is the worst case a planted tree has and
+        // the case every previous miss in this scene was measured at.
+        expect(`${id} back`).toBe(pxAcross(cluster, y, -12) >= 4 ? `${id} back` : `${id} TOO SMALL`);
+    }
+});
+
+test('a fruit cluster does not outgrow the canopy it hangs in', () => {
+    // The other end of the same decision. Legibility bought by making an apple
+    // the size of a leaf clump is fine; making it the size of a branch is not.
+    const oak = resolveSpecies('bur-oak', DEFAULT_CUSTOM);
+    const leafCard = oak.leafSize * 1.25 * GARDEN_CONFIG.tree.leafCardScale;
+    for (const id of ['apple', 'pear', 'orange', 'cherry']) {
+        const r = resolveSpecies(id, DEFAULT_CUSTOM);
+        const card = GARDEN_CONFIG.garden.fruit.size * r.fruitSize;
+        expect(card).toBeLessThan(leafCard * 1.3);
+        // And small against its own tree, or the tree reads as a toy.
+        expect(card / r.matureHeight).toBeLessThan(0.14);
+    }
+});
+
+test('true scale would have been invisible, which is why it is not used', () => {
+    // Kept as a measurement rather than a comment, because "just draw it life
+    // size" is the obvious suggestion and it is wrong here for a reason that
+    // only a number can settle.
+    expect(pxAcross(0.08, 2.7, 0)).toBeLessThan(3);   // an apple
+    expect(pxAcross(0.02, 4.8, 0)).toBeLessThan(1);   // a cherry
+});
+
+
+// ---- Fruit has to be a different colour from its own leaves (M12-6) --------
+
+/**
+ * THE SECOND HALF OF "TOO SMALL TO SEE", AND IT WAS INVISIBLE FOR A DIFFERENT
+ * REASON. With the pixel sizes fixed, QA reported the cherries and the oranges
+ * reading and the apples and the pears still absent.
+ *
+ * They were being drawn, at the right size, on the right schedule. They were
+ * the same COLOUR as the canopy they hung in. The apple's unripe green was
+ * 0x7f9a4e against its own summer foliage of 0x4c7538 and spring of 0x86a84e,
+ * and it did not colour up until hour 14.5, by which point the leaves were
+ * turning too, so fruit and canopy changed together and the red arrived onto
+ * ochre.
+ *
+ * CALIBRATED AGAINST THE TWO THAT WORK rather than against a number somebody
+ * liked the look of. The cherry reads in frame and its worst moment measures
+ * 113, so 110 is the floor and every species is held to it across every hour
+ * it has fruit on the branch.
+ */
+
+/** Redmean colour distance. Cheap, and good enough to rank against a
+ *  reference that is known to read on a real screen. */
+function colourDistance(a, b) {
+    const rm = (a[0] + b[0]) / 2;
+    const dr = a[0] - b[0], dg = a[1] - b[1], db = a[2] - b[2];
+    return Math.sqrt((2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db);
+}
+
+const bytes = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+const blend = (a, b, t) => a.map((v, i) => v + (b[i] - v) * Math.max(0, Math.min(1, t)));
+
+/** What the canopy is wearing at an hour, the way the leaf shader mixes it. */
+function canopyColour(species, hour) {
+    const phen = phenologyAt(hour, !!species.evergreen);
+    const f = species.foliage;
+    let c = blend(bytes(f.summer), bytes(f.autumn), phen.color);
+    if (phen.color <= 0) c = blend(c, bytes(f.spring), 1 - phen.leaf);
+    return c;
+}
+
+/** The worst moment a species has, over every hour it carries fruit. */
+function worstContrast(id) {
+    const s = speciesById(id);
+    let worst = Infinity;
+    let at = 0;
+    for (let h = 0; h < 24; h += 0.05) {
+        const stage = fruitStageAt(h, s.schedule);
+        // Only while there is meaningfully fruit on the tree. A single fruit
+        // mid-drop is not what anybody is looking at.
+        if (stage.size * (1 - stage.drop) < 0.5) continue;
+        const fruit = blend(bytes(s.fruit.unripe), bytes(s.fruit.ripe), stage.ripe);
+        const d = colourDistance(fruit, canopyColour(s, h));
+        if (d < worst) { worst = d; at = h; }
+    }
+    return { worst, at };
+}
+
+test('no fruit is ever the same colour as the leaves around it', () => {
+    // The cherry is the calibration: it reads on a real screen and its worst
+    // moment is 113. Anything at or above that floor reads too.
+    const cherry = worstContrast('cherry');
+    expect(cherry.worst).toBeGreaterThan(110);
+
+    for (const id of ['apple', 'pear', 'orange', 'cherry']) {
+        const { worst, at } = worstContrast(id);
+        expect(`${id} worst ${Math.round(worst)} at hour ${at.toFixed(1)}`)
+            .toBe(worst >= 110 ? `${id} worst ${Math.round(worst)} at hour ${at.toFixed(1)}` : `${id} BLENDS INTO ITS OWN CANOPY`);
+    }
+});
+
+test('unripe fruit is a lighter, yellower green than the leaves, not a leaf green', () => {
+    // The specific mistake. An unripe apple that matches its own foliage is
+    // botanically defensible and completely invisible, and it is invisible for
+    // MOST of the fruit's life, because the green phase is the long one.
+    for (const id of ['apple', 'pear', 'orange']) {
+        const s = speciesById(id);
+        const unripe = bytes(s.fruit.unripe);
+        const summer = bytes(s.foliage.summer);
+        const spring = bytes(s.foliage.spring);
+        expect(colourDistance(unripe, summer)).toBeGreaterThan(110);
+        // Lighter than the canopy, which is what "unripe" looks like in life.
+        expect(unripe[0] + unripe[1] + unripe[2]).toBeGreaterThan(summer[0] + summer[1] + summer[2]);
+        // NOT asserted against the SPRING colour. The leaf shader only mixes
+        // spring in while the canopy is still expanding, weighted by how far
+        // short of full size the leaves are, and every one of these trees has
+        // full leaves long before it has fruit. The hour-by-hour sweep above is
+        // what covers the moments that actually happen.
+    }
+});
+
+test('the fruit colours up before the canopy turns, which is where the contrast is', () => {
+    // Fruit and leaves changing colour together is the worst possible timing
+    // and it is what shipped: apple ripened 14.5 to 17.5 against a leaf turn of
+    // 15 to 18. Real apples and pears come in before the leaves go.
+    const turnStart = GARDEN_CONFIG.season.phenology.turnStart;
+    for (const id of ['apple', 'pear', 'cherry']) {
+        const s = speciesById(id);
+        // Fully ripe while the canopy is still mostly green.
+        expect(phenologyAt(s.schedule.ripenEnd, false).color).toBeLessThan(0.25);
+        expect(s.schedule.ripenEnd).toBeLessThan(turnStart + 3);
+    }
+});
+
+test('the three deciduous fruit trees ripen in the right order', () => {
+    // Cherry in high summer, then pear, then apple. That is the real order and
+    // it is also three separate events rather than one, which is worth more in
+    // frame than any of them individually.
+    const at = (id) => speciesById(id).schedule.ripenEnd;
+    expect(at('cherry')).toBeLessThan(at('pear'));
+    expect(at('pear')).toBeLessThan(at('apple'));
 });

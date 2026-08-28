@@ -21,6 +21,7 @@
 import { seasonAt, hourAt } from './clock.min.js';
 import { SPECIES, SLIDERS, DEFAULT_CUSTOM, sliderWords, speciesById } from './species.min.js';
 import { healthBand, HEALTH_WORDS } from './garden.min.js';
+import { fruitStageAt, fruitWords } from './clock.min.js';
 
 let chipEl = null;
 let lastChip = '';
@@ -325,12 +326,46 @@ export function getPreviewCanvas() {
 
 // ---- The tree card ---------------------------------------------------------
 
-/** The card's lines. Pure, so the copy can be asserted. */
-export function cardLines(record, resolved, ageYears) {
+/**
+ * The card's lines. Pure, so the copy can be asserted.
+ *
+ * `context` carries what the card cannot work out from the record alone:
+ * `hour` for the blossom and fruit stage, and `falling` for the one line that
+ * explains why a tree is thirsty in the rain.
+ */
+export function cardLines(record, resolved, ageYears, context = {}) {
     const band = healthBand(record.health);
     const years = Math.floor(ageYears);
     const age = years < 1 ? 'Planted this year' : years === 1 ? 'One year old' : `${years} years old`;
     const moisture = Math.round(record.moisture * 100);
+    const thirst = moisture > 60 ? 'Well watered'
+        : moisture > 25 ? 'Getting thirsty'
+            : moisture > 0 ? 'Thirsty' : 'Bone dry';
+
+    // What the tree is DOING, in plain words, beside the health band it already
+    // names. Colour is never the only carrier of anything in this scene, so a
+    // visitor who cannot see an orange pixel is still told there is ripe fruit
+    // on the tree.
+    const stage = resolved.schedule && context.hour !== undefined
+        ? fruitStageAt(context.hour, resolved.schedule)
+        : null;
+    const doing = stage ? fruitWords(stage, !!resolved.fruit) : '';
+
+    // WHY A TREE CAN BE THIRSTY IN A DOWNPOUR, and it is true rather than an
+    // apology for the rule. A nursery tree stands in a root ball of imported
+    // compost that is drier and better drained than the ground around it, so
+    // rain runs off it and past it, which is why every nursery tells you to
+    // water a new tree by hand through its first summers whatever the weather
+    // does. Only shown when both halves are actually on screen.
+    const runoff = context.falling && moisture <= 25
+        ? 'Rain runs straight off a young tree\u2019s root ball, so it still wants watering by hand.'
+        : '';
+
+    const texts = [age, HEALTH_WORDS[band]];
+    if (doing) texts.push(doing);
+    texts.push(`${thirst}, ${moisture}%`);
+    if (runoff) texts.push(runoff);
+
     return {
         title: resolved.name,
         age,
@@ -339,45 +374,51 @@ export function cardLines(record, resolved, ageYears) {
         moisture,
         // Plain words alongside the bar, because a bar is a colour and colour
         // is never the only carrier.
-        thirst: moisture > 60 ? 'Well watered'
-            : moisture > 25 ? 'Getting thirsty'
-                : moisture > 0 ? 'Thirsty' : 'Bone dry'
+        thirst,
+        doing,
+        runoff,
+        texts
     };
 }
 
-export function openTreeCard(entry, ageYears) {
+export function openTreeCard(entry, ageYears, context = {}) {
     if (!cardEl || !entry) return;
     cardEntry = entry;
     returnFocus = document.activeElement;
-    const lines = cardLines(entry.record, entry.resolved, ageYears);
-
+    const lines = cardLines(entry.record, entry.resolved, ageYears, context);
     if (cardTitle) cardTitle.textContent = lines.title;
-    if (cardBody) {
+    writeCardBody(lines);
+    cardEl.classList.remove('hidden');
+    if (cardWater) cardWater.focus();
+}
+
+export function refreshTreeCard(ageYears, context = {}) {
+    if (!isCardOpen() || !cardEntry) return;
+    writeCardBody(cardLines(cardEntry.record, cardEntry.resolved, ageYears, context));
+}
+
+/**
+ * THE LINE COUNT VARIES NOW, WHICH THE OLD REFRESH COULD NOT HAVE SURVIVED. It
+ * wrote into the paragraphs that already existed and stopped at whichever list
+ * ran out first, which was correct only while the card had exactly three lines
+ * every time. A blossoming tree has four and a thirsty one in the rain has five,
+ * so the body is rebuilt when the count moves and written in place when it has
+ * not, which keeps the common path free of DOM churn.
+ */
+function writeCardBody(lines) {
+    if (!cardBody) return;
+    const texts = lines.texts;
+    if (cardBody.children.length !== texts.length) {
         cardBody.innerHTML = '';
-        for (const text of [lines.age, lines.health, `${lines.thirst}, ${lines.moisture}%`]) {
+        for (const text of texts) {
             const p = document.createElement('p');
             p.className = 'tree-line';
             p.textContent = text;
             cardBody.appendChild(p);
         }
-        cardBody.dataset.band = lines.band;
-    }
-    cardEl.classList.remove('hidden');
-    if (cardWater) cardWater.focus();
-}
-
-export function refreshTreeCard(ageYears) {
-    if (!isCardOpen() || !cardEntry) return;
-    openTreeCardBody(cardEntry, ageYears);
-}
-
-function openTreeCardBody(entry, ageYears) {
-    const lines = cardLines(entry.record, entry.resolved, ageYears);
-    if (!cardBody) return;
-    const paras = cardBody.children;
-    const texts = [lines.age, lines.health, `${lines.thirst}, ${lines.moisture}%`];
-    for (let i = 0; i < paras.length && i < texts.length; i++) {
-        paras[i].textContent = texts[i];
+    } else {
+        const paras = cardBody.children;
+        for (let i = 0; i < texts.length; i++) paras[i].textContent = texts[i];
     }
     cardBody.dataset.band = lines.band;
 }
