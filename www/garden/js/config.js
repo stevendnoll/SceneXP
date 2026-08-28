@@ -392,19 +392,32 @@ export const GARDEN_CONFIG = deepFreeze({
         // sapling that would otherwise look pasted onto a lawn, it carries the
         // water level, and above all IT IS THE TREE'S TAP TARGET.
         bed: {
-            // 1.1 m across against a 1.5 m planting grid, so two beds on
-            // adjacent cells leave 0.4 m of grass between them and can never
+            // 1.28 m across against a 1.5 m planting grid, so two beds on
+            // adjacent cells leave 0.22 m of grass between them and can never
             // overlap. That is what makes the tap unambiguous by construction
-            // rather than by tuning.
-            radius: 0.55,
+            // rather than by tuning, and the grid is also the ceiling on how
+            // wide a bed may get in the name of being seen.
+            radius: 0.64,
             taper: 0.86,        // top radius as a fraction of the bottom
             segments: 20,
             // The bed spans from `skirt` below the lowest ground it covers to
             // `lip` above the highest, so nothing buries and nothing floats.
             // Capped, or the steepest corner of the plot draws a pillar.
-            lip: 0.10,
+            // THE LIP IS THE ONLY PART OF A BED THAT IS NOT FORESHORTENED,
+            // and that is why it is this deep. The camera looks along the
+            // ground at about 17 degrees, so the top face of a bed at the back
+            // of the plot is FIVE PIXELS tall while a Coast Redwood's trunk is
+            // nine pixels wide straight through the middle of it: QA reported
+            // the mulch as missing, and the probe proved it was drawn, in the
+            // scene, visible, and simply too small to see. A vertical edge
+            // survives the view angle where a flat disc does not, so raising
+            // the lip buys more legibility than widening the bed ever could,
+            // and the grid caps the width anyway.
+            lip: 0.24,
             skirt: 0.06,
-            maxHeight: 0.60,
+            // Room for the lip on top of the worst slope the plot has, or the
+            // cap quietly eats the edge exactly where the ground is steepest.
+            maxHeight: 0.75,
             color: 0x4a3527,
             // How far toward the snow a covered bed goes. NOT ALL THE WAY: at
             // 1.0 it came out a flat uniform white against ground that carries

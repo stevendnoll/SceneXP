@@ -728,7 +728,12 @@ test('EVERY PLANTED TREE HAS A BED, through the real planting path', () => {
     // QA found trees standing with a water level and no mulch under them. The
     // level and the bed are two instanced meshes synced in one loop, so a
     // count that can differ between them is the whole question.
-    const cells = [[-4, 2], [-1, -3], [2, 1], [4, -2], [0, 4], [-3, 0]];
+    // FILL THE PLOT. Six trees was the old coverage here and six is not where
+    // a capacity bug lives.
+    const cells = [];
+    for (let gz = -3; gz <= 3 && cells.length < 40; gz++) {
+        for (let gx = -3; gx <= 3 && cells.length < 40; gx++) cells.push([gx, gz]);
+    }
     const seen = [];
     measureWood(() => {
         builtGarden.initGarden(recordingScene(), { mobile: false });
@@ -742,11 +747,85 @@ test('EVERY PLANTED TREE HAS A BED, through the real planting path', () => {
             });
         }
     });
+    // Planting stops at the plot's capacity, which is fine and expected. What
+    // is not fine is a bed count that stops somewhere else.
     for (const row of seen) {
-        expect(row.planted).toBe(true);
         expect(row.beds).toBe(row.trees);
         expect(row.levels).toBe(row.trees);
     }
-    expect(seen[seen.length - 1].trees).toBe(cells.length);
+    const full = seen[seen.length - 1];
+    expect(full.trees).toBe(GARDEN_CONFIG.plot.maxTrees);
+    expect(full.beds).toBe(GARDEN_CONFIG.plot.maxTrees);
+    builtGarden.disposeGarden();
+});
+
+test('A RESTORED GARDEN GETS ITS BEDS, not just a freshly planted one', () => {
+    // Restoring is a DIFFERENT PATH from planting, and until the pagehide
+    // data-loss bug was fixed it was barely reachable: every refresh wiped the
+    // garden, so nobody had ever come back to one. The first QA session after
+    // that fix reported trees standing with a water level and no mulch.
+    const records = [];
+    for (let i = 0; i < 9; i++) {
+        records.push({
+            id: `t${i}`, species: 'bur-oak', seed: 1234 + i,
+            gx: (i % 3) - 3, gz: Math.floor(i / 3) - 3,
+            custom: undefined, plantedAt: 0, growth: 0.44,
+            moisture: 1, health: 1, bud: 0, budActive: false, lastWateredAt: 0
+        });
+    }
+    let after;
+    measureWood(() => {
+        builtGarden.initGarden(recordingScene(), { mobile: false });
+        builtGarden.restoreTrees(records);
+        after = {
+            trees: builtGarden.getTrees().length,
+            beds: builtBeds.getBedMesh().count,
+            levels: builtBeds.getLevelMesh().count
+        };
+    });
+    expect(after.trees).toBe(records.length);
+    expect(after.beds).toBe(records.length);
+    expect(after.levels).toBe(records.length);
+    builtGarden.disposeGarden();
+});
+
+test('A BED SURVIVES REMOVING OTHER TREES AND PLANTING NEW ONES', () => {
+    // QA: "the issue happens with newly added trees", after removing a lot of
+    // others. Removal splices the middle out of the list and every bed after it
+    // shifts down an index, so plant-remove-plant is the sequence where a stale
+    // matrix or a stale count would show, and it is the one path never tested.
+    const seen = [];
+    measureWood(() => {
+        builtGarden.initGarden(recordingScene(), { mobile: false });
+        const plant = (gx, gz) => builtGarden.plantTree('bur-oak', undefined, gx, gz, 0, () => 0.5);
+        const snap = (label) => seen.push({
+            label,
+            trees: builtGarden.getTrees().length,
+            beds: builtBeds.getBedMesh().count,
+            levels: builtBeds.getLevelMesh().count
+        });
+
+        for (let i = -3; i <= 3; i++) plant(i, 0);
+        snap('seven planted');
+        // Take out the middle, the way a visitor clearing space does.
+        for (const gx of [-1, 0, 1]) {
+            const entry = builtGarden.getTrees().find((t) => t.record.gx === gx && t.record.gz === 0);
+            builtGarden.removeTree(entry);
+        }
+        snap('three removed');
+        for (let i = -2; i <= 2; i++) plant(i, 2);
+        snap('five more planted');
+        // And clear the lot, then start again.
+        builtGarden.clearGarden();
+        snap('cleared');
+        for (let i = -2; i <= 2; i++) plant(i, -2);
+        snap('replanted');
+    });
+
+    for (const row of seen) {
+        expect(`${row.label}: beds ${row.beds}`).toBe(`${row.label}: beds ${row.trees}`);
+        expect(`${row.label}: levels ${row.levels}`).toBe(`${row.label}: levels ${row.trees}`);
+    }
+    expect(seen.map((r) => r.trees)).toEqual([7, 4, 9, 0, 5]);
     builtGarden.disposeGarden();
 });

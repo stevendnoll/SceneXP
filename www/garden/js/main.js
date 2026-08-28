@@ -41,7 +41,7 @@ import { resolveSpecies } from './species.min.js';
 import {
     dollyView, applyDollyDelta, dollyLimits, getDolly, resetView
 } from './view.min.js';
-import { pickBase } from './beds.min.js';
+import { pickBase, getBedMesh, getLevelMesh, bedSpan } from './beds.min.js';
 import { createTree, updateTree, disposeTree } from './tree.min.js';
 import {
     initGarden, plantTree, restoreTrees, removeTree, clearGarden, waterTree,
@@ -185,6 +185,7 @@ async function init() {
         onReset: applyReset
     });
     setupEventListeners();
+    installDebugProbe();
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {
@@ -1026,6 +1027,94 @@ export function getClock() {
 }
 
 export function getWeather() { return weather; }
+
+// ---- A window onto the scene, for QA --------------------------------------
+
+/**
+ * `?debug=1` puts a small read-only probe on `window.__garden`.
+ *
+ * IT EXISTS BECAUSE THE HARNESS CANNOT SEE THE GPU. A whole afternoon went
+ * into a report of missing mulch beds: the instance counts, the matrices, the
+ * ground clearance, the shadow frustum and the wall's line of sight were all
+ * measured correct in Node, through planting, restoring, removing, clearing,
+ * replanting and a full plot, and the beds were still missing on screen. There
+ * was no way to ask the running page a single question, so every step was a
+ * guess. This is that missing question.
+ *
+ * Read-only, off unless asked for, and it holds nothing the page does not
+ * already have. `__garden.report()` prints a row per tree.
+ */
+function installDebugProbe() {
+    if (typeof window === 'undefined') return false;
+    const asked = /(^|[?&])debug(=|&|$)/.test(window.location.search || '');
+    if (!asked) return false;
+
+    window.__garden = {
+        counts() {
+            const bed = getBedMesh();
+            const level = getLevelMesh();
+            return {
+                trees: getTrees().length,
+                beds: bed ? bed.count : null,
+                levels: level ? level.count : null,
+                capacity: bed ? bed.instanceMatrix.count : null,
+                // Everything between "the data is right" and "it is on the
+                // screen". A mesh can be perfectly built, correctly counted
+                // and simply not in the scene, or hidden, or wearing a
+                // material that failed to compile, and none of those are
+                // visible from Node.
+                bedInScene: !!(bed && bed.parent),
+                bedVisible: !!(bed && bed.visible),
+                bedMaterialVisible: !!(bed && bed.material && bed.material.visible),
+                bedProgramFailed: !!(bed && bed.material && bed.material.program
+                    && bed.material.program.diagnostics
+                    && !bed.material.program.diagnostics.runnable),
+                levelInScene: !!(level && level.parent)
+            };
+        },
+        // Per tree: where its cell is, where the GROUND is there, where the
+        // bed's top ended up, and where the tree's own group actually sits.
+        // Those last two come from one `heightAt` call each and must agree: a
+        // trunk that ends in mid-air over the grass, which is what QA is
+        // seeing, means the tree and its bed have stopped agreeing about where
+        // the ground is, and this is the row that would say so.
+        bases: () => projectBases().map((b) => {
+            const r = b.entry.record;
+            const { x, z } = cellCenter(r.gx, r.gz);
+            const span = bedSpan(x, z);
+            const g = b.entry.tree && b.entry.tree.group;
+            return {
+                gx: r.gx, gz: r.gz, species: r.species,
+                groundY: +heightAt(x, z).toFixed(3),
+                bedTop: +span.top.toFixed(3),
+                bedBottom: +span.bottom.toFixed(3),
+                treeY: g && g.position ? +Number(g.position.y).toFixed(3) : null,
+                behind: !!b.behind,
+                screenX: b.x === undefined ? null : Math.round(b.x),
+                screenY: b.y === undefined ? null : Math.round(b.y),
+                radiusPx: b.radiusPx === undefined ? null : Math.round(b.radiusPx)
+            };
+        }),
+        report() {
+            const counts = this.counts();
+            console.log('[Garden] counts', counts);
+            if (counts.trees !== counts.beds) {
+                console.warn('[Garden] BED COUNT DOES NOT MATCH THE TREES.');
+            }
+            const rows = this.bases();
+            // The one comparison worth making automatically.
+            for (const row of rows) {
+                if (row.treeY !== null && Math.abs(row.treeY - row.groundY) > 0.01) {
+                    console.warn(`[Garden] tree ${row.gx},${row.gz} sits at ${row.treeY} but the ground there is ${row.groundY}`);
+                }
+            }
+            console.table(rows);
+            return counts;
+        }
+    };
+    console.log('[Garden] debug probe ready. Call __garden.report().');
+    return true;
+}
 
 // ---- Cleanup / state -------------------------------------------------------
 

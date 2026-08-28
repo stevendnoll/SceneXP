@@ -239,12 +239,19 @@ function buildBedMesh(config, capacity) {
         // batched and incrementally. A vertex injection into a shared three
         // chunk is the one thing here a green suite cannot check, so it is out
         // until there is a reason to want it back that is worth the risk.
-        shader.fragmentShader = `
+        // DECLARED THROUGH THE `#include <common>` SEAM, which is what
+        // terrain.js and tree.js both do. This material was the only one in
+        // the scene that PREPENDED its uniforms to the top of the shader
+        // instead, and it was the only one that did not draw. Whatever the
+        // mechanism, matching the two injections that demonstrably work is
+        // worth more than being clever about where a declaration goes.
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', `#include <common>
 uniform vec3 uMulch;
 uniform vec3 uSnowColor;
 uniform float uSnow;
-uniform float uSnowMix;
-` + shader.fragmentShader.replace('#include <map_fragment>', `
+uniform float uSnowMix;`)
+            .replace('#include <map_fragment>', `
     #include <map_fragment>
     // The bed takes the season the ground takes. A bed that stayed brown
     // through a covered winter would be the only bare earth in the frame.

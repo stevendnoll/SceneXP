@@ -716,3 +716,35 @@ test('the bed material names its own program cache key', () => {
     const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
     expect(beds).toMatch(/customProgramCacheKey = \(\) => 'garden-bed'/);
 });
+
+test('INJECTED UNIFORMS GO THROUGH THE `#include <common>` SEAM', () => {
+    // Every material in this scene that patches a three shader declares its
+    // uniforms by replacing `#include <common>`. One of them prepended them to
+    // the top of the shader source instead, and it was the only one in the
+    // scene that did not draw. The mechanism was never proven, so this pins
+    // the convention rather than a theory: match the injections that work.
+    //
+    // A green suite cannot tell a shader that compiles from one that does not,
+    // so consistency across the four is the only guard available here.
+    const offences = [];
+    for (const name of readdirSync(DIR)) {
+        if (!name.endsWith('.js') || name.endsWith('.min.js')) continue;
+        const src = readFileSync(join(DIR, name), 'utf8');
+        if (!src.includes('onBeforeCompile')) continue;
+        // A prepend looks like: shader.fragmentShader = `...` + shader.fragmentShader
+        if (/shader\.(fragment|vertex)Shader\s*=\s*`[^`]*`\s*\+\s*shader\./.test(src)) {
+            offences.push(`${name} prepends to a three shader instead of using the include seam`);
+        }
+    }
+    expect(offences).toEqual([]);
+
+    // And the seam really is in use, so this cannot pass by finding nothing.
+    const patched = readdirSync(DIR)
+        .filter((n) => n.endsWith('.js') && !n.endsWith('.min.js'))
+        .map((n) => readFileSync(join(DIR, n), 'utf8'))
+        .filter((src) => src.includes('onBeforeCompile'));
+    expect(patched.length).toBeGreaterThanOrEqual(3);
+    for (const src of patched) {
+        expect(src).toMatch(/replace\('#include <(common|map_fragment|begin_vertex)>'/);
+    }
+});

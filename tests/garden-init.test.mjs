@@ -768,3 +768,44 @@ test('the shared part is handed the aim the dolly moves, not the frozen config',
     // config's, so writing to it can never mutate the config.
     expect(main.__test__.viewTarget()).not.toBe(GARDEN_CONFIG.camera.lookAt);
 });
+
+// ---- The QA probe ----------------------------------------------------------
+
+test('the debug probe is OFF unless it is asked for', async () => {
+    // It is a diagnostic, not a feature. A visitor who never types ?debug must
+    // never get a global, and the production page must not carry one.
+    await bootGarden();
+    expect(globalThis.window.__garden).toBeUndefined();
+});
+
+test('?debug=1 answers the question the harness cannot', async () => {
+    dom.windowStub.location.search = '?debug=1';
+    const main = await bootGarden();
+    const ui = await import('../www/garden/js/ui.min.js');
+    beginTending();
+
+    const probe = globalThis.window.__garden;
+    expect(probe).toBeDefined();
+    expect(probe.counts().trees).toBe(0);
+
+    ui.openPlantModal({ full: false });
+    fire(dom.el('plant-confirm'), 'click');
+    stepFrames(5);
+
+    const counts = probe.counts();
+    expect(counts.trees).toBe(1);
+    // `beds`, `levels` and `capacity` come off an InstancedMesh, which under
+    // the shared stub is a proxy holding no numbers, so all this can say here
+    // is that the probe REACHES them. Their values are asserted against real
+    // instanced meshes in garden-scene.test.mjs, which is the only place they
+    // are numbers at all.
+    expect(counts).toHaveProperty('beds');
+    expect(counts).toHaveProperty('levels');
+    expect(counts).toHaveProperty('capacity');
+
+    // And it names the tree, so a row on screen can be matched to a record.
+    const bases = probe.bases();
+    expect(bases).toHaveLength(1);
+    expect(bases[0]).toHaveProperty('gx');
+    expect(bases[0]).toHaveProperty('species');
+});

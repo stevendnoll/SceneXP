@@ -70,6 +70,40 @@ test('a bed big enough to tap at the back would swallow its neighbours', () => {
     expect(B.radius * 2).toBeLessThan(spacing);
 });
 
+test('A BED IS BIG ENOUGH TO SEE AT THE BACK OF THE PLOT', () => {
+    // The bug that took a whole afternoon: QA reported missing mulch, and the
+    // beds were in the scene, visible, counted, correctly placed, on a shader
+    // that compiled. They were 22 x 5 px, with a Coast Redwood's 9 px trunk
+    // straight through the middle. Drawn is not the same as seen, and nothing
+    // in the suite had ever asked how big the thing lands.
+    //
+    // THE LIP IS WHAT CARRIES THIS. A flat disc is foreshortened by the
+    // camera's ~17 degrees and a vertical edge is not, so the edge is worth
+    // more than the width, and the width is capped by the planting grid.
+    const half = GARDEN_CONFIG.plot.halfSize;
+    const worst = projectedBed(-half, B.radius, 640);
+    const lipPx = (B.lip / Math.hypot(CAM.position.y, CAM.position.z + half)) * (640 / (CAM.fov * Math.PI / 180));
+
+    expect(worst.width).toBeGreaterThan(20);
+    // Top face plus the edge below it: the whole silhouette, on a small window.
+    expect(worst.height + lipPx).toBeGreaterThan(8);
+    // The trunk of the largest species covers the middle, so what has to
+    // survive is what is left either side of it.
+    const trunk = 2 * GARDEN_CONFIG.plot.maxTreeHeight * GARDEN_CONFIG.tree.trunkRadiusRatio;
+    expect(worst.width - (trunk / (2 * B.radius)) * worst.width).toBeGreaterThan(8);
+});
+
+test('and it still cannot touch its neighbour', () => {
+    // The grid is the ceiling on making a bed easier to see. Two beds on
+    // adjacent cells must leave grass between them, or the tap stops being
+    // unambiguous by construction, which is the whole reason the bed exists.
+    expect(2 * B.radius).toBeLessThan(GARDEN_CONFIG.plot.gridSpacing);
+    expect(GARDEN_CONFIG.plot.gridSpacing - 2 * B.radius).toBeGreaterThan(0.15);
+    // And the height cap must leave room for the lip on the steepest ground,
+    // or the cap quietly eats the edge exactly where the relief is worst.
+    expect(B.maxHeight).toBeGreaterThan(B.lip + B.skirt + 0.36);
+});
+
 // ---- The bed sits on rolling ground ----------------------------------------
 
 test('NO BED BURIES ITS DOWNHILL EDGE OR FLOATS ON ITS UPHILL ONE', () => {
