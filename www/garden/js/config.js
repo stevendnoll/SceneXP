@@ -462,12 +462,30 @@ export const GARDEN_CONFIG = deepFreeze({
             // collide.
             levelWidth: 0.44,
             levelHeight: 0.10,
-            minLevelPx: 7,
+            minLevelPx: 8,
             levelLift: 0.05,
-            levelOpacity: 0.92,
-            levelTrackColor: 0x1e2a30,
-            levelFullColor: 0x6fb3d4,
-            levelEmptyColor: 0xd9a05b,
+            levelOpacity: 0.95,
+            // MEASURED IN SHOWN LUMINANCE, against the two things the gauge
+            // ever lies on: mulch (0.125) and snow (0.822). The first version
+            // put the track at 1.53:1 against mulch and the fill at 1.32:1
+            // against snow, so on a bed you could see the water and not the
+            // tank, and in winter the other way round. A MID-VALUE TRACK reads
+            // on both (2.13:1 and 2.34:1) and gives the best internal reading,
+            // which is the one that matters: fill against track is 2.05:1, and
+            // that IS the gauge.
+            levelTrackColor: 0x59666d,
+            // The blue the thirst droplet used to be, which this replaced.
+            levelFullColor: 0x8fd3f4,
+            levelEmptyColor: 0xf0a63c,
+            // A rim, worth more than any colour at 35 x 8 px: 2.71:1 against
+            // mulch and 13.5:1 against snow, so the gauge has a silhouette
+            // whatever it is standing on.
+            levelBorderColor: 0x0d1418,
+            levelBorder: 0.18,
+            // How visible a FULL tank is, as a fraction of the empty one. It
+            // was 0.35, which is where "quiet when full" tipped over into
+            // "cannot be read at all". Urgency is carried by the colour now.
+            levelQuiet: 0.82,
             // QUIET WHEN FULL. Addendum B took everything out of this frame
             // that competed with the swaying, and this milestone puts sixteen
             // small readouts back in. A level stays nearly transparent until
@@ -1128,6 +1146,43 @@ export const GARDEN_CONFIG = deepFreeze({
         // rather than as facets at this camera distance.
         segments: 96,
         segmentsMobile: 64,
+
+        // ---- How much the plot rolls -----------------------------------------
+        // 0 LEVELS THE NURSERY, which is where this sits now. The relief was
+        // always deliberate (it damps to exactly zero at the boundary so the
+        // 24 m plot and the flat surround meet with no seam), and it measured
+        // -0.67 m to +0.86 m with a steepest slope of 17.7 degrees. What QA
+        // pointed out is that a cultivated planting bed is a LEVELLED thing,
+        // and the hills and valleys read as unworked ground rather than as a
+        // nursery. Levelling also means no planting row is on a slope and
+        // every mulch bed sits the same way on the same ground.
+        //
+        // A scale rather than a switch, so the rolling plot is one number
+        // away. The seam holds at any value: at 0 it is 0 = 0, and otherwise
+        // the edge damp is untouched. The meadow beyond the wall still rolls,
+        // because that is `outerWavesAt` and a meadow is not cultivated.
+        reliefScale: 0,
+
+        // How far the meadow sits below the plot where they meet, in metres.
+        //
+        // THIS NUMBER AND `reliefScale` ARE COUPLED, and not noticing that cost
+        // a long day of QA. The meadow is ONE 360 m plane covering the whole
+        // world, the plot included, and `outerReliefAt` is zero inside the
+        // plot, so there is an opaque green surface at -0.01 stretched right
+        // across the nursery. That is correct where the two MEET, because the
+        // edge damp puts the plot at exactly 0 there. It is wrong everywhere
+        // the plot's interior dips BELOW it: at `reliefScale` 1 the relief ran
+        // -0.67 to +0.86, so 55 of the 169 plantable cells sat under the
+        // meadow, and the ground, the mulch beds and the bottoms of the trunks
+        // standing on them were all hidden behind it. It reported as "the
+        // mulch rings are missing in an L from the back left corner", which is
+        // exactly the shape of the region where the relief goes negative.
+        //
+        // A levelled nursery makes the coupling moot: the plot sits at 0, a
+        // centimetre proud of the meadow, everywhere. Raising `reliefScale`
+        // again means giving the meadow a hole rather than a plane. There is a
+        // test below that fails the moment the two disagree.
+        meadowDrop: 0.01,
 
         // THE UNDULATION, as a sum of three plane waves. Sines because the
         // whole point is a function that is cheap, smooth, and above all

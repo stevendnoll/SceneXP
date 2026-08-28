@@ -699,15 +699,24 @@ test('THE WATER LEVEL IS UNLIT, or it vanishes exactly when it is needed', () =>
     expect(body).toMatch(/fog: false/);
 });
 
-test('the level is quiet when full, in the shader as well as the rule', () => {
-    // `levelUrgency` decides how loud, and the fragment has to actually spend
-    // it. A shader that ignored it would put sixteen bright bars in a frame
-    // that Addendum B cleared on purpose.
+test('URGENCY IS CARRIED BY COLOUR, and the gauge stays readable either way', () => {
+    // The first version faded the whole gauge to 32 percent when the tank was
+    // full, which kept a healthy garden calm and also made it unreadable: QA
+    // could not see the indicator at all. Urgency still has to reach the
+    // fragment, but through the colour, with visibility kept high in both
+    // states.
     const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
     const frag = beds.slice(beds.indexOf('const LEVEL_FRAG'));
     const body = frag.slice(0, frag.indexOf('`;'));
-    expect(body).toMatch(/alpha = uOpacity \* \(0\.35 \+ 0\.65 \* vBedUrgency\)/);
+    expect(body).toMatch(/mix\(uFull, uEmpty, vBedUrgency\)/);
     expect(body).toMatch(/step\(vBedUv\.x, vBedFill\)/);
+    // A rim, which is what a 35 x 8 px readout needs most.
+    expect(body).toMatch(/bedShown = mix\(bedShown, uBorderColor, bedRim\)/);
+
+    // And a full tank is still visible: the quiet floor is a dimming, not a
+    // disappearance.
+    expect(GARDEN_CONFIG.garden.bed.levelQuiet).toBeGreaterThan(0.7);
+    expect(GARDEN_CONFIG.garden.bed.levelQuiet).toBeLessThan(1);
 });
 
 test('the bed material names its own program cache key', () => {

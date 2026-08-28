@@ -44,15 +44,30 @@ export function edgeDamp(x, z, terrain = GARDEN_CONFIG.terrain, plot = GARDEN_CO
     return 1 - t * t * (3 - 2 * t);
 }
 
-/** The ground height at a point, in metres. Zero at and beyond the plot edge. */
+/**
+ * The ground height at a point, in metres. Zero at and beyond the plot edge.
+ *
+ * `terrain.reliefScale` multiplies the whole thing, and 0 LEVELS THE PLOT. A
+ * nursery bed is a cultivated thing and a cultivated thing is levelled, so a
+ * flat plot is the honest look as well as the simpler one: no planting row
+ * ends up on a slope, every mulch bed sits the same way, and the wall (which
+ * already stands on a boundary damped to exactly zero) reads as level all the
+ * way round, which is what a walled garden looks like.
+ *
+ * It scales rather than switches so the rolling ground is one number away, and
+ * the edge damp is left in the expression either way: at scale 0 the seam is
+ * 0 = 0, and at any other scale it is the original guarantee.
+ */
 export function heightAt(x, z, terrain = GARDEN_CONFIG.terrain, plot = GARDEN_CONFIG.plot) {
+    const scale = terrain.reliefScale === undefined ? 1 : terrain.reliefScale;
+    if (scale === 0) return 0;
     const damp = edgeDamp(x, z, terrain, plot);
     if (damp <= 0) return 0;
     let h = 0;
     for (const w of terrain.relief) {
         h += w.amp * Math.sin(x * w.fx + z * w.fz + w.phase);
     }
-    return h * damp;
+    return h * damp * scale;
 }
 
 /**
@@ -461,8 +476,10 @@ export function initTerrain(scene, config = GARDEN_CONFIG, options = {}) {
     surroundMesh = new THREE.Mesh(surroundGeo, groundMaterial);
     surroundMesh.name = 'meadow';
     // A hair below the plot, so the two never fight for the same pixel where
-    // they meet.
-    surroundMesh.position.y = -0.01;
+    // they meet. THE PLOT MUST NEVER DIP BELOW THIS: the meadow is one plane
+    // across the whole world, the nursery included, so anything under it is
+    // behind it. See config.terrain.meadowDrop.
+    surroundMesh.position.y = -config.terrain.meadowDrop;
     surroundMesh.receiveShadow = false;
     scene.add(surroundMesh);
 

@@ -61,21 +61,57 @@ test('the ground is the same ground on every visit', () => {
     const first = samples.map(([x, z]) => heightAt(x, z));
     const second = samples.map(([x, z]) => heightAt(x, z));
     expect(second).toEqual(first);
-    expect(first.some((h) => h !== 0)).toBe(true);
+    // The relief itself is still deterministic whatever the plot is scaled to,
+    // which is the property this test is actually about. The nursery ships
+    // LEVELLED (terrain.reliefScale 0), so the shape is exercised through a
+    // rolling copy rather than through whatever the current setting happens
+    // to be.
+    const rolling = { ...GARDEN_CONFIG.terrain, reliefScale: 1 };
+    const rolled = samples.map(([x, z]) => heightAt(x, z, rolling));
+    expect(samples.map(([x, z]) => heightAt(x, z, rolling))).toEqual(rolled);
+    expect(rolled.some((h) => h !== 0)).toBe(true);
+});
+
+test('THE NURSERY IS LEVEL, and the seam still holds', () => {
+    // A cultivated planting bed is a levelled thing. What matters is that
+    // levelling does not disturb the seam the whole terrain is built around:
+    // the plot and the world beyond it still meet at exactly zero, because at
+    // scale 0 that meeting is 0 = 0.
+    expect(GARDEN_CONFIG.terrain.reliefScale).toBe(0);
+    for (let x = -HALF; x <= HALF; x += 0.5) {
+        for (let z = -HALF; z <= HALF; z += 0.5) {
+            expect(heightAt(x, z)).toBe(0);
+        }
+    }
+    // And it is a SCALE rather than a switch, so it has to scale. 0 and 1 both
+    // work through short circuits and a no-op multiply, so only a fractional
+    // value proves the multiply is doing anything: without it, asking for half
+    // the relief would quietly hand back all of it.
+    const rolling = { ...GARDEN_CONFIG.terrain, reliefScale: 1 };
+    const half = { ...GARDEN_CONFIG.terrain, reliefScale: 0.5 };
+    expect(heightAt(0, 0, rolling)).not.toBe(0);
+    expect(heightAt(HALF, 0, rolling)).toBe(0);
+    for (const [x, z] of [[3, 4], [-7, 2], [1.5, -6]]) {
+        expect(heightAt(x, z, half)).toBeCloseTo(heightAt(x, z, rolling) * 0.5, 9);
+    }
 });
 
 test('the relief rolls without becoming a hillside', () => {
+    const rolling = { ...GARDEN_CONFIG.terrain, reliefScale: 1 };
     let min = Infinity, max = -Infinity, steepest = 0;
     for (let x = -HALF; x <= HALF; x += 0.25) {
         for (let z = -HALF; z <= HALF; z += 0.25) {
-            const h = heightAt(x, z);
+            const h = heightAt(x, z, rolling);
             if (h < min) min = h;
             if (h > max) max = h;
-            const s = slopeAt(x, z);
+            const s = slopeAt(x, z, rolling);
             if (s > steepest) steepest = s;
         }
     }
-    // Enough to read as ground rather than as a table top.
+    // Enough to read as ground rather than as a table top. Measured on a
+    // ROLLING copy, so the relief's shape stays guaranteed even while the
+    // nursery ships levelled: turning the plot back on must not produce
+    // ground that is flat, or a hillside.
     expect(max - min).toBeGreaterThan(0.8);
     // And gentle enough that a tree stands on it rather than leaning off it.
     expect(max - min).toBeLessThan(2.5);
@@ -203,4 +239,35 @@ test('the grass colour wraps through midnight without a jump', () => {
         const b = (after >> shift) & 0xff;
         expect(Math.abs(a - b)).toBeLessThan(3);
     }
+});
+
+test('THE PLOT NEVER DIPS BELOW THE MEADOW PLANE', () => {
+    // The meadow is ONE plane across the whole world, the nursery included,
+    // sitting `meadowDrop` below where the two meet. So anything in the plot
+    // that sits under it is BEHIND it, and that is not a subtle artefact: it
+    // hides the ground, the mulch beds, and the bottoms of the trunks standing
+    // on them. At the old `reliefScale` of 1 it swallowed 55 of the 169
+    // plantable cells in an L from the back-left corner, and it took a long
+    // day of QA to find, because every one of those things measured correct.
+    const drop = -GARDEN_CONFIG.terrain.meadowDrop;
+    let lowest = Infinity;
+    for (let x = -HALF; x <= HALF; x += 0.25) {
+        for (let z = -HALF; z <= HALF; z += 0.25) {
+            lowest = Math.min(lowest, heightAt(x, z));
+        }
+    }
+    expect(lowest).toBeGreaterThanOrEqual(drop);
+
+    // And the trap this guards: turning the relief back on reintroduces it,
+    // so raising reliefScale means giving the meadow a hole rather than a
+    // plane. Asserted so the failure names the reason rather than arriving as
+    // "the mulch went missing" six rounds into a QA pass.
+    const rolling = { ...GARDEN_CONFIG.terrain, reliefScale: 1 };
+    let rollingLowest = Infinity;
+    for (let x = -HALF; x <= HALF; x += 0.5) {
+        for (let z = -HALF; z <= HALF; z += 0.5) {
+            rollingLowest = Math.min(rollingLowest, heightAt(x, z, rolling));
+        }
+    }
+    expect(rollingLowest).toBeLessThan(drop);
 });

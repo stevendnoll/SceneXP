@@ -12,7 +12,7 @@ import { GARDEN_CONFIG } from '../www/garden/js/config.js';
 import {
     groundUnderBed, bedSpan, bedPickRadius, pickBase, levelFill, levelUrgency
 } from '../www/garden/js/beds.js';
-import { cellCenter, cellInPlot } from '../www/garden/js/terrain.js';
+import { cellCenter, cellInPlot, heightAt } from '../www/garden/js/terrain.js';
 import { plantingGrowth, currentHeight, createRecord } from '../www/garden/js/garden.js';
 import { SPECIES, speciesById } from '../www/garden/js/species.js';
 
@@ -132,14 +132,34 @@ test('NO BED BURIES ITS DOWNHILL EDGE OR FLOATS ON ITS UPHILL ONE', () => {
 });
 
 test('the ground sample looks at the rim, not just the middle', () => {
-    // A version that read `heightAt` at the centre alone would pass the span
-    // tests on flat ground and bury every bed on a slope.
+    // The nursery ships LEVELLED, so on the shipped config every rim sample
+    // equals the centre and this rule costs nothing. It has to keep working
+    // if the plot is ever rolled again, which is one config number away, so
+    // the claim is made against rolling ground: across a bed's footprint the
+    // rim genuinely differs from the middle, which is why `groundUnderBed`
+    // samples the rim at all.
+    const rolling = { ...GARDEN_CONFIG.terrain, reliefScale: 1 };
     const cells = plantableCells();
     const varied = cells.filter(({ x, z }) => {
-        const g = groundUnderBed(x, z, B.radius);
-        return g.high - g.low > 0.02;
+        let low = heightAt(x, z, rolling);
+        let high = low;
+        for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const h = heightAt(x + Math.cos(a) * B.radius, z + Math.sin(a) * B.radius, rolling);
+            low = Math.min(low, h);
+            high = Math.max(high, h);
+        }
+        return high - low > 0.02;
     });
     expect(varied.length).toBeGreaterThan(cells.length / 2);
+
+    // And on the levelled plot every bed is identical bar its x and z, which
+    // is the point of levelling: one shape, one height, everywhere.
+    const spans = plantableCells().map(({ x, z }) => bedSpan(x, z));
+    for (const s of spans) {
+        expect(s.top).toBeCloseTo(spans[0].top, 9);
+        expect(s.height).toBeCloseTo(spans[0].height, 9);
+    }
 });
 
 // ---- Picking ---------------------------------------------------------------

@@ -1095,6 +1095,29 @@ function installDebugProbe() {
                 radiusPx: b.radiusPx === undefined ? null : Math.round(b.radiusPx)
             };
         }),
+        // WHAT IS ACTUALLY IN THE INSTANCE BUFFER, read straight back out of
+        // the typed array the GPU is handed. Everything upstream of this has
+        // measured correct for days: the counts, the spans, the positions the
+        // code intends. This is the one link never inspected, and if index 0
+        // draws while 1 and 2 do not, this is where it will show.
+        matrices() {
+            const bed = getBedMesh();
+            if (!bed) return [];
+            const a = bed.instanceMatrix.array;
+            const rows = [];
+            for (let i = 0; i < bed.count; i++) {
+                const o = i * 16;
+                rows.push({
+                    i,
+                    x: +a[o + 12].toFixed(3), y: +a[o + 13].toFixed(3), z: +a[o + 14].toFixed(3),
+                    scaleX: +Math.hypot(a[o], a[o + 1], a[o + 2]).toFixed(3),
+                    scaleY: +Math.hypot(a[o + 4], a[o + 5], a[o + 6]).toFixed(3),
+                    scaleZ: +Math.hypot(a[o + 8], a[o + 9], a[o + 10]).toFixed(3),
+                    w: +a[o + 15].toFixed(3)
+                });
+            }
+            return rows;
+        },
         report() {
             const counts = this.counts();
             console.log('[Garden] counts', counts);
@@ -1109,6 +1132,8 @@ function installDebugProbe() {
                 }
             }
             console.table(rows);
+            console.log('[Garden] instance buffer as the GPU sees it:');
+            console.table(this.matrices());
             return counts;
         }
     };

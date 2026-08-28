@@ -189,19 +189,34 @@ const LEVEL_FRAG = `
 uniform vec3 uEmpty;
 uniform vec3 uFull;
 uniform vec3 uTrack;
+uniform vec3 uBorderColor;
 uniform float uOpacity;
+uniform float uQuiet;
+uniform float uBorder;
+uniform float uAspect;
 varying vec2 vBedUv;
 varying float vBedFill;
 varying float vBedUrgency;
 void main() {
+    // A DARK RIM, because at 35 x 8 px an edge is worth more than any colour.
+    // The measured problem was that the track sat at 1.53:1 against the mulch
+    // it lies on and the fill at 1.32:1 against snow, so on a bed you could
+    // see the water and not the tank, and in winter the other way round. A rim
+    // gives the whole gauge a silhouette on both. The x distance is scaled by
+    // the aspect so the border is even in world units rather than in uv.
+    float bedRim = 1.0 - step(uBorder,
+        min(min(vBedUv.x, 1.0 - vBedUv.x) * uAspect, min(vBedUv.y, 1.0 - vBedUv.y)));
     // uv.x runs 0 to 1 across the bar. Everything left of the fill is water.
-    float wet = step(vBedUv.x, vBedFill);
-    vec3 water = mix(uFull, uEmpty, vBedUrgency);
-    vec3 shown = mix(uTrack, water, wet);
-    // A full tank is nearly transparent and an empty one is plain. Sixteen
-    // healthy trees must not read as sixteen warnings.
-    float alpha = uOpacity * (0.35 + 0.65 * vBedUrgency);
-    gl_FragColor = vec4(shown, alpha);
+    float bedWet = step(vBedUv.x, vBedFill);
+    vec3 bedWater = mix(uFull, uEmpty, vBedUrgency);
+    vec3 bedShown = mix(uTrack, bedWater, bedWet);
+    bedShown = mix(bedShown, uBorderColor, bedRim);
+    // URGENCY IS CARRIED BY COLOUR, NOT BY VISIBILITY. It used to fade the
+    // whole gauge to 32 percent when the tank was full, which kept a healthy
+    // garden calm and also made it unreadable. Blue to amber says the same
+    // thing and can be seen while it says it.
+    float bedAlpha = uOpacity * (uQuiet + (1.0 - uQuiet) * vBedUrgency);
+    gl_FragColor = vec4(bedShown, bedAlpha);
 }
 `;
 
@@ -299,6 +314,10 @@ function buildLevelMesh(config, capacity) {
         uFull: { value: new THREE.Vector3() },
         uTrack: { value: new THREE.Vector3() },
         uOpacity: { value: B.levelOpacity },
+        uQuiet: { value: B.levelQuiet },
+        uBorder: { value: B.levelBorder },
+        uAspect: { value: B.levelWidth / B.levelHeight },
+        uBorderColor: { value: new THREE.Vector3() },
         // Pixels per radian of vertical field, which is the one number that
         // turns a world size into a screen size. It moves with the viewport
         // and with the orientation's composed FOV, so it is published every
@@ -310,6 +329,7 @@ function buildLevelMesh(config, capacity) {
     setVec(uniforms.uEmpty.value, B.levelEmptyColor);
     setVec(uniforms.uFull.value, B.levelFullColor);
     setVec(uniforms.uTrack.value, B.levelTrackColor);
+    setVec(uniforms.uBorderColor.value, B.levelBorderColor);
 
     const material = new THREE.ShaderMaterial({
         vertexShader: LEVEL_VERT,
