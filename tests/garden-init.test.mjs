@@ -815,3 +815,148 @@ test('?debug=1 answers the question the harness cannot', async () => {
     expect(bases[0]).toHaveProperty('gx');
     expect(bases[0]).toHaveProperty('species');
 });
+
+// ---- Somebody arriving with no idea what to do (M15) -----------------------
+
+/**
+ * WHAT A NEWCOMER ACTUALLY FACES.
+ *
+ * Everything this scene explains about itself is on the welcome card, and the
+ * card was dismissible with no way back. A visitor who clicked through it
+ * before reading, which is what people do with a splash screen, was left in a
+ * field with no idea that the field was the thing to touch.
+ */
+/**
+ * Put the classes on the modals that the SHIPPED MARKUP has.
+ *
+ * The DOM stub invents an element for any id asked of it, with an EMPTY
+ * classList, and never reads index.html. So `!classList.contains('hidden')` is
+ * true by default and every modal reads as OPEN, which makes `anyModalOpen()`
+ * true and silently suppresses anything guarded by it. That is the same trap
+ * recorded against this harness before: an assertion that depends on state the
+ * stub invents is testing the stub.
+ */
+function asShipped() {
+    for (const id of ['plant-modal', 'tree-card', 'reset-modal']) {
+        dom.el(id).classList.add('hidden');
+    }
+}
+
+describe('the first visit', () => {
+    test('THE INSTRUCTIONS CAN BE REACHED AGAIN', async () => {
+        await bootGarden();
+        beginTending();
+        const blocker = dom.el('blocker');
+
+        fire(dom.el('help-btn'), 'click');
+        expect(blocker.classList.contains('hidden')).toBe(false);
+        // And it is the SAME CARD, so its text cannot drift from a second copy.
+        // The prompt is the one thing that changes: "begin" is the wrong word
+        // for somebody who already has a garden behind it.
+        expect(dom.el('begin-prompt').textContent).toMatch(/return to your garden/i);
+
+        // Escape closes it, because it is a panel now and that is what closes a
+        // panel. Enter and Space still work, as they always did.
+        fire(document, 'keydown', { code: 'Escape' });
+        expect(blocker.classList.contains('hidden')).toBe(true);
+    });
+
+    test('NOTHING IN THE CORNER IS OFFERED WHILE THE CARD IS UP', async () => {
+        // `.menu-btn` is z-index 110 against the blocker's 100, so these draw
+        // OVER the welcome card and sit in its tab order. Help there is a
+        // button whose whole purpose is to summon the card already filling the
+        // screen, and reset is a destructive one offered before the visitor has
+        // seen the garden.
+        await bootGarden();
+        expect(dom.el('help-btn').hidden).toBe(true);
+        expect(dom.el('reset-btn').hidden).toBe(true);
+
+        // HOME STAYS, and that is not an oversight: it is the way off the page,
+        // it works from the card, and it is the target of the "Skip to home
+        // link" that opens the document. Hiding it would break the skip link
+        // for exactly the visitors it exists for.
+        expect(dom.el('home-btn').hidden).toBe(false);
+
+        beginTending();
+        expect(dom.el('help-btn').hidden).toBe(false);
+        expect(dom.el('reset-btn').hidden).toBe(false);
+
+        // And they go away again every time the card comes back, not just on
+        // the first arrival.
+        fire(dom.el('help-btn'), 'click');
+        expect(dom.el('help-btn').hidden).toBe(true);
+        expect(dom.el('reset-btn').hidden).toBe(true);
+        fire(document, 'keydown', { code: 'Escape' });
+        expect(dom.el('help-btn').hidden).toBe(false);
+    });
+
+    test('and the sheet actually hides them, which the stub cannot tell us', () => {
+        // The DOM stub has no stylesheet, so setting `hidden` succeeds whether
+        // or not a rule exists. `.ui-float.visible` sets `display: flex`, which
+        // beats the attribute's UA default, so without this rule the buttons
+        // would stay on screen and only leave the tab order.
+        const css = readFileSync(
+            join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+        expect(css).toMatch(/\.menu-btn\[hidden\]\s*\{[^}]*display:\s*none/);
+    });
+
+    test('the garden does not age while the card is being read', async () => {
+        const main = await bootGarden();
+        beginTending();
+        stepFrames(30, 50);
+        const aged = main.__test__.state.elapsedSeconds;
+        expect(aged).toBeGreaterThan(0);
+
+        fire(dom.el('help-btn'), 'click');
+        stepFrames(60, 50);
+        // THE CALENDAR IS HELD BEHIND THE CARD, which is what makes the help
+        // button safe to press: reading the rules must not cost a season.
+        expect(main.__test__.state.elapsedSeconds).toBeCloseTo(aged, 6);
+
+        fire(dom.el('blocker'), 'click');
+        stepFrames(10, 50);
+        expect(main.__test__.state.elapsedSeconds).toBeGreaterThan(aged);
+    });
+
+    test('AN EMPTY PLOT KEEPS ASKING, and stops the moment it is planted', async () => {
+        // The first version was one toast, 2.2 s after the card went and gone
+        // 4.2 s later. A visitor still looking at the mountains when it arrived
+        // never saw it, and nothing on screen suggested the grass was the thing
+        // to touch. That is exactly the visitor this is for.
+        await bootGarden();
+        asShipped();
+        beginTending();
+        const toastEl = dom.el('garden-toast');
+
+        await jest.advanceTimersByTimeAsync(2500);
+        const first = toastEl.textContent;
+        expect(first).toMatch(/plant your first tree/i);
+
+        // It asks again later, and NOT with the same sentence: a line repeated
+        // word for word reads as a stuck screen rather than as a hint.
+        await jest.advanceTimersByTimeAsync(15000);
+        expect(toastEl.textContent).not.toBe(first);
+        // And the second one names the clock, which is the fact a newcomer is
+        // most missing. Nothing else on screen says a day is a year.
+        expect(toastEl.textContent).toMatch(/year/i);
+
+        // It gives up rather than nagging forever.
+        await jest.advanceTimersByTimeAsync(15000);
+        const third = toastEl.textContent;
+        await jest.advanceTimersByTimeAsync(60000);
+        expect(toastEl.textContent).toBe(third);
+    });
+
+    test('and the welcome card itself says what a year is', async () => {
+        // The toasts are the backstop. The card is where somebody who reads
+        // gets it, and it had no line about the clock at all: the season chip
+        // reads "Spring, year 3" and means nothing until a year is explained.
+        const html = readFileSync(
+            join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8');
+        const card = html.slice(html.indexOf('controls-hint'));
+        const list = card.slice(0, card.indexOf('</ul>'));
+        expect(list).toMatch(/day and night is a year/i);
+        // And the LOOK line has to describe the keys the part actually has now.
+        expect(list).toMatch(/plus and minus/i);
+    });
+});

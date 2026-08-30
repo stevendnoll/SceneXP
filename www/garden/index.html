@@ -144,25 +144,30 @@
          behind it, so this sits over a real morning rather than a still frame.
          M3-6 adds one polite line here for browsers that cannot save a garden
          (private windows, blocked storage). -->
-    <div id="blocker">
+    <div id="blocker" tabindex="-1">
         <div id="instructions">
             <p class="title">WELCOME</p>
             <p class="subtitle">An open plot, and as many years as you care to spend on it</p>
-            <p class="click-prompt">Click to begin</p>
+            <p class="click-prompt" id="begin-prompt">Click to begin</p>
             <!-- One row per idea. As loose inline spans these reflowed into a
                  ragged block with the labels stranded mid-line, which read as
                  broken text rather than as a legend. -->
             <ul class="controls-hint">
-                <li><span>PLANT</span> Tap an empty patch of grass to choose a tree.</li>
+                <li><span>PLANT</span> Tap an empty patch of grass within the walls to choose a tree.</li>
                 <!-- M9-8. This used to read "Drag to pan and tilt, pinch or
                      use the buttons to zoom", which was false on every machine
                      without a touchscreen: the shared part's gesture handler
                      returns early on a mouse pointer, so a desktop drag does
                      nothing at all. The buttons are the one instruction that
                      is true everywhere, so they lead. -->
-                <li><span>LOOK</span> Drag to look around, and scroll or pinch to move closer. The arrows and the plus and minus do the same thing.</li>
+                <li><span>LOOK</span> Drag to look around, or use the arrow buttons. Scroll, pinch, or the plus and minus move you closer and further away.</li>
                 <li><span>WATER</span> A thirsty tree raises a blue droplet over its bed. Tap the droplet and it drinks.</li>
                 <li><span>TEND</span> Tap the mulch under a tree to see how it is doing.</li>
+                <!-- THE SENTENCE A NEWCOMER IS MOST MISSING. Nothing else on
+                     screen says a day is a year, so somebody watching a sapling
+                     for thirty seconds and seeing nothing happen cannot tell
+                     whether the scene is slow, broken, or waiting for them. -->
+                <li><span>GROW</span> Every day and night is a year. Leaves bud, turn and fall, and your trees fill out while you watch.</li>
                 <li><span>REMEMBER</span> Your garden is saved in this browser and waits for you.</li>
             </ul>
             <!-- Filled in only when the browser will not let the page save.
@@ -185,6 +190,24 @@
             <path d="M10 19v-5h4v5" stroke-linejoin="round" />
         </svg>
     </a>
+
+    <!-- HOW TO PLAY, AND IT IS THE WELCOME CARD ITSELF. Everything this scene
+         explains about itself lived on a card that could be dismissed and never
+         reached again, so a visitor who clicked through it before reading was
+         left in a field with no idea what any of it was for. This puts the same
+         card back, which is better than a second copy of the same sentences
+         that could drift from it. The garden's calendar is held while the card
+         is up, so reading it never costs a season. -->
+    <button id="help-btn" class="ui-float menu-btn help-btn" type="button"
+        title="How this works"
+        aria-label="How this works">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" />
+            <path d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" stroke-linecap="round"
+                stroke-linejoin="round" fill="none" />
+            <circle cx="12.1" cy="17.4" r="1.05" stroke="none" fill="currentColor" />
+        </svg>
+    </button>
 
     <!-- Start over. Behind a confirmation, because it is the visitor's garden
          and there is no undo. -->

@@ -169,6 +169,31 @@ body {
  * which is where the Home button already is. This one steps left by a button
  * plus a gap so the two sit as a pair rather than on top of each other.
  */
+/* ---- Nothing in the corner is offered while the welcome card is up ---------
+ *
+ * `.menu-btn` is z-index 110 and the blocker is 100, so these buttons sit ON
+ * TOP of the welcome overlay and are in the tab order there. That made the help
+ * button a live control that did nothing (the card it summons is already on
+ * screen) and the reset button a destructive one reachable before the visitor
+ * had seen the garden at all.
+ *
+ * `.ui-float.visible` sets `display: flex`, so hiding these needs a rule that
+ * beats it rather than the `hidden` attribute's UA default alone. Written as
+ * one selector on the attribute so the JS has one thing to set, and so a
+ * control that is out of sight is out of the tab order by the same act. */
+.menu-btn[hidden] {
+    display: none;
+}
+
+/* The top-right stack, right to left: home, start over, how this works. The
+   shared .menu-btn anchors every floating button to the corner, so each one
+   past the first steps left by a button plus a gap. */
+.help-btn {
+    right: 144px;
+    background: rgba(20, 20, 20, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
 .reset-btn {
     right: 82px;
     background: rgba(20, 20, 20, 0.78);

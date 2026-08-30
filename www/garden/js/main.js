@@ -110,7 +110,7 @@ let scene = null;
 let camera = null;
 let weather = null;
 
-let canvas, loadingScreen, blocker, waterAllBtn;
+let canvas, loadingScreen, blocker, waterAllBtn, helpBtn, resetBtn;
 let cleanupController = null;
 
 // The plant flow's pending spot, chosen when the visitor tapped the grass.
@@ -148,6 +148,8 @@ async function init() {
     loadingScreen = document.getElementById('loading-screen');
     blocker = document.getElementById('blocker');
     waterAllBtn = document.getElementById('water-all');
+    helpBtn = document.getElementById('help-btn');
+    resetBtn = document.getElementById('reset-btn');
     if (!canvas) return;
 
     applySiteLinks();
@@ -215,6 +217,10 @@ async function init() {
         // its own renders an invisible Home button. The pan and zoom row tags
         // itself .ui-float too, so it is revealed by the same sweep.
         document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
+        // AND STRAIGHT BACK OFF FOR THE TWO THAT HAVE NOTHING TO DO YET. The
+        // sweep is indiscriminate by design, so this is the one place that
+        // knows the welcome card is still up.
+        syncWelcomeChrome();
         showHud();
     }, 400);
 
@@ -537,8 +543,11 @@ function setupEventListeners() {
         blocker.addEventListener('click', dismiss, { signal });
         blocker.addEventListener('touchend', dismiss, { signal });
         document.addEventListener('keydown', (event) => {
-            if (event.code === 'Enter' || event.code === 'Space') {
-                if (!blocker.classList.contains('hidden')) beginTending();
+            if (blocker.classList.contains('hidden')) return;
+            // Escape as well as Enter and Space, because the card is now a
+            // panel a visitor can OPEN, and Escape is what closes a panel.
+            if (event.code === 'Enter' || event.code === 'Space' || event.code === 'Escape') {
+                beginTending();
             }
         }, { signal });
     }
@@ -572,8 +581,8 @@ function setupEventListeners() {
     }, { signal });
     canvas.addEventListener('pointerleave', () => updateDropHover(-1e4, -1e4), { signal });
 
-    const reset = document.getElementById('reset-btn');
-    if (reset) reset.addEventListener('click', handleReset, { signal });
+    if (resetBtn) resetBtn.addEventListener('click', handleReset, { signal });
+    if (helpBtn) helpBtn.addEventListener('click', openHelp, { signal });
 
     // A REAL BUTTON IN THE DOM, and that is the point of it as much as the
     // convenience is. Every other way to water a tree needs a pointer aimed at
@@ -623,33 +632,106 @@ function onResize() {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
 }
 
+/**
+ * Show the corner controls only while there is a garden to use them on.
+ *
+ * ---- A CONTROL THAT DOES NOTHING IS WORSE THAN NO CONTROL ----
+ *
+ * `.menu-btn` is z-index 110 and the blocker is 100, so the top-right stack
+ * draws OVER the welcome card and sits in its tab order. Help there is a button
+ * whose whole purpose is to summon the card already filling the screen, and
+ * reset is a destructive one offered before the visitor has seen the garden.
+ *
+ * HIDDEN RATHER THAN DISABLED. A dimmed button asks "why can't I press this",
+ * which is a question the visitor should not have to hold; the absence of a
+ * control whose target is already on screen is unremarkable. It also takes them
+ * out of the tab order, which is the half that actually mattered: a keyboard
+ * visitor tabbing through the welcome card should not land on a control that
+ * does nothing when pressed.
+ *
+ * HOME STAYS, and that is not an oversight. It is the way off the page, it
+ * works perfectly well from the welcome card, and it is the target of the
+ * "Skip to home link" that opens the document. Hiding it would break the skip
+ * link for exactly the visitors it exists for.
+ */
+function syncWelcomeChrome() {
+    const reading = !blocker || !blocker.classList.contains('hidden');
+    for (const el of [helpBtn, resetBtn]) {
+        if (el) el.hidden = reading;
+    }
+}
+
+/**
+ * Put the welcome card back up.
+ *
+ * IT IS THE SAME CARD, not a second copy of its sentences. Everything the scene
+ * explains about itself lives there, and a help panel repeating it would be two
+ * texts to keep in step, with the copy nobody edits the one a lost visitor
+ * reads. The calendar is already held whenever the card is up, so reading it
+ * costs no seasons.
+ */
+function openHelp() {
+    if (!blocker || !blocker.classList.contains('hidden')) return;
+    // The prompt is written for a first arrival. On the way back it is a
+    // different sentence, because "begin" is wrong for somebody who already has
+    // a garden behind the card.
+    const prompt = document.getElementById('begin-prompt');
+    if (prompt) prompt.textContent = 'Click to return to your garden';
+    blocker.classList.remove('hidden');
+    syncWelcomeChrome();
+    helpReturn = document.activeElement;
+    blocker.focus({ preventScroll: true });
+    track('help-opened');
+}
+
 function beginTending() {
     if (!state.loaded || !blocker || blocker.classList.contains('hidden')) return;
     blocker.classList.add('hidden');
-    track('begin-tending');
+    syncWelcomeChrome();
+    // ONCE PER VISIT, NOT ONCE PER DISMISSAL, now that the card can be opened
+    // again from the help button.
+    if (!tendingBegun) {
+        tendingBegun = true;
+        track('begin-tending');
+    }
+    if (helpReturn && typeof helpReturn.focus === 'function') {
+        try { helpReturn.focus({ preventScroll: true }); } catch (e) { /* gone */ }
+    }
+    helpReturn = null;
     // AT ONCE RATHER THAN ON THE NEXT HEARTBEAT. A visitor coming back to a
     // garden that went thirsty while they were away should meet the offer in
     // the first frame they see, not a second into it.
     syncWaterAll();
+    nudgeToPlant();
+}
 
-    // THE FIRST THING A VISITOR SEES IS THE GARDEN, NOT A DIALOG. An earlier
-    // version opened the plant modal automatically on a first visit, on the
-    // theory that an empty plot leaves people wondering what to do. It was
-    // wrong twice over: dismissing the welcome card is a request to LOOK at
-    // the place, and covering it immediately takes that away, and worse, the
-    // auto-opened modal had to invent a planting spot, which quietly broke the
-    // one rule the interaction has (a tree goes where you tapped).
-    //
-    // A toast does the same teaching job without taking the view or the
-    // choice. It waits a moment so it arrives after the eye has settled, and
-    // only when there is nothing planted yet.
-    if (!getTrees().length) {
-        setTimeout(() => {
-            if (!getTrees().length && !anyModalOpen()) {
-                toast('Tap any patch of grass to plant your first tree.', 4200);
-            }
-        }, 2200);
-    }
+/**
+ * Keep offering the first tree until there is one.
+ *
+ * THE FIRST VERSION WAS A SINGLE SHOT and it was the wrong shape. One toast,
+ * 2.2 seconds after the card went, gone again 4.2 seconds later: a visitor who
+ * was still looking at the mountains when it arrived, or who opened the plant
+ * modal and closed it again, was left in an empty field with nothing on screen
+ * suggesting the field was the thing to touch. That is precisely the visitor
+ * this milestone is about.
+ *
+ * So it asks again, at a widening gap, and gives up after a few. The words
+ * change on the later ones, because a sentence repeated verbatim reads as a
+ * stuck screen rather than as a hint.
+ */
+function nudgeToPlant(round = 0) {
+    if (plantNudge) { clearTimeout(plantNudge); plantNudge = null; }
+    if (round >= PLANT_NUDGES.length) return;
+    plantNudge = setTimeout(() => {
+        plantNudge = null;
+        // The garden answers the question the moment anything is planted, and
+        // a modal on screen is a visitor already doing it.
+        if (getTrees().length) return;
+        if (!anyModalOpen() && (!blocker || blocker.classList.contains('hidden'))) {
+            toast(PLANT_NUDGES[round], 4600);
+        }
+        nudgeToPlant(round + 1);
+    }, round === 0 ? 2200 : 14000);
 }
 
 function applySiteLinks() {
@@ -855,6 +937,8 @@ function handlePlant(selection) {
         cell.gx, cell.gz, state.elapsedSeconds);
     pendingCell = null;
     if (!entry) { toast('That spot is taken.'); return; }
+    // The plot has an answer now, so it stops asking the question.
+    if (plantNudge) { clearTimeout(plantNudge); plantNudge = null; }
     // The copy names no number on purpose. A tree goes in already part grown
     // (M10-1) and the exact remaining years move with one config value, so a
     // sentence with a figure in it would go stale the first time that changes.
@@ -1168,6 +1252,24 @@ function stop() {
 
 let saveDue = 0;
 let waterAllDue = 0;
+let tendingBegun = false;
+let helpReturn = null;
+let plantNudge = null;
+
+/**
+ * What an empty plot says, in order.
+ *
+ * THE SECOND ONE NAMES THE CLOCK, and that is the sentence a newcomer is most
+ * missing. Nothing on screen says a day and night is a year, so a visitor
+ * watching a sapling for thirty seconds and seeing no change has no way to know
+ * whether the scene is slow, broken, or waiting for them. The season chip says
+ * "Spring, year 3" and means nothing until somebody explains what a year is.
+ */
+const PLANT_NUDGES = [
+    'Tap any patch of grass to plant your first tree.',
+    'Every day and night here is a year, so a tree you plant now will fill out while you watch.',
+    'Still an empty plot. Tap the grass inside the walls to choose a tree.'
+];
 let wallHints = 0;
 let wallHintAt = -1e9;
 let dropTaught = false;

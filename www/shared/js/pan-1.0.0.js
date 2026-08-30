@@ -33,10 +33,17 @@
  * while a CSS orientation media query (www/shared/css/styles-1.0.0.css) keeps it
  * hidden at every landscape aspect. Press and hold a button by pointer,
  * hold Space/Enter on the focused button, or hold the keys anywhere
- * while in portrait: Left/Right or A/D pan, Up zooms in, Down zooms
- * out. The tilt axis below has no buttons, so it gets its own keys:
- * W/S, or Shift+Up/Down for arrow-key visitors, held at the pan speed.
- * Together that puts the full WASD square on the view. Rotating the
+ * while in portrait: Left/Right or A/D pan, and plus/minus zoom.
+ *
+ * EVERY KEY DOES WHAT THE BUTTON UNDER THE SAME GLYPH DOES, which is
+ * why the zoom moved off the arrows: a scene with `tiltButtons` draws an
+ * up arrow, a down arrow, a plus and a minus, and answering the arrow
+ * KEYS with the plus and minus BUTTONS is not guessable. The plain
+ * arrows now follow whichever arrows are on screen, so they tilt where
+ * tilt buttons exist and keep the zoom where they do not. The tilt also
+ * always has W/S, and Shift+Up/Down for arrow-key visitors in a scene
+ * that draws no tilt pair, held at the pan speed. Together that puts the
+ * full WASD square on the view. Rotating the
  * phone back to landscape resets every control so the composed frame
  * returns exactly as designed.
  *
@@ -480,15 +487,28 @@ function makeButton(label, svgPath, axis, dir, signal) {
 
 // These keys map to the same holds from anywhere while portrait
 // (desktop portrait windows and switch-access users get the same slow
-// look-around): Left/Right or A/D pan, Up zooms in, Down zooms out.
-// The tilt, which has no buttons, gets its own keys through keyHoldFor
-// below: W/S, or Shift+Up/Down for arrow-key visitors, so the full
-// WASD square drives the view.
+// look-around): Left/Right or A/D pan, and plus/minus zoom.
+//
+// ---- A KEY BELONGS TO THE BUTTON IT LOOKS LIKE ----
+//
+// Up and Down used to zoom, from before this part had tilt buttons to
+// draw. Once `tiltButtons: true` existed, a scene could show an up
+// arrow, a down arrow, a plus and a minus, and then answer the arrow
+// KEYS with the plus and minus BUTTONS. Nothing about that is
+// guessable. So plus and minus now carry the zoom, the arrows follow
+// whichever arrows are on screen, and `keyHoldFor` below decides which.
+//
+// `Equal` and `Minus` are the physical keys, so they cover both = and +
+// without the visitor having to hold Shift for one of them.
 const KEY_HOLDS = {
     ArrowLeft: { axis: 'pan', dir: -1, btn: () => _panLeftBtn },
     ArrowRight: { axis: 'pan', dir: 1, btn: () => _panRightBtn },
     KeyA: { axis: 'pan', dir: -1, btn: () => _panLeftBtn },
     KeyD: { axis: 'pan', dir: 1, btn: () => _panRightBtn },
+    Equal: { axis: 'zoom', dir: 1, btn: () => _zoomInBtn },
+    Minus: { axis: 'zoom', dir: -1, btn: () => _zoomOutBtn },
+    NumpadAdd: { axis: 'zoom', dir: 1, btn: () => _zoomInBtn },
+    NumpadSubtract: { axis: 'zoom', dir: -1, btn: () => _zoomOutBtn },
     ArrowUp: { axis: 'zoom', dir: 1, btn: () => _zoomInBtn },
     ArrowDown: { axis: 'zoom', dir: -1, btn: () => _zoomOutBtn }
 };
@@ -498,13 +518,28 @@ const KEY_HOLDS = {
 const TILT_UP_HOLD = { axis: 'tilt', dir: 1, btn: () => _tiltUpBtn };
 const TILT_DOWN_HOLD = { axis: 'tilt', dir: -1, btn: () => _tiltDownBtn };
 
-/** The hold a key press maps to. W/S always tilt; holding Shift re-aims
- *  the Up/Down arrows from zoom to tilt (plain arrows keep the zoom). */
+/**
+ * The hold a key press maps to.
+ *
+ * W/S always tilt, and so does Shift+Up/Down, which is the arrow-key route in
+ * a scene that draws no tilt buttons.
+ *
+ * ---- AND THE PLAIN ARROWS FOLLOW THE BUTTONS THAT EXIST ----
+ *
+ * In a scene with `tiltButtons: true` there are up and down arrows ON SCREEN,
+ * and the arrow keys have to be those. In a scene without them the only up and
+ * down controls are the zoom pair, so the arrows keep the zoom they have always
+ * had. Either way the key does what the button under the same glyph does,
+ * which is the whole rule, and no existing scene changes: `tiltButtons` is used
+ * by exactly one experience.
+ */
 function keyHoldFor(event) {
     if (event.code === 'KeyW') return TILT_UP_HOLD;
     if (event.code === 'KeyS') return TILT_DOWN_HOLD;
     if (event.shiftKey && event.code === 'ArrowUp') return TILT_UP_HOLD;
     if (event.shiftKey && event.code === 'ArrowDown') return TILT_DOWN_HOLD;
+    if (_tiltUpBtn && event.code === 'ArrowUp') return TILT_UP_HOLD;
+    if (_tiltDownBtn && event.code === 'ArrowDown') return TILT_DOWN_HOLD;
     return KEY_HOLDS[event.code] || null;
 }
 

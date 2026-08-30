@@ -1108,3 +1108,99 @@ describe('zoomContainerClass', () => {
     expect(globalThis.document.body.children).toHaveLength(0);
   });
 });
+
+// ---- A key belongs to the button it looks like ------------------------------
+
+/**
+ * WHY THE ZOOM MOVED OFF THE ARROWS.
+ *
+ * Up and Down carried the zoom from before this part could draw tilt buttons.
+ * Once `tiltButtons: true` existed, a scene could show an up arrow, a down
+ * arrow, a plus and a minus on screen, and then answer the arrow KEYS with the
+ * plus and minus BUTTONS. Nothing about that is guessable, and QA on the garden
+ * said so.
+ *
+ * The rule now is that a key does what the button under the same glyph does.
+ * Plus and minus carry the zoom everywhere, and the plain arrows follow
+ * whichever arrows are actually on screen.
+ */
+describe('the keys follow the buttons that exist', () => {
+  test('plus and minus zoom, on the main row and the numpad', async () => {
+    const { m, camera } = await setup({ zoom: ZOOM });
+    globalThis.window.fire('keydown', { code: 'Equal' });
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'Equal' });
+    const zoomedIn = camera.fov;
+    expect(zoomedIn).toBeLessThan(BASE_FOV);
+
+    globalThis.window.fire('keydown', { code: 'Minus' });
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'Minus' });
+    expect(camera.fov).toBeCloseTo(BASE_FOV, 10);
+
+    // `Equal` and `Minus` are the PHYSICAL keys, so they answer whether or not
+    // Shift is down. Requiring Shift for the plus would mean the key printed on
+    // the cap only worked with a modifier.
+    globalThis.window.fire('keydown', { code: 'NumpadAdd' });
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'NumpadAdd' });
+    expect(camera.fov).toBeCloseTo(zoomedIn, 10);
+    globalThis.window.fire('keydown', { code: 'NumpadSubtract' });
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'NumpadSubtract' });
+    expect(camera.fov).toBeCloseTo(BASE_FOV, 10);
+  });
+
+  test('WITH tilt buttons, the arrows tilt and leave the lens alone', async () => {
+    const { m, camera, buttons } = await setup({ zoom: ZOOM, tiltButtons: true });
+    expect(buttons['Look up']).toBeTruthy();
+
+    globalThis.window.fire('keydown', { code: 'ArrowUp' });
+    // The on-screen button it belongs to lights up, which is the visible half
+    // of the same claim.
+    expect(buttons['Look up'].classList.contains('held')).toBe(true);
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'ArrowUp' });
+    expect(buttons['Look up'].classList.contains('held')).toBe(false);
+    expect(m.getTiltAngle()).toBeGreaterThan(0);
+    // AND THE LENS DID NOT MOVE. This is the assertion that fails against the
+    // old mapping, where ArrowUp was the zoom. Read off the offset rather than
+    // the fov: the part only writes to the camera once a zoom has happened, so
+    // an untouched lens still carries whatever fov the camera was made with.
+    expect(m.getZoomOffset()).toBe(0);
+
+    const up = m.getTiltAngle();
+    globalThis.window.fire('keydown', { code: 'ArrowDown' });
+    expect(buttons['Look down'].classList.contains('held')).toBe(true);
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'ArrowDown' });
+    expect(m.getTiltAngle()).toBeLessThan(up);
+    expect(m.getZoomOffset()).toBe(0);
+
+    // The zoom is still reachable, from the keys that look like it.
+    globalThis.window.fire('keydown', { code: 'Equal' });
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'Equal' });
+    expect(camera.fov).toBeLessThan(BASE_FOV);
+  });
+
+  test('WITHOUT tilt buttons the arrows keep the zoom, so no old scene moves', async () => {
+    // `tiltButtons` is used by exactly one experience, so this is the path
+    // every other scene on the site takes and it must be untouched.
+    const { m, camera, buttons } = await setup({ zoom: ZOOM });
+    expect(buttons['Look up']).toBeUndefined();
+    globalThis.window.fire('keydown', { code: 'ArrowUp' });
+    expect(buttons['Zoom in'].classList.contains('held')).toBe(true);
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'ArrowUp' });
+    expect(camera.fov).toBeLessThan(BASE_FOV);
+    expect(m.getTiltAngle()).toBe(0);
+
+    // And Shift+Up still reaches the tilt there, which is the only route those
+    // scenes have ever had to it from the arrows.
+    globalThis.window.fire('keydown', { code: 'ArrowUp', shiftKey: true });
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'ArrowUp' });
+    expect(m.getTiltAngle()).toBeGreaterThan(0);
+  });
+});
