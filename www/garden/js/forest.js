@@ -40,7 +40,9 @@ import { makeRandom, resolveSpecies, SPECIES, speciesById } from './species.min.
 import { phenologyAt, seasonAt, clamp01 } from './clock.min.js';
 import { mixColor, packColor, unpackColor } from './sky.min.js';
 import { buildSkeleton, bakeGeometry, buildLeaves, leafClusterTexture, patchVertex } from './tree.min.js';
-import { worldHeightAt, openingHalfWidthAt } from './terrain.min.js';
+import {
+    worldHeightAt, openingHalfWidthAt, pondWaterLevel, pondHalfWidth
+} from './terrain.min.js';
 // One statement of where the eye can go, read rather than copied. view.js
 // depends on nothing but the config and the clock, so there is no cycle.
 import { dollyTrackZ } from './view.min.js';
@@ -805,6 +807,26 @@ function buildNearTreeline(scene, config, options) {
 }
 
 /**
+ * Whether a point would put something in the lake.
+ *
+ * The water is a flat plane over the basin's bounding rectangle, so a spot is
+ * wet when it is under that rectangle AND the ground there is below the
+ * waterline. Both halves are needed: the rectangle alone would exclude dry
+ * ground the water does not reach, and the height alone would exclude parts of
+ * the meadow that dip below the same level far away from any water.
+ *
+ * The margin keeps a bush's own girth out as well as its centre.
+ */
+export function inTheLake(x, z, config = GARDEN_CONFIG, margin = 1.2) {
+    const P = config.world.pond;
+    if (!P) return false;
+    const rw = pondHalfWidth(config.world) + margin;
+    const rd = P.halfDepth + margin;
+    if (Math.abs(x - P.x) > rw || Math.abs(z - P.z) > rd) return false;
+    return worldHeightAt(x, z) < pondWaterLevel(config.world);
+}
+
+/**
  * Bushes and wildflowers along the wall.
  *
  * WHAT STOPS THE WALL LOOKING DROPPED ONTO A LAWN. A mown plot with a hard
@@ -849,6 +871,21 @@ function buildUndergrowth(scene, config, options) {
         // allowed a little closer in than trees are.
         const square = Math.max(Math.abs(x), Math.abs(z));
         if (square < config.plot.halfSize + 1) continue;
+        // ---- AND NOT IN THE LAKE (M14-4) ---------------------------------
+        // The trees have had a rule keeping them out of the basin since M7-6.
+        // These never did, and the bush ring runs 13.5 to 30 m from the plot
+        // while the lake spans 26 to 58 m out, so 2.2 percent of the candidate
+        // spots land in the water. With a hundred bushes drawn that is not a
+        // rare event, it is a certainty, and QA found one standing in the lake.
+        //
+        // THE TEST IS "WOULD IT BE STANDING IN WATER", not "is it inside the
+        // ellipse". Those are different questions here: the meadow's own waves
+        // tilt the basin by about 3.7 m across its width, so a good part of the
+        // bowl is dry ground well above the waterline and a bush may stand
+        // there quite happily. Asking about the water level answers the
+        // question actually being asked, and it keeps answering it if the
+        // ground under the lake is ever levelled.
+        if (inTheLake(x, z, config)) continue;
         const size = 0.5 + random() * 1.1;
         p.set(x, worldHeightAt(x, z) + size * 0.34, z);
         e.set(0, random() * Math.PI, 0);

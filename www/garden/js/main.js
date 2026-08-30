@@ -30,7 +30,7 @@ import { hourAt, yearAt, seasonAt, snowCoverageAt, startSeconds } from './clock.
 import { initSky, updateSky, disposeSky } from './sky.min.js';
 import {
     initTerrain, updateTerrain, disposeTerrain, getGroundMesh, snapToGrid,
-    nearestFreeCell, cellCenter, heightAt
+    nearestFreeCell, cellCenter, heightAt, inPlantingReach
 } from './terrain.min.js';
 import { initForest, updateForest, disposeForest } from './forest.min.js';
 import { initVista, updateVista, disposeVista } from './vista.min.js';
@@ -42,8 +42,8 @@ import {
     dollyView, applyDollyDelta, dollyLimits, getDolly, resetView
 } from './view.min.js';
 import {
-    pickBase, pickDrop, dropScreenY, dropPresence, thirstyCount,
-    getBedMesh, getLevelMesh, bedSpan
+    pickBase, pickDrop, pickDropIndex, dropScreenY, dropPresence, thirstyCount,
+    setHoveredDrop, getBedMesh, getLevelMesh, bedSpan
 } from './beds.min.js';
 import { createTree, updateTree, disposeTree } from './tree.min.js';
 import {
@@ -557,6 +557,21 @@ function setupEventListeners() {
         if (touch) handleSceneTap(touch.clientX, touch.clientY);
     }, { signal });
 
+    // ---- HOVER, WHICH ONLY A POINTER HAS ----------------------------------
+    // The web's oldest answer to "is this a control" is the cursor, and until
+    // now this canvas had one cursor everywhere. A mouse visitor can ask what
+    // something is before committing to it, and a droplet is the only thing in
+    // the scene worth answering for, so it is the only thing tested here.
+    //
+    // `pointerType` GATES IT, because a touch generates pointer events too, and
+    // a phone would otherwise leave a droplet stuck in its hover state after
+    // every tap, with no pointer left anywhere to take it out again.
+    canvas.addEventListener('pointermove', (event) => {
+        if (event.pointerType && event.pointerType !== 'mouse') return;
+        updateDropHover(event.clientX, event.clientY);
+    }, { signal });
+    canvas.addEventListener('pointerleave', () => updateDropHover(-1e4, -1e4), { signal });
+
     const reset = document.getElementById('reset-btn');
     if (reset) reset.addEventListener('click', handleReset, { signal });
 
@@ -685,7 +700,9 @@ function projectBases() {
     const halfW = window.innerWidth / 2;
     const halfH = window.innerHeight / 2;
 
-    for (const entry of getTrees()) {
+    const trees = getTrees();
+    for (let i = 0; i < trees.length; i++) {
+        const entry = trees[i];
         const { x, z } = cellCenter(entry.record.gx, entry.record.gz);
         const span = bedSpan(x, z);
         basePoint.set(x, heightAt(x, z), z);
@@ -698,17 +715,35 @@ function projectBases() {
         // Behind the eye: `project` still returns numbers there, and they are
         // mirrored, so a tree behind the camera would otherwise pick as though
         // it were in front of it.
-        if (basePoint.z > 1) { bases.push({ entry, behind: true }); continue; }
+        // `index` is the INSTANCE index in the bed meshes, which is the same
+        // order `syncBeds` wrote them in. It is what lets the hover highlight
+        // reach the right droplet without a second way of identifying a tree.
+        if (basePoint.z > 1) { bases.push({ entry, index: i, behind: true }); continue; }
         const sx = (basePoint.x + 1) * halfW;
         const sy = (1 - basePoint.y) * halfH;
         const ex = (baseEdge.x + 1) * halfW;
         bases.push({
-            entry, x: sx, y: sy, radiusPx: Math.abs(ex - sx),
+            entry, index: i, x: sx, y: sy, radiusPx: Math.abs(ex - sx),
             dropY: dropScreenY((1 - gaugePoint.y) * halfH),
             thirst: dropPresence(entry.record.moisture)
         });
     }
     return bases;
+}
+
+/**
+ * Put the cursor and the highlight on whatever droplet is under the pointer.
+ *
+ * THE CURSOR IS SET FROM THE SAME SEARCH THE TAP USES, not from a lookalike, so
+ * "it looked clickable" and "it was clickable" cannot come apart. `setHoveredDrop`
+ * returns whether anything actually moved, which keeps a pointermove that
+ * crosses forty pixels of empty grass from touching the GPU at all.
+ */
+function updateDropHover(clientX, clientY) {
+    if (!canvas || !state.loaded || anyModalOpen()) return;
+    const index = pickDropIndex(clientX, clientY, projectBases());
+    if (!setHoveredDrop(index)) return;
+    canvas.style.cursor = index >= 0 ? 'pointer' : '';
 }
 
 function pickGround(clientX, clientY) {
@@ -718,6 +753,27 @@ function pickGround(clientX, clientY) {
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObject(ground, false);
     return hits.length ? hits[0].point : null;
+}
+
+/**
+ * Say where trees go, for a tap that landed outside the walls.
+ *
+ * THROTTLED, AND THEN IT STOPS. Looking at the sky is a thing people do in a
+ * scene like this, and a toast every time would turn an idle glance upward into
+ * being told off. It waits between showings so a double tap is one message, and
+ * it gives up after a few, because by then the visitor either understands or is
+ * not going to be helped by a fourth copy of the same sentence.
+ */
+function hintTheWalls() {
+    if (wallHints >= 3) return;
+    const now = performance.now();
+    if (now - wallHintAt < 5000) return;
+    wallHintAt = now;
+    wallHints += 1;
+    toast(isFull()
+        ? `This plot holds ${capacity()} trees, and they all go inside the walls.`
+        : 'Trees go inside the walls. Tap the grass in the plot to plant one.');
+    track('plant-hint');
 }
 
 function handleSceneTap(clientX, clientY) {
@@ -758,8 +814,18 @@ function handleSceneTap(clientX, clientY) {
         return;
     }
 
+    // ---- A TAP THAT LANDS NOWHERE USED TO MEAN NOTHING --------------------
+    // Two ways to miss, and neither said so. A tap on the sky, the mountains or
+    // the far forest never touches the ground mesh, so `pickGround` came back
+    // null and the handler simply returned. A tap on the meadow outside the
+    // walls DID hit the ground, and the ring search would slide it up to
+    // eighteen metres to the nearest free cell, so a tree appeared most of a
+    // plot away from where the visitor pointed.
+    //
+    // The first taught nothing and the second taught something false. Both now
+    // say the one rule the scene has, and neither plants.
     const point = pickGround(clientX, clientY);
-    if (!point) return;
+    if (!point || !inPlantingReach(point.x, point.z)) { hintTheWalls(); return; }
 
     const cell = snapToGrid(point.x, point.z);
     // THE INTERACTION NEVER SAYS NO. A tap on an occupied cell, or just
@@ -821,6 +887,14 @@ function waterOne(entry, from) {
         ? 'Watered. Look for new buds along the branches.'
         : 'Watered. It looks pleased.');
     track('tree-watered', { revived: result === 'revived' ? 1 : 0, from });
+    // THE DROPLET IS GONE THE INSTANT IT IS PRESSED, so the hover it was
+    // carrying has to go with it. Leaving it set would keep a pointer cursor
+    // over bare grass and put the highlight on whichever tree inherits the
+    // index next.
+    setHoveredDrop(-1);
+    if (canvas) canvas.style.cursor = '';
+    // Somebody who has watered a tree does not need to be told how.
+    dropTaught = true;
     save();
     syncWaterAll();
 }
@@ -858,10 +932,30 @@ function handleWaterAll() {
  * loop, because moisture also falls on its own and nothing else would notice
  * the garden crossing the threshold while the visitor watched.
  */
+/**
+ * Say what a droplet is, once, the first time one is on screen.
+ *
+ * THE SCENE ALREADY TEACHES ITSELF THIS WAY. Planting is taught by a toast a
+ * moment after the welcome card goes, rather than by a dialog that takes the
+ * view away, and this is the same trick for the same reason. It is the only
+ * mechanism that reaches a touch visitor, who has no pointer to hover with and
+ * so cannot be told anything by a cursor.
+ *
+ * Once per visit and never after the first watering, so the sentence is only
+ * ever read by somebody who has not yet done the thing it describes.
+ */
+function teachTheDroplet(count) {
+    if (dropTaught || count < 1 || anyModalOpen()) return;
+    dropTaught = true;
+    toast('A blue droplet means a tree is thirsty. Tap the droplet and it drinks.', 5200);
+    track('drop-taught');
+}
+
 function syncWaterAll() {
     if (!waterAllBtn) return;
     const M = GARDEN_CONFIG.garden.moisture;
     const count = thirstyCount(getTrees());
+    teachTheDroplet(count);
     const show = count >= M.waterAllFrom;
     // `.visible` is what the house chrome uses, and the button is display:none
     // without it. `hidden` as well, so it leaves the tab order rather than
@@ -1074,6 +1168,9 @@ function stop() {
 
 let saveDue = 0;
 let waterAllDue = 0;
+let wallHints = 0;
+let wallHintAt = -1e9;
+let dropTaught = false;
 
 function animate() {
     if (!state.running) return;

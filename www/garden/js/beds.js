@@ -189,7 +189,7 @@ export function dropScreenY(anchorY, config = GARDEN_CONFIG) {
  *
  * @param {Array} bases [{ entry, x, y, dropY, thirst }], already projected
  */
-export function pickDrop(tapX, tapY, bases, config = GARDEN_CONFIG) {
+function nearestDrop(tapX, tapY, bases, config) {
     const B = config.garden.bed;
     let best = null;
     let bestDistance = Infinity;
@@ -203,10 +203,27 @@ export function pickDrop(tapX, tapY, bases, config = GARDEN_CONFIG) {
         if (distance > B.dropPickPx) continue;
         if (distance < bestDistance) {
             bestDistance = distance;
-            best = base.entry;
+            best = base;
         }
     }
     return best;
+}
+
+export function pickDrop(tapX, tapY, bases, config = GARDEN_CONFIG) {
+    const hit = nearestDrop(tapX, tapY, bases, config);
+    return hit ? hit.entry : null;
+}
+
+/**
+ * The same answer as an INSTANCE INDEX, for the hover highlight.
+ *
+ * The pointer and the tap must agree about what is under them, so both come
+ * through the same search rather than through two that look alike. Returns -1
+ * for nothing, which is what the attribute wants anyway.
+ */
+export function pickDropIndex(tapX, tapY, bases, config = GARDEN_CONFIG) {
+    const hit = nearestDrop(tapX, tapY, bases, config);
+    return hit && typeof hit.index === 'number' ? hit.index : -1;
 }
 
 /** How many of these trees are asking for water. Drives the Water all
@@ -231,6 +248,8 @@ let urgencyAttr = null;
 let dropMesh = null;
 let dropUniforms = null;
 let thirstAttr = null;
+let hoverAttr = null;
+let hoveredIndex = -1;
 let scratch = null;
 
 const LEVEL_VERT = `
@@ -338,28 +357,43 @@ void main() {
 const DROP_VERT = `
 uniform float uPxPerRad;
 uniform float uSizePx;
+uniform float uCardScale;
 uniform float uRisePx;
 uniform float uPulse;
+uniform float uBobPx;
+uniform float uHoverGrow;
 attribute float aThirst;
+attribute float aHover;
 varying vec2 vDropUv;
 varying float vDropThirst;
+varying float vDropHover;
 void main() {
     vDropUv = uv;
     vDropThirst = aThirst;
+    vDropHover = aHover;
     vec4 mv = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-    // Metres per pixel AT THIS DEPTH, which is what turns both numbers below
+    // Metres per pixel AT THIS DEPTH, which is what turns every number below
     // from pixels into a size the projection will honour.
     float dropDepth = max(0.001, -mv.z);
     float dropMetre = dropDepth / uPxPerRad;
     // THE RISE IS MEASURED FROM THE GAUGE'S ANCHOR, and it is the same number
     // dropScreenY subtracts on the CPU. The two have to agree or the button
     // is not under the drawing.
-    mv.y += uRisePx * dropMetre;
+    //
+    // THE BOB RIDES ON TOP OF IT AND THE TARGET DOES NOT FOLLOW, deliberately.
+    // A target that moved with the drawing would be a button that dodges the
+    // pointer. Two pixels of travel inside a 44 px ring is nothing to a tap and
+    // is most of what makes the droplet read as alive.
+    mv.y += (uRisePx + uBobPx) * dropMetre;
     // THE PULSE IS A SIZE AND NEVER AN OPACITY. A control that fades in and out
     // reads as one that might be disabled, and this one is always pressable
-    // while it is there. Small enough that it says "alive" rather than "look at
-    // me", in a frame whose only other motion is the trees.
-    mv.xy += position.xy * (uSizePx * uPulse * dropMetre);
+    // while it is there.
+    //
+    // THE CARD IS BIGGER THAN THE DROPLET, and the fragment shader divides the
+    // difference back out, so this scale buys room for the ring to travel
+    // through and changes nothing about the drawing inside it.
+    float dropGrow = uPulse + uHoverGrow * vDropHover;
+    mv.xy += position.xy * (uSizePx * uCardScale * dropGrow * dropMetre);
     gl_Position = projectionMatrix * mv;
 }
 `;
@@ -377,8 +411,15 @@ const DROP_FRAG = `
 uniform vec3 uDropColor;
 uniform vec3 uDropEdge;
 uniform float uOpacity;
+uniform float uCardScale;
+uniform float uRingAt;
+uniform float uRingWidth;
+uniform vec3 uRingColor;
+uniform float uRingOpacity;
+uniform float uHoverLift;
 varying vec2 vDropUv;
 varying float vDropThirst;
+varying float vDropHover;
 
 float dropField(vec2 p) {
     // The lobe, and the apex above it. sin(halfAngle) = r / |apex - centre|
@@ -397,11 +438,16 @@ float dropField(vec2 p) {
 }
 
 void main() {
-    vec2 dropP = vDropUv - 0.5;
+    // THE CARD IS uCardScale TIMES THE DROPLET, so the droplet's own space is
+    // recovered by scaling up before the field is sampled. Everything measured
+    // in droplet-widths below therefore stays put when the card grows to make
+    // room for a longer ring, which is what makes that number safe to tune.
+    vec2 dropCard = vDropUv - 0.5;
+    vec2 dropP = dropCard * uCardScale;
     float dropD = dropField(dropP);
-    // The card is uSizePx across, so one pixel is 1/uSizePx of uv. Softening by
-    // a shade over that is what keeps a 17 px drawing from having stairs on it
-    // without needing derivatives, which are not free on every target.
+    // The droplet is uSizePx across, so one pixel is 1/uSizePx of its space.
+    // Softening by a shade over that is what keeps a 17 px drawing from having
+    // stairs on it without needing derivatives, which are not free everywhere.
     float dropAA = 0.045;
     // A DARK OUTLINE, AND IT IS NOT DECORATION. Measured, the pale blue body is
     // 4.37:1 against mulch and 1.34:1 against spring grass, while the outline
@@ -414,7 +460,43 @@ void main() {
     // A HIGHLIGHT, which is the one thing that says "water" rather than "pin".
     float dropLit = 1.0 - smoothstep(0.0, 0.12, length(dropP - vec2(-0.075, -0.20)));
     dropShown = mix(dropShown, vec3(1.0), dropLit * 0.55 * dropCore);
+    // Under the pointer it brightens as well as swelling, because the swell
+    // alone is ambiguous with the pulse it already has.
+    dropShown = mix(dropShown, vec3(1.0), uHoverLift * vDropHover * dropCore);
     float dropAlpha = dropIn * uOpacity * vDropThirst;
+
+    // ---- THE RING, WHICH IS THE PART THAT SAYS "PRESS ME" -----------------
+    // An expanding ring is the one idiom that means "tap here" without words.
+    // It sweeps from just outside the droplet to the edge of the TARGET, so a
+    // visitor watching it is watching the actual size of the thing they have to
+    // hit rather than the much smaller thing they can see.
+    //
+    // IT IS MEASURED IN CARD WIDTHS, not droplet widths, because its whole job
+    // is to leave the droplet behind. uRingAt is 0 to 1 across the sweep and
+    // negative during the pause, which is when nothing here draws at all.
+    if (uRingAt >= 0.0) {
+        float ringR = mix(0.16, 0.47, uRingAt);
+        // SIGNED, not absolute, because which SIDE of the ring a fragment is on
+        // is what gives the band an edge. Inside it is light and the leading
+        // edge is the droplet's own dark outline: measured, no colour at all
+        // beats 2.10:1 against summer grass, so the ring cannot be carried by
+        // its fill and has to be carried by a boundary, exactly like the gauge.
+        float ringOff = length(dropCard) - ringR;
+        float ringAA = 0.5 * uRingWidth;
+        float ring = 1.0 - smoothstep(0.0, ringAA, abs(ringOff) - 0.5 * uRingWidth);
+        vec3 ringShown = mix(uRingColor, uDropEdge, smoothstep(-ringAA, ringAA, ringOff));
+        // FADING AS IT GOES, so the ring reads as travelling outward rather
+        // than as a circle switching on. It also has to be gone before it
+        // reaches the card's edge, or it clips into a square.
+        ring *= (1.0 - uRingAt) * (1.0 - uRingAt);
+        float ringAlpha = ring * uRingOpacity * uOpacity * vDropThirst;
+        // BEHIND THE DROPLET, NEVER OVER IT: the droplet is the thing being
+        // pointed at, and a ring crossing it would strobe the drawing.
+        float ringShow = ringAlpha * (1.0 - dropAlpha);
+        dropShown = mix(ringShown, dropShown, dropAlpha / max(0.0001, dropAlpha + ringShow));
+        dropAlpha = dropAlpha + ringShow;
+    }
+
     if (dropAlpha < 0.004) discard;
     gl_FragColor = vec4(dropShown, dropAlpha);
 }
@@ -559,6 +641,11 @@ function buildDropMesh(config, capacity) {
     const thirst = new Float32Array(capacity);
     thirstAttr = new THREE.InstancedBufferAttribute(thirst, 1);
     geo.setAttribute('aThirst', thirstAttr);
+    // ONE FLOAT FOR THE POINTER, written only when the hovered tree changes.
+    // A uniform would have needed the instance index in the shader, which is
+    // one more thing to be wrong about across WebGL versions.
+    hoverAttr = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
+    geo.setAttribute('aHover', hoverAttr);
 
     const uniforms = {
         uDropColor: { value: new THREE.Vector3() },
@@ -566,11 +653,20 @@ function buildDropMesh(config, capacity) {
         uOpacity: { value: B.levelOpacity },
         uPxPerRad: { value: 800 },
         uSizePx: { value: B.dropSizePx },
+        uCardScale: { value: B.dropCardScale },
         uRisePx: { value: B.dropRisePx },
-        uPulse: { value: 1 }
+        uPulse: { value: 1 },
+        uBobPx: { value: 0 },
+        uRingAt: { value: -1 },
+        uRingWidth: { value: B.dropRingWidth },
+        uRingColor: { value: new THREE.Vector3() },
+        uRingOpacity: { value: B.dropRingOpacity },
+        uHoverGrow: { value: B.dropHoverGrow },
+        uHoverLift: { value: B.dropHoverLift }
     };
     setVec(uniforms.uDropColor.value, B.levelFullColor);
     setVec(uniforms.uDropEdge.value, B.levelBorderColor);
+    setVec(uniforms.uRingColor.value, B.levelRingColor);
 
     const material = new THREE.ShaderMaterial({
         vertexShader: DROP_VERT,
@@ -678,9 +774,11 @@ export function syncBeds(entries, config = GARDEN_CONFIG) {
  * passed in rather than derived because this module has no camera and no
  * window, which is also what keeps it testable.
  *
- * `seconds` is the animation clock, and only the droplet's pulse reads it.
+ * `seconds` is the animation clock, and only the droplet's motion reads it.
+ * `motion` is the reduced-motion scale, which the droplet's ring reads as a
+ * switch rather than a dial. See below.
  */
-export function updateBeds(entries, snowCoverage = 0, pxPerRadian = 0, config = GARDEN_CONFIG, seconds = 0) {
+export function updateBeds(entries, snowCoverage = 0, pxPerRadian = 0, config = GARDEN_CONFIG, seconds = 0, motion = 1) {
     if (!bedMesh || !bedUniforms) return;
     const B = config.garden.bed;
     bedUniforms.uSnow.value = clamp01(snowCoverage);
@@ -691,8 +789,26 @@ export function updateBeds(entries, snowCoverage = 0, pxPerRadian = 0, config = 
         // fireflies had. They were insects and had to look independent; these
         // are one control repeated, and a row of them breathing out of step
         // would read as sixteen things happening rather than one thing asking.
-        dropUniforms.uPulse.value =
-            1 + B.dropPulse * Math.sin(seconds * B.dropPulseHz * Math.PI * 2);
+        const swing = Math.sin(seconds * B.dropPulseHz * Math.PI * 2);
+        dropUniforms.uPulse.value = 1 + B.dropPulse * motion * swing;
+        // The bob is half a cycle behind the swell, so the droplet is widest at
+        // the bottom of its travel. That is what a drop hanging under something
+        // does, and the two moving in step would read as one zoom.
+        dropUniforms.uBobPx.value = B.dropBobPx * motion * -swing;
+        // ---- THE RING'S CYCLE IS A SWEEP AND THEN A PAUSE -----------------
+        // Negative means the pause, and during it the fragment shader does not
+        // draw a ring at all. A ring running continuously would be a second
+        // weather system in a frame whose only motion is meant to be the trees.
+        //
+        // REDUCED MOTION TAKES THE RING AWAY ENTIRELY rather than slowing it
+        // down. It is the one element here that is pure animation, so a visitor
+        // who asked for less movement should not be given a slower version of
+        // the thing they asked not to see. The droplet, the gauge and the
+        // colours all stay, so nothing is said only by moving.
+        const phase = (seconds % B.dropRingSeconds) / B.dropRingSeconds;
+        dropUniforms.uRingAt.value = (motion >= 1 && phase < B.dropRingSweep)
+            ? phase / B.dropRingSweep
+            : -1;
     }
     const n = Math.min(entries.length, levelMesh ? levelMesh.count : 0);
     for (let i = 0; i < n; i++) {
@@ -707,6 +823,31 @@ export function updateBeds(entries, snowCoverage = 0, pxPerRadian = 0, config = 
         if (thirstAttr) thirstAttr.needsUpdate = true;
     }
 }
+
+/**
+ * Which droplet the pointer is over, by index, or -1 for none.
+ *
+ * WRITTEN ONLY WHEN IT CHANGES. A pointermove handler fires on every pixel of
+ * travel, and re-uploading an instance attribute at that rate for a value that
+ * is the same as last time is the sort of cost that never shows up in a profile
+ * as one line. Returns whether anything moved, which is also what the conductor
+ * uses to decide whether the cursor needs setting.
+ */
+export function setHoveredDrop(index) {
+    const next = typeof index === 'number' && index >= 0 ? index : -1;
+    if (next === hoveredIndex) return false;
+    if (hoverAttr) {
+        if (hoveredIndex >= 0 && hoveredIndex < hoverAttr.array.length) {
+            hoverAttr.array[hoveredIndex] = 0;
+        }
+        if (next >= 0 && next < hoverAttr.array.length) hoverAttr.array[next] = 1;
+        hoverAttr.needsUpdate = true;
+    }
+    hoveredIndex = next;
+    return true;
+}
+
+export function getHoveredDrop() { return hoveredIndex; }
 
 export function getBedMesh() { return bedMesh; }
 export function getLevelMesh() { return levelMesh; }
@@ -740,6 +881,8 @@ export function disposeBeds() {
     fillAttr = null;
     urgencyAttr = null;
     thirstAttr = null;
+    hoverAttr = null;
+    hoveredIndex = -1;
     scratch = null;
     sceneRef = null;
 }

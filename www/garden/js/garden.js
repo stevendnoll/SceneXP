@@ -510,7 +510,8 @@ export function updateGarden(dt, elapsedSeconds, context = {}, config = GARDEN_C
     // same reason the sway does: it has to keep breathing behind the welcome
     // card, where `dt` is held at zero.
     updateBeds(trees, snow, context.pxPerRadian || 0, config,
-        context.time === undefined ? elapsedSeconds : context.time);
+        context.time === undefined ? elapsedSeconds : context.time,
+        context.motion === undefined ? 1 : context.motion);
 }
 
 /** Ages in whole years, for the tree card. */

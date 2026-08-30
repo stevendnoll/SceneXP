@@ -758,25 +758,72 @@ test('THE DROPLET IS A DISTANCE FIELD, not a sampled picture', () => {
     expect(body).toMatch(/mix\(uDropEdge, uDropColor, dropCore\)/);
 });
 
-test('the droplet PULSES IN SIZE and never in opacity', () => {
+test('the droplet MOVES rather than fading, and the ring is the loud part', () => {
     // A control that fades in and out reads as one that might be disabled, and
-    // this one is pressable the whole time it is on screen. The swell also has
-    // to stay small: the scene's one piece of motion is the trees, and sixteen
-    // throbbing markers would take that away.
+    // this one is pressable the whole time it is on screen. So every signal it
+    // has is geometry.
+    const B = GARDEN_CONFIG.garden.bed;
     const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
     const vert = beds.slice(beds.indexOf('const DROP_VERT'));
     const vertBody = vert.slice(0, vert.indexOf('`;'));
     const frag = beds.slice(beds.indexOf('const DROP_FRAG'));
     const fragBody = frag.slice(0, frag.indexOf('`;'));
 
-    expect(vertBody).toMatch(/uSizePx \* uPulse/);
+    expect(vertBody).toMatch(/uSizePx \* uCardScale \* dropGrow/);
     expect(fragBody).not.toMatch(/uPulse/);
-    expect(GARDEN_CONFIG.garden.bed.dropPulse).toBeGreaterThan(0);
-    expect(GARDEN_CONFIG.garden.bed.dropPulse).toBeLessThan(0.12);
-
     // The alpha is the tree's own thirst and the material's opacity, so a
     // droplet is either arriving or fully there, never breathing away.
     expect(fragBody).toMatch(/dropAlpha = dropIn \* uOpacity \* vDropThirst/);
+
+    // ---- THE SWELL IS THE WEAK SIGNAL AND IS SIZED ACCORDINGLY (M13-4) ----
+    // It shipped at 0.06, which QA read as not looking tappable and which is
+    // half a pixel on a 17 px drawing. The eye reads a change of POSITION much
+    // more readily than a change of extent, so the bob has to be worth more
+    // pixels than the swell, and this is the arithmetic that says so.
+    const swellPx = B.dropSizePx * B.dropPulse;
+    expect(B.dropBobPx).toBeGreaterThan(swellPx);
+    expect(B.dropBobPx).toBeGreaterThanOrEqual(1.5);
+    // And neither is allowed to become a second weather system.
+    expect(B.dropBobPx).toBeLessThan(4);
+    expect(B.dropPulse).toBeLessThan(0.12);
+
+    // The ring sweeps and then PAUSES. A ring running continuously would be
+    // sixteen things moving in a frame whose only motion is meant to be trees.
+    expect(B.dropRingSweep).toBeGreaterThan(0);
+    expect(B.dropRingSweep).toBeLessThan(0.6);
+    expect(fragBody).toMatch(/if \(uRingAt >= 0\.0\)/);
+    // It goes BEHIND the droplet, never over it.
+    expect(fragBody).toMatch(/ringShow = ringAlpha \* \(1\.0 - dropAlpha\)/);
+
+    // The card has to hold the ring at full reach, or it clips into a square.
+    // The ring stops at 0.47 of the card and fades to nothing before then.
+    expect(B.dropCardScale * 0.47).toBeLessThan(B.dropCardScale * 0.5);
+    expect(B.dropCardScale).toBeGreaterThan(2);
+});
+
+test('the ring reaches the size of the TARGET, not the size of the drawing', () => {
+    // The point of the ring is that it shows a visitor how big the thing they
+    // have to hit actually is. The droplet is 17 px and the target is 44, so a
+    // ring that stopped at the droplet's own edge would be teaching the wrong
+    // number. It sweeps out to roughly the target instead.
+    const B = GARDEN_CONFIG.garden.bed;
+    const reachPx = B.dropSizePx * B.dropCardScale * 0.47;
+    expect(reachPx).toBeGreaterThan(B.dropSizePx * 0.5);
+    expect(reachPx).toBeGreaterThan(B.dropPickPx * 0.8);
+    expect(reachPx).toBeLessThan(B.dropPickPx * 1.3);
+});
+
+test('REDUCED MOTION TAKES THE RING AWAY, and leaves the droplet', () => {
+    // The ring is the one element here that is purely animation, so somebody
+    // who asked for less movement gets none of it rather than a slower one.
+    // Everything that CARRIES INFORMATION stays: the droplet, its colour, the
+    // gauge under it. Nothing in this scene is said only by moving.
+    const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
+    expect(beds).toMatch(/uRingAt\.value = \(motion >= 1 && phase < B\.dropRingSweep\)/);
+    // The swell and the bob scale with it rather than switching off, because a
+    // control that is completely inert reads as a disabled one.
+    expect(beds).toMatch(/B\.dropPulse \* motion \* swing/);
+    expect(beds).toMatch(/B\.dropBobPx \* motion \* -swing/);
 });
 
 test('the bed material names its own program cache key', () => {

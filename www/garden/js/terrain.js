@@ -100,7 +100,7 @@ export function normalAt(x, z, terrain = GARDEN_CONFIG.terrain, plot = GARDEN_CO
  * Long wavelengths on purpose. This ground is 30 to 120 metres away and any
  * detail in it is smaller than a pixel.
  */
-export function outerWavesAt(x, z, world = GARDEN_CONFIG.world) {
+function rollingWavesAt(x, z, world) {
     const O = world.outerRelief;
     const m = Math.max(Math.abs(x), Math.abs(z));
     if (m <= O.rampFrom) return 0;
@@ -111,6 +111,64 @@ export function outerWavesAt(x, z, world = GARDEN_CONFIG.world) {
         h += w.amp * Math.sin(x * w.fx + z * w.fz + w.phase);
     }
     return h * ramp;
+}
+
+/**
+ * How much the meadow is LEVELLED here, 1 across the lake and 0 out in the
+ * fields. Zero everywhere if the pond has no shelf configured.
+ *
+ * ---- WHY A LAKE NEEDS FLAT GROUND UNDER IT (M14-5) ----
+ *
+ * A basin dug into rolling ground is not a bowl, it is a dent in a hillside,
+ * and water in it does not do what a lake does. Measured on the shipped
+ * numbers, the meadow rose 3.7 m across this basin: the west end sat a metre
+ * UNDER the waterline and the east end stood 1.9 m PROUD of it, so the real
+ * waterline fell at x = +12 instead of the basin's own +29 and a third of the
+ * lake bed was dry land. That is what QA saw and reported as a hill on the
+ * right of the lake and a notch at the top, and it had been true since the lake
+ * was first widened. The sand added in M14-1 did not cause any of it, it simply
+ * painted the dry third a colour that made it impossible to miss.
+ *
+ * So the waves are damped toward their value at the pond's centre across the
+ * basin and a margin beyond it, and they come back over a wide blend so there
+ * is no terrace edge. A floodplain, which is what surrounds a real lake.
+ *
+ * THE CENTRE VALUE IS WHAT `pondWaterLevel` ALREADY USED, so levelling toward
+ * it leaves the water level exactly where it was and nothing downstream has to
+ * be re-derived. That is also why the raw waves are a separate function: this
+ * one has to sample them at the pond's centre, and calling `outerWavesAt` for
+ * that would be infinite recursion.
+ */
+export function lakeShelfAt(x, z, world = GARDEN_CONFIG.world) {
+    const P = world.pond;
+    if (!P || !P.shelf) return 0;
+    const r = Math.hypot((x - P.x) / pondHalfWidth(world), (z - P.z) / P.halfDepth);
+    if (r >= P.shelf.to) return 0;
+    if (r <= P.shelf.from) return 1;
+    const t = (P.shelf.to - r) / (P.shelf.to - P.shelf.from);
+    return t * t * (3 - 2 * t);
+}
+
+/**
+ * The relief of the world OUTSIDE the plot.
+ *
+ * The exact mirror of `edgeDamp`: that one flattens the plot's own relief as it
+ * approaches the boundary, and this one holds the outer world flat at the
+ * boundary and lets it rise as it goes away. The two meet at exactly zero, so
+ * the seam that `heightAt` was built to avoid stays perfect while the meadow
+ * beyond it still rolls.
+ *
+ * Long wavelengths on purpose. This ground is 30 to 120 metres away and any
+ * detail in it is smaller than a pixel.
+ *
+ * Flat across the lake, for the reason in `lakeShelfAt` above.
+ */
+export function outerWavesAt(x, z, world = GARDEN_CONFIG.world) {
+    const raw = rollingWavesAt(x, z, world);
+    const shelf = lakeShelfAt(x, z, world);
+    if (shelf <= 0) return raw;
+    const P = world.pond;
+    return raw + (rollingWavesAt(P.x, P.z, world) - raw) * shelf;
 }
 
 /**
@@ -243,6 +301,31 @@ export function cellInPlot(gx, gz, config = GARDEN_CONFIG) {
     const { x, z } = cellCenter(gx, gz, config.plot.gridSpacing);
     const margin = config.terrain.wall.thickness + config.plot.gridSpacing;
     const limit = config.plot.halfSize - margin;
+    return Math.abs(x) <= limit && Math.abs(z) <= limit;
+}
+
+/**
+ * Whether a tapped point on the ground counts as somebody asking to plant.
+ *
+ * `cellInPlot` answers a different question, which is where a tree may STAND,
+ * and it is held a wall's thickness inside the stonework so a mature trunk
+ * never grows through it. Aiming is not that precise and does not need to be:
+ * `nearestFreeCell` already slides a tap onto the closest spot that works, and
+ * that is the right answer for a tap on the wall or on the metre of grass
+ * beside it.
+ *
+ * IT IS THE WRONG ANSWER FOR A TAP ON THE MEADOW, which was the bug. The ring
+ * search runs twelve deep, or eighteen metres, so a tap out among the forest
+ * would quietly plant a tree most of a plot away from where the visitor
+ * pointed, and a tap on the sky or the mountains missed the ground mesh
+ * entirely and did nothing at all. Neither taught the one rule this scene has:
+ * trees go inside the walls.
+ *
+ * So the wall itself is the line. Inside it, plus a cell of grace, is a
+ * planting tap. Outside it is a question, and the conductor answers it.
+ */
+export function inPlantingReach(x, z, config = GARDEN_CONFIG) {
+    const limit = config.plot.halfSize + config.plot.gridSpacing;
     return Math.abs(x) <= limit && Math.abs(z) <= limit;
 }
 

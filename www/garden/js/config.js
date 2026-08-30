@@ -575,10 +575,57 @@ export const GARDEN_CONFIG = deepFreeze({
             // across the last of the thirst rather than appearing at a hard
             // edge. `garden.moisture.thirstyBelow` is where it starts.
             dropFadeSpan: 0.08,
-            // Enough of a swell to read as alive at 17 px without becoming a
-            // second thing moving in a frame built around the trees.
-            dropPulse: 0.06,
-            dropPulseHz: 0.55
+
+            // ---- MAKING IT LOOK PRESSABLE (M13-4) --------------------------
+            // The first version shipped a size pulse of 0.06 and QA reported
+            // the droplet did not look tappable. Both are true at once: the
+            // pulse was there and it was worth about HALF A PIXEL on a 17 px
+            // drawing, which is not a signal, it is a rounding error. A swell
+            // is also the weakest motion available at this size, because the
+            // eye reads a change of POSITION far more readily than a change of
+            // extent. So the swell stays small and two better signals join it.
+            dropPulse: 0.07,
+            dropPulseHz: 0.55,
+            // A BOB, which is the change of position. Two pixels of travel at
+            // 17 px reads from across the plot where two pixels of swell does
+            // not, and a droplet that rises and settles is the one motion this
+            // shape is expected to make.
+            dropBobPx: 2.0,
+            // ---- AND A RING, which is the part that says "press me" --------
+            // An expanding ring is the one idiom that means "tap here" without
+            // words, and unlike the drawing it is allowed to be large, because
+            // it is gone again a moment later. It sweeps from the droplet's own
+            // edge out to the edge of the TARGET, so what a visitor watches is
+            // the actual size of the thing they have to hit.
+            // ---- AND THE RING NEEDS AN EDGE, for the same reason the gauge
+            // and the droplet do. Measured against summer grass, the droplet's
+            // blue is 1.80:1 and even pure white is only 2.10:1, so no colour
+            // wins there on luminance and picking a brighter one is just
+            // picking a losing number more loudly. What wins is a boundary: the
+            // ring is light on its inside and takes the droplet's own dark
+            // outline on its leading edge, which is 6.57:1 on that same grass.
+            // A soft halo on mulch at night and a visible edge on daylight
+            // grass, from one shape.
+            levelRingColor: 0xe6f6ff,
+            dropRingSeconds: 2.8,
+            // How much of the cycle the ring is travelling. The rest is the
+            // pause, and the pause is what keeps sixteen of these from reading
+            // as a second weather system.
+            dropRingSweep: 0.42,
+            dropRingWidth: 0.075,
+            dropRingOpacity: 0.5,
+            // The quad has to be wide enough to hold the ring at full reach.
+            // The droplet is drawn at its own size inside it, so this number
+            // changes the room and never the drawing.
+            dropCardScale: 2.7,
+            // ---- HOVER, which is the desktop half of the answer ------------
+            // A pointer is the one input that can ask "what is this" before
+            // committing, and the web's answer has always been the cursor. The
+            // canvas takes a pointer cursor over a droplet and the droplet
+            // itself swells and brightens, so a mouse visitor knows it is a
+            // control before they press it rather than after.
+            dropHoverGrow: 0.22,
+            dropHoverLift: 0.35
         },
 
         moisture: {
@@ -988,6 +1035,20 @@ export const GARDEN_CONFIG = deepFreeze({
             // given a width that puts trees in it. This is the band of dry
             // ground left between the water and the wood.
             shoreMargin: 2.0,
+            // ---- THE GROUND UNDER THE LAKE IS LEVELLED (M14-5) -----------
+            // In basin radii: fully flat inside `from`, back to open meadow by
+            // `to`. A basin dug into rolling ground is a dent in a hillside
+            // rather than a bowl, and the meadow rose 3.7 m across this one, so
+            // the west end sat a metre under the waterline and the east end
+            // stood 1.9 m proud of it. A third of the lake bed was dry land and
+            // the real waterline fell at x = +12 instead of +29.
+            //
+            // `to` is well outside the basin on purpose: the blend has to
+            // finish clear of the water, or the waves come back inside the lake
+            // and the problem returns in miniature. It is also wide, 0.65 of a
+            // radius or about 19 m, so the meadow returns as a slope rather
+            // than as a terrace rim around a flat disc.
+            shelf: { from: 1.15, to: 1.8 },
             // How far the ground is dug out, and how much of that is filled.
             // Less than full, so there is a band of damp shore.
             depth: 1.9,
@@ -996,14 +1057,25 @@ export const GARDEN_CONFIG = deepFreeze({
             // backwards: a LOWER number is a FULLER lake. Measured water
             // half-width against the 29 m basin, and share of frame width:
             //
-            //   0.45  15.5 m  33%   (what read as a pond)
-            //   0.30  18.5 m  39%
-            //   0.15  21.8 m  46%
-            //   0.06  24.7 m  52%
+            // ---- RE-MEASURED AFTER THE BED WAS LEVELLED (M14-5) ----------
+            // The old table was taken against a rectangle of water on tilted
+            // ground, where the visible lake was whatever the terrain left of
+            // it: 41 m across, off centre, and 35 percent of a 1280 frame. On
+            // a level bed the water fills the basin evenly and the numbers
+            // mean what they say. Half-width, the grass bank left between the
+            // waterline and the basin rim, and share of frame width:
             //
-            // 0.15 still leaves a 7 m band of damp shore, which is what stops
-            // the water meeting the grass in a hard line.
-            fill: 0.15,
+            //   0.15  21.9 m   7.1 m bank   37%
+            //   0.10  23.3 m   5.7 m bank   39%
+            //   0.07  24.3 m   4.7 m bank   41%
+            //   0.05  25.1 m   3.9 m bank   42%
+            //   0.03  26.0 m   3.0 m bank   44%
+            //
+            // 0.07 is more water than the scene has ever actually shown and
+            // still leaves a bank wide enough to read as a shore. The bank is
+            // the thing the old comment called a band of damp shore, and on a
+            // level bed it is finally the same all the way round.
+            fill: 0.07,
             // Still water, so the ripples are small and slow.
             // THE PLANE IS NOW THREE TIMES THE OLD SIZE and the ripple scale
             // did not move with it, so the pattern repeated about eight times

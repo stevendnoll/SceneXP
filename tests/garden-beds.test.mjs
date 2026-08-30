@@ -598,7 +598,11 @@ test('the drawn droplet and the tappable one share ONE number', async () => {
 
     // The shader's uniform comes from the config key, and nothing else sets it.
     expect(beds).toMatch(/uRisePx:\s*\{\s*value:\s*B\.dropRisePx\s*\}/);
-    expect(beds).toMatch(/mv\.y \+= uRisePx \* dropMetre/);
+    // AND THE BOB RIDES ON TOP OF THE RISE RATHER THAN REPLACING IT. The target
+    // deliberately does not follow the bob: a button that dodged the pointer by
+    // two pixels would be a worse bug than the one the bob is fixing.
+    expect(beds).toMatch(/mv\.y \+= \(uRisePx \+ uBobPx\) \* dropMetre/);
+    expect(beds).not.toMatch(/dropScreenY[\s\S]{0,200}uBobPx/);
     // The CPU side reads the same key, once.
     expect(beds).toMatch(/return anchorY - config\.garden\.bed\.dropRisePx/);
     expect(beds.match(/dropRisePx/g)).toHaveLength(3);
@@ -630,4 +634,113 @@ test('Water all leaves the tab order when it leaves the screen', async () => {
     // pixels of 3D scene.
     const html = readFileSync(join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8');
     expect(html).toMatch(/<button id="water-all" type="button" class="water-all" hidden>/);
+});
+
+// ---- Making it look pressable, and saying where trees go (M13-4) -----------
+
+const { pickDropIndex, setHoveredDrop, getHoveredDrop } = await import('../www/garden/js/beds.js');
+const { inPlantingReach } = await import('../www/garden/js/terrain.js');
+
+test('THE CURSOR AND THE TAP COME FROM THE SAME SEARCH', () => {
+    // "It looked clickable" and "it was clickable" have to be the same claim.
+    // Two lookalike searches would drift the first time either was tuned, so
+    // the hover index and the watering tap run through one function and this
+    // asserts they agree everywhere, including at the boundary.
+    const bases = [
+        { entry: { id: 'a' }, index: 0, x: 400, y: 400, radiusPx: B.minPickPx, thirst: 1, dropY: 370 },
+        { entry: { id: 'b' }, index: 1, x: 460, y: 400, radiusPx: B.minPickPx, thirst: 0, dropY: 370 }
+    ];
+    for (let x = 340; x <= 520; x += 3) {
+        for (const y of [370, 370 - B.dropPickPx + 1, 370 + B.dropPickPx - 1, 300]) {
+            const entry = pickDrop(x, y, bases);
+            const index = pickDropIndex(x, y, bases);
+            expect(index >= 0).toBe(entry !== null);
+            if (entry) expect(bases[index].entry).toBe(entry);
+        }
+    }
+    // The tree that is not asking is never hovered, for the same reason it is
+    // never tapped: there is nothing drawn there to hover.
+    expect(pickDropIndex(460, 370, bases)).toBe(-1);
+});
+
+test('the hover attribute is written only when it CHANGES', () => {
+    // A pointermove fires on every pixel of travel. Re-uploading an instance
+    // attribute at that rate, for a value identical to last frame's, is the
+    // kind of cost that never appears in a profile as a single line.
+    setHoveredDrop(-1);
+    expect(setHoveredDrop(2)).toBe(true);
+    expect(getHoveredDrop()).toBe(2);
+    expect(setHoveredDrop(2)).toBe(false);
+    expect(setHoveredDrop(-1)).toBe(true);
+    expect(setHoveredDrop(-1)).toBe(false);
+    // Anything that is not an index means nothing is hovered, rather than
+    // meaning instance NaN.
+    expect(setHoveredDrop(3)).toBe(true);
+    expect(setHoveredDrop(null)).toBe(true);
+    expect(getHoveredDrop()).toBe(-1);
+});
+
+test('A TAP OUTSIDE THE WALLS IS A QUESTION, not a silence', () => {
+    // Two ways to miss and neither used to say so. The reach is deliberately
+    // WIDER than the plantable area: `nearestFreeCell` already slides a tap on
+    // the wall or the grass beside it onto a spot that works, and that is the
+    // right answer there. What it is not the right answer for is the meadow.
+    const half = GARDEN_CONFIG.plot.halfSize;
+    const spacing = GARDEN_CONFIG.plot.gridSpacing;
+
+    // Inside, and on the wall, and a cell past it: all planting taps.
+    expect(inPlantingReach(0, 0)).toBe(true);
+    expect(inPlantingReach(half, 0)).toBe(true);
+    expect(inPlantingReach(0, -half)).toBe(true);
+    expect(inPlantingReach(half + spacing * 0.9, 0)).toBe(true);
+
+    // Out on the meadow: not.
+    expect(inPlantingReach(half + spacing * 2, 0)).toBe(false);
+    expect(inPlantingReach(0, half + spacing * 2)).toBe(false);
+    expect(inPlantingReach(60, 60)).toBe(false);
+
+    // AND IT MUST BE WIDER THAN WHERE A TREE MAY STAND, or a tap on the last
+    // legal row of grass would be answered with a hint about the walls it is
+    // already inside.
+    const margin = GARDEN_CONFIG.terrain.wall.thickness + spacing;
+    expect(half + spacing).toBeGreaterThan(half - margin);
+
+    // The old behaviour, for the record: the ring search runs twelve deep, so
+    // a tap this far out would have planted a tree eighteen metres away.
+    expect(12 * spacing).toBeGreaterThan(half);
+});
+
+test('and the conductor asks the reach before it plants', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'main.js'), 'utf8');
+    const handler = src.slice(src.indexOf('function handleSceneTap'));
+    const body = handler.slice(0, handler.indexOf('\n}\n'));
+    // Both misses take the same exit, and neither reaches plantTree.
+    expect(body).toMatch(/if \(!point \|\| !inPlantingReach\(point\.x, point\.z\)\) \{ hintTheWalls\(\); return; \}/);
+    expect(body.indexOf('inPlantingReach')).toBeLessThan(body.indexOf('nearestFreeCell'));
+
+    // THE HINT GIVES UP, because looking at the sky is a thing people do and a
+    // toast every time turns an idle glance into being told off.
+    const hint = src.slice(src.indexOf('function hintTheWalls'));
+    const hintBody = hint.slice(0, hint.indexOf('\n}\n'));
+    expect(hintBody).toMatch(/wallHints >= \d/);
+    expect(hintBody).toMatch(/wallHintAt < \d+/);
+});
+
+test('the droplet teaches itself once, and never after the first watering', async () => {
+    // The only route that reaches a touch visitor: they have no pointer, so no
+    // cursor and no hover can tell them anything. It follows the pattern the
+    // scene already uses to teach planting.
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'main.js'), 'utf8');
+    const fn = src.slice(src.indexOf('function teachTheDroplet'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toMatch(/if \(dropTaught \|\| count < 1 \|\| anyModalOpen\(\)\) return/);
+    expect(body).toMatch(/dropTaught = true/);
+    // And watering sets the same flag, so somebody who has already done it is
+    // never told how.
+    const water = src.slice(src.indexOf('function waterOne'));
+    expect(water.slice(0, water.indexOf('\n}\n'))).toMatch(/dropTaught = true/);
 });

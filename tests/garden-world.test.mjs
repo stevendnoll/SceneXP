@@ -23,6 +23,8 @@ import {
 } from '../www/garden/js/forest.js';
 import { presenceAt, WINDOWS } from '../www/garden/js/wildlife.js';
 import { luminanceOf } from '../www/garden/js/sky.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { dollyView, dollyTrackZ } from '../www/garden/js/view.js';
 
 const PLOT = GARDEN_CONFIG.plot;
@@ -231,8 +233,20 @@ test('nothing in the vista is placed where the camera cannot see it', () => {
 });
 
 test('the mountains are drawn without scene fog, because fog would erase them', () => {
-    // Scene fog is total past 260 m. A ridge at 340 with fog on is painted
-    // exactly the colour of the sky behind it.
+    // Scene fog is total past 260 m, so a ridge drawn with fog on is painted
+    // exactly the colour of the sky behind it. Every tier carries its own
+    // aerial perspective instead. That is a property of the MATERIAL, so it is
+    // asserted directly rather than inferred from where a layer stands.
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'vista.js'), 'utf8');
+    const build = src.slice(src.indexOf('function buildRidge'));
+    expect(build.slice(0, build.indexOf('\n}\n'))).toMatch(/fog: false/);
+
+    // AND EVERY TIER SITS PAST THE CEILING. A tier inside the fog's range is a
+    // different problem: everything around it at that distance really is most
+    // of the way dissolved, so a crisp ridge there reads as standing in front
+    // of the haze rather than in it. One was tried at 205 m to fill the empty
+    // band between the lake and the range (M14-2) and taken out again after QA
+    // (M14-5), and this is the line that says what a new one would owe.
     for (const layer of W.mountains.layers) {
         expect(layer.distance).toBeGreaterThan(GARDEN_CONFIG.sky.fog.far);
     }
@@ -658,4 +672,172 @@ test('the dolly deltas clamp, and a NaN cannot strand the camera', async () => {
     expect(view.getDolly()).toBe(-1);
     view.resetView();
     expect(view.getDolly()).toBe(0);
+});
+
+// ---- Nothing stands in the lake (M14-4) ------------------------------------
+
+const { inTheLake } = await import('../www/garden/js/forest.js');
+
+test('NO BUSH STANDS IN THE LAKE', () => {
+    // The trees have had a rule keeping them out of the basin since M7-6 and
+    // the bushes never did. The ring they are scattered on runs 13.5 to 30 m
+    // from the plot and the lake spans 26 to 58 m out, so the two overlap, and
+    // with a hundred bushes drawn a spot in the water is a certainty rather
+    // than a risk. QA found one standing in it.
+    const U = W.undergrowth;
+    const wet = [];
+    let n = 0;
+    let seed = 1;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    for (let i = 0; i < 40000; i++) {
+        const a = rnd() * Math.PI * 2;
+        const r = U.bushRadius.min + rnd() * (U.bushRadius.max - U.bushRadius.min);
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (Math.max(Math.abs(x), Math.abs(z)) < PLOT.halfSize + 1) continue;
+        n += 1;
+        // Everything the placement loop accepts must be dry.
+        if (!inTheLake(x, z)) {
+            if (worldHeightAt(x, z) < pondWaterLevel(W)
+                && Math.abs(x - W.pond.x) <= pondHalfWidth(W)
+                && Math.abs(z - W.pond.z) <= W.pond.halfDepth) wet.push([x, z]);
+        }
+    }
+    expect(n).toBeGreaterThan(1000);
+    expect(wet).toEqual([]);
+
+    // AND THE RULE IS "WOULD IT BE STANDING IN WATER", not "is it inside the
+    // ellipse". Those are still different questions after M14-5 levelled the
+    // bed, and for a better reason than before: the water fills the basin to
+    // about 0.84 of its radius, so the outer sixth of the bowl is the grass
+    // BANK, which is dry ground a bush is perfectly at home on. A basin test
+    // would throw the whole shore away.
+    const P = W.pond;
+    const dryInBasin = { x: P.x + pondHalfWidth(W) * 0.93, z: P.z };
+    expect(pondBasinAt(dryInBasin.x, dryInBasin.z)).toBeGreaterThan(0);
+    expect(worldHeightAt(dryInBasin.x, dryInBasin.z)).toBeGreaterThan(pondWaterLevel(W));
+    expect(inTheLake(dryInBasin.x, dryInBasin.z)).toBe(false);
+
+    // The middle of the lake is unambiguously out.
+    expect(inTheLake(P.x, P.z)).toBe(true);
+    // And so is somewhere well clear of it.
+    expect(inTheLake(0, 0)).toBe(false);
+    expect(inTheLake(90, 90)).toBe(false);
+});
+
+// ---- The lake bed is level (M14-5) -----------------------------------------
+
+const { lakeShelfAt, outerReliefAt: reliefAt } = await import('../www/garden/js/terrain.js');
+
+/** The world as it was before the shelf: same config, no levelling. */
+const TILTED = (() => {
+    const w = structuredClone(W);
+    delete w.pond.shelf;
+    return w;
+})();
+
+test('A LAKE NEEDS FLAT GROUND UNDER IT, and this one did not have any', () => {
+    // The fault QA reported as a hill on the right of the lake and a notch at
+    // the top, and it had been true since the lake was first widened. A basin
+    // dug into rolling ground is a dent in a hillside, not a bowl.
+    const P = W.pond;
+    const rw = pondHalfWidth(W);
+    const levelTilted = outerWavesAt(P.x, P.z, TILTED) - P.depth * P.fill;
+
+    // THE OLD GROUND, ACROSS THE BASIN: a metre under water at one end and
+    // nearly two metres of dry land at the other.
+    const west = reliefAt(P.x - rw * 0.7, P.z, TILTED);
+    const east = reliefAt(P.x + rw * 0.7, P.z, TILTED);
+    // Measured at 0.7 of the basin radius, which is well inside where water
+    // should be on both sides.
+    expect(levelTilted - west).toBeGreaterThan(0.5);     // drowned
+    expect(east - levelTilted).toBeGreaterThan(0.9);     // dry land, well proud
+    expect(east - west).toBeGreaterThan(2.2);            // the tilt itself
+
+    // And now it is level: the two ends agree to within a few centimetres.
+    const level = pondWaterLevel(W);
+    const w2 = reliefAt(P.x - rw * 0.7, P.z);
+    const e2 = reliefAt(P.x + rw * 0.7, P.z);
+    expect(Math.abs(e2 - w2)).toBeLessThan(0.05);
+    expect(level - w2).toBeGreaterThan(0);
+    expect(level - e2).toBeGreaterThan(0);
+});
+
+test('the waterline is the same distance out on every side', () => {
+    const P = W.pond;
+    const level = pondWaterLevel(W);
+    const reach = (dx, dz) => {
+        // THE FIRST CROSSING, not the last. Walking on past the shore finds
+        // the next dip the meadow happens to have, which belongs to no lake.
+        let out = 0;
+        for (let d = 0; d < 40; d += 0.02) {
+            if (reliefAt(P.x + dx * d, P.z + dz * d) >= level) break;
+            out = d;
+        }
+        return out;
+    };
+    expect(reach(1, 0)).toBeCloseTo(reach(-1, 0), 1);
+    expect(reach(0, 1)).toBeCloseTo(reach(0, -1), 1);
+    // The old bed was lopsided by most of its own width.
+    const tiltedReach = (dx) => {
+        const lv = outerWavesAt(P.x, P.z, TILTED) - P.depth * P.fill;
+        let out = 0;
+        for (let d = 0; d < 40; d += 0.02) {
+            if (reliefAt(P.x + dx * d, P.z, TILTED) >= lv) break;
+            out = d;
+        }
+        return out;
+    };
+    expect(Math.abs(tiltedReach(1) - tiltedReach(-1))).toBeGreaterThan(8);
+});
+
+test('NO DRY LAND IS LEFT INSIDE THE WATER, which is what the notch was', () => {
+    const P = W.pond;
+    const level = pondWaterLevel(W);
+    const rw = pondHalfWidth(W);
+    let dryNow = 0;
+    let dryBefore = 0;
+    const levelTilted = outerWavesAt(P.x, P.z, TILTED) - P.depth * P.fill;
+    for (let x = -rw; x <= rw; x += 0.5) {
+        for (let z = P.z - P.halfDepth; z <= P.z + P.halfDepth; z += 0.5) {
+            // Well inside the basin, where water has no business being absent.
+            if (Math.hypot(x / rw, (z - P.z) / P.halfDepth) > 0.7) continue;
+            if (reliefAt(x, z) >= level) dryNow += 1;
+            if (reliefAt(x, z, TILTED) >= levelTilted) dryBefore += 1;
+        }
+    }
+    expect(dryNow).toBe(0);
+    // And the old bed had a great deal of it, which is the guard rather than
+    // the restatement: this number is what QA was looking at.
+    expect(dryBefore).toBeGreaterThan(100);
+});
+
+test('levelling did not move the water, which is why nothing downstream broke', () => {
+    // The shelf damps the waves toward their value AT THE POND CENTRE, and that
+    // is the value `pondWaterLevel` was already built on. So the water sits
+    // exactly where it did and every number derived from it still holds.
+    const P = W.pond;
+    expect(outerWavesAt(P.x, P.z)).toBeCloseTo(outerWavesAt(P.x, P.z, TILTED), 9);
+    expect(lakeShelfAt(P.x, P.z)).toBe(1);
+});
+
+test('the shelf finishes clear of the water, and of the plot', () => {
+    const P = W.pond;
+    // Fully flat past the basin rim, or the waves come back inside the lake and
+    // the whole problem returns in miniature.
+    expect(P.shelf.from).toBeGreaterThan(1);
+    expect(P.shelf.to).toBeGreaterThan(P.shelf.from);
+    // And a WIDE blend, so the meadow returns as a slope rather than as a
+    // terrace rim around a flat disc.
+    expect((P.shelf.to - P.shelf.from) * pondHalfWidth(W)).toBeGreaterThan(12);
+
+    // IT MUST NOT REACH THE PLOT. The seam between the plot and the meadow is
+    // guaranteed at exactly zero, and levelling ground near it would be a
+    // second thing deciding that height.
+    for (let x = -HALF; x <= HALF; x += 0.5) {
+        for (const z of [-HALF, HALF]) {
+            expect(lakeShelfAt(x, z)).toBe(0);
+            expect(lakeShelfAt(z, x)).toBe(0);
+        }
+    }
 });

@@ -235,7 +235,10 @@ function buildRidge(layer, index, config) {
     geo.computeBoundingSphere();
 
     const uniforms = {
-        uRock: { value: new THREE.Vector3(...unpackColor(M.rockColor)) },
+        // PER LAYER, FALLING BACK TO THE RANGE'S OWN ROCK. The near tier is a
+        // wooded rise rather than a peak, and a third grey silhouette would
+        // have added distance without adding a middle distance. See M14-2.
+        uRock: { value: new THREE.Vector3(...unpackColor(layer.color || M.rockColor)) },
         uHaze: { value: new THREE.Vector3(0.6, 0.7, 0.8) },
         uHazeAmount: { value: layer.haze }
     };
