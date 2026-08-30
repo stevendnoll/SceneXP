@@ -74,11 +74,11 @@ const state = {
     // pass while somebody is still reading what the place is.
     elapsedSeconds: 0,
     // THE ANIMATION CLOCK, which always moves. Sway, flutter, falling rain and
-    // drifting fireflies ride this instead, so the welcome frame is alive
-    // while the calendar holds. Never persisted and never read by any rule:
-    // freezing it would not pause the garden, it would photograph it, and a
-    // photograph of rain is streaks hanging motionless in the air, which reads
-    // as broken rather than as still.
+    // anything the wildlife module is flying ride this instead, so the welcome
+    // frame is alive while the calendar holds. Never persisted and never read
+    // by any rule: freezing it would not pause the garden, it would photograph
+    // it, and a photograph of rain is streaks hanging motionless in the air,
+    // which reads as broken rather than as still.
     sceneSeconds: 0,
     // WHETHER ANYTHING IS ACTUALLY FALLING, from the last frame's `fall`. The
     // tree card needs it for one line of copy and can be opened by a tap at any
@@ -1006,7 +1006,19 @@ function animate() {
     updateTerrain(hour, snow);
     updateForest(hour, snow, weather.wind, state.sceneSeconds, motionScale());
     updateVista(hour, state.sceneSeconds, snow, weather.gloom, camera);
-    updateWildlife(hour, state.sceneSeconds, snow);
+    // Pixels per radian of vertical field. TWO THINGS IN THIS SCENE HOLD A SIZE
+    // ON SCREEN RATHER THAN IN METRES, the water level in the mulch beds and
+    // the fireflies' glow, and both need the lens and the viewport, both of
+    // which move: the composed field differs by orientation and the window can
+    // be resized at any moment.
+    //
+    // The fireflies are switched off at the moment (M12-9) and this still goes
+    // to them, because a benched creature that has to be re-wired as well as
+    // re-flagged is not really benched. It costs one division either way.
+    const pxPerRadian = camera
+        ? window.innerHeight / (camera.fov * Math.PI / 180)
+        : 0;
+    updateWildlife(hour, state.sceneSeconds, snow, GARDEN_CONFIG, { camera, pxPerRadian });
     updateGarden(gardenDelta, state.elapsedSeconds, {
         // NO `rain` HERE ANY MORE. The garden used to be handed the rain rate
         // and it filled every tank with it, whatever the temperature had made
@@ -1017,13 +1029,8 @@ function animate() {
         // The trees sway on the animation clock while their growth, thirst and
         // health wait on `gardenDelta` above.
         time: state.sceneSeconds,
-        // Pixels per radian of vertical field. The water level holds a size on
-        // screen rather than in metres, so it needs the lens and the viewport,
-        // both of which move: the composed FOV differs by orientation and the
-        // window can be resized at any moment.
-        pxPerRadian: camera
-            ? window.innerHeight / (camera.fov * Math.PI / 180)
-            : 0
+        // Measured once above, and shared with the fireflies.
+        pxPerRadian
     });
     updateHud(yearAt(state.elapsedSeconds), state.elapsedSeconds, weatherWords(weather, fall));
     if (isCardOpen()) {

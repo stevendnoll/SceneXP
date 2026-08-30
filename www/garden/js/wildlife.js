@@ -2,6 +2,16 @@
 /**
  * wildlife.js - Butterflies, fireflies, birds and bats.
  *
+ * ---- NONE OF THEM ARE SWITCHED ON ----
+ *
+ * All four sit behind `world.wildlife.enabled` and all four are currently
+ * false, so at the moment this module builds nothing and the scene pays it
+ * nothing. That is a product decision and not a state of disrepair: the
+ * butterflies, birds and bats pulled the eye off the growing trees (M8-1), and
+ * the fireflies came off later because neither drawing of them landed (M12-9).
+ * Everything below is whole, tested and tuned, and each one comes back by
+ * turning its own word to true.
+ *
  * ---- SCALE IS THE WHOLE PROBLEM ----
  *
  * `www/gavin/js/store.js` is the reference for HOW these move: a closed curve
@@ -18,7 +28,7 @@
  * ---- WHY THE CPU DRIVES THESE ----
  *
  * Everything else in this scene animates in a shader because it has hundreds
- * or thousands of instances. There are sixteen fireflies. Composing sixteen
+ * or thousands of instances. There are eighteen fireflies. Composing eighteen
  * matrices a frame is nothing, and it buys code that can be read, so the trade
  * that was right for the leaves is wrong here.
  *
@@ -171,15 +181,29 @@ export function initWildlife(scene, config = GARDEN_CONFIG, options = {}) {
     // ---- Fireflies ---------------------------------------------------------
     // MeshBasicMaterial and fog off: a firefly is a light, so it must not be
     // lit by the scene and must not dim with distance.
+    //
+    // A QUAD AND A FALLOFF, NOT A SPHERE. It used to be a 5 by 4 sphere, and a
+    // sphere is a BODY: it has a silhouette, that silhouette has countable
+    // edges, and it grows as it comes toward the lens. None of those are true
+    // of a light. What is drawn now is one camera-facing card carrying a soft
+    // radial glow, held at a constant size on screen by `driveFireflies`, so
+    // what a visitor sees is a point of light with an edge that fades rather
+    // than a green polygon on the grass.
+    //
+    // `depthWrite` off because the glow is mostly transparent and two of them
+    // crossing must not punch each other out.
     if (on.fireflies) {
+        const glow = fireflyTexture();
         fireflies = buildFlyer(
             mobile ? W.fireflies.countMobile : W.fireflies.count,
-            new THREE.SphereGeometry(W.fireflies.size, 5, 4),
+            new THREE.PlaneGeometry(1, 1),
             new THREE.MeshBasicMaterial({
-                color: W.fireflies.color, transparent: true, opacity: 1, fog: false
+                color: W.fireflies.color, map: glow, transparent: true,
+                opacity: 1, fog: false, depthWrite: false
             }),
             W.fireflies.box, seed ^ 0xF11E);
         fireflies.mesh.name = 'fireflies';
+        if (glow) disposables.push(glow);
         scene.add(fireflies.mesh);
     }
 
@@ -296,6 +320,94 @@ function butterflyTexture(size = 64) {
     return texture;
 }
 
+/**
+ * The firefly's glow, drawn once: white, so the instance colour tints it, and
+ * soft all the way out to nothing at the rim.
+ *
+ * THE ALPHA MUST REACH ZERO AT THE EDGE OF THE CARD or the quad shows as a
+ * square, which is a worse artefact than the polygon this replaces. Hence the
+ * gradient running to the half-width and the last stop being fully clear.
+ *
+ * Three stops rather than two, because a light is not a linear ramp: a small
+ * near-solid core carries the insect and a wide faint halo carries the glow.
+ */
+function fireflyTexture(size = 64) {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, size, size);
+    const mid = size / 2;
+
+    const g = ctx.createRadialGradient(mid, mid, 0, mid, mid, mid);
+    g.addColorStop(0.00, 'rgba(255,255,255,1)');
+    g.addColorStop(0.20, 'rgba(255,255,255,0.94)');
+    g.addColorStop(0.42, 'rgba(255,255,255,0.42)');
+    g.addColorStop(0.72, 'rgba(255,255,255,0.10)');
+    g.addColorStop(1.00, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+/**
+ * The frame every measurement in this scene is quoted at, in pixels of height.
+ * Only a fallback here: the live viewport is what the scene actually hands in.
+ */
+export const REFERENCE_FRAME_PX = 800;
+
+/**
+ * How wide a firefly has to be DRAWN, in metres, to cover the same handful of
+ * pixels wherever it is.
+ *
+ * This is the whole fix, and it is one line of arithmetic: pixels are
+ * `(metres / depth) * pxPerRadian`, so metres are `depth * pixels /
+ * pxPerRadian`. Size becomes a function of depth instead of a constant, which
+ * is the exact inversion of what a body does and what a light needs.
+ *
+ * PURE, AND TAKING A NUMBER RATHER THAN A CAMERA, for the reason `updateBeds`
+ * gives for the water level: the module has no camera and no window, and the
+ * measurement is worth being able to assert without either.
+ *
+ * @param {number} depth  metres in front of the lens, along the view axis
+ * @param {number} pxPerRadian  viewport height over the vertical field
+ * @param {number} blink  0 to 1, how hard this one is glowing right now
+ */
+export function fireflyGlowSize(depth, pxPerRadian, config = GARDEN_CONFIG, blink = 0) {
+    const F = config.world.wildlife.fireflies;
+    // A frame we have not been told the size of is the reference one. Without
+    // this, a first frame that arrives before the viewport is measured would
+    // put every firefly at zero and they would flicker in from nothing.
+    const perRad = pxPerRadian > 0
+        ? pxPerRadian
+        : REFERENCE_FRAME_PX / (config.camera.fov * Math.PI / 180);
+    // Never behind the lens, and never in the half metre where the arithmetic
+    // stops meaning anything.
+    return Math.max(0.4, depth) * (F.sizePx * (1 + F.bloom * blink)) / perRad;
+}
+
+/**
+ * How far in front of the lens a point is.
+ *
+ * The DEPTH along the view axis rather than the distance to the eye, because
+ * that is what a perspective projection divides by. Using the radial distance
+ * would draw the fireflies at the edges of a wide frame about 15 percent large,
+ * which is small but is exactly the kind of thing this change exists to stop.
+ * With no camera to ask, the radial distance is the honest answer.
+ */
+function viewDepth(p, eye, forward) {
+    const dx = p.x - eye.x;
+    const dy = p.y - eye.y;
+    const dz = p.z - eye.z;
+    if (!forward) return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    return dx * forward.x + dy * forward.y + dz * forward.z;
+}
+
 const _pos = { set: () => { } };
 
 /** Drive one flyer group. Returns nothing; everything is in the matrices. */
@@ -340,8 +452,11 @@ function driveFlyer(group, time, presence, config, options = {}) {
  * @param {number} hour
  * @param {number} elapsed  in-world seconds, which is also the animation clock
  * @param {number} snowCoverage  nothing flies in a snowstorm
+ * @param {object} view  `{ camera, pxPerRadian }`, the live lens. Optional:
+ *        without it the fireflies fall back to the composed viewpoint in the
+ *        config, which is what the pure tests exercise.
  */
-export function updateWildlife(hour, elapsed, snowCoverage = 0, config = GARDEN_CONFIG) {
+export function updateWildlife(hour, elapsed, snowCoverage = 0, config = GARDEN_CONFIG, view = null) {
     // ONE GUARD PER CREATURE, NEVER ONE FOR ALL OF THEM. This used to read
     // `if (!butterflies) return`, which was harmless while everything was
     // always built and became a bug the moment one creature could be switched
@@ -373,6 +488,25 @@ export function updateWildlife(hour, elapsed, snowCoverage = 0, config = GARDEN_
         const colour = new THREE.Color();
         const base = new THREE.Color(W.fireflies.color);
 
+        // ---- The lens, live ------------------------------------------------
+        // THE LIVE ONE AND NOT THE CONFIGURED ONE, because both halves of it
+        // move: the portrait layout widens the field to 72 degrees and dollies
+        // straight back, and the window can be resized at any moment. A size
+        // pinned to the composed camera would be a third out on a phone.
+        const camera = view && view.camera ? view.camera : null;
+        const pxPerRadian = view && view.pxPerRadian > 0 ? view.pxPerRadian : 0;
+        const eye = camera ? camera.position : config.camera.position;
+        // The card faces the lens exactly, which is what the camera's own
+        // rotation means. Nothing else in this file needs to billboard, so
+        // this is the one place it is done.
+        let forward = null;
+        if (camera) {
+            q.copy(camera.quaternion);
+            forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        } else {
+            q.identity();
+        }
+
         for (let i = 0; i < fireflies.count; i++) {
             const path = fireflies.paths[i];
             pathAt(path, elapsed * 0.55, p);
@@ -380,8 +514,12 @@ export function updateWildlife(hour, elapsed, snowCoverage = 0, config = GARDEN_
             // read as a string of fairy lights rather than as insects.
             const blink = Math.pow(
                 clamp01(Math.sin(elapsed * (1.1 + path.tint * 0.9) + path.px) * 0.5 + 0.5), 3);
-            const size = 0.55 + blink * 0.9;
-            q.identity();
+            // THE BLINK IS BRIGHTNESS. It used to be size as well, running
+            // from 0.55 to 1.45, which meant the nearest firefly at its
+            // brightest was also its largest: 28.8 px of flat green. What
+            // varies now is the colour below, and all the size does is the
+            // small swell of `bloom`.
+            const size = fireflyGlowSize(viewDepth(p, eye, forward), pxPerRadian, config, blink);
             s.setScalar(size);
             m.compose(p, q, s);
             fireflies.mesh.setMatrixAt(i, m);

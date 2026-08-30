@@ -980,16 +980,27 @@ export const GARDEN_CONFIG = deepFreeze({
             // geometry, no instance matrices and no per-frame walk.
             //
             // The butterflies, birds and bats are moving things that pull the
-            // eye off the only motion that matters. The fireflies stay: they
-            // are static points of light at dusk, so they add depth without
-            // competing, which is the distinction the other three fail. The
-            // code for all four stays in `wildlife.js` in full working order,
-            // because this is a prototype and any of them may come back.
+            // eye off the only motion that matters.
+            //
+            // THE FIREFLIES ARE OFF TOO, as of the third screenshot pass, and
+            // for a different reason: not that they competed but that they
+            // never landed. The first version was a sphere sized in metres,
+            // which drew countable octagons on the lawn. The second held its
+            // size on screen and read as too faint, which is the other side of
+            // the same coin, because a soft glow that is 12 px wide is only
+            // about 5 px of solid light and the rest is halo. Getting from
+            // there to something worth having is a lighting problem rather
+            // than a sizing one, and that is not this milestone's work.
+            //
+            // NOTHING WAS DELETED TO DO THIS. All four still live in
+            // `wildlife.js` in full working order, the firefly sizing below is
+            // still measured by the guard, and bringing any of them back is
+            // this one word. See M12-9.
             enabled: {
                 butterflies: false,
                 birds: false,
                 bats: false,
-                fireflies: true
+                fireflies: false
             },
 
             butterflies: {
@@ -1003,7 +1014,50 @@ export const GARDEN_CONFIG = deepFreeze({
                 box: { x0: -11, x1: 11, y0: 1.1, y1: 3.2, z0: 2, z1: 19, rx: 5, ry: 0.9, rz: 4 }
             },
             fireflies: {
-                count: 18, countMobile: 9, size: 0.07, color: 0xd8ff5a,
+                // NOT BUILT AT THE MOMENT: `enabled.fireflies` is false. Kept
+                // whole, and still measured by the guard, so the day they come
+                // back they come back tuned rather than from scratch.
+                count: 18, countMobile: 9, color: 0xd8ff5a,
+                // ---- SIZED IN PIXELS, BECAUSE A FIREFLY IS A LIGHT -------
+                // A light's apparent size is its GLOW and not its body, so
+                // this is pixels of frame rather than centimetres of insect.
+                // The first pass was a 7 cm sphere flown through a box whose
+                // near edge is 5.4 m from the lens and whose far corner is
+                // 28.7 m, which made the size on screen a function of where
+                // the insect happened to be:
+                //
+                //     near edge, full blink   28.8 px
+                //     near edge, dim          10.9 px
+                //     middle of the box        9.3 px
+                //     far corner               5.4 px
+                //
+                // A five-fold range across one box, and at the near end it
+                // is bigger than an apple on a tree. QA caught it in the
+                // second screenshot pass: three of them sat on the lawn as
+                // flat lime octagons (the sphere was 5 by 4 segments, and
+                // you could count the edges) and one hung in the night sky
+                // above the horizon at about 35 px.
+                //
+                // Held constant instead, the way the water level in the
+                // mulch beds is held: the scene hands `updateWildlife` the
+                // same `pxPerRadian` it hands the garden, so this survives
+                // both a resize and the portrait layout's wider lens.
+                //
+                // THIS IS THE WHOLE CARD, HALO INCLUDED, which is what makes
+                // 12 the right number rather than 9. The glow fades to
+                // nothing at the rim, so what reads as the insect is the
+                // near-solid core at about 40 percent of this: 4.8 px of
+                // light inside 12 px of glow. Calibrated against the one
+                // firefly nobody complained about, the one in the MIDDLE of
+                // the box, which was 9.3 px of flat green at full blink.
+                // Raising this makes the halo wider, not the light brighter.
+                sizePx: 12,
+                // How much a brighter blink also swells. Deliberately small:
+                // a light that flares does read as bigger, and anything past
+                // this is the old bug arriving through the front door. The
+                // blink is carried by BRIGHTNESS now, which is what a firefly
+                // actually varies.
+                bloom: 0.18,
                 box: { x0: -12, x1: 12, y0: 0.9, y1: 3.4, z0: -6, z1: 18, rx: 6, ry: 1.1, rz: 5 }
             },
             birds: {

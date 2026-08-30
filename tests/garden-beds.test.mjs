@@ -329,6 +329,11 @@ test('the conductor is the one that knows the lens', async () => {
     const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'main.js'), 'utf8');
     // Viewport height over the vertical field in radians, both of which move:
     // the composed FOV differs by orientation and a window can be resized.
-    expect(src).toMatch(/pxPerRadian:/);
     expect(src).toMatch(/window\.innerHeight \/ \(camera\.fov \* Math\.PI \/ 180\)/);
+    // TWO THINGS HOLD A SIZE ON SCREEN NOW, the water level in the beds and
+    // the fireflies' glow (M12-8), and they must be handed the SAME number.
+    // Measuring it twice is how the two would drift apart on a resize.
+    expect(src).toMatch(/updateWildlife\([^)]*pxPerRadian[^)]*\)/);
+    expect(src).toMatch(/^\s*pxPerRadian$/m);
+    expect(src.match(/window\.innerHeight \/ \(camera\.fov/g)).toHaveLength(1);
 });

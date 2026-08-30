@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { installThree, installCanvas, uninstallAll } from './helpers/three-stub.mjs';
 
 let GARDEN_CONFIG;
-let initWildlife, updateWildlife, disposeWildlife;
+let initWildlife, updateWildlife, disposeWildlife, fireflyGlowSize, REFERENCE_FRAME_PX;
 let initVista, disposeVista;
 let createTree, disposeTree, resolveSpecies;
 let updateVista, snowCoverageAt;
@@ -54,7 +54,7 @@ beforeAll(async () => {
     // imports to the .min files, so only these two share one beds instance.
     builtGarden = await import('../www/garden/js/garden.min.js');
     builtBeds = await import('../www/garden/js/beds.min.js');
-    ({ initWildlife, updateWildlife, disposeWildlife } =
+    ({ initWildlife, updateWildlife, disposeWildlife, fireflyGlowSize, REFERENCE_FRAME_PX } =
         await import('../www/garden/js/wildlife.js'));
     ({ initVista, disposeVista } = await import('../www/garden/js/vista.js'));
     ({ createTree, disposeTree } = await import('../www/garden/js/tree.js'));
@@ -73,45 +73,54 @@ afterAll(() => uninstallAll());
 describe('the wildlife flags', () => {
     afterEach(() => disposeWildlife());
 
-    test('the three that compete with the trees are off, and the fireflies are not', () => {
+    test('every creature is off, the fireflies included', () => {
         // The product decision, stated where a future reader will find it:
         // butterflies, birds and bats are moving things that pull the eye off
-        // the only motion that matters. Fireflies are static points of light at
-        // dusk, so they add depth without competing.
+        // the only motion that matters. The fireflies came off later and for a
+        // different reason, which is that neither version of them landed. The
+        // sphere drew octagons and the glow that replaced it read as too faint,
+        // and the fix for the second is a lighting problem rather than a sizing
+        // one. See M12-9.
         const on = GARDEN_CONFIG.world.wildlife.enabled;
         expect(on.butterflies).toBe(false);
         expect(on.birds).toBe(false);
         expect(on.bats).toBe(false);
-        expect(on.fireflies).toBe(true);
+        expect(on.fireflies).toBe(false);
     });
 
     test('a creature that is off is never BUILT, not merely hidden', () => {
         const built = initWildlife(recordingScene(), GARDEN_CONFIG);
         // Null means buildFlyer was never called: no geometry, no material, no
-        // seeded paths, and nothing for driveFlyer to walk every frame.
+        // seeded paths, and nothing for driveFlyer to walk every frame. With
+        // everything off the module builds nothing at all, which is the state
+        // the early-return bug below would hide rather than announce.
         expect(built.butterflies).toBeNull();
         expect(built.birds).toBeNull();
         expect(built.bats).toBeNull();
-        expect(built.fireflies).not.toBeNull();
-        expect(built.fireflies.count).toBeGreaterThan(0);
+        expect(built.fireflies).toBeNull();
     });
 
     test('only the creatures that are on reach the scene', () => {
         const scene = recordingScene();
         initWildlife(scene, GARDEN_CONFIG);
-        expect(scene.added).toHaveLength(1);
+        expect(scene.added).toHaveLength(0);
     });
 
     test('turning a flag back on is the only edit needed to restore one', () => {
-        // The claim M8-1 makes about being reversible. If this ever fails, the
-        // butterflies have quietly become a code change to bring back.
-        const scene = recordingScene();
-        const built = initWildlife(scene, withFlags((c) => {
-            c.world.wildlife.enabled.butterflies = true;
-        }));
-        expect(built.butterflies).not.toBeNull();
-        expect(built.butterflies.count).toBeGreaterThan(0);
-        expect(scene.added).toHaveLength(2);
+        // The claim M8-1 makes about being reversible, and the claim M12-9
+        // leans on hardest now that the fireflies are the ones waiting to come
+        // back. If this ever fails, benching a creature has quietly become a
+        // code change to undo rather than one word in the config.
+        for (const name of ['butterflies', 'fireflies', 'birds', 'bats']) {
+            const scene = recordingScene();
+            const built = initWildlife(scene, withFlags((c) => {
+                c.world.wildlife.enabled[name] = true;
+            }));
+            expect(built[name]).not.toBeNull();
+            expect(built[name].count).toBeGreaterThan(0);
+            expect(scene.added).toHaveLength(1);
+            disposeWildlife();
+        }
     });
 
     test('the fireflies are still DRIVEN when the butterflies are gone', () => {
@@ -126,7 +135,14 @@ describe('the wildlife flags', () => {
         // early return does not throw. It has to watch the work happen. The
         // group handed back is the same object the module holds, so swapping
         // its mesh for a recorder puts a probe inside the real drive loop.
-        const built = initWildlife(recordingScene(), GARDEN_CONFIG);
+        //
+        // BUILT BEHIND THE FLAG, because the shipped config has the fireflies
+        // off (M12-9) and this guard is about the drive loop rather than about
+        // the product decision. It is worth more now than it was: the module's
+        // only remaining creature is one nobody is watching in a screenshot.
+        const built = initWildlife(recordingScene(), withFlags((c) => {
+            c.world.wildlife.enabled.fireflies = true;
+        }));
         let matrixWrites = 0;
         built.fireflies.mesh = {
             visible: false,
@@ -144,7 +160,9 @@ describe('the wildlife flags', () => {
     });
 
     test('and they are still put away at the hours they do not belong to', () => {
-        const built = initWildlife(recordingScene(), GARDEN_CONFIG);
+        const built = initWildlife(recordingScene(), withFlags((c) => {
+            c.world.wildlife.enabled.fireflies = true;
+        }));
         built.fireflies.mesh = {
             visible: true,
             material: {},
@@ -165,6 +183,129 @@ describe('the wildlife flags', () => {
         }));
         expect(() => updateWildlife(20, 200, 0)).not.toThrow();
         expect(() => disposeWildlife()).not.toThrow();
+    });
+});
+
+// ---- A firefly is a light, so it holds its size on screen (M12-8) ----------
+
+/**
+ * WHY THIS IS MEASURED AT BOTH ENDS OF THE BOX.
+ *
+ * The fireflies were a 7 cm sphere, which is a BODY: it grows as it comes
+ * toward the lens. Their box runs from 5.4 m in front of the camera to 31 m,
+ * so the same insect was 28.8 px on the near edge at full blink and 5.4 px in
+ * the far corner. QA found the near ones as flat lime octagons lying on the
+ * lawn, and one in the sky at about 35 px. Nothing about the flight paths, the
+ * hours, the blink or the count was wrong, and no test could see it, because
+ * every one of them measured the insect and not the frame.
+ *
+ * A light's apparent size is its glow. So the property is that a firefly
+ * covers the SAME pixels wherever it is, and that is what is asserted, at the
+ * two corners of its own box that used to disagree by a factor of five.
+ *
+ * THIS BLOCK OUTLIVES THE FIREFLIES BEING SWITCHED OFF (M12-9), on purpose.
+ * `fireflyGlowSize` is a pure function over the config, so it measures whether
+ * the numbers are still sound whether or not anything is drawing them, and the
+ * point of benching a creature rather than deleting it is that it comes back
+ * tuned. A dormant feature with no guard on it comes back broken.
+ */
+function boxCorners(box) {
+    const out = [];
+    for (const x of [box.x0, 0, box.x1]) {
+        for (const y of [box.y0, box.y1]) {
+            for (const z of [box.z0, box.z1]) out.push({ x, y, z });
+        }
+    }
+    return out;
+}
+
+/** Pixels across, projected independently of the code under test. */
+function pxOf(metres, depth) {
+    const pxPerRadian = REFERENCE_FRAME_PX / (GARDEN_CONFIG.camera.fov * Math.PI / 180);
+    return 2 * Math.atan(metres / (2 * depth)) * pxPerRadian;
+}
+
+/** Radial distance from the composed viewpoint, which is what the module falls
+ *  back to when it has not been handed a camera. */
+function depthOf(point) {
+    const eye = GARDEN_CONFIG.camera.position;
+    return Math.hypot(point.x - eye.x, point.y - eye.y, point.z - eye.z);
+}
+
+describe('the fireflies hold their size on screen', () => {
+    const F = () => GARDEN_CONFIG.world.wildlife.fireflies;
+
+    test('a firefly is the same size at both ends of its own box', () => {
+        const corners = boxCorners(F().box);
+        const sizes = corners.map((c) => {
+            const depth = depthOf(c);
+            return pxOf(fireflyGlowSize(depth, 0, GARDEN_CONFIG, 0), depth);
+        });
+        const near = Math.max(...sizes);
+        const far = Math.min(...sizes);
+        // The old sphere spread these by a factor of 5.3 across the same
+        // corners. Anything above a few percent means size has gone back to
+        // being a property of the insect rather than of the frame.
+        expect(near / far).toBeLessThan(1.02);
+        expect(near).toBeCloseTo(F().sizePx, 1);
+    });
+
+    test('and the brightest blink is still nothing like the old worst case', () => {
+        // The number QA actually saw: 28.8 px of flat green at the near edge on
+        // a full blink. The blink is carried by brightness now, so all that is
+        // left of it in the size is `bloom`.
+        const corners = boxCorners(F().box);
+        const worst = Math.max(...corners.map((c) => {
+            const depth = depthOf(c);
+            return pxOf(fireflyGlowSize(depth, 0, GARDEN_CONFIG, 1), depth);
+        }));
+        // The absolute cap the old worst case blows straight through, left
+        // loose on purpose: how big a firefly should be is a matter of taste
+        // and belongs in the config, while 28.8 px of flat green is a bug.
+        expect(worst).toBeLessThan(18);
+        // The property underneath it, which taste does not get a vote on: the
+        // blink is a swell and not a growth, so the brightest a firefly gets
+        // is within a quarter of its resting size.
+        expect(worst).toBeGreaterThan(F().sizePx);
+        expect(worst / F().sizePx).toBeLessThan(1.25);
+    });
+
+    test('a wider lens or a taller window moves it, and by the right amount', () => {
+        // The two halves that move. Portrait widens the field to 72 degrees and
+        // the window can be any height, so a size pinned to the composed camera
+        // would be a third out on a phone. Same pixels, different metres.
+        const depth = 12;
+        const landscape = REFERENCE_FRAME_PX / (GARDEN_CONFIG.camera.fov * Math.PI / 180);
+        const portrait = REFERENCE_FRAME_PX / (GARDEN_CONFIG.camera.portrait.fov * Math.PI / 180);
+        const wide = fireflyGlowSize(depth, portrait, GARDEN_CONFIG, 0);
+        const narrow = fireflyGlowSize(depth, landscape, GARDEN_CONFIG, 0);
+        // A wider field means fewer pixels per radian, so the same pixels cost
+        // more metres.
+        expect(wide).toBeGreaterThan(narrow);
+        expect(2 * Math.atan(wide / (2 * depth)) * portrait).toBeCloseTo(F().sizePx, 1);
+        // And a frame twice as tall is twice as many pixels per radian, so the
+        // insect stays the same number of pixels while halving in metres.
+        expect(fireflyGlowSize(depth, landscape * 2, GARDEN_CONFIG, 0))
+            .toBeCloseTo(narrow / 2, 5);
+    });
+
+    test('an unmeasured viewport falls back rather than vanishing', () => {
+        // A first frame can arrive before the window has been measured. Zero
+        // pixels per radian must not mean zero metres of firefly.
+        const depth = 12;
+        expect(fireflyGlowSize(depth, 0, GARDEN_CONFIG, 0)).toBeGreaterThan(0);
+        expect(fireflyGlowSize(depth, 0, GARDEN_CONFIG, 0))
+            .toBeCloseTo(fireflyGlowSize(
+                depth, REFERENCE_FRAME_PX / (GARDEN_CONFIG.camera.fov * Math.PI / 180),
+                GARDEN_CONFIG, 0), 6);
+    });
+
+    test('and one that drifts behind the lens does not turn inside out', () => {
+        // A negative depth is a negative scale, which mirrors the card and, at
+        // a big enough negative, draws it enormous behind the camera.
+        expect(fireflyGlowSize(-4, 0, GARDEN_CONFIG, 0)).toBeGreaterThan(0);
+        expect(fireflyGlowSize(-4, 0, GARDEN_CONFIG, 0))
+            .toBe(fireflyGlowSize(0.4, 0, GARDEN_CONFIG, 0));
     });
 });
 
