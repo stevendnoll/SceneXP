@@ -112,10 +112,12 @@
                 deepen, turn, and fall. Snow arrives in the small hours and
                 melts as the light comes back. The trees grow a little older
                 every year, and your garden is still there when you return.</p>
-            <p>The one thing they ask for is water. A tree left dry through
-                enough summers begins to wilt, though it is never truly gone,
-                and the first watering puts buds back on the branches within
-                seconds.</p>
+            <p>The one thing they ask for is water, and they ask for it plainly.
+                A small gauge on every bed shows how full that tree's tank is,
+                and a thirsty one raises a blue droplet above it. Tap the
+                droplet and the tree drinks. A tree left dry through enough
+                summers begins to wilt, though it is never truly gone, and the
+                first watering puts buds back on the branches within seconds.</p>
             <p>Most experiences on SceneXP honor a person or a business. This
                 one is a garden you plant and tend yourself.</p>
             <nav aria-label="Site sections">
@@ -159,7 +161,8 @@
                      nothing at all. The buttons are the one instruction that
                      is true everywhere, so they lead. -->
                 <li><span>LOOK</span> Drag to look around, and scroll or pinch to move closer. The arrows and the plus and minus do the same thing.</li>
-                <li><span>TEND</span> Tap a tree to see how it is doing and to water it.</li>
+                <li><span>WATER</span> A thirsty tree raises a blue droplet over its bed. Tap the droplet and it drinks.</li>
+                <li><span>TEND</span> Tap the mulch under a tree to see how it is doing.</li>
                 <li><span>REMEMBER</span> Your garden is saved in this browser and waits for you.</li>
             </ul>
             <!-- Filled in only when the browser will not let the page save.
@@ -201,6 +204,14 @@
 
     <!-- Short confirmations: a tree planted, a tree watered, a plot full. -->
     <div id="garden-toast" class="garden-toast" role="status" aria-live="polite"></div>
+
+    <!-- WATER ALL. Hidden until the garden is genuinely behind (three thirsty
+         trees or more), so a tended plot carries no maintenance chrome, and it
+         names the count because a button that says how many is also a reading
+         of the garden. It is a real button rather than a painted one because
+         every other route to watering needs a pointer aimed at a few pixels of
+         3D scene, and this is the keyboard's way in. -->
+    <button id="water-all" type="button" class="water-all" hidden></button>
 
     <!-- THE PLANT MODAL. The species grid is a real radio group and the
          sliders are real range inputs, so the whole thing works from the

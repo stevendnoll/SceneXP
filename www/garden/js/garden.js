@@ -506,7 +506,11 @@ export function updateGarden(dt, elapsedSeconds, context = {}, config = GARDEN_C
     // The beds take the season and the levels take each tree's tank. One pass
     // over the instance attributes rather than a mesh per tree. The level's
     // pixel floor needs the lens, which only the conductor knows.
-    updateBeds(trees, snow, context.pxPerRadian || 0, config);
+    // The droplet's pulse rides the ANIMATION clock, not the calendar, for the
+    // same reason the sway does: it has to keep breathing behind the welcome
+    // card, where `dt` is held at zero.
+    updateBeds(trees, snow, context.pxPerRadian || 0, config,
+        context.time === undefined ? elapsedSeconds : context.time);
 }
 
 /** Ages in whole years, for the tree card. */

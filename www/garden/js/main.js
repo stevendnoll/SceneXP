@@ -41,7 +41,10 @@ import { resolveSpecies } from './species.min.js';
 import {
     dollyView, applyDollyDelta, dollyLimits, getDolly, resetView
 } from './view.min.js';
-import { pickBase, getBedMesh, getLevelMesh, bedSpan } from './beds.min.js';
+import {
+    pickBase, pickDrop, dropScreenY, dropPresence, thirstyCount,
+    getBedMesh, getLevelMesh, bedSpan
+} from './beds.min.js';
 import { createTree, updateTree, disposeTree } from './tree.min.js';
 import {
     initGarden, plantTree, restoreTrees, removeTree, clearGarden, waterTree,
@@ -107,7 +110,7 @@ let scene = null;
 let camera = null;
 let weather = null;
 
-let canvas, loadingScreen, blocker;
+let canvas, loadingScreen, blocker, waterAllBtn;
 let cleanupController = null;
 
 // The plant flow's pending spot, chosen when the visitor tapped the grass.
@@ -144,6 +147,7 @@ async function init() {
     canvas = document.getElementById('scene');
     loadingScreen = document.getElementById('loading-screen');
     blocker = document.getElementById('blocker');
+    waterAllBtn = document.getElementById('water-all');
     if (!canvas) return;
 
     applySiteLinks();
@@ -556,6 +560,13 @@ function setupEventListeners() {
     const reset = document.getElementById('reset-btn');
     if (reset) reset.addEventListener('click', handleReset, { signal });
 
+    // A REAL BUTTON IN THE DOM, and that is the point of it as much as the
+    // convenience is. Every other way to water a tree needs a pointer aimed at
+    // a few pixels of 3D scene, so before this the keyboard's only route to the
+    // care loop was the tree card's own button, which a droplet tap now bypasses
+    // for exactly the trees that need watering. This one is reached by Tab.
+    if (waterAllBtn) waterAllBtn.addEventListener('click', handleWaterAll, { signal });
+
     // Pan, tilt, and zoom. ON AT EVERY ASPECT, unlike the other composed
     // views: a 24 metre plot is wider than any screen, so a desktop visitor
     // needs to reach the far corners as much as a phone does. `landscapeFov`
@@ -601,6 +612,10 @@ function beginTending() {
     if (!state.loaded || !blocker || blocker.classList.contains('hidden')) return;
     blocker.classList.add('hidden');
     track('begin-tending');
+    // AT ONCE RATHER THAN ON THE NEXT HEARTBEAT. A visitor coming back to a
+    // garden that went thirsty while they were away should meet the offer in
+    // the first frame they see, not a second into it.
+    syncWaterAll();
 
     // THE FIRST THING A VISITOR SEES IS THE GARDEN, NOT A DIALOG. An earlier
     // version opened the plant modal automatically on a first visit, on the
@@ -640,6 +655,7 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const basePoint = new THREE.Vector3();
 const baseEdge = new THREE.Vector3();
+const gaugePoint = new THREE.Vector3();
 
 /** Nearest tree under a screen point, with the house tap tolerance so a
  *  sapling is reachable with a fingertip. */
@@ -655,6 +671,12 @@ const baseEdge = new THREE.Vector3();
  * `radiusPx` is the bed's own projected half-width, so the target matches what
  * the visitor sees. Both numbers come from the same projection, so they cannot
  * disagree about where a bed is.
+ *
+ * `dropY` and `thirst` are the droplet's half of the same story. The droplet is
+ * drawn by lifting the GAUGE'S anchor by `dropRisePx` inside the shader, so the
+ * target is found by projecting that same anchor and subtracting that same
+ * number here. Three places would have been a bug waiting; there is one number
+ * and it lives in the config.
  */
 function projectBases() {
     const bases = [];
@@ -665,10 +687,14 @@ function projectBases() {
 
     for (const entry of getTrees()) {
         const { x, z } = cellCenter(entry.record.gx, entry.record.gz);
+        const span = bedSpan(x, z);
         basePoint.set(x, heightAt(x, z), z);
         baseEdge.set(x + B.radius, heightAt(x, z), z);
+        // The gauge's own anchor, which is what the droplet rises from.
+        gaugePoint.set(x, span.top + B.levelLift, z + B.radius * 0.72);
         basePoint.project(camera);
         baseEdge.project(camera);
+        gaugePoint.project(camera);
         // Behind the eye: `project` still returns numbers there, and they are
         // mirrored, so a tree behind the camera would otherwise pick as though
         // it were in front of it.
@@ -676,7 +702,11 @@ function projectBases() {
         const sx = (basePoint.x + 1) * halfW;
         const sy = (1 - basePoint.y) * halfH;
         const ex = (baseEdge.x + 1) * halfW;
-        bases.push({ entry, x: sx, y: sy, radiusPx: Math.abs(ex - sx) });
+        bases.push({
+            entry, x: sx, y: sy, radiusPx: Math.abs(ex - sx),
+            dropY: dropScreenY((1 - gaugePoint.y) * halfH),
+            thirst: dropPresence(entry.record.moisture)
+        });
     }
     return bases;
 }
@@ -703,7 +733,25 @@ function handleSceneTap(clientX, clientY) {
     // BEHIND IT. That is what makes the interaction unambiguous rather than a
     // side effect of it, and there is a test that says so, because this is the
     // rule somebody will quietly put back.
-    const tree = pickBase(clientX, clientY, projectBases());
+    const bases = projectBases();
+
+    // ---- THE DROPLET IS TRIED FIRST, AND THAT ORDER IS THE WHOLE DESIGN ----
+    // Watering used to cost a tap to open a card and a second one to press a
+    // button in it, for the single most repeated act in the scene. A droplet
+    // above the gauge is now a button in the world: one tap, no modal, and the
+    // toast is the only thing that appears.
+    //
+    // It is FIRST rather than nearest because its target overlaps the bed's.
+    // The gauge's top edge is 7 to 8 px above the bed's base point and the
+    // bed's target has a 22 px floor, so a droplet drawn above the gauge is
+    // inside the bed's target at every row of the plot. Asking which centre is
+    // nearer would be a coin toss over a couple of pixels; asking which is
+    // tried first is an answer. A tree with no droplet is unaffected, because
+    // `pickDrop` skips anything that is not asking.
+    const thirsty = pickDrop(clientX, clientY, bases);
+    if (thirsty) { waterOne(thirsty, 'drop'); return; }
+
+    const tree = pickBase(clientX, clientY, bases);
     if (tree) {
         openTreeCard(tree, ageYears(tree.record, state.elapsedSeconds), cardContext());
         track('tree-opened', { species: tree.record.species });
@@ -760,6 +808,75 @@ function isCustomised(custom) {
     return false;
 }
 
+/**
+ * Water one tree and say so. The shared end of every watering route.
+ *
+ * `from` is only for the count, so the droplet and the card can be told apart
+ * later without either of them owning a different idea of what watering is.
+ */
+function waterOne(entry, from) {
+    if (!entry) return;
+    const result = waterTree(entry, state.elapsedSeconds);
+    toast(result === 'revived'
+        ? 'Watered. Look for new buds along the branches.'
+        : 'Watered. It looks pleased.');
+    track('tree-watered', { revived: result === 'revived' ? 1 : 0, from });
+    save();
+    syncWaterAll();
+}
+
+/**
+ * Water everything that is asking.
+ *
+ * A RESCUE AND NOT A ROUTINE, which is why the control offering it is only
+ * there when the garden is in trouble. See `waterAllFrom`.
+ */
+function handleWaterAll() {
+    const thirsty = getTrees().filter((e) => needsWater(e.record.moisture));
+    if (!thirsty.length) return;
+    let revived = 0;
+    for (const entry of thirsty) {
+        if (waterTree(entry, state.elapsedSeconds) === 'revived') revived += 1;
+    }
+    // THE COPY NAMES THE COUNT, because the visitor pressed a button that named
+    // one and a confirmation that drops it reads as though something else
+    // happened. The bare-tree line is worth its own sentence: it is the reward
+    // for coming back, and it is the whole of what watering buys.
+    const many = thirsty.length > 1;
+    toast(revived > 0
+        ? `Watered ${thirsty.length} ${many ? 'trees' : 'tree'}. Look for new buds along the bare branches.`
+        : `Watered ${thirsty.length} ${many ? 'trees' : 'tree'}. The garden looks pleased.`);
+    track('water-all', { count: thirsty.length, revived });
+    save();
+    syncWaterAll();
+}
+
+/**
+ * Show or hide the Water all control, and keep its count honest.
+ *
+ * Called after anything that can move a tank, and once a second from the frame
+ * loop, because moisture also falls on its own and nothing else would notice
+ * the garden crossing the threshold while the visitor watched.
+ */
+function syncWaterAll() {
+    if (!waterAllBtn) return;
+    const M = GARDEN_CONFIG.garden.moisture;
+    const count = thirstyCount(getTrees());
+    const show = count >= M.waterAllFrom;
+    // `.visible` is what the house chrome uses, and the button is display:none
+    // without it. `hidden` as well, so it leaves the tab order rather than
+    // sitting in it invisibly, which is the version of this bug that only
+    // keyboard visitors ever meet.
+    waterAllBtn.classList.toggle('visible', show);
+    waterAllBtn.hidden = !show;
+    if (show) {
+        const label = `${M.waterAllLabel} ${count}`;
+        if (waterAllBtn.textContent !== label) waterAllBtn.textContent = label;
+        waterAllBtn.setAttribute('aria-label',
+            `${M.waterAllLabel} ${count} thirsty ${count > 1 ? 'trees' : 'tree'}`);
+    }
+}
+
 function handleWater() {
     const entry = getCardEntry();
     if (!entry) return;
@@ -767,7 +884,7 @@ function handleWater() {
     toast(result === 'revived'
         ? 'Watered. Look for new buds along the branches.'
         : 'Watered. It looks pleased.');
-    track('tree-watered', { revived: result === 'revived' ? 1 : 0 });
+    track('tree-watered', { revived: result === 'revived' ? 1 : 0, from: 'card' });
     // AND THE CARD GETS OUT OF THE WAY. Watering is a one-shot: there is
     // nothing further to do on this card, the toast has already confirmed it,
     // and the tree's own water level is on its bed in the scene, which is where
@@ -956,6 +1073,7 @@ function stop() {
 }
 
 let saveDue = 0;
+let waterAllDue = 0;
 
 function animate() {
     if (!state.running) return;
@@ -1033,6 +1151,11 @@ function animate() {
         pxPerRadian
     });
     updateHud(yearAt(state.elapsedSeconds), state.elapsedSeconds, weatherWords(weather, fall));
+    // A SECOND IS FAST ENOUGH AND SIXTY TIMES A SECOND IS DOM CHURN. Watering
+    // syncs this straight away; the drift the other way, a garden going thirsty
+    // while somebody watches it, is the slowest thing in the scene.
+    waterAllDue += delta;
+    if (waterAllDue > 1) { waterAllDue = 0; syncWaterAll(); }
     if (isCardOpen()) {
         const entry = getCardEntry();
         if (entry) refreshTreeCard(ageYears(entry.record, state.elapsedSeconds), cardContext());

@@ -703,14 +703,17 @@ test('the bare threshold really does clear the mask it has to erase', () => {
 // number rather than a hope, and the shared stub cannot count, so the beds are
 // built under the same real-geometry harness the wood is measured with.
 
-test('THE BEDS AND THE LEVELS ARE TWO DRAW CALLS, not thirty two', () => {
+test('THE BEDS, THE LEVELS AND THE DROPLETS ARE THREE DRAW CALLS, not forty eight', () => {
     const meshes = measureWood(() => {
         initBeds(recordingScene(), GARDEN_CONFIG, { mobile: false });
     });
 
-    // One instanced mesh each, whatever the plot holds.
-    expect(meshes).toHaveLength(2);
-    expect(meshes.map((m) => m.name).sort()).toEqual(['mulch-beds', 'water-levels']);
+    // One instanced mesh each, whatever the plot holds. The droplet earns its
+    // own because it is a different shader and a different size rule, not
+    // because it is a different tree: sixteen of them are still one draw.
+    expect(meshes).toHaveLength(3);
+    expect(meshes.map((m) => m.name).sort())
+        .toEqual(['mulch-beds', 'thirst-drops', 'water-levels']);
 
     // Sized for the plot's capacity.
     for (const mesh of meshes) {

@@ -89,12 +89,76 @@ body {
     opacity: 1;
 }
 
+/* ---- Water all --------------------------------------------------------------
+ *
+ * TOP LEFT, WHICH IS THE ONLY EMPTY CORNER. Home and reset own the top right,
+ * the season chip and the pan row own the bottom centre, the zoom pair owns the
+ * bottom right. It also puts the one piece of chrome that ASKS for something at
+ * the opposite end of the frame from the ones that undo things, so a rescue is
+ * never a neighbour of "start a new garden".
+ *
+ * IT IS DISPLAY NONE UNTIL IT IS NEEDED, and the id-scoped sheet gives a new
+ * element no hiding of its own, so the rule is written here rather than
+ * inherited. The `hidden` attribute goes on with it, which is what takes it out
+ * of the tab order: a button that is invisible but still focusable is a trap
+ * only keyboard visitors ever find.
+ */
+.water-all {
+    position: fixed;
+    display: none;
+    top: calc(20px + env(safe-area-inset-top, 0px));
+    left: calc(20px + env(safe-area-inset-left, 0px));
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1.05rem;
+    min-height: 44px;
+    background: rgba(20, 20, 20, 0.78);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.55);
+    border-radius: 999px;
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    cursor: pointer;
+    z-index: 120;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.water-all.visible {
+    display: inline-flex;
+}
+
+.water-all:hover {
+    background: rgba(var(--ui-accent-rgb), 0.3);
+    border-color: var(--ui-accent);
+}
+
+.water-all:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+}
+
+/* The droplet, drawn rather than shipped as an image, so it costs no request
+   and inherits the button's own colour. The same shape the scene draws above a
+   thirsty tree's gauge, which is what ties the button to the world. */
+.water-all::before {
+    content: "";
+    width: 0.72rem;
+    height: 0.92rem;
+    flex: none;
+    background: #8fd3f4;
+    border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+    clip-path: polygon(50% 0%, 100% 45%, 100% 100%, 0% 100%, 0% 45%);
+}
+
 /* Reduced motion asks for less movement, not for less information. The chip
    still updates, it simply stops fading while it does. */
 @media (prefers-reduced-motion: reduce) {
 
     .season-chip,
-    .garden-toast {
+    .garden-toast,
+    .water-all {
         transition: none;
     }
 }

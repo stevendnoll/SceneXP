@@ -708,15 +708,75 @@ test('URGENCY IS CARRIED BY COLOUR, and the gauge stays readable either way', ()
     const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
     const frag = beds.slice(beds.indexOf('const LEVEL_FRAG'));
     const body = frag.slice(0, frag.indexOf('`;'));
-    expect(body).toMatch(/mix\(uFull, uEmpty, vBedUrgency\)/);
     expect(body).toMatch(/step\(vBedUv\.x, vBedFill\)/);
     // A rim, which is what a 35 x 8 px readout needs most.
     expect(body).toMatch(/bedShown = mix\(bedShown, uBorderColor, bedRim\)/);
+
+    // ---- AND THE URGENCY IS ON THE DRY SIDE (M13-1) ----------------------
+    // It used to read mix(uFull, uEmpty, vBedUrgency), applied where the fill
+    // IS. An empty tank has no fill, so the amber that means "out of water"
+    // could not be drawn on a tree that was out of water, and the gauge came
+    // out as track and rim: 2.13:1 and 2.71:1 on the mulch it lies on, which
+    // QA read as no gauge at all.
+    //
+    // These two assertions are a pair and the second is the load-bearing one.
+    // The urgency mix has to be against the TRACK, and it must not be applied
+    // to the water, or the amber goes back to living on the part that
+    // disappears.
+    expect(body).toMatch(/mix\(uTrack, uEmpty, vBedUrgency\)/);
+    expect(body).not.toMatch(/mix\(uFull, uEmpty, vBedUrgency\)/);
 
     // And a full tank is still visible: the quiet floor is a dimming, not a
     // disappearance.
     expect(GARDEN_CONFIG.garden.bed.levelQuiet).toBeGreaterThan(0.7);
     expect(GARDEN_CONFIG.garden.bed.levelQuiet).toBeLessThan(1);
+});
+
+test('THE DROPLET IS A DISTANCE FIELD, not a sampled picture', () => {
+    // It is 17 px on screen and the visitor can dolly in until it is far more
+    // than that, so a canvas texture would be a 17 px drawing stretched. The
+    // shape is solved per fragment instead, which costs nothing at this size
+    // and is crisp at every one.
+    const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
+    const frag = beds.slice(beds.indexOf('const DROP_FRAG'));
+    const body = frag.slice(0, frag.indexOf('`;'));
+    expect(body).not.toMatch(/sampler2D|texture2D|texture\(/);
+    expect(body).toMatch(/float dropField\(vec2 p\)/);
+
+    // A TEARDROP AND NOT AN ICE CREAM. The cone's flanks have to be TANGENT to
+    // the lobe or the silhouette has two corners where they meet, which at 17
+    // px is most of what there is to look at. Tangency is what sinT encodes,
+    // and it has to be derived from the lobe rather than typed in beside it.
+    expect(body).toMatch(/float sinT = lobeR \/ /);
+    expect(body).toMatch(/cosT = sqrt\(1\.0 - sinT \* sinT\)/);
+    // The wedge is cut off at the lobe's centre, or it widens forever downward
+    // and the droplet grows a skirt.
+    expect(body).toMatch(/cone = max\(cone, lobeAt\.y - p\.y\)/);
+
+    // A dark outline, which is the only part that reads on grass: measured, the
+    // pale blue body is 1.34:1 against spring grass and the outline is 8.79:1.
+    expect(body).toMatch(/mix\(uDropEdge, uDropColor, dropCore\)/);
+});
+
+test('the droplet PULSES IN SIZE and never in opacity', () => {
+    // A control that fades in and out reads as one that might be disabled, and
+    // this one is pressable the whole time it is on screen. The swell also has
+    // to stay small: the scene's one piece of motion is the trees, and sixteen
+    // throbbing markers would take that away.
+    const beds = readFileSync(join(DIR, 'beds.js'), 'utf8');
+    const vert = beds.slice(beds.indexOf('const DROP_VERT'));
+    const vertBody = vert.slice(0, vert.indexOf('`;'));
+    const frag = beds.slice(beds.indexOf('const DROP_FRAG'));
+    const fragBody = frag.slice(0, frag.indexOf('`;'));
+
+    expect(vertBody).toMatch(/uSizePx \* uPulse/);
+    expect(fragBody).not.toMatch(/uPulse/);
+    expect(GARDEN_CONFIG.garden.bed.dropPulse).toBeGreaterThan(0);
+    expect(GARDEN_CONFIG.garden.bed.dropPulse).toBeLessThan(0.12);
+
+    // The alpha is the tree's own thirst and the material's opacity, so a
+    // droplet is either arriving or fully there, never breathing away.
+    expect(fragBody).toMatch(/dropAlpha = dropIn \* uOpacity \* vDropThirst/);
 });
 
 test('the bed material names its own program cache key', () => {

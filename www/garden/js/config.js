@@ -476,7 +476,45 @@ export const GARDEN_CONFIG = deepFreeze({
             levelTrackColor: 0x59666d,
             // The blue the thirst droplet used to be, which this replaced.
             levelFullColor: 0x8fd3f4,
+            // ---- THE AMBER IS ON THE DRY SIDE, NOT THE WET ONE (M13-1) ------
+            // It used to tint the FILL, as `mix(uFull, uEmpty, urgency)`, and
+            // the fill is the part that is not there when the tank is empty.
+            // So the colour built to signal thirst was, by construction, the
+            // one colour that could never be seen at maximum thirst: at
+            // moisture 0 the whole gauge was track and rim, which measures
+            // 2.13:1 and 2.71:1 against the mulch it lies on. QA read a row of
+            // dead trees as having no gauges at all, and was right.
+            //
+            // Painted on the DRY side it is the empty tank that goes amber,
+            // which is 3.87:1 on mulch, and the fill stays blue and means
+            // water. Measured against every ground the gauge lies on:
+            //
+            //                  mulch  snowy bed  summer grass
+            //     blue fill    4.37       1.03       1.80
+            //     amber dry    3.87       1.16       1.59
+            //     rim         *2.71     *12.14      *6.57
+            //
+            // Starred is the one carrying that background, and after this
+            // change every background has one at 3:1 or better. Mulch was the
+            // only one that did not, and mulch is the one it is always on.
             levelEmptyColor: 0xf0a63c,
+            // ---- AND A DARK TICK AT THE FILL EDGE ---------------------------
+            // Blue against amber is 1.13:1, because they are a hue pair and
+            // not a luminance pair. The BOUNDARY between them is the whole
+            // reading of a gauge, so it gets drawn rather than left to emerge:
+            // a tick in the rim colour, which is 11.82:1 against the water and
+            // 10.47:1 against the dry side. It is also what keeps the gauge
+            // readable without colour vision, which the hue pair alone would
+            // not be. Drawn only when there is a boundary to draw, so a full
+            // tank and an empty one stay unbroken.
+            //
+            // IN THE SAME UNITS AS `levelBorder`, which is bar HEIGHTS: the
+            // shader scales the x distance by the aspect, so both numbers mean
+            // the same thing whatever the bar's proportions are. The bar floors
+            // at 8 px tall, so 0.11 is a tick 1.76 px wide against a rim of
+            // 1.44, which is the narrowest an edge can be and still survive
+            // being resampled.
+            levelTickWidth: 0.11,
             // A rim, worth more than any colour at 35 x 8 px: 2.71:1 against
             // mulch and 13.5:1 against snow, so the gauge has a silhouette
             // whatever it is standing on.
@@ -491,7 +529,56 @@ export const GARDEN_CONFIG = deepFreeze({
             // small readouts back in. A level stays nearly transparent until
             // the tank is down to here, so a healthy garden looks like a garden
             // and only a thirsty one looks like it wants something.
-            noticeAbove: 0.55
+            noticeAbove: 0.55,
+
+            // ---- The droplet, which is a BUTTON (M13-2) ---------------------
+            // A tap on the droplet waters that tree on the spot. It is drawn
+            // above the gauge, and both come off the same world anchor and the
+            // same two numbers below, so what is drawn and what is tappable
+            // cannot drift apart. Same rule as `radiusPx` on the bed.
+            //
+            // SIZED AND LIFTED IN PIXELS, for the reason the gauge is: the
+            // gauge floors at 8 x 35 px right across the plot, so a droplet
+            // placed a fixed number of METRES above it would sit on top of the
+            // gauge at the back row and halfway up the trunk at the front.
+            dropSizePx: 17,
+            // ---- THE RISE IS SET BY THE TAP, NOT BY THE LOOK ----------------
+            // Measured on a 1280x800 frame, from the gauge's anchor: the gauge
+            // itself floors at 8 px, so its top edge is 4 px up, and the bed's
+            // own base point is 3 to 4 px DOWN. That is the whole of the room
+            // there is, and both targets have to fit in it.
+            //
+            //   droplet target   26 rise - 22 radius = 4 px above the anchor,
+            //                    so about 7.5 px above the bed's base point
+            //   bed target       a 22 px circle on the base point, of which
+            //                    everything below that line survives
+            //
+            // Which leaves the droplet a 44 px circle and the bed a band 29 px
+            // tall and 44 px wide. A shorter rise buys the droplet nothing it
+            // does not already have and takes the tree card's only route away,
+            // and this is the number to move if QA finds the card hard to open
+            // on a thirsty tree.
+            dropRisePx: 26,
+            // ---- WHY THE TARGET IS BIGGER THAN THE DRAWING ------------------
+            // A 17 px droplet is not a touch target: 44 px is the figure, and
+            // a radius of 22 is how you get one. The drawing stays small
+            // because a 44 px droplet over a 30 px bed would look like weather
+            // rather than like a control.
+            //
+            // The two targets DO overlap, and that is expected rather than
+            // tolerated. `pickDrop` is tried first and `pickBase` second, so
+            // what settles a tap in the overlap is an order and not a distance
+            // of a couple of pixels. A tree with no droplet is untouched by any
+            // of this.
+            dropPickPx: 22,
+            // A droplet only exists on a tree that is asking, so it fades in
+            // across the last of the thirst rather than appearing at a hard
+            // edge. `garden.moisture.thirstyBelow` is where it starts.
+            dropFadeSpan: 0.08,
+            // Enough of a swell to read as alive at 17 px without becoming a
+            // second thing moving in a frame built around the trees.
+            dropPulse: 0.06,
+            dropPulseHz: 0.55
         },
 
         moisture: {
@@ -504,7 +591,28 @@ export const GARDEN_CONFIG = deepFreeze({
             // care loop was arithmetically dead. Nothing waters a tree now
             // except the visitor, and the reasoning is in `moistureAfter`.
             // The thirst marker appears below this.
-            thirstyBelow: 0.25
+            thirstyBelow: 0.25,
+
+            // ---- "Water all", which is a RESCUE and not a routine (M13-3) ---
+            // M11-4 took the free water out of this scene on purpose, so that
+            // nothing waters a tree but the visitor and showing up means
+            // something. A permanent Water all button would hand that straight
+            // back: it would become the only control anybody used, and the
+            // droplets would be decoration.
+            //
+            // So it appears only when the garden is in real trouble, carries
+            // the count, and goes away again once the plot is tended. Three is
+            // chosen to be past coincidence: one or two thirsty trees is the
+            // ordinary state of a garden being looked after, and is two taps.
+            waterAllFrom: 3,
+            // AND IT IS THE KEYBOARD'S ROUTE TO THE CARE LOOP, which is the
+            // other half of why it exists. A tree is reachable only by tapping
+            // the canvas, so before this the only keyboard path to watering was
+            // the tree card's own button, and M13-2 takes that path away for
+            // exactly the trees that need it. A real DOM button reached by Tab
+            // is the fix, and it is why this one is never hidden from assistive
+            // technology while it is showing.
+            waterAllLabel: 'Water all'
         },
 
         // ---- Blossom and fruit (M11-6, M11-7) -------------------------------
