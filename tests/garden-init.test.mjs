@@ -459,6 +459,76 @@ test('a tree planted on the plot stands on the ground, not through it', async ()
     expect(Number.isFinite(terrain.heightAt(x, z))).toBe(true);
 });
 
+// ---- The preview rectangle, and the two QA reports it caused ---------------
+//
+// `renderer.setViewport` and `renderer.setScissor` MULTIPLY WHAT THEY ARE GIVEN
+// BY THE PIXEL RATIO before touching GL, so both take CSS pixels. The preview
+// used to hand them drawing-buffer pixels, which is the same number at a ratio
+// of 1 and only there. Every machine this was written and reviewed on runs at
+// 1. At the 1.5 a phone gets, the rectangle lands off the top of the buffer and
+// the thumbnail is stale corner pixels (QA: "the tree isn't visible in the
+// rotating preview window"), and the hand-built restore afterwards leaves the
+// MAIN scene on a viewport half again too big, so from then on the garden is
+// drawn somewhere other than where every projection in main.js says it is (QA:
+// taps on a planted tree's mulch answering "Trees go inside the walls", because
+// planting is what opens a modal in the first place).
+//
+// So the rule under test is: the rectangle three is handed, once three has
+// multiplied and floored it, must be the same rectangle `drawImage` reads.
+
+/** What three.js will actually hand GL for a rect given in CSS pixels. */
+function asThreeApplies(cssX, cssY, cssW, cssH, pixelRatio) {
+    return {
+        x: Math.floor(cssX * pixelRatio), y: Math.floor(cssY * pixelRatio),
+        w: Math.floor(cssW * pixelRatio), h: Math.floor(cssH * pixelRatio)
+    };
+}
+
+test('THE PREVIEW RECTANGLE IS THE TOP LEFT OF THE BUFFER AT EVERY PIXEL RATIO', async () => {
+    const { previewRect } = await import('../www/garden/js/main.js');
+
+    // 391 x 841 CSS, the frame QA shot the mobile pass on, at every ratio the
+    // quality governor can produce (ceiling 1.5 on mobile and 2 on desktop,
+    // scaled down to 0.6 of that), plus the 1 that hid the bug.
+    for (const [cssW, cssH] of [[391, 841], [989, 841], [1280, 800]]) {
+        for (const pr of [0.6, 0.75, 0.9, 1, 1.2, 1.5, 2, 3]) {
+            const bufW = Math.floor(cssW * pr);
+            const bufH = Math.floor(cssH * pr);
+            const rect = previewRect(bufW, bufH, pr);
+            const gl = asThreeApplies(0, rect.cssTop, rect.css, rect.css, pr);
+
+            const where = `${cssW}x${cssH} @ ${pr}`;
+            // Square, and inside the buffer, or the scissor clips the picture.
+            expect(`${where}: ${gl.w}x${gl.h}`).toBe(`${where}: ${rect.device}x${rect.device}`);
+            expect(`${where}: fits`).toBe(`${where}: ${gl.x >= 0 && gl.y >= 0
+                && gl.x + gl.w <= bufW && gl.y + gl.h <= bufH}`.replace('true', 'fits'));
+            // GL measures from the BOTTOM, drawImage from the top, and the copy
+            // reads the buffer's top `device` rows. So the rect's top edge has
+            // to be the buffer's top edge, exactly.
+            expect(`${where}: top`).toBe(`${where}: ${gl.y + gl.h === bufH ? 'top' : gl.y + gl.h}`);
+        }
+    }
+});
+
+test('the preview never asks for a rectangle bigger than the window', async () => {
+    const { previewRect } = await import('../www/garden/js/main.js');
+    // A very short window, which is a phone in landscape with the keyboard up
+    // or a desktop window dragged to a sliver. A 256 px square does not fit in
+    // it, and a scissor rect that hangs off the buffer draws nothing at all.
+    const rect = previewRect(300, 120, 1);
+    expect(rect.device).toBeLessThanOrEqual(120);
+    expect(rect.cssTop).toBeGreaterThanOrEqual(0);
+
+    // And nothing a renderer can report turns it into NaN, which would be a
+    // scissor rectangle that silently draws nothing and reports nothing.
+    for (const bad of [0, NaN, undefined, null]) {
+        const safe = previewRect(bad, bad, bad);
+        expect(Number.isFinite(safe.css) && safe.css > 0).toBe(true);
+        expect(Number.isFinite(safe.device) && safe.device > 0).toBe(true);
+        expect(Number.isFinite(safe.cssTop)).toBe(true);
+    }
+});
+
 // ---- Camera framing --------------------------------------------------------
 
 test('landscape uses the composed viewpoint unchanged', async () => {

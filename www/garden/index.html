@@ -74,7 +74,7 @@
     <title>Fractal Garden</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
-    <link rel="preload" href="css/experience.min.css?v=7" as="style">
+    <link rel="preload" href="css/experience.min.css?v=8" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -84,7 +84,7 @@
          dark body, and this scene wants a soft daylight behind a slow first
          frame. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
-    <link rel="stylesheet" href="css/experience.min.css?v=7">
+    <link rel="stylesheet" href="css/experience.min.css?v=8">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -151,24 +151,31 @@
             <p class="click-prompt" id="begin-prompt">Click to begin</p>
             <!-- One row per idea. As loose inline spans these reflowed into a
                  ragged block with the labels stranded mid-line, which read as
-                 broken text rather than as a legend. -->
+                 broken text rather than as a legend.
+
+                 ONE LINE EACH ON A PHONE, WHICH IS WHAT CUT THEM DOWN. QA on a
+                 391 px frame found this card running off the bottom of the
+                 screen with no way to scroll to the rest, and the six rows
+                 spent 110 words getting there. They now spend 58 and say the
+                 same six things. The rule for anything added here: if the row
+                 does not fit one line at 391 px, it is two ideas. -->
             <ul class="controls-hint">
-                <li><span>PLANT</span> Tap an empty patch of grass within the walls to choose a tree.</li>
+                <li><span>PLANT</span> Tap the grass inside the walls to choose a tree.</li>
                 <!-- M9-8. This used to read "Drag to pan and tilt, pinch or
                      use the buttons to zoom", which was false on every machine
                      without a touchscreen: the shared part's gesture handler
                      returns early on a mouse pointer, so a desktop drag does
                      nothing at all. The buttons are the one instruction that
                      is true everywhere, so they lead. -->
-                <li><span>LOOK</span> Drag to look around, or use the arrow buttons. Scroll, pinch, or the plus and minus move you closer and further away.</li>
-                <li><span>WATER</span> A thirsty tree raises a blue droplet over its bed. Tap the droplet and it drinks.</li>
+                <li><span>LOOK</span> Drag to look around, or use the arrows. Pinch or the plus and minus to zoom.</li>
+                <li><span>WATER</span> Tap the blue droplet over a thirsty tree and it drinks.</li>
                 <li><span>TEND</span> Tap the mulch under a tree to see how it is doing.</li>
                 <!-- THE SENTENCE A NEWCOMER IS MOST MISSING. Nothing else on
                      screen says a day is a year, so somebody watching a sapling
                      for thirty seconds and seeing nothing happen cannot tell
                      whether the scene is slow, broken, or waiting for them. -->
-                <li><span>GROW</span> Every day and night is a year. Leaves bud, turn and fall, and your trees fill out while you watch.</li>
-                <li><span>REMEMBER</span> Your garden is saved in this browser and waits for you.</li>
+                <li><span>GROW</span> Every day and night is a year, so your trees fill out while you watch.</li>
+                <li><span>KEEP</span> Your garden is saved in this browser.</li>
             </ul>
             <!-- Filled in only when the browser will not let the page save.
                  Empty and silent otherwise. -->

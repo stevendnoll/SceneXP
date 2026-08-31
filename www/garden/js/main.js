@@ -118,6 +118,11 @@ let cleanupController = null;
 // The plant flow's pending spot, chosen when the visitor tapped the grass.
 let pendingCell = null;
 
+// How far a finger may travel and still count as a tap on the welcome card
+// rather than a scroll of it. Generous, because the card is a full-screen
+// target and nothing on it is small enough to need precision.
+const BLOCKER_TAP_SLOP = 12;
+
 // ---- Device and preference checks -----------------------------------------
 
 export function detectMobile() {
@@ -155,6 +160,9 @@ async function init() {
     if (!canvas) return;
 
     applySiteLinks();
+    // "Click to begin" on the device most visitors arrive on is the first
+    // sentence of the scene naming a control they do not have.
+    setBeginPrompt(false);
 
     updateLoadingStatus('Verifying your browser…', 10);
     const proof = await getProofOfWork(GARDEN_CONFIG.proofOfWork);
@@ -542,8 +550,33 @@ function setupEventListeners() {
             if (e) e.preventDefault();
             beginTending();
         };
-        blocker.addEventListener('click', dismiss, { signal });
-        blocker.addEventListener('touchend', dismiss, { signal });
+        // ---- A SCROLL IS NOT A DISMISSAL --------------------------------
+        // The welcome card scrolls on a short screen, and a flick to read the
+        // rest of it ends in a `touchend` exactly like a tap does. Without
+        // this the card would close itself the first time somebody tried to
+        // read the bottom of it, which is the one gesture it has to survive.
+        // The click guard is the second half: a browser that synthesises a
+        // click after a drag would otherwise walk straight past the touch one.
+        let touchStart = null;
+        let draggedAt = -1e9;
+        blocker.addEventListener('touchstart', (event) => {
+            const t = event.touches && event.touches[0];
+            touchStart = t ? { x: t.clientX, y: t.clientY } : null;
+        }, { passive: true, signal });
+        blocker.addEventListener('touchend', (event) => {
+            const start = touchStart;
+            touchStart = null;
+            const t = event.changedTouches && event.changedTouches[0];
+            if (start && t && Math.hypot(t.clientX - start.x, t.clientY - start.y) > BLOCKER_TAP_SLOP) {
+                draggedAt = performance.now();
+                return;
+            }
+            dismiss(event);
+        }, { signal });
+        blocker.addEventListener('click', (event) => {
+            if (performance.now() - draggedAt < 600) return;
+            dismiss(event);
+        }, { signal });
         document.addEventListener('keydown', (event) => {
             if (blocker.classList.contains('hidden')) return;
             // Escape as well as Enter and Space, because the card is now a
@@ -664,6 +697,23 @@ function syncWelcomeChrome() {
 }
 
 /**
+ * The one line on the welcome card that names a control.
+ *
+ * TWO SENTENCES AND TWO VERBS. "Begin" is wrong for somebody who already has a
+ * garden behind the card, and "click" is wrong on a phone, which is where most
+ * visitors meet this. Both live here so neither can be updated without the
+ * other.
+ */
+function setBeginPrompt(returning) {
+    const prompt = document.getElementById('begin-prompt');
+    if (!prompt) return;
+    const verb = state.mobile ? 'Tap' : 'Click';
+    prompt.textContent = returning
+        ? `${verb} to return to your garden`
+        : `${verb} to begin`;
+}
+
+/**
  * Put the welcome card back up.
  *
  * IT IS THE SAME CARD, not a second copy of its sentences. Everything the scene
@@ -674,12 +724,11 @@ function syncWelcomeChrome() {
  */
 function openHelp() {
     if (!blocker || !blocker.classList.contains('hidden')) return;
-    // The prompt is written for a first arrival. On the way back it is a
-    // different sentence, because "begin" is wrong for somebody who already has
-    // a garden behind the card.
-    const prompt = document.getElementById('begin-prompt');
-    if (prompt) prompt.textContent = 'Click to return to your garden';
+    setBeginPrompt(true);
     blocker.classList.remove('hidden');
+    // Reading starts at the top, whatever the visitor had scrolled to last
+    // time the card was up.
+    blocker.scrollTop = 0;
     syncWelcomeChrome();
     helpReturn = document.activeElement;
     blocker.focus({ preventScroll: true });
@@ -1161,6 +1210,10 @@ let previewPending = null;
 const PREVIEW_PX = 256;
 const previousClear = new THREE.Color();
 const scratchColor = new THREE.Color();
+// What the renderer was set to before the preview borrowed a corner of it, read
+// back off the renderer rather than rebuilt. See renderPreview.
+const previousViewport = new THREE.Vector4();
+const previousScissor = new THREE.Vector4();
 
 /**
  * The backdrop the preview tree stands against.
@@ -1348,6 +1401,51 @@ function previewDrive(time) {
     });
 }
 
+/**
+ * The preview rectangle, in the two units that both have a claim on it.
+ *
+ * ---- setViewport AND setScissor TAKE CSS PIXELS, NOT BUFFER PIXELS ----
+ *
+ * This is the whole of the bug that cost QA two separate reports. Both of those
+ * three.js calls multiply what they are handed by the renderer's pixel ratio
+ * before touching GL, so a rectangle stated in drawing-buffer pixels is scaled
+ * by the ratio a SECOND time. At a ratio of 1 the two units are the same number
+ * and everything worked, which is why this shipped: the machine it was written
+ * and reviewed on runs at 1. At the 1.5 a phone gets, the preview's rectangle
+ * lands entirely off the top of the buffer, so the thumbnail is whatever stale
+ * pixels happen to be in the corner (QA: "the tree isn't visible in the
+ * rotating preview window"), AND the restore afterwards leaves the MAIN scene
+ * on a viewport half again too big, so from then on the garden is drawn zoomed
+ * and offset from where every projection in this file thinks it is. That is the
+ * second report: taps on a planted tree's mulch missed it and fell through to
+ * "Trees go inside the walls", because planting is what opens a modal.
+ *
+ * So the rect is computed in CSS pixels for three, and in buffer pixels for
+ * `drawImage`, which reads a canvas in its own intrinsic pixels and knows
+ * nothing about ratios. `device` is derived from `css` by the same floor three
+ * applies, so the two can never describe different rectangles.
+ */
+export function previewRect(bufferWidth, bufferHeight, pixelRatio, wanted = PREVIEW_PX) {
+    // Every input is read back off a renderer, so every one of them is guarded:
+    // a NaN here would be a scissor rectangle of NaN, which draws nothing and
+    // reports nothing.
+    const pr = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
+    const bw = Number.isFinite(bufferWidth) && bufferWidth > 0 ? bufferWidth : wanted;
+    const bh = Number.isFinite(bufferHeight) && bufferHeight > 0 ? bufferHeight : wanted;
+    const css = Math.max(1, Math.min(
+        Math.floor(wanted / pr), Math.floor(bw / pr), Math.floor(bh / pr)));
+    // What three will actually hand GL once it has multiplied and floored.
+    const device = Math.max(1, Math.floor(css * pr));
+    // WebGL measures its viewport from the BOTTOM of the buffer, so this is the
+    // TOP left corner of the picture. drawImage measures from the top, which is
+    // why the copy reads from (0, 0) and not from the same number. Getting that
+    // backwards copies a corner of the sky instead. The half pixel is there so
+    // the floor three applies lands on `bufferHeight - device` exactly rather
+    // than a row below it.
+    const cssTop = (bh - device + 0.5) / pr;
+    return { css, device, cssTop };
+}
+
 function renderPreview(time) {
     if (!previewTree || !renderer || !previewScene) return;
     const target = getPreviewCanvas();
@@ -1356,34 +1454,38 @@ function renderPreview(time) {
     previewTree.group.rotation.y = state.reducedMotion ? 0.6 : time * 0.35;
     updateTree(previewTree, previewDrive(time), previewResolved);
 
-    const size = Math.round(PREVIEW_PX);
-    const w = renderer.domElement.width;
-    const h = renderer.domElement.height;
+    const rect = previewRect(renderer.domElement.width, renderer.domElement.height,
+        renderer.getPixelRatio());
 
-    // WebGL measures its viewport from the BOTTOM of the buffer, so this rect
-    // is the TOP left corner of the picture. drawImage measures from the top,
-    // which is why the copy below reads from (0, 0) and not from the same
-    // numbers. Getting that backwards copies a corner of the sky instead.
+    // RESTORED FROM WHAT WAS THERE, never from numbers rebuilt by hand. The
+    // hand-built restore is what leaked a wrong viewport into the whole scene
+    // for the rest of the session, and the renderer is holding the right answer
+    // already.
     previousClear.copy(renderer.getClearColor(scratchColor));
     const previousAlpha = renderer.getClearAlpha();
+    renderer.getViewport(previousViewport);
+    renderer.getScissor(previousScissor);
+    const previousScissorTest = renderer.getScissorTest();
 
     renderer.setScissorTest(true);
-    renderer.setViewport(0, h - size, size, size);
-    renderer.setScissor(0, h - size, size, size);
+    renderer.setViewport(0, rect.cssTop, rect.css, rect.css);
+    renderer.setScissor(0, rect.cssTop, rect.css, rect.css);
     renderer.setClearColor(0x9a9182, 1);
     renderer.clear();
     renderer.render(previewScene, previewCamera);
-    renderer.setScissorTest(false);
-    renderer.setViewport(0, 0, w, h);
+    renderer.setScissorTest(previousScissorTest);
+    renderer.setViewport(previousViewport);
+    renderer.setScissor(previousScissor);
     renderer.setClearColor(previousClear, previousAlpha);
 
     // THE CONTEXT BELONGS TO A CANVAS, so it is re-taken whenever the
     // destination changes. Caching one across both modals would have drawn the
     // tree card's portrait into the plant modal's canvas, which is the sort of
-    // bug that only shows up on the second thing a visitor does.
-    if (!previewCtx || previewCtxFor !== target) {
-        target.width = size;
-        target.height = size;
+    // bug that only shows up on the second thing a visitor does. The size is
+    // re-checked too, because the pixel ratio moves under the quality governor.
+    if (!previewCtx || previewCtxFor !== target || target.width !== rect.device) {
+        target.width = rect.device;
+        target.height = rect.device;
         previewCtx = target.getContext('2d');
         previewCtxFor = target;
     }
@@ -1391,7 +1493,8 @@ function renderPreview(time) {
         // Same task as the render, so the drawing buffer is still valid. That
         // is why the main renderer needs no preserveDrawingBuffer, which would
         // cost every frame of the whole scene to serve one thumbnail.
-        previewCtx.drawImage(renderer.domElement, 0, 0, size, size, 0, 0, size, size);
+        previewCtx.drawImage(renderer.domElement,
+            0, 0, rect.device, rect.device, 0, 0, rect.device, rect.device);
     }
 }
 

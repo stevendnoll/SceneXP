@@ -1015,6 +1015,11 @@ export function updateForest(hour, snowCoverage = 0, wind = null, elapsed = 0, m
     const bare = barenessAt(hour, config);
     deciduous.material.userData.bare.value = bare;
 
+    // How far the REAL trees of the near treeline have shed, which finishes a
+    // little before the fall does. See `shedBy` in the config, and the note in
+    // the loop below for why this is a scale rather than a threshold.
+    const shed = clamp01(bare / config.world.nearTreeline.shedBy);
+
     for (const tree of nearTrees) {
         // THE SAME WIND VECTOR THE PLANTED TREES READ. One source, so nothing
         // in frame can disagree about the weather.
@@ -1033,18 +1038,34 @@ export function updateForest(hour, snowCoverage = 0, wind = null, elapsed = 0, m
         const leafColour = forestColorAt(hour, tree.evergreen, config);
         tree.leafMesh.material.color.setHex(
             packColor(mixColor(leafColour, snowColor, snow * (tree.evergreen ? 0.4 : 0.55))));
-        // THE WOOD'S OWN BARE THRESHOLD, not the flat tier's. The flat tier
-        // draws its trunk and limbs INTO the canopy texture, so its threshold
-        // has to stop short of erasing them: 0.82 takes the leaves and leaves
-        // the branches. This mask has no wood in it at all, because the
-        // branches here are real geometry, so it can and must go all the way.
-        // At 0.82 the mask's own 0.62 to 0.92 alpha left about a third of the
-        // canopy standing through deep winter, which is why the wood kept full
-        // tan crowns under snow when M7-2 and M3-3 both call for bare.
-        const N = config.world.nearTreeline;
-        tree.leafMesh.material.alphaTest = tree.evergreen
-            ? F.leafyAlphaTest
-            : F.leafyAlphaTest + (N.bareAlphaTest - F.leafyAlphaTest) * bare;
+        // ---- THE SHED IS A SCALE, AND A THRESHOLD COULD NEVER HAVE DONE IT --
+        //
+        // This used to ramp `alphaTest` from the leafy value up to 0.99, and it
+        // was the same trap `buildFarTier` records above, met a second time.
+        // The cluster mask paints nine ellipses at 0.62 to 0.92 alpha and they
+        // COMPOSITE: three overlapping clumps reach 0.99 and five reach a flat
+        // 1.0. So the core of every canopy passed 0.99, and the wood kept solid
+        // crowns all winter on branches too thin to see at 20 m. QA read it as
+        // exactly what it looked like: leaves floating in the air.
+        //
+        // No threshold fixes that. One above 1.0 erases everything a leaf could
+        // ever be, at every season, and one below it cannot touch the cores. So
+        // the threshold holds still at the leafy value and the shed rides the
+        // material's OPACITY, which scales the alpha before the test reads it.
+        // A pixel survives while `mask * (1 - shed) >= leafyAlphaTest`, which
+        // is exact at every density of overlap: the canopy thins from its soft
+        // edges inward and is gone outright at shed 1.
+        //
+        // The material stays `transparent: false`, so this costs no sorting and
+        // no second draw. It is a threshold test all the way down.
+        //
+        // An evergreen keeps its needles: it dulls, it does not erode.
+        tree.leafMesh.material.alphaTest = F.leafyAlphaTest;
+        tree.leafMesh.material.opacity = tree.evergreen ? 1 : 1 - shed;
+        // Nothing left to test against. Skipping the draw is worth the line on
+        // a phone, and it is also what makes "bare" mean bare rather than
+        // "every fragment discarded".
+        tree.leafMesh.visible = tree.evergreen || shed < 1;
     }
 
     // Scrub follows the deciduous wood, and takes snow more heavily because it

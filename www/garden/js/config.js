@@ -1053,13 +1053,29 @@ export const GARDEN_CONFIG = deepFreeze({
             // were 6 to 11 px at 30 m, too small to merge into a canopy: at 3.6
             // a bur oak's clump is 0.61 m, about 16 px, which reads as foliage
             // rather than as specks on a wire.
-            // Erases the canopy OUTRIGHT in deep winter. The flat tier stops
-            // at 0.82 because its trunk and limbs are painted into the same
-            // texture and must survive; this mask holds nothing but foliage,
-            // since the branches here are real geometry. Left at 0.82 the
-            // mask's own 0.62 to 0.92 alpha kept about a third of the canopy
-            // through winter, and overlapping clumps kept more.
-            bareAlphaTest: 0.99,
+            // ---- WINTER IS A SHED, NOT A THRESHOLD (QA 2026-08-31) --------
+            // `bareAlphaTest: 0.99` used to live here, and no value could have
+            // worked. The cluster mask paints nine ellipses at 0.62 to 0.92
+            // alpha and they COMPOSITE: three overlapping clumps reach 0.99 and
+            // five reach a flat 1.0, so the core of every canopy passed any
+            // threshold a leaf could also pass, and the wood kept solid crowns
+            // on branches too thin to see at 20 m. QA read it exactly as it
+            // looked: leaves floating in the air (garden-1 through garden-3).
+            //
+            // So the canopy sheds on the material's OPACITY instead, which
+            // scales the alpha the fixed threshold then reads. That is the same
+            // move the flat tier's fragment hook makes, and it is exact at
+            // every density of overlap because it scales rather than compares.
+            // A leaf pixel survives while `mask * (1 - shed) >= leafyAlphaTest`,
+            // so the canopy thins from its soft edges inward and is gone
+            // outright once the shed completes.
+            //
+            // COMPLETED BEFORE THE DROP ENDS, at 0.86 of it, which is hour 20.3
+            // of a drop that runs 18 to 21. The last stretch of the fall is
+            // when a real wood is already bare, and finishing early is what
+            // guarantees that midnight is never the hour the last clump pops
+            // out of existence.
+            shedBy: 0.86,
             leafCards: 700,
             leafScale: 3.6,
 

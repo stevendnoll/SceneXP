@@ -673,41 +673,131 @@ test('nothing in the fractal wood is secretly an evergreen', () => {
     disposeForest();
 });
 
-test('the wood goes properly bare in deep winter', () => {
-    // M7-2 and M3-3 both call for bare, and it was not happening: the threshold
-    // was the flat tier's 0.82 while this mask paints 0.62 to 0.92, so about a
-    // third of the canopy stood through winter and overlapping clumps kept more.
-    // Through the recorder: under the plain stub a material is absorbed and a
-    // threshold cannot be read back off it.
-    measureWood(() => initForest(recordingScene(), GARDEN_CONFIG, { mobile: false }));
-    const N = GARDEN_CONFIG.world.nearTreeline;
-
-    // Hour 2 is deep winter, fully turned and fully dropped.
-    updateForest(2, 1, { x: 0, z: 0 }, 0);
-    for (const entry of nearTreeEntries()) {
-        if (!entry.leafMesh) continue;
-        expect(entry.leafMesh.material.alphaTest).toBeCloseTo(N.bareAlphaTest, 6);
-    }
-    // And in full leaf it is the leafy threshold, or summer would be thin.
-    updateForest(12, 0, { x: 0, z: 0 }, 0);
-    for (const entry of nearTreeEntries()) {
-        if (!entry.leafMesh) continue;
-        expect(entry.leafMesh.material.alphaTest)
-            .toBeCloseTo(GARDEN_CONFIG.world.farForest.leafyAlphaTest, 6);
-    }
-    disposeForest();
-});
-
-test('the bare threshold really does clear the mask it has to erase', () => {
-    // The number that matters, tied to the texture rather than asserted on its
-    // own: if the mask is ever repainted brighter than the threshold, the wood
-    // silently keeps its winter canopy again and nothing else fails.
+/**
+ * The alpha range one leaf clump is drawn at, read off the drawing source so
+ * repainting the mask cannot quietly move what these tests are about.
+ */
+function leafClumpAlpha() {
     const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'tree.js'), 'utf8');
     const fn = src.slice(src.indexOf('export function leafClusterTexture'));
     const m = fn.slice(0, fn.indexOf('\n}')).match(/rgba\(255,255,255,\$\{([\d.]+) \+ random\(\) \* ([\d.]+)\}\)/);
     expect(m).not.toBeNull();
-    const brightest = Number(m[1]) + Number(m[2]);
-    expect(GARDEN_CONFIG.world.nearTreeline.bareAlphaTest).toBeGreaterThan(brightest);
+    return { low: Number(m[1]), high: Number(m[1]) + Number(m[2]) };
+}
+
+test('NO WINTER THRESHOLD COULD EVER HAVE STRIPPED THIS MASK', () => {
+    // The arithmetic behind the QA report, and the reason the number is gone
+    // rather than raised. `leafClusterTexture` draws nine ellipses clustered
+    // inside the middle third of the texture. Canvas is source-over, so alpha
+    // ACCUMULATES: a = a_dst + a_src * (1 - a_dst). The old winter threshold
+    // was 0.99 and one clump is 0.62 to 0.92, which looks safely under it.
+    const { low, high } = leafClumpAlpha();
+    const over = (a, b) => a + b * (1 - a);
+    expect(high).toBeLessThan(0.99);
+
+    // Two clumps at the bright end are already past 0.99, and three store as a
+    // flat 1.0 in the eight bits the texture keeps. From the DIMMEST clumps the
+    // mask draws it takes five to pass 0.99 and eight to store as 1.0. Nine
+    // clumps inside the middle third of the texture is several deep through its
+    // centre either way, so the core of every canopy passed the threshold that
+    // was meant to erase it, all winter, on branches too thin to see at 20 m.
+    // QA saw exactly what it was: leaves floating in the air.
+    const stored = (a) => Math.round(a * 255) / 255;
+    const deep = (a, n) => { let v = 0; for (let i = 0; i < n; i++) v = over(v, a); return v; };
+    expect(deep(high, 2)).toBeGreaterThan(0.99);
+    expect(stored(deep(high, 3))).toBe(1);
+    expect(deep(low, 5)).toBeGreaterThan(0.99);
+    expect(stored(deep(low, 8))).toBe(1);
+
+    // And a threshold above 1.0 is one no leaf could pass at any season, so
+    // there is no number. The config key is gone, not tuned.
+    expect(GARDEN_CONFIG.world.nearTreeline.bareAlphaTest).toBeUndefined();
+});
+
+test('the shed takes every leaf pixel, at every density of overlap', () => {
+    // The shipped rule rather than a restatement of it: the threshold holds
+    // still and the shed scales the alpha the threshold reads, so a pixel
+    // survives while `mask * (1 - shed) >= leafyAlphaTest`. Scaling is exact
+    // where comparing was not, which is the whole point.
+    const leafy = GARDEN_CONFIG.world.farForest.leafyAlphaTest;
+    const survives = (mask, shed) => mask * (1 - shed) >= leafy;
+
+    // Fully shed: nothing survives, INCLUDING the composited 1.0 core that no
+    // threshold could reach. This is the assertion the old test could not make.
+    for (let a = 0.4; a <= 1.0001; a += 0.02) expect(survives(a, 1)).toBe(false);
+
+    // The old rule, for contrast, so the test says what it is protecting
+    // against: a core at 1.0 passes a threshold of 0.99 and stands all winter.
+    expect(1.0 >= 0.99).toBe(true);
+
+    // In full leaf it is an identity, so summer is exactly what it always was.
+    const { low, high } = leafClumpAlpha();
+    for (const a of [low, high, 1]) expect(survives(a, 0)).toBe(a >= leafy);
+
+    // And it thins from the soft edges inward rather than popping: a dim pixel
+    // goes before a bright one, at every shed in between.
+    for (let shed = 0.05; shed < 1; shed += 0.05) {
+        expect(survives(high, shed) || !survives(low, shed)).toBe(true);
+    }
+});
+
+test('the near wood is bare in deep winter and full in summer', () => {
+    // Through the recorder: under the plain stub a material is absorbed and
+    // nothing can be read back off it.
+    measureWood(() => initForest(recordingScene(), GARDEN_CONFIG, { mobile: false }));
+    const leafy = GARDEN_CONFIG.world.farForest.leafyAlphaTest;
+
+    // Hour 2 is deep winter, fully turned and fully dropped.
+    updateForest(2, 1, { x: 0, z: 0 }, 0);
+    for (const entry of nearTreeEntries()) {
+        if (!entry.leafMesh || entry.evergreen) continue;
+        expect(entry.leafMesh.material.opacity).toBeCloseTo(0, 6);
+        // Bare means bare, not "every fragment discarded".
+        expect(entry.leafMesh.visible).toBe(false);
+    }
+
+    // Hour 12 is high summer. Full opacity and the leafy threshold, or the
+    // wood is thin in the season it is most looked at.
+    updateForest(12, 0, { x: 0, z: 0 }, 0);
+    for (const entry of nearTreeEntries()) {
+        if (!entry.leafMesh) continue;
+        expect(entry.leafMesh.material.opacity).toBeCloseTo(1, 6);
+        expect(entry.leafMesh.material.alphaTest).toBeCloseTo(leafy, 6);
+        expect(entry.leafMesh.visible).toBe(true);
+    }
+
+    // THE THRESHOLD MUST NOT MOVE WITH THE SEASON. If somebody puts that back,
+    // the shed and the threshold are both trying to strip the wood and it
+    // over-thins in autumn as well as under-shedding in winter. Same rule the
+    // flat tier already holds to, one tier down.
+    for (const hour of [2, 6, 12, 18, 21]) {
+        updateForest(hour, hour === 2 ? 1 : 0, { x: 0, z: 0 }, 0);
+        for (const entry of nearTreeEntries()) {
+            if (!entry.leafMesh) continue;
+            expect(entry.leafMesh.material.alphaTest).toBeCloseTo(leafy, 6);
+        }
+    }
+    disposeForest();
+});
+
+test('the wood is bare BEFORE midnight, not exactly at it', () => {
+    // The fall runs hour 18 to 21 and winter opens at 21. A shed that only
+    // completed at the very end of that window would put the last clump's
+    // disappearance on the same tick the season changes, which is the one
+    // moment a pop would be visible. It finishes at 0.86 of the drop instead.
+    measureWood(() => initForest(recordingScene(), GARDEN_CONFIG, { mobile: false }));
+    const opacityAt = (hour) => {
+        updateForest(hour, 0, { x: 0, z: 0 }, 0);
+        const entry = nearTreeEntries().find((e) => e.leafMesh && !e.evergreen);
+        return entry ? entry.leafMesh.material.opacity : null;
+    };
+
+    expect(opacityAt(18)).toBeCloseTo(1, 6);      // the turn is over, the fall opens
+    expect(opacityAt(19.5)).toBeGreaterThan(0);   // mid-fall, thinning
+    expect(opacityAt(19.5)).toBeLessThan(1);
+    expect(opacityAt(20.6)).toBeCloseTo(0, 6);    // done before winter opens
+    expect(opacityAt(21)).toBeCloseTo(0, 6);
+    disposeForest();
 });
 
 // ---- The beds pay their way (M10-6) ----------------------------------------

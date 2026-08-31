@@ -151,6 +151,88 @@ test('a long species name cannot run under the close button', () => {
     expect(CSS).toMatch(/\.tree-card \.piece-title[^{]*\{[^}]*padding-right/);
 });
 
+// ---- The bottom row and the zoom stack (QA 2026-08-31) ---------------------
+//
+// The pan row is centred in the VIEWPORT and the zoom stack is anchored to the
+// right EDGE, so the two are laid out against different origins and whether
+// they collide is a function of the window width. Nobody had done that
+// arithmetic, and on a 391 px phone QA found the minus button sitting on top of
+// the right arrow. The numbers live in two stylesheets and three media queries,
+// which is exactly the shape of thing that is cheap to assert and expensive to
+// eyeball.
+
+/** One number out of a CSS rule, so the test moves when the sheet does. */
+function cssPx(pattern, source) {
+    const m = source.match(pattern);
+    expect(m).not.toBeNull();
+    return Number(m[1]);
+}
+
+/** Where the two bottom-corner control groups actually land, in CSS pixels. */
+function bottomControlsAt(viewportWidth) {
+    // The shared part's own sizes, and this scene's narrow-screen shrink.
+    const shrink = CSS.slice(CSS.indexOf('@media (max-width: 380px)'));
+    const small = viewportWidth <= 380;
+    // Anchored on the selector's own brace, or `max-width: 380px` in the media
+    // query's condition is the first "width" the regex finds.
+    const button = cssPx(/\.pan-btn\s*\{[^}]*width:\s*(\d+)px/, small ? shrink : SHARED_CSS);
+    const gap = small
+        ? cssPx(/\.pan-controls\s*\{[^}]*gap:\s*(\d+)px/, shrink)
+        : cssPx(/\.pan-controls\s*\{[^}]*gap:\s*(\d+)px/, SHARED_CSS);
+
+    // The zoom stack's corner, and the shift the row takes to clear it.
+    const zoom = CSS.slice(CSS.indexOf('.garden-zoom {'));
+    const inset = cssPx(/right:\s*calc\((\d+)px/, zoom);
+    const shiftRule = CSS.slice(CSS.indexOf('@media (max-width: 28rem)'));
+    const shift = viewportWidth <= 28 * 16
+        ? cssPx(/left:\s*calc\(50% - (\d+)px\)/, shiftRule) : 0;
+
+    // Four buttons and three gaps, centred and then stepped left.
+    const width = button * 4 + gap * 3;
+    const centre = viewportWidth / 2 - shift;
+    return {
+        rowLeft: centre - width / 2,
+        rowRight: centre + width / 2,
+        zoomLeft: viewportWidth - inset - button
+    };
+}
+
+test('THE ZOOM STACK AND THE RIGHT ARROW DO NOT SHARE A PIXEL', () => {
+    // 320 is the narrowest phone still in use, 391 is the frame QA shot the
+    // mobile pass on, and 433 and 449 sit either side of the rule's own
+    // boundary, which is where a fix like this fails if it is going to.
+    for (const width of [320, 360, 375, 380, 381, 391, 414, 430, 433, 449, 480, 600]) {
+        const { rowLeft, rowRight, zoomLeft } = bottomControlsAt(width);
+        // Air between the two groups, not merely an absence of overlap: two
+        // circles a pixel apart read as a mistake as surely as two overlapping
+        // ones do.
+        expect(`${width}px: ${Math.round(zoomLeft - rowRight)}px clear`)
+            .toBe(`${width}px: ${Math.max(12, Math.round(zoomLeft - rowRight))}px clear`);
+        // And it has not simply been pushed off the other edge of the screen.
+        expect(`${width}px: ${rowLeft >= 8}`).toBe(`${width}px: true`);
+    }
+});
+
+test('the welcome card can be scrolled to its own bottom', () => {
+    // `align-items: center` on the shared `#blocker` overflows EQUALLY at both
+    // ends, so a card taller than the screen puts its own title above the top
+    // of the viewport where no scroll can reach it: a scroll container cannot
+    // scroll to negative. Auto margins centre it while it fits and collapse
+    // rather than going negative when it does not.
+    const blocker = CSS.slice(CSS.indexOf('#blocker {'));
+    const rule = blocker.slice(0, blocker.indexOf('}'));
+    expect(rule).toMatch(/overflow-y:\s*auto/);
+    expect(rule).toMatch(/align-items:\s*flex-start/);
+    const instructions = CSS.slice(CSS.indexOf('#instructions {'));
+    expect(instructions.slice(0, instructions.indexOf('}'))).toMatch(/margin:\s*auto/);
+
+    // And the scroll has to survive the dismissal handler: a flick to read the
+    // rest of the card ends in a `touchend` exactly like a tap does, so the
+    // card would otherwise close itself the first time anybody tried to read
+    // the bottom of it.
+    expect(JS).toMatch(/BLOCKER_TAP_SLOP/);
+});
+
 test('the welcome legend is rows, not a ragged paragraph', () => {
     // As loose inline spans the four label-and-sentence pairs wrapped wherever
     // they landed, stranding PLANT and TEND mid-sentence.

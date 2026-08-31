@@ -208,6 +208,49 @@ body {
     color: var(--ui-subtitle);
 }
 
+/* ---- The welcome card has to fit a phone, and scroll when it does not -------
+ *
+ * QA on a 391 x 841 frame found the card running off the bottom of the screen
+ * with the last row under the pan controls, and nothing would scroll to it.
+ * Two separate causes, and the copy was only one of them.
+ *
+ * THE OTHER IS THAT `align-items: center` CLIPS. The shared `#blocker` centres
+ * its child in a full-height flex box, and a flex item taller than its
+ * container overflows EQUALLY at both ends, so the top of the card goes above
+ * the top of the screen where no amount of `overflow-y: auto` can reach it: a
+ * scroll container cannot scroll to negative. Auto margins on the card are the
+ * fix rather than a workaround. They centre it exactly as before while it fits,
+ * and they collapse to zero rather than going negative when it does not, so the
+ * overflow all lands at the bottom where the scroll can get at it.
+ *
+ * The shared sheet's spacing is a desktop landscape budget (3rem under the
+ * subtitle alone), so the small-screen block below spends it again more
+ * carefully rather than letting the card be tall and then scrolling it.
+ */
+#blocker {
+    align-items: flex-start;
+    overflow-y: auto;
+    /* A flick that runs past the end of this card is not a request to move the
+       page behind it. */
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#instructions {
+    margin: auto;
+    max-width: 40rem;
+    padding: calc(1.75rem + env(safe-area-inset-top, 0px)) 1.25rem
+        calc(1.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+#instructions .subtitle {
+    margin-bottom: 1.4rem;
+}
+
+#instructions .click-prompt {
+    margin-bottom: 1.2rem;
+}
+
 /* ---- The welcome legend -----------------------------------------------------
  *
  * The shared stylesheet styles the LABELS (.controls-hint span) and nothing
@@ -215,6 +258,13 @@ body {
  * spans the pairs wrapped wherever they happened to land, stranding PLANT and
  * TEND in the middle of sentences and reading as broken text. So the rows are
  * a list here, and the label gets a column of its own so the sentences align.
+ *
+ * The shared sheet also hides `.controls-hint` outright below 768px. This
+ * scene keeps it, because the legend IS the instructions here rather than a
+ * reminder of controls the visitor can find by poking at them, and a phone is
+ * where most visitors will meet it. It is written as a bare class so it wins
+ * the specificity tie by coming later, which is deliberate: an `#instructions`
+ * prefix would make it unbeatable from the shared sheet.
  */
 .controls-hint {
     list-style: none;
@@ -240,11 +290,42 @@ body {
 }
 
 /* Below the column split the label sits on its own line above its sentence,
-   which is still a legend and never a ragged block. */
+   which is still a legend and never a ragged block. The rest of this block is
+   the phone's share of the card's height: the shared sheet's type and spacing
+   are a desktop budget, and six rows of legend under it is what pushed the last
+   one off the bottom of a 391 x 841 frame. */
 @media (max-width: 30rem) {
     .controls-hint li {
         grid-template-columns: 1fr;
         row-gap: 0.15rem;
+    }
+
+    .controls-hint {
+        gap: 0.5rem;
+        margin-top: 1rem;
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+    }
+
+    #instructions {
+        padding-left: 1.1rem;
+        padding-right: 1.1rem;
+    }
+
+    #instructions .title {
+        letter-spacing: 0.18em;
+        margin-bottom: 0.4rem;
+    }
+
+    #instructions .subtitle {
+        font-size: 0.95rem;
+        letter-spacing: 0.05em;
+        margin-bottom: 1rem;
+    }
+
+    #instructions .click-prompt {
+        font-size: 1.05rem;
+        margin-bottom: 0.9rem;
     }
 }
 
@@ -811,10 +892,39 @@ body {
     }
 }
 
+/* ---- The two groups share one corner, so they share one centre -------------
+ *
+ * THE ARITHMETIC THAT WAS NEVER DONE. The pan row is centred in the VIEWPORT
+ * (the shared sheet's `left: 50%` and a translate) while the zoom stack is
+ * anchored to the right EDGE, so the two are laid out against different
+ * origins and whether they collide is a function of the window width. Four
+ * 54px circles and three 16px gaps is 264px, and a stack 54px wide held 20px
+ * off the edge leaves a centred row only `width - 148px` to live in. The row
+ * therefore overlaps the stack at any width below 428px, which QA found on a
+ * 391px phone: the minus button sitting on top of the right arrow.
+ *
+ * The buttons could shrink instead, and below 320px they would have to go
+ * under the 44px touch target to do it. So the row gives up the viewport
+ * centre rather than its size: it steps left by HALF of what the zoom stack
+ * occupies (20px offset, 54px button, and 8px of air between them), which
+ * centres the two groups as one cluster. The season chip stays on the viewport
+ * centre, a row higher up, where nothing is competing for the space.
+ *
+ * 28rem rather than the 428px the arithmetic gives: right at the boundary the
+ * unshifted row clears the stack by ten pixels, which is a pass by measurement
+ * and a near miss by eye, so the rule starts a little wider than it has to.
+ */
+@media (max-width: 28rem) {
+    .pan-controls.always-on.visible {
+        left: calc(50% - 41px);
+    }
+}
+
 /* Four circles at 54px plus three 16px gaps is 264px, which fits the narrowest
-   phone in use with room either side. The zoom stack sits clear of it in the
-   corner. Below that, shrink rather than wrap: a wrapped control row reads as
-   broken. */
+   phone in use. IT DOES NOT FIT BESIDE THE ZOOM STACK, which is the thing this
+   comment used to claim and the rule above now handles: 46px circles at a 10px
+   gap still overlap a centred row at 320px by 13px. Shrink rather than wrap
+   either way, because a wrapped control row reads as broken. */
 @media (max-width: 380px) {
     .pan-controls .pan-btn,
     .garden-zoom .pan-btn {
