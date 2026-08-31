@@ -140,6 +140,33 @@ export function dollyForDistance(point, composed, want, config = GARDEN_CONFIG) 
     return Math.max(Math.min(F.minDolly, ceiling), best);
 }
 
+/**
+ * How far the visitor may look to either side, for a dolly.
+ *
+ * THE CLAMP HAS TO MOVE BECAUSE THE EYE DOES. The shared part sets its yaw
+ * limit once, which is correct for a scene whose camera never moves, and this
+ * one's zoom is a dolly: the plot subtends 35 degrees from the composed
+ * viewpoint and 108 from the near end of the track, so one number is generous
+ * at one end and confining at the other. The numbers behind the two ends are in
+ * `camera.portrait.pan`.
+ *
+ * LINEAR IN THE DOLLY rather than in the angle the plot subtends, and that is a
+ * choice. Matching the geometry would keep the front corner exactly at the same
+ * place in frame all the way in, which sounds better and is not: it reaches 108
+ * degrees at the near end, where the corner is behind the eye, and a pan that
+ * turns you around is a different control. Linear stays predictable, doubles
+ * the reach where visitors actually sit, and stops short of a free look.
+ *
+ * Only the way IN widens it. Pulling out past the composed viewpoint is already
+ * the widest useful view of the plot and needs no more turning than it ever
+ * did.
+ */
+export function panLimitFor(dolly, config = GARDEN_CONFIG) {
+    const P = config.camera.portrait.pan;
+    const t = Math.max(0, Math.min(1, dolly || 0));
+    return P.maxAngle + (P.maxAngleNear - P.maxAngle) * t;
+}
+
 // ---- State -----------------------------------------------------------------
 
 let dolly = 0;

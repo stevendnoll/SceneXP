@@ -508,6 +508,55 @@ test('SHOW THE WHOLE GARDEN IS ONLY THERE WHEN IT HAS SOMETHING TO DO', async ()
     main.__test__.state.running = false;
 });
 
+test('ZOOMING IN WIDENS THE PAN, AND PULLING BACK BRINGS THE VIEW IN AGAIN', async () => {
+    // The rule is asserted in garden-world; this is the wiring: that the render
+    // loop actually pushes it to the shared part every frame, and that it does
+    // so BEFORE the part reads it, so the clamp a drag or a button works
+    // against is this frame's rather than last frame's.
+    const main = await bootGarden();
+    const view = await import('../www/garden/js/view.min.js');
+    const pan = await import('../www/shared/js/pan-1.0.0.min.js');
+    const P = GARDEN_CONFIG.camera.portrait.pan;
+    const [, zoomIn, zoomOut] = zoomStack().children;
+
+    fire(dom.el('blocker'), 'click');
+    stepFrames(5);
+
+    // Zoomed out, the clamp is the composed one and the visitor can be pushed
+    // all the way to it.
+    fire(globalThis.window, 'keydown', { code: 'ArrowRight' });
+    stepFrames(200);
+    fire(globalThis.window, 'keyup', { code: 'ArrowRight' });
+    expect(pan.getPanAngle()).toBeCloseTo(P.maxAngle, 6);
+
+    // Come in, and the travel that was used up is available again. The button
+    // stops reading as spent, which is the visible half of it.
+    fire(zoomIn, 'pointerdown', { pointerId: 1 });
+    stepFrames(60);
+    fire(zoomIn, 'pointerup', { pointerId: 1 });
+    expect(view.getDolly()).toBeGreaterThan(0.2);
+    expect(zoomIn.classList.contains('at-limit')).toBe(false);
+    fire(globalThis.window, 'keydown', { code: 'ArrowRight' });
+    stepFrames(200);
+    fire(globalThis.window, 'keyup', { code: 'ArrowRight' });
+    const wide = pan.getPanAngle();
+    expect(wide).toBeGreaterThan(P.maxAngle);
+    expect(wide).toBeCloseTo(view.panLimitFor(view.getDolly()), 6);
+
+    // ---- AND PULLING BACK BRINGS IT IN ----------------------------------
+    // A visitor left beyond a clamp they can no longer reach would find both
+    // pan buttons refusing to move. Coupled to a control they are already
+    // holding, and it is the same "pull back and the frame re-composes" the
+    // aim release does one layer up.
+    fire(zoomOut, 'pointerdown', { pointerId: 2 });
+    stepFrames(400);
+    fire(zoomOut, 'pointerup', { pointerId: 2 });
+    expect(view.getDolly()).toBeLessThanOrEqual(0);
+    expect(pan.getPanAngle()).toBeCloseTo(P.maxAngle, 6);
+
+    main.__test__.state.running = false;
+});
+
 test('deleting the saved garden by hand actually deletes it', async () => {
     // THE EXACT SEQUENCE FROM QA. Clearing the key and reloading used to do
     // nothing, because a reload fires visibilitychange and then pagehide, both

@@ -25,7 +25,7 @@ import { presenceAt, WINDOWS } from '../www/garden/js/wildlife.js';
 import { luminanceOf } from '../www/garden/js/sky.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { dollyView, dollyTrackZ } from '../www/garden/js/view.js';
+import { dollyView, dollyTrackZ, panLimitFor } from '../www/garden/js/view.js';
 import { cellInPlot, cellCenter } from '../www/garden/js/terrain.js';
 import { SPECIES } from '../www/garden/js/species.js';
 
@@ -923,6 +923,70 @@ test('PULLING BACK IS ALSO ASKING TO SEE THE WHOLE GARDEN', async () => {
     expect(F.minDolly).toBeGreaterThan(0);
 });
 
+test('THE PAN REACHES THE FRONT CORNERS ONCE THE EYE IS IN AMONG THEM', async () => {
+    // ---- WHAT QA REPORTED, IN ARITHMETIC ---------------------------------
+    // "Hard to zoom in on the front corners because my side pan range is
+    // limited, which is fine while zoomed out but limiting while zoomed in."
+    // The clamp was one number because the shared part was built for scenes
+    // whose eye never moves. This one's zoom is a DOLLY, so the same 24 metres
+    // of plot subtends 35 degrees from the composed viewpoint and 108 from the
+    // near end of the track.
+    const cam = GARDEN_CONFIG.camera;
+    const P = cam.portrait.pan;
+    const composed = { ...COMPOSED };
+
+    // The nearest, most sideways cell a visitor can actually plant in.
+    let corner = { x: 0, z: 0 };
+    const steps = Math.ceil(PLOT.halfSize / PLOT.gridSpacing) + 1;
+    for (let gx = -steps; gx <= steps; gx++) {
+        for (let gz = -steps; gz <= steps; gz++) {
+            if (!cellInPlot(gx, gz)) continue;
+            const c = cellCenter(gx, gz);
+            corner = { x: Math.max(corner.x, c.x), z: Math.max(corner.z, c.z) };
+        }
+    }
+    const deg = (r) => r * 180 / Math.PI;
+    const needAt = (t) => deg(Math.atan2(corner.x, dollyView(t, composed).z - corner.z));
+    const haveAt = (t) => deg(panLimitFor(t));
+    // Frame half-widths: a 16:9 desktop and the 391 x 841 phone QA shot on.
+    const half = (fov, aspect) => deg(Math.atan(Math.tan(fov * Math.PI / 360) * aspect));
+    const wide = half(cam.fov, 16 / 9);
+    const tall = half(cam.portrait.fov, 391 / 841);
+
+    // ZOOMED OUT IS UNCHANGED, which QA explicitly said was fine. The whole
+    // plot is in frame there and nothing needs a wider turn.
+    expect(haveAt(0)).toBeCloseTo(deg(P.maxAngle), 6);
+    expect(haveAt(-1)).toBeCloseTo(deg(P.maxAngle), 6);
+
+    // AND THE MIDDLE OF THE TRACK IS WHERE THE FIX HAS TO LAND, because that
+    // is where anybody actually sits. Before, the corner was 29 degrees off
+    // centre, which is off a portrait screen entirely.
+    const before = needAt(0.5) - deg(P.maxAngle);
+    const after = needAt(0.5) - haveAt(0.5);
+    expect(before).toBeGreaterThan(tall);      // was off the phone
+    expect(after).toBeLessThan(tall);          // now on it
+    expect(after).toBeLessThan(before);
+
+    // In frame on a desktop at every zoom, which the old clamp lost past 0.7.
+    for (const t of [0.25, 0.5, 0.7, 0.85]) {
+        expect(`${t}: ${needAt(t) - haveAt(t) < wide}`).toBe(`${t}: true`);
+    }
+
+    // ---- AND IT DELIBERATELY STOPS SHORT OF A FREE LOOK -----------------
+    // At the near end the eye is at z = 6 and a corner tree at z = 9 is BEHIND
+    // it. Matching the geometry all the way would mean turning to look over
+    // your own shoulder, which is a different control. The limit never reaches
+    // what centring the corner there would need.
+    expect(haveAt(1)).toBeLessThan(needAt(1));
+    expect(haveAt(1)).toBeCloseTo(deg(P.maxAngleNear), 6);
+    // Monotone in between, so the reach never shrinks as the eye comes in.
+    let last = -Infinity;
+    for (let t = 0; t <= 1.0001; t += 0.05) {
+        expect(panLimitFor(t)).toBeGreaterThanOrEqual(last);
+        last = panLimitFor(t);
+    }
+});
+
 test('the view reset control knows when it has nothing to do', async () => {
     // It is hidden until the view has actually moved, in the tradition of the
     // Water all button, so the frame the scene opens on carries no chrome it
@@ -1161,12 +1225,28 @@ test('THE MOUNTAINS SPAN THE WHOLE HORIZON, AT EVERY ASPECT AND FULL PAN', () =>
     const aim = Math.atan2(reach, cam.focus.clearance) * 180 / Math.PI;
     expect(aim).toBeGreaterThan(30);
 
+    // ---- AND THE PAN TERM IS NOT A CONSTANT EITHER --------------------
+    // `maxAngleNear` doubles the yaw clamp as the dolly comes in, so the worst
+    // case is the WIDEST the clamp ever gets and not the one in the config's
+    // `maxAngle`. Read through the same function the render loop calls, or the
+    // budget is computed against a limit the scene does not actually use.
+    const widest = panLimitFor(1) * 180 / Math.PI;
+    expect(widest).toBeGreaterThan(pan);
+
     for (const aspect of [4 / 3, 16 / 10, 16 / 9, 21 / 9, 32 / 9]) {
-        expect(`${aspect}: ${halfH(cam.fov, aspect) + pan + aim <= spread}`)
+        expect(`${aspect}: ${halfH(cam.fov, aspect) + widest + aim <= spread}`)
             .toBe(`${aspect}: true`);
     }
     // Portrait too, which uses its own wider lens on a narrow window.
-    expect(halfH(cam.portrait.fov, 0.46) + pan + aim).toBeLessThanOrEqual(spread);
+    expect(halfH(cam.portrait.fov, 0.46) + widest + aim).toBeLessThanOrEqual(spread);
+
+    // ---- AND IT IS A CLOSED RING, WHICH IS WHY THIS IS THE LAST TIME ----
+    // The arithmetic above has now been redone twice, once for the focus aim
+    // and once for the pan. At 180 the arc cannot be exceeded by any
+    // combination of aim, lens and pan, so the failure this test exists for
+    // (QA: "the range simply stops, with pale sky beyond it") is gone by
+    // construction rather than by a sum that keeps needing another term.
+    expect(spread).toBeGreaterThanOrEqual(180);
 
     // AND THE OLD VALUE FAILS, which is what makes this a guard. 62 was short
     // by 7 degrees at 4:3 and by 23 at 21:9.
@@ -1180,10 +1260,11 @@ test('THE MOUNTAINS SPAN THE WHOLE HORIZON, AT EVERY ASPECT AND FULL PAN', () =>
         expect(layer.segments / spread).toBeGreaterThan(1.8);
     }
     // And it stays cheap: two triangles a segment. The arc went from 105 to
-    // 150 degrees for the focus move and the segments went with it, which is
-    // 408 more triangles against a 400,000 budget.
+    // 150 for the focus move and then to a closed 180 for the wider pan, with
+    // the segments rising each time to hold the ridgeline's density. 1,634
+    // triangles where there were 952, against a 400,000 budget.
     const tris = W.mountains.layers.reduce((a, l) => a + l.segments * 2, 0);
-    expect(tris).toBeLessThan(1600);
+    expect(tris).toBeLessThan(1800);
 });
 
 // ---- Clouds (M20-2) --------------------------------------------------------

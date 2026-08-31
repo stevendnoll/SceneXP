@@ -43,7 +43,7 @@ import { resolveSpecies } from './species.min.js';
 import {
     dollyView, applyDollyDelta, dollyLimits, getDolly, resetView,
     focusDistance, dollyForDistance, focusOn, stepView, cancelFocus, getAim,
-    aimTarget, viewIsComposed
+    aimTarget, viewIsComposed, panLimitFor
 } from './view.min.js';
 import {
     pickBase, pickDrop, pickDropIndex, dropScreenY, dropPresence, thirstyCount,
@@ -58,12 +58,12 @@ import {
 import {
     initUi, updateHud, showHud, openPlantModal, isPlantOpen,
     openTreeCard, closeTreeCard, isCardOpen, refreshTreeCard, getCardEntry,
-    anyModalOpen, getPreviewCanvas, toast, openResetModal
+    anyModalOpen, getPreviewCanvas, toast, openResetModal, waterAllText
 } from './ui.min.js';
 import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
 import {
     initPortraitControls, updatePortraitControls, gestureClaimedTap, resetPortraitAim,
-    getPanAngle, getTiltAngle
+    getPanAngle, getTiltAngle, setPanLimit
 } from '../../shared/js/pan-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
@@ -1231,8 +1231,11 @@ function waterOne(entry, from) {
 /**
  * Water everything that is asking.
  *
- * A RESCUE AND NOT A ROUTINE, which is why the control offering it is only
- * there when the garden is in trouble. See `waterAllFrom`.
+ * IT APPEARS AT ONE THIRSTY TREE. It used to wait for three, to keep it a
+ * rescue rather than a routine, and that argument was answering the wrong
+ * question: this is the keyboard's ONLY route to the care loop, so a threshold
+ * of three closed watering entirely for a visitor without a pointer whenever
+ * one or two trees were asking. See `waterAllFrom`.
  */
 function handleWaterAll() {
     const thirsty = getTrees().filter((e) => needsWater(e.record.moisture));
@@ -1293,10 +1296,9 @@ function syncWaterAll() {
     waterAllBtn.classList.toggle('visible', show);
     waterAllBtn.hidden = !show;
     if (show) {
-        const label = `${M.waterAllLabel} ${count}`;
+        const { label, aria } = waterAllText(count);
         if (waterAllBtn.textContent !== label) waterAllBtn.textContent = label;
-        waterAllBtn.setAttribute('aria-label',
-            `${M.waterAllLabel} ${count} thirsty ${count > 1 ? 'trees' : 'tree'}`);
+        waterAllBtn.setAttribute('aria-label', aria);
     }
 }
 
@@ -1822,6 +1824,10 @@ function animate() {
     // it runs at the rate the screen does rather than at the rate a year does.
     stepView(delta);
     applyView();
+    // HOW FAR THE VISITOR MAY LOOK TO THE SIDE DEPENDS ON WHERE THE EYE IS,
+    // and the eye moves in this scene. Set before the part reads it, so the
+    // clamp the drag and the buttons work against is this frame's.
+    setPanLimit(panLimitFor(getDolly()));
     updatePortraitControls(delta);
     // After the part, so the yaw and tilt it may have just changed are the ones
     // being asked about rather than last frame's.

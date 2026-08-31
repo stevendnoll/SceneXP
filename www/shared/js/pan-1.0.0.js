@@ -844,6 +844,35 @@ export function updatePortraitControls(deltaTime) {
 }
 
 /**
+ * Move the yaw clamp, for an experience whose eye is not in a fixed place.
+ *
+ * ---- THE LIMIT WAS SIZED FOR ONE VIEWPOINT AND THERE ARE NOW MANY ----
+ *
+ * `pan.maxAngle` is set once at init, which is right for the view-only scenes
+ * this part was built for: the eye never moves, so how far the visitor needs to
+ * turn to reach the edge of the subject never changes. www/garden's zoom is a
+ * DOLLY, so the eye travels from 22 metres back to inside the plot, and the
+ * angle subtended by the same 24 metres of garden goes from 35 degrees to 108.
+ * A single clamp is generous at one end of that track and confining at the
+ * other, which is what QA reported: "hard to zoom in on the front corners
+ * because my side pan range is limited, which is fine while zoomed out".
+ *
+ * THE CURRENT YAW IS RE-CLAMPED, so a limit that shrinks brings the view back
+ * inside it rather than leaving the visitor outside a range they can no longer
+ * reach. In garden that means pulling the dolly back also re-composes the aim,
+ * which is the same thing its own focus release does one layer up.
+ *
+ * A no-op when the limit has not moved, because the caller is a render loop and
+ * `syncLimitClasses` is DOM work.
+ */
+export function setPanLimit(maxAngle) {
+    if (!(maxAngle >= 0) || maxAngle === _maxAngle) return;
+    _maxAngle = maxAngle;
+    _angle = Math.min(_maxAngle, Math.max(-_maxAngle, _angle));
+    syncLimitClasses();
+}
+
+/**
  * Put the yaw and tilt back to zero, so the aim is the composed one again.
  *
  * ---- FOR AN EXPERIENCE THAT MOVES THE AIM ITSELF ----

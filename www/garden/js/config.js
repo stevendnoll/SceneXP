@@ -274,6 +274,33 @@ export const GARDEN_CONFIG = deepFreeze({
             pan: {
                 speed: 0.45,
                 maxAngle: 0.55,
+                // ---- AND IT GROWS AS THE EYE COMES IN (QA 2026-08-31) -------
+                // `maxAngle` is the clamp at the COMPOSED viewpoint, where it
+                // is right: the eye is 22 m back, the whole 24 m plot subtends
+                // 35 degrees, and 31.5 either way reaches all of it. But this
+                // scene's zoom is a DOLLY, so the eye travels to z = 6, and the
+                // same plot then subtends 108 degrees. Measured, the angle
+                // needed to centre the nearest front corner cell (9, 9):
+                //
+                //     dolly   0     0.25   0.5   0.7   0.85   1
+                //     eye z   22    18     14    10.8  8.4    6
+                //     need    35    45     61    79    94     108
+                //
+                // At 31.5 the corner is off a portrait frame past dolly 0.25
+                // and off a 16:9 one past 0.7, which is exactly the report:
+                // "hard to zoom in on the front corners, which is fine while
+                // zoomed out but limiting while zoomed in".
+                //
+                // DOUBLED AT THE NEAR END, and interpolated linearly between,
+                // which at the middle of the track (where anybody actually
+                // sits) takes the corner from 29 degrees off centre to 13.7:
+                // off a portrait screen to comfortably on it. The far end is
+                // deliberately NOT solved. At dolly 1 the eye is at z = 6 and a
+                // corner tree at z = 9 is BEHIND it, and turning to look over
+                // your own shoulder is a free-look camera rather than a wider
+                // pan. See `panLimitFor` in view.js, and the mountain arc,
+                // which had to become a closed ring to cover this.
+                maxAngleNear: 1.10,
                 maxTilt: 0.32
             },
             zoom: {
@@ -796,26 +823,28 @@ export const GARDEN_CONFIG = deepFreeze({
             // The thirst marker appears below this.
             thirstyBelow: 0.25,
 
-            // ---- "Water all", which is a RESCUE and not a routine (M13-3) ---
-            // M11-4 took the free water out of this scene on purpose, so that
-            // nothing waters a tree but the visitor and showing up means
-            // something. A permanent Water all button would hand that straight
-            // back: it would become the only control anybody used, and the
-            // droplets would be decoration.
+            // ---- "Water all" APPEARS AT ONE THIRSTY TREE (QA 2026-08-31) ----
+            // It was three, and the reasoning was about protecting the care
+            // loop: M11-4 took the free water out of this scene so that nothing
+            // waters a tree but the visitor, and a permanent Water all would
+            // hand that straight back, becoming the only control anybody used
+            // while the droplets turned into decoration. One or two thirsty
+            // trees was called the ordinary state of a garden being tended.
             //
-            // So it appears only when the garden is in real trouble, carries
-            // the count, and goes away again once the plot is tended. Three is
-            // chosen to be past coincidence: one or two thirsty trees is the
-            // ordinary state of a garden being looked after, and is two taps.
-            waterAllFrom: 3,
-            // AND IT IS THE KEYBOARD'S ROUTE TO THE CARE LOOP, which is the
-            // other half of why it exists. A tree is reachable only by tapping
-            // the canvas, so before this the only keyboard path to watering was
-            // the tree card's own button, and M13-2 takes that path away for
-            // exactly the trees that need it. A real DOM button reached by Tab
-            // is the fix, and it is why this one is never hidden from assistive
-            // technology while it is showing.
-            waterAllLabel: 'Water all'
+            // THE ARGUMENT WAS SOUND AND IT WAS ANSWERING THE WRONG QUESTION.
+            // This button is also THE KEYBOARD'S ONLY ROUTE TO THE CARE LOOP: a
+            // tree is reachable only by tapping a few pixels of 3D canvas, and
+            // the droplet (M13-2) took away the tree card's own Water button
+            // for exactly the trees that need watering. So at one or two
+            // thirsty trees a visitor without a pointer could not water at all.
+            // The threshold was not protecting the loop from being too easy, it
+            // was closing it for part of the audience, and the shape of a
+            // garden that has ONE thirsty tree is precisely when a keyboard
+            // visitor most needs a way in.
+            //
+            // The droplets are unharmed: they are still the one-tap route and
+            // still the only one that works on a specific tree.
+            waterAllFrom: 1
         },
 
         // ---- Blossom and fruit (M11-6, M11-7) -------------------------------
@@ -1280,8 +1309,8 @@ export const GARDEN_CONFIG = deepFreeze({
                 // SEGMENTS ROSE WITH THE SPREAD, or the same profile stretched
                 // over 1.7 times the arc and the ridgeline went soft. 952
                 // triangles for the pair, which is nothing.
-                { distance: 340, height: 112, roughness: 0.42, haze: 0.72, segments: 366 },
-                { distance: 285, height: 74, roughness: 0.55, haze: 0.5, segments: 314 }
+                { distance: 340, height: 112, roughness: 0.42, haze: 0.72, segments: 440 },
+                { distance: 285, height: 74, roughness: 0.55, haze: 0.5, segments: 377 }
             ],
             // ---- HALF-ANGLE OF THE ARC, AND IT IS SET BY THE CAMERA -------
             // Centred on north. It was 62, which is short on EVERY landscape
@@ -1313,18 +1342,29 @@ export const GARDEN_CONFIG = deepFreeze({
             //     21:9    48.4 + 53.4 + 31.5 = 133.3
             //     32:9    48.4 + 64.0 + 31.5 = 143.9
             //
-            // 150 covers 32:9 with room, and the segment counts above rose
-            // with it to hold the ridgeline's density: 1,360 triangles for the
-            // pair where there were 952, which is nothing.
+            // ---- AND THEN THE PAN TERM STOPPED BEING A CONSTANT -----------
+            // `camera.portrait.pan.maxAngleNear` doubles the yaw clamp as the
+            // dolly comes in, so the third column is 63 degrees rather than
+            // 31.5 wherever the visitor is zoomed in, and the widest window
+            // reaches 175.4.
+            //
+            // SO IT IS A CLOSED RING NOW, which is the last time this number
+            // needs to move. 180 cannot be exceeded by any combination of aim,
+            // lens and pan, so the class of bug this key exists for (QA: "the
+            // range simply stops, with pale sky beyond it") is gone by
+            // construction rather than by arithmetic that has already had to be
+            // redone twice. It costs 1,634 triangles for the pair against a
+            // 400,000 budget, and the segment counts above rose with the arc to
+            // hold the ridgeline's density.
             //
             // NONE OF THE EXTRA ARC IS VISIBLE FROM ANY VIEW THAT EXISTED
-            // BEFORE. Fully panned and at the widest aspect the old frame
+            // BEFORE. Fully panned and at the widest aspect the ORIGINAL frame
             // reached 77.3 degrees, so everything past 105 can only be seen
-            // once the camera has been turned to a tree in a corner of the
-            // plot. Beyond 90 the arc curves behind the camera plane, which
-            // costs nothing: it is a curtain and the far side is never looked
-            // at.
-            spreadDegrees: 150,
+            // once the camera has been turned to a tree in a corner of the plot
+            // and dollied in. Beyond 90 the arc curves behind the camera plane,
+            // which costs nothing: it is a curtain and its far side is only
+            // ever seen from inside.
+            spreadDegrees: 180,
             rockColor: 0x4a5566
         },
 

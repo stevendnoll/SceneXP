@@ -235,6 +235,46 @@ describe('panning', () => {
     expect(buttons['Pan left'].classList.contains('at-limit')).toBe(false);
   });
 
+  test('setPanLimit moves the clamp for an experience whose eye moves', async () => {
+    // The clamp is set once at init, which is right for a scene whose camera
+    // never moves and wrong for www/garden, whose zoom is a DOLLY: the same
+    // subject subtends 35 degrees from the composed viewpoint and 108 from the
+    // near end of the track, so one number is generous at one end and confining
+    // at the other. QA: "hard to zoom in on the front corners because my side
+    // pan range is limited, which is fine while zoomed out".
+    const { m, buttons } = await setup();
+    press(buttons['Pan right']);
+    m.updatePortraitControls(10);              // way past the clamp
+    expect(m.getPanAngle()).toBeCloseTo(PAN.maxAngle, 10);
+    expect(buttons['Pan right'].classList.contains('at-limit')).toBe(true);
+    release(buttons['Pan right']);
+
+    // Widen it, and the travel that was used up is available again.
+    m.setPanLimit(PAN.maxAngle * 2);
+    expect(buttons['Pan right'].classList.contains('at-limit')).toBe(false);
+    press(buttons['Pan right']);
+    m.updatePortraitControls(10);
+    expect(m.getPanAngle()).toBeCloseTo(PAN.maxAngle * 2, 10);
+    release(buttons['Pan right']);
+
+    // ---- AND A LIMIT THAT SHRINKS BRINGS THE VIEW BACK INSIDE IT --------
+    // Otherwise the visitor is left beyond a range they can no longer reach,
+    // with the pan buttons refusing to move in either direction. In garden this
+    // is what makes pulling the dolly back re-compose the aim.
+    m.setPanLimit(PAN.maxAngle);
+    expect(m.getPanAngle()).toBeCloseTo(PAN.maxAngle, 10);
+    expect(buttons['Pan right'].classList.contains('at-limit')).toBe(true);
+
+    // A no-op when nothing moved, because the caller is a render loop and
+    // syncing the dimming is DOM work. Rubbish is refused rather than stored:
+    // a negative clamp would invert the comparison and pin the yaw to nonsense.
+    m.setPanLimit(PAN.maxAngle);
+    m.setPanLimit(-1);
+    m.setPanLimit(NaN);
+    expect(m.getPanAngle()).toBeCloseTo(PAN.maxAngle, 10);
+    m.disposePortraitControls();
+  });
+
   test('resetPortraitAim consumes the offset for an experience that re-aims', async () => {
     // ---- THE BUG THIS SEAM EXISTS FOR, AND IT SHIPPED ------------------
     // The yaw and tilt are an OFFSET FROM the `lookAt` object the experience
