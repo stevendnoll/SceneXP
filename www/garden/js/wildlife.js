@@ -19,6 +19,16 @@
  * crosses a couple of pixels a second. They add life to the far half of the
  * view without asking for any of the attention.
  *
+ * ---- AND THREE MORE WERE BUILT AND DELETED ----
+ *
+ * Bees on the wildflowers, butterflies at the blossom, and birds that perched
+ * on the visitor's own branches, over 2026-08-30 and 31. All three read fine in
+ * the arithmetic and none of them read on a phone, which is the section below.
+ * They are gone rather than flagged off because the flocks above already cover
+ * "a butterfly" and "a bird", and a second implementation that never worked is
+ * only a thing to trip over. `config.js` has the full note and the names to
+ * search git for.
+ *
  * ---- SCALE IS THE WHOLE PROBLEM ----
  *
  * `www/gavin/js/store.js` is the reference for HOW these move: a closed curve
@@ -88,6 +98,7 @@ export const WINDOWS = {
     // Through midnight, which is the interval that wraps.
     bats: { from: 20.0, to: 3.5, fade: 1.0 }
 };
+
 
 /**
  * Where the ducks drift, as seeded closed paths on the water.
@@ -334,6 +345,7 @@ let butterflies = null;
 let fireflies = null;
 let birds = null;
 let bats = null;
+
 let ducks = null;
 let duckHeads = null;
 let duckBills = null;
@@ -570,18 +582,6 @@ function wingGeometry() {
     return geo;
 }
 
-/**
- * A butterfly: the same dihedral pair, but as quads carrying UVs.
- *
- * A BARE TRIANGLE IS A PAPER DART, NOT A BUTTERFLY. Against the lawn the
- * untextured version read as scattered litter in the QA screenshots, which is
- * the one thing a garden must never look like. The silhouette has to come from
- * an alpha mask, because at a 30 cm wingspan there is no room to spend
- * triangles on the shape of a wing.
- *
- * The spine is at u = 0.5 and each wing runs out to its own edge of the
- * texture, so one drawn butterfly maps across both halves.
- */
 function butterflyGeometry() {
     const geo = new THREE.BufferGeometry();
     const position = new Float32Array([

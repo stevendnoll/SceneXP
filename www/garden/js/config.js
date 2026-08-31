@@ -1010,11 +1010,25 @@ export const GARDEN_CONFIG = deepFreeze({
         },
 
         health: {
-            // 1/6 per fully dry year, so three dry summers reaches 0.5 (the
-            // wilt) and six reaches 0 (bare). Straight from the requirements.
-            dryPerYear: 1 / 6,
-            // Three watered summers bring a bare tree all the way back.
-            recoverPerYear: 1 / 3,
+            // ---- NEGLECT BITES IN A YEAR NOW (QA 2026-08-31) --------------
+            // This was 1/6, so three dry summers reached the wilt and six
+            // reached bare, which is what M5-2's requirement asked for. QA
+            // superseded it: "bone dry trees continue to bloom and produce
+            // fruit even after several years." They did, and correctly by the
+            // old numbers, because blossom stops at health 0.25 and that took
+            // FOUR AND A HALF dry years to reach.
+            //
+            // At 0.8 a bone-dry tree loses its blossom in about eleven months
+            // and everything else within fifteen. Read with the tank, which
+            // itself takes a full thirst window to empty, that is: miss a year
+            // and it is dry, miss a second and it is dead wood. Neglect costs
+            // about three times what it used to.
+            dryPerYear: 0.8,
+            // And it comes back within a year of being looked after, which is
+            // the other half of the same request. Most of the recovery is not
+            // here at all: see `bud.reviveTo`, which is the jump that lets a
+            // tree watered in spring flower THAT spring rather than next.
+            recoverPerYear: 0.6,
             wiltBelow: 0.5,
             failingBelow: 0.25,
             bareBelow: 0.05
@@ -1028,6 +1042,26 @@ export const GARDEN_CONFIG = deepFreeze({
             // Health at or below which watering triggers the reward at all. A
             // healthy tree gets a quieter acknowledgement instead.
             below: 0.6,
+
+            // ---- AND THE REWARD IS REAL, NOT ONLY BUDS --------------------
+            // "The restoration of a bone dry to watered tree should be fast:
+            // if it's spring it should bloom that year." A rate cannot do
+            // that. The thirst window opens at hour 7 and the cherry has
+            // finished flowering by 6.9, so a tree watered in early spring
+            // would recover no health at all until its own blossom was over,
+            // whatever the rate was set to. So watering a tree that had been
+            // let go lifts its health AT ONCE.
+            //
+            // 0.45 rather than 1: it is above `fruit.cropFrom` so the tree
+            // flowers again the same spring, and below `wiltBelow` so the card
+            // still says "Starting to wilt" and the crop comes in at about 40
+            // percent. It comes back, and it comes back thinner than one that
+            // was never let go. `recoverPerYear` carries it the rest of the way
+            // over the following year.
+            //
+            // NEVER DOWNWARD: a tree at 0.55 is inside `below` and must not be
+            // pulled to 0.45 by being watered. See `waterTree`.
+            reviveTo: 0.45,
             // The buds hand over to real leaves once the season has produced
             // this much natural canopy. In autumn and winter that never
             // happens, so they hold as a promise until spring.
@@ -1563,6 +1597,36 @@ export const GARDEN_CONFIG = deepFreeze({
             // `wildlife.js` in full working order, the firefly sizing below is
             // still measured by the guard, and bringing any of them back is
             // this one word. See M12-9.
+            // ---- AND THREE ROUNDS OF FLYERS THAT WERE DELETED --------------
+            // A bee, a butterfly and a perching bird were each built, shipped
+            // to QA and cut, in that order, over 2026-08-30 and 31. The last
+            // note was "the birds and the bees still don't look quite right,
+            // let's go ahead and remove them," and by then it had stopped being
+            // a tuning problem: three different creatures, three different
+            // drawings, and none of them read on a phone at this camera.
+            //
+            // WHAT IS ACTUALLY HARD HERE, for whoever tries a fourth time. The
+            // eye is 22 m from the plot and the meadow starts at 13, so a
+            // life-sized insect is under a pixel and a bird is four. Every
+            // version was exaggerated to 5 to 25 px, and at that size a
+            // silhouette is all there is: the bee's gold-and-black bands, the
+            // butterfly's wing shape and the bird's flap were each meant to
+            // carry it, and each of them lands somewhere between "a smudge"
+            // and "a leaf blowing past". Anything that flies here has to work
+            // as a two-tone shape 8 px across, or it should not be built.
+            //
+            // NOTHING SALVAGEABLE WAS LOST. `enabled.butterflies` and
+            // `enabled.birds` below still hold M8-1's ORIGINAL flocks, whole
+            // and one word from returning; those were switched off for pulling
+            // the eye off the trees, which is a different complaint and a
+            // reversible one. The deleted code was second implementations that
+            // never read correctly, and a dead one of those is only a thing to
+            // trip over. In git if it is ever wanted: `pollinatorTargets`,
+            // `springBloomer`, `butterflyFlightAt` and `driveButterflies`;
+            // `beeAt`, `beePatch`, `beeTexture` and `driveBees`; `percherCount`,
+            // `perchersOut` and `drivePerchers`, with `branchPerches` in
+            // main.js.
+
             enabled: {
                 butterflies: false,
                 birds: false,
@@ -1657,6 +1721,9 @@ export const GARDEN_CONFIG = deepFreeze({
                 // cycle, which is long enough to watch and short enough that a
                 // visitor who looks away has not missed the year.
                 leaveAt: 17.5,
+                // How high over the nursery they drift once the blossom has
+                // finished, which is most of the span they are here for.
+                driftHeight: 2.6,
                 arriveAt: 3.0,
                 span: 1.0,
 

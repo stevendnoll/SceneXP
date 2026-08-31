@@ -1488,6 +1488,16 @@ function applyReset() {
     // guard in save() would see a vanished key forever and never write again.
     storageSeen = false;
     closeTreeCard();
+    // ---- AND THE SKY CLEARS WITH IT (QA 2026-08-31) ---------------------
+    // The weather is a state machine with its own dwell and transition, and
+    // nothing here ever touched it, so a garden cleared during a downpour got
+    // a fresh plot under the same storm. QA: "it doesn't always reset the
+    // weather", and the "always" is exactly right: it looked fine whenever it
+    // happened to be a clear day already.
+    //
+    // A new garden opens on the morning the scene opens on, which the clock
+    // above already goes back to. The sky is the other half of that frame.
+    weather = createWeather('sunny');
     // A new garden gets the composed viewpoint back too. Leaving the visitor
     // up at the birds-eye end looking down at an empty plot is not the frame
     // this scene opens on. THE AIM IS TWO THINGS AND BOTH HAVE TO GO: this

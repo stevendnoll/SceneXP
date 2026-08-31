@@ -86,6 +86,22 @@ describe('the wildlife flags', () => {
         expect(on.birds).toBe(false);
         expect(on.bats).toBe(false);
         expect(on.fireflies).toBe(false);
+        // ---- AND NOTHING ELSE FLIES HERE ANY MORE ------------------------
+        // Three more creatures were built and cut over 2026-08-30 and 31: bees
+        // working the wildflowers, butterflies at the blossom, and birds that
+        // perched on the visitor's own branches. Each was shipped to QA and
+        // each came back as "doesn't look quite right", which by the third one
+        // had stopped being a tuning note: at 13 to 22 m a flyer is a handful
+        // of pixels, and none of the three drawings survived that.
+        //
+        // THE FLAGS ABOVE ARE NOT THOSE. They are M8-1's original flocks, still
+        // whole and still one word from returning, switched off for a different
+        // and reversible reason. The deleted ones left no flag behind on
+        // purpose, so nothing here can be switched on to find a creature that
+        // does not work. This assertion is the record of that: the enabled map
+        // is the ducks and the four benched flocks, and nothing else.
+        expect(Object.keys(on).sort())
+            .toEqual(['bats', 'birds', 'butterflies', 'ducks', 'fireflies']);
         // THE DUCKS DO NOT HAVE THE PROBLEM THE OTHERS HAD (M22-1). Everything
         // above was switched off for pulling the eye away from the growing
         // trees. Ducks are on the LAKE, which is already where the eye goes
@@ -116,8 +132,12 @@ describe('the wildlife flags', () => {
     test('only the creatures that are on reach the scene', () => {
         const scene = recordingScene();
         initWildlife(scene, GARDEN_CONFIG);
-        // The ducks' four meshes, and nothing else: a pale body, a dark head,
-        // an orange bill, and the wings that only exist while they migrate.
+        // The ducks' four meshes and nothing else: a pale body, a dark head,
+        // an orange bill and the wings that only exist while they migrate.
+        // NOT NAME-CHECKED: under the THREE stub `mesh.name` is a function
+        // that absorbs the assignment, so a name assertion here passes against
+        // anything. The count is the claim, and `initWildlife`'s return is
+        // where the four are identified by name.
         expect(scene.added).toHaveLength(4);
     });
 

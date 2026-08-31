@@ -20,12 +20,23 @@
  *
  *   moisture  drains only inside the thirst window, and one watering lasts
  *             exactly one window. This is the rhythm the visitor feels.
- *   health    falls only while moisture is zero AND the window is open, at
- *             1/6 per fully dry year. This is the consequence, and it is slow.
+ *   health    falls only while moisture is zero AND the window is open. This
+ *             is the consequence.
  *
- * Three dry summers reaches 0.5 and the wilt begins. Six reaches 0 and the
- * tree looks dead. It is never actually dead: watering it puts buds back on
- * the branches within a second and a half, in any season.
+ * MISS A YEAR AND IT IS DRY, MISS A SECOND AND IT IS DEAD WOOD. The planting
+ * tank carries a tree through its first year; a second year bone dry takes the
+ * blossom and the fruit with it, and a third leaves bare grey branches. That is
+ * about three times faster than the schedule M5-2 asked for, and it is a QA
+ * decision that supersedes it: at 1/6 a year the blossom survived four and a
+ * half dry years, and nobody watches a tree for four and a half years to find
+ * out it minded.
+ *
+ * IT IS NEVER ACTUALLY DEAD, and coming back is deliberately much faster than
+ * dying. Watering puts buds on the branches within a second and a half in any
+ * season, AND lifts health over the crop threshold at once, so a tree watered
+ * in spring flowers that spring rather than the next one. A rate could not do
+ * that: health only moves inside the thirst window, which opens after the early
+ * blossom is over.
  */
 
 import { GARDEN_CONFIG } from './config.min.js';
@@ -211,8 +222,18 @@ export function viewFor(record, hour, options = {}) {
         // crop it has earned. Null for the twelve species that carry neither.
         fruit: options.schedule ? fruitStageAt(hour, options.schedule) : null,
         crop: cropAt(growth, health),
-        // A struggling canopy is thin as well as dull.
-        leaf: phen.leaf * (0.4 + 0.6 * health),
+        // ---- A DEAD TREE HAS NO LEAVES ON IT (QA 2026-08-31) -----------
+        // This was `0.4 + 0.6 * health`, which floors at FORTY PER CENT of a
+        // full canopy: a tree at health zero went on sprouting every spring,
+        // which is what QA saw. The floor was never meant as one, it was a
+        // "struggling canopy is thin as well as dull" curve that happened not
+        // to reach the bottom.
+        //
+        // The square root reaches zero and is otherwise almost exactly the old
+        // curve where it mattered: 0.71 against 0.70 at the wilt, 0.87 against
+        // 0.85 at three quarters. What changes is the bottom, where it should:
+        // 0.32 against 0.46 at a tenth, and nothing at all at zero.
+        leaf: phen.leaf * Math.sqrt(health),
         color: phen.color,
         // New leaves come in pale and yellow-green before they deepen.
         spring: phen.color > 0 ? 0 : clamp01(1 - phen.leaf),
@@ -515,12 +536,21 @@ export function disposeGarden() {
  */
 export function waterTree(entry, elapsedSeconds, config = GARDEN_CONFIG) {
     const r = entry.record;
-    const revived = r.health <= config.garden.bud.below;
+    const B = config.garden.bud;
+    const revived = r.health <= B.below;
     r.moisture = 1;
     r.lastWateredAt = elapsedSeconds;
     if (revived) {
         r.budActive = true;
         r.budStartedAt = elapsedSeconds;
+        // ---- AND THE TREE COMES BACK AT ONCE ------------------------------
+        // Not only buds. A rate cannot deliver "watered in spring, flowering
+        // this spring", because health only moves inside the thirst window and
+        // that opens at hour 7, by which time the early bloomers are over. So
+        // the water itself lifts it over the crop threshold and the rate takes
+        // it the rest of the way. NEVER DOWNWARD: `below` is 0.6 and a tree at
+        // 0.55 is inside it.
+        r.health = Math.max(r.health, B.reviveTo);
     }
     return revived ? 'revived' : 'refreshed';
 }

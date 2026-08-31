@@ -341,6 +341,57 @@ test('the garden can be planted, watered, saved, and cleared', async () => {
     expect(garden.getTrees()).toHaveLength(0);
 });
 
+test('A NEW GARDEN GETS A NEW SKY, NOT THE OLD STORM', async () => {
+    // QA: "when I reset the scene using the Start a new garden button, it
+    // doesn't always reset the weather." The "always" is the tell. `applyReset`
+    // put the clock back to the opening spring morning and cleared the plot,
+    // and never touched the weather at all, so a garden cleared under a
+    // downpour got a fresh plot in the rain. It looked fine whenever it
+    // happened to be a clear day already, which is most of the time.
+    const main = await bootGarden();
+    const ui = await import('../www/garden/js/ui.min.js');
+    fire(dom.el('blocker'), 'click');
+    stepFrames(30);
+
+    // A settled storm, the way the state machine leaves one: mid-dwell, fully
+    // transitioned, with rain falling and the sky dark.
+    const w = main.getWeather();
+    w.state = 'storm';
+    w.from = 'storm';
+    w.transition = 1;
+    w.held = 12;
+    w.gloom = 0.8;
+    w.rain = 1;
+    w.precip = 'rain';
+    w.windStrength = 0.9;
+
+    // An empty plot clears without the confirm dialog.
+    fire(dom.el('reset-btn'), 'click');
+    stepFrames(2);
+
+    // ---- THE SKY THE SCENE OPENS ON ------------------------------------
+    // Not merely "not a storm": the same object `init` builds, so there is one
+    // definition of what a new garden looks like rather than a second one that
+    // can drift from it.
+    const { createWeather } = await import('../www/garden/js/weather.min.js');
+    const fresh = createWeather('sunny');
+    const now = main.getWeather();
+    for (const key of ['state', 'from', 'transition', 'gloom', 'rain', 'precip']) {
+        expect(`${key}: ${now[key]}`).toBe(`${key}: ${fresh[key]}`);
+    }
+    // AND IT IS SETTLED, not caught mid-crossfade. `transition` at 1 means the
+    // new garden opens clear rather than fading out of the storm it replaced.
+    expect(now.transition).toBe(1);
+    // The dwell starts over too, so the fresh sky gets its full run before the
+    // machine rolls again. Not exactly zero: the two frames stepped above have
+    // already aged it, and pinning it to 0 would be a test of the frame count.
+    expect(now.held).toBeLessThan(0.5);
+
+    // And the scene keeps running on it.
+    stepFrames(60);
+    expect(main.getState().running).toBe(true);
+});
+
 test('PLANTING TURNS THE SCENE TO LOOK AT THE NEW TREE', async () => {
     // The arithmetic is asserted in tests/garden-world.test.mjs. This is the
     // wiring: that planting reaches it at all, that the aim lands on the tree

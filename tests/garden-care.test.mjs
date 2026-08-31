@@ -20,7 +20,7 @@ import { GARDEN_CONFIG } from '../www/garden/js/config.js';
 import {
     thirstSecondsPerYear, growthRate, moistureAfter, healthAfter, healthBand,
     needsWater, dropFor, viewFor, createRecord, serialize, hydrate, HEALTH_WORDS,
-    cropAt, plantingGrowth
+    cropAt, plantingGrowth, waterTree
 } from '../www/garden/js/garden.js';
 import { inThirstWindow } from '../www/garden/js/clock.js';
 import { cellInPlot } from '../www/garden/js/terrain.js';
@@ -144,20 +144,105 @@ test('a watered tree reaches maturity in four and a half years', () => {
     expect(atFive.health).toBe(1);
 });
 
-test('three dry summers begin the wilt and three more leave it bare', () => {
-    // STRAIGHT FROM THE REQUIREMENTS, checked by running the years rather than
-    // by restating the rate.
-    const { log } = simulate(8);
+test('A YEAR BONE DRY STOPS THE BLOSSOM, TWO AND IT IS DEAD WOOD', () => {
+    // ---- THIS SUPERSEDES M5-2's SCHEDULE, AND ON PURPOSE ---------------
+    // The requirement said three dry summers reach the wilt and six reach bare,
+    // and the code did exactly that. QA overruled it: "bone dry trees continue
+    // to bloom and produce fruit even after several years." They did, correctly
+    // by the old numbers, because blossom stops at health 0.25 and at 1/6 a
+    // year that was four and a half dry years away. Nobody watches a tree for
+    // four and a half years to find out it minded.
+    //
+    // Run the years rather than restating the rate, same as before.
+    const { log } = simulate(6);
     const at = (y) => log.find((l) => l.year === y);
 
-    // The tank it was planted with carries it through its first year.
+    // The tank it was planted with still carries it through its first year,
+    // which is the one part of the old schedule that was never the problem.
     expect(at(1).health).toBe(1);
-    // Then three dry summers.
-    expect(at(4).health).toBeCloseTo(0.5, 2);
-    expect(healthBand(at(4).health)).toBe('wilting');
-    // And three more.
-    expect(at(7).health).toBeCloseTo(0, 2);
-    expect(healthBand(at(7).health)).toBe('bare');
+    expect(at(1).moisture).toBeCloseTo(0, 3);
+
+    // A second year, bone dry from the first day of it: the blossom is gone.
+    // `cropAt` is what gates flower AND fruit, so this one number is the whole
+    // of "no longer blooms or produces fruit".
+    expect(at(2).health).toBeLessThan(GARDEN_CONFIG.garden.fruit.cropFrom);
+    expect(cropAt(1, at(2).health)).toBe(0);
+    expect(healthBand(at(2).health)).toBe('failing');
+
+    // A third and it is bare wood, and STAYS bare rather than creeping back.
+    expect(at(3).health).toBeCloseTo(0, 2);
+    expect(healthBand(at(3).health)).toBe('bare');
+    expect(at(5).health).toBe(0);
+});
+
+test('A DEAD TREE PUTS OUT NO LEAVES AT ALL', () => {
+    // The other half of the report, and a separate bug: `leaf` was
+    // `0.4 + 0.6 * health`, which floors at FORTY PER CENT of a full canopy.
+    // A tree at health zero went on sprouting every spring however long it had
+    // been dead. The floor was never meant as one.
+    const spring = 7;                       // leaves out, nothing turning
+    const look = (health) => viewFor({ health, growth: 1, moisture: 0 }, spring, {});
+
+    expect(look(0).leaf).toBe(0);
+    expect(look(0).crop).toBe(0);
+    // And the tree card and the wood agree it is gone.
+    expect(healthBand(0)).toBe('bare');
+
+    // A LIVING TREE IS UNCHANGED, which is what makes this a fix and not a
+    // retune. The old curve gave 0.70 at the wilt and 0.85 at three quarters;
+    // the new one gives 0.71 and 0.87 against the same phenology.
+    const full = look(1).leaf;
+    expect(look(1).leaf).toBeGreaterThan(0);
+    expect(look(0.5).leaf / full).toBeCloseTo(0.707, 2);
+    expect(look(0.75).leaf / full).toBeCloseTo(0.866, 2);
+    // Monotonic, so a tree never looks fuller for being sicker.
+    let last = -1;
+    for (let h = 0; h <= 1.0001; h += 0.05) {
+        const leaf = look(h).leaf;
+        expect(`${h.toFixed(2)}: ${leaf >= last}`).toBe(`${h.toFixed(2)}: true`);
+        last = leaf;
+    }
+});
+
+test('WATERING A DEAD TREE BRINGS IT BACK IN TIME TO FLOWER', () => {
+    // "The restoration of a bone dry to watered tree should be fast: if it's
+    // spring it should bloom that year." A RATE CANNOT DELIVER THAT, and that
+    // is the whole reason there is a jump. Health only moves inside the thirst
+    // window, the window opens at hour 7, and the cherry has finished flowering
+    // by 6.9: a tree watered in early spring would recover nothing at all until
+    // its own blossom was over, whatever `recoverPerYear` was set to.
+    const B = GARDEN_CONFIG.garden.bud;
+    expect(GARDEN_CONFIG.season.thirst.start).toBeGreaterThan(3);
+
+    const dead = { health: 0, moisture: 0, growth: 1 };
+    const entry = { record: dead };
+    expect(waterTree(entry, 0)).toBe('revived');
+
+    // It is over the crop threshold the instant the water lands, so it flowers
+    // this spring rather than next.
+    expect(dead.health).toBe(B.reviveTo);
+    expect(cropAt(1, dead.health)).toBeGreaterThan(0);
+
+    // AND IT COMES BACK THINNER THAN ONE THAT WAS NEVER LET GO, which is the
+    // half that keeps the care loop meaning something: about 40 percent of a
+    // crop, and the card still says it is wilting rather than doing well.
+    expect(cropAt(1, dead.health)).toBeLessThan(0.6);
+    expect(healthBand(dead.health)).toBe('wilting');
+
+    // NEVER DOWNWARD. `bud.below` is 0.6, so a tree at 0.55 counts as revived
+    // and must not be pulled down to the floor by being watered.
+    const middling = { record: { health: 0.55, moisture: 0, growth: 1 } };
+    expect(waterTree(middling, 0)).toBe('revived');
+    expect(middling.record.health).toBe(0.55);
+
+    // And a year of being looked after finishes the job.
+    let health = dead.health;
+    const dt = 0.1;
+    for (let i = 0; i < thirstSecondsPerYear() / dt; i++) {
+        health = healthAfter(health, 1, dt, 12);
+    }
+    expect(health).toBeCloseTo(1, 2);
+    expect(healthBand(health)).toBe('healthy');
 });
 
 test('a tree is never actually dead', () => {
