@@ -1102,3 +1102,210 @@ test('and they face where they are going', () => {
         }
     }
 });
+
+// ---- The ducks migrate (M23-1) ----------------------------------------------
+
+const { duckFlightAt, duckFlightPos } = await import('../www/garden/js/wildlife.js');
+
+test('THE DUCKS ARE GONE FOR THE COLD HALF OF THE YEAR', () => {
+    // The only wildlife in this scene the CALENDAR drives rather than the clock.
+    // Everything else here keeps hours, which is a time of day; this keeps a
+    // season, and it is the same kind of beat the blossom is.
+    const D = W.wildlife.ducks;
+
+    // On the water through summer and into autumn.
+    for (const h of [6, 9, 12, 15, 17]) expect(duckFlightAt(h)).toBe(0);
+    // Gone through winter, both sides of midnight.
+    for (const h of [19, 21, 23, 0, 2]) expect(duckFlightAt(h)).toBe(1);
+    // And back on the water once spring is properly open.
+    for (const h of [4.5, 5, 6]) expect(duckFlightAt(h)).toBe(0);
+
+    // They leave in mid AUTUMN and land in early SPRING, which is the whole
+    // request. Autumn is 15 to 21 and spring is 3 to 9.
+    expect(D.leaveAt).toBeGreaterThan(15);
+    expect(D.leaveAt).toBeLessThan(21);
+    expect(D.arriveAt).toBeGreaterThanOrEqual(3);
+    expect(D.arriveAt).toBeLessThan(9);
+
+    // REBASED ACROSS MIDNIGHT, which is where every off-by-one in this scene
+    // has landed. The away window runs 18.5 round through 0 to 3.
+    expect(duckFlightAt(23.99)).toBe(1);
+    expect(duckFlightAt(0.01)).toBe(1);
+
+    // And it is continuous: no frame where three birds jump.
+    let prev = duckFlightAt(0);
+    for (let h = 0; h < 24; h += 0.02) {
+        const now = duckFlightAt(h);
+        expect(Math.abs(now - prev)).toBeLessThan(0.08);
+        prev = now;
+    }
+});
+
+test('a duck takes off like a duck, not like a helicopter', () => {
+    // The first attempt reached full height by 60 percent of the way while the
+    // ground track was still at 39, which measured 63 degrees off the water and
+    // then 54. A duck runs across the surface, gets up, and climbs shallow.
+    const D = W.wildlife.ducks;
+    const swim = { x: W.pond.x, z: W.pond.z, yaw: 0 };
+    let prevAngle = -1;
+    let steepest = 0;
+    for (let f = 0.02; f <= 1; f += 0.02) {
+        const air = duckFlightPos(swim, f, 0, 3);
+        const ground = Math.hypot(air.x - swim.x, air.z - swim.z);
+        const angle = Math.atan2(air.lift, Math.max(0.001, ground)) * 180 / Math.PI;
+        steepest = Math.max(steepest, angle);
+        // THE ANGLE RISES, which is the property: the climb always lags the run.
+        expect(angle).toBeGreaterThan(prevAngle - 0.6);
+        prevAngle = angle;
+    }
+    // Nothing in the flight is steeper than the path's own average, and that
+    // average is a shallow migration climb rather than a launch.
+    const overall = Math.atan2(D.awayHeight, Math.hypot(D.awayX, D.awayZ)) * 180 / Math.PI;
+    expect(steepest).toBeLessThan(overall + 1);
+    expect(overall).toBeLessThan(25);
+});
+
+test('they dissolve into the haze rather than winking out', () => {
+    // AWAY IS NOT HIDDEN, IT IS FAR. The meshes only go invisible once the
+    // birds are past the fog ceiling, so there is no frame where three ducks
+    // vanish in place.
+    const D = W.wildlife.ducks;
+    const cam = GARDEN_CONFIG.camera;
+    const away = Math.hypot(W.pond.x + D.awayX - cam.position.x,
+        D.awayHeight - cam.position.y,
+        W.pond.z + D.awayZ - cam.position.z);
+    expect(away).toBeGreaterThan(GARDEN_CONFIG.sky.fog.far);
+    // And still inside the frustum, or they would clip out instead of fading.
+    expect(away).toBeLessThan(cam.far);
+
+    const wildlife = readFileSync(
+        join(process.cwd(), 'www', 'garden', 'js', 'wildlife.js'), 'utf8');
+    expect(wildlife).toMatch(/const gone = flight >= 0\.999/);
+
+    // THE FLAP IS A SQUASH, NOT A HINGE, which is this file's own rule for
+    // everything it draws. A hinge at this distance moves a wingtip by a pixel
+    // and a half. The wings only exist in flight, and their span is the only
+    // proportion that matters at ten pixels.
+    expect(wildlife).toMatch(/s\.set\(\s*halfSpan \* pose/);
+    expect(D.wingSpan).toBeGreaterThan(D.bodyLength);
+
+    // ---- THE MESH IS TWO UNITS WIDE, SO THE SCALE IS A HALF SPAN --------
+    // `wingGeometry` runs from x = -1 to +1. Handing it the full span drew
+    // wings twice as long as the config asked for: a span three times the body
+    // against a real duck's one and a half, which QA saw as too long.
+    expect(wildlife).toMatch(/const halfSpan = D\.wingSpan \* body \* 0\.5/);
+    // The drawn span is the config's number, and it is the real proportion: a
+    // mallard is 0.85 m across on a 0.55 m body. One of the few numbers in this
+    // scene that did NOT need exaggerating for the frame.
+    const drawn = D.wingSpan * D.bodyLength;
+    expect(drawn / D.bodyLength).toBeCloseTo(0.85 / 0.55, 1);
+    // And the old model is proved to be twice that, so the guard is a guard.
+    expect((drawn * 2) / D.bodyLength).toBeGreaterThan(2.8);
+
+    // ---- THE STROKE IS AN ANGLE, AND THAT IS WHY IT WAS WRONG (M23-3) ----
+    // `wingGeometry` puts its tips at y = 0.25 for |x| = 1, so the Y scale
+    // reaching a given sweep is tan(angle) / 0.25 times the span. Setting that
+    // multiplier by hand left the wings sweeping SIX DEGREES, which QA read as
+    // a hummingbird: a shiver at speed rather than a flap.
+    const WING_TIP_Y = 0.25;
+    const halfSpan = D.wingSpan * D.bodyLength * 0.5;
+    const scaleY = halfSpan * Math.tan(D.flapDegrees * Math.PI / 180) / WING_TIP_Y;
+    const sweep = Math.atan2(WING_TIP_Y * scaleY, halfSpan) * 180 / Math.PI;
+    expect(sweep).toBeCloseTo(D.flapDegrees, 6);
+    // A duck's wingtip travels 35 to 45 degrees either side of level.
+    expect(D.flapDegrees).toBeGreaterThan(28);
+    expect(D.flapDegrees).toBeLessThan(50);
+    // And the old multiplier is proved to be nothing like it, so the guard is a
+    // guard rather than the code restated.
+    const oldSweep = Math.atan2(WING_TIP_Y * halfSpan * 0.42, halfSpan) * 180 / Math.PI;
+    expect(oldSweep).toBeLessThan(10);
+
+    // ---- AND THE BEAT IS SLOWER THAN A REAL DUCK'S, ON PURPOSE ----
+    // A mallard beats 8 to 10 times a second. At ten pixels and sixty frames
+    // that has no shape, it shimmers. Same family as sizing the bird at 0.95 m
+    // rather than 0.55: the physically true number is the wrong one here.
+    expect(D.flapHz).toBeLessThan(4);
+    // A full stroke has to last long enough to be seen as a stroke.
+    expect(60 / D.flapHz).toBeGreaterThan(15);
+    // But it is still a bird and not a flag: fast enough to read as beating.
+    expect(D.flapHz).toBeGreaterThan(1.5);
+});
+
+const { duckPosture } = await import('../www/garden/js/wildlife.js');
+
+test('POSTURE IS NOT DISTANCE, which is why the wings were never seen', () => {
+    // The fault QA reported twice in one sentence: never seeing the wings, and
+    // the ducks keeping their floating pose in the air. One cause. The wings,
+    // the neck and the heading were all scaled by the flight parameter, the
+    // same number that carries the birds away, so each reached full only once
+    // the duck was a speck.
+    //
+    // MEASURED, that put the wings at 3.4 px across when the body was 2.7, and
+    // full span at the moment there was nothing left to see it on.
+    const D = W.wildlife.ducks;
+    const cam = GARDEN_CONFIG.camera;
+    const perRad = 800 / (cam.fov * Math.PI / 180);
+    const level = pondWaterLevel(W);
+    const swim = { x: W.pond.x, z: W.pond.z, yaw: 0 };
+    const px = (f, span) => {
+        const air = duckFlightPos(swim, f, 0, 3);
+        const y = level + air.lift;
+        const d = Math.hypot(air.x - cam.position.x, y - cam.position.y,
+            air.z - cam.position.z);
+        return span / d * perRad;
+    };
+
+    // THE POSE FINISHES WHILE THEY ARE STILL BIG. That is the whole property.
+    const doneAt = D.postureOver;
+    expect(duckPosture(doneAt)).toBeCloseTo(1, 3);
+    expect(px(doneAt, D.bodyLength)).toBeGreaterThan(8);
+
+    // And the wings are wider than the body at that moment, so a visitor sees
+    // a bird with its wings out rather than a blob that shrank.
+    const wingsOut = px(doneAt, D.wingSpan * D.bodyLength * duckPosture(doneAt));
+    expect(wingsOut).toBeGreaterThan(px(doneAt, D.bodyLength));
+    expect(wingsOut).toBeGreaterThan(12);
+
+    // THE GUARD AGAINST THE OLD MODEL: scaled by `flight` instead of the pose,
+    // the wings at the same moment are a fraction of that.
+    const oldModel = px(doneAt, D.wingSpan * D.bodyLength * doneAt);
+    expect(oldModel).toBeLessThan(wingsOut / 4);
+
+    // The pose is monotonic and starts from nothing, so a duck never begins
+    // mid-flap.
+    expect(duckPosture(0)).toBe(0);
+    let prev = -1;
+    for (let f = 0; f <= 1; f += 0.01) {
+        const now = duckPosture(f);
+        expect(now).toBeGreaterThanOrEqual(prev - 1e-9);
+        prev = now;
+    }
+});
+
+test('and the take-off happens near the water, where it can be seen', () => {
+    // The other half of the same fix. The run is held back so the first quarter
+    // of the flight happens close in: at f = 0.25 they have travelled twelve
+    // metres and are still nearly ten pixels across.
+    const D = W.wildlife.ducks;
+    const swim = { x: W.pond.x, z: W.pond.z, yaw: 0 };
+    const at = duckFlightPos(swim, 0.25, 0, 3);
+    const ground = Math.hypot(at.x - swim.x, at.z - swim.z);
+    const total = Math.hypot(D.awayX, D.awayZ);
+    expect(ground / total).toBeLessThan(0.1);
+
+    // A NOSE-UP ATTITUDE, so they fly rather than slide along an invisible
+    // ramp, and it follows the climb rather than being a constant.
+    expect(at.pitch).toBeGreaterThan(0.05);
+    expect(duckFlightPos(swim, 1, 0, 3).pitch)
+        .toBeGreaterThan(duckFlightPos(swim, 0.1, 0, 3).pitch);
+    // Applied in YXZ, or a pitched duck would also roll and read as a bird
+    // falling over.
+    const wildlife = readFileSync(
+        join(process.cwd(), 'www', 'garden', 'js', 'wildlife.js'), 'utf8');
+    expect(wildlife).toMatch(/e\.set\(pitch, yaw, 0, 'YXZ'\)/);
+
+    // A FULL BEAT IS UP AND DOWN. `abs` on the sine would have flapped at twice
+    // the stated rate with the wings never going below level.
+    expect(wildlife).toMatch(/const beat = Math\.sin\(elapsed \* D\.flapHz/);
+    expect(wildlife).not.toMatch(/Math\.abs\(Math\.sin\(elapsed \* D\.flapHz/);
+});

@@ -165,6 +165,118 @@ export function duckWaterReach(config = GARDEN_CONFIG) {
     return { x: pondHalfWidth(config.world) * share, z: P.halfDepth * share };
 }
 
+/**
+ * How far through its migration a duck is: 0 on the water, 1 away.
+ *
+ * ---- THE ONLY WILDLIFE IN THIS SCENE THE CALENDAR DRIVES ----
+ *
+ * Everything else here keeps HOURS, which is a time of day. This keeps a
+ * season. Ducks go south for the winter, so they lift off in mid autumn and
+ * come back as spring opens, and the lake is empty for the cold half of the
+ * year. It is the same kind of seasonal beat the blossom is: something a
+ * visitor watching a year notices happening rather than something always there.
+ *
+ * REBASED ON THE DEPARTURE, like `fruitStageAt`, because the away window runs
+ * from 18.5 round through midnight to 3.0 and every off-by-one in this scene
+ * has landed in exactly that sort of interval.
+ */
+export function duckFlightAt(hour, config = GARDEN_CONFIG) {
+    const D = config.world.wildlife.ducks;
+    if (!D || D.leaveAt === undefined) return 0;
+    const at = (h) => wrapHour(h - D.leaveAt);
+    const t = at(hour);
+    const gone = D.span;
+    const back = at(D.arriveAt);
+    const down = back + D.span;
+    if (t < gone) return smoothTo(t / gone);
+    if (t < back) return 1;
+    if (t < down) return 1 - smoothTo((t - back) / D.span);
+    return 0;
+}
+
+/** Smoothstep on an already-clamped 0..1. */
+function smoothTo(t) {
+    const c = clamp01(t);
+    return c * c * (3 - 2 * c);
+}
+
+/**
+ * Where a duck is when it is `f` of the way through leaving.
+ *
+ * ONE PATH FOR BOTH DIRECTIONS. Arriving is leaving played backwards, which is
+ * true of a real migration and saves the scene a second set of numbers that
+ * could disagree with the first about where the lake is.
+ *
+ * ---- POSTURE IS NOT DISTANCE, AND CONFLATING THEM HID THE WHOLE ANIMATION ----
+ *
+ * The first version scaled the wings, the neck and the turn by `f`, the same
+ * number that carries the birds away. So every one of them reached full only
+ * once the duck was a speck. Measured, the wings peaked at 3.4 px when the body
+ * was already 2.7: QA reported never seeing them, and reported the ducks
+ * keeping their floating pose, and both were the same fault.
+ *
+ * `duckPosture` below rises to 1 over the first sixth of the flight, while the
+ * birds are still close and about ten pixels across, and everything about how a
+ * duck HOLDS itself reads from that. `f` is left to do only what it is for,
+ * which is where the bird is.
+ *
+ * ---- AND THE CLIMB LAGS THE RUN ----
+ *
+ * An earlier attempt reached full height by 60 percent of the way while the
+ * ground track was at 39, which left the water at 63 degrees: a helicopter. A
+ * duck runs across the surface, gets up, and climbs shallow. Both curves are
+ * powers of `f` chosen so the angle RISES through the flight, and so that the
+ * first quarter of it happens NEAR THE WATER: at f = 0.25 they have travelled
+ * twelve metres, which is what leaves the take-off somewhere it can be seen.
+ */
+
+/**
+ * How far a duck is into its flying POSE, 0 sitting to 1 fully airborne.
+ *
+ * Deliberately not `f`. See the note above: this is the number the wings, the
+ * neck and the heading read, and it is finished long before the bird is far.
+ */
+export function duckPosture(f, config = GARDEN_CONFIG) {
+    const D = config.world.wildlife.ducks;
+    const over = (D && D.postureOver) || 0.16;
+    return smoothTo(Math.min(1, f / over));
+}
+export function duckFlightPos(swim, f, index, count, config = GARDEN_CONFIG) {
+    const D = config.world.wildlife.ducks;
+    const P = config.world.pond;
+    const away = {
+        x: P.x + D.awayX,
+        y: D.awayHeight,
+        z: P.z + D.awayZ
+    };
+    // The formation builds as they climb: on the water they are scattered, and
+    // by the time they are specks they are a skein.
+    const dx = away.x - swim.x;
+    const dz = away.z - swim.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const fx = dx / len;
+    const fz = dz / len;
+    const rank = index - (count - 1) / 2;
+    const side = index % 2 === 0 ? 1 : -1;
+    const form = smoothTo(f);
+    const bx = -fx * D.fileBehind * Math.abs(rank) + -fz * side * D.fileSide * Math.abs(rank);
+    const bz = -fz * D.fileBehind * Math.abs(rank) + fx * side * D.fileSide * Math.abs(rank);
+
+    const track = Math.pow(f, 2.2);      // the run, held near the water at first
+    const climb = Math.pow(f, 2.5);      // and the climb, always a little behind
+    const ground = Math.hypot(dx * track + bx * form, dz * track + bz * form);
+    return {
+        x: swim.x + dx * track + bx * form,
+        z: swim.z + dz * track + bz * form,
+        lift: away.y * climb,
+        yaw: Math.atan2(fx, fz),
+        // Nose up along the climb. Small, because the whole path averages 16
+        // degrees, but it is the difference between a bird flying and a bird
+        // sliding along an invisible ramp.
+        pitch: Math.atan2(away.y * climb, Math.max(0.5, ground))
+    };
+}
+
 /** Where one duck is at a time, and which way it is pointing. */
 export function duckAt(path, t, config = GARDEN_CONFIG) {
     const D = config.world.wildlife.ducks;
@@ -187,6 +299,7 @@ let birds = null;
 let bats = null;
 let ducks = null;
 let duckHeads = null;
+let duckWings = null;
 let duckPaths_ = [];
 const disposables = [];
 
@@ -331,10 +444,25 @@ export function initWildlife(scene, config = GARDEN_CONFIG, options = {}) {
         duckHeads.frustumCulled = false;
         duckHeads.count = duckPaths_.length;
         ducks.count = duckPaths_.length;
+        // ---- THE WINGS, WHICH ONLY EXIST IN FLIGHT --------------------
+        // The same dihedral pair the birds and bats use, because at ten pixels
+        // a wing is a silhouette and not an anatomy. What differs for a duck is
+        // PROPORTION: long and narrow rather than broad, and beaten far faster.
+        duckWings = new THREE.InstancedMesh(
+            wingGeometry(),
+            new THREE.MeshLambertMaterial({
+                color: W.ducks.bodyColor, side: THREE.DoubleSide
+            }),
+            Math.max(1, duckPaths_.length));
+        duckWings.name = 'duck-wings';
+        duckWings.frustumCulled = false;
+        duckWings.count = duckPaths_.length;
         disposables.push(ducks.geometry, ducks.material,
-            duckHeads.geometry, duckHeads.material);
+            duckHeads.geometry, duckHeads.material,
+            duckWings.geometry, duckWings.material);
         scene.add(ducks);
         scene.add(duckHeads);
+        scene.add(duckWings);
     }
 
     // ---- Birds -------------------------------------------------------------
@@ -364,10 +492,15 @@ export function initWildlife(scene, config = GARDEN_CONFIG, options = {}) {
         scene.add(bats.mesh);
     }
 
-    return { butterflies, fireflies, birds, bats, ducks, duckHeads };
+    return { butterflies, fireflies, birds, bats, ducks, duckHeads, duckWings };
 }
 
 /** Two triangles meeting at a spine: a pair of wings, from any angle. */
+// The tip height of `wingGeometry` at |x| = 1. Named, because the flap's
+// amplitude is derived from it and a bare 0.25 in that arithmetic is the sort
+// of number that goes stale the moment the mesh changes.
+const WING_TIP_Y = 0.25;
+
 function wingGeometry() {
     const geo = new THREE.BufferGeometry();
     const position = new Float32Array([
@@ -606,7 +739,7 @@ export function updateWildlife(hour, elapsed, snowCoverage = 0, config = GARDEN_
 
     driveFlyer(bats, elapsed * 1.5, presenceAt(hour, WINDOWS.bats), config, { size: W.bats.size });
 
-    driveDucks(elapsed, config);
+    driveDucks(hour, elapsed, config);
 
     // ---- Fireflies: position, and a blink each --------------------------
     if (!fireflies) return;
@@ -677,11 +810,21 @@ export function updateWildlife(hour, elapsed, snowCoverage = 0, config = GARDEN_
  * duck awake on it at this distance, so a window would cost a draw call's worth
  * of bookkeeping to hide something nobody could see change.
  */
-function driveDucks(elapsed, config) {
+function driveDucks(hour, elapsed, config) {
     if (!ducks || !duckPaths_.length) return;
     const D = config.world.wildlife.ducks;
     const level = pondWaterLevel(config.world);
     const body = D.bodyLength;
+    const flight = duckFlightAt(hour, config);
+    // AWAY IS NOT HIDDEN, IT IS FAR. They recede past the fog ceiling and
+    // dissolve, so there is no frame where three birds wink out. The meshes go
+    // invisible only once nothing could be seen of them anyway, which saves the
+    // per-frame walk for the cold half of the year.
+    const gone = flight >= 0.999;
+    ducks.visible = !gone;
+    duckHeads.visible = !gone;
+    if (duckWings) duckWings.visible = !gone && flight > 0.005;
+    if (gone) return;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const e = new THREE.Euler();
@@ -690,36 +833,99 @@ function driveDucks(elapsed, config) {
 
     for (let i = 0; i < duckPaths_.length; i++) {
         const path = duckPaths_[i];
-        const at = duckAt(path, elapsed, config);
+        const swim = duckAt(path, elapsed, config);
         // A slow bob, each on its own clock, so three of them never rise
-        // together like a row of floats.
-        const bob = Math.sin(elapsed * path.bob * 0.55 + path.px) * D.bob;
-        e.set(0, at.yaw, 0);
+        // together like a row of floats. It goes as they leave the water.
+        const bob = Math.sin(elapsed * path.bob * 0.55 + path.px)
+            * D.bob * (1 - flight);
+
+        let x = swim.x;
+        let z = swim.z;
+        let yaw = swim.yaw;
+        let lift = 0;
+        let pitch = 0;
+        // POSTURE, NOT DISTANCE. Finished within the first sixth of the flight,
+        // while the birds are still close and about ten pixels across, which is
+        // the only window in which any of this can be seen at all.
+        const pose = flight > 0 ? duckPosture(flight, config) : 0;
+        if (flight > 0) {
+            const air = duckFlightPos(swim, flight, i, duckPaths_.length, config);
+            x = air.x;
+            z = air.z;
+            lift = air.lift;
+            pitch = air.pitch * pose;
+            // The heading swings from wherever it was drifting onto the line of
+            // travel, rather than snapping to it at the first frame.
+            yaw = swim.yaw + Math.atan2(Math.sin(air.yaw - swim.yaw),
+                Math.cos(air.yaw - swim.yaw)) * pose;
+        }
+        // YXZ, so the yaw is applied about the world's up and the pitch about
+        // the bird's own wing axis. In the default order a pitched duck would
+        // also roll, which at this size reads as a bird falling over.
+        e.set(pitch, yaw, 0, 'YXZ');
         q.setFromEuler(e);
 
-        p.set(at.x, level + body * 0.16 + bob, at.z);
+        const y = level + body * 0.16 + bob + lift;
+        p.set(x, y, z);
         s.setScalar(body);
         m.compose(p, q, s);
         ducks.setMatrixAt(i, m);
 
         // The head rides forward and up, in the duck's OWN frame, so it stays
-        // at the front however the bird is pointing.
-        p.set(at.x + Math.sin(at.yaw) * body * 0.34,
-            level + body * 0.40 + bob,
-            at.z + Math.cos(at.yaw) * body * 0.34);
+        // at the front however the bird is pointing. IN FLIGHT IT REACHES: a
+        // duck on water tucks its neck and a duck in the air stretches it out,
+        // and that change of outline is worth more than the wings at this size.
+        const reach = body * (0.34 + 0.30 * pose);
+        p.set(x + Math.sin(yaw) * reach,
+            y + body * (0.24 - 0.14 * pose) + Math.sin(pitch) * reach,
+            z + Math.cos(yaw) * reach);
         s.setScalar(body * 0.30);
         m.compose(p, q, s);
         duckHeads.setMatrixAt(i, m);
+
+        if (duckWings) {
+            // THE FLAP IS A SQUASH, NOT A HINGE, which is this file's own rule
+            // for everything it draws: at this distance the silhouette is all
+            // that reads. A hinge would move a wingtip by a pixel and a half.
+            // A full beat is up AND down, so the dihedral is signed rather
+            // than folded: `abs` would have beaten at twice the rate with the
+            // wings never going below level.
+            const beat = Math.sin(elapsed * D.flapHz * Math.PI * 2 + path.px);
+            p.set(x, y + body * 0.10, z);
+            // SIZED BY THE POSE, NOT BY THE DISTANCE. This is the whole of
+            // M23-2: scaled by `flight` the wings reached full span only once
+            // the duck was a speck.
+            //
+            // THE STROKE IS AN ANGLE. `wingGeometry` puts its tips at y = 0.25
+            // for |x| = 1, so the Y scale that reaches a given sweep is
+            // tan(angle) / 0.25 times the span. Setting that multiplier by hand
+            // is what left the wings sweeping six degrees: a shiver rather than
+            // a flap, which QA read as a hummingbird.
+            // HALF, BECAUSE THE MESH IS ALREADY TWO UNITS WIDE. `wingGeometry`
+            // runs from x = -1 to x = +1, so its scale is a HALF span. Handing
+            // it the full one drew wings twice as long as the config asked for:
+            // a span three times the body against a real duck's one and a half,
+            // which QA saw as the wings being too long. The name says span, so
+            // the number is a span and the halving lives here.
+            const halfSpan = D.wingSpan * body * 0.5;
+            const sweep = Math.tan(D.flapDegrees * Math.PI / 180) / WING_TIP_Y;
+            s.set(halfSpan * pose,
+                halfSpan * sweep * beat * pose,
+                D.wingChord * body * pose);
+            m.compose(p, q, s);
+            duckWings.setMatrixAt(i, m);
+        }
     }
     ducks.instanceMatrix.needsUpdate = true;
     duckHeads.instanceMatrix.needsUpdate = true;
+    if (duckWings) duckWings.instanceMatrix.needsUpdate = true;
 }
 
 export function disposeWildlife() {
     for (const group of [butterflies, fireflies, birds, bats]) {
         if (group && sceneRef) sceneRef.remove(group.mesh);
     }
-    for (const mesh of [ducks, duckHeads]) {
+    for (const mesh of [ducks, duckHeads, duckWings]) {
         if (mesh && sceneRef) sceneRef.remove(mesh);
     }
     for (const item of disposables) {
@@ -730,6 +936,7 @@ export function disposeWildlife() {
     fireflies = null;
     ducks = null;
     duckHeads = null;
+    duckWings = null;
     duckPaths_ = [];
     birds = null;
     bats = null;

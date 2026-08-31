@@ -107,13 +107,15 @@ describe('the wildlife flags', () => {
         // a dark head, because at 12 px the body alone is a floating leaf.
         expect(built.ducks).not.toBeNull();
         expect(built.duckHeads).not.toBeNull();
+        expect(built.duckWings).not.toBeNull();
     });
 
     test('only the creatures that are on reach the scene', () => {
         const scene = recordingScene();
         initWildlife(scene, GARDEN_CONFIG);
-        // The ducks' two meshes, and nothing else.
-        expect(scene.added).toHaveLength(2);
+        // The ducks' three meshes, and nothing else: a pale body, a dark head,
+        // and the wings that only exist while they are migrating.
+        expect(scene.added).toHaveLength(3);
     });
 
     test('turning a flag back on is the only edit needed to restore one', () => {
@@ -128,8 +130,8 @@ describe('the wildlife flags', () => {
             }));
             expect(built[name]).not.toBeNull();
             expect(built[name].count).toBeGreaterThan(0);
-            // The one turned on, plus the ducks' two.
-            expect(scene.added).toHaveLength(3);
+            // The one turned on, plus the ducks' three.
+            expect(scene.added).toHaveLength(4);
             disposeWildlife();
         }
     });

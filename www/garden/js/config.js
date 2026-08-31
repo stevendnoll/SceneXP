@@ -1277,7 +1277,81 @@ export const GARDEN_CONFIG = deepFreeze({
                 keepInside: 0.62,
                 // A slow bob, in metres, so they sit ON the water rather than
                 // in it.
-                bob: 0.035
+                bob: 0.035,
+
+                // ---- THEY MIGRATE (M23-1) ---------------------------------
+                // Gone for the cold half of the year, which is the only piece
+                // of this scene's wildlife that the CALENDAR drives rather than
+                // the clock. Hours, in the same scale everything else uses:
+                // spring is 03 to 09, autumn 15 to 21, winter 21 to 03.
+                //
+                //     17.5  they lift off the water, mid autumn
+                //     18.5  gone
+                //      3.0  specks over the mountains, spring has just begun
+                //      4.0  down on the water again
+                //
+                // `span` of 1.0 in-world hour is 10 real seconds at the shipped
+                // cycle, which is long enough to watch and short enough that a
+                // visitor who looks away has not missed the year.
+                leaveAt: 17.5,
+                arriveAt: 3.0,
+                span: 1.0,
+                // WHERE THEY GO. Away over the far end of the lake and up, so
+                // they recede rather than cross: at 291 m they are past the fog
+                // ceiling of 260 and dissolve into the haze instead of popping
+                // out of existence. Flying them SOUTH over the camera was the
+                // other option and it is the one a real skein does, but at 20 m
+                // a duck is 36 px of low-poly sphere and the whole illusion is
+                // built on never being that close.
+                awayX: 30,
+                awayHeight: 75,
+                awayZ: -260,
+                // ---- POSTURE IS NOT DISTANCE (M23-2) ----------------------
+                // How much of the flight the take-off POSE takes: wings out,
+                // neck reaching, body swinging onto the heading. Short, and
+                // that is the point. The first version tied all three to the
+                // flight parameter itself, so they reached full only once the
+                // birds were specks: the wings peaked at 3.4 px when the body
+                // was 2.7, and QA reported never seeing them and the ducks
+                // keeping their floating pose, which were one fault.
+                postureOver: 0.16,
+                // ---- THE BEAT IS SLOWER THAN A REAL DUCK'S, ON PURPOSE ----
+                // A mallard beats 8 to 10 times a second. At 6.5 QA read it as
+                // a hummingbird, and was right: at ten pixels and sixty frames
+                // a beat that fast has no shape, it just shimmers. The eye
+                // needs to SEE a stroke, which wants something nearer 2.5.
+                //
+                // Same family as sizing a duck at 0.95 m instead of 0.55: the
+                // physically true number is the wrong one for this frame, and
+                // the honest move is to say so rather than to pretend the
+                // accurate one looks right.
+                flapHz: 2.6,
+                // ---- AND THE STROKE IS AN ANGLE, WHICH IS WHY IT WAS WRONG --
+                // It used to be a raw multiplier on the wing mesh's Y scale,
+                // and that mesh puts its tips at y = 0.25 for |x| = 1. So a
+                // multiplier of 0.42 swept the tips through six degrees, which
+                // is a shiver. Stated as the angle it means, it can be checked
+                // against a bird: a duck's wingtip travels 35 to 45 degrees
+                // either side of level.
+                flapDegrees: 38,
+                // ---- FULL TIP TO TIP, as a multiple of the body ------------
+                // A mallard is 0.85 m across on a 0.55 m body, so 1.55 is the
+                // real proportion and this is one of the few numbers here that
+                // did NOT need exaggerating for the frame.
+                //
+                // It was being drawn at twice this. `wingGeometry` runs from
+                // x = -1 to +1, so its scale is a HALF span, and handing it the
+                // full one gave a span three times the body: QA saw wings that
+                // were too long and they were, by exactly a factor of two. The
+                // halving now lives in the drive, so this number means what its
+                // name says and can be checked against a bird.
+                wingSpan: 1.55,
+                wingChord: 0.34,
+                // The skein. Behind and to the side, in the direction of
+                // travel, so three birds read as a formation rather than as
+                // three birds that happen to be near each other.
+                fileBehind: 1.9,
+                fileSide: 1.25
             },
 
             butterflies: {
