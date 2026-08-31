@@ -32,11 +32,13 @@ import {
 import { initSky, updateSky, disposeSky } from './sky.min.js';
 import {
     initTerrain, updateTerrain, disposeTerrain, getGroundMesh, snapToGrid,
-    nearestFreeCell, cellCenter, heightAt, inPlantingReach, plantingReach
+    nearestFreeCell, cellCenter, heightAt, inPlantingReach, plantingReach, pondWaterLevel
 } from './terrain.min.js';
 import { initForest, updateForest, disposeForest } from './forest.min.js';
-import { initVista, updateVista, disposeVista } from './vista.min.js';
-import { initWildlife, updateWildlife, disposeWildlife } from './wildlife.min.js';
+import { initVista, updateVista, disposeVista, setVistaEye, getPondMesh } from './vista.min.js';
+import {
+    initWildlife, updateWildlife, disposeWildlife, duckFlightAt, lakeShot
+} from './wildlife.min.js';
 import { createWeather, stepWeather, weatherWords, overcastAt } from './weather.min.js';
 import { initPrecipitation, updatePrecipitation, disposePrecipitation } from './precip.min.js';
 import { resolveSpecies } from './species.min.js';
@@ -58,7 +60,8 @@ import {
 import {
     initUi, updateHud, showHud, openPlantModal, isPlantOpen,
     openTreeCard, closeTreeCard, isCardOpen, refreshTreeCard, getCardEntry,
-    anyModalOpen, getPreviewCanvas, toast, openResetModal, waterAllText
+    anyModalOpen, getPreviewCanvas, toast, openResetModal, waterAllText,
+    openLakeCard, closeLakeCard, isLakeOpen, getLakeCanvas, refreshLakeCard
 } from './ui.min.js';
 import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
 import {
@@ -114,6 +117,11 @@ let renderer = null;
 let scene = null;
 let camera = null;
 let weather = null;
+// The lake's card borrows a second camera on the SAME scene. Built once at
+// init, because a camera is cheap and building one per frame is not.
+let lakeCamera = null;
+// Where the ducks live, and how far any of them strays. See lakeShot.
+let lakeHome = null;
 
 let canvas, loadingScreen, blocker, waterAllBtn, helpBtn, resetBtn, viewResetBtn;
 // What syncViewReset last wrote, so a per-frame check costs no DOM writes.
@@ -184,6 +192,12 @@ async function init() {
     buildRenderer();
     buildScene();
     placeCamera();
+    lakeCamera = new THREE.PerspectiveCamera(
+        GARDEN_CONFIG.world.pond.watch.fov, 1,
+        GARDEN_CONFIG.camera.near, GARDEN_CONFIG.camera.far);
+    // Where the ducks live and how far they roam. Seeded, so it is the same
+    // shot every visit, and it follows the mobile duck count.
+    lakeHome = lakeShot(GARDEN_CONFIG, { mobile: state.mobile });
 
     updateLoadingStatus('Hanging the sky…', 45);
     initSky(scene, renderer, GARDEN_CONFIG, { mobile: state.mobile });
@@ -1070,6 +1084,82 @@ function updateDropHover(clientX, clientY) {
     canvas.style.cursor = index >= 0 ? 'pointer' : '';
 }
 
+// ---- The lake --------------------------------------------------------------
+
+/**
+ * A tap on the water opens the card that looks across it.
+ *
+ * RAYCAST, UNLIKE EVERY OTHER TARGET IN THIS SCENE. A mulch bed is picked in
+ * screen space because it is a disc seen at 17 degrees and five pixels tall at
+ * the back of the plot. The lake is 58 m by 32 m and hundreds of pixels from
+ * anywhere, so "did the ray hit it" has a good answer, and it is the honest one:
+ * the target is exactly the drawn surface.
+ *
+ * THE LAKE IS ALWAYS TAPPABLE, including the cold half of the year when the
+ * ducks are away. It was the ducks before, which meant a target that came and
+ * went with the season and a card that had to close itself. The water is there
+ * every day, so the card can say something true on any of them.
+ */
+function tapLake(clientX, clientY) {
+    const water = getPondMesh();
+    if (!water || !camera) return false;
+    pointer.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    if (!raycaster.intersectObject(water, false).length) return false;
+    if (!openLakeCard(duckFlightAt(hourAt(state.elapsedSeconds)))) return false;
+    track('lake-opened');
+    return true;
+}
+
+/**
+ * Where the borrowed camera stands and what it points at.
+ *
+ * PURE, AND THAT IS THE POINT: under the test harness every number read back
+ * off a THREE camera is a proxy, so a composition that only ever existed inside
+ * `camera.lookAt` could not be asserted at all. Two QA rounds landed on this
+ * shot and neither of the things they found would have been caught by a test of
+ * the numbers going IN.
+ *
+ * AIMED AT THE DUCKS AND NOT AT THE MIDDLE OF THE WATER. `duckPaths` seeds the
+ * loops wherever the seed puts them, which is seven metres off the pond's own
+ * centre, so a camera aimed at the centre showed the birds off to one side.
+ * That was the report.
+ *
+ * FIXED, NOT FOLLOWING. The first version tracked one duck, which is why it
+ * ended up four metres away: a portrait needs a subject. The subject is the
+ * lake, so the shot is composed once and is correct on the days when there is
+ * nothing swimming on it.
+ *
+ * The distance is derived from how far any duck ever strays from home, so all
+ * three are centred AND in frame by construction rather than by a number that
+ * suited one seed.
+ */
+export function lakeFraming(home, waterLevel, config = GARDEN_CONFIG) {
+    const V = config.world.pond.watch;
+    const side = V.sideDegrees * Math.PI / 180;
+    const half = home.radius + V.framePadding;
+    const distance = half / Math.tan((V.fov / 2) * Math.PI / 180);
+    return {
+        distance,
+        half,
+        eye: {
+            x: home.x + Math.sin(side) * distance,
+            y: waterLevel + V.height,
+            z: home.z + Math.cos(side) * distance
+        },
+        at: { x: home.x, y: waterLevel + V.aimHeight, z: home.z }
+    };
+}
+
+/** Put the borrowed camera where `lakeFraming` says. */
+function aimLakeCamera() {
+    if (!lakeCamera || !lakeHome) return false;
+    const shot = lakeFraming(lakeHome, pondWaterLevel(GARDEN_CONFIG.world));
+    lakeCamera.position.set(shot.eye.x, shot.eye.y, shot.eye.z);
+    lakeCamera.lookAt(shot.at.x, shot.at.y, shot.at.z);
+    return true;
+}
+
 function pickGround(clientX, clientY) {
     const ground = getGroundMesh();
     if (!ground || !camera) return null;
@@ -1146,6 +1236,13 @@ function handleSceneTap(clientX, clientY) {
         track('tree-opened', { species: tree.record.species });
         return;
     }
+
+    // ---- THE LAKE IS THE OTHER THING ON SCREEN WORTH TOUCHING -------------
+    // After the plot's own targets, because the plot is what the visitor came
+    // to tend and its beds must never lose a tap to something 42 m behind
+    // them. Before the ground, because a tap on the water is a tap on the water
+    // and not a misdirected attempt to plant a tree in a lake.
+    if (tapLake(clientX, clientY)) return;
 
     // ---- A TAP THAT LANDS NOWHERE USED TO MEAN NOTHING --------------------
     // Two ways to miss, and neither said so. A tap on the sky, the mountains or
@@ -1644,16 +1741,25 @@ export function previewRect(bufferWidth, bufferHeight, pixelRatio, wanted = PREV
     return { css, device, cssTop };
 }
 
-function renderPreview(time) {
-    if (!previewTree || !renderer || !previewScene) return;
-    const target = getPreviewCanvas();
-    if (!target) return;
-
-    previewTree.group.rotation.y = state.reducedMotion ? 0.6 : time * 0.35;
-    updateTree(previewTree, previewDrive(time), previewResolved);
-
+/**
+ * Draw a scene into the corner of the main buffer and copy it to a 2D canvas.
+ *
+ * ONE WEBGL CONTEXT FOR THE WHOLE PAGE, which is the point of all of this: a
+ * second context for a thumbnail would be an unforced error on a phone. Two
+ * callers now, and they are deliberately different in kind. The tree portraits
+ * draw a private little scene built for the purpose; the lake's card draws THE
+ * SCENE ITSELF from a second camera, so what the visitor sees is the same water
+ * under the same sky at the same hour, and nothing about it can drift from the
+ * world it is a view of.
+ *
+ * `clear` is the colour to wipe the rectangle with first, or null to leave the
+ * renderer's own alone. The lake view wants the latter: the sky dome covers the
+ * frame, so a clear colour would only ever be seen through a bug.
+ */
+function drawIntoCorner(target, scene3, camera3, clear, wanted = PREVIEW_PX) {
+    if (!renderer || !target || !scene3 || !camera3) return;
     const rect = previewRect(renderer.domElement.width, renderer.domElement.height,
-        renderer.getPixelRatio());
+        renderer.getPixelRatio(), wanted);
 
     // RESTORED FROM WHAT WAS THERE, never from numbers rebuilt by hand. The
     // hand-built restore is what leaked a wrong viewport into the whole scene
@@ -1668,16 +1774,16 @@ function renderPreview(time) {
     renderer.setScissorTest(true);
     renderer.setViewport(0, rect.cssTop, rect.css, rect.css);
     renderer.setScissor(0, rect.cssTop, rect.css, rect.css);
-    renderer.setClearColor(0x9a9182, 1);
+    if (clear !== null) renderer.setClearColor(clear, 1);
     renderer.clear();
-    renderer.render(previewScene, previewCamera);
+    renderer.render(scene3, camera3);
     renderer.setScissorTest(previousScissorTest);
     renderer.setViewport(previousViewport);
     renderer.setScissor(previousScissor);
     renderer.setClearColor(previousClear, previousAlpha);
 
     // THE CONTEXT BELONGS TO A CANVAS, so it is re-taken whenever the
-    // destination changes. Caching one across both modals would have drawn the
+    // destination changes. Caching one across the cards would have drawn the
     // tree card's portrait into the plant modal's canvas, which is the sort of
     // bug that only shows up on the second thing a visitor does. The size is
     // re-checked too, because the pixel ratio moves under the quality governor.
@@ -1694,6 +1800,36 @@ function renderPreview(time) {
         previewCtx.drawImage(renderer.domElement,
             0, 0, rect.device, rect.device, 0, 0, rect.device, rect.device);
     }
+}
+
+function renderPreview(time) {
+    if (!previewTree || !previewScene) return;
+    const target = getPreviewCanvas();
+    if (!target) return;
+
+    previewTree.group.rotation.y = state.reducedMotion ? 0.6 : time * 0.35;
+    updateTree(previewTree, previewDrive(time), previewResolved);
+    drawIntoCorner(target, previewScene, previewCamera, 0x9a9182);
+}
+
+/**
+ * Draw the lake's card: the real scene, from 22 metres off the water.
+ *
+ * THE WATER IS TOLD WHICH EYE IS LOOKING AT IT. The pond's Fresnel is computed
+ * from `uEye`, which `updateVista` sets to the scene camera once a frame, so
+ * without this the view would light its water with an angle taken from sixty
+ * metres behind it. Set, draw, set back.
+ *
+ * CAPTURED AT MORE PIXELS THAN A TREE THUMBNAIL. This card is a "look closer",
+ * so the resolution IS the feature: at `capturePx` a duck covers 36 px against
+ * the 11.5 it gets on a 1600 px screen.
+ */
+function renderLakeView() {
+    const target = getLakeCanvas();
+    if (!target || !camera || !aimLakeCamera()) return;
+    setVistaEye(lakeCamera.position);
+    drawIntoCorner(target, scene, lakeCamera, null, GARDEN_CONFIG.world.pond.watch.capturePx);
+    setVistaEye(camera.position);
 }
 
 // ---- Render loop -----------------------------------------------------------
@@ -1825,6 +1961,7 @@ function animate() {
         const entry = getCardEntry();
         if (entry) refreshTreeCard(ageYears(entry.record, state.elapsedSeconds), cardContext());
     }
+    if (isLakeOpen()) refreshLakeCard(duckFlightAt(hour));
 
     // The camera, in order: the move after planting if one is running, then
     // our own dolly, then the shared part's yaw and tilt refining the aim on
@@ -1861,6 +1998,10 @@ function animate() {
     // EITHER MODAL, since both show the same turning tree through the same
     // rectangle and neither can be open while the other is.
     if (isPlantOpen() || isCardOpen()) renderPreview(state.sceneSeconds);
+    // THE LAKE'S CARD DRAWS THE SCENE ITSELF, so it has to come after
+    // everything that moved the world this frame and before the main pass that
+    // clears the buffer. Same rectangle, same copy, a different camera.
+    if (isLakeOpen()) renderLakeView();
     if (renderer && scene && camera) renderer.render(scene, camera);
 
     // A slow heartbeat for growth, which changes continuously and has no

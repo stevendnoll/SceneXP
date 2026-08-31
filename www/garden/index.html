@@ -74,7 +74,7 @@
     <title>Fractal Garden</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
-    <link rel="preload" href="css/experience.min.css?v=9" as="style">
+    <link rel="preload" href="css/experience.min.css?v=12" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -84,7 +84,7 @@
          dark body, and this scene wants a soft daylight behind a slow first
          frame. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
-    <link rel="stylesheet" href="css/experience.min.css?v=9">
+    <link rel="stylesheet" href="css/experience.min.css?v=12">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -369,6 +369,29 @@
                 <button id="tree-water" type="button" class="piece-enter">Water it</button>
                 <button id="tree-remove" type="button" class="tree-remove">Remove this tree</button>
             </div>
+        </div>
+    </div>
+
+    <!-- THE LAKE'S CARD. The water is 42 metres out and the dolly runs up the
+         middle of the PLOT, so the lake is one of the two things this scene is
+         made of and the visitor can never get near it. The card lends a second
+         camera rather than moving the first, and draws the SAME scene at the
+         same hour from 22 m off the water.
+
+         IT IS THE LAKE AND NOT THE DUCKS, which is a correction. A first
+         version framed one duck at four metres, and a duck here is two
+         ellipsoids built to read at the twelve pixels it covers from anywhere
+         the camera can go: what a close-up of an abstraction shows is the
+         abstraction. At 22 m all three fit, they are three times the size they
+         are on screen, and the card still says something true on the winter
+         days when the lake is empty. -->
+    <div id="lake-card" class="hidden" role="dialog" aria-modal="true" aria-labelledby="lake-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container lake-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <h2 id="lake-title" class="plant-heading">The lake</h2>
+            <canvas id="lake-view" class="lake-view" aria-hidden="true"></canvas>
+            <p id="lake-note" class="plant-note"></p>
         </div>
     </div>
 

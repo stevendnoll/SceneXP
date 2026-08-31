@@ -407,6 +407,52 @@ function bakeLeafCards(leaves, limit, scale) {
 
 /** Two quads crossed at right angles: volume from any angle for four
  *  triangles, anchored at the base so the tree stands on the ground. */
+/**
+ * A tuft of tall grass, drawn once into a canvas as an alpha mask.
+ *
+ * WHITE, like every other mask here, so the material's colour can carry the
+ * season and the snow. Blades rather than a shape: a few strokes fanning from a
+ * common root, each bending a little, because what says "long grass" at this
+ * distance is a spray of near-vertical lines and nothing else.
+ *
+ * THE TIPS ARE DIMMER THAN THE ROOTS on purpose. `alphaTest` takes the faintest
+ * pixels first, so a tuft loses its very tips before its body and reads as
+ * thinning rather than as being cut off flat.
+ */
+function buildWeedTexture(size, seed) {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const random = makeRandom(seed);
+
+    ctx.clearRect(0, 0, size, size);
+    ctx.lineCap = 'round';
+    const root = size * 0.5;
+    for (let i = 0; i < 9; i++) {
+        // Where it leaves the ground, and how far it leans by the tip.
+        const from = root + (random() - 0.5) * size * 0.30;
+        const lean = (random() - 0.5) * size * 0.44;
+        const top = size * (0.06 + random() * 0.30);
+        const grad = ctx.createLinearGradient(0, size, 0, top);
+        grad.addColorStop(0, 'rgba(255,255,255,1)');
+        grad.addColorStop(1, 'rgba(255,255,255,0.55)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = Math.max(1, size * (0.035 + random() * 0.025));
+        ctx.beginPath();
+        ctx.moveTo(from, size);
+        // One control point, so the blade bows instead of kinking.
+        ctx.quadraticCurveTo(from + lean * 0.35, size * 0.55, from + lean, top);
+        ctx.stroke();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
 function buildCrossedQuad() {
     const geo = new THREE.BufferGeometry();
     const h = 0.5;
@@ -500,6 +546,7 @@ let evergreen = null;
 let nearTrees = [];
 let bushes = null;
 let flowers = null;
+let weeds = null;
 let flowerPlacements = [];
 let lastBloom = -1;
 const disposables = [];
@@ -951,6 +998,105 @@ function buildUndergrowth(scene, config, options) {
     if (flowers.instanceColor) flowers.instanceColor.needsUpdate = true;
     scene.add(flowers);
     disposables.push(flowerGeo, flowerMaterial);
+
+    buildWeeds(scene, config, options);
+}
+
+/**
+ * Where the unmown corners are, as plain numbers.
+ *
+ * ---- IN PATCHES, AND THAT IS THE WHOLE OF WHY IT READS ----
+ *
+ * An even sprinkle of tall grass across the apron says "meadow", which is a
+ * different picture and a duller one. A few dense tufts with mown ground
+ * between them says nobody has been round here with a scythe, and it is the
+ * CONTRAST that then makes the plot look tended. So the placement is two
+ * levels: a handful of patch centres in the band between the wall and the
+ * treeline, and a clump of tufts around each.
+ *
+ * Pure and seeded, like `scatter` and `duckPaths`, so the three rules that
+ * matter can be asserted rather than eyeballed in a screenshot: nothing inside
+ * the walls, nothing standing in the lake, and nothing on the ground the eye
+ * travels through.
+ */
+export function weedPatches(config = GARDEN_CONFIG, options = {}) {
+    const U = config.world.undergrowth;
+    const patches = options.mobile ? U.weedPatchesMobile : U.weedPatches;
+    const per = options.mobile ? U.perPatchMobile : U.perPatch;
+    const total = patches * per;
+    const random = makeRandom(config.world.seed ^ 0x5EED4);
+    const out = [];
+
+    let guard = 0;
+    while (out.length < total && guard++ < patches * 60) {
+        const angle = random() * Math.PI * 2;
+        const radius = U.weedRadius.min + random() * (U.weedRadius.max - U.weedRadius.min);
+        const cx = Math.cos(angle) * radius;
+        const cz = Math.sin(angle) * radius;
+        // Never inside the walls, and never standing in the lake.
+        if (Math.max(Math.abs(cx), Math.abs(cz)) < config.plot.halfSize + 0.5) continue;
+        if (inTheLake(cx, cz, config)) continue;
+        // Never where the eye travels. The dolly runs up the middle of the
+        // world from z = 2 to 40, so the apron either side of it is ground the
+        // camera passes through, and a tuft standing where the lens is about to
+        // be is the near treeline's bug at a smaller scale.
+        if (!clearsCamera(cx, cz, config, U.weedClearance)) continue;
+
+        for (let i = 0; i < per && out.length < total; i++) {
+            const a = random() * Math.PI * 2;
+            const r = Math.sqrt(random()) * U.patchSpread;
+            const x = cx + Math.cos(a) * r;
+            const z = cz + Math.sin(a) * r;
+            const height = U.weedHeight.min + random() * (U.weedHeight.max - U.weedHeight.min);
+            const yaw = random() * Math.PI;
+            if (Math.max(Math.abs(x), Math.abs(z)) < config.plot.halfSize + 0.3) continue;
+            if (inTheLake(x, z, config)) continue;
+            out.push({ x, z, height, yaw, patch: { x: cx, z: cz } });
+        }
+    }
+    return out;
+}
+
+/**
+ * The unmown corners, built. See `weedPatches` for where they go and why.
+ *
+ * They take the season and the snow from the same call the scrub does, so the
+ * apron cannot end up green in a week the wood has turned.
+ */
+function buildWeeds(scene, config, options) {
+    const placements = weedPatches(config, options);
+
+    const geo = buildCrossedQuad();
+    const texture = buildWeedTexture(64, config.world.seed ^ 0x3EED5);
+    const material = new THREE.MeshLambertMaterial({
+        color: 0xffffff, map: texture, alphaTest: 0.38, side: THREE.DoubleSide
+    });
+    if (texture) disposables.push(texture);
+    weeds = new THREE.InstancedMesh(geo, material, Math.max(1, placements.length));
+    weeds.name = 'weeds';
+    weeds.castShadow = false;
+    weeds.receiveShadow = true;
+    weeds.frustumCulled = false;
+
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const e = new THREE.Euler();
+    const p = new THREE.Vector3();
+    const sc = new THREE.Vector3();
+    placements.forEach((weed, i) => {
+        p.set(weed.x, worldHeightAt(weed.x, weed.z), weed.z);
+        e.set(0, weed.yaw, 0);
+        q.setFromEuler(e);
+        // Wider than tall would read as a bush, so the spread follows the
+        // height rather than being its own number.
+        sc.set(weed.height * 0.72, weed.height, weed.height * 0.72);
+        m.compose(p, q, sc);
+        weeds.setMatrixAt(i, m);
+    });
+    weeds.count = placements.length;
+    weeds.instanceMatrix.needsUpdate = true;
+    scene.add(weeds);
+    disposables.push(geo, material);
 }
 
 /** Rewrite the flower transforms for a bloom level, 0 gone and 1 full. */
@@ -1075,6 +1221,14 @@ export function updateForest(hour, snowCoverage = 0, wind = null, elapsed = 0, m
             packColor(mixColor(forestColorAt(hour, false, config), snowColor, snow * 0.8)));
     }
 
+    // The unmown corners turn with the same year, and go under the snow with
+    // the scrub. THEY DO NOT SHED: long grass stands through the winter, which
+    // is half of what makes it read as neglected rather than as planted.
+    if (weeds) {
+        weeds.material.color.setHex(
+            packColor(mixColor(forestColorAt(hour, false, config), snowColor, snow * 0.85)));
+    }
+
     // THE FLOWERS ARE REBUILT ONLY WHEN THE BLOOM ACTUALLY MOVES. Rewriting
     // nine hundred instance matrices every frame would be the most expensive
     // thing in the scene, for a value that changes over minutes.
@@ -1100,7 +1254,7 @@ function setSeason(material, hex) {
 }
 
 export function getForestMeshes() {
-    return [evergreen, deciduous, bushes, flowers,
+    return [evergreen, deciduous, bushes, flowers, weeds,
         ...nearTrees.map((t) => t.mesh),
         ...nearTrees.map((t) => t.leafMesh)].filter(Boolean);
 }
@@ -1121,6 +1275,7 @@ export function disposeForest() {
     evergreen = null;
     bushes = null;
     flowers = null;
+    weeds = null;
     flowerPlacements = [];
     lastBloom = -1;
     nearTrees = [];

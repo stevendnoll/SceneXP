@@ -379,6 +379,7 @@ body {
 
 #plant-modal,
 #tree-card,
+#lake-card,
 #reset-modal {
     position: fixed;
     inset: 0;
@@ -391,6 +392,7 @@ body {
 
 #plant-modal.hidden,
 #tree-card.hidden,
+#lake-card.hidden,
 #reset-modal.hidden {
     display: none;
 }
@@ -399,6 +401,7 @@ body {
    stay visible behind its own dialogs. */
 #plant-modal .modal-backdrop,
 #tree-card .modal-backdrop,
+#lake-card .modal-backdrop,
 #reset-modal .modal-backdrop {
     position: absolute;
     inset: 0;
@@ -412,6 +415,7 @@ body {
 /* The generic .modal-container is bordered in another experience's orange. */
 #plant-modal .modal-container,
 #tree-card .modal-container,
+#lake-card .modal-container,
 #reset-modal .modal-container {
     position: relative;
     background: rgba(16, 26, 14, 0.96);
@@ -423,6 +427,7 @@ body {
 
 #plant-modal .modal-close,
 #tree-card .modal-close,
+#lake-card .modal-close,
 #reset-modal .modal-close {
     position: absolute;
     top: 8px;
@@ -440,6 +445,7 @@ body {
 
 #plant-modal .modal-close:hover,
 #tree-card .modal-close:hover,
+#lake-card .modal-close:hover,
 #reset-modal .modal-close:hover {
     background: rgba(var(--ui-accent-rgb), 0.3);
     transform: none;
@@ -676,6 +682,50 @@ body {
 #plant-confirm:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* ---- The lake's card -------------------------------------------------------
+ *
+ * A borrowed camera 22 metres off the water, drawn through the same
+ * scissor-rectangle path the tree portraits use, so the page still has exactly
+ * one WebGL context. The card is nothing but a heading, that view, and a line.
+ *
+ * WIDER THAN THE TREE CARD AND NOT SQUARE. A tree is tall and a lake is a
+ * landscape, so this one is 4:3 and gets the room a small scene needs.
+ */
+.lake-card {
+    max-width: min(94vw, 30rem);
+    padding: 1.3rem 1.4rem 1.4rem;
+}
+
+.lake-card .plant-heading {
+    /* The close button is absolutely positioned over the container's top right
+       corner, so the heading has to stop short of it. */
+    padding-right: 2.9rem;
+}
+
+.lake-view {
+    display: block;
+    width: 100%;
+    /* CAPPED BY THE VIEWPORT'S HEIGHT as well as the card's width, the same way
+       the tree portrait is: on a short landscape window a box sized from the
+       width alone is most of the screen before a line of text is drawn. */
+    max-height: 52vh;
+    /* SQUARE, BECAUSE THE CAPTURE IS. `previewRect` hands back a square
+       rectangle and the canvas is sized from it, so a 4:3 box stretched every
+       duck in it 33 percent wider than it is. The frame the camera covers is
+       chosen from the ducks' own spread either way, so the shape costs nothing
+       and the extra height is far shore, treeline and sky rather than waste. */
+    aspect-ratio: 1 / 1;
+    margin: 0.2rem 0 0.8rem;
+    border-radius: 10px;
+    /* The water and the sky it sits under, so the first frame is not a flash
+       of something else. DELIBERATELY NOT the tree portraits' gradient: that
+       one is pinned to the clear colour `drawIntoCorner` wipes their rectangle
+       with, and this view has no clear colour at all (the sky dome fills the
+       frame). Two placeholders for two different pictures. */
+    background: linear-gradient(#c3d8e6, #93b0bd 58%, #46626c);
+    border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 /* ---- The tree card --------------------------------------------------------- */

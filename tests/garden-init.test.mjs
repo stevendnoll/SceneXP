@@ -540,8 +540,17 @@ test('ZOOMING IN WIDENS THE PAN, AND PULLING BACK BRINGS THE VIEW IN AGAIN', asy
     stepFrames(200);
     fire(globalThis.window, 'keyup', { code: 'ArrowRight' });
     const wide = pan.getPanAngle();
+    // More than the composed clamp, which is the whole ask, and never past the
+    // quarter turn. The exact value is the RULE'S business (asserted in
+    // garden-world against every frame shape); what this file asserts is that
+    // the render loop is applying it at all.
     expect(wide).toBeGreaterThan(P.maxAngle);
-    expect(wide).toBeCloseTo(view.panLimitFor(view.getDolly()), 6);
+    expect(wide).toBeLessThanOrEqual(P.maxAngleCap + 1e-9);
+    // And it really is a clamp: leaning on it longer does not move it.
+    fire(globalThis.window, 'keydown', { code: 'ArrowRight' });
+    stepFrames(200);
+    fire(globalThis.window, 'keyup', { code: 'ArrowRight' });
+    expect(pan.getPanAngle()).toBeCloseTo(wide, 9);
 
     // ---- AND PULLING BACK BRINGS IT IN ----------------------------------
     // A visitor left beyond a clamp they can no longer reach would find both
@@ -553,6 +562,104 @@ test('ZOOMING IN WIDENS THE PAN, AND PULLING BACK BRINGS THE VIEW IN AGAIN', asy
     fire(zoomOut, 'pointerup', { pointerId: 2 });
     expect(view.getDolly()).toBeLessThanOrEqual(0);
     expect(pan.getPanAngle()).toBeCloseTo(P.maxAngle, 6);
+
+    main.__test__.state.running = false;
+});
+
+test('THE LAKE VIEW IS AIMED AT THE DUCKS, NOT AT THE MIDDLE OF THE WATER', async () => {
+    // ---- THE SECOND QA REPORT, AND IT IS ONE LINE OF ARITHMETIC --------
+    // "It looks like the focus is on the center of the lake, but ideally the
+    // three ducks would be in the center." `duckPaths` seeds each loop
+    // wherever the seed puts it, so the trio lives seven metres off the pond's
+    // own centre, and a camera aimed at the centre puts them out to one side.
+    //
+    // Asserted through the PURE composition rather than off the camera, because
+    // under the THREE stub every number read back off one is a proxy: a shot
+    // that only ever existed inside `camera.lookAt` could not be checked at all.
+    const main = await bootGarden();
+    const { lakeShot } = await import('../www/garden/js/wildlife.min.js');
+    const { pondWaterLevel } = await import('../www/garden/js/terrain.min.js');
+    const { GARDEN_CONFIG: CFG } = await import('../www/garden/js/config.min.js');
+    const P = CFG.world.pond;
+
+    const home = lakeShot(CFG, { mobile: false });
+    const level = pondWaterLevel(CFG.world);
+    const shot = main.lakeFraming(home, level);
+
+    // It looks at the ducks.
+    expect(shot.at.x).toBeCloseTo(home.x, 9);
+    expect(shot.at.z).toBeCloseTo(home.z, 9);
+    // AND THAT IS NOT THE MIDDLE OF THE WATER, or this test proves nothing.
+    expect(Math.hypot(home.x - P.x, home.z - P.z)).toBeGreaterThan(3);
+    expect(Math.hypot(shot.at.x - P.x, shot.at.z - P.z)).toBeGreaterThan(3);
+
+    // The eye is that far back along the chosen bearing, on the near side, and
+    // the frame it covers holds the ducks' whole roaming envelope.
+    expect(Math.hypot(shot.eye.x - home.x, shot.eye.z - home.z))
+        .toBeCloseTo(shot.distance, 6);
+    expect(shot.eye.z).toBeGreaterThan(home.z);
+    expect(shot.half).toBeGreaterThan(home.radius);
+    // Above the water rather than in it, and looking at the surface rather
+    // than at the sky.
+    expect(shot.eye.y).toBeGreaterThan(level);
+    expect(shot.at.y).toBeLessThan(shot.eye.y);
+
+    main.__test__.state.running = false;
+});
+
+test('THE LAKE IS TAPPABLE ALL YEAR, AND ITS CARD REPORTS THE SEASON', async () => {
+    // The lake is 42 m out and the dolly runs up the middle of the PLOT, so one
+    // of the two things this scene is made of is permanently out of reach. The
+    // card lends a second camera rather than moving the first.
+    //
+    // IT DOES NOT CLOSE ITSELF, and that is a correction rather than a dropped
+    // requirement. The first version was a portrait of one duck and had to shut
+    // when they migrated; the subject is the water now, the water is there
+    // every day of the year, and a card that can be opened on an empty lake in
+    // January needs to say why it is empty rather than refuse to open.
+    const main = await bootGarden();
+    const ui = await import('../www/garden/js/ui.min.js');
+    const wildlife = await import('../www/garden/js/wildlife.min.js');
+    const { GARDEN_CONFIG: CFG } = await import('../www/garden/js/config.min.js');
+
+    fire(dom.el('blocker'), 'click');
+    stepFrames(20);
+    expect(ui.isLakeOpen()).toBe(false);
+
+    // Opened the way a tap on the water does.
+    expect(ui.openLakeCard(0)).toBe(true);
+    expect(ui.isLakeOpen()).toBe(true);
+    // It is a modal like the others, so nothing behind it takes a tap.
+    expect(ui.anyModalOpen()).toBe(true);
+    expect(dom.el('lake-note').textContent).toMatch(/drifting|keep to the lake/i);
+
+    // ---- THE LINE FOLLOWS THE YEAR WHILE IT IS OPEN --------------------
+    // Somebody who opens it in high summer and stays for the migration is told
+    // what they are watching as it happens, rather than being shown an empty
+    // lake with the summer's copy still under it.
+    const secondsForHour = (h) => (h / 24) * CFG.clock.cycleSeconds;
+    const D = CFG.world.wildlife.ducks;
+
+    main.__test__.state.elapsedSeconds = secondsForHour(D.leaveAt + D.span * 0.5);
+    stepFrames(2);
+    expect(wildlife.duckFlightAt(D.leaveAt + D.span * 0.5)).toBeGreaterThan(0.02);
+    expect(dom.el('lake-note').textContent).toMatch(/leaving|climbing/i);
+    // AND IT IS STILL OPEN, which is the half that changed.
+    expect(ui.isLakeOpen()).toBe(true);
+
+    // Deep winter: they are gone, the card stays, and it says so.
+    main.__test__.state.elapsedSeconds = secondsForHour(0.5);
+    stepFrames(2);
+    expect(ui.isLakeOpen()).toBe(true);
+    expect(dom.el('lake-note').textContent).toMatch(/gone south/i);
+
+    // And it can be opened FRESH in the season with nothing on the water,
+    // which the duck-shaped version could not do at all.
+    ui.closeLakeCard();
+    expect(ui.isLakeOpen()).toBe(false);
+    expect(ui.openLakeCard(wildlife.duckFlightAt(0))).toBe(true);
+    expect(dom.el('lake-note').textContent).toMatch(/gone south/i);
+    ui.closeLakeCard();
 
     main.__test__.state.running = false;
 });

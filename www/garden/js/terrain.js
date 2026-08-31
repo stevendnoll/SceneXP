@@ -466,6 +466,8 @@ let groundMesh = null;
 let surroundMesh = null;
 let wallMesh = null;
 let groundMaterial = null;
+let meadowMaterial = null;
+let meadowUniforms = null;
 let groundUniforms = null;
 let sceneRef = null;
 
@@ -588,7 +590,18 @@ export function initTerrain(scene, config = GARDEN_CONFIG, options = {}) {
     mnrm.needsUpdate = true;
     surroundGeo.computeBoundingSphere();
 
-    surroundMesh = new THREE.Mesh(surroundGeo, groundMaterial);
+    // ---- ITS OWN MATERIAL, SO IT CAN BE A DIFFERENT GREEN ---------------
+    // The plot and the meadow used to share one, which is why the wall read as
+    // a line drawn on one continuous lawn. A second material rather than a
+    // world-position test in the shader: these are already two meshes, so it
+    // costs no extra draw call, and it keeps the difference in plain
+    // JavaScript where it can be read. The program is shared through
+    // `customProgramCacheKey`, so there is no second compile either.
+    const meadowBuilt = buildGroundMaterial(config);
+    meadowMaterial = meadowBuilt.material;
+    meadowUniforms = meadowBuilt.uniforms;
+
+    surroundMesh = new THREE.Mesh(surroundGeo, meadowMaterial);
     surroundMesh.name = 'meadow';
     // A hair below the plot, so the two never fight for the same pixel where
     // they meet. THE PLOT MUST NEVER DIP BELOW THIS: the meadow is one plane
@@ -685,16 +698,26 @@ function hashIndex(n) {
  */
 export function updateTerrain(hour, snowCoverage = 0, config = GARDEN_CONFIG) {
     if (!groundUniforms) return;
-    const [r, g, b] = unpackColor(grassColorAt(hour, config.terrain));
+    const T = config.terrain;
+    const [r, g, b] = unpackColor(grassColorAt(hour, T));
     groundUniforms.uGrassColor.value.set(r, g, b);
     groundUniforms.uSnow.value = snowCoverage;
 
+    // THE MEADOW IS THE SAME GRASS, UNMOWN. The tint goes on the seasonal
+    // colour and NOT on the snow: it is written into `uGrassColor` alone, and
+    // the shader mixes toward `uSnowColor` afterwards, so a white winter is the
+    // same white on both sides of the wall. Snow does not care what was mown.
+    if (meadowUniforms) {
+        const tint = T.meadowTint;
+        meadowUniforms.uGrassColor.value.set(r * tint, g * tint, b * tint);
+        meadowUniforms.uSnow.value = snowCoverage;
+    }
+
     // Snow is smoother than grass, which is most of why fresh snow reads as
     // snow rather than as white grass.
-    if (groundMaterial) {
-        const T = config.terrain;
-        groundMaterial.roughness = T.roughness + (T.snowRoughness - T.roughness) * snowCoverage;
-    }
+    const roughness = T.roughness + (T.snowRoughness - T.roughness) * snowCoverage;
+    if (groundMaterial) groundMaterial.roughness = roughness;
+    if (meadowMaterial) meadowMaterial.roughness = roughness;
 }
 
 export function getGroundMesh() { return groundMesh; }
@@ -706,9 +729,10 @@ export function disposeTerrain() {
         if (sceneRef) sceneRef.remove(mesh);
         mesh.geometry.dispose();
     }
-    // The plot and the surround SHARE one material, so it is disposed once
-    // here rather than per mesh.
+    // Two materials now, one per mesh: the meadow is a different green because
+    // it is not mown. See buildGroundMaterial's second call.
     if (groundMaterial) groundMaterial.dispose();
+    if (meadowMaterial) meadowMaterial.dispose();
     if (wallMesh) wallMesh.material.dispose();
     groundMesh = null;
     surroundMesh = null;

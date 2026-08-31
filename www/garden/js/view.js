@@ -227,7 +227,11 @@ export function panLimitFor(dolly, frame = {}, config = GARDEN_CONFIG) {
     // corner dead centre from where the dolly has put it.
     const need = Math.atan2(corner.x, dollyView(t, composed, config).z - corner.z);
     const withLens = need - halfWidth * P.cornerAt;
-    return Math.max(P.maxAngle, withDolly, withLens);
+    // A QUARTER TURN IS THE MOST, EVER. Both rules above chase the far corner,
+    // and once the eye can travel past the front row that corner is BEHIND it:
+    // `need` goes over 90 degrees and keeps climbing, so an uncapped rule would
+    // quietly turn the pan into a free look. See `maxAngleCap`.
+    return Math.min(P.maxAngleCap, Math.max(P.maxAngle, withDolly, withLens));
 }
 
 // ---- State -----------------------------------------------------------------

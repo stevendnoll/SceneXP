@@ -166,6 +166,43 @@ export function duckWaterReach(config = GARDEN_CONFIG) {
 }
 
 /**
+ * Where the ducks live, and how far from it any of them ever gets.
+ *
+ * ---- THE LAKE'S CENTRE IS NOT WHERE THE DUCKS ARE ----
+ *
+ * `duckPaths` seeds each loop at a random point inside the water, so the three
+ * of them sit wherever the seed put them: measured, seven metres off the lake's
+ * own centre. The card's camera aimed at the centre of the water and the ducks
+ * came out to one side of the frame, which is exactly what QA saw. The shot has
+ * to be composed on the birds, and the birds are not where the arithmetic of the
+ * pond says the middle is.
+ *
+ * `radius` IS ANALYTIC RATHER THAN SAMPLED, so no rare moment between two
+ * samples can put a bird outside the frame, and it follows the loops on its own
+ * if they are ever retuned.
+ *
+ * AND THE LOOP IS A BOX, NOT AN ELLIPSE. `duckAt` oscillates x and z at
+ * INDEPENDENT frequencies and phases, so the path is a Lissajous figure that
+ * fills the rectangle `rx` by `rz` rather than tracing its inscribed ellipse.
+ * The furthest a duck gets from its own loop centre is therefore the
+ * rectangle's CORNER and not its long axis. Bounding it by `max(rx, rz)` is the
+ * obvious reading and it is too small by a fifth, which is a duck and a half of
+ * frame: the walked paths caught it.
+ *
+ * Pure and seeded, so it is the same shot on every visit.
+ */
+export function lakeShot(config = GARDEN_CONFIG, options = {}) {
+    const P = config.world.pond;
+    const paths = duckPaths(config, options);
+    if (!paths.length) return { x: P.x, z: P.z, radius: 0 };
+    const x = paths.reduce((a, p) => a + p.cx, 0) / paths.length;
+    const z = paths.reduce((a, p) => a + p.cz, 0) / paths.length;
+    const radius = Math.max(...paths.map(
+        (p) => Math.hypot(p.cx - x, p.cz - z) + Math.hypot(p.rx, p.rz)));
+    return { x, z, radius };
+}
+
+/**
  * How far through its migration a duck is: 0 on the water, 1 away.
  *
  * ---- THE ONLY WILDLIFE IN THIS SCENE THE CALENDAR DRIVES ----
@@ -299,8 +336,10 @@ let birds = null;
 let bats = null;
 let ducks = null;
 let duckHeads = null;
+let duckBills = null;
 let duckWings = null;
 let duckPaths_ = [];
+
 const disposables = [];
 
 const _m = typeof THREE !== 'undefined' ? null : null;
@@ -444,6 +483,24 @@ export function initWildlife(scene, config = GARDEN_CONFIG, options = {}) {
         duckHeads.frustumCulled = false;
         duckHeads.count = duckPaths_.length;
         ducks.count = duckPaths_.length;
+        // ---- THE BILL, WHICH THE LAKE CARD IS WHAT EARNS ------------------
+        // A cone laid along +Z so it points where the duck faces, drawn in its
+        // own mesh because it is the one part of the bird that is not the
+        // bird's colour. Two pixels out on the lake and nearly eight in the
+        // card, which is where it does its work.
+        // BLUNT, not pointed: a cylinder tapering to most of its width rather
+        // than to nothing. A duck's bill is a paddle, and a cone at this size
+        // reads as a heron. Rotated so its axis lies along +Z, which is where
+        // the same yaw that turns the body points it.
+        const billGeo = new THREE.CylinderGeometry(0.28, 0.5, 1, 6);
+        billGeo.rotateX(Math.PI / 2);
+        duckBills = new THREE.InstancedMesh(
+            billGeo,
+            new THREE.MeshLambertMaterial({ color: W.ducks.billColor }),
+            Math.max(1, duckPaths_.length));
+        duckBills.name = 'duck-bills';
+        duckBills.frustumCulled = false;
+        duckBills.count = duckPaths_.length;
         // ---- THE WINGS, WHICH ONLY EXIST IN FLIGHT --------------------
         // The same dihedral pair the birds and bats use, because at ten pixels
         // a wing is a silhouette and not an anatomy. What differs for a duck is
@@ -462,6 +519,7 @@ export function initWildlife(scene, config = GARDEN_CONFIG, options = {}) {
             duckWings.geometry, duckWings.material);
         scene.add(ducks);
         scene.add(duckHeads);
+        scene.add(duckBills);
         scene.add(duckWings);
     }
 
@@ -492,7 +550,7 @@ export function initWildlife(scene, config = GARDEN_CONFIG, options = {}) {
         scene.add(bats.mesh);
     }
 
-    return { butterflies, fireflies, birds, bats, ducks, duckHeads, duckWings };
+    return { butterflies, fireflies, birds, bats, ducks, duckHeads, duckBills, duckWings };
 }
 
 /** Two triangles meeting at a spine: a pair of wings, from any angle. */
@@ -823,6 +881,7 @@ function driveDucks(hour, elapsed, config) {
     const gone = flight >= 0.999;
     ducks.visible = !gone;
     duckHeads.visible = !gone;
+    if (duckBills) duckBills.visible = !gone;
     if (duckWings) duckWings.visible = !gone && flight > 0.005;
     if (gone) return;
     const m = new THREE.Matrix4();
@@ -883,6 +942,20 @@ function driveDucks(hour, elapsed, config) {
         m.compose(p, q, s);
         duckHeads.setMatrixAt(i, m);
 
+        // The bill, on the same heading, a little further forward again. It
+        // rides the head's own reach so it stays on the front of the face
+        // whichever way the bird is pointing and however far it has stretched
+        // its neck to fly.
+        if (duckBills) {
+            const out = reach + body * D.billReach;
+            p.set(x + Math.sin(yaw) * out,
+                y + body * (0.24 - 0.14 * pose) + Math.sin(pitch) * out,
+                z + Math.cos(yaw) * out);
+            s.set(body * D.billWidth, body * D.billWidth * D.billFlat, body * D.billLength);
+            m.compose(p, q, s);
+            duckBills.setMatrixAt(i, m);
+        }
+
         if (duckWings) {
             // THE FLAP IS A SQUASH, NOT A HINGE, which is this file's own rule
             // for everything it draws: at this distance the silhouette is all
@@ -916,8 +989,14 @@ function driveDucks(hour, elapsed, config) {
             duckWings.setMatrixAt(i, m);
         }
     }
+    // EVERY MESH WRITTEN ABOVE IS MARKED HERE. An instanced matrix buffer is
+    // not uploaded until it is flagged, so a mesh that is written and not
+    // flagged draws at the IDENTITY: the bills shipped for one round as three
+    // unit cones standing at the world origin, which is nowhere near a duck and
+    // is why QA could not see them. There is a test that pairs these two lists.
     ducks.instanceMatrix.needsUpdate = true;
     duckHeads.instanceMatrix.needsUpdate = true;
+    if (duckBills) duckBills.instanceMatrix.needsUpdate = true;
     if (duckWings) duckWings.instanceMatrix.needsUpdate = true;
 }
 
@@ -925,7 +1004,7 @@ export function disposeWildlife() {
     for (const group of [butterflies, fireflies, birds, bats]) {
         if (group && sceneRef) sceneRef.remove(group.mesh);
     }
-    for (const mesh of [ducks, duckHeads, duckWings]) {
+    for (const mesh of [ducks, duckHeads, duckBills, duckWings]) {
         if (mesh && sceneRef) sceneRef.remove(mesh);
     }
     for (const item of disposables) {
@@ -936,6 +1015,7 @@ export function disposeWildlife() {
     fireflies = null;
     ducks = null;
     duckHeads = null;
+    duckBills = null;
     duckWings = null;
     duckPaths_ = [];
     birds = null;

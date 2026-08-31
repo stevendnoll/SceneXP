@@ -177,9 +177,14 @@ void main() {
     // Ice: brighter, flatter, and it takes the sky far less.
     col = mix(col, gardenSrgbToLinear(uIce) * uLum * 0.55 + sky * 0.16, uFreeze);
 
-    // A soft edge so the water meets the shore without a hard rim.
-    float edge = smoothstep(0.0, 0.06, min(min(vPondUv.x, 1.0 - vPondUv.x),
-                                            min(vPondUv.y, 1.0 - vPondUv.y)));
+    // A soft edge so the water meets the shore without a hard rim. RADIAL,
+    // because the surface is an ellipse now rather than a rectangle: a circle's
+    // uv puts the centre at 0.5 and the rim at 0.5 from it, so this is exactly
+    // the normalised basin radius pondBasinAt uses. It is insurance rather than
+    // the shore: the rim sits at r = 1 and the real waterline is at 0.84, so
+    // this band is under the bank and unseen unless the terrain is retuned.
+    float rim = length(vPondUv - vec2(0.5)) * 2.0;
+    float edge = smoothstep(1.0, 0.94, rim);
 
     gl_FragColor = vec4(gardenLinearToSrgb(gardenToneMap(col * uExposure)), edge);
 }
@@ -293,8 +298,30 @@ function buildPond(config) {
     // NaN plane draws nothing at all: the lake simply was not there. Nothing
     // threw, and the whole suite stayed green, because under the test stub a
     // geometry is a proxy and NaN is just another number it absorbs.
-    const geo = new THREE.PlaneGeometry(pondHalfWidth(config.world) * 2, P.halfDepth * 2, 1, 1);
+    // ---- THE WATER IS AN ELLIPSE BECAUSE THE BASIN IS (QA 2026-08-31) -----
+    //
+    // It was a RECTANGLE over an elliptical basin, and the corners of a
+    // rectangle are outside the ellipse it contains. `lakeShelfAt` levels the
+    // ground toward the pond's centre out to a normalised radius of 1.8 and a
+    // rectangle's corner is at 1.41, so the levelling is only two thirds done
+    // there and the raw meadow waves still dip. Measured, the far-left corner
+    // sat 44 cm BELOW the water line, which is a puddle of lake sitting out on
+    // the grass with nothing around it. QA: "a small puddle behind the back
+    // left corner of the lake."
+    //
+    // A unit circle scaled to the basin's own two radii makes the drawn shape
+    // the dug shape, so the artefact is gone by construction rather than by a
+    // fade or a threshold. Measured, the true waterline is a clean ellipse at
+    // r = 0.84 at every angle, so the rim at r = 1 is buried under a metre and
+    // a half of bank all the way round: what the visitor sees is the shore,
+    // never the mesh.
+    //
+    // 64 segments for 64 triangles against a 400,000 budget. THE RIPPLES DO NOT
+    // CARE: `pondNormal` is fed `vWorld.xz`, so the surface pattern is in world
+    // space and is not attached to this geometry at all.
+    const geo = new THREE.CircleGeometry(1, 64);
     geo.rotateX(-Math.PI / 2);
+    geo.scale(pondHalfWidth(config.world), 1, P.halfDepth);
 
     const uniforms = {
         uZenith: { value: new THREE.Vector3() },
@@ -453,6 +480,24 @@ export function initVista(scene, camera, config = GARDEN_CONFIG) {
  *        change together rather than on two schedules
  * @param {number} gloom        the weather, so the water dulls under a storm
  */
+/**
+ * Tell the water which eye is looking at it.
+ *
+ * The pond's Fresnel is `normalize(vWorld - uEye)`, so the eye position decides
+ * how much sky the surface returns. `updateVista` sets it from the scene's
+ * camera once a frame, which is right until something renders the same water
+ * from somewhere ELSE: www/garden's duck card puts a second camera four metres
+ * off the surface, and drawing that pass with the main camera's eye would light
+ * a close-up with a grazing angle taken from sixty metres away.
+ *
+ * Set it, draw, set it back. Cheaper and far narrower than running the whole of
+ * `updateVista` twice, and it is the only uniform in here that is about the
+ * VIEWER rather than about the world.
+ */
+export function setVistaEye(position) {
+    if (pond && position) pond.uniforms.uEye.value.copy(position);
+}
+
 export function updateVista(hour, elapsed, snowCoverage = 0, gloom = 0, camera = null, cloud = 0, wet = 0, config = GARDEN_CONFIG) {
     const sky = applyGloom(skyStateAt(hour, config.sky.keys), gloom, config.sky);
     const light = lightingAt(hour, snowCoverage, gloom, null, config);
@@ -498,6 +543,13 @@ function setVec(vec, hex) {
     vec.set(r, g, b);
 }
 
+/**
+ * The lake's surface. Used for the SNOW LINE and, since the lake became a tap
+ * target, for picking: unlike a mulch bed this one is worth a raycast, because
+ * an ellipse 58 m by 32 m is hundreds of pixels even from the composed
+ * viewpoint. "Did the ray hit it" has an answer where "which of three
+ * twelve-pixel ducks is nearest" did not.
+ */
 export function getPondMesh() { return pond ? pond.mesh : null; }
 
 export function disposeVista() {

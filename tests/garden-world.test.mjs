@@ -968,32 +968,56 @@ test('THE PAN REACHES THE FRONT CORNERS ONCE THE EYE IS IN AMONG THEM', async ()
 
         // ---- THE INVARIANT, AND IT IS THE ONE THAT WAS VIOLATED ---------
         // The plot's front corner is reachable INTO FRAME at every point on
-        // the track, on every frame shape. The first version grew the clamp
-        // with the dolly and knew nothing about the lens, so it held on a
-        // desktop and failed on a phone past 0.7, which is exactly what QA
-        // reported: "works perfectly on a desktop, still not able to pan far
-        // enough on a phone".
+        // the track WHERE IT IS STILL IN FRONT OF THE EYE. The first version
+        // grew the clamp with the dolly and knew nothing about the lens, so it
+        // held on a desktop and failed on a phone past 0.7, which is exactly
+        // what QA reported: "works perfectly on a desktop, still not able to
+        // pan far enough on a phone".
+        //
+        // THE QUALIFIER IS NEW AND IT IS NOT A CLIMBDOWN. The dolly's near end
+        // moved to z = 2 so the eye now travels PAST the front row, and a
+        // corner seven metres behind you is not something a pan should reach:
+        // see `maxAngleCap`. Where the corner is in front, the promise holds.
+        const inFront = (t) => dollyView(t, composed).z - corner.z > 0;
+        let checked = 0;
         for (let t = 0; t <= 1.0001; t += 0.05) {
+            if (!inFront(t)) continue;
+            checked++;
             const off = needAt(t) - haveAt(t);
             expect(`${name} @${t.toFixed(2)}: ${off < halfWidth}`)
                 .toBe(`${name} @${t.toFixed(2)}: true`);
-        }
 
-        // And WELL inside it rather than hugging the edge, which is the
-        // difference between reaching a tree and glimpsing it. `cornerAt` is a
-        // CEILING on how far out the corner may sit, not a target: where the
-        // dolly term is the more generous of the two it lands closer still,
-        // which is what keeps the desktop exactly as QA signed it off.
-        for (let t = 0; t <= 1.0001; t += 0.05) {
-            const share = (needAt(t) - haveAt(t)) / halfWidth;
-            expect(`${name} @${t.toFixed(2)}: ${share <= P.cornerAt + 1e-9}`)
+            // And WELL inside it rather than hugging the edge, which is the
+            // difference between reaching a tree and glimpsing it. `cornerAt`
+            // is a CEILING on how far out it may sit, not a target: where the
+            // dolly term is the more generous of the two it lands closer
+            // still, which is what keeps the desktop as QA signed it off.
+            expect(`${name} @${t.toFixed(2)}: ${off <= halfWidth * P.cornerAt + 1e-9}`)
                 .toBe(`${name} @${t.toFixed(2)}: true`);
         }
+        // The qualifier must not quietly eat the test. It is the eye passing
+        // the corner's own z and nothing else, which happens past the middle
+        // of the track on every frame shape, so most of the track is still
+        // under the promise.
+        expect(`${name}: ${checked > 10}`).toBe(`${name}: true`);
+        expect(`${name}: ${inFront(0.5)}`).toBe(`${name}: true`);
+        expect(`${name}: ${inFront(1)}`).toBe(`${name}: false`);
 
         // ---- AND IT STOPS SHORT OF A FREE LOOK -------------------------
-        // At the near end the eye is at z = 6 and a corner tree at z = 9 is
-        // BEHIND it. The corner is held inside the frame, never dragged to the
-        // middle of it, so the camera never becomes one that turns around.
+        // Once the eye is past the front row the corner is behind it, and
+        // reaching it would ask for 128 degrees. A QUARTER TURN IS THE MOST,
+        // EVER: face straight across the plot either way, never behind. The
+        // semantic and not the config value, so raising the number fails here
+        // rather than quietly turning the pan into a free look.
+        for (let t = 0; t <= 1.0001; t += 0.05) {
+            expect(`${name} @${t.toFixed(2)}: ${haveAt(t) <= Math.PI / 2 + 1e-9}`)
+                .toBe(`${name} @${t.toFixed(2)}: true`);
+        }
+        // And the cap really is what binds at the near end: without it the
+        // rules above would ask for more, which is what makes it a limit
+        // rather than a comment.
+        expect(`${name}: ${needAt(1) - halfWidth * P.cornerAt > Math.PI / 2}`)
+            .toBe(`${name}: true`);
         expect(`${name}: ${haveAt(1) < needAt(1)}`).toBe(`${name}: true`);
 
         // Monotone, so the reach never shrinks as the eye comes in.
@@ -1012,10 +1036,12 @@ test('THE PAN REACHES THE FRONT CORNERS ONCE THE EYE IS IN AMONG THEM', async ()
     // The phone is carried by the LENS term: it needs more turn than the dolly
     // term's ceiling has, which is precisely what the first version lacked.
     expect(panLimitFor(1, phone)).toBeGreaterThan(P.maxAngleNear);
-    // The desktop is carried by the DOLLY term through the middle of the track,
-    // unchanged from the behaviour QA signed off on. `panLimitFor` with no
-    // frame IS that term.
-    for (const t of [0.25, 0.5, 0.7]) {
+    // The desktop is carried by the DOLLY term through the FIRST HALF of the
+    // track, unchanged from the behaviour QA signed off on. Past about 0.55
+    // the eye is close enough that even a 16:9 frame needs the lens term, and
+    // that is the extension of the near end doing its work rather than a
+    // regression. `panLimitFor` with no frame IS the dolly term.
+    for (const t of [0.25, 0.4, 0.5]) {
         expect(`desktop @${t}`).toBe(
             panLimitFor(t, desktop) === panLimitFor(t) ? `desktop @${t}` : `desktop @${t} moved`);
     }
@@ -1061,6 +1087,350 @@ test('the view reset control knows when it has nothing to do', async () => {
     view.focusOn({ x: 5, y: 3, z: -5 }, 0.6, 1, { x: 0, y: 2.5, z: -2 });
     expect(view.viewIsComposed(0, 0)).toBe(false);
     view.resetView();
+});
+
+// ---- The bill (QA 2026-08-31) ---------------------------------------------
+
+test('EVERY INSTANCED MATRIX THAT IS WRITTEN IS ALSO UPLOADED', async () => {
+    // ---- THE BUG THIS EXISTS FOR, AND IT SHIPPED -----------------------
+    // An instanced matrix buffer is not sent to the GPU until it is flagged.
+    // `driveDucks` wrote the bills every frame and marked the body, the head
+    // and the wings, so the bills drew at the IDENTITY: three unit cones
+    // standing at the world origin, which is nowhere near a duck. QA reported
+    // it as "I still can't see the ducks' bills", which is exactly right and
+    // says nothing about where they actually were.
+    //
+    // NOTHING THROWS AND NOTHING LOOKS WRONG IN THE CODE. The write is there,
+    // the mesh is in the scene, the material is correct. The only evidence is
+    // one missing line in a list of four, which is why this is asserted
+    // structurally rather than left to a reader noticing an omission.
+    const files = ['wildlife.js', 'forest.js', 'beds.js'];
+    for (const name of files) {
+        const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', name), 'utf8');
+        const written = new Set(
+            [...src.matchAll(/([\w.]+)\.setMatrixAt\(/g)].map((m) => m[1]));
+        const flagged = new Set(
+            [...src.matchAll(/([\w.]+)\.instanceMatrix\.needsUpdate/g)].map((m) => m[1]));
+        expect(`${name}: writes ${written.size > 0}`).toBe(`${name}: writes true`);
+        for (const target of written) {
+            expect(`${name}: ${target} is uploaded ${flagged.has(target)}`)
+                .toBe(`${name}: ${target} is uploaded true`);
+        }
+    }
+});
+
+test('THE BILL IS WORTH A MESH ONLY BECAUSE THE CARD EXISTS', async () => {
+    // QA on the first duck card: "the ducks don't have eyes or beaks." That was
+    // a symptom of standing four metres away, and the answer was to stand back.
+    // A bill is the one piece of detail that survives the retreat, and this is
+    // the arithmetic that says so rather than a preference.
+    const W = await import('../www/garden/js/wildlife.js');
+    const D = GARDEN_CONFIG.world.wildlife.ducks;
+    const V = GARDEN_CONFIG.world.pond.watch;
+    const deg = (d) => d * Math.PI / 180;
+
+    const home = W.lakeShot(GARDEN_CONFIG, { mobile: false });
+    const half = home.radius + V.framePadding;
+    const pxPerMetre = V.capturePx / (2 * half);
+
+    // ---- MEASURED PAST THE FACE, WHICH IS THE HALF THAT SHOWS ----------
+    // The first version of this test multiplied the duck's size by the bill's
+    // LENGTH and called that the answer. It is not: the bill sits inside the
+    // head for as far as the head's own radius, and at the shipped numbers more
+    // than half of it was buried. The test passed and the bill was two pixels.
+    const headRadius = 0.30 * 0.5;                     // head scale x sphere radius
+    const tip = D.billReach + D.billLength / 2;        // both as body fractions
+    const visible = (tip - headRadius) * D.bodyLength * pxPerMetre;
+    const width = D.billWidth * D.bodyLength * pxPerMetre;
+    expect(visible).toBeGreaterThan(6);
+    expect(width).toBeGreaterThan(3);
+
+    // AND ITS BASE IS INSIDE THE HEAD, or the bill floats off the face with a
+    // gap of daylight between the two.
+    expect(D.billReach - D.billLength / 2).toBeLessThan(headRadius);
+
+    // ---- DELIBERATELY TOO BIG, WHICH IS THE HOUSE ANSWER ---------------
+    // A real duck's bill is about an eighth of its body. At that proportion
+    // this one is under two pixels of visible bill: true scale fails at a few
+    // pixels, and the fix is exaggeration rather than accuracy. Stated as a
+    // ratio so nobody "corrects" it back to life size.
+    expect(D.billLength).toBeGreaterThan(0.18);
+
+    // Out on the lake it stays a rounding error, which is fine: nothing is
+    // asked of it there.
+    const mainDistance = Math.hypot(GARDEN_CONFIG.camera.position.y,
+        GARDEN_CONFIG.camera.position.z - GARDEN_CONFIG.world.pond.z);
+    const mainFov = 2 * Math.atan(Math.tan(deg(GARDEN_CONFIG.camera.fov) / 2) * 16 / 9);
+    const mainPxPerMetre = 1600 / (2 * mainDistance * Math.tan(mainFov / 2));
+    expect((tip - headRadius) * D.bodyLength * mainPxPerMetre).toBeLessThan(4);
+
+    // AND IT HAS TO BE A DIFFERENT COLOUR FROM THE HEAD, or the whole of it is
+    // a few pixels of the same dark green and there was no reason to draw it.
+    //
+    // A RAW RATIO AND NOT A SHOWN ONE, which is worth naming because this scene
+    // has been caught by the difference before: these colours go through ACES
+    // and an sRGB encode before anybody sees them, so the ratio on screen is
+    // smaller than the one here. It is used as a RELATIVE guard rather than a
+    // measurement: the tone curve is monotonic, so two colours this far apart
+    // in the material stay clearly apart in the frame.
+    const lum = (hex) => {
+        const r = (hex >> 16) & 255, g = (hex >> 8) & 255, b = hex & 255;
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    };
+    const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+    expect(ratio(D.billColor, D.headColor)).toBeGreaterThan(2.5);
+    // Orange rather than merely bright: red and green well above blue.
+    const blue = D.billColor & 255;
+    expect((D.billColor >> 16) & 255).toBeGreaterThan(blue * 1.6);
+    expect((D.billColor >> 8) & 255).toBeGreaterThan(blue * 1.2);
+
+    // A PADDLE AND NOT A SPIKE. A duck's bill is flat, and a cone at this size
+    // reads as a heron.
+    expect(D.billFlat).toBeLessThan(0.75);
+
+    // EYES ARE DELIBERATELY ABSENT. One pixel in the card and nothing at all in
+    // the scene is geometry bought for a thing nobody can see, and this is the
+    // number that would have to change before anybody argues otherwise.
+    expect(D.bodyLength * 0.06 * pxPerMetre).toBeLessThan(3);
+});
+
+// ---- The unmown corners (QA 2026-08-31) -----------------------------------
+
+test('THE WEEDS ARE PATCHES, NOT A SPRINKLE', async () => {
+    // Asked for as "a few tall patches of weeds outside the nursery, to make it
+    // look less cared for". THE CLUMPING IS THE FEATURE: an even scatter of
+    // tall grass across the apron says "meadow", which is a different picture
+    // and a duller one. A few dense tufts with mown ground between them says
+    // nobody has been round with a scythe, and it is that CONTRAST that makes
+    // the plot look tended.
+    const { weedPatches } = await import('../www/garden/js/forest.js');
+    const U = GARDEN_CONFIG.world.undergrowth;
+
+    for (const mobile of [false, true]) {
+        const label = mobile ? 'mobile' : 'desktop';
+        const weeds = weedPatches(GARDEN_CONFIG, { mobile });
+        expect(`${label}: ${weeds.length > 20}`).toBe(`${label}: true`);
+
+        // Every tuft is close to its own patch centre, or they are not patches.
+        for (const w of weeds) {
+            const from = Math.hypot(w.x - w.patch.x, w.z - w.patch.z);
+            expect(`${label}: ${from <= U.patchSpread + 1e-9}`).toBe(`${label}: true`);
+        }
+        // And there are FEW patches holding MANY tufts, which is the shape of
+        // the thing. A scatter would have as many centres as plants.
+        const centres = new Set(weeds.map((w) => `${w.patch.x},${w.patch.z}`));
+        expect(`${label}: ${centres.size < weeds.length / 4}`).toBe(`${label}: true`);
+        expect(`${label}: ${centres.size >= 4}`).toBe(`${label}: true`);
+    }
+});
+
+test('nothing unmown grows in the nursery, in the lake, or where the eye goes', async () => {
+    // Three rules, and each of them is a picture nobody wants: weeds inside a
+    // walled nursery say it is abandoned rather than tended, weeds in the lake
+    // are grass standing on water, and a metre of grass on the dolly's own
+    // track is the near treeline's bug at a smaller scale, with the lens about
+    // to arrive where the plant is.
+    const { weedPatches, inTheLake, clearsCamera } = await import('../www/garden/js/forest.js');
+    const U = GARDEN_CONFIG.world.undergrowth;
+    const half = GARDEN_CONFIG.plot.halfSize;
+
+    for (const mobile of [false, true]) {
+        const label = mobile ? 'mobile' : 'desktop';
+        for (const w of weedPatches(GARDEN_CONFIG, { mobile })) {
+            const at = `${label} (${w.x.toFixed(1)}, ${w.z.toFixed(1)})`;
+            expect(`${at}: outside the walls ${Math.max(Math.abs(w.x), Math.abs(w.z)) > half}`)
+                .toBe(`${at}: outside the walls true`);
+            expect(`${at}: dry ${!inTheLake(w.x, w.z)}`).toBe(`${at}: dry true`);
+            // Measured on the PATCH, which is what the rule is applied to; a
+            // tuft may lean a spread's worth off it.
+            expect(`${at}: clear of the eye ${clearsCamera(w.patch.x, w.patch.z, GARDEN_CONFIG, U.weedClearance)}`)
+                .toBe(`${at}: clear of the eye true`);
+        }
+    }
+
+    // TALLER THAN EVERYTHING ELSE OUT THERE, which is the point of them: the
+    // wildflowers beside them are 0.22 to 0.44 m.
+    expect(U.weedHeight.min).toBeGreaterThan(0.44);
+    // And the band starts at the wall and stops short of the wood, so they fill
+    // the apron the eye crosses rather than competing with the trees.
+    expect(U.weedRadius.min).toBeGreaterThan(GARDEN_CONFIG.plot.halfSize);
+    expect(U.weedRadius.max).toBeLessThan(GARDEN_CONFIG.world.clearing.innerRadius
+        + GARDEN_CONFIG.world.clearing.rampWidth);
+});
+
+test('THE MEADOW IS A DIFFERENT GREEN, BUT THE SAME SNOW', async () => {
+    // The plot and the world beyond were exactly one colour, so the wall read
+    // as a line drawn on a continuous lawn rather than as the edge of something
+    // tended.
+    const T = GARDEN_CONFIG.terrain;
+    expect(T.meadowTint).toBeLessThan(1);
+
+    // ---- AND IT HAS TO BEAT THE NOISE IT SITS IN -----------------------
+    //
+    // THE FIRST ATTEMPT WAS 0.88 AND QA COULD NOT SEE IT. The wiring was
+    // correct, the two materials really did carry different uniforms, and the
+    // difference through the tone curve measured 19 of 255, which should be
+    // plain on two large flat areas. The term that was missing is the variation
+    // ALREADY INSIDE each of them: the shader's mottle swings every patch of
+    // grass across a spread of 23 percent, and a step of 12 percent between the
+    // two is half of that. A difference smaller than the noise around it does
+    // not read as a boundary, it reads as more noise.
+    //
+    // So this is asserted against the mottle rather than as a number on its
+    // own, which is what makes it survive somebody retuning either one: the
+    // shader is `uGrassColor * (1 + (coarse - 0.5) * 2 * mottle + (fine - 0.5)
+    // * mottle * 0.6)`, so the spread is that expression's own range.
+    const spread = (2 * T.mottle) + (T.mottle * 0.6);
+    const step = 1 - T.meadowTint;
+    expect(`step ${step.toFixed(3)} vs mottle spread ${spread.toFixed(3)}`)
+        .toBe(`step ${step.toFixed(3)} vs mottle spread ${spread.toFixed(3)}`);
+    expect(step).toBeGreaterThan(spread);
+    // And not so far past it that the wall looks like the edge of a texture
+    // rather than the edge of a lawn. These are the same field an hour apart in
+    // mowing, not two biomes.
+    expect(step).toBeLessThan(spread * 2);
+
+    // ---- AND IT DARKENS THE GRASS, NOT THE SNOW ------------------------
+    // The tint is written into `uGrassColor` and the shader mixes toward
+    // `uSnowColor` afterwards, so a white winter is the same white on both
+    // sides of the wall. Snow does not care what was mown. Read off the source,
+    // because the two writes are what the property lives in.
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'terrain.js'), 'utf8');
+    const fn = src.slice(src.indexOf('export function updateTerrain'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toMatch(/meadowUniforms\.uGrassColor\.value\.set\(r \* tint/);
+    // uSnow is written straight through, untinted.
+    expect(body).toMatch(/meadowUniforms\.uSnow\.value = snowCoverage/);
+    expect(body).not.toMatch(/uSnow\.value = snowCoverage \* tint/);
+
+    // Two materials, or there is nothing to tint differently. The plot and the
+    // meadow shared one until this change, which is why they matched.
+    const init = src.slice(src.indexOf('function initTerrain'));
+    expect(init).toMatch(/new THREE\.Mesh\(surroundGeo, meadowMaterial\)/);
+
+    // ---- AND THE GROUND OUTSIDE THE WALL REALLY IS THE MEADOW ----------
+    // Checked because it is the other way this could have been invisible and
+    // the arithmetic would have looked perfect: the plot's own mesh is built
+    // `halfSize * 2` across, so it stops exactly at the wall and every pixel
+    // beyond belongs to the surround.
+    expect(init).toMatch(/const size = P\.halfSize \* 2;/);
+});
+
+// ---- The lake is a tap target (QA 2026-08-31) -----------------------------
+
+test('THE LAKE VIEW IS COMPOSED ON THE DUCKS, NOT ON THE MIDDLE OF THE WATER', async () => {
+    // ---- TWO QA REPORTS, AND THE SECOND FOUND THE FIRST'S BLIND SPOT ----
+    // The card framed ONE duck at 4.2 m, and a duck here is two ellipsoids and
+    // a wing quad built to read at the twelve pixels it covers from anywhere
+    // the camera can reach: "the ducks don't have eyes or beaks" is what a
+    // close-up of an abstraction shows. Standing back fixed that and revealed
+    // the next thing: the camera aimed at the POND'S centre, and `duckPaths`
+    // seeds the loops wherever the seed puts them.
+    const W = await import('../www/garden/js/wildlife.js');
+    const { pondHalfWidth } = await import('../www/garden/js/terrain.js');
+    const V = GARDEN_CONFIG.world.pond.watch;
+    const P = GARDEN_CONFIG.world.pond;
+    const D = GARDEN_CONFIG.world.wildlife.ducks;
+    const deg = (d) => d * Math.PI / 180;
+
+    // Both duck counts this scene ships: a phone gets fewer, so it gets a
+    // different shot, and both have to be right.
+    for (const mobile of [false, true]) {
+        const label = mobile ? 'mobile' : 'desktop';
+        const home = W.lakeShot(GARDEN_CONFIG, { mobile });
+        const paths = W.duckPaths(GARDEN_CONFIG, { mobile });
+        expect(paths.length).toBeGreaterThan(1);
+
+        // THE BUG, STATED: where they live is not where the water's middle is.
+        // If this ever became true the test above it would pass for the wrong
+        // reason, so it is asserted rather than assumed.
+        expect(`${label}: ${Math.hypot(home.x - P.x, home.z - P.z) > 3}`)
+            .toBe(`${label}: true`);
+
+        // `radius` is analytic: the furthest a duck on a closed ellipse can get
+        // from a fixed point is the distance to its loop's centre plus the
+        // loop's long axis. Checked against the loops actually walked, because
+        // an analytic bound that is wrong is worse than a sampled one.
+        let furthest = 0;
+        for (let t = 0; t < 3000; t += 0.5) {
+            for (const path of paths) {
+                const a = W.duckAt(path, t);
+                furthest = Math.max(furthest, Math.hypot(a.x - home.x, a.z - home.z));
+            }
+        }
+        expect(`${label}: ${furthest <= home.radius + 1e-6}`).toBe(`${label}: true`);
+        expect(`${label}: ${home.radius < furthest + 1.5}`).toBe(`${label}: true`);
+
+        // ---- ALL THREE FIT, WITH AIR -----------------------------------
+        const half = home.radius + V.framePadding;
+        const distance = half / Math.tan(deg(V.fov) / 2);
+        expect(`${label}: ${half > furthest + D.bodyLength}`).toBe(`${label}: true`);
+
+        // ---- AND THE CAMERA STANDS CLEAR OF THE PLOT -------------------
+        // The whole reason the lens is 42 rather than 34. A wider frame needs
+        // less distance for the same coverage, and at 34 the eye landed at
+        // z = -9, INSIDE the walls, where a tree planted half a metre in front
+        // of the lens would be the entire picture.
+        const side = deg(V.sideDegrees);
+        const eye = {
+            x: home.x + Math.sin(side) * distance,
+            z: home.z + Math.cos(side) * distance
+        };
+        const inPlot = Math.abs(eye.x) <= GARDEN_CONFIG.plot.halfSize
+            && Math.abs(eye.z) <= GARDEN_CONFIG.plot.halfSize;
+        expect(`${label}: eye in the plot ${inPlot}`).toBe(`${label}: eye in the plot false`);
+        // Nor standing in the wood, nor out in the lake it is looking at.
+        expect(`${label}: ${forestDensityAt(eye.x, eye.z) === 0}`).toBe(`${label}: true`);
+        expect(`${label}: ${eye.z > P.z + P.halfDepth}`).toBe(`${label}: true`);
+
+        // ---- WORTH OPENING, AND NOT SO CLOSE IT ASKS FOR AN EYE --------
+        // A duck's size on screen is set by how many METRES the frame covers,
+        // not by the lens covering them, which is why widening the fov cost
+        // nothing above. Against the composed view: the lake is 64 m off and a
+        // duck is 11.5 px on a 1600 px wide 16:9 screen.
+        const inCard = V.capturePx * D.bodyLength / (2 * half);
+        const mainDistance = Math.hypot(GARDEN_CONFIG.camera.position.y,
+            GARDEN_CONFIG.camera.position.z - P.z);
+        const mainFov = 2 * Math.atan(Math.tan(deg(GARDEN_CONFIG.camera.fov) / 2) * 16 / 9);
+        const onScreen = 1600 * D.bodyLength / (2 * mainDistance * Math.tan(mainFov / 2));
+        expect(onScreen).toBeLessThan(15);
+        expect(`${label}: ${inCard / onScreen > 2.5}`).toBe(`${label}: true`);
+        expect(`${label}: ${inCard / V.capturePx < 0.15}`).toBe(`${label}: true`);
+
+        // The camera stands ON the water, not over it: a lake seen from above
+        // is a diagram, and the far shore and hills are what make it a place.
+        expect(`${label}: ${V.height < distance / 4}`).toBe(`${label}: true`);
+        expect(`${label}: ${distance < pondHalfWidth() * 2}`).toBe(`${label}: true`);
+    }
+});
+
+test('the lake card says where the ducks are, in every season', async () => {
+    // ---- IT IS ABOUT THE LAKE AND IT REPORTS ON THE DUCKS ---------------
+    // Which is the right way round and was not before. The card used to be a
+    // portrait of one duck and had to close itself when they left; the lake
+    // does not leave, so the line changes instead and the visitor keeps the
+    // choice. That is also what lets the card be opened in the cold half of the
+    // year and say something true rather than showing empty water.
+    const { lakeNote } = await import('../www/garden/js/ui.js');
+    const { duckFlightAt } = await import('../www/garden/js/wildlife.js');
+
+    const summer = lakeNote(duckFlightAt(12));
+    const gone = lakeNote(duckFlightAt(0));
+    const leaving = lakeNote(0.4);
+    expect(summer).toMatch(/drifting|keep to the lake/i);
+    expect(gone).toMatch(/gone south/i);
+    expect(gone).toMatch(/spring/i);          // and that they come back
+    expect(leaving).toMatch(/leaving|climbing/i);
+    // Three different things to say, or the line is decoration.
+    expect(new Set([summer, gone, leaving]).size).toBe(3);
+
+    // House style, which applies to every string a visitor can read, and every
+    // hour of the year must produce one of them rather than an empty string.
+    for (let h = 0; h < 24; h += 0.25) {
+        const note = lakeNote(duckFlightAt(h));
+        expect(`${h}: ${note.length > 20}`).toBe(`${h}: true`);
+        expect(note).not.toMatch(/[\u2014;]/);
+    }
 });
 
 // ---- Nothing stands in the lake (M14-4) ------------------------------------

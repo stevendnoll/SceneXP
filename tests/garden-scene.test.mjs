@@ -26,7 +26,7 @@ let initWildlife, updateWildlife, disposeWildlife, fireflyGlowSize, REFERENCE_FR
 let initVista, disposeVista;
 let createTree, disposeTree, resolveSpecies;
 let updateVista, snowCoverageAt;
-let pondHalfWidth;
+let pondHalfWidth, pondWaterLevel, outerReliefAt;
 let initForest, disposeForest, updateForest, getForestMeshes, __forest;
 let initBeds, disposeBeds, syncBeds, updateBeds, __beds;
 let builtGarden, builtBeds;
@@ -61,7 +61,7 @@ beforeAll(async () => {
     ({ resolveSpecies } = await import('../www/garden/js/species.js'));
     ({ updateVista } = await import('../www/garden/js/vista.js'));
     ({ snowCoverageAt } = await import('../www/garden/js/clock.js'));
-    ({ pondHalfWidth } = await import('../www/garden/js/terrain.js'));
+    ({ pondHalfWidth, pondWaterLevel, outerReliefAt } = await import('../www/garden/js/terrain.js'));
     __forest = await import('../www/garden/js/forest.js');
     ({ initForest, disposeForest, updateForest, getForestMeshes } = __forest);
 });
@@ -103,19 +103,22 @@ describe('the wildlife flags', () => {
         expect(built.birds).toBeNull();
         expect(built.bats).toBeNull();
         expect(built.fireflies).toBeNull();
-        // The ducks are the exception, and they are two meshes: a pale body and
-        // a dark head, because at 12 px the body alone is a floating leaf.
+        // The ducks are the exception, and they are FOUR meshes: a pale body,
+        // a dark head, an orange bill and the wings. The body alone is a
+        // floating leaf at 12 px; the bill is two pixels out there and nearly
+        // eight in the lake card, which is what earns it.
         expect(built.ducks).not.toBeNull();
         expect(built.duckHeads).not.toBeNull();
+        expect(built.duckBills).not.toBeNull();
         expect(built.duckWings).not.toBeNull();
     });
 
     test('only the creatures that are on reach the scene', () => {
         const scene = recordingScene();
         initWildlife(scene, GARDEN_CONFIG);
-        // The ducks' three meshes, and nothing else: a pale body, a dark head,
-        // and the wings that only exist while they are migrating.
-        expect(scene.added).toHaveLength(3);
+        // The ducks' four meshes, and nothing else: a pale body, a dark head,
+        // an orange bill, and the wings that only exist while they migrate.
+        expect(scene.added).toHaveLength(4);
     });
 
     test('turning a flag back on is the only edit needed to restore one', () => {
@@ -130,8 +133,8 @@ describe('the wildlife flags', () => {
             }));
             expect(built[name]).not.toBeNull();
             expect(built[name].count).toBeGreaterThan(0);
-            // The one turned on, plus the ducks' three.
-            expect(scene.added).toHaveLength(4);
+            // The one turned on, plus the ducks' four.
+            expect(scene.added).toHaveLength(5);
             disposeWildlife();
         }
     });
@@ -435,14 +438,33 @@ test('the freeze follows the same snow coverage the ground does', () => {
 // ---- The vista is built out of real numbers (M8-2) -------------------------
 
 /** Run a builder with PlaneGeometry recording the dimensions it is handed. */
+/**
+ * Every flat geometry the vista builds, with its constructor arguments and any
+ * scaling applied to it afterwards.
+ *
+ * IT RECORDS THE SCALE TOO, because the lake stopped being a rectangle. An
+ * ellipse is a unit circle scaled to two radii, so the numbers that decide how
+ * big the water is are no longer all in the constructor call, and a recorder
+ * that only watched constructors would have gone quiet about the one thing it
+ * exists to watch. The returned object is a plain recorder rather than a real
+ * geometry: the shared stub's `set` trap discards assignments, so a method
+ * cannot be wrapped on an instance it hands back.
+ */
 function recordGeometry(run) {
     const seen = [];
     const base = globalThis.THREE;
+    const wrap = (name) => function Recorder(...args) {
+        const rec = { name, args, scales: [] };
+        seen.push(rec);
+        return {
+            rotateX() { return this; },
+            scale(...s) { rec.scales.push(s); return this; },
+            dispose() { }
+        };
+    };
     globalThis.THREE = new Proxy(base, {
         get(target, key) {
-            if (key === 'PlaneGeometry') {
-                return function Recorder(...args) { seen.push(args); return new base.PlaneGeometry(...args); };
-            }
+            if (key === 'PlaneGeometry' || key === 'CircleGeometry') return wrap(key);
             return target[key];
         }
     });
@@ -460,21 +482,57 @@ test('nothing in the vista is built NaN metres wide', () => {
     // downstream complaining; here the complaint was a lake that was not there.
     const seen = recordGeometry(() => initVista(recordingScene(), null, GARDEN_CONFIG));
     expect(seen.length).toBeGreaterThan(0);
-    for (const args of seen) {
-        for (const value of args) {
+    for (const rec of seen) {
+        for (const value of [...rec.args, ...rec.scales.flat()]) {
             expect(Number.isFinite(value)).toBe(true);
         }
     }
     disposeVista();
 });
 
-test('the water plane is exactly as wide as the derivation says', () => {
-    // Pins the mesh to the same number the ground is dug by. Two sources for
-    // the lake's width would mean a plane that does not match its own basin.
+test('THE WATER IS THE SHAPE OF THE BASIN, not a rectangle around it', () => {
+    // ---- THE PUDDLE, IN ARITHMETIC (QA 2026-08-31) ---------------------
+    // The water was a PlaneGeometry over an elliptical basin, and the corners
+    // of a rectangle are outside the ellipse it contains. `lakeShelfAt` levels
+    // the ground toward the pond's centre out to a normalised radius of 1.8,
+    // and a rectangle's corner is at 1.41, so the levelling is only two thirds
+    // done there and the raw meadow waves still dip below the water line.
+    const W = GARDEN_CONFIG.world;
+    const P = W.pond;
+    const hw = pondHalfWidth();
+    const level = pondWaterLevel(W);
+    const showsWater = (x, z) => outerReliefAt(x, z, W) < level;
+    const basinR = (x, z) => Math.hypot((x - P.x) / hw, (z - P.z) / P.halfDepth);
+
+    // The old shape really did put lake out on the grass, and this is where QA
+    // saw it: the far corner, which is the deepest point of the artefact.
+    const corner = { x: P.x - hw, z: P.z - P.halfDepth };
+    expect(basinR(corner.x, corner.z)).toBeCloseTo(Math.SQRT2, 2);
+    expect(showsWater(corner.x, corner.z)).toBe(true);
+    expect(level - outerReliefAt(corner.x, corner.z, W)).toBeGreaterThan(0.4);
+
+    // ---- AND THE NEW SHAPE CANNOT, BECAUSE IT IS THE BASIN --------------
+    // A unit circle scaled to the basin's own two radii. Same two numbers the
+    // ground is dug by, so the drawn shape and the dug shape are one fact.
     const seen = recordGeometry(() => initVista(recordingScene(), null, GARDEN_CONFIG));
-    const widths = seen.map((a) => a[0]);
-    expect(widths).toContain(pondHalfWidth() * 2);
+    const pond = seen.find((rec) => rec.name === 'CircleGeometry');
+    expect(pond).toBeDefined();
+    expect(pond.args[0]).toBe(1);
+    expect(pond.scales).toContainEqual([hw, 1, P.halfDepth]);
     disposeVista();
+
+    // The rim is buried the whole way round, so what the visitor sees is the
+    // shore and never the edge of the mesh. Measured: the true waterline is a
+    // clean ellipse at 0.84 at every angle.
+    for (let deg = 0; deg < 360; deg += 5) {
+        const a = deg * Math.PI / 180;
+        const x = P.x + Math.cos(a) * hw;
+        const z = P.z + Math.sin(a) * P.halfDepth;
+        expect(`${deg}: ${showsWater(x, z)}`).toBe(`${deg}: false`);
+    }
+    // And there is no dry ring either: the middle is water, or the lake is a
+    // hole in the ground with nothing in it.
+    expect(showsWater(P.x, P.z)).toBe(true);
 });
 
 // ---- The wood pays its way (M8-4) ------------------------------------------

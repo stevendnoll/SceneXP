@@ -534,9 +534,17 @@ test('THE PREVIEW IS DRAWN BEFORE THE SCENE, or it is left in the corner', () =>
     expect(scene).toBeGreaterThan(0);
     expect(preview).toBeLessThan(scene);
 
-    // And the copy still happens inside renderPreview, which is what keeps it
-    // in the same task as the render and valid without preserveDrawingBuffer.
-    const fn = main.slice(main.indexOf('function renderPreview'));
+    // THE LAKE'S CARD DRAWS THE SCENE ITSELF, from a second camera, so it has
+    // the same rule for a stronger reason: drawn after the main pass it would
+    // leave a window onto the lake stamped over the corner of the garden.
+    const lake = main.indexOf('if (isLakeOpen()) renderLakeView()');
+    expect(lake).toBeGreaterThan(0);
+    expect(lake).toBeLessThan(scene);
+
+    // And the copy still happens in the same task as the render, which is what
+    // keeps it valid without preserveDrawingBuffer. It lives in the shared
+    // `drawIntoCorner` now, which is the one place either card copies from.
+    const fn = main.slice(main.indexOf('function drawIntoCorner'));
     expect(fn.slice(0, fn.indexOf('\n}\n'))).toMatch(/previewCtx\.drawImage\(renderer\.domElement/);
 });
 

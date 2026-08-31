@@ -45,6 +45,10 @@ let cardThirstFill = null;
 let cardWater = null;
 let cardRemove = null;
 
+let lakeEl = null;
+let lakeCanvas = null;
+let lakeNoteEl = null;
+
 let resetEl = null;
 let resetBody = null;
 let resetConfirm = null;
@@ -146,10 +150,27 @@ export function initUi(handlers = {}) {
     cardWater = document.getElementById('tree-water');
     cardRemove = document.getElementById('tree-remove');
 
+    lakeEl = document.getElementById('lake-card');
+    lakeCanvas = document.getElementById('lake-view');
+    lakeNoteEl = document.getElementById('lake-note');
+
     resetEl = document.getElementById('reset-modal');
     resetBody = document.getElementById('reset-body');
     resetConfirm = document.getElementById('reset-confirm');
     resetCancel = document.getElementById('reset-cancel');
+
+    // ---- A DIALOG STARTS CLOSED, AND THAT IS THIS MODULE'S BUSINESS ------
+    // The markup carries `class="hidden"` on all four, and it is still the
+    // right place for it: the page must not flash a dialog before the script
+    // runs. But a module that OWNS four dialogs should not be relying on an
+    // attribute typed in another file for the state it reports. `isLakeOpen`
+    // was true from the first frame under the harness for exactly that reason,
+    // which suppressed the planting nudge, because the stub fabricates elements
+    // without their attributes. The same trap as `.ui-float` needing
+    // `.visible`, met for the third time.
+    for (const el of [modalEl, cardEl, lakeEl, resetEl]) {
+        if (el) el.classList.add('hidden');
+    }
 
     buildSpeciesGrid();
     buildTabs();
@@ -176,12 +197,13 @@ export function initUi(handlers = {}) {
         if (onResetConfirmed) onResetConfirmed();
     });
 
-    for (const el of [modalEl, cardEl, resetEl]) {
+    for (const el of [modalEl, cardEl, lakeEl, resetEl]) {
         if (!el) continue;
         el.querySelectorAll('[data-close]').forEach((c) =>
             c.addEventListener('click', () => {
                 if (el === modalEl) closePlantModal();
                 else if (el === cardEl) closeTreeCard();
+                else if (el === lakeEl) closeLakeCard();
                 else closeResetModal();
             }));
     }
@@ -192,9 +214,10 @@ export function initUi(handlers = {}) {
         if (isResetOpen()) closeResetModal();
         else if (isPlantOpen()) closePlantModal();
         else if (isCardOpen()) closeTreeCard();
+        else if (isLakeOpen()) closeLakeCard();
     });
 
-    return { modalEl, cardEl, resetEl, chipEl };
+    return { modalEl, cardEl, lakeEl, resetEl, chipEl };
 }
 
 // ---- The reset dialog ------------------------------------------------------
@@ -553,7 +576,64 @@ export function getCardEntry() {
 }
 
 export function anyModalOpen() {
-    return isPlantOpen() || isCardOpen() || isResetOpen();
+    return isPlantOpen() || isCardOpen() || isResetOpen() || isLakeOpen();
+}
+
+// ---- The lake's card -------------------------------------------------------
+
+/**
+ * The line under the borrowed camera. Pure, so the copy can be asserted.
+ *
+ * IT IS ABOUT THE LAKE AND IT REPORTS ON THE DUCKS, which is the right way
+ * round now and was not before. The card used to be a portrait of one duck and
+ * had to close itself when they left; the lake does not leave, so instead the
+ * line changes and the visitor keeps the choice. That also means the card can
+ * be opened in the cold half of the year and say something true rather than
+ * showing empty water with no explanation.
+ *
+ * @param {number} flight 0 with the ducks on the water, 1 with them gone
+ */
+export function lakeNote(flight) {
+    if (flight >= 0.999) {
+        return 'The ducks have gone south for the winter. The lake keeps without them, and they come back as the spring opens.';
+    }
+    if (flight > 0.02) {
+        return 'They are leaving. Ducks go south before the winter, and these are climbing away over the far shore.';
+    }
+    return 'Three ducks, drifting. They keep to the lake all spring and summer, and go south before the winter closes it.';
+}
+
+/** Open the card. It has no subject beyond the lake, so it takes no handle. */
+export function openLakeCard(flight) {
+    if (!lakeEl) return false;
+    returnFocus = typeof document !== 'undefined' ? document.activeElement : null;
+    if (lakeNoteEl) lakeNoteEl.textContent = lakeNote(flight);
+    lakeEl.classList.remove('hidden');
+    const close = lakeEl.querySelector('.modal-close');
+    if (close && close.focus) close.focus();
+    return true;
+}
+
+/** Keep the line honest while the card is open, so somebody watching the
+ *  take-off is told what they are watching as it happens. */
+export function refreshLakeCard(flight) {
+    if (!isLakeOpen() || !lakeNoteEl) return;
+    const text = lakeNote(flight);
+    if (lakeNoteEl.textContent !== text) lakeNoteEl.textContent = text;
+}
+
+export function closeLakeCard() {
+    if (!lakeEl) return;
+    lakeEl.classList.add('hidden');
+    restoreFocus();
+}
+
+export function isLakeOpen() {
+    return !!lakeEl && !lakeEl.classList.contains('hidden');
+}
+
+export function getLakeCanvas() {
+    return lakeCanvas;
 }
 
 function restoreFocus() {
@@ -585,6 +665,9 @@ export function __resetUi() {
     modalEl = null;
     cardEl = null;
     cardEntry = null;
+    lakeEl = null;
+    lakeCanvas = null;
+    lakeNoteEl = null;
     resetEl = null;
     resetBody = null;
     resetConfirm = null;

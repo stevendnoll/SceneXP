@@ -322,6 +322,30 @@ export const GARDEN_CONFIG = deepFreeze({
                 // It is a fraction and NOT an angle on purpose: an angle would
                 // be another number sized for one screen, which is the bug.
                 cornerAt: 0.6,
+
+                // ---- AND A QUARTER TURN IS THE MOST, EVER -----------------
+                // The rules above are both "turn far enough to reach the far
+                // corner", and once the dolly's near end moved to z = 2 that
+                // question changes its answer: a corner cell at z = 9 is then
+                // seven metres BEHIND the eye, and reaching it would ask for
+                // 128 degrees. A camera that turns to look over its own
+                // shoulder is a free look, which is a different control and a
+                // different scene.
+                //
+                // So: the visitor may turn to face straight across the plot,
+                // to either side, and never behind. It is a line that can be
+                // stated in one sentence, which is the test of a good limit.
+                //
+                // The consequence is deliberate and worth knowing: at the very
+                // deepest zoom the front corners are beside or behind the eye
+                // and cannot be brought into frame without backing off a
+                // little. That is what standing in the middle of a garden is
+                // actually like.
+                // Written as the quarter turn it IS rather than as 1.5708,
+                // which is a rounded one: the rule is "never past straight
+                // across", and a value a few microradians over it is a value
+                // that does not quite mean what the sentence says.
+                maxAngleCap: Math.PI / 2,
                 maxTilt: 0.32
             },
             zoom: {
@@ -365,7 +389,28 @@ export const GARDEN_CONFIG = deepFreeze({
         // 40) aimed at (0, 3, -14) the whole 24 m plot sits inside the middle
         // of the frame with a band of sky still showing above the hills.
         dolly: {
-            near: { z: 6, y: 2.2, lookY: 3.2, lookZ: -2 },
+            // ---- THE NEAR END WENT FROM z = 6 TO z = 2 (QA 2026-08-31) -----
+            // Asked for as "increase the zoom in range". Four more metres of
+            // track, which is a quarter again, and it changes the shot rather
+            // than only its size: at 6 the eye is short of the front row of
+            // trees, at 2 it is level with it and the plot is around the
+            // visitor rather than in front of them.
+            //
+            // MEASURED, IT COSTS NOTHING. The plot is levelled (`reliefScale`
+            // is 0) so the 2.2 m eye keeps every centimetre of its clearance,
+            // and the near treeline's keep-out loses NOT ONE of its 1,620
+            // candidate spots: the ring starts at 16 m and the keep-out is 12,
+            // so lengthening a track that runs up the middle changes nothing
+            // that was not already excluded.
+            //
+            // `lookZ` moved with it, from -2 to -5. The aim is a point, so
+            // shortening the throw from 8 m to 4 would have tipped the camera
+            // from 7 degrees up to 19 as it came in, and the view would have
+            // reared back at exactly the moment the visitor was concentrating.
+            // At -5 the throw stays 7 m and the pitch stays 8.
+            //
+            // WHAT IT DOES COST is at the far corners: see `pan.maxAngleCap`.
+            near: { z: 2, y: 2.2, lookY: 3.2, lookZ: -5 },
             far: { z: 40, y: 26, lookY: 3.0, lookZ: -14 },
             // Both ends are clamped against the composed z rather than trusted:
             // `framingFor` dollies a portrait phone back on its own, and a tall
@@ -1240,6 +1285,72 @@ export const GARDEN_CONFIG = deepFreeze({
         // Sat in the northern opening, offset east so the low morning sun lays
         // its glitter path back toward the viewer.
         pond: {
+            // ---- TAP THE WATER AND LOOK ACROSS IT (QA 2026-08-31) ----------
+            //
+            // THE FIRST VERSION FRAMED ONE DUCK AT FOUR METRES AND THAT WAS THE
+            // WRONG QUESTION TO ASK THE ASSET. A duck here is two ellipsoids
+            // and a wing quad, built to read at the twelve pixels it covers
+            // from anywhere the camera can reach. At 4.2 m it filled 37 percent
+            // of the frame, and what a close-up of an abstraction shows is the
+            // abstraction: QA reported the ducks have no eyes or beaks, which
+            // is true, correct, and none of the modelling's fault.
+            //
+            // So the subject is the LAKE, which is 58 m by 32 m of water that
+            // is there every day of the year, rather than a bird that is not.
+            // Measured, and this is why 22 m:
+            //
+            //   distance   frame     holds the trio?   a duck is
+            //     4.2 m     2.6 m         no            189 px   <- the report
+            //      16 m     9.8 m         no             50 px
+            //      22 m    13.5 m         YES            36 px
+            //      40 m    24.5 m         yes            20 px
+            //
+            // The three of them never spread more than 12.3 m apart, measured
+            // over their own loops, so 13.5 m of frame holds all three at every
+            // moment of the year. And 36 px against the 11.5 a duck covers on a
+            // 1600 px screen is a genuine three times closer, which is what
+            // makes the card worth opening at all.
+            watch: {
+                // ---- COMPOSED ON THE BIRDS, NOT ON THE WATER ---------------
+                // The distance is DERIVED, from `lakeShot` in wildlife.js: the
+                // ducks' own loops say where they live and how far any of them
+                // ever strays, and the camera stands back far enough to hold
+                // that whole envelope with `framePadding` metres of air. So the
+                // framing follows the loops if they are ever retuned, and "all
+                // three ducks, centred" is structural rather than a number that
+                // happened to work on one seed.
+                //
+                // The first version aimed at the pond's own centre, and the
+                // ducks live SEVEN METRES off it: they came out to one side of
+                // the frame, which is what QA saw.
+                framePadding: 1.5,
+
+                // ---- AND THE LENS IS WHAT KEEPS THE CAMERA OUT OF THE PLOT --
+                // Widening the fov shortens the distance needed for the same
+                // frame, and it costs nothing: a duck's size on screen is set
+                // by how many metres the frame covers, not by the lens that
+                // covers them. At 34 degrees the eye lands at z = -9, which is
+                // INSIDE the plot, where a planted tree half a metre in front
+                // of the lens would be the whole picture. At 42 it lands at
+                // -15, on the open meadow between the wall and the water.
+                fov: 42,
+
+                // Low enough that the far shore and the hills are the backdrop
+                // rather than a plan view of some water, high enough that the
+                // ducks are not sitting on the horizon line.
+                height: 3.5,
+                // A few degrees off the axis, so the shot is not perfectly
+                // symmetrical about a lake that already is.
+                sideDegrees: 10,
+                aimHeight: 0.3,
+
+                // MORE PIXELS THAN A TREE THUMBNAIL, because this card is a
+                // "look closer" and the resolution IS the feature: at this
+                // capture a duck covers 39 px against the 11.5 it gets on a
+                // 1600 px screen. Drawn only while the card is open.
+                capturePx: 768
+            },
+
             // CENTRED, because a lake that fills the opening has water under
             // wherever the sun happens to be. The old offset of -4 existed to
             // lay the morning glitter path back toward the viewer, and it cost
@@ -1487,6 +1598,38 @@ export const GARDEN_CONFIG = deepFreeze({
                 // silhouette read as a bird rather than as a leaf.
                 bodyColor: 0xe8e4da,
                 headColor: 0x33403a,
+                // ---- THE BILL, AND IT IS THE CARD THAT EARNS IT ------------
+                // On the lake itself a duck is 11.5 px and a bill is a fifth of
+                // that: two pixels, which is the rounding error this file's own
+                // header warns about. In the lake card a duck is 38 px and the
+                // bill is nearly eight, which is enough to read as COLOUR even
+                // where it is not enough to read as shape. That is the whole
+                // argument for it: orange at the front of a dark head is the
+                // single mark that says duck rather than waterbird.
+                //
+                // EYES ARE DELIBERATELY NOT HERE. They would be one pixel in
+                // the card and nothing at all in the scene, which is geometry
+                // bought for a thing nobody can see.
+                billColor: 0xf0ad3c,
+                // ---- AND IT IS DELIBERATELY TOO BIG ----------------------
+                // Sized at a real duck's proportions the bill was 5 cm across
+                // and half of it was inside the head, which is under two pixels
+                // of visible bill even in the card. That is this file's oldest
+                // lesson met again: TRUE SCALE FAILS AT A FEW PIXELS, and the
+                // answer is to exaggerate deliberately rather than to be
+                // accurate and invisible. These butterflies have a 30 cm
+                // wingspan for the same reason.
+                //
+                // As a fraction of the body. `reach` is how far forward of the
+                // HEAD'S centre it sits, and the head's own radius is 0.15 of
+                // the body, so the reach has to clear that before any of the
+                // bill is outside the face at all.
+                billReach: 0.24,
+                billLength: 0.24,
+                billWidth: 0.105,
+                // A bill is a flat paddle and not a spike. Without this it is a
+                // cone, which reads as a heron.
+                billFlat: 0.5,
                 // Metres per second, on the animation clock. A duck on still
                 // water drifts rather than swims, and anything faster reads as
                 // a wind-up toy.
@@ -1516,6 +1659,7 @@ export const GARDEN_CONFIG = deepFreeze({
                 leaveAt: 17.5,
                 arriveAt: 3.0,
                 span: 1.0,
+
                 // WHERE THEY GO. Away over the far end of the lake and up, so
                 // they recede rather than cross: at 291 m they are past the fog
                 // ceiling of 260 and dissolve into the haze instead of popping
@@ -1660,6 +1804,38 @@ export const GARDEN_CONFIG = deepFreeze({
             flowers: 180,
             flowersMobile: 80,
             flowerRadius: { min: 13, max: 26 },
+
+            // ---- THE UNMOWN CORNERS ------------------------------------
+            // Asked for as "a few tall patches of weeds outside the nursery,
+            // to make it look less cared for and more true to nature". IN
+            // PATCHES AND NOT SCATTERED, which is the whole of why it reads:
+            // an even sprinkle of tall grass over the whole apron says
+            // "meadow", and a few dense tufts with mown ground between them
+            // says "nobody has been round here with a scythe". The second is
+            // what makes the plot look tended by contrast.
+            //
+            // The band starts at the wall and stops short of where the trees
+            // begin, so they fill the apron the eye crosses on its way out of
+            // the garden rather than competing with the wood.
+            weedPatches: 9,
+            weedPatchesMobile: 5,
+            perPatch: 16,
+            perPatchMobile: 10,
+            weedRadius: { min: 13.5, max: 23 },
+            // How far a tuft spreads from its patch centre. Small: a patch is a
+            // clump, and at much more than this they stop reading as one thing.
+            patchSpread: 1.9,
+            // Taller than anything else out here, which is the point of them.
+            // The wildflowers are 0.22 to 0.44.
+            weedHeight: { min: 0.55, max: 1.05 },
+            // AND OFF THE EYE'S TRACK. The dolly runs from z = 2 out to 40 up
+            // the middle, so the apron either side of it is ground the camera
+            // travels THROUGH, and a metre of grass standing where the lens is
+            // about to be is the same bug the near treeline has a 12 m keep-out
+            // for. Far less is needed here, because a weed is a metre and a
+            // tree is fifteen.
+            weedClearance: 3,
+
             // Wildflower colours, drawn from a seeded pick per plant.
             palette: [0xe8d05a, 0xd98ab0, 0xe6e4dd, 0xa88fd0, 0xe07a55]
         }
@@ -1973,6 +2149,31 @@ export const GARDEN_CONFIG = deepFreeze({
         // again means giving the meadow a hole rather than a plane. There is a
         // test below that fails the moment the two disagree.
         meadowDrop: 0.01,
+
+        // ---- THE MEADOW IS NOT MOWN, AND IT SHOULD NOT LOOK IT -----------
+        // The plot and the world beyond it were exactly the same green, so the
+        // wall read as a line drawn on one continuous lawn rather than as the
+        // edge of something tended. This darkens the grass OUTSIDE the wall,
+        // and only the grass: it multiplies the seasonal colour before the snow
+        // is mixed in, so a white winter is the same white on both sides, which
+        // is what snow actually does.
+        //
+        // ---- IT HAS TO BEAT THE MOTTLE, WHICH 0.88 DID NOT ---------------
+        // The first value was 0.88, chosen as "a little darker", and QA could
+        // not see it. The wiring was correct and the arithmetic through the
+        // tone curve said 19 of 255, which should be plain. THE TERM THAT WAS
+        // MISSING IS THE NOISE IT SITS IN: `mottle` already swings every patch
+        // of grass from 0.883 to 1.117 of its own colour, a spread of 23
+        // percent, and a step of 12 percent between the two areas is HALF the
+        // variation inside each of them. A difference smaller than the noise
+        // around it does not read as a boundary, it reads as more noise.
+        //
+        // So the rule, and there is a test on it: the step between the two
+        // must be larger than the spread within either. At 0.76 it is 1.03
+        // times the mottle, which is the smallest value that can be seen at
+        // all rather than a number picked for feel. If the mottle is ever
+        // raised, this has to come down with it.
+        meadowTint: 0.76,
 
         // THE UNDULATION, as a sum of three plane waves. Sines because the
         // whole point is a function that is cheap, smooth, and above all
