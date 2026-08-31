@@ -27,6 +27,37 @@
 
 import { GARDEN_CONFIG } from './config.min.js';
 
+// ---- The composed viewpoint (pure) -----------------------------------------
+
+/**
+ * The composed viewpoint for an aspect ratio.
+ *
+ * A PORTRAIT FRAME IS ABOUT A THIRD AS WIDE. three.js fov is vertical, so a
+ * phone held upright keeps the height and loses both sides. Below an aspect of
+ * 1 this widens to the portrait fov and dollies straight back until the
+ * composed half-width fits at focusZ. It only ever dollies BACK.
+ *
+ * IT LIVES HERE RATHER THAN IN main.js, which is where it was written and where
+ * the suite still imports it from through a re-export. It is the zero of the
+ * dolly track this module owns, `panLimitFor` needs the lens it returns, and
+ * nothing in it ever touched THREE: in main.js a pure test of the framing had
+ * to stand up a stubbed renderer to reach it.
+ */
+export function framingFor(aspect, cam = GARDEN_CONFIG.camera) {
+    const portrait = cam.portrait || {};
+    let fov = cam.fov;
+    let z = cam.position.z;
+
+    if (aspect < 1 && portrait.minHalfWidth) {
+        fov = portrait.fov || fov;
+        const halfFovRad = (fov / 2) * Math.PI / 180;
+        const needed = portrait.focusZ + portrait.minHalfWidth / (Math.tan(halfFovRad) * aspect);
+        z = Math.max(z, needed);
+    }
+
+    return { fov, z };
+}
+
 // ---- The track (pure) ------------------------------------------------------
 
 /**
@@ -141,30 +172,62 @@ export function dollyForDistance(point, composed, want, config = GARDEN_CONFIG) 
 }
 
 /**
- * How far the visitor may look to either side, for a dolly.
+ * How far the visitor may look to either side, for a dolly and a frame.
  *
- * THE CLAMP HAS TO MOVE BECAUSE THE EYE DOES. The shared part sets its yaw
- * limit once, which is correct for a scene whose camera never moves, and this
- * one's zoom is a dolly: the plot subtends 35 degrees from the composed
- * viewpoint and 108 from the near end of the track, so one number is generous
- * at one end and confining at the other. The numbers behind the two ends are in
- * `camera.portrait.pan`.
+ * ---- THE CLAMP MOVES BECAUSE THE EYE DOES, AND BECAUSE THE FRAME DOES ----
  *
- * LINEAR IN THE DOLLY rather than in the angle the plot subtends, and that is a
- * choice. Matching the geometry would keep the front corner exactly at the same
- * place in frame all the way in, which sounds better and is not: it reaches 108
- * degrees at the near end, where the corner is behind the eye, and a pan that
- * turns you around is a different control. Linear stays predictable, doubles
- * the reach where visitors actually sit, and stops short of a free look.
+ * The shared part sets its yaw limit once, which is correct for a scene whose
+ * camera never moves. This one's zoom is a dolly, so the plot subtends 35
+ * degrees from the composed viewpoint and 108 from the near end of the track,
+ * and one number is generous at one end and confining at the other.
  *
- * Only the way IN widens it. Pulling out past the composed viewpoint is already
- * the widest useful view of the plot and needs no more turning than it ever
- * did.
+ * THE FIRST VERSION FIXED ONLY HALF OF THAT AND QA CAUGHT THE REST: it grew
+ * with the dolly and knew nothing about the LENS. A portrait phone composes at
+ * fov 72 on a narrow window, which is 18.7 degrees of frame either side of the
+ * aim against a 16:9 desktop's 45.7. The same limit therefore lands the plot's
+ * front corner comfortably in frame on a desktop and clean OFF it on a phone
+ * past a dolly of 0.7, from the same code. "Works perfectly on a desktop, still
+ * not able to pan far enough on a phone" is what a lens-blind rule feels like.
+ *
+ * So there are two terms and the larger wins, because they are answers to two
+ * different questions:
+ *
+ *   `withDolly`  a predictable, lens-blind growth toward `maxAngleNear`. It is
+ *                what a WIDE frame wants: the corner is already in view there,
+ *                and this is about being able to CENTRE it comfortably.
+ *   `withLens`   enough turn to hold the far corner `cornerAt` of the way out
+ *                in whatever frame this device actually has. It is what a
+ *                NARROW frame needs, and it is what was missing.
+ *
+ * IT STILL STOPS SHORT OF A FREE LOOK. The corner is held inside the frame, not
+ * dragged to the middle of it, so at the near end (where the eye is at z = 6
+ * and a corner tree at z = 9 is BEHIND it) the visitor can see their whole plot
+ * without the camera becoming something that turns all the way around.
+ *
+ * Only the way IN widens it: pulling out past the composed viewpoint is already
+ * the widest useful view of the plot.
+ *
+ * @param {number} dolly
+ * @param {object} frame  { halfWidth } radians from the aim to the frame's
+ *                        side, { composed } the dolly's zero, and { corner }
+ *                        from terrain's `plantingReach`. All optional: without
+ *                        them only the dolly term applies, which is what the
+ *                        pure tests of that term want.
  */
-export function panLimitFor(dolly, config = GARDEN_CONFIG) {
+export function panLimitFor(dolly, frame = {}, config = GARDEN_CONFIG) {
     const P = config.camera.portrait.pan;
     const t = Math.max(0, Math.min(1, dolly || 0));
-    return P.maxAngle + (P.maxAngleNear - P.maxAngle) * t;
+    const withDolly = P.maxAngle + (P.maxAngleNear - P.maxAngle) * t;
+
+    const { halfWidth, composed, corner } = frame;
+    if (!Number.isFinite(halfWidth) || !composed || !corner) {
+        return Math.max(P.maxAngle, withDolly);
+    }
+    // How far off the axis the eye would have to look to put the plot's front
+    // corner dead centre from where the dolly has put it.
+    const need = Math.atan2(corner.x, dollyView(t, composed, config).z - corner.z);
+    const withLens = need - halfWidth * P.cornerAt;
+    return Math.max(P.maxAngle, withDolly, withLens);
 }
 
 // ---- State -----------------------------------------------------------------

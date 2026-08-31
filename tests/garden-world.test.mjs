@@ -25,8 +25,9 @@ import { presenceAt, WINDOWS } from '../www/garden/js/wildlife.js';
 import { luminanceOf } from '../www/garden/js/sky.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { dollyView, dollyTrackZ, panLimitFor } from '../www/garden/js/view.js';
-import { cellInPlot, cellCenter } from '../www/garden/js/terrain.js';
+import { dollyView, dollyTrackZ, panLimitFor, framingFor } from '../www/garden/js/view.js';
+import { cellInPlot, cellCenter, plantingReach } from '../www/garden/js/terrain.js';
+
 import { SPECIES } from '../www/garden/js/species.js';
 
 const PLOT = GARDEN_CONFIG.plot;
@@ -933,58 +934,96 @@ test('THE PAN REACHES THE FRONT CORNERS ONCE THE EYE IS IN AMONG THEM', async ()
     // near end of the track.
     const cam = GARDEN_CONFIG.camera;
     const P = cam.portrait.pan;
-    const composed = { ...COMPOSED };
+    const corner = plantingReach();
+    const deg = (r) => r * 180 / Math.PI;
 
-    // The nearest, most sideways cell a visitor can actually plant in.
-    let corner = { x: 0, z: 0 };
-    const steps = Math.ceil(PLOT.halfSize / PLOT.gridSpacing) + 1;
-    for (let gx = -steps; gx <= steps; gx++) {
-        for (let gz = -steps; gz <= steps; gz++) {
-            if (!cellInPlot(gx, gz)) continue;
-            const c = cellCenter(gx, gz);
-            corner = { x: Math.max(corner.x, c.x), z: Math.max(corner.z, c.z) };
+    // Every frame this scene composes for, with the lens and the composed
+    // distance each orientation actually gets. THE PHONE IS THE POINT: three
+    // and a half times narrower a field than the desktop, from the same code.
+    const shapes = [
+        { name: '16:9 desktop', w: 1600, h: 900 },
+        { name: 'phone portrait', w: 391, h: 841 },
+        { name: 'narrow phone', w: 320, h: 780 }
+    ].map(({ name, w, h }) => {
+        const aspect = w / h;
+        const { fov, z } = framingFor(aspect, cam);
+        return {
+            name, corner,
+            halfWidth: Math.atan(Math.tan((fov / 2) * Math.PI / 180) * aspect),
+            composed: { ...COMPOSED, z }
+        };
+    });
+    // The phone really is the narrow case, or this test is not about anything.
+    expect(shapes[1].halfWidth).toBeLessThan(shapes[0].halfWidth / 2);
+
+    for (const shape of shapes) {
+        const { name, halfWidth, composed } = shape;
+        const needAt = (t) => Math.atan2(corner.x, dollyView(t, composed).z - corner.z);
+        const haveAt = (t) => panLimitFor(t, shape);
+
+        // ZOOMED OUT IS UNCHANGED, which QA explicitly said was fine: the whole
+        // plot is in frame there and nothing needs a wider turn.
+        expect(`${name}: ${deg(haveAt(0)).toFixed(1)}`).toBe(`${name}: ${deg(P.maxAngle).toFixed(1)}`);
+        expect(`${name}: ${deg(haveAt(-1)).toFixed(1)}`).toBe(`${name}: ${deg(P.maxAngle).toFixed(1)}`);
+
+        // ---- THE INVARIANT, AND IT IS THE ONE THAT WAS VIOLATED ---------
+        // The plot's front corner is reachable INTO FRAME at every point on
+        // the track, on every frame shape. The first version grew the clamp
+        // with the dolly and knew nothing about the lens, so it held on a
+        // desktop and failed on a phone past 0.7, which is exactly what QA
+        // reported: "works perfectly on a desktop, still not able to pan far
+        // enough on a phone".
+        for (let t = 0; t <= 1.0001; t += 0.05) {
+            const off = needAt(t) - haveAt(t);
+            expect(`${name} @${t.toFixed(2)}: ${off < halfWidth}`)
+                .toBe(`${name} @${t.toFixed(2)}: true`);
+        }
+
+        // And WELL inside it rather than hugging the edge, which is the
+        // difference between reaching a tree and glimpsing it. `cornerAt` is a
+        // CEILING on how far out the corner may sit, not a target: where the
+        // dolly term is the more generous of the two it lands closer still,
+        // which is what keeps the desktop exactly as QA signed it off.
+        for (let t = 0; t <= 1.0001; t += 0.05) {
+            const share = (needAt(t) - haveAt(t)) / halfWidth;
+            expect(`${name} @${t.toFixed(2)}: ${share <= P.cornerAt + 1e-9}`)
+                .toBe(`${name} @${t.toFixed(2)}: true`);
+        }
+
+        // ---- AND IT STOPS SHORT OF A FREE LOOK -------------------------
+        // At the near end the eye is at z = 6 and a corner tree at z = 9 is
+        // BEHIND it. The corner is held inside the frame, never dragged to the
+        // middle of it, so the camera never becomes one that turns around.
+        expect(`${name}: ${haveAt(1) < needAt(1)}`).toBe(`${name}: true`);
+
+        // Monotone, so the reach never shrinks as the eye comes in.
+        let last = -Infinity;
+        for (let t = 0; t <= 1.0001; t += 0.05) {
+            expect(`${name} @${t.toFixed(2)}: ${haveAt(t) >= last}`)
+                .toBe(`${name} @${t.toFixed(2)}: true`);
+            last = haveAt(t);
         }
     }
-    const deg = (r) => r * 180 / Math.PI;
-    const needAt = (t) => deg(Math.atan2(corner.x, dollyView(t, composed).z - corner.z));
-    const haveAt = (t) => deg(panLimitFor(t));
-    // Frame half-widths: a 16:9 desktop and the 391 x 841 phone QA shot on.
-    const half = (fov, aspect) => deg(Math.atan(Math.tan(fov * Math.PI / 360) * aspect));
-    const wide = half(cam.fov, 16 / 9);
-    const tall = half(cam.portrait.fov, 391 / 841);
 
-    // ZOOMED OUT IS UNCHANGED, which QA explicitly said was fine. The whole
-    // plot is in frame there and nothing needs a wider turn.
-    expect(haveAt(0)).toBeCloseTo(deg(P.maxAngle), 6);
-    expect(haveAt(-1)).toBeCloseTo(deg(P.maxAngle), 6);
-
-    // AND THE MIDDLE OF THE TRACK IS WHERE THE FIX HAS TO LAND, because that
-    // is where anybody actually sits. Before, the corner was 29 degrees off
-    // centre, which is off a portrait screen entirely.
-    const before = needAt(0.5) - deg(P.maxAngle);
-    const after = needAt(0.5) - haveAt(0.5);
-    expect(before).toBeGreaterThan(tall);      // was off the phone
-    expect(after).toBeLessThan(tall);          // now on it
-    expect(after).toBeLessThan(before);
-
-    // In frame on a desktop at every zoom, which the old clamp lost past 0.7.
-    for (const t of [0.25, 0.5, 0.7, 0.85]) {
-        expect(`${t}: ${needAt(t) - haveAt(t) < wide}`).toBe(`${t}: true`);
+    // ---- THE TWO TERMS EACH CARRY A DIFFERENT DEVICE -------------------
+    // Without this the pair could collapse to one rule and still pass
+    // everything above, which would be the lens-blind version all over again.
+    const [desktop, phone] = shapes;
+    // The phone is carried by the LENS term: it needs more turn than the dolly
+    // term's ceiling has, which is precisely what the first version lacked.
+    expect(panLimitFor(1, phone)).toBeGreaterThan(P.maxAngleNear);
+    // The desktop is carried by the DOLLY term through the middle of the track,
+    // unchanged from the behaviour QA signed off on. `panLimitFor` with no
+    // frame IS that term.
+    for (const t of [0.25, 0.5, 0.7]) {
+        expect(`desktop @${t}`).toBe(
+            panLimitFor(t, desktop) === panLimitFor(t) ? `desktop @${t}` : `desktop @${t} moved`);
     }
 
-    // ---- AND IT DELIBERATELY STOPS SHORT OF A FREE LOOK -----------------
-    // At the near end the eye is at z = 6 and a corner tree at z = 9 is BEHIND
-    // it. Matching the geometry all the way would mean turning to look over
-    // your own shoulder, which is a different control. The limit never reaches
-    // what centring the corner there would need.
-    expect(haveAt(1)).toBeLessThan(needAt(1));
-    expect(haveAt(1)).toBeCloseTo(deg(P.maxAngleNear), 6);
-    // Monotone in between, so the reach never shrinks as the eye comes in.
-    let last = -Infinity;
-    for (let t = 0; t <= 1.0001; t += 0.05) {
-        expect(panLimitFor(t)).toBeGreaterThanOrEqual(last);
-        last = panLimitFor(t);
-    }
+    // Without a frame it is the dolly term alone, which is what the shared
+    // part's own tests and the horizon budget below ask for.
+    expect(panLimitFor(1)).toBeCloseTo(P.maxAngleNear, 10);
+    expect(panLimitFor(0)).toBeCloseTo(P.maxAngle, 10);
 });
 
 test('the view reset control knows when it has nothing to do', async () => {
@@ -1215,14 +1254,7 @@ test('THE MOUNTAINS SPAN THE WHOLE HORIZON, AT EVERY ASPECT AND FULL PAN', () =>
     // and the arctangent of those two is the worst aim the scene can produce.
     // Derived here rather than typed, so widening the plot or shortening the
     // clearance fails this instead of quietly opening a gap in the sky.
-    let reach = 0;
-    const steps = Math.ceil(PLOT.halfSize / PLOT.gridSpacing) + 1;
-    for (let gx = -steps; gx <= steps; gx++) {
-        for (let gz = -steps; gz <= steps; gz++) {
-            if (cellInPlot(gx, gz)) reach = Math.max(reach, Math.abs(cellCenter(gx, gz).x));
-        }
-    }
-    const aim = Math.atan2(reach, cam.focus.clearance) * 180 / Math.PI;
+    const aim = Math.atan2(plantingReach().x, cam.focus.clearance) * 180 / Math.PI;
     expect(aim).toBeGreaterThan(30);
 
     // ---- AND THE PAN TERM IS NOT A CONSTANT EITHER --------------------

@@ -305,6 +305,34 @@ export function cellInPlot(gx, gz, config = GARDEN_CONFIG) {
 }
 
 /**
+ * The furthest a tree can stand from the eye's track, in metres.
+ *
+ * `x` is the widest a plantable cell gets to either side and `z` is the nearest
+ * one to the camera, which together are the plot's front corner: the hardest
+ * thing in the garden to look at, because the eye travels along +z at x = 0.
+ *
+ * IT LIVES HERE BECAUSE THE GRID DOES. The camera's pan limit needs it, the
+ * horizon's arc needs it, and both tests used to walk the cells themselves,
+ * which is three copies of a rule that belongs to whoever owns `cellInPlot`.
+ * Derived rather than written down, so coarsening the grid or moving the wall
+ * moves this with them.
+ */
+export function plantingReach(config = GARDEN_CONFIG) {
+    const steps = Math.ceil(config.plot.halfSize / config.plot.gridSpacing) + 1;
+    let x = 0;
+    let z = 0;
+    for (let gx = -steps; gx <= steps; gx++) {
+        for (let gz = -steps; gz <= steps; gz++) {
+            if (!cellInPlot(gx, gz, config)) continue;
+            const c = cellCenter(gx, gz, config.plot.gridSpacing);
+            if (c.x > x) x = c.x;
+            if (c.z > z) z = c.z;
+        }
+    }
+    return { x, z };
+}
+
+/**
  * Whether a tapped point on the ground counts as somebody asking to plant.
  *
  * `cellInPlot` answers a different question, which is where a tree may STAND,

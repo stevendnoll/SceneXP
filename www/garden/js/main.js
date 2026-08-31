@@ -32,7 +32,7 @@ import {
 import { initSky, updateSky, disposeSky } from './sky.min.js';
 import {
     initTerrain, updateTerrain, disposeTerrain, getGroundMesh, snapToGrid,
-    nearestFreeCell, cellCenter, heightAt, inPlantingReach
+    nearestFreeCell, cellCenter, heightAt, inPlantingReach, plantingReach
 } from './terrain.min.js';
 import { initForest, updateForest, disposeForest } from './forest.min.js';
 import { initVista, updateVista, disposeVista } from './vista.min.js';
@@ -43,7 +43,7 @@ import { resolveSpecies } from './species.min.js';
 import {
     dollyView, applyDollyDelta, dollyLimits, getDolly, resetView,
     focusDistance, dollyForDistance, focusOn, stepView, cancelFocus, getAim,
-    aimTarget, viewIsComposed, panLimitFor
+    aimTarget, viewIsComposed, panLimitFor, framingFor
 } from './view.min.js';
 import {
     pickBase, pickDrop, pickDropIndex, dropScreenY, dropPresence, thirstyCount,
@@ -123,6 +123,11 @@ let cleanupController = null;
 
 // The plant flow's pending spot, chosen when the visitor tapped the grass.
 let pendingCell = null;
+
+// The plot's front corner, which is the hardest thing in the garden to look at
+// and so the thing the pan limit is sized against. Derived once from the
+// planting grid rather than per frame: it moves only if the grid does.
+const plantingCorner = plantingReach();
 
 // How far a finger may travel and still count as a tap on the welcome card
 // rather than a scroll of it. Generous, because the card is a full-screen
@@ -296,29 +301,32 @@ function buildScene() {
     scene = new THREE.Scene();
 }
 
+// The composed viewpoint's own arithmetic MOVED TO view.js, which is the module
+// that owns where the visitor is standing and which the pan limit already had
+// to reach for. Re-exported here because this is where the suite has always
+// imported it from, and because a scene's entry point naming its own framing is
+// worth keeping. Nothing in it ever touched THREE, and being out of this file
+// is what lets a pure test use it without a stubbed renderer.
+export { framingFor };
+
 /**
- * The composed viewpoint for an aspect ratio. Pure, because it is the one
- * piece of arithmetic in this file worth asserting, and because under the test
- * harness every number read back off a THREE camera is zero.
+ * Half the frame's HORIZONTAL field, in radians.
  *
- * A PORTRAIT FRAME IS ABOUT A THIRD AS WIDE. three.js fov is vertical, so a
- * phone held upright keeps the height and loses both sides. Below an aspect of
- * 1 this widens to the portrait fov and dollies straight back until the
- * composed half-width fits at focusZ. It only ever dollies BACK.
+ * three's `fov` is vertical, so this is the number that actually says how much
+ * of the garden is beside the aim, and it is a third as big on a phone held
+ * upright as on a 16:9 desktop. The pan limit needs it: without it a clamp that
+ * is generous on one frame is confining on the other, which is the bug QA
+ * found.
+ *
+ * READ THROUGH `framingFor` RATHER THAN OFF THE CAMERA. It is the same pure
+ * function `placeCamera` sets the lens from, so the two cannot disagree, and it
+ * returns a real number under the test harness, where every value read back off
+ * a THREE camera is a proxy.
  */
-export function framingFor(aspect, cam = GARDEN_CONFIG.camera) {
-    const portrait = cam.portrait || {};
-    let fov = cam.fov;
-    let z = cam.position.z;
-
-    if (aspect < 1 && portrait.minHalfWidth) {
-        fov = portrait.fov || fov;
-        const halfFovRad = (fov / 2) * Math.PI / 180;
-        const needed = portrait.focusZ + portrait.minHalfWidth / (Math.tan(halfFovRad) * aspect);
-        z = Math.max(z, needed);
-    }
-
-    return { fov, z };
+function frameHalfWidth() {
+    const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+    const { fov } = framingFor(aspect, GARDEN_CONFIG.camera);
+    return Math.atan(Math.tan((fov / 2) * Math.PI / 180) * aspect);
 }
 
 /**
@@ -1824,10 +1832,15 @@ function animate() {
     // it runs at the rate the screen does rather than at the rate a year does.
     stepView(delta);
     applyView();
-    // HOW FAR THE VISITOR MAY LOOK TO THE SIDE DEPENDS ON WHERE THE EYE IS,
-    // and the eye moves in this scene. Set before the part reads it, so the
-    // clamp the drag and the buttons work against is this frame's.
-    setPanLimit(panLimitFor(getDolly()));
+    // HOW FAR THE VISITOR MAY LOOK TO THE SIDE DEPENDS ON WHERE THE EYE IS AND
+    // ON HOW WIDE THE FRAME IS, and both move in this scene. Set before the
+    // part reads it, so the clamp the drag and the buttons work against is this
+    // frame's.
+    setPanLimit(panLimitFor(getDolly(), {
+        halfWidth: frameHalfWidth(),
+        composed: composedView(),
+        corner: plantingCorner
+    }));
     updatePortraitControls(delta);
     // After the part, so the yaw and tilt it may have just changed are the ones
     // being asked about rather than last frame's.

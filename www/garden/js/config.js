@@ -301,6 +301,27 @@ export const GARDEN_CONFIG = deepFreeze({
                 // pan. See `panLimitFor` in view.js, and the mountain arc,
                 // which had to become a closed ring to cover this.
                 maxAngleNear: 1.10,
+
+                // ---- AND THE FRAME'S OWN WIDTH IS THE OTHER HALF ----------
+                // `maxAngleNear` alone was LENS-BLIND, and QA caught it: a
+                // portrait phone composes at fov 72 on a narrow window, which
+                // is 18.7 degrees of frame either side of the aim against a
+                // 16:9 desktop's 45.7. So the same clamp lands the front corner
+                // comfortably in frame on a desktop and clean off it on a
+                // phone past a dolly of 0.7. "Works perfectly on a desktop,
+                // still not able to pan far enough on a phone" is what a
+                // lens-blind rule feels like.
+                //
+                // So the limit is ALSO whatever holds the far corner this far
+                // out in the frame this device actually has, as a fraction of
+                // the half-width, and the larger of the two rules wins. At 0.6
+                // the corner sits well inside the frame rather than hugging its
+                // edge, which is the difference between reaching a tree and
+                // glimpsing it.
+                //
+                // It is a fraction and NOT an angle on purpose: an angle would
+                // be another number sized for one screen, which is the bug.
+                cornerAt: 0.6,
                 maxTilt: 0.32
             },
             zoom: {
