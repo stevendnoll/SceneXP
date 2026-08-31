@@ -680,6 +680,45 @@ function nearTreeEntries() {
 
 // ---- The wood sways, and not in lockstep (M8-5) ----------------------------
 
+test('THE FAR DRIFTS REACH THE SCENE WITH THEIR INSTANCE DATA', () => {
+    // The duck bills shipped drawn at the world origin because `setMatrixAt`
+    // was called and `instanceMatrix.needsUpdate` was not, so an InstancedMesh
+    // that is built, filled and added still draws every instance at identity.
+    // Nothing in a pure placement test can see that, which is why this one is
+    // here: it drives the real builder and reads the mesh back.
+    //
+    // THROUGH `measureWood`, which is the only stub in this file with a real
+    // InstancedMesh. The plain one absorbs every property, so `mesh.name` and
+    // `mesh.count` both read back as an empty chainable and a lookup by either
+    // finds nothing while an assertion on either passes against anything.
+    const built = measureWood(() => initForest(recordingScene(), GARDEN_CONFIG, { mobile: false }));
+    const wanted = __forest.farDrifts(GARDEN_CONFIG, { mobile: false }).length;
+    expect(wanted).toBeGreaterThan(400);
+
+    const drifts = built.find((m) => m.name === 'far-drifts');
+    expect(drifts).toBeDefined();
+    // Set to what was actually placed, not left at the buffer's capacity. An
+    // InstancedMesh left at capacity draws its whole allocation, which is how
+    // the beds once drew sixteen rings into a garden holding none.
+    expect(drifts.count).toBe(wanted);
+    expect(drifts.instanceMatrix.needsUpdate).toBe(true);
+
+    // AND IT IS NOT ASKING FOR SHADOWS. Nothing casts one at 100 to 190 m and
+    // the shadow camera does not reach out there, so 704 instances sampling a
+    // map they sit outside of would be pure cost.
+    expect(drifts.receiveShadow).toBe(false);
+    expect(drifts.castShadow).toBe(false);
+
+    // ONE DRAW CALL FOR THE WHOLE BAND, and a rounding error of triangles. The
+    // plot capacity went to 49 in M24-2 and a mixed plot is already 18 percent
+    // over budget, so a fourth attempt at this band had to be nearly free or it
+    // was not going to be affordable at all.
+    expect(built.filter((m) => m.name === 'far-drifts')).toHaveLength(1);
+    const tris = trianglesOf(drifts);
+    expect(tris).toBeLessThan(400000 * 0.01);
+    disposeForest();
+});
+
 test('every tree in the wood has its own phase', () => {
     // THE WHOLE POINT OF THIS TASK. Instances share one geometry, and the sway
     // phase comes from vertex position in LOCAL space, so without a per-tree
@@ -909,14 +948,20 @@ test('THE BEDS, THE LEVELS AND THE DROPLETS ARE THREE DRAW CALLS, not forty eigh
 
 test('the beds cost a rounding error against the scene budget', () => {
     // A twenty-sided truncated cone is 40 side triangles plus two caps of 20,
-    // so about 80 a bed, and a level is two. Against a scene measured near
-    // 371,600 of its 400,000 this has to be invisible or the milestone has
-    // quietly spent the wood's headroom on interface.
+    // so about 80 a bed, and a level is two. This has to stay invisible or the
+    // milestone has quietly spent the wood's headroom on interface.
+    //
+    // A SHARE AND NOT A LITERAL. This read `< 2000`, which was 20 beds plus
+    // room, and raising the capacity to 49 broke it at 4,018 without anything
+    // being wrong: the beds had gone from 0.4 percent of the scene budget to
+    // 1.0, which is still a rounding error. A ceiling tied to the capacity
+    // keeps meaning the same thing when the capacity moves, which is the whole
+    // difference between an assertion and a snapshot.
     const B = GARDEN_CONFIG.garden.bed;
     const perBed = B.segments * 4;
     const perLevel = 2;
     const total = GARDEN_CONFIG.plot.maxTrees * (perBed + perLevel);
-    expect(total).toBeLessThan(2000);
+    expect(total).toBeLessThan(400000 * 0.015);
 });
 
 test('a mobile plot builds a smaller bed buffer, not the desktop one', () => {
@@ -1055,11 +1100,14 @@ test('EVERY PLANTED TREE HAS A BED, through the real planting path', () => {
     // level and the bed are two instanced meshes synced in one loop, so a
     // count that can differ between them is the whole question.
     // FILL THE PLOT. Six trees was the old coverage here and six is not where
-    // a capacity bug lives.
+    // a capacity bug lives. EVERY CELL, not a literal count: the capacity and
+    // the 7x7 grid are the same number now, so a hard 40 here would stop nine
+    // trees short of full and the assertion below would be testing nothing.
     const cells = [];
-    for (let gz = -3; gz <= 3 && cells.length < 40; gz++) {
-        for (let gx = -3; gx <= 3 && cells.length < 40; gx++) cells.push([gx, gz]);
+    for (let gz = -3; gz <= 3; gz++) {
+        for (let gx = -3; gx <= 3; gx++) cells.push([gx, gz]);
     }
+    expect(cells).toHaveLength(GARDEN_CONFIG.plot.maxTrees);
     const seen = [];
     measureWood(() => {
         builtGarden.initGarden(recordingScene(), { mobile: false });

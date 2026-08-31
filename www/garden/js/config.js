@@ -178,44 +178,63 @@ export const GARDEN_CONFIG = deepFreeze({
         // 1.5 m spacing, so decoupling them changed nothing on its own.
         plantMargin: 1.5,
         reachGrace: 1.5,
-        // ---- Capacity, by device tier, and it is a TRIANGLE BUDGET --------
-        // The plant modal says so plainly when the plot is full and offers to
-        // remove a tree instead.
+        // ---- Capacity, by device tier ------------------------------------
+        // ---- THE CAPACITY IS THE GRID NOW (2026-08-31) --------------------
+        // "Since the nursery is a grid of 7x7 cells, could we increase the
+        // maximum tree count to 49?" The premise is exactly right: the grid
+        // runs -9 to +9 in threes on both axes, which is 49 cells, and a
+        // capacity of 20 stopped a visitor with **29 cells visibly empty**. A
+        // plot that says "full" while two thirds of its lattice is bare is the
+        // wrong kind of surprise, and the number that produced it was a
+        // triangle budget wearing a gardening hat.
         //
-        // ---- WHY 16 WAS EXACTLY RIGHT, AND WHAT 20 COSTS ----
+        // So these two numbers are the same number on purpose. "Full" now
+        // means physically full, and the plant modal's message is a fact about
+        // the ground rather than a policy.
         //
-        // Re-measured 2026-08-30 across 400 SEEDS PER SPECIES, because a tree's
-        // cost varies with its seed by about a third and a single sample is
-        // worth nothing here. The worst single tree in the set is 17,412
-        // triangles (Sugar Maple; the Blue Spruce and Coast Redwood land within
-        // 50 of it because the 1,200 segment cap binds for all three).
+        // WHAT IT COSTS, MEASURED over 60 seeds a species, whole scene,
+        // against the 400,000 desktop budget in PRD section 13:
         //
-        //     fixed scene, trees aside      120,654
-        //       of which the fractal wood    75,000
-        //     budget                        400,000
-        //     left for planted trees        279,346
+        //     trees   mixed plot   worst case (one species, unlucky seeds)
+        //       16      235,086      398,286
+        //       20      263,694      467,694     <- what shipped before
+        //       39      399,582      797,382     <- the last one that fits
+        //       49      471,102      970,902     <- here
         //
-        //     16 x 17,412 = 278,592   fits, with 754 to spare
-        //     20 x 17,412 = 348,240   over by 68,894
+        // **A MIXED PLOT OF 49 IS 18 PERCENT OVER BUDGET.** That is a change
+        // in kind and not in degree: 20 was over only in the worst case, which
+        // is twenty Sugar Maples on unlucky seeds and does not happen, and its
+        // ordinary case had 136,000 to spare. 49 is over on the ORDINARY case.
+        // It ships anyway as a deliberate call, because the budget is a 60 fps
+        // desktop target with headroom built into it and because a visitor who
+        // fills all 49 cells has chosen to.
         //
-        // So 16 was not a round number, it was the answer. **20 IS OVER BUDGET
-        // IN THE WORST CASE** and is shipped anyway as a deliberate call: the
-        // worst case is a plot of twenty trees all of the single most expensive
-        // species on unlucky seeds. A realistic mixed plot of 20 is about
-        // 150,000, and even twenty Blue Spruces average 303,000, which fits.
+        // THE LEVER IF THIS EVER BITES is still `tree.maxSegments`, and the
+        // cost of pulling it is now on record: 1200 -> 360 brings a mixed 49
+        // back to 358,500 and truncates **16 of the 17 species** rather than
+        // the 2 it truncates today. That is every tree in the garden losing
+        // outer canopy to buy the 49th one, which is why it is not done here.
+        // Better levers first, in order: distance LOD for planted trees (the
+        // back row stands 30 m out and the wood already has the machinery),
+        // then `leafCards`.
+        maxTrees: 49,
+        // ---- AND THE PHONE DOES NOT GET 49 --------------------------------
+        // The grid argument is just as true on a phone and the hardware is
+        // not. A mobile tree is capped at 480 segments rather than 1200, so it
+        // is 5,749 triangles against the desktop's 7,152, but 49 of them is
+        // still 281,701 of trees alone on the tier that has to hold 30 fps.
         //
-        // THE LEVER IF THIS EVER BITES is `tree.maxSegments`, not this number.
-        // Only three species reach the 1,200 cap, so lowering it costs nothing
-        // anywhere else, and 900 would bring a worst-case plot of 20 back
-        // inside. It is not done here because the cap truncates the LAST-BORN
-        // segments, which are the outer canopy, and the note beside
-        // `maxSegmentsMobile` records what that did to the Coast Redwood.
-        maxTrees: 20,
-        // The 480 segment cap truncates hard on this tier, so a mobile tree is
-        // 6,978 triangles at worst against the desktop's 17,412, and 12 of them
-        // is 83,736. Moved with the desktop tier at roughly the ratio it always
-        // had (10/16, now 12/20), with a great deal of room to spare.
-        maxTreesMobile: 12,
+        // 24 is half the lattice, chosen against a yardstick rather than by
+        // feel: 24 mobile trees are 137,976 triangles, about what a DESKTOP
+        // carried at the old cap of 20 (143,040). A phone now holds what a
+        // desktop held yesterday, which is a claim this scene can make without
+        // a device in hand.
+        //
+        // It is still a capacity BELOW the grid, so a phone can be told the
+        // plot is full with 25 cells open. That is the honest trade, and this
+        // is the one number to raise once somebody has watched a frame counter
+        // on a real handset with thirty trees in the ground.
+        maxTreesMobile: 24,
         // THE TALLEST SPECIES, IN METRES, AND IT IS A CAMERA CONSTRAINT. The
         // camera block below is composed so that a tree this tall standing at
         // the middle of the plot fits inside the vertical frame. Raising it
@@ -1127,7 +1146,46 @@ export const GARDEN_CONFIG = deepFreeze({
             waves: [
                 { amp: 1.15, fx: 0.031, fz: 0.027, phase: 1.3 },
                 { amp: 0.55, fx: 0.062, fz: -0.048, phase: 3.9 }
-            ]
+            ],
+
+            // ---- THE FAR HILLS (QA 2026-08-31) ------------------------
+            // "The area between the lake and the mountains still looks too
+            // bare." It is, and this is the FOURTH thing put there. The
+            // first two were objects and both came out again: M14-2's
+            // wooded ridge at 205 m and M21-1's band of 87 tree impostors
+            // at 143 to 199 m, the second of which QA called flat and a
+            // cutout. `farHillsAt` in terrain.js carries the full argument
+            // for why ground succeeds where an object failed.
+            //
+            // THE ONE NUMBER THAT IS NOT TASTE IS `peak`, and it is capped
+            // by the CAMERA rather than by the look. The composed eye is at
+            // y 7, and a hill lower than the eye is below the horizon at
+            // every distance, so it can never become a silhouette. 4 m
+            // fills half the 46-pixel band and leaves 17 px of sky; 6 m
+            // leaves 5 and reads as touching the skyline.
+            farHills: {
+                // Clear of the lake by a margin. The shelf that levels the
+                // meadow for the water finishes at 1.8 pond radii, which is
+                // z = -70.8, and the far shore is z = -58. Starting at 78 m
+                // means the rise begins beyond both and the ground the lake
+                // sits in is exactly as flat as it was.
+                from: 78,
+                // Long, because this has to read as country. Full height is
+                // not reached until 138 m, which is the middle of the band
+                // and where fog is taking about 40 percent.
+                rampOver: 60,
+                // TWO WAVES, NEITHER ALIGNED WITH THE VIEW AXIS. A single
+                // ridge square to the camera is an object again whatever it
+                // is made of, so these run diagonally and cross: the crest
+                // leaves the frame at the side rather than having two
+                // visible ends. Wavelengths of 190 m and 118 m against a
+                // 46 px band, which is what keeps it a swell and not a
+                // dune. Summed amplitude 4.2 m, folded positive.
+                waves: [
+                    { amp: 2.6, fx: 0.021, fz: 0.017, phase: 4.286 },
+                    { amp: 1.6, fx: -0.034, fz: 0.041, phase: 0.143 }
+                ]
+            }
         },
 
         meadow: {
@@ -1902,6 +1960,57 @@ export const GARDEN_CONFIG = deepFreeze({
             // for. Far less is needed here, because a weed is a metre and a
             // tree is fifteen.
             weedClearance: 3,
+
+            // ---- THE ROUGH GROUND BEYOND THE LAKE (QA 2026-08-31) -------
+            // "The area between the lake and the mountains still looks too
+            // bare." `farDrifts` in forest.js carries the argument, including
+            // why this is the FOURTH attempt at the band and what M22-2 said
+            // to change. The short version: four times the density of the
+            // tree band that failed, overlapping into a mass, and no row.
+            farDrifts: {
+                // The bare wedge, measured. Water ends at 58 m, the far
+                // forest closes off at about 117 m on the axis and stops
+                // dead at 135, and the meadow mesh ends at 180. Starting at
+                // 72 keeps clear of the shore; ending at 168 keeps the
+                // furthest drift a dozen metres inside the mesh edge so
+                // nothing is ever cut off by the end of the ground.
+                radius: { min: 72, max: 168 },
+                // ---- DENSITY IS THE WHOLE LESSON ----
+                // M21-1 put 87 objects here at even intervals and QA read it
+                // as a paper frieze. 44 drifts of 16 is 704 tufts, and at a
+                // 9 m spread their footprints touch and overlap, which is
+                // what makes the side woods work and is what that band
+                // never had. 2,816 triangles in one draw call.
+                drifts: 44,
+                driftsMobile: 22,
+                perDrift: 16,
+                perDriftMobile: 10,
+                spread: 9,
+                // How many drifts come up flowering rather than as rough
+                // grass. Under a third, because a meadow that is mostly
+                // flowers is a postcard.
+                flowerShare: 0.3,
+
+                // ---- SIZED FOR 100 TO 190 m, WHICH IS NOT LIFE SIZE ----
+                // The near weeds are 0.55 to 1.05 m at 13 to 23 m. The same
+                // plant out here is under two pixels. The bare band is 46 px
+                // of a 900 px frame, so these are metres tall to be a few
+                // pixels of it:
+                //
+                //     2.4 m at 130 m   = 18 px, 39 percent of the band
+                //     1.7 m at 160 m   = 10 px
+                //
+                // Held BELOW the far forest's 7 to 18 m on purpose. Anything
+                // approaching that height stops being ground cover and
+                // becomes the tree band again.
+                weedHeight: { min: 1.6, max: 2.8 },
+                flowerHeight: { min: 1.2, max: 2.0 },
+                // Wider than the near weeds' 1.2 m of margin. A drift that
+                // clips the water reads as reeds, which would be a fine
+                // thing to build on purpose and a poor thing to get by
+                // accident.
+                lakeMargin: 3
+            },
 
             // Wildflower colours, drawn from a seeded pick per plant.
             palette: [0xe8d05a, 0xd98ab0, 0xe6e4dd, 0xa88fd0, 0xe07a55]

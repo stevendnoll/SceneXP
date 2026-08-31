@@ -172,25 +172,36 @@ test('no tree can be planted into the wall', () => {
     }
 });
 
-test('the plot holds far more cells than trees', () => {
+test('THE CAPACITY AND THE GRID ARE THE SAME NUMBER', () => {
     let cells = 0;
     for (let gx = -30; gx <= 30; gx++) {
         for (let gz = -30; gz <= 30; gz++) if (cellInPlot(gx, gz)) cells++;
     }
-    // Otherwise the grid, rather than the stated capacity, would be what
-    // limits the garden, and it would do it without saying so.
+    // ---- THIS TEST USED TO SAY THE OPPOSITE, AND WHY IT CHANGED ----------
+    // It read `cells > maxTrees * 2`, guarding against the grid quietly being
+    // the real limit while the config claimed another number. That was the
+    // right worry at a capacity of 20 with 49 cells: a visitor was stopped
+    // with twenty-nine of them visibly empty, and the two limits disagreeing
+    // is exactly what made that possible.
     //
-    // THE HEADROOM IS DELIBERATELY THINNER THAN IT WAS. Coarsening the grid in
-    // M24-1 took this from 169 cells to 49, so the ratio went from 8.4x the
-    // capacity to 2.4x. That was the point of the change and it is still not a
-    // cap: a full garden of twenty trees leaves twenty-nine cells open, so
-    // there is visibly free ground and a real choice about where to plant. The
-    // floor is set at 2x because at 1x the grid IS the cap, whatever the
-    // configured capacity says.
-    expect(cells).toBeGreaterThan(PLOT.maxTrees * 2);
-    // And the failure this guards against is the silent one, so name it: the
-    // cell count must never be the smaller of the two limits.
-    expect(cells).toBeGreaterThan(PLOT.maxTrees);
+    // The answer was to make them AGREE rather than to widen the gap. "Full"
+    // is now a fact about the ground: every cell can hold a tree and the plot
+    // refuses the fiftieth because there is nowhere to put it.
+    expect(cells).toBe(49);
+    expect(cells).toBe(PLOT.maxTrees);
+    // 7 x 7, which is what makes 49 the honest number rather than a round one.
+    expect(Math.sqrt(cells)).toBe(7);
+
+    // ---- WHAT THE OLD TEST WAS PROTECTING IS STILL PROTECTED -------------
+    // Its real claim was that the grid must never be the SMALLER limit, or the
+    // garden refuses a tree for a reason nothing states. Equal is fine and
+    // smaller is not, so the inequality survives with its edge moved.
+    expect(cells).toBeGreaterThanOrEqual(PLOT.maxTrees);
+
+    // AND THE PHONE IS THE CASE WHERE THEY STILL DISAGREE, on purpose: the
+    // mobile tier holds a smaller capacity for triangles rather than for room,
+    // so it must be the one that is lower and never the other way round.
+    expect(PLOT.maxTreesMobile).toBeLessThan(cells);
 });
 
 test('the interaction never says no while there is room', () => {
@@ -219,6 +230,34 @@ test('a genuinely full neighbourhood is reported rather than guessed at', () => 
         for (let gz = -30; gz <= 30; gz++) occupied.add(cellKey(gx, gz));
     }
     expect(nearestFreeCell(0, 0, occupied)).toBeNull();
+});
+
+test('A FULL PLOT IS A STATE THE GARDEN CAN NOW ACTUALLY REACH', () => {
+    // The test above fills a 61 x 61 block, which is a synthetic state: no real
+    // garden could produce it while the capacity was 20 and the grid held 49,
+    // so `nearestFreeCell` returning null was unreachable code in practice.
+    //
+    // RAISING THE CAPACITY TO 49 MADE IT REACHABLE. A visitor who plants the
+    // last legal tree leaves the grid with nothing free, and the next tap has
+    // to be refused rather than answered with an occupied cell or a spot in
+    // the wall. This fills the plot the way a visitor would, one legal cell at
+    // a time, and asks the question they would ask next.
+    const occupied = new Set();
+    for (let gx = -30; gx <= 30; gx++) {
+        for (let gz = -30; gz <= 30; gz++) if (cellInPlot(gx, gz)) occupied.add(cellKey(gx, gz));
+    }
+    expect(occupied.size).toBe(PLOT.maxTrees);
+    // From the middle, from a corner, and from outside the wall: all refused,
+    // and none of them refused by hanging or by inventing a cell.
+    expect(nearestFreeCell(0, 0, occupied)).toBeNull();
+    expect(nearestFreeCell(3, 3, occupied)).toBeNull();
+    expect(nearestFreeCell(20, 20, occupied)).toBeNull();
+
+    // AND ONE TREE OUT OF THE GROUND REOPENS EXACTLY THAT CELL. The refusal
+    // has to be a fact about the plot rather than a latch, or "remove one to
+    // make room" would be a lie the interface tells.
+    occupied.delete(cellKey(2, -1));
+    expect(nearestFreeCell(0, 0, occupied)).toEqual({ gx: 2, gz: -1 });
 });
 
 test('nearestFreeCell prefers a nearer orthogonal to a further diagonal', () => {

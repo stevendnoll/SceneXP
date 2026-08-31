@@ -547,6 +547,7 @@ let nearTrees = [];
 let bushes = null;
 let flowers = null;
 let weeds = null;
+let farDriftMesh = null;
 let flowerPlacements = [];
 let lastBloom = -1;
 const disposables = [];
@@ -1000,6 +1001,7 @@ function buildUndergrowth(scene, config, options) {
     disposables.push(flowerGeo, flowerMaterial);
 
     buildWeeds(scene, config, options);
+    buildFarDrifts(scene, config, options);
 }
 
 /**
@@ -1055,6 +1057,171 @@ export function weedPatches(config = GARDEN_CONFIG, options = {}) {
         }
     }
     return out;
+}
+
+/**
+ * The rough ground beyond the lake, where the meadow runs out to the hills.
+ *
+ * ---- THE FOURTH THING PUT IN THIS BAND ----
+ *
+ * QA has reported the stretch between the far shore and the mountains as bare
+ * three times. M14-2 answered with a wooded ridge at 205 m and M14-6 took it
+ * out. M21-1 answered with 87 tree impostors at 143 to 199 m and M22-2 took
+ * those out: "the line of trees looks flat, and the impostor style that works
+ * at the sides of the scene stands out badly dead centre."
+ *
+ * M22-2 also wrote down what to change if anybody tried again, and this is that
+ * list followed rather than a fresh guess:
+ *
+ *   "the two things to change are DENSITY, four times this and overlapping,
+ *    and either camera-facing billboards or real geometry. Not another row."
+ *
+ * So: FOUR TIMES THE DENSITY, IN OVERLAPPING DRIFTS, AND NOT A ROW. 87 objects
+ * became ~700 tufts in `driftCount` clumps whose spreads touch, which is the
+ * same reason the side woods read and the tree band did not. The side woods
+ * overlap into a MASS where no single tree is legible; the band was individuals
+ * at even intervals and similar heights, which is a paper frieze whatever it is
+ * made of. Nothing here is meant to be legible on its own.
+ *
+ * The other half of the answer is `farHillsAt` in terrain.js, which gives the
+ * band the landform it never had. These stand ON it, through `worldHeightAt`,
+ * so the drifts climb and the crest carries texture rather than being bare
+ * ground with tufts on the flat in front of it.
+ *
+ * ---- SIZED FOR 100 TO 190 METRES, WHICH IS NOT LIFE SIZE ----
+ *
+ * The near weeds are 0.55 to 1.05 m at 13 to 23 m out. The same plant here
+ * would be under two pixels. Measured from the composed viewpoint, the whole
+ * bare band spans 46 pixels of a 900 pixel frame, so a tuft has to be metres
+ * tall simply to be a few pixels of it. This is the same honest exaggeration
+ * as the duck's 0.95 m body and the 30 cm butterflies.
+ *
+ * ---- AND THEY GO WHERE THE WOOD IS NOT ----
+ *
+ * `forestDensityAt` is the one statement of the clearing's shape, and it is
+ * zero through the northern opening, which is exactly the wedge the visitor
+ * looks out through and exactly what is bare. Placing only where it is zero
+ * means these can never grow up through the far forest, and means the two
+ * systems cannot disagree about where the wood ends.
+ */
+export function farDrifts(config = GARDEN_CONFIG, options = {}) {
+    const F = config.world.undergrowth.farDrifts;
+    if (!F) return [];
+    const drifts = options.mobile ? F.driftsMobile : F.drifts;
+    const per = options.mobile ? F.perDriftMobile : F.perDrift;
+    const total = drifts * per;
+    const random = makeRandom(config.world.seed ^ 0xFA4D1);
+    const out = [];
+
+    let guard = 0;
+    while (out.length < total && guard++ < drifts * 80) {
+        const angle = random() * Math.PI * 2;
+        const radius = F.radius.min + random() * (F.radius.max - F.radius.min);
+        const cx = Math.cos(angle) * radius;
+        const cz = Math.sin(angle) * radius;
+        // Only where the wood is not, which is the opening, which is the bare
+        // part. And never in the water: the lake's far half is in this band.
+        if (forestDensityAt(cx, cz, config) > 0) continue;
+        if (inTheLake(cx, cz, config, F.lakeMargin)) continue;
+
+        const flowering = random() < F.flowerShare;
+        for (let i = 0; i < per && out.length < total; i++) {
+            const a = random() * Math.PI * 2;
+            // Square-rooted for a uniform disc, so a drift is a patch of
+            // ground rather than a dense middle with strays round it.
+            const r = Math.sqrt(random()) * F.spread;
+            const x = cx + Math.cos(a) * r;
+            const z = cz + Math.sin(a) * r;
+            // EVERY TUFT, NOT JUST THE CENTRE. A drift is `spread` metres
+            // across, so a centre cleanly outside the wood still throws
+            // tufts into it, and a centre inside the outer edge still throws
+            // them off the end of the ground. Both were true of the first
+            // cut: 9 m of spread put grass inside the far forest and out
+            // past the mesh at 180 m, where it would stand on nothing.
+            if (inTheLake(x, z, config, F.lakeMargin)) continue;
+            if (forestDensityAt(x, z, config) > 0) continue;
+            if (Math.hypot(x, z) > F.radius.max) continue;
+            const band = flowering ? F.flowerHeight : F.weedHeight;
+            out.push({
+                x, z,
+                height: band.min + random() * (band.max - band.min),
+                yaw: random() * Math.PI,
+                flowering,
+                patch: { x: cx, z: cz }
+            });
+        }
+    }
+    return out;
+}
+
+/**
+ * The rough ground beyond the lake, built. See `farDrifts` for where it goes.
+ *
+ * ONE MESH AND ONE DRAW CALL for all 704 tufts, on the crossed quad the near
+ * weeds and the wildflowers already use. 2,816 triangles, which is 0.7 percent
+ * of the scene budget and about two thirds of what the mulch beds cost.
+ *
+ * ---- WHY THE FLOWERS ARE PAINTED AND NOT MODELLED ----
+ *
+ * The obvious build is a second mesh carrying `buildFlowerTexture`, matching
+ * the near meadow. It is not worth the draw call HERE: these stand 98 to 189 m
+ * out and measure 7 to 27 px, where a flower and a grass tuft have the same
+ * silhouette and the only thing that separates them is colour. So a flowering
+ * drift is the same blade mask wearing a petal hue, and at this size that is
+ * the whole of the difference a second texture would have bought.
+ *
+ * This is the scene's own rule about distance applied one step further out
+ * than usual: at 12 px a shape is a smudge and colour is what survives.
+ */
+function buildFarDrifts(scene, config, options) {
+    const placements = farDrifts(config, options);
+    if (!placements.length) return;
+    const U = config.world.undergrowth;
+
+    const geo = buildCrossedQuad();
+    const texture = buildWeedTexture(64, config.world.seed ^ 0xFA4D2);
+    const material = new THREE.MeshLambertMaterial({
+        color: 0xffffff, map: texture, alphaTest: 0.38, side: THREE.DoubleSide
+    });
+    if (texture) disposables.push(texture);
+    farDriftMesh = new THREE.InstancedMesh(geo, material, Math.max(1, placements.length));
+    farDriftMesh.name = 'far-drifts';
+    farDriftMesh.castShadow = false;
+    // NO SHADOW RECEIVING, unlike the near weeds. Nothing casts one this far
+    // out, the shadow camera does not reach here, and asking 704 instances to
+    // sample a map they are outside of is pure cost.
+    farDriftMesh.receiveShadow = false;
+    farDriftMesh.frustumCulled = false;
+
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const e = new THREE.Euler();
+    const p = new THREE.Vector3();
+    const sc = new THREE.Vector3();
+    const colour = new THREE.Color();
+    placements.forEach((tuft, i) => {
+        // THROUGH `worldHeightAt`, which is what puts these ON the far hills
+        // rather than on the flat the hills rise out of. The one height
+        // function is the whole reason that is free.
+        p.set(tuft.x, worldHeightAt(tuft.x, tuft.z), tuft.z);
+        e.set(0, tuft.yaw, 0);
+        q.setFromEuler(e);
+        // Wider than the near weeds relative to height. Those are single
+        // tufts a person could walk up to; at 130 m a drift is a patch of
+        // rough ground, and a patch is broader than it is tall.
+        sc.set(tuft.height * 1.15, tuft.height, tuft.height * 1.15);
+        m.compose(p, q, sc);
+        farDriftMesh.setMatrixAt(i, m);
+        colour.setHex(tuft.flowering
+            ? U.palette[i % U.palette.length]
+            : 0xffffff);
+        farDriftMesh.setColorAt(i, colour);
+    });
+    farDriftMesh.count = placements.length;
+    farDriftMesh.instanceMatrix.needsUpdate = true;
+    if (farDriftMesh.instanceColor) farDriftMesh.instanceColor.needsUpdate = true;
+    scene.add(farDriftMesh);
+    disposables.push(geo, material);
 }
 
 /**
@@ -1229,6 +1396,20 @@ export function updateForest(hour, snowCoverage = 0, wind = null, elapsed = 0, m
             packColor(mixColor(forestColorAt(hour, false, config), snowColor, snow * 0.85)));
     }
 
+    // The rough ground beyond the lake turns with the same year. It does not
+    // shed either, for the same reason the corners do not, and it takes snow
+    // the most heavily of the three: it is the furthest out, so it is where a
+    // white winter should reach first and read plainest.
+    //
+    // ONE MATERIAL COLOUR OVER PER-INSTANCE HUES. three multiplies the two, so
+    // the drifts that came up flowering keep their colour through the year and
+    // go dull in the winter along with everything else, rather than sitting out
+    // there in high summer yellow under snow.
+    if (farDriftMesh) {
+        farDriftMesh.material.color.setHex(
+            packColor(mixColor(forestColorAt(hour, false, config), snowColor, snow * 0.9)));
+    }
+
     // THE FLOWERS ARE REBUILT ONLY WHEN THE BLOOM ACTUALLY MOVES. Rewriting
     // nine hundred instance matrices every frame would be the most expensive
     // thing in the scene, for a value that changes over minutes.
@@ -1254,7 +1435,7 @@ function setSeason(material, hex) {
 }
 
 export function getForestMeshes() {
-    return [evergreen, deciduous, bushes, flowers, weeds,
+    return [evergreen, deciduous, bushes, flowers, weeds, farDriftMesh,
         ...nearTrees.map((t) => t.mesh),
         ...nearTrees.map((t) => t.leafMesh)].filter(Boolean);
 }
@@ -1276,6 +1457,7 @@ export function disposeForest() {
     bushes = null;
     flowers = null;
     weeds = null;
+    farDriftMesh = null;
     flowerPlacements = [];
     lastBloom = -1;
     nearTrees = [];

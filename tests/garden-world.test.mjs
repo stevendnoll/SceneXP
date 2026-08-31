@@ -15,11 +15,11 @@
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
 import {
     heightAt, outerWavesAt, outerReliefAt, worldHeightAt, pondBasinAt, pondWaterLevel,
-    pondHalfWidth
+    pondHalfWidth, farHillsAt
 } from '../www/garden/js/terrain.js';
 import {
     forestDensityAt, scatter, forestColorAt, barenessAt, bloomAt,
-    clearsCamera, openingHalfWidthAt
+    clearsCamera, openingHalfWidthAt, farDrifts
 } from '../www/garden/js/forest.js';
 import { presenceAt, WINDOWS } from '../www/garden/js/wildlife.js';
 import { luminanceOf } from '../www/garden/js/sky.js';
@@ -2145,4 +2145,191 @@ test('and the take-off happens near the water, where it can be seen', () => {
     // the stated rate with the wings never going below level.
     expect(wildlife).toMatch(/const beat = Math\.sin\(elapsed \* D\.flapHz/);
     expect(wildlife).not.toMatch(/Math\.abs\(Math\.sin\(elapsed \* D\.flapHz/);
+});
+
+// ---- The bare band between the lake and the mountains (QA 2026-08-31) ------
+//
+// THE FOURTH ATTEMPT AT THIS, AND THE TESTS EXIST BECAUSE OF THE OTHER THREE.
+// M14-2 put a wooded ridge here and M14-6 removed it. M21-1 put 87 tree
+// impostors here and M22-2 removed those, concluding that a distinct object in
+// the middle distance dead centre competes with the garden and reveals its own
+// construction. What is asserted below is the two things that make ground
+// different from an object: it cannot be a silhouette, and it is a mass rather
+// than a row.
+
+/** Screen row, of 900, for a point `h` metres up at `d` metres out, from the
+ *  composed viewpoint. The whole argument for the hill's height is in pixels,
+ *  so the test that guards it had better be too. */
+function screenRow(h, d) {
+    const cam = GARDEN_CONFIG.camera;
+    const pitch = Math.atan2(cam.lookAt.y - cam.position.y, Math.abs(cam.lookAt.z - cam.position.z));
+    const fov = cam.fov * Math.PI / 180;
+    return ((pitch + fov / 2 - Math.atan((h - cam.position.y) / d)) / fov) * 900;
+}
+
+test('A HILL LOWER THAN THE EYE CAN NEVER BREAK THE SKYLINE', async () => {
+    // THE PROPERTY THAT MAKES THIS SAFE, and it is geometry rather than taste.
+    // A point at height h and distance d sits at atan((h - eye) / d), which is
+    // negative at EVERY d whenever h < eye. So a hill shorter than the camera
+    // has no silhouette against the sky at any distance, in any weather, at any
+    // pan, and therefore cannot read as a cutout the way M21-1's impostors did.
+    const eye = GARDEN_CONFIG.camera.position.y;
+
+    // The real peak, found over the whole meadow rather than assumed from the
+    // amplitudes: the waves are folded at zero, so the sum is not the peak.
+    let peak = 0;
+    for (let x = -180; x <= 180; x += 2) {
+        for (let z = -180; z <= 180; z += 2) peak = Math.max(peak, farHillsAt(x, z));
+    }
+    expect(peak).toBeGreaterThan(3);        // it is a hill and not a ripple
+    expect(peak).toBeLessThan(eye);         // and it is under the eye
+
+    // Stated the way it is actually used, so this fails if either the hill
+    // grows or the camera drops.
+    for (let d = 60; d <= 400; d += 10) {
+        expect(`${d}m: ${screenRow(peak, d) > screenRow(0, 1e9)}`).toBe(`${d}m: true`);
+    }
+
+    // ---- AND IT FILLS THE BAND IT WAS BUILT FOR -------------------------
+    // The bare stretch spans screen rows 366 (the far shore) to 320 (the mesh
+    // edge), 46 px of a 900 px frame, with the horizon at 291. Half of that
+    // band is the target: enough to stop reading as flat, with a clear strip of
+    // sky left above it. 6 m was rejected for leaving only 5 px of sky.
+    const camZ = GARDEN_CONFIG.camera.position.z;
+    let bestRise = 0;
+    let gap = Infinity;
+    for (let z = -80; z >= -175; z -= 5) {
+        const d = camZ - z;
+        const flat = outerReliefAt(0, z) - farHillsAt(0, z);
+        bestRise = Math.max(bestRise, screenRow(flat, d) - screenRow(outerReliefAt(0, z), d));
+        gap = Math.min(gap, screenRow(outerReliefAt(0, z), d) - screenRow(0, 1e9));
+    }
+    expect(bestRise).toBeGreaterThan(15);   // measured 18 px on the view axis
+    expect(gap).toBeGreaterThan(8);         // measured 14 px of sky still showing
+});
+
+test('the hill does not touch the lake it stands behind', async () => {
+    // THE ONE WAY THIS CHANGE COULD HAVE BROKEN SOMETHING EXPENSIVE. The water
+    // level is `outerWavesAt` sampled at the pond centre, and the shelf levels
+    // the meadow across the basin so the lake is not a dent in a hillside. A
+    // relief term added upstream of either would have moved the waterline, and
+    // M14-5 records what that looked like: a third of the lake bed dry.
+    const P = GARDEN_CONFIG.world.pond;
+    const halfWidth = pondHalfWidth();
+
+    // Nothing anywhere the lake reaches, including the shelf that blends out
+    // to 1.8 radii, and including the margin the shore sits in.
+    for (let a = 0; a < Math.PI * 2; a += 0.05) {
+        for (let r = 0; r <= 2.0; r += 0.1) {
+            const x = P.x + Math.cos(a) * r * halfWidth;
+            const z = P.z + Math.sin(a) * r * P.halfDepth;
+            expect(`hill at ${x.toFixed(0)},${z.toFixed(0)}: ${farHillsAt(x, z)}`)
+                .toBe(`hill at ${x.toFixed(0)},${z.toFixed(0)}: 0`);
+        }
+    }
+    // Which is the same as saying it starts outside the shelf entirely.
+    expect(lakeShelfAt(0, -GARDEN_CONFIG.world.outerRelief.farHills.from)).toBe(0);
+
+    // AND THE WATERLINE IS BIT-IDENTICAL. Not "close": `pondWaterLevel` reads
+    // `outerWavesAt`, and the hill is added downstream of it in `outerReliefAt`
+    // on purpose, so the correct answer here is exact equality.
+    expect(pondWaterLevel()).toBe(outerWavesAt(P.x, P.z) - P.depth * P.fill);
+
+    // The plot is untouched too: the hill starts 78 m out and the garden ends
+    // at 12, so nothing a visitor plants stands on a slope that just appeared.
+    for (let x = -12; x <= 12; x += 2) {
+        for (let z = -12; z <= 12; z += 2) expect(farHillsAt(x, z)).toBe(0);
+    }
+});
+
+test('THE DRIFTS ARE A MASS, WHICH IS THE ONE THING THE TREE BAND WAS NOT', async () => {
+    // M22-2, on why 87 impostors read as a paper frieze: "the band was too
+    // sparse and too evenly spaced. The side woods work because they overlap
+    // into a MASS where no single tree is legible." And its instruction for a
+    // fourth attempt: "DENSITY, four times this and overlapping. Not another
+    // row." This is that instruction, asserted.
+    const tufts = farDrifts();
+    const F = GARDEN_CONFIG.world.undergrowth.farDrifts;
+
+    // Four times, and then some: 87 objects became 704 tufts.
+    expect(tufts.length).toBeGreaterThan(87 * 4);
+
+    // OVERLAPPING, which is the half that matters. Every drift has a
+    // neighbouring drift closer than the two spreads that would just touch, so
+    // no drift stands alone as a legible clump.
+    const centres = [];
+    for (const t of tufts) {
+        if (!centres.some((c) => c.x === t.patch.x && c.z === t.patch.z)) centres.push(t.patch);
+    }
+    expect(centres.length).toBeGreaterThan(20);
+    let lonely = 0;
+    for (const c of centres) {
+        const nearest = Math.min(...centres
+            .filter((o) => o !== c)
+            .map((o) => Math.hypot(o.x - c.x, o.z - c.z)));
+        if (nearest > F.spread * 2) lonely++;
+    }
+    // A few on the rim of the ring have no neighbour and that is scenery, not
+    // a row. The claim is that the great majority are in company.
+    expect(lonely / centres.length).toBeLessThan(0.35);
+
+    // NOT A ROW, stated so it cannot become one: a row has one z. These are
+    // spread over most of the band's depth.
+    const zs = tufts.map((t) => t.z);
+    expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(150);
+});
+
+test('nothing drifts into the wood, the water, or off the end of the ground', async () => {
+    // Three keep-outs, and the third is the one the first cut got wrong: only
+    // the drift CENTRE was tested, so a 9 m spread threw tufts into the far
+    // forest and out past the meadow mesh at 180 m, where they would have stood
+    // on nothing at all.
+    const F = GARDEN_CONFIG.world.undergrowth.farDrifts;
+    for (const options of [{}, { mobile: true }]) {
+        const tufts = farDrifts(GARDEN_CONFIG, options);
+        expect(tufts.length).toBeGreaterThan(100);
+        for (const t of tufts) {
+            const r = Math.hypot(t.x, t.z);
+            const where = `${t.x.toFixed(0)},${t.z.toFixed(0)}`;
+            // `forestDensityAt` is the ONE statement of where the wood is, so
+            // the two systems cannot disagree about where it ends.
+            expect(`${where} in the wood: ${forestDensityAt(t.x, t.z) > 0}`)
+                .toBe(`${where} in the wood: false`);
+            expect(`${where} in the lake: ${inTheLake(t.x, t.z, GARDEN_CONFIG, 0)}`)
+                .toBe(`${where} in the lake: false`);
+            expect(`${where} on the ground: ${r <= F.radius.max}`)
+                .toBe(`${where} on the ground: true`);
+        }
+        // And inside the meadow mesh, which is 360 m square, with room to spare.
+        expect(F.radius.max).toBeLessThan(GARDEN_CONFIG.world.meadow.size / 2 - 10);
+    }
+});
+
+test('a drift is sized for 100 to 190 metres, which is not life size', async () => {
+    // The fourth time this scene has had to say it, after the fruit, the beds,
+    // the ducks and the bills. The near weeds are 0.55 to 1.05 m at 13 to 23 m
+    // out. The same plant at 130 m is 1.6 px and would have been a fourth thing
+    // shipped too small to see.
+    const F = GARDEN_CONFIG.world.undergrowth.farDrifts;
+    const U = GARDEN_CONFIG.world.undergrowth;
+    const cam = GARDEN_CONFIG.camera;
+    const hFov = 2 * Math.atan(Math.tan((cam.fov / 2) * Math.PI / 180) * 16 / 9);
+    const pxAt = (m, d) => (m / d) * (1600 / hFov);
+
+    // What a NEAR weed would have measured out here, which is the mistake.
+    expect(pxAt(U.weedHeight.max, 130)).toBeLessThan(9);
+    // And what these actually measure across the band.
+    expect(pxAt(F.weedHeight.min, 190)).toBeGreaterThan(7);
+    expect(pxAt(F.weedHeight.max, 100)).toBeGreaterThan(20);
+
+    // ---- AND HELD UNDER THE WOOD ----------------------------------------
+    // The far forest is 7 to 18 m. Ground cover that approaches it stops being
+    // ground cover and becomes the tree band that was removed twice, so this is
+    // the ceiling that keeps this a different idea rather than the same one.
+    expect(F.weedHeight.max).toBeLessThan(GARDEN_CONFIG.world.farForest.minHeight);
+
+    // A ROUNDING ERROR AGAINST THE BUDGET, which matters more than usual: the
+    // plot capacity went to 49 in M24-2 and a mixed plot is already 18 percent
+    // over. Four triangles a crossed quad, one draw call.
+    expect(farDrifts().length * 4).toBeLessThan(400000 * 0.01);
 });

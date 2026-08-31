@@ -245,8 +245,77 @@ export function pondBasinAt(x, z, world = GARDEN_CONFIG.world) {
     return P.depth * t * t * (3 - 2 * t);
 }
 
+/**
+ * The far hills, beyond the lake and short of the mountains.
+ *
+ * ---- THE FOURTH ATTEMPT AT THIS BAND, AND THE FIRST ONE MADE OF GROUND ----
+ *
+ * QA, three times: the stretch between the far shore and the mountains looks
+ * bare. It is. Measured on the view axis there is water to z = -58, then 122
+ * metres of meadow with nothing on it at all, then the mesh edge at -180. The
+ * only relief out there is `rollingWavesAt`, which sags 1.3 m over 90 metres,
+ * or fourteen pixels.
+ *
+ * M14-2 filled it with a wooded ridge and QA had it out again. M21-1 filled it
+ * with 87 tree impostors and QA had those out too: "the line of trees looks
+ * flat, and the impostor style that works at the sides stands out badly dead
+ * centre." The recorded conclusion across both, plus the M14-2 predecessor, is
+ * that A DISTINCT OBJECT IN THE MIDDLE DISTANCE DEAD CENTRE COMPETES WITH THE
+ * GARDEN AND REVEALS ITS OWN CONSTRUCTION.
+ *
+ * So this one is not an object. It is the ground, and the reason that is safe
+ * is geometry rather than taste: A HILL SHORTER THAN THE EYE NEVER BREAKS THE
+ * SKYLINE. A point at height h and distance d sits at atan((h - eye) / d),
+ * which is negative for every d whenever h < eye. The composed camera is at
+ * y = 7, these crest at `peak`, and the crest therefore stays under the horizon
+ * at any distance, in any weather, at any pan. There is no silhouette to read
+ * as a cutout, because there is no silhouette.
+ *
+ * ---- SIZED AGAINST THE BAND, WHICH IS 46 PIXELS TALL ----
+ *
+ * That is the number that matters and it is easy to miss. From the composed
+ * viewpoint the whole bare stretch, far shore to mesh edge, spans screen rows
+ * 366 to 320 of 900. The horizon is at 291. So:
+ *
+ *     hill      crest row    rise over flat    gap left to the horizon
+ *      3 m         313           17 px                 22 px
+ *      4 m         308           22 px                 17 px      <- here
+ *      6 m         296           34 px                  5 px
+ *
+ * 4 m fills half the band and keeps a clear strip of sky above it. 6 m was the
+ * other candidate and is rejected: five pixels of gap is a hill that reads as
+ * touching the skyline, and the eye only has to rise for it to touch.
+ *
+ * ---- AND THEY ARE HILLS, PLURAL, DELIBERATELY OFF-AXIS ----
+ *
+ * One bump centred on the view axis is an object again, whatever it is made
+ * of. Two long waves at different angles, neither aligned with the axis, give
+ * a crest that runs diagonally out of frame and reads as country rather than
+ * as a mound with two sides.
+ *
+ * Zero inside `from`, which is well beyond the lake's shelf, so the water
+ * level, the basin and the shore are all untouched by this.
+ */
+export function farHillsAt(x, z, world = GARDEN_CONFIG.world) {
+    const H = world.outerRelief && world.outerRelief.farHills;
+    if (!H) return 0;
+    const d = Math.hypot(x, z);
+    if (d <= H.from) return 0;
+    const t = Math.min(1, (d - H.from) / H.rampOver);
+    const ramp = t * t * (3 - 2 * t);
+    let h = 0;
+    for (const w of H.waves) h += w.amp * Math.sin(x * w.fx + z * w.fz + w.phase);
+    // Folded so the land rises rather than trenching: a dip out here would read
+    // as a hole in the meadow, and the flat ground is already the floor.
+    return Math.max(0, h) * ramp;
+}
+
 export function outerReliefAt(x, z, world = GARDEN_CONFIG.world) {
-    return outerWavesAt(x, z, world) - pondBasinAt(x, z, world);
+    // THE HILLS GO ON AFTER THE SHELF, not inside `outerWavesAt`. The shelf
+    // blends the meadow toward its value at the pond centre, and `pondWaterLevel`
+    // samples `outerWavesAt` there to decide where the water sits. A term added
+    // upstream of either would move the lake.
+    return outerWavesAt(x, z, world) - pondBasinAt(x, z, world) + farHillsAt(x, z, world);
 }
 
 /**

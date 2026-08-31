@@ -469,7 +469,14 @@ test('a plot full of trees in blossom stays inside the scene budget', () => {
     // that BLOSSOM IS NEVER THE BINDING COST, and a constant cannot say that.
     // Measured, a full plot in blossom is well under a full plot of the
     // expensive conifers, which is the scene's real ceiling.
-    let worst = 0;
+    // ---- AND THE SAME TRAP WAS STILL ONE LINE DOWN (2026-08-31) ----
+    // The note above is right and the second assertion did not follow it: it
+    // stayed absolute, at 8 percent of the 400,000, and raising the capacity to
+    // 49 broke it at 14.8 percent with nothing wrong. Fixing THAT by editing
+    // the number upward would have been the mistake M19-2 already named, so it
+    // is a ratio now. Blossom is a share of the tree it hangs on, and that
+    // share does not change when the plot gets bigger.
+    let worstShare = 0;
     let worstBearing = 0;
     let ceiling = 0;
     for (const s of SPECIES) {
@@ -482,16 +489,17 @@ test('a plot full of trees in blossom stays inside the scene budget', () => {
         ceiling = Math.max(ceiling, tris);
         if (!resolved.schedule) continue;
         const anchors = fruitFor(s.id).fruit.anchors.length;
-        worst = Math.max(worst, anchors);
+        worstShare = Math.max(worstShare, (anchors * 4) / tris);
         worstBearing = Math.max(worstBearing, tris + anchors * 4);
     }
     const n = GARDEN_CONFIG.plot.maxTrees;
     // A whole orchard in flower costs less than a plot of the biggest conifers,
     // so it never decides the cap.
     expect(worstBearing * n).toBeLessThan(ceiling * n);
-    // And the blossom ITSELF stays a small share of the whole budget, which is
-    // the number the density was originally tuned against.
-    expect(worst * 4 * n).toBeLessThan(400000 * 0.08);
+    // Measured at 0.12 on the cherry, which is the heaviest bloomer. A fifth
+    // is the ceiling because past that the flowers are no longer decoration on
+    // a tree, they are a second tree.
+    expect(worstShare).toBeLessThan(0.2);
     // One extra draw call per fruit tree, and only for the five species that
     // have a schedule. The other eleven pay nothing at all.
     expect(SPECIES.filter((x) => x.schedule).length).toBeLessThan(SPECIES.length / 2);
