@@ -686,28 +686,32 @@ test('A TAP OUTSIDE THE WALLS IS A QUESTION, not a silence', () => {
     // the wall or the grass beside it onto a spot that works, and that is the
     // right answer there. What it is not the right answer for is the meadow.
     const half = GARDEN_CONFIG.plot.halfSize;
-    const spacing = GARDEN_CONFIG.plot.gridSpacing;
+    // The grace is `reachGrace` and not the grid spacing. It read the spacing
+    // until M24-1, which meant coarsening the grid silently doubled it to three
+    // metres of open meadow. Aiming tolerance is about how precisely a person
+    // can point at something, so it does not move when the lattice does.
+    const grace = GARDEN_CONFIG.plot.reachGrace;
 
-    // Inside, and on the wall, and a cell past it: all planting taps.
+    // Inside, and on the wall, and a little past it: all planting taps.
     expect(inPlantingReach(0, 0)).toBe(true);
     expect(inPlantingReach(half, 0)).toBe(true);
     expect(inPlantingReach(0, -half)).toBe(true);
-    expect(inPlantingReach(half + spacing * 0.9, 0)).toBe(true);
+    expect(inPlantingReach(half + grace * 0.9, 0)).toBe(true);
 
     // Out on the meadow: not.
-    expect(inPlantingReach(half + spacing * 2, 0)).toBe(false);
-    expect(inPlantingReach(0, half + spacing * 2)).toBe(false);
+    expect(inPlantingReach(half + grace * 2, 0)).toBe(false);
+    expect(inPlantingReach(0, half + grace * 2)).toBe(false);
     expect(inPlantingReach(60, 60)).toBe(false);
 
     // AND IT MUST BE WIDER THAN WHERE A TREE MAY STAND, or a tap on the last
     // legal row of grass would be answered with a hint about the walls it is
     // already inside.
-    const margin = GARDEN_CONFIG.terrain.wall.thickness + spacing;
-    expect(half + spacing).toBeGreaterThan(half - margin);
+    const margin = GARDEN_CONFIG.terrain.wall.thickness + GARDEN_CONFIG.plot.plantMargin;
+    expect(half + grace).toBeGreaterThan(half - margin);
 
     // The old behaviour, for the record: the ring search runs twelve deep, so
-    // a tap this far out would have planted a tree eighteen metres away.
-    expect(12 * spacing).toBeGreaterThan(half);
+    // a tap this far out would have planted a tree well across the plot.
+    expect(12 * GARDEN_CONFIG.plot.gridSpacing).toBeGreaterThan(half);
 });
 
 test('and the conductor asks the reach before it plants', async () => {

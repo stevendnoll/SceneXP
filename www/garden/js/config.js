@@ -128,9 +128,56 @@ export const GARDEN_CONFIG = deepFreeze({
     // x and z both run from -12 to +12. -Z is away from the camera.
     plot: {
         halfSize: 12,
-        // Trees snap to this grid, which is what stops a garden becoming one
-        // solid mass of overlapping geometry.
-        gridSpacing: 1.5,
+        // ---- THE PLANTING GRID, COARSENED FROM 1.5 (M24-1) ----------------
+        // Trees have always snapped to a grid and have always been centred in
+        // their cell. At 1.5 m that was invisible as a lattice: twenty trees
+        // among 169 cells land wherever they were tapped, so the result read as
+        // scattered even though every one of them was exactly on a node.
+        //
+        // At 3.0 m there are 49 cells, so a row of trunks and mulch beds lines
+        // up where the planting happens to line up, and the beds sit 1.7 m
+        // apart instead of 0.22.
+        //
+        // IT DOES NOT STOP THE CANOPIES OVERLAPPING, and no spacing this plot
+        // can hold would. Measured off the built skeletons the mean mature
+        // canopy is 10.1 m across and the widest is 19.6, against a 24 m plot:
+        // twenty of them cannot help interpenetrating. The neatness this buys
+        // is at the trunks and the beds, which is what an orchard looks like
+        // anyway.
+        //
+        //     spacing   cells   mean canopy overlap   bed gap
+        //       1.5      169          8.6 m            0.22 m
+        //       3.0       49          7.1 m            1.72 m
+        //       5.0       25          5.1 m            3.72 m
+        //
+        // 5.0 was the other candidate and was turned down for the interaction
+        // rather than the look: twenty trees into twenty-five cells fills
+        // nearly all of them, and "a tree goes where you tapped" stops meaning
+        // anything.
+        gridSpacing: 3.0,
+        // What the grid used to be. Kept, because a saved garden stores CELL
+        // INDICES rather than positions, so migrating one needs the spacing it
+        // was written against. See `hydrate`.
+        legacyGridSpacing: 1.5,
+        // ---- TWO DISTANCES THAT USED TO BE THE GRID SPACING ---------------
+        // Both of these read `gridSpacing` until M24-1, and both were wrong to.
+        // Neither is about how far apart trees stand, so coarsening the grid
+        // moved them for no reason: the plantable area SHRANK from 169 cells to
+        // 25, and the aiming grace doubled to three metres of open meadow.
+        //
+        // plantMargin  how far inside the wall a trunk must stand. The widest
+        //              mature trunk measured across every species and forty
+        //              seeds is 0.148 m of radius and a mulch bed is 0.64, so
+        //              1.5 is generous on purpose and has room to spare.
+        // reachGrace   how far outside the wall still counts as asking to
+        //              plant. This is aiming tolerance, which is about how
+        //              precisely a person can point at a thing, and a person's
+        //              aim does not change when the lattice does.
+        //
+        // Both hold the exact numbers that the old formula produced at the old
+        // 1.5 m spacing, so decoupling them changed nothing on its own.
+        plantMargin: 1.5,
+        reachGrace: 1.5,
         // ---- Capacity, by device tier, and it is a TRIANGLE BUDGET --------
         // The plant modal says so plainly when the plot is full and offers to
         // remove a tree instead.
@@ -2206,7 +2253,13 @@ export const GARDEN_CONFIG = deepFreeze({
 
     // The one key this scene persists to. Versioned in the name, so a future
     // schema change is a new key rather than a guess at an old one. M3-5.
-    storage: { key: 'scenexp-garden-v1', schema: 1 },
+    // SCHEMA 2 REMAPS THE GRID. A saved tree stores `gx, gz`, which are cell
+    // INDICES, so the moment the spacing changed every one of them meant a
+    // different place: a tree at gx 5 was at 7.5 m and would have been read as
+    // 15, outside the plot and dropped. Version 1 saves are migrated rather
+    // than discarded, because the whole promise of this scene is that a garden
+    // is still there when you come back.
+    storage: { key: 'scenexp-garden-v1', schema: 2 },
 
     // ---- Outward-facing links -----------------------------------------------
     // Phase 5 hosting model: builder-funnel links are root-relative (the

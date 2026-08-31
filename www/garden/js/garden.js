@@ -34,10 +34,29 @@ import {
 } from './clock.min.js';
 import { resolveSpecies, clampCustom, speciesById, newSeed, DEFAULT_CUSTOM } from './species.min.js';
 import { createTree, updateTree, disposeTree } from './tree.min.js';
-import { heightAt, cellCenter, cellKey, cellInPlot } from './terrain.min.js';
+import {
+    heightAt, cellCenter, cellKey, cellInPlot, snapToGrid, nearestFreeCell
+} from './terrain.min.js';
 import { initBeds, syncBeds, updateBeds, disposeBeds } from './beds.min.js';
 
 // ---- Derived constants (pure) ----------------------------------------------
+
+/** The storage schema written while the planting grid was 1.5 m. Records at
+ *  this version are readable, but every cell index in them means a different
+ *  place, so `hydrate` re-snaps them. See the note there. */
+export const SCHEMA_GRID_1_5 = 1;
+
+/**
+ * A cell index written against the old 1.5 m grid, expressed on the current
+ * one. Position is the only thing the two grids agree about, so it goes
+ * through the world and back rather than being scaled as an index: the
+ * arithmetic is then the same whatever the two spacings happen to be, and it
+ * stays correct if the grid is ever changed again.
+ */
+export function regridCell(gx, gz, config = GARDEN_CONFIG) {
+    const was = config.plot.legacyGridSpacing;
+    return snapToGrid(gx * was, gz * was, config.plot.gridSpacing);
+}
 
 /** How many real seconds the thirst window lasts, per year. Everything about
  *  water is expressed against this, so changing the cycle length or the window
@@ -276,6 +295,21 @@ export function serialize(records, elapsedSeconds, config = GARDEN_CONFIG) {
  * careless. An unrecognised `v` IS discarded whole, because guessing at the
  * shape of an unknown schema is the one case where being conservative is
  * right.
+ *
+ * ---- SCHEMA 1 IS MIGRATED, NOT DISCARDED (M24-1) ----
+ *
+ * A tree is saved as a CELL INDEX, not a position, so coarsening the planting
+ * grid from 1.5 m to 3.0 changed what every saved index meant. A tree written
+ * at gx 5 stood at 7.5 m; read back against the new grid it would have claimed
+ * 15 m, outside the plot, and been dropped as out of bounds. A visitor who had
+ * tended a garden for a year would have opened the page to bare mulch, and
+ * nothing would have looked like a bug.
+ *
+ * So a version 1 record is put back through the spacing it was written against
+ * and re-snapped: world position first, new cell second. That is a HALVING, so
+ * two old cells can land on one new one, and the second arrival takes the
+ * nearest free cell instead of being dropped. The garden tidies itself into
+ * rows and keeps every tree, which is the whole promise this scene makes.
  */
 export function hydrate(raw, config = GARDEN_CONFIG) {
     // `restored` is what tells the conductor apart a garden that was read from
@@ -283,13 +317,17 @@ export function hydrate(raw, config = GARDEN_CONFIG) {
     // should open at the fresh-garden start hour.
     const empty = { elapsedSeconds: 0, trees: [], dropped: 0, restored: false };
     if (!raw || typeof raw !== 'object') return empty;
-    if (raw.v !== config.storage.schema) return empty;
+    if (raw.v !== config.storage.schema && raw.v !== SCHEMA_GRID_1_5) return empty;
+    const regrid = raw.v === SCHEMA_GRID_1_5;
 
     const elapsed = Number.isFinite(raw.elapsedSeconds) && raw.elapsedSeconds >= 0
         ? raw.elapsedSeconds : 0;
     const list = Array.isArray(raw.trees) ? raw.trees : [];
     const trees = [];
     const seen = new Set();
+    // Cells as they were WRITTEN, which is what duplicates are judged on. Same
+    // as `seen` unless this is a migration. See the note in the loop.
+    const source = new Set();
     let dropped = 0;
 
     for (const t of list) {
@@ -298,8 +336,34 @@ export function hydrate(raw, config = GARDEN_CONFIG) {
         if (!speciesById(t.species)) { dropped++; continue; }
         if (!Number.isFinite(t.seed)) { dropped++; continue; }
         if (!Number.isInteger(t.gx) || !Number.isInteger(t.gz)) { dropped++; continue; }
-        if (!cellInPlot(t.gx, t.gz, config)) { dropped++; continue; }
-        const key = cellKey(t.gx, t.gz);
+
+        // DUPLICATES ARE JUDGED ON THE CELL AS WRITTEN, before any migration.
+        // Two records on one cell is corrupt data, because there was never a
+        // legal way to produce it, and it stays a dropped record. The relocation
+        // below is for the other thing entirely: two records that were on
+        // DIFFERENT cells and collide only because the grid got coarser. Judging
+        // both after the re-snap would quietly promote corruption into a second
+        // tree in the next cell along.
+        const sourceKey = cellKey(t.gx, t.gz);
+        if (source.has(sourceKey)) { dropped++; continue; }
+        source.add(sourceKey);
+
+        // On a migration this is where the old index becomes a new one. The
+        // re-snap halves, so it asks for the nearest free cell rather than the
+        // exact one, and only a genuinely full plot loses a tree.
+        let gx = t.gx;
+        let gz = t.gz;
+        if (regrid) {
+            const at = regridCell(t.gx, t.gz, config);
+            if (!cellInPlot(at.gx, at.gz, config)) { dropped++; continue; }
+            const free = nearestFreeCell(at.gx, at.gz, seen, 12, config);
+            if (!free) { dropped++; continue; }
+            gx = free.gx;
+            gz = free.gz;
+        }
+
+        if (!cellInPlot(gx, gz, config)) { dropped++; continue; }
+        const key = cellKey(gx, gz);
         if (seen.has(key)) { dropped++; continue; }
         seen.add(key);
 
@@ -307,8 +371,8 @@ export function hydrate(raw, config = GARDEN_CONFIG) {
             id: typeof t.id === 'string' && t.id ? t.id : `t${nextId++}`,
             species: t.species,
             seed: t.seed >>> 0,
-            gx: t.gx,
-            gz: t.gz,
+            gx,
+            gz,
             custom: clampCustom(t.custom),
             plantedAt: finite(t.plantedAt, 0),
             growth: clamp01(finite(t.growth, 0)),

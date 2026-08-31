@@ -299,7 +299,7 @@ export function cellKey(gx, gz) {
  *  wall, so a mature trunk never grows through the stonework. */
 export function cellInPlot(gx, gz, config = GARDEN_CONFIG) {
     const { x, z } = cellCenter(gx, gz, config.plot.gridSpacing);
-    const margin = config.terrain.wall.thickness + config.plot.gridSpacing;
+    const margin = config.terrain.wall.thickness + config.plot.plantMargin;
     const limit = config.plot.halfSize - margin;
     return Math.abs(x) <= limit && Math.abs(z) <= limit;
 }
@@ -321,11 +321,15 @@ export function cellInPlot(gx, gz, config = GARDEN_CONFIG) {
  * entirely and did nothing at all. Neither taught the one rule this scene has:
  * trees go inside the walls.
  *
- * So the wall itself is the line. Inside it, plus a cell of grace, is a
- * planting tap. Outside it is a question, and the conductor answers it.
+ * So the wall itself is the line. Inside it, plus a metre and a half of grace,
+ * is a planting tap. Outside it is a question, and the conductor answers it.
+ *
+ * The grace is plot.reachGrace and NOT the grid spacing, which is what it read
+ * until the grid was coarsened. Aiming tolerance is about how precisely a
+ * person can point at a thing, and that does not change when the lattice does.
  */
 export function inPlantingReach(x, z, config = GARDEN_CONFIG) {
-    const limit = config.plot.halfSize + config.plot.gridSpacing;
+    const limit = config.plot.halfSize + config.plot.reachGrace;
     return Math.abs(x) <= limit && Math.abs(z) <= limit;
 }
 

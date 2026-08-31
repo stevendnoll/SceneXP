@@ -324,7 +324,10 @@ test('the garden can be planted, watered, saved, and cleared', async () => {
     const saved = JSON.parse(dom.windowStub.localStorage
         ? dom.windowStub.localStorage.getItem('scenexp-garden-v1')
         : globalThis.localStorage.getItem('scenexp-garden-v1'));
-    expect(saved.v).toBe(1);
+    // The configured schema, not a number copied into the test. Bumping the
+    // schema is a deliberate act and the suite should follow it, not fail on it.
+    const { GARDEN_CONFIG } = await import('../www/garden/js/config.js');
+    expect(saved.v).toBe(GARDEN_CONFIG.storage.schema);
     expect(saved.trees).toHaveLength(1);
     expect(saved.trees[0].species).toBe(entry.record.species);
 

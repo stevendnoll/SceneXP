@@ -150,13 +150,24 @@ test('a point snaps to a cell and back to its centre', () => {
 });
 
 test('no tree can be planted into the wall', () => {
-    const margin = GARDEN_CONFIG.terrain.wall.thickness + PLOT.gridSpacing;
+    // Asserted against the WALL, not against the margin formula. This test used
+    // to recompute `wall.thickness + gridSpacing` and check the cells matched
+    // it, which is the same arithmetic twice and proves only that the constant
+    // was copied correctly. When the grid was coarsened in M24-1 the formula
+    // changed and this test failed, having caught nothing: no tree had moved
+    // any closer to the stonework.
+    //
+    // What actually has to hold is that the widest thing a cell can hold still
+    // clears the inner face of the wall. The mulch bed is wider than any trunk,
+    // so the bed is the test.
+    const inner = HALF - GARDEN_CONFIG.terrain.wall.thickness;
+    const widest = GARDEN_CONFIG.garden.bed.radius;
     for (let gx = -30; gx <= 30; gx++) {
         for (let gz = -30; gz <= 30; gz++) {
             if (!cellInPlot(gx, gz)) continue;
             const { x, z } = cellCenter(gx, gz);
-            expect(Math.abs(x)).toBeLessThanOrEqual(HALF - margin + 1e-9);
-            expect(Math.abs(z)).toBeLessThanOrEqual(HALF - margin + 1e-9);
+            expect(Math.abs(x) + widest).toBeLessThan(inner);
+            expect(Math.abs(z) + widest).toBeLessThan(inner);
         }
     }
 });
@@ -168,7 +179,18 @@ test('the plot holds far more cells than trees', () => {
     }
     // Otherwise the grid, rather than the stated capacity, would be what
     // limits the garden, and it would do it without saying so.
-    expect(cells).toBeGreaterThan(PLOT.maxTrees * 4);
+    //
+    // THE HEADROOM IS DELIBERATELY THINNER THAN IT WAS. Coarsening the grid in
+    // M24-1 took this from 169 cells to 49, so the ratio went from 8.4x the
+    // capacity to 2.4x. That was the point of the change and it is still not a
+    // cap: a full garden of twenty trees leaves twenty-nine cells open, so
+    // there is visibly free ground and a real choice about where to plant. The
+    // floor is set at 2x because at 1x the grid IS the cap, whatever the
+    // configured capacity says.
+    expect(cells).toBeGreaterThan(PLOT.maxTrees * 2);
+    // And the failure this guards against is the silent one, so name it: the
+    // cell count must never be the smaller of the two limits.
+    expect(cells).toBeGreaterThan(PLOT.maxTrees);
 });
 
 test('the interaction never says no while there is room', () => {

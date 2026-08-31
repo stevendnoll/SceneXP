@@ -23,6 +23,7 @@ import {
     cropAt, plantingGrowth
 } from '../www/garden/js/garden.js';
 import { inThirstWindow } from '../www/garden/js/clock.js';
+import { cellInPlot } from '../www/garden/js/terrain.js';
 
 const CYCLE = GARDEN_CONFIG.clock.cycleSeconds;
 
@@ -257,9 +258,16 @@ test('the thirst marker appears before the tank is empty', () => {
 // ---- Persistence -----------------------------------------------------------
 
 test('a garden round trips through storage unchanged', () => {
+    let edge = 0;
+    while (cellInPlot(-(edge + 1), edge + 1)) edge++;
+
     const records = [
         createRecord('sugar-maple', { height: 1.15 }, 2, -3, 120, 12345),
-        createRecord('blue-spruce', {}, -4, 5, 300, 999)
+        // The far corner of whatever grid is configured, rather than a cell
+        // written down when the spacing was 1.5 m. This fixture went stale the
+        // moment the grid was coarsened, and a round-trip test that silently
+        // drops one of its two trees is not testing a round trip.
+        createRecord('blue-spruce', {}, -edge, edge, 300, 999)
     ];
     records[0].growth = 0.5;
     records[0].health = 0.75;
@@ -346,6 +354,93 @@ test('a saved file cannot plant more trees than the plot holds', () => {
     }
     const back = hydrate({ v: 1, elapsedSeconds: 0, trees });
     expect(back.trees.length).toBe(GARDEN_CONFIG.plot.maxTrees);
+});
+
+// ---- The grid coarsened, and saves had to survive it (M24-1) ---------------
+
+/**
+ * A saved tree is a CELL INDEX, so changing the spacing changed what every
+ * saved garden meant. These are the tests that the change did not cost anyone
+ * their trees.
+ *
+ * Falsified against the code as it stood before the migration, where hydrate
+ * was a strict `raw.v !== schema` and anything else came back empty: the first
+ * of these fails on `restored`, and the rest fail on length 0.
+ */
+test('A SAVED GARDEN SURVIVES THE GRID CHANGING UNDER IT', () => {
+    const trees = [];
+    for (let gx = -6; gx <= 6; gx += 3) {
+        for (let gz = -6; gz <= 6; gz += 4) {
+            trees.push({ species: 'apple', seed: 7, gx, gz, plantedAt: 0, growth: 1 });
+        }
+    }
+    expect(trees.length).toBeGreaterThan(10);
+
+    const back = hydrate({ v: 1, elapsedSeconds: 4321, trees });
+
+    expect(back.restored).toBe(true);
+    expect(back.trees).toHaveLength(trees.length);
+    expect(back.dropped).toBe(0);
+    expect(back.elapsedSeconds).toBe(4321);
+    // Every one of them landed somewhere legal, and no two on the same cell.
+    for (const t of back.trees) expect(cellInPlot(t.gx, t.gz)).toBe(true);
+    expect(new Set(back.trees.map((t) => `${t.gx},${t.gz}`)).size).toBe(trees.length);
+});
+
+test('a migrated tree stays where the visitor put it', () => {
+    // The point of going through the world rather than scaling the index: a
+    // tree must not travel across the plot to reach its new cell. Half a cell
+    // is the most a re-snap can ever move one, and that is the same tolerance
+    // the planting tap has always had.
+    const was = GARDEN_CONFIG.plot.legacyGridSpacing;
+    const now = GARDEN_CONFIG.plot.gridSpacing;
+    const trees = [{ species: 'apple', seed: 1, gx: 3, gz: -5 }];
+    const [t] = hydrate({ v: 1, elapsedSeconds: 0, trees }).trees;
+
+    expect(Math.abs(t.gx * now - 3 * was)).toBeLessThanOrEqual(now / 2 + 1e-9);
+    expect(Math.abs(t.gz * now - -5 * was)).toBeLessThanOrEqual(now / 2 + 1e-9);
+});
+
+test('two old cells that become one both keep a tree', () => {
+    // The halving case, which is the whole reason the migration cannot simply
+    // re-snap and dedupe. These two stood 1.5 m apart and land on one cell.
+    const back = hydrate({
+        v: 1,
+        elapsedSeconds: 0,
+        trees: [
+            { species: 'olive', seed: 1, gx: 2, gz: 0 },
+            { species: 'bur-oak', seed: 2, gx: 3, gz: 0 }
+        ]
+    });
+    expect(back.trees).toHaveLength(2);
+    expect(back.dropped).toBe(0);
+    expect(back.trees[0].gx).not.toBe(back.trees[1].gx);
+    // Both species kept their identity; neither became a copy of the other.
+    expect(back.trees.map((t) => t.species).sort()).toEqual(['bur-oak', 'olive']);
+});
+
+test('but a duplicate record is still corruption, and still dropped', () => {
+    // Distinguished from the case above by the cell AS WRITTEN. Two records on
+    // one old cell could never have been produced legally, so the second is
+    // dropped rather than relocated into the next cell along.
+    const back = hydrate({
+        v: 1,
+        elapsedSeconds: 0,
+        trees: [
+            { species: 'olive', seed: 1, gx: 2, gz: 0 },
+            { species: 'bur-oak', seed: 2, gx: 2, gz: 0 }
+        ]
+    });
+    expect(back.trees).toHaveLength(1);
+    expect(back.dropped).toBe(1);
+    expect(back.trees[0].species).toBe('olive');
+});
+
+test('and a version nobody has ever written is still discarded whole', () => {
+    // Migrating one known old schema is not the same as guessing at any number.
+    const trees = [{ species: 'olive', seed: 1, gx: 0, gz: 0 }];
+    expect(hydrate({ v: 99, elapsedSeconds: 0, trees }).restored).toBe(false);
+    expect(hydrate({ v: 0, elapsedSeconds: 0, trees }).trees).toHaveLength(0);
 });
 
 test('two trees can never share a cell', () => {
