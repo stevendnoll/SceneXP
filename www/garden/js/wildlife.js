@@ -1,16 +1,23 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * wildlife.js - Butterflies, fireflies, birds and bats.
+ * wildlife.js - Butterflies, fireflies, birds, bats and ducks.
  *
- * ---- NONE OF THEM ARE SWITCHED ON ----
+ * ---- NONE OF THE FOUR THAT FLY ARE SWITCHED ON ----
  *
  * All four sit behind `world.wildlife.enabled` and all four are currently
- * false, so at the moment this module builds nothing and the scene pays it
- * nothing. That is a product decision and not a state of disrepair: the
+ * false. That is a product decision and not a state of disrepair: the
  * butterflies, birds and bats pulled the eye off the growing trees (M8-1), and
  * the fireflies came off later because neither drawing of them landed (M12-9).
  * Everything below is whole, tested and tuned, and each one comes back by
  * turning its own word to true.
+ *
+ * ---- THE DUCKS ARE ON, AND THEY DO NOT HAVE THAT PROBLEM ----
+ *
+ * The four above competed with the one thing this scene is about, which is
+ * trees moving. Ducks are on the LAKE, which is already where the eye goes when
+ * it leaves the plot, and they DRIFT rather than fly: at 51 to 78 m a duck
+ * crosses a couple of pixels a second. They add life to the far half of the
+ * view without asking for any of the attention.
  *
  * ---- SCALE IS THE WHOLE PROBLEM ----
  *
@@ -40,6 +47,7 @@
  */
 
 import { GARDEN_CONFIG } from './config.min.js';
+import { pondHalfWidth, pondWaterLevel } from './terrain.min.js';
 import { makeRandom } from './species.min.js';
 import { wrapHour, clamp01 } from './clock.min.js';
 
@@ -81,6 +89,95 @@ export const WINDOWS = {
     bats: { from: 20.0, to: 3.5, fade: 1.0 }
 };
 
+/**
+ * Where the ducks drift, as seeded closed paths on the water.
+ *
+ * ---- THE LAKE IS AN ELLIPSE AND THEY HAVE TO STAY IN IT ----
+ *
+ * Not in the BASIN, which is the dug bowl, but inside the WATERLINE, which is
+ * where the ground actually falls below the water. Since M14-5 levelled the bed
+ * those two differ by a bank several metres wide, and a duck on the bank is a
+ * duck standing on grass.
+ *
+ * Each path is a slow closed loop rather than a wander, for the same reason the
+ * flyers' are: a random walk needs state, drifts out of its box, and cannot be
+ * asserted. A loop is a function of time, so a duck is exactly where it should
+ * be on any frame, including the first one after a tab comes back.
+ *
+ * Pure and seeded, so they are the same three ducks on every visit.
+ */
+export function duckPaths(config = GARDEN_CONFIG, options = {}) {
+    const D = config.world.wildlife.ducks;
+    if (!D) return [];
+    const P = config.world.pond;
+    const random = makeRandom(config.world.seed ^ 0xD0CC5);
+    const count = options.mobile ? D.countMobile : D.count;
+    // The waterline, not the basin rim. `pondHalfWidth` is the bowl; the water
+    // reaches `fill` of the way up it, and `keepInside` holds them well clear
+    // of even that.
+    const reach = duckWaterReach(config);
+    const out = [];
+    for (let i = 0; i < count; i++) {
+        // A loop small enough that the whole of it stays inside the water,
+        // placed anywhere in the part of the lake the loop leaves room for.
+        const loop = 0.10 + random() * 0.12;
+        const room = 1 - loop;
+        const a = random() * Math.PI * 2;
+        const r = Math.sqrt(random()) * room;
+        out.push({
+            cx: P.x + Math.cos(a) * r * reach.x,
+            cz: P.z + Math.sin(a) * r * reach.z,
+            rx: loop * reach.x,
+            rz: loop * reach.z,
+            // Awkward speeds, so three ducks never fall into step.
+            sx: 0.055 + random() * 0.045,
+            sz: 0.050 + random() * 0.045,
+            px: random() * 6.283,
+            pz: random() * 6.283,
+            bob: 0.7 + random() * 0.6,
+            tint: random()
+        });
+    }
+    return out;
+}
+
+/**
+ * How far the water reaches, in metres, less the margin the ducks keep.
+ *
+ * SOLVED RATHER THAN GUESSED. The basin is dug by a smoothstep, so the
+ * waterline is where `t * t * (3 - 2t) = fill` with `t = 1 - r`, and that has no
+ * tidy closed form. A first attempt used `1 - cbrt(fill)` as an approximation
+ * and put the ducks at 0.25 of the basin instead of 0.84: three birds huddled
+ * in the very middle of the lake. Ten steps of bisection is exact enough and
+ * follows `fill` if the lake is ever made fuller.
+ */
+export function duckWaterReach(config = GARDEN_CONFIG) {
+    const D = config.world.wildlife.ducks;
+    const P = config.world.pond;
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 24; i++) {
+        const t = (lo + hi) / 2;
+        if (t * t * (3 - 2 * t) < P.fill) lo = t; else hi = t;
+    }
+    // `t` is measured inward from the rim, so the waterline is 1 - t.
+    const share = (1 - (lo + hi) / 2) * (D ? D.keepInside : 0.6);
+    return { x: pondHalfWidth(config.world) * share, z: P.halfDepth * share };
+}
+
+/** Where one duck is at a time, and which way it is pointing. */
+export function duckAt(path, t, config = GARDEN_CONFIG) {
+    const D = config.world.wildlife.ducks;
+    const s = D ? D.speed : 0.3;
+    const x = path.cx + Math.sin(t * path.sx * s + path.px) * path.rx;
+    const z = path.cz + Math.cos(t * path.sz * s + path.pz) * path.rz;
+    // A moment ahead, which is what a duck faces: the derivative of the loop.
+    const ahead = 0.6;
+    const nx = path.cx + Math.sin((t + ahead) * path.sx * s + path.px) * path.rx;
+    const nz = path.cz + Math.cos((t + ahead) * path.sz * s + path.pz) * path.rz;
+    return { x, z, yaw: Math.atan2(nx - x, nz - z) };
+}
+
 // ---- State -----------------------------------------------------------------
 
 let sceneRef = null;
@@ -88,6 +185,9 @@ let butterflies = null;
 let fireflies = null;
 let birds = null;
 let bats = null;
+let ducks = null;
+let duckHeads = null;
+let duckPaths_ = [];
 const disposables = [];
 
 const _m = typeof THREE !== 'undefined' ? null : null;
@@ -207,6 +307,36 @@ export function initWildlife(scene, config = GARDEN_CONFIG, options = {}) {
         scene.add(fireflies.mesh);
     }
 
+    // ---- Ducks -------------------------------------------------------------
+    // TWO MESHES AND NOT ONE, because the head is what makes the silhouette
+    // read as a bird. At this distance a duck is about 12 px of pale body and
+    // 3 px of dark head, and the body alone is a floating leaf.
+    if (on.ducks) {
+        const D = W.ducks;
+        duckPaths_ = duckPaths(config, { mobile });
+        const bodyGeo = new THREE.SphereGeometry(0.5, 7, 5);
+        // Long, low and narrow: a duck on water is mostly waterline.
+        bodyGeo.scale(0.52, 0.42, 1.0);
+        ducks = new THREE.InstancedMesh(
+            bodyGeo,
+            new THREE.MeshLambertMaterial({ color: W.ducks.bodyColor }),
+            Math.max(1, duckPaths_.length));
+        ducks.name = 'ducks';
+        ducks.frustumCulled = false;
+        duckHeads = new THREE.InstancedMesh(
+            new THREE.SphereGeometry(0.5, 6, 5),
+            new THREE.MeshLambertMaterial({ color: W.ducks.headColor }),
+            Math.max(1, duckPaths_.length));
+        duckHeads.name = 'duck-heads';
+        duckHeads.frustumCulled = false;
+        duckHeads.count = duckPaths_.length;
+        ducks.count = duckPaths_.length;
+        disposables.push(ducks.geometry, ducks.material,
+            duckHeads.geometry, duckHeads.material);
+        scene.add(ducks);
+        scene.add(duckHeads);
+    }
+
     // ---- Birds -------------------------------------------------------------
     // Drawn against the sky, so a silhouette reads at any size.
     if (on.birds) {
@@ -234,7 +364,7 @@ export function initWildlife(scene, config = GARDEN_CONFIG, options = {}) {
         scene.add(bats.mesh);
     }
 
-    return { butterflies, fireflies, birds, bats };
+    return { butterflies, fireflies, birds, bats, ducks, duckHeads };
 }
 
 /** Two triangles meeting at a spine: a pair of wings, from any angle. */
@@ -476,6 +606,8 @@ export function updateWildlife(hour, elapsed, snowCoverage = 0, config = GARDEN_
 
     driveFlyer(bats, elapsed * 1.5, presenceAt(hour, WINDOWS.bats), config, { size: W.bats.size });
 
+    driveDucks(elapsed, config);
+
     // ---- Fireflies: position, and a blink each --------------------------
     if (!fireflies) return;
     const presence = presenceAt(hour, WINDOWS.fireflies) * calm;
@@ -533,9 +665,62 @@ export function updateWildlife(hour, elapsed, snowCoverage = 0, config = GARDEN_
     }
 }
 
+/**
+ * Move the ducks.
+ *
+ * ON THE WATER'S OWN LEVEL, read from `pondWaterLevel` rather than carried as a
+ * number here: the lake's surface has moved twice already (M14-5 re-measured
+ * `fill`) and a second copy of that height would have put three birds in the
+ * air or under the surface without anything failing.
+ *
+ * They are out at every hour. A duck asleep on the water looks exactly like a
+ * duck awake on it at this distance, so a window would cost a draw call's worth
+ * of bookkeeping to hide something nobody could see change.
+ */
+function driveDucks(elapsed, config) {
+    if (!ducks || !duckPaths_.length) return;
+    const D = config.world.wildlife.ducks;
+    const level = pondWaterLevel(config.world);
+    const body = D.bodyLength;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const e = new THREE.Euler();
+    const p = new THREE.Vector3();
+    const s = new THREE.Vector3();
+
+    for (let i = 0; i < duckPaths_.length; i++) {
+        const path = duckPaths_[i];
+        const at = duckAt(path, elapsed, config);
+        // A slow bob, each on its own clock, so three of them never rise
+        // together like a row of floats.
+        const bob = Math.sin(elapsed * path.bob * 0.55 + path.px) * D.bob;
+        e.set(0, at.yaw, 0);
+        q.setFromEuler(e);
+
+        p.set(at.x, level + body * 0.16 + bob, at.z);
+        s.setScalar(body);
+        m.compose(p, q, s);
+        ducks.setMatrixAt(i, m);
+
+        // The head rides forward and up, in the duck's OWN frame, so it stays
+        // at the front however the bird is pointing.
+        p.set(at.x + Math.sin(at.yaw) * body * 0.34,
+            level + body * 0.40 + bob,
+            at.z + Math.cos(at.yaw) * body * 0.34);
+        s.setScalar(body * 0.30);
+        m.compose(p, q, s);
+        duckHeads.setMatrixAt(i, m);
+    }
+    ducks.instanceMatrix.needsUpdate = true;
+    duckHeads.instanceMatrix.needsUpdate = true;
+}
+
 export function disposeWildlife() {
     for (const group of [butterflies, fireflies, birds, bats]) {
         if (group && sceneRef) sceneRef.remove(group.mesh);
+    }
+    for (const mesh of [ducks, duckHeads]) {
+        if (mesh && sceneRef) sceneRef.remove(mesh);
     }
     for (const item of disposables) {
         if (item && typeof item.dispose === 'function') item.dispose();
@@ -543,6 +728,9 @@ export function disposeWildlife() {
     disposables.length = 0;
     butterflies = null;
     fireflies = null;
+    ducks = null;
+    duckHeads = null;
+    duckPaths_ = [];
     birds = null;
     bats = null;
     sceneRef = null;

@@ -422,6 +422,36 @@ export function skyOpennessAt(cloud, stars = GARDEN_CONFIG.sky.stars) {
  * makes that impossible, which is the same principle as the ground's daylight
  * deriving from the sky's own shown luminance.
  */
+/**
+ * ---- WHY THE CLOUDS LIVE IN THE SHARED CHUNK ----
+ *
+ * This string is imported by the pond's fragment shader as well as the dome's,
+ * which is the whole reason the water samples gardenSkyLinear rather than
+ * approximating it. A cloudy sky over a cloudless lake would be the same fault
+ * one layer up, so the cover function goes in the shared piece and both
+ * surfaces call it with uniforms built by one function.
+ *
+ * ---- SAMPLED ON A SHEET, NOT ON THE DOME ----
+ *
+ * Dividing xz by y projects the direction onto a level sheet overhead, which is
+ * what makes the clouds bunch up and foreshorten toward the horizon the way
+ * real ones do. Sampling the dome directly gives evenly sized puffs all the way
+ * down, which reads as wallpaper.
+ *
+ * ---- COVER SLIDES THE THRESHOLD, NOT THE OPACITY ----
+ *
+ * At `clearAt` only the tops of the noise field clear the bar, so a clear day
+ * gets a few small islands with real sky between them; at `fullAt` most of the
+ * field does. Fading the opacity instead would give a clear day a whole sky of
+ * faint smears, which is not the same picture at all.
+ *
+ * ---- AND A FRACT-DOT HASH RATHER THAN A SIN ONE ----
+ *
+ * sin(dot(p, k)) at these coordinates takes an argument in the hundreds of
+ * radians, where float32 carries enough error to make the field on the GPU a
+ * different field from any modelled off it. That cost a QA round on the lake
+ * shore already. See [[glsl-hash-differs-offline]] in the decision log.
+ */
 export const SKY_GLSL = `
 vec3 gardenSrgbToLinear(vec3 c) {
     return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
@@ -446,6 +476,54 @@ vec3 gardenSkyLinear(vec3 dir, vec3 zenith, vec3 horizon, float lum, float power
     float up = clamp(dir.y, 0.0, 1.0);
     vec3 sky = mix(horizon, zenith, pow(up, power));
     return gardenSrgbToLinear(sky) * lum;
+}
+
+// Clouds. The long note is above the export, because prose inside a GLSL
+// string is a trap: the reserved-word lint reads it as code, and it is right
+// to.
+float gardenCloudHash(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+}
+
+float gardenCloudNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(gardenCloudHash(i), gardenCloudHash(i + vec2(1.0, 0.0)), u.x),
+               mix(gardenCloudHash(i + vec2(0.0, 1.0)), gardenCloudHash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+// Four octaves. Three reads as hills and five costs a full-screen dome more
+// than the result is worth.
+// NORMALISED, so the thresholds in the config are percentiles of a 0..1 field
+// rather than of whatever the amplitudes happen to sum to. Three octaves: the
+// fourth adds fractal detail at the edges, which is what made the first pass
+// read as scattered scraps rather than as fluffy masses.
+float gardenCloudFbm(vec2 p, float persistence) {
+    float v = 0.0;
+    float a = 1.0;
+    float total = 0.0;
+    for (int i = 0; i < 3; i++) {
+        v += a * gardenCloudNoise(p);
+        total += a;
+        p *= 2.03;
+        a *= persistence;
+    }
+    return v / total;
+}
+
+float gardenCloudCover(vec3 dir, float cover, float drift, vec4 shape, vec3 form) {
+    if (dir.y <= 0.002) return 0.0;
+    // xz over (bias + y). Gentle, and SEAMLESS: an atan2 mapping puts a wrap
+    // due west and the widest panned frame reaches 84.5 degrees off north.
+    float k = form.x / (form.y + dir.y);
+    vec2 p = dir.xz * k + vec2(drift, drift * 0.31);
+    float f = gardenCloudFbm(p, form.z);
+    float thr = mix(shape.y, shape.z, cover);
+    float lift = smoothstep(0.01, shape.w, dir.y);
+    return smoothstep(thr, thr + shape.x, f) * lift;
 }
 `;
 
@@ -492,6 +570,16 @@ uniform float uStarDensity;
 uniform float uStarBrightness;
 uniform float uStarHorizon;
 
+uniform float uCloudCover;
+uniform float uCloudDrift;
+uniform vec4  uCloudShape;   // edge, clear threshold, full threshold, horizon fade
+uniform vec3  uCloudForm;    // scale, bias, persistence
+uniform vec3  uCloudColor;
+uniform vec3  uCloudStorm;
+uniform float uCloudWarmth;
+uniform float uCloudWet;
+uniform float uCloudOpacity;
+
 float hash21(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
     p += dot(p, p + 45.32);
@@ -516,10 +604,16 @@ void main() {
     // The vertical gradient, from the shared chunk the pond also uses.
     vec3 col = gardenSkyLinear(dir, uZenith, uHorizon, uLum, uGradientPower);
 
+    // WORKED OUT FIRST AND LAID ON LAST. A cloud is in front of everything
+    // behind it, so the stars and the two bodies below are attenuated by it
+    // and the cloud's own colour goes on at the end.
+    float clouds = gardenCloudCover(dir, uCloudCover, uCloudDrift, uCloudShape, uCloudForm) * uCloudOpacity;
+    float behind = 1.0 - clouds;
+
     // Stars, before the sun and moon are added so a bright body drowns them.
     if (uStarFade > 0.001) {
         float horizonMask = smoothstep(0.0, uStarHorizon, dir.y);
-        col += vec3(starField(dir)) * uStarFade * uStarBrightness * horizonMask;
+        col += vec3(starField(dir)) * uStarFade * uStarBrightness * horizonMask * behind;
     }
 
     // The sun: a disc with a soft limb, plus a wide bloom and a tight aureole.
@@ -527,21 +621,80 @@ void main() {
     float sunCos = dot(dir, uSunDir);
     vec3 sunLin = gardenSrgbToLinear(uSunColor);
     float disc = smoothstep(uSunSoftCos, uSunCos, sunCos);
-    col += sunLin * disc * uSunDisc * uSunUp;
+    col += sunLin * disc * uSunDisc * uSunUp * behind;
     float g = max(sunCos, 0.0);
     col += sunLin * (pow(g, uSunGlowPower) * uSunGlow
-                   + pow(g, uSunAureolePower) * uSunAureole) * uSunUp;
+                   + pow(g, uSunAureolePower) * uSunAureole) * uSunUp * behind;
 
     // The moon: the same idea, softer, and it never saturates.
     float moonCos = dot(dir, uMoonDir);
     vec3 moonLin = gardenSrgbToLinear(uMoonColor);
     float moonDisc = smoothstep(uMoonSoftCos, uMoonCos, moonCos);
-    col += moonLin * moonDisc * uMoonDisc * uMoonUp;
-    col += moonLin * pow(max(moonCos, 0.0), uMoonGlowPower) * uMoonGlow * uMoonUp;
+    col += moonLin * moonDisc * uMoonDisc * uMoonUp * behind;
+    col += moonLin * pow(max(moonCos, 0.0), uMoonGlowPower) * uMoonGlow * uMoonUp * behind;
+
+    // The cloud itself. Warmed toward the horizon colour low in the sky, which
+    // is what gives a sunset its underlit edge without a second light: a cloud
+    // is lit by the sky it sits in.
+    // Happy when dry, gloomy when it is falling. Driven by what is actually
+    // COMING DOWN rather than by the cover, or a bright dry overcast would be
+    // painted as a storm. See the note beside stormColor in the config.
+    vec3 cloudBody = mix(uCloudColor, uCloudStorm, uCloudWet);
+    vec3 cloudSrgb = mix(cloudBody, uHorizon,
+        uCloudWarmth * (1.0 - clamp(dir.y * 2.2, 0.0, 1.0)));
+    col = mix(col, gardenSrgbToLinear(cloudSrgb) * uLum, clouds);
 
     gl_FragColor = vec4(gardenLinearToSrgb(gardenToneMap(col * uExposure)), 1.0);
 }
 `;
+
+/**
+ * The cloud uniforms, built here and handed to BOTH surfaces that draw sky.
+ *
+ * The dome and the water each need their own uniform objects, because three
+ * will not share one across two programs, but they come from one function so
+ * the lake cannot end up reflecting a different sky from the one overhead.
+ * Same arrangement the shore used for its two shaders.
+ */
+export function cloudUniforms(config = GARDEN_CONFIG) {
+    const C = config.sky.clouds;
+    return {
+        uCloudCover: { value: 0 },
+        uCloudDrift: { value: 0 },
+        uCloudShape: { value: new THREE.Vector4(C.edge, C.clearAt, C.fullAt, C.horizonFade) },
+        uCloudForm: { value: new THREE.Vector3(C.scale, C.bias, C.persistence) },
+        uCloudColor: { value: new THREE.Vector3(...unpackColor(C.color)) },
+        uCloudStorm: { value: new THREE.Vector3(...unpackColor(C.stormColor)) },
+        uCloudWarmth: { value: C.horizonWarmth },
+        uCloudWet: { value: 0 },
+        uCloudOpacity: { value: C.opacity },
+    };
+}
+
+/** Move the clouds. Both surfaces get the same two numbers every frame. */
+export function driveClouds(uniforms, cover, seconds, wet = 0, sunElevation = 90, config = GARDEN_CONFIG) {
+    if (!uniforms || !uniforms.uCloudCover) return;
+    const C = config.sky.clouds;
+    uniforms.uCloudCover.value = clamp01(cover);
+    uniforms.uCloudDrift.value = seconds * C.drift;
+    // The rate at which anything is falling, curved so that a drizzle greys the
+    // sky a little and a downpour greys it completely.
+    const visible = config.weather.precipitation.visibleRate;
+    const w = clamp01((wet - visible) / Math.max(0.001, C.wetFull - visible));
+    uniforms.uCloudWet.value = w;
+    // ---- THE WARMTH IS A SUNRISE AND SUNSET EFFECT ------------------------
+    // It exists to give a low sun its underlit edge, and applying it at every
+    // hour left a noon cloud mixed toward a pale blue horizon: slightly blue,
+    // slightly dull, and not white. Faded out as the sun climbs.
+    //
+    // A wet cloud mostly stops taking it either way: a rain-bearing cloud is
+    // lit from above and is thick enough not to glow at its base.
+    if (uniforms.uCloudWarmth) {
+        const low = clamp01((C.warmthFadesAbove - sunElevation) / C.warmthFadesAbove);
+        uniforms.uCloudWarmth.value =
+            C.horizonWarmth * low * (1 - w * (1 - C.stormWarmth));
+    }
+}
 
 // ---- Imperative side -------------------------------------------------------
 
@@ -618,7 +771,9 @@ export function initSky(scene, renderer, config = GARDEN_CONFIG, options = {}) {
             uStarFade: { value: 0 },
             uStarDensity: { value: S.stars.density },
             uStarBrightness: { value: S.stars.brightness },
-            uStarHorizon: { value: Math.sin(rad(S.stars.horizonFadeDegrees)) }
+            uStarHorizon: { value: Math.sin(rad(S.stars.horizonFadeDegrees)) },
+
+            ...cloudUniforms(config)
         }
     });
 
@@ -688,7 +843,7 @@ function configureShadow(light, shadow, mobile) {
  *                               the winter snowfall is a calendar event and
  *                               closes the sky without ever touching gloom.
  */
-export function updateSky(hour, deltaSeconds = 0, snowCoverage = 0, gloom = 0, flash = 0, cloud = 0, config = GARDEN_CONFIG) {
+export function updateSky(hour, deltaSeconds = 0, snowCoverage = 0, gloom = 0, flash = 0, cloud = 0, seconds = 0, wet = 0, config = GARDEN_CONFIG) {
     if (!domeMaterial) return null;
     const S = config.sky;
     const u = domeMaterial.uniforms;
@@ -714,6 +869,11 @@ export function updateSky(hour, deltaSeconds = 0, snowCoverage = 0, gloom = 0, f
     // the glow lingers for a moment after the disc has set.
     u.uSunUp.value = clamp01((light.sunElevation + 6) / 8);
     u.uMoonUp.value = clamp01((light.moonElevation + 4) / 8);
+
+    // THE SAME `cloud` THE SEASON CHIP READS, so the word and the sky agree.
+    // On the animation clock, so the weather keeps drifting behind the welcome
+    // card the way the trees keep swaying.
+    driveClouds(u, cloud, seconds, wet, light.sunElevation, config);
 
     // CLOUD IS A LID, AND A LID IS OPAQUE TO EVERYTHING BEHIND IT. The stars
     // used to be a function of the sun's elevation and nothing else, so they

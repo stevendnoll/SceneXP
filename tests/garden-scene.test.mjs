@@ -73,7 +73,7 @@ afterAll(() => uninstallAll());
 describe('the wildlife flags', () => {
     afterEach(() => disposeWildlife());
 
-    test('every creature is off, the fireflies included', () => {
+    test('the four that fly are off, and the ducks are not', () => {
         // The product decision, stated where a future reader will find it:
         // butterflies, birds and bats are moving things that pull the eye off
         // the only motion that matters. The fireflies came off later and for a
@@ -86,6 +86,11 @@ describe('the wildlife flags', () => {
         expect(on.birds).toBe(false);
         expect(on.bats).toBe(false);
         expect(on.fireflies).toBe(false);
+        // THE DUCKS DO NOT HAVE THE PROBLEM THE OTHERS HAD (M22-1). Everything
+        // above was switched off for pulling the eye away from the growing
+        // trees. Ducks are on the LAKE, which is already where the eye goes
+        // when it leaves the plot, and they drift rather than fly.
+        expect(on.ducks).toBe(true);
     });
 
     test('a creature that is off is never BUILT, not merely hidden', () => {
@@ -98,12 +103,17 @@ describe('the wildlife flags', () => {
         expect(built.birds).toBeNull();
         expect(built.bats).toBeNull();
         expect(built.fireflies).toBeNull();
+        // The ducks are the exception, and they are two meshes: a pale body and
+        // a dark head, because at 12 px the body alone is a floating leaf.
+        expect(built.ducks).not.toBeNull();
+        expect(built.duckHeads).not.toBeNull();
     });
 
     test('only the creatures that are on reach the scene', () => {
         const scene = recordingScene();
         initWildlife(scene, GARDEN_CONFIG);
-        expect(scene.added).toHaveLength(0);
+        // The ducks' two meshes, and nothing else.
+        expect(scene.added).toHaveLength(2);
     });
 
     test('turning a flag back on is the only edit needed to restore one', () => {
@@ -118,7 +128,8 @@ describe('the wildlife flags', () => {
             }));
             expect(built[name]).not.toBeNull();
             expect(built[name].count).toBeGreaterThan(0);
-            expect(scene.added).toHaveLength(1);
+            // The one turned on, plus the ducks' two.
+            expect(scene.added).toHaveLength(3);
             disposeWildlife();
         }
     });
@@ -178,7 +189,8 @@ describe('the wildlife flags', () => {
     test('nothing throws when every creature is off', () => {
         initWildlife(recordingScene(), withFlags((c) => {
             c.world.wildlife.enabled = {
-                butterflies: false, birds: false, bats: false, fireflies: false
+                butterflies: false, birds: false, bats: false, fireflies: false,
+                ducks: false
             };
         }));
         expect(() => updateWildlife(20, 200, 0)).not.toThrow();

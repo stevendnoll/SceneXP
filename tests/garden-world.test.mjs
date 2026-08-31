@@ -841,3 +841,264 @@ test('the shelf finishes clear of the water, and of the plot', () => {
         }
     }
 });
+
+// ---- The range has to reach the edge of the frame (M20-1) ------------------
+
+test('THE MOUNTAINS SPAN THE WHOLE HORIZON, AT EVERY ASPECT AND FULL PAN', () => {
+    // QA found the range simply stopping, with pale sky beyond it. Two things
+    // add up and only the first was ever accounted for.
+    //
+    // `camera.fov` is VERTICAL, so the horizontal half-angle is
+    // atan(tan(fov / 2) * aspect) and GROWS WITH THE WINDOW. The pan then adds
+    // its own limit on top, which is why this was not just a wide-screen bug:
+    // even 4:3 ran out once panned.
+    const cam = GARDEN_CONFIG.camera;
+    const spread = W.mountains.spreadDegrees;
+    const pan = cam.portrait.pan.maxAngle * 180 / Math.PI;
+    const halfH = (fov, aspect) => Math.atan(Math.tan(fov * Math.PI / 360) * aspect) * 180 / Math.PI;
+
+    for (const aspect of [4 / 3, 16 / 10, 16 / 9, 21 / 9, 32 / 9]) {
+        expect(halfH(cam.fov, aspect) + pan).toBeLessThanOrEqual(spread);
+    }
+    // Portrait too, which uses its own wider lens on a narrow window.
+    expect(halfH(cam.portrait.fov, 0.46) + pan).toBeLessThanOrEqual(spread);
+
+    // AND THE OLD VALUE FAILS, which is what makes this a guard. 62 was short
+    // by 7 degrees at 4:3 and by 23 at 21:9.
+    expect(halfH(cam.fov, 16 / 9) + pan).toBeGreaterThan(62);
+    expect(halfH(cam.fov, 4 / 3) + pan).toBeGreaterThan(62);
+
+    // THE PROFILE IS SAMPLED PER DEGREE, NOT PER RIDGE. Widening the arc
+    // without the segments would stretch the same ridgeline over 1.7 times the
+    // sky and soften it, so the detail is held roughly constant.
+    for (const layer of W.mountains.layers) {
+        expect(layer.segments / spread).toBeGreaterThan(1.8);
+    }
+    // And it stays cheap: two triangles a segment.
+    const tris = W.mountains.layers.reduce((a, l) => a + l.segments * 2, 0);
+    expect(tris).toBeLessThan(1200);
+});
+
+// ---- Clouds (M20-2) --------------------------------------------------------
+
+test('COVER SLIDES THE THRESHOLD, and the thresholds come off the field', () => {
+    const C = GARDEN_CONFIG.sky.clouds;
+    // A NORMALISED fbm still does not spread evenly over 0 to 1. Sampled over
+    // 9,000 directions across the band this camera can actually see:
+    //
+    //     p20 0.137   p32 0.169   p50 0.219   p90 0.419   p98.8 0.555
+    //
+    // The first pass guessed 0.62 and 0.34, which is a threshold ABOVE the
+    // field's maximum and one at its 90th percentile: almost no cloud at any
+    // weather. Guessing a threshold against an unmeasured distribution is the
+    // same mistake as guessing a size in metres against an unmeasured frame,
+    // and this scene has now made both.
+    //
+    // `clearAt` sits near the 99th percentile, so a clear day is one or two
+    // small puffs. It was the 97.5th and QA read that as still too cloudy.
+    expect(C.clearAt).toBeGreaterThan(0.50);
+    expect(C.clearAt).toBeLessThan(0.62);
+    expect(C.fullAt).toBeGreaterThan(0.12);
+    expect(C.fullAt).toBeLessThan(0.25);
+    // CLEARER MEANS A HIGHER BAR, which is the direction the whole thing rests
+    // on: at `clearAt` only the tops of the field get through.
+    expect(C.clearAt).toBeGreaterThan(C.fullAt);
+
+    // The edge has to be small against the field's own span, or every cloud is
+    // a smear with no edge anywhere. The first pass used 0.16 against a span of
+    // about 0.32.
+    expect(C.edge).toBeLessThan((C.clearAt - C.fullAt) / 2);
+
+    // ---- AND THE SHAPE IS SET BY A BAND 19 DEGREES TALL ------------------
+    // The camera pitches down 10.6 degrees with a 60 degree lens, so the
+    // visible sky runs from the horizon to about 19.4. A cloud has to FIT in
+    // that to read as a cloud: the second attempt reduced the foreshortening
+    // and got slabs with vertical walls crossing the whole strip.
+    const cam = GARDEN_CONFIG.camera;
+    const pitch = Math.atan2(cam.lookAt.y - cam.position.y,
+        Math.hypot(cam.lookAt.x - cam.position.x, cam.lookAt.z - cam.position.z));
+    const topOfSky = (pitch + cam.fov * Math.PI / 360) * 180 / Math.PI;
+    expect(topOfSky).toBeGreaterThan(10);
+    expect(topOfSky).toBeLessThan(30);
+
+    // A GENTLE, SEAMLESS PROJECTION. xz over (bias + y) foreshortens by only
+    // 1.6x across that band, so clouds stay round, and it has no wrap: an
+    // atan2 mapping puts a seam due west and the widest panned frame reaches
+    // 84.5 degrees off north.
+    expect(C.bias).toBeGreaterThan(0.3);
+    const atHorizon = 1 / C.bias;
+    const atTop = 1 / (C.bias + Math.sin(topOfSky * Math.PI / 180));
+    expect(atHorizon / atTop).toBeLessThan(2.2);
+
+    // Three octaves, not four: the fourth adds the fractal edge detail that
+    // made the first pass read as scattered scraps.
+    expect(C.octaves).toBe(3);
+
+    // They stop short of the horizon, where the projection has nothing left to
+    // give and distant cloud is lost in haze anyway.
+    expect(C.horizonFade).toBeGreaterThan(0.05);
+    expect(C.horizonFade).toBeLessThan(Math.sin(topOfSky * Math.PI / 180));
+
+    // AND THEY MOVE. The visible sky is about 11 noise cells wide, so this
+    // crosses the frame in roughly five minutes. It was 0.0075, eight times
+    // slower, which read as a painted backdrop.
+    expect(C.drift).toBeGreaterThan(0.02);
+    expect(C.drift).toBeLessThan(0.08);
+});
+
+test('the lake reflects the same clouds the dome draws', () => {
+    const dir = join(process.cwd(), 'www', 'garden', 'js');
+    const sky = readFileSync(join(dir, 'sky.js'), 'utf8');
+    const vista = readFileSync(join(dir, 'vista.js'), 'utf8');
+
+    // THE COVER FUNCTION IS IN THE SHARED CHUNK, which is the whole reason the
+    // water samples the dome's GLSL rather than approximating it. A cloudy sky
+    // over a cloudless lake is the same fault one layer up.
+    const glsl = sky.slice(sky.indexOf('export const SKY_GLSL'));
+    expect(glsl.slice(0, glsl.indexOf('`;'))).toMatch(/float gardenCloudCover/);
+    expect(vista).toMatch(/gardenCloudCover\(reflected/);
+
+    // And both surfaces get their uniforms from ONE builder, so they cannot be
+    // given different weather.
+    expect(sky).toMatch(/export function cloudUniforms/);
+    expect(sky).toMatch(/\.\.\.cloudUniforms\(config\)/);
+    expect(vista).toMatch(/\.\.\.cloudUniforms\(config\)/);
+    // Driven from one function too, off the same `cloud` the season chip reads.
+    expect(sky).toMatch(/export function driveClouds/);
+    expect(sky).toMatch(/driveClouds\(u, cloud, seconds, wet, light\.sunElevation, config\)/);
+    expect(vista).toMatch(/driveClouds\(pond\.uniforms, cloud, elapsed, wet, light\.sunElevation, config\)/);
+
+    // ---- HAPPY WHEN DRY, GLOOMY WHEN IT IS FALLING (M20-4) ---------------
+    // The colour is driven by the PRECIPITATION RATE and not by the cover, and
+    // that separation is the point: plenty of days are wall to wall cloud and
+    // still cheerful, so painting a dry overcast as a storm would be wrong.
+    // `overcastAt` already raises the cover on its own.
+    const main = readFileSync(join(dir, 'main.js'), 'utf8');
+    expect(main).toMatch(/const wet = Math\.max\(fall\.rain, fall\.snow\)/);
+    expect(sky).toMatch(/mix\(uCloudColor, uCloudStorm, uCloudWet\)/);
+    expect(vista).toMatch(/mix\(uCloudColor, uCloudStorm, uCloudWet\)/);
+    // Both surfaces again, so the lake never reflects a cheerful sky in a
+    // downpour.
+    const C = GARDEN_CONFIG.sky.clouds;
+    const lum = (h) => (0.2126 * ((h >> 16) & 255) + 0.7152 * ((h >> 8) & 255)
+        + 0.0722 * (h & 255)) / 255;
+    // The storm tone is genuinely dark against the happy one, or "gloomy" is
+    // just a slightly duller white.
+    expect(lum(C.color) / lum(C.stormColor)).toBeGreaterThan(2);
+    // And a wet cloud mostly stops taking the horizon's warmth: it is lit from
+    // above and thick enough not to glow at its base.
+    expect(C.stormWarmth).toBeLessThan(0.5);
+
+    // ---- WHITE AT MIDDAY, WARM ONLY AT THE ENDS OF THE DAY --------------
+    // The warmth exists to give a low sun its underlit edge, and it used to be
+    // applied at EVERY hour, so a noon cloud was mixed 40 percent toward a
+    // pale blue horizon and rendered 0xe3e7e9 rather than the 0xeaeaea it
+    // should be: slightly blue, slightly dull, and not the white QA asked for.
+    expect(C.warmthFadesAbove).toBeGreaterThan(5);
+    expect(C.warmthFadesAbove).toBeLessThan(GARDEN_CONFIG.sun.maxElevation);
+    expect(sky).toMatch(/warmthFadesAbove - sunElevation/);
+
+    // A CLOUD IS IN FRONT OF WHAT IS BEHIND IT: the stars and both bodies are
+    // attenuated by it rather than shining through.
+    const frag = sky.slice(sky.indexOf('const SKY_FRAG'));
+    const body = frag.slice(0, frag.indexOf('`;'));
+    expect(body).toMatch(/float behind = 1\.0 - clouds/);
+    expect(body).toMatch(/uStarBrightness \* horizonMask \* behind/);
+    expect(body).toMatch(/uSunDisc \* uSunUp \* behind/);
+    expect(body).toMatch(/uMoonDisc \* uMoonUp \* behind/);
+});
+
+// ---- Ducks (M22-1) ----------------------------------------------------------
+
+const { duckPaths, duckAt, duckWaterReach } = await import('../www/garden/js/wildlife.js');
+
+test('EVERY DUCK STAYS ON OPEN WATER, at every moment of its loop', () => {
+    // Not in the BASIN, which is the dug bowl, but inside the WATERLINE. Since
+    // M14-5 levelled the bed those two differ by a bank several metres wide,
+    // and a duck on the bank is a duck standing on grass.
+    const level = pondWaterLevel(W);
+    const paths = duckPaths();
+    expect(paths.length).toBeGreaterThan(1);
+
+    let samples = 0;
+    for (const path of paths) {
+        // A whole loop and then some, so nothing is missed between samples.
+        for (let t = 0; t < 6000; t += 5) {
+            const at = duckAt(path, t);
+            expect(outerReliefAt(at.x, at.z)).toBeLessThan(level);
+            samples += 1;
+        }
+    }
+    expect(samples).toBeGreaterThan(2000);
+});
+
+test('the waterline is SOLVED, not approximated', () => {
+    // The basin is dug by a smoothstep, so the waterline is where
+    // t * t * (3 - 2t) = fill with t = 1 - r, which has no tidy closed form. A
+    // first attempt used `1 - cbrt(fill)` and put the ducks at 0.25 of the
+    // basin instead of 0.84: three birds huddled in the very middle of the
+    // lake, which looks like a placement bug and is an algebra one.
+    const P = W.pond;
+    const reach = duckWaterReach();
+    const share = reach.x / pondHalfWidth(W);
+    // Solve it independently here, so the test is not the code twice.
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 40; i++) {
+        const t = (lo + hi) / 2;
+        if (t * t * (3 - 2 * t) < P.fill) lo = t; else hi = t;
+    }
+    const waterline = 1 - (lo + hi) / 2;
+    expect(share).toBeCloseTo(waterline * W.wildlife.ducks.keepInside, 4);
+    // And the guess it replaced is genuinely wrong, which is what makes this a
+    // guard rather than a restatement.
+    // 0.838 against 0.588: the ducks ended up at 30 percent of the radius they
+    // should have had, which is the difference between spread across a lake and
+    // huddled in the middle of it.
+    expect(Math.abs(waterline - (1 - Math.cbrt(P.fill)))).toBeGreaterThan(0.2);
+    expect(waterline / (1 - Math.cbrt(P.fill))).toBeGreaterThan(1.3);
+
+    // They spread across the lake rather than huddling in the middle.
+    expect(share).toBeGreaterThan(0.4);
+    // With a real margin from the shore, so none of them is ever at the edge.
+    expect(share).toBeLessThan(waterline);
+});
+
+test('a duck is sized in PIXELS, because a real one is a speck', () => {
+    // The lake sits 51 to 78 m from the eye, where a true 0.55 m mallard is 5
+    // to 7.5 px and reads as dirt on the screen. This scene has been caught by
+    // sizing in botany rather than in pixels three times already.
+    const D = W.wildlife.ducks;
+    const cam = GARDEN_CONFIG.camera;
+    const perRad = 800 / (cam.fov * Math.PI / 180);
+    const level = pondWaterLevel(W);
+    const far = Math.hypot(cam.position.y - level,
+        cam.position.z - (W.pond.z - W.pond.halfDepth));
+    const px = D.bodyLength / far * perRad;
+    // Legible at the FAR end of the water, which is the case that decides it.
+    expect(px).toBeGreaterThan(8);
+    // And not a pantomime: a swan is 1.5 m and this has to stay under that.
+    expect(D.bodyLength).toBeLessThan(1.5);
+
+    // They drift rather than swim. Anything faster reads as a wind-up toy, and
+    // the whole reason ducks are allowed in a scene that switched off its
+    // butterflies is that they do not compete with the trees.
+    expect(D.speed).toBeLessThan(0.6);
+});
+
+test('and they face where they are going', () => {
+    // A duck sliding sideways across a lake is the one thing that would give
+    // the loop away.
+    for (const path of duckPaths()) {
+        for (let t = 0; t < 400; t += 37) {
+            const a = duckAt(path, t);
+            const b = duckAt(path, t + 0.6);
+            const travelled = Math.hypot(b.x - a.x, b.z - a.z);
+            if (travelled < 1e-4) continue;
+            const heading = Math.atan2(b.x - a.x, b.z - a.z);
+            const off = Math.abs(Math.atan2(Math.sin(a.yaw - heading),
+                Math.cos(a.yaw - heading)));
+            expect(off).toBeLessThan(0.25);
+        }
+    }
+});

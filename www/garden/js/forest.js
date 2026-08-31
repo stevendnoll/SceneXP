@@ -504,9 +504,10 @@ let flowerPlacements = [];
 let lastBloom = -1;
 const disposables = [];
 
-function buildFarTier(points, isEvergreen, config, seedOffset) {
-    const F = config.world.farForest;
-    const texture = buildCanopyTexture(F.textureSize, config.world.seed + seedOffset, isEvergreen);
+function buildFarTier(points, isEvergreen, config, seedOffset, tier = null) {
+    const F = tier || config.world.farForest;
+    const texture = buildCanopyTexture(config.world.farForest.textureSize,
+        config.world.seed + seedOffset, isEvergreen);
     // ONE MATERIAL COLOUR TINTED THE TRUNK AS WELL AS THE LEAVES, so the whole
     // impostor went green and the perimeter wood grew green trunks. The canopy
     // texture now marks wood in its GREEN channel (wood is drawn red, foliage
@@ -517,11 +518,13 @@ function buildFarTier(points, isEvergreen, config, seedOffset) {
         color: 0xffffff,
         map: texture,
         transparent: false,
-        alphaTest: F.leafyAlphaTest,
+        alphaTest: config.world.farForest.leafyAlphaTest,
         side: THREE.DoubleSide
     });
     material.userData.season = { value: new THREE.Vector3(1, 1, 1) };
-    material.userData.bark = { value: new THREE.Vector3(...unpackColor(F.barkColor)) };
+    material.userData.bark = {
+        value: new THREE.Vector3(...unpackColor(config.world.farForest.barkColor))
+    };
     // Evergreens never shed, so theirs is pinned at 0 and never written.
     material.userData.bare = { value: 0 };
     material.customProgramCacheKey = () => 'garden-canopy';
@@ -633,6 +636,7 @@ export function initForest(scene, config = GARDEN_CONFIG, options = {}) {
     deciduous = buildFarTier(deciduousPoints, false, config, 29);
     scene.add(evergreen);
     scene.add(deciduous);
+
 
     buildNearTreeline(scene, config, options);
     buildUndergrowth(scene, config, options);

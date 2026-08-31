@@ -1139,11 +1139,33 @@ export const GARDEN_CONFIG = deepFreeze({
         // height, just under the top edge.
         mountains: {
             layers: [
-                { distance: 340, height: 112, roughness: 0.42, haze: 0.72, segments: 150 },
-                { distance: 285, height: 74, roughness: 0.55, haze: 0.5, segments: 130 }
+                // SEGMENTS ROSE WITH THE SPREAD, or the same profile stretched
+                // over 1.7 times the arc and the ridgeline went soft. 952
+                // triangles for the pair, which is nothing.
+                { distance: 340, height: 112, roughness: 0.42, haze: 0.72, segments: 256 },
+                { distance: 285, height: 74, roughness: 0.55, haze: 0.5, segments: 220 }
             ],
-            // Half-angle of the arc they span, in degrees, centred on north.
-            spreadDegrees: 62,
+            // ---- HALF-ANGLE OF THE ARC, AND IT IS SET BY THE CAMERA -------
+            // Centred on north. It was 62, which is short on EVERY landscape
+            // aspect once the view is panned, and QA caught the range simply
+            // stopping with pale sky beyond it.
+            //
+            // Two things add up and only the first was accounted for. The
+            // camera's `fov` is VERTICAL, so the horizontal half-angle is
+            // atan(tan(fov/2) * aspect) and grows with the window: 37.6 degrees
+            // at 4:3, 45.8 at 16:9, 53.4 at 21:9. The pan then adds its own
+            // 31.5 on top, and the pan is why this is not simply a wide-screen
+            // bug:
+            //
+            //     4:3     37.6 + 31.5 =  69.1   short by  7.1
+            //     16:9    45.8 + 31.5 =  77.3   short by 15.3
+            //     21:9    53.4 + 31.5 =  84.9   short by 22.9
+            //     32:9    64.0 + 31.5 =  95.5   short by 33.5
+            //
+            // 105 covers past 32:9 with room. Beyond 90 the arc curves behind
+            // the camera plane, which costs nothing: it is a curtain and the
+            // far side of it is simply never looked at.
+            spreadDegrees: 105,
             rockColor: 0x4a5566
         },
 
@@ -1214,7 +1236,48 @@ export const GARDEN_CONFIG = deepFreeze({
                 butterflies: false,
                 birds: false,
                 bats: false,
-                fireflies: false
+                fireflies: false,
+                // THE ONE THING ALIVE OUT THERE. Everything above was switched
+                // off for pulling the eye away from the trees, and ducks do not
+                // have that problem: they are on the LAKE, which is already
+                // where the eye goes when it leaves the plot, and they move at
+                // the speed of drifting rather than of flying.
+                ducks: true
+            },
+
+            // ---- Ducks (M22-1) --------------------------------------------
+            // SIZED IN PIXELS, BECAUSE A REAL DUCK IS A SPECK. The lake sits 51
+            // to 78 m from the eye, where a true 0.55 m mallard measures 5 to
+            // 7.5 px and reads as dirt on the screen. This scene has been
+            // caught by that three times now, on the mulch beds, the water
+            // gauges and the fruit.
+            //
+            //     body     px near   px far
+            //     0.55 m      7.5       4.9   a speck
+            //     0.95 m     14.2       9.3   reads as a bird
+            //
+            // 0.95 m is a swan rather than a mallard, and it is the honest
+            // trade: the alternative is something nobody can see.
+            ducks: {
+                count: 3,
+                countMobile: 2,
+                bodyLength: 0.95,
+                // A pale body and a dark head. At this size the head is about
+                // 3 px, and that dark dot at one end is most of what makes the
+                // silhouette read as a bird rather than as a leaf.
+                bodyColor: 0xe8e4da,
+                headColor: 0x33403a,
+                // Metres per second, on the animation clock. A duck on still
+                // water drifts rather than swims, and anything faster reads as
+                // a wind-up toy.
+                speed: 0.30,
+                // How far into the lake they keep, as a share of the waterline.
+                // Well clear of the shore, so none of them ever appears to be
+                // standing on the bank.
+                keepInside: 0.62,
+                // A slow bob, in metres, so they sit ON the water rather than
+                // in it.
+                bob: 0.035
             },
 
             butterflies: {
@@ -1827,6 +1890,120 @@ export const GARDEN_CONFIG = deepFreeze({
         // THREE tagged as linear so the renderer does not convert it a second
         // time. Near is past the far edge of the plot, so nothing the visitor
         // planted is ever fogged.
+        // ---- Clouds (M20-2) -------------------------------------------------
+        // SPARSE WHEN CLEAR, HEAVY WHEN CLOUDY, and `cover` slides the
+        // THRESHOLD rather than the opacity. At `clearAt` only the tops of the
+        // noise field clear the bar, so a clear day gets a few small islands
+        // with real sky between them; at `fullAt` most of the field does.
+        // Fading the opacity instead would give a clear day a whole sky of
+        // faint smears, which is not the same picture at all.
+        //
+        // The cover itself is `overcastAt`, the one number the season chip and
+        // the sky already agree on, so the words "cloudy" and the thing
+        // overhead cannot disagree.
+        clouds: {
+            // ---- THE CAMERA BARELY SEES ANY SKY, AND THAT SETS ALL OF THIS --
+            // It pitches down 10.6 degrees with a 60 degree lens, so the frame
+            // spans -40.6 to +19.4 in elevation: the visible sky is a band
+            // about 19 degrees tall sitting on the horizon. Every number here
+            // follows from that, and the first two attempts did not know it.
+            //
+            // ATTEMPT ONE projected onto a level sheet (xz divided by y) and
+            // drew dozens of tiny fragments. That projection is right for a
+            // sky you look UP into, where it makes cloud bunch and foreshorten
+            // properly, and wrong for a band lying on the horizon: everything
+            // in it is compressed into flat slivers.
+            //
+            // ATTEMPT TWO raised the clamp to reduce the squashing, which made
+            // it worse. With little foreshortening a cloud is taller than the
+            // 19 degree band, so it arrives as a slab with vertical walls
+            // crossing the whole strip. **A CLOUD HAS TO BE SMALL ENOUGH TO FIT
+            // IN THE BAND TO READ AS A CLOUD AT ALL.**
+            //
+            // What works is a gentle SEAMLESS projection, xz over (bias + y),
+            // which foreshortens by only 1.6x across the visible band and so
+            // keeps clouds round. It also has no wrap: an atan2 mapping puts a
+            // seam due west, and the widest panned frame reaches 84.5 degrees
+            // off north, which is close enough to find it.
+            bias: 0.55,
+            // ---- SCALE IS SET BY THE BAND INCLUDING THE TILT ---------------
+            // Measured against 19 degrees of sky and then found wanting,
+            // because the TILT was left out: `pan.maxTilt` is 18.3 degrees, so
+            // the visible sky actually reaches 37.7 in landscape and 43.7 in
+            // portrait. Over twice what was tuned for.
+            //
+            // At 4.5 the whole of that band held only three or four noise
+            // features, so a cloudy sky arrived as one continental mass with no
+            // sky in it. QA sent back a screenshot of exactly that. At 8 the
+            // same band holds a dozen or so, which is a handful of distinct
+            // rounded clouds on a clear day and a properly broken sky when it
+            // is cloudy.
+            scale: 8.0,
+            // Three octaves, not four. The fourth adds fractal detail at the
+            // edges, which is what made the first pass read as scattered scraps
+            // rather than as fluffy masses.
+            octaves: 3,
+            persistence: 0.45,
+            // ---- THRESHOLDS FROM THE FIELD'S OWN PERCENTILES ---------------
+            // A normalised fbm does not span 0 to 1. Sampled over 9,000
+            // directions across the VISIBLE band:
+            //
+            //     p20 0.145   p34 0.189   p50 0.242   p90 0.419   p98.5 0.549
+            //
+            // `clearAt` is the 98.5th, so a clear day is a few small rounded
+            // puffs. `fullAt` is the 34th, giving about half the sky.
+            // The 97th rather than the 98.5th. At the 98.5th a clear day was
+            // one or two puffs, which is not "a few white fluffy clouds" so
+            // much as an almost empty sky; 4 percent was too many. This is
+            // about 2, which is several distinct clouds with plenty of blue.
+            clearAt: 0.508,
+            fullAt: 0.189,
+            edge: 0.045,
+            // ---- AND THEY MOVE ---------------------------------------------
+            // The visible sky is about 11 noise cells wide, so this crosses the
+            // frame in roughly five minutes and moves a cloud its own width in
+            // about thirty seconds: weather, rather than a slideshow or a
+            // conveyor. It was 0.0075, which is eight times slower and read as
+            // a painted backdrop.
+            drift: 0.035,
+            // Clouds still stop short of the horizon, where the projection has
+            // nothing left to give and distant cloud is lost in haze anyway.
+            horizonFade: 0.14,
+            // NOT PURE WHITE. A cloud is lit by the same sky it sits in, so
+            // this is warmed toward the horizon colour low down, which is what
+            // gives a sunset its underlit edge for free.
+            // ---- HAPPY WHEN DRY, GLOOMY WHEN IT IS FALLING ----------------
+            // The cover already rises when it rains, because `overcastAt` reads
+            // what is actually falling. The COLOUR is a separate question and
+            // has to be, or a bright dry overcast would be painted as a storm:
+            // plenty of days are wall to wall cloud and still cheerful.
+            //
+            // So this is driven by the PRECIPITATION RATE and not by the cover.
+            // Dry cloud is near white and takes the horizon's warmth low down,
+            // which is what gives a sunset its underlit edge. Wet cloud goes to
+            // a flat slate and mostly stops taking that warmth, because a
+            // rain-bearing cloud is lit from above and thick enough not to glow
+            // at its base.
+            color: 0xf8faf8,
+            stormColor: 0x646a72,
+            // ---- AND THE WARMTH ONLY HAPPENS WHEN THE SUN IS LOW ----------
+            // It exists to give a sunrise and a sunset their underlit edge. It
+            // was applied at every hour, so a NOON cloud was mixed 40 percent
+            // toward a pale blue horizon and came out 0xe3e7e9 rather than the
+            // 0xeaeaea it should be: slightly blue, slightly dull, and not the
+            // white QA asked for. Faded out above this elevation, midday
+            // clouds are white and the dawn ones still catch the light.
+            horizonWarmth: 0.4,
+            warmthFadesAbove: 18,
+            // How much of the warmth survives a downpour.
+            stormWarmth: 0.25,
+            // The rate at which cloud is fully grey. `weather.states.stormy`
+            // carries rain 1.0, so this greys well before the worst of it and
+            // a drizzle still darkens the sky a little.
+            wetFull: 0.45,
+            opacity: 0.94
+        },
+
         fog: { near: 60, far: 260 },
 
         // ---- Lighting -------------------------------------------------------

@@ -35,6 +35,7 @@ import { makeRandom } from './species.min.js';
 import { clamp01 } from './clock.min.js';
 import {
     SKY_GLSL, skyStateAt, applyGloom, lightingAt, directionAt,
+    cloudUniforms, driveClouds,
     shownColor, unpackColor, mixColor, packColor
 } from './sky.min.js';
 import { worldHeightAt, outerWavesAt, pondWaterLevel, pondHalfWidth } from './terrain.min.js';
@@ -95,6 +96,15 @@ uniform float uTime;
 uniform float uRippleScale;
 uniform float uRippleHeight;
 uniform float uReflectance;
+uniform float uCloudCover;
+uniform float uCloudDrift;
+uniform vec4  uCloudShape;
+uniform vec3  uCloudForm;
+uniform vec3  uCloudColor;
+uniform vec3  uCloudStorm;
+uniform float uCloudWarmth;
+uniform float uCloudWet;
+uniform float uCloudOpacity;
 uniform vec3  uEye;
 
 varying vec3 vWorld;
@@ -145,6 +155,17 @@ void main() {
     vec3 reflected = reflect(eyeDir, normal);
     reflected.y = abs(reflected.y);
     vec3 sky = gardenSkyLinear(reflected, uZenith, uHorizon, uLum, uGradientPower);
+
+    // ---- AND THE CLOUDS IN IT ---------------------------------------------
+    // The whole reason this shader imports the dome's GLSL rather than
+    // approximating it: a cloudy sky over a cloudless lake is the same fault as
+    // water reflecting a gradient nobody can see. One function, both surfaces.
+    float pondCloud =
+        gardenCloudCover(reflected, uCloudCover, uCloudDrift, uCloudShape, uCloudForm) * uCloudOpacity;
+    vec3 pondCloudBody = mix(uCloudColor, uCloudStorm, uCloudWet);
+    vec3 pondCloudSrgb = mix(pondCloudBody, uHorizon,
+        uCloudWarmth * (1.0 - clamp(reflected.y * 2.2, 0.0, 1.0)));
+    sky = mix(sky, gardenSrgbToLinear(pondCloudSrgb) * uLum, pondCloud);
 
     // A sun glint, which is most of what makes water read as water at dawn.
     float glint = pow(max(dot(reflected, uSunDir), 0.0), 220.0);
@@ -291,6 +312,7 @@ function buildPond(config) {
         uRippleScale: { value: P.rippleScale },
         uRippleHeight: { value: P.rippleHeight },
         uReflectance: { value: P.baseReflectance },
+        ...cloudUniforms(config),
         uEye: { value: new THREE.Vector3() }
     };
 
@@ -431,7 +453,7 @@ export function initVista(scene, camera, config = GARDEN_CONFIG) {
  *        change together rather than on two schedules
  * @param {number} gloom        the weather, so the water dulls under a storm
  */
-export function updateVista(hour, elapsed, snowCoverage = 0, gloom = 0, camera = null, config = GARDEN_CONFIG) {
+export function updateVista(hour, elapsed, snowCoverage = 0, gloom = 0, camera = null, cloud = 0, wet = 0, config = GARDEN_CONFIG) {
     const sky = applyGloom(skyStateAt(hour, config.sky.keys), gloom, config.sky);
     const light = lightingAt(hour, snowCoverage, gloom, null, config);
     const snow = clamp01(snowCoverage);
@@ -439,6 +461,10 @@ export function updateVista(hour, elapsed, snowCoverage = 0, gloom = 0, camera =
     // The ridge haze is the sky's horizon AS SHOWN, not the raw keyframe: it
     // has to match the pixels beside it, and those have been through the tone
     // curve and the encode.
+    // The water reflects the same clouds the dome draws, driven from the same
+    // two numbers. See the note beside gardenCloudCover in sky.js.
+    if (pond) driveClouds(pond.uniforms, cloud, elapsed, wet, light.sunElevation, config);
+
     const haze = shownColor(sky.horizon, sky.lum, config.sky.exposure);
     for (const ridge of ridges) {
         setVec(ridge.uniforms.uHaze.value, haze);

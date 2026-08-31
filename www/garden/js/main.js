@@ -1481,10 +1481,13 @@ function animate() {
     state.falling = Math.max(fall.rain, fall.snow)
         >= GARDEN_CONFIG.weather.precipitation.visibleRate;
 
-    updateSky(hour, delta, snow, weather.gloom, fall.flash, cloud);
+    // WHAT IS ACTUALLY FALLING, which is what greys the clouds. The cover
+    // already rises on its own through `overcastAt`; this is the colour.
+    const wet = Math.max(fall.rain, fall.snow);
+    updateSky(hour, delta, snow, weather.gloom, fall.flash, cloud, state.sceneSeconds, wet);
     updateTerrain(hour, snow);
     updateForest(hour, snow, weather.wind, state.sceneSeconds, motionScale());
-    updateVista(hour, state.sceneSeconds, snow, weather.gloom, camera);
+    updateVista(hour, state.sceneSeconds, snow, weather.gloom, camera, cloud, wet);
     // Pixels per radian of vertical field. TWO THINGS IN THIS SCENE HOLD A SIZE
     // ON SCREEN RATHER THAN IN METRES, the water level in the mulch beds and
     // the fireflies' glow, and both need the lens and the viewport, both of
