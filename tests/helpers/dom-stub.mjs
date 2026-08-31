@@ -191,6 +191,12 @@ function makeElement(tag = 'div') {
     },
     // The reference node is honoured, or insertion order is not a thing a test
     // can check and every layout assertion passes by accident.
+    // A real DOM has it and the stub did not, which is a difference the suite
+    // reports as "3D init failed" rather than as a missing method. www/garden
+    // moves its view-reset button into the shared pan part's zoom stack and
+    // needs it at the FRONT: the stack is anchored to the bottom of the frame,
+    // so appending would shove the zoom buttons upward when it appears.
+    prepend(c) { detach(c); el.children.unshift(c); adopt(el, c); return c; },
     insertBefore(c, ref) {
       detach(c);
       const at = ref ? el.children.indexOf(ref) : -1;

@@ -42,7 +42,8 @@ import { initPrecipitation, updatePrecipitation, disposePrecipitation } from './
 import { resolveSpecies } from './species.min.js';
 import {
     dollyView, applyDollyDelta, dollyLimits, getDolly, resetView,
-    focusDistance, dollyForDistance, focusOn, stepView, cancelFocus, getAim
+    focusDistance, dollyForDistance, focusOn, stepView, cancelFocus, getAim,
+    aimTarget, viewIsComposed
 } from './view.min.js';
 import {
     pickBase, pickDrop, pickDropIndex, dropScreenY, dropPresence, thirstyCount,
@@ -61,7 +62,8 @@ import {
 } from './ui.min.js';
 import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
 import {
-    initPortraitControls, updatePortraitControls, gestureClaimedTap, resetPortraitAim
+    initPortraitControls, updatePortraitControls, gestureClaimedTap, resetPortraitAim,
+    getPanAngle, getTiltAngle
 } from '../../shared/js/pan-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
@@ -113,7 +115,10 @@ let scene = null;
 let camera = null;
 let weather = null;
 
-let canvas, loadingScreen, blocker, waterAllBtn, helpBtn, resetBtn;
+let canvas, loadingScreen, blocker, waterAllBtn, helpBtn, resetBtn, viewResetBtn;
+// What syncViewReset last wrote, so a per-frame check costs no DOM writes.
+// `null` means it has never written, which forces the first call through.
+let viewResetShown = null;
 let cleanupController = null;
 
 // The plant flow's pending spot, chosen when the visitor tapped the grass.
@@ -158,6 +163,7 @@ async function init() {
     waterAllBtn = document.getElementById('water-all');
     helpBtn = document.getElementById('help-btn');
     resetBtn = document.getElementById('reset-btn');
+    viewResetBtn = document.getElementById('view-reset');
     if (!canvas) return;
 
     applySiteLinks();
@@ -379,11 +385,61 @@ function applyView() {
     // rotates from THIS object rather than from the config, the visitor's own
     // yaw and tilt re-base onto it: pan left afterwards and you pan left of the
     // tree, which is what anybody would expect and none of it is code.
-    const focus = getAim();
-    viewTarget.x = focus ? focus.x : cam.lookAt.x;
-    viewTarget.y = focus ? focus.y : view.lookY;
-    viewTarget.z = focus ? focus.z : view.lookZ;
+    //
+    // `aimTarget` is where the release lives, so pulling the dolly back toward
+    // the composed viewpoint opens the frame back onto the whole garden rather
+    // than retreating along an axis that is no longer pointed at it.
+    const target = aimTarget({ x: cam.lookAt.x, y: view.lookY, z: view.lookZ });
+    viewTarget.x = target.x;
+    viewTarget.y = target.y;
+    viewTarget.z = target.z;
     camera.lookAt(viewTarget.x, viewTarget.y, viewTarget.z);
+}
+
+/**
+ * Put the camera back where the scene opens.
+ *
+ * THE SAME MOVE PLANTING USES, aimed at the composed viewpoint with a dolly of
+ * zero, which is worth noticing rather than being clever about: it eases rather
+ * than snapping, it starts from where the camera is genuinely looking, and it
+ * is cancelled by the same first touch. All three come free. `stepView` then
+ * releases the aim outright on the frame it lands, because a dolly of zero puts
+ * `focusHold` at zero.
+ *
+ * IT CLEARS ALL THREE THINGS THAT CAN MOVE THE VIEW. The dolly and the aim are
+ * this module's; the yaw and tilt belong to the shared part and would otherwise
+ * survive, which is the half the dolly release cannot reach on its own and the
+ * reason this control earns its place beside it.
+ */
+function showWholeGarden() {
+    if (!camera) return;
+    const cam = GARDEN_CONFIG.camera;
+    const view = dollyView(0, composedView());
+    const target = { x: cam.lookAt.x, y: view.lookY, z: view.lookZ };
+    const from = currentAimPoint(target);
+    resetPortraitAim();
+    focusOn(target, 0, state.reducedMotion ? 0 : GARDEN_CONFIG.camera.focus.seconds, from);
+    track('view-reset');
+}
+
+/**
+ * Show the control only while the view has somewhere to go back to.
+ *
+ * Called every frame, and it touches the DOM only when the answer changes: the
+ * dolly moves continuously, so an unguarded write here would be sixty attribute
+ * changes a second for a value that is a boolean.
+ */
+function syncViewReset() {
+    if (!viewResetBtn) return;
+    const show = !viewIsComposed(getPanAngle(), getTiltAngle());
+    // `null` until the first call, so the state is WRITTEN once rather than
+    // inherited from the markup. The markup does carry `hidden`, but a control
+    // whose visibility is only correct because an attribute happened to be
+    // typed in another file is the shape of the `.ui-float` bug this codebase
+    // has already met twice.
+    if (show === viewResetShown) return;
+    viewResetShown = show;
+    viewResetBtn.hidden = !show;
 }
 
 // Scratch for the aim read-back below, so a planting allocates nothing.
@@ -771,6 +827,19 @@ function setupEventListeners() {
         onFirstUse: (kind) => track(`view-${kind}`),
         signal
     });
+
+    // ---- AND THE VIEW RESET JOINS THE STACK THE PART JUST BUILT -----------
+    // It lives in index.html with the rest of the chrome and moves here,
+    // because the container is the shared part's and only exists after the
+    // call above. PREPENDED, not appended: the stack is anchored to the bottom
+    // of the frame, so adding to the end would shove the plus and minus upward
+    // the moment this appeared, and a zoom button that moves when a neighbour
+    // shows up is worse than no neighbour.
+    if (viewResetBtn) {
+        const stack = document.querySelector('.garden-zoom');
+        if (stack) stack.prepend(viewResetBtn);
+        viewResetBtn.addEventListener('click', showWholeGarden, { signal });
+    }
 }
 
 function onResize() {
@@ -1754,6 +1823,9 @@ function animate() {
     stepView(delta);
     applyView();
     updatePortraitControls(delta);
+    // After the part, so the yaw and tilt it may have just changed are the ones
+    // being asked about rather than last frame's.
+    syncViewReset();
 
     // ---- THE PREVIEW GOES FIRST, AND THAT IS THE WHOLE FIX ----------------
     // It draws into a SCISSOR RECTANGLE at the top left of the main drawing

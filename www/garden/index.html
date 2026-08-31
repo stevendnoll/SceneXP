@@ -74,7 +74,7 @@
     <title>Fractal Garden</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
-    <link rel="preload" href="css/experience.min.css?v=8" as="style">
+    <link rel="preload" href="css/experience.min.css?v=9" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -84,7 +84,7 @@
          dark body, and this scene wants a soft daylight behind a slow first
          frame. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
-    <link rel="stylesheet" href="css/experience.min.css?v=8">
+    <link rel="stylesheet" href="css/experience.min.css?v=9">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -224,6 +224,37 @@
         <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M20 12a8 8 0 1 1-2.5-5.8" stroke-linecap="round" fill="none" />
             <path d="M20 4v4.5h-4.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+        </svg>
+    </button>
+
+    <!-- SHOW THE WHOLE GARDEN, and it is only here when it has something to do.
+         Same rule the Water all button follows: a visitor who has not moved the
+         camera never sees it, so the frame the scene opens on carries no chrome
+         it does not need. It appears the moment the view leaves the composed
+         one, which is also the moment the visitor is looking at these controls,
+         because they were just holding one.
+
+         IT MOVES INTO THE ZOOM STACK AT INIT (main.js), because that container
+         is built by the shared pan part rather than by this file. It lives here
+         rather than being created in JavaScript so the label and the icon are
+         in the markup with the rest of the chrome. Prepended, not appended: the
+         stack is anchored to the bottom of the frame, so adding to the end
+         would shove the plus and minus upward the moment this appeared.
+
+         THE ICON IS DELIBERATELY NOT A CIRCULAR ARROW. That is the top-right
+         "start a new garden" button, which is the one irreversible action in
+         the scene, and two controls that both read as "reset" is how somebody
+         loses a garden. This is the four-corner framing reticle every map and
+         viewer uses for "fit the view". -->
+    <button id="view-reset" class="pan-btn view-reset" type="button" hidden
+        title="Show the whole garden"
+        aria-label="Show the whole garden">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9V5.8A1.8 1.8 0 0 1 5.8 4H9" />
+            <path d="M15 4h3.2A1.8 1.8 0 0 1 20 5.8V9" />
+            <path d="M20 15v3.2a1.8 1.8 0 0 1-1.8 1.8H15" />
+            <path d="M9 20H5.8A1.8 1.8 0 0 1 4 18.2V15" />
+            <circle cx="12" cy="12" r="1.6" stroke="none" fill="currentColor" />
         </svg>
     </button>
 

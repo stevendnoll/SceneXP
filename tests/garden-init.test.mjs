@@ -451,6 +451,63 @@ test('PLANTING AFTER A PAN CENTRES THE TREE, NOT THE TREE PLUS THE PAN', async (
     main.__test__.state.running = false;
 });
 
+test('SHOW THE WHOLE GARDEN IS ONLY THERE WHEN IT HAS SOMETHING TO DO', async () => {
+    // The Water all rule, applied to the camera: a visitor who has not moved
+    // the view never sees this, so the frame the scene opens on carries no
+    // chrome it does not need. And when it does appear it puts back all THREE
+    // things that can move the view, which is what earns it a place next to a
+    // zoom that can only reach two of them.
+    const main = await bootGarden();
+    const ui = await import('../www/garden/js/ui.min.js');
+    const view = await import('../www/garden/js/view.min.js');
+    const pan = await import('../www/shared/js/pan-1.0.0.min.js');
+    const button = dom.el('view-reset');
+
+    fire(dom.el('blocker'), 'click');
+    stepFrames(10);
+    // Nothing has moved, so there is nothing to put back. `hidden` and not a
+    // class, so it leaves the tab order with the pixels: a button that is
+    // invisible and still focusable is a trap only keyboard visitors find.
+    //
+    // And the state is WRITTEN rather than inherited from the markup's own
+    // `hidden`, which is what this assertion actually pins: the harness
+    // fabricates elements without their attributes, so a control that relied
+    // on the attribute would read as visible here and be right on the site by
+    // luck. That is the `.ui-float` trap this codebase has met twice.
+    expect(button.hidden).toBe(true);
+
+    // Move all three: the visitor's pan, and the dolly and aim that planting
+    // takes over.
+    fire(globalThis.window, 'keydown', { code: 'ArrowRight' });
+    stepFrames(40);
+    fire(globalThis.window, 'keyup', { code: 'ArrowRight' });
+    ui.openPlantModal({ full: false });
+    fire(dom.el('plant-confirm'), 'click');
+    stepFrames(150);
+    expect(button.hidden).toBe(false);
+    expect(view.getAim()).not.toBe(null);
+    expect(view.getDolly()).toBeGreaterThan(0);
+
+    // Press it, and the view eases back rather than cutting: same move
+    // planting uses, aimed at the composed viewpoint with a dolly of zero.
+    fire(button, 'click');
+    expect(view.isFocusing()).toBe(true);
+    // The part's offset is the half the dolly release cannot reach, and it
+    // goes at once, folded into the move so nothing jumps.
+    expect(pan.getPanAngle()).toBe(0);
+    expect(pan.getTiltAngle()).toBe(0);
+
+    stepFrames(150);
+    expect(view.getDolly()).toBeCloseTo(0, 6);
+    // The aim is released outright rather than parked on the composed point,
+    // so the next zoom in is a plain dolly and not a rubber band.
+    expect(view.getAim()).toBe(null);
+    // And the control takes itself away again.
+    expect(button.hidden).toBe(true);
+
+    main.__test__.state.running = false;
+});
+
 test('deleting the saved garden by hand actually deletes it', async () => {
     // THE EXACT SEQUENCE FROM QA. Clearing the key and reloading used to do
     // nothing, because a reload fires visibilitychange and then pagehide, both
@@ -811,13 +868,19 @@ test('the zoom pair lives in its own corner, plus on top', async () => {
     // `zoomContainerClass` doing its job.
     await bootGarden();
     const stack = zoomStack();
-    expect(labels(stack)).toEqual(['Zoom in', 'Zoom out']);
 
-    // They are the SHARED PART's buttons, carrying its hold listeners, which
-    // is what keeps the pinch and the arrow keys working. Building a private
-    // pair here instead would have taken the pinch with it, since
+    // THE VIEW RESET IS FIRST, AND THAT IS LOAD BEARING. The stack is anchored
+    // to the BOTTOM of the frame, so a button appended to the end would shove
+    // the zoom pair upward the moment it appeared, and a zoom button that moves
+    // when a neighbour shows up is worse than the neighbour.
+    expect(stack.children[0]).toBe(dom.el('view-reset'));
+    expect(labels(stack).slice(1)).toEqual(['Zoom in', 'Zoom out']);
+
+    // The pair are the SHARED PART's buttons, carrying its hold listeners,
+    // which is what keeps the pinch and the arrow keys working. Building a
+    // private pair here instead would have taken the pinch with it, since
     // applyGesturePinch returns early when neither zoom button exists.
-    for (const btn of stack.children) {
+    for (const btn of stack.children.slice(1)) {
         expect(btn.listeners.has('pointerdown')).toBe(true);
         expect(btn.parentNode).toBe(stack);
     }
@@ -904,8 +967,9 @@ test('a tilt button that loses focus stops tilting', async () => {
 
 test('THE ZOOM IS A DOLLY: holding it moves the camera, not the lens', async () => {
     const main = await bootGarden();
-    // Plus first: the stack reads top to bottom, in on top.
-    const [zoomIn, zoomOut] = zoomStack().children;
+    // Plus first: the stack reads top to bottom, in on top. The view reset
+    // sits above the pair, which is why this skips one.
+    const [, zoomIn, zoomOut] = zoomStack().children;
 
     // The FOV is never touched, and that claim is checked in the SOURCE rather
     // than on the camera: under the THREE stub `camera.fov` is a proxy and

@@ -157,6 +157,16 @@ let aim = null;
 // The move in progress, if any. See focusOn.
 let flight = null;
 
+// Where the dolly was when the last move ENDED, landed or interrupted. It is
+// what the aim's grip on its tree is measured against. See `focusHold`.
+let focusDolly = 0;
+
+/** End the move in progress and remember where it left the dolly. */
+function landFocus() {
+    if (flight) focusDolly = dolly;
+    flight = null;
+}
+
 /**
  * Signed deltas from the shared part: buttons and keys stream `zoom.speed`
  * units a second, a pinch sends log2 of the spread, and a wheel notch sends
@@ -170,8 +180,39 @@ export function applyDollyDelta(delta) {
     // A VISITOR WHO REACHES FOR THE ZOOM OWNS THE CAMERA FROM THAT MOMENT. The
     // move after planting writes `dolly` every frame, so without this the
     // button would appear dead for a second and then jump.
-    flight = null;
+    landFocus();
     dolly = Math.max(-1, Math.min(1, dolly + delta));
+}
+
+/**
+ * How firmly the aim is still holding its tree, 1 to 0.
+ *
+ * ---- PULLING BACK IS ALSO ASKING TO SEE THE WHOLE GARDEN ----
+ *
+ * Without this the aim never lets go. `resetView` had exactly one caller,
+ * `applyReset`, which is "start a new garden", so once a tree had been planted
+ * the ONLY route back to the composed wide shot was deleting the plot. The
+ * dolly still zoomed, along an axis that was no longer pointed at the garden.
+ *
+ * The release rides the dolly rather than a control of its own, because the
+ * dolly ALREADY owns part of the aim: `dollyView` moves `lookY` and `lookZ`
+ * across the track. This extends the same idea to the focus. Measured from
+ * where the move actually landed, so "back to where the scene put me" is the
+ * point at which the tree is fully let go, whichever tree it was.
+ *
+ * SMOOTHSTEPPED, because the alternative is that every small zoom-out also
+ * swings the aim a little and the zoom button quietly does two things. With a
+ * zero slope at the top a 14 percent pull back moves the aim by 6, which reads
+ * as the frame opening up rather than as the camera turning.
+ *
+ * The floor under `focusDolly` is the same `minDolly` a full-strength move is
+ * promised, so a move that was interrupted early cannot divide by nearly zero
+ * and cannot release faster than a completed one would.
+ */
+function focusHold(config = GARDEN_CONFIG) {
+    const F = config.camera.focus;
+    const t = Math.max(0, Math.min(1, dolly / Math.max(focusDolly, F.minDolly)));
+    return t * t * (3 - 2 * t);
 }
 
 // ---- Being shown a tree ----------------------------------------------------
@@ -215,7 +256,23 @@ export function focusOn(point, targetDolly, seconds, fromAim) {
  * ages. Nothing here can touch `elapsedSeconds`.
  */
 export function stepView(delta) {
-    if (!flight) return false;
+    if (!flight) {
+        // ---- AND THE AIM LETS GO WHEN IT HAS BEEN PULLED ALL THE WAY BACK --
+        // Released for good rather than held at zero, so zooming in again is a
+        // plain dolly toward whatever is in front of the visitor and not a
+        // rubber band back to a tree they finished looking at. This is the one
+        // thing that clears an aim without a reset.
+        //
+        // Measured on the DOLLY rather than on `focusHold`, and that is not a
+        // detail: a move interrupted in its first millisecond leaves the dolly
+        // at 2e-8, which is a hold of 2e-14, which is visually nothing and is
+        // not zero, so a strict test would hold an invisible aim forever. The
+        // deadband is the same one the "show the whole garden" control uses to
+        // decide it has nothing to do, so the two cannot disagree about where
+        // the composed viewpoint is.
+        if (aim && dolly <= GARDEN_CONFIG.camera.focus.composedEpsilon) aim = null;
+        return false;
+    }
     flight.elapsed += Math.max(0, delta || 0);
     const k = flight.seconds <= 0 ? 1 : Math.min(1, flight.elapsed / flight.seconds);
     // Smoothstep, so it leaves and arrives without a jolt at either end.
@@ -227,7 +284,7 @@ export function stepView(delta) {
         y: mix(flight.fromAim.y, flight.toAim.y),
         z: mix(flight.fromAim.z, flight.toAim.z)
     };
-    if (k >= 1) { flight = null; return false; }
+    if (k >= 1) { landFocus(); return false; }
     return true;
 }
 
@@ -239,14 +296,52 @@ export function stepView(delta) {
  * unrequested move on top of the one they just refused.
  */
 export function cancelFocus() {
-    flight = null;
+    landFocus();
 }
 
 /** Whether a move is in progress. */
 export function isFocusing() { return flight !== null; }
 
-/** Where the composed aim points, or null for the dolly's own look-at. */
+/** The raw focus point, before the dolly's release is applied. For tests and
+ *  for asking "is the camera on a tree at all". */
 export function getAim() { return aim; }
+
+/**
+ * What `camera.lookAt` should actually be given this frame.
+ *
+ * THE ONE STATEMENT OF THE AIM, so the release cannot be applied in one place
+ * and forgotten in another. A move in progress owns the aim outright: it is
+ * writing both the aim and the dolly, and letting the release read a dolly the
+ * move is still moving would fight it.
+ */
+export function aimTarget(composedAim) {
+    if (!aim) return composedAim;
+    if (flight) return aim;
+    const hold = focusHold();
+    const mix = (a, b) => a + (b - a) * hold;
+    return {
+        x: mix(composedAim.x, aim.x),
+        y: mix(composedAim.y, aim.y),
+        z: mix(composedAim.z, aim.z)
+    };
+}
+
+/**
+ * Whether the view is the one the scene opens on.
+ *
+ * What the "show the whole garden" control keys its visibility off, and it asks
+ * about all THREE things that can move the view: this module's dolly and aim,
+ * and the shared part's own yaw and tilt, which are passed in because they
+ * belong to the part rather than here. A control that appeared while any one of
+ * them was still off would be a button that does nothing.
+ */
+export function viewIsComposed(panAngle = 0, tilt = 0, config = GARDEN_CONFIG) {
+    const F = config.camera.focus;
+    return Math.abs(dolly) <= F.composedEpsilon
+        && aim === null && flight === null
+        && Math.abs(panAngle) <= F.composedEpsilon
+        && Math.abs(tilt) <= F.composedEpsilon;
+}
 
 /** Polled every frame by the part, to dim whichever button has run out. */
 export function dollyLimits() {
@@ -264,4 +359,5 @@ export function resetView() {
     dolly = 0;
     aim = null;
     flight = null;
+    focusDolly = 0;
 }

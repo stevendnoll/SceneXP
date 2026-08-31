@@ -892,6 +892,28 @@ body {
     }
 }
 
+/* ---- Show the whole garden ---------------------------------------------
+ *
+ * It joins the zoom stack at init and wears `.pan-btn`, so it inherits the
+ * circle look and every size rule below without a second copy of any of them.
+ *
+ * IT IS HIDDEN UNTIL IT HAS A JOB, in the tradition of the Water all button:
+ * a visitor who has not moved the camera never sees it, so the frame the scene
+ * opens on carries no chrome it does not need. `.pan-btn` sets `display: flex`,
+ * which beats the browser's own `[hidden] { display: none }`, so hiding it
+ * needs a rule that outranks the class. Same trap as `.menu-btn[hidden]` above,
+ * and the same fix. The `hidden` attribute goes on with it, which is what takes
+ * it out of the tab order: a button that is invisible and still focusable is a
+ * trap only keyboard visitors ever find.
+ *
+ * It deliberately does NOT carry `.ui-float`. The reveal sweep in main.js adds
+ * `.visible` to everything that does, and `.ui-float.visible { display: flex }`
+ * would put this on screen whatever the attribute said.
+ */
+.view-reset[hidden] {
+    display: none;
+}
+
 /* ---- The two groups share one corner, so they share one centre -------------
  *
  * THE ARITHMETIC THAT WAS NEVER DONE. The pan row is centred in the VIEWPORT

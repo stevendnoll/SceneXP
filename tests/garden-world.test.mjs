@@ -835,20 +835,16 @@ test('a camera move eases, lands, and is cancelled by the first touch', async ()
     // every frame, so the button would look dead and then jump.
     view.resetView();
     view.focusOn(to, 1, 1.0, from);
-    view.stepView(0.25);
+    view.stepView(0.9);
     const grabbed = view.getAim().x;
-    view.applyDollyDelta(-0.2);
+    // A small nudge, so the grab is what is under test rather than the release
+    // below: a big pull back would let the tree go and that is a different rule.
+    view.applyDollyDelta(-0.05);
     expect(view.isFocusing()).toBe(false);
     view.stepView(5);
     // Stopped where it was, NOT snapped back: refusing a move is not a request
     // for a second one in the opposite direction.
     expect(view.getAim().x).toBeCloseTo(grabbed, 9);
-
-    view.resetView();
-    view.focusOn(to, 1, 1.0, from);
-    view.cancelFocus();
-    view.stepView(5);
-    expect(view.getAim().x).toBeCloseTo(from.x, 9);
 
     // Reduced motion arrives rather than travels, and it is a duration of zero
     // rather than a branch anywhere in the move itself.
@@ -863,6 +859,105 @@ test('a camera move eases, lands, and is cancelled by the first touch', async ()
     view.resetView();
     expect(view.getAim()).toBe(null);
     expect(view.getDolly()).toBe(0);
+});
+
+test('PULLING BACK IS ALSO ASKING TO SEE THE WHOLE GARDEN', async () => {
+    // ---- THE GAP THIS CLOSES ---------------------------------------------
+    // Without it the aim never lets go. `resetView` had exactly one caller,
+    // `applyReset`, which is "start a new garden", so once a tree had been
+    // planted the ONLY route back to the composed wide shot was deleting the
+    // plot. The dolly still zoomed, along an axis no longer pointed at the
+    // garden.
+    const view = await import('../www/garden/js/view.js');
+    const composedAim = { x: 0, y: 2.5, z: -2 };
+    const tree = { x: 8, y: 3, z: -6 };
+    const land = (dolly) => {
+        view.resetView();
+        view.focusOn(tree, dolly, 0, composedAim);   // arrives at once
+        expect(view.isFocusing()).toBe(false);
+    };
+
+    // Where the move landed, the tree is held outright: the release is
+    // measured from there, so "back to where the scene put me" is the point
+    // the tree is fully let go, whichever tree it was and however far in.
+    land(0.7);
+    expect(view.aimTarget(composedAim).x).toBeCloseTo(tree.x, 6);
+
+    // A SMALL PULL BACK BARELY TURNS THE CAMERA, which is the whole reason the
+    // release is smoothstepped: without it the zoom button quietly does two
+    // things, and every nudge of the zoom would swing the aim.
+    view.applyDollyDelta(-0.1);
+    const nudged = view.aimTarget(composedAim).x;
+    expect(nudged / tree.x).toBeGreaterThan(0.9);
+    expect(nudged).toBeLessThan(tree.x);
+
+    // Half way back is most of the way around.
+    land(0.7);
+    view.applyDollyDelta(-0.35);
+    expect(view.aimTarget(composedAim).x).toBeCloseTo(tree.x * 0.5, 6);
+
+    // ---- AND AT THE COMPOSED VIEWPOINT IT IS LET GO FOR GOOD -------------
+    // Released rather than held at zero, so zooming in again is a plain dolly
+    // toward whatever is in front of the visitor and not a rubber band back to
+    // a tree they had finished looking at.
+    land(0.7);
+    view.applyDollyDelta(-0.7);
+    view.stepView(0.016);
+    expect(view.getAim()).toBe(null);
+    expect(view.aimTarget(composedAim)).toEqual(composedAim);
+    view.applyDollyDelta(0.7);
+    view.stepView(0.016);
+    expect(view.getAim()).toBe(null);
+
+    // A move interrupted before it got anywhere cannot divide by nearly zero
+    // and cannot release faster than a completed one would: `minDolly` is the
+    // floor under the measurement.
+    const F = GARDEN_CONFIG.camera.focus;
+    view.resetView();
+    view.focusOn(tree, 0.8, 10, composedAim);
+    view.stepView(0.001);
+    view.cancelFocus();
+    expect(view.getDolly()).toBeLessThan(0.01);
+    view.stepView(0.016);
+    expect(view.getAim()).toBe(null);
+    expect(F.minDolly).toBeGreaterThan(0);
+});
+
+test('the view reset control knows when it has nothing to do', async () => {
+    // It is hidden until the view has actually moved, in the tradition of the
+    // Water all button, so the frame the scene opens on carries no chrome it
+    // does not need. That means the question has to cover ALL THREE things
+    // that can move the view: this module's dolly and aim, and the shared
+    // part's yaw and tilt, which live somewhere else entirely and are passed
+    // in. A button that appeared while any one of them was off would be a
+    // control that does nothing when pressed.
+    const view = await import('../www/garden/js/view.js');
+    view.resetView();
+    expect(view.viewIsComposed(0, 0)).toBe(true);
+
+    // The part's own offsets, which the dolly release cannot reach and which
+    // are the reason this control earns its place beside the zoom.
+    expect(view.viewIsComposed(0.4, 0)).toBe(false);
+    expect(view.viewIsComposed(0, -0.2)).toBe(false);
+
+    // The dolly, either way off centre.
+    view.applyDollyDelta(0.5);
+    expect(view.viewIsComposed(0, 0)).toBe(false);
+    view.applyDollyDelta(-1);
+    expect(view.viewIsComposed(0, 0)).toBe(false);
+
+    // And a deadband, because the dolly is continuous: an exact test would
+    // leave the button flickering on a hair either side of zero.
+    view.resetView();
+    view.applyDollyDelta(0.001);
+    expect(view.viewIsComposed(0, 0)).toBe(true);
+
+    // A move in progress counts as moved, or the control blinks out for the
+    // frame the camera passes through the composed viewpoint on its way past.
+    view.resetView();
+    view.focusOn({ x: 5, y: 3, z: -5 }, 0.6, 1, { x: 0, y: 2.5, z: -2 });
+    expect(view.viewIsComposed(0, 0)).toBe(false);
+    view.resetView();
 });
 
 // ---- Nothing stands in the lake (M14-4) ------------------------------------

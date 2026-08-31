@@ -378,7 +378,29 @@ export const GARDEN_CONFIG = deepFreeze({
             // redwood is framed on empty sky and a maple on its own roots.
             aimHeightRatio: 0.35,
             minAimHeight: 1.4,
-            maxAimHeight: 4.5
+            maxAimHeight: 4.5,
+
+            // ---- AND PULLING BACK LETS THE TREE GO ------------------------
+            // The aim used to hold its tree forever: `resetView` had one
+            // caller, "start a new garden", so the only route back to the
+            // composed wide shot was deleting the plot. The release rides the
+            // DOLLY rather than a control of its own, because the dolly already
+            // owns part of the aim (`dollyView` moves lookY and lookZ across
+            // the track). It is measured from where the move landed and
+            // smoothstepped, so a small pull back opens the frame rather than
+            // turning the camera. See `focusHold` in view.js, which needs no
+            // number of its own: `minDolly` above is the floor it uses.
+            //
+            // How near the composed viewpoint counts as being AT it, and it
+            // answers that question for two things at once so they cannot
+            // disagree: where the aim lets its tree go, and whether the "show
+            // the whole garden" control has anything to do. Both need a
+            // deadband because the dolly is a continuous value: an exact test
+            // would flicker the button on a hair either side of zero, and it
+            // would hold an invisible aim forever after a move interrupted in
+            // its first millisecond (a dolly of 2e-8 is a hold of 2e-14, which
+            // is not zero).
+            composedEpsilon: 0.02
         }
     },
 
