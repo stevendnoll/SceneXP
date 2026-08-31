@@ -496,7 +496,7 @@ body {
     width: 100%;
     aspect-ratio: 1 / 1;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.05);
+    background: linear-gradient(#cfe0ea, #b6c4c8 55%, #9a9182);
     border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
@@ -515,71 +515,81 @@ body {
     color: var(--ui-subtitle);
 }
 
-.customise {
-    margin: 1rem 0 0.2rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.16);
-    padding-top: 0.8rem;
+/* ---- The card is a column, and only its middle scrolls --------------------
+ *
+ * THE BUG THIS FIXES, AND IT WAS THIS FILE'S OWN DOING. `.plant-card` set
+ * `max-height: 88vh` with `overflow-y: auto`, while the `#plant-modal
+ * .modal-container` rule above sets `overflow: visible` to let the close button
+ * hang off the corner. An id plus a class beats a bare class, so the overflow
+ * stayed visible while the height stayed capped: on a short window the content
+ * ran out past the card's own rounded border and the Plant button floated below
+ * it. Two rules in one stylesheet, each reasonable alone.
+ *
+ * Fixing the specificity alone would have made the whole card scroll, button
+ * and heading included. A column with one scrolling row is the better answer
+ * anyway: the action is always on screen without scrolling to it. */
+#plant-modal .modal-container.plant-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
-.customise summary {
-    cursor: pointer;
-    font-family: var(--font-system);
-    font-size: 0.88rem;
-    color: var(--ui-accent-strong);
-}
-
-.slider-list {
-    display: grid;
-    gap: 0.55rem;
-    margin-top: 0.8rem;
-}
-
-.slider-row {
-    display: grid;
-    grid-template-columns: 8rem 1fr 6rem;
-    align-items: center;
-    gap: 0.6rem;
-}
-
-@media (max-width: 30rem) {
-    .slider-row {
-        grid-template-columns: 1fr 5.5rem;
-        grid-template-areas: "label readout" "input input";
-    }
-
-    .slider-label {
-        grid-area: label;
-    }
-
-    .slider-readout {
-        grid-area: readout;
-    }
-
-    .slider-input {
-        grid-area: input;
-    }
-}
-
-.slider-label,
-.slider-readout {
-    font-family: var(--font-system);
-    font-size: 0.8rem;
-    color: var(--ui-subtitle);
-}
-
-.slider-readout {
-    text-align: right;
-    color: var(--ui-accent-strong);
-}
-
-.slider-input {
-    width: 100%;
-    accent-color: var(--ui-accent);
+.plant-layout {
+    overflow-y: auto;
+    min-height: 0;
+    /* Room for the close button's corner, and for a scrollbar that appears. */
+    padding-right: 0.15rem;
 }
 
 #plant-confirm {
     margin-top: 1rem;
     width: 100%;
+    flex: none;
+}
+
+/* ---- The two groups ------------------------------------------------------
+ *
+ * Seventeen species is a list rather than a choice, so they split by the thing
+ * a visitor actually picks on: whether it flowers. Fruit trees live under
+ * Flowering, because a tree that fruits flowered first. */
+.plant-tabs {
+    display: flex;
+    gap: 0.4rem;
+    margin: 0 0 0.8rem;
+    flex: none;
+}
+
+.plant-tab {
+    flex: 1 1 0;
+    padding: 0.5rem 0.9rem;
+    min-height: 40px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    color: var(--ui-subtitle);
+    font-family: var(--font-system);
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.plant-tab:hover {
+    border-color: rgba(var(--ui-accent-rgb), 0.6);
+    color: var(--ui-title);
+}
+
+/* The selected tab is named by aria-selected rather than by a class, so the
+   thing a screen reader is told and the thing an eye is shown are one state
+   and cannot come apart. */
+.plant-tab[aria-selected="true"] {
+    background: rgba(var(--ui-accent-rgb), 0.18);
+    border-color: var(--ui-accent);
+    color: var(--ui-title);
+}
+
+.plant-tab:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
 }
 
 #plant-confirm:disabled {
@@ -622,6 +632,93 @@ body {
 .reset-card .tree-line {
     margin: 0 0 1.1rem;
     line-height: 1.5;
+}
+
+/* ---- The tree card's own portrait and gauge -------------------------------
+ *
+ * The card was a title, four lines and two buttons. These two put the tree and
+ * its thirst in it, and both are deliberately the SAME things the scene already
+ * shows: the canvas is fed by the same scissor-rectangle renderer the plant
+ * modal uses, and the gauge is the one on the bed, in its colours. A visitor
+ * who has learned to read one has learned to read the other. */
+/* ---- The card is a column too, and only its middle scrolls ---------------
+ *
+ * `#tree-card .modal-container` sets `overflow: visible` like the plant one, and
+ * this card had no height cap at all, so on a short window it ran straight off
+ * the screen with the text cut off and both buttons out of reach. The portrait
+ * made it worse by adding a square the height of the card's own width. */
+#tree-card .modal-container.tree-card {
+    display: flex;
+    flex-direction: column;
+    max-height: 88vh;
+    overflow: hidden;
+}
+
+.tree-scroll {
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 0.15rem;
+}
+
+.tree-actions {
+    flex: none;
+}
+
+.tree-preview {
+    display: block;
+    /* CAPPED BY THE VIEWPORT'S HEIGHT, not only by the card's width. A square
+       sized from the width alone is 19 rem tall in a 22 rem card, which is most
+       of a short window before a single line of text has been drawn. `min()`
+       keeps it square and lets the shorter of the two limits win. */
+    width: min(100%, 32vh);
+    aspect-ratio: 1 / 1;
+    margin: 0.7rem auto 0.2rem;
+    border-radius: 10px;
+    /* The backdrop the renderer draws, so the first frame is not a flash of
+       something else. Sky at the top, a deeper neutral at the bottom. */
+    background: linear-gradient(#cfe0ea, #b6c4c8 55%, #9a9182);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* The track is the missing water, so it carries the amber, and the fill is the
+   water. Exactly the way round the bed's gauge does it, and for the reason
+   recorded there: painting the alarm colour on the fill means an empty tank
+   cannot show it. */
+.tree-thirst {
+    position: relative;
+    height: 12px;
+    margin: 0 0 1rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background: #59666d;
+    border: 1px solid #0d1418;
+}
+
+.tree-thirst[data-urgent="true"] {
+    background: #f0a63c;
+}
+
+.tree-thirst-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: #8fd3f4;
+    /* The dark tick where the water stops, which is the whole reading of a
+       gauge. Blue on amber is 1.13:1, a hue pair and not a luminance one, so
+       the edge between them has to be drawn rather than left to emerge. */
+    border-right: 2px solid #0d1418;
+    transition: width 0.35s ease;
+}
+
+/* A full tank and an empty one have no boundary to draw, so the tick goes. */
+.tree-thirst-fill[data-edge="false"] {
+    border-right-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tree-thirst-fill {
+        transition: none;
+    }
 }
 
 .tree-body {

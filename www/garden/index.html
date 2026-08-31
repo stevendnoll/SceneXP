@@ -74,7 +74,7 @@
     <title>Fractal Garden</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
-    <link rel="preload" href="css/experience.min.css?v=5" as="style">
+    <link rel="preload" href="css/experience.min.css?v=7" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -84,7 +84,7 @@
          dark body, and this scene wants a soft daylight behind a slow first
          frame. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
-    <link rel="stylesheet" href="css/experience.min.css?v=5">
+    <link rel="stylesheet" href="css/experience.min.css?v=7">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -236,21 +236,44 @@
          3D scene, and this is the keyboard's way in. -->
     <button id="water-all" type="button" class="water-all" hidden></button>
 
-    <!-- THE PLANT MODAL. The species grid is a real radio group and the
-         sliders are real range inputs, so the whole thing works from the
-         keyboard and reads correctly to a screen reader. The preview canvas is
-         drawn into by the main renderer through a scissor rectangle, so no
-         second WebGL context is ever created. -->
+    <!-- THE PLANT MODAL. The species grid is a real radio group, so the whole
+         thing works from the keyboard and reads correctly to a screen reader.
+         The preview canvas is drawn into by the main renderer through a
+         scissor rectangle, so no second WebGL context is ever created.
+
+         THE CARD IS A COLUMN WITH A SCROLLING MIDDLE, and that is a fix rather
+         than a refactor. It used to be one block with `max-height: 88vh` and
+         `overflow-y: auto`, while the `#plant-modal .modal-container` rule in
+         experience.css sets `overflow: visible` so the close button can hang
+         off the corner. An id plus a class beats a bare class, so the height
+         capped and nothing scrolled: on a short window the Plant button hung
+         out below the card's own rounded border. The heading and the button are
+         now their own rows and only the middle scrolls, which also means the
+         button is always reachable without scrolling to it. -->
     <div id="plant-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="plant-heading">
         <div class="modal-backdrop" data-close></div>
         <div class="modal-container plant-card">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
             <h2 id="plant-heading" class="plant-heading">Choose a tree</h2>
 
+            <!-- TWO GROUPS, BECAUSE SEVENTEEN IS A LIST AND NOT A CHOICE.
+                 A real tablist: arrow keys move between tabs and only the
+                 selected one is in the tab order, which is what the pattern
+                 asks for and what a plain row of buttons would not give.
+                 "Flowering" holds anything that blossoms, fruit trees
+                 included, since a tree that fruits flowered first. -->
+            <div class="plant-tabs" role="tablist" aria-label="Kinds of tree">
+                <button id="tab-flowering" class="plant-tab" type="button" role="tab"
+                    aria-selected="true" aria-controls="species-grid">Flowering</button>
+                <button id="tab-foliage" class="plant-tab" type="button" role="tab"
+                    aria-selected="false" aria-controls="species-grid" tabindex="-1">Foliage</button>
+            </div>
+
             <div class="plant-layout">
                 <fieldset class="species-fieldset">
                     <legend class="visually-hidden">Species</legend>
-                    <div id="species-grid" class="species-grid"></div>
+                    <div id="species-grid" class="species-grid" role="tabpanel"
+                        aria-labelledby="tab-flowering"></div>
                 </fieldset>
 
                 <div class="plant-side">
@@ -260,11 +283,12 @@
                 </div>
             </div>
 
-            <details class="customise">
-                <summary>Customize this tree</summary>
-                <div id="slider-list" class="slider-list"></div>
-            </details>
-
+            <!-- THE CUSTOMIZE DISCLOSURE IS GONE (M16-2). Seventeen species
+                 cover the range, and six sliders on top of them was a second
+                 decision asked of somebody who had only wanted a tree. The
+                 SLIDER DATA PATH STAYS: `resolveSpecies` still takes a custom
+                 object and saved gardens still carry one, so a garden planted
+                 before this change comes back exactly as it was. -->
             <button id="plant-confirm" type="button" class="piece-enter">Plant it here</button>
         </div>
     </div>
@@ -276,7 +300,33 @@
         <div class="modal-container tree-card">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
             <h2 id="tree-title" class="piece-title"></h2>
-            <div id="tree-body" class="tree-body"></div>
+
+            <!-- THE TREE ITSELF, TURNING. Same scissor-rectangle trick the
+                 plant modal uses, and the same one canvas would not do: this
+                 one is built from the tapped tree's own record and driven at
+                 its LIVE growth, health and season, so what turns here is the
+                 tree in the garden rather than a catalogue photograph of its
+                 species. -->
+            <!-- THE SCROLLING MIDDLE. Same shape as the plant card and for the
+                 same reason: `#tree-card .modal-container` sets
+                 `overflow: visible`, so without a column with one scrolling row
+                 a tall card simply runs off the screen. On a 511 px window QA
+                 found the text cut off and both buttons unreachable. -->
+            <div class="tree-scroll">
+                <canvas id="tree-preview" class="tree-preview" aria-hidden="true"></canvas>
+
+                <div id="tree-body" class="tree-body"></div>
+
+            <!-- The same gauge that stands on the bed, in the same colours: the
+                 fill is blue, the part that is missing goes amber, and a dark
+                 tick marks where the two meet. A visitor who has learned to
+                 read the one in the world can read this without being told.
+                 The percentage stays in the text above, because colour is never
+                 the only carrier of anything here. -->
+                <div id="tree-thirst" class="tree-thirst" role="img">
+                    <div id="tree-thirst-fill" class="tree-thirst-fill"></div>
+                </div>
+            </div>
             <div class="tree-actions">
                 <button id="tree-water" type="button" class="piece-enter">Water it</button>
                 <button id="tree-remove" type="button" class="tree-remove">Remove this tree</button>

@@ -49,7 +49,7 @@ import { createTree, updateTree, disposeTree } from './tree.min.js';
 import {
     initGarden, plantTree, restoreTrees, removeTree, clearGarden, waterTree,
     updateGarden, getTrees, getOccupied, isFull, capacity, ageYears,
-    serialize, hydrate, needsWater, disposeGarden
+    serialize, hydrate, needsWater, viewFor, currentHeight, disposeGarden
 } from './garden.min.js';
 import {
     initUi, updateHud, showHud, openPlantModal, isPlantOpen,
@@ -892,6 +892,15 @@ function handleSceneTap(clientX, clientY) {
     const tree = pickBase(clientX, clientY, bases);
     if (tree) {
         openTreeCard(tree, ageYears(tree.record, state.elapsedSeconds), cardContext());
+        // THE CARD'S PORTRAIT IS THE TREE'S OWN SPECIES AND SEED, so what turns
+        // in it is this tree rather than a stock example of its kind. Built
+        // through the same debounced path the plant modal uses, which is what
+        // keeps the two from being two ways of doing one thing.
+        setPreviewSpecies({
+            species: tree.record.species,
+            custom: tree.record.custom || {},
+            seed: tree.record.seed
+        });
         track('tree-opened', { species: tree.record.species });
         return;
     }
@@ -1134,12 +1143,72 @@ let previewScene = null;
 let previewCamera = null;
 let previewTree = null;
 let previewResolved = null;
+let previewCtxFor = null;
 let previewCtx = null;
 let previewTimer = 0;
 let previewPending = null;
 const PREVIEW_PX = 256;
 const previousClear = new THREE.Color();
 const scratchColor = new THREE.Color();
+
+/**
+ * The backdrop the preview tree stands against.
+ *
+ * ---- IT WAS A DARK GREEN BEHIND GREEN LEAVES ----
+ *
+ * The clear colour was 0x1d2a18, which is a dark FOLIAGE green, so every canopy
+ * in the list was being shown against its own hue at its own value. QA reported
+ * it as too dark and too similar to the trees, and the brightness was the lesser
+ * half of that: hue was the rest.
+ *
+ * ---- AND NO FLAT COLOUR CAN DO IT, WHICH IS WHY THIS IS A GRADIENT ----
+ *
+ * Measured across all seventeen species, the two ends of the range fight each
+ * other. Foliage runs mid to dark, so it wants a LIGHT backdrop. The Quaking
+ * Aspen and the Paper Birch have chalk-white bark, which against a light
+ * backdrop measures 1.07:1 and 1.15:1, near enough invisible. Any single value
+ * loses one end or the other.
+ *
+ * A gradient wins both because the tree is not one thing evenly distributed:
+ * CANOPY IS HIGH IN THE FRAME AND TRUNK IS LOW. Sky at the top for the leaves,
+ * a deeper neutral at the bottom for the trunks, and a white trunk goes from
+ * 1.07:1 to about 1.75:1 without costing the canopy anything.
+ *
+ * Drawn as an inside-out sphere rather than a plane, so it fills the frame at
+ * any camera distance: the preview camera is placed per tree from that tree's
+ * height, and a plane sized for a Japanese Maple would not cover a Redwood.
+ */
+function previewBackdrop() {
+    const size = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = 4;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const grad = ctx.createLinearGradient(0, 0, 0, size);
+    grad.addColorStop(0, '#cfe0ea');
+    grad.addColorStop(0.55, '#b6c4c8');
+    grad.addColorStop(1, '#9a9182');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 4, size);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const geo = new THREE.SphereGeometry(120, 12, 8);
+    const mat = new THREE.MeshBasicMaterial({
+        map: texture,
+        side: THREE.BackSide,
+        // UNLIT AND UNTONED. It is a backdrop, not a surface in the scene: the
+        // colours above are what should arrive on screen, and anything that
+        // lit or tone mapped them would move them somewhere else.
+        fog: false,
+        toneMapped: false,
+        depthWrite: false
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = 'preview-backdrop';
+    mesh.renderOrder = -1;
+    return mesh;
+}
 
 function buildPreview() {
     previewScene = new THREE.Scene();
@@ -1149,18 +1218,40 @@ function buildPreview() {
     previewScene.add(key);
     previewScene.add(new THREE.HemisphereLight(0xbcd8ee, 0x4a5a34, 0.9));
     previewScene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const backdrop = previewBackdrop();
+    if (backdrop) previewScene.add(backdrop);
 }
 
 function handleCustomChange(selection) {
-    previewPending = { species: selection.species, custom: { ...selection.custom } };
-    // Debounced, so dragging a slider does not bake sixty skeletons a second.
+    setPreviewSpecies(selection);
+}
+
+/**
+ * Ask for a turning tree.
+ *
+ * ONE ENTRY POINT FOR BOTH MODALS. The plant modal asks for the species under
+ * the cursor; the tree card asks for the tree the visitor tapped, seed and all,
+ * so the portrait is that tree rather than a stock example of its kind.
+ *
+ * `seed` is optional and the difference is deliberate: the plant modal passes
+ * none and gets the fixed showcase seed, because moving between species should
+ * show the species rather than a different tree each time.
+ */
+function setPreviewSpecies(selection) {
+    previewPending = {
+        species: selection.species,
+        custom: { ...(selection.custom || {}) },
+        seed: selection.seed
+    };
+    // Debounced, so moving quickly down the species list does not bake a
+    // skeleton per row.
     if (previewTimer) clearTimeout(previewTimer);
     previewTimer = setTimeout(rebuildPreview, 120);
 }
 
 function rebuildPreview() {
     if (!previewScene || !previewPending) return;
-    const { species, custom } = previewPending;
+    const { species, custom, seed } = previewPending;
     if (previewTree) {
         previewScene.remove(previewTree.group);
         disposeTree(previewTree);
@@ -1178,12 +1269,54 @@ function rebuildPreview() {
     // as a spindly pale thing rather than as the giant its own description
     // promises. The small species were all under the cap, which is why only the
     // large ones looked wrong.
-    previewTree = createTree(previewResolved, 0x5EED, { mobile: state.mobile });
+    previewTree = createTree(previewResolved, seed === undefined ? 0x5EED : seed,
+        { mobile: state.mobile });
     previewScene.add(previewTree.group);
 
-    const h = previewResolved.matureHeight;
+    // FRAMED ON WHAT IS ACTUALLY THERE. The plant modal draws its tree full
+    // grown so `matureHeight` is right for it, but the tree card draws a tree at
+    // its own age, and a sapling framed for the giant it will become is a few
+    // pixels in the middle of an empty square.
+    const entry = isCardOpen() ? getCardEntry() : null;
+    const h = entry
+        ? Math.max(0.6, currentHeight(entry.record, previewResolved))
+        : previewResolved.matureHeight;
     previewCamera.position.set(h * 1.05, h * 0.72, h * 1.35);
     previewCamera.lookAt(0, h * 0.45, 0);
+}
+
+/**
+ * What the turning preview should be showing.
+ *
+ * TWO CALLERS AND TWO ANSWERS. The plant modal shows a tree FULL GROWN, because
+ * the visitor is choosing what they will eventually have rather than the
+ * sapling they are about to plant. The tree card shows the tree AS IT IS: its
+ * own growth, health, season and fruit, because a portrait of your tree that
+ * looked nothing like the one on the bed would be a catalogue photograph.
+ */
+function previewDrive(time) {
+    const entry = isCardOpen() ? getCardEntry() : null;
+    if (!entry) {
+        return {
+            growth: 1, health: 1, leaf: 1, color: 0, spring: 0, drop: 0, bud: 0,
+            snow: 0, wind: { x: 0.05, z: 0 }, time
+        };
+    }
+    // THE SAME CALL THE GARDEN DRIVES THIS TREE WITH, options included, so the
+    // two cannot disagree about what it looks like today. Dropping `evergreen`
+    // or `schedule` here would quietly give the portrait a deciduous year and
+    // no fruit, which is the shape of bug that reads as "the card is wrong
+    // about my orange tree" long after anybody would look here.
+    const hour = hourAt(state.elapsedSeconds);
+    return viewFor(entry.record, hour, {
+        evergreen: entry.resolved.evergreen,
+        schedule: entry.resolved.schedule,
+        snow: snowCoverageAt(hour),
+        // NO WIND IN A PORTRAIT. It should hold still enough to be looked at,
+        // and the turn is doing the work of showing it is alive.
+        wind: { x: 0, z: 0 },
+        time
+    });
 }
 
 function renderPreview(time) {
@@ -1191,13 +1324,8 @@ function renderPreview(time) {
     const target = getPreviewCanvas();
     if (!target) return;
 
-    // Full grown and slowly turning, so the visitor is choosing the tree they
-    // will eventually have rather than the sapling they are about to plant.
     previewTree.group.rotation.y = state.reducedMotion ? 0.6 : time * 0.35;
-    updateTree(previewTree, {
-        growth: 1, health: 1, leaf: 1, color: 0, spring: 0, drop: 0, bud: 0,
-        snow: 0, wind: { x: 0.05, z: 0 }, time
-    }, previewResolved);
+    updateTree(previewTree, previewDrive(time), previewResolved);
 
     const size = Math.round(PREVIEW_PX);
     const w = renderer.domElement.width;
@@ -1213,17 +1341,22 @@ function renderPreview(time) {
     renderer.setScissorTest(true);
     renderer.setViewport(0, h - size, size, size);
     renderer.setScissor(0, h - size, size, size);
-    renderer.setClearColor(0x1d2a18, 1);
+    renderer.setClearColor(0x9a9182, 1);
     renderer.clear();
     renderer.render(previewScene, previewCamera);
     renderer.setScissorTest(false);
     renderer.setViewport(0, 0, w, h);
     renderer.setClearColor(previousClear, previousAlpha);
 
-    if (!previewCtx) {
+    // THE CONTEXT BELONGS TO A CANVAS, so it is re-taken whenever the
+    // destination changes. Caching one across both modals would have drawn the
+    // tree card's portrait into the plant modal's canvas, which is the sort of
+    // bug that only shows up on the second thing a visitor does.
+    if (!previewCtx || previewCtxFor !== target) {
         target.width = size;
         target.height = size;
         previewCtx = target.getContext('2d');
+        previewCtxFor = target;
     }
     if (previewCtx) {
         // Same task as the render, so the drawing buffer is still valid. That
@@ -1365,8 +1498,22 @@ function animate() {
     applyView();
     updatePortraitControls(delta);
 
+    // ---- THE PREVIEW GOES FIRST, AND THAT IS THE WHOLE FIX ----------------
+    // It draws into a SCISSOR RECTANGLE at the top left of the main drawing
+    // buffer and copies those pixels out to a 2D canvas. Drawn after the scene,
+    // the copy was taken correctly and then the frame was PRESENTED with the
+    // rectangle still stamped in the corner: a second, ghostly tree over the
+    // top left of the garden whenever either modal was open. QA found it.
+    //
+    // Going first costs nothing and needs no restore pass, because
+    // `renderer.render` clears the whole buffer before it draws. The copy is
+    // still taken in the same task as the render, which is what makes it valid
+    // without `preserveDrawingBuffer`.
+    //
+    // EITHER MODAL, since both show the same turning tree through the same
+    // rectangle and neither can be open while the other is.
+    if (isPlantOpen() || isCardOpen()) renderPreview(state.sceneSeconds);
     if (renderer && scene && camera) renderer.render(scene, camera);
-    if (isPlantOpen()) renderPreview(state.elapsedSeconds);
 
     // A slow heartbeat for growth, which changes continuously and has no
     // event to hang a write on. Everything else saves on the change itself.

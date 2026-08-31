@@ -240,3 +240,298 @@ test('the card body survives a line count that moves', () => {
     expect(blossom).toBe(4);
     expect(both).toBe(5);
 });
+
+// ---- The plant modal, regrouped (M16) --------------------------------------
+
+const { isFlowering: floweringOf, SPECIES: ALL } = await import('../www/garden/js/species.js');
+const { GARDEN_CONFIG } = await import('../www/garden/js/config.js');
+
+test('THE PLANT BUTTON CANNOT FALL OUT OF THE CARD', () => {
+    // The bug, and it was a specificity one INSIDE THIS STYLESHEET rather than
+    // a shared-sheet override. `.plant-card` set `max-height: 88vh` with
+    // `overflow-y: auto`, while `#plant-modal .modal-container` sets
+    // `overflow: visible` so the close button can hang off the corner. An id
+    // plus a class beats a bare class, so the height capped while the overflow
+    // stayed visible: on a short window the content ran out past the card's own
+    // rounded border and the Plant button floated below it. Both rules are
+    // reasonable alone, which is why this is pinned rather than tidied.
+    const css = readFileSync(
+        join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+    expect(css).toMatch(/#plant-modal \.modal-container,[\s\S]{0,120}\{[^}]*overflow:\s*visible/);
+
+    // Fixed by making the card a COLUMN with one scrolling row, which also
+    // keeps the action on screen without scrolling to it. The selector has to
+    // out-specify the one above, so it carries the id too.
+    expect(css).toMatch(/#plant-modal \.modal-container\.plant-card\s*\{[^}]*flex-direction:\s*column/);
+    expect(css).toMatch(/#plant-modal \.modal-container\.plant-card\s*\{[^}]*overflow:\s*hidden/);
+    // The middle scrolls and the button does not.
+    expect(css).toMatch(/\.plant-layout\s*\{[^}]*overflow-y:\s*auto/);
+    expect(css).toMatch(/\.plant-layout\s*\{[^}]*min-height:\s*0/);
+    expect(css).toMatch(/#plant-confirm\s*\{[^}]*flex:\s*none/);
+});
+
+test('the customise disclosure is gone, and its DATA PATH is not', () => {
+    const html = readFileSync(join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8');
+    const ui = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'ui.js'), 'utf8');
+    const css = readFileSync(
+        join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+    for (const src of [html, ui, css]) {
+        expect(src).not.toMatch(/slider-list|slider-row|customise/);
+    }
+
+    // BUT A GARDEN PLANTED BEFORE THIS CHANGE MUST COME BACK AS ITSELF. The
+    // records carry a `custom` object and `resolveSpecies` still takes one, so
+    // removing the controls removed a decision and not a saved tree's shape.
+    const species = readFileSync(
+        join(process.cwd(), 'www', 'garden', 'js', 'species.js'), 'utf8');
+    expect(species).toMatch(/export function resolveSpecies\(\s*id,\s*custom/);
+    expect(ui).toMatch(/custom: \{ \.\.\.selection\.custom \}/);
+});
+
+test('SEVENTEEN SPECIES SPLIT INTO TWO GROUPS a visitor would look in', () => {
+    // Seventeen is a list rather than a choice. They split on the thing people
+    // actually pick on, and a tree that fruits flowered first, so fruit trees
+    // live under Flowering.
+    const flowering = ALL.filter(floweringOf);
+    const foliage = ALL.filter((s) => !floweringOf(s));
+    expect(flowering.length + foliage.length).toBe(ALL.length);
+    expect(flowering.length).toBeGreaterThan(2);
+    expect(foliage.length).toBeGreaterThan(2);
+
+    // Every fruit tree is in the flowering group, which is the rule QA asked
+    // for stated as an assertion rather than left to hold by coincidence.
+    for (const s of ALL.filter((sp) => sp.fruit)) {
+        expect(floweringOf(s)).toBe(true);
+    }
+    // And nothing in the foliage group flowers.
+    for (const s of foliage) {
+        expect(s.blossom).toBeUndefined();
+        expect(s.schedule).toBeUndefined();
+    }
+
+    // BOTH GROUPS KEEP THE SMALL-TO-LARGE ORDER, since filtering a sorted list
+    // cannot unsort it and the grid's whole job is showing the range.
+    for (const group of [flowering, foliage]) {
+        for (let i = 1; i < group.length; i++) {
+            expect(group[i].matureHeight).toBeGreaterThanOrEqual(group[i - 1].matureHeight);
+        }
+    }
+});
+
+test('the tabs are a real tablist, and the selection follows the tab', () => {
+    const html = readFileSync(join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8');
+    expect(html).toMatch(/role="tablist"/);
+    expect(html).toMatch(/id="tab-flowering"[^>]*role="tab"/);
+    expect(html).toMatch(/id="tab-foliage"[^>]*role="tab"/);
+    // Only the selected tab is in the tab order, which is what the pattern owes
+    // and what a row of plain buttons would not give.
+    expect(html).toMatch(/id="tab-foliage"[^>]*tabindex="-1"/);
+    expect(html).toMatch(/id="species-grid"[^>]*role="tabpanel"/);
+
+    const ui = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'ui.js'), 'utf8');
+    // THE SELECTION HAS TO MOVE WITH THE TAB, or switching leaves the preview
+    // showing a tree the grid no longer offers and the button planting
+    // something the visitor cannot see.
+    const fn = ui.slice(ui.indexOf('function showGroup'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toMatch(/isFlowering\(chosen\) !== flowering/);
+    expect(body).toMatch(/SPECIES\.find/);
+    // Arrow keys move between tabs.
+    expect(ui).toMatch(/ArrowLeft.*ArrowRight|ArrowRight.*ArrowLeft/s);
+    // The state is aria-selected and not a class, so what a screen reader is
+    // told and what an eye is shown are one fact.
+    expect(body).toMatch(/setAttribute\('aria-selected'/);
+});
+
+test('IT OPENS ON FLOWERING, and the markup and the JS agree about that', () => {
+    const html = readFileSync(join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8');
+    const ui = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'ui.js'), 'utf8');
+
+    // They did NOT agree before. The markup shipped Flowering selected while
+    // the init opened whichever group the current selection was in, and the
+    // default selection is SPECIES[0], which is a foliage tree. So the JS
+    // silently overrode the markup on the first paint.
+    expect(html).toMatch(/id="tab-flowering"[^>]*aria-selected="true"/);
+    expect(html).toMatch(/id="tab-foliage"[^>]*aria-selected="false"/);
+    const build = ui.slice(ui.indexOf('function buildTabs'));
+    const body = build.slice(0, build.indexOf('\n}\n'));
+    expect(body).toMatch(/showGroup\('flowering'\)/);
+    expect(body).not.toMatch(/isFlowering\(chosen\)/);
+
+    // And SPECIES[0] really is a foliage tree, which is the fact that made the
+    // two disagree. If the list is ever reordered so the first entry flowers,
+    // this stops being the reason and somebody should find out what is.
+    expect(floweringOf(ALL[0])).toBe(false);
+
+    // STICKY AFTER THAT: the group is chosen once at init rather than on every
+    // open, so planting a row of oaks costs one tab switch and not one per
+    // tree.
+    const open = ui.slice(ui.indexOf('export function openPlantModal'));
+    expect(open.slice(0, open.indexOf('\n}\n'))).not.toMatch(/showGroup/);
+});
+
+// ---- The tree card is not a list of four lines any more (M16-5) -------------
+
+test('THE CARD SHOWS THE TREE, AND IT IS THE VISITOR\'S OWN TREE', () => {
+    const html = readFileSync(join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8');
+    const main = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'main.js'), 'utf8');
+    const ui = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'ui.js'), 'utf8');
+    expect(html).toMatch(/id="tree-preview"/);
+
+    // ONE RENDERER, TWO DESTINATIONS, rather than a second scissor path.
+    expect(ui).toMatch(/if \(isCardOpen\(\)\) return cardPreview/);
+    expect(main).toMatch(/if \(isPlantOpen\(\) \|\| isCardOpen\(\)\) renderPreview/);
+
+    // AND THE 2D CONTEXT FOLLOWS THE CANVAS. Caching one across both modals
+    // would draw the card's portrait into the plant modal's canvas, which is
+    // the kind of bug that only appears on the second thing a visitor does.
+    expect(main).toMatch(/previewCtxFor !== target/);
+
+    // The card's tree is built from the record's own SEED, so it is that tree
+    // rather than a stock example of its species. The plant modal passes none
+    // and keeps the fixed showcase seed, because moving between species should
+    // show the species.
+    expect(main).toMatch(/seed: tree\.record\.seed/);
+    expect(main).toMatch(/seed === undefined \? 0x5EED : seed/);
+
+    // Driven at its LIVE state, with the same options the garden drives it
+    // with. Dropping `evergreen` or `schedule` would quietly give the portrait
+    // a deciduous year and no fruit.
+    const drive = main.slice(main.indexOf('function previewDrive'));
+    const body = drive.slice(0, drive.indexOf('\n}\n'));
+    expect(body).toMatch(/evergreen: entry\.resolved\.evergreen/);
+    expect(body).toMatch(/schedule: entry\.resolved\.schedule/);
+
+    // AND FRAMED ON WHAT IS ACTUALLY THERE. A sapling framed for the giant it
+    // will become is a few pixels in the middle of an empty square.
+    expect(main).toMatch(/currentHeight\(entry\.record, previewResolved\)/);
+});
+
+test('the card gauge is the gauge on the bed, in its colours', () => {
+    const css = readFileSync(
+        join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+    const B = GARDEN_CONFIG.garden.bed;
+    const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+    // The fill is the water, the track is what is missing and goes amber, and a
+    // dark tick marks where the two meet. Read off the same four colours the
+    // shader uses, so the card cannot drift from the world.
+    const thirst = css.slice(css.indexOf('.tree-thirst {'));
+    const block = thirst.slice(0, thirst.indexOf('@media'));
+    expect(block).toContain(hex(B.levelFullColor));
+    expect(block).toContain(hex(B.levelEmptyColor));
+    expect(block).toContain(hex(B.levelTrackColor));
+    expect(block).toContain(hex(B.levelBorderColor));
+
+    const ui = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'ui.js'), 'utf8');
+    // Urgent at the SAME threshold the droplet and the bed use, read from the
+    // config rather than typed here.
+    expect(ui).toMatch(/record\.moisture < GARDEN_CONFIG\.garden\.moisture\.thirstyBelow/);
+    // No boundary to draw on a tank that is all one thing.
+    expect(ui).toMatch(/fill > 0\.02 && fill < 0\.98/);
+    // COLOUR IS NEVER THE ONLY CARRIER: the percentage stays in the words, and
+    // the gauge names itself to a screen reader.
+    expect(ui).toMatch(/Water level \$\{Math\.round\(fill \* 100\)\} percent/);
+    expect(ui).toMatch(/texts\.push\(`\$\{thirst\}, \$\{moisture\}%`\)/);
+});
+
+// ---- Three things QA found in the two modals (M17) --------------------------
+
+test('THE PREVIEW IS DRAWN BEFORE THE SCENE, or it is left in the corner', () => {
+    // The preview renders into a SCISSOR RECTANGLE at the top left of the main
+    // drawing buffer and copies those pixels out to a 2D canvas. Drawn after
+    // the scene, the copy was taken correctly and then the frame was PRESENTED
+    // with the rectangle still stamped in the corner: a second, ghostly tree
+    // over the top left of the garden whenever either modal was open.
+    //
+    // Going first costs nothing and needs no restore pass, because
+    // `renderer.render` clears the whole buffer before it draws.
+    const main = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'main.js'), 'utf8');
+    const preview = main.indexOf('if (isPlantOpen() || isCardOpen()) renderPreview(');
+    const scene = main.indexOf('if (renderer && scene && camera) renderer.render(scene, camera)');
+    expect(preview).toBeGreaterThan(0);
+    expect(scene).toBeGreaterThan(0);
+    expect(preview).toBeLessThan(scene);
+
+    // And the copy still happens inside renderPreview, which is what keeps it
+    // in the same task as the render and valid without preserveDrawingBuffer.
+    const fn = main.slice(main.indexOf('function renderPreview'));
+    expect(fn.slice(0, fn.indexOf('\n}\n'))).toMatch(/previewCtx\.drawImage\(renderer\.domElement/);
+});
+
+test('the tree card fits a short window, buttons included', () => {
+    const css = readFileSync(
+        join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+    // The card had NO height cap at all, and `#tree-card .modal-container` sets
+    // `overflow: visible`, so on a 511 px window it ran off the screen with the
+    // text cut off and both buttons out of reach.
+    expect(css).toMatch(/#tree-card \.modal-container,[\s\S]{0,120}\{[^}]*overflow:\s*visible/);
+    expect(css).toMatch(/#tree-card \.modal-container\.tree-card\s*\{[^}]*max-height:\s*88vh/);
+    expect(css).toMatch(/#tree-card \.modal-container\.tree-card\s*\{[^}]*flex-direction:\s*column/);
+    expect(css).toMatch(/\.tree-scroll\s*\{[^}]*overflow-y:\s*auto/);
+    expect(css).toMatch(/\.tree-scroll\s*\{[^}]*min-height:\s*0/);
+    // The actions stay put while the middle scrolls.
+    expect(css).toMatch(/\.tree-actions\s*\{[^}]*flex:\s*none/);
+
+    // AND THE PORTRAIT IS CAPPED BY THE VIEWPORT, not only by the card's width.
+    // A square sized from the width alone is 19 rem tall in a 22 rem card,
+    // which is most of a short window before a line of text is drawn.
+    expect(css).toMatch(/\.tree-preview\s*\{[^}]*width:\s*min\(100%,\s*\d+vh\)/);
+
+    const html = readFileSync(join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8');
+    // The scrolling wrapper has to hold all three, or one of them escapes it.
+    const scroll = html.slice(html.indexOf('class="tree-scroll"'));
+    const inner = scroll.slice(0, scroll.indexOf('tree-actions'));
+    for (const id of ['tree-preview', 'tree-body', 'tree-thirst']) {
+        expect(inner).toContain(`id="${id}"`);
+    }
+});
+
+test('THE BACKDROP IS NOT A FOLIAGE COLOUR ANY MORE', () => {
+    const main = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'main.js'), 'utf8');
+    // It was 0x1d2a18, a dark FOLIAGE green, so every canopy in the list was
+    // shown against its own hue at its own value. Brightness was the lesser
+    // half of that report; hue was the rest. The value survives in a comment
+    // explaining the history, which is why this asks about the CALL and not
+    // about the file.
+    expect(main).not.toMatch(/setClearColor\(0x1d2a18/);
+
+    // NO FLAT COLOUR CAN DO IT, which is why this is a gradient. Foliage runs
+    // mid to dark and wants a light ground; the Quaking Aspen and the Paper
+    // Birch have chalk-white bark, which against a light ground measures
+    // 1.07:1 and 1.15:1. A gradient wins both because a tree is not evenly
+    // distributed: canopy is high in the frame and trunk is low.
+    expect(main).toMatch(/function previewBackdrop/);
+    expect(main).toMatch(/createLinearGradient/);
+    expect(main).toMatch(/side: THREE\.BackSide/);
+    // Unlit and untoned, because the colours chosen are the ones that should
+    // arrive on screen.
+    const fn = main.slice(main.indexOf('function previewBackdrop'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toMatch(/toneMapped: false/);
+    expect(body).toMatch(/fog: false/);
+    // A SPHERE AND NOT A PLANE: the preview camera is placed per tree from that
+    // tree's height, so a plane sized for a Japanese Maple would not cover a
+    // Coast Redwood.
+    expect(body).toMatch(/SphereGeometry/);
+
+    // The CSS shows the same thing before the first frame lands, so opening a
+    // modal is never a flash of some other colour.
+    const css = readFileSync(
+        join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+    expect(css.match(/linear-gradient\(#cfe0ea/g)).toHaveLength(2);
+
+    // The top of the gradient beats the darkest foliage, and the bottom beats
+    // the palest bark, which is the pair no single value could serve.
+    const lum = (hex) => {
+        const r = (hex >> 16) & 255, g = (hex >> 8) & 255, b = hex & 255;
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    };
+    const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+    const darkestLeaf = ALL.reduce((a, s) => lum(s.foliage.summer) < lum(a.foliage.summer) ? s : a);
+    const palestBark = ALL.reduce((a, s) => lum(s.bark) > lum(a.bark) ? s : a);
+    expect(ratio(0xcfe0ea, darkestLeaf.foliage.summer)).toBeGreaterThan(2);
+    expect(ratio(0x9a9182, palestBark.bark)).toBeGreaterThan(1.5);
+    // And the old flat green failed the second of those, which is the guard.
+    expect(ratio(0x1d2a18, palestBark.bark)).toBeGreaterThan(3);
+    expect(ratio(0x1d2a18, darkestLeaf.foliage.summer)).toBeLessThan(2);
+});

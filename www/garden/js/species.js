@@ -123,6 +123,49 @@ export const SPECIES = [
         }
     },
     {
+        // ---- IT EARNS ITS PLACE ON A SCHEDULE FACT, like the cherry --------
+        // The cherry is here because it flowers on bare wood, which is what
+        // people actually adore about cherry blossom. The lemon is here because
+        // IT HOLDS ITS FRUIT LONGER THAN ANYTHING ELSE IN THE GARDEN: ripe by
+        // mid-autumn and still hanging at the spring dawn, which is the best
+        // frame this scene has. Nothing else is carrying fruit then, and an
+        // evergreen with yellow fruit is the only colour in the winter frame
+        // besides the orange.
+        //
+        // A real lemon is close to everbearing, flowering while last year's
+        // fruit still hangs. `fruitStageAt` cannot express that: `bloom` runs
+        // before `bloomEnd` and `size` runs after it, so the two segments are
+        // disjoint by construction. The long hold is the half of the truth this
+        // machinery can tell, and it is the more interesting half anyway.
+        id: 'lemon',
+        name: 'Lemon',
+        size: 'Small',
+        note: 'Ripe by the autumn and still holding fruit at the spring sunrise, which nothing else here manages.',
+        matureHeight: 4.2,
+        evergreen: true,
+        bark: 0x93887a,
+        barkName: 'Smooth pale grey',
+        // Lighter and yellower than the orange's very dark citrus green, which
+        // is both true of the tree and what keeps the yellow fruit legible: the
+        // orange's leaves measure 0x3d6b34 and a yellow fruit on those reads as
+        // a lamp rather than as fruit.
+        foliage: { spring: 0x4c7a3c, summer: 0x497539, autumn: 0x497539 },
+        blossom: 0xfdf4f2,
+        fruit: { unripe: 0x8aa64c, ripe: 0xf2d541, size: 0.80, shape: 'lemon' },
+        // Rebased on `bloomStart`, `holdEnd` at 6.0 and `dropEnd` at 7.0 land at
+        // 22.5 and 23.5, so they stay inside the year and in order. That is the
+        // whole trick: the fruit drops as the next flowering opens.
+        schedule: {
+            bloomStart: 7.5, bloomFull: 8.5, bloomFade: 9.5, bloomEnd: 10.5,
+            setEnd: 12.5, swellEnd: 16.5, ripenEnd: 18.0, holdEnd: 6.0, dropEnd: 7.0
+        },
+        params: {
+            depth: 6, branches: 2, thirdChance: 0.44, lengthRatio: 0.71,
+            radiusRatio: 0.70, divergence: 58, gravitropism: 0.03, taper: 0.79,
+            jitter: 0.27, leafSize: 0.12, leafDensity: 2.1
+        }
+    },
+    {
         id: 'apple',
         name: 'Apple',
         size: 'Small',
@@ -446,6 +489,22 @@ export const SPECIES = [
 ];
 
 export const SPECIES_BY_ID = SPECIES.reduce((map, s) => { map[s.id] = s; return map; }, {});
+
+/**
+ * Whether a species flowers, which is how the plant modal splits its list.
+ *
+ * BLOSSOM OR FRUIT, and the `fruit` half is not redundant even though every
+ * species carrying fruit today also carries a blossom colour. A tree that
+ * fruits flowered first, so the rule is stated rather than left to hold by
+ * coincidence, and a future species with fruit and no blossom row still lands
+ * in the group a visitor would look for it in.
+ *
+ * Derived rather than stored: a `flowering: true` field on seventeen entries is
+ * seventeen chances to disagree with the schedule beside it.
+ */
+export function isFlowering(species) {
+    return !!(species && (species.blossom || species.fruit));
+}
 
 export function speciesById(id) {
     return SPECIES_BY_ID[id] || null;

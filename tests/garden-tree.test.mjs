@@ -133,6 +133,10 @@ test('a tree is a function of its seed, and that is locked', () => {
         'copper-beech': 2600671710,
         'weeping-willow': 691008386,
         'sugar-maple': 863262162,
+        // The lemon joined at M16-3. A golden value like the rest: it pins
+        // that this species' generated skeleton is stable across engines,
+        // which is what makes a saved garden come back as the same garden.
+        lemon: 1470650742,
         'quaking-aspen': 3742805772,
         'blue-spruce': 943020070,
         'scots-pine': 1560069635,
@@ -365,8 +369,10 @@ test('only the species that carry a schedule build any anchors at all', () => {
         const expected = s.schedule ? 'anchors' : 'none';
         expect(`${s.id}: ${fruit ? 'anchors' : 'none'}`).toBe(`${s.id}: ${expected}`);
     }
-    // Five of the sixteen: the four fruit trees and the dogwood.
-    expect(SPECIES.filter((s) => s.schedule).length).toBe(5);
+    // Six of the seventeen: five fruit trees and the dogwood, which flowers
+    // and sets nothing.
+    expect(SPECIES.filter((s) => s.schedule).length).toBe(6);
+    expect(SPECIES.filter((s) => s.fruit).length).toBe(5);
 });
 
 /**

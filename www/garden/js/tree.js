@@ -793,6 +793,20 @@ export const FRUIT_SHAPES = {
             { x: -0.150, y: 0.700, r: 0.105 },
             { x: 0.135, y: 0.615, r: 0.097 }
         ]
+    },
+    // A LEMON IS THE ONE THAT IS TALLER THAN IT IS WIDE, and at eight pixels
+    // that is the whole of what separates it from the orange beside it in the
+    // list. `squash` is the y radius as a fraction of the x radius, so this is
+    // the only entry above 1. The real nipple at each end is not drawn: this
+    // machinery cuts a stem WELL with `destination-out` and cannot add a bump,
+    // and at this size the silhouette's proportion carries it anyway.
+    lemon: {
+        kind: 'round', node: 0.140, stalk: 0.013, enter: 0.90,
+        squash: 1.32, dimple: 0.20,
+        bodies: [
+            { x: -0.165, y: 0.545, r: 0.108 },
+            { x: 0.170, y: 0.475, r: 0.100 }
+        ]
     }
 };
 

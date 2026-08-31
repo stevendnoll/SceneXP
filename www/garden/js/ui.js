@@ -18,8 +18,9 @@
  * happened to aim at it would be a small and infuriating bug.
  */
 
+import { GARDEN_CONFIG } from './config.min.js';
 import { seasonAt, hourAt } from './clock.min.js';
-import { SPECIES, SLIDERS, DEFAULT_CUSTOM, sliderWords, speciesById } from './species.min.js';
+import { SPECIES, DEFAULT_CUSTOM, isFlowering, speciesById } from './species.min.js';
 import { healthBand, HEALTH_WORDS } from './garden.min.js';
 import { fruitStageAt, fruitWords } from './clock.min.js';
 
@@ -28,7 +29,8 @@ let lastChip = '';
 
 let modalEl = null;
 let modalGrid = null;
-let modalSliders = null;
+let tabFlowering = null;
+let tabFoliage = null;
 let modalPreview = null;
 let modalPlant = null;
 let modalTitle = null;
@@ -37,6 +39,9 @@ let modalNote = null;
 let cardEl = null;
 let cardTitle = null;
 let cardBody = null;
+let cardPreview = null;
+let cardThirst = null;
+let cardThirstFill = null;
 let cardWater = null;
 let cardRemove = null;
 
@@ -97,7 +102,8 @@ export function initUi(handlers = {}) {
 
     modalEl = document.getElementById('plant-modal');
     modalGrid = document.getElementById('species-grid');
-    modalSliders = document.getElementById('slider-list');
+    tabFlowering = document.getElementById('tab-flowering');
+    tabFoliage = document.getElementById('tab-foliage');
     modalPreview = document.getElementById('preview-canvas');
     modalPlant = document.getElementById('plant-confirm');
     modalTitle = document.getElementById('plant-title');
@@ -106,6 +112,9 @@ export function initUi(handlers = {}) {
     cardEl = document.getElementById('tree-card');
     cardTitle = document.getElementById('tree-title');
     cardBody = document.getElementById('tree-body');
+    cardPreview = document.getElementById('tree-preview');
+    cardThirst = document.getElementById('tree-thirst');
+    cardThirstFill = document.getElementById('tree-thirst-fill');
     cardWater = document.getElementById('tree-water');
     cardRemove = document.getElementById('tree-remove');
 
@@ -115,7 +124,7 @@ export function initUi(handlers = {}) {
     resetCancel = document.getElementById('reset-cancel');
 
     buildSpeciesGrid();
-    buildSliders();
+    buildTabs();
 
     if (modalPlant) {
         modalPlant.addEventListener('click', () => {
@@ -196,12 +205,89 @@ export function isResetOpen() {
     return !!resetEl && !resetEl.classList.contains('hidden');
 }
 
+// ---- The two groups --------------------------------------------------------
+
+/**
+ * Show one group, and move the selection into it if it is not there already.
+ *
+ * THE SELECTION HAS TO FOLLOW, or switching tabs leaves the preview showing a
+ * tree the grid no longer offers and the Plant button planting something the
+ * visitor cannot see. It lands on the first of the new group, which is also
+ * the smallest, because the list is ordered small to large.
+ */
+function showGroup(name) {
+    const flowering = name !== 'foliage';
+    for (const [btn, on] of [[tabFlowering, flowering], [tabFoliage, !flowering]]) {
+        if (!btn) continue;
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        // Only the selected tab is in the tab order. Arrow keys move between
+        // them, which is what a tablist owes and what a row of plain buttons
+        // would not give.
+        btn.tabIndex = on ? 0 : -1;
+    }
+    if (modalGrid) {
+        modalGrid.setAttribute('aria-labelledby', flowering ? 'tab-flowering' : 'tab-foliage');
+    }
+    const chosen = speciesById(selection.species);
+    if (!chosen || isFlowering(chosen) !== flowering) {
+        const first = SPECIES.find((s) => isFlowering(s) === flowering);
+        if (first) selection.species = first.id;
+    }
+    buildSpeciesGrid();
+    refreshSelectionText();
+    if (onCustomChanged) onCustomChanged(selection);
+}
+
+function buildTabs() {
+    const pair = [tabFlowering, tabFoliage].filter(Boolean);
+    if (!pair.length) return;
+    for (const btn of pair) {
+        btn.addEventListener('click', () => {
+            showGroup(btn === tabFoliage ? 'foliage' : 'flowering');
+        });
+        btn.addEventListener('keydown', (event) => {
+            if (event.code !== 'ArrowLeft' && event.code !== 'ArrowRight') return;
+            event.preventDefault();
+            const other = btn === tabFoliage ? tabFlowering : tabFoliage;
+            if (!other) return;
+            showGroup(other === tabFoliage ? 'foliage' : 'flowering');
+            other.focus();
+        });
+    }
+    // ---- IT OPENS ON FLOWERING ----------------------------------------
+    // Which is also what the markup ships, so the two now agree. They did not
+    // before: this opened on whichever group the current selection was in, and
+    // the default selection is SPECIES[0], the Japanese Maple, which is a
+    // FOLIAGE tree. So the static markup said Flowering, the JS immediately
+    // said Foliage, and nothing had chosen either.
+    //
+    // Flowering is the right default on its merits too. It holds the trees that
+    // do something a visitor can watch for, which is what somebody opening this
+    // for the first time is here to find.
+    //
+    // STICKY AFTER THAT, because this runs once at init rather than on every
+    // open: a visitor planting a row of oaks switches tabs once, not once per
+    // tree.
+    showGroup('flowering');
+}
+
 // ---- The species grid ------------------------------------------------------
+
+/**
+ * Which group is showing. Not a class on an element: `aria-selected` on the
+ * tabs is the state, so what a screen reader is told and what an eye is shown
+ * are one fact and cannot come apart.
+ */
+function currentGroup() {
+    return tabFoliage && tabFoliage.getAttribute('aria-selected') === 'true'
+        ? 'foliage' : 'flowering';
+}
 
 function buildSpeciesGrid() {
     if (!modalGrid) return;
     modalGrid.innerHTML = '';
-    for (const s of SPECIES) {
+    const wantFlowering = currentGroup() === 'flowering';
+    for (const s of SPECIES.filter((sp) => isFlowering(sp) === wantFlowering)) {
         const label = document.createElement('label');
         label.className = 'species-option';
 
@@ -240,49 +326,6 @@ function buildSpeciesGrid() {
     }
 }
 
-function buildSliders() {
-    if (!modalSliders) return;
-    modalSliders.innerHTML = '';
-    for (const s of SLIDERS) {
-        const row = document.createElement('div');
-        row.className = 'slider-row';
-
-        const label = document.createElement('label');
-        label.className = 'slider-label';
-        label.setAttribute('for', `slider-${s.key}`);
-        label.textContent = s.label;
-
-        const input = document.createElement('input');
-        input.type = 'range';
-        input.id = `slider-${s.key}`;
-        input.className = 'slider-input';
-        input.min = String(s.min);
-        input.max = String(s.max);
-        input.step = String(s.step);
-        input.value = String(selection.custom[s.key]);
-
-        const readout = document.createElement('span');
-        readout.className = 'slider-readout';
-
-        const sync = () => {
-            const value = parseFloat(input.value);
-            selection.custom[s.key] = value;
-            const words = sliderWords(s.key, value);
-            // WORDS, NOT NUMBERS. "0.85" tells a screen reader nothing about
-            // what the tree will look like; "narrow" does.
-            input.setAttribute('aria-valuetext', words);
-            readout.textContent = words;
-            if (onCustomChanged) onCustomChanged(selection);
-        };
-        input.addEventListener('input', sync);
-        sync();
-
-        row.appendChild(label);
-        row.appendChild(input);
-        row.appendChild(readout);
-        modalSliders.appendChild(row);
-    }
-}
 
 function refreshSelectionText() {
     const s = speciesById(selection.species);
@@ -320,8 +363,41 @@ export function getSelection() {
     return { species: selection.species, custom: { ...selection.custom } };
 }
 
+/**
+ * Whichever canvas the renderer should be drawing into.
+ *
+ * ONE RENDERER, TWO DESTINATIONS. Both modals show a turning tree and neither
+ * can be open while the other is, so the scissor-rectangle path in main.js asks
+ * here rather than carrying a second copy of itself. The card is tested first
+ * because it is the one that can be opened while a plant modal is still
+ * finishing its close animation.
+ */
 export function getPreviewCanvas() {
+    if (isCardOpen()) return cardPreview;
     return modalPreview;
+}
+
+/**
+ * Paint the card's thirst gauge.
+ *
+ * THE SAME GAUGE THAT STANDS ON THE BED, and deliberately so: the fill is the
+ * water, the track is what is missing and goes amber when it matters, and a
+ * dark tick marks where the two meet. Blue against amber is 1.13:1, a hue pair
+ * and not a luminance one, so that boundary is drawn rather than left to
+ * emerge, exactly as it is in the shader.
+ *
+ * The percentage stays in the card's text. Colour is never the only carrier of
+ * anything in this scene, and a gauge on its own would be.
+ */
+function paintThirst(moisture, urgent) {
+    if (!cardThirst || !cardThirstFill) return;
+    const fill = Math.max(0, Math.min(1, moisture));
+    cardThirstFill.style.width = `${(fill * 100).toFixed(1)}%`;
+    cardThirst.dataset.urgent = urgent ? 'true' : 'false';
+    // No boundary to draw on a tank that is all one thing.
+    cardThirstFill.dataset.edge = (fill > 0.02 && fill < 0.98) ? 'true' : 'false';
+    cardThirst.setAttribute('aria-label',
+        `Water level ${Math.round(fill * 100)} percent`);
 }
 
 // ---- The tree card ---------------------------------------------------------
@@ -375,6 +451,11 @@ export function cardLines(record, resolved, ageYears, context = {}) {
         // Plain words alongside the bar, because a bar is a colour and colour
         // is never the only carrier.
         thirst,
+        // Whether the gauge should be shouting. The SAME LINE the bed's gauge
+        // and the droplet use, read off the config rather than a number typed
+        // here, so the card cannot disagree with the world about when a tree is
+        // in trouble.
+        thirsty: record.moisture < GARDEN_CONFIG.garden.moisture.thirstyBelow,
         doing,
         runoff,
         texts
@@ -388,13 +469,18 @@ export function openTreeCard(entry, ageYears, context = {}) {
     const lines = cardLines(entry.record, entry.resolved, ageYears, context);
     if (cardTitle) cardTitle.textContent = lines.title;
     writeCardBody(lines);
+    paintThirst(entry.record.moisture, lines.thirsty);
     cardEl.classList.remove('hidden');
     if (cardWater) cardWater.focus();
 }
 
 export function refreshTreeCard(ageYears, context = {}) {
     if (!isCardOpen() || !cardEntry) return;
-    writeCardBody(cardLines(cardEntry.record, cardEntry.resolved, ageYears, context));
+    const lines = cardLines(cardEntry.record, cardEntry.resolved, ageYears, context);
+    writeCardBody(lines);
+    // The card is refreshed every frame it is open, so watering a tree fills
+    // the gauge while the visitor is looking at it rather than on reopening.
+    paintThirst(cardEntry.record.moisture, lines.thirsty);
 }
 
 /**
