@@ -326,6 +326,59 @@ export const GARDEN_CONFIG = deepFreeze({
             //
             // Tilt is NOT here. The shared part owns it, on `portrait.pan`
             // above, so the buttons, W and S, and a drag are all one axis.
+        },
+
+        // ---- BEING SHOWN THE TREE YOU JUST PLANTED --------------------------
+        // From the composed viewpoint a newly planted sapling is a few hundred
+        // pixels of nothing, 25 metres away and anywhere across a 24 metre
+        // plot, and on a portrait phone it can be off the side of the frame
+        // entirely. The visitor has just made a decision and the scene answers
+        // it by showing them something they have to hunt for. So the camera
+        // turns to the new tree and moves in on it.
+        //
+        // IT IS A COURTESY AND NOT A CUTSCENE. It eases, the first touch of any
+        // control cancels it, and reduced motion arrives without travelling.
+        // See view.js, which owns the move.
+        focus: {
+            seconds: 1.15,
+
+            // ---- FRAMED IN THE TREE'S OWN HEIGHTS -------------------------
+            // How many of them the vertical frame should hold, so a 3 m
+            // Japanese Maple and a 14 m Coast Redwood land at the same share of
+            // the picture rather than one filling it and the other vanishing.
+            // At 2.2 a mature tree is about 45 percent of the frame's height.
+            //
+            // The tree going in is a SAPLING, not the mature specimen this is
+            // measured against, and that is deliberate: the framing is chosen
+            // once, at planting, and has to still make sense in ten years. A
+            // distance chosen to fill the frame with a two metre sapling would
+            // stand the eye inside the tree for the rest of the garden's life.
+            frameHeights: 2.2,
+            // Metres, and the floor is what stops a small tree pulling the eye
+            // in on top of its own mulch. The ceiling keeps the move worth
+            // making at all: past this it is barely closer than composed.
+            minDistance: 8,
+            maxDistance: 20,
+
+            // ---- THE EYE MUST NOT END UP BEHIND THE TREE ------------------
+            // The near end of the dolly track is z = 6, which is INSIDE a plot
+            // that runs -12 to +12, so a tree planted at the front of it can
+            // finish behind the camera, which looks down -z. This is how far in
+            // front of the tree the eye stays, whatever distance was asked for.
+            clearance: 8,
+            // The other end of the promise: always a move worth noticing, and
+            // never so far in that the plot around the tree stops reading.
+            // `minDolly` yields to `clearance` when the two disagree.
+            minDolly: 0.3,
+            maxDolly: 0.85,
+
+            // Where on the tree to aim: a little way up it rather than at the
+            // ground, so the trunk is centred and the canopy has the top of the
+            // frame to grow into. Scaled by the species and then clamped, or a
+            // redwood is framed on empty sky and a maple on its own roots.
+            aimHeightRatio: 0.35,
+            minAimHeight: 1.4,
+            maxAimHeight: 4.5
         }
     },
 
@@ -1205,8 +1258,8 @@ export const GARDEN_CONFIG = deepFreeze({
                 // SEGMENTS ROSE WITH THE SPREAD, or the same profile stretched
                 // over 1.7 times the arc and the ridgeline went soft. 952
                 // triangles for the pair, which is nothing.
-                { distance: 340, height: 112, roughness: 0.42, haze: 0.72, segments: 256 },
-                { distance: 285, height: 74, roughness: 0.55, haze: 0.5, segments: 220 }
+                { distance: 340, height: 112, roughness: 0.42, haze: 0.72, segments: 366 },
+                { distance: 285, height: 74, roughness: 0.55, haze: 0.5, segments: 314 }
             ],
             // ---- HALF-ANGLE OF THE ARC, AND IT IS SET BY THE CAMERA -------
             // Centred on north. It was 62, which is short on EVERY landscape
@@ -1225,10 +1278,31 @@ export const GARDEN_CONFIG = deepFreeze({
             //     21:9    53.4 + 31.5 =  84.9   short by 22.9
             //     32:9    64.0 + 31.5 =  95.5   short by 33.5
             //
-            // 105 covers past 32:9 with room. Beyond 90 the arc curves behind
-            // the camera plane, which costs nothing: it is a curtain and the
-            // far side of it is simply never looked at.
-            spreadDegrees: 105,
+            // ---- AND A THIRD TERM ARRIVED WITH THE FOCUS MOVE -------------
+            // `camera.focus` turns the COMPOSED AIM to a newly planted tree,
+            // which is a third rotation on top of the two above and by far the
+            // largest. Its worst case is set by the plot's own half-width and
+            // the focus `clearance`: the eye stops 8 m in front of a tree that
+            // can be 9 m off the track, so atan(9/8) = 48.4 degrees, and the
+            // pan then composes on top of THAT rather than on north.
+            //
+            //     4:3     48.4 + 37.6 + 31.5 = 117.5
+            //     16:9    48.4 + 45.8 + 31.5 = 125.6
+            //     21:9    48.4 + 53.4 + 31.5 = 133.3
+            //     32:9    48.4 + 64.0 + 31.5 = 143.9
+            //
+            // 150 covers 32:9 with room, and the segment counts above rose
+            // with it to hold the ridgeline's density: 1,360 triangles for the
+            // pair where there were 952, which is nothing.
+            //
+            // NONE OF THE EXTRA ARC IS VISIBLE FROM ANY VIEW THAT EXISTED
+            // BEFORE. Fully panned and at the widest aspect the old frame
+            // reached 77.3 degrees, so everything past 105 can only be seen
+            // once the camera has been turned to a tree in a corner of the
+            // plot. Beyond 90 the arc curves behind the camera plane, which
+            // costs nothing: it is a curtain and the far side is never looked
+            // at.
+            spreadDegrees: 150,
             rockColor: 0x4a5566
         },
 

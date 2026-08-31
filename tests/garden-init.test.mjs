@@ -341,6 +341,116 @@ test('the garden can be planted, watered, saved, and cleared', async () => {
     expect(garden.getTrees()).toHaveLength(0);
 });
 
+test('PLANTING TURNS THE SCENE TO LOOK AT THE NEW TREE', async () => {
+    // The arithmetic is asserted in tests/garden-world.test.mjs. This is the
+    // wiring: that planting reaches it at all, that the aim lands on the tree
+    // that was actually planted, and that the move runs on the render loop
+    // rather than arriving in one frame.
+    const main = await bootGarden();
+    const ui = await import('../www/garden/js/ui.min.js');
+    const garden = await import('../www/garden/js/garden.min.js');
+    const view = await import('../www/garden/js/view.min.js');
+    const terrain = await import('../www/garden/js/terrain.min.js');
+
+    fire(dom.el('blocker'), 'click');
+    stepFrames(10);
+    // Nothing is planted, so nothing has been asked for.
+    expect(view.getAim()).toBe(null);
+
+    ui.openPlantModal({ full: false });
+    fire(dom.el('plant-confirm'), 'click');
+    expect(garden.getTrees()).toHaveLength(1);
+
+    // IT IS A MOVE AND NOT A CUT. One frame in, the aim exists and is on its
+    // way rather than already there: a camera that teleports leaves the
+    // visitor working out where they are.
+    stepFrames(1);
+    expect(view.isFocusing()).toBe(true);
+
+    // And it arrives on the tree that went in, not near it.
+    stepFrames(120);
+    const record = garden.getTrees()[0].record;
+    const cell = terrain.cellCenter(record.gx, record.gz);
+    const aim = view.getAim();
+    expect(view.isFocusing()).toBe(false);
+    expect(aim.x).toBeCloseTo(cell.x, 6);
+    expect(aim.z).toBeCloseTo(cell.z, 6);
+    // Aimed up the trunk rather than at the roots, or the tree grows out of
+    // the top of the frame it was just centred in.
+    expect(aim.y).toBeGreaterThan(terrain.heightAt(cell.x, cell.z));
+
+    // ---- AND THE VISITOR CAN TAKE IT BACK --------------------------------
+    // A move that ignores the controls is worse than no move. `pointerdown`
+    // is on the document because the pan and zoom buttons are floating chrome
+    // and never touch the canvas.
+    ui.openPlantModal({ full: false });
+    fire(dom.el('plant-confirm'), 'click');
+    stepFrames(2);
+    expect(view.isFocusing()).toBe(true);
+    fire(globalThis.document, 'pointerdown');
+    expect(view.isFocusing()).toBe(false);
+
+    main.__test__.state.running = false;
+});
+
+test('PLANTING AFTER A PAN CENTRES THE TREE, NOT THE TREE PLUS THE PAN', async () => {
+    // ---- THE BUG THIS EXISTS FOR, AND IT SHIPPED ONCE --------------------
+    //
+    // The shared pan part's yaw is an OFFSET FROM this scene's aim object, it
+    // persists, and it is applied AFTER `applyView` every frame. So aiming the
+    // composed view at a new tree centred it and then added the visitor's own
+    // pan straight back on top: the tree came out at the edge of a desktop
+    // frame and clean off a portrait one, whose half-width is 18.7 degrees
+    // against a pan limit of 31.5.
+    //
+    // The "sometimes" in the QA report was exactly whether the visitor had
+    // panned before planting, which is most of the time, because looking at
+    // the spot is how you choose it. So this test pans FIRST.
+    //
+    // It cannot assert the camera's direction: under the THREE stub every
+    // number read back off a camera is zero. It asserts the thing that made
+    // the direction wrong, which is the offset surviving the plant.
+    const main = await bootGarden();
+    const ui = await import('../www/garden/js/ui.min.js');
+    const view = await import('../www/garden/js/view.min.js');
+    const pan = await import('../www/shared/js/pan-1.0.0.min.js');
+
+    fire(dom.el('blocker'), 'click');
+    stepFrames(10);
+    expect(pan.getPanAngle()).toBe(0);
+
+    // Look across the plot, the way somebody choosing a spot does. The part
+    // listens for the arrow keys on the WINDOW, not the document.
+    fire(globalThis.window, 'keydown', { code: 'ArrowRight' });
+    stepFrames(60);
+    fire(globalThis.window, 'keyup', { code: 'ArrowRight' });
+    const panned = pan.getPanAngle();
+    expect(panned).toBeGreaterThan(0.2);
+
+    // Plant. The offset is CONSUMED rather than carried, so the visitor's pan
+    // range is symmetric about the tree they are now looking at.
+    ui.openPlantModal({ full: false });
+    fire(dom.el('plant-confirm'), 'click');
+    expect(pan.getPanAngle()).toBe(0);
+    expect(pan.getTiltAngle()).toBe(0);
+
+    // AND IT IS FOLDED INTO THE MOVE RATHER THAN THROWN AWAY. Zeroing the
+    // offset on its own would swing the camera by up to 31.5 degrees in one
+    // frame, so the move starts from where the camera was genuinely pointing.
+    // Under the stub that read-back is not available and it falls back to the
+    // composed aim, so what is asserted here is that the move is still an
+    // eased one and still lands on the tree.
+    stepFrames(1);
+    expect(view.isFocusing()).toBe(true);
+    stepFrames(120);
+    expect(view.isFocusing()).toBe(false);
+    expect(view.getAim()).not.toBe(null);
+    // And nothing has quietly put the offset back.
+    expect(pan.getPanAngle()).toBe(0);
+
+    main.__test__.state.running = false;
+});
+
 test('deleting the saved garden by hand actually deletes it', async () => {
     // THE EXACT SEQUENCE FROM QA. Clearing the key and reloading used to do
     // nothing, because a reload fires visibilitychange and then pagehide, both

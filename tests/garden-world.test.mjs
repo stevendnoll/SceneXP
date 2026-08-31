@@ -26,6 +26,8 @@ import { luminanceOf } from '../www/garden/js/sky.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { dollyView, dollyTrackZ } from '../www/garden/js/view.js';
+import { cellInPlot, cellCenter } from '../www/garden/js/terrain.js';
+import { SPECIES } from '../www/garden/js/species.js';
 
 const PLOT = GARDEN_CONFIG.plot;
 const HALF = PLOT.halfSize;
@@ -674,6 +676,195 @@ test('the dolly deltas clamp, and a NaN cannot strand the camera', async () => {
     expect(view.getDolly()).toBe(0);
 });
 
+// ---- Being shown the tree you just planted ---------------------------------
+//
+// The camera turns to a newly planted tree and moves in on it. Everything that
+// decides where it ends up is pure, which is what lets the framing be measured
+// against every species in every corner of the plot rather than sampled in a
+// screenshot from wherever the last tree happened to go.
+
+/** Every cell the plot actually offers, so the extremes tested are real ones. */
+function everyCell() {
+    const out = [];
+    const reach = Math.ceil(GARDEN_CONFIG.plot.halfSize / GARDEN_CONFIG.plot.gridSpacing) + 1;
+    for (let gx = -reach; gx <= reach; gx++) {
+        for (let gz = -reach; gz <= reach; gz++) {
+            if (!cellInPlot(gx, gz)) continue;
+            const { x, z } = cellCenter(gx, gz);
+            out.push({ x, z, y: worldHeightAt(x, z) });
+        }
+    }
+    return out;
+}
+
+/** Where the eye ends up on the track, which `dollyView` states and this
+ *  mirrors only so the assertions can talk about a position. */
+function eyeAt(dolly, composed) {
+    const view = dollyView(dolly, composed);
+    return { x: 0, y: view.y, z: view.z };
+}
+
+/** The aim point `showTree` builds, which is a little way up the trunk. */
+function aimPointFor(cell, matureHeight) {
+    const F = GARDEN_CONFIG.camera.focus;
+    return {
+        x: cell.x,
+        z: cell.z,
+        y: cell.y + Math.min(F.maxAimHeight, Math.max(F.minAimHeight,
+            matureHeight * F.aimHeightRatio))
+    };
+}
+
+test('THE EYE NEVER ENDS UP BEHIND THE TREE IT WAS SENT TO LOOK AT', async () => {
+    // THE FAILURE THIS EXISTS FOR. The near end of the dolly track is z = 6,
+    // which is INSIDE a plot that runs -12 to +12, and the camera looks down
+    // -z. So a tree planted at the front of the plot can finish behind the eye,
+    // and "turn to your new tree" would aim the camera over its own shoulder at
+    // something it cannot see. It is invisible in every test that only checks
+    // the distance came out right, because the distance is a hypotenuse and
+    // does not have a sign.
+    const { focusDistance, dollyForDistance } = await import('../www/garden/js/view.js');
+    const F = GARDEN_CONFIG.camera.focus;
+
+    // Both lenses this scene composes with: 60 landscape, 72 portrait, and the
+    // portrait one also sits further back, which changes the whole track.
+    for (const [fov, composedZ] of [[60, 22], [72, 26.6]]) {
+        const composed = { ...COMPOSED, z: composedZ };
+        for (const cell of everyCell()) {
+            for (const h of [3, 4.5, 9, 14]) {
+                const point = aimPointFor(cell, h);
+                const t = dollyForDistance(point, composed, focusDistance(h, fov));
+                const eye = eyeAt(t, composed);
+                const ahead = eye.z - point.z;
+                expect(`fov ${fov} (${cell.x},${cell.z}) h${h}: ${ahead >= F.clearance - 1e-6}`)
+                    .toBe(`fov ${fov} (${cell.x},${cell.z}) h${h}: true`);
+            }
+        }
+    }
+});
+
+test('the move is always a move, and never all the way in', async () => {
+    const { focusDistance, dollyForDistance } = await import('../www/garden/js/view.js');
+    const F = GARDEN_CONFIG.camera.focus;
+    const composed = { ...COMPOSED };
+
+    for (const cell of everyCell()) {
+        for (const h of [3, 9, 14]) {
+            const point = aimPointFor(cell, h);
+            const t = dollyForDistance(point, composed, focusDistance(h, 60));
+            // Never past the far end of what is comfortable, and never out.
+            expect(`(${cell.x},${cell.z}): ${t >= 0 && t <= F.maxDolly + 1e-9}`)
+                .toBe(`(${cell.x},${cell.z}): true`);
+            // AND ALWAYS CLOSER THAN IT WAS. A "zoom to your new tree" that
+            // leaves the camera where it stood has not happened, and the
+            // visitor is left looking for a sapling 25 metres away.
+            const before = eyeAt(0, composed);
+            const after = eyeAt(t, composed);
+            const was = Math.hypot(point.x, before.y - point.y, before.z - point.z);
+            const now = Math.hypot(point.x, after.y - point.y, after.z - point.z);
+            expect(`(${cell.x},${cell.z}) h${h}: ${now < was}`)
+                .toBe(`(${cell.x},${cell.z}) h${h}: true`);
+        }
+    }
+});
+
+test('a redwood and a maple are framed the same, and so are the two lenses', async () => {
+    // The point of measuring the distance in the TREE'S OWN HEIGHTS. A fixed
+    // number of metres frames a 3 m Japanese Maple and a 14 m Coast Redwood
+    // completely differently, and a fixed distance frames the same tree
+    // differently in portrait, where the composed lens is 72 rather than 60.
+    const { focusDistance } = await import('../www/garden/js/view.js');
+    const F = GARDEN_CONFIG.camera.focus;
+    const share = (h, fov) => {
+        const d = focusDistance(h, fov);
+        return h / (2 * d * Math.tan((fov / 2) * Math.PI / 180));
+    };
+
+    // Away from the clamps, every species lands at the same share of the frame
+    // and both lenses agree with each other. The band is where BOTH lenses are
+    // unclamped: portrait wants the eye a quarter closer for the same framing,
+    // so it meets the 8 m floor at a taller tree than landscape does.
+    for (const h of [6, 7.5, 9, 10]) {
+        expect(share(h, 60)).toBeCloseTo(1 / F.frameHeights, 6);
+        expect(share(h, 72)).toBeCloseTo(1 / F.frameHeights, 6);
+    }
+    // The clamps are what the extremes hit, and they are the right way round:
+    // the smallest tree is held back off its own mulch, the largest is not
+    // allowed to retreat so far that the move stopped being one.
+    expect(focusDistance(3, 60)).toBe(F.minDistance);
+    expect(focusDistance(14, 60)).toBe(F.maxDistance);
+    // Every species in the table is inside the clamps or on one of them, which
+    // is what says the two numbers are sized to the trees that exist rather
+    // than to a guess.
+    for (const s of SPECIES) {
+        for (const fov of [60, 72]) {
+            const d = focusDistance(s.matureHeight, fov);
+            expect(`${s.id}@${fov}: ${d >= F.minDistance && d <= F.maxDistance}`)
+                .toBe(`${s.id}@${fov}: true`);
+        }
+    }
+});
+
+test('a camera move eases, lands, and is cancelled by the first touch', async () => {
+    const view = await import('../www/garden/js/view.js');
+    view.resetView();
+    expect(view.getAim()).toBe(null);
+
+    const from = { x: 0, y: 2.5, z: -2 };
+    const to = { x: 6, y: 3, z: -6 };
+    view.focusOn(to, 0.6, 1.0, from);
+
+    // It starts where the aim already was, or the move opens with a jump,
+    // which is the one thing an eased move is for avoiding.
+    expect(view.getAim().x).toBeCloseTo(from.x, 9);
+    expect(view.getDolly()).toBeCloseTo(0, 9);
+
+    // Half way is past half way, because it is a smoothstep and not a ramp.
+    view.stepView(0.5);
+    expect(view.getAim().x).toBeCloseTo(3, 6);
+    expect(view.isFocusing()).toBe(true);
+
+    view.stepView(0.6);
+    expect(view.getAim()).toEqual(to);
+    expect(view.getDolly()).toBeCloseTo(0.6, 9);
+    expect(view.isFocusing()).toBe(false);
+
+    // ---- THE VISITOR OWNS THE CAMERA THE MOMENT THEY TOUCH IT ------------
+    // A move that carries on after somebody has taken the controls is
+    // infuriating, and the zoom is worse than that: the move writes the dolly
+    // every frame, so the button would look dead and then jump.
+    view.resetView();
+    view.focusOn(to, 1, 1.0, from);
+    view.stepView(0.25);
+    const grabbed = view.getAim().x;
+    view.applyDollyDelta(-0.2);
+    expect(view.isFocusing()).toBe(false);
+    view.stepView(5);
+    // Stopped where it was, NOT snapped back: refusing a move is not a request
+    // for a second one in the opposite direction.
+    expect(view.getAim().x).toBeCloseTo(grabbed, 9);
+
+    view.resetView();
+    view.focusOn(to, 1, 1.0, from);
+    view.cancelFocus();
+    view.stepView(5);
+    expect(view.getAim().x).toBeCloseTo(from.x, 9);
+
+    // Reduced motion arrives rather than travels, and it is a duration of zero
+    // rather than a branch anywhere in the move itself.
+    view.resetView();
+    view.focusOn(to, 0.7, 0, from);
+    expect(view.getAim()).toEqual(to);
+    expect(view.getDolly()).toBeCloseTo(0.7, 9);
+    expect(view.isFocusing()).toBe(false);
+
+    // And a new garden faces the way the scene opens, not at the ground where
+    // a tree used to stand.
+    view.resetView();
+    expect(view.getAim()).toBe(null);
+    expect(view.getDolly()).toBe(0);
+});
+
 // ---- Nothing stands in the lake (M14-4) ------------------------------------
 
 const { inTheLake } = await import('../www/garden/js/forest.js');
@@ -857,11 +1048,30 @@ test('THE MOUNTAINS SPAN THE WHOLE HORIZON, AT EVERY ASPECT AND FULL PAN', () =>
     const pan = cam.portrait.pan.maxAngle * 180 / Math.PI;
     const halfH = (fov, aspect) => Math.atan(Math.tan(fov * Math.PI / 360) * aspect) * 180 / Math.PI;
 
+    // ---- AND A THIRD TERM ARRIVED WITH THE FOCUS MOVE ---------------------
+    // `camera.focus` turns the COMPOSED AIM to a newly planted tree, and the
+    // pan then composes on top of THAT rather than on north. It is the largest
+    // of the three and it is not a free parameter: the eye stops `clearance`
+    // metres in front of a tree that can be a plot half-width off the track,
+    // and the arctangent of those two is the worst aim the scene can produce.
+    // Derived here rather than typed, so widening the plot or shortening the
+    // clearance fails this instead of quietly opening a gap in the sky.
+    let reach = 0;
+    const steps = Math.ceil(PLOT.halfSize / PLOT.gridSpacing) + 1;
+    for (let gx = -steps; gx <= steps; gx++) {
+        for (let gz = -steps; gz <= steps; gz++) {
+            if (cellInPlot(gx, gz)) reach = Math.max(reach, Math.abs(cellCenter(gx, gz).x));
+        }
+    }
+    const aim = Math.atan2(reach, cam.focus.clearance) * 180 / Math.PI;
+    expect(aim).toBeGreaterThan(30);
+
     for (const aspect of [4 / 3, 16 / 10, 16 / 9, 21 / 9, 32 / 9]) {
-        expect(halfH(cam.fov, aspect) + pan).toBeLessThanOrEqual(spread);
+        expect(`${aspect}: ${halfH(cam.fov, aspect) + pan + aim <= spread}`)
+            .toBe(`${aspect}: true`);
     }
     // Portrait too, which uses its own wider lens on a narrow window.
-    expect(halfH(cam.portrait.fov, 0.46) + pan).toBeLessThanOrEqual(spread);
+    expect(halfH(cam.portrait.fov, 0.46) + pan + aim).toBeLessThanOrEqual(spread);
 
     // AND THE OLD VALUE FAILS, which is what makes this a guard. 62 was short
     // by 7 degrees at 4:3 and by 23 at 21:9.
@@ -874,9 +1084,11 @@ test('THE MOUNTAINS SPAN THE WHOLE HORIZON, AT EVERY ASPECT AND FULL PAN', () =>
     for (const layer of W.mountains.layers) {
         expect(layer.segments / spread).toBeGreaterThan(1.8);
     }
-    // And it stays cheap: two triangles a segment.
+    // And it stays cheap: two triangles a segment. The arc went from 105 to
+    // 150 degrees for the focus move and the segments went with it, which is
+    // 408 more triangles against a 400,000 budget.
     const tris = W.mountains.layers.reduce((a, l) => a + l.segments * 2, 0);
-    expect(tris).toBeLessThan(1200);
+    expect(tris).toBeLessThan(1600);
 });
 
 // ---- Clouds (M20-2) --------------------------------------------------------

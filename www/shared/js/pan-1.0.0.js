@@ -843,6 +843,41 @@ export function updatePortraitControls(deltaTime) {
     }
 }
 
+/**
+ * Put the yaw and tilt back to zero, so the aim is the composed one again.
+ *
+ * ---- FOR AN EXPERIENCE THAT MOVES THE AIM ITSELF ----
+ *
+ * The yaw and tilt here are an OFFSET FROM the `lookAt` object the experience
+ * handed over, and that object is allowed to move: www/garden turns the
+ * composed aim onto a newly planted tree. The offset then rides on top of the
+ * new aim, which is right for a visitor still looking around and wrong the
+ * instant the experience has deliberately aimed at something. Garden shipped
+ * that bug: pan across the plot, plant a tree, and the scene centred the tree
+ * and then added the visitor's 31.5 degrees of pan back on, which on a portrait
+ * phone (a frame 18.7 degrees wide either side) put the new tree off screen.
+ *
+ * So an experience that re-aims announces it here, and the offset is consumed
+ * rather than carried. The visitor's pan range is then symmetric about whatever
+ * they are now looking at, which is the whole reason the offset exists.
+ *
+ * THIS DOES NOT MOVE THE CAMERA BY ITSELF and must not be called as though it
+ * did. The next `updatePortraitControls` restores the composed aim, so a caller
+ * that has not also moved its own `lookAt` will see the view snap back by
+ * whatever the offset was. Garden's `showTree` reads the camera's ACTUAL
+ * direction first and starts its own eased move from there, so the offset is
+ * folded into a move that was happening anyway and nothing jumps.
+ *
+ * The held buttons are deliberately untouched: a finger still down on the pan
+ * arrow is a request that has not finished.
+ */
+export function resetPortraitAim() {
+    _angle = 0;
+    _tilt = 0;
+    syncLimitClasses();
+    syncTiltClasses();
+}
+
 /** Current yaw offset in radians (exposed for unit tests). */
 export function getPanAngle() {
     return _angle;

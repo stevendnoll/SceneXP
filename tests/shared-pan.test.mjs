@@ -235,6 +235,38 @@ describe('panning', () => {
     expect(buttons['Pan left'].classList.contains('at-limit')).toBe(false);
   });
 
+  test('resetPortraitAim consumes the offset for an experience that re-aims', async () => {
+    // ---- THE BUG THIS SEAM EXISTS FOR, AND IT SHIPPED ------------------
+    // The yaw and tilt are an OFFSET FROM the `lookAt` object the experience
+    // handed over, and that object is allowed to move: www/garden turns the
+    // composed aim onto a newly planted tree. The offset then rode on top of
+    // the new aim, so the scene centred the tree and added the visitor's 31.5
+    // degrees of pan back on. On a portrait phone, whose frame is 18.7 degrees
+    // wide either side, that put the new tree clean off the screen.
+    const { m, camera, buttons } = await setup();
+    press(buttons['Pan right']);
+    m.updatePortraitControls(1);
+    release(buttons['Pan right']);
+    expect(m.getPanAngle()).toBeCloseTo(0.4, 10);
+    expect(buttons['Pan right'].classList.contains('at-limit')).toBe(false);
+
+    m.resetPortraitAim();
+    expect(m.getPanAngle()).toBe(0);
+    expect(m.getTiltAngle()).toBe(0);
+
+    // AND THE COMPOSED AIM IS WHAT THE CAMERA GETS FROM THE NEXT FRAME ON,
+    // which is the half that makes it a reset rather than a bookkeeping
+    // change. The caller is expected to have moved `lookAt` itself, which is
+    // why garden folds this into an eased move rather than calling it alone.
+    m.updatePortraitControls(1);
+    expect(lastLookAt(camera)).toEqual(LOOK_AT);
+
+    // The zoom is a separate axis and is deliberately left alone: it is not
+    // part of the aim, and an experience re-aiming has said nothing about how
+    // close the visitor wanted to be.
+    m.disposePortraitControls();
+  });
+
   test('releasing holds the view where it is (no snap back)', async () => {
     const { m, buttons } = await setup();
     press(buttons['Pan right']);

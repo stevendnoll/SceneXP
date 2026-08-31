@@ -41,7 +41,8 @@ import { createWeather, stepWeather, weatherWords, overcastAt } from './weather.
 import { initPrecipitation, updatePrecipitation, disposePrecipitation } from './precip.min.js';
 import { resolveSpecies } from './species.min.js';
 import {
-    dollyView, applyDollyDelta, dollyLimits, getDolly, resetView
+    dollyView, applyDollyDelta, dollyLimits, getDolly, resetView,
+    focusDistance, dollyForDistance, focusOn, stepView, cancelFocus, getAim
 } from './view.min.js';
 import {
     pickBase, pickDrop, pickDropIndex, dropScreenY, dropPresence, thirstyCount,
@@ -60,7 +61,7 @@ import {
 } from './ui.min.js';
 import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
 import {
-    initPortraitControls, updatePortraitControls, gestureClaimedTap
+    initPortraitControls, updatePortraitControls, gestureClaimedTap, resetPortraitAim
 } from '../../shared/js/pan-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
@@ -373,10 +374,107 @@ function applyView() {
     const cam = GARDEN_CONFIG.camera;
     const view = dollyView(getDolly(), composedView());
     camera.position.set(cam.position.x, view.y, view.z);
-    viewTarget.x = cam.lookAt.x;
-    viewTarget.y = view.lookY;
-    viewTarget.z = view.lookZ;
+    // THE AIM IS THE DOLLY'S UNTIL SOMETHING ASKS FOR A PARTICULAR SPOT. After
+    // planting that is the new tree (see showTree), and because the shared part
+    // rotates from THIS object rather than from the config, the visitor's own
+    // yaw and tilt re-base onto it: pan left afterwards and you pan left of the
+    // tree, which is what anybody would expect and none of it is code.
+    const focus = getAim();
+    viewTarget.x = focus ? focus.x : cam.lookAt.x;
+    viewTarget.y = focus ? focus.y : view.lookY;
+    viewTarget.z = focus ? focus.z : view.lookZ;
     camera.lookAt(viewTarget.x, viewTarget.y, viewTarget.z);
+}
+
+// Scratch for the aim read-back below, so a planting allocates nothing.
+const aimDirection = new THREE.Vector3();
+
+/**
+ * The point the camera is looking at right now, at the same range as `target`.
+ *
+ * READ OFF THE CAMERA, which is what makes it exact. What it is aimed at is
+ * this scene's own aim with the shared part's yaw and tilt composed on top, and
+ * rebuilding that here would mean keeping a second copy of the part's
+ * composition order in step with the part's. `matrixWorld` is refreshed first
+ * rather than trusted: it is normally a frame old, which is invisible, but the
+ * frame it would be wrong on is the one where a resize just moved the camera.
+ *
+ * Falls back to the composed aim if the direction does not come back as
+ * numbers, which is the case under the test harness's THREE stub and would
+ * otherwise put a NaN into the move.
+ */
+function currentAimPoint(target) {
+    const cam = GARDEN_CONFIG.camera;
+    const view = dollyView(getDolly(), composedView());
+    const composedAim = { x: cam.lookAt.x, y: view.lookY, z: view.lookZ };
+    if (!camera || typeof camera.getWorldDirection !== 'function') return composedAim;
+
+    camera.updateMatrixWorld();
+    camera.getWorldDirection(aimDirection);
+    const range = Math.hypot(target.x - camera.position.x,
+        target.y - camera.position.y, target.z - camera.position.z);
+    const point = {
+        x: camera.position.x + aimDirection.x * range,
+        y: camera.position.y + aimDirection.y * range,
+        z: camera.position.z + aimDirection.z * range
+    };
+    const sane = Number.isFinite(point.x) && Number.isFinite(point.y)
+        && Number.isFinite(point.z);
+    return sane ? point : composedAim;
+}
+
+/**
+ * Turn to a tree that has just gone in, and move in on it.
+ *
+ * THE SCENE'S ANSWER TO THE ONE DECISION THE VISITOR MAKES. A sapling planted
+ * from the composed viewpoint is a couple of hundred pixels of nothing, 25 m
+ * away and anywhere across a 24 m plot, and on a portrait phone it can be off
+ * the side of the frame entirely: the visitor chose a tree and the scene showed
+ * them a field. All of the arithmetic is in view.js and pure; this reads the
+ * three things it needs off the world.
+ */
+function showTree(entry) {
+    if (!entry || !camera) return;
+    const F = GARDEN_CONFIG.camera.focus;
+    const { x, z } = cellCenter(entry.record.gx, entry.record.gz);
+    const mature = entry.resolved.matureHeight;
+    const point = {
+        x, z,
+        // A little way up the trunk, off the ground the bed actually sits on.
+        y: heightAt(x, z) + Math.min(F.maxAimHeight,
+            Math.max(F.minAimHeight, mature * F.aimHeightRatio))
+    };
+    const composed = composedView();
+
+    // ---- THE MOVE STARTS FROM WHERE THE CAMERA IS ACTUALLY LOOKING --------
+    //
+    // NOT FROM THE COMPOSED AIM, and that distinction was a shipped bug. The
+    // shared pan part's yaw and tilt are an OFFSET FROM this scene's aim
+    // object, they persist, and they are applied after `applyView` every
+    // frame. So panning across the plot and then planting used to centre the
+    // tree and then add the visitor's own 31.5 degrees straight back on top of
+    // it: the tree came out at the edge of a desktop frame and clean off a
+    // portrait one, whose half-width is only 18.7 degrees. QA reported it as
+    // "sometimes it over-pans left or right", and the "sometimes" was exactly
+    // whether the visitor had panned before planting, which is most of the
+    // time, because looking at the spot is how you choose it.
+    //
+    // The offset is consumed rather than fought (`resetPortraitAim`), and the
+    // move begins from the direction the camera is genuinely pointing, so the
+    // two happen in one gesture and nothing jumps. Read off the camera rather
+    // than recomputed from `getPanAngle` and `getTiltAngle`, because a second
+    // copy of the part's composition order is a second thing to drift.
+    const from = currentAimPoint(point);
+    resetPortraitAim();
+
+    focusOn(point,
+        dollyForDistance(point, composed, focusDistance(mature, camera.fov)),
+        // REDUCED MOTION ARRIVES RATHER THAN TRAVELS. A camera flying across a
+        // scene is precisely the thing that setting is asking not to happen,
+        // and this is the one place in the garden where honouring it means
+        // holding still rather than moving less.
+        state.reducedMotion ? 0 : F.seconds,
+        from);
 }
 
 // ---- Quality adaptation ----------------------------------------------------
@@ -615,6 +713,22 @@ function setupEventListeners() {
         updateDropHover(event.clientX, event.clientY);
     }, { signal });
     canvas.addEventListener('pointerleave', () => updateDropHover(-1e4, -1e4), { signal });
+
+    // ---- THE MOVE AFTER PLANTING STOPS THE MOMENT IT IS INTERRUPTED --------
+    // A camera that carries on travelling after somebody has taken hold of the
+    // controls is infuriating, and it is worse than that here: the pan buttons
+    // and a drag would be composing a yaw on top of an aim that is still
+    // sliding, so the view would not end up where they steered it.
+    //
+    // On the DOCUMENT rather than the canvas, because the pan and zoom buttons
+    // are floating chrome and a keyboard visitor never touches the canvas at
+    // all. The zoom has its own cancel inside `applyDollyDelta`, which is the
+    // one route that would otherwise write the dolly and be overwritten. This
+    // cannot fire on the press that started the move: `pointerdown` on the
+    // Plant button happens before the click that plants.
+    for (const type of ['pointerdown', 'keydown']) {
+        document.addEventListener(type, cancelFocus, { passive: true, signal });
+    }
 
     if (resetBtn) resetBtn.addEventListener('click', handleReset, { signal });
     if (helpBtn) helpBtn.addEventListener('click', openHelp, { signal });
@@ -1003,6 +1117,8 @@ function handlePlant(selection) {
     // (M10-1) and the exact remaining years move with one config value, so a
     // sentence with a figure in it would go stale the first time that changes.
     toast(`${entry.resolved.name} planted as a young sapling. Water it through the summers and it will fill out.`);
+    // And the scene turns to look at it. See showTree.
+    showTree(entry);
     track('tree-planted', {
         species: entry.record.species,
         customised: isCustomised(selection.custom) ? 1 : 0
@@ -1185,8 +1301,11 @@ function applyReset() {
     closeTreeCard();
     // A new garden gets the composed viewpoint back too. Leaving the visitor
     // up at the birds-eye end looking down at an empty plot is not the frame
-    // this scene opens on.
+    // this scene opens on. THE AIM IS TWO THINGS AND BOTH HAVE TO GO: this
+    // scene's own (`resetView`) and the shared part's offset on top of it, or
+    // the fresh plot opens turned however far the last visit was panned.
     resetView();
+    resetPortraitAim();
     applyView();
     toast('A new garden, and a fresh plot of grass.');
     track('garden-cleared', { trees });
@@ -1628,8 +1747,11 @@ function animate() {
         if (entry) refreshTreeCard(ageYears(entry.record, state.elapsedSeconds), cardContext());
     }
 
-    // The camera, in order: our own dolly first, then the shared part's yaw
-    // and tilt refining the aim on top of it.
+    // The camera, in order: the move after planting if one is running, then
+    // our own dolly, then the shared part's yaw and tilt refining the aim on
+    // top of it. `delta` and not `gardenDelta`: a camera move is animation, so
+    // it runs at the rate the screen does rather than at the rate a year does.
+    stepView(delta);
     applyView();
     updatePortraitControls(delta);
 
