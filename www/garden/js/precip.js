@@ -131,6 +131,28 @@ let rain = null;
 let snow = null;
 let bolt = null;
 let sceneRef = null;
+/**
+ * Where the falling weather sits in the transparent pass.
+ *
+ * ---- IT HAS TO BE AFTER THE LAKE, AND THAT IS THE WHOLE OF IT ----
+ *
+ * three sorts transparent objects by `renderOrder` first and only then by
+ * depth. The pond is `renderOrder = 5` and everything here defaulted to 0, so
+ * the rain was drawn and then the water was blended straight over the top of
+ * it: a storm with a clean, dry ellipse cut out of the middle of it. QA caught
+ * it in three screenshots and it was true of rain, sleet and snow alike.
+ *
+ * DEPTH WAS NEVER THE PROBLEM, which is worth saying because "it is behind the
+ * water" is the obvious reading. The pond sets `depthWrite: false`, so it never
+ * occluded anything; the drops in front of it pass the depth test against the
+ * meadow beyond perfectly well. It was purely the order two blends happened in.
+ *
+ * Above the pond and nothing else: the ridges sit at -900 and are long gone by
+ * here, and the plot's own transparent markers are over the nursery where no
+ * weather is being cut out of anything.
+ */
+const FALLING_ORDER = 10;
+
 let cameraRef = null;
 let reducedMotion = false;
 
@@ -224,6 +246,7 @@ function buildRain(count, P, config) {
 
     const mesh = new THREE.LineSegments(geo, material);
     mesh.name = 'rain';
+    mesh.renderOrder = FALLING_ORDER;
     mesh.frustumCulled = false;
     mesh.visible = false;
     return { mesh, uniforms, material, geo };
@@ -266,6 +289,7 @@ function buildSnow(count, P, config, pixelRatio) {
 
     const mesh = new THREE.Points(geo, material);
     mesh.name = 'snow';
+    mesh.renderOrder = FALLING_ORDER;
     mesh.frustumCulled = false;
     mesh.visible = false;
     return { mesh, uniforms, material, geo };
@@ -296,6 +320,7 @@ function buildBolt(config) {
 
     const mesh = new THREE.LineSegments(geo, material);
     mesh.name = 'lightning';
+    mesh.renderOrder = FALLING_ORDER;
     mesh.frustumCulled = false;
     mesh.visible = false;
     return { mesh, uniforms, material, geo, position, aBright };

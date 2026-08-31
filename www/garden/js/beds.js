@@ -80,35 +80,95 @@ export function bedSpan(x, z, config = GARDEN_CONFIG) {
  * has a floor so the back of the plot stays reachable: a bed there is about 24
  * px wide, and a 12 px target is not one.
  */
-export function bedPickRadius(projectedHalfWidthPx, config = GARDEN_CONFIG) {
+export function bedPickRadius(projectedHalfPx, config = GARDEN_CONFIG) {
     const B = config.garden.bed;
-    return Math.max(B.minPickPx, projectedHalfWidthPx * B.pickScale);
+    // AN UNKNOWN EXTENT IS THE FLOOR, not a NaN. `Math.max(22, NaN)` is NaN,
+    // and a NaN radius makes every comparison against it false, which turns a
+    // miss into a hit: the whole plot becomes one enormous tap target and every
+    // tap opens a tree. Cheap to guard and expensive to debug.
+    if (!Number.isFinite(projectedHalfPx)) return B.minPickPx;
+    return Math.max(B.minPickPx, projectedHalfPx * B.pickScale);
 }
 
 /**
  * Which tree a tap belongs to, or null for "none of them, so plant".
  *
- * NEAREST WINS, which is what makes crowding degrade gracefully. Two trees on
- * adjacent cells are 1.5 m apart, which is 24 px at the back of the plot, so
- * their targets overlap. "Which disc did the ray hit" has no answer there and
- * "which centre is closest" always does.
+ * ---- THE TARGET IS AN ELLIPSE, BECAUSE THE BED IS ONE (QA 2026-08-31) ----
+ *
+ * It was a CIRCLE of the bed's projected half-WIDTH, and a bed is a disc seen
+ * at a grazing angle: it is drawn several times wider than it is tall. So the
+ * target stood well proud of the picture above and below it, and two reports
+ * came out of the same arithmetic:
+ *
+ *   dolly   tree   bed on screen   circular target   overshoot
+ *     0      z 0     22 x 7 px         r = 22        15 px of empty grass
+ *     1      z 0    299 x 635 px       r = 299       most of the screen
+ *
+ * At the composed viewpoint the target is three to five times taller than the
+ * bed it belongs to, which is a tap on the grass beside a tree opening that
+ * tree. Zoomed in, a bed near the eye is 299 px across and its circle reaches
+ * that far in every direction, which is a tap anywhere near the plot opening
+ * whichever tree happens to be nearest. QA saw both: "a modal comes up for a
+ * different kind of tree even though I'm clicking on empty space, or an
+ * existing tree's mulch with a heavy zoom in."
+ *
+ * ---- AND OVERLAPS ARE SETTLED BY DEPTH, NOT BY SCREEN DISTANCE ----
+ *
+ * Nearest-centre was the old rule and it is the wrong question once the targets
+ * have honest shapes. When two beds overlap on screen, one of them is IN FRONT
+ * of the other and is what the visitor is looking at; which centre happens to
+ * be fewer pixels away says nothing about that. So a tap inside more than one
+ * picks the nearest to the camera, which is the one drawn on top.
  *
  * @param {number} tapX,tapY  in CSS pixels
- * @param {Array} bases       [{ entry, x, y, radiusPx }], already projected
+ * @param {Array} bases       [{ entry, x, y, radiusPx, radiusYPx, depth }]
  */
 export function pickBase(tapX, tapY, bases, config = GARDEN_CONFIG) {
+    // How far into a bed's ellipse the tap is, as a fraction of the way to the
+    // rim: 0 dead centre, 1 on it, above 1 outside. `floored` asks about the
+    // TAP TARGET, which is never smaller than `minPickPx`; unfloored asks about
+    // the bed as DRAWN.
+    const into = (base, floored) => {
+        const rx = floored ? bedPickRadius(base.radiusPx, config)
+            : Math.max(1e-6, base.radiusPx);
+        const ry = floored ? bedPickRadius(base.radiusYPx, config)
+            : Math.max(1e-6, base.radiusYPx === undefined ? 0 : base.radiusYPx);
+        const dx = (tapX - base.x) / rx;
+        const dy = (tapY - base.y) / ry;
+        return dx * dx + dy * dy;
+    };
+
+    // ---- FIRST, THE BEDS THE VISITOR CAN ACTUALLY SEE UNDER THE TAP -----
+    // If the tap is on a drawn bed then the overlap is real, and the one in
+    // FRONT is the one being looked at. `depth` is the projected z, so smaller
+    // is nearer the eye.
     let best = null;
-    let bestDistance = Infinity;
+    let bestDepth = Infinity;
     for (const base of bases) {
         if (!base || base.behind) continue;
-        const dx = tapX - base.x;
-        const dy = tapY - base.y;
-        const distance = Math.hypot(dx, dy);
-        if (distance > bedPickRadius(base.radiusPx, config)) continue;
-        if (distance < bestDistance) {
-            bestDistance = distance;
+        if (into(base, false) > 1) continue;
+        const depth = base.depth === undefined ? 0 : base.depth;
+        if (depth < bestDepth) {
+            bestDepth = depth;
             best = base.entry;
         }
+    }
+    if (best) return best;
+
+    // ---- THEN THE FLOOR, WHICH IS A COURTESY AND NOT A CLAIM ------------
+    // A bed at the back of the plot is four pixels tall, so the target is held
+    // to `minPickPx` and is deliberately larger than the picture. Depth must
+    // NOT decide between two of those: the overlap is invented by the floor
+    // rather than seen on screen, so a tap dead centre on the far bed would be
+    // answered by its neighbour half a metre nearer. Whichever the tap is most
+    // deeply inside wins, which is the only thing that can be meant here.
+    let bestInside = Infinity;
+    for (const base of bases) {
+        if (!base || base.behind) continue;
+        const inside = into(base, true);
+        if (inside > 1 || inside >= bestInside) continue;
+        bestInside = inside;
+        best = base.entry;
     }
     return best;
 }

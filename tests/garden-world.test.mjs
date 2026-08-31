@@ -1316,6 +1316,53 @@ test('THE MEADOW IS A DIFFERENT GREEN, BUT THE SAME SNOW', async () => {
     expect(init).toMatch(/const size = P\.halfSize \* 2;/);
 });
 
+// ---- The weather falls in front of the water (QA 2026-08-31) --------------
+
+test('THE FALLING WEATHER IS DRAWN AFTER THE LAKE', () => {
+    // ---- WHAT QA SAW, IN THREE SCREENSHOTS -----------------------------
+    // A storm with a clean, dry ellipse cut out of the middle of it. Rain,
+    // sleet and snow all stopped at the shoreline and none of them crossed the
+    // water, which reads as the lake being in front of the weather.
+    //
+    // DEPTH WAS NEVER THE PROBLEM, which is worth writing down because "it is
+    // behind the water" is the obvious reading and it is wrong. The pond sets
+    // `depthWrite: false`, so it never occluded anything: drops in front of it
+    // pass the depth test against the meadow beyond perfectly well.
+    //
+    // three sorts TRANSPARENT objects by `renderOrder` first and only then by
+    // depth. The pond is 5 and everything falling defaulted to 0, so the rain
+    // was drawn and the water was then blended straight over the top of it. It
+    // is purely the order two blends happened in.
+    //
+    // Read from the two sources because that is where the mechanism lives: one
+    // number in precip.js and one in vista.js, in different modules, with
+    // nothing between them that would notice if they crossed.
+    const precip = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'precip.js'), 'utf8');
+    const vista = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'vista.js'), 'utf8');
+
+    const falling = precip.match(/const FALLING_ORDER = (\d+)/);
+    expect(falling).not.toBeNull();
+    const pondBlock = vista.slice(vista.indexOf('function buildPond'));
+    const pond = pondBlock.slice(0, pondBlock.indexOf('\n}\n'))
+        .match(/mesh\.renderOrder = (\d+)/);
+    expect(pond).not.toBeNull();
+    expect(Number(falling[1])).toBeGreaterThan(Number(pond[1]));
+
+    // And every falling thing carries it: rain, snow and the lightning were all
+    // reported, and a fix that reached two of the three would look like a fix.
+    for (const name of ['rain', 'snow', 'lightning']) {
+        const at = precip.indexOf(`mesh.name = '${name}';`);
+        expect(`${name} is built: ${at > 0}`).toBe(`${name} is built: true`);
+        expect(`${name} is ordered: ${precip.slice(at, at + 120).includes('renderOrder = FALLING_ORDER')}`)
+            .toBe(`${name} is ordered: true`);
+    }
+
+    // The pond still draws after the ridges, which is the reason it had an
+    // order of its own in the first place.
+    const ridge = vista.match(/mesh\.renderOrder = -900 \+ index/);
+    expect(ridge).not.toBeNull();
+});
+
 // ---- The lake is a tap target (QA 2026-08-31) -----------------------------
 
 test('THE LAKE VIEW IS COMPOSED ON THE DUCKS, NOT ON THE MIDDLE OF THE WATER', async () => {

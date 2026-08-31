@@ -1008,6 +1008,7 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const basePoint = new THREE.Vector3();
 const baseEdge = new THREE.Vector3();
+const baseNear = new THREE.Vector3();
 const gaugePoint = new THREE.Vector3();
 
 /** Nearest tree under a screen point, with the house tap tolerance so a
@@ -1045,10 +1046,16 @@ function projectBases() {
         const span = bedSpan(x, z);
         basePoint.set(x, heightAt(x, z), z);
         baseEdge.set(x + B.radius, heightAt(x, z), z);
+        // THE BED'S NEAR RIM, which is what gives the target its HEIGHT. A bed
+        // is a disc seen at a grazing angle: several times wider on screen than
+        // it is tall, and a circular target sized from the width alone stands
+        // well proud of the picture above and below it. See pickBase.
+        baseNear.set(x, heightAt(x, z), z + B.radius);
         // The gauge's own anchor, which is what the droplet rises from.
         gaugePoint.set(x, span.top + B.levelLift, z + B.radius * 0.72);
         basePoint.project(camera);
         baseEdge.project(camera);
+        baseNear.project(camera);
         gaugePoint.project(camera);
         // Behind the eye: `project` still returns numbers there, and they are
         // mirrored, so a tree behind the camera would otherwise pick as though
@@ -1060,8 +1067,14 @@ function projectBases() {
         const sx = (basePoint.x + 1) * halfW;
         const sy = (1 - basePoint.y) * halfH;
         const ex = (baseEdge.x + 1) * halfW;
+        const ny = (1 - baseNear.y) * halfH;
         bases.push({
-            entry, index: i, x: sx, y: sy, radiusPx: Math.abs(ex - sx),
+            entry, index: i, x: sx, y: sy,
+            radiusPx: Math.abs(ex - sx),
+            radiusYPx: Math.abs(ny - sy),
+            // Monotonic in distance from the eye, so it settles which of two
+            // overlapping beds is the one drawn on top.
+            depth: basePoint.z,
             dropY: dropScreenY((1 - gaugePoint.y) * halfH),
             thirst: dropPresence(entry.record.moisture)
         });
@@ -2127,7 +2140,8 @@ function installDebugProbe() {
                 behind: !!b.behind,
                 screenX: b.x === undefined ? null : Math.round(b.x),
                 screenY: b.y === undefined ? null : Math.round(b.y),
-                radiusPx: b.radiusPx === undefined ? null : Math.round(b.radiusPx)
+                radiusPx: b.radiusPx === undefined ? null : Math.round(b.radiusPx),
+                radiusYPx: b.radiusYPx === undefined ? null : Math.round(b.radiusYPx)
             };
         }),
         // WHAT IS ACTUALLY IN THE INSTANCE BUFFER, read straight back out of

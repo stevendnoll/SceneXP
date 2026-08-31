@@ -172,22 +172,111 @@ test('the pick radius follows the drawn bed, with a floor', () => {
     expect(B.minPickPx * 2).toBeGreaterThanOrEqual(44);
 });
 
-test('NEAREST WINS between two trees whose targets overlap', () => {
-    // Two trees on adjacent cells are 1.5 m apart, which is about 24 px at the
-    // back of the plot, so their targets overlap heavily. "Which disc did the
-    // ray hit" has no answer there and "which centre is closest" always does.
-    const a = { entry: 'a', x: 100, y: 200, radiusPx: 12 };
-    const b = { entry: 'b', x: 124, y: 200, radiusPx: 12 };
-    expect(pickBase(104, 200, [a, b])).toBe('a');
-    expect(pickBase(120, 200, [a, b])).toBe('b');
-    // Dead centre between them resolves to one of them rather than to nothing.
+test('THE TARGET IS AN ELLIPSE, BECAUSE THE BED IS ONE', () => {
+    // ---- WHAT QA SAW, AND WHY IT WAS ARITHMETIC ------------------------
+    // The target was a circle of the bed's projected half-WIDTH, and a bed is a
+    // disc seen at a grazing angle: several times wider on screen than it is
+    // tall. At the composed viewpoint a bed in the middle of the plot is
+    // 22 x 7 px and the circle was r = 22, so the target stood fifteen pixels
+    // of empty grass proud of the picture above and below it. Zoomed in, a bed
+    // near the eye is 299 px across and the circle reached that far in EVERY
+    // direction. "A modal comes up for a different kind of tree even though I'm
+    // clicking on empty space."
+    const wide = { entry: 'a', x: 100, y: 200, radiusPx: 120, radiusYPx: 30 };
+
+    // Along the bed, right out to its rim: on it.
+    expect(pickBase(215, 200, [wide])).toBe('a');
+    // The same distance ABOVE it is grass, and used to be a hit.
+    expect(pickBase(100, 85, [wide])).toBeNull();
+    // Just inside the drawn rim vertically: still on it.
+    expect(pickBase(100, 175, [wide])).toBe('a');
+    // And the ellipse is a real ellipse rather than a bounding box: the corner
+    // of the box is outside it.
+    expect(pickBase(210, 226, [wide])).toBeNull();
+});
+
+test('a bed at the back of the plot still gets a floor on BOTH axes', () => {
+    // The reason the floor exists at all: a bed at the far row is 16 x 4 px,
+    // and four pixels is not a touch target. The ellipse has to keep that
+    // promise in the axis it applies to, or the fix for one report becomes an
+    // unreachable back row.
+    const far = { entry: 'a', x: 100, y: 200, radiusPx: 16, radiusYPx: 4 };
+    expect(pickBase(100, 200 + B.minPickPx - 2, [far])).toBe('a');
+    expect(pickBase(100 + B.minPickPx - 2, 200, [far])).toBe('a');
+    // A missing extent falls back to the floor rather than to NaN, which would
+    // make every comparison false and turn a miss into a hit.
+    expect(bedPickRadius(undefined)).toBe(B.minPickPx);
+    expect(bedPickRadius(NaN)).toBe(B.minPickPx);
+    const noHeight = { entry: 'a', x: 100, y: 200, radiusPx: 12 };
+    expect(pickBase(400, 400, [noHeight])).toBeNull();
+});
+
+test('AN OVERLAP IS SETTLED BY DEPTH, NOT BY SCREEN DISTANCE', () => {
+    // Nearest-centre was the old rule and it is the wrong question once the
+    // targets have honest shapes. When two beds overlap on screen one of them
+    // is IN FRONT of the other and is the one the visitor is looking at; which
+    // centre happens to be fewer pixels away says nothing about that.
+    //
+    // This is the second half of the QA report: with a heavy zoom a bed near
+    // the eye is 299 px across, so it overlaps most of the plot behind it, and
+    // a tap on its own mulch was answered by whichever smaller bed had a nearer
+    // centre. `depth` is the projected z, so smaller is nearer the camera.
+    const near = { entry: 'near', x: 100, y: 200, radiusPx: 120, radiusYPx: 90, depth: 0.10 };
+    const far = { entry: 'far', x: 130, y: 200, radiusPx: 20, radiusYPx: 12, depth: 0.80 };
+
+    // The tap is inside both, and much closer to the FAR bed's centre. The one
+    // in front wins, because it is drawn over the other.
+    expect(pickBase(130, 200, [near, far])).toBe('near');
+    expect(pickBase(130, 200, [far, near])).toBe('near');
+    // Outside the near one, the far one is still perfectly pickable.
+    expect(pickBase(300, 200, [near, far])).toBeNull();
+    const alone = { ...far, x: 400 };
+    expect(pickBase(400, 200, [near, alone])).toBe('far');
+
+    // Two neighbours at the same depth still resolve to one of them rather
+    // than to nothing: adjacent cells are 24 px apart at the back of the plot,
+    // so their floored targets overlap heavily and a tap between them has to
+    // land somewhere.
+    const a = { entry: 'a', x: 100, y: 200, radiusPx: 12, radiusYPx: 12, depth: 0.5 };
+    const b = { entry: 'b', x: 124, y: 200, radiusPx: 12, radiusYPx: 12, depth: 0.5 };
     expect(pickBase(112, 200, [a, b])).not.toBeNull();
-    // Order must not decide it.
-    expect(pickBase(104, 200, [b, a])).toBe('a');
+    // And order does not decide it: the same tap gives the same answer either
+    // way round, which "first one wins" would not.
+    expect(pickBase(104, 200, [a, b])).toBe(pickBase(104, 200, [b, a]));
+});
+
+test('THE FLOOR MUST NOT LET A NEIGHBOUR STEAL A DEAD-CENTRE TAP', () => {
+    // The trap in fixing the other half of this. Depth is the right rule for a
+    // REAL overlap, and the wrong one for an overlap the floor invented: at the
+    // back of the plot every bed is four pixels tall, so every target is held
+    // to `minPickPx` and reaches well past the picture. Two neighbours 24 px
+    // apart then always overlap, and "nearest the camera wins" would answer a
+    // tap dead centre on the far one with the one half a metre in front of it.
+    //
+    // So the floored pass is settled by how deeply inside the tap is, and only
+    // beds the visitor can actually SEE under the tap are settled by depth.
+    const far = { entry: 'far', x: 100, y: 200, radiusPx: 16, radiusYPx: 4, depth: 0.8 };
+    const near = { entry: 'near', x: 124, y: 200, radiusPx: 16, radiusYPx: 4, depth: 0.2 };
+
+    // Dead centre on the far bed. It is inside the near one's FLOORED target
+    // too, and the near one is nearer, and it still must not win.
+    expect(pickBase(100, 200, [far, near])).toBe('far');
+    expect(pickBase(100, 200, [near, far])).toBe('far');
+    // Dead centre on the near one gives the near one, so the rule is about the
+    // tap and not about a bias toward the back.
+    expect(pickBase(124, 200, [far, near])).toBe('near');
+
+    // ---- AND A REAL OVERLAP IS STILL SETTLED BY DEPTH -------------------
+    // Both drawn beds genuinely cover the tap here, which only happens when the
+    // targets are bigger than the floor, which only happens close up.
+    const bigNear = { entry: 'near', x: 100, y: 200, radiusPx: 120, radiusYPx: 90, depth: 0.1 };
+    const bigFar = { entry: 'far', x: 130, y: 200, radiusPx: 60, radiusYPx: 40, depth: 0.9 };
+    expect(pickBase(130, 200, [bigNear, bigFar])).toBe('near');
+    expect(pickBase(130, 200, [bigFar, bigNear])).toBe('near');
 });
 
 test('a tap that is on no bed is a tap that plants', () => {
-    const only = { entry: 'a', x: 100, y: 200, radiusPx: 12 };
+    const only = { entry: 'a', x: 100, y: 200, radiusPx: 12, radiusYPx: 12 };
     expect(pickBase(100 + B.minPickPx + 1, 200, [only])).toBeNull();
     expect(pickBase(400, 400, [only])).toBeNull();
     expect(pickBase(100, 200, [])).toBeNull();
@@ -203,8 +292,8 @@ test('a tree behind the camera can never be picked', () => {
     // version of this test passed a flagged entry with no x or y at all, which
     // made every comparison NaN and returned null by accident: it went on
     // passing with the skip deleted.
-    const behind = { entry: 'a', x: 100, y: 200, radiusPx: 30, behind: true };
-    const front = { entry: 'b', x: 400, y: 200, radiusPx: 30 };
+    const behind = { entry: 'a', x: 100, y: 200, radiusPx: 30, radiusYPx: 30, behind: true };
+    const front = { entry: 'b', x: 400, y: 200, radiusPx: 30, radiusYPx: 30 };
     expect(pickBase(100, 200, [behind])).toBeNull();
     expect(pickBase(100, 200, [behind, front])).toBeNull();
     // And the one in front is still perfectly pickable.
