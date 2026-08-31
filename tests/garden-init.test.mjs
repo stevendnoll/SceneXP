@@ -306,10 +306,16 @@ test('the garden can be planted, watered, saved, and cleared', async () => {
     fire(dom.el('tree-water'), 'click');
     stepFrames(10);
     expect(entry.record.moisture).toBeGreaterThan(0.9);
-    // AND THE CARD CLOSES BEHIND IT (M12-1). Watering is a one-shot: the toast
-    // confirms it and the tree's own water level shows the result in the scene,
-    // so the card has nothing left to say and is standing in front of it.
-    expect(ui.isCardOpen()).toBe(false);
+    // AND THE CARD STAYS OPEN (M19-1, reversing M12-1). It used to close, and
+    // the reasoning was sound while the card was four lines of text: the toast
+    // confirmed it and the only readout of the result was out on the bed.
+    // The droplet is the one-tap route now, so somebody who opened the card is
+    // here to LOOK at the tree, and the card has its own gauge refreshed every
+    // frame, so watering from here fills the bar in front of them. Closing
+    // threw away the feedback the card had just gained.
+    expect(ui.isCardOpen()).toBe(true);
+    // And the gauge in it followed, which is the point of leaving it open.
+    expect(dom.el('tree-thirst-fill').style.width).toMatch(/^9\d(\.\d+)?%|^100/);
     expect(entry.record.budActive).toBe(true);
     stepFrames(120);
     expect(entry.record.bud).toBeGreaterThan(0.5);

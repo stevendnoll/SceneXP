@@ -362,6 +362,35 @@ export function fruitStageAt(hour, schedule, shape = GARDEN_CONFIG.garden.fruit)
 }
 
 /**
+ * The hour a species looks its best, for the chooser's preview.
+ *
+ * THE SCHEDULE DECIDES, NOT A CONSTANT. The plant modal is showing what a
+ * visitor will eventually have, and for the six that flower that means fruit on
+ * the branches: an apple tree in the list should be carrying red apples and an
+ * orange tree oranges. Picking the moment off the tree's OWN schedule means the
+ * preview cannot promise something the tree will not do, which a hand-picked
+ * hour or a hand-built stage object both could.
+ *
+ * A tree that fruits shows FULL RIPE FRUIT, taken from the middle of the hold:
+ * ripening has finished by `ripenEnd` and nothing has fallen before `holdEnd`.
+ * One that only flowers, which is the Flowering Dogwood, shows FULL BLOSSOM,
+ * from the middle of `bloomFull` to `bloomFade`.
+ *
+ * Everything is rebased on `bloomStart` before the midpoint is taken and
+ * wrapped back afterwards, because these windows cross midnight: the lemon
+ * holds from hour 18 round to 6 and the orange from 20 to 2.5, and a plain
+ * average of those two numbers lands in the middle of the wrong season.
+ */
+export function showcaseHour(schedule) {
+    if (!schedule) return 12;
+    const at = (h) => wrapHour(h - schedule.bloomStart);
+    const mid = schedule.dropEnd == null
+        ? (at(schedule.bloomFull) + at(schedule.bloomFade)) / 2
+        : (at(schedule.ripenEnd) + at(schedule.holdEnd)) / 2;
+    return wrapHour(schedule.bloomStart + mid);
+}
+
+/**
  * What the tree is doing, in words, for the tree card.
  *
  * COLOUR IS NEVER THE ONLY CARRIER of what anything in this scene is doing, the

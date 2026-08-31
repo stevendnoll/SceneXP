@@ -26,7 +26,9 @@
  */
 
 import { GARDEN_CONFIG } from './config.min.js';
-import { hourAt, yearAt, seasonAt, snowCoverageAt, startSeconds } from './clock.min.js';
+import {
+    hourAt, yearAt, seasonAt, snowCoverageAt, startSeconds, fruitStageAt, showcaseHour
+} from './clock.min.js';
 import { initSky, updateSky, disposeSky } from './sky.min.js';
 import {
     initTerrain, updateTerrain, disposeTerrain, getGroundMesh, snapToGrid,
@@ -1072,12 +1074,21 @@ function handleWater() {
         ? 'Watered. Look for new buds along the branches.'
         : 'Watered. It looks pleased.');
     track('tree-watered', { revived: result === 'revived' ? 1 : 0, from: 'card' });
-    // AND THE CARD GETS OUT OF THE WAY. Watering is a one-shot: there is
-    // nothing further to do on this card, the toast has already confirmed it,
-    // and the tree's own water level is on its bed in the scene, which is where
-    // the visitor is looking. `closeTreeCard` restores focus, so this is also
-    // the only ordering that leaves the keyboard somewhere sensible.
-    closeTreeCard();
+    // ---- AND THE CARD STAYS OPEN (M19-1) ---------------------------------
+    // It used to close itself, and the reasoning at the time was sound: there
+    // was nothing further to do on a card that held four lines of text, the
+    // toast had confirmed it, and the only readout of the result was the gauge
+    // out on the bed, which is where the visitor was looking.
+    //
+    // TWO THINGS SINCE HAVE TAKEN THAT ARGUMENT AWAY. The droplet (M13-2) is
+    // the one-tap route now, so somebody who has gone as far as opening the
+    // card is here to LOOK at the tree rather than to water it in a hurry. And
+    // the card has its own gauge and portrait (M16-5), refreshed every frame it
+    // is open, so watering from here fills the bar in front of them. Closing
+    // threw away the one piece of feedback the card had just gained.
+    //
+    // Focus is left on the Water button, which is where it was and where a
+    // visitor would expect it after pressing something.
     save();
 }
 
@@ -1297,9 +1308,27 @@ function rebuildPreview() {
 function previewDrive(time) {
     const entry = isCardOpen() ? getCardEntry() : null;
     if (!entry) {
+        const schedule = previewResolved && previewResolved.schedule;
         return {
             growth: 1, health: 1, leaf: 1, color: 0, spring: 0, drop: 0, bud: 0,
-            snow: 0, wind: { x: 0.05, z: 0 }, time
+            snow: 0, wind: { x: 0.05, z: 0 }, time,
+            // ---- AND CARRYING WHAT IT IS FOR (M18) ------------------------
+            // An apple tree in the chooser should have red apples on it and an
+            // orange tree oranges, which is the thing a visitor is picking
+            // between when they pick a fruit tree. The moment comes off the
+            // species' OWN schedule, so the preview cannot promise something
+            // the tree will not do.
+            //
+            // THE CANOPY STAYS IN FULL SUMMER LEAF while the fruit comes from
+            // the ripe hour, and that is a deliberate inconsistency. Half of
+            // these ripen in autumn, so an honest hour would show the apple and
+            // the pear turning and half bare. This is a showcase and not a
+            // simulation: the tree card next door is where a visitor sees the
+            // truth about their own tree, at its real hour, and it uses the
+            // same `viewFor` the garden does.
+            fruit: schedule ? fruitStageAt(showcaseHour(schedule), schedule) : null,
+            // A mature, healthy specimen bears a full crop by construction.
+            crop: 1
         };
     }
     // THE SAME CALL THE GARDEN DRIVES THIS TREE WITH, options included, so the

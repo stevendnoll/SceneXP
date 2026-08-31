@@ -131,10 +131,44 @@ export const GARDEN_CONFIG = deepFreeze({
         // Trees snap to this grid, which is what stops a garden becoming one
         // solid mass of overlapping geometry.
         gridSpacing: 1.5,
-        // Capacity, by device tier. The plant modal says so plainly when the
-        // plot is full and offers to remove a tree instead.
-        maxTrees: 16,
-        maxTreesMobile: 10,
+        // ---- Capacity, by device tier, and it is a TRIANGLE BUDGET --------
+        // The plant modal says so plainly when the plot is full and offers to
+        // remove a tree instead.
+        //
+        // ---- WHY 16 WAS EXACTLY RIGHT, AND WHAT 20 COSTS ----
+        //
+        // Re-measured 2026-08-30 across 400 SEEDS PER SPECIES, because a tree's
+        // cost varies with its seed by about a third and a single sample is
+        // worth nothing here. The worst single tree in the set is 17,412
+        // triangles (Sugar Maple; the Blue Spruce and Coast Redwood land within
+        // 50 of it because the 1,200 segment cap binds for all three).
+        //
+        //     fixed scene, trees aside      120,654
+        //       of which the fractal wood    75,000
+        //     budget                        400,000
+        //     left for planted trees        279,346
+        //
+        //     16 x 17,412 = 278,592   fits, with 754 to spare
+        //     20 x 17,412 = 348,240   over by 68,894
+        //
+        // So 16 was not a round number, it was the answer. **20 IS OVER BUDGET
+        // IN THE WORST CASE** and is shipped anyway as a deliberate call: the
+        // worst case is a plot of twenty trees all of the single most expensive
+        // species on unlucky seeds. A realistic mixed plot of 20 is about
+        // 150,000, and even twenty Blue Spruces average 303,000, which fits.
+        //
+        // THE LEVER IF THIS EVER BITES is `tree.maxSegments`, not this number.
+        // Only three species reach the 1,200 cap, so lowering it costs nothing
+        // anywhere else, and 900 would bring a worst-case plot of 20 back
+        // inside. It is not done here because the cap truncates the LAST-BORN
+        // segments, which are the outer canopy, and the note beside
+        // `maxSegmentsMobile` records what that did to the Coast Redwood.
+        maxTrees: 20,
+        // The 480 segment cap truncates hard on this tier, so a mobile tree is
+        // 6,978 triangles at worst against the desktop's 17,412, and 12 of them
+        // is 83,736. Moved with the desktop tier at roughly the ratio it always
+        // had (10/16, now 12/20), with a great deal of room to spare.
+        maxTreesMobile: 12,
         // THE TALLEST SPECIES, IN METRES, AND IT IS A CAMERA CONSTRAINT. The
         // camera block below is composed so that a tree this tall standing at
         // the middle of the plot fits inside the vertical frame. Raising it
