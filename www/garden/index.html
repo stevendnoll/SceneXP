@@ -43,18 +43,18 @@
          earthdefense. The JPEG is built and sits beside this file for any
          scraper that asks for it by name, and for the rare one that cannot
          read WebP at all. -->
-    <meta property="og:image" content="https://www.scenexp.com/garden/assets/og-garden.webp?v=1">
+    <meta property="og:image" content="https://www.scenexp.com/garden/assets/og-garden.webp?v=2">
     <meta property="og:image:type" content="image/webp">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="Three young fractal trees stand bare in a walled garden plot at dusk, each with a blue water gauge glowing at its base. Behind them a still lake reflects the sky, a dark green wood runs along both sides, and mauve hills fade into the distance under a starry sky broken by pale drifting cloud.">
+    <meta property="og:image:alt" content="Looking up into a grove of fractal trees in full white blossom, their branching arms filling the frame against a blue summer sky. Below them a mown lawn runs to a pale lake, a green wood closes both sides, and a row of dark mulch beds crosses the foreground, each with a small blue water gauge at the base of a trunk.">
 
     <!-- Twitter / X. The same single WebP as og:image. -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Fractal Garden">
     <meta name="twitter:description" content="Plant a garden of fractal trees, then watch it live through the years. Every season passes, and the trees remember you.">
-    <meta name="twitter:image" content="https://www.scenexp.com/garden/assets/og-garden.webp?v=1">
-    <meta name="twitter:image:alt" content="Three young fractal trees stand bare in a walled garden plot at dusk, each with a blue water gauge glowing at its base. Behind them a still lake reflects the sky, a dark green wood runs along both sides, and mauve hills fade into the distance under a starry sky broken by pale drifting cloud.">
+    <meta name="twitter:image" content="https://www.scenexp.com/garden/assets/og-garden.webp?v=2">
+    <meta name="twitter:image:alt" content="Looking up into a grove of fractal trees in full white blossom, their branching arms filling the frame against a blue summer sky. Below them a mown lawn runs to a pale lake, a green wood closes both sides, and a row of dark mulch beds crosses the foreground, each with a small blue water gauge at the base of a trunk.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
@@ -73,7 +73,7 @@
     <title>Fractal Garden</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
-    <link rel="preload" href="css/experience.min.css?v=13" as="style">
+    <link rel="preload" href="css/experience.min.css?v=16" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -83,7 +83,7 @@
          dark body, and this scene wants a soft daylight behind a slow first
          frame. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
-    <link rel="stylesheet" href="css/experience.min.css?v=13">
+    <link rel="stylesheet" href="css/experience.min.css?v=16">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -159,7 +159,13 @@
                  same six things. The rule for anything added here: if the row
                  does not fit one line at 391 px, it is two ideas. -->
             <ul class="controls-hint">
-                <li><span>PLANT</span> Tap the grass inside the walls to choose a tree.</li>
+                <!-- BOTH ROUTES, AND THE GESTURE LEADS. Pointing at the ground
+                     is what makes this a garden rather than a form, so it is
+                     named first; the button is the one that always works and
+                     is the only one a keyboard visitor has. One line still, at
+                     391 px: this is a word longer than the sentence it
+                     replaced. -->
+                <li><span>PLANT</span> Tap the grass in the plot, or use the Plant button.</li>
                 <!-- M9-8. This used to read "Drag to pan and tilt, pinch or
                      use the buttons to zoom", which was false on every machine
                      without a touchscreen: the shared part's gesture handler
@@ -265,6 +271,27 @@
     <!-- Short confirmations: a tree planted, a tree watered, a plot full. -->
     <div id="garden-toast" class="garden-toast" role="status" aria-live="polite"></div>
 
+    <!-- ===== PLANT A TREE, AND IT IS FOR EVERYBODY ========================
+         It began as the keyboard's way in, off screen in the panel below, and
+         it is on screen for all visitors now. TWO ARGUMENTS TURNED IT OUT:
+         it is the one instruction the whole scene is built to give somebody
+         who has just arrived, and a route the plot's newest visitor needs
+         should not be the one route that is hidden. Pointing at the grass is
+         still there and is still the better gesture once it has been learned.
+
+         ABOVE WATER ALL, WHICH IS THE ORDER THEY HAPPEN IN. They are the two
+         controls that act on the plot rather than on the view, so they are a
+         pair in the one empty corner, and the top-right stack keeps the things
+         that undo and explain. Water all appears under it with the first tree,
+         which is also the first moment there is anything to water.
+
+         IT STAYS WHEN THE PLOT IS FULL, and pressing it then says so in a
+         toast rather than opening a modal with a dead button in it. Same
+         answer a tap on a full plot gets, and the same reason Water all no
+         longer comes and goes: a control that moves around as the garden
+         changes is hard to learn. -->
+    <button id="tend-plant" type="button" class="tend-plant" hidden>Plant a tree</button>
+
     <!-- WATER ALL. On screen from the first planted tree, and it waters the
          whole plot rather than the thirsty part of it. It used to wait for
          three thirsty trees, then for one, and a control that comes and goes as
@@ -272,6 +299,35 @@
          painted one because every other route to watering needs a pointer aimed
          at a few pixels of 3D scene, and this is the keyboard's way in. -->
     <button id="water-all" type="button" class="water-all" hidden></button>
+
+    <!-- ===== AND THE TREES THEMSELVES, WHICH ARE STILL ONLY ADDRESSABLE ====
+         Planting has a button in the corner now. REACHING ONE PARTICULAR TREE
+         STILL DOES NOT, because the only pointer target a tree has is a small
+         ellipse of mulch near the ground, and no amount of chrome would put
+         forty-nine of those in the frame. So this stays: one row per planted
+         tree, off screen until something in it has focus.
+
+         IT IS OFF SCREEN AND NOT INVISIBLE, which is the difference that
+         matters. It sits above the top of the frame and slides in whenever
+         anything inside it has focus, exactly as the skip link above does, so
+         a sighted keyboard visitor can SEE where they are. A control that is
+         focusable but never visible is a trap only they ever find.
+
+         THE LIST IS AN ADDRESSING MECHANISM, NOT A SECOND CARE LOOP. Pressing
+         a tree opens that tree's own card, which is already fully keyboard
+         operable and carries Water and Remove. That mirrors the pointer route
+         (aim at a bed, get the card) rather than inventing a parallel set of
+         actions that could drift from it. -->
+    <div id="tend-panel" class="tend-panel" role="group" aria-labelledby="tend-heading">
+        <h2 id="tend-heading" class="tend-heading">Your trees</h2>
+        <p class="tend-note">Choose a tree to see how it is doing, water it, or
+            take it out. Press Escape to close anything that opens.</p>
+        <!-- Filled in by ui.js. Empty and silent on an empty plot, where the
+             sentence below is what is shown instead. -->
+        <p id="tend-empty" class="tend-empty">No trees planted yet. Use the
+            Plant a tree button in the top corner.</p>
+        <ul id="tend-list" class="tend-list"></ul>
+    </div>
 
     <!-- THE PLANT MODAL. The species grid is a real radio group, so the whole
          thing works from the keyboard and reads correctly to a screen reader.

@@ -80,6 +80,10 @@ test('auto-boots through the loading screen into a running loop', async () => {
 
     // .ui-float elements are display:none until JavaScript says otherwise, so
     // "the markup is correct" is not the same as "the button is on screen".
+    // The season chip waits for the welcome card to go, along with the rest of
+    // the chrome, and is asserted properly in its own test below.
+    expect(dom.el('season-chip').classList.contains('visible')).toBe(false);
+    fire(dom.el('blocker'), 'click');
     expect(dom.el('season-chip').classList.contains('visible')).toBe(true);
 
     // No 2D fallback redirect happened.
@@ -1505,6 +1509,385 @@ describe('the first visit', () => {
     });
 });
 
+// ---- Somebody arriving with no pointer (M24-11) -----------------------------
+
+/**
+ * THE WHOLE EXPERIENCE WAS BEHIND A GESTURE THEY CANNOT MAKE.
+ *
+ * `openPlantModal` had exactly one caller, `handleSceneTap`, bound only to
+ * `click` and `touchend` on the canvas, and every other act in the scene is
+ * downstream of owning a tree. A keyboard visitor could read the welcome card,
+ * pan, tilt, zoom, and leave. Water all was the one keyboard control they had,
+ * and it only appears once a tree exists, which they had no way to create.
+ *
+ * These tests drive the tend panel exactly as a keyboard visitor would: press
+ * Plant, choose a species, confirm, and then find the new tree in the list and
+ * open it. Nothing here touches the canvas.
+ */
+describe('the visitor with no pointer', () => {
+    /** Press a control the way a keyboard visitor does: focus, then activate.
+     *  `fire` alone only invokes listeners, and every focus restore in ui.js
+     *  reads `document.activeElement` at the moment a dialog opens. */
+    function press(el) {
+        el.focus();
+        fire(el, 'click');
+    }
+
+    async function bootTending() {
+        const main = await bootGarden();
+        asShipped();
+        const ui = await import('../www/garden/js/ui.min.js');
+        const garden = await import('../www/garden/js/garden.min.js');
+        beginTending();
+        return { main, ui, garden };
+    }
+
+    test('CAN PLANT A TREE WITHOUT EVER TOUCHING THE CANVAS', async () => {
+        const { ui, garden } = await bootTending();
+        expect(garden.getTrees()).toHaveLength(0);
+
+        // The one route in. No raycast, no client coordinates, no canvas.
+        fire(dom.el('tend-plant'), 'click');
+        expect(ui.isPlantOpen()).toBe(true);
+
+        // ---- AND THE BUTTON DOES NOT SAY "HERE" ------------------------
+        // There is no spot, because there was no pointer to put one under, so
+        // the plot picks the free cell nearest its middle. Telling this
+        // visitor "Plant it here" names a place they never chose.
+        expect(dom.el('plant-confirm').textContent).toBe('Plant it in the plot');
+        expect(dom.el('plant-confirm').disabled).toBe(false);
+
+        fire(dom.el('plant-confirm'), 'click');
+        stepFrames(30);
+        expect(garden.getTrees()).toHaveLength(1);
+    });
+
+    test('and the tree they planted is in the list, in words', async () => {
+        const { garden } = await bootTending();
+        const list = dom.el('tend-list');
+        // An empty plot says so rather than showing an empty group.
+        expect(list.children).toHaveLength(0);
+        expect(dom.el('tend-empty').hidden).toBe(false);
+
+        fire(dom.el('tend-plant'), 'click');
+        fire(dom.el('plant-confirm'), 'click');
+        stepFrames(30);
+
+        // AT ONCE, not on the next heartbeat: the visitor's next Tab is looking
+        // for the tree they just planted.
+        expect(list.children).toHaveLength(1);
+        expect(dom.el('tend-empty').hidden).toBe(true);
+
+        // ---- THE TEXT IS THE ACCESSIBLE NAME, NOT AN ARIA-LABEL OVER IT ----
+        // A visible label and an accessible name that disagree is a WCAG
+        // failure and a practical one, because voice control types what it
+        // sees. So the sentence is the button's own text and there is no
+        // aria-label competing with it.
+        const row = list.children[0].children[0];
+        const entry = garden.getTrees()[0];
+        expect(row.getAttribute('aria-label')).toBeFalsy();
+        expect(row.textContent).toContain(entry.resolved.name);
+        // Identity and state, in words: which tree, how old, how it is doing,
+        // how thirsty. Never colour alone, which nothing here is.
+        expect(row.textContent).toMatch(/planted this year|year/i);
+        expect(row.textContent).toMatch(/percent/);
+    });
+
+    test('and pressing it opens that tree\'s own card', async () => {
+        const { ui, garden } = await bootTending();
+        fire(dom.el('tend-plant'), 'click');
+        fire(dom.el('plant-confirm'), 'click');
+        stepFrames(30);
+
+        fire(dom.el('tend-list').children[0].children[0], 'click');
+        expect(ui.isCardOpen()).toBe(true);
+        // THE SAME CARD THE POINTER GETS, on the same tree, or the keyboard
+        // route is a second-class copy that drifts the first time the card
+        // gains anything.
+        expect(ui.getCardEntry()).toBe(garden.getTrees()[0]);
+        expect(dom.el('tree-title').textContent).toBe(garden.getTrees()[0].resolved.name);
+
+        // And the card is where tending happens, so both its actions work from
+        // here. Watering first, because it is the one a visitor repeats.
+        garden.getTrees()[0].record.moisture = 0.1;
+        fire(dom.el('tree-water'), 'click');
+        expect(garden.getTrees()[0].record.moisture).toBeGreaterThan(0.9);
+    });
+
+    test('and each row opens ITS OWN tree, not the last one built', async () => {
+        // ---- ONE TREE CANNOT CATCH AN OFF-BY-ONE --------------------------
+        // Every row closes over the entry it was built for, and a loop that
+        // captured the wrong binding, or a handler that read some "current"
+        // tree instead, would look perfect on a plot of one and open the same
+        // card from every row on a plot of three. Rows are also matched to
+        // records by id rather than by position, so a reordered list fails here
+        // rather than silently opening a neighbour.
+        const { ui, garden } = await bootTending();
+        for (let i = 0; i < 3; i++) {
+            press(dom.el('tend-plant'));
+            press(dom.el('plant-confirm'));
+            stepFrames(10);
+        }
+        const trees = garden.getTrees();
+        expect(trees).toHaveLength(3);
+
+        const rows = dom.el('tend-list').children;
+        expect(rows).toHaveLength(3);
+        for (let i = 0; i < 3; i++) {
+            const row = rows[i].children[0];
+            expect(`row ${i}: ${row.dataset.treeId}`).toBe(`row ${i}: ${trees[i].record.id}`);
+            press(row);
+            expect(ui.getCardEntry() === trees[i]
+                ? `row ${i} opens its own tree`
+                : `row ${i} opened the WRONG tree`).toBe(`row ${i} opens its own tree`);
+            fire(document, 'keydown', { code: 'Escape' });
+        }
+    });
+
+    test('REMOVING A TREE DOES NOT DROP FOCUS ON THE FLOOR', async () => {
+        // ---- THE BUG THIS ROUTE WOULD HAVE SHIPPED WITH -----------------
+        // The card's focus restore aims at whatever opened it, which is the
+        // list row for the tree being removed. `closeTreeCard` runs BEFORE the
+        // remove handler, so focus lands on that row and the rebuild then
+        // destroys it, silently dropping focus to <body>: the visitor is thrown
+        // back to the top of the page with no idea why.
+        const { garden } = await bootTending();
+        // `fire` invokes listeners and does NOT focus, where a real press
+        // does both, so every step a keyboard visitor would take focuses
+        // first. Without that the whole chain of focus restores runs against
+        // an activeElement nothing ever set, and this test would pass or fail
+        // for reasons that have nothing to do with the code.
+        press(dom.el('tend-plant'));
+        press(dom.el('plant-confirm'));
+        stepFrames(30);
+        // Planting hands focus back to the button that opened the modal.
+        expect(document.activeElement).toBe(dom.el('tend-plant'));
+
+        const row = dom.el('tend-list').children[0].children[0];
+        press(row);
+        // The card opens with Water focused; the visitor tabs on to Remove.
+        press(dom.el('tree-remove'));
+
+        expect(garden.getTrees()).toHaveLength(0);
+        expect(dom.el('tend-list').children).toHaveLength(0);
+        // The card's own restore aimed focus at the row it was opened from,
+        // which no longer exists. Handed to the one control that is always
+        // there, rather than dropped on <body>.
+        expect(document.activeElement).toBe(dom.el('tend-plant'));
+    });
+
+    test('the list survives a tick without taking focus with it', async () => {
+        // ---- REBUILT WHEN THE SET MOVES, WRITTEN IN PLACE WHEN IT HAS NOT --
+        // A tree's line carries its age and its thirst, so it rides the
+        // once-a-second tick. Rebuilding on every one of those would take focus
+        // out of the panel once a second, which would make the route unusable
+        // for exactly the visitor it exists for. This is the test that fails if
+        // `tendKey` is dropped.
+        const { garden } = await bootTending();
+        fire(dom.el('tend-plant'), 'click');
+        fire(dom.el('plant-confirm'), 'click');
+        stepFrames(30);
+
+        const row = dom.el('tend-list').children[0].children[0];
+        row.focus();
+        // Four seconds of frames, which is four resyncs.
+        stepFrames(120, 33);
+        expect(dom.el('tend-list').children[0].children[0]).toBe(row);
+        expect(document.activeElement).toBe(row);
+        expect(garden.getTrees()).toHaveLength(1);
+    });
+
+    test('and neither the panel nor Plant is offered while the card is up', async () => {
+        // The panel is off screen until something in it has focus, so the tab
+        // order is the whole point of hiding it. Plant is real chrome now and
+        // draws OVER the welcome card at z-index 120 against its 100, so it is
+        // the visible half of the same rule: a tree offered before the visitor
+        // has seen the ground.
+        await bootGarden();
+        const panel = dom.el('tend-panel');
+        const plant = dom.el('tend-plant');
+        expect(panel.hidden).toBe(true);
+        expect(plant.hidden).toBe(true);
+
+        beginTending();
+        expect(panel.hidden).toBe(false);
+        expect(plant.hidden).toBe(false);
+        // `.visible` AS WELL AS THE ATTRIBUTE. The sheet gives it display:none
+        // until something says otherwise, exactly like Water all, so clearing
+        // `hidden` alone would leave an invisible button in the tab order.
+        expect(plant.classList.contains('visible')).toBe(true);
+
+        fire(dom.el('help-btn'), 'click');
+        expect(panel.hidden).toBe(true);
+        expect(plant.hidden).toBe(true);
+    });
+
+    test('AND THE SEASON CHIP IS A READING OF A CLOCK THAT IS STOPPED', async () => {
+        // ---- IT WAS KEPT ON THE WRONG ARGUMENT --------------------------
+        // "A status readout is not a control": true, and beside the point. The
+        // calendar does NOT run while the card is up, so the chip reads
+        // "Spring, year 1 · clear" over a card explaining what a year is, and
+        // it will still read exactly that however long the visitor takes. A
+        // frozen readout is not information.
+        await bootGarden();
+        const chip = dom.el('season-chip');
+        expect(chip.classList.contains('visible')).toBe(false);
+
+        beginTending();
+        expect(chip.classList.contains('visible')).toBe(true);
+        // And it is saying something, so what comes back is a chip and not an
+        // empty pill: the reveal and the text are separate mechanisms and only
+        // one of them moved.
+        stepFrames(30);
+        expect(chip.textContent).toMatch(/^Spring, year 1/);
+
+        // Back off with the help card, and back on when it closes, every time
+        // rather than only on the first arrival.
+        fire(dom.el('help-btn'), 'click');
+        expect(chip.classList.contains('visible')).toBe(false);
+        fire(document, 'keydown', { code: 'Escape' });
+        expect(chip.classList.contains('visible')).toBe(true);
+
+        // ---- IT FADES RATHER THAN BEING `hidden` ------------------------
+        // The chip is an `aria-live` region, and taking one out of the document
+        // and putting it back is a change some screen readers announce: a
+        // visitor who opened the help card would hear the weather read at them
+        // for their trouble. Opacity never touches the accessibility tree. So
+        // the attribute must NOT be what moved.
+        expect(chip.hidden).toBe(false);
+        fire(dom.el('help-btn'), 'click');
+        expect(chip.hidden).toBe(false);
+    });
+
+    test('and the sheet fades the chip rather than collapsing it', () => {
+        // The DOM stub has no stylesheet, so nothing above can tell us that
+        // `.visible` is the difference between seen and unseen here, or that
+        // the transition the comment promises exists at all.
+        const css = readFileSync(
+            join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+        expect(css).toMatch(/\.season-chip \{[^}]*opacity:\s*0;/);
+        expect(css).toMatch(/\.season-chip \{[^}]*transition:\s*opacity/);
+        expect(css).toMatch(/\.season-chip\.visible \{[^}]*opacity:\s*1/);
+        // No `display` anywhere in either, or the fade is decorative and the
+        // chip pops.
+        const rest = css.slice(css.indexOf('.season-chip {'));
+        expect(rest.slice(0, rest.indexOf('\n}\n'))).not.toMatch(/display:/);
+    });
+
+    test('AND PLANT STAYS ONCE IT ARRIVES, INCLUDING ON A FULL PLOT', async () => {
+        // ---- A CONTROL THAT COMES AND GOES IS HARD TO LEARN -------------
+        // The lesson Water all already carries, met again at the other end of
+        // the range. A full plot is answered in a toast rather than by the
+        // button vanishing, or by opening the species grid so the visitor can
+        // read one disabled sentence at the bottom of it, which costs them a
+        // dismissal to learn what a toast says at once. It is also the same
+        // answer a tap on a full plot has always given.
+        const { ui } = await bootTending();
+        const plant = dom.el('tend-plant');
+        const toastEl = dom.el('garden-toast');
+
+        // Fill it. `capacity()` rather than a number typed here, or this test
+        // goes stale the moment the plot is resized.
+        const { capacity } = await import('../www/garden/js/garden.min.js');
+        for (let i = 0; i < capacity(); i++) {
+            press(plant);
+            press(dom.el('plant-confirm'));
+        }
+        stepFrames(10);
+
+        expect(plant.hidden).toBe(false);
+        press(plant);
+        expect(ui.isPlantOpen()).toBe(false);
+        expect(toastEl.textContent).toMatch(new RegExp(`holds ${capacity()} trees`));
+    });
+
+    test('and the sheet slides it in on focus rather than leaving it invisible', () => {
+        // The DOM stub has no stylesheet, so nothing above can tell us the
+        // panel is ever visible. A focusable control that never appears is a
+        // trap only sighted keyboard visitors find, and this is the rule that
+        // stops it being one.
+        const css = readFileSync(
+            join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+        expect(css).toMatch(/\.tend-panel\s*\{[^}]*translateY\(-120%\)/);
+        expect(css).toMatch(/\.tend-panel:focus-within\s*\{[^}]*translateY\(0\)/);
+        expect(css).toMatch(/\.tend-panel\[hidden\]\s*\{[^}]*display:\s*none/);
+        // The rows are real 44px targets, because the panel is on screen for
+        // whoever opened it and a pointer can reach it too.
+        expect(css).toMatch(/\.tend-row\s*\{[^}]*min-height:\s*44px/);
+        // And Plant, which is real chrome, needs the same `[hidden]` rule the
+        // rest of the corner has: `.visible` sets `display` and beats the
+        // attribute's UA default.
+        expect(css).toMatch(/\.tend-plant\.visible\[hidden\]/);
+        // Grouped with Water all, which is the point: the two are one family
+        // and share every rule but their `top`.
+        expect(css).toMatch(
+            /\.tend-plant\.visible,\s*\n\.water-all\.visible \{[^}]*display:\s*inline-flex/);
+    });
+
+    test('and Plant sits ABOVE Water all by exactly its own height', () => {
+        // ---- THE OFFSET IS THE BUTTON, NOT A GUESS ----------------------
+        // 20px inset, a 44px control, 10px of air. If the pair ever drifts
+        // apart or overlaps it is because one of these three moved and the
+        // other did not, which is invisible in a passing suite and obvious in
+        // a screenshot nobody takes until after the deploy.
+        const css = readFileSync(
+            join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+        const shared = css.slice(css.indexOf('.tend-plant,\n.water-all'));
+        const block = shared.slice(0, shared.indexOf('\n}\n'));
+        expect(block).toMatch(/min-height:\s*44px/);
+        // Neither ever grows a second line and shoves the other one down.
+        expect(block).toMatch(/white-space:\s*nowrap/);
+
+        // Both names appear TWICE: once in the grouped rule above that carries
+        // everything they share, and once alone with their own `top`. Requiring
+        // `top:` inside the block is what picks the right one, since `[^}]`
+        // cannot reach past the grouped rule's closing brace.
+        const top = (sel) => {
+            const m = css.match(
+                new RegExp(`\\n\\${sel} \\{[^}]*top:\\s*calc\\((\\d+)px`));
+            return m ? Number(m[1]) : null;
+        };
+        expect(top('.tend-plant')).toBe(20);
+        expect(top('.water-all')).toBe(20 + 44 + 10);
+    });
+
+    test('AND PLANT DOES NOT SIT THERE LOOKING PRESSED', () => {
+        // ---- A FILL IS A STATE IN THIS SHEET ----------------------------
+        // It shipped with a resting background of `rgba(accent, 0.26)` and QA
+        // read it as permanently active. Correct, and measurably so: the hover
+        // fill on the button directly below it is 0.30, so the two states were
+        // three hundredths apart and the button lived inside its neighbour's
+        // hover. Every control here is a dark pill that lifts to the accent
+        // when touched, so a pill that starts lifted says "pressed".
+        //
+        // The property asserted is that the two differ in NOTHING but position:
+        // anything either one declares for itself at rest is a difference, and
+        // a difference in fill is the one that reads as a state.
+        const css = readFileSync(
+            join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+        // Both names also head the GROUPED rule that carries everything they
+        // share, so requiring `top:` inside the block is what picks the
+        // standalone one: `[^}]` cannot reach past the grouped rule's brace.
+        const soleRule = (sel) => {
+            const m = css.match(new RegExp(`\\n\\${sel} \\{([^}]*top:[^}]*)\\}`));
+            return m ? m[1] : null;
+        };
+        for (const sel of ['.tend-plant', '.water-all']) {
+            const rule = soleRule(sel);
+            expect(`${sel} exists`).toBe(rule === null ? `${sel} MISSING` : `${sel} exists`);
+            // Position and nothing else. The shared rule above them carries the
+            // whole resting look, so neither can drift from the other.
+            expect(`${sel}: ${rule.replace(/\s+/g, ' ').trim()}`)
+                .toBe(`${sel}: ${rule.match(/top:[^;]+;/)[0]}`);
+        }
+
+        // And the lift is one rule for both, so they cannot disagree about what
+        // "you are on this" looks like either.
+        expect(css).toMatch(
+            /\.tend-plant:hover,\s*\n\.water-all:hover \{[^}]*rgba\(var\(--ui-accent-rgb\), 0\.3\)/);
+    });
+});
+
 // ---- The copy tells the truth about the species list ------------------------
 //
 // TWO SEPARATE LIES SHIPPED IN THIS COPY AND BOTH WERE FOUND BY READING RATHER
@@ -1743,7 +2126,7 @@ describe('the social card', () => {
     });
 
     test('the card is the WebP, at the size every renderer expects', () => {
-        expect(meta('og:image')).toBe(`${BASE}assets/og-garden.webp?v=1`);
+        expect(meta('og:image')).toBe(`${BASE}assets/og-garden.webp?v=2`);
         expect(meta('og:image:type')).toBe('image/webp');
         expect(meta('og:image:width')).toBe('1200');
         expect(meta('og:image:height')).toBe('630');

@@ -89,26 +89,35 @@ body {
     opacity: 1;
 }
 
-/* ---- Water all --------------------------------------------------------------
+/* ---- The plot's own two controls ---------------------------------------------
  *
- * TOP LEFT, WHICH IS THE ONLY EMPTY CORNER. Home and reset own the top right,
- * the season chip and the pan row own the bottom centre, the zoom pair owns the
- * bottom right. It also puts the one piece of chrome that ASKS for something at
- * the opposite end of the frame from the ones that undo things, so a rescue is
- * never a neighbour of "start a new garden".
+ * TOP LEFT, WHICH IS THE ONLY EMPTY CORNER. Home, start over and help own the
+ * top right, the season chip and the pan row own the bottom centre, the zoom
+ * pair owns the bottom right. It also puts the two pieces of chrome that ACT ON
+ * THE GARDEN at the opposite end of the frame from the ones that undo and
+ * explain, so a rescue is never a neighbour of "start a new garden".
  *
- * IT IS DISPLAY NONE UNTIL THE FIRST TREE IS PLANTED, and the id-scoped sheet
- * gives a new element no hiding of its own, so the rule is written here rather
- * than inherited. The `hidden` attribute goes on with it, which is what takes
- * it out of the tab order: a button that is invisible but still focusable is a
- * trap only keyboard visitors ever find. After that first tree it stays, so
- * this pair is toggled once a visit rather than every time a tank crosses a
- * threshold.
+ * PLANT ABOVE WATER, WHICH IS THE ORDER THEY HAPPEN IN, and the markup is in
+ * the same order so the tab order agrees with the picture. Water all appears
+ * beneath with the first tree, which is also the first moment there is anything
+ * to water, so the pair never reflows: Plant does not move when its neighbour
+ * arrives.
+ *
+ * ---- THE OFFSET IS THE BUTTON, NOT A GUESS ----
+ * 20px inset, a 44px control (the `min-height` below wins: 0.85rem of text in
+ * 0.5rem of padding is 34px), and 10px of air. Both are `white-space: nowrap`,
+ * so neither ever grows a second line and moves the other one.
+ *
+ * BOTH ARE DISPLAY NONE UNTIL JAVASCRIPT SAYS OTHERWISE, and the id-scoped
+ * sheet gives a new element no hiding of its own, so the rule is written here
+ * rather than inherited. The `hidden` attribute goes on with it, which is what
+ * takes them out of the tab order: a button that is invisible but still
+ * focusable is a trap only keyboard visitors ever find.
  */
+.tend-plant,
 .water-all {
     position: fixed;
     display: none;
-    top: calc(20px + env(safe-area-inset-top, 0px));
     left: calc(20px + env(safe-area-inset-left, 0px));
     align-items: center;
     gap: 0.4rem;
@@ -127,15 +136,44 @@ body {
     transition: background 0.2s ease, border-color 0.2s ease;
 }
 
+/* ---- A FILL IS A STATE, SO A RESTING BUTTON DOES NOT CARRY ONE -------------
+ *
+ * Plant shipped with an accent-tinted background so the eye would find it on an
+ * empty plot. QA: *"the Plant a tree button is always highlighted green, as if
+ * it's active"*, and that is a reading of the sheet rather than a matter of
+ * taste. THE RESTING FILL WAS 0.26 OF THE ACCENT AND THE HOVER FILL DIRECTLY
+ * BELOW IT IS 0.30: the two states were three hundredths apart, so the button
+ * spent its whole life inside its neighbour's hover.
+ *
+ * Every control in this scene is a dark pill that lifts to the accent when
+ * touched, and that vocabulary is the whole of how the frame says "you are on
+ * this". A pill that starts lifted is saying "pressed" in it. So the two now
+ * differ in nothing but position: same rest, same lift, same focus ring.
+ *
+ * IT NEEDS NO HELP BEING FOUND. On an empty plot it is the only thing in the
+ * corner, and the welcome card's PLANT row and the third planting nudge both
+ * name it. Emphasis is what the copy is for; colour here is what STATE is for.
+ */
+.tend-plant {
+    top: calc(20px + env(safe-area-inset-top, 0px));
+}
+
+.water-all {
+    top: calc(74px + env(safe-area-inset-top, 0px));
+}
+
+.tend-plant.visible,
 .water-all.visible {
     display: inline-flex;
 }
 
+.tend-plant:hover,
 .water-all:hover {
     background: rgba(var(--ui-accent-rgb), 0.3);
     border-color: var(--ui-accent);
 }
 
+.tend-plant:focus-visible,
 .water-all:focus-visible {
     outline: 2px solid var(--ui-accent);
     outline-offset: 2px;
@@ -160,6 +198,7 @@ body {
 
     .season-chip,
     .garden-toast,
+    .tend-plant,
     .water-all {
         transition: none;
     }
@@ -1013,12 +1052,13 @@ body {
 
 /* ---- AND NOTHING ELSE IS OFFERED WHILE THE WELCOME CARD IS UP -------------
  *
- * The companion of `.menu-btn[hidden]` above, for the three floats that are not
- * menu buttons. All of them sit ABOVE the blocker (the pan row and the zoom
- * stack at z-index 110 against its 100, Water all at 120), so the welcome card
+ * The companion of `.menu-btn[hidden]` above, for the floats that are not menu
+ * buttons. All of them sit ABOVE the blocker (the pan row and the zoom stack at
+ * z-index 110 against its 100, Plant and Water all at 120), so the welcome card
  * arrived under a full set of chrome, in its tab order, with nothing any of it
- * could usefully do: the card covers the view the pan and zoom would aim, and
- * Water all offers to water a plot the visitor has not been shown.
+ * could usefully do: the card covers the view the pan and zoom would aim, Water
+ * all offers to water a plot the visitor has not been shown, and Plant offers
+ * to put a tree in it before they have seen the ground.
  *
  * ---- THE `hidden` ATTRIBUTE IS NOT ENOUGH ON ANY OF THEM ----
  *
@@ -1026,6 +1066,7 @@ body {
  * the attribute's UA default. So each selector here is written to OUTRANK the
  * one it has to defeat rather than to rely on this file loading second:
  *
+ *   .tend-plant.visible                2 classes  <  3 here
  *   .water-all.visible                 2 classes  <  3 here
  *   .garden-zoom.visible               2 classes  <  3 here
  *   .pan-controls.visible (portrait)   2 classes  <  3 here
@@ -1036,9 +1077,139 @@ body {
  * the case that needs deciding. `syncWelcomeChrome` in main.js sets the
  * attribute, and tests/garden-init.test.mjs asserts both halves, because the
  * DOM stub has no stylesheet and cannot tell us this rule exists. */
+.tend-plant.visible[hidden],
 .water-all.visible[hidden],
 .garden-zoom.visible[hidden],
 .pan-controls.visible[hidden],
 .pan-controls.always-on.visible[hidden] {
     display: none;
+}
+
+/* The tend panel is the last of them, and it is the one that needs the
+ * attribute least and relies on it most: it sets no `display` of its own, so
+ * the UA default would already hide it, but it is also the only piece of chrome
+ * here that is PURELY a tab stop. Written out rather than inherited so that
+ * "hidden means hidden" is a rule this sheet states about every control it
+ * owns, and so the guard in tests/garden-init.test.mjs can check all of them. */
+.tend-panel[hidden] {
+    display: none;
+}
+
+/* ---- The tend panel, which is the keyboard's way into the plot -------------
+ *
+ * ---- OFF SCREEN, NOT INVISIBLE, AND THE DIFFERENCE IS THE WHOLE RULE ----
+ *
+ * Planting was reachable only through a click or a touch on the canvas, and
+ * every other act in this scene is downstream of owning a tree, so a visitor
+ * with no pointer could read the welcome card, look around, and leave. This
+ * panel is their route: a Plant button and one row per planted tree.
+ *
+ * It sits above the top of the frame and slides in on `:focus-within`, which is
+ * exactly what `.skip-link` in the shared sheet already does and what a
+ * keyboard visitor has therefore already met once on this page. THE ALTERNATIVE
+ * WAS A CLIPPED, PERMANENTLY INVISIBLE REGION, and that is a trap rather than a
+ * feature: focus lands somewhere the sighted keyboard visitor cannot see, and
+ * they are left pressing Tab into nothing. Being off screen also keeps it out
+ * of the frame entirely for the pointer visitor, which is what lets this scene
+ * add a whole interaction route without adding a pixel of chrome.
+ *
+ * `hidden` IS SET BY main.js WHILE THE WELCOME CARD IS UP, and the rule for it
+ * is below with the rest of that family, because a panel that is only off
+ * screen is still a tab stop.
+ *
+ * Z-INDEX ABOVE THE MODALS (200) rather than beside the other chrome (110):
+ * this slides down from the top edge, and the plant modal it opens covers the
+ * whole viewport. A panel that disappeared behind the thing it just opened
+ * would leave the visitor with no visible focus at the moment they most need
+ * one.
+ */
+.tend-panel {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(-120%);
+    z-index: 300;
+    width: min(92vw, 34rem);
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 1rem 1.25rem 1.25rem;
+    background: rgba(16, 26, 14, 0.97);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.55);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    transition: transform 0.2s ease;
+}
+
+.tend-panel:focus-within {
+    transform: translateX(-50%) translateY(0);
+}
+
+/* The same reason `.pan-controls` respects it: this slides, and a visitor who
+   asked for less movement should get the panel put in place rather than
+   travelling. It still arrives and still leaves. */
+@media (prefers-reduced-motion: reduce) {
+    .tend-panel {
+        transition: none;
+    }
+}
+
+.tend-heading {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+    letter-spacing: 0.3px;
+}
+
+.tend-note {
+    margin: 0 0 0.85rem;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.tend-empty {
+    margin: 0.85rem 0 0;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.68);
+}
+
+.tend-list {
+    list-style: none;
+    margin: 0.85rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+/* A ROW IS A FULL SENTENCE AND IT WRAPS RATHER THAN TRUNCATING. The text is
+   the button's accessible name as well as its label, so an ellipsis would be
+   hiding the half a screen reader is about to read out. Left aligned, because
+   a list of sentences centred is a list nobody can scan. */
+.tend-row {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    background: rgba(20, 20, 20, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 8px;
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.tend-row:hover {
+    background: rgba(var(--ui-accent-rgb), 0.22);
+    border-color: rgba(var(--ui-accent-rgb), 0.6);
+}
+
+.tend-row:focus-visible {
+    outline: 3px solid var(--ui-accent);
+    outline-offset: 2px;
 }

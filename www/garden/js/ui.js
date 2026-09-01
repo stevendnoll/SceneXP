@@ -49,6 +49,16 @@ let lakeEl = null;
 let lakeCanvas = null;
 let lakeNoteEl = null;
 
+let tendEl = null;
+let tendPlant = null;
+let tendList = null;
+let tendEmpty = null;
+// The ids currently in the list, joined, so a rebuild happens when the SET of
+// trees moves and not when one of them merely got a year older. Rebuilding on
+// every tick would drop focus out of the panel once a second, which is the one
+// thing a keyboard route must never do.
+let tendKey = '';
+
 let resetEl = null;
 let resetBody = null;
 let resetConfirm = null;
@@ -60,6 +70,8 @@ let onCustomChanged = null;
 let onWaterChosen = null;
 let onRemoveChosen = null;
 let onResetConfirmed = null;
+let onPlantRequested = null;
+let onTreeChosen = null;
 
 let selection = { species: SPECIES[0].id, custom: { ...DEFAULT_CUSTOM } };
 let cardEntry = null;
@@ -88,8 +100,29 @@ export function updateHud(year, elapsedSeconds, weatherWord = '') {
     chipEl.textContent = text;
 }
 
-export function showHud() {
-    if (chipEl) chipEl.classList.add('visible');
+/**
+ * Show or hide the season chip.
+ *
+ * ---- IT FADES RATHER THAN BEING `hidden`, UNLIKE THE REST OF THE CHROME ----
+ *
+ * Two reasons, and the second is the one that decides it.
+ *
+ * The chip is built on opacity: it has been fading in on load since M1-8, and a
+ * readout that fades in on arrival and POPS out when the help card opens is two
+ * different objects. `display: none` cannot be transitioned, so `hidden` would
+ * cost the fade.
+ *
+ * AND IT IS AN `aria-live` REGION. Removing one from the document and putting it
+ * back is a change some screen readers announce, so a visitor who opened the
+ * help card would hear the weather read out at them for their trouble. Opacity
+ * never touches the accessibility tree, so nothing is announced either way. It
+ * does mean the chip is still readable to a screen reader behind the card, which
+ * is the right trade: it is a status readout rather than a control, there is
+ * nothing to press on it by mistake, and the calendar is held while the card is
+ * up so its text cannot change under anyone.
+ */
+export function setHudVisible(on) {
+    if (chipEl) chipEl.classList.toggle('visible', !!on);
 }
 
 /**
@@ -134,6 +167,8 @@ export function initUi(handlers = {}) {
     onWaterChosen = handlers.onWater;
     onRemoveChosen = handlers.onRemove;
     onResetConfirmed = handlers.onReset;
+    onPlantRequested = handlers.onPlantRequest;
+    onTreeChosen = handlers.onTreeChoose;
 
     chipEl = document.getElementById('season-chip');
 
@@ -163,6 +198,12 @@ export function initUi(handlers = {}) {
     resetBody = document.getElementById('reset-body');
     resetConfirm = document.getElementById('reset-confirm');
     resetCancel = document.getElementById('reset-cancel');
+
+    tendEl = document.getElementById('tend-panel');
+    tendPlant = document.getElementById('tend-plant');
+    tendList = document.getElementById('tend-list');
+    tendEmpty = document.getElementById('tend-empty');
+    tendKey = '';
 
     // ---- A DIALOG STARTS CLOSED, AND THAT IS THIS MODULE'S BUSINESS ------
     // The markup carries `class="hidden"` on all four, and it is still the
@@ -194,6 +235,10 @@ export function initUi(handlers = {}) {
         const entry = cardEntry;
         closeTreeCard();
         if (onRemoveChosen && entry) onRemoveChosen(entry);
+    });
+
+    if (tendPlant) tendPlant.addEventListener('click', () => {
+        if (onPlantRequested) onPlantRequested();
     });
 
     if (resetCancel) resetCancel.addEventListener('click', () => closeResetModal());
@@ -392,6 +437,25 @@ function refreshSelectionText() {
 
 // ---- The plant modal -------------------------------------------------------
 
+/**
+ * What the modal's confirm button says. Pure, so the copy can be asserted.
+ *
+ * ---- "HERE" IS A WORD ONLY A TAP HAS EARNED ----
+ *
+ * The modal used to be reachable one way: point at a patch of grass, and the
+ * button confirms the spot under the finger. The keyboard route has no spot,
+ * because there was no pointer to put one under, so the plot picks the nearest
+ * free cell to its middle. Telling that visitor "Plant it HERE" names a place
+ * they never chose and cannot see.
+ *
+ * @param {boolean} full   no room left, so the button is a statement
+ * @param {boolean} placed the visitor chose the spot, so "here" is true
+ */
+export function plantButtonText(full, placed) {
+    if (full) return 'The plot is full';
+    return placed ? 'Plant it here' : 'Plant it in the plot';
+}
+
 export function openPlantModal(context = {}) {
     if (!modalEl) return;
     returnFocus = document.activeElement;
@@ -399,7 +463,10 @@ export function openPlantModal(context = {}) {
     modalEl.classList.remove('hidden');
     if (modalPlant) {
         modalPlant.disabled = !!context.full;
-        modalPlant.textContent = context.full ? 'The plot is full' : 'Plant it here';
+        // `placed` defaults TRUE, so every existing caller keeps the wording it
+        // had and only the route that genuinely has no spot says otherwise.
+        modalPlant.textContent = plantButtonText(
+            !!context.full, context.placed !== false);
         modalPlant.focus();
     }
     if (onCustomChanged) onCustomChanged(selection);
@@ -577,6 +644,111 @@ export function closeTreeCard() {
     restoreFocus();
 }
 
+// ---- The tend panel, which is the keyboard's way into the plot --------------
+
+/**
+ * One tree as a line a screen reader can read out.
+ *
+ * ---- IT IS THE BUTTON'S TEXT, NOT AN `aria-label` OVER DIFFERENT TEXT ----
+ *
+ * A visible label and an accessible name that disagree is a WCAG failure and a
+ * practical one: voice control types what it sees. So the sentence below is
+ * both, and the panel is styled to show it.
+ *
+ * BUILT FROM `cardLines`, which is the same function the tree card writes its
+ * body from. The list and the card cannot describe one tree two ways, and
+ * neither can go stale when the other's wording changes.
+ *
+ * THE ADVICE IS LEFT OUT ON PURPOSE. `lines.texts` also carries the runoff
+ * sentence and the fruit stage, which belong on the card a visitor has chosen
+ * to open. A list is for CHOOSING, so it carries identity and state and stops:
+ * which tree, how old, how it is doing, how thirsty.
+ */
+export function treeListLabel(lines) {
+    return `${lines.title}, ${lines.age.toLowerCase()}, ${lines.health.toLowerCase()}, ${lines.thirst.toLowerCase()} at ${lines.moisture} percent`;
+}
+
+/**
+ * Keep the off-screen list in step with the plot.
+ *
+ * ---- REBUILT WHEN THE SET MOVES, WRITTEN IN PLACE WHEN IT HAS NOT ----
+ *
+ * Called from the same once-a-second tick as `syncWaterAll`, because a tree's
+ * line carries its age and its thirst and both drift. Rebuilding the list on
+ * every one of those ticks would take focus out of the panel once a second,
+ * which would make the route unusable for exactly the visitor it exists for.
+ * So the tree ids decide: a plant, a remove or a restore rebuilds, and
+ * everything else only rewrites text that actually changed.
+ *
+ * AND THE FOCUSED ROW IS LEFT ALONE. Some screen readers re-announce a button
+ * whose text changes underneath the cursor, so the one row the visitor is
+ * standing on keeps its wording until they move off it. It is refreshed the
+ * moment they do, and the card they open reads the live record anyway.
+ *
+ * @param {Array} entries the planted trees, in `getTrees()` order
+ * @param {Function} lineFor entry to `cardLines` output, from the caller that
+ *        owns the clock and the weather
+ */
+export function syncTreeList(entries, lineFor) {
+    if (!tendList) return;
+    const list = entries || [];
+    const key = list.map((e) => e.record.id).join(',');
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+
+    if (key !== tendKey) {
+        // ---- A REBUILD CAN DROP FOCUS ON THE FLOOR ----------------------
+        // Removing a tree destroys the very button that opened its card, and
+        // the card's own focus restore then aims at an element no longer in the
+        // document, which silently lands focus on <body>: the visitor is thrown
+        // back to the top of the page with no idea why. Caught here, where the
+        // element is known to be going, and handed to the one control that is
+        // always present.
+        const losing = !!(active && tendList.contains && tendList.contains(active));
+        tendKey = key;
+        tendList.innerHTML = '';
+        for (const entry of list) {
+            const li = document.createElement('li');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'tend-row';
+            btn.dataset.treeId = entry.record.id;
+            btn.textContent = treeListLabel(lineFor(entry));
+            btn.addEventListener('click', () => {
+                if (onTreeChosen) onTreeChosen(entry);
+            });
+            li.appendChild(btn);
+            tendList.appendChild(li);
+        }
+        if (losing && tendPlant && tendPlant.focus) {
+            try { tendPlant.focus({ preventScroll: true }); } catch (e) { /* gone */ }
+        }
+    } else {
+        const rows = tendList.children;
+        for (let i = 0; i < list.length && i < rows.length; i++) {
+            const btn = rows[i].children ? rows[i].children[0] : null;
+            if (!btn || btn === active) continue;
+            const text = treeListLabel(lineFor(list[i]));
+            if (btn.textContent !== text) btn.textContent = text;
+        }
+    }
+
+    // THE EMPTY PLOT SAYS SO. A group containing one button and an empty list
+    // reads as broken rather than as empty, and "no trees planted yet" is also
+    // the answer to the question somebody arriving here is asking.
+    if (tendEmpty) tendEmpty.hidden = list.length > 0;
+}
+
+/** Whether the panel is offered at all. Hidden with the rest of the chrome
+ *  while the welcome card is up: there is nothing to tend behind it, and it
+ *  would be in the card's tab order. */
+export function setTendPanelHidden(hidden) {
+    if (tendEl) tendEl.hidden = !!hidden;
+}
+
+export function getTendPanel() {
+    return tendEl;
+}
+
 export function isCardOpen() {
     return !!cardEl && !cardEl.classList.contains('hidden');
 }
@@ -707,6 +879,11 @@ export function __resetUi() {
     lakeEl = null;
     lakeCanvas = null;
     lakeNoteEl = null;
+    tendEl = null;
+    tendPlant = null;
+    tendList = null;
+    tendEmpty = null;
+    tendKey = '';
     resetEl = null;
     resetBody = null;
     resetConfirm = null;

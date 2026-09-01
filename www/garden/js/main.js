@@ -58,10 +58,11 @@ import {
     serialize, hydrate, needsWater, viewFor, currentHeight, disposeGarden
 } from './garden.min.js';
 import {
-    initUi, updateHud, showHud, openPlantModal, isPlantOpen,
+    initUi, updateHud, setHudVisible, openPlantModal, isPlantOpen,
     openTreeCard, closeTreeCard, isCardOpen, refreshTreeCard, getCardEntry,
     anyModalOpen, getPreviewCanvas, toast, openResetModal, waterAllText,
-    openLakeCard, closeLakeCard, isLakeOpen, getLakeCanvas, refreshLakeCard
+    openLakeCard, closeLakeCard, isLakeOpen, getLakeCanvas, refreshLakeCard,
+    syncTreeList, setTendPanelHidden, cardLines
 } from './ui.min.js';
 import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
 import {
@@ -126,6 +127,7 @@ let lakeHome = null;
 let lakeDucks = 0;
 
 let canvas, loadingScreen, blocker, waterAllBtn, helpBtn, resetBtn, viewResetBtn;
+let plantBtn = null;
 // The two groups the shared pan part builds, held so the welcome card can put
 // them away. Queried once, after the part has built them.
 let panRow = null, zoomStack = null;
@@ -179,6 +181,7 @@ async function init() {
     loadingScreen = document.getElementById('loading-screen');
     blocker = document.getElementById('blocker');
     waterAllBtn = document.getElementById('water-all');
+    plantBtn = document.getElementById('tend-plant');
     helpBtn = document.getElementById('help-btn');
     resetBtn = document.getElementById('reset-btn');
     viewResetBtn = document.getElementById('view-reset');
@@ -249,7 +252,9 @@ async function init() {
         onCustomChange: handleCustomChange,
         onWater: handleWater,
         onRemove: handleRemove,
-        onReset: applyReset
+        onReset: applyReset,
+        onPlantRequest: handlePlantRequest,
+        onTreeChoose: showTreeCardFor
     });
     setupEventListeners();
     installDebugProbe();
@@ -262,11 +267,11 @@ async function init() {
         // its own renders an invisible Home button. The pan and zoom row tags
         // itself .ui-float too, so it is revealed by the same sweep.
         document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
-        // AND STRAIGHT BACK OFF FOR THE TWO THAT HAVE NOTHING TO DO YET. The
-        // sweep is indiscriminate by design, so this is the one place that
-        // knows the welcome card is still up.
+        // AND STRAIGHT BACK OFF FOR WHATEVER HAS NOTHING TO DO YET. The sweep
+        // is indiscriminate by design, so this is the one place that knows the
+        // welcome card is still up. It reveals the season chip too, which is
+        // why there is no separate `showHud()` here any more: one owner.
         syncWelcomeChrome();
-        showHud();
     }, 400);
 
     track('session-start', { device: state.mobile ? 'touch' : 'desktop' });
@@ -910,9 +915,12 @@ function readingWelcome() {
  *
  *   help        summons the card already filling the screen
  *   start over  destructive, offered before the visitor has seen the garden
+ *   plant       puts a tree in a plot they have not seen the ground of
  *   water all   waters a plot they have not been shown yet
  *   pan, tilt   the card covers the view they would be aiming
  *   zoom        the same, and the frame reset with it
+ *   tend panel  reaches the trees behind a card that has not been read
+ *   season chip a reading of a calendar that is not running
  *
  * HIDDEN RATHER THAN DISABLED. A dimmed button asks "why can't I press this",
  * which is a question the visitor should not have to hold; the absence of a
@@ -931,22 +939,55 @@ function readingWelcome() {
  * once a second from the animation loop, which does NOT stop for the card. Only
  * writing it here would have it flicker back a second later.
  *
- * HOME STAYS, and that is not an oversight. It is the way off the page, it
+ * HOME STAYS, and that is the only one that does. It is the way off the page, it
  * works perfectly well from the welcome card, and it is the target of the
  * "Skip to home link" that opens the document. Hiding it would break the skip
- * link for exactly the visitors it exists for. The season chip stays too: it is
- * a status readout rather than a control, so it is not in the tab order and
- * there is nothing to press on it by mistake.
+ * link for exactly the visitors it exists for.
+ *
+ * ---- AND THE SEASON CHIP GOES, WHICH IS A CORRECTION ----
+ *
+ * It was kept on the argument that a status readout is not a control: nothing
+ * to press by mistake, nothing in the tab order. True and beside the point. QA
+ * asked for it to go with the rest, and THE BETTER ARGUMENT WAS ALREADY IN THIS
+ * FILE: the calendar does not run while the card is up, so the chip is a live
+ * reading of a clock that is stopped. It says "Spring, year 3 · clear" over a
+ * card explaining what a year is, and it will still say exactly that however
+ * long the visitor reads. A frozen readout is not information, and the welcome
+ * screen should be its own six sentences and nothing else.
+ *
+ * It leaves by FADE rather than by `hidden`, unlike everything above. See
+ * `setHudVisible` in ui.js: the chip is built on opacity, and it is an
+ * `aria-live` region, which is the half that decides it.
  */
 function syncWelcomeChrome() {
     const reading = readingWelcome();
     for (const el of [helpBtn, resetBtn, panRow, zoomStack]) {
         if (el) el.hidden = reading;
     }
+    // ---- PLANT IS THE ONE THAT ARRIVES HERE AND STAYS -------------------
+    // Every other control on this list already existed before the card was
+    // dismissed. Plant is revealed by this call and never taken away again:
+    // there is always somewhere to put a tree until the plot is full, and a
+    // full plot is answered in a toast rather than by the button vanishing.
+    // `.visible` as well as the attribute, because the sheet gives it
+    // `display: none` until something says otherwise, exactly like Water all.
+    if (plantBtn) {
+        plantBtn.hidden = reading;
+        plantBtn.classList.toggle('visible', !reading);
+    }
+    // THE TEND PANEL IS THE ONE HERE THAT IS PURELY A TAB STOP, since it is off
+    // screen until something in it has focus. That makes the tab order the
+    // whole point of hiding it: a keyboard visitor reading the welcome card
+    // should not tab into a Plant button behind it.
+    setTendPanelHidden(reading);
     // One way only. Putting it BACK is `syncWaterAll`'s job, because whether
     // there is anything to water is a question this function has no business
     // answering.
     if (reading && waterAllBtn) waterAllBtn.hidden = true;
+    // The chip, which fades rather than being hidden. This is also what first
+    // reveals it, so the fade a visitor sees on arrival is the same one they
+    // see every time they close the help card.
+    setHudVisible(!reading);
 }
 
 /**
@@ -1004,8 +1045,12 @@ function beginTending() {
     helpReturn = null;
     // AT ONCE RATHER THAN ON THE NEXT HEARTBEAT. A visitor coming back to a
     // garden that went thirsty while they were away should meet the offer in
-    // the first frame they see, not a second into it.
+    // the first frame they see, not a second into it. The tend panel is the
+    // same argument with more force: it is the keyboard's only route in, and a
+    // restored garden must be listed in it before the first Tab, not a second
+    // after.
     syncWaterAll();
+    syncTendList();
     nudgeToPlant();
 }
 
@@ -1283,23 +1328,7 @@ function handleSceneTap(clientX, clientY) {
     if (thirsty) { waterOne(thirsty, 'drop'); return; }
 
     const tree = pickBase(clientX, clientY, bases);
-    if (tree) {
-        openTreeCard(tree, ageYears(tree.record, state.elapsedSeconds), cardContext());
-        // THE CARD'S PORTRAIT IS THE TREE'S OWN SPECIES AND SEED, so what turns
-        // in it is this tree rather than a stock example of its kind. Built
-        // through the same debounced path the plant modal uses, which is what
-        // keeps the two from being two ways of doing one thing.
-        setPreviewSpecies({
-            species: tree.record.species,
-            custom: tree.record.custom || {},
-            seed: tree.record.seed
-        });
-        // `kind` rather than `species` in the beacon: the log reads one column
-        // across every scene, where a prop, a piece of scenery and a tree are
-        // all the kind of thing that was touched.
-        track('tree-opened', { kind: tree.record.species });
-        return;
-    }
+    if (tree) { showTreeCardFor(tree, 'bed'); return; }
 
     // ---- THE LAKE IS THE OTHER THING ON SCREEN WORTH TOUCHING -------------
     // After the plot's own targets, because the plot is what the visitor came
@@ -1330,7 +1359,74 @@ function handleSceneTap(clientX, clientY) {
     openPlantModal({ full: isFull() });
 }
 
+/**
+ * Open one tree's card, from wherever the visitor asked.
+ *
+ * ---- ONE FUNCTION, BECAUSE THERE ARE TWO WAYS IN NOW ----
+ *
+ * A pointer aims at the mulch bed; a keyboard picks the tree out of the tend
+ * panel's list. Both must produce exactly the same card, with the same portrait
+ * and the same beacon, or the keyboard route becomes a second-class copy that
+ * drifts the first time the card gains anything. This lived inline in
+ * `handleSceneTap` until the list needed it too.
+ *
+ * @param {object} entry the tree
+ * @param {string} from  'bed' or 'list', for the beacon only
+ */
+function showTreeCardFor(entry, from = 'list') {
+    if (!entry) return;
+    openTreeCard(entry, ageYears(entry.record, state.elapsedSeconds), cardContext());
+    // THE CARD'S PORTRAIT IS THE TREE'S OWN SPECIES AND SEED, so what turns in
+    // it is this tree rather than a stock example of its kind. Built through the
+    // same debounced path the plant modal uses, which is what keeps the two from
+    // being two ways of doing one thing.
+    setPreviewSpecies({
+        species: entry.record.species,
+        custom: entry.record.custom || {},
+        seed: entry.record.seed
+    });
+    // `kind` rather than `species` in the beacon: the log reads one column
+    // across every scene, where a prop, a piece of scenery and a tree are all
+    // the kind of thing that was touched. `from` is what will answer whether
+    // the keyboard route is used at all.
+    track('tree-opened', { kind: entry.record.species, from });
+}
+
 // ---- The plant flow --------------------------------------------------------
+
+/**
+ * Plant from the corner button, which has no spot because it has no pointer.
+ *
+ * `pendingCell` is CLEARED rather than left alone, and that is the whole of the
+ * bug this guards against: a visitor who taps a patch of grass, closes the
+ * modal without planting, and then presses this button would otherwise plant in
+ * a spot they chose minutes ago and have forgotten. `handlePlant` already falls
+ * back to the free cell nearest the middle of the plot, and that fallback has
+ * been waiting here since M2 for exactly this caller.
+ *
+ * ---- A FULL PLOT IS ANSWERED IN A TOAST, NOT IN A MODAL ----
+ *
+ * The same answer a tap on a full plot already gets, and now that this button
+ * is on screen for everybody it is the one that matters: opening the species
+ * grid so the visitor can read one disabled sentence at the bottom of it costs
+ * them a dismissal to learn something a toast says at once. It is also why the
+ * button does not disappear at 49 trees. A control that comes and goes as the
+ * garden changes is hard to learn, which is the lesson Water all already
+ * carries, and "you have filled the plot" is worth being told.
+ */
+function handlePlantRequest() {
+    if (!state.loaded || anyModalOpen()) return;
+    if (readingWelcome()) return;
+    if (isFull()) {
+        toast(`This plot holds ${capacity()} trees. Remove one to make room.`);
+        return;
+    }
+    pendingCell = null;
+    // `placed: false` because there is no "here" to plant it in. See
+    // `plantButtonText`.
+    openPlantModal({ placed: false });
+    track('plant-from-button');
+}
 
 function handlePlant(selection) {
     if (isFull()) {
@@ -1362,6 +1458,10 @@ function handlePlant(selection) {
         customised: isCustomised(selection.custom) ? 1 : 0
     });
     save();
+    // AT ONCE, because a keyboard visitor's next Tab is looking for the tree
+    // they just planted, and a second is a long time to be told nothing
+    // happened.
+    syncTendList();
 }
 
 function isCustomised(custom) {
@@ -1395,6 +1495,7 @@ function waterOne(entry, from) {
     dropTaught = true;
     save();
     syncWaterAll();
+    syncTendList();
 }
 
 /**
@@ -1431,6 +1532,7 @@ function handleWaterAll() {
     track('water-all', { count: trees.length, thirsty, revived });
     save();
     syncWaterAll();
+    syncTendList();
 }
 
 /**
@@ -1457,6 +1559,26 @@ function teachTheDroplet(count) {
     dropTaught = true;
     toast('A blue droplet means a tree is thirsty. Tap the droplet and it drinks.', 5200);
     track('drop-taught');
+}
+
+/**
+ * Keep the tend panel's list of trees in step with the plot.
+ *
+ * The lines carry age and thirst, both of which drift, so this rides the same
+ * once-a-second tick as `syncWaterAll` rather than the frame. `syncTreeList`
+ * itself decides what that costs: a rebuild only when the SET of trees moves,
+ * and text written only where it changed. See its header for why that matters
+ * more here than it does anywhere else in the scene.
+ *
+ * The context comes from here because this is the side that owns the clock and
+ * the weather, and `cardLines` is the same function the tree card writes from,
+ * so the list and the card cannot describe one tree two different ways.
+ */
+function syncTendList() {
+    const context = cardContext();
+    syncTreeList(getTrees(), (entry) => cardLines(
+        entry.record, entry.resolved,
+        ageYears(entry.record, state.elapsedSeconds), context));
 }
 
 function syncWaterAll() {
@@ -1523,6 +1645,13 @@ function handleRemove(entry) {
     toast('Removed. The ground is free again.');
     track('tree-removed');
     save();
+    // BEFORE ANYTHING ELSE TOUCHES FOCUS. The card that removed this tree has
+    // already closed and aimed its focus restore at the list row for a tree
+    // that no longer exists; rebuilding here is what catches that and hands
+    // focus to the Plant button instead of dropping it on <body>. See
+    // `syncTreeList`.
+    syncTendList();
+    syncWaterAll();
 }
 
 /**
@@ -1579,6 +1708,11 @@ function applyReset() {
     applyView();
     toast('A new garden, and a fresh plot of grass.');
     track('garden-cleared', { trees });
+    // The plot is empty, so the list is too, and the panel says so instead of
+    // offering rows for trees that were just cleared. The reset dialog's own
+    // focus restore lands on the reset button in the corner, which survives.
+    syncTendList();
+    syncWaterAll();
 }
 
 // ---- The live preview ------------------------------------------------------
@@ -1958,10 +2092,17 @@ let plantNudge = null;
  * whether the scene is slow, broken, or waiting for them. The season chip says
  * "Spring, year 3" and means nothing until somebody explains what a year is.
  */
+// THE LAST ONE NAMES THE BUTTON AND THE FIRST TWO DO NOT, which is the whole
+// shape of this list. Pointing at the ground is the better gesture and is what
+// makes this a garden rather than a form, so it leads and gets two goes. But
+// somebody still looking at an empty plot after two hints is somebody the
+// gesture is not reaching, and there is a button in the corner that always
+// works. Telling them about it on the first toast would teach the worse route
+// to everybody.
 const PLANT_NUDGES = [
     'Tap any patch of grass to plant your first tree.',
     'Every day and night here is a year, so a tree you plant now will fill out while you watch.',
-    'Still an empty plot. Tap the grass inside the walls to choose a tree.'
+    'Still an empty plot. Tap the grass inside the walls, or use the Plant a tree button in the corner.'
 ];
 let wallHints = 0;
 let wallHintAt = -1e9;
@@ -2050,7 +2191,7 @@ function animate() {
     // syncs this straight away; the drift the other way, a garden going thirsty
     // while somebody watches it, is the slowest thing in the scene.
     waterAllDue += delta;
-    if (waterAllDue > 1) { waterAllDue = 0; syncWaterAll(); }
+    if (waterAllDue > 1) { waterAllDue = 0; syncWaterAll(); syncTendList(); }
     if (isCardOpen()) {
         const entry = getCardEntry();
         if (entry) refreshTreeCard(ageYears(entry.record, state.elapsedSeconds), cardContext());

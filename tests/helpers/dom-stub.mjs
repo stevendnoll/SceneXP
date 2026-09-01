@@ -152,7 +152,6 @@ function makeElement(tag = 'div') {
     parentElement: null,
     parentNode: null,
     textContent: '',
-    innerHTML: '',
     value: '',
     href: '',
     disabled: false,
@@ -208,7 +207,19 @@ function makeElement(tag = 'div') {
     remove() { el.parentElement?.removeChild?.(el); },
     querySelector(sel) { return el._selMemo?.get(sel) ?? memoChild(el, sel); },
     querySelectorAll() { return []; },
-    contains() { return false; },
+    // ---- AND `contains` HAS TO WALK THE TREE ------------------------------
+    // It returned a flat `false`, which is the most dangerous answer a stub can
+    // give: every "is focus still inside this panel" check reads as no, so code
+    // that rescues focus never runs and the test asserting it was rescued
+    // passes for the wrong reason. www/garden's tend panel rebuilds its list
+    // when a tree is removed and has to catch the focus it is about to
+    // destroy. A real node contains itself, and so does this one.
+    contains(node) {
+      for (let at = node; at; at = at.parentElement) {
+        if (at === el) return true;
+      }
+      return false;
+    },
     closest() { return null; },
     focus() { el.focused = true; if (globalThis.document) globalThis.document.activeElement = el; },
     blur() { el.focused = false; },
@@ -219,6 +230,32 @@ function makeElement(tag = 'div') {
     getContext(type) { return type === '2d' ? make2dContext() : chainable(); },
     toDataURL() { return 'data:,'; },
   };
+  // ---- `innerHTML = ''` HAS TO ACTUALLY EMPTY THE ELEMENT ------------------
+  //
+  // It was a plain string field, so assigning to it stored a string and left
+  // every child in place. THREE PRODUCTION CALL SITES CLEAR A CONTAINER THIS
+  // WAY (`modalGrid`, `cardBody` and the tend panel's tree list in
+  // www/garden/js/ui.js), and under the stub all three appended to whatever was
+  // already there. A list rebuilt from four rows to two read as six, and a
+  // test asserting what a rebuild produced was reading rows that no longer
+  // exist in a browser.
+  //
+  // The stub cannot PARSE markup and is not going to try. Assigning detaches
+  // the children and stores the string, which models the real thing exactly for
+  // the clearing case and harmlessly for the only other use in the codebase
+  // (pan-1.0.0 writing one SVG into a button it just created).
+  Object.defineProperty(el, 'innerHTML', {
+    enumerable: true,
+    configurable: true,
+    get() { return el._html || ''; },
+    set(value) {
+      for (const child of el.children.splice(0)) {
+        child.parentElement = null;
+        child.parentNode = null;
+      }
+      el._html = String(value);
+    },
+  });
   // `className` AND `classList` ARE THE SAME STATE. As two plain fields they
   // drift the moment any code sets one and reads the other, and a class
   // assigned by `el.className = 'a b'` is then invisible to `contains('a')`,

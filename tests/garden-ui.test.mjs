@@ -473,7 +473,13 @@ test('THE CARD SHOWS THE TREE, AND IT IS THE VISITOR\'S OWN TREE', () => {
     // rather than a stock example of its species. The plant modal passes none
     // and keeps the fixed showcase seed, because moving between species should
     // show the species.
-    expect(main).toMatch(/seed: tree\.record\.seed/);
+    //
+    // SCOPED TO `showTreeCardFor` RATHER THAN TO THE WHOLE FILE, because that
+    // is the one route into the card now: the tend panel's list opens it as
+    // well as a tap on a bed, and a portrait that came out right from only one
+    // of them would be the keyboard route quietly becoming second class.
+    const show = main.slice(main.indexOf('function showTreeCardFor'));
+    expect(show.slice(0, show.indexOf('\n}\n'))).toMatch(/seed: entry\.record\.seed/);
     expect(main).toMatch(/seed === undefined \? 0x5EED : seed/);
 
     // Driven at its LIVE state, with the same options the garden drives it
