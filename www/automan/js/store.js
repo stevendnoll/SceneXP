@@ -43,14 +43,16 @@
  *   |  [ brochures ]                                            |
  *   +--------------- front wall (behind the camera) ------------+
  *
- * BUILD STATUS: milestone M3. The room, the lot, and the desk are all
- * real, and the three chairs are placed and aimed. The chairs are still
- * empty: the cast arrives at M4. See specs/automan/TASKS.md.
+ * BUILD STATUS: milestone M4. The room, the lot, the desk and all three
+ * of the cast are real and posed: John is leaning in with a finger on the
+ * deal sheet. Nothing moves yet beyond the wall clock, because the
+ * animation is M5 and the passing car is M6. See specs/automan/TASKS.md.
  */
 
 import { getScene } from '../../shared/js/scene-1.0.0.min.js';
 import { initWorld, getWorldGroup, registerOutdoorProp } from '../../shared/js/world-1.0.0.min.js';
 import { AUTOMAN_CONFIG } from './config.min.js';
+import { createPerson } from '../../shared/js/people-1.0.0.min.js';
 import { createBackgroundScenery } from '../../shared/js/scenery-1.0.0.min.js';
 import { createWall, createWallSegment } from '../../shared/js/structures-1.0.0.min.js';
 import { createCeilingLights } from '../../shared/js/lighting-1.0.0.min.js';
@@ -522,6 +524,7 @@ const leafMaterial = new THREE.MeshStandardMaterial({
 // ANIMATION REGISTRIES (filled during build, driven by updateShowroom)
 // ============================================
 let wallClock = null;    // { hour, minute, second } hand pivots on the wall clock
+let cast = null;         // { john, customer, dealer }, each { group, waist, neck, arms, yaw, seat }
 
 // ============================================
 // INITIALIZE THE SHOWROOM WORLD
@@ -540,7 +543,8 @@ export function initStore() {
     createCurtainWall();      // the floor-to-ceiling glazing across the back
     createDealerDesk();       // the sales desk itself
     createDeskItems();        // the deal sheet, the pages, the screen, the die-cast
-    createDeskChairs();       // three chairs, aimed the way their sitters will be
+    createDeskChairs();       // three chairs, aimed the way their sitters are
+    createCast();             // John, his customer, and the dealer
     createWallClock();        // real local time, on the west wall
     createShowroomLighting(); // the shared rig, reskinned as recessed panels
     createDaylightShaft();    // the faux daylight washing in through the glass
@@ -1246,6 +1250,71 @@ function seatHeightY(seatTop, scaleY) {
     return seatTop + 0.05 - 0.75 * scaleY;
 }
 
+// The shared rig's joints, in its own local coordinates. Everything the
+// three helpers below depend on comes from people-1.0.0.js: legs 0.75,
+// torso 0.55, arms hung at the shoulder 0.05 below the torso top.
+const HIP_Y = 0.75;                 // top of the legs, base of the torso
+const NECK_Y = 1.32 - HIP_Y;        // neck base, in waist-pivot coordinates
+
+/** The shared rig has NO head or neck pivot: the head, eyes, pupils,
+ *  nose, ears and hair are all direct children of the person, each
+ *  carrying an absolute height, and the hair is a group sitting at y 0
+ *  whose own children carry the absolute heights. So a nod needs one
+ *  built, and this builds it.
+ *
+ *  Everything at or above the neck base moves into a pivot there, plus
+ *  the hair group by reference, since its own y says nothing about where
+ *  it renders. Run this AFTER addWaist, on the waist pivot. */
+function addNeck(waist, hair) {
+    const pivot = new THREE.Group();
+    pivot.position.set(0, NECK_Y, 0);
+    const movers = waist.children.filter(
+        (child) => child === hair || child.position.y >= NECK_Y + 0.01
+    );
+    movers.forEach((child) => {
+        waist.remove(child);
+        child.position.y -= NECK_Y;
+        pivot.add(child);
+    });
+    waist.add(pivot);
+    return pivot;
+}
+
+/** A waist, for leaning in. The rig cannot lean: its torso is a plain
+ *  mesh among the person's children, so rotating it alone would leave
+ *  the arms and head behind in mid air.
+ *
+ *  This wraps EVERYTHING except the two leg groups into a pivot at the
+ *  hip, so rotating it tips the whole upper body and carries the arms and
+ *  head with it. That is what lets John reach the deal sheet at all: from
+ *  his chair the page is 0.85m from his shoulder and the rig's arm is
+ *  only 0.61m, so without a lean he would be pointing at thin air.
+ *
+ *  Run AFTER poseSeated, which needs the leg groups still at hip height
+ *  to find them. Returns the pivot. */
+function addWaist(person) {
+    const pivot = new THREE.Group();
+    pivot.position.set(0, HIP_Y, 0);
+    const isLeg = (child) => child.isGroup && !child.userData.isArm &&
+        Math.abs(child.position.y - HIP_Y) < 0.02;
+    const movers = person.children.filter((child) => !isLeg(child));
+    movers.forEach((child) => {
+        person.remove(child);
+        child.position.y -= HIP_Y;
+        pivot.add(child);
+    });
+    person.add(pivot);
+    return pivot;
+}
+
+/** The hair group, found before anything is rearranged: it is the only
+ *  direct child that is a Group, is not an arm, and sits at y 0. A bald
+ *  figure simply has none. */
+function findHairGroup(person) {
+    return person.children.find((child) =>
+        child.isGroup && !child.userData.isArm && Math.abs(child.position.y) < 1e-6) || null;
+}
+
 /** Give a tagged arm a working elbow: wrap the forearm and hand (the
  *  parts below the elbow sphere at half arm length) into a pivot group
  *  at the joint. The sphere itself stays with the upper arm as the joint
@@ -1253,8 +1322,7 @@ function seatHeightY(seatTop, scaleY) {
  *
  *  This is what makes John's point read as a point rather than as
  *  sleepwalking: the shared rig's arm is one rigid group hinged at the
- *  shoulder, which cannot put a fingertip on a specific spot on a desk.
- *  Used from M4. */
+ *  shoulder, which cannot put a fingertip on a specific spot on a desk. */
 function addElbow(arm) {
     const pivot = new THREE.Group();
     pivot.position.set(0, -0.275, 0);
@@ -1272,6 +1340,164 @@ function addElbow(arm) {
  *  moved chair keeps its sight line without a second number to update. */
 function faceToward(from, to) {
     return Math.atan2(to.x - from.x, to.z - from.z);
+}
+
+// ============================================
+// THE CAST
+// ============================================
+// THE POSE ARITHMETIC, so the next person to move the desk knows what to
+// redo. Every angle below was SOLVED against the real transform chain,
+// not eyeballed. The chain, outermost first:
+//
+//   person   position (x, seatY, z), rotation.y = yaw
+//     waist  pivot at local y 0.75, rotation.x = lean       (addWaist)
+//       arm  at (side*0.2125, 0.50, 0) from the waist pivot,
+//            rotation.x = shoulder, rotation.z as given
+//         elbow  at (0, -0.275, 0), rotation.x = bend       (addElbow)
+//           hand at (0, -0.295, 0), fingertip 0.045 beyond
+//
+// Seated, John's shoulder sits at y 1.02 and the deal sheet's near edge
+// is 0.85m away, while the rig's whole arm reaches 0.61m. He therefore
+// CANNOT touch the page sitting upright, which is why addWaist exists: a
+// 0.38 radian lean (21.8 degrees) carries the shoulder far enough
+// forward that the solved arm lands the fingertip within 1mm of the
+// page, with the elbow at y 0.808 clearing the 0.75 desk top.
+//
+// If the desk, the sheet, or any seat moves, re-solve. Do not nudge these
+// by eye: the fingertip either touches the paper or it hovers, and at
+// this camera distance a centimetre of hover is visible.
+const JOHN_POINT_ARM = { shoulder: -1.045, rotZ: -0.615, elbow: -0.730 };
+const JOHN_REST_ARM = { shoulder: -0.740, rotZ: -0.920, elbow: -0.800 };
+const JOHN_LEAN = 0.38;
+// The lean tips his head down with the rest of him, so the neck takes
+// most of it back and leaves him looking level at the dealer rather than
+// at his own knees.
+const JOHN_NECK_X = -0.30;
+
+// The customer: upright, hands resting on her thighs. Solved the same
+// way, to land them at y 0.61 and 0.365 forward, which is the lap.
+const CUSTOMER_REST_ARM = { shoulder: -0.20, roll: 0.22, elbow: -0.95 };
+
+// The dealer: a light 0.10 lean with both forearms on his side of the
+// desk, hands landing within 48mm of the desk top.
+const DEALER_REST_ARM = { shoulder: -0.545, roll: 0.075, elbow: -1.160 };
+const DEALER_LEAN = 0.10;
+
+/** Build one seated figure and rig it: seat, waist, neck, elbows. Returns
+ *  everything the animation pass needs, so updateShowroom never has to go
+ *  hunting through the scene graph. */
+function seatFigure(person, seat, target, kind) {
+    const yaw = faceToward(seat, target);
+    const hair = findHairGroup(person);
+
+    poseSeated(person);
+    person.position.set(seat.x, seatHeightY(LAYOUT.chairSeatTop, 1), seat.z);
+    person.rotation.y = yaw;
+
+    const waist = addWaist(person);
+    const neck = addNeck(waist, hair);
+    const arms = waist.children
+        .filter((child) => child.isGroup && child.userData.isArm)
+        .map((arm) => ({ arm, elbow: addElbow(arm), side: arm.position.x < 0 ? -1 : 1 }));
+
+    showroomGroup.add(registerOutdoorProp(person, kind));
+    return { group: person, waist, neck, arms, yaw, seat };
+}
+
+/** John Walker, mid-point. Clean-shaven head and a light blue button-down
+ *  from the flyer, seated at the desk's west end, leaning in with a
+ *  finger on the deal sheet and his eyes on the dealer. */
+function createJohn() {
+    const john = createPerson({
+        role: 'customer', x: 0, z: 0, rotationY: 0,
+        bald: true,
+        dressShirt: true,
+        shirtColor: JOHN_LOOK.shirtColor,
+        pantsColor: JOHN_LOOK.pantsColor,
+        skinTone: JOHN_LOOK.skinTone,
+        eyeColor: JOHN_LOOK.eyeColor
+    });
+
+    const rig = seatFigure(john, LAYOUT.john, LAYOUT.dealer, 'john');
+    rig.waist.rotation.x = JOHN_LEAN;
+    rig.neck.rotation.x = JOHN_NECK_X;
+
+    // The arm on the -x side is the one solved onto the page.
+    rig.arms.forEach((entry) => {
+        const pose = entry.side < 0 ? JOHN_POINT_ARM : JOHN_REST_ARM;
+        entry.arm.rotation.x = pose.shoulder;
+        entry.arm.rotation.z = pose.rotZ;
+        entry.elbow.rotation.x = pose.elbow;
+        entry.role = entry.side < 0 ? 'point' : 'rest';
+    });
+    return rig;
+}
+
+/** The customer: John's client, seated on the near side, watching the
+ *  dealer and nodding along. Neutral clothing on purpose, so she never
+ *  competes with the navy and gold. */
+function createCustomer() {
+    const customer = createPerson({
+        role: 'customer', x: 0, z: 0, rotationY: 0,
+        hairStyle: 'long',
+        shirtColor: 0x77707e,
+        pantsColor: 0x2f3540,
+        skinTone: 0xd9a97f,
+        hairColor: 0x3a2a1e,
+        eyeColor: 0x3b2a1c
+    });
+    customer.scale.set(0.96, 0.97, 0.96);
+
+    const rig = seatFigure(customer, LAYOUT.customer, LAYOUT.dealer, 'customer');
+    rig.arms.forEach((entry) => {
+        entry.arm.rotation.x = CUSTOMER_REST_ARM.shoulder;
+        entry.arm.rotation.z = -entry.side * CUSTOMER_REST_ARM.roll;
+        entry.elbow.rotation.x = CUSTOMER_REST_ARM.elbow;
+    });
+    return rig;
+}
+
+/** The dealer: a professional doing his job across a desk from another
+ *  professional. Suit and tie, forearms on the desk, listening. He is
+ *  deliberately not a villain (PRD decision D6): the scene's case is
+ *  "bring somebody who knows", not "dealers are crooks". */
+function createDealer() {
+    const dealer = createPerson({
+        role: 'shopkeeper', x: 0, z: 0, rotationY: 0,
+        hasSuit: true,
+        tieColor: 0x7d2733,
+        shirtColor: 0x2c3038,
+        pantsColor: 0x23262c,
+        skinTone: 0xe3b891,
+        hairColor: 0x2e2a26,
+        eyeColor: 0x33261a
+    });
+
+    const mid = {
+        x: (LAYOUT.john.x + LAYOUT.customer.x) / 2,
+        z: (LAYOUT.john.z + LAYOUT.customer.z) / 2
+    };
+    const rig = seatFigure(dealer, LAYOUT.dealer, mid, 'dealer');
+    rig.waist.rotation.x = DEALER_LEAN;
+    // His body squares up to the pair, but his attention is on John, so
+    // the head turns the rest of the way.
+    rig.neck.rotation.y = faceToward(LAYOUT.dealer, LAYOUT.john) - rig.yaw;
+    rig.neck.rotation.x = -0.08;
+    rig.arms.forEach((entry) => {
+        entry.arm.rotation.x = DEALER_REST_ARM.shoulder;
+        entry.arm.rotation.z = -entry.side * DEALER_REST_ARM.roll;
+        entry.elbow.rotation.x = DEALER_REST_ARM.elbow;
+    });
+    return rig;
+}
+
+/** All three, and the registry the animation pass drives at M5. */
+function createCast() {
+    cast = {
+        john: createJohn(),
+        customer: createCustomer(),
+        dealer: createDealer()
+    };
 }
 
 // ============================================
@@ -1521,6 +1747,11 @@ export function getShowroomGroup() {
 // Exposed for unit tests only; production code uses the named exports above.
 export const __test__ = {
     LAYOUT, PALETTE, JOHN_LOOK,
+    JOHN_POINT_ARM, JOHN_REST_ARM, JOHN_LEAN, JOHN_NECK_X,
+    CUSTOMER_REST_ARM, DEALER_REST_ARM, DEALER_LEAN,
+    HIP_Y, NECK_Y,
     seatHeightY, faceToward,
-    poseSeated, addElbow, createDeskChair, createSucculent
+    poseSeated, addElbow, addWaist, addNeck, findHairGroup,
+    createDeskChair, createSucculent,
+    getCast: () => cast
 };

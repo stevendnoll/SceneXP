@@ -394,6 +394,30 @@ function checkSceneTap(clientX, clientY) {
 // prop kinds match each other exactly, so a prop with no story and a
 // story with no prop both fail the build.
 const PROP_CONTENT = {
+    // The three people. From M8 a tap on any of them opens the contact
+    // card instead, tailored to whoever was tapped (task T8.3). Their
+    // copy lives here in the meantime so a tap is never a dead end.
+    john: {
+        title: 'Meet John Walker',
+        lines: [
+            'This is John, doing the part most people dread. Twenty five years of this, more than 2,000 cars, and now he does it for the buyer instead of the dealership.',
+            'He has sat on the other side of this desk and desked these deals himself, which is exactly why he is worth having on your side of it.'
+        ]
+    },
+    customer: {
+        title: 'She brought backup',
+        lines: [
+            'She walked in with somebody who knows what every line on that page is worth. The consultation that got her here was free.',
+            'Notice how relaxed she is. That is what it looks like when the numbers have already been checked by someone in your corner.'
+        ]
+    },
+    dealer: {
+        title: 'The other side of the desk',
+        lines: [
+            'He is good at his job, and that is exactly the point. Nobody should have to sit across from a professional without one of their own.',
+            'This is a fair conversation between two people who both know the business. That is all John is really here to arrange.'
+        ]
+    },
     clock: {
         title: 'The Wall Clock',
         lines: [
