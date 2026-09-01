@@ -6,18 +6,6 @@
 
 [![SceneXP.com, custom 3D experiences, right in your browser](www/assets/og-image.jpg)](https://www.scenexp.com/)
 
-Stand at the water's edge while the weather turns.
-
-[![A view out to sea under a low grey storm sky, with a branching fork of lightning coming down to the horizon and a small orange and white navigation buoy standing in the heaving grey swell](www/highwater/assets/og-highwater.jpg)](https://www.scenexp.com/highwater/)
-
-Defend Earth from the Martian fleet.
-
-[![A close-up of the Earth with Mars and the moon in the distance](www/earthdefense/assets/og-earthdefense.jpg)](https://www.scenexp.com/earthdefense/)
-
-Try the 3D Mandelbrot zoom.
-
-[![A glowing spiral of warm color deep inside the Mandelbrot set, captured mid-dive in the Mandelbrot experience](www/mandelbrot/assets/og-mandelbrot.jpg)](https://www.scenexp.com/mandelbrot/)
-
 [SceneXP.com](https://www.scenexp.com/) is a live website and a home for browser-native 3D experiences: worlds, games, experiments, stories, and simulations. Some were built to honor a person, place, or business. Others exist to show visitors what a browser can do. New experiences land regularly.
 
 Everything runs client side. No app, no download, no account, no cookies, and no third-party scripts, trackers, or CDNs.

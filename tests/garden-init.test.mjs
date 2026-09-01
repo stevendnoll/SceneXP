@@ -2160,7 +2160,7 @@ describe('the social card', () => {
     });
 
     test('the card is the WebP, at the size every renderer expects', () => {
-        expect(meta('og:image')).toBe(`${BASE}assets/og-garden.webp?v=2`);
+        expect(meta('og:image')).toBe(`${BASE}assets/og-garden.webp?v=3`);
         expect(meta('og:image:type')).toBe('image/webp');
         expect(meta('og:image:width')).toBe('1200');
         expect(meta('og:image:height')).toBe('630');

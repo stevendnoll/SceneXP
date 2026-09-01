@@ -150,9 +150,10 @@
                 </ul>
 
                 <h2>Pick an interaction model</h2>
-                <p>Every experience so far follows one of three interaction models, and choosing one up
-                    front is the biggest design decision you will make. All three are assembled from the
-                    same shared parts, so the existing experiences double as working references.</p>
+                <p>Every experience so far follows one of four interaction models, and choosing one up
+                    front is the biggest design decision you will make. All four are assembled from the
+                    same shared parts, so the existing experiences double as working references. A new
+                    model is welcome too, if none of these fits what you have in mind.</p>
                 <ul>
                     <li><strong>Explorable worlds.</strong> First-person scenes that visitors walk through,
                         with keyboard and mouse on desktop, dual joysticks on phones, and collision so
@@ -161,11 +162,20 @@
                         subject, and the scene moves instead of the visitor. A row of floating buttons
                         offers gentle pan and zoom, with matching swipe and pinch gestures on touch
                         screens, and tapping props opens short lines of story. This is the simplest model
-                        to build and a great fit for small subjects.</li>
+                        to build and a great fit for small subjects. Fractal Garden extends it, keeping
+                        the fixed viewpoint but letting a tap on the ground plant a tree, so the visitor
+                        changes the scene rather than just looking around it.</li>
                     <li><strong>Hands-off rides.</strong> The scene drives itself and the visitor mostly
                         watches, with play and pause, speed, and direction controls for light steering.
                         The Mandelbrot dive is the reference: its auto zoom
-                        flies the camera while the visitor picks destinations and adjusts the ride.</li>
+                        flies the camera while the visitor picks destinations and adjusts the ride. High
+                        Water is the strictest version, with no controls at all beyond starting and
+                        replaying.</li>
+                    <li><strong>Piloted flight.</strong> The visitor drives a vehicle through open space
+                        rather than walking or watching, so the world moves around a camera that never
+                        stops. Earth Defense is the reference: keyboard and mouse on desktop, a throttle
+                        on the left thumb and a look joystick on the right on phones. Reach for this when
+                        the subject is the movement itself rather than the place.</li>
                 </ul>
 
                 <h2>Layer on the delight</h2>
@@ -229,14 +239,29 @@ python3 -m http.server 8000
                     <li><strong>Follow the metadata pattern.</strong> Every experience page carries a strict
                         same-origin Content Security Policy, full Open Graph and Twitter tags, JSON-LD, and a
                         polite no-JavaScript fallback. Copy the pattern from an existing experience.</li>
+                    <li><strong>Make a social card.</strong> A 1200 by 630 capture of your world, saved as
+                        <code>assets/og-&lt;world&gt;.webp</code> with a <code>.jpg</code> beside it. Please
+                        read the conversion note in
+                        <a href="https://github.com/stevendnoll/SceneXP/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING.md</a>
+                        before you make it, because a screenshot taken on a Mac carries the display's color
+                        profile and will come out visibly duller than what you were looking at unless you
+                        convert it properly.</li>
                     <li><strong>Build and test.</strong> Run <code>npm run build</code> (your new files are
                         minified automatically), then <code>npm test</code>. Please include a small unit
                         test for your world, following the <code>tests</code> folder's
                         <code>&lt;experience&gt;-init.test.mjs</code> pattern. Every pull request should
                         bring tests along for the code it adds or changes.</li>
                     <li><strong>Add your world to the directory.</strong> One card in
-                        <code>www/index.html</code>, one entry in <code>www/js/directory.js</code>, and one URL
-                        in <code>www/sitemap.xml</code>.</li>
+                        <code>www/index.html</code>, one entry in <code>www/js/directory.js</code>, one URL
+                        in <code>www/sitemap.xml</code>, and a short description in
+                        <code>www/llms.txt</code>.</li>
+                    <li><strong>If your world remembers anything, say so in the privacy policy.</strong>
+                        <code>sessionStorage</code> needs nothing, since it goes when the tab closes and the
+                        policy already covers it. Anything you put in <code>localStorage</code> outlives the
+                        visit, so it has to be named in <code>www/privacy.html</code> along with how a
+                        visitor clears it. The test suite keeps the list of files allowed to write
+                        persistent storage and will fail the moment yours joins them, which is the reminder
+                        rather than the rule.</li>
                     <li><strong>Open a pull request</strong> telling us the story behind your world. The
                         <code>main</code> branch does not accept direct pushes, so every change to the
                         project arrives this way, and we read every pull request with genuine delight.</li>

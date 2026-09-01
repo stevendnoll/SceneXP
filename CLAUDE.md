@@ -18,8 +18,8 @@ their own world, welcome aboard. We are delighted to have you both.
 
 - Please read the README.md file to get a general understanding of the
   SceneXP.com project.
-- CONTRIBUTING.md covers the architecture, the three interaction models, and
-  the step-by-step guide for adding a new experience.
+- CONTRIBUTING.md covers the architecture, the interaction models, and the
+  step-by-step guide for adding a new experience.
 - The 2D and 3D HTML, JavaScript, and CSS files are stored in the www
   folder. Each experience lives in its own folder under www and is assembled
   from the shared parts library in www/shared (its README.md documents every

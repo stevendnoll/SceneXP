@@ -19,7 +19,7 @@ is a static folder of browser-native HTML, CSS, and JavaScript, powered by
 Three.js.
 
 - **One folder per experience.** Every experience lives in its own folder
-  under `www/`, like `www/dad`, `www/family`, and `www/roqui`, with its own
+  under `www/`, like `www/dad`, and `www/family`, with its own
   `index.html`, config, and orchestrator. Styling comes from the shared
   versioned stylesheet in `www/shared/css`, and an experience that needs
   rules of its own can add an optional `css/experience.css`.
@@ -35,26 +35,36 @@ Three.js.
 
 ## Pick an interaction model
 
-Every experience so far follows one of three interaction models, and choosing
-one up front is the biggest design decision you will make. All three are
+Every experience so far follows one of four interaction models, and choosing
+one up front is the biggest design decision you will make. All four are
 assembled from the same shared parts, so the existing experiences double as
-working references.
+working references. A new model is welcome too, if none of these fits what you
+have in mind.
 
 - **Explorable worlds.** First-person scenes that visitors walk through, with
   keyboard and mouse on desktop, dual joysticks on phones, and collision so
   nobody wanders through a wall. Some also offer a guided autopilot tour.
-  `www/dad`, `www/family`, `www/roqui`, and `www/steve` are all built this way.
+  `www/dad`, `www/family`, `www/interstate`, and `www/seedtoseed` are all built this way.
 - **Composed views.** A fixed camera frames one lovingly detailed subject,
   and the scene moves instead of the visitor. A row of floating buttons
   offers gentle pan and zoom, with matching swipe and pinch gestures on
   touch screens, and tapping props opens short lines of story. This is the
-  simplest model to build and a great fit for small subjects. See
-  `www/gavin`.
+  simplest model to build and a great fit for small subjects. It provides a fixed
+  viewpoint with pan, tilt, and a dolly zoom, but tapping the ground plants
+  a tree rather than opening a line of dialog, which is worth reading if your
+  scene wants the visitor to change it.
 - **Hands-off rides.** The scene drives itself and the visitor mostly
   watches, with play and pause, speed, and direction controls for light
   steering. The Mandelbrot dive (`www/mandelbrot`) is the reference: its
   auto zoom flies the camera while the visitor picks destinations and
-  adjusts the ride.
+  adjusts the ride. `www/highwater` is the strictest version of this, with
+  no controls at all beyond starting and replaying.
+- **Piloted flight.** The visitor drives a vehicle through open space rather
+  than walking or watching, so the world moves around a camera that never
+  stops. `www/earthdefense` is the reference: keyboard and mouse on desktop,
+  a throttle on the left thumb and a look joystick on the right on phones,
+  with a HUD carrying live ranges and target lock. Reach for this when the
+  subject is the movement itself rather than the place.
 
 ## Layer on the delight
 
@@ -263,7 +273,7 @@ A new experience should ship with a small init test, following the
 `tests/<experience>-init.test.mjs` pattern the existing experiences use: a
 build-and-tick smoke test plus a few assertions about your world's layout or
 behavior. The floor for experience code is sized for exactly that kind of
-simple, honest test, and `tests/gavin-init.test.mjs` is a good model to copy
+simple, honest test, and `tests/garden-init.test.mjs` is a good model to copy
 from.
 
 Every JS and CSS file under `www/` is minified automatically by convention
