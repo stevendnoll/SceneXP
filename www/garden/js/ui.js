@@ -21,7 +21,7 @@
 import { GARDEN_CONFIG } from './config.min.js';
 import { seasonAt, hourAt } from './clock.min.js';
 import { SPECIES, DEFAULT_CUSTOM, isFlowering, speciesById } from './species.min.js';
-import { healthBand, HEALTH_WORDS } from './garden.min.js';
+import { healthBand, HEALTH_WORDS, cropAt } from './garden.min.js';
 import { fruitStageAt, fruitWords } from './clock.min.js';
 
 let chipEl = null;
@@ -476,7 +476,12 @@ export function cardLines(record, resolved, ageYears, context = {}) {
     const stage = resolved.schedule && context.hour !== undefined
         ? fruitStageAt(context.hour, resolved.schedule)
         : null;
-    const doing = stage ? fruitWords(stage, !!resolved.fruit) : '';
+    // THROUGH `cropAt`, which is the same function the shader scales the
+    // blossom and the fruit by. Reading the calendar alone told saplings and
+    // dead trees they were carrying fruit they do not have. See `fruitWords`.
+    const doing = stage
+        ? fruitWords(stage, !!resolved.fruit, cropAt(record.growth, record.health))
+        : '';
 
     // WHY A TREE CAN BE THIRSTY IN A DOWNPOUR, and it is true rather than an
     // apology for the rule. A nursery tree stands in a root ball of imported

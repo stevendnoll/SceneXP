@@ -396,12 +396,37 @@ export function showcaseHour(schedule) {
  * COLOUR IS NEVER THE ONLY CARRIER of what anything in this scene is doing, the
  * same rule `HEALTH_WORDS` and `sliderWords` already follow, so a visitor who
  * cannot see an orange pixel is still told there is ripe fruit on the tree.
+ *
+ * ---- IT HAS TO DESCRIBE THIS TREE, NOT THE SPECIES (QA 2026-08-31) ----
+ *
+ * QA: "it will say things like Fruit swelling or that the fruit is ripe even
+ * for saplings without fruit, or dead trees which also don't have fruit."
+ * Correct, and the reason is a clean split that this function sat on the wrong
+ * side of. `fruitStageAt` is a function of the CALENDAR and the species
+ * schedule alone: it says what an apple tree is doing in August, and every
+ * apple tree in the plot gets the same answer whether it is a twig, a
+ * full-grown tree or a dead one.
+ *
+ * What decides whether a PARTICULAR tree carries anything is `cropAt(growth,
+ * health)`, and the renderer has always used it: `viewFor` puts it in `crop`
+ * and the shader multiplies the blossom and the fruit by it, so a sapling under
+ * `bearFrom` and a tree under `cropFrom` draw nothing at all. The card was
+ * reading the calendar and the tree was reading the crop, so the words
+ * described fruit that was never on screen.
+ *
+ * SO THE WORDS TAKE THE SAME PRODUCT THE SHADER DOES. `bloom` and `size` are
+ * amounts and are scaled; `ripe` and `drop` are phases of the year and are not.
+ * The thresholds now mean "enough to see" rather than "in season", which is
+ * what they always read as.
+ *
+ * @param {number} crop 0 to 1, from `cropAt(growth, health)`. Defaults to 1,
+ *   so a caller asking purely about the calendar still can.
  */
-export function fruitWords(stage, hasFruit = true) {
+export function fruitWords(stage, hasFruit = true, crop = 1) {
     if (!stage) return '';
-    if (stage.bloom > 0.15) return 'In blossom';
+    if (stage.bloom * crop > 0.15) return 'In blossom';
     if (!hasFruit) return '';
-    if (stage.drop >= 1 || stage.size <= 0.02) return '';
+    if (stage.drop >= 1 || stage.size * crop <= 0.02) return '';
     if (stage.drop > 0.05) return 'Dropping its fruit';
     if (stage.ripe > 0.85) return 'Fruit ripe';
     if (stage.ripe > 0.05) return 'Fruit ripening';

@@ -12,6 +12,8 @@
  * boundary constants would pass against any implementation that had the same
  * typo.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
 import { speciesById } from '../www/garden/js/species.js';
 import {
@@ -423,4 +425,71 @@ test('the stage is named in words, because colour is never the only carrier', ()
     // And a blossom-only tree is never told it has fruit.
     const dog = sched('flowering-dogwood');
     expect(fruitWords(fruitStageAt(12, dog), false)).toBe('');
+});
+
+test('THE WORDS DESCRIBE THIS TREE, NOT ITS SPECIES', async () => {
+    // QA: "it will say things like Fruit swelling or that the fruit is ripe
+    // even for saplings without fruit, or dead trees which also don't have
+    // fruit." Both true, and both the same fault.
+    //
+    // `fruitStageAt` is a function of the CALENDAR and the species schedule
+    // alone. It says what an apple tree is doing in August, and every apple in
+    // the plot gets that answer whether it is a twig, a full-grown tree or a
+    // dead one. What decides whether a PARTICULAR tree carries anything is
+    // `cropAt(growth, health)`, which the renderer has always used: `viewFor`
+    // puts it in `crop` and the shader multiplies blossom and fruit by it. The
+    // card read one and the tree drew the other.
+    const { cropAt } = await import('../www/garden/js/garden.js');
+    const apple = sched('apple');
+    const wordsFor = (growth, health) => {
+        const crop = cropAt(growth, health);
+        const said = new Set();
+        for (let hour = 0; hour < 24; hour += 0.25) {
+            const w = fruitWords(fruitStageAt(hour, apple), true, crop);
+            if (w) said.add(w);
+        }
+        return said;
+    };
+
+    // A SAPLING SAYS NOTHING, all year. This is the case QA named, and the
+    // threshold is not invented here: `fruit.bearFrom` is where the shader
+    // starts drawing a crop at all.
+    expect([...wordsFor(0.2, 1)]).toEqual([]);
+    expect([...wordsFor(0.5, 1)]).toEqual([]);
+    // A DEAD TREE SAYS NOTHING either, and so does one too far gone to bear.
+    expect([...wordsFor(1, 0)]).toEqual([]);
+    expect([...wordsFor(1, 0.2)]).toEqual([]);
+
+    // AND A GROWN, HEALTHY TREE IS UNCHANGED, which is the half that would
+    // make a fix worse than the bug.
+    expect(wordsFor(1, 1).size).toBe(5);
+    expect(wordsFor(1, 1).has('Fruit ripe')).toBe(true);
+    expect(wordsFor(1, 1).has('In blossom')).toBe(true);
+    // A tree that is struggling but still bearing keeps its words: it has
+    // fruit on it, so saying so is right. Half a crop is still a crop.
+    expect(wordsFor(1, 0.5).has('Fruit ripe')).toBe(true);
+
+    // ---- THE PRODUCT, NOT A SECOND THRESHOLD ---------------------------
+    // `bloom` and `size` are AMOUNTS and are scaled by the crop; `ripe` and
+    // `drop` are phases of the year and are not. So the thresholds keep
+    // meaning "enough to see" rather than gaining a separate rule that could
+    // drift from the shader's.
+    const august = fruitStageAt(12, apple);
+    expect(august.size).toBeGreaterThan(0.02);
+    expect(fruitWords(august, true, 0)).toBe('');
+    expect(fruitWords(august, true, 0.02 / august.size * 0.9)).toBe('');
+    expect(fruitWords(august, true, 1)).toBe('Fruit swelling');
+    // Defaulting to a full crop, so a caller asking purely about the calendar
+    // still can and every older call site still means what it meant.
+    expect(fruitWords(august, true)).toBe(fruitWords(august, true, 1));
+});
+
+test('the tree card asks for the crop, or the words drift from the tree again', async () => {
+    // The rule lives in `fruitWords`, but it is only true if the card passes
+    // the tree in. A default of 1 makes forgetting silent, which is exactly
+    // how this shipped: the call read `fruitWords(stage, !!resolved.fruit)`
+    // and looked complete.
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'ui.js'), 'utf8');
+    expect(src).toMatch(/cropAt\(record\.growth, record\.health\)/);
+    expect(src).toMatch(/import \{[^}]*cropAt[^}]*\} from '\.\/garden\.min\.js'/);
 });
