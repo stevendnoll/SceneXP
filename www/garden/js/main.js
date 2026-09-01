@@ -1246,7 +1246,10 @@ function handleSceneTap(clientX, clientY) {
             custom: tree.record.custom || {},
             seed: tree.record.seed
         });
-        track('tree-opened', { species: tree.record.species });
+        // `kind` rather than `species` in the beacon: the log reads one column
+        // across every scene, where a prop, a piece of scenery and a tree are
+        // all the kind of thing that was touched.
+        track('tree-opened', { kind: tree.record.species });
         return;
     }
 
@@ -1307,7 +1310,7 @@ function handlePlant(selection) {
     // And the scene turns to look at it. See showTree.
     showTree(entry);
     track('tree-planted', {
-        species: entry.record.species,
+        kind: entry.record.species,
         customised: isCustomised(selection.custom) ? 1 : 0
     });
     save();
