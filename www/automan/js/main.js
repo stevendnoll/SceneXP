@@ -64,7 +64,8 @@ let dialogOpen = false;   // one dialog at a time; taps pause while it's up
 // experiences surface theirs a few checklist discoveries in; this scene
 // has no checklist, so every fourth prop story earns it instead, shown
 // once that story's card closes so the two never stack).
-let nudgeModal;
+let nudgeModal, nudgeKicker, nudgeTitle, nudgeMessage;
+let contactCall, contactText, contactEmail, contactFallback;
 let nudgeOpen = false;
 let nudgePending = false;
 let propClicks = 0;
@@ -92,6 +93,16 @@ async function init() {
     dialogMessage = document.getElementById('dialog-message');
     dialogCta = document.getElementById('dialog-cta');
     nudgeModal = document.getElementById('nudge-modal');
+    nudgeTitle = document.getElementById('nudge-title');
+    nudgeMessage = document.getElementById('nudge-message');
+    nudgeKicker = nudgeModal && nudgeModal.querySelector('.complete-kicker');
+    contactCall = document.getElementById('contact-call');
+    contactText = document.getElementById('contact-text');
+    contactEmail = document.getElementById('contact-email');
+    contactFallback = document.getElementById('contact-fallback');
+    // Hidden until a card actually opens, so an empty status line never
+    // takes up room in the card.
+    setShown(contactFallback, false);
 
     if (!canvas) return;
 
@@ -106,6 +117,9 @@ async function init() {
     updateLoadingStatus('Verifying your browser…', 10);
     const proof = await getProofOfWork(AUTOMAN_CONFIG.proofOfWork);
     setProofHash(proof && proof.hash);
+    // The contact card assembles John's number and address from this, so
+    // hold on to it. Solving here means the card never makes anyone wait.
+    _proof = proof;
 
     updateLoadingStatus('Initializing renderer…', 25);
     initScene(canvas, AUTOMAN_CONFIG);
@@ -267,6 +281,33 @@ function setupEventListeners() {
         el.addEventListener('click', closePropDialog, { signal }));
     if (nudgeModal) nudgeModal.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closeNudgeModal, { signal }));
+
+    // Every prop story leads on to the contact card. Closing the story
+    // first keeps the two cards from ever being open together, and
+    // clearing the queued invitation stops it arriving straight after.
+    if (dialogCta) dialogCta.addEventListener('click', () => {
+        nudgePending = false;
+        if (dialogModal) dialogModal.classList.add('hidden');
+        dialogOpen = false;
+        openContactCard('story');
+    }, { signal });
+
+    // The floating contact button. It keeps a real href to the site's
+    // contact page for anyone whose JavaScript never runs, so this
+    // intercepts rather than replaces it.
+    const bizBtn = document.getElementById('biz-btn');
+    if (bizBtn) bizBtn.addEventListener('click', (event) => {
+        if (!state.isLoaded || dialogOpen || nudgeOpen) return;
+        event.preventDefault();
+        openContactCard('button');
+    }, { signal });
+
+    // Which of the three actions a visitor actually takes is the number
+    // that tells John whether any of this worked.
+    [[contactCall, 'call'], [contactText, 'text'], [contactEmail, 'email']]
+        .forEach(([el, action]) => {
+            if (el) el.addEventListener('click', () => track('contact-action', { action }), { signal });
+        });
     document.addEventListener('keydown', (event) => {
         if (event.code !== 'Escape') return;
         if (nudgeOpen) closeNudgeModal();
@@ -324,10 +365,10 @@ function firstVisibleHit(targets) {
 // Props this size are easy to miss beside their big neighbors, so they
 // get the whole tolerance search to themselves before anything else is
 // allowed to answer. The neighbors are large enough to spare the halo.
-// (Task T8.2 revisits this list once M7 has placed the fixtures: the
-// awkward targets in this room are the model car, the clock, and the
-// waste basket.)
-const SMALL_PROP_KINDS = ['modelcar', 'clock', 'basket'];
+// The awkward targets in this room, each small enough to be missed
+// beside a big neighbour: the die-cast on the desk corner, the wall
+// clock, the waste basket, and the product menu standing on the desk.
+const SMALL_PROP_KINDS = ['modelcar', 'clock', 'basket', 'warrantycard'];
 
 /** Direct hit first, then a couple of rings of sample rays around the
  *  point, so the model car on the desk corner is tappable with a
@@ -380,7 +421,22 @@ function checkSceneTap(clientX, clientY) {
     const hit = pickSceneHit(clientX, clientY);
     if (!hit) return;
     const prop = getPropRoot(hit.object);
-    if (prop) openPropDialog(prop.userData.propKind);
+    if (!prop) return;
+    const kind = prop.userData.propKind;
+
+    // Tapping any of the three people goes straight to the contact card,
+    // tailored to whoever was tapped. It does NOT count toward the
+    // every-fourth-story cadence: somebody who taps John has already
+    // asked, and offering again two props later would be nagging.
+    if (PERSON_KINDS.includes(kind)) {
+        track('click-person', { who: kind });
+        // If the card cannot open for any reason, fall through and at
+        // least tell their story. That also keeps their PROP_CONTENT
+        // entries reachable rather than leaving three blocks of copy
+        // nobody can ever see.
+        if (openContactCard(kind)) return;
+    }
+    openPropDialog(kind);
 }
 
 // ---- The showroom's stories -------------------------------------------------
@@ -527,11 +583,12 @@ let propTick = 0;   // rotates which line a prop shows, no Math.random needed
 
 let dialogReturnFocus = null;
 
-/** Open the showroom dialog for a clicked prop: its title and a line from
- *  its pair (alternating, so a second click gives something new). Props
- *  flagged cta lead with the button through to the contact card, and the
- *  dismiss button steps down to the muted look while that leads. From M8
- *  every story carries one, since there is nowhere else to send anybody. */
+/** Open the showroom dialog for a tapped prop: its title and a line from
+ *  its pair (alternating, so a second tap gives something new).
+ *
+ *  Every story leads with the same onward button, because unlike the
+ *  other featured-business experiences there is nowhere else to send
+ *  anybody: this page IS John's web presence. */
 function openPropDialog(kind) {
     const content = PROP_CONTENT[kind];
     if (!content || !dialogModal) return;
@@ -539,19 +596,12 @@ function openPropDialog(kind) {
     track('click-prop', { kind });
     if (dialogTitle) dialogTitle.textContent = content.title;
     if (dialogMessage) dialogMessage.textContent = content.lines[propTick++ % content.lines.length];
-    const dismiss = dialogModal.querySelector('.dialog-primary');
-    if (dialogCta) dialogCta.classList.toggle('hidden', !content.cta);
-    if (dismiss) {
-        dismiss.classList.toggle('piece-enter', !content.cta);
-        dismiss.classList.toggle('piece-cancel', !!content.cta);
-    }
-    // Every few stories, queue the reach-out invitation to follow this one
+    // Every few stories, queue the invitation to follow this one
     propClicks += 1;
     if (propClicks % NUDGE_EVERY === 0) nudgePending = true;
     dialogReturnFocus = document.activeElement;
     dialogModal.classList.remove('hidden');
-    const lead = (content.cta && dialogCta) ? dialogCta : dismiss;
-    if (lead) lead.focus();
+    if (dialogCta) dialogCta.focus();
 }
 
 function closePropDialog() {
@@ -578,26 +628,150 @@ function restoreDialogFocus() {
     }
 }
 
-// M0 GATE, REMOVED AT TASK T8.5. The contact card's call, text, and
-// email actions are assembled from AUTOMAN_CONFIG.site.contact once the
-// proof of work resolves, and that assembler is M8 work. Until it lands,
-// the card would open with three empty hrefs, which is worse than not
-// offering it, so both routes in are held shut. Grep CONTACT_CARD_WIRED
-// to find everything this gate touches.
-const CONTACT_CARD_WIRED = false;
+// ---- The contact card ------------------------------------------------------
 
-/** The contact card: John's call, text, and email actions. Opened
- *  directly by a tap on any of the three people at the desk, and
- *  otherwise after every fourth prop story, the same low-pressure card
- *  the garden and tire-shop experiences extend partway through. */
-function openNudgeModal() {
-    if (!nudgeModal || !CONTACT_CARD_WIRED) return false;
+// Who opened it, and what it says when they did. Every route in gets its
+// own heading and opening line, so the card reads as an answer to the tap
+// rather than the same advert wheeled out five different ways.
+const CONTACT_CARDS = {
+    john: {
+        kicker: '★  Free consultation, by phone or Zoom  ★',
+        title: 'Meet John Walker',
+        lead: 'This is John, doing the part most people dread. Twenty five years of it, more than 2,000 cars, and now he does it for the buyer instead of the dealership. If he cannot get you the deal you want, you owe him nothing.'
+    },
+    customer: {
+        kicker: '★  Free consultation, by phone or Zoom  ★',
+        title: 'She brought backup',
+        lead: 'She walked in with somebody who knows what every line on that page is worth. The consultation that got her here was free, and so is yours.'
+    },
+    dealer: {
+        kicker: '★  Free consultation, by phone or Zoom  ★',
+        title: 'The other side of the desk',
+        lead: 'He is good at his job, and that is exactly the point. Nobody should have to sit across from a professional without one of their own.'
+    },
+    story: {
+        kicker: '★  Free consultation, by phone or Zoom  ★',
+        title: 'Let John handle it',
+        lead: 'John Walker has spent twenty five years on the other side of that desk, and more than 2,000 cars have gone through his hands. If he cannot get you the deal you want, you owe him nothing.'
+    },
+    nudge: {
+        kicker: '★  A few stops into the visit  ★',
+        title: 'Enjoying the showroom?',
+        lead: 'Thank you for looking around. Everything in this room is something John has already thought about on a customer’s behalf. If you have a car to buy or sell, he would be glad to hear from you.'
+    },
+    button: {
+        kicker: '★  Free consultation, by phone or Zoom  ★',
+        title: 'Talk to John',
+        lead: 'By phone or by Zoom, before you ever set foot in a dealership. He will look at the numbers with you and tell you plainly what he sees.'
+    }
+};
+
+// The three people at the desk, which are the taps that open the card
+// straight away instead of telling a story first.
+const PERSON_KINDS = ['john', 'customer', 'dealer'];
+
+let _proof = null;      // the solved proof of work, handed over at boot
+let _contact = null;    // memoized once assembled
+
+/** Assemble John's phone number and email from the fragments in config,
+ *  and build the three action links.
+ *
+ *  This is PRD decision D3: the values never appear whole in the source,
+ *  so a scraper grepping for a phone or email pattern finds nothing. It
+ *  costs the visitor nothing, because init() already awaited the proof of
+ *  work before the scene was built, so by the time any card can open the
+ *  proof is long since in hand and the card renders with live links.
+ *
+ *  Returns null when there is no proof, which in practice means no
+ *  crypto.subtle, which means a non-secure origin. */
+function assembleContact() {
+    if (_contact) return _contact;
+    if (!_proof) return null;
+
+    const c = AUTOMAN_CONFIG.site.contact;
+    const groups = c.phoneParts.map((part) => part.join(''));
+    const digits = groups.join('');
+    const email = c.emailParts.map((part) => part.join(''));
+    const address = `${email[0]}@${email[1]}.${email[2]}`;
+    // The Ref is the first six hex characters of the solved hash. A mail
+    // or text arriving with a valid-looking one demonstrably came through
+    // a browser that solved the gate, which helps John triage.
+    const ref = _proof.hash.slice(0, 6);
+
+    _contact = {
+        display: `(${groups[0]}) ${groups[1]}-${groups[2]}`,
+        address,
+        tel: `tel:+1${digits}`,
+        // `?&body=` is the form both iOS and Android accept.
+        sms: `sms:+1${digits}?&body=${encodeURIComponent(c.smsBody)}`,
+        mail: `mailto:${address}?subject=${encodeURIComponent(`${c.emailSubject} (Ref ${ref})`)}`
+    };
+    return _contact;
+}
+
+/** Show or hide an element without touching classes.
+ *
+ *  The shared stylesheet has NO generic .hidden rule (it scopes hiding to
+ *  named modal ids and a couple of specific classes), so adding that class
+ *  to an anchor would do nothing at all and leave a dead link on screen.
+ *  Setting style.display through the CSSOM is unaffected by the page's
+ *  style-src policy, and is what the loading bar already does. */
+function setShown(el, shown) {
+    if (el) el.style.display = shown ? '' : 'none';
+}
+
+/** Open the contact card. `entry` says who asked for it, which picks the
+ *  copy and is recorded so the log can tell which route actually works. */
+function openContactCard(entry) {
+    if (!nudgeModal) return false;
+    const copy = CONTACT_CARDS[entry] || CONTACT_CARDS.story;
+    if (!dialogReturnFocus) dialogReturnFocus = document.activeElement;
+
+    if (nudgeKicker) nudgeKicker.textContent = copy.kicker;
+    if (nudgeTitle) nudgeTitle.textContent = copy.title;
+    if (nudgeMessage) nudgeMessage.textContent = copy.lead;
+
+    const contact = assembleContact();
+    if (contact) {
+        if (contactCall) {
+            contactCall.href = contact.tel;
+            contactCall.textContent = `Call ${contact.display}`;
+        }
+        if (contactText) {
+            contactText.href = contact.sms;
+            contactText.textContent = `Text ${contact.display}`;
+        }
+        if (contactEmail) {
+            contactEmail.href = contact.mail;
+            contactEmail.textContent = `Email ${contact.address}`;
+        }
+        [contactCall, contactText, contactEmail].forEach((el) => setShown(el, true));
+        setShown(contactFallback, false);
+    } else {
+        // No proof, so no assembled links. The card must still be a card:
+        // a visitor should never meet a contact card with no way to make
+        // contact. (This is the cost of D3, recorded in the PRD.)
+        [contactCall, contactText, contactEmail].forEach((el) => setShown(el, false));
+        if (contactFallback) {
+            contactFallback.textContent = 'John’s direct line appears here over a secure '
+                + 'connection (https). In the meantime you can reach the developer through the '
+                + 'contact page and he will pass your message straight on.';
+        }
+        setShown(contactFallback, true);
+    }
+
     nudgeOpen = true;
-    track('contact-nudge');
+    track('contact-open', { entry });
     nudgeModal.classList.remove('hidden');
-    const enter = nudgeModal.querySelector('.piece-enter');
-    if (enter) enter.focus();
+    const lead = contact ? contactCall : nudgeModal.querySelector('[data-close]');
+    if (lead) lead.focus();
     return true;
+}
+
+/** Kept under its old name because closePropDialog calls it: the queued
+ *  invitation that follows every fourth prop story. */
+function openNudgeModal() {
+    return openContactCard('nudge');
 }
 
 function closeNudgeModal() {
@@ -737,5 +911,13 @@ if (typeof document !== 'undefined') {
     }
 }
 
-// Exposed for unit tests only; production code uses the named export above.
-export const __test__ = { bufToHex, hasWebGL };
+// Exposed for unit tests only; production code uses the named exports
+// above. The contact plumbing is here because a typo in one of the joined
+// fragments in config would otherwise not surface until a visitor tapped
+// Call and reached the wrong number.
+export const __test__ = {
+    bufToHex, hasWebGL,
+    CONTACT_CARDS, PERSON_KINDS, PROP_CONTENT, SMALL_PROP_KINDS, NUDGE_EVERY,
+    assembleContact,
+    setProof(proof) { _proof = proof; _contact = null; }
+};

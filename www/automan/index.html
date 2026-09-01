@@ -220,8 +220,8 @@
                      A <button> because it opens a card in place, wearing
                      the .dialog-primary reset the same way the dismiss
                      button below does. -->
-                <button id="dialog-cta" class="piece-enter dialog-cta dialog-primary hidden" type="button">Talk to John &rarr;</button>
-                <button class="piece-enter dialog-primary" type="button" data-close>Back to the showroom</button>
+                <button id="dialog-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
+                <button id="dialog-dismiss" class="piece-cancel dialog-primary" type="button" data-close>Back to the showroom</button>
             </div>
         </div>
     </div>
@@ -252,10 +252,17 @@
                 <p id="nudge-message" class="piece-subtitle">John Walker has spent twenty five years on the other side
                     of that desk, and more than 2,000 cars have gone through his hands. If he cannot get you the deal
                     you want, you owe him nothing.</p>
+                <!-- The three actions and the fallback note are shown and
+                     hidden by main.js through style.display, NOT by adding
+                     a class. The shared stylesheet has no generic .hidden
+                     rule: it scopes hiding to named ids and a couple of
+                     specific classes, so `class="hidden"` on an anchor
+                     here would do exactly nothing and the dead links would
+                     stay on screen. -->
                 <a id="contact-call" class="piece-enter" href="">Call John</a>
                 <a id="contact-text" class="piece-cancel" href="">Send a text</a>
                 <a id="contact-email" class="piece-cancel" href="">Email John</a>
-                <p id="contact-fallback" class="piece-subtitle hidden" role="status" aria-live="polite"></p>
+                <p id="contact-fallback" class="piece-subtitle" role="status" aria-live="polite"></p>
                 <p class="piece-subtitle">Baltimore, Maryland, or anywhere by Zoom. 100% satisfaction guarantee.</p>
                 <button class="piece-cancel" data-close>Back to the showroom</button>
             </div>
