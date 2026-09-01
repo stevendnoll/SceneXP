@@ -43,17 +43,19 @@
  *   |  [ brochures ]                                            |
  *   +--------------- front wall (behind the camera) ------------+
  *
- * BUILD STATUS: milestone M6. The conversation is running and a car
- * crosses the lot every so often behind the dealer's shoulder. The
- * showroom's own fixtures (the vending machine, the coffee bar, the
- * waiting chairs, the sales board) are M7, so the sides of the room are
- * still bare. See specs/automan/TASKS.md.
+ * BUILD STATUS: milestone M7. The room is furnished and everything in it
+ * answers a tap. What remains is the interaction layer at M8 (the person
+ * taps opening the contact card, its assembled links, the nudge cadence)
+ * and the accessibility pass at M9. See specs/automan/TASKS.md.
  */
 
 import { getScene } from '../../shared/js/scene-1.0.0.min.js';
 import { initWorld, getWorldGroup, registerOutdoorProp } from '../../shared/js/world-1.0.0.min.js';
 import { AUTOMAN_CONFIG } from './config.min.js';
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
+import {
+    createTallPlant, createSnakePlant, createLoungeChair, createVendingMachine
+} from '../../shared/js/furniture-1.0.0.min.js';
 import { createBackgroundScenery } from '../../shared/js/scenery-1.0.0.min.js';
 import { createWall, createWallSegment } from '../../shared/js/structures-1.0.0.min.js';
 import { createCeilingLights } from '../../shared/js/lighting-1.0.0.min.js';
@@ -144,10 +146,29 @@ const LAYOUT = {
     dealer: { x: -0.45, z: -3.15 },
     chairSeatTop: 0.47,
 
-    // The wall clock. Jenn's hangs on her back wall, but this room's back
-    // wall is glass, so it goes on the west wall ahead and to the left of
-    // the camera, facing +X.
-    clock: { x: -3.70, y: 2.05, z: -1.60, rotY: Math.PI / 2, r: 0.17 },
+    // THE WEST WALL is where the showroom's own fixtures live, and that
+    // is not decoration: it is the only wall the visitor can actually
+    // reach. From the fixed camera the frame covers bearings -158 to -79
+    // degrees, and the pan row adds 35.5 either side, which opens the
+    // south and south-west and leaves the EAST wall unreachable at any
+    // pan. So nothing worth seeing is ever placed east of the desk.
+    //
+    // Running north to south along the wall at x -3.65, facing +X.
+    clock: { x: -3.70, y: 2.05, z: -0.20, rotY: Math.PI / 2, r: 0.17 },
+    keyBoard: { x: -3.66, y: 1.50, z: -3.40 },
+    salesBoard: { x: -3.66, y: 1.60, z: -1.90, w: 1.40, h: 0.90 },
+    coffeeBar: { x: -3.35, z: 0.70 },
+    vending: { x: -3.35, z: 2.00 },
+
+    // The waiting area, on the near side of the room, reachable by a pan
+    // toward the south.
+    waitingChairs: { xs: [-1.85, -1.15, -0.45], z: 1.70 },
+    brochureRack: { x: -1.60, z: 2.85 },
+    wasteBasket: { x: -2.20, z: -1.50 },
+    plants: [
+        { x: -3.15, z: -3.90, kind: 'tall' },
+        { x: -1.00, z: 2.50, kind: 'snake' }
+    ],
 
     // The ceiling fixtures: two runs of two, one over the desk and one
     // over the waiting area. The shared rig gives each a point light, and
@@ -545,6 +566,7 @@ export function initStore() {
     createDealerDesk();       // the sales desk itself
     createDeskItems();        // the deal sheet, the pages, the screen, the die-cast
     createDeskChairs();       // three chairs, aimed the way their sitters are
+    createFixtures();         // the sales board, key board, coffee bar, waiting area
     createCast();             // John, his customer, and the dealer
     createWallClock();        // real local time, on the west wall
     createShowroomLighting(); // the shared rig, reskinned as recessed panels
@@ -1447,6 +1469,321 @@ function addElbow(arm) {
  *  moved chair keeps its sight line without a second number to update. */
 function faceToward(from, to) {
     return Math.atan2(to.x - from.x, to.z - from.z);
+}
+
+// ============================================
+// THE SHOWROOM'S OWN FIXTURES
+// ============================================
+/** The sales board: the month's numbers in marker, where everyone can
+ *  see them. No figures, only names and tallies, because a number here
+ *  would read as a claim about a real dealership. */
+function drawSalesBoard(W, H) {
+    const canvas = makeCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#f7f7f5';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = '#0d5bc4';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(30, 74); ctx.lineTo(W - 30, 74);
+    ctx.stroke();
+    ctx.fillStyle = '#12294a';
+    ctx.font = 'bold 46px system-ui, sans-serif';
+    ctx.fillText('THIS MONTH', 30, 58);
+
+    // Names and tally marks. Marker blue, a little uneven, the way a
+    // board that gets updated every morning actually looks.
+    const rows = ['ALVAREZ', 'BRENNAN', 'OKAFOR', 'PARK', 'WHITFIELD'];
+    ctx.font = '30px system-ui, sans-serif';
+    rows.forEach((name, i) => {
+        const y = 130 + i * 54;
+        ctx.fillStyle = '#39414d';
+        ctx.fillText(name, 34, y);
+        ctx.strokeStyle = '#1d3f7a';
+        ctx.lineWidth = 4;
+        const tallies = 3 + ((i * 5) % 7);
+        for (let k = 0; k < tallies; k++) {
+            const gx = 300 + Math.floor(k / 5) * 62 + (k % 5) * 11;
+            if (k % 5 === 4) {           // the diagonal that closes a five
+                ctx.beginPath();
+                ctx.moveTo(gx - 46, y - 22); ctx.lineTo(gx + 4, y + 2);
+                ctx.stroke();
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(gx, y - 22); ctx.lineTo(gx + 2, y + 2);
+                ctx.stroke();
+            }
+        }
+    });
+
+    ctx.strokeStyle = '#f0a51e';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(30, H - 46); ctx.lineTo(W - 30, H - 46);
+    ctx.stroke();
+    ctx.fillStyle = '#8a6a1e';
+    ctx.font = 'italic 26px system-ui, sans-serif';
+    ctx.fillText('TARGET', 30, H - 14);
+
+    return new THREE.CanvasTexture(canvas);
+}
+
+function createSalesBoard() {
+    const B = LAYOUT.salesBoard;
+    const board = new THREE.Group();
+    board.name = 'salesBoard';
+
+    const frame = new THREE.Mesh(
+        new THREE.BoxGeometry(0.05, B.h + 0.08, B.w + 0.08), brushedMetal
+    );
+    board.add(frame);
+    const face = new THREE.Mesh(
+        new THREE.PlaneGeometry(B.w, B.h),
+        new THREE.MeshStandardMaterial({ map: drawSalesBoard(768, 512), roughness: 0.5 })
+    );
+    face.rotation.y = Math.PI / 2;
+    face.position.x = 0.028;
+    board.add(face);
+    const tray = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.5), brushedMetal);
+    tray.position.set(0.04, -B.h / 2 - 0.05, 0);
+    board.add(tray);
+
+    board.position.set(B.x, B.y, B.z);
+    showroomGroup.add(registerOutdoorProp(board, 'salesboard'));
+}
+
+/** The key board: every key on the lot, tagged and hung. */
+function createKeyBoard() {
+    const K = LAYOUT.keyBoard;
+    const group = new THREE.Group();
+    group.name = 'keyBoard';
+
+    const panel = new THREE.Mesh(
+        new THREE.BoxGeometry(0.04, 0.86, 0.66),
+        new THREE.MeshStandardMaterial({ color: 0x7d6a52, roughness: 0.85 })
+    );
+    group.add(panel);
+
+    const hookMaterial = brushedMetal;
+    const tagColors = [0xf0a51e, 0xdfe2e5, 0x0d5bc4, 0x8c2130];
+    for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 7; col++) {
+            const z = -0.27 + col * 0.09;
+            const y = 0.32 - row * 0.20;
+            const hook = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.012, 0.012), hookMaterial);
+            hook.position.set(0.03, y, z);
+            group.add(hook);
+            // Skip a few, so the board reads as a working one rather than
+            // a full set nobody has touched.
+            if ((row * 7 + col) % 9 === 3) continue;
+            const tag = new THREE.Mesh(
+                new THREE.BoxGeometry(0.006, 0.075, 0.042),
+                new THREE.MeshStandardMaterial({
+                    color: tagColors[(row + col) % tagColors.length], roughness: 0.7
+                })
+            );
+            tag.position.set(0.042, y - 0.05, z);
+            group.add(tag);
+        }
+    }
+
+    group.position.set(K.x, K.y, K.z);
+    showroomGroup.add(registerOutdoorProp(group, 'keyboard_keys'));
+}
+
+/** The coffee bar: free coffee, tiny cups, and a pot that has been on
+ *  since morning. */
+function createCoffeeBar() {
+    const C = LAYOUT.coffeeBar;
+    const bar = new THREE.Group();
+    bar.name = 'coffeeBar';
+
+    const counterTop = 0.92;
+    const cabinet = new THREE.Mesh(
+        new THREE.BoxGeometry(0.58, counterTop - 0.06, 1.30),
+        new THREE.MeshStandardMaterial({ color: 0x5c6069, roughness: 0.6, metalness: 0.1 })
+    );
+    cabinet.position.y = (counterTop - 0.06) / 2;
+    cabinet.castShadow = true;
+    bar.add(cabinet);
+    const top = new THREE.Mesh(
+        new THREE.BoxGeometry(0.62, 0.06, 1.34),
+        new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.35, metalness: 0.2 })
+    );
+    top.position.y = counterTop - 0.03;
+    bar.add(top);
+
+    // The machine, its pot, and a short stack of cups
+    const machine = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.34, 0.30), matteBlack);
+    machine.position.set(0.02, counterTop + 0.17, -0.34);
+    bar.add(machine);
+    const pot = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.075, 0.085, 0.17, 12),
+        new THREE.MeshStandardMaterial({
+            color: 0x3a2318, roughness: 0.25, metalness: 0.1,
+            transparent: true, opacity: 0.85
+        })
+    );
+    pot.position.set(0.02, counterTop + 0.085, -0.06);
+    bar.add(pot);
+    for (let i = 0; i < 5; i++) {
+        const cup = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.035, 0.028, 0.07, 10),
+            new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.8 })
+        );
+        cup.position.set(0.02, counterTop + 0.035 + i * 0.055, 0.22);
+        bar.add(cup);
+    }
+    const tray = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.02, 0.24), brushedMetal);
+    tray.position.set(0.02, counterTop + 0.01, 0.48);
+    bar.add(tray);
+
+    bar.position.set(C.x, 0, C.z);
+    showroomGroup.add(registerOutdoorProp(bar, 'coffeebar'));
+}
+
+/** The waiting chairs: where you sit while somebody takes your keys away
+ *  to appraise your trade. */
+function createWaitingArea() {
+    const W = LAYOUT.waitingChairs;
+    const row = new THREE.Group();
+    row.name = 'waitingChairs';
+    W.xs.forEach((x) => {
+        const chair = createLoungeChair();
+        chair.position.set(x, 0, W.z);
+        chair.rotation.y = Math.PI;      // turned to face the desk
+        row.add(chair);
+    });
+    showroomGroup.add(registerOutdoorProp(row, 'chairs'));
+}
+
+/** The waste basket. Where the first offer goes, then the second. */
+function createWasteBasket() {
+    const B = LAYOUT.wasteBasket;
+    const basket = new THREE.Group();
+    basket.name = 'wasteBasket';
+    const bin = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.16, 0.13, 0.34, 14, 1, true),
+        new THREE.MeshStandardMaterial({
+            color: 0x4a4f57, roughness: 0.6, metalness: 0.4, side: THREE.DoubleSide
+        })
+    );
+    bin.position.y = 0.17;
+    basket.add(bin);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.02, 14), matteBlack);
+    base.position.y = 0.01;
+    basket.add(base);
+    // One crumpled sheet, just showing over the rim
+    const ball = new THREE.Mesh(
+        new THREE.SphereGeometry(0.055, 7, 5),
+        new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.95 })
+    );
+    ball.position.set(0.03, 0.31, -0.02);
+    ball.scale.set(1, 0.8, 0.95);
+    basket.add(ball);
+
+    basket.position.set(B.x, 0, B.z);
+    showroomGroup.add(registerOutdoorProp(basket, 'basket'));
+}
+
+/** The brochure rack: glossy photographs and generous adjectives. */
+function createBrochureRack() {
+    const R = LAYOUT.brochureRack;
+    const rack = new THREE.Group();
+    rack.name = 'brochureRack';
+
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.30, 0.05), brushedMetal);
+    post.position.y = 0.65;
+    rack.add(post);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.03, 0.30), matteBlack);
+    foot.position.y = 0.015;
+    rack.add(foot);
+
+    const covers = [0x1d3c66, 0x8c2130, 0x2f6f4a, 0xdfe2e5];
+    for (let tier = 0; tier < 3; tier++) {
+        const shelfY = 0.42 + tier * 0.34;
+        const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.02, 0.10), brushedMetal);
+        shelf.position.set(0, shelfY, 0.05);
+        rack.add(shelf);
+        for (let i = 0; i < 2; i++) {
+            const leaflet = new THREE.Mesh(
+                new THREE.BoxGeometry(0.20, 0.26, 0.012),
+                new THREE.MeshStandardMaterial({
+                    color: covers[(tier * 2 + i) % covers.length], roughness: 0.4, metalness: 0.05
+                })
+            );
+            leaflet.position.set(-0.12 + i * 0.24, shelfY + 0.12, 0.075);
+            leaflet.rotation.x = -0.16;
+            rack.add(leaflet);
+        }
+    }
+
+    rack.position.set(R.x, 0, R.z);
+    rack.rotation.y = Math.PI;
+    showroomGroup.add(registerOutdoorProp(rack, 'brochures'));
+}
+
+/** The product menu, standing on the desk: warranty, tire and wheel, GAP,
+ *  presented as one page of yes or no. */
+function createProductMenu() {
+    const D = LAYOUT.desk;
+    const card = new THREE.Group();
+    card.name = 'productMenu';
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xf4f1e9, roughness: 0.85, side: THREE.DoubleSide
+    });
+    [-1, 1].forEach((side) => {
+        const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.13), material);
+        leaf.position.set(0, 0.062, side * 0.022);
+        leaf.rotation.x = side * 0.28;
+        card.add(leaf);
+    });
+    const band = new THREE.Mesh(
+        new THREE.BoxGeometry(0.17, 0.022, 0.008),
+        new THREE.MeshStandardMaterial({ color: PALETTE.navy, roughness: 0.6 })
+    );
+    band.position.set(0, 0.115, 0.026);
+    card.add(band);
+    card.position.set(D.x + 0.10, D.topY, D.z - 0.30);
+    card.rotation.y = -0.5;
+    showroomGroup.add(registerOutdoorProp(card, 'warrantycard'));
+}
+
+/** The green residents, from the shared furniture part rather than hand
+ *  built: one tall plant softening the corner by the glass, and a snake
+ *  plant by the waiting chairs. */
+function createShowroomPlants() {
+    LAYOUT.plants.forEach((p, i) => {
+        const plant = p.kind === 'tall' ? createTallPlant() : createSnakePlant();
+        plant.position.set(p.x, 0, p.z);
+        plant.rotation.y = i * 1.1;
+        showroomGroup.add(registerOutdoorProp(plant, 'plant'));
+    });
+}
+
+/** The vending machine, the unofficial clock of every dealership. Shared
+ *  furniture part, turned to face the room. */
+function createVending() {
+    const V = LAYOUT.vending;
+    const machine = createVendingMachine();
+    machine.position.set(V.x, 0, V.z);
+    machine.rotation.y = Math.PI / 2;
+    showroomGroup.add(registerOutdoorProp(machine, 'vending'));
+}
+
+/** Everything the showroom itself carries, as opposed to the desk. */
+function createFixtures() {
+    createSalesBoard();
+    createKeyBoard();
+    createCoffeeBar();
+    createWaitingArea();
+    createWasteBasket();
+    createBrochureRack();
+    createProductMenu();
+    createShowroomPlants();
+    createVending();
 }
 
 // ============================================

@@ -21,9 +21,11 @@
  * page is his web presence. So the second floating button and every card
  * CTA lead to the contact card rather than off the site.
  *
- * BUILD STATUS: milestone M0. The prop table, the person taps, the
- * contact card's assembled links, and the rewired contact button all
- * arrive at M8. See specs/automan/TASKS.md.
+ * BUILD STATUS: milestone M7. Every prop in the showroom answers a tap
+ * with its own story. Still to come at M8: the person taps opening the
+ * contact card rather than a story, the card's assembled call, text and
+ * email links, and the rewired contact button. See
+ * specs/automan/TASKS.md.
  *
  * Future contributors: this file (with www/jamar/js/main.js and
  * www/gavin/js/main.js) is the template for "living diorama"
@@ -387,9 +389,6 @@ function checkSceneTap(clientX, clientY) {
 // semicolons. Two lines apiece so a second click gives something new.
 // Every prop points back at something John actually does for a buyer.
 //
-// M0: only the wall clock is registered so far, so this table holds only
-// the clock. The full fifteen-prop table is written at task T8.1 from the
-// copy in specs/automan/PRD.md, once M7 has registered the fixtures.
 // tests/automan-init.test.mjs asserts that this table and the registered
 // prop kinds match each other exactly, so a prop with no story and a
 // story with no prop both fail the build.
@@ -423,6 +422,104 @@ const PROP_CONTENT = {
         lines: [
             'Look closely, it keeps your real local time. It is also the number nobody tells you about at a dealership: hours spent.',
             'The days of spending all day at the dealership are over. That is more or less the whole promise.'
+        ]
+    },
+    papers: {
+        title: 'The Deal Sheet',
+        lines: [
+            'Four boxes on one page: price, trade, down payment, monthly. John reads it back to front, because the box they want you looking at is almost never the one that matters.',
+            'Every number on here is negotiable, and most people only ever argue with one of them.'
+        ]
+    },
+    desk: {
+        title: 'The Desk',
+        lines: [
+            'This is where it all happens, and where most buyers are at their least prepared. John comes to it having already done the homework.',
+            'Nothing gets signed at this desk that John has not read twice.'
+        ]
+    },
+    window: {
+        title: 'The Lot',
+        lines: [
+            'Rows and rows of them, all wearing a sticker. The right one for you is a different question from the one they want to sell you today.',
+            'Take a minute and watch. There is no hurry in here, and there does not have to be one out there either.'
+        ]
+    },
+    computer: {
+        title: 'The Screen',
+        lines: [
+            'The dealer\'s monitor, turned away from you. Everything on it is knowable, and most of it is public.',
+            'Rates, invoice, incentives, book value on your trade. John looks all of it up before you ever walk in.'
+        ]
+    },
+    modelcar: {
+        title: 'The Model Car',
+        lines: [
+            'A little die cast on the corner of the desk. Somebody\'s favourite thing in this room.',
+            'Buying a car is supposed to be fun. It usually stops being fun somewhere around the finance office.'
+        ]
+    },
+    warrantycard: {
+        title: 'The Menu',
+        lines: [
+            'Extended warranty, tire and wheel, GAP, paint protection. Presented as one page of yes or no.',
+            'Some of it is worth having and some of it is not, and it depends on you. John will tell you which is which.'
+        ]
+    },
+    salesboard: {
+        title: 'The Sales Board',
+        lines: [
+            'The month\'s numbers, in marker, where everybody can see them. Timing matters more than most buyers realise.',
+            'Knowing what a dealership needs at the end of a month is worth real money to the person sitting on the other side.'
+        ]
+    },
+    keyboard_keys: {
+        title: 'The Key Board',
+        lines: [
+            'Every key on the lot, tagged and hung. Somewhere on there is the one you drive home.',
+            'The trick is making sure the price on that tag is the price you should be paying.'
+        ]
+    },
+    coffeebar: {
+        title: 'The Coffee Bar',
+        lines: [
+            'Free coffee, tiny cups, a pot that has been on since morning. Hospitality is cheap and the finance office is not.',
+            'John\'s consultation is free too, and that one actually saves you money.'
+        ]
+    },
+    vending: {
+        title: 'The Vending Machine',
+        lines: [
+            'The unofficial clock of every dealership. If you have been here long enough to visit it twice, the process has gone wrong.',
+            'Buying a car should not take all day. Walk in prepared and you can be home before the coffee wears off.'
+        ]
+    },
+    chairs: {
+        title: 'The Waiting Chairs',
+        lines: [
+            'Where you sit while somebody takes your keys away to appraise your trade. The wait is a tactic as often as it is a queue.',
+            'Know what your trade is worth before you hand over the keys, and the wait stops working.'
+        ]
+    },
+    basket: {
+        title: 'The Waste Basket',
+        lines: [
+            'Where the first offer goes. Then the second one. This is a normal part of the process and not a sign anything is wrong.',
+            'John has seen where the real number lives. He is happy to sit through as many of these as it takes.'
+        ]
+    },
+    brochures: {
+        title: 'The Brochure Rack',
+        lines: [
+            'Glossy photographs, generous adjectives, and not one useful number.',
+            'The useful numbers are the trade value, the out the door price, and the rate. John brings those.'
+        ]
+    },
+    plant: {
+        title: 'The Showroom Plant',
+        lines: [
+            'Every dealership has one, and it is doing better than most of them. Slightly plastic, entirely unbothered.',
+            'It has watched a thousand deals go through. About half of them could have gone better.'
         ]
     }
 };
