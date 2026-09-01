@@ -121,6 +121,24 @@
             place: 'The water\'s edge',
             url: 'highwater/',
             tags: ['high', 'water', 'ocean', 'sea', 'beach', 'shore', 'storm', 'surf', 'waves', 'swell', 'wave', 'tsunami', 'lightning', 'thunderstorm', 'weather', 'clouds', 'tide', 'surge', 'flood', 'sand', 'coast', 'passive', 'ambient', 'silent']
+        },
+        {
+            slug: 'garden',
+            title: 'Fractal Garden',
+            // A THIRD ENTRY WHERE THIS FIELD IS NOT AN HONOREE, after
+            // earthdefense and highwater above. This one belongs to whoever is
+            // looking at it, which is the honest thing to say and also the
+            // invitation. Still the card's eyebrow line and still part of the
+            // search haystack.
+            honoree: 'A garden you plant and tend yourself',
+            blurb: 'Plant a garden of fractal trees, then watch it live through the years. Choose from seventeen species, each one grown from its own seed so no two are alike, then tend them through spring blossom, summer fruit, autumn color and winter snow. Every tree you plant is still standing when you come back.',
+            place: 'A walled garden plot',
+            url: 'garden/',
+            // MATCHING IS A PLAIN SUBSTRING SEARCH over this haystack, so the
+            // PLURAL is the useful form to store: 'trees' answers both "tree"
+            // and "trees", where 'tree' answers only the first. Same reason
+            // 'seasons' is here rather than 'season'.
+            tags: ['garden', 'trees', 'fractal', 'seasons', 'snow', 'plant', 'planting', 'grow', 'growth', 'tend', 'water', 'nature', 'spring', 'summer', 'autumn', 'winter', 'blossom', 'fruit', 'orchard', 'lake', 'wind', 'rain', 'weather', 'stars', 'calm', 'quiet', 'relaxing', 'species', 'oak', 'maple', 'cherry', 'apple', 'birch', 'redwood', 'pine', 'spruce', 'willow', 'branches', 'leaves', 'canopy']
         }
     ];
 

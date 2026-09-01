@@ -1421,6 +1421,200 @@ describe('the first visit', () => {
     });
 });
 
+// ---- The copy tells the truth about the species list ------------------------
+//
+// TWO SEPARATE LIES SHIPPED IN THIS COPY AND BOTH WERE FOUND BY READING RATHER
+// THAN BY FAILING. The page said "twelve species" from M2 until 2026-08-31,
+// through M11 adding four and M16 adding a seventeenth, and it offered to let a
+// visitor "shape your own with a handful of sliders" for a fortnight after
+// M16-2 deleted the sliders.
+//
+// **A COUNT IN PROSE IS A CACHED COPY OF SOMETHING THAT MOVES.** M10-1 already
+// wrote this rule down for the planting-age toast and chose to name no number.
+// The species count is worth naming, because "seventeen species" sells the
+// scene in a way "several" does not, so it is named and then pinned here.
+
+describe('the species copy', () => {
+    const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six',
+        'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen',
+        'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+        'twenty'];
+    // Every file that makes a claim to a visitor or a crawler about the list.
+    const FILES = [
+        ['www', 'garden', 'index.html'],
+        ['www', 'index.html'],
+        ['www', 'js', 'directory.js'],
+        ['www', 'llms.txt']
+    ];
+    const read = (p) => readFileSync(join(process.cwd(), ...p), 'utf8');
+
+    test('every count in the copy is the real number of species', async () => {
+        const { SPECIES } = await import('../www/garden/js/species.js');
+        const right = NUMBER_WORDS[SPECIES.length];
+        expect(right).toBeTruthy();
+        for (const path of FILES) {
+            const text = read(path);
+            // Any number word standing in front of "species", "trees" or
+            // "tree", which is every shape this claim has taken so far.
+            const claims = [...text.matchAll(
+                new RegExp(`(${NUMBER_WORDS.join('|')}) (?:tree species|species|trees|tree)\\b`, 'gi'))]
+                .map((m) => m[1].toLowerCase());
+            for (const word of claims) {
+                expect(`${path.join('/')}: ${word}`).toBe(`${path.join('/')}: ${right}`);
+            }
+        }
+    });
+
+    test('the copy has at least one such claim, so the sweep above is not empty', () => {
+        // The failure mode of the test above is finding nothing and passing.
+        const claims = FILES
+            .map((p) => read(p).match(/seventeen (?:tree species|species|trees)/gi) || [])
+            .flat();
+        expect(claims.length).toBeGreaterThan(3);
+    });
+
+    test('every uniqueness claim in a species note is still true', async () => {
+        // THE MODAL NOTE IS COPY THAT MAKES CLAIMS ABOUT DATA, which is the
+        // worst combination this repo has: `refreshSelectionText` puts
+        // `species.note` on screen the moment a visitor picks a tree, and
+        // nothing connects the sentence to the schedule it describes. Three of
+        // these were wrong when M6-1 read them. Each assertion below is the
+        // fact one surviving sentence rests on.
+        const { SPECIES, speciesById } = await import('../www/garden/js/species.js');
+        const { phenologyAt } = await import('../www/garden/js/clock.js');
+        const blooming = SPECIES.filter((s) => s.schedule && s.schedule.bloomFull != null);
+        const fruiting = SPECIES.filter((s) => s.fruit);
+        const inWrap = (h, a, b) => (a <= b ? h >= a && h <= b : h >= a || h <= b);
+
+        // Dogwood: "the only one here that blossoms without going on to fruit."
+        // It USED to say "the only tree here that blossoms", which stopped
+        // being true the moment M11 gave five fruit trees a bloom schedule.
+        expect(blooming.filter((s) => !s.fruit).map((s) => s.id)).toEqual(['flowering-dogwood']);
+
+        // Lemon: "still holding fruit at the spring sunrise, which nothing
+        // else here manages." Sunrise is hour 6. The orange comes close and
+        // lets go at 2.5, which is why this one is worth pinning.
+        const atSunrise = fruiting
+            .filter((s) => inWrap(6, s.schedule.ripenEnd, s.schedule.holdEnd))
+            .map((s) => s.id);
+        expect(atSunrise).toEqual(['lemon']);
+
+        // Orange: "the last of the orchard to ripen, and it holds its fruit
+        // deep into the winter." Both halves, because the note now leans on
+        // both. It previously claimed nothing else fruited at midwinter, and
+        // the lemon does.
+        const latest = fruiting.reduce((a, b) => (a.schedule.ripenEnd > b.schedule.ripenEnd ? a : b));
+        expect(latest.id).toBe('orange');
+        expect(inWrap(0, latest.schedule.ripenEnd, latest.schedule.holdEnd)).toBe(true);
+
+        // Cherry: "flowers on bare branches before anything has leaves." Not a
+        // uniqueness claim, but a claim about a NUMBER that lives elsewhere:
+        // the canopy is 9 percent leafed at its bloom peak, and it is the
+        // barest of any bloomer. The pear's deleted "first of the orchard into
+        // flower" was the same shape and was simply wrong, the cherry being
+        // a full hour ahead of it.
+        const leafAtBloom = (s) => phenologyAt(s.schedule.bloomFull, !!s.evergreen).leaf;
+        const barest = blooming.reduce((a, b) => (leafAtBloom(a) < leafAtBloom(b) ? a : b));
+        expect(barest.id).toBe('cherry');
+        expect(leafAtBloom(speciesById('cherry'))).toBeLessThan(0.15);
+        const firstIntoFlower = fruiting
+            .reduce((a, b) => (a.schedule.bloomStart < b.schedule.bloomStart ? a : b));
+        expect(firstIntoFlower.id).toBe('cherry');
+    });
+
+    test('NOTHING OFFERS THE SLIDERS, because M16-2 deleted them', () => {
+        // The data path survives (`resolveSpecies` still takes a custom object,
+        // so old saved gardens come back), which is exactly why this is easy to
+        // forget: nothing breaks, the copy just describes a control that is not
+        // there. Comments are allowed to say "slider", since the record of WHY
+        // the disclosure went lives in one, so this reads the copy only.
+        const visible = [
+            ...[...read(FILES[0]).matchAll(/content="([^"]*)"/g)].map((m) => m[1]),
+            ...[...read(FILES[0]).matchAll(/<p>([\s\S]*?)<\/p>/g)].map((m) => m[1]),
+            ...[...read(FILES[1]).matchAll(/<p[^>]*>([\s\S]*?)<\/p>/g)].map((m) => m[1]),
+            ...[...read(FILES[2]).matchAll(/blurb: '([^']*)'/g)].map((m) => m[1]),
+            read(FILES[3])
+        ].join(' ');
+        expect(visible).not.toMatch(/slider/i);
+        expect(visible).not.toMatch(/shape your own/i);
+        // And the sweep looked at something real.
+        expect(visible).toMatch(/fractal trees/i);
+    });
+});
+
+// ---- House style, which is M6-1's whole "done when" -------------------------
+//
+// "A read-through finds none of either" is a fine acceptance test for a human
+// and no use at all six months later. These two are the standing version.
+//
+// THE TWO CHARACTERS NEED DIFFERENT TREATMENT, and getting that wrong is why
+// this is not one sweep. An em-dash has NO legitimate home anywhere in this
+// scene's JavaScript, not in a selector, an id, a GLSL literal or a class name,
+// so it is checked over every string literal in every module with no filtering
+// and no judgement calls. A semicolon is a different animal: it is syntax, it
+// is CSS, and it ends every line of the shaders, so it can only be checked over
+// copy that has been positively identified as copy.
+
+describe('house style (M6-1)', () => {
+    const GARDEN_JS = ['beds', 'clock', 'config', 'forest', 'garden', 'main',
+        'precip', 'sky', 'species', 'terrain', 'tree', 'ui', 'view', 'vista',
+        'weather', 'wildlife'];
+
+    test('NO EM-DASH ANYWHERE, in copy or out of it', () => {
+        // Zero tolerance is available here precisely because nothing else in a
+        // JS file has any reason to hold one, which makes this the one house
+        // rule that can be enforced without deciding what counts as prose.
+        for (const name of GARDEN_JS) {
+            const src = readFileSync(
+                join(process.cwd(), 'www', 'garden', 'js', `${name}.js`), 'utf8');
+            expect(`${name}.js: ${src.includes('—')}`).toBe(`${name}.js: false`);
+        }
+        const html = readFileSync(
+            join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8');
+        expect(html).not.toContain('—');
+    });
+
+    test('no semicolon in anything a visitor reads', async () => {
+        // Imported one at a time rather than through Promise.all: these modules
+        // share `config.min.js`, and racing four dynamic imports at it under
+        // the ESM loader fails with "not in cache".
+        const { SPECIES } = await import('../www/garden/js/species.js');
+        const { HEALTH_WORDS } = await import('../www/garden/js/garden.js');
+        const ui = await import('../www/garden/js/ui.js');
+        const { fruitWords } = await import('../www/garden/js/clock.js');
+        const copy = [
+            ...SPECIES.flatMap((s) => [s.name, s.note, s.size, s.barkName]),
+            ...Object.values(HEALTH_WORDS),
+            ...[0, 1, 4, 17, 49].flatMap((n) => [
+                ui.waterAllText(n).label, ui.waterAllText(n).aria, ui.resetPrompt(n)]),
+            ...['none', 'bloom', 'set', 'swell', 'ripe', 'hold', 'drop']
+                .map((stage) => fruitWords(stage)),
+            ...[true, false, null].map((flight) => ui.lakeNote(flight))
+        ].filter((s) => typeof s === 'string');
+        // The sweep has to have swept something. A filter that quietly returns
+        // nothing is the failure mode of every test in this file that reads
+        // from somewhere else.
+        expect(copy.length).toBeGreaterThan(80);
+        for (const line of copy) {
+            expect(`${JSON.stringify(line)} clean`).toBe(`${JSON.stringify(line)} clean`.replace(/;/g, ''));
+        }
+
+        // And the page's own visible text, with markup and entities removed so
+        // the `&times;` on the close buttons is not read as a semicolon.
+        const html = readFileSync(
+            join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8')
+            .replace(/<!--[\s\S]*?-->/g, '')
+            .replace(/<(script|style)[\s\S]*?<\/\1>/g, '');
+        const visible = [
+            ...[...html.matchAll(/(?:aria-label|title|placeholder|alt)="([^"]*)"/g)].map((m) => m[1]),
+            ...[...html.matchAll(/<meta name="description" content="([^"]*)"/g)].map((m) => m[1]),
+            ...html.replace(/<[^>]+>/g, '\n').split('\n')
+        ].map((s) => s.replace(/&[a-z]+;/g, ' ').trim()).filter((s) => /[a-z]/.test(s));
+        expect(visible.length).toBeGreaterThan(40);
+        for (const line of visible) expect(line).not.toContain(';');
+    });
+});
+
 // ---- The social card (M6-2, M6-3) ------------------------------------------
 //
 // The same block highwater carries, for the same reason: a share preview is
@@ -1438,6 +1632,24 @@ describe('the social card', () => {
             new RegExp(`<meta ${attr}="${key}" content="([^"]*)"`));
         return m && m[1];
     };
+
+    test('NO ROBOTS TAG AT ALL, which is what M6-4 asks for', () => {
+        // The M0-1 `noindex, nofollow` was a scaffold, and its own comment
+        // predicted the failure: "if this line survives to launch, the page
+        // will be invisible to search and nobody will notice for weeks."
+        // Nothing replaces it. The site default is indexable, robots.txt says
+        // Allow: /, and no other experience carries a robots tag.
+        // Comments stripped, so a future note explaining that the tag is gone
+        // on purpose does not fail the test that keeps it gone.
+        const markup = html.replace(/<!--[\s\S]*?-->/g, '');
+        expect(markup).not.toMatch(/<meta\s+name="robots"/i);
+        expect(markup).not.toMatch(/noindex/i);
+        // The sitemap and llms.txt invite crawlers here, so this is the tag
+        // that decides whether that invitation means anything.
+        const sitemap = readFileSync(
+            join(process.cwd(), 'www', 'sitemap.xml'), 'utf8');
+        expect(sitemap).toContain('https://www.scenexp.com/garden/');
+    });
 
     test('EXACTLY ONE og:image, because Apple renders every one it finds', () => {
         // Two og:image tags put two identical cards in a friend's message
