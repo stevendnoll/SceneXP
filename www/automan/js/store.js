@@ -43,11 +43,11 @@
  *   |  [ brochures ]                                            |
  *   +--------------- front wall (behind the camera) ------------+
  *
- * BUILD STATUS: milestone M5. The room, the lot, the desk and the cast
- * are real, and the conversation is running: John makes the point and
- * checks his customer, she nods along, the dealer listens and reads. The
- * lot is still static, because the passing car is M6, and the fixtures
- * are M7. See specs/automan/TASKS.md.
+ * BUILD STATUS: milestone M6. The conversation is running and a car
+ * crosses the lot every so often behind the dealer's shoulder. The
+ * showroom's own fixtures (the vending machine, the coffee bar, the
+ * waiting chairs, the sales board) are M7, so the sides of the room are
+ * still bare. See specs/automan/TASKS.md.
  */
 
 import { getScene } from '../../shared/js/scene-1.0.0.min.js';
@@ -811,10 +811,15 @@ function createParkedCar(tier, bodyMaterial) {
     const m = carMaterials();
     const car = new THREE.Group();
 
+    // Painted panels are collected so a car can be recoloured later
+    // without guessing which meshes carry the body material.
+    car.userData.bodyMeshes = [];
+
     if (tier === 3) {
         const slab = new THREE.Mesh(g.slab, bodyMaterial);
         slab.position.y = 0.52;
         car.add(slab);
+        car.userData.bodyMeshes.push(slab);
         const band = new THREE.Mesh(g.slabGlass, m.glass);
         band.position.set(0, 0.90, -0.20);
         car.add(band);
@@ -824,10 +829,12 @@ function createParkedCar(tier, bodyMaterial) {
     const body = new THREE.Mesh(g.body, bodyMaterial);
     body.position.y = 0.58;
     car.add(body);
+    car.userData.bodyMeshes.push(body);
 
     const cabin = new THREE.Mesh(g.cabin, bodyMaterial);
     cabin.position.set(0, 1.10, -0.20);
     car.add(cabin);
+    car.userData.bodyMeshes.push(cabin);
 
     const band = new THREE.Mesh(g.glassBand, m.glass);
     band.position.set(0, 1.14, -0.20);
@@ -840,12 +847,16 @@ function createParkedCar(tier, bodyMaterial) {
         return car;
     }
 
+    // The wheels are collected onto the group, because the car that
+    // crosses the lot needs to turn them and a parked one does not.
+    car.userData.wheels = [];
     [-1, 1].forEach((sx) => {
         [-1, 1].forEach((sz) => {
             const wheel = new THREE.Mesh(g.wheel, matteBlack);
             wheel.rotation.z = Math.PI / 2;
             wheel.position.set(sx * 0.86, 0.33, sz * 1.42);
             car.add(wheel);
+            car.userData.wheels.push(wheel);
         });
         const head = new THREE.Mesh(g.lamp, m.lampFront);
         head.position.set(sx * 0.56, 0.70, 2.21);
@@ -856,6 +867,98 @@ function createParkedCar(tier, bodyMaterial) {
     });
 
     return car;
+}
+
+// ---- The car that crosses the lot ---------------------------------------
+// The same little state machine the sunnyvalejenn fence birds run, which
+// is where the shape came from: wait, cross, wait again, with the group
+// hidden the whole time it is waiting so an off-screen car costs nothing.
+//
+// It crosses the drive lane between the glass and the first parked row,
+// so it passes behind the dealer's shoulder. The lane is only about 7.4m
+// wide in frame, so a crawl rather than a drive: at 2.8 m/s (roughly 6
+// mph, which is what anyone actually does on a dealership lot) it stays
+// in view for about 2.6 seconds, long enough to notice and too short to
+// become the subject.
+const PASS_SPEED = 2.8;
+const PASS_FROM = -17.0;
+const PASS_TO = 6.0;
+const PASS_GAP = [9, 22];       // seconds of empty lane between crossings
+
+let passingCar = null;
+
+function createPassingCar(lot) {
+    const L = LAYOUT.lot;
+    const materials = carMaterials();
+
+    if (_reducedMotion.matches) {
+        // Reduced motion: no crossing at all. One car simply sits in the
+        // lane, in frame, so the composition still reads as a working lot.
+        const parked = createParkedCar(1, materials.bodies[3]);
+        parked.position.set(-4.5, L.groundY, L.driveLaneZ);
+        parked.rotation.y = Math.PI / 2;
+        lot.add(parked);
+        return;
+    }
+
+    const car = createParkedCar(1, materials.bodies[0]);
+    car.visible = false;
+    car.position.set(PASS_FROM, L.groundY, L.driveLaneZ);
+    lot.add(car);
+    passingCar = {
+        group: car,
+        wheels: car.userData.wheels || [],
+        bodyMeshes: car.userData.bodyMeshes || [],
+        state: 'waiting',
+        timer: 4 + Math.random() * 6,     // the first one comes along early
+        dir: 1,
+        pass: 0
+    };
+}
+
+/** Advance the crossing. Direction alternates and the colour changes on
+ *  every pass, so the same car never appears to drive round in circles. */
+function updatePassingCar(deltaTime) {
+    const p = passingCar;
+    if (!p) return;
+
+    if (p.state === 'waiting') {
+        p.timer -= deltaTime;
+        if (p.timer > 0) return;
+        const materials = carMaterials();
+        p.dir = p.pass % 2 === 0 ? 1 : -1;
+        p.pass += 1;
+        // Recolour by swapping the shared body material, which costs
+        // nothing: the geometry and every material already exist.
+        const body = materials.bodies[p.pass % materials.bodies.length];
+        p.bodyMeshes.forEach((mesh) => { mesh.material = body; });
+        p.group.position.x = p.dir > 0 ? PASS_FROM : PASS_TO;
+        p.group.rotation.y = p.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+        p.group.visible = true;
+        p.state = 'driving';
+        return;
+    }
+
+    // Driving: roll along the lane, and turn the wheels at the rate the
+    // ground speed actually implies rather than a rate that looks about
+    // right. The wheel radius is 0.33.
+    //
+    // The spin goes on rotation.X, which looks wrong and is not. The
+    // wheel is a cylinder whose axis starts along local Y, and
+    // rotation.z = PI/2 lays that axis down onto X. Under three.js Euler
+    // XYZ the z term is applied to the vector first, so the axle ends up
+    // along the parent's X and rotation.x is the spin. Putting it on
+    // rotation.y would swivel the wheel like a turntable instead.
+    p.group.position.x += p.dir * PASS_SPEED * deltaTime;
+    const spin = (PASS_SPEED / 0.33) * deltaTime * p.dir;
+    p.wheels.forEach((wheel) => { wheel.rotation.x -= spin; });
+
+    const done = p.dir > 0 ? p.group.position.x >= PASS_TO : p.group.position.x <= PASS_FROM;
+    if (done) {
+        p.state = 'waiting';
+        p.group.visible = false;
+        p.timer = PASS_GAP[0] + Math.random() * (PASS_GAP[1] - PASS_GAP[0]);
+    }
 }
 
 /** The whole lot: the apron and its kerb, the asphalt, the painted stall
@@ -1016,6 +1119,9 @@ function createLot() {
         block.name = `backdropBlock_${i}`;
         lot.add(block);
     });
+
+    // The car that crosses the lane between the glass and the first row.
+    createPassingCar(lot);
 
     showroomGroup.add(lot);
 }
@@ -1956,6 +2062,9 @@ export function updateShowroom(deltaTime) {
         updateCustomer(cast.customer, deltaTime);
         updateDealer(cast.dealer, deltaTime);
     }
+
+    // A car crosses the lot every so often, behind the dealer's shoulder
+    updatePassingCar(deltaTime);
 }
 
 /** The root showroom group (exposed for tests and future passes). */
@@ -1971,6 +2080,8 @@ export const __test__ = {
     HIP_Y, NECK_Y, TAP_LIFT, TAP_EVERY, TAP_BURST,
     seatHeightY, faceToward, normalizeAngle, approach,
     johnTargets, customerTargets, dealerTargets,
+    PASS_SPEED, PASS_FROM, PASS_TO, PASS_GAP,
+    getPassingCar: () => passingCar,
     poseSeated, addElbow, addWaist, addNeck, findHairGroup,
     createDeskChair, createSucculent,
     getCast: () => cast
