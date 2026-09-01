@@ -710,8 +710,8 @@ export function initForest(scene, config = GARDEN_CONFIG, options = {}) {
  * A handful of real silhouettes in front of it means the flat ones are never
  * the nearest thing, which is the whole trick.
  *
- * A few distinct skeletons, each instanced, so sixteen trees cost five draw
- * calls rather than sixteen.
+ * A few distinct skeletons, each instanced, so the whole tier costs one draw
+ * call per skeleton rather than one per tree.
  */
 function buildNearTreeline(scene, config, options) {
     const N = config.world.nearTreeline;

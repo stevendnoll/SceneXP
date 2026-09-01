@@ -1048,6 +1048,35 @@ body {
     .pan-controls {
         gap: 10px;
     }
+
+    /* ---- AND PLANT SHARES ITS ROW WITH THE TOP-RIGHT STACK -------------
+     *
+     * The one collision in the frame, and it is arithmetic rather than taste.
+     * Help is the leftmost of the three menu buttons at `right: 144px` and is
+     * 50px wide, so the stack reaches 194px in from the right edge whatever
+     * the screen is. Plant is 110px at the full size and starts 20px in from
+     * the left, so the two meet when the viewport falls below 328px:
+     *
+     *     viewport   plant ends   help starts   gap
+     *      391 px       130           197       +67   the QA frame, fine
+     *      360 px       130           166       +36   snug
+     *      320 px       130           126        -4   OVERLAPPING
+     *
+     * WATER ALL IS NOT AT RISK AND NEEDS NO ARITHMETIC. It sits at `top: 74px`
+     * and the menu buttons end at 70, so it is below the row entirely. It is
+     * shrunk here anyway, because the two are a pair and a pair that changes
+     * size one at a time stops being one.
+     *
+     * Shrinking rather than shortening the label: "Plant" alone would be
+     * narrower at every width, but it would make the button worse on the
+     * ninety-nine percent of screens that never had a problem. The 44px touch
+     * target is untouched, which is the number that may not move.
+     */
+    .tend-plant,
+    .water-all {
+        padding: 0.5rem 0.72rem;
+        font-size: 0.78rem;
+    }
 }
 
 /* ---- AND NOTHING ELSE IS OFFERED WHILE THE WELCOME CARD IS UP -------------

@@ -793,9 +793,10 @@ export const GARDEN_CONFIG = deepFreeze({
             // "cannot be read at all". Urgency is carried by the colour now.
             levelQuiet: 0.82,
             // QUIET WHEN FULL. Addendum B took everything out of this frame
-            // that competed with the swaying, and this milestone puts sixteen
-            // small readouts back in. A level stays nearly transparent until
-            // the tank is down to here, so a healthy garden looks like a garden
+            // that competed with the swaying, and this milestone puts a small
+            // readout back under every tree. A level stays nearly
+            // transparent until the tank is down to here, so a healthy
+            // garden looks like a garden
             // and only a thirsty one looks like it wants something.
             noticeAbove: 0.55,
 
@@ -877,8 +878,8 @@ export const GARDEN_CONFIG = deepFreeze({
             levelRingColor: 0xe6f6ff,
             dropRingSeconds: 2.8,
             // How much of the cycle the ring is travelling. The rest is the
-            // pause, and the pause is what keeps sixteen of these from reading
-            // as a second weather system.
+            // pause, and the pause is what keeps a plot full of these from
+            // reading as a second weather system.
             dropRingSweep: 0.42,
             dropRingWidth: 0.075,
             dropRingOpacity: 0.5,
@@ -973,18 +974,23 @@ export const GARDEN_CONFIG = deepFreeze({
 
             // ---- Sized against the scene budget, not by eye ------------------
             // These two are a share of the LEAF CARD count, and the first pass
-            // at 0.55 and 0.12 cost 43,776 triangles for sixteen cherries in
-            // blossom against a scene already measured near 371,600 of its
-            // 400,000. That is not a tuning question, it is the wood's entire
-            // remaining headroom spent on flowers.
+            // at 0.55 and 0.12 cost 2,736 triangles PER CHERRY IN BLOSSOM,
+            // which on the plot of the day was the wood's entire remaining
+            // headroom spent on flowers. That is not a tuning question.
+            //
+            // PER TREE RATHER THAN PER PLOT, and that is the whole reason this
+            // reads the way it does. It was written as a plot total back when
+            // the plot held sixteen; the plot holds 49 now, and a total
+            // measured against the old one would have gone quietly and badly
+            // stale. The whole-plot arithmetic lives with the budget at the
+            // top of this file, where it is kept up to date.
             //
             // A BLOSSOM CARD IS A CLUSTER, WHICH IS WHAT MAKES THE SMALLER
             // NUMBER FREE. The mask draws five flowers per card, exactly as a
             // leaf card draws nine leaves, so one card per four or five leaf
             // clusters is still hundreds of flowers on a tree. Measured at
-            // these values, worst case sixteen cherries in blossom: 303 cards
-            // a tree, 4,848 instances, 19,392 triangles. Under 5 percent of the
-            // budget, against 43,776 before.
+            // these values: 303 cards and 1,212 triangles a tree, against
+            // 2,736 before.
             //
             // Fruit is per-card rather than per-cluster, so its number is the
             // one that has to read as a real count. Measured: 40 apples on an

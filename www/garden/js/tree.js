@@ -972,9 +972,9 @@ function drawFruitLayer(shape, size) {
  * TWO SHAPES, TWO CHANNELS, ONE UPLOAD PER SPECIES THAT BEARS. Blossom goes in
  * red and fruit in green, composited with `lighter` so drawing one does not
  * erase the other where they overlap, and blue carries the shading. Cached and
- * never disposed, exactly like `leafClusterTexture`, so sixteen apple trees
- * still cost one upload and no two of them can disagree about what an apple
- * looks like. Callers must NOT dispose it.
+ * never disposed, exactly like `leafClusterTexture`, so a plot full of apple
+ * trees still costs one upload and no two of them can disagree about what an
+ * apple looks like. Callers must NOT dispose it.
  *
  * THE BLOSSOM IS THE SAME DRAWING IN EVERY ONE OF THEM, deliberately. Five
  * petals at this size is five petals, the four species already differ by
@@ -1237,8 +1237,8 @@ export function createTree(resolved, seed, options = {}) {
     group.add(leafMesh);
 
     // ---- Blossom and fruit -------------------------------------------------
-    // Only for the species that carry a schedule, so twelve of the sixteen pay
-    // nothing at all: no mesh, no material, no draw call.
+    // Only for the species that carry a schedule, so most of them pay nothing
+    // at all: no mesh, no material, no draw call.
     let fruitMesh = null;
     let fruitMaterial = null;
     let fruitUniforms = null;
@@ -1395,8 +1395,9 @@ function buildLeafCard() {
  *
  * ONE TEXTURE FOR THE WHOLE SCENE, cached and never disposed. Every planted
  * tree and every tier of the wood outside the wall shares it, so a canopy
- * cannot disagree with itself about what a leaf clump looks like, and sixteen
- * trees cost one 64 by 64 upload rather than sixteen. Callers must NOT dispose
+ * cannot disagree with itself about what a leaf clump looks like, and a whole
+ * garden costs one 64 by 64 upload rather than one per tree. Callers must NOT
+ * dispose
  * it: it outlives any one tree.
  *
  * White, so the season's colour can tint it, and with soft alpha so the same

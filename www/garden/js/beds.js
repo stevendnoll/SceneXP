@@ -176,11 +176,12 @@ export function pickBase(tapX, tapY, bases, config = GARDEN_CONFIG) {
 /**
  * How full a tree's water level reads, 0 to 1.
  *
- * Not the raw moisture. The level is ALWAYS ON SCREEN, sixteen of them, in a
- * scene whose whole point is watching trees move, so a full tank has to be
+ * Not the raw moisture. The level is ALWAYS ON SCREEN, one under every
+ * tree, in a scene whose whole point is watching trees move, so a full tank
+ * has to be
  * quiet and an empty one has to be plain. This is the fill; `levelUrgency`
  * below is the contrast, and keeping them separate is what lets a healthy
- * garden look like a garden rather than like sixteen warnings.
+ * garden look like a garden rather than like a plot full of warnings.
  */
 export function levelFill(moisture) {
     return clamp01(moisture);
@@ -848,7 +849,8 @@ export function updateBeds(entries, snowCoverage = 0, pxPerRadian = 0, config = 
         // EVERY DROPLET ON ONE CLOCK, which is the opposite of the rule the
         // fireflies had. They were insects and had to look independent; these
         // are one control repeated, and a row of them breathing out of step
-        // would read as sixteen things happening rather than one thing asking.
+        // would read as a plot full of things happening rather than one
+        // thing asking.
         const swing = Math.sin(seconds * B.dropPulseHz * Math.PI * 2);
         dropUniforms.uPulse.value = 1 + B.dropPulse * motion * swing;
         // The bob is half a cycle behind the swell, so the droplet is widest at

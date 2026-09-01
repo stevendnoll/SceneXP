@@ -1750,7 +1750,7 @@ const previousScissor = new THREE.Vector4();
  *
  * ---- AND NO FLAT COLOUR CAN DO IT, WHICH IS WHY THIS IS A GRADIENT ----
  *
- * Measured across all seventeen species, the two ends of the range fight each
+ * Measured across every species, the two ends of the range fight each
  * other. Foliage runs mid to dark, so it wants a LIGHT backdrop. The Quaking
  * Aspen and the Paper Birch have chalk-white bark, which against a light
  * backdrop measures 1.07:1 and 1.15:1, near enough invisible. Any single value

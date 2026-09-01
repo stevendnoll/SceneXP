@@ -1851,6 +1851,40 @@ describe('the visitor with no pointer', () => {
         expect(top('.water-all')).toBe(20 + 44 + 10);
     });
 
+    test('AND PLANT DOES NOT COLLIDE WITH THE TOP-RIGHT STACK', () => {
+        // ---- THE ONE COLLISION IN THE FRAME, AND IT IS ARITHMETIC -------
+        // Plant is the only float that shares a ROW with the menu buttons:
+        // Water all sits at top 74 and the stack ends at 70, so it is below
+        // them entirely. Help is the leftmost of the three at `right: 144px`
+        // and 50px wide, so the stack reaches 194px in from the right edge
+        // whatever the screen is, and Plant at its full size reaches 130px in
+        // from the left. They meet below a 328px viewport.
+        //
+        // This asserts the two numbers the arithmetic rests on, because both
+        // live in DIFFERENT stylesheets: the width is the shared sheet's and
+        // the offset is this scene's, so a change to either silently moves the
+        // point at which the frame breaks and no screenshot at 391px would
+        // ever show it.
+        const css = readFileSync(
+            join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
+        const shared = readFileSync(
+            join(process.cwd(), 'www', 'shared', 'css', 'styles-1.0.0.css'), 'utf8');
+
+        const menu = shared.slice(shared.indexOf('.menu-btn {'));
+        const btnWidth = Number(menu.match(/width:\s*(\d+)px/)[1]);
+        const helpRight = Number(css.match(/\.help-btn \{[^}]*right:\s*(\d+)px/)[1]);
+        expect(btnWidth).toBe(50);
+        expect(helpRight).toBe(144);
+
+        // And the narrow-phone rule exists to keep them apart, at the SAME
+        // breakpoint the pan row already shrinks on rather than a third one.
+        const narrow = css.slice(css.indexOf('@media (max-width: 380px)'));
+        const block = narrow.slice(0, narrow.indexOf('\n}\n'));
+        expect(block).toMatch(/\.tend-plant,\s*\n\s*\.water-all \{[^}]*font-size:\s*0\.78rem/);
+        // The touch target is the number that may not move.
+        expect(block).not.toMatch(/min-height/);
+    });
+
     test('AND PLANT DOES NOT SIT THERE LOOKING PRESSED', () => {
         // ---- A FILL IS A STATE IN THIS SHEET ----------------------------
         // It shipped with a resting background of `rgba(accent, 0.26)` and QA

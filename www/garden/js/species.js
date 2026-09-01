@@ -1,29 +1,30 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * species.js - The sixteen trees, the six sliders, and the seeded generator.
+ * species.js - The tree species, the shape sliders, and the seeded generator.
  *
  * Pure throughout. No THREE, no DOM.
  *
  * THE SEEDED GENERATOR IS LOAD BEARING. Every jitter in a tree's shape is
  * drawn from `makeRandom(seed)`, and the seed is stored with the tree. That is
  * the whole reason a persisted garden comes back as the SAME garden rather
- * than as twelve trees of the right species in the right places with the wrong
- * shapes. There is deliberately no Math.random() anywhere downstream of here.
+ * than as a plot of trees of the right species in the right places with
+ * the wrong shapes. There is deliberately no Math.random() anywhere
+ * downstream of here.
  *
  * BARK COLOUR IS A FIRST-CLASS PART OF THE CHOICE, not a detail. The grid is
- * ordered small to large so a visitor sees the range at a glance, and the
- * sixteen cover twelve distinct bark treatments: chalk white, silver grey,
+ * ordered small to large so a visitor sees the range at a glance, and between
+ * them they cover a wide spread of bark treatments: chalk white, silver grey,
  * smooth grey, dark grey, blocky dark grey, medium brown, scaly grey brown,
  * deep furrowed brown, smooth pale grey, dark red, glossy banded red brown, and
  * orange red.
  *
- * FOUR OF THEM FRUIT, and they carry three extra fields for it: `blossom` is
+ * SOME OF THEM FRUIT, and they carry three extra fields for it: `blossom` is
  * the flower colour, `fruit` is the unripe and ripe pair, and `schedule` is the
  * tree's own year in the same hours `season.phenology` uses. Every one of those
  * colours is the real one, which is the entire point of adding them: a pear
  * that ripens red throws away the reason it is here. See PRD Addendum E.4.
  *
- * A FIFTH CARRIES `blossom` AND NO FRUIT. The Flowering Dogwood has had that
+ * ONE MORE CARRIES `blossom` AND NO FRUIT. The Flowering Dogwood has had that
  * colour since M2 with nothing to draw it, while its own note in the modal
  * called it "the only tree here that blossoms". It now has a schedule with
  * flower keys and no fruit keys, and the note is true.
@@ -61,7 +62,7 @@ export function newSeed(random = Math.random) {
     return Math.floor(random() * 0xFFFFFFFF) >>> 0;
 }
 
-// ---- The sixteen -----------------------------------------------------------
+// ---- The species ------------------------------------------------------------
 
 /**
  * Every species, ordered small to large.
@@ -499,8 +500,8 @@ export const SPECIES_BY_ID = SPECIES.reduce((map, s) => { map[s.id] = s; return 
  * coincidence, and a future species with fruit and no blossom row still lands
  * in the group a visitor would look for it in.
  *
- * Derived rather than stored: a `flowering: true` field on seventeen entries is
- * seventeen chances to disagree with the schedule beside it.
+ * Derived rather than stored: a `flowering: true` field on every entry is one
+ * more chance per species to disagree with the schedule beside it.
  */
 export function isFlowering(species) {
     return !!(species && (species.blossom || species.fruit));
