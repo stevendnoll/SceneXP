@@ -43,10 +43,11 @@
  *   |  [ brochures ]                                            |
  *   +--------------- front wall (behind the camera) ------------+
  *
- * BUILD STATUS: milestone M4. The room, the lot, the desk and all three
- * of the cast are real and posed: John is leaning in with a finger on the
- * deal sheet. Nothing moves yet beyond the wall clock, because the
- * animation is M5 and the passing car is M6. See specs/automan/TASKS.md.
+ * BUILD STATUS: milestone M5. The room, the lot, the desk and the cast
+ * are real, and the conversation is running: John makes the point and
+ * checks his customer, she nods along, the dealer listens and reads. The
+ * lot is still static, because the passing car is M6, and the fixtures
+ * are M7. See specs/automan/TASKS.md.
  */
 
 import { getScene } from '../../shared/js/scene-1.0.0.min.js';
@@ -1359,16 +1360,27 @@ function faceToward(from, to) {
 // Seated, John's shoulder sits at y 1.02 and the deal sheet's near edge
 // is 0.85m away, while the rig's whole arm reaches 0.61m. He therefore
 // CANNOT touch the page sitting upright, which is why addWaist exists: a
-// 0.38 radian lean (21.8 degrees) carries the shoulder far enough
-// forward that the solved arm lands the fingertip within 1mm of the
-// page, with the elbow at y 0.808 clearing the 0.75 desk top.
+// 0.395 radian lean (22.6 degrees) carries the shoulder far enough
+// forward that the solved arm lands his hand 11mm above the desk top,
+// which is ON the page, with the elbow at 0.801 clearing the desk.
 //
-// If the desk, the sheet, or any seat moves, re-solve. Do not nudge these
-// by eye: the fingertip either touches the paper or it hovers, and at
-// this camera distance a centimetre of hover is visible.
-const JOHN_POINT_ARM = { shoulder: -1.045, rotZ: -0.615, elbow: -0.730 };
-const JOHN_REST_ARM = { shoulder: -0.740, rotZ: -0.920, elbow: -0.800 };
-const JOHN_LEAN = 0.38;
+// Two traps in solving this, both hit on the way here:
+//
+//  - Aim at the PAPER, not at a comfortable height above it. An earlier
+//    solve targeted 35mm up and read as a hover rather than a touch. At
+//    this camera distance 35mm is about ten pixels of daylight under his
+//    hand, and the whole gesture stops landing.
+//  - The arm has four degrees of freedom for a three-dimensional target,
+//    so there is a family of answers and the cheapest is a ramrod
+//    STRAIGHT arm (elbow -0.01). It hits the mark and looks like a
+//    mannequin, and it leaves the tap nowhere to travel. The solve is
+//    shaped to prefer a natural bend near -0.75.
+//
+// If the desk, the sheet, or any seat moves, re-solve rather than nudging
+// by eye. specs/automan/verify-pose.mjs re-checks all of it.
+const JOHN_POINT_ARM = { shoulder: -1.035, rotZ: -0.610, elbow: -0.700 };
+const JOHN_REST_ARM = { shoulder: -0.705, rotZ: -0.950, elbow: -0.840 };
+const JOHN_LEAN = 0.395;
 // The lean tips his head down with the rest of him, so the neck takes
 // most of it back and leaves him looking level at the dealer rather than
 // at his own knees.
@@ -1491,13 +1503,42 @@ function createDealer() {
     return rig;
 }
 
-/** All three, and the registry the animation pass drives at M5. */
+/** All three, and the registry the animation pass drives.
+ *
+ *  Each gets its own clock with a different period, and a different head
+ *  start, so the three of them never fall into step. Three figures moving
+ *  in unison reads as machinery, which is the one thing this scene cannot
+ *  afford: the whole point is that these are people having a conversation. */
 function createCast() {
     cast = {
         john: createJohn(),
         customer: createCustomer(),
         dealer: createDealer()
     };
+    cast.john.anim = { mode: 'making', modeT: 0, dur: 8.5, glanceTo: -0.85 };
+    cast.customer.anim = {
+        mode: 'listening', modeT: 0, dur: 4.7,
+        glanceTo: normalizeAngle(faceToward(LAYOUT.customer, LAYOUT.john) - cast.customer.yaw)
+    };
+    cast.dealer.anim = {
+        mode: 'listening', modeT: 0, dur: 6.3, shiftT: 5.0,
+        headBase: cast.dealer.neck.rotation.y,
+        readTo: normalizeAngle(faceToward(LAYOUT.dealer, LAYOUT.dealSheet) - cast.dealer.yaw)
+    };
+}
+
+/** Wrap an angle into [-pi, pi], so a head turn always takes the short
+ *  way round instead of spinning most of a full circle. */
+function normalizeAngle(a) {
+    let x = a;
+    while (x > Math.PI) x -= Math.PI * 2;
+    while (x < -Math.PI) x += Math.PI * 2;
+    return x;
+}
+
+/** Frame-rate independent ease toward a target. */
+function approach(current, target, rate, deltaTime) {
+    return current + (target - current) * Math.min(1, rate * deltaTime);
 }
 
 // ============================================
@@ -1723,13 +1764,185 @@ function createDaylightShaft() {
 // ============================================
 let _t = 0;    // showroom clock, seconds
 
+// John's two-tap burst: how often he makes the point again, how long the
+// burst lasts, and how far the finger lifts.
+const TAP_EVERY = 3.2;
+const TAP_BURST = 0.9;
+const TAP_LIFT = 0.085;      // radians off the solved elbow bend
+
+/** John: making his customer's case. The point is the resting state, not
+ *  a gesture he breaks into, because that is what the scene is about. The
+ *  finger taps the page a couple of times to land a sentence, his head
+ *  moves a little as he talks, and now and then he turns to check his
+ *  customer is with him.
+ *
+ *  The tap only ever LIFTS. The pointing pose was solved to put the
+ *  fingertip on the paper, so any tap that could go the other way would
+ *  drive his hand through the desk. */
+function updateJohn(rig, deltaTime) {
+    const a = rig.anim;
+    a.modeT += deltaTime;
+
+    if (a.mode === 'making' && a.modeT >= a.dur) {
+        a.mode = 'glancing';
+        a.modeT = 0;
+    } else if (a.mode === 'glancing' && a.modeT >= 1.7) {
+        a.mode = 'making';
+        a.modeT = 0;
+        a.dur = 7.5 + Math.random() * 4.5;
+    }
+
+    const target = johnTargets(a.mode, a.modeT, _t, a.glanceTo);
+    const point = rig.arms.find((entry) => entry.role === 'point');
+    if (point) point.elbow.rotation.x = JOHN_POINT_ARM.elbow - target.lift;
+    rig.neck.rotation.x = approach(rig.neck.rotation.x, target.neckX, 6, deltaTime);
+    rig.neck.rotation.y = approach(rig.neck.rotation.y, target.neckY, 7, deltaTime);
+}
+
+/** John's per-frame targets, as a pure function of his state.
+ *
+ *  Pulled out so it can be tested without a scene graph: the Three test
+ *  stub is a proxy that absorbs every assignment and reads back as zero,
+ *  so an animation written straight onto rig objects cannot be checked at
+ *  all. Here the numbers are just numbers.
+ *
+ *  `lift` is always >= 0 by construction, which is the property that
+ *  keeps his hand out of the desk: the pose puts it on the paper, so the
+ *  tap has nowhere to go but up. */
+function johnTargets(mode, modeT, t, glanceTo) {
+    if (mode === 'making') {
+        const phase = modeT % TAP_EVERY;
+        const lift = phase < TAP_BURST
+            ? Math.abs(Math.sin(phase * Math.PI / (TAP_BURST / 2))) * TAP_LIFT
+            : 0;
+        return {
+            lift,
+            neckX: JOHN_NECK_X + Math.sin(t * 1.3) * 0.03,
+            neckY: Math.sin(t * 0.9) * 0.055
+        };
+    }
+    // The glance out and back on one envelope, so nothing snaps. His hand
+    // stays on the page: he looks at his customer, he does not stop
+    // making the point.
+    const envelope = Math.sin(Math.PI * Math.min(1, modeT / 1.7));
+    return {
+        lift: 0,
+        neckX: JOHN_NECK_X + 0.05 * envelope,
+        neckY: glanceTo * envelope
+    };
+}
+
+/** The customer: watching the dealer, and agreeing. She NODS, which is
+ *  agreement. A shaken head would read as the opposite and quietly
+ *  undercut the whole scene (PRD decision D5).
+ *
+ *  Bursts of two or three nods with real pauses between them, because a
+ *  metronome nod reads as a broken machine rather than a person. */
+function updateCustomer(rig, deltaTime) {
+    const a = rig.anim;
+    a.modeT += deltaTime;
+
+    if (a.mode === 'listening' && a.modeT >= a.dur) {
+        a.mode = Math.random() < 0.3 ? 'glancing' : 'nodding';
+        a.modeT = 0;
+        a.nods = 2 + Math.floor(Math.random() * 2);
+    } else if (a.mode === 'nodding' && a.modeT >= a.nods * 0.62) {
+        a.mode = 'listening';
+        a.modeT = 0;
+        a.dur = 3.6 + Math.random() * 4.0;
+    } else if (a.mode === 'glancing' && a.modeT >= 1.9) {
+        a.mode = 'listening';
+        a.modeT = 0;
+        a.dur = 4.2 + Math.random() * 4.0;
+    }
+
+    const target = customerTargets(a.mode, a.modeT, _t, a.glanceTo);
+    rig.neck.rotation.x = approach(rig.neck.rotation.x, target.neckX, 9, deltaTime);
+    rig.neck.rotation.y = approach(rig.neck.rotation.y, target.neckY, 7, deltaTime);
+}
+
+/** The customer's per-frame targets, pure so they can be tested.
+ *
+ *  The nod lives entirely on neckX (pitch). neckY (yaw) only ever moves
+ *  during a deliberate glance at John. That separation is the mechanical
+ *  guarantee behind decision D5: she can nod, and she can look at John,
+ *  but there is no path through this function that shakes her head. */
+function customerTargets(mode, modeT, t, glanceTo) {
+    let nod = 0;
+    let turn = 0;
+    if (mode === 'nodding') {
+        // (1 - cos) rides from neutral down and back, so the chin dips
+        // and returns rather than rocking above the neutral line.
+        nod = (1 - Math.cos((modeT / 0.62) * Math.PI * 2)) / 2 * 0.30;
+    } else if (mode === 'glancing') {
+        turn = glanceTo * 0.8 * Math.sin(Math.PI * Math.min(1, modeT / 1.9));
+    }
+    // A little idle drift, so she is never perfectly still.
+    return { neckX: nod + Math.sin(t * 0.55 + 1.4) * 0.022, neckY: turn };
+}
+
+/** The dealer: listening. His head is on John, he nods now and then, he
+ *  glances down at the page when John taps it, and every so often he
+ *  shifts in the chair. Never dejected and never smug (decision D6): he
+ *  is a professional hearing out another professional. */
+function updateDealer(rig, deltaTime) {
+    const a = rig.anim;
+    a.modeT += deltaTime;
+    a.shiftT -= deltaTime;
+
+    if (a.mode === 'listening' && a.modeT >= a.dur) {
+        a.mode = Math.random() < 0.45 ? 'reading' : 'nodding';
+        a.modeT = 0;
+    } else if (a.mode === 'nodding' && a.modeT >= 1.35) {
+        a.mode = 'listening';
+        a.modeT = 0;
+        a.dur = 4.8 + Math.random() * 4.5;
+    } else if (a.mode === 'reading' && a.modeT >= 2.1) {
+        a.mode = 'listening';
+        a.modeT = 0;
+        a.dur = 5.5 + Math.random() * 4.5;
+    }
+
+    const target = dealerTargets(a.mode, a.modeT, a.headBase, a.readTo);
+    rig.neck.rotation.x = approach(rig.neck.rotation.x, target.neckX, 7, deltaTime);
+    rig.neck.rotation.y = approach(rig.neck.rotation.y, target.neckY, 6, deltaTime);
+
+    // A shift in the chair, on its own slow clock so it never lines up
+    // with the nods.
+    if (a.shiftT <= 0) a.shiftT = 11 + Math.random() * 9;
+    const shift = Math.max(0, Math.sin((1 - a.shiftT / 11) * Math.PI * 2)) * 0.05;
+    rig.waist.rotation.x = approach(rig.waist.rotation.x, DEALER_LEAN + shift, 3, deltaTime);
+    rig.group.rotation.y = approach(rig.group.rotation.y, rig.yaw + shift * 0.6, 3, deltaTime);
+}
+
+/** The dealer's per-frame targets, pure so they can be tested. His head
+ *  rests on John, dips for a nod, and turns down to the page when he
+ *  reads it. */
+function dealerTargets(mode, modeT, headBase, readTo) {
+    if (mode === 'nodding') {
+        return {
+            neckX: -0.08 + (1 - Math.cos((modeT / 0.65) * Math.PI * 2)) / 2 * 0.19,
+            neckY: headBase
+        };
+    }
+    if (mode === 'reading') {
+        const envelope = Math.sin(Math.PI * Math.min(1, modeT / 2.1));
+        return {
+            neckX: -0.08 + 0.34 * envelope,
+            neckY: headBase + (readTo - headBase) * envelope
+        };
+    }
+    return { neckX: -0.08, neckY: headBase };
+}
+
 /**
- * Advance the showroom one frame. At M0 that is only the wall clock:
- * John's point and glance, his customer's nod, the dealer's listening,
- * and the car crossing the lot all arrive at M5 and M6. Everything holds
- * still under prefers-reduced-motion. Driven by main.js's loop (which
- * also runs the shared day/night pass, frozen at noon, for the sky and
- * the shadow-map refresh, plus the drifting clouds).
+ * Advance the showroom one frame: John making the point, his customer
+ * nodding along, the dealer listening, and the wall clock keeping the
+ * visitor's real local time. Everything holds still under
+ * prefers-reduced-motion, which is why the whole pass returns early
+ * rather than slowing down. Driven by main.js's loop (which also runs the
+ * shared day/night pass, frozen at noon, for the sky and the shadow-map
+ * refresh, plus the drifting clouds).
  */
 export function updateShowroom(deltaTime) {
     if (_reducedMotion.matches) return;
@@ -1737,6 +1950,12 @@ export function updateShowroom(deltaTime) {
 
     // The wall clock keeps the visitor's real local time
     setClockHands();
+
+    if (cast) {
+        updateJohn(cast.john, deltaTime);
+        updateCustomer(cast.customer, deltaTime);
+        updateDealer(cast.dealer, deltaTime);
+    }
 }
 
 /** The root showroom group (exposed for tests and future passes). */
@@ -1749,8 +1968,9 @@ export const __test__ = {
     LAYOUT, PALETTE, JOHN_LOOK,
     JOHN_POINT_ARM, JOHN_REST_ARM, JOHN_LEAN, JOHN_NECK_X,
     CUSTOMER_REST_ARM, DEALER_REST_ARM, DEALER_LEAN,
-    HIP_Y, NECK_Y,
-    seatHeightY, faceToward,
+    HIP_Y, NECK_Y, TAP_LIFT, TAP_EVERY, TAP_BURST,
+    seatHeightY, faceToward, normalizeAngle, approach,
+    johnTargets, customerTargets, dealerTargets,
     poseSeated, addElbow, addWaist, addNeck, findHairGroup,
     createDeskChair, createSucculent,
     getCast: () => cast
