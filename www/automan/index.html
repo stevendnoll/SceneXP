@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="A living 3D visit to a car dealership desk, where John Walker, The Auto Man, sits on the buyer's side and argues the deal down for his customer. A car buying and selling advocate in Baltimore, Maryland, with a free consultation by phone or Zoom.">
+    <meta name="theme-color" content="#12294a">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK (Phase 5). Crawlers read these without running
+         JavaScript, so they cannot come from config.js and must stay literal
+         absolute URLs naming where this page is actually served (currently
+         www.scenexp.com/automan; these are deployment metadata, not
+         outbound links). When serving from a new domain, update the URLs
+         here: canonical, og:url, og:image, twitter:image, and the JSON-LD
+         ids below. Everything else in the experience is relative,
+         config-driven (AUTOMAN_CONFIG.site in js/config.js), or derived
+         from location. -->
+    <link rel="canonical" href="https://www.scenexp.com/automan/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="John Walker, The Auto Man">
+    <meta property="og:description" content="A living 3D visit to a dealership desk, where John Walker sits on the buyer's side of it. Tap anyone at the desk to reach him.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/automan/">
+    <meta property="og:locale" content="en_US">
+    <!-- WebP per preference. og-automan.webp is a capture of the showroom
+         from the visitor's viewpoint (same flow as the other experiences).
+         If a platform (notably Facebook) won't render the preview, swap the
+         two image URLs below to .../og-automan.jpg (both live in assets/).
+         PROVISIONAL: both files land at task T10.3. -->
+    <meta property="og:image" content="https://www.scenexp.com/automan/assets/og-automan.webp?v=1">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A bright 3D car dealership desk seen from its open corner: John Walker points at a deal sheet while his customer nods beside him, the dealer listens from across the desk, and a wide glass wall behind them looks out on rows of cars in the lot.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="John Walker, The Auto Man">
+    <meta name="twitter:description" content="A living 3D visit to a dealership desk, where John Walker sits on the buyer's side of it.">
+    <meta name="twitter:image" content="https://www.scenexp.com/automan/assets/og-automan.webp?v=1">
+    <meta name="twitter:image:alt" content="A bright 3D car dealership desk seen from its open corner: John Walker points at a deal sheet while his customer nods beside him, the dealer listens from across the desk, and a wide glass wall behind them looks out on rows of cars in the lot.">
+
+    <!-- Structured data: the experience, and the business it features.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP.
+
+         NOTE (PRD decision D3, still open): John's phone number and email
+         are deliberately absent here. They live in js/config.js as joined
+         fragments and are assembled only after the proof of work resolves,
+         which keeps them away from scrapers and equally away from search
+         engines and assistants. If D3 moves to option 2, "telephone" and
+         "email" properties go on the ProfessionalService node below, and
+         the noscript fallback gains them too. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/automan/#website",
+      "url": "https://www.scenexp.com/automan/",
+      "name": "John Walker, The Auto Man",
+      "description": "A passive 3D visit to a car dealership desk, built for John Walker, The Auto Man, a car buying and selling advocate who negotiates on the buyer's behalf.",
+      "inLanguage": "en-US",
+      "about": {
+        "@type": "ProfessionalService",
+        "@id": "https://www.scenexp.com/automan/#business",
+        "name": "John Walker, The Auto Man",
+        "url": "https://www.scenexp.com/automan/",
+        "description": "Car buying and selling advocacy. John Walker reviews the deal front to back, values your trade, checks the financing and the rate, and explains the warranties and protection products, so you walk into the dealership prepared. Free consultation by phone or Zoom.",
+        "areaServed": {
+          "@type": "Place",
+          "name": "Baltimore, Maryland, and remote via Zoom"
+        },
+        "founder": {
+          "@type": "Person",
+          "name": "John Walker"
+        },
+        "slogan": "Your advocate before, during, and after the deal."
+      }
+    }
+    </script>
+
+    <title>John Walker, The Auto Man</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text introduction to John and his service.
+
+         Under PRD decision D3 this fallback cannot carry John's phone
+         number or email, because they are assembled behind a proof of work
+         that needs JavaScript. That is a real cost of D3 and one of the
+         reasons it is flagged for revisiting. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>John Walker, The Auto Man</h1>
+            <p>This is a living 3D visit to a car dealership desk, and it
+                needs JavaScript to run. It was built for John Walker, who
+                goes by The Auto Man, because he does the part of buying a
+                car that most people quietly dread. John has spent more
+                than twenty five years in sales and marketing, ten of them
+                in the automotive industry, and more than 2,000 vehicles
+                have gone through his hands. He has worked the dealership
+                side and desked the deals, so he knows exactly where the
+                money moves: the trade valuation, the price, the financing
+                and the rate, the extended warranty, the tire and wheel
+                cover, the GAP insurance. He now does that work for the
+                buyer instead of the dealer. In the 3D scene he is at the
+                desk with his customer, pointing at the deal sheet and
+                making her case, while the lot fills the window behind
+                them. The consultation is free, by phone or by Zoom, and
+                if he cannot get you the deal you want, you owe him
+                nothing. He works in Baltimore, Maryland, and anywhere
+                else by Zoom.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/">The SceneXP experience directory</a></li>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <img class="loader-logo logo-card" src="assets/automan-1.webp" alt="" width="150" height="150">
+            <div class="loader-title">John Walker, The Auto Man</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- The welcome overlay. This experience is watched, not walked: there
+         are no movement controls to explain, so the overlay just sets the
+         scene and steps aside on the first click, tap, or keypress. -->
+    <div id="blocker">
+        <div id="instructions">
+            <img class="welcome-logo logo-card" src="assets/automan-1.webp" alt="John Walker, The Auto Man" width="110" height="110">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">John is at the desk, and he is doing the talking</p>
+            <p class="click-prompt">Click to pull up a chair</p>
+            <div class="controls-hint">
+                <span>SIT BACK</span> No controls needed. The deal is already underway.
+                <span>LOOK CLOSER</span> Click anyone at the desk to reach John, or anything in the showroom for a little of its story.
+            </div>
+            <p class="welcome-footnote">The Auto Man name belongs to John Walker and appears here with
+                his blessing.</p>
+        </div>
+    </div>
+
+    <!-- Floating controls -->
+    <!-- The Home button returns to the serving site's root in the same tab
+         (applySiteLinks keeps it in sync with AUTOMAN_CONFIG.site.home). No
+         settings cog and no autopilot: there is nothing to adjust and
+         nowhere to be driven. -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+    <!-- The contact button, and the most important control on the page.
+         The other featured-business experiences point this slot at the
+         business's own website, but this page IS John's web presence, so
+         there is nowhere outward to send anybody. Instead main.js
+         intercepts the click and opens the contact card, which is wired
+         at task T8.9. Until then this button simply follows its href.
+
+         It stays an <a> rather than becoming a <button> for two reasons:
+         it inherits the .biz-btn styling unchanged, and it keeps a real
+         destination for anyone whose JavaScript never runs. That fallback
+         href is the site's own contact page rather than John's details,
+         which is another consequence of PRD decision D3. -->
+    <a id="biz-btn" class="ui-float menu-btn biz-btn biz-btn-snug" href="/contact.html"
+        title="Call, text, or email John Walker"
+        aria-label="Call, text, or email John Walker">
+        <img class="biz-logo-round" src="assets/automan-1.webp" alt="" width="26" height="26">
+    </a>
+
+    <!-- Dialog shown when something in the showroom is clicked: the host's
+         voice, telling the story of a car deal one prop at a time. -->
+    <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="dialog-title" class="piece-title">On the Showroom Floor</h2>
+                <p id="dialog-message" class="piece-subtitle"></p>
+                <!-- Leads on to the contact card rather than off the site.
+                     A <button> because it opens a card in place, wearing
+                     the .dialog-primary reset the same way the dismiss
+                     button below does. -->
+                <button id="dialog-cta" class="piece-enter dialog-cta dialog-primary hidden" type="button">Talk to John &rarr;</button>
+                <button class="piece-enter dialog-primary" type="button" data-close>Back to the showroom</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- The contact card. Reuses the celebration card styling the garden
+         and tire-shop experiences use for theirs, and keeps the
+         #nudge-modal id because the shared stylesheet scopes its modal
+         rules to a fixed list of ids: a new id would arrive with no
+         hiding, no layout, and a near-opaque generic backdrop.
+
+         Two ways in. Tapping any of the three people at the desk opens it
+         immediately, with the heading and opening line tailored to who was
+         tapped. Otherwise it follows every fourth prop story, once that
+         story's card has closed, so the two never stack.
+
+         The three action hrefs are empty here on purpose. main.js
+         assembles them from AUTOMAN_CONFIG.site.contact once the proof of
+         work resolves, which has always happened by the time this card can
+         open. If the proof is unavailable, the actions are replaced by the
+         fallback note rather than left as dead links. -->
+    <div id="nudge-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="nudge-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card complete-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <p class="complete-kicker" aria-hidden="true">★ &nbsp;Free consultation, by phone or Zoom&nbsp; ★</p>
+                <h2 id="nudge-title" class="piece-title">Let John handle it</h2>
+                <p id="nudge-message" class="piece-subtitle">John Walker has spent twenty five years on the other side
+                    of that desk, and more than 2,000 cars have gone through his hands. If he cannot get you the deal
+                    you want, you owe him nothing.</p>
+                <a id="contact-call" class="piece-enter" href="">Call John</a>
+                <a id="contact-text" class="piece-cancel" href="">Send a text</a>
+                <a id="contact-email" class="piece-cancel" href="">Email John</a>
+                <p id="contact-fallback" class="piece-subtitle hidden" role="status" aria-live="polite"></p>
+                <p class="piece-subtitle">Baltimore, Maryland, or anywhere by Zoom. 100% satisfaction guarantee.</p>
+                <button class="piece-cancel" data-close>Back to the showroom</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="game-canvas" aria-label="A living 3D car dealership desk: John Walker points at a deal sheet and makes his customer's case while she nods along, the dealer listens from across the desk, and cars roll past the lot beyond the glass wall behind them"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

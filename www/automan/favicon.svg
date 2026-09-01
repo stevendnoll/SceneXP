@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="John Walker, The Auto Man">
+    <!-- PROVISIONAL (task T10.1). A simple car in the flyer's navy and
+         gold: an echo of John Walker's colors, not a copy of his artwork.
+         Drawn plain on purpose, because a favicon is read at 16px. -->
+    <rect width="64" height="64" rx="14" fill="#12294a"/>
+    <!-- Body: a low wedge with the cabin set back over the rear wheel -->
+    <path d="M10 40 L 11.5 33 L 19 32 L 25 23 L 41 23 L 48 32 L 55 34 L 56 40 L 56 44 L 10 44 Z"
+        fill="#f0a51e"/>
+    <!-- Windows, punched back to the ground color so the cabin reads small -->
+    <path d="M27 31 L 31.5 24.5 L 35 24.5 L 35 31 Z" fill="#12294a"/>
+    <path d="M37 24.5 L 41.5 24.5 L 46 31 L 37 31 Z" fill="#12294a"/>
+    <!-- Wheels -->
+    <circle cx="21" cy="44" r="7" fill="#f0a51e"/>
+    <circle cx="21" cy="44" r="3" fill="#12294a"/>
+    <circle cx="45" cy="44" r="7" fill="#f0a51e"/>
+    <circle cx="45" cy="44" r="3" fill="#12294a"/>
+    <!-- The road, one steady line -->
+    <rect x="8" y="52" width="48" height="3" rx="1.5" fill="#2f6fd0"/>
+</svg>
