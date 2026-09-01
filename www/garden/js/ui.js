@@ -98,25 +98,30 @@ export function showHud() {
  * Pure, so the copy can be asserted, in the same tradition as `chipText` and
  * `resetPrompt`.
  *
- * ---- IT USED TO READ "Water all 1" ----
+ * ---- THE COUNT CAME OFF THE LABEL WHEN THE BUTTON STOPPED COUNTING ----
  *
- * The label was the config string plus the count, which is grammatical from two
- * upward and nonsense at one, and one is now where the button first appears.
- * The same "all 1 of your trees" that `resetPrompt` already had to solve.
+ * It read "Water 4 trees" while the button watered exactly the trees that were
+ * asking, and the number was a reading of the garden: four are thirsty. The
+ * button waters the whole plot now, so that same number would say how many
+ * trees you own, which the plot already tells you and which changes nothing
+ * about whether pressing it is worth doing. A number that no longer means what
+ * it used to mean is worse than no number.
  *
- * So the count carries its own noun and "all" goes. It is no loss: the button
- * waters exactly the trees that are asking, the number IS how many are asking,
- * and "Water 4 trees" says that without a word that only works in the plural.
- * The count stays because a button that says how many is also a reading of the
- * garden, which is half of what this control is for.
+ * "Water all" is the plain description of what happens, and it is stable, which
+ * a control that is now permanently on screen wants to be.
+ *
+ * THE COUNT SURVIVES IN THE ARIA LABEL, where it is doing different work: a
+ * visitor who cannot see the plot has no other way to know how much "all" is.
+ * Guarded at one, because "Water all 1 trees" is what counting without reading
+ * produces, and it is the same "all 1 of your trees" that `resetPrompt` already
+ * had to solve.
  */
 export function waterAllText(count) {
-    const noun = count === 1 ? 'tree' : 'trees';
     return {
-        label: `Water ${count} ${noun}`,
-        // The aria label says WHY those trees, which the visible one leaves to
-        // the droplet beside it and to the garden the visitor is looking at.
-        aria: `Water ${count} thirsty ${noun}`
+        label: 'Water all',
+        aria: count === 1
+            ? 'Water the one tree in your garden'
+            : `Water all ${count} trees in your garden`
     };
 }
 

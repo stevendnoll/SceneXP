@@ -1350,30 +1350,37 @@ function waterOne(entry, from) {
 }
 
 /**
- * Water everything that is asking.
+ * Water the whole plot, whether or not it was asking.
  *
- * IT APPEARS AT ONE THIRSTY TREE. It used to wait for three, to keep it a
- * rescue rather than a routine, and that argument was answering the wrong
- * question: this is the keyboard's ONLY route to the care loop, so a threshold
- * of three closed watering entirely for a visitor without a pointer whenever
- * one or two trees were asking. See `waterAllFrom`.
+ * IT WATERS EVERY PLANTED TREE, not the thirsty ones. It used to wait for three
+ * thirsty trees, then for one, and both thresholds left the control appearing
+ * and vanishing as moisture drifted: hard to learn, and for a keyboard visitor
+ * the care loop's only route entering and leaving the tab order by itself. A
+ * button that is always in the same place is worth more than the difficulty the
+ * threshold was buying. See the note above the deleted `waterAllFrom`.
  */
 function handleWaterAll() {
-    const thirsty = getTrees().filter((e) => needsWater(e.record.moisture));
-    if (!thirsty.length) return;
+    const trees = getTrees();
+    if (!trees.length) return;
+    // Counted BEFORE watering, because watering is what destroys the evidence.
+    // The toast reads it to decide whether it has anything to celebrate, and
+    // the beacon keeps it so the log can still tell a rescue from a routine now
+    // that the button's own count no longer says.
+    const thirsty = trees.filter((e) => needsWater(e.record.moisture)).length;
     let revived = 0;
-    for (const entry of thirsty) {
+    for (const entry of trees) {
         if (waterTree(entry, state.elapsedSeconds) === 'revived') revived += 1;
     }
-    // THE COPY NAMES THE COUNT, because the visitor pressed a button that named
-    // one and a confirmation that drops it reads as though something else
-    // happened. The bare-tree line is worth its own sentence: it is the reward
+    // THE COPY NAMES NO COUNT NOW, and that is the honest version rather than a
+    // shorter one. The button waters everything, so a number here would mostly
+    // be a tally of tanks that were already full, and "Watered 16 trees" after
+    // topping up one is the kind of confirmation that teaches a visitor to stop
+    // reading them. The bare-tree line keeps its own sentence: it is the reward
     // for coming back, and it is the whole of what watering buys.
-    const many = thirsty.length > 1;
     toast(revived > 0
-        ? `Watered ${thirsty.length} ${many ? 'trees' : 'tree'}. Look for new buds along the bare branches.`
-        : `Watered ${thirsty.length} ${many ? 'trees' : 'tree'}. The garden looks pleased.`);
-    track('water-all', { count: thirsty.length, revived });
+        ? 'Watered every tree. Look for new buds along the bare branches.'
+        : 'Watered every tree. The garden looks pleased.');
+    track('water-all', { count: trees.length, thirsty, revived });
     save();
     syncWaterAll();
 }
@@ -1406,10 +1413,15 @@ function teachTheDroplet(count) {
 
 function syncWaterAll() {
     if (!waterAllBtn) return;
-    const M = GARDEN_CONFIG.garden.moisture;
-    const count = thirstyCount(getTrees());
-    teachTheDroplet(count);
-    const show = count >= M.waterAllFrom;
+    const planted = getTrees();
+    // The droplet lesson still reads THIRST, because a droplet is still a
+    // thirsty tree and nothing about this button changed what one means.
+    teachTheDroplet(thirstyCount(planted));
+    // ONE PLANTED TREE IS THE WHOLE CONDITION NOW. Still not zero: on an empty
+    // plot there is nothing to water, and a button that cannot do anything
+    // would be competing with the one instruction the scene wants a new
+    // visitor to read, which is to plant something.
+    const show = planted.length > 0;
     // `.visible` is what the house chrome uses, and the button is display:none
     // without it. `hidden` as well, so it leaves the tab order rather than
     // sitting in it invisibly, which is the version of this bug that only
@@ -1417,7 +1429,7 @@ function syncWaterAll() {
     waterAllBtn.classList.toggle('visible', show);
     waterAllBtn.hidden = !show;
     if (show) {
-        const { label, aria } = waterAllText(count);
+        const { label, aria } = waterAllText(planted.length);
         if (waterAllBtn.textContent !== label) waterAllBtn.textContent = label;
         waterAllBtn.setAttribute('aria-label', aria);
     }

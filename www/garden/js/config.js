@@ -908,28 +908,33 @@ export const GARDEN_CONFIG = deepFreeze({
             // The thirst marker appears below this.
             thirstyBelow: 0.25,
 
-            // ---- "Water all" APPEARS AT ONE THIRSTY TREE (QA 2026-08-31) ----
-            // It was three, and the reasoning was about protecting the care
-            // loop: M11-4 took the free water out of this scene so that nothing
-            // waters a tree but the visitor, and a permanent Water all would
-            // hand that straight back, becoming the only control anybody used
-            // while the droplets turned into decoration. One or two thirsty
-            // trees was called the ordinary state of a garden being tended.
+            // ---- THERE IS NO `waterAllFrom` AND THAT IS DELIBERATE ---------
+            // The button used to appear at three thirsty trees, then at one,
+            // and now it is simply there from the first planted tree onward and
+            // waters the whole plot rather than the part of it that is asking.
+            // The knob is deleted rather than zeroed, the same way `rainFill`
+            // above it was, because a live-looking number that no longer gates
+            // anything is how somebody loses an afternoon later.
             //
-            // THE ARGUMENT WAS SOUND AND IT WAS ANSWERING THE WRONG QUESTION.
-            // This button is also THE KEYBOARD'S ONLY ROUTE TO THE CARE LOOP: a
-            // tree is reachable only by tapping a few pixels of 3D canvas, and
-            // the droplet (M13-2) took away the tree card's own Water button
-            // for exactly the trees that need watering. So at one or two
-            // thirsty trees a visitor without a pointer could not water at all.
-            // The threshold was not protecting the loop from being too easy, it
-            // was closing it for part of the audience, and the shape of a
-            // garden that has ONE thirsty tree is precisely when a keyboard
-            // visitor most needs a way in.
+            // WHAT THE THRESHOLD WAS FOR, AND WHY IT WENT. It was protecting
+            // the care loop: M11-4 took the free water out of this scene so
+            // that nothing waters a tree but the visitor, and a Water all that
+            // is always available hands a good part of that back. It also
+            // turned out to be the KEYBOARD'S ONLY ROUTE TO THE CARE LOOP,
+            // since a tree is reachable only by tapping a few pixels of 3D
+            // canvas and M13-2 took the tree card's own Water button away for
+            // exactly the trees that need watering. Lowering it to one kept the
+            // loop and opened the route, but left the control appearing and
+            // vanishing as moisture drifted, which is hard to learn and, for a
+            // keyboard visitor, means the only way in enters and leaves the tab
+            // order on its own.
             //
-            // The droplets are unharmed: they are still the one-tap route and
-            // still the only one that works on a specific tree.
-            waterAllFrom: 1
+            // SO THE COST IS KNOWN AND ACCEPTED. A full tank drains over
+            // `thirstSecondsPerYear` (100s) and thirst begins at 0.25, so a
+            // visitor who presses this every three minutes will never see a
+            // droplet, never lose a tree, and never meet the bud reward. The
+            // droplets remain for a visitor who does not press it, and they are
+            // still the only route that waters ONE named tree.
         },
 
         // ---- Blossom and fruit (M11-6, M11-7) -------------------------------

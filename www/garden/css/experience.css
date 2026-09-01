@@ -97,11 +97,13 @@ body {
  * the opposite end of the frame from the ones that undo things, so a rescue is
  * never a neighbour of "start a new garden".
  *
- * IT IS DISPLAY NONE UNTIL IT IS NEEDED, and the id-scoped sheet gives a new
- * element no hiding of its own, so the rule is written here rather than
- * inherited. The `hidden` attribute goes on with it, which is what takes it out
- * of the tab order: a button that is invisible but still focusable is a trap
- * only keyboard visitors ever find.
+ * IT IS DISPLAY NONE UNTIL THE FIRST TREE IS PLANTED, and the id-scoped sheet
+ * gives a new element no hiding of its own, so the rule is written here rather
+ * than inherited. The `hidden` attribute goes on with it, which is what takes
+ * it out of the tab order: a button that is invisible but still focusable is a
+ * trap only keyboard visitors ever find. After that first tree it stays, so
+ * this pair is toggled once a visit rather than every time a tank crosses a
+ * threshold.
  */
 .water-all {
     position: fixed;

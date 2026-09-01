@@ -266,12 +266,12 @@
     <!-- Short confirmations: a tree planted, a tree watered, a plot full. -->
     <div id="garden-toast" class="garden-toast" role="status" aria-live="polite"></div>
 
-    <!-- WATER ALL. Hidden until the garden is genuinely behind (three thirsty
-         trees or more), so a tended plot carries no maintenance chrome, and it
-         names the count because a button that says how many is also a reading
-         of the garden. It is a real button rather than a painted one because
-         every other route to watering needs a pointer aimed at a few pixels of
-         3D scene, and this is the keyboard's way in. -->
+    <!-- WATER ALL. On screen from the first planted tree, and it waters the
+         whole plot rather than the thirsty part of it. It used to wait for
+         three thirsty trees, then for one, and a control that comes and goes as
+         moisture drifts is hard to learn. It is a real button rather than a
+         painted one because every other route to watering needs a pointer aimed
+         at a few pixels of 3D scene, and this is the keyboard's way in. -->
     <button id="water-all" type="button" class="water-all" hidden></button>
 
     <!-- THE PLANT MODAL. The species grid is a real radio group, so the whole

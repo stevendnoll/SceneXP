@@ -635,47 +635,50 @@ test('a tap outside the ring is nobody s droplet', () => {
 
 // ---- Water all --------------------------------------------------------------
 
-test('Water all counts what is asking, and stays a rescue', () => {
+test('thirst is still counted, and the button no longer gates on it', () => {
     const M = GARDEN_CONFIG.garden.moisture;
     const trees = [0, 0.1, M.thirstyBelow, 0.6, 1].map((m) => ({ record: { moisture: m } }));
     // Exactly at the line is not below it, which is the same boundary
-    // `needsWater` and the droplet both use.
+    // `needsWater` and the droplet both use. `thirstyCount` survives the
+    // change: it still drives the droplets and the droplet lesson, it simply
+    // no longer decides whether the Water all button exists.
     expect(thirstyCount(trees)).toBe(2);
     expect(thirstyCount([])).toBe(0);
 
-    // ---- IT APPEARS AT ONE, AND THAT IS AN ACCESSIBILITY FLOOR ----------
-    // It used to wait for three, to keep it a rescue rather than a routine:
-    // M11-4 took the free water out of this scene so showing up meant
-    // something, and a permanent Water all would hand that back, becoming the
-    // only control anybody used while the droplets turned into decoration.
-    //
-    // The argument was sound and it was answering the wrong question. This
-    // button is the KEYBOARD'S ONLY ROUTE TO THE CARE LOOP, because a tree is
-    // reachable only by tapping a few pixels of 3D canvas and M13-2 took the
-    // tree card's own Water button away for exactly the trees that need it. At
-    // a threshold of three, a visitor without a pointer could not water at all
-    // while one or two trees were asking. A threshold above one is a garden
-    // that is closed to them, not a garden that is harder to tend.
-    expect(M.waterAllFrom).toBe(1);
+    // ---- THE THRESHOLD KNOB IS GONE, NOT ZEROED -------------------------
+    // It was three, then one, and now the button is on screen from the first
+    // planted tree and waters the whole plot. `rainFill` set the precedent
+    // above it in config.js: a live-looking number that no longer gates
+    // anything is how somebody loses an afternoon later. If this assertion
+    // ever fails, something has reintroduced a knob that nothing reads.
+    expect(M.waterAllFrom).toBeUndefined();
 });
 
-test('Water all says how many, and says it grammatically at one', async () => {
-    // "Water all 1" is what counting without reading produces, and one is now
-    // where the button first appears. The same trap `resetPrompt` already had
-    // to solve for "all 1 of your trees". The count stays because a button that
-    // says how many is also a reading of the garden.
+test('Water all names no count, and the aria label says how much "all" is', async () => {
+    // The label was a reading of the garden while the button watered exactly
+    // the trees that were asking. Watering everything makes the same number a
+    // count of trees you own, which says nothing about whether to press it.
     const { waterAllText } = await import('../www/garden/js/ui.js');
-    expect(waterAllText(1).label).toBe('Water 1 tree');
-    expect(waterAllText(1).aria).toBe('Water 1 thirsty tree');
-    expect(waterAllText(4).label).toBe('Water 4 trees');
-    expect(waterAllText(4).aria).toBe('Water 4 thirsty trees');
-    // House style, which applies to every string a visitor can read, and no
-    // count may produce a word that only works in the plural.
+    expect(waterAllText(1).label).toBe('Water all');
+    expect(waterAllText(4).label).toBe('Water all');
+    // Stable across the whole range, because the button is permanent now and a
+    // label that rewrites itself under a visitor is what this change removed.
+    const labels = new Set();
+    for (let n = 1; n <= GARDEN_CONFIG.plot.maxTrees; n++) labels.add(waterAllText(n).label);
+    expect(labels.size).toBe(1);
+
+    // The count moves to the aria label, where it is the only way a visitor who
+    // cannot see the plot knows how much "all" is. Guarded at one, because
+    // "Water all 1 trees" is the same trap `resetPrompt` had to solve.
+    expect(waterAllText(1).aria).toBe('Water the one tree in your garden');
+    expect(waterAllText(4).aria).toBe('Water all 4 trees in your garden');
     for (let n = 1; n <= GARDEN_CONFIG.plot.maxTrees; n++) {
         const { label, aria } = waterAllText(n);
-        expect(`${n}: ${label}`).toBe(`${n}: Water ${n} tree${n === 1 ? '' : 's'}`);
+        // House style, which applies to every string a visitor can read, and no
+        // count may produce a word that only works in the plural.
+        expect(`${n}: ${aria}`).not.toMatch(/\b1 trees\b/);
         expect(label).not.toMatch(/[—;]/);
-        expect(aria).toContain('thirsty');
+        expect(aria).not.toMatch(/[—;]/);
     }
 });
 
