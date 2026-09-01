@@ -105,6 +105,41 @@ function makeStyle() {
   };
 }
 
+/** Depth-first search for the first descendant carrying a class. */
+function findByClass(root, name) {
+  if (!root || !Array.isArray(root.children)) return null;
+  for (const child of root.children) {
+    if (child && child.classList && child.classList.contains(name)) return child;
+    const deeper = findByClass(child, name);
+    if (deeper) return deeper;
+  }
+  return null;
+}
+
+/** Every descendant carrying a class, in document order. */
+function allByClass(root, name, found = []) {
+  if (!root || !Array.isArray(root.children)) return found;
+  for (const child of root.children) {
+    if (child && child.classList && child.classList.contains(name)) found.push(child);
+    allByClass(child, name, found);
+  }
+  return found;
+}
+
+/** Take a node out of whatever parent it is in, so a move is a move. */
+function detach(node) {
+  const parent = node && (node.parentNode || node.parentElement);
+  if (parent && Array.isArray(parent.children)) {
+    parent.children = parent.children.filter((x) => x !== node);
+  }
+}
+
+function adopt(parent, node) {
+  if (!node) return;
+  node.parentElement = parent;
+  node.parentNode = parent;
+}
+
 function makeElement(tag = 'div') {
   const listeners = new Map(); // type -> Set<fn>
   const el = {
@@ -115,8 +150,8 @@ function makeElement(tag = 'div') {
     classList: makeClassList(),
     children: [],
     parentElement: null,
+    parentNode: null,
     textContent: '',
-    innerHTML: '',
     value: '',
     href: '',
     disabled: false,
@@ -143,13 +178,48 @@ function makeElement(tag = 'div') {
     getAttribute(k) { return k in el.attributes ? el.attributes[k] : null; },
     removeAttribute(k) { delete el.attributes[k]; },
     hasAttribute(k) { return k in el.attributes; },
-    appendChild(c) { el.children.push(c); if (c) c.parentElement = el; return c; },
-    removeChild(c) { el.children = el.children.filter((x) => x !== c); return c; },
-    insertBefore(c) { el.children.push(c); if (c) c.parentElement = el; return c; },
+    // APPENDING A NODE THAT ALREADY HAS A PARENT MOVES IT, which is what the
+    // real DOM does and what any code that reparents a widget depends on.
+    // Without the detach a node ends up in its old parent's children as well,
+    // and a test asserting a row's contents reads a row that never existed.
+    appendChild(c) { detach(c); el.children.push(c); adopt(el, c); return c; },
+    removeChild(c) {
+      el.children = el.children.filter((x) => x !== c);
+      if (c) { c.parentElement = null; c.parentNode = null; }
+      return c;
+    },
+    // The reference node is honoured, or insertion order is not a thing a test
+    // can check and every layout assertion passes by accident.
+    // A real DOM has it and the stub did not, which is a difference the suite
+    // reports as "3D init failed" rather than as a missing method. www/garden
+    // moves its view-reset button into the shared pan part's zoom stack and
+    // needs it at the FRONT: the stack is anchored to the bottom of the frame,
+    // so appending would shove the zoom buttons upward when it appears.
+    prepend(c) { detach(c); el.children.unshift(c); adopt(el, c); return c; },
+    insertBefore(c, ref) {
+      detach(c);
+      const at = ref ? el.children.indexOf(ref) : -1;
+      if (at >= 0) el.children.splice(at, 0, c);
+      else el.children.push(c);
+      adopt(el, c);
+      return c;
+    },
     remove() { el.parentElement?.removeChild?.(el); },
     querySelector(sel) { return el._selMemo?.get(sel) ?? memoChild(el, sel); },
     querySelectorAll() { return []; },
-    contains() { return false; },
+    // ---- AND `contains` HAS TO WALK THE TREE ------------------------------
+    // It returned a flat `false`, which is the most dangerous answer a stub can
+    // give: every "is focus still inside this panel" check reads as no, so code
+    // that rescues focus never runs and the test asserting it was rescued
+    // passes for the wrong reason. www/garden's tend panel rebuilds its list
+    // when a tree is removed and has to catch the focus it is about to
+    // destroy. A real node contains itself, and so does this one.
+    contains(node) {
+      for (let at = node; at; at = at.parentElement) {
+        if (at === el) return true;
+      }
+      return false;
+    },
     closest() { return null; },
     focus() { el.focused = true; if (globalThis.document) globalThis.document.activeElement = el; },
     blur() { el.focused = false; },
@@ -160,6 +230,46 @@ function makeElement(tag = 'div') {
     getContext(type) { return type === '2d' ? make2dContext() : chainable(); },
     toDataURL() { return 'data:,'; },
   };
+  // ---- `innerHTML = ''` HAS TO ACTUALLY EMPTY THE ELEMENT ------------------
+  //
+  // It was a plain string field, so assigning to it stored a string and left
+  // every child in place. THREE PRODUCTION CALL SITES CLEAR A CONTAINER THIS
+  // WAY (`modalGrid`, `cardBody` and the tend panel's tree list in
+  // www/garden/js/ui.js), and under the stub all three appended to whatever was
+  // already there. A list rebuilt from four rows to two read as six, and a
+  // test asserting what a rebuild produced was reading rows that no longer
+  // exist in a browser.
+  //
+  // The stub cannot PARSE markup and is not going to try. Assigning detaches
+  // the children and stores the string, which models the real thing exactly for
+  // the clearing case and harmlessly for the only other use in the codebase
+  // (pan-1.0.0 writing one SVG into a button it just created).
+  Object.defineProperty(el, 'innerHTML', {
+    enumerable: true,
+    configurable: true,
+    get() { return el._html || ''; },
+    set(value) {
+      for (const child of el.children.splice(0)) {
+        child.parentElement = null;
+        child.parentNode = null;
+      }
+      el._html = String(value);
+    },
+  });
+  // `className` AND `classList` ARE THE SAME STATE. As two plain fields they
+  // drift the moment any code sets one and reads the other, and a class
+  // assigned by `el.className = 'a b'` is then invisible to `contains('a')`,
+  // to a class-based querySelector, and to every assertion written against
+  // either. The shared parts set className; the experiences use classList.
+  Object.defineProperty(el, 'className', {
+    enumerable: true,
+    configurable: true,
+    get() { return el.classList.values().join(' '); },
+    set(value) {
+      el.classList.values().forEach((name) => el.classList.remove(name));
+      String(value).split(/\s+/).filter(Boolean).forEach((name) => el.classList.add(name));
+    },
+  });
   return el;
 }
 
@@ -232,11 +342,32 @@ export function installDom({ innerWidth = 1280, innerHeight = 800 } = {}) {
       if (!byId.has(id)) byId.set(id, makeElement('div'));
       return byId.get(id);
     },
+    // A REAL SEARCH FIRST, then the auto-vivify fallback the rest of the
+    // suites lean on. Code that builds a widget and then goes looking for it
+    // by class was finding a fresh empty div and quietly working on nothing,
+    // which is a test passing while the thing under test did not happen.
+    // Only simple `.class` selectors are searched, which is all any experience
+    // uses on the document.
     querySelector(sel) {
+      if (typeof sel === 'string' && /^\.[\w-]+$/.test(sel)) {
+        const found = findByClass(documentStub.body, sel.slice(1));
+        if (found) return found;
+      }
       if (!bySelector.has(sel)) bySelector.set(sel, makeElement('div'));
       return bySelector.get(sel);
     },
-    querySelectorAll() { return []; },
+    // THE REVEAL SWEEP RUNS THROUGH HERE. Every experience hides its chrome
+    // with .ui-float until JS adds .visible, in one
+    // `querySelectorAll('.ui-float')` pass, and returning an empty list made
+    // that pass a no-op under test. So no suite could tell a scene that
+    // reveals its controls from one that leaves them invisible, which is a
+    // house bug this project has already shipped once.
+    querySelectorAll(sel) {
+      if (typeof sel === 'string' && /^\.[\w-]+$/.test(sel)) {
+        return allByClass(documentStub.body, sel.slice(1));
+      }
+      return [];
+    },
     addEventListener(type, fn, opts) {
       if (!documentListeners.has(type)) documentListeners.set(type, new Set());
       documentListeners.get(type).add(fn);

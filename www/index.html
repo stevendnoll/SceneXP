@@ -10,7 +10,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="SceneXP hosts custom 3D experiences, almost all of them built to honor the people, places, and businesses behind them. Walk through little worlds made with Three.js, right in your browser.">
+    <meta name="description" content="SceneXP is a home for 3D worlds, games, experiments, stories, and simulations, every one running entirely in your browser. No app and no download, just a link.">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f7fb">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e0f14">
     <meta name="author" content="Steve Noll">
@@ -18,8 +18,8 @@
     <link rel="canonical" href="https://www.scenexp.com/">
 
     <!-- Open Graph -->
-    <meta property="og:title" content="SceneXP | Custom 3D Experiences">
-    <meta property="og:description" content="Custom 3D experiences, almost all of them built to honor the people, places, and businesses behind them. Walk through little worlds made with Three.js, right in your browser.">
+    <meta property="og:title" content="SceneXP | 3D Worlds, Games, and Experiments">
+    <meta property="og:description" content="A home for 3D worlds, games, experiments, stories, and simulations, every one running entirely in your browser. No app and no download, just a link.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/">
@@ -32,8 +32,8 @@
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="SceneXP | Custom 3D Experiences">
-    <meta name="twitter:description" content="Custom 3D experiences, almost all of them built to honor the people, places, and businesses behind them. Little worlds made with Three.js, right in your browser.">
+    <meta name="twitter:title" content="SceneXP | 3D Worlds, Games, and Experiments">
+    <meta name="twitter:description" content="3D worlds, games, experiments, and simulations, every one running entirely in your browser. No app and no download.">
     <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.webp?v=2">
     <meta name="twitter:image:alt" content="The SceneXP logo and wordmark on a dark background with the tagline, custom 3D experiences right in your browser.">
 
@@ -48,7 +48,7 @@
           "@id": "https://www.scenexp.com/#website",
           "url": "https://www.scenexp.com/",
           "name": "SceneXP",
-          "description": "Custom 3D experiences, almost all of them built to honor the people, places, and businesses behind them.",
+          "description": "A home for 3D worlds, games, experiments, stories, and simulations, every one running entirely in the browser.",
           "inLanguage": "en-US",
           "publisher": {
             "@type": "Organization",
@@ -62,7 +62,7 @@
         {
           "@type": "ItemList",
           "@id": "https://www.scenexp.com/#experiences",
-          "name": "SceneXP custom 3D experiences",
+          "name": "SceneXP 3D experiences",
           "itemListElement": [
             {
               "@type": "ListItem",
@@ -136,16 +136,16 @@
     }
     </script>
 
-    <title>SceneXP | Custom 3D Experiences</title>
+    <title>SceneXP | 3D Worlds, Games, and Experiments</title>
 
-    <link rel="preload" href="/css/site.min.css?v=1" as="style">
+    <link rel="preload" href="/css/site.min.css?v=2" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/site.min.css?v=1">
+    <link rel="stylesheet" href="/css/site.min.css?v=2">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
     <script src="/js/nav.min.js?v=1" defer></script>
-    <script src="/js/directory.min.js?v=9" defer></script>
+    <script src="/js/directory.min.js?v=10" defer></script>
 </head>
 
 <body>
@@ -203,27 +203,27 @@
     </header>
 
     <main id="main">
-        <section class="hero">
-            <div class="container">
-                <p class="hero-eyebrow">Custom 3D experiences, right in your browser</p>
-                <h1>Little worlds, <span class="hero-accent">built with love</span></h1>
-                <p class="hero-sub">Custom 3D experiences that celebrate the people you love and bring the
-                    businesses you built to life. Walk around, look closer, and stay as long as you like. No
-                    app and no downloads, just your browser.</p>
-                <div class="hero-actions">
-                    <a class="btn btn-primary" href="#experiences">Browse the experiences</a>
-                    <a class="btn btn-ghost" href="/contact.html">Request your own</a>
-                </div>
-            </div>
-        </section>
+        <!-- NO HERO SECTION, ON PURPOSE. The cards are the product and they
+             carry preview images, so the grid starts high on the fold rather
+             than behind a screenful of copy.
 
+             THAT MAKES THIS SECTION HEAD THE HOME OF THE PAGE'S ONLY h1. It is
+             an h1 rather than an h2 because the document needs exactly one and
+             this is now the first heading on the page. If a section is ever
+             added above this one, the h1 moves with it rather than being
+             duplicated. Two knock-on rules follow from that, and both live in
+             site.css: `.section-head h1, .section-head h2` are styled together
+             so the level stays an outline decision rather than a visual one,
+             and the cards below are h2 rather than h3 so no level is skipped
+             between this heading and theirs. -->
         <section id="experiences" class="section" aria-labelledby="experiences-heading">
             <div class="container">
                 <div class="section-head">
-                    <h2 id="experiences-heading">Step inside the experiences</h2>
-                    <p>Each one is a small handcrafted world you can explore on any modern device. Almost all of them
-                        were built to honor the person or business at the heart of them, and one of them is
-                        simply a game.</p>
+                    <h1 id="experiences-heading">3D worlds, games, and experiments, right in your browser</h1>
+                    <p>Worlds to walk through, games to play, stories to sit with, and experiments that
+                        exist to show you what a browser can do. Every one runs on any modern device with
+                        no app, no download, and nothing to install. New experiences land regularly, so it
+                        is worth checking back now and then.</p>
                 </div>
 
                 <!-- Search is progressive enhancement: directory.js reveals the form
@@ -231,7 +231,7 @@
                 <form id="experience-search-form" class="experience-search" role="search" hidden>
                     <label for="experience-search">Search the experiences</label>
                     <input type="search" id="experience-search" name="q" autocomplete="off"
-                        placeholder="Try trail, golf, or Zumba">
+                        placeholder="Try trail, space, or garden">
                 </form>
                 <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
 
@@ -239,6 +239,23 @@
                      the TOP of this list and renumber the JSON-LD ItemList in the
                      head to match. -->
                 <ul class="experience-grid">
+                    <li class="experience-card" data-slug="garden">
+                        <a href="/garden/">
+                            <img src="/garden/assets/og-garden.webp?v=3" width="1200" height="630" loading="lazy"
+                                decoding="async"
+                                alt="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below grey rolling hills, under a blue sky with white clouds.">
+                            <div class="experience-card-body">
+                                <p class="experience-eyebrow">A garden you plant and tend yourself</p>
+                                <h2>Fractal Garden</h2>
+                                <p>Plant a garden of fractal trees, then watch it live through the
+                                    years. Choose from seventeen species, each one grown from its
+                                    own seed so no two are alike, then tend them through spring
+                                    blossom, summer fruit, autumn color and winter snow. Every tree
+                                    you plant is still standing when you come back.</p>
+                                <span class="experience-cta">Plant your first tree →</span>
+                            </div>
+                        </a>
+                    </li>
                     <li class="experience-card" data-slug="highwater">
                         <a href="/highwater/">
                             <img src="/highwater/assets/og-highwater.webp?v=1" width="1200" height="630" loading="lazy"
@@ -246,7 +263,7 @@
                                 alt="A view out to sea under a low grey storm sky, with a branching fork of lightning coming down to the horizon and a small orange and white navigation buoy standing in the heaving grey swell.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">A study of water and weather</p>
-                                <h3>High Water</h3>
+                                <h2>High Water</h2>
                                 <p>Ninety seconds at the water's edge, beginning on an ordinary
                                     bright afternoon. The sky closes over, lightning starts to work
                                     along the cloud base, and the surf keeps rising. Please know
@@ -262,7 +279,7 @@
                                 alt="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, and orange diamonds mark the incoming Martian raiders across a deep starfield.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">Built for the joy of flying through space</p>
-                                <h3>Earth Defense</h3>
+                                <h2>Earth Defense</h2>
                                 <p>Fly a single ship in orbit above a massive Earth while twelve
                                     Martian raiders close on the installations below. There is no
                                     fire button to learn: line a raider up in the middle of your
@@ -278,7 +295,7 @@
                                 alt="A deep zoom into the Mandelbrot set: a giant spiral of glowing red and gold fractal filaments coiling toward its center against dark space.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">For Benoit Mandelbrot</p>
-                                <h3>The Mandelbrot Set</h3>
+                                <h2>The Mandelbrot Set</h2>
                                 <p>The most famous shape in mathematics floats in a quiet starfield.
                                     Choose a destination on its burning edge, press play, and the auto
                                     zoom dives hundreds of billions of times deep, until the numbers
@@ -294,7 +311,7 @@
                                 alt="A 3D karaoke bar at night: Jamar sings on the corner stage under a happy birthday banner while friends raise glasses from a red vinyl booth.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">Happy Birthday, Jamar!</p>
-                                <h3>Jamar's Karaoke Night</h3>
+                                <h2>Jamar's Karaoke Night</h2>
                                 <p>It is karaoke night at the corner bar, and the birthday singer is
                                     Steve's best friend Jamar. Settle in, follow the rolling lyrics
                                     screen, and tap the jukebox to pick what he sings next.</p>
@@ -309,7 +326,7 @@
                                 alt="A 3D close-up of a Confederate Jasmine in a cedar planter box, with three kids peering through the leaves in search of the bugs living there.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">For Gavin, age eleven</p>
-                                <h3>Gavin's Bug Patrol</h3>
+                                <h2>Gavin's Bug Patrol</h2>
                                 <p>Every spring, Steve's son Gavin releases ladybugs and praying mantises into
                                     the patio plants. Settle in for a close-up of the jasmine, watch the garden
                                     change shifts at dusk, and see if you can spot all three mantises.</p>
@@ -324,7 +341,7 @@
                                 alt="Steve's 3D home office: he stands at his sit-stand desk working on SceneXP code while a tuxedo cat sleeps by the window.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">Where SceneXP gets built</p>
-                                <h3>Steve's Home Office</h3>
+                                <h2>Steve's Home Office</h2>
                                 <p>Step inside the little office in Steve's house where every one of these
                                     experiences gets built. Peek at the code on the monitor, read the whiteboard,
                                     watch for birds on the fence, and please mind the sleeping cat.</p>
@@ -339,7 +356,7 @@
                                 alt="A 3D tire shop storefront with an open garage bay beneath the Interstate Tire sign.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">For a neighborhood tire shop</p>
-                                <h3>The Interstate Tire Shop</h3>
+                                <h2>The Interstate Tire Shop</h2>
                                 <p>Walk into a 3D tire shop built for Interstate Tire in historic Cockeysville,
                                     Maryland. See the car up on the lift, catch the waiting room TV, and stroll
                                     Railroad Ave to the 1892 freight depot.</p>
@@ -354,7 +371,7 @@
                                 alt="A 3D backyard vegetable garden with raised beds, a greenhouse, and a picket fence.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">For a gardening business</p>
-                                <h3>The Seed to Seed Garden</h3>
+                                <h2>The Seed to Seed Garden</h2>
                                 <p>Stroll a 3D backyard garden built for Seed to Seed, a home vegetable gardening
                                     company. Wander the raised beds, step inside the greenhouse, and meet the
                                     gardener.</p>
@@ -369,7 +386,7 @@
                                 alt="A joyful 3D Zumba class with dancers mid-step and a disco ball overhead.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">For a wonderful instructor</p>
-                                <h3>Zumba with Roqui</h3>
+                                <h2>Zumba with Roqui</h2>
                                 <p>Step into a joyful 3D Zumba class and say hola to Roqui. Catch the beat, fire
                                     up the speakers, and find the disco ball.</p>
                                 <span class="experience-cta">Step inside →</span>
@@ -383,7 +400,7 @@
                                 alt="A 3D pirate mini golf course in Ocean City, with a pirate ship at its center.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">For a family summer memory</p>
-                                <h3>Putt Putt with Mom and Dad</h3>
+                                <h2>Putt Putt with Mom and Dad</h2>
                                 <p>Play a 3D round of pirate mini golf in Ocean City, Maryland, built from a
                                     favorite summer memory. Board the ship and walk the plank hole.</p>
                                 <span class="experience-cta">Step inside →</span>
@@ -397,7 +414,7 @@
                                 alt="A walkable 3D stretch of the NCR Trail, with the Gunpowder River alongside.">
                             <div class="experience-card-body">
                                 <p class="experience-eyebrow">In memory of a dad</p>
-                                <h3>A Ride on the NCR Trail</h3>
+                                <h2>A Ride on the NCR Trail</h2>
                                 <p>Take a quiet walk on a 3D stretch of Maryland's NCR Trail, built for a dad who
                                     rode it nearly every weekend. Find the river and listen for the little
                                     waterfall.</p>
@@ -408,7 +425,7 @@
                 </ul>
 
                 <div id="search-empty" class="search-empty" hidden>
-                    <p>No matches just yet. Please try another word, like trail, golf, or Zumba.</p>
+                    <p>No matches just yet. Please try another word, like trail, space, or garden.</p>
                 </div>
             </div>
         </section>
@@ -416,22 +433,29 @@
         <section class="section" aria-labelledby="for-heading">
             <div class="container">
                 <div class="section-head">
-                    <h2 id="for-heading">For the people you love, and the business you built</h2>
-                    <p>Every world here is a tribute. Some celebrate a person or a memory. Others give a
-                        business a home on the web that no template site could ever match.</p>
+                    <h2 id="for-heading">What you will find here</h2>
+                    <p>The collection wanders on purpose. Some experiences are places, some are games, and
+                        some exist for no better reason than to find out whether a browser could do the
+                        thing at all.</p>
                 </div>
                 <ul class="audience-grid">
                     <li class="audience-card">
-                        <h3>People and memories</h3>
-                        <p>A gift, a tribute, or a place where a memory lives on. Walk a favorite trail again,
-                            replay a perfect summer evening, or step back into the class that made your week.
-                            The worlds above all began exactly this way.</p>
+                        <h3>Worlds and stories</h3>
+                        <p>Places you walk through in first person, or settle into and watch. A quiet trail
+                            along the Gunpowder, a karaoke night at the corner bar, a tire shop on Railroad
+                            Ave. Many of these were built to honor a real person or business.</p>
                     </li>
                     <li class="audience-card">
-                        <h3>Businesses with a story</h3>
-                        <p>Your storefront, studio, or venue as a world customers can wander. A 3D experience
-                            makes your business unforgettable, and it works beautifully alongside your existing
-                            website or as the marketing site itself.</p>
+                        <h3>Games and rides</h3>
+                        <p>Some hand you the controls and some fly themselves. Defend Earth from a Martian
+                            fleet, play a round of pirate mini golf, or take a hands-off dive hundreds of
+                            billions of times deep into the Mandelbrot set.</p>
+                    </li>
+                    <li class="audience-card">
+                        <h3>Experiments and simulations</h3>
+                        <p>The ones built to show you something. A physically modelled ocean that shoals and
+                            breaks on a measured beach, and a garden of fractal trees that grow, fruit, and
+                            go bare with the seasons while you tend them.</p>
                     </li>
                 </ul>
             </div>
@@ -440,49 +464,36 @@
         <section class="section" aria-labelledby="how-heading">
             <div class="container">
                 <div class="section-head">
-                    <h2 id="how-heading">How a SceneXP experience comes to be</h2>
-                    <p>Every world starts with a story worth honoring. Here is how yours would take shape.</p>
+                    <h2 id="how-heading">Every one of them runs in your browser</h2>
+                    <p>No app, no download, no account, and nothing to install. Each experience is
+                        browser-native HTML, CSS, and JavaScript with Three.js doing the drawing, served
+                        from this domain and nowhere else. There are no third-party scripts, no CDNs, and
+                        no trackers anywhere on the site. Open a link and you are already inside.</p>
                 </div>
-                <ol class="step-grid">
-                    <li class="step-card">
-                        <h3>Share the story</h3>
-                        <p>Tell us about the person, place, or business you want to celebrate. A favorite trail,
-                            a summer tradition, a shop with real character. The details make the world.</p>
-                    </li>
-                    <li class="step-card">
-                        <h3>We build the world</h3>
-                        <p>Your experience is handcrafted with Three.js: the places, the people, the little
-                            secrets to discover. You review it and we polish until it feels right.</p>
-                    </li>
-                    <li class="step-card">
-                        <h3>Share the link</h3>
-                        <p>The finished world lives at its own address and runs in any modern browser, on phones
-                            too. Send it to someone who deserves it, or link it from your website and give
-                            customers a visit to remember.</p>
-                    </li>
-                </ol>
             </div>
         </section>
 
-        <section class="section" aria-labelledby="developers-heading">
+        <section class="section" aria-labelledby="commission-heading">
             <div class="container">
                 <div class="section-head">
-                    <h2 id="developers-heading">Developers are warmly invited</h2>
-                    <p>SceneXP is open source under the MIT license, and the shared parts library makes new
-                        worlds easier to assemble than you might think. We would be honored to host yours.</p>
+                    <h2 id="commission-heading">Built for someone in particular</h2>
+                    <p>Several of the worlds above began as a gift. Someone knew a person who deserved a
+                        world, or a business that deserved to be more than another template website, and
+                        told us the story. We still love making those, so if a person or a place came to
+                        mind while you were browsing, we would be glad to hear about it.</p>
                 </div>
-                <p><a class="btn btn-ghost" href="/contribute.html">Read the contributor guide</a></p>
+                <p><a class="btn btn-ghost" href="/contact.html">Start the conversation</a></p>
             </div>
         </section>
 
         <section class="cta-band" aria-labelledby="cta-heading">
             <div class="container">
                 <div class="cta-band-inner">
-                    <h2 id="cta-heading">Who would you build a world for?</h2>
-                    <p>If a person came to mind just now, or you pictured your own business as a walkable
-                        world, we would love to hear about it. Every experience starts with a short, friendly
-                        conversation.</p>
-                    <a class="btn" href="/contact.html">Start the conversation</a>
+                    <h2 id="cta-heading">Bring your own little world</h2>
+                    <p>SceneXP is open source under the MIT license, and the shared parts library makes a
+                        new experience easier to assemble than you might think. Whatever you would build,
+                        we would be delighted to host it.</p>
+                    <a class="btn" href="/contribute.html">Read the contributor guide</a>
                 </div>
             </div>
         </section>
@@ -505,8 +516,8 @@
                     </svg>
                     SceneXP
                 </a>
-                <p>Custom 3D experiences for the people you love and the businesses you are proud of. Thank
-                    you for visiting.</p>
+                <p>3D worlds, games, and experiments, every one running right in your browser.
+                    Thank you for visiting.</p>
             </div>
             <nav class="footer-nav" aria-label="Explore">
                 <h2>Explore</h2>

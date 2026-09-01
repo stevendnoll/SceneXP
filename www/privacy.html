@@ -53,9 +53,9 @@
 
     <title>Privacy | SceneXP</title>
 
-    <link rel="preload" href="/css/site.min.css?v=1" as="style">
+    <link rel="preload" href="/css/site.min.css?v=2" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/site.min.css?v=1">
+    <link rel="stylesheet" href="/css/site.min.css?v=2">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
@@ -143,11 +143,18 @@
                     <li><strong>A small puzzle token.</strong> The contact page and the 3D experiences ask your
                         browser to solve a tiny proof-of-work puzzle that deters spam robots. The solved token
                         is kept in your browser's session storage and expires on its own.</li>
-                    <li><strong>Your progress and settings inside the experiences.</strong> Each 3D experience
-                        remembers your discovery checklist progress, your movement and look settings, and
-                        whether you have already seen its little celebration messages. All of it lives in your
-                        browser's session storage, is cleared when the tab closes, and never leaves your
-                        device.</li>
+                    <li><strong>Your progress inside an experience, while the tab is open.</strong> Each 3D
+                        experience remembers your discovery checklist progress and whether you have already
+                        seen its little celebration messages. That lives in your browser's session storage
+                        and is cleared when the tab closes.</li>
+                    <li><strong>A few things that are meant to outlast the visit.</strong> Where an experience
+                        would be poorer for forgetting, it saves to your browser's local storage instead, so
+                        it is still there when you come back. The Fractal Garden saves your garden: which
+                        trees you planted, where you planted them, and how they are getting on. Earth Defense
+                        saves your best score along with your sound and control settings. It stays on your
+                        device, it is never sent to us or to anyone else, and you can remove it whenever you
+                        like. The garden has a Start a new garden button that clears its save on the spot,
+                        and clearing this site's data in your browser settings removes all of it.</li>
                 </ul>
 
                 <h2>Anonymous usage counts</h2>
@@ -184,8 +191,8 @@
                     </svg>
                     SceneXP
                 </a>
-                <p>Custom 3D experiences for the people you love and the businesses you are proud of. Thank
-                    you for visiting.</p>
+                <p>3D worlds, games, and experiments, every one running right in your browser.
+                    Thank you for visiting.</p>
             </div>
             <nav class="footer-nav" aria-label="Explore">
                 <h2>Explore</h2>

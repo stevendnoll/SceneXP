@@ -10,7 +10,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="Build your own custom 3D experience with the SceneXP parts library and share it with the world through a GitHub pull request.">
+    <meta name="description" content="Build your own browser-native 3D world, game, or experiment with the SceneXP parts library and share it with the world through a GitHub pull request.">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f7fb">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e0f14">
     <meta name="author" content="Steve Noll">
@@ -19,7 +19,7 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="Contribute | SceneXP">
-    <meta property="og:description" content="Build your own custom 3D experience with the SceneXP parts library and share it with the world through a GitHub pull request.">
+    <meta property="og:description" content="Build your own browser-native 3D world, game, or experiment with the SceneXP parts library and share it with the world through a GitHub pull request.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/contribute.html">
@@ -33,7 +33,7 @@
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Contribute | SceneXP">
-    <meta name="twitter:description" content="Build your own custom 3D experience with the SceneXP parts library and share it through a GitHub pull request.">
+    <meta name="twitter:description" content="Build your own browser-native 3D world, game, or experiment with the SceneXP parts library and share it through a GitHub pull request.">
     <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.webp?v=2">
     <meta name="twitter:image:alt" content="The SceneXP logo and wordmark on a dark background with the tagline, custom 3D experiences right in your browser.">
 
@@ -45,7 +45,7 @@
       "@id": "https://www.scenexp.com/contribute.html#webpage",
       "url": "https://www.scenexp.com/contribute.html",
       "name": "Contribute to SceneXP",
-      "description": "How to build your own custom 3D experience with the SceneXP parts library and contribute it through a GitHub pull request.",
+      "description": "How to build your own browser-native 3D world, game, or experiment with the SceneXP parts library and contribute it through a GitHub pull request.",
       "inLanguage": "en-US",
       "isPartOf": { "@id": "https://www.scenexp.com/#website" }
     }
@@ -53,9 +53,9 @@
 
     <title>Contribute | SceneXP</title>
 
-    <link rel="preload" href="/css/site.min.css?v=1" as="style">
+    <link rel="preload" href="/css/site.min.css?v=2" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/site.min.css?v=1">
+    <link rel="stylesheet" href="/css/site.min.css?v=2">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
@@ -119,10 +119,11 @@
     <main id="main">
         <div class="page-hero">
             <div class="container">
-                <h1>Bring your own little world</h1>
-                <p>SceneXP is open source under the MIT license, and new experiences are warmly welcomed through
-                    GitHub pull requests. If there is a person you would like to honor, or a business you
-                    would like to bring to life as a small 3D world, this page will get you building.</p>
+                <h1>Build your own little world</h1>
+                <p>SceneXP is open source under the MIT license, and new experiences are warmly welcomed
+                    through GitHub pull requests. A world to walk through, a game, a story, a simulation, or
+                    an experiment that exists to show what a browser can do. Whatever you have in mind, this
+                    page will get you building.</p>
             </div>
         </div>
 
@@ -133,8 +134,7 @@
                     folder of browser-native HTML, CSS, and JavaScript, powered by Three.js.</p>
                 <ul>
                     <li><strong>One folder per experience.</strong> Every experience lives in its own folder
-                        under <code>www/</code>, like <code>www/dad</code>, <code>www/family</code>, and
-                        <code>www/roqui</code>, with its own <code>index.html</code>, config, and
+                        under <code>www/</code> with its own <code>index.html</code>, config, and
                         orchestrator. Styling comes from the shared versioned stylesheet in
                         <code>www/shared/css</code>, and an experience that needs rules of its own can
                         add an optional <code>css/experience.css</code>.</li>
@@ -150,25 +150,32 @@
                 </ul>
 
                 <h2>Pick an interaction model</h2>
-                <p>Every experience so far follows one of three interaction models, and choosing one up
-                    front is the biggest design decision you will make. All three are assembled from the
-                    same shared parts, so the existing experiences double as working references.</p>
+                <p>Every experience so far follows one of four interaction models, and choosing one up
+                    front is the biggest design decision you will make. All four are assembled from the
+                    same shared parts, so the existing experiences double as working references. A new
+                    model is welcome too, if none of these fits what you have in mind.</p>
                 <ul>
                     <li><strong>Explorable worlds.</strong> First-person scenes that visitors walk through,
                         with keyboard and mouse on desktop, dual joysticks on phones, and collision so
-                        nobody wanders through a wall. Some also offer a guided autopilot tour.
-                        <code>www/dad</code>, <code>www/family</code>, <code>www/roqui</code>,
-                        <code>www/seedtoseed</code>, <code>www/interstate</code>, and
-                        <code>www/steve</code> are all built this way.</li>
+                        nobody wanders through a wall. Some also offer a guided autopilot tour.</li>
                     <li><strong>Composed views.</strong> A fixed camera frames one lovingly detailed
                         subject, and the scene moves instead of the visitor. A row of floating buttons
                         offers gentle pan and zoom, with matching swipe and pinch gestures on touch
                         screens, and tapping props opens short lines of story. This is the simplest model
-                        to build and a great fit for small subjects. See <code>www/gavin</code> and <code>www/jamar</code>.</li>
+                        to build and a great fit for small subjects. Fractal Garden extends it, keeping
+                        the fixed viewpoint but letting a tap on the ground plant a tree, so the visitor
+                        changes the scene rather than just looking around it.</li>
                     <li><strong>Hands-off rides.</strong> The scene drives itself and the visitor mostly
                         watches, with play and pause, speed, and direction controls for light steering.
-                        The Mandelbrot dive (<code>www/mandelbrot</code>) is the reference: its auto zoom
-                        flies the camera while the visitor picks destinations and adjusts the ride.</li>
+                        The Mandelbrot dive is the reference: its auto zoom
+                        flies the camera while the visitor picks destinations and adjusts the ride. High
+                        Water is the strictest version, with no controls at all beyond starting and
+                        replaying.</li>
+                    <li><strong>Piloted flight.</strong> The visitor drives a vehicle through open space
+                        rather than walking or watching, so the world moves around a camera that never
+                        stops. Earth Defense is the reference: keyboard and mouse on desktop, a throttle
+                        on the left thumb and a look joystick on the right on phones. Reach for this when
+                        the subject is the movement itself rather than the place.</li>
                 </ul>
 
                 <h2>Layer on the delight</h2>
@@ -178,11 +185,11 @@
                     <li><strong>Discovery checklists.</strong> A short list of things to find in the
                         scene, ticked off with a small celebration as visitors discover them.</li>
                     <li><strong>Tap-to-talk props.</strong> Objects and characters that respond to a
-                        click or tap with a short line of story. This is where the honoree's personality
-                        lives.</li>
+                        click or tap with a short line of story. In a world built for someone, this is
+                        where their personality lives.</li>
                     <li><strong>Guided tours.</strong> An autopilot that drives the camera past the
                         highlights until the visitor takes over.</li>
-                    <li><strong>Featuring a business.</strong> Experiences that honor a business can
+                    <li><strong>Featuring a business.</strong> An experience built for a business can
                         carry its logo on the loading and welcome screens, a floating button to its
                         website, and a warm invitation card that appears as visitors explore. Always
                         with the owner's permission, and always in the spirit of a tribute rather than
@@ -232,14 +239,29 @@ python3 -m http.server 8000
                     <li><strong>Follow the metadata pattern.</strong> Every experience page carries a strict
                         same-origin Content Security Policy, full Open Graph and Twitter tags, JSON-LD, and a
                         polite no-JavaScript fallback. Copy the pattern from an existing experience.</li>
+                    <li><strong>Make a social card.</strong> A 1200 by 630 capture of your world, saved as
+                        <code>assets/og-&lt;world&gt;.webp</code> with a <code>.jpg</code> beside it. Please
+                        read the conversion note in
+                        <a href="https://github.com/stevendnoll/SceneXP/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING.md</a>
+                        before you make it, because a screenshot taken on a Mac carries the display's color
+                        profile and will come out visibly duller than what you were looking at unless you
+                        convert it properly.</li>
                     <li><strong>Build and test.</strong> Run <code>npm run build</code> (your new files are
                         minified automatically), then <code>npm test</code>. Please include a small unit
                         test for your world, following the <code>tests</code> folder's
                         <code>&lt;experience&gt;-init.test.mjs</code> pattern. Every pull request should
                         bring tests along for the code it adds or changes.</li>
                     <li><strong>Add your world to the directory.</strong> One card in
-                        <code>www/index.html</code>, one entry in <code>www/js/directory.js</code>, and one URL
-                        in <code>www/sitemap.xml</code>.</li>
+                        <code>www/index.html</code>, one entry in <code>www/js/directory.js</code>, one URL
+                        in <code>www/sitemap.xml</code>, and a short description in
+                        <code>www/llms.txt</code>.</li>
+                    <li><strong>If your world remembers anything, say so in the privacy policy.</strong>
+                        <code>sessionStorage</code> needs nothing, since it goes when the tab closes and the
+                        policy already covers it. Anything you put in <code>localStorage</code> outlives the
+                        visit, so it has to be named in <code>www/privacy.html</code> along with how a
+                        visitor clears it. The test suite keeps the list of files allowed to write
+                        persistent storage and will fail the moment yours joins them, which is the reminder
+                        rather than the rule.</li>
                     <li><strong>Open a pull request</strong> telling us the story behind your world. The
                         <code>main</code> branch does not accept direct pushes, so every change to the
                         project arrives this way, and we read every pull request with genuine delight.</li>
@@ -247,8 +269,11 @@ python3 -m http.server 8000
 
                 <h2>House rules</h2>
                 <ul>
-                    <li><strong>Honor someone.</strong> Every experience celebrates a person, place, or
-                        business. Kind worlds only, please.</li>
+                    <li><strong>Give visitors something worth their time.</strong> That is the only test
+                        an experience has to pass here. Some of ours celebrate a real person, place, or
+                        business, and those are always welcome. So is a game, a simulation, or an
+                        experiment that honors nobody at all. Kind worlds only, please, whichever kind
+                        you bring.</li>
                     <li><strong>Security first.</strong> Same-origin CSP, no third-party scripts, no trackers,
                         no CDNs. Everything ships from this domain.</li>
                     <li><strong>Accessible and considerate.</strong> Keyboard support, reduced-motion respect,
@@ -286,8 +311,8 @@ python3 -m http.server 8000
                     </svg>
                     SceneXP
                 </a>
-                <p>Custom 3D experiences for the people you love and the businesses you are proud of. Thank
-                    you for visiting.</p>
+                <p>3D worlds, games, and experiments, every one running right in your browser.
+                    Thank you for visiting.</p>
             </div>
             <nav class="footer-nav" aria-label="Explore">
                 <h2>Explore</h2>

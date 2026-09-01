@@ -423,6 +423,11 @@ a {
     max-width: 46rem;
 }
 
+/* BOTH LEVELS, because the home page has no hero and puts its single <h1> in
+   the first section head while every other section head carries an h2. The
+   two must look identical, so the heading level stays a document-outline
+   decision rather than a visual one. */
+.section-head h1,
 .section-head h2 {
     margin: 0;
     font-size: clamp(1.7rem, 3.5vw, 2.3rem);
@@ -538,7 +543,10 @@ a {
     color: var(--link);
 }
 
-.experience-card h3 {
+/* h2 SINCE THE HERO WENT AWAY. The page's only h1 is the experiences section
+   head directly above these cards, so a card title is one level below it. It
+   was an h3 when the h1 lived in a hero and the section carried an h2. */
+.experience-card h2 {
     margin: 0.35rem 0 0;
     font-size: 1.25rem;
     font-weight: 800;

@@ -1,9 +1,12 @@
 # Contributing to SceneXP
 
 Thank you for considering a contribution. New 3D experiences are warmly
-welcomed, and so are fixes and improvements to the site itself. Every
-experience on SceneXP honors a person, place, or business, and we would be
-delighted to host yours.
+welcomed, and so are fixes and improvements to the site itself.
+
+SceneXP is a home for browser-native 3D experiences: worlds, games,
+experiments, stories, and simulations. Some were built to honor a person,
+place, or business. Others exist to show visitors what a browser can do. We
+would be delighted to host whichever kind you bring.
 
 By participating you agree to our [code of conduct](CODE_OF_CONDUCT.md), and
 security concerns are best raised through the steps in
@@ -16,7 +19,7 @@ is a static folder of browser-native HTML, CSS, and JavaScript, powered by
 Three.js.
 
 - **One folder per experience.** Every experience lives in its own folder
-  under `www/`, like `www/dad`, `www/family`, and `www/roqui`, with its own
+  under `www/`, like `www/dad`, and `www/family`, with its own
   `index.html`, config, and orchestrator. Styling comes from the shared
   versioned stylesheet in `www/shared/css`, and an experience that needs
   rules of its own can add an optional `css/experience.css`.
@@ -32,26 +35,36 @@ Three.js.
 
 ## Pick an interaction model
 
-Every experience so far follows one of three interaction models, and choosing
-one up front is the biggest design decision you will make. All three are
+Every experience so far follows one of four interaction models, and choosing
+one up front is the biggest design decision you will make. All four are
 assembled from the same shared parts, so the existing experiences double as
-working references.
+working references. A new model is welcome too, if none of these fits what you
+have in mind.
 
 - **Explorable worlds.** First-person scenes that visitors walk through, with
   keyboard and mouse on desktop, dual joysticks on phones, and collision so
   nobody wanders through a wall. Some also offer a guided autopilot tour.
-  `www/dad`, `www/family`, `www/roqui`, and `www/steve` are all built this way.
+  `www/dad`, `www/family`, `www/interstate`, and `www/seedtoseed` are all built this way.
 - **Composed views.** A fixed camera frames one lovingly detailed subject,
   and the scene moves instead of the visitor. A row of floating buttons
   offers gentle pan and zoom, with matching swipe and pinch gestures on
   touch screens, and tapping props opens short lines of story. This is the
-  simplest model to build and a great fit for small subjects. See
-  `www/gavin`.
+  simplest model to build and a great fit for small subjects. It provides a fixed
+  viewpoint with pan, tilt, and a dolly zoom, but tapping the ground plants
+  a tree rather than opening a line of dialog, which is worth reading if your
+  scene wants the visitor to change it.
 - **Hands-off rides.** The scene drives itself and the visitor mostly
   watches, with play and pause, speed, and direction controls for light
   steering. The Mandelbrot dive (`www/mandelbrot`) is the reference: its
   auto zoom flies the camera while the visitor picks destinations and
-  adjusts the ride.
+  adjusts the ride. `www/highwater` is the strictest version of this, with
+  no controls at all beyond starting and replaying.
+- **Piloted flight.** The visitor drives a vehicle through open space rather
+  than walking or watching, so the world moves around a camera that never
+  stops. `www/earthdefense` is the reference: keyboard and mouse on desktop,
+  a throttle on the left thumb and a look joystick on the right on phones,
+  with a HUD carrying live ranges and target lock. Reach for this when the
+  subject is the movement itself rather than the place.
 
 ## Layer on the delight
 
@@ -61,11 +74,11 @@ difference between a scene visitors look at and a scene they share:
 - **Discovery checklists.** A short list of things to find in the scene,
   ticked off with a small celebration as visitors discover them.
 - **Tap-to-talk props.** Objects and characters that respond to a click or
-  tap with a short line of story. This is where the honoree's personality
-  lives.
+  tap with a short line of story. In a world built for someone, this is where
+  their personality lives.
 - **Guided tours.** An autopilot that drives the camera past the highlights
   until the visitor takes over.
-- **Featuring a business.** Experiences that honor a business can carry its
+- **Featuring a business.** An experience built for a business can carry its
   logo on the loading and welcome screens, a floating button to its website,
   and a warm invitation card that appears as visitors explore. Always with
   the owner's permission, and always in the spirit of a tribute rather than
@@ -162,7 +175,7 @@ Each experience ships a 1200 by 630 card as `assets/og-<world>.webp` with a
 
 **The WebP is what every page points at, including Twitter.** `og:image`,
 `twitter:image` and the directory card on the home page all name the WebP, on
-all twelve experiences. An earlier version of this note said the JPEG was what
+every experience in the collection. An earlier version of this note said the JPEG was what
 Twitter used, which was never true of any page in the repository.
 
 The JPEG is not referenced by any page. It ships for two reasons:
@@ -260,7 +273,7 @@ A new experience should ship with a small init test, following the
 `tests/<experience>-init.test.mjs` pattern the existing experiences use: a
 build-and-tick smoke test plus a few assertions about your world's layout or
 behavior. The floor for experience code is sized for exactly that kind of
-simple, honest test, and `tests/gavin-init.test.mjs` is a good model to copy
+simple, honest test, and `tests/garden-init.test.mjs` is a good model to copy
 from.
 
 Every JS and CSS file under `www/` is minified automatically by convention
@@ -306,17 +319,35 @@ source of truth either way.
    entry in the catalog array in `www/js/directory.js`, and one URL in
    `www/sitemap.xml`. Also please add a short description of your world
    in the `www/llms.txt` file.
-7. **Open a pull request** telling us the story behind your world. We read
+7. **If your world remembers anything, say so in the privacy policy.**
+   `sessionStorage` needs nothing: it goes when the tab closes, and the
+   policy already covers it. But anything you put in `localStorage` outlives
+   the visit, so it has to be named in `www/privacy.html` along with how a
+   visitor clears it. `tests/privacy.test.mjs` holds the list of files
+   allowed to write persistent storage and will fail the moment yours joins
+   them, which is the reminder rather than the rule.
+8. **Open a pull request** telling us the story behind your world. We read
    every one with genuine delight.
 
 ## House rules
 
-- **Honor someone.** Every experience celebrates a person, place, or
-  business. Kind worlds only, please.
+- **Give visitors something worth their time.** That is the only test an
+  experience has to pass here. Some of ours celebrate a real person, place, or
+  business, and those are always welcome. So is a game, a simulation, or an
+  experiment that honors nobody at all, which is how Earth Defense, High
+  Water, and Fractal Garden were built. Kind worlds only, please, whichever
+  kind you bring.
 - **Security first.** Same-origin CSP, no third-party scripts, no trackers,
   no CDNs. Everything ships from this domain.
 - **Accessible and considerate.** Keyboard support, reduced-motion respect,
-  and a no-JavaScript fallback are part of the pattern, not extras.
+  and a no-JavaScript fallback are part of the pattern, not extras. Worth
+  checking early rather than late: if the only way into your world's main
+  action is a pointer event on the canvas, it has no keyboard story yet, and
+  no test will tell you.
+- **Nothing leaves the visitor's device.** Storage here is for the visitor's
+  benefit and nobody else's, so it stays in their browser and is never sent
+  anywhere. If you keep something past the visit, disclose it (step 7 above)
+  and give them a way to clear it.
 - **Fast on phones.** Many visitors arrive on mobile, so keep assets lean
   and performance in mind.
 - **A gracious tone.** User-facing copy should read like a world-class host:

@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="garden">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party
+         scripts/styles). No media-src: this scene plays no sound, so nothing
+         may load any. Adding one later would mean the scene had grown audio,
+         which is a decision rather than an oversight. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="Plant a garden of 3D fractal trees and watch it live through the years. Choose from seventeen species, each one grown from its own seed so no two are alike, then tend them through spring, summer, autumn, and winter as they grow. Runs in any modern browser with no app and no download.">
+    <!-- A leaf green, which is what the chrome should be tinted with while the
+         page is still the loading screen. The scene's own dominant colour
+         changes with the hour, so no single value could match it. -->
+    <meta name="theme-color" content="#8fbf76">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they cannot come from config.js and must stay literal absolute URLs
+         naming where this page is actually served (currently
+         www.scenexp.com/garden). When serving from a new domain, update the
+         URLs here: canonical, og:url, og:image, twitter:image, and the JSON-LD
+         id below. Everything else is relative or config-driven. -->
+    <link rel="canonical" href="https://www.scenexp.com/garden/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Fractal Garden">
+    <meta property="og:description" content="Plant a garden of fractal trees, then watch it live through the years. Choose from seventeen species, each grown from its own seed, and tend them through every season as they grow.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/garden/">
+    <meta property="og:locale" content="en_US">
+
+    <!-- EXACTLY ONE og:image, and it is the WebP, which is what the other
+         eleven pages do. Apple's link preview renders EVERY og:image it finds,
+         so adding the JPEG here as a fallback would put two identical cards in
+         a friend's message thread. That bug shipped once already, on
+         earthdefense. The JPEG is built and sits beside this file for any
+         scraper that asks for it by name, and for the rare one that cannot
+         read WebP at all. -->
+    <meta property="og:image" content="https://www.scenexp.com/garden/assets/og-garden.webp?v=3">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below grey rolling hills, under a blue sky with white clouds.">
+
+    <!-- Twitter / X. The same single WebP as og:image. -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Fractal Garden">
+    <meta name="twitter:description" content="Plant a garden of fractal trees, then watch it live through the years. Every season passes, and the trees remember you.">
+    <meta name="twitter:image" content="https://www.scenexp.com/garden/assets/og-garden.webp?v=3">
+    <meta name="twitter:image:alt" content="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below grey rolling hills, under a blue sky with white clouds.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/garden/#website",
+      "url": "https://www.scenexp.com/garden/",
+      "name": "Fractal Garden",
+      "description": "An interactive 3D scene. Plant fractal trees in an open plot and tend them across the years as the seasons and the weather turn.",
+      "inLanguage": "en-US"
+    }
+    </script>
+
+    <title>Fractal Garden</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
+    <link rel="preload" href="css/experience.min.css?v=17" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <!-- The shared sheet FIRST and the experience sheet second, which is the
+         order the cascade needs: the shared one sets a universal reset and a
+         dark body, and this scene wants a soft daylight behind a slow first
+         frame. -->
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
+    <link rel="stylesheet" href="css/experience.min.css?v=17">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback
+         layout. A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text intro and links to the classic site. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Fractal Garden</h1>
+            <p>This is an interactive 3D scene, and it needs JavaScript to
+                draw. It begins as an open plot of grassland. You choose a spot,
+                pick one of seventeen trees, and it goes into the ground as a
+                sapling.</p>
+            <p>Then time does the work. Every day and night cycle is a year, and
+                the sun's own hours are the seasons: dawn is spring, noon is
+                summer, dusk is autumn, and midnight is winter. Leaves bud,
+                deepen, turn, and fall. Snow arrives in the small hours and
+                melts as the light comes back. The trees grow a little older
+                every year, and your garden is still there when you return.</p>
+            <p>The one thing they ask for is water, and they ask for it plainly.
+                A small gauge on every bed shows how full that tree's tank is,
+                and a thirsty one raises a blue droplet above it. Tap the
+                droplet and the tree drinks. A tree left dry through enough
+                summers begins to wilt, though it is never truly gone, and the
+                first watering puts buds back on the branches within seconds.</p>
+            <p>SceneXP is a home for 3D experiences that run right in your
+                browser. This one is a garden you plant and tend yourself.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">FRACTAL GARDEN</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- The welcome overlay. Dismissed by a click, a tap, Enter, or Space, the
+         same as the other composed-view experiences. The plot is already alive
+         behind it, so this sits over a real morning rather than a still frame.
+         M3-6 adds one polite line here for browsers that cannot save a garden
+         (private windows, blocked storage). -->
+    <div id="blocker" tabindex="-1">
+        <div id="instructions">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">An open plot, and as many years as you care to spend on it</p>
+            <p class="click-prompt" id="begin-prompt">Click to begin</p>
+            <!-- One row per idea. As loose inline spans these reflowed into a
+                 ragged block with the labels stranded mid-line, which read as
+                 broken text rather than as a legend.
+
+                 ONE LINE EACH ON A PHONE, WHICH IS WHAT CUT THEM DOWN. QA on a
+                 391 px frame found this card running off the bottom of the
+                 screen with no way to scroll to the rest, and the six rows
+                 spent 110 words getting there. They now spend 58 and say the
+                 same six things. The rule for anything added here: if the row
+                 does not fit one line at 391 px, it is two ideas. -->
+            <ul class="controls-hint">
+                <!-- BOTH ROUTES, AND THE GESTURE LEADS. Pointing at the ground
+                     is what makes this a garden rather than a form, so it is
+                     named first; the button is the one that always works and
+                     is the only one a keyboard visitor has. One line still, at
+                     391 px: this is a word longer than the sentence it
+                     replaced. -->
+                <li><span>PLANT</span> Tap the grass in the plot, or use the Plant button.</li>
+                <!-- M9-8. This used to read "Drag to pan and tilt, pinch or
+                     use the buttons to zoom", which was false on every machine
+                     without a touchscreen: the shared part's gesture handler
+                     returns early on a mouse pointer, so a desktop drag does
+                     nothing at all. The buttons are the one instruction that
+                     is true everywhere, so they lead. -->
+                <li><span>LOOK</span> Drag to look around, or use the arrows. Pinch or the plus and minus to zoom.</li>
+                <li><span>WATER</span> Tap the blue droplet over a thirsty tree and it drinks.</li>
+                <li><span>TEND</span> Tap the mulch under a tree to see how it is doing.</li>
+                <!-- THE SENTENCE A NEWCOMER IS MOST MISSING. Nothing else on
+                     screen says a day is a year, so somebody watching a sapling
+                     for thirty seconds and seeing nothing happen cannot tell
+                     whether the scene is slow, broken, or waiting for them. -->
+                <li><span>GROW</span> Every day and night is a year, so your trees fill out while you watch.</li>
+                <li><span>KEEP</span> Your garden is saved in this browser.</li>
+            </ul>
+            <!-- Filled in only when the browser will not let the page save.
+                 Empty and silent otherwise. -->
+            <p id="storage-note" class="storage-note"></p>
+        </div>
+    </div>
+
+    <!-- Floating controls. The Home button returns to the serving site's root
+         in the same tab (applySiteLinks keeps it in sync with
+         GARDEN_CONFIG.site.home). Note it is display:none until main.js adds
+         .visible on load, which is true of every .ui-float element on the
+         site: correct markup on its own renders an invisible button. -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+
+    <!-- HOW TO PLAY, AND IT IS THE WELCOME CARD ITSELF. Everything this scene
+         explains about itself lived on a card that could be dismissed and never
+         reached again, so a visitor who clicked through it before reading was
+         left in a field with no idea what any of it was for. This puts the same
+         card back, which is better than a second copy of the same sentences
+         that could drift from it. The garden's calendar is held while the card
+         is up, so reading it never costs a season. -->
+    <button id="help-btn" class="ui-float menu-btn help-btn" type="button"
+        title="How this works"
+        aria-label="How this works">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" />
+            <path d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" stroke-linecap="round"
+                stroke-linejoin="round" fill="none" />
+            <circle cx="12.1" cy="17.4" r="1.05" stroke="none" fill="currentColor" />
+        </svg>
+    </button>
+
+    <!-- Start over. Behind a confirmation, because it is the visitor's garden
+         and there is no undo. -->
+    <button id="reset-btn" class="ui-float menu-btn reset-btn" type="button"
+        title="Start a new garden"
+        aria-label="Start a new garden">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12a8 8 0 1 1-2.5-5.8" stroke-linecap="round" fill="none" />
+            <path d="M20 4v4.5h-4.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+        </svg>
+    </button>
+
+    <!-- SHOW THE WHOLE GARDEN, and it is only here when it has something to do.
+         Same rule the Water all button follows: a visitor who has not moved the
+         camera never sees it, so the frame the scene opens on carries no chrome
+         it does not need. It appears the moment the view leaves the composed
+         one, which is also the moment the visitor is looking at these controls,
+         because they were just holding one.
+
+         IT MOVES INTO THE ZOOM STACK AT INIT (main.js), because that container
+         is built by the shared pan part rather than by this file. It lives here
+         rather than being created in JavaScript so the label and the icon are
+         in the markup with the rest of the chrome. Prepended, not appended: the
+         stack is anchored to the bottom of the frame, so adding to the end
+         would shove the plus and minus upward the moment this appeared.
+
+         THE ICON IS DELIBERATELY NOT A CIRCULAR ARROW. That is the top-right
+         "start a new garden" button, which is the one irreversible action in
+         the scene, and two controls that both read as "reset" is how somebody
+         loses a garden. This is the four-corner framing reticle every map and
+         viewer uses for "fit the view". -->
+    <button id="view-reset" class="pan-btn view-reset" type="button" hidden
+        title="Show the whole garden"
+        aria-label="Show the whole garden">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9V5.8A1.8 1.8 0 0 1 5.8 4H9" />
+            <path d="M15 4h3.2A1.8 1.8 0 0 1 20 5.8V9" />
+            <path d="M20 15v3.2a1.8 1.8 0 0 1-1.8 1.8H15" />
+            <path d="M9 20H5.8A1.8 1.8 0 0 1 4 18.2V15" />
+            <circle cx="12" cy="12" r="1.6" stroke="none" fill="currentColor" />
+        </svg>
+    </button>
+
+    <!-- The season, the year, and the weather. A status readout only, never a
+         click target, in the same tradition as the depth chip in
+         www/mandelbrot. -->
+    <div id="season-chip" class="season-chip" role="status" aria-live="polite"></div>
+
+    <!-- Short confirmations: a tree planted, a tree watered, a plot full. -->
+    <div id="garden-toast" class="garden-toast" role="status" aria-live="polite"></div>
+
+    <!-- ===== PLANT A TREE, AND IT IS FOR EVERYBODY ========================
+         It began as the keyboard's way in, off screen in the panel below, and
+         it is on screen for all visitors now. TWO ARGUMENTS TURNED IT OUT:
+         it is the one instruction the whole scene is built to give somebody
+         who has just arrived, and a route the plot's newest visitor needs
+         should not be the one route that is hidden. Pointing at the grass is
+         still there and is still the better gesture once it has been learned.
+
+         ABOVE WATER ALL, WHICH IS THE ORDER THEY HAPPEN IN. They are the two
+         controls that act on the plot rather than on the view, so they are a
+         pair in the one empty corner, and the top-right stack keeps the things
+         that undo and explain. Water all appears under it with the first tree,
+         which is also the first moment there is anything to water.
+
+         IT STAYS WHEN THE PLOT IS FULL, and pressing it then says so in a
+         toast rather than opening a modal with a dead button in it. Same
+         answer a tap on a full plot gets, and the same reason Water all no
+         longer comes and goes: a control that moves around as the garden
+         changes is hard to learn. -->
+    <button id="tend-plant" type="button" class="tend-plant" hidden>Plant a tree</button>
+
+    <!-- WATER ALL. On screen from the first planted tree, and it waters the
+         whole plot rather than the thirsty part of it. It used to wait for
+         three thirsty trees, then for one, and a control that comes and goes as
+         moisture drifts is hard to learn. It is a real button rather than a
+         painted one because every other route to watering needs a pointer aimed
+         at a few pixels of 3D scene, and this is the keyboard's way in. -->
+    <button id="water-all" type="button" class="water-all" hidden></button>
+
+    <!-- ===== AND THE TREES THEMSELVES, WHICH ARE STILL ONLY ADDRESSABLE ====
+         Planting has a button in the corner now. REACHING ONE PARTICULAR TREE
+         STILL DOES NOT, because the only pointer target a tree has is a small
+         ellipse of mulch near the ground, and no amount of chrome would put
+         forty-nine of those in the frame. So this stays: one row per planted
+         tree, off screen until something in it has focus.
+
+         IT IS OFF SCREEN AND NOT INVISIBLE, which is the difference that
+         matters. It sits above the top of the frame and slides in whenever
+         anything inside it has focus, exactly as the skip link above does, so
+         a sighted keyboard visitor can SEE where they are. A control that is
+         focusable but never visible is a trap only they ever find.
+
+         THE LIST IS AN ADDRESSING MECHANISM, NOT A SECOND CARE LOOP. Pressing
+         a tree opens that tree's own card, which is already fully keyboard
+         operable and carries Water and Remove. That mirrors the pointer route
+         (aim at a bed, get the card) rather than inventing a parallel set of
+         actions that could drift from it. -->
+    <div id="tend-panel" class="tend-panel" role="group" aria-labelledby="tend-heading">
+        <h2 id="tend-heading" class="tend-heading">Your trees</h2>
+        <p class="tend-note">Choose a tree to see how it is doing, water it, or
+            take it out. Press Escape to close anything that opens.</p>
+        <!-- Filled in by ui.js. Empty and silent on an empty plot, where the
+             sentence below is what is shown instead. -->
+        <p id="tend-empty" class="tend-empty">No trees planted yet. Use the
+            Plant a tree button in the top corner.</p>
+        <ul id="tend-list" class="tend-list"></ul>
+    </div>
+
+    <!-- THE PLANT MODAL. The species grid is a real radio group, so the whole
+         thing works from the keyboard and reads correctly to a screen reader.
+         The preview canvas is drawn into by the main renderer through a
+         scissor rectangle, so no second WebGL context is ever created.
+
+         THE CARD IS A COLUMN WITH A SCROLLING MIDDLE, and that is a fix rather
+         than a refactor. It used to be one block with `max-height: 88vh` and
+         `overflow-y: auto`, while the `#plant-modal .modal-container` rule in
+         experience.css sets `overflow: visible` so the close button can hang
+         off the corner. An id plus a class beats a bare class, so the height
+         capped and nothing scrolled: on a short window the Plant button hung
+         out below the card's own rounded border. The heading and the button are
+         now their own rows and only the middle scrolls, which also means the
+         button is always reachable without scrolling to it. -->
+    <div id="plant-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="plant-heading">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container plant-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <h2 id="plant-heading" class="plant-heading">Choose a tree</h2>
+
+            <!-- TWO GROUPS, BECAUSE SEVENTEEN IS A LIST AND NOT A CHOICE.
+                 A real tablist: arrow keys move between tabs and only the
+                 selected one is in the tab order, which is what the pattern
+                 asks for and what a plain row of buttons would not give.
+                 "Flowering" holds anything that blossoms, fruit trees
+                 included, since a tree that fruits flowered first. -->
+            <div class="plant-tabs" role="tablist" aria-label="Kinds of tree">
+                <button id="tab-flowering" class="plant-tab" type="button" role="tab"
+                    aria-selected="true" aria-controls="species-grid">Flowering</button>
+                <button id="tab-foliage" class="plant-tab" type="button" role="tab"
+                    aria-selected="false" aria-controls="species-grid" tabindex="-1">Foliage</button>
+            </div>
+
+            <div class="plant-layout">
+                <fieldset class="species-fieldset">
+                    <legend class="visually-hidden">Species</legend>
+                    <div id="species-grid" class="species-grid" role="tabpanel"
+                        aria-labelledby="tab-flowering"></div>
+                </fieldset>
+
+                <div class="plant-side">
+                    <canvas id="preview-canvas" class="preview-canvas" aria-hidden="true"></canvas>
+                    <p id="plant-title" class="plant-title"></p>
+                    <p id="plant-note" class="plant-note"></p>
+                </div>
+            </div>
+
+            <!-- THE CUSTOMIZE DISCLOSURE IS GONE (M16-2). Seventeen species
+                 cover the range, and six sliders on top of them was a second
+                 decision asked of somebody who had only wanted a tree. The
+                 SLIDER DATA PATH STAYS: `resolveSpecies` still takes a custom
+                 object and saved gardens still carry one, so a garden planted
+                 before this change comes back exactly as it was. -->
+            <button id="plant-confirm" type="button" class="piece-enter">Plant it here</button>
+        </div>
+    </div>
+
+    <!-- THE TREE CARD. Health is stated in words as well as shown, because
+         colour is never the only carrier of anything here. -->
+    <div id="tree-card" class="hidden" role="dialog" aria-modal="true" aria-labelledby="tree-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container tree-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <h2 id="tree-title" class="piece-title"></h2>
+
+            <!-- THE TREE ITSELF, TURNING. Same scissor-rectangle trick the
+                 plant modal uses, and the same one canvas would not do: this
+                 one is built from the tapped tree's own record and driven at
+                 its LIVE growth, health and season, so what turns here is the
+                 tree in the garden rather than a catalogue photograph of its
+                 species. -->
+            <!-- THE SCROLLING MIDDLE. Same shape as the plant card and for the
+                 same reason: `#tree-card .modal-container` sets
+                 `overflow: visible`, so without a column with one scrolling row
+                 a tall card simply runs off the screen. On a 511 px window QA
+                 found the text cut off and both buttons unreachable. -->
+            <div class="tree-scroll">
+                <canvas id="tree-preview" class="tree-preview" aria-hidden="true"></canvas>
+
+                <div id="tree-body" class="tree-body"></div>
+
+            <!-- The same gauge that stands on the bed, in the same colours: the
+                 fill is blue, the part that is missing goes amber, and a dark
+                 tick marks where the two meet. A visitor who has learned to
+                 read the one in the world can read this without being told.
+                 The percentage stays in the text above, because colour is never
+                 the only carrier of anything here. -->
+                <div id="tree-thirst" class="tree-thirst" role="img">
+                    <div id="tree-thirst-fill" class="tree-thirst-fill"></div>
+                </div>
+            </div>
+            <div class="tree-actions">
+                <button id="tree-water" type="button" class="piece-enter">Water it</button>
+                <button id="tree-remove" type="button" class="tree-remove">Remove this tree</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE LAKE'S CARD. The water is 42 metres out and the dolly runs up the
+         middle of the PLOT, so the lake is one of the two things this scene is
+         made of and the visitor can never get near it. The card lends a second
+         camera rather than moving the first, and draws the SAME scene at the
+         same hour from 22 m off the water.
+
+         IT IS THE LAKE AND NOT THE DUCKS, which is a correction. A first
+         version framed one duck at four metres, and a duck here is two
+         ellipsoids built to read at the twelve pixels it covers from anywhere
+         the camera can go: what a close-up of an abstraction shows is the
+         abstraction. At 22 m all three fit, they are three times the size they
+         are on screen, and the card still says something true on the winter
+         days when the lake is empty. -->
+    <div id="lake-card" class="hidden" role="dialog" aria-modal="true" aria-labelledby="lake-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container lake-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <h2 id="lake-title" class="plant-heading">The lake</h2>
+            <canvas id="lake-view" class="lake-view" aria-hidden="true"></canvas>
+            <p id="lake-note" class="plant-note"></p>
+        </div>
+    </div>
+
+    <!-- CLEARING THE GARDEN ASKS HERE, NOT IN THE BROWSER. This is the only
+         irreversible action in the scene, and a native confirm() was the one
+         piece of unstyled browser chrome in it. Note the ids below are wired
+         to the shared modal parts in experience.css: a new modal id inherits
+         no hiding, no positioning, and a near-opaque backdrop. -->
+    <div id="reset-modal" class="hidden" role="dialog" aria-modal="true"
+        aria-labelledby="reset-title" aria-describedby="reset-body">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container reset-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <h2 id="reset-title" class="piece-title">Start a new garden?</h2>
+            <p id="reset-body" class="tree-line"></p>
+            <div class="tree-actions">
+                <button id="reset-confirm" type="button" class="piece-enter">Clear the plot</button>
+                <button id="reset-cancel" type="button" class="tree-remove">Keep my garden</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="scene"
+        aria-label="A 3D plot of open grassland where fractal trees can be planted and tended through the seasons"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

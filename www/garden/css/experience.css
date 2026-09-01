@@ -1,0 +1,1244 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed.
+ *
+ * experience.css - Fractal Garden.
+ *
+ * Loaded AFTER ../shared/css/styles-1.0.0.css, which is the order the cascade
+ * needs: the shared sheet sets a universal reset and a dark body, and this
+ * scene wants a soft daylight behind a slow first frame, so the background
+ * below has to be the later rule.
+ *
+ * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block.
+ * The page runs a strict same-origin CSP with style-src 'self', which blocks
+ * inline styles outright, and the failure is silent apart from a console
+ * message: the page simply renders unstyled. The same rule applies to
+ * JavaScript, which is why this experience keeps a js/main.js rather than a
+ * script block.
+ *
+ * BUMP THE ?v= QUERY ON BOTH LINES IN index.html when this file changes. A
+ * stale stylesheet over fresh markup does not look like a caching problem, it
+ * looks like a broken layout.
+ *
+ * The pan and zoom row needs nothing from this file. The shared sheet already
+ * carries `.pan-controls.always-on.visible { display: flex }` for experiences
+ * whose composed frame crops at every aspect, which is this one: a 24 metre
+ * plot is wider than any screen. main.js opts in by passing `alwaysOn: true`
+ * and the 'always-on' extra class to the shared part.
+ *
+ * Growing here as the milestones land: the plant modal and its species grid
+ * (M2-9), the live preview viewport (M2-10), the season chip (M1-8), the tree
+ * card (M5-5), and the thirst marker (M5-8).
+ */
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    /* Close to the scene's own daylight sky, so a slow first frame is a calm
+       morning rather than a white flash or a black one. The sky changes colour
+       with the hour and this cannot follow it, so it is deliberately the
+       friendliest of the hours rather than an average of them. */
+    background: #a8c8e0;
+}
+
+#scene {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* The canvas is the tap surface for planting and for the pan and pinch
+       gestures. Turning off the browser's own touch handling here is what
+       stops a swipe across the plot from scrolling the page underneath it. */
+    touch-action: none;
+}
+
+/* ---- The season chip --------------------------------------------------------
+ *
+ * Bottom centre, in the tradition of the depth chip in www/mandelbrot. It is a
+ * STATUS READOUT AND NEVER A CLICK TARGET, so pointer events pass straight
+ * through to the garden: a chip that swallowed a planting tap because the
+ * visitor happened to aim at it would be a small and infuriating bug.
+ *
+ * The pan and zoom row also lives bottom centre and is on at EVERY aspect in
+ * this scene (a 24 metre plot is wider than any screen), so unlike Gavin's
+ * chip this one steps up above the row in landscape as well as portrait.
+ * .pan-controls is 54px of button anchored 24px from the bottom, so 90px plus
+ * the safe area clears it with a little breath.
+ */
+.season-chip {
+    position: fixed;
+    bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.45rem 1.1rem;
+    background: rgba(20, 20, 20, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    letter-spacing: 0.3px;
+    border-radius: 999px;
+    white-space: nowrap;
+    z-index: 110;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.season-chip.visible {
+    opacity: 1;
+}
+
+/* ---- The plot's own two controls ---------------------------------------------
+ *
+ * TOP LEFT, WHICH IS THE ONLY EMPTY CORNER. Home, start over and help own the
+ * top right, the season chip and the pan row own the bottom centre, the zoom
+ * pair owns the bottom right. It also puts the two pieces of chrome that ACT ON
+ * THE GARDEN at the opposite end of the frame from the ones that undo and
+ * explain, so a rescue is never a neighbour of "start a new garden".
+ *
+ * PLANT ABOVE WATER, WHICH IS THE ORDER THEY HAPPEN IN, and the markup is in
+ * the same order so the tab order agrees with the picture. Water all appears
+ * beneath with the first tree, which is also the first moment there is anything
+ * to water, so the pair never reflows: Plant does not move when its neighbour
+ * arrives.
+ *
+ * ---- THE OFFSET IS THE BUTTON, NOT A GUESS ----
+ * 20px inset, a 44px control (the `min-height` below wins: 0.85rem of text in
+ * 0.5rem of padding is 34px), and 10px of air. Both are `white-space: nowrap`,
+ * so neither ever grows a second line and moves the other one.
+ *
+ * BOTH ARE DISPLAY NONE UNTIL JAVASCRIPT SAYS OTHERWISE, and the id-scoped
+ * sheet gives a new element no hiding of its own, so the rule is written here
+ * rather than inherited. The `hidden` attribute goes on with it, which is what
+ * takes them out of the tab order: a button that is invisible but still
+ * focusable is a trap only keyboard visitors ever find.
+ */
+.tend-plant,
+.water-all {
+    position: fixed;
+    display: none;
+    left: calc(20px + env(safe-area-inset-left, 0px));
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1.05rem;
+    min-height: 44px;
+    background: rgba(20, 20, 20, 0.78);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.55);
+    border-radius: 999px;
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    cursor: pointer;
+    z-index: 120;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+/* ---- A FILL IS A STATE, SO A RESTING BUTTON DOES NOT CARRY ONE -------------
+ *
+ * Plant shipped with an accent-tinted background so the eye would find it on an
+ * empty plot. QA: *"the Plant a tree button is always highlighted green, as if
+ * it's active"*, and that is a reading of the sheet rather than a matter of
+ * taste. THE RESTING FILL WAS 0.26 OF THE ACCENT AND THE HOVER FILL DIRECTLY
+ * BELOW IT IS 0.30: the two states were three hundredths apart, so the button
+ * spent its whole life inside its neighbour's hover.
+ *
+ * Every control in this scene is a dark pill that lifts to the accent when
+ * touched, and that vocabulary is the whole of how the frame says "you are on
+ * this". A pill that starts lifted is saying "pressed" in it. So the two now
+ * differ in nothing but position: same rest, same lift, same focus ring.
+ *
+ * IT NEEDS NO HELP BEING FOUND. On an empty plot it is the only thing in the
+ * corner, and the welcome card's PLANT row and the third planting nudge both
+ * name it. Emphasis is what the copy is for; colour here is what STATE is for.
+ */
+.tend-plant {
+    top: calc(20px + env(safe-area-inset-top, 0px));
+}
+
+.water-all {
+    top: calc(74px + env(safe-area-inset-top, 0px));
+}
+
+.tend-plant.visible,
+.water-all.visible {
+    display: inline-flex;
+}
+
+.tend-plant:hover,
+.water-all:hover {
+    background: rgba(var(--ui-accent-rgb), 0.3);
+    border-color: var(--ui-accent);
+}
+
+.tend-plant:focus-visible,
+.water-all:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+}
+
+/* The droplet, drawn rather than shipped as an image, so it costs no request
+   and inherits the button's own colour. The same shape the scene draws above a
+   thirsty tree's gauge, which is what ties the button to the world. */
+.water-all::before {
+    content: "";
+    width: 0.72rem;
+    height: 0.92rem;
+    flex: none;
+    background: #8fd3f4;
+    border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+    clip-path: polygon(50% 0%, 100% 45%, 100% 100%, 0% 100%, 0% 45%);
+}
+
+/* Reduced motion asks for less movement, not for less information. The chip
+   still updates, it simply stops fading while it does. */
+@media (prefers-reduced-motion: reduce) {
+
+    .season-chip,
+    .garden-toast,
+    .tend-plant,
+    .water-all {
+        transition: none;
+    }
+}
+
+/* ---- The reset button -------------------------------------------------------
+ *
+ * The shared .menu-btn anchors every floating button to the top right corner,
+ * which is where the Home button already is. This one steps left by a button
+ * plus a gap so the two sit as a pair rather than on top of each other.
+ */
+/* ---- Nothing in the corner is offered while the welcome card is up ---------
+ *
+ * `.menu-btn` is z-index 110 and the blocker is 100, so these buttons sit ON
+ * TOP of the welcome overlay and are in the tab order there. That made the help
+ * button a live control that did nothing (the card it summons is already on
+ * screen) and the reset button a destructive one reachable before the visitor
+ * had seen the garden at all.
+ *
+ * `.ui-float.visible` sets `display: flex`, so hiding these needs a rule that
+ * beats it rather than the `hidden` attribute's UA default alone. Written as
+ * one selector on the attribute so the JS has one thing to set, and so a
+ * control that is out of sight is out of the tab order by the same act. */
+.menu-btn[hidden] {
+    display: none;
+}
+
+/* The top-right stack, right to left: home, start over, how this works. The
+   shared .menu-btn anchors every floating button to the corner, so each one
+   past the first steps left by a button plus a gap. */
+.help-btn {
+    right: 144px;
+    background: rgba(20, 20, 20, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.reset-btn {
+    right: 82px;
+    background: rgba(20, 20, 20, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.storage-note {
+    margin: 0.8rem 0 0;
+    font-family: var(--font-system);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--ui-subtitle);
+}
+
+/* ---- The welcome card has to fit a phone, and scroll when it does not -------
+ *
+ * QA on a 391 x 841 frame found the card running off the bottom of the screen
+ * with the last row under the pan controls, and nothing would scroll to it.
+ * Two separate causes, and the copy was only one of them.
+ *
+ * THE OTHER IS THAT `align-items: center` CLIPS. The shared `#blocker` centres
+ * its child in a full-height flex box, and a flex item taller than its
+ * container overflows EQUALLY at both ends, so the top of the card goes above
+ * the top of the screen where no amount of `overflow-y: auto` can reach it: a
+ * scroll container cannot scroll to negative. Auto margins on the card are the
+ * fix rather than a workaround. They centre it exactly as before while it fits,
+ * and they collapse to zero rather than going negative when it does not, so the
+ * overflow all lands at the bottom where the scroll can get at it.
+ *
+ * The shared sheet's spacing is a desktop landscape budget (3rem under the
+ * subtitle alone), so the small-screen block below spends it again more
+ * carefully rather than letting the card be tall and then scrolling it.
+ */
+#blocker {
+    align-items: flex-start;
+    overflow-y: auto;
+    /* A flick that runs past the end of this card is not a request to move the
+       page behind it. */
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#instructions {
+    margin: auto;
+    max-width: 40rem;
+    padding: calc(1.75rem + env(safe-area-inset-top, 0px)) 1.25rem
+        calc(1.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+#instructions .subtitle {
+    margin-bottom: 1.4rem;
+}
+
+#instructions .click-prompt {
+    margin-bottom: 1.2rem;
+}
+
+/* ---- The welcome legend -----------------------------------------------------
+ *
+ * The shared stylesheet styles the LABELS (.controls-hint span) and nothing
+ * else, which is fine for one line and falls apart at four: as loose inline
+ * spans the pairs wrapped wherever they happened to land, stranding PLANT and
+ * TEND in the middle of sentences and reading as broken text. So the rows are
+ * a list here, and the label gets a column of its own so the sentences align.
+ *
+ * The shared sheet also hides `.controls-hint` outright below 768px. This
+ * scene keeps it, because the legend IS the instructions here rather than a
+ * reminder of controls the visitor can find by poking at them, and a phone is
+ * where most visitors will meet it. It is written as a bare class so it wins
+ * the specificity tie by coming later, which is deliberate: an `#instructions`
+ * prefix would make it unbeatable from the shared sheet.
+ */
+.controls-hint {
+    list-style: none;
+    display: grid;
+    gap: 0.55rem;
+    max-width: 36rem;
+    margin: 1.4rem auto 0;
+    text-align: left;
+    line-height: 1.45;
+}
+
+.controls-hint li {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    align-items: baseline;
+    column-gap: 0.6rem;
+}
+
+.controls-hint span {
+    margin: 0;
+    justify-self: start;
+    font-size: 0.68rem;
+}
+
+/* Below the column split the label sits on its own line above its sentence,
+   which is still a legend and never a ragged block. The rest of this block is
+   the phone's share of the card's height: the shared sheet's type and spacing
+   are a desktop budget, and six rows of legend under it is what pushed the last
+   one off the bottom of a 391 x 841 frame. */
+@media (max-width: 30rem) {
+    .controls-hint li {
+        grid-template-columns: 1fr;
+        row-gap: 0.15rem;
+    }
+
+    .controls-hint {
+        gap: 0.5rem;
+        margin-top: 1rem;
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+    }
+
+    #instructions {
+        padding-left: 1.1rem;
+        padding-right: 1.1rem;
+    }
+
+    #instructions .title {
+        letter-spacing: 0.18em;
+        margin-bottom: 0.4rem;
+    }
+
+    #instructions .subtitle {
+        font-size: 0.95rem;
+        letter-spacing: 0.05em;
+        margin-bottom: 1rem;
+    }
+
+    #instructions .click-prompt {
+        font-size: 1.05rem;
+        margin-bottom: 0.9rem;
+    }
+}
+
+/* ---- Toasts ---------------------------------------------------------------- */
+
+.garden-toast {
+    position: fixed;
+    top: calc(18px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 1.15rem;
+    max-width: min(90vw, 30rem);
+    background: rgba(16, 26, 14, 0.88);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.5);
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    font-size: 0.9rem;
+    text-align: center;
+    border-radius: 12px;
+    z-index: 200;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+}
+
+.garden-toast.visible {
+    opacity: 1;
+}
+
+/* ---- The modal shell --------------------------------------------------------
+ *
+ * THERE IS NO GENERIC `.hidden` RULE IN THE SHARED STYLESHEET. Every one of
+ * them is scoped to a specific id (`#dialog-modal.hidden`, `#piece-modal.hidden`
+ * and so on), so a new modal with a new id carries the class and is not hidden
+ * by anything. That is not a small cosmetic miss: it means BOTH of this scene's
+ * modals were on screen from the first frame, the close buttons appeared dead
+ * (the handler ran, added a class, and nothing matched it), and two
+ * `.modal-backdrop` elements at 92 percent opacity sat over the whole page, so
+ * the garden itself looked like a black screen.
+ *
+ * The same trap as `.ui-float` needing `.visible`: the shared sheet gives you
+ * the PARTS, and each experience is responsible for wiring its own ids to
+ * them. `tests/garden-ui.test.mjs` now checks that every id this scene hides
+ * from JavaScript has a rule that actually hides it.
+ *
+ * The layout below is copied from the shared `#dialog-modal` family so the
+ * chrome matches the rest of the site, and the three colour overrides after it
+ * are because the generic `.modal-backdrop` and `.modal-container` carry
+ * another experience's palette.
+ */
+
+#plant-modal,
+#tree-card,
+#lake-card,
+#reset-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+}
+
+#plant-modal.hidden,
+#tree-card.hidden,
+#lake-card.hidden,
+#reset-modal.hidden {
+    display: none;
+}
+
+/* The generic .modal-backdrop is a near-opaque near-black. A garden wants to
+   stay visible behind its own dialogs. */
+#plant-modal .modal-backdrop,
+#tree-card .modal-backdrop,
+#lake-card .modal-backdrop,
+#reset-modal .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(9, 17, 8, 0.58);
+    backdrop-filter: blur(3px);
+    cursor: pointer;
+}
+
+/* The generic .modal-container is bordered in another experience's orange. */
+#plant-modal .modal-container,
+#tree-card .modal-container,
+#lake-card .modal-container,
+#reset-modal .modal-container {
+    position: relative;
+    background: rgba(16, 26, 14, 0.96);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.55);
+    border-radius: 14px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+    overflow: visible;
+}
+
+#plant-modal .modal-close,
+#tree-card .modal-close,
+#lake-card .modal-close,
+#reset-modal .modal-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.5);
+    border-radius: 50%;
+    color: var(--ui-title);
+    font-size: 1.4rem;
+    line-height: 1;
+    z-index: 10;
+}
+
+#plant-modal .modal-close:hover,
+#tree-card .modal-close:hover,
+#lake-card .modal-close:hover,
+#reset-modal .modal-close:hover {
+    background: rgba(var(--ui-accent-rgb), 0.3);
+    transform: none;
+}
+
+/* ---- The plant modal -------------------------------------------------------
+ *
+ * Built on the shared modal PARTS (.modal-backdrop, .modal-container,
+ * .modal-close), wired to this scene's ids above. What is added here is the
+ * species grid, the preview, and the slider rows.
+ */
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.plant-card {
+    max-width: min(94vw, 46rem);
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 1.4rem 1.5rem 1.5rem;
+}
+
+.plant-heading {
+    margin: 0 0 0.9rem;
+    font-family: var(--font-system);
+    font-size: 1.15rem;
+    color: var(--ui-title);
+}
+
+.plant-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+@media (min-width: 44rem) {
+    .plant-layout {
+        grid-template-columns: 1.5fr 1fr;
+    }
+}
+
+.species-fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+
+.species-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 0.5rem;
+}
+
+/* Each option is a real radio input inside its label. The input is visually
+   hidden but never display:none, so it keeps its place in the tab order and
+   still reports its checked state. */
+.species-option {
+    position: relative;
+    display: block;
+    padding: 0.55rem 0.6rem 0.6rem 2.1rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.04);
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.species-option input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+}
+
+.species-swatch {
+    position: absolute;
+    left: 0.6rem;
+    top: 0.7rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    background: var(--bark, #888);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.species-name {
+    display: block;
+    font-family: var(--font-system);
+    font-size: 0.9rem;
+    color: var(--ui-title);
+}
+
+.species-meta {
+    display: block;
+    margin-top: 0.15rem;
+    font-family: var(--font-system);
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: var(--ui-subtitle);
+}
+
+.species-option:hover {
+    border-color: rgba(var(--ui-accent-rgb), 0.6);
+}
+
+/* The selected state is a border AND a background, never colour alone, and
+   the focus ring is kept rather than removed. */
+.species-option:has(input:checked) {
+    border-color: var(--ui-accent);
+    background: rgba(var(--ui-accent-rgb), 0.16);
+}
+
+.species-option:has(input:focus-visible) {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+}
+
+.plant-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.preview-canvas {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 10px;
+    background: linear-gradient(#cfe0ea, #b6c4c8 55%, #9a9182);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.plant-title {
+    margin: 0.2rem 0 0;
+    font-family: var(--font-system);
+    font-size: 1rem;
+    color: var(--ui-accent-strong);
+}
+
+.plant-note {
+    margin: 0;
+    font-family: var(--font-system);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--ui-subtitle);
+}
+
+/* ---- The card is a column, and only its middle scrolls --------------------
+ *
+ * THE BUG THIS FIXES, AND IT WAS THIS FILE'S OWN DOING. `.plant-card` set
+ * `max-height: 88vh` with `overflow-y: auto`, while the `#plant-modal
+ * .modal-container` rule above sets `overflow: visible` to let the close button
+ * hang off the corner. An id plus a class beats a bare class, so the overflow
+ * stayed visible while the height stayed capped: on a short window the content
+ * ran out past the card's own rounded border and the Plant button floated below
+ * it. Two rules in one stylesheet, each reasonable alone.
+ *
+ * Fixing the specificity alone would have made the whole card scroll, button
+ * and heading included. A column with one scrolling row is the better answer
+ * anyway: the action is always on screen without scrolling to it. */
+#plant-modal .modal-container.plant-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.plant-layout {
+    overflow-y: auto;
+    min-height: 0;
+    /* Room for the close button's corner, and for a scrollbar that appears. */
+    padding-right: 0.15rem;
+}
+
+#plant-confirm {
+    margin-top: 1rem;
+    width: 100%;
+    flex: none;
+}
+
+/* ---- The two groups ------------------------------------------------------
+ *
+ * Seventeen species is a list rather than a choice, so they split by the thing
+ * a visitor actually picks on: whether it flowers. Fruit trees live under
+ * Flowering, because a tree that fruits flowered first. */
+.plant-tabs {
+    display: flex;
+    gap: 0.4rem;
+    margin: 0 0 0.8rem;
+    flex: none;
+}
+
+.plant-tab {
+    flex: 1 1 0;
+    padding: 0.5rem 0.9rem;
+    min-height: 40px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    color: var(--ui-subtitle);
+    font-family: var(--font-system);
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.plant-tab:hover {
+    border-color: rgba(var(--ui-accent-rgb), 0.6);
+    color: var(--ui-title);
+}
+
+/* The selected tab is named by aria-selected rather than by a class, so the
+   thing a screen reader is told and the thing an eye is shown are one state
+   and cannot come apart. */
+.plant-tab[aria-selected="true"] {
+    background: rgba(var(--ui-accent-rgb), 0.18);
+    border-color: var(--ui-accent);
+    color: var(--ui-title);
+}
+
+.plant-tab:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+}
+
+#plant-confirm:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ---- The lake's card -------------------------------------------------------
+ *
+ * A borrowed camera 22 metres off the water, drawn through the same
+ * scissor-rectangle path the tree portraits use, so the page still has exactly
+ * one WebGL context. The card is nothing but a heading, that view, and a line.
+ *
+ * WIDER THAN THE TREE CARD AND NOT SQUARE. A tree is tall and a lake is a
+ * landscape, so this one is 4:3 and gets the room a small scene needs.
+ */
+.lake-card {
+    max-width: min(94vw, 30rem);
+    padding: 1.3rem 1.4rem 1.4rem;
+}
+
+.lake-card .plant-heading {
+    /* The close button is absolutely positioned over the container's top right
+       corner, so the heading has to stop short of it. */
+    padding-right: 2.9rem;
+}
+
+.lake-view {
+    display: block;
+    width: 100%;
+    /* CAPPED BY THE VIEWPORT'S HEIGHT as well as the card's width, the same way
+       the tree portrait is: on a short landscape window a box sized from the
+       width alone is most of the screen before a line of text is drawn. */
+    max-height: 52vh;
+    /* SQUARE, BECAUSE THE CAPTURE IS. `previewRect` hands back a square
+       rectangle and the canvas is sized from it, so a 4:3 box stretched every
+       duck in it 33 percent wider than it is. The frame the camera covers is
+       chosen from the ducks' own spread either way, so the shape costs nothing
+       and the extra height is far shore, treeline and sky rather than waste. */
+    aspect-ratio: 1 / 1;
+    margin: 0.2rem 0 0.8rem;
+    border-radius: 10px;
+    /* The water and the sky it sits under, so the first frame is not a flash
+       of something else. DELIBERATELY NOT the tree portraits' gradient: that
+       one is pinned to the clear colour `drawIntoCorner` wipes their rectangle
+       with, and this view has no clear colour at all (the sky dome fills the
+       frame). Two placeholders for two different pictures. */
+    background: linear-gradient(#c3d8e6, #93b0bd 58%, #46626c);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* ---- The tree card --------------------------------------------------------- */
+
+.tree-card,
+.reset-card {
+    max-width: min(92vw, 22rem);
+    padding: 1.3rem 1.4rem 1.4rem;
+}
+
+/* The close button is absolutely positioned at the top right of the container,
+   so it sits OVER the title unless the title is told to stop short of it. A
+   long species name ran straight under it ("Coast Redwood" with the cross
+   through the second word). 36px button plus its 8px offset plus a gap. */
+.tree-card .piece-title,
+.reset-card .piece-title {
+    padding-right: 2.9rem;
+}
+
+/* The shared `.piece-title` is a GALLERY DISPLAY STYLE from another experience:
+   1.8rem at weight 700 with 0.25rem beneath it. That is defensible for a
+   species name and wrong for a sentence. On "Start a new garden?" it wrapped to
+   two crowded lines in a 22rem card and then sat almost on top of its own body
+   text, while the plant modal two clicks away uses `.plant-heading` at 1.15rem.
+   Two dialogs in one scene should not be set in two different voices. */
+.reset-card .piece-title {
+    margin: 0 0 0.7rem;
+    font-family: var(--font-system);
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    line-height: 1.3;
+}
+
+.reset-card .tree-line {
+    margin: 0 0 1.1rem;
+    line-height: 1.5;
+}
+
+/* ---- The tree card's own portrait and gauge -------------------------------
+ *
+ * The card was a title, four lines and two buttons. These two put the tree and
+ * its thirst in it, and both are deliberately the SAME things the scene already
+ * shows: the canvas is fed by the same scissor-rectangle renderer the plant
+ * modal uses, and the gauge is the one on the bed, in its colours. A visitor
+ * who has learned to read one has learned to read the other. */
+/* ---- The card is a column too, and only its middle scrolls ---------------
+ *
+ * `#tree-card .modal-container` sets `overflow: visible` like the plant one, and
+ * this card had no height cap at all, so on a short window it ran straight off
+ * the screen with the text cut off and both buttons out of reach. The portrait
+ * made it worse by adding a square the height of the card's own width. */
+#tree-card .modal-container.tree-card {
+    display: flex;
+    flex-direction: column;
+    max-height: 88vh;
+    overflow: hidden;
+}
+
+.tree-scroll {
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 0.15rem;
+}
+
+.tree-actions {
+    flex: none;
+}
+
+.tree-preview {
+    display: block;
+    /* CAPPED BY THE VIEWPORT'S HEIGHT, not only by the card's width. A square
+       sized from the width alone is 19 rem tall in a 22 rem card, which is most
+       of a short window before a single line of text has been drawn. `min()`
+       keeps it square and lets the shorter of the two limits win. */
+    width: min(100%, 32vh);
+    aspect-ratio: 1 / 1;
+    margin: 0.7rem auto 0.2rem;
+    border-radius: 10px;
+    /* The backdrop the renderer draws, so the first frame is not a flash of
+       something else. Sky at the top, a deeper neutral at the bottom. */
+    background: linear-gradient(#cfe0ea, #b6c4c8 55%, #9a9182);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* The track is the missing water, so it carries the amber, and the fill is the
+   water. Exactly the way round the bed's gauge does it, and for the reason
+   recorded there: painting the alarm colour on the fill means an empty tank
+   cannot show it. */
+.tree-thirst {
+    position: relative;
+    height: 12px;
+    margin: 0 0 1rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background: #59666d;
+    border: 1px solid #0d1418;
+}
+
+.tree-thirst[data-urgent="true"] {
+    background: #f0a63c;
+}
+
+.tree-thirst-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: #8fd3f4;
+    /* The dark tick where the water stops, which is the whole reading of a
+       gauge. Blue on amber is 1.13:1, a hue pair and not a luminance one, so
+       the edge between them has to be drawn rather than left to emerge. */
+    border-right: 2px solid #0d1418;
+    transition: width 0.35s ease;
+}
+
+/* A full tank and an empty one have no boundary to draw, so the tick goes. */
+.tree-thirst-fill[data-edge="false"] {
+    border-right-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tree-thirst-fill {
+        transition: none;
+    }
+}
+
+.tree-body {
+    margin: 0.5rem 0 1rem;
+}
+
+.tree-line {
+    margin: 0 0 0.3rem;
+    font-family: var(--font-system);
+    font-size: 0.88rem;
+    color: var(--ui-subtitle);
+}
+
+/* Health is carried by the words in the card first. This tints the second
+   line to match, as a reinforcement rather than as the message. */
+.tree-body[data-band="wilting"] .tree-line:nth-child(2) {
+    color: #e0c36a;
+}
+
+.tree-body[data-band="failing"] .tree-line:nth-child(2) {
+    color: #dc9a5c;
+}
+
+.tree-body[data-band="bare"] .tree-line:nth-child(2) {
+    color: #cf8080;
+}
+
+.tree-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.tree-remove {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    padding: 0.45rem 1rem;
+    font-family: var(--font-system);
+    font-size: 0.8rem;
+    color: var(--ui-subtitle);
+    cursor: pointer;
+}
+
+.tree-remove:hover {
+    border-color: rgba(255, 255, 255, 0.5);
+    color: var(--ui-title);
+}
+
+/* ---- The view controls (M9-7) ---------------------------------------------
+   The shared part builds both groups, from `tiltButtons` and
+   `zoomContainerClass`: one four-button look cluster at the bottom centre,
+
+       [pan left] [look up] [look down] [pan right]
+
+   and the zoom pair stacked here at the bottom right, plus on top, which is
+   the idiom every map application already taught the visitor. Both stay inside
+   thumb reach, which the top corners of a phone are not. */
+.garden-zoom {
+    position: fixed;
+    right: calc(20px + env(safe-area-inset-right, 0px));
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 110;
+    pointer-events: none;
+}
+
+/* The house chrome is display:none until JS adds .visible. The part builds
+   this container before main.js's reveal sweep runs, so the sweep finds it and
+   both groups appear together. Without the rule it would inherit .ui-float's
+   hidden state and the zoom would simply not be there. */
+.garden-zoom.visible {
+    display: flex;
+}
+
+/* On a short landscape window the two stacks would meet the season chip and
+   the bottom of the frame. Tighten both rather than letting them overlap. */
+@media (max-height: 520px) {
+    .garden-zoom {
+        gap: 8px;
+        bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .garden-zoom .pan-btn,
+    .pan-controls .pan-btn {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+/* ---- Show the whole garden ---------------------------------------------
+ *
+ * It joins the zoom stack at init and wears `.pan-btn`, so it inherits the
+ * circle look and every size rule below without a second copy of any of them.
+ *
+ * IT IS HIDDEN UNTIL IT HAS A JOB, in the tradition of the Water all button:
+ * a visitor who has not moved the camera never sees it, so the frame the scene
+ * opens on carries no chrome it does not need. `.pan-btn` sets `display: flex`,
+ * which beats the browser's own `[hidden] { display: none }`, so hiding it
+ * needs a rule that outranks the class. Same trap as `.menu-btn[hidden]` above,
+ * and the same fix. The `hidden` attribute goes on with it, which is what takes
+ * it out of the tab order: a button that is invisible and still focusable is a
+ * trap only keyboard visitors ever find.
+ *
+ * It deliberately does NOT carry `.ui-float`. The reveal sweep in main.js adds
+ * `.visible` to everything that does, and `.ui-float.visible { display: flex }`
+ * would put this on screen whatever the attribute said.
+ */
+.view-reset[hidden] {
+    display: none;
+}
+
+/* ---- The two groups share one corner, so they share one centre -------------
+ *
+ * THE ARITHMETIC THAT WAS NEVER DONE. The pan row is centred in the VIEWPORT
+ * (the shared sheet's `left: 50%` and a translate) while the zoom stack is
+ * anchored to the right EDGE, so the two are laid out against different
+ * origins and whether they collide is a function of the window width. Four
+ * 54px circles and three 16px gaps is 264px, and a stack 54px wide held 20px
+ * off the edge leaves a centred row only `width - 148px` to live in. The row
+ * therefore overlaps the stack at any width below 428px, which QA found on a
+ * 391px phone: the minus button sitting on top of the right arrow.
+ *
+ * The buttons could shrink instead, and below 320px they would have to go
+ * under the 44px touch target to do it. So the row gives up the viewport
+ * centre rather than its size: it steps left by HALF of what the zoom stack
+ * occupies (20px offset, 54px button, and 8px of air between them), which
+ * centres the two groups as one cluster. The season chip stays on the viewport
+ * centre, a row higher up, where nothing is competing for the space.
+ *
+ * 28rem rather than the 428px the arithmetic gives: right at the boundary the
+ * unshifted row clears the stack by ten pixels, which is a pass by measurement
+ * and a near miss by eye, so the rule starts a little wider than it has to.
+ */
+@media (max-width: 28rem) {
+    .pan-controls.always-on.visible {
+        left: calc(50% - 41px);
+    }
+}
+
+/* Four circles at 54px plus three 16px gaps is 264px, which fits the narrowest
+   phone in use. IT DOES NOT FIT BESIDE THE ZOOM STACK, which is the thing this
+   comment used to claim and the rule above now handles: 46px circles at a 10px
+   gap still overlap a centred row at 320px by 13px. Shrink rather than wrap
+   either way, because a wrapped control row reads as broken. */
+@media (max-width: 380px) {
+    .pan-controls .pan-btn,
+    .garden-zoom .pan-btn {
+        width: 46px;
+        height: 46px;
+    }
+
+    .pan-controls {
+        gap: 10px;
+    }
+
+    /* ---- AND PLANT SHARES ITS ROW WITH THE TOP-RIGHT STACK -------------
+     *
+     * The one collision in the frame, and it is arithmetic rather than taste.
+     * Help is the leftmost of the three menu buttons at `right: 144px` and is
+     * 50px wide, so the stack reaches 194px in from the right edge whatever
+     * the screen is. Plant is 110px at the full size and starts 20px in from
+     * the left, so the two meet when the viewport falls below 328px:
+     *
+     *     viewport   plant ends   help starts   gap
+     *      391 px       130           197       +67   the QA frame, fine
+     *      360 px       130           166       +36   snug
+     *      320 px       130           126        -4   OVERLAPPING
+     *
+     * WATER ALL IS NOT AT RISK AND NEEDS NO ARITHMETIC. It sits at `top: 74px`
+     * and the menu buttons end at 70, so it is below the row entirely. It is
+     * shrunk here anyway, because the two are a pair and a pair that changes
+     * size one at a time stops being one.
+     *
+     * Shrinking rather than shortening the label: "Plant" alone would be
+     * narrower at every width, but it would make the button worse on the
+     * ninety-nine percent of screens that never had a problem. The 44px touch
+     * target is untouched, which is the number that may not move.
+     */
+    .tend-plant,
+    .water-all {
+        padding: 0.5rem 0.72rem;
+        font-size: 0.78rem;
+    }
+}
+
+/* ---- AND NOTHING ELSE IS OFFERED WHILE THE WELCOME CARD IS UP -------------
+ *
+ * The companion of `.menu-btn[hidden]` above, for the floats that are not menu
+ * buttons. All of them sit ABOVE the blocker (the pan row and the zoom stack at
+ * z-index 110 against its 100, Plant and Water all at 120), so the welcome card
+ * arrived under a full set of chrome, in its tab order, with nothing any of it
+ * could usefully do: the card covers the view the pan and zoom would aim, Water
+ * all offers to water a plot the visitor has not been shown, and Plant offers
+ * to put a tree in it before they have seen the ground.
+ *
+ * ---- THE `hidden` ATTRIBUTE IS NOT ENOUGH ON ANY OF THEM ----
+ *
+ * Each carries a `.visible` rule that sets `display`, and an author rule beats
+ * the attribute's UA default. So each selector here is written to OUTRANK the
+ * one it has to defeat rather than to rely on this file loading second:
+ *
+ *   .tend-plant.visible                2 classes  <  3 here
+ *   .water-all.visible                 2 classes  <  3 here
+ *   .garden-zoom.visible               2 classes  <  3 here
+ *   .pan-controls.visible (portrait)   2 classes  <  3 here
+ *   .pan-controls.always-on.visible    3 classes  <  4 here
+ *
+ * Matching on `.visible` as well as `[hidden]` is not belt and braces: without
+ * `.visible` these elements are already `display: none`, so the pair is exactly
+ * the case that needs deciding. `syncWelcomeChrome` in main.js sets the
+ * attribute, and tests/garden-init.test.mjs asserts both halves, because the
+ * DOM stub has no stylesheet and cannot tell us this rule exists. */
+.tend-plant.visible[hidden],
+.water-all.visible[hidden],
+.garden-zoom.visible[hidden],
+.pan-controls.visible[hidden],
+.pan-controls.always-on.visible[hidden] {
+    display: none;
+}
+
+/* The tend panel is the last of them, and it is the one that needs the
+ * attribute least and relies on it most: it sets no `display` of its own, so
+ * the UA default would already hide it, but it is also the only piece of chrome
+ * here that is PURELY a tab stop. Written out rather than inherited so that
+ * "hidden means hidden" is a rule this sheet states about every control it
+ * owns, and so the guard in tests/garden-init.test.mjs can check all of them. */
+.tend-panel[hidden] {
+    display: none;
+}
+
+/* ---- The tend panel, which is the keyboard's way into the plot -------------
+ *
+ * ---- OFF SCREEN, NOT INVISIBLE, AND THE DIFFERENCE IS THE WHOLE RULE ----
+ *
+ * Planting was reachable only through a click or a touch on the canvas, and
+ * every other act in this scene is downstream of owning a tree, so a visitor
+ * with no pointer could read the welcome card, look around, and leave. This
+ * panel is their route: a Plant button and one row per planted tree.
+ *
+ * It sits above the top of the frame and slides in on `:focus-within`, which is
+ * exactly what `.skip-link` in the shared sheet already does and what a
+ * keyboard visitor has therefore already met once on this page. THE ALTERNATIVE
+ * WAS A CLIPPED, PERMANENTLY INVISIBLE REGION, and that is a trap rather than a
+ * feature: focus lands somewhere the sighted keyboard visitor cannot see, and
+ * they are left pressing Tab into nothing. Being off screen also keeps it out
+ * of the frame entirely for the pointer visitor, which is what lets this scene
+ * add a whole interaction route without adding a pixel of chrome.
+ *
+ * `hidden` IS SET BY main.js WHILE THE WELCOME CARD IS UP, and the rule for it
+ * is below with the rest of that family, because a panel that is only off
+ * screen is still a tab stop.
+ *
+ * Z-INDEX ABOVE THE MODALS (200) rather than beside the other chrome (110):
+ * this slides down from the top edge, and the plant modal it opens covers the
+ * whole viewport. A panel that disappeared behind the thing it just opened
+ * would leave the visitor with no visible focus at the moment they most need
+ * one.
+ */
+.tend-panel {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(-120%);
+    z-index: 300;
+    width: min(92vw, 34rem);
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 1rem 1.25rem 1.25rem;
+    background: rgba(16, 26, 14, 0.97);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.55);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    transition: transform 0.2s ease;
+}
+
+.tend-panel:focus-within {
+    transform: translateX(-50%) translateY(0);
+}
+
+/* The same reason `.pan-controls` respects it: this slides, and a visitor who
+   asked for less movement should get the panel put in place rather than
+   travelling. It still arrives and still leaves. */
+@media (prefers-reduced-motion: reduce) {
+    .tend-panel {
+        transition: none;
+    }
+}
+
+.tend-heading {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+    letter-spacing: 0.3px;
+}
+
+.tend-note {
+    margin: 0 0 0.85rem;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.tend-empty {
+    margin: 0.85rem 0 0;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.68);
+}
+
+.tend-list {
+    list-style: none;
+    margin: 0.85rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+/* A ROW IS A FULL SENTENCE AND IT WRAPS RATHER THAN TRUNCATING. The text is
+   the button's accessible name as well as its label, so an ellipsis would be
+   hiding the half a screen reader is about to read out. Left aligned, because
+   a list of sentences centred is a list nobody can scan. */
+.tend-row {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    background: rgba(20, 20, 20, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 8px;
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.tend-row:hover {
+    background: rgba(var(--ui-accent-rgb), 0.22);
+    border-color: rgba(var(--ui-accent-rgb), 0.6);
+}
+
+.tend-row:focus-visible {
+    outline: 3px solid var(--ui-accent);
+    outline-offset: 2px;
+}

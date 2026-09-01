@@ -5,8 +5,10 @@ file. It's always a pleasure working with you.
 
 Let's build something great together that thoroughly delights any visitors
 that stumble across the SceneXP.com website or any of its 3D scenes and
-experiences. Each custom 3D experience is built to honor a person, place, or
-business.
+experiences. SceneXP is a home for browser-native 3D experiences: worlds,
+games, experiments, stories, and simulations. Some are built to honor a
+person, place, or business, and others exist to show visitors what a browser
+can do.
 
 This file is checked into the repository, so it guides every contributor's
 sessions, not just the maintainer's. If you are helping a contributor build
@@ -16,8 +18,8 @@ their own world, welcome aboard. We are delighted to have you both.
 
 - Please read the README.md file to get a general understanding of the
   SceneXP.com project.
-- CONTRIBUTING.md covers the architecture, the three interaction models, and
-  the step-by-step guide for adding a new experience.
+- CONTRIBUTING.md covers the architecture, the interaction models, and the
+  step-by-step guide for adding a new experience.
 - The 2D and 3D HTML, JavaScript, and CSS files are stored in the www
   folder. Each experience lives in its own folder under www and is assembled
   from the shared parts library in www/shared (its README.md documents every

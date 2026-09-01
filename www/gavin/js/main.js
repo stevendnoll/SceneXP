@@ -244,8 +244,20 @@ function setupEventListeners() {
         getCamera,
         lookAt: GAVIN_CONFIG.camera.lookAt,
         baseFov: GAVIN_CONFIG.camera.portrait.fov,
+        // The zoom anchor while landscape. placeCamera composes a different
+        // FOV per orientation, so the anchor has to follow it, and it is
+        // REQUIRED once alwaysOn is set or a landscape zoom hangs off the
+        // portrait FOV and jumps the moment it is touched.
+        landscapeFov: GAVIN_CONFIG.camera.fov,
         pan: GAVIN_CONFIG.camera.portrait.pan,
         zoom: GAVIN_CONFIG.camera.portrait.zoom,
+        // THE CONTROLS ARE ON AT EVERY ASPECT, as in jamar and sunnyvalejenn.
+        // Without this the shared CSS hides the row at every landscape aspect,
+        // so a desktop visitor had no on-screen controls at all: the scene
+        // answered the keyboard and, since the shared part learned about the
+        // mouse, a drag, with nothing on screen to say so.
+        alwaysOn: true,
+        extraClass: 'always-on',
         surface: canvas,
         onFirstUse: (kind) => track(`portrait-${kind}`),
         signal

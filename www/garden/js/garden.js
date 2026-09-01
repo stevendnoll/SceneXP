@@ -1,0 +1,630 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * garden.js - The garden itself: what is planted, how it grows, and what it
+ * needs.
+ *
+ * The rules are pure functions over plain numbers. The array of trees and the
+ * meshes they own are the only mutable state, and persistence sits at the edge
+ * as two pure functions the conductor hands to storage.
+ *
+ * ---- GROWTH IS INTEGRATED, NOT COMPUTED FROM AGE ----
+ *
+ * The obvious design reads a tree's growth off its age. It is wrong here,
+ * because a neglected tree has to STALL: two trees planted in the same minute,
+ * one watered and one not, must not be the same size. So `growth` is stored on
+ * the record and advanced each frame at a rate scaled by health, and `age` is
+ * kept alongside purely to tell the visitor how old the tree is. The two
+ * diverge, and that divergence is the point.
+ *
+ * ---- THE WATER MODEL IS TWO NUMBERS, AND THEY DO DIFFERENT JOBS ----
+ *
+ *   moisture  drains only inside the thirst window, and one watering lasts
+ *             exactly one window. This is the rhythm the visitor feels.
+ *   health    falls only while moisture is zero AND the window is open. This
+ *             is the consequence.
+ *
+ * MISS A YEAR AND IT IS DRY, MISS A SECOND AND IT IS DEAD WOOD. The planting
+ * tank carries a tree through its first year; a second year bone dry takes the
+ * blossom and the fruit with it, and a third leaves bare grey branches. That is
+ * about three times faster than the schedule M5-2 asked for, and it is a QA
+ * decision that supersedes it: at 1/6 a year the blossom survived four and a
+ * half dry years, and nobody watches a tree for four and a half years to find
+ * out it minded.
+ *
+ * IT IS NEVER ACTUALLY DEAD, and coming back is deliberately much faster than
+ * dying. Watering puts buds on the branches within a second and a half in any
+ * season, AND lifts health over the crop threshold at once, so a tree watered
+ * in spring flowers that spring rather than the next one. A rate could not do
+ * that: health only moves inside the thirst window, which opens after the early
+ * blossom is over.
+ */
+
+import { GARDEN_CONFIG } from './config.min.js';
+import {
+    hourAt, inThirstWindow, phenologyAt, fruitStageAt, seasonAt, clamp01, smoothstep
+} from './clock.min.js';
+import { resolveSpecies, clampCustom, speciesById, newSeed, DEFAULT_CUSTOM } from './species.min.js';
+import { createTree, updateTree, disposeTree } from './tree.min.js';
+import {
+    heightAt, cellCenter, cellKey, cellInPlot, snapToGrid, nearestFreeCell
+} from './terrain.min.js';
+import { initBeds, syncBeds, updateBeds, disposeBeds } from './beds.min.js';
+
+// ---- Derived constants (pure) ----------------------------------------------
+
+/** The storage schema written while the planting grid was 1.5 m. Records at
+ *  this version are readable, but every cell index in them means a different
+ *  place, so `hydrate` re-snaps them. See the note there. */
+export const SCHEMA_GRID_1_5 = 1;
+
+/**
+ * A cell index written against the old 1.5 m grid, expressed on the current
+ * one. Position is the only thing the two grids agree about, so it goes
+ * through the world and back rather than being scaled as an index: the
+ * arithmetic is then the same whatever the two spacings happen to be, and it
+ * stays correct if the grid is ever changed again.
+ */
+export function regridCell(gx, gz, config = GARDEN_CONFIG) {
+    const was = config.plot.legacyGridSpacing;
+    return snapToGrid(gx * was, gz * was, config.plot.gridSpacing);
+}
+
+/** How many real seconds the thirst window lasts, per year. Everything about
+ *  water is expressed against this, so changing the cycle length or the window
+ *  retimes the whole care loop consistently. */
+export function thirstSecondsPerYear(config = GARDEN_CONFIG) {
+    const t = config.season.thirst;
+    return (t.end - t.start) * (config.clock.cycleSeconds / 24);
+}
+
+// ---- The rules (pure) ------------------------------------------------------
+
+/** How fast a tree grows, as a fraction of the way to maturity per second.
+ *  Zero once health has fallen far enough: a failing tree stops rather than
+ *  creeping, and it never shrinks. */
+export function growthRate(health, config = GARDEN_CONFIG) {
+    const G = config.garden;
+    if (health < G.minGrowthHealth) return 0;
+    const perSecond = 1 / (G.maturityYears * config.clock.cycleSeconds);
+    // THE CURVE MATTERS MORE THAN THE FLOOR. A first version used a straight
+    // line from 0.35 to 1, which left a tree at health 0.17 still growing at
+    // nearly half speed, so six years of total neglect still produced a full
+    // sized tree. It was merely a grey one. Putting health on a power curve
+    // means a struggling tree visibly stalls, which is the whole point of
+    // coupling growth to health in the first place.
+    const h = clamp01(health);
+    return perSecond * (0.15 + 0.85 * Math.pow(h, 1.5));
+}
+
+/**
+ * Moisture after a step. Drains inside the thirst window, and NOTHING PUTS IT
+ * BACK except the visitor.
+ *
+ * THE WEATHER USED TO WATER THE GARDEN FOR YOU, AND IT DID IT TWICE OVER.
+ * Measured over 400 in-world years against the shipped config, precipitation
+ * delivered 2.39 tank-fills a year (rain 1.51, snow 0.67, sleet 0.21) against a
+ * drain of exactly 1.00. So the care loop was not weak, it was arithmetically
+ * dead, and had been since the rain shader started compiling. Snow was part of
+ * it: this function was handed `weather.rain` and added it whatever the
+ * temperature had made of it, so a blizzard filled a tank.
+ *
+ * ONE TERM LEAVES AND ALL THREE GO WITH IT. `garden.moisture.rainFill` is
+ * deleted rather than zeroed, because a live-looking knob that does nothing is
+ * how somebody loses an afternoon later.
+ *
+ * AND IT IS TRUE, which is the only reason to prefer it to cutting the rain. A
+ * newly planted nursery tree sits in a root ball of imported compost that is
+ * drier and better drained than the ground around it, so rain runs off it and
+ * past it. Every nursery in the world tells you to water a new tree by hand
+ * through its first summers regardless of rainfall, and the first few years of
+ * a young tree is exactly what this scene is about. The tree card says so.
+ */
+export function moistureAfter(moisture, dt, hour, config = GARDEN_CONFIG) {
+    const M = config.garden.moisture;
+    let m = moisture;
+    if (inThirstWindow(hour, config.season.thirst)) {
+        m -= dt / (thirstSecondsPerYear(config) * M.windowsPerFill);
+    }
+    return clamp01(m);
+}
+
+/** Health after a step. Falls only while dry AND thirsty, recovers only while
+ *  watered AND thirsty, and is untouched the rest of the year. Winter cannot
+ *  hurt a tree here, and it cannot heal one either. */
+export function healthAfter(health, moisture, dt, hour, config = GARDEN_CONFIG) {
+    const H = config.garden.health;
+    if (!inThirstWindow(hour, config.season.thirst)) return clamp01(health);
+    const perSecond = 1 / thirstSecondsPerYear(config);
+    if (moisture <= 0) return clamp01(health - H.dryPerYear * perSecond * dt);
+    return clamp01(health + H.recoverPerYear * perSecond * dt);
+}
+
+/** The four bands, in words, because colour is never the only carrier. */
+export function healthBand(health) {
+    const H = GARDEN_CONFIG.garden.health;
+    if (health <= H.bareBelow) return 'bare';
+    if (health <= H.failingBelow) return 'failing';
+    if (health <= H.wiltBelow) return 'wilting';
+    return 'healthy';
+}
+
+export const HEALTH_WORDS = {
+    healthy: 'Doing well',
+    wilting: 'Starting to wilt',
+    failing: 'Struggling badly',
+    bare: 'Bare, but not gone'
+};
+
+export function needsWater(moisture, config = GARDEN_CONFIG) {
+    return moisture < config.garden.moisture.thirstyBelow;
+}
+
+/**
+ * How much of a crop a tree has earned, 0 to 1.
+ *
+ * TWO GATES, AND THEY ARE THE REASON FRUIT IS WORTH BUILDING AT ALL. Taking the
+ * free water out of `moistureAfter` leaves the honest question of what showing
+ * up buys the visitor, and this is the answer: fruit is the first thing in this
+ * garden that care BUYS rather than merely preserves.
+ *
+ *   - GROWTH. A sapling does not fruit. Planting growth is 0.444, so a first
+ *     blossom at `bearFrom` is a little under an in-world year of watching away,
+ *     which is real orchard timing at this scene's scale.
+ *   - HEALTH. A neglected tree does not fruit either. Nothing at or below the
+ *     `failing` band, and `cropFrom` is deliberately the same 0.25 that band is
+ *     drawn at, so the crop and the words the tree card already uses agree by
+ *     construction rather than by coincidence.
+ *
+ * It thins the SET rather than shrinking every fruit, in the shader, against a
+ * per-instance draw. A half-crop tree is a scattering of full-sized apples,
+ * which is a poor year. A full count of half-sized ones is a rendering fault.
+ */
+export function cropAt(growth, health, config = GARDEN_CONFIG) {
+    const F = config.garden.fruit;
+    const bear = smoothstep((clamp01(growth) - F.bearFrom) / (F.bearFull - F.bearFrom));
+    const crop = clamp01((clamp01(health) - F.cropFrom) / (F.cropFull - F.cropFrom));
+    return bear * crop;
+}
+
+/**
+ * How much of the canopy is on the ground, taking the season and the tree's
+ * health together.
+ *
+ * A failing tree sheds out of season, which is most of how neglect READS
+ * before the colour changes are obvious. The scaling lines up with the bands:
+ * nothing extra at the wilt threshold, half the canopy at "failing", and bare
+ * at zero health.
+ */
+export function dropFor(phenologyDrop, health) {
+    const H = GARDEN_CONFIG.garden.health;
+    const fromHealth = clamp01((H.wiltBelow - health) / H.wiltBelow);
+    return Math.max(phenologyDrop, fromHealth);
+}
+
+/**
+ * Everything a tree's shaders need for one frame.
+ *
+ * Pure, so what a tree looks like at a given moment can be asserted without a
+ * renderer: "a healthy maple at noon in year three is in full leaf", "a tree
+ * at zero health is bare in every season", "a watered bare tree carries buds".
+ */
+export function viewFor(record, hour, options = {}) {
+    const evergreen = options.evergreen === true;
+    const phen = phenologyAt(hour, evergreen);
+    const health = clamp01(record.health);
+    const drop = dropFor(phen.drop, health);
+    const growth = clamp01(record.growth);
+
+    return {
+        growth,
+        health,
+        // Where the tree is in its blossom and fruit year, and how much of a
+        // crop it has earned. Null for the twelve species that carry neither.
+        fruit: options.schedule ? fruitStageAt(hour, options.schedule) : null,
+        crop: cropAt(growth, health),
+        // ---- A DEAD TREE HAS NO LEAVES ON IT (QA 2026-08-31) -----------
+        // This was `0.4 + 0.6 * health`, which floors at FORTY PER CENT of a
+        // full canopy: a tree at health zero went on sprouting every spring,
+        // which is what QA saw. The floor was never meant as one, it was a
+        // "struggling canopy is thin as well as dull" curve that happened not
+        // to reach the bottom.
+        //
+        // The square root reaches zero and is otherwise almost exactly the old
+        // curve where it mattered: 0.71 against 0.70 at the wilt, 0.87 against
+        // 0.85 at three quarters. What changes is the bottom, where it should:
+        // 0.32 against 0.46 at a tenth, and nothing at all at zero.
+        leaf: phen.leaf * Math.sqrt(health),
+        color: phen.color,
+        // New leaves come in pale and yellow-green before they deepen.
+        spring: phen.color > 0 ? 0 : clamp01(1 - phen.leaf),
+        drop,
+        bud: clamp01(record.bud || 0),
+        snow: options.snow || 0,
+        wind: options.wind || { x: 0, z: 0 },
+        time: options.time || 0,
+        // Reduced motion damps the sway rather than removing it, because in
+        // this scene the movement is the content. Absent means full motion.
+        motion: options.motion === undefined ? 1 : options.motion
+    };
+}
+
+// ---- Records ---------------------------------------------------------------
+
+let nextId = 1;
+
+/**
+ * The growth a newly planted tree starts at.
+ *
+ * DERIVED FROM THE AGE RATHER THAN WRITTEN DOWN, so the two numbers cannot
+ * drift: growth advances at exactly `1 / maturityYears` per year at full
+ * health, so an age is a growth. See `config.garden.plantAgeYears`.
+ */
+export function plantingGrowth(config = GARDEN_CONFIG) {
+    const G = config.garden;
+    return clamp01((G.plantAgeYears || 0) / G.maturityYears);
+}
+
+export function createRecord(speciesId, custom, gx, gz, plantedAt, seed) {
+    return {
+        id: `t${nextId++}`,
+        species: speciesId,
+        seed: seed >>> 0,
+        gx, gz,
+        custom: clampCustom(custom),
+        plantedAt,
+        // ONLY THIS FIELD STARTS FORWARD. Everything below it starts where a
+        // brand new tree starts, because `plantedAt` drives the decline
+        // schedule and backdating that would plant a thirsty tree.
+        growth: plantingGrowth(),
+        moisture: 1,
+        health: 1,
+        bud: 0,
+        budActive: false,
+        lastWateredAt: plantedAt
+    };
+}
+
+// ---- Persistence (pure) ----------------------------------------------------
+
+export function serialize(records, elapsedSeconds, config = GARDEN_CONFIG) {
+    return {
+        v: config.storage.schema,
+        elapsedSeconds: round(elapsedSeconds, 2),
+        trees: records.map((r) => ({
+            id: r.id,
+            species: r.species,
+            seed: r.seed,
+            gx: r.gx,
+            gz: r.gz,
+            custom: r.custom,
+            plantedAt: round(r.plantedAt, 2),
+            growth: round(r.growth, 4),
+            moisture: round(r.moisture, 4),
+            health: round(r.health, 4),
+            lastWateredAt: round(r.lastWateredAt, 2)
+        }))
+    };
+}
+
+/**
+ * Read a saved garden back, dropping anything that does not survive
+ * inspection.
+ *
+ * A BAD TREE IS DROPPED ON ITS OWN rather than taking the garden with it. A
+ * garden lost to a schema change is bad; a garden silently rendered wrong is
+ * worse; a garden thrown away because one record had a NaN in it is just
+ * careless. An unrecognised `v` IS discarded whole, because guessing at the
+ * shape of an unknown schema is the one case where being conservative is
+ * right.
+ *
+ * ---- SCHEMA 1 IS MIGRATED, NOT DISCARDED (M24-1) ----
+ *
+ * A tree is saved as a CELL INDEX, not a position, so coarsening the planting
+ * grid from 1.5 m to 3.0 changed what every saved index meant. A tree written
+ * at gx 5 stood at 7.5 m; read back against the new grid it would have claimed
+ * 15 m, outside the plot, and been dropped as out of bounds. A visitor who had
+ * tended a garden for a year would have opened the page to bare mulch, and
+ * nothing would have looked like a bug.
+ *
+ * So a version 1 record is put back through the spacing it was written against
+ * and re-snapped: world position first, new cell second. That is a HALVING, so
+ * two old cells can land on one new one, and the second arrival takes the
+ * nearest free cell instead of being dropped. The garden tidies itself into
+ * rows and keeps every tree, which is the whole promise this scene makes.
+ */
+export function hydrate(raw, config = GARDEN_CONFIG) {
+    // `restored` is what tells the conductor apart a garden that was read from
+    // one that was never there. Both come back empty, but only the second
+    // should open at the fresh-garden start hour.
+    const empty = { elapsedSeconds: 0, trees: [], dropped: 0, restored: false };
+    if (!raw || typeof raw !== 'object') return empty;
+    if (raw.v !== config.storage.schema && raw.v !== SCHEMA_GRID_1_5) return empty;
+    const regrid = raw.v === SCHEMA_GRID_1_5;
+
+    const elapsed = Number.isFinite(raw.elapsedSeconds) && raw.elapsedSeconds >= 0
+        ? raw.elapsedSeconds : 0;
+    const list = Array.isArray(raw.trees) ? raw.trees : [];
+    const trees = [];
+    const seen = new Set();
+    // Cells as they were WRITTEN, which is what duplicates are judged on. Same
+    // as `seen` unless this is a migration. See the note in the loop.
+    const source = new Set();
+    let dropped = 0;
+
+    for (const t of list) {
+        if (trees.length >= config.plot.maxTrees) { dropped++; continue; }
+        if (!t || typeof t !== 'object') { dropped++; continue; }
+        if (!speciesById(t.species)) { dropped++; continue; }
+        if (!Number.isFinite(t.seed)) { dropped++; continue; }
+        if (!Number.isInteger(t.gx) || !Number.isInteger(t.gz)) { dropped++; continue; }
+
+        // DUPLICATES ARE JUDGED ON THE CELL AS WRITTEN, before any migration.
+        // Two records on one cell is corrupt data, because there was never a
+        // legal way to produce it, and it stays a dropped record. The relocation
+        // below is for the other thing entirely: two records that were on
+        // DIFFERENT cells and collide only because the grid got coarser. Judging
+        // both after the re-snap would quietly promote corruption into a second
+        // tree in the next cell along.
+        const sourceKey = cellKey(t.gx, t.gz);
+        if (source.has(sourceKey)) { dropped++; continue; }
+        source.add(sourceKey);
+
+        // On a migration this is where the old index becomes a new one. The
+        // re-snap halves, so it asks for the nearest free cell rather than the
+        // exact one, and only a genuinely full plot loses a tree.
+        let gx = t.gx;
+        let gz = t.gz;
+        if (regrid) {
+            const at = regridCell(t.gx, t.gz, config);
+            if (!cellInPlot(at.gx, at.gz, config)) { dropped++; continue; }
+            const free = nearestFreeCell(at.gx, at.gz, seen, 12, config);
+            if (!free) { dropped++; continue; }
+            gx = free.gx;
+            gz = free.gz;
+        }
+
+        if (!cellInPlot(gx, gz, config)) { dropped++; continue; }
+        const key = cellKey(gx, gz);
+        if (seen.has(key)) { dropped++; continue; }
+        seen.add(key);
+
+        trees.push({
+            id: typeof t.id === 'string' && t.id ? t.id : `t${nextId++}`,
+            species: t.species,
+            seed: t.seed >>> 0,
+            gx,
+            gz,
+            custom: clampCustom(t.custom),
+            plantedAt: finite(t.plantedAt, 0),
+            growth: clamp01(finite(t.growth, 0)),
+            moisture: clamp01(finite(t.moisture, 1)),
+            health: clamp01(finite(t.health, 1)),
+            bud: 0,
+            budActive: false,
+            lastWateredAt: finite(t.lastWateredAt, 0)
+        });
+    }
+
+    // Keep the id counter ahead of anything restored, or a new tree planted in
+    // this session could collide with a saved one.
+    for (const t of trees) {
+        const n = parseInt(String(t.id).slice(1), 10);
+        if (Number.isFinite(n) && n >= nextId) nextId = n + 1;
+    }
+
+    return { elapsedSeconds: elapsed, trees, dropped, restored: true };
+}
+
+function finite(v, fallback) {
+    return Number.isFinite(v) ? v : fallback;
+}
+
+function round(v, places) {
+    const f = Math.pow(10, places);
+    return Math.round(v * f) / f;
+}
+
+// ---- The living garden -----------------------------------------------------
+
+const trees = [];          // { record, resolved, tree }
+const occupied = new Set();
+let sceneRef = null;
+let optionsRef = { mobile: false };
+
+export function initGarden(scene, options = {}) {
+    initBeds(scene, GARDEN_CONFIG, options);
+    sceneRef = scene;
+    optionsRef = options;
+}
+
+export function getTrees() {
+    return trees;
+}
+
+export function getOccupied() {
+    return occupied;
+}
+
+export function isFull(config = GARDEN_CONFIG) {
+    return trees.length >= capacity(config);
+}
+
+export function capacity(config = GARDEN_CONFIG) {
+    return optionsRef.mobile ? config.plot.maxTreesMobile : config.plot.maxTrees;
+}
+
+/** Build the meshes for a record and stand it on the ground. */
+function materialise(record) {
+    const resolved = resolveSpecies(record.species, record.custom);
+    const built = createTree(resolved, record.seed, optionsRef);
+    const { x, z } = cellCenter(record.gx, record.gz);
+    built.group.position.set(x, heightAt(x, z), z);
+    if (sceneRef) sceneRef.add(built.group);
+    const entry = { record, resolved, tree: built };
+    trees.push(entry);
+    occupied.add(cellKey(record.gx, record.gz));
+    // The beds are one instanced mesh, so the whole buffer is rebuilt whenever
+    // the list changes. Never per frame: a bed does not move once it is laid,
+    // and the level's fill rides an attribute rather than a matrix.
+    syncBeds(trees, GARDEN_CONFIG);
+    return entry;
+}
+
+/**
+ * How tall a tree is right now, in metres.
+ *
+ * THE ONE STATEMENT OF A TREE'S HEIGHT, and the same curve the bark shader
+ * uses for `uScale`. It was written to float the thirst marker above a canopy
+ * rather than above the tree the canopy will eventually be; that marker is
+ * gone (M10-5) and this outlived it, because the question "how big is this
+ * thing actually" is what M10-1 is about and a test that recomputed the curve
+ * would only be restating the code it was checking.
+ */
+export function currentHeight(record, resolved, config = GARDEN_CONFIG) {
+    const T = config.tree;
+    const g = clamp01(record.growth);
+    const ease = g * g * (3 - 2 * g);
+    return resolved.matureHeight * (T.saplingScale + (1 - T.saplingScale) * ease);
+}
+
+export function plantTree(speciesId, custom, gx, gz, elapsedSeconds, random = Math.random) {
+    if (isFull()) return null;
+    if (!speciesById(speciesId)) return null;
+    if (!cellInPlot(gx, gz)) return null;
+    if (occupied.has(cellKey(gx, gz))) return null;
+    const record = createRecord(speciesId, custom || DEFAULT_CUSTOM, gx, gz,
+        elapsedSeconds, newSeed(random));
+    return materialise(record);
+}
+
+export function restoreTrees(records) {
+    for (const record of records) materialise(record);
+    return trees.length;
+}
+
+export function removeTree(entry) {
+    const i = trees.indexOf(entry);
+    if (i < 0) return false;
+    trees.splice(i, 1);
+    occupied.delete(cellKey(entry.record.gx, entry.record.gz));
+    if (sceneRef) sceneRef.remove(entry.tree.group);
+    disposeTree(entry.tree);
+    syncBeds(trees, GARDEN_CONFIG);
+    return true;
+}
+
+export function clearGarden() {
+    while (trees.length) removeTree(trees[trees.length - 1]);
+    nextId = 1;
+}
+
+/** Teardown, paired with initGarden. The beds are built in there, so they come
+ *  down from here rather than leaving main.js to know they exist. */
+export function disposeGarden() {
+    clearGarden();
+    disposeBeds();
+    sceneRef = null;
+}
+
+/**
+ * Water a tree.
+ *
+ * Returns 'revived' when the watering earned the bud reward, 'refreshed'
+ * otherwise, so the conductor can pitch the acknowledgement to match. A
+ * healthy tree gets something quiet; a bare one gets buds within a second and
+ * a half, in any season.
+ */
+export function waterTree(entry, elapsedSeconds, config = GARDEN_CONFIG) {
+    const r = entry.record;
+    const B = config.garden.bud;
+    const revived = r.health <= B.below;
+    r.moisture = 1;
+    r.lastWateredAt = elapsedSeconds;
+    if (revived) {
+        r.budActive = true;
+        r.budStartedAt = elapsedSeconds;
+        // ---- AND THE TREE COMES BACK AT ONCE ------------------------------
+        // Not only buds. A rate cannot deliver "watered in spring, flowering
+        // this spring", because health only moves inside the thirst window and
+        // that opens at hour 7, by which time the early bloomers are over. So
+        // the water itself lifts it over the crop threshold and the rate takes
+        // it the rest of the way. NEVER DOWNWARD: `below` is 0.6 and a tree at
+        // 0.55 is inside it.
+        r.health = Math.max(r.health, B.reviveTo);
+    }
+    return revived ? 'revived' : 'refreshed';
+}
+
+/** Every tree, one frame. */
+export function updateGarden(dt, elapsedSeconds, context = {}, config = GARDEN_CONFIG) {
+    const hour = hourAt(elapsedSeconds, config.clock.cycleSeconds);
+    const snow = context.snow || 0;
+    const wind = context.wind || { x: 0, z: 0 };
+    const B = config.garden.bud;
+
+    for (const entry of trees) {
+        const r = entry.record;
+
+        r.moisture = moistureAfter(r.moisture, dt, hour, config);
+        r.health = healthAfter(r.health, r.moisture, dt, hour, config);
+        r.growth = clamp01(r.growth + growthRate(r.health, config) * dt);
+
+        // The bud reward: up over riseSeconds, then held until the season
+        // produces enough real canopy to take over. In autumn and winter that
+        // never happens, so the buds stay on the branches as a promise.
+        if (r.budActive) {
+            const since = elapsedSeconds - (r.budStartedAt || elapsedSeconds);
+            r.bud = clamp01(since / B.riseSeconds);
+            const natural = phenologyAt(hour, entry.resolved.evergreen).leaf;
+            if (natural >= B.handoverLeaf) {
+                r.budActive = false;
+            }
+        } else if (r.bud > 0) {
+            r.bud = Math.max(0, r.bud - dt * 0.8);
+        }
+
+        updateTree(entry.tree, viewFor(r, hour, {
+            evergreen: entry.resolved.evergreen,
+            schedule: entry.resolved.schedule,
+            snow,
+            wind,
+            // The animation clock when the conductor supplies one, so a tree
+            // can sway while the calendar is held. Falls back to the calendar,
+            // which is what every caller without a welcome card to wait on
+            // wants.
+            time: context.time === undefined ? elapsedSeconds : context.time
+        }), entry.resolved);
+
+    }
+
+    // The beds take the season and the levels take each tree's tank. One pass
+    // over the instance attributes rather than a mesh per tree. The level's
+    // pixel floor needs the lens, which only the conductor knows.
+    // The droplet's pulse rides the ANIMATION clock, not the calendar, for the
+    // same reason the sway does: it has to keep breathing behind the welcome
+    // card, where `dt` is held at zero.
+    updateBeds(trees, snow, context.pxPerRadian || 0, config,
+        context.time === undefined ? elapsedSeconds : context.time,
+        context.motion === undefined ? 1 : context.motion);
+}
+
+/** Ages in whole years, for the tree card. */
+export function ageYears(record, elapsedSeconds, config = GARDEN_CONFIG) {
+    return Math.max(0, (elapsedSeconds - record.plantedAt) / config.clock.cycleSeconds);
+}
+
+/** The meshes a tap can hit, for the raycaster. */
+export function getPickTargets() {
+    return trees.map((t) => t.tree.group);
+}
+
+export function seasonNow(elapsedSeconds, config = GARDEN_CONFIG) {
+    return seasonAt(hourAt(elapsedSeconds, config.clock.cycleSeconds));
+}
+
+export function __resetGarden() {
+    trees.length = 0;
+    occupied.clear();
+    sceneRef = null;
+    nextId = 1;
+}
