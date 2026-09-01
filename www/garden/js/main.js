@@ -37,7 +37,7 @@ import {
 import { initForest, updateForest, disposeForest } from './forest.min.js';
 import { initVista, updateVista, disposeVista, setVistaEye, getPondMesh } from './vista.min.js';
 import {
-    initWildlife, updateWildlife, disposeWildlife, duckFlightAt, lakeShot
+    initWildlife, updateWildlife, disposeWildlife, duckFlightAt, lakeShot, duckCount
 } from './wildlife.min.js';
 import { createWeather, stepWeather, weatherWords, overcastAt } from './weather.min.js';
 import { initPrecipitation, updatePrecipitation, disposePrecipitation } from './precip.min.js';
@@ -122,8 +122,13 @@ let weather = null;
 let lakeCamera = null;
 // Where the ducks live, and how far any of them strays. See lakeShot.
 let lakeHome = null;
+// How many are out there, which is fewer on a phone. The card's line names it.
+let lakeDucks = 0;
 
 let canvas, loadingScreen, blocker, waterAllBtn, helpBtn, resetBtn, viewResetBtn;
+// The two groups the shared pan part builds, held so the welcome card can put
+// them away. Queried once, after the part has built them.
+let panRow = null, zoomStack = null;
 // What syncViewReset last wrote, so a per-frame check costs no DOM writes.
 // `null` means it has never written, which forces the first call through.
 let viewResetShown = null;
@@ -198,6 +203,10 @@ async function init() {
     // Where the ducks live and how far they roam. Seeded, so it is the same
     // shot every visit, and it follows the mobile duck count.
     lakeHome = lakeShot(GARDEN_CONFIG, { mobile: state.mobile });
+    // AND SO DOES THE CARD'S SENTENCE NOW. It used to name three as a literal
+    // while a phone built two, which is what QA read off the lake. Both the
+    // shot above and the line come from the same count.
+    lakeDucks = duckCount(GARDEN_CONFIG, { mobile: state.mobile });
 
     updateLoadingStatus('Hanging the sky…', 45);
     initSky(scene, renderer, GARDEN_CONFIG, { mobile: state.mobile });
@@ -857,9 +866,18 @@ function setupEventListeners() {
     // of the frame, so adding to the end would shove the plus and minus upward
     // the moment this appeared, and a zoom button that moves when a neighbour
     // shows up is worse than no neighbour.
+    // ---- AND BOTH GROUPS ARE HELD, SO THE WELCOME CARD CAN PUT THEM AWAY ---
+    // They are the shared part's own elements and only exist after the call
+    // above, so this is the earliest anything can hold them. `syncWelcomeChrome`
+    // is what uses them, and it first runs from the reveal sweep, which is a
+    // `setTimeout` set up after this function returns.
+    panRow = document.querySelector('.pan-controls');
+    zoomStack = document.querySelector('.garden-zoom');
+
     if (viewResetBtn) {
-        const stack = document.querySelector('.garden-zoom');
-        if (stack) stack.prepend(viewResetBtn);
+        // The view reset rides INSIDE the zoom stack, which is why hiding the
+        // stack is enough to take this with it.
+        if (zoomStack) zoomStack.prepend(viewResetBtn);
         viewResetBtn.addEventListener('click', showWholeGarden, { signal });
     }
 }
@@ -872,15 +890,29 @@ function onResize() {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
 }
 
+/** Is the welcome card up? One reading of it, so the chrome that hides behind
+ *  the card and the button that has to stay hidden while it is up cannot come
+ *  to different answers. */
+function readingWelcome() {
+    return !blocker || !blocker.classList.contains('hidden');
+}
+
 /**
- * Show the corner controls only while there is a garden to use them on.
+ * Show the controls only while there is a garden to use them on.
  *
  * ---- A CONTROL THAT DOES NOTHING IS WORSE THAN NO CONTROL ----
  *
- * `.menu-btn` is z-index 110 and the blocker is 100, so the top-right stack
- * draws OVER the welcome card and sits in its tab order. Help there is a button
- * whose whole purpose is to summon the card already filling the screen, and
- * reset is a destructive one offered before the visitor has seen the garden.
+ * Every one of these floats sits ABOVE the blocker: `.menu-btn`, the pan row
+ * and the zoom stack are z-index 110 against its 100, and Water all is 120. So
+ * the welcome card, which is the one screen in the scene that should be nothing
+ * but its own six sentences, arrived under a full set of chrome, all of it in
+ * the card's tab order and none of it with anything to do:
+ *
+ *   help        summons the card already filling the screen
+ *   start over  destructive, offered before the visitor has seen the garden
+ *   water all   waters a plot they have not been shown yet
+ *   pan, tilt   the card covers the view they would be aiming
+ *   zoom        the same, and the frame reset with it
  *
  * HIDDEN RATHER THAN DISABLED. A dimmed button asks "why can't I press this",
  * which is a question the visitor should not have to hold; the absence of a
@@ -889,16 +921,32 @@ function onResize() {
  * visitor tabbing through the welcome card should not land on a control that
  * does nothing when pressed.
  *
+ * THE `hidden` ATTRIBUTE ALONE DOES NOT HIDE ANY OF THEM. Every one carries a
+ * `.visible` rule setting `display`, which beats the attribute's UA default, so
+ * each needs a matching rule in experience.css that outranks it. That is the
+ * `.ui-float` trap this codebase has now met three times, and the rule and this
+ * function are asserted together in tests/garden-init.test.mjs.
+ *
+ * WATER ALL IS SET HERE AND ALSO GATED IN `syncWaterAll`, because that one runs
+ * once a second from the animation loop, which does NOT stop for the card. Only
+ * writing it here would have it flicker back a second later.
+ *
  * HOME STAYS, and that is not an oversight. It is the way off the page, it
  * works perfectly well from the welcome card, and it is the target of the
  * "Skip to home link" that opens the document. Hiding it would break the skip
- * link for exactly the visitors it exists for.
+ * link for exactly the visitors it exists for. The season chip stays too: it is
+ * a status readout rather than a control, so it is not in the tab order and
+ * there is nothing to press on it by mistake.
  */
 function syncWelcomeChrome() {
-    const reading = !blocker || !blocker.classList.contains('hidden');
-    for (const el of [helpBtn, resetBtn]) {
+    const reading = readingWelcome();
+    for (const el of [helpBtn, resetBtn, panRow, zoomStack]) {
         if (el) el.hidden = reading;
     }
+    // One way only. Putting it BACK is `syncWaterAll`'s job, because whether
+    // there is anything to water is a question this function has no business
+    // answering.
+    if (reading && waterAllBtn) waterAllBtn.hidden = true;
 }
 
 /**
@@ -1119,7 +1167,7 @@ function tapLake(clientX, clientY) {
     pointer.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     if (!raycaster.intersectObject(water, false).length) return false;
-    if (!openLakeCard(duckFlightAt(hourAt(state.elapsedSeconds)))) return false;
+    if (!openLakeCard(duckFlightAt(hourAt(state.elapsedSeconds)), lakeDucks)) return false;
     track('lake-opened');
     return true;
 }
@@ -1413,15 +1461,23 @@ function teachTheDroplet(count) {
 
 function syncWaterAll() {
     if (!waterAllBtn) return;
+    // NOT WHILE THE WELCOME CARD IS UP, and this is the half that matters,
+    // because this function runs once a second from the animation loop and the
+    // loop does not stop for the card. A returning visitor met the card with a
+    // Water all button floating over it, and hiding it only in
+    // `syncWelcomeChrome` would have put it back a second later.
+    const reading = readingWelcome();
     const planted = getTrees();
     // The droplet lesson still reads THIRST, because a droplet is still a
-    // thirsty tree and nothing about this button changed what one means.
-    teachTheDroplet(thirstyCount(planted));
+    // thirsty tree and nothing about this button changed what one means. Held
+    // while the card is up for the same reason the button is: a toast landing
+    // on the welcome screen teaches a gesture the visitor cannot make yet.
+    if (!reading) teachTheDroplet(thirstyCount(planted));
     // ONE PLANTED TREE IS THE WHOLE CONDITION NOW. Still not zero: on an empty
     // plot there is nothing to water, and a button that cannot do anything
     // would be competing with the one instruction the scene wants a new
     // visitor to read, which is to plant something.
-    const show = planted.length > 0;
+    const show = planted.length > 0 && !reading;
     // `.visible` is what the house chrome uses, and the button is display:none
     // without it. `hidden` as well, so it leaves the tab order rather than
     // sitting in it invisibly, which is the version of this bug that only
@@ -1999,7 +2055,7 @@ function animate() {
         const entry = getCardEntry();
         if (entry) refreshTreeCard(ageYears(entry.record, state.elapsedSeconds), cardContext());
     }
-    if (isLakeOpen()) refreshLakeCard(duckFlightAt(hour));
+    if (isLakeOpen()) refreshLakeCard(duckFlightAt(hour), lakeDucks);
 
     // The camera, in order: the move after planting if one is running, then
     // our own dolly, then the shared part's yaw and tilt refining the aim on

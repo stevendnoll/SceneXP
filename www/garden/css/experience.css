@@ -1010,3 +1010,35 @@ body {
         gap: 10px;
     }
 }
+
+/* ---- AND NOTHING ELSE IS OFFERED WHILE THE WELCOME CARD IS UP -------------
+ *
+ * The companion of `.menu-btn[hidden]` above, for the three floats that are not
+ * menu buttons. All of them sit ABOVE the blocker (the pan row and the zoom
+ * stack at z-index 110 against its 100, Water all at 120), so the welcome card
+ * arrived under a full set of chrome, in its tab order, with nothing any of it
+ * could usefully do: the card covers the view the pan and zoom would aim, and
+ * Water all offers to water a plot the visitor has not been shown.
+ *
+ * ---- THE `hidden` ATTRIBUTE IS NOT ENOUGH ON ANY OF THEM ----
+ *
+ * Each carries a `.visible` rule that sets `display`, and an author rule beats
+ * the attribute's UA default. So each selector here is written to OUTRANK the
+ * one it has to defeat rather than to rely on this file loading second:
+ *
+ *   .water-all.visible                 2 classes  <  3 here
+ *   .garden-zoom.visible               2 classes  <  3 here
+ *   .pan-controls.visible (portrait)   2 classes  <  3 here
+ *   .pan-controls.always-on.visible    3 classes  <  4 here
+ *
+ * Matching on `.visible` as well as `[hidden]` is not belt and braces: without
+ * `.visible` these elements are already `display: none`, so the pair is exactly
+ * the case that needs deciding. `syncWelcomeChrome` in main.js sets the
+ * attribute, and tests/garden-init.test.mjs asserts both halves, because the
+ * DOM stub has no stylesheet and cannot tell us this rule exists. */
+.water-all.visible[hidden],
+.garden-zoom.visible[hidden],
+.pan-controls.visible[hidden],
+.pan-controls.always-on.visible[hidden] {
+    display: none;
+}

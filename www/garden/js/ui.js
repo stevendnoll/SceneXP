@@ -601,23 +601,52 @@ export function anyModalOpen() {
  * be opened in the cold half of the year and say something true rather than
  * showing empty water with no explanation.
  *
+ * ---- AND IT COUNTS THE DUCKS RATHER THAN REMEMBERING HOW MANY THERE WERE ----
+ *
+ * The summer line used to open "Three ducks, drifting" as a literal, and a
+ * phone builds two of them: `wildlife.js` halves the count on mobile, and it
+ * has since the ducks arrived. QA read the card on a phone, counted the lake,
+ * and found the sentence claiming a bird that was not on the water.
+ *
+ * A COUNT IN PROSE GOES STALE SILENTLY, because nothing fails when the value it
+ * was copied from moves. `duckCount` is now the one reading of it and this
+ * sentence is built from the same number the geometry is, so the card cannot
+ * disagree with the lake again whatever the count becomes.
+ *
  * @param {number} flight 0 with the ducks on the water, 1 with them gone
+ * @param {number} count how many are on the water, from `duckCount`
  */
-export function lakeNote(flight) {
+export function lakeNote(flight, count = 3) {
     if (flight >= 0.999) {
         return 'The ducks have gone south for the winter. The lake keeps without them, and they come back as the spring opens.';
     }
     if (flight > 0.02) {
         return 'They are leaving. Ducks go south before the winter, and these are climbing away over the far shore.';
     }
-    return 'Three ducks, drifting. They keep to the lake all spring and summer, and go south before the winter closes it.';
+    const n = Math.max(0, Math.round(Number(count) || 0));
+    const many = n !== 1;
+    return `${countWord(n)} duck${many ? 's' : ''}, drifting. ${many ? 'They keep' : 'It keeps'} to the lake all spring and summer, and ${many ? 'go' : 'goes'} south before the winter closes it.`;
 }
 
-/** Open the card. It has no subject beyond the lake, so it takes no handle. */
-export function openLakeCard(flight) {
+/**
+ * A small number as the word for it, because a card is prose and not a readout.
+ *
+ * Only ever asked for two or three, but written for the range a config could
+ * plausibly hold, and falling back to the digits rather than to nothing so an
+ * unexpected count reads awkwardly instead of reading as "undefined ducks".
+ */
+const NUMBER_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+
+export function countWord(n) {
+    return NUMBER_WORDS[n] || String(n);
+}
+
+/** Open the card. It has no subject beyond the lake, so it takes no handle,
+ *  only how far through the year the ducks are and how many of them there are. */
+export function openLakeCard(flight, count) {
     if (!lakeEl) return false;
     returnFocus = typeof document !== 'undefined' ? document.activeElement : null;
-    if (lakeNoteEl) lakeNoteEl.textContent = lakeNote(flight);
+    if (lakeNoteEl) lakeNoteEl.textContent = lakeNote(flight, count);
     lakeEl.classList.remove('hidden');
     const close = lakeEl.querySelector('.modal-close');
     if (close && close.focus) close.focus();
@@ -626,9 +655,9 @@ export function openLakeCard(flight) {
 
 /** Keep the line honest while the card is open, so somebody watching the
  *  take-off is told what they are watching as it happens. */
-export function refreshLakeCard(flight) {
+export function refreshLakeCard(flight, count) {
     if (!isLakeOpen() || !lakeNoteEl) return;
-    const text = lakeNote(flight);
+    const text = lakeNote(flight, count);
     if (lakeNoteEl.textContent !== text) lakeNoteEl.textContent = text;
 }
 

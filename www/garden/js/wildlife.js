@@ -101,6 +101,28 @@ export const WINDOWS = {
 
 
 /**
+ * How many ducks this visit gets, which is fewer on a phone.
+ *
+ * ---- IT IS EXPORTED BECAUSE THE LAKE CARD NAMES THE NUMBER ----
+ *
+ * The card's line used to read "Three ducks, drifting" as a literal, and a
+ * phone builds two. QA read the card on a phone, counted the lake, and found
+ * the copy claiming a duck that was never there. That is this codebase's own
+ * lesson about prose: A COUNT IN A SENTENCE GOES STALE SILENTLY, because
+ * nothing fails when the number it was copied from moves. Either pin the
+ * sentence to the value or name no number at all.
+ *
+ * So there is one reading of it, here, and both the geometry and the sentence
+ * come through this function. The lake card's framing already followed the
+ * mobile count (`lakeShot` below); the sentence was the only part that did not.
+ */
+export function duckCount(config = GARDEN_CONFIG, options = {}) {
+    const D = config.world.wildlife.ducks;
+    if (!D) return 0;
+    return options.mobile ? D.countMobile : D.count;
+}
+
+/**
  * Where the ducks drift, as seeded closed paths on the water.
  *
  * ---- THE LAKE IS AN ELLIPSE AND THEY HAVE TO STAY IN IT ----
@@ -115,14 +137,15 @@ export const WINDOWS = {
  * asserted. A loop is a function of time, so a duck is exactly where it should
  * be on any frame, including the first one after a tab comes back.
  *
- * Pure and seeded, so they are the same three ducks on every visit.
+ * Pure and seeded, so they are the same ducks on every visit. How many of them
+ * there are is `duckCount`, which is three on a desktop and two on a phone.
  */
 export function duckPaths(config = GARDEN_CONFIG, options = {}) {
     const D = config.world.wildlife.ducks;
     if (!D) return [];
     const P = config.world.pond;
     const random = makeRandom(config.world.seed ^ 0xD0CC5);
-    const count = options.mobile ? D.countMobile : D.count;
+    const count = duckCount(config, options);
     // The waterline, not the basin rim. `pondHalfWidth` is the bowl; the water
     // reaches `fill` of the way up it, and `keepInside` holds them well clear
     // of even that.

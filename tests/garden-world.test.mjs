@@ -1566,6 +1566,50 @@ test('the lake card says where the ducks are, in every season', async () => {
     }
 });
 
+test('AND IT COUNTS THEM RATHER THAN REMEMBERING HOW MANY THERE WERE', async () => {
+    // ---- QA COUNTED THE LAKE ON A PHONE AND THE CARD WAS WRONG -----------
+    // The summer line opened "Three ducks, drifting" as a literal, and
+    // `duckCount` halves the count on mobile, so a phone showed two ducks under
+    // a sentence claiming three. A COUNT IN PROSE GOES STALE SILENTLY, because
+    // nothing fails when the value it was copied from moves. The lake card's
+    // framing already followed the mobile count; the sentence did not.
+    const { lakeNote } = await import('../www/garden/js/ui.js');
+    const { duckCount, duckPaths } = await import('../www/garden/js/wildlife.js');
+
+    // One reading of the count: the sentence and the geometry come from the
+    // same call, so they cannot disagree whatever the config becomes.
+    for (const mobile of [false, true]) {
+        const label = mobile ? 'mobile' : 'desktop';
+        const n = duckCount(GARDEN_CONFIG, { mobile });
+        expect(`${label}: ${n}`).toBe(`${label}: ${duckPaths(GARDEN_CONFIG, { mobile }).length}`);
+
+        // The word, not the digit: this is a card and not a readout.
+        const words = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'];
+        const note = lakeNote(0, n);
+        expect(`${label}: ${note.split(',')[0]}`)
+            .toBe(`${label}: ${words[n]} duck${n === 1 ? '' : 's'}`);
+        expect(note).not.toMatch(/\d/);
+    }
+
+    // AND THE TEST HAS TO FAIL AGAINST THE OLD CODE, or it is only restating
+    // it. The old line said "Three" at every count, so the mobile card is the
+    // assertion that matters: two ducks, and the sentence must not say three.
+    const two = lakeNote(0, 2);
+    expect(two).toMatch(/^Two ducks, drifting\./);
+    expect(two).not.toMatch(/three/i);
+    expect(lakeNote(0, 3)).toMatch(/^Three ducks, drifting\./);
+
+    // A lake with one duck would read "It keeps to the lake", not "They keep".
+    // Not a count this scene ships, and that is the point: the sentence is
+    // built rather than chosen, so a future config cannot make it ungrammatical.
+    expect(lakeNote(0, 1)).toMatch(/^One duck, drifting\. It keeps .* goes south/);
+
+    // The two seasonal lines name no number at all, so nothing to go stale.
+    for (const flight of [0.4, 1]) {
+        expect(lakeNote(flight, 2)).toBe(lakeNote(flight, 3));
+    }
+});
+
 // ---- Nothing stands in the lake (M14-4) ------------------------------------
 
 const { inTheLake } = await import('../www/garden/js/forest.js');

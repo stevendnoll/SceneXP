@@ -1350,6 +1350,74 @@ describe('the first visit', () => {
         expect(dom.el('help-btn').hidden).toBe(false);
     });
 
+    test('NOR IS ANYTHING ELSE ON SCREEN', async () => {
+        // ---- THE CORNER WAS ONLY HALF OF IT ----------------------------
+        // Reported from QA on a phone: the welcome card arrives under a full
+        // set of chrome. Every float here is ABOVE the blocker (the pan row and
+        // the zoom stack at 110 against its 100, Water all at 120), all of it
+        // is in the card's tab order, and none of it has anything to do: the
+        // card covers the view the pan and zoom would aim, and Water all
+        // offers to water a plot the visitor has not been shown.
+        await bootGarden();
+        // Found by class, not invented: the stub searches the body first, so a
+        // typo here fails rather than passing against a fresh empty div.
+        const panRow = document.querySelector('.pan-controls');
+        const zoom = document.querySelector('.garden-zoom');
+        expect(panRow.classList.contains('ui-float')).toBe(true);
+        expect(zoom.classList.contains('ui-float')).toBe(true);
+        expect(panRow.hidden).toBe(true);
+        expect(zoom.hidden).toBe(true);
+        // The view reset rides INSIDE the zoom stack, so the stack going away
+        // takes it too.
+        expect(dom.el('view-reset').parentElement).toBe(zoom);
+
+        beginTending();
+        expect(panRow.hidden).toBe(false);
+        expect(zoom.hidden).toBe(false);
+
+        fire(dom.el('help-btn'), 'click');
+        expect(panRow.hidden).toBe(true);
+        expect(zoom.hidden).toBe(true);
+    });
+
+    test('and Water all stays away for as long as the card is up', async () => {
+        // ---- THE ONE THAT PUTS ITSELF BACK ------------------------------
+        // `syncWaterAll` runs once a second FROM THE ANIMATION LOOP, and the
+        // loop does not stop for the welcome card: only the calendar does. So
+        // hiding this in `syncWelcomeChrome` alone is not a fix, it is a one
+        // second delay. This is the test that fails if the gate in
+        // `syncWaterAll` is removed and the one in `syncWelcomeChrome` is not.
+        await bootGarden();
+        asShipped();
+        // THE BUILT MODULES, because main.js resolves its imports to the .min
+        // files and the module state has to be the same one it is driving.
+        const ui = await import('../www/garden/js/ui.min.js');
+        const garden = await import('../www/garden/js/garden.min.js');
+        beginTending();
+        // Under the stub a raycast finds nothing, so the modal is opened
+        // directly and the plant falls back to the middle of the plot.
+        ui.openPlantModal({ full: false });
+        fire(dom.el('plant-confirm'), 'click');
+        // Past the once-a-second resync, which is what puts the button up: a
+        // plant does not sync it directly.
+        stepFrames(60, 30);
+        expect(garden.getTrees()).toHaveLength(1);
+        const water = dom.el('water-all');
+        expect(water.hidden).toBe(false);
+
+        fire(dom.el('help-btn'), 'click');
+        expect(water.hidden).toBe(true);
+        // Two seconds of frames, which is twice the resync interval.
+        stepFrames(60, 40);
+        expect(water.hidden).toBe(true);
+
+        // And it comes straight back with the card, without waiting for the
+        // next tick, because a returning visitor meets the offer in the first
+        // frame they see.
+        fire(document, 'keydown', { code: 'Escape' });
+        expect(water.hidden).toBe(false);
+    });
+
     test('and the sheet actually hides them, which the stub cannot tell us', () => {
         // The DOM stub has no stylesheet, so setting `hidden` succeeds whether
         // or not a rule exists. `.ui-float.visible` sets `display: flex`, which
@@ -1358,6 +1426,22 @@ describe('the first visit', () => {
         const css = readFileSync(
             join(process.cwd(), 'www', 'garden', 'css', 'experience.css'), 'utf8');
         expect(css).toMatch(/\.menu-btn\[hidden\]\s*\{[^}]*display:\s*none/);
+
+        // The same trap, three more times over, and each selector has to
+        // OUTRANK the `.visible` rule it is defeating rather than rely on
+        // source order: `.pan-controls.always-on.visible` is three classes, so
+        // the rule that beats it needs four.
+        for (const sel of [
+            '.water-all.visible[hidden]',
+            '.garden-zoom.visible[hidden]',
+            '.pan-controls.visible[hidden]',
+            '.pan-controls.always-on.visible[hidden]'
+        ]) {
+            const escaped = sel.replace(/[.[\]]/g, (c) => `\\${c}`);
+            expect(`${sel} hides`).toBe(
+                new RegExp(`${escaped}[^{]*\\{[^}]*display:\\s*none`).test(css)
+                    ? `${sel} hides` : `${sel} MISSING from experience.css`);
+        }
     });
 
     test('the garden does not age while the card is being read', async () => {
