@@ -37,13 +37,6 @@
     <link rel="canonical" href="https://www.scenexp.com/garden/">
 
     <!-- Open Graph -->
-    <!-- THE IMAGE TAGS ARE MISSING ON PURPOSE. There is no social card yet
-         (TASKS.md M6-2 makes it, M6-3 wires it in). An og:image pointing at a
-         file that does not exist is worse than none at all, because a scraper
-         caches the failure. Exactly ONE og:image goes in here when it exists:
-         Apple's link preview renders every og:image it finds, so a second one
-         as a fallback puts two identical cards in a friend's message thread.
-         That bug shipped once already, on earthdefense. -->
     <meta property="og:title" content="Fractal Garden">
     <meta property="og:description" content="Plant a garden of fractal trees, then watch it live through the years. Choose a species or shape your own, and tend it through every season as it grows.">
     <meta property="og:type" content="website">
@@ -51,11 +44,25 @@
     <meta property="og:url" content="https://www.scenexp.com/garden/">
     <meta property="og:locale" content="en_US">
 
-    <!-- Twitter / X. The image tag joins this block in M6-3, naming the same
-         single WebP as og:image. -->
+    <!-- EXACTLY ONE og:image, and it is the WebP, which is what the other
+         eleven pages do. Apple's link preview renders EVERY og:image it finds,
+         so adding the JPEG here as a fallback would put two identical cards in
+         a friend's message thread. That bug shipped once already, on
+         earthdefense. The JPEG is built and sits beside this file for any
+         scraper that asks for it by name, and for the rare one that cannot
+         read WebP at all. -->
+    <meta property="og:image" content="https://www.scenexp.com/garden/assets/og-garden.webp?v=1">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Three young fractal trees stand bare in a walled garden plot at dusk, each with a blue water gauge glowing at its base. Behind them a still lake reflects the sky, a dark green wood runs along both sides, and mauve hills fade into the distance under a starry sky broken by pale drifting cloud.">
+
+    <!-- Twitter / X. The same single WebP as og:image. -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Fractal Garden">
     <meta name="twitter:description" content="Plant a garden of fractal trees, then watch it live through the years. Every season passes, and the trees remember you.">
+    <meta name="twitter:image" content="https://www.scenexp.com/garden/assets/og-garden.webp?v=1">
+    <meta name="twitter:image:alt" content="Three young fractal trees stand bare in a walled garden plot at dusk, each with a blue water gauge glowing at its base. Behind them a still lake reflects the sky, a dark green wood runs along both sides, and mauve hills fade into the distance under a starry sky broken by pale drifting cloud.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->

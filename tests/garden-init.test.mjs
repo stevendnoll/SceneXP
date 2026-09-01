@@ -1420,3 +1420,87 @@ describe('the first visit', () => {
         expect(list).toMatch(/plus and minus/i);
     });
 });
+
+// ---- The social card (M6-2, M6-3) ------------------------------------------
+//
+// The same block highwater carries, for the same reason: a share preview is
+// written once, never looked at again, and quietly rots. Everything here is a
+// claim about a FILE ON DISK or about a tag that a scraper caches, which is the
+// kind of mistake that cannot be fixed by editing the page later.
+
+describe('the social card', () => {
+    const BASE = 'https://www.scenexp.com/garden/';
+    const html = readFileSync(
+        join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8');
+    const meta = (key) => {
+        const attr = key.startsWith('og:') ? 'property' : 'name';
+        const m = html.match(
+            new RegExp(`<meta ${attr}="${key}" content="([^"]*)"`));
+        return m && m[1];
+    };
+
+    test('EXACTLY ONE og:image, because Apple renders every one it finds', () => {
+        // Two og:image tags put two identical cards in a friend's message
+        // thread. earthdefense shipped that once, and the tempting mistake here
+        // is adding the JPEG as a "fallback" underneath the WebP.
+        expect(html.match(/<meta property="og:image"/g) || []).toHaveLength(1);
+    });
+
+    test('the card is the WebP, at the size every renderer expects', () => {
+        expect(meta('og:image')).toBe(`${BASE}assets/og-garden.webp?v=1`);
+        expect(meta('og:image:type')).toBe('image/webp');
+        expect(meta('og:image:width')).toBe('1200');
+        expect(meta('og:image:height')).toBe('630');
+        // Both blocks name the same file, so a cache-busting bump applied to
+        // one of the two cannot go unnoticed until a share looks stale.
+        expect(meta('twitter:image')).toBe(meta('og:image'));
+    });
+
+    test('both files exist, and BOTH ARE THE SIZE THEY CLAIM TO BE', () => {
+        // The assertion that would actually have caught something. The tags
+        // above are hand-typed numbers, and the image is built by a command run
+        // once, months before anybody looks at a preview.
+        const dir = join(process.cwd(), 'www', 'garden', 'assets');
+        for (const name of ['og-garden.webp', 'og-garden.jpg']) {
+            const bytes = readFileSync(join(dir, name));
+            expect(`${name}: ${bytes.length > 0}`).toBe(`${name}: true`);
+        }
+        // WebP: 'VP8 ' | 'VP8L' | 'VP8X' after the RIFF/WEBP header. The lossy
+        // 'VP8 ' frame header carries width and height as 14-bit fields.
+        const webp = readFileSync(join(dir, 'og-garden.webp'));
+        expect(webp.slice(0, 4).toString('latin1')).toBe('RIFF');
+        expect(webp.slice(8, 12).toString('latin1')).toBe('WEBP');
+        expect(webp.slice(12, 16).toString('latin1')).toBe('VP8 ');
+        expect(webp.readUInt16LE(26) & 0x3fff).toBe(1200);
+        expect(webp.readUInt16LE(28) & 0x3fff).toBe(630);
+
+        // JPEG: walk the segment markers to the SOF, which is where the real
+        // dimensions live. Reading them from anywhere else reads a thumbnail.
+        const jpg = readFileSync(join(dir, 'og-garden.jpg'));
+        expect(jpg.readUInt16BE(0)).toBe(0xffd8);
+        let i = 2;
+        let size = null;
+        while (i < jpg.length - 9) {
+            if (jpg[i] !== 0xff) { i += 1; continue; }
+            const marker = jpg[i + 1];
+            // SOF0/1/2/9/10, skipping DHT, DAC and the restart markers.
+            if (marker >= 0xc0 && marker <= 0xcf
+                && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+                size = { h: jpg.readUInt16BE(i + 5), w: jpg.readUInt16BE(i + 7) };
+                break;
+            }
+            i += 2 + jpg.readUInt16BE(i + 2);
+        }
+        expect(size).toEqual({ w: 1200, h: 630 });
+    });
+
+    test('alt text is present, real, and matches between the two blocks', () => {
+        // A share preview is often the only thing a screen reader user gets.
+        const alt = meta('og:image:alt');
+        expect(alt).toBeTruthy();
+        expect(alt.length).toBeGreaterThan(60);
+        expect(meta('twitter:image:alt')).toBe(alt);
+        // House style applies to it, and it is long enough to attract both.
+        expect(alt).not.toMatch(/[—;]/);
+    });
+});
