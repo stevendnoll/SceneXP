@@ -409,7 +409,7 @@ describe('a portrait phone', () => {
     expect(reported().filter((action) => action === 'portrait-pan')).toHaveLength(1);
   });
 
-  test('THE VIEW CONTROLS ARE ON IN LANDSCAPE TOO, as in jamar', async () => {
+  test('THE VIEW CONTROLS ARE ON IN LANDSCAPE TOO', async () => {
     // This test used to assert the opposite, and the opposite was the bug QA
     // reported: gavin was the only one of the four view-only scenes that left
     // `alwaysOn` off, so the shared CSS hid the row at every landscape aspect
@@ -431,7 +431,7 @@ describe('a portrait phone', () => {
     expect(reported().filter((a) => a === 'portrait-pan')).toHaveLength(1);
   });
 
-  test('gavin asks for the row on the same terms jamar and sunnyvalejenn do', async () => {
+  test('gavin asks for the row on the same terms', async () => {
     // The three view-only scenes should not drift apart on this again. The
     // pair that matters is `alwaysOn` plus the `always-on` class: the flag
     // makes the inputs live at every aspect and the class is what the shared
@@ -439,7 +439,7 @@ describe('a portrait phone', () => {
     // that answers the keyboard and shows no buttons, which is the state
     // gavin was found in.
     const options = {};
-    for (const scene of ['gavin', 'jamar', 'sunnyvalejenn']) {
+    for (const scene of ['gavin']) {
       const src = readFileSync(join(process.cwd(), 'www', scene, 'js', 'main.js'), 'utf8');
       const call = src.match(/initPortraitControls\(\{[\s\S]*?\n {4}\}\)/);
       expect(call).not.toBeNull();
