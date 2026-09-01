@@ -63,9 +63,29 @@ export const AUTOMAN_CONFIG = deepFreeze({
     // shoulder. Every face reads, which matters because all three are tap
     // targets. (PRD decision D2.)
     //
-    // PROVISIONAL. The numbers below are the composition's starting point
-    // and get measured properly at task T4.8, once the desk and all three
-    // figures exist. Nothing downstream should treat them as settled.
+    // SOLVED, NOT COMPOSED BY EYE. These numbers come out of a search over
+    // camera positions and the customer's seat, scored against everything
+    // the scene needs at once. The seating is the part that had to give:
+    // with John and his customer BOTH square on the desk's near side,
+    // anyone facing the dealer has their back to this camera, and the two
+    // of them also collapse onto the same sight line. Corner seating fixes
+    // both, and is decision D8.
+    //
+    // What the chosen arrangement delivers:
+    //
+    //   John's face       55 deg off the lens, reads FRONT (his likeness
+    //                     is the one that has to land)
+    //   the customer      86 deg, a clean profile, and a nod reads from
+    //                     any angle
+    //   the dealer        83 deg, profile turning to front, listening
+    //   min separation    11.2 deg, so nobody collapses into a neighbour
+    //   nearest person    3.71m, so nobody looms over the lens
+    //   behind the dealer x -1.74 on the back wall, comfortably central
+    //                     glass rather than a sliver beside the pier
+    //
+    // Move the camera, the lookAt point, the desk, or any seat and all of
+    // that has to be re-solved together, INCLUDING the lot placement in
+    // store.js, which is measured from this same viewpoint.
     //
     // !! PORTRAIT DOLLY, READ BEFORE TUNING !!
     // The shared placeCamera() that sunnyvalejenn uses widens the FOV and
@@ -76,29 +96,31 @@ export const AUTOMAN_CONFIG = deepFreeze({
     // it sideways relative to its own view and swings the aim (lookAt is
     // fixed). placeCamera has to be reworked to dolly ALONG the view axis
     // instead, moving the position away from lookAt on the normalized
-    // (position - lookAt) vector. Tracked as task T4.8a.
+    // (position - lookAt) vector.
     camera: {
-        position: { x: 3.05, y: 1.45, z: -0.30 },
-        lookAt: { x: -0.55, y: 0.95, z: -2.20 },
-        fov: 58,
+        position: { x: 2.50, y: 1.45, z: -0.30 },
+        lookAt: { x: -0.93, y: 0.92, z: -2.18 },
+        fov: 50,
         portrait: {
-            fov: 72,
-            // Half the span that must survive a portrait frame: John's
-            // outside shoulder to the customer's outside shoulder, plus
-            // margin. Measured at T4.8, guessed here. placeCamera backs
-            // the eye along its view axis until this much fits either
-            // side of the lookAt point, which IS the deal sheet, so the
-            // focus plane needs no separate number.
-            minHalfWidth: 2.4,
+            fov: 74,
+            // Half the width that must survive a portrait frame, measured
+            // at the lookAt plane. Derived by projecting each figure onto
+            // the camera's right vector, adding a 0.34 half-body, and
+            // scaling to the lookAt distance: John needs 0.52, the
+            // customer 1.41, the dealer 1.42. So 1.45, with a little air.
+            // placeCamera backs the eye along its view axis until this
+            // much fits either side of the lookAt point, which IS the deal
+            // sheet, so the focus plane needs no separate number.
+            minHalfWidth: 1.45,
             // How far the eye may sit from the lookAt point, in metres
-            // along that axis. The composed range is 4.10. The cap is set
-            // by the east wall behind the camera: the view axis leaves
-            // the lookAt point with an x component of 0.878, so an eye
-            // range of r puts it at x = -0.55 + 0.878r, and the wall's
-            // room-side face is at 3.725. Stopping at x 3.6 gives
-            // r = 4.72, so 4.6 leaves a little air. Recompute this if the
-            // camera or the lookAt point moves (task T4.8).
-            maxRange: 4.6,
+            // along that axis. The composed range is 3.95. The cap comes
+            // from the east wall behind the camera: the view axis leaves
+            // the lookAt point with an x component of 0.869, so an eye
+            // range of r puts it at x = -0.93 + 0.869r, and the wall's
+            // room-side face is at 3.725. Stopping at x 3.57 gives
+            // r = 5.18, so 5.1 leaves a little air. A 9:19.5 phone needs
+            // only 4.17 of that, so there is real margin.
+            maxRange: 5.1,
             // View controls (shared pan-1.0.0.js): the showroom is wider
             // than any frame, so every aspect crops the coffee bar on one
             // side and the sales board on the other. This scene runs the

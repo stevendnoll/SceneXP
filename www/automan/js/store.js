@@ -43,10 +43,9 @@
  *   |  [ brochures ]                                            |
  *   +--------------- front wall (behind the camera) ------------+
  *
- * BUILD STATUS: milestone M1. The room is real: polished floor, the
- * floor-to-ceiling curtain wall, and the lighting rig. Beyond the glass
- * there is still nothing but sky, because the lot is M2. The desk is M3
- * and the cast is M4. See specs/automan/TASKS.md.
+ * BUILD STATUS: milestone M3. The room, the lot, and the desk are all
+ * real, and the three chairs are placed and aimed. The chairs are still
+ * empty: the cast arrives at M4. See specs/automan/TASKS.md.
  */
 
 import { getScene } from '../../shared/js/scene-1.0.0.min.js';
@@ -111,18 +110,35 @@ const LAYOUT = {
         bays: 4
     },
 
-    // The sales desk. Its top height and the sheet's position are the
-    // anchor for John's pointing pose, so they get fixed at M3 and
-    // nothing about his arm can be solved before then.
-    desk: { x: -0.45, z: -2.25, w: 1.95, d: 0.95, topY: 0.75 },
-    dealSheet: { x: -0.35, z: -2.0 },
+    // The sales desk. Its top height and the sheet's position anchor
+    // John's pointing pose, so both are fixed here and the arm solve at
+    // M4 works from them rather than the other way round.
+    desk: { x: -0.45, z: -2.25, w: 1.90, d: 1.00, topY: 0.75 },
 
-    // Where the three of them sit. Yaws are not stored: each figure is
-    // aimed at build time with faceToward() below, so moving anyone keeps
-    // the sight lines honest without a second set of numbers to update.
-    john: { x: -1.35, z: -1.35 },
-    customer: { x: 0.30, z: -1.30 },
-    dealer: { x: -0.45, z: -3.00 },
+    // The deal sheet, and the whole reason the camera is where it is.
+    // Solved rather than placed: it is the point on the desk top NEAREST
+    // THE CENTRE that is still inside John's seated reach. His shoulder
+    // sits 0.2125 off his spine, the shared rig's arm gives 0.63 from
+    // shoulder to fingertip, and a forward lean buys another 0.22, so the
+    // budget is 0.85m. This spot is 0.82m from his LEFT shoulder, which
+    // is therefore the arm that points (task T4.3).
+    dealSheet: { x: -0.93, z: -2.18 },
+
+    // CORNER SEATING (decision D8). John sits at the desk's WEST END, not
+    // beside his customer on the near side, and that is load-bearing:
+    // from the end he faces EAST across the desk toward the dealer, which
+    // is roughly back toward the camera, so his face reads. Seated square
+    // on the near side he would be a back of head, and he and his
+    // customer would land on the same sight line 1 degree apart. They
+    // still sit 1.37m apart, which reads as two people who arrived
+    // together.
+    //
+    // Yaws are not stored: each figure is aimed at build time with
+    // faceToward(), so moving a seat keeps its sight line honest without
+    // a second set of numbers to update.
+    john: { x: -1.85, z: -2.35 },
+    customer: { x: -1.10, z: -1.20 },
+    dealer: { x: -0.45, z: -3.15 },
     chairSeatTop: 0.47,
 
     // The wall clock. Jenn's hangs on her back wall, but this room's back
@@ -133,7 +149,54 @@ const LAYOUT = {
     // The ceiling fixtures: two runs of two, one over the desk and one
     // over the waiting area. The shared rig gives each a point light, and
     // those do not cast shadows, so four is affordable on a phone.
-    ceilingLights: { xs: [-1.9, 1.5], zs: [-2.9, 0.3] }
+    ceilingLights: { xs: [-1.9, 1.5], zs: [-2.9, 0.3] },
+
+    // THE LOT, beyond the glass.
+    //
+    // Placement here is measured, not composed by eye, because the corner
+    // camera looks DIAGONALLY out through the wall and the visible slice
+    // of the lot is nowhere near centred on it. Rays from the eye through
+    // the glass edges fan out sharply to the west, and the portrait
+    // camera (a much narrower cone, dollied back) sees a strict subset of
+    // the landscape view, shifted further west again. The usable span at
+    // each row depth, in metres of world x:
+    //
+    //     depth    landscape 16:9      portrait 9:19.5
+    //     -7.4     -7.7 ..  -0.3       -7.7 ..  -3.8
+    //    -11.0    -12.9 ..  -1.7      -13.0 ..  -7.1
+    //    -17.5    -22.3 ..  -4.3      -22.4 .. -12.9
+    //    -24.0    -31.6 ..  -6.9      -31.8 .. -18.8
+    //
+    // So every row runs from its portrait limit in the west out to its
+    // landscape limit in the east, which puts cars in frame on a phone
+    // AND fills the wider desktop view. Cars centred on x = 0 would sit
+    // almost entirely outside a portrait frame.
+    //
+    // RE-MEASURED AT M3, and it mattered: the composition solve moved the
+    // camera and narrowed the landscape FOV to 50, which shifted every
+    // span. The rows as first written at M2 would have left a portrait
+    // visitor looking at an empty lot. Recompute these whenever the
+    // camera, the lookAt point, the FOV, or the glass width moves.
+    lot: {
+        groundY: -0.14,        // the apron sits a kerb below the showroom slab
+        kerbZ: -4.45,
+        apronFarZ: -6.0,       // the concrete walkway right outside the glass
+        driveLaneZ: -7.4,      // where the passing car crosses (M6)
+        asphaltFarZ: -29,
+        grassFarZ: -62,
+        minX: -70,
+        maxX: 25,
+        stallAngle: 0.52,      // ~30 degrees off square, standard angled parking
+        stallDepth: 5.4,
+        // Three rows, receding, each cheaper to draw than the last.
+        rows: [
+            { z: -11.0, tier: 1, from: -12.6, to: -2.2, pitch: 2.6 },
+            { z: -17.5, tier: 2, from: -22.0, to: -4.6, pitch: 2.9 },
+            { z: -24.0, tier: 3, from: -31.5, to: -7.0, pitch: 3.5 }
+        ],
+        poles: [{ x: -11.0, z: -14.5 }, { x: -21.0, z: -21.0 }],
+        pennants: { fromX: -15.0, toX: 1.0, z: -8.6, y: 3.6 }
+    }
 };
 
 // -------------------------------------------------------------------------
@@ -260,6 +323,191 @@ function createShowroomFloorTexture() {
     return texture;
 }
 
+/** Lot asphalt: dark, slightly blotchy, with a little coarse aggregate
+ *  speckle and one seam. Tiled hard over a big plane, so it stays low
+ *  contrast to avoid reading as a pattern. */
+function createAsphaltTexture() {
+    const S = 256;
+    const canvas = makeCanvas(S, S);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#3c3b3a';
+    ctx.fillRect(0, 0, S, S);
+
+    // Broad tonal patches, the way resurfaced asphalt weathers
+    for (let i = 0; i < 26; i++) {
+        ctx.fillStyle = ['#403f3e', '#383736', '#454342'][i % 3];
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(Math.random() * S, Math.random() * S, 20 + Math.random() * 45, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Aggregate speckle
+    for (let i = 0; i < 2600; i++) {
+        const g = 40 + Math.floor(Math.random() * 45);
+        ctx.fillStyle = `rgb(${g},${g - 1},${g - 2})`;
+        ctx.fillRect(Math.random() * S, Math.random() * S, 1, 1);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+}
+
+/** One row of angled stall stripes, as a cutout texture laid just above
+ *  the asphalt. The canvas covers exactly one stall pitch across and the
+ *  full stall depth down, so repeating it along U walks the stripes down
+ *  the row.
+ *
+ *  The line is drawn several times at multiples of the canvas width so it
+ *  survives the wrap: a single stroke would simply be clipped at the edge
+ *  and the pattern would break at every tile seam. */
+function createStallStripeTexture(pitch, depth, angle) {
+    const W = 256, H = 256;
+    const canvas = makeCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    // How far the stripe travels across, in pixels, over the full depth.
+    const runMetres = depth * Math.tan(angle);
+    const runPx = (runMetres / pitch) * W;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = '#e8e6dd';
+    ctx.lineWidth = Math.max(4, (0.12 / pitch) * W);
+    ctx.lineCap = 'butt';
+    for (let k = -3; k <= 3; k++) {
+        ctx.beginPath();
+        ctx.moveTo(k * W, H);
+        ctx.lineTo(k * W + runPx, 0);
+        ctx.stroke();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+}
+
+/** The deal sheet: a dealership four square, which is the page every one
+ *  of these conversations actually happens over. Trade, price, down
+ *  payment, monthly, one box each, and the whole trick of it is moving a
+ *  number out of the box you are watching into one you are not.
+ *
+ *  Deliberately carries NO prices. Marks and struck-through scribbles
+ *  read as a worked page at a glance and at a lean, and nothing on it
+ *  could ever be mistaken for a real offer. */
+function drawDealSheet() {
+    const W = 320, H = 440;
+    const canvas = makeCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#fbfaf6';
+    ctx.fillRect(0, 0, W, H);
+
+    // Header band in the brand navy
+    ctx.fillStyle = '#12294a';
+    ctx.fillRect(0, 0, W, 46);
+    ctx.fillStyle = '#f0a51e';
+    ctx.font = 'bold 21px system-ui, sans-serif';
+    ctx.fillText('WORKSHEET', 16, 31);
+
+    // The four square itself
+    const bx = 20, by = 70, bw = W - 40, bh = 250;
+    ctx.strokeStyle = '#2a3340';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.beginPath();
+    ctx.moveTo(bx + bw / 2, by); ctx.lineTo(bx + bw / 2, by + bh);
+    ctx.moveTo(bx, by + bh / 2); ctx.lineTo(bx + bw, by + bh / 2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#39414d';
+    ctx.font = 'bold 15px system-ui, sans-serif';
+    const labels = ['TRADE', 'PRICE', 'DOWN', 'MONTHLY'];
+    labels.forEach((label, i) => {
+        const cx = bx + (i % 2) * (bw / 2) + 12;
+        const cy = by + Math.floor(i / 2) * (bh / 2) + 22;
+        ctx.fillText(label, cx, cy);
+    });
+
+    // Pen work: a couple of struck-through figures per box, as marks
+    // rather than numbers, plus a circled one in the trade box.
+    ctx.strokeStyle = '#1d3f7a';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    const scribble = (cx, cy, n) => {
+        for (let i = 0; i < n; i++) {
+            const y = cy + i * 22;
+            ctx.beginPath();
+            ctx.moveTo(cx, y);
+            ctx.lineTo(cx + 52 + ((i * 17) % 23), y);
+            ctx.stroke();
+            if (i < n - 1) {   // struck through, the way a countered number is
+                ctx.beginPath();
+                ctx.moveTo(cx - 4, y - 4);
+                ctx.lineTo(cx + 62, y + 5);
+                ctx.stroke();
+            }
+        }
+    };
+    scribble(bx + 16, by + 52, 3);
+    scribble(bx + bw / 2 + 16, by + 52, 3);
+    scribble(bx + 16, by + bh / 2 + 52, 2);
+    scribble(bx + bw / 2 + 16, by + bh / 2 + 52, 3);
+
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(bx + 52, by + 96, 46, 17, 0.06, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // The products line under the square, the other half of the deal
+    ctx.fillStyle = '#39414d';
+    ctx.font = '13px system-ui, sans-serif';
+    ['WARRANTY', 'TIRE & WHEEL', 'GAP'].forEach((t, i) => {
+        const y = by + bh + 34 + i * 26;
+        ctx.fillText(t, bx + 30, y);
+        ctx.strokeStyle = '#2a3340';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bx + 6, y - 12, 15, 15);
+    });
+
+    return new THREE.CanvasTexture(canvas);
+}
+
+/** A pennant string as one cutout strip: triangular flags hanging from a
+ *  cord, alternating through the brand colors. Cheaper than geometry and
+ *  perfectly legible at the distance it hangs. */
+function createPennantTexture() {
+    const W = 512, H = 96;
+    const canvas = makeCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    // The cord
+    ctx.fillStyle = '#4a4a4a';
+    ctx.fillRect(0, 0, W, 4);
+
+    const colors = ['#f0a51e', '#12294a', '#e8e6dd', '#0d5bc4'];
+    const n = 16;
+    const step = W / n;
+    for (let i = 0; i < n; i++) {
+        ctx.fillStyle = colors[i % colors.length];
+        const x = i * step;
+        ctx.beginPath();
+        ctx.moveTo(x + 2, 3);
+        ctx.lineTo(x + step - 2, 3);
+        ctx.lineTo(x + step / 2, H - 8);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+}
+
 // ============================================
 // SHARED MATERIALS
 // ============================================
@@ -288,7 +536,11 @@ export function initStore() {
     showroomGroup = initWorld(AUTOMAN_CONFIG);
 
     createShowroom();         // floor, ceiling, walls, baseboards, the corner piers
+    createLot();              // the apron, the asphalt, the parked rows, the backdrop
     createCurtainWall();      // the floor-to-ceiling glazing across the back
+    createDealerDesk();       // the sales desk itself
+    createDeskItems();        // the deal sheet, the pages, the screen, the die-cast
+    createDeskChairs();       // three chairs, aimed the way their sitters will be
     createWallClock();        // real local time, on the west wall
     createShowroomLighting(); // the shared rig, reskinned as recessed panels
     createDaylightShaft();    // the faux daylight washing in through the glass
@@ -487,6 +739,475 @@ function createCurtainWall() {
     }
 
     showroomGroup.add(registerOutdoorProp(wall, 'window'));
+}
+
+// ============================================
+// THE LOT (seen through the curtain wall)
+// ============================================
+// Everything out here is scenery. Nothing in the lot is registered as a
+// prop, so a tap anywhere through the glass resolves to the curtain wall
+// itself, which is exactly right: its story IS the lot.
+//
+// Three tiers of car, cheaper the further away they sit. Geometries and
+// materials are built once and shared across all 21 cars, so the row
+// count costs draw calls rather than memory.
+
+const CAR_COLORS = [0xdfe2e5, 0x9aa0a6, 0x1f2226, 0x1d3c66, 0x8c2130, 0x4a5a3f];
+
+let _carGeo = null;
+let _carMats = null;
+
+function carGeometries() {
+    if (_carGeo) return _carGeo;
+    _carGeo = {
+        body: new THREE.BoxGeometry(1.82, 0.58, 4.40),
+        cabin: new THREE.BoxGeometry(1.66, 0.52, 2.20),
+        glassBand: new THREE.BoxGeometry(1.70, 0.30, 2.10),
+        wheel: new THREE.CylinderGeometry(0.33, 0.33, 0.22, 10),
+        skirt: new THREE.BoxGeometry(1.86, 0.30, 4.20),
+        lamp: new THREE.BoxGeometry(0.34, 0.12, 0.06),
+        slab: new THREE.BoxGeometry(1.84, 1.04, 4.40),
+        slabGlass: new THREE.BoxGeometry(1.86, 0.32, 2.30)
+    };
+    return _carGeo;
+}
+
+function carMaterials() {
+    if (_carMats) return _carMats;
+    _carMats = {
+        bodies: CAR_COLORS.map((c) => new THREE.MeshStandardMaterial({
+            color: c, roughness: 0.35, metalness: 0.45
+        })),
+        glass: new THREE.MeshStandardMaterial({
+            color: 0x1a2530, roughness: 0.15, metalness: 0.5
+        }),
+        lampFront: new THREE.MeshStandardMaterial({
+            color: 0xf2f0e6, roughness: 0.25, metalness: 0.2
+        }),
+        lampRear: new THREE.MeshStandardMaterial({
+            color: 0x8e1f24, roughness: 0.35, metalness: 0.2
+        })
+    };
+    return _carMats;
+}
+
+/** One parked car, local forward +Z, origin between the wheels on the
+ *  ground. `tier` trades detail for distance:
+ *
+ *    1  near row: body, cabin, glazing, four wheels, lamps  (11 meshes)
+ *    2  middle:   body, cabin, glazing, a dark skirt         (4 meshes)
+ *    3  far row:  one slab and a glazing band                (2 meshes)
+ *
+ *  Nothing out here casts or receives shadow. The only shadow-casting
+ *  light in the scene is the daylight shaft aimed INTO the room, so lot
+ *  shadows would cost fill rate and buy nothing. */
+function createParkedCar(tier, bodyMaterial) {
+    const g = carGeometries();
+    const m = carMaterials();
+    const car = new THREE.Group();
+
+    if (tier === 3) {
+        const slab = new THREE.Mesh(g.slab, bodyMaterial);
+        slab.position.y = 0.52;
+        car.add(slab);
+        const band = new THREE.Mesh(g.slabGlass, m.glass);
+        band.position.set(0, 0.90, -0.20);
+        car.add(band);
+        return car;
+    }
+
+    const body = new THREE.Mesh(g.body, bodyMaterial);
+    body.position.y = 0.58;
+    car.add(body);
+
+    const cabin = new THREE.Mesh(g.cabin, bodyMaterial);
+    cabin.position.set(0, 1.10, -0.20);
+    car.add(cabin);
+
+    const band = new THREE.Mesh(g.glassBand, m.glass);
+    band.position.set(0, 1.14, -0.20);
+    car.add(band);
+
+    if (tier === 2) {
+        const skirt = new THREE.Mesh(g.skirt, m.glass);
+        skirt.position.y = 0.24;
+        car.add(skirt);
+        return car;
+    }
+
+    [-1, 1].forEach((sx) => {
+        [-1, 1].forEach((sz) => {
+            const wheel = new THREE.Mesh(g.wheel, matteBlack);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(sx * 0.86, 0.33, sz * 1.42);
+            car.add(wheel);
+        });
+        const head = new THREE.Mesh(g.lamp, m.lampFront);
+        head.position.set(sx * 0.56, 0.70, 2.21);
+        car.add(head);
+        const tail = new THREE.Mesh(g.lamp, m.lampRear);
+        tail.position.set(sx * 0.56, 0.72, -2.21);
+        car.add(tail);
+    });
+
+    return car;
+}
+
+/** The whole lot: the apron and its kerb, the asphalt, the painted stall
+ *  rows, the parked cars, two light poles, a pennant string, and the
+ *  grass and distant backdrop that keep the horizon from reading as an
+ *  empty edge. */
+function createLot() {
+    const L = LAYOUT.lot;
+    const lot = new THREE.Group();
+    lot.name = 'lot';
+
+    const width = L.maxX - L.minX;
+    const cxLot = (L.minX + L.maxX) / 2;
+
+    // --- The apron and its kerb. The glazing runs to the floor, so the
+    // ground outside is in plain view and the two planes must not simply
+    // meet: the lot sits a kerb lower, and the ground extends back UNDER
+    // the showroom so there can never be a gap at the seam whatever the
+    // camera does. (Decision D7's follow-on.) ---
+    const apron = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, 2.0 + (L.kerbZ - L.apronFarZ)),
+        new THREE.MeshStandardMaterial({ color: 0xbdbab4, roughness: 0.85, metalness: 0.0 })
+    );
+    apron.rotation.x = -Math.PI / 2;
+    apron.position.set(cxLot, L.groundY, (2.0 + L.apronFarZ) / 2);
+    lot.add(apron);
+
+    const kerb = new THREE.Mesh(
+        new THREE.BoxGeometry(width, -L.groundY, 0.14),
+        new THREE.MeshStandardMaterial({ color: 0xa9a6a0, roughness: 0.9, metalness: 0.0 })
+    );
+    kerb.position.set(cxLot, L.groundY / 2, L.kerbZ);
+    lot.add(kerb);
+
+    // --- The asphalt ---
+    const asphaltTexture = createAsphaltTexture();
+    asphaltTexture.repeat.set(width / 6, (L.apronFarZ - L.asphaltFarZ) / 6);
+    const asphalt = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, L.apronFarZ - L.asphaltFarZ),
+        new THREE.MeshStandardMaterial({ map: asphaltTexture, roughness: 0.92, metalness: 0.0 })
+    );
+    asphalt.rotation.x = -Math.PI / 2;
+    asphalt.position.set(cxLot, L.groundY - 0.005, (L.apronFarZ + L.asphaltFarZ) / 2);
+    lot.add(asphalt);
+
+    // --- Grass beyond the asphalt, out to the horizon ---
+    const grass = new THREE.Mesh(
+        new THREE.PlaneGeometry(width + 60, L.asphaltFarZ - L.grassFarZ),
+        new THREE.MeshStandardMaterial({ color: 0x5f8a4c, roughness: 0.95, metalness: 0.0 })
+    );
+    grass.rotation.x = -Math.PI / 2;
+    grass.position.set(cxLot, L.groundY - 0.01, (L.asphaltFarZ + L.grassFarZ) / 2);
+    lot.add(grass);
+
+    // --- The stall rows, and the cars in them ---
+    const materials = carMaterials();
+    let colorTick = 0;
+    L.rows.forEach((row, rowIndex) => {
+        const length = (row.to - row.from) + row.pitch * 2;
+        const centerX = (row.from + row.to) / 2;
+
+        // Painted stripes: one cutout plane per row, a hair above the
+        // asphalt. alphaTest rather than transparency, so it still writes
+        // depth and never sorts oddly against the cars.
+        const stripeTexture = createStallStripeTexture(row.pitch, L.stallDepth, L.stallAngle);
+        stripeTexture.repeat.set(length / row.pitch, 1);
+        const stripes = new THREE.Mesh(
+            new THREE.PlaneGeometry(length, L.stallDepth),
+            new THREE.MeshStandardMaterial({
+                map: stripeTexture, transparent: false, alphaTest: 0.5,
+                roughness: 0.9, metalness: 0.0
+            })
+        );
+        stripes.rotation.x = -Math.PI / 2;
+        stripes.position.set(centerX, L.groundY + 0.006, row.z);
+        stripes.name = `stallRow_${rowIndex}`;
+        lot.add(stripes);
+
+        for (let x = row.from; x <= row.to + 1e-6; x += row.pitch) {
+            const bodyMaterial = materials.bodies[colorTick++ % materials.bodies.length];
+            const car = createParkedCar(row.tier, bodyMaterial);
+            // Angled parking: every car in a row sits at the same angle,
+            // with a degree or two of scatter so the row does not read as
+            // a stamped pattern.
+            car.rotation.y = L.stallAngle + (((colorTick * 37) % 11) - 5) * 0.004;
+            car.position.set(x, L.groundY, row.z + (((colorTick * 53) % 7) - 3) * 0.05);
+            lot.add(car);
+        }
+    });
+
+    // --- Light poles ---
+    L.poles.forEach((p, i) => {
+        const pole = new THREE.Group();
+        pole.name = `lightPole_${i}`;
+        const mast = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.09, 0.12, 6.2, 8), brushedMetal
+        );
+        mast.position.y = 3.1;
+        pole.add(mast);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.16, 0.42), matteBlack);
+        head.position.set(0.42, 6.15, 0);
+        pole.add(head);
+        const base = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.22, 0.26, 0.4, 8),
+            new THREE.MeshStandardMaterial({ color: 0x9c9993, roughness: 0.9 })
+        );
+        base.position.y = 0.2;
+        pole.add(base);
+        pole.position.set(p.x, L.groundY, p.z);
+        lot.add(pole);
+    });
+
+    // --- The pennant string across the frontage ---
+    const P = L.pennants;
+    const span = P.toX - P.fromX;
+    const pennantTexture = createPennantTexture();
+    pennantTexture.repeat.set(span / 4.0, 1);
+    const pennants = new THREE.Mesh(
+        new THREE.PlaneGeometry(span, 0.62),
+        new THREE.MeshStandardMaterial({
+            map: pennantTexture, transparent: false, alphaTest: 0.5,
+            roughness: 0.85, metalness: 0.0, side: THREE.DoubleSide
+        })
+    );
+    pennants.position.set((P.fromX + P.toX) / 2, P.y, P.z);
+    pennants.name = 'pennants';
+    lot.add(pennants);
+
+    [P.fromX, P.toX].forEach((x, i) => {
+        const post = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.06, 0.07, P.y + 0.3, 6), brushedMetal
+        );
+        post.position.set(x, L.groundY + (P.y + 0.3) / 2, P.z);
+        post.name = `pennantPost_${i}`;
+        lot.add(post);
+    });
+
+    // --- The backdrop: a treeline and a couple of low commercial blocks,
+    // so the far edge of the lot resolves into something rather than
+    // running out at a bare horizon. Deliberately simple and unlit by
+    // anything but the ambient rig. ---
+    const canopy = new THREE.MeshStandardMaterial({ color: 0x33562f, roughness: 0.95 });
+    for (let i = 0; i < 14; i++) {
+        const x = -58 + i * 5.0 + ((i * 29) % 7) * 0.4;
+        const blob = new THREE.Mesh(new THREE.SphereGeometry(2.6, 7, 5), canopy);
+        blob.scale.set(1, 0.85 + ((i * 13) % 5) * 0.06, 1);
+        blob.position.set(x, L.groundY + 2.4, -37 - ((i * 17) % 5) * 1.4);
+        lot.add(blob);
+    }
+    const blockMaterial = new THREE.MeshStandardMaterial({ color: 0xb4ab9d, roughness: 0.9 });
+    [
+        { x: -44, w: 16, h: 5.0, z: -45 },
+        { x: -20, w: 22, h: 4.2, z: -47 },
+        { x: 4, w: 14, h: 5.6, z: -44 }
+    ].forEach((b, i) => {
+        const block = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, 10), blockMaterial);
+        block.position.set(b.x, L.groundY + b.h / 2, b.z);
+        block.name = `backdropBlock_${i}`;
+        lot.add(block);
+    });
+
+    showroomGroup.add(lot);
+}
+
+// ============================================
+// THE SALES DESK
+// ============================================
+/** The desk itself: a pedestal desk with a modesty panel on the dealer's
+ *  side. Its top height is the anchor for John's pointing pose, so it is
+ *  fixed in LAYOUT rather than tuned here. */
+function createDealerDesk() {
+    const D = LAYOUT.desk;
+    const desk = new THREE.Group();
+    desk.name = 'salesDesk';
+
+    const wood = new THREE.MeshStandardMaterial({
+        color: PALETTE.deskWood, roughness: 0.5, metalness: 0.03
+    });
+    const darkWood = new THREE.MeshStandardMaterial({
+        color: 0x6d5238, roughness: 0.55, metalness: 0.03
+    });
+
+    const top = new THREE.Mesh(new THREE.BoxGeometry(D.w, 0.055, D.d), wood);
+    top.position.y = D.topY - 0.0275;
+    top.castShadow = true;
+    top.receiveShadow = true;
+    desk.add(top);
+
+    // Pedestals at each end, and the modesty panel closing the dealer's
+    // side so the visitor never sees straight through the desk.
+    [-1, 1].forEach((s) => {
+        const pedestal = new THREE.Mesh(
+            new THREE.BoxGeometry(0.09, D.topY - 0.06, D.d - 0.10), darkWood
+        );
+        pedestal.position.set(s * (D.w / 2 - 0.08), (D.topY - 0.06) / 2, 0);
+        pedestal.castShadow = true;
+        desk.add(pedestal);
+    });
+    const modesty = new THREE.Mesh(
+        new THREE.BoxGeometry(D.w - 0.22, D.topY - 0.28, 0.04), darkWood
+    );
+    modesty.position.set(0, (D.topY - 0.28) / 2 + 0.16, -(D.d / 2 - 0.09));
+    desk.add(modesty);
+
+    // A slim brand rail along the near edge, the one place the gold
+    // appears in the room's furniture.
+    const rail = new THREE.Mesh(
+        new THREE.BoxGeometry(D.w, 0.02, 0.02),
+        new THREE.MeshStandardMaterial({ color: PALETTE.gold, roughness: 0.45, metalness: 0.55 })
+    );
+    rail.position.set(0, D.topY - 0.065, D.d / 2 - 0.006);
+    desk.add(rail);
+
+    desk.position.set(D.x, 0, D.z);
+    showroomGroup.add(registerOutdoorProp(desk, 'desk'));
+}
+
+/** Everything ON the desk: the deal sheet John points at, the loose pages
+ *  around it, the dealer's screen turned away from the visitor, a
+ *  calculator, a pen, and the little die-cast on the near corner.
+ *
+ *  The sheet, the screen, and the model car are their own registered
+ *  props, so each answers a tap with its own story. The desk under them
+ *  answers for the rest. */
+function createDeskItems() {
+    const D = LAYOUT.desk;
+    const S = LAYOUT.dealSheet;
+    const paperWhite = new THREE.MeshStandardMaterial({
+        color: 0xf7f5ef, roughness: 0.9, metalness: 0.0
+    });
+
+    // ---- The deal sheet, face up, turned a little toward John ----
+    const sheetGroup = new THREE.Group();
+    sheetGroup.name = 'dealSheet';
+    const sheet = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.30, 0.41),
+        new THREE.MeshStandardMaterial({ map: drawDealSheet(), roughness: 0.85, metalness: 0.0 })
+    );
+    sheet.rotation.x = -Math.PI / 2;
+    sheet.position.y = 0.002;
+    sheetGroup.add(sheet);
+    // A backing card so the page has thickness from a low angle
+    const backing = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.003, 0.41), paperWhite);
+    sheetGroup.add(backing);
+    sheetGroup.position.set(S.x, D.topY + 0.003, S.z);
+    sheetGroup.rotation.y = -0.22;
+    showroomGroup.add(registerOutdoorProp(sheetGroup, 'papers'));
+
+    // ---- Loose supporting pages, fanned beside it ----
+    const loose = new THREE.Group();
+    loose.name = 'loosePages';
+    [
+        { x: 0.30, z: 0.14, r: 0.42 },
+        { x: 0.24, z: -0.16, r: -0.28 },
+        { x: 0.46, z: -0.02, r: 0.12 }
+    ].forEach((p, i) => {
+        const page = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.002, 0.29), paperWhite);
+        page.position.set(S.x + p.x, D.topY + 0.002 + i * 0.002, S.z + p.z);
+        page.rotation.y = p.r;
+        loose.add(page);
+    });
+    showroomGroup.add(loose);
+
+    // ---- The dealer's screen, turned away from the visitor ----
+    // It faces the dealer at -z, so from the camera it is a blank back,
+    // which is exactly the point: everything on it is knowable, and none
+    // of it is being shown to the customer.
+    const screen = new THREE.Group();
+    screen.name = 'dealerScreen';
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.32, 0.022), matteBlack);
+    panel.position.y = 0.30;
+    screen.add(panel);
+    const face = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.48, 0.28),
+        new THREE.MeshStandardMaterial({ color: 0x1b2a3a, roughness: 0.25, metalness: 0.2 })
+    );
+    face.position.set(0, 0.30, -0.013);
+    face.rotation.y = Math.PI;
+    screen.add(face);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.14, 8), brushedMetal);
+    neck.position.y = 0.09;
+    screen.add(neck);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.014, 0.13), brushedMetal);
+    foot.position.y = 0.02;
+    screen.add(foot);
+    screen.position.set(D.x + 0.42, D.topY, D.z - 0.30);
+    screen.rotation.y = 0.18;
+    showroomGroup.add(registerOutdoorProp(screen, 'computer'));
+
+    // ---- Calculator and pen, on the dealer's side of the page ----
+    const deskKit = new THREE.Group();
+    deskKit.name = 'deskKit';
+    const calc = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.012, 0.16), matteBlack);
+    calc.position.set(D.x - 0.05, D.topY + 0.006, D.z - 0.24);
+    calc.rotation.y = 0.3;
+    deskKit.add(calc);
+    const calcFace = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.075, 0.04),
+        new THREE.MeshStandardMaterial({ color: 0x9fb8a4, roughness: 0.4 })
+    );
+    calcFace.rotation.x = -Math.PI / 2;
+    calcFace.position.set(D.x - 0.05 + 0.015, D.topY + 0.013, D.z - 0.285);
+    calcFace.rotation.z = 0.3;
+    deskKit.add(calcFace);
+    const pen = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.005, 0.005, 0.14, 6),
+        new THREE.MeshStandardMaterial({ color: PALETTE.navy, roughness: 0.4, metalness: 0.3 })
+    );
+    pen.rotation.set(Math.PI / 2, 0, 0.9);
+    pen.position.set(S.x + 0.13, D.topY + 0.008, S.z + 0.24);
+    deskKit.add(pen);
+    showroomGroup.add(deskKit);
+
+    // ---- The die-cast on the near corner. It reuses the lot's own car
+    // geometry at 1/22 scale, so the little model costs no new memory at
+    // all and is recognisably the same shape as the cars outside. ----
+    const model = new THREE.Group();
+    model.name = 'modelCar';
+    const die = createParkedCar(1, new THREE.MeshStandardMaterial({
+        color: PALETTE.gold, roughness: 0.3, metalness: 0.7
+    }));
+    die.scale.setScalar(0.045);
+    die.rotation.y = -0.6;
+    die.position.y = 0.012;
+    model.add(die);
+    const plinth = new THREE.Mesh(
+        new THREE.BoxGeometry(0.15, 0.012, 0.09),
+        new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.6, metalness: 0.2 })
+    );
+    plinth.position.y = 0.006;
+    plinth.rotation.y = -0.6;
+    model.add(plinth);
+    model.position.set(D.x + D.w / 2 - 0.20, D.topY, D.z + D.d / 2 - 0.16);
+    showroomGroup.add(registerOutdoorProp(model, 'modelcar'));
+}
+
+/** The three chairs. Each is aimed the same way its occupant will be at
+ *  M4, from the same faceToward() call, so a chair can never end up
+ *  pointing somewhere its sitter is not. */
+function createDeskChairs() {
+    const mid = {
+        x: (LAYOUT.john.x + LAYOUT.customer.x) / 2,
+        z: (LAYOUT.john.z + LAYOUT.customer.z) / 2
+    };
+    [
+        { seat: LAYOUT.john, target: LAYOUT.dealer, kind: 'john' },
+        { seat: LAYOUT.customer, target: LAYOUT.dealer, kind: 'customer' },
+        { seat: LAYOUT.dealer, target: mid, kind: 'dealer' }
+    ].forEach(({ seat, target, kind }) => {
+        const yaw = faceToward(seat, target);
+        // Nudge the chair a few centimetres back from the sitter, so the
+        // backrest sits behind them rather than through them.
+        const chair = createDeskChair(
+            seat.x - Math.sin(yaw) * 0.04, seat.z - Math.cos(yaw) * 0.04, yaw, kind
+        );
+        showroomGroup.add(chair);
+    });
 }
 
 // ============================================
