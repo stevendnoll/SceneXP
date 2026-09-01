@@ -307,7 +307,14 @@ source of truth either way.
    entry in the catalog array in `www/js/directory.js`, and one URL in
    `www/sitemap.xml`. Also please add a short description of your world
    in the `www/llms.txt` file.
-7. **Open a pull request** telling us the story behind your world. We read
+7. **If your world remembers anything, say so in the privacy policy.**
+   `sessionStorage` needs nothing: it goes when the tab closes, and the
+   policy already covers it. But anything you put in `localStorage` outlives
+   the visit, so it has to be named in `www/privacy.html` along with how a
+   visitor clears it. `tests/privacy.test.mjs` holds the list of files
+   allowed to write persistent storage and will fail the moment yours joins
+   them, which is the reminder rather than the rule.
+8. **Open a pull request** telling us the story behind your world. We read
    every one with genuine delight.
 
 ## House rules
@@ -320,7 +327,14 @@ source of truth either way.
 - **Security first.** Same-origin CSP, no third-party scripts, no trackers,
   no CDNs. Everything ships from this domain.
 - **Accessible and considerate.** Keyboard support, reduced-motion respect,
-  and a no-JavaScript fallback are part of the pattern, not extras.
+  and a no-JavaScript fallback are part of the pattern, not extras. Worth
+  checking early rather than late: if the only way into your world's main
+  action is a pointer event on the canvas, it has no keyboard story yet, and
+  no test will tell you.
+- **Nothing leaves the visitor's device.** Storage here is for the visitor's
+  benefit and nobody else's, so it stays in their browser and is never sent
+  anywhere. If you keep something past the visit, disclose it (step 7 above)
+  and give them a way to clear it.
 - **Fast on phones.** Many visitors arrive on mobile, so keep assets lean
   and performance in mind.
 - **A gracious tone.** User-facing copy should read like a world-class host:
