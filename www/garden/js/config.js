@@ -1981,15 +1981,25 @@ export const GARDEN_CONFIG = deepFreeze({
                 // 9 m spread their footprints touch and overlap, which is
                 // what makes the side woods work and is what that band
                 // never had. 2,816 triangles in one draw call.
-                drifts: 44,
-                driftsMobile: 22,
+                // RAISED FROM 44 (QA, same day). "It would be nice to see
+                // wildflowers on the hill." They were there and the count was
+                // the fault, not the colour: the drifts ring the whole world
+                // and only the northern wedge is ever in frame, so 44 drifts
+                // at a 0.3 flower share put exactly TWO flowering patches in
+                // the composed view. Two patches in a 100 m band is something
+                // you find rather than something you see.
+                drifts: 56,
+                driftsMobile: 26,
                 perDrift: 16,
                 perDriftMobile: 10,
                 spread: 9,
                 // How many drifts come up flowering rather than as rough
                 // grass. Under a third, because a meadow that is mostly
                 // flowers is a postcard.
-                flowerShare: 0.3,
+                // Raised with the count, so about ten flowering patches fall
+                // in frame rather than two. Still under half, because a meadow
+                // that is mostly flowers is a postcard.
+                flowerShare: 0.5,
 
                 // ---- SIZED FOR 100 TO 190 m, WHICH IS NOT LIFE SIZE ----
                 // The near weeds are 0.55 to 1.05 m at 13 to 23 m. The same
@@ -2004,7 +2014,22 @@ export const GARDEN_CONFIG = deepFreeze({
                 // approaching that height stops being ground cover and
                 // becomes the tree band again.
                 weedHeight: { min: 1.6, max: 2.8 },
-                flowerHeight: { min: 1.2, max: 2.0 },
+                // ---- THE SIZE OF A FAR WILDFLOWER (QA 2026-08-31) ---------
+                // These ARE the perimeter wildflowers now, on the same mesh
+                // and the same petal mask, so the only thing left to choose is
+                // how big. It cannot be their real 0.22 to 0.44 m: that is
+                // FOUR PIXELS at 130 m, which is the fifth time this scene
+                // would have shipped something too small to see.
+                //
+                // Matched in PIXELS instead, which is what "the same
+                // wildflowers" has to mean at six times the distance. Measured
+                // from the composed viewpoint, a perimeter flower spans 4.6 px
+                // (0.22 m at 48 m) to 12.6 px (0.44 m at 35 m). These span 4.5
+                // to 12.5, which is the same flower seen further off rather
+                // than a bigger flower: the first cut at 1.5 to 2.4 m came out
+                // at 19 px, half again the largest thing on the perimeter, and
+                // that is a good part of why it read as a weed.
+                flowerHeight: { min: 0.85, max: 1.25 },
                 // Wider than the near weeds' 1.2 m of margin. A drift that
                 // clips the water reads as reeds, which would be a fine
                 // thing to build on purpose and a poor thing to get by
@@ -2162,13 +2187,62 @@ export const GARDEN_CONFIG = deepFreeze({
             // therefore tuned against nothing. They are a considered starting
             // point rather than a measured one, and this is the first place to
             // look when the first screenshot of working rain comes back.
-            rainDrops: 4000,
-            rainDropsMobile: 1400,
-            snowFlakes: 1800,
-            snowFlakesMobile: 600,
-            // The box of weather that travels with the viewer.
-            radius: 26,
-            height: 22,
+            // ---- COUNTS FOLLOW THE VOLUME, OR THE STORM GETS LIGHTER ----
+            // The box below is 5.12 times the volume it was, and drops are
+            // spread through it, so keeping the old counts would have halved
+            // the density of every storm in the scene to fix an edge nobody
+            // sees except at full zoom-out. These are the old numbers times
+            // that same 5.12, which holds the density a visitor actually
+            // stands in to within 3 percent of what it has always been.
+            //
+            // AFFORDABLE BECAUSE RAIN IS LINES. 20,000 drops is 40,000
+            // vertices and ZERO triangles, in one draw call, running a vertex
+            // shader with no texture fetch and a three-line fragment shader.
+            // It costs nothing against a scene budgeted in triangles, which is
+            // why the count was the right lever here and the radius was not.
+            rainDrops: 20000,
+            rainDropsMobile: 6500,
+            snowFlakes: 9000,
+            snowFlakesMobile: 3000,
+
+            // ---- THE BOX OF WEATHER THAT TRAVELS WITH THE VIEWER --------
+            // ---- AND IT WAS SMALLER THAN THE ZOOM (QA 2026-08-31) -------
+            // "If I zoom out all the way I can see where the rain, sleet and
+            // snow spawns into view." Two edges were visible and only one of
+            // them is the obvious one:
+            //
+            //   THE CEILING. The dolly runs the camera out to z 40 and **y 26**
+            //   at full zoom-out, and the volume was 22 m tall anchored at the
+            //   ground. The camera was FOUR METRES ABOVE THE WEATHER, looking
+            //   down onto the top surface of it.
+            //
+            //   THE WALL. A 26 m radius around a camera at z 40 covers z 14 to
+            //   66. The plot is z -12 to 12 and the lake is at -42, so every
+            //   distant thing in frame had dry air in front of it and the
+            //   cylinder's far wall drew a horizontal line across the meadow.
+            //
+            // ---- A BIGGER CYLINDER ONLY MOVES THE LINE ------------------
+            // The volume grows as radius squared times height, so holding the
+            // present density out to where the fog would hide the edge (about
+            // 150 m) costs roughly 48,000 drops against 4,000. That is not
+            // affordable and it is not the fix either, because the fault is
+            // that the volume HAS an edge.
+            //
+            // So the walls and the ceiling are soft now (`rimFrom`, `topFrom`)
+            // and the box is moderately bigger. Rain thins out into the
+            // distance instead of stopping, which is also what rain does.
+            //
+            // The size still had to move, because a fade needs somewhere to
+            // happen: 46 m of radius puts the fade band at 33 to 46 m, and 36 m
+            // of height puts the camera at full zoom-out INSIDE the volume with
+            // the ceiling fading above its head rather than under its feet.
+            radius: 46,
+            height: 36,
+            // Where the fades begin, as a fraction of radius and of height.
+            // A quarter of each: enough distance to dissolve in, and not so
+            // much that the middle of the storm is being dimmed.
+            rimFrom: 0.74,
+            topFrom: 0.78,
             rainSpeed: 26,
             snowSpeed: 2.4,
             rainColor: 0xa9c2d4,
@@ -2339,17 +2413,72 @@ export const GARDEN_CONFIG = deepFreeze({
         // not see it. The wiring was correct and the arithmetic through the
         // tone curve said 19 of 255, which should be plain. THE TERM THAT WAS
         // MISSING IS THE NOISE IT SITS IN: `mottle` already swings every patch
-        // of grass from 0.883 to 1.117 of its own colour, a spread of 23
-        // percent, and a step of 12 percent between the two areas is HALF the
-        // variation inside each of them. A difference smaller than the noise
-        // around it does not read as a boundary, it reads as more noise.
+        // of grass across a spread of 23 percent, and a step of 12 percent
+        // between the two areas is half the variation inside each of them.
         //
-        // So the rule, and there is a test on it: the step between the two
-        // must be larger than the spread within either. At 0.76 it is 1.03
-        // times the mottle, which is the smallest value that can be seen at
-        // all rather than a number picked for feel. If the mottle is ever
-        // raised, this has to come down with it.
-        meadowTint: 0.76,
+        // ---- AND 0.76 DID NOT WORK EITHER (QA 2026-08-31, third report) ----
+        //
+        // "I know we've tried to make the grass outside of the walls darker a
+        // couple of times, but the grass still all looks like it's the same
+        // shade of green." Measured through the shipped pipeline, ACES and the
+        // sRGB encode included, at a spring morning:
+        //
+        //     inside   rgb(197,215,174)   luminance 208.2
+        //     outside  rgb(181,202,155)   luminance 194.1   step 14.1 of 255
+        //     mottle inside                                 spread 11.1
+        //     darkest inside 201.8 vs brightest outside 199.8  MARGIN 2.0
+        //
+        // Two of 255. The old rule, `step > spread`, was satisfied and is not
+        // the right rule: it compares means, and what a visitor sees at the
+        // wall is the DARKEST inside against the BRIGHTEST outside, which
+        // cleared by a margin no eye is going to find.
+        //
+        // ---- THE REAL FAULT IS THAT BOTH LIVE ON ONE AXIS ------------------
+        //
+        // The mottle is `uGrassColor * (1 + noise)`, a SCALAR multiply, so it
+        // moves brightness and nothing else. A scalar tint is also a scalar
+        // multiply. Two rounds of tuning were spent making a brightness
+        // difference compete with brightness noise, which is the one contest it
+        // cannot win cheaply.
+        //
+        // A pure luminance step across a boundary also reads as the WRONG
+        // THING. Ground that is only darker reads as ground in shade, which is
+        // a cloud passing, not a different kind of grass.
+        //
+        // So the tint is a COLOUR now, not a number. The mottle has exactly
+        // zero chromatic component, so a hue difference is uncontested at any
+        // mottle value.
+        //
+        // ---- AND THE FIRST COLOUR WENT THE WRONG WAY (QA, same day) --------
+        //
+        // The first chromatic version was { 0.94, 0.66, 0.50 }: less blue than
+        // green than red, which is drier, yellower, unwatered meadow. It read
+        // correctly as different and QA did not want it: "the grass outside of
+        // the walls looks a little brownish, and I was hoping for a darker
+        // green." Fair, and worth recording as a distinction the measurements
+        // could not make. **Being visible and being right are two questions,
+        // and only the first one has a number.** Hue 60 IS the colour of dry
+        // grass; it is also the colour of dead grass at a glance, and a
+        // nursery is not surrounded by that.
+        //
+        // Red is the channel that is cut hardest now, which takes the meadow
+        // the other way round the wheel: deeper and cooler rather than drier.
+        // The chromatic argument is untouched, only its direction, and every
+        // measure came out BETTER:
+        //
+        //                       khaki      deep green
+        //     worst luminance    18.6         19.6
+        //     worst hue          13.5         22.9 degrees
+        //     margin vs mottle    6.6          7.4
+        //
+        //     inside  spring rgb(197,215,174) hue 86   a tended lawn
+        //     outside spring rgb(153,203,144) hue 111  deeper, cooler
+        //
+        // Across the whole year the meadow stays between hue 93 and 116, which
+        // is green at every hour, while the plot itself turns dun to hue 58 in
+        // the autumn. The two are never confusable and the outside is never
+        // the brown one, which is the note this answers.
+        meadowTint: { r: 0.50, g: 0.78, b: 0.65 },
 
         // THE UNDULATION, as a sum of three plane waves. Sines because the
         // whole point is a function that is cheap, smooth, and above all

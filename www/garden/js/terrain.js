@@ -776,9 +776,12 @@ export function updateTerrain(hour, snowCoverage = 0, config = GARDEN_CONFIG) {
     // colour and NOT on the snow: it is written into `uGrassColor` alone, and
     // the shader mixes toward `uSnowColor` afterwards, so a white winter is the
     // same white on both sides of the wall. Snow does not care what was mown.
+    // PER CHANNEL, NOT A SCALAR. A scalar moves brightness only, which is the
+    // one axis the shader's mottle already occupies, so two rounds of it were
+    // invisible. See config.terrain.meadowTint for the measurements.
     if (meadowUniforms) {
         const tint = T.meadowTint;
-        meadowUniforms.uGrassColor.value.set(r * tint, g * tint, b * tint);
+        meadowUniforms.uGrassColor.value.set(r * tint.r, g * tint.g, b * tint.b);
         meadowUniforms.uSnow.value = snowCoverage;
     }
 

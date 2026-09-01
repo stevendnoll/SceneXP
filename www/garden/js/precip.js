@@ -33,6 +33,9 @@ uniform float uSpeed;
 uniform float uLength;
 uniform float uLeanBase;
 uniform float uLeanWind;
+uniform float uRadius;
+uniform float uRimFrom;
+uniform float uTopFrom;
 attribute float aTop;
 attribute float aOffset;
 varying float vFade;
@@ -52,7 +55,19 @@ void main() {
     // The whole column drifts downwind as it falls, and that one tracks the
     // real wind rather than the leaning floor.
     p.xz += vec2(uWind.x, uWind.z) * fall * 0.12;
-    vFade = smoothstep(0.0, 0.15, fall / uHeight);
+    // ---- SOFT WALLS AND A SOFT CEILING --------------------------------
+    // The volume used to end at a hard cylinder, and QA saw exactly that:
+    // a horizontal line across the far meadow with dry ground above it. A
+    // bigger cylinder only moves the line. What removes it is having no
+    // edge: the rain thins out through the last quarter of the radius and
+    // the top, so the weather dissolves into the distance the way weather
+    // does rather than stopping.
+    //
+    // MEASURED ON THE BASE SCATTER, not on the drifted position, so the
+    // wind drift and the lean cannot push a drop's fade about as it falls.
+    float rim = 1.0 - smoothstep(uRimFrom, 1.0, length(position.xz) / uRadius);
+    float top = 1.0 - smoothstep(uTopFrom, 1.0, fall / uHeight);
+    vFade = smoothstep(0.0, 0.15, fall / uHeight) * rim * top;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `;
@@ -73,6 +88,9 @@ uniform vec3 uWind;
 uniform float uSpeed;
 uniform float uSize;
 uniform float uPixelRatio;
+uniform float uRadius;
+uniform float uRimFrom;
+uniform float uTopFrom;
 attribute float aOffset;
 attribute float aPhase;
 varying float vFade;
@@ -86,7 +104,12 @@ void main() {
     p.x += sin(t * 0.7) * 0.5 + sin(t * 1.9) * 0.2;
     p.z += cos(t * 0.6) * 0.5 + cos(t * 1.7) * 0.2;
     p.xz += vec2(uWind.x, uWind.z) * fall * 0.20;
-    vFade = smoothstep(0.0, 0.1, fall / uHeight);
+    // Soft walls and ceiling, exactly as the rain has them. Snow shows the
+    // seam WORSE than rain does: a flake is a round dot rather than a
+    // streak, so a wall of them ending reads as a straight edge of confetti.
+    float rim = 1.0 - smoothstep(uRimFrom, 1.0, length(position.xz) / uRadius);
+    float top = 1.0 - smoothstep(uTopFrom, 1.0, fall / uHeight);
+    vFade = smoothstep(0.0, 0.1, fall / uHeight) * rim * top;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     gl_PointSize = uSize * uPixelRatio * (14.0 / max(1.0, -mv.z));
     gl_Position = projectionMatrix * mv;
@@ -231,6 +254,9 @@ function buildRain(count, P, config) {
         uLength: { value: P.rainLength },
         uLeanBase: { value: P.leanBase },
         uLeanWind: { value: P.leanWind },
+        uRadius: { value: P.radius },
+        uRimFrom: { value: P.rimFrom },
+        uTopFrom: { value: P.topFrom },
         uColor: { value: new THREE.Vector3(...unpackColor(P.rainColor)) },
         uOpacity: { value: 0 }
     };
@@ -274,6 +300,9 @@ function buildSnow(count, P, config, pixelRatio) {
         uSpeed: { value: P.snowSpeed },
         uSize: { value: 2.6 },
         uPixelRatio: { value: pixelRatio },
+        uRadius: { value: P.radius },
+        uRimFrom: { value: P.rimFrom },
+        uTopFrom: { value: P.topFrom },
         uColor: { value: new THREE.Vector3(...unpackColor(P.snowColor)) },
         uOpacity: { value: 0 }
     };

@@ -692,8 +692,13 @@ test('THE FAR DRIFTS REACH THE SCENE WITH THEIR INSTANCE DATA', () => {
     // `mesh.count` both read back as an empty chainable and a lookup by either
     // finds nothing while an assertion on either passes against anything.
     const built = measureWood(() => initForest(recordingScene(), GARDEN_CONFIG, { mobile: false }));
-    const wanted = __forest.farDrifts(GARDEN_CONFIG, { mobile: false }).length;
-    expect(wanted).toBeGreaterThan(400);
+    // THE WEED TUFTS ONLY. The flowering share of the drifts is on the
+    // wildflower mesh now, so this count and the placement count differ on
+    // purpose and a test that compared them would be asserting the old bug.
+    const tufts = __forest.farDrifts(GARDEN_CONFIG, { mobile: false });
+    const wanted = tufts.filter((t) => !t.flowering).length;
+    expect(wanted).toBeGreaterThan(300);
+    expect(tufts.length).toBeGreaterThan(wanted);
 
     const drifts = built.find((m) => m.name === 'far-drifts');
     expect(drifts).toBeDefined();

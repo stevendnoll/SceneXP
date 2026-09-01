@@ -970,7 +970,24 @@ function buildUndergrowth(scene, config, options) {
         color: 0xffffff, map: flowerTexture, alphaTest: 0.42, side: THREE.DoubleSide
     });
     if (flowerTexture) disposables.push(flowerTexture);
-    flowers = new THREE.InstancedMesh(flowerGeo, flowerMaterial, Math.max(1, flowerCount));
+    // ---- THE FAR FLOWERS ARE THESE FLOWERS (QA 2026-08-31) --------------
+    // They were a separate thing and QA saw straight through it: "it almost
+    // looks like some of the weeds were colored to look like flowers." That is
+    // exactly what they were. The far drifts are drawn on the WEED mask, and a
+    // flowering one was the same blade silhouette wearing a petal hue, on the
+    // reasoning that at 13 px a shape is a smudge and only colour survives.
+    // The shape was not a smudge, and a coloured blade of grass is a coloured
+    // blade of grass.
+    //
+    // So there is no second flower any more. The drifts' flowering share joins
+    // `flowerPlacements` and rides the wildflower mesh: the same crossed quad,
+    // the same petal mask, the same palette, and the same bloom cycle that
+    // takes them all off in the winter. One mesh, one texture, one rule.
+    const driftTufts = farDrifts(config, options);
+    const driftFlowers = driftTufts.filter((t) => t.flowering);
+    const driftWeeds = driftTufts.filter((t) => !t.flowering);
+    flowers = new THREE.InstancedMesh(flowerGeo, flowerMaterial,
+        Math.max(1, flowerCount + driftFlowers.length));
     flowers.name = 'wildflowers';
     flowers.frustumCulled = false;
 
@@ -991,6 +1008,21 @@ function buildUndergrowth(scene, config, options) {
             hue: U.palette[Math.floor(random() * U.palette.length)]
         });
     }
+    // The far ones, on the same list. Their only difference is SIZE, and that
+    // is not a style choice: a 0.33 m flower at 130 m is four pixels. These
+    // carry their own band so the two can be tuned apart, and the test holds
+    // them to a similar number of PIXELS rather than a similar number of
+    // metres, which is what "the same wildflowers" has to mean out there.
+    const F = U.farDrifts;
+    for (const tuft of driftFlowers) {
+        flowerPlacements.push({
+            x: tuft.x, z: tuft.z,
+            y: worldHeightAt(tuft.x, tuft.z),
+            size: F.flowerHeight.min + random() * (F.flowerHeight.max - F.flowerHeight.min),
+            yaw: tuft.yaw,
+            hue: U.palette[Math.floor(random() * U.palette.length)]
+        });
+    }
     flowerPlacements.forEach((flower, i) => {
         colour.setHex(flower.hue);
         flowers.setColorAt(i, colour);
@@ -1001,7 +1033,7 @@ function buildUndergrowth(scene, config, options) {
     disposables.push(flowerGeo, flowerMaterial);
 
     buildWeeds(scene, config, options);
-    buildFarDrifts(scene, config, options);
+    buildFarDrifts(scene, config, driftWeeds);
 }
 
 /**
@@ -1173,13 +1205,16 @@ export function farDrifts(config = GARDEN_CONFIG, options = {}) {
  * This is the scene's own rule about distance applied one step further out
  * than usual: at 12 px a shape is a smudge and colour is what survives.
  */
-function buildFarDrifts(scene, config, options) {
-    const placements = farDrifts(config, options);
-    if (!placements.length) return;
-    const U = config.world.undergrowth;
-
+function buildFarDrifts(scene, config, placements) {
+    if (!placements || !placements.length) return;
     const geo = buildCrossedQuad();
     const texture = buildWeedTexture(64, config.world.seed ^ 0xFA4D2);
+    // ONE MATERIAL COLOUR, because every tuft here is rough grass now. The
+    // flowering share went to the wildflower mesh, which is where the petal
+    // mask and the bloom cycle live. What was here before was instance colours
+    // over a white material, needed only because a hue multiplied by a
+    // seasonally tinted material comes out as mud; with no hues left there is
+    // nothing to protect.
     const material = new THREE.MeshLambertMaterial({
         color: 0xffffff, map: texture, alphaTest: 0.38, side: THREE.DoubleSide
     });
@@ -1198,7 +1233,6 @@ function buildFarDrifts(scene, config, options) {
     const e = new THREE.Euler();
     const p = new THREE.Vector3();
     const sc = new THREE.Vector3();
-    const colour = new THREE.Color();
     placements.forEach((tuft, i) => {
         // THROUGH `worldHeightAt`, which is what puts these ON the far hills
         // rather than on the flat the hills rise out of. The one height
@@ -1212,14 +1246,9 @@ function buildFarDrifts(scene, config, options) {
         sc.set(tuft.height * 1.15, tuft.height, tuft.height * 1.15);
         m.compose(p, q, sc);
         farDriftMesh.setMatrixAt(i, m);
-        colour.setHex(tuft.flowering
-            ? U.palette[i % U.palette.length]
-            : 0xffffff);
-        farDriftMesh.setColorAt(i, colour);
     });
     farDriftMesh.count = placements.length;
     farDriftMesh.instanceMatrix.needsUpdate = true;
-    if (farDriftMesh.instanceColor) farDriftMesh.instanceColor.needsUpdate = true;
     scene.add(farDriftMesh);
     disposables.push(geo, material);
 }

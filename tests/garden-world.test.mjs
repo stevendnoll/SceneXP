@@ -15,7 +15,7 @@
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
 import {
     heightAt, outerWavesAt, outerReliefAt, worldHeightAt, pondBasinAt, pondWaterLevel,
-    pondHalfWidth, farHillsAt
+    pondHalfWidth, farHillsAt, grassColorAt
 } from '../www/garden/js/terrain.js';
 import {
     forestDensityAt, scatter, forestColorAt, barenessAt, bloomAt,
@@ -1263,32 +1263,118 @@ test('THE MEADOW IS A DIFFERENT GREEN, BUT THE SAME SNOW', async () => {
     // as a line drawn on a continuous lawn rather than as the edge of something
     // tended.
     const T = GARDEN_CONFIG.terrain;
-    expect(T.meadowTint).toBeLessThan(1);
+    const tint = T.meadowTint;
+    expect(tint.r).toBeLessThanOrEqual(1);
+    expect(tint.g).toBeLessThan(1);
+    expect(tint.b).toBeLessThan(1);
 
-    // ---- AND IT HAS TO BEAT THE NOISE IT SITS IN -----------------------
+    // ---- WHAT THE PREVIOUS TWO VERSIONS OF THIS TEST GOT WRONG ---------
     //
-    // THE FIRST ATTEMPT WAS 0.88 AND QA COULD NOT SEE IT. The wiring was
-    // correct, the two materials really did carry different uniforms, and the
-    // difference through the tone curve measured 19 of 255, which should be
-    // plain on two large flat areas. The term that was missing is the variation
-    // ALREADY INSIDE each of them: the shader's mottle swings every patch of
-    // grass across a spread of 23 percent, and a step of 12 percent between the
-    // two is half of that. A difference smaller than the noise around it does
-    // not read as a boundary, it reads as more noise.
+    // It asserted `1 - meadowTint > 2 * mottle + 0.6 * mottle`, both sides in
+    // linear multiplier space, and it passed at 0.240 against 0.234 while QA
+    // reported for the THIRD time that the grass looked the same. Three faults,
+    // and the third is the one that matters:
     //
-    // So this is asserted against the mottle rather than as a number on its
-    // own, which is what makes it survive somebody retuning either one: the
-    // shader is `uGrassColor * (1 + (coarse - 0.5) * 2 * mottle + (fine - 0.5)
-    // * mottle * 0.6)`, so the spread is that expression's own range.
-    const spread = (2 * T.mottle) + (T.mottle * 0.6);
-    const step = 1 - T.meadowTint;
-    expect(`step ${step.toFixed(3)} vs mottle spread ${spread.toFixed(3)}`)
-        .toBe(`step ${step.toFixed(3)} vs mottle spread ${spread.toFixed(3)}`);
-    expect(step).toBeGreaterThan(spread);
-    // And not so far past it that the wall looks like the edge of a texture
-    // rather than the edge of a lawn. These are the same field an hour apart in
-    // mowing, not two biomes.
-    expect(step).toBeLessThan(spread * 2);
+    // 1. It compared MEANS. What a visitor sees at the wall is the darkest
+    //    mottle cell inside against the brightest one outside, and those
+    //    cleared each other by 2 of 255.
+    // 2. It measured in linear multipliers rather than in what reaches the
+    //    screen. The tone curve and the sRGB encode are not a monotone scaling
+    //    of that number, so a ratio there says little about a pixel.
+    // 3. IT ASSERTED ON ONE AXIS WHILE THE NOISE OWNED THAT AXIS. The mottle
+    //    is `uGrassColor * (1 + noise)`, a scalar, so it is pure brightness. A
+    //    scalar tint is pure brightness too. The whole difference was being
+    //    spent in the one dimension it had to share.
+    //
+    // It also carried an assertion comparing a template string to an identical
+    // template string, which cannot fail and was measuring nothing at all.
+    //
+    // So: measured in DISPLAY space, at the WORST hour of the year, against the
+    // WORST corner of the mottle, and on both axes separately.
+    const aces = (x) => {
+        const v = (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14);
+        return Math.min(1, Math.max(0, v));
+    };
+    const encode = (x) => (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
+    const shown = (rgb) => rgb.map((v) => encode(aces(v)) * 255);
+    const lum = (p) => 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
+    const hueOf = (p) => {
+        const mx = Math.max(...p);
+        const mn = Math.min(...p);
+        if (mx === mn) return 0;
+        let h;
+        if (mx === p[0]) h = (((p[1] - p[2]) / (mx - mn)) + 6) % 6;
+        else if (mx === p[1]) h = (p[2] - p[0]) / (mx - mn) + 2;
+        else h = (p[0] - p[1]) / (mx - mn) + 4;
+        return h * 60;
+    };
+    const unpack = (hex) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
+    // The shader's own range: coarse contributes +/- mottle, fine +/- 0.3 of it.
+    const half = T.mottle * 1.3;
+
+    let worstLum = Infinity;
+    let worstHue = Infinity;
+    let worstMargin = Infinity;
+    for (let hour = 0; hour < 24; hour += 0.5) {
+        const base = unpack(grassColorAt(hour, T));
+        const inside = shown(base);
+        if (lum(inside) < 8) continue;          // the dead of winter, near black
+        const outside = shown(base.map((v, i) => v * [tint.r, tint.g, tint.b][i]));
+        worstLum = Math.min(worstLum, lum(inside) - lum(outside));
+        worstHue = Math.min(worstHue, Math.abs(hueOf(inside) - hueOf(outside)));
+        // The corner that decides it: the darkest inside against the brightest
+        // outside, which is what meets at the wall in the worst place.
+        worstMargin = Math.min(worstMargin,
+            lum(shown(base.map((v) => v * (1 - half))))
+            - lum(shown(base.map((v, i) => v * [tint.r, tint.g, tint.b][i] * (1 + half)))));
+    }
+
+    // Still darker, and by more than before: 18.6 of 255 at the worst hour
+    // against the old 13.7.
+    expect(worstLum).toBeGreaterThan(16);
+    // AND THE MOTTLE NO LONGER SWALLOWS IT. 6.6 of 255 at the worst corner of
+    // the noise at the worst hour, against 2.0 before, which is the number the
+    // last two attempts actually failed on.
+    expect(worstMargin).toBeGreaterThan(5);
+
+    // ---- THE LOAD-BEARING HALF -----------------------------------------
+    // The mottle is a scalar multiply and therefore has EXACTLY ZERO chromatic
+    // component, so a hue difference is uncontested at any mottle value. This
+    // is the assertion that would have caught all three rounds: the old tint
+    // scored 0.5 degrees, which is to say the two areas were the same colour
+    // and one was slightly dimmer, and ground that is only dimmer reads as
+    // ground in shade rather than as a different kind of grass.
+    expect(worstHue).toBeGreaterThan(8);
+    // Not so far that it stops being grass. These are the same field mown and
+    // unmown, not two biomes.
+    expect(worstHue).toBeLessThan(45);
+    // ---- AND THE DIRECTION, WHICH IS NOT THE SAME QUESTION -------------
+    // The first chromatic tint was { 0.94, 0.66, 0.50 } and scored well on
+    // every assertion above: drier, yellower, plainly different. QA did not
+    // want it. "The grass outside of the walls looks a little brownish, and I
+    // was hoping for a darker green." Hue 60 is the colour of dry grass and
+    // also the colour of dead grass at a glance.
+    //
+    // So the difference has a direction as well as a size, and the direction
+    // is the half no measurement above can see. Stated as the thing that was
+    // actually wrong: THE MEADOW MAY NEVER BE THE BROWNER OF THE TWO, at any
+    // hour of the year. Red is the channel cut hardest, which takes it the
+    // other way round the wheel, deeper and cooler rather than drier.
+    expect(tint.r).toBeLessThan(tint.g);
+    let browner = 0;
+    let greenest = 0;
+    for (let hour = 0; hour < 24; hour += 0.5) {
+        const base = unpack(grassColorAt(hour, T));
+        const inside = shown(base);
+        if (lum(inside) < 8) continue;
+        const outside = shown(base.map((v, i) => v * [tint.r, tint.g, tint.b][i]));
+        if (hueOf(outside) < hueOf(inside)) browner++;
+        greenest = Math.max(greenest, hueOf(outside));
+    }
+    expect(browner).toBe(0);
+    // And it stays grass rather than becoming a billiard table: green runs
+    // from about 90 to 140 degrees, and past that it is cyan.
+    expect(greenest).toBeLessThan(140);
 
     // ---- AND IT DARKENS THE GRASS, NOT THE SNOW ------------------------
     // The tint is written into `uGrassColor` and the shader mixes toward
@@ -2279,6 +2365,46 @@ test('THE DRIFTS ARE A MASS, WHICH IS THE ONE THING THE TREE BAND WAS NOT', asyn
     expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(150);
 });
 
+test('THE FLOWERING DRIFTS ARE IN FRAME, NOT MERELY IN THE WORLD', async () => {
+    // ---- WHAT EVERY OTHER TEST HERE MISSED -----------------------------
+    // QA: "it would be nice to see wildflowers on the hill." They were there.
+    // The placement was right, the keep-outs were right, the colours had just
+    // been fixed, and the count of flowering tufts in the WORLD was 224. In
+    // the composed FRAME there were thirty-two of them, in two patches.
+    //
+    // The drifts ring the whole world and the camera sees a 91 degree wedge of
+    // it, so roughly a third of everything placed is ever visible, and a share
+    // taken of the whole ring is not the share that arrives on screen. Every
+    // assertion in this file counted things in the world. This one counts what
+    // a visitor actually gets.
+    const cam = GARDEN_CONFIG.camera;
+    const half = Math.atan(Math.tan((cam.fov / 2) * Math.PI / 180) * 16 / 9);
+    const inFrame = (t) => {
+        const depth = t.z - cam.position.z;
+        return depth < 0 && Math.abs(Math.atan2(t.x, -depth)) < half;
+    };
+
+    const tufts = farDrifts().filter(inFrame);
+    const flowering = tufts.filter((t) => t.flowering);
+    const patches = new Set(flowering.map((t) => `${t.patch.x.toFixed(2)},${t.patch.z.toFixed(2)}`));
+
+    // PATCHES AND NOT TUFTS, because a patch is the thing a visitor sees. Two
+    // was what shipped and it reads as nothing; seven reads as a meadow in
+    // flower. Thirty-two tufts spread over two patches and a hundred metres is
+    // the same picture as none.
+    expect(patches.size).toBeGreaterThan(5);
+    expect(flowering.length).toBeGreaterThan(60);
+    // And they are not all flowers: the rough grass still has to be the
+    // majority or the band stops being a meadow and becomes a flowerbed.
+    expect(flowering.length).toBeLessThan(tufts.length * 0.6);
+
+    // ON THE HILL SPECIFICALLY, which is what was asked for. The far hills
+    // rise from 78 m, so this also proves the drifts and the landform overlap
+    // rather than sitting in front of one another.
+    const { farHillsAt: hill } = await import('../www/garden/js/terrain.js');
+    expect(flowering.filter((t) => hill(t.x, t.z) > 1.5).length).toBeGreaterThan(25);
+});
+
 test('nothing drifts into the wood, the water, or off the end of the ground', async () => {
     // Three keep-outs, and the third is the one the first cut got wrong: only
     // the drift CENTRE was tested, so a 9 m spread threw tufts into the far
@@ -2332,4 +2458,148 @@ test('a drift is sized for 100 to 190 metres, which is not life size', async () 
     // plot capacity went to 49 in M24-2 and a mixed plot is already 18 percent
     // over. Four triangles a crossed quad, one draw call.
     expect(farDrifts().length * 4).toBeLessThan(400000 * 0.01);
+});
+
+test('THE FAR FLOWERS ARE THE PERIMETER WILDFLOWERS, NOT A LOOKALIKE', async () => {
+    // ---- THREE ROUNDS OF "THERE ARE NO FLOWERS", AND THE THIRD ANSWER ----
+    // QA, finally: "it almost looks like some of the weeds were colored to
+    // look like flowers. I'd rather we just used the same small wildflowers we
+    // already had on the perimeter." That is precisely what they were. The far
+    // drifts are drawn on the WEED mask, and a flowering drift was the same
+    // blade silhouette wearing a petal hue, on the argument that at 13 px a
+    // shape is a smudge and only colour survives.
+    //
+    // The argument was wrong, and it was wrong in a way worth keeping: 13 px is
+    // NOT a smudge. It is enough to tell a five-petal rosette from a fan of
+    // blades, and a viewer who cannot name the difference still sees that one
+    // of them is not a flower. "Too small for detail" is not the same as "too
+    // small for shape", and the first two rounds of this spent a colour budget
+    // fixing a silhouette problem.
+    //
+    // So there is no second flower. The flowering share of the drifts joins
+    // `flowerPlacements` and rides the wildflower mesh: same crossed quad, same
+    // petal mask, same palette, same bloom cycle. This test is that there is
+    // nothing left to diverge.
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'forest.js'), 'utf8');
+    // No second texture, no second palette, no second colour rule.
+    expect(src).not.toMatch(/driftColorAt|setDriftColors|flowerBlend/);
+    // The far flowers are pushed onto the same list the perimeter ones are.
+    const build = src.slice(src.indexOf('const driftTufts = farDrifts'), src.indexOf('function weedPatches'));
+    expect(build).toMatch(/flowerPlacements\.push/);
+    expect(build).toMatch(/hue: U\.palette/);
+    // And the drift mesh is handed ONLY the tufts that are not flowers, so a
+    // flower can never be drawn on the blade mask again.
+    expect(build).toMatch(/buildFarDrifts\(scene, config, driftWeeds\)/);
+
+    // ---- SIZED IN PIXELS, WHICH IS WHAT "THE SAME" HAS TO MEAN ----------
+    // Their real size cannot come with them: 0.22 to 0.44 m is FOUR PIXELS at
+    // 130 m, and shipping that would have been the fifth thing this scene made
+    // too small to see. So the match is in the frame, not in the world.
+    const U = GARDEN_CONFIG.world.undergrowth;
+    const cam = GARDEN_CONFIG.camera;
+    const hFov = 2 * Math.atan(Math.tan((cam.fov / 2) * Math.PI / 180) * 16 / 9);
+    const px = (m, d) => (m / d) * (1600 / hFov);
+    // A perimeter flower, at the near and far ends of its own ring.
+    const nearPx = [px(0.22, cam.position.z + U.flowerRadius.max), px(0.44, cam.position.z + U.flowerRadius.min)];
+    const F = U.farDrifts;
+    const farPx = [px(F.flowerHeight.min, 190), px(F.flowerHeight.max, 100)];
+    // MEASURED AT THE MIDDLE OF THE BAND, not at its worst corner. The
+    // smallest flower at the furthest edge is 5.8 px under 65 percent fog and
+    // is meant to fade out there; inflating the whole band so that one case
+    // clears a threshold is how the drifts became weed-sized in the first
+    // place. The claim is that a typical far flower reads.
+    const median = (F.flowerHeight.min + F.flowerHeight.max) / 2;
+    expect(px(median, (F.radius.min + F.radius.max) / 2)).toBeGreaterThan(8);
+    // The far ones sit inside the range the near ones already occupy, at the
+    // small end: the same flower, further away, not a bigger flower.
+    expect(farPx[1]).toBeLessThan(nearPx[1]);
+    expect(farPx[1]).toBeGreaterThan(nearPx[0] * 0.6);
+    // AND SMALLER THAN THE ROUGH GRASS THEY STAND IN, which is the thing that
+    // stops them reading as weeds however they are drawn.
+    expect(F.flowerHeight.max).toBeLessThan(F.weedHeight.min * 1.25);
+    expect(F.flowerHeight.max).toBeLessThan(F.weedHeight.max);
+});
+
+test('THE CAMERA IS INSIDE THE WEATHER AT EVERY ZOOM', async () => {
+    // QA: "if I zoom out all the way I can see where the rain, sleet and snow
+    // spawns into view." Two edges were in frame and the ceiling is the one
+    // that is not a matter of degree.
+    //
+    // The precipitation is a cylinder anchored at the GROUND and centred on the
+    // camera's x and z, 22 m tall. The dolly runs the camera out to y 26 at
+    // full zoom-out, so the camera stood FOUR METRES ABOVE THE WEATHER and was
+    // looking down onto the top surface of it. Nothing about that is a tuning
+    // question: rain you are above is not rain.
+    const P = GARDEN_CONFIG.weather.precipitation;
+    const cam = GARDEN_CONFIG.camera;
+    const composed = { z: cam.position.z, y: cam.position.y, lookY: cam.lookAt.y, lookZ: cam.lookAt.z };
+
+    let highest = 0;
+    for (let dolly = -1; dolly <= 1; dolly += 0.05) {
+        const view = dollyView(dolly, composed);
+        highest = Math.max(highest, view.y);
+        expect(`dolly ${dolly.toFixed(2)}: ${view.y < P.height ? 'inside' : 'ABOVE THE WEATHER'}`)
+            .toBe(`dolly ${dolly.toFixed(2)}: inside`);
+    }
+    // The dolly really does climb, or the loop above is asserting nothing.
+    expect(highest).toBeGreaterThan(20);
+    // AND WITH THE CEILING FADE ABOVE ITS HEAD, not around it. A camera inside
+    // the volume but up in the fade band still sees the thinning as a lid.
+    expect(highest).toBeLessThan(P.topFrom * P.height);
+
+    // ---- THE WALL, WHICH IS A MATTER OF DEGREE --------------------------
+    // A 26 m radius around a camera at z 40 covered z 14 to 66, while the plot
+    // is z -12 to 12 and the lake is at -42: every distant thing in frame had
+    // dry air in front of it. It cannot be solved by size alone, because the
+    // volume grows as radius squared times height and holding this density out
+    // to the fog would cost about 48,000 drops. So the edge is SOFT instead,
+    // and the size only has to give the fade somewhere to happen.
+    expect(P.rimFrom).toBeGreaterThan(0.5);
+    expect(P.rimFrom).toBeLessThan(0.9);
+    expect(P.topFrom).toBeGreaterThan(0.5);
+    expect(P.topFrom).toBeLessThan(0.9);
+    // The fade band has to be metres deep, not centimetres, or it is a hard
+    // edge with extra steps.
+    expect((1 - P.rimFrom) * P.radius).toBeGreaterThan(8);
+    expect((1 - P.topFrom) * P.height).toBeGreaterThan(5);
+    // And it must reach past the plot, or the nursery itself sits at the rim.
+    expect(P.rimFrom * P.radius).toBeGreaterThan(GARDEN_CONFIG.plot.halfSize * 1.4);
+
+    // ---- AND THE STORM DID NOT GET LIGHTER TO PAY FOR IT ----------------
+    // The box is 5.12 times the volume, and drops are spread through it, so
+    // holding the old counts would have halved the density of every storm in
+    // the scene to fix an edge only visible at full zoom-out. Density is the
+    // property, not the count.
+    const volume = Math.PI * P.radius * P.radius * P.height;
+    const before = Math.PI * 26 * 26 * 22;
+    for (const [key, was] of [['rainDrops', 4000], ['rainDropsMobile', 1400],
+        ['snowFlakes', 1800], ['snowFlakesMobile', 600]]) {
+        const ratio = (P[key] / volume) / (was / before);
+        expect(`${key}: ${ratio > 0.85 && ratio < 1.15}`).toBe(`${key}: true`);
+    }
+});
+
+test('the soft edges are wired into both shaders, not just the rain', async () => {
+    // Snow shows the seam WORSE than rain does: a flake is a round dot rather
+    // than a streak, so a wall of them ending reads as a straight edge of
+    // confetti. The first cut of a fix like this reaches for the rain, because
+    // the rain is what the screenshot showed.
+    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'precip.js'), 'utf8');
+    for (const shader of ['RAIN_VERT', 'SNOW_VERT']) {
+        const body = src.slice(src.indexOf(`const ${shader}`), src.indexOf('`;', src.indexOf(`const ${shader}`)));
+        expect(`${shader} ${/uRimFrom/.test(body) ? 'rim' : 'HAS NO RIM FADE'}`).toBe(`${shader} rim`);
+        expect(`${shader} ${/uTopFrom/.test(body) ? 'top' : 'HAS NO TOP FADE'}`).toBe(`${shader} top`);
+        // Off the BASE SCATTER, so the wind drift and the lean cannot move a
+        // drop's fade about as it falls.
+        expect(`${shader} ${/length\(position\.xz\)/.test(body) ? 'stable' : 'FADES OFF THE DRIFTED POSITION'}`)
+            .toBe(`${shader} stable`);
+    }
+    // GLSL IS A STRING, so a shader that will not compile passes every test
+    // that reads it. This one has cost this scene a whole rain system once
+    // (a backticked identifier in a comment ended the template literal) and
+    // cost it again in this very edit. Cheapest possible guard: the built file
+    // must still contain both shaders whole.
+    const built = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'precip.min.js'), 'utf8');
+    expect(built).toMatch(/uRimFrom/);
+    expect(built).toMatch(/uTopFrom/);
 });
