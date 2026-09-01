@@ -5,9 +5,10 @@ file. It's always a pleasure working with you.
 
 Let's build something great together that thoroughly delights any visitors
 that stumble across the SceneXP.com website or any of its 3D scenes and
-experiences. Most of the custom 3D experiences are built to honor a person,
-place, or business, and a few exist simply to show visitors something a
-browser can do.
+experiences. SceneXP is a home for handcrafted, browser-native 3D
+experiences: worlds, games, experiments, stories, and simulations. Some are
+built to honor a person, place, or business, and others exist to show
+visitors what a browser can do.
 
 This file is checked into the repository, so it guides every contributor's
 sessions, not just the maintainer's. If you are helping a contributor build

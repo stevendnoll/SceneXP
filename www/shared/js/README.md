@@ -1,6 +1,6 @@
 # The Shared 3D Engine Parts Library
 
-General-purpose pieces of the custom 3D experiences, extracted in Phase 4 so a
+General-purpose pieces of the SceneXP 3D experiences, extracted in Phase 4 so a
 new experience is assembled from parts instead of copied from the previous
 one. Each experience keeps its own `main.js` orchestrator; these modules are
 imported parts driven by one plain config object (a "parts library", not a

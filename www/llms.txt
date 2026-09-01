@@ -1,15 +1,17 @@
 # SceneXP
 
-> SceneXP.com hosts custom 3D experiences built with Three.js and browser-native
-> HTML, CSS, and JavaScript. Most are made to honor a person, place, or business,
-> and a few exist simply to show visitors something a browser can do. Everything
-> runs in the browser with no app or download, and the project is open source
-> under the MIT license.
+> SceneXP.com is a home for handcrafted, browser-native 3D experiences: worlds,
+> games, experiments, stories, and simulations. Every one is built with Three.js
+> and browser-native HTML, CSS, and JavaScript, and runs entirely in the browser
+> with no app, no download, and no account. Some were made to honor a person,
+> place, or business, and others exist to show visitors something a browser can
+> do. New experiences land regularly. The project is open source under the MIT
+> license and accepts new experiences from contributors.
 
 ## Pages
 
-- [Home and experience directory](https://www.scenexp.com/): browse every hosted 3D experience.
-- [Contact](https://www.scenexp.com/contact.html): request a custom 3D experience for someone you love or for your business.
+- [Home and experience directory](https://www.scenexp.com/): browse every hosted 3D experience, newest first, with a live search over the collection.
+- [Contact](https://www.scenexp.com/contact.html): request a custom 3D experience built for someone you love or for your business.
 - [Contribute](https://www.scenexp.com/contribute.html): developer guide for building a new experience with the shared parts library and submitting it as a GitHub pull request. Covers the three interaction models (walkable first-person worlds with mobile joysticks, fixed-camera composed views with pan and zoom plus swipe and pinch, and hands-off rides with play and pause) and the optional delight layers (discovery checklists, tap-to-talk prop dialogs, guided autopilot tours, and featured-business links).
 - [Privacy](https://www.scenexp.com/privacy.html): no accounts, no cookies, no third-party trackers, anonymized first-party usage counts only.
 - [Terms](https://www.scenexp.com/terms.html): plain-language terms of service covering site use, the MIT license and Three.js attribution, and the hosted Seed to Seed and Interstate Tire logo permissions.
@@ -25,12 +27,15 @@
 - [Gavin's Bug Patrol](https://www.scenexp.com/gavin/): a passive 3D close-up of the Confederate Jasmine where Steve's eleven-year-old son Gavin releases ladybugs and praying mantises every spring, with a fixed viewpoint, a day and night shift of garden bugs, and three hidden mantises to spot.
 - [Jamar's Karaoke Night](https://www.scenexp.com/jamar/): a passive 3D karaoke night at the corner bar, built as a birthday present for Steve's best friend Jamar, who has the microphone and the corner stage, with a rolling lyrics screen, a jukebox for picking his next song, and friends raising a toast from the booth.
 - [The Mandelbrot Set](https://www.scenexp.com/mandelbrot/): a 3D visit to the Mandelbrot set floating in a starfield, honoring Benoit Mandelbrot, with an auto zoom that dives a 3D tunnel of glowing fractal terrain hundreds of billions of times deep, eleven selectable destinations on the burning edge, and a color cycle that drifts from orange to violet on the way down.
-- [Earth Defense](https://www.scenexp.com/earthdefense/): a playable 3D space game set in orbit above Earth, and one of three experiences on the site built for its own sake rather than to honor someone. You fly a single ship against twelve incoming Martian raiders and defend seven installations on Earth and the Moon. There is no fire button: line a raider up in the middle of your view and the guns fire themselves. Near-true-scale planets, a Moon on an eight-minute orbit, Mars as a red disc far ahead, a HUD with live ranges and target lock, keyboard and mouse on desktop with a throttle and look joystick on phones, and a third-person camera shot when a run ends.
-- [High Water](https://www.scenexp.com/highwater/): a passive 3D scene at the water's edge, and one of three experiences on the site built for its own sake rather than to honor someone. Ninety seconds that open on an ordinary bright afternoon and end with the sea closing over the viewer. A physically modelled ocean with a four component swell that shoals and breaks on a measured beach slope, a storm that closes the sky into a shelf cloud, fractal branching lightning with a flash rate capped under the WCAG three per second limit, and a tsunami front that travels in from the fog and grows as it shoals. Fixed viewpoint, no controls beyond starting and replaying, silent by design, with a content warning before it begins.
-- [Fractal Garden](https://www.scenexp.com/garden/): a 3D garden you plant and tend yourself, and one of three experiences on the site built for its own sake rather than to honor someone. You choose from seventeen tree species and plant up to forty-nine of them in a walled plot. Every tree is a fractal grown from a seeded skeleton, so no two are alike, and each one grows from sapling to maturity over about eighteen minutes of watching. A day and night is one year, so seasons turn while you watch: spring blossom on bare wood, summer fruit on the apple, pear, orange, cherry and lemon, autumn color, and a winter that is always midnight under falling snow. Trees get thirsty and nothing waters them but you, so a garden left alone goes bare and a watered one buds again. The clock runs only while the page is open, and the garden is saved in the browser, so a returning visitor never finds a dead garden. Fixed viewpoint with pan, tilt and a dolly zoom, keyboard and pointer, and no sound.
+- [Earth Defense](https://www.scenexp.com/earthdefense/): a playable 3D space game set in orbit above Earth, built for the joy of flying through space. You fly a single ship against twelve incoming Martian raiders and defend seven installations on Earth and the Moon. There is no fire button: line a raider up in the middle of your view and the guns fire themselves. Near-true-scale planets, a Moon on an eight-minute orbit, Mars as a red disc far ahead, a HUD with live ranges and target lock, keyboard and mouse on desktop with a throttle and look joystick on phones, and a third-person camera shot when a run ends.
+- [High Water](https://www.scenexp.com/highwater/): a passive 3D scene at the water's edge, a study of water and weather. Ninety seconds that open on an ordinary bright afternoon and end with the sea closing over the viewer. A physically modelled ocean with a four component swell that shoals and breaks on a measured beach slope, a storm that closes the sky into a shelf cloud, fractal branching lightning with a flash rate capped under the WCAG three per second limit, and a tsunami front that travels in from the fog and grows as it shoals. Fixed viewpoint, no controls beyond starting and replaying, silent by design, with a content warning before it begins.
+- [Fractal Garden](https://www.scenexp.com/garden/): a 3D garden you plant and tend yourself, a simulation of fractal growth and seasons. You choose from seventeen tree species and plant up to forty-nine of them in a walled plot. Every tree is a fractal grown from a seeded skeleton, so no two are alike, and each one grows from sapling to maturity over about eighteen minutes of watching. A day and night is one year, so seasons turn while you watch: spring blossom on bare wood, summer fruit on the apple, pear, orange, cherry and lemon, autumn color, and a winter that is always midnight under falling snow. Trees get thirsty and nothing waters them but you, so a garden left alone goes bare and a watered one buds again. The clock runs only while the page is open, and the garden is saved in the browser, so a returning visitor never finds a dead garden. Fixed viewpoint with pan, tilt and a dolly zoom, keyboard and pointer, and no sound.
 
 ## Notes
 
-- Custom experiences serve two audiences equally: tributes to people and memories, and standout marketing experiences for businesses.
-- Experiences work on desktop and mobile in any modern browser.
-- To request a custom experience, use the contact page. The email address is revealed in the browser to deter scrapers.
+- The collection spans several kinds of experience: walkable worlds, playable games, hands-off rides, quiet stories, and technical simulations. Some honor a real person, place, or business; others were built to show what a browser can do.
+- Everything runs client side. No app, no download, no account, no cookies, and no third-party scripts, trackers, or CDNs. Every page carries a strict same-origin Content Security Policy.
+- Experiences work on desktop and mobile in any modern browser, with keyboard support, reduced-motion respect, and a no-JavaScript fallback.
+- New experiences land regularly, and the home page lists them newest first.
+- Developers can contribute their own experience through a GitHub pull request. See the contribute page for the shared parts library and the step-by-step guide.
+- To request a custom experience built for a person or a business, use the contact page. The email address is revealed in the browser to deter scrapers.

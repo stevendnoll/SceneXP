@@ -8,23 +8,23 @@
          restyled. A crawler that trusts a stale date has no reason to come back
          for the new card. Asserted in tests/directory.test.mjs: this date can
          never be older than the newest experience below. -->
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-09-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/contact.html</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-09-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/contribute.html</loc>
-    <lastmod>2026-07-30</lastmod>
+    <lastmod>2026-09-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/privacy.html</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-09-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/terms.html</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-09-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/dad/</loc>
@@ -64,14 +64,14 @@
   </url>
   <url>
     <loc>https://www.scenexp.com/earthdefense/</loc>
-    <lastmod>2026-08-11</lastmod>
+    <lastmod>2026-09-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/highwater/</loc>
-    <lastmod>2026-08-24</lastmod>
+    <lastmod>2026-09-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/garden/</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-09-01</lastmod>
   </url>
 </urlset>

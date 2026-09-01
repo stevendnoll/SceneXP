@@ -6,9 +6,9 @@ labels: enhancement
 
 We would be delighted to hear your idea. Sketching it here first lets us offer guidance before you invest the build time.
 
-**Who or what would this experience honor?**
+**What kind of experience is it?**
 
-Every SceneXP experience celebrates a person, place, or business.
+A world to walk through, a game, a story, a simulation, or an experiment that shows what a browser can do. If it is built to honor a person, place, or business, please tell us who.
 
 **What would visitors see and do?**
 

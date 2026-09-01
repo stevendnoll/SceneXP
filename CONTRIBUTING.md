@@ -1,10 +1,12 @@
 # Contributing to SceneXP
 
 Thank you for considering a contribution. New 3D experiences are warmly
-welcomed, and so are fixes and improvements to the site itself. Most
-experiences on SceneXP honor a person, place, or business, and a few exist
-simply to show visitors something a browser can do. We would be delighted to
-host either kind.
+welcomed, and so are fixes and improvements to the site itself.
+
+SceneXP is a home for handcrafted, browser-native 3D experiences: worlds,
+games, experiments, stories, and simulations. Some were built to honor a
+person, place, or business. Others exist to show visitors what a browser can
+do. We would be delighted to host whichever kind you bring.
 
 By participating you agree to our [code of conduct](CODE_OF_CONDUCT.md), and
 security concerns are best raised through the steps in
@@ -62,11 +64,11 @@ difference between a scene visitors look at and a scene they share:
 - **Discovery checklists.** A short list of things to find in the scene,
   ticked off with a small celebration as visitors discover them.
 - **Tap-to-talk props.** Objects and characters that respond to a click or
-  tap with a short line of story. This is where the honoree's personality
-  lives.
+  tap with a short line of story. In a world built for someone, this is where
+  their personality lives.
 - **Guided tours.** An autopilot that drives the camera past the highlights
   until the visitor takes over.
-- **Featuring a business.** Experiences that honor a business can carry its
+- **Featuring a business.** An experience built for a business can carry its
   logo on the loading and welcome screens, a floating button to its website,
   and a warm invitation card that appears as visitors explore. Always with
   the owner's permission, and always in the spirit of a tribute rather than
@@ -163,7 +165,7 @@ Each experience ships a 1200 by 630 card as `assets/og-<world>.webp` with a
 
 **The WebP is what every page points at, including Twitter.** `og:image`,
 `twitter:image` and the directory card on the home page all name the WebP, on
-all twelve experiences. An earlier version of this note said the JPEG was what
+every experience in the collection. An earlier version of this note said the JPEG was what
 Twitter used, which was never true of any page in the repository.
 
 The JPEG is not referenced by any page. It ships for two reasons:
@@ -319,11 +321,12 @@ source of truth either way.
 
 ## House rules
 
-- **Honor someone, or show us something.** Most experiences here celebrate a
-  person, place, or business, and that remains the heart of the site. A world
-  that honors nobody in particular is just as welcome, as long as it gives
-  visitors an experience worth having. Earth Defense and High Water are both
-  built that way. Kind worlds only, please, whichever kind you bring.
+- **Give visitors something worth their time.** That is the only test an
+  experience has to pass here. Some of ours celebrate a real person, place, or
+  business, and those are always welcome. So is a game, a simulation, or an
+  experiment that honors nobody at all, which is how Earth Defense, High
+  Water, and Fractal Garden were built. Kind worlds only, please, whichever
+  kind you bring.
 - **Security first.** Same-origin CSP, no third-party scripts, no trackers,
   no CDNs. Everything ships from this domain.
 - **Accessible and considerate.** Keyboard support, reduced-motion respect,

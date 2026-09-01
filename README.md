@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/stevendnoll/SceneXP/actions/workflows/ci.yml/badge.svg)](https://github.com/stevendnoll/SceneXP/actions/workflows/ci.yml)
 
-Custom 3D experiences, right in your browser. Built with [Three.js](https://threejs.org/) and nothing else but browser-native HTML, CSS, and JavaScript.
+Handcrafted 3D worlds, games, and experiments, right in your browser. Built with [Three.js](https://threejs.org/) and nothing else but browser-native HTML, CSS, and JavaScript.
 
 [![SceneXP.com, custom 3D experiences, right in your browser](www/assets/og-image.jpg)](https://www.scenexp.com/)
 
@@ -18,13 +18,15 @@ Try the 3D Mandelbrot zoom.
 
 [![A glowing spiral of warm color deep inside the Mandelbrot set, captured mid-dive in the Mandelbrot experience](www/mandelbrot/assets/og-mandelbrot.jpg)](https://www.scenexp.com/mandelbrot/)
 
-[SceneXP.com](https://www.scenexp.com/) is a live website hosting a growing collection of custom 3D experiences, almost all of them built to honor a person, place, or business.
+[SceneXP.com](https://www.scenexp.com/) is a live website and a home for handcrafted, browser-native 3D experiences: worlds, games, experiments, stories, and simulations. Some were built to honor a person, place, or business. Others exist to show visitors what a browser can do. New experiences land regularly.
+
+Everything runs client side. No app, no download, no account, no cookies, and no third-party scripts, trackers, or CDNs.
 
 The site itself is about three things:
 
 1. Making the hosted 3D experiences easy to discover. Each experience lives in its own `www` subfolder and joins the browseable directory on the home page, the `sitemap.xml`, and the `llms.txt`.
-2. Inviting visitors to [reach out](https://www.scenexp.com/contact.html) if they would like a custom 3D experience of their own.
-3. Making it easy for developers to contribute their own 3D worlds through GitHub pull requests.
+2. Making it easy for developers to contribute their own experiences through GitHub pull requests.
+3. Inviting visitors to [reach out](https://www.scenexp.com/contact.html) if they would like an experience built for a person or a business of their own.
 
 SEO is a high priority, as are security, performance, and accessibility.
 

@@ -1,6 +1,6 @@
 # Code of Conduct
 
-SceneXP exists to spread a little happiness. Every experience in this project honors a real person or business, and we ask that the community around the project carry that same spirit. Think of yourself as a guest in someone's home, and of everyone else as a fellow guest.
+SceneXP exists to spread a little happiness. Many of the experiences in this project honor a real person or business, and we ask that the community around the project carry that same spirit in everything it builds. Think of yourself as a guest in someone's home, and of everyone else as a fellow guest.
 
 ## Our standard
 
@@ -14,7 +14,7 @@ Everyone is welcome here, whatever their background, identity, or level of exper
 
 ## Unacceptable behavior
 
-Harassment, insults, discriminatory remarks, sexualized language or imagery, personal or political attacks, publishing others' private information, and any conduct a reasonable person would consider inappropriate in a professional setting. Because our experiences depict real people, mockery or unkind commentary aimed at an honoree is treated exactly like conduct aimed at a contributor.
+Harassment, insults, discriminatory remarks, sexualized language or imagery, personal or political attacks, publishing others' private information, and any conduct a reasonable person would consider inappropriate in a professional setting. Because some of our experiences depict real people, mockery or unkind commentary aimed at an honoree is treated exactly like conduct aimed at a contributor.
 
 ## Enforcement
 
