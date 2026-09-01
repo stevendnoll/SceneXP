@@ -1,6 +1,6 @@
 # SceneXP
 
-> SceneXP.com is a home for handcrafted, browser-native 3D experiences: worlds,
+> SceneXP.com is a home for browser-native 3D experiences: worlds,
 > games, experiments, stories, and simulations. Every one is built with Three.js
 > and browser-native HTML, CSS, and JavaScript, and runs entirely in the browser
 > with no app, no download, and no account. Some were made to honor a person,

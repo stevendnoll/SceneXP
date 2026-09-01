@@ -3,10 +3,10 @@
 Thank you for considering a contribution. New 3D experiences are warmly
 welcomed, and so are fixes and improvements to the site itself.
 
-SceneXP is a home for handcrafted, browser-native 3D experiences: worlds,
-games, experiments, stories, and simulations. Some were built to honor a
-person, place, or business. Others exist to show visitors what a browser can
-do. We would be delighted to host whichever kind you bring.
+SceneXP is a home for browser-native 3D experiences: worlds, games,
+experiments, stories, and simulations. Some were built to honor a person,
+place, or business. Others exist to show visitors what a browser can do. We
+would be delighted to host whichever kind you bring.
 
 By participating you agree to our [code of conduct](CODE_OF_CONDUCT.md), and
 security concerns are best raised through the steps in

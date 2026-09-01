@@ -53,9 +53,9 @@
 
     <title>Contribute | SceneXP</title>
 
-    <link rel="preload" href="/css/site.min.css?v=1" as="style">
+    <link rel="preload" href="/css/site.min.css?v=2" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/site.min.css?v=1">
+    <link rel="stylesheet" href="/css/site.min.css?v=2">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
@@ -119,7 +119,7 @@
     <main id="main">
         <div class="page-hero">
             <div class="container">
-                <h1>Bring your own little world</h1>
+                <h1>Build your own little world</h1>
                 <p>SceneXP is open source under the MIT license, and new experiences are warmly welcomed
                     through GitHub pull requests. A world to walk through, a game, a story, a simulation, or
                     an experiment that exists to show what a browser can do. Whatever you have in mind, this
@@ -134,8 +134,7 @@
                     folder of browser-native HTML, CSS, and JavaScript, powered by Three.js.</p>
                 <ul>
                     <li><strong>One folder per experience.</strong> Every experience lives in its own folder
-                        under <code>www/</code>, like <code>www/dad</code>, <code>www/family</code>, and
-                        <code>www/roqui</code>, with its own <code>index.html</code>, config, and
+                        under <code>www/</code> with its own <code>index.html</code>, config, and
                         orchestrator. Styling comes from the shared versioned stylesheet in
                         <code>www/shared/css</code>, and an experience that needs rules of its own can
                         add an optional <code>css/experience.css</code>.</li>
@@ -157,18 +156,15 @@
                 <ul>
                     <li><strong>Explorable worlds.</strong> First-person scenes that visitors walk through,
                         with keyboard and mouse on desktop, dual joysticks on phones, and collision so
-                        nobody wanders through a wall. Some also offer a guided autopilot tour.
-                        <code>www/dad</code>, <code>www/family</code>, <code>www/roqui</code>,
-                        <code>www/seedtoseed</code>, <code>www/interstate</code>, and
-                        <code>www/steve</code> are all built this way.</li>
+                        nobody wanders through a wall. Some also offer a guided autopilot tour.</li>
                     <li><strong>Composed views.</strong> A fixed camera frames one lovingly detailed
                         subject, and the scene moves instead of the visitor. A row of floating buttons
                         offers gentle pan and zoom, with matching swipe and pinch gestures on touch
                         screens, and tapping props opens short lines of story. This is the simplest model
-                        to build and a great fit for small subjects. See <code>www/gavin</code> and <code>www/jamar</code>.</li>
+                        to build and a great fit for small subjects.</li>
                     <li><strong>Hands-off rides.</strong> The scene drives itself and the visitor mostly
                         watches, with play and pause, speed, and direction controls for light steering.
-                        The Mandelbrot dive (<code>www/mandelbrot</code>) is the reference: its auto zoom
+                        The Mandelbrot dive is the reference: its auto zoom
                         flies the camera while the visitor picks destinations and adjusts the ride.</li>
                 </ul>
 
@@ -290,7 +286,7 @@ python3 -m http.server 8000
                     </svg>
                     SceneXP
                 </a>
-                <p>Handcrafted 3D worlds, games, and experiments, every one running right in your browser.
+                <p>3D worlds, games, and experiments, every one running right in your browser.
                     Thank you for visiting.</p>
             </div>
             <nav class="footer-nav" aria-label="Explore">

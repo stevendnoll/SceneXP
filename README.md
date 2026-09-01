@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/stevendnoll/SceneXP/actions/workflows/ci.yml/badge.svg)](https://github.com/stevendnoll/SceneXP/actions/workflows/ci.yml)
 
-Handcrafted 3D worlds, games, and experiments, right in your browser. Built with [Three.js](https://threejs.org/) and nothing else but browser-native HTML, CSS, and JavaScript.
+3D worlds, games, and experiments, right in your browser. Built with [Three.js](https://threejs.org/) and nothing else but browser-native HTML, CSS, and JavaScript.
 
 [![SceneXP.com, custom 3D experiences, right in your browser](www/assets/og-image.jpg)](https://www.scenexp.com/)
 
@@ -18,7 +18,7 @@ Try the 3D Mandelbrot zoom.
 
 [![A glowing spiral of warm color deep inside the Mandelbrot set, captured mid-dive in the Mandelbrot experience](www/mandelbrot/assets/og-mandelbrot.jpg)](https://www.scenexp.com/mandelbrot/)
 
-[SceneXP.com](https://www.scenexp.com/) is a live website and a home for handcrafted, browser-native 3D experiences: worlds, games, experiments, stories, and simulations. Some were built to honor a person, place, or business. Others exist to show visitors what a browser can do. New experiences land regularly.
+[SceneXP.com](https://www.scenexp.com/) is a live website and a home for browser-native 3D experiences: worlds, games, experiments, stories, and simulations. Some were built to honor a person, place, or business. Others exist to show visitors what a browser can do. New experiences land regularly.
 
 Everything runs client side. No app, no download, no account, no cookies, and no third-party scripts, trackers, or CDNs.
 
