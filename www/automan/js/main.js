@@ -22,7 +22,7 @@
  * CTA leads to the contact card, and the second floating button opens a
  * picture of John's flyer rather than sending anybody anywhere.
  *
- * BUILD STATUS: milestone M14, the fourth screenshot QA round. Every prop
+ * BUILD STATUS: milestone M15, the fifth screenshot QA round. Every prop
  * in the showroom answers a tap with its own story, the three people open
  * the contact card, and its call, text and email links are assembled from
  * the solved proof of work. See specs/automan/TASKS.md.

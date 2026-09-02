@@ -18,6 +18,18 @@
  * on the floor without a word. Hence a file.
  */
 
+/* THE TOP-RIGHT STACK, right to left: Home, then the flyer.
+   The shared .menu-btn anchors EVERY floating button to the same corner
+   (top 20, right 20), so a second one has to step left by a button plus a
+   gap or it lands on top of the first, which is exactly what it did. 82px
+   is that step, and it is the same slot the contact button used before it
+   was removed (the shared sheet spells it .biz-btn-snug). Home keeps the
+   corner: it is the control every page on the site has in the same place,
+   and this one is particular to this scene. */
+#help-btn {
+    right: 82px;
+}
+
 /* The shared stylesheet has no screen-reader-only helper, so the card's
    heading (which labels the dialog and must not be drawn over the flyer)
    needs one here. Clip rather than display:none, or it stops being

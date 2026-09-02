@@ -44,7 +44,7 @@
  *   |         [ chairs ]  [ brochures ]                         |
  *   +--------------- front wall (behind the camera) ------------+
  *
- * BUILD STATUS: milestone M14, the fourth screenshot QA round. The room is
+ * BUILD STATUS: milestone M15, the fifth screenshot QA round. The room is
  * furnished, everything in it answers a tap, and the interaction layer is
  * in. What remains is the accessibility pass at M9 and the assets,
  * directory entry, and Jest suite at M10. See specs/automan/TASKS.md.
@@ -62,6 +62,15 @@
  * check compared raw bearings against a range straddling +/-180, which is
  * where this room's window points. A check that agrees with a screenshot
  * is worth more than a check that agrees with its own arithmetic.
+ *
+ * The fifth round's note is shorter: THE STUB CANNOT MEASURE ANYTHING.
+ * Its meshes have no vertices, so a bounding box under it is always empty
+ * and a panel that is inside out, misplaced, or the wrong size looks
+ * exactly like one that is not. The lot's new SUV turned out to be 2.14m
+ * wide rather than the 1.98m of its bodywork, because its wheels stand
+ * outboard of the paint, and the only way to find that out was to run the
+ * real three.js in a scratch script and read the box. Anything with an
+ * extruded or bevelled panel should be measured that way once.
  *
  * The fourth round's note is about the DESK, which has now had three
  * shapes. Each one solved the problem it was given and introduced the
@@ -340,6 +349,12 @@ const LAYOUT = {
         // from and to are bay centres, and (to - from) has to stay a whole
         // number of pitches or the tiled stripes break at the row's end.
         stallPitch: 3.15,
+        // Which bays of the near row hold an SUV rather than a sedan,
+        // counting from the row's west end. Two of five: enough that the
+        // row stops reading as one car repeated, few enough that the
+        // extra meshes stay in the noise. Only tier 1 uses this, because
+        // the difference is invisible past it.
+        suvBays: [1, 3],
         // Three rows, receding, each cheaper to draw than the last. Row
         // ends run east past the frame now (the last row-one car sits at
         // x 0.0, off the composed view but reachable with a pan), so the
@@ -1177,6 +1192,15 @@ function createCurtainWall() {
 
 const CAR_COLORS = [0xdfe2e5, 0x9aa0a6, 0x1f2226, 0x1d3c66, 0x8c2130, 0x4a5a3f];
 
+/** The widest thing parked on the lot, across its body, including any
+ *  cladding proud of the paint. The bay has to hold it, and the bay check
+ *  reads this rather than a number somebody typed twice: the SUV arrived
+ *  0.15m wider than the sedan the bays were sized for. */
+function widestVehicle() {
+    const sedan = 1.86;                 // the tier-1 car's skirt
+    return Math.max(sedan, suvWidth());
+}
+
 let _carGeo = null;
 let _carMats = null;
 
@@ -1209,15 +1233,218 @@ function carMaterials() {
         }),
         lampRear: new THREE.MeshStandardMaterial({
             color: 0x8e1f24, roughness: 0.35, metalness: 0.2
+        }),
+        // The SUV's own three. Its paint comes from the same bodies array
+        // as every other car, so an SUV takes its turn in the row's colour
+        // rotation instead of standing out as the odd one.
+        suvTrim: new THREE.MeshStandardMaterial({
+            color: 0x26282c, roughness: 0.6, metalness: 0.2
+        }),
+        tire: new THREE.MeshStandardMaterial({ color: 0x171717, roughness: 0.9 }),
+        rim: new THREE.MeshStandardMaterial({
+            color: 0xd2d5da, roughness: 0.35, metalness: 0.3
+        }),
+        chrome: new THREE.MeshStandardMaterial({
+            color: 0xc9ccd2, roughness: 0.3, metalness: 0.4
+        }),
+        suvHead: new THREE.MeshStandardMaterial({
+            color: 0xeef4ff, roughness: 0.25, metalness: 0.2,
+            emissive: 0x334455, emissiveIntensity: 0.4
         })
     };
     return _carMats;
+}
+
+/** A rounded-rectangle THREE.Shape from (x0,y0) to (x1,y1), corner radius
+ *  r. Borrowed from www/interstate, where it gives its parked SUV soft
+ *  panel corners instead of boxy ones. */
+function roundedRectShape(x0, y0, x1, y1, r) {
+    const shape = new THREE.Shape();
+    shape.moveTo(x0 + r, y0);
+    shape.lineTo(x1 - r, y0);
+    shape.quadraticCurveTo(x1, y0, x1, y0 + r);
+    shape.lineTo(x1, y1 - r);
+    shape.quadraticCurveTo(x1, y1, x1 - r, y1);
+    shape.lineTo(x0 + r, y1);
+    shape.quadraticCurveTo(x0, y1, x0, y1 - r);
+    shape.lineTo(x0, y0 + r);
+    shape.quadraticCurveTo(x0, y0, x0 + r, y0);
+    return shape;
+}
+
+// The SUV's geometry, built ONCE and shared by every SUV on the lot.
+//
+// This matters more here than it does in www/interstate, which builds one
+// SUV and stops. Extruded, bevelled panels are the expensive part of that
+// model, and a lot has rows of cars: building them per vehicle would pay
+// the cost as many times as there are SUVs. Sharing means an extra SUV in
+// the row costs draw calls and nothing else, exactly like the sedans.
+const SUV = {
+    length: 5.0, width: 1.98, wheelR: 0.38, wheelW: 0.28,
+    // How far the tyre sits inside the body's flank. The original parks on
+    // a street and wears torus wheel arches over wheels that stand 12cm
+    // proud; those arches are the first thing to go at eleven metres, and
+    // without them a proud wheel is just a wheel sticking out. Tucking the
+    // track in also matters for a reason a street has and a lot does not:
+    // the widest point of the vehicle has to fit inside a painted bay.
+    trackInset: 0.08,
+    sill: 0.42, beltline: 1.18, glassH: 0.50, glassW: 1.66
+};
+
+/** The SUV's true width, which is NOT SUV.width: the widest point is the
+ *  alloy hub face, a centimetre proud of the tyre, and the tyres sit
+ *  outboard of the paint. Measured against real three.js geometry (the
+ *  test stub's meshes have no vertices, so a bounding box under it is
+ *  always empty) and derived here so the bay check reads one number. */
+function suvWidth() {
+    return 2 * (SUV.width / 2 - SUV.trackInset + 0.01 + (SUV.wheelW + 0.02) / 2);
+}
+let _suvGeo = null;
+
+/** Extrude a side profile across the vehicle's width. The profile is
+ *  authored in (local Z, world Y) and a -90 degree turn maps its X axis
+ *  onto Z and its depth onto the width, which is the trick that lets a
+ *  windscreen be raked and a liftgate be upright. */
+function suvPanel(shape, bevel, panelW) {
+    const depth = panelW - 2 * bevel;
+    return {
+        geometry: new THREE.ExtrudeGeometry(shape, {
+            depth, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel,
+            bevelSegments: 2, curveSegments: 8
+        }),
+        offsetX: depth / 2
+    };
+}
+
+function suvGeometries() {
+    if (_suvGeo) return _suvGeo;
+    const S = SUV;
+    const fZ = S.length / 2, rZ = -S.length / 2;
+    const roofY = S.beltline + S.glassH;
+
+    // The greenhouse profile is the one piece that says which way the
+    // vehicle is pointed: a raked screen at the front, an upright liftgate
+    // almost at the tail.
+    const glass = new THREE.Shape();
+    glass.moveTo(-2.14, 0);
+    glass.lineTo(1.24, 0);
+    glass.quadraticCurveTo(1.02, S.glassH, 0.52, S.glassH);
+    glass.lineTo(-2.02, S.glassH);
+    glass.quadraticCurveTo(-2.2, S.glassH, -2.2, S.glassH - 0.14);
+    glass.lineTo(-2.14, 0);
+
+    _suvGeo = {
+        body: suvPanel(roundedRectShape(rZ + 0.06, S.sill + 0.02, fZ + 0.06, S.beltline, 0.24), 0.06, S.width),
+        // proud of the paint by 1.5cm so the two curved surfaces never
+        // share a plane: flush panels z-fight into a speckled band
+        clad: suvPanel(roundedRectShape(rZ + 0.02, S.sill - 0.02, fZ + 0.02, S.sill + 0.16, 0.14), 0.05, S.width + 0.03),
+        roof: suvPanel(roundedRectShape(-2.24, roofY, 0.55, roofY + 0.13, 0.10), 0.04, S.glassW + 0.06),
+        glass: new THREE.ExtrudeGeometry(glass, { depth: S.glassW, bevelEnabled: false, curveSegments: 8 }),
+        rail: new THREE.BoxGeometry(0.06, 0.05, 2.5),
+        tire: new THREE.CylinderGeometry(S.wheelR, S.wheelR, S.wheelW, 14),
+        hub: new THREE.CylinderGeometry(S.wheelR * 0.55, S.wheelR * 0.55, S.wheelW + 0.02, 10),
+        grille: new THREE.BoxGeometry(S.width * 0.58, 0.42, 0.06),
+        grilleBar: new THREE.BoxGeometry(S.width * 0.58, 0.05, 0.09),
+        lamp: new THREE.BoxGeometry(0.34, 0.11, 0.06),
+        tailBar: new THREE.BoxGeometry(S.width * 0.86, 0.13, 0.05)
+    };
+    return _suvGeo;
+}
+
+/** A parked SUV: the same shape www/interstate parks outside its window,
+ *  cut down to what survives eleven metres and a pane of glass.
+ *
+ *  A lot of identical three-box sedans reads as wallpaper, and a real
+ *  dealership's front row is mostly the tall things. This is the variety,
+ *  so only SOME of the near row are SUVs and the rest stay sedans.
+ *
+ *  What was kept from the original: extruded panels with bevelled edges
+ *  (the whole reason it looks polished rather than folded out of boxes), a
+ *  raked windscreen against an upright liftgate, roof rails, alloy hubs, a
+ *  grille with a chrome bar, and a full-width tail bar. What was dropped:
+ *  the torus wheel arches, the mirrors, the B-pillars and the spoiler, all
+ *  of which are under a pixel from the showroom and each of which is a
+ *  draw call. 17 meshes against the tier-1 sedan's 11.
+ *
+ *  Local forward +Z and origin on the ground between the wheels, the same
+ *  contract createParkedCar keeps, so the row builder can place either. */
+function createLotSUV(bodyMaterial) {
+    const g = suvGeometries();
+    const m = carMaterials();
+    const S = SUV;
+    const suv = new THREE.Group();
+    suv.userData.bodyMeshes = [];
+
+    const panel = (part, material) => {
+        const mesh = new THREE.Mesh(part.geometry, material);
+        mesh.rotation.y = -Math.PI / 2;
+        mesh.position.x = part.offsetX;     // recentre after the turn
+        return mesh;
+    };
+    const body = panel(g.body, bodyMaterial);
+    suv.add(body);
+    suv.userData.bodyMeshes.push(body);
+    suv.add(panel(g.clad, m.suvTrim));
+
+    const greenhouse = new THREE.Mesh(g.glass, m.glass);
+    greenhouse.rotation.y = -Math.PI / 2;
+    greenhouse.position.set(S.glassW / 2, S.beltline, 0);
+    suv.add(greenhouse);
+
+    const roof = panel(g.roof, bodyMaterial);
+    suv.add(roof);
+    suv.userData.bodyMeshes.push(roof);
+    [-1, 1].forEach((s) => {
+        const rail = new THREE.Mesh(g.rail, m.suvTrim);
+        rail.position.set(s * (S.glassW / 2 - 0.12), S.beltline + S.glassH + 0.17, -0.75);
+        suv.add(rail);
+    });
+
+    suv.userData.wheels = [];
+    [[1, 1.62], [1, -1.62], [-1, 1.62], [-1, -1.62]].forEach(([sx, wz]) => {
+        const track = S.width / 2 - S.trackInset;
+        const tire = new THREE.Mesh(g.tire, m.tire);
+        tire.rotation.z = Math.PI / 2;
+        tire.position.set(sx * track, S.wheelR, wz);
+        suv.add(tire);
+        suv.userData.wheels.push(tire);
+        // The alloy face sits a centimetre proud of the sidewall, which is
+        // what makes a wheel read as a wheel rather than a black disc.
+        const hub = new THREE.Mesh(g.hub, m.rim);
+        hub.rotation.z = Math.PI / 2;
+        hub.position.set(sx * (track + 0.01), S.wheelR, wz);
+        suv.add(hub);
+    });
+
+    // The nose and tail furniture goes against the body's BEVELLED
+    // extents, not its nominal ones. An extrusion's bevel pushes the
+    // outline out by bevelSize at each end, so the paint reaches
+    // length/2 + 0.12 at the front: a grille placed at the nominal nose is
+    // buried inside its own bumper. Measured against real geometry.
+    const nose = S.length / 2 + 0.12, tailZ = -S.length / 2;
+    const grille = new THREE.Mesh(g.grille, m.suvTrim);
+    grille.position.set(0, S.sill + 0.42, nose - 0.02);
+    suv.add(grille);
+    const bar = new THREE.Mesh(g.grilleBar, m.chrome);
+    bar.position.set(0, S.sill + 0.50, nose - 0.01);
+    suv.add(bar);
+    [-1, 1].forEach((sx) => {
+        const lamp = new THREE.Mesh(g.lamp, m.suvHead);
+        lamp.position.set(sx * (S.width * 0.33), S.beltline - 0.14, nose - 0.03);
+        suv.add(lamp);
+    });
+    const tail = new THREE.Mesh(g.tailBar, m.lampRear);
+    tail.position.set(0, S.beltline - 0.18, tailZ - 0.01);
+    suv.add(tail);
+
+    return suv;
 }
 
 /** One parked car, local forward +Z, origin between the wheels on the
  *  ground. `tier` trades detail for distance:
  *
  *    1  near row: body, cabin, glazing, four wheels, lamps  (11 meshes)
+ *       (and some bays of the near row hold createLotSUV instead)
  *    2  middle:   body, cabin, glazing, a dark skirt         (4 meshes)
  *    3  far row:  one slab and a glazing band                (2 meshes)
  *
@@ -1302,6 +1529,31 @@ const PASS_SPEED = 2.8;
 const PASS_FROM = -17.0;
 const PASS_TO = 6.0;
 const PASS_GAP = [9, 22];       // seconds of empty lane between crossings
+const WHEEL_R = 0.33;           // matches carGeometries().wheel
+
+/** How far a passing car's wheel turns in one frame, as a delta on the
+ *  wheel's rotation.x. Signed, in the WHEEL'S OWN frame.
+ *
+ *  It takes the direction of travel and ignores it, and that is the whole
+ *  point of it being a function. The car is turned to face whichever way
+ *  it is going (rotation.y = +/- PI/2), so in its own frame it always
+ *  drives forward, and its wheels always turn the same way. Multiplying
+ *  the spin by the direction, which is what this used to do inline, is
+ *  correct for exactly one of the two crossings and backwards for the
+ *  other: eastbound cars rolled along with their wheels spinning the wrong
+ *  way for two QA rounds before anybody caught it.
+ *
+ *  The sign comes from rolling without slipping, not from taste. The wheel
+ *  sits with its axle on local X (rotation.z = PI/2 lays the cylinder
+ *  down), so a point at the bottom of it, (0, -r, 0), moves to z = -r
+ *  sin(theta) as theta grows: the contact patch travels BACKWARDS while
+ *  the car goes forwards, which is what rolling is. Hence a positive
+ *  delta. specs/automan/verify-composition.mjs checks the contact patch
+ *  is standing still, in both directions, rather than checking this sign.
+ */
+function passingWheelDelta(deltaTime, dir) {
+    return (PASS_SPEED / WHEEL_R) * deltaTime;
+}
 
 let passingCar = null;
 
@@ -1359,7 +1611,7 @@ function updatePassingCar(deltaTime) {
 
     // Driving: roll along the lane, and turn the wheels at the rate the
     // ground speed actually implies rather than a rate that looks about
-    // right. The wheel radius is 0.33.
+    // right.
     //
     // The spin goes on rotation.X, which looks wrong and is not. The
     // wheel is a cylinder whose axis starts along local Y, and
@@ -1368,8 +1620,8 @@ function updatePassingCar(deltaTime) {
     // along the parent's X and rotation.x is the spin. Putting it on
     // rotation.y would swivel the wheel like a turntable instead.
     p.group.position.x += p.dir * PASS_SPEED * deltaTime;
-    const spin = (PASS_SPEED / 0.33) * deltaTime * p.dir;
-    p.wheels.forEach((wheel) => { wheel.rotation.x -= spin; });
+    const spin = passingWheelDelta(deltaTime, p.dir);
+    p.wheels.forEach((wheel) => { wheel.rotation.x += spin; });
 
     const done = p.dir > 0 ? p.group.position.x >= PASS_TO : p.group.position.x <= PASS_FROM;
     if (done) {
@@ -1483,9 +1735,19 @@ function createLot() {
         stripes.name = `stallRow_${rowIndex}`;
         lot.add(stripes);
 
+        let bay = 0;
         for (let x = row.from; x <= row.to + 1e-6; x += pitch) {
             const bodyMaterial = materials.bodies[colorTick++ % materials.bodies.length];
-            const car = createParkedCar(row.tier, bodyMaterial);
+            // SOME of the near row are SUVs, and the rest stay sedans.
+            // A row of identical three-box cars reads as wallpaper, and a
+            // real front row is mostly the tall things, but the polished
+            // model costs 15 meshes against a sedan's 11, so it goes only
+            // where the detail survives: the near row, and not all of it.
+            // L.suvBays names which, so the mix is a decision in LAYOUT
+            // rather than an accident of a modulus.
+            const isSUV = row.tier === 1 && L.suvBays.includes(bay);
+            const car = isSUV ? createLotSUV(bodyMaterial) : createParkedCar(row.tier, bodyMaterial);
+            bay += 1;
             // Angled parking: every car in a row sits at the same angle,
             // with a degree or two of scatter so the row does not read as
             // a stamped pattern.
@@ -3102,7 +3364,8 @@ export const __test__ = {
     LEG_SPLAY,
     CLOUD_PUFFS, getCloudBank: () => cloudBank,
     johnTargets, customerTargets, dealerTargets,
-    PASS_SPEED, PASS_FROM, PASS_TO, PASS_GAP,
+    PASS_SPEED, PASS_FROM, PASS_TO, PASS_GAP, WHEEL_R, passingWheelDelta,
+    SUV, widestVehicle, suvWidth, createLotSUV, suvGeometries,
     getPassingCar: () => passingCar,
     poseSeated, addElbow, addWaist, addNeck, findHairGroup,
     createDeskChair, createSucculent,
