@@ -23,6 +23,14 @@
  * paint and the shadow-map refresh), and the interior carries the shared
  * lighting rig plus one faux daylight shaft angled in through the glass.
  *
+ * It was briefly enabled on 2026-09-02 and taken out again the same day.
+ * If it is ever wanted back, three things in here assume a fixed noon and
+ * will need to follow the sun: the cloud bank uses an unlit material and
+ * would hold daylight white at midnight, the daylight shaft below is a
+ * constant and would be a sunbeam at midnight, and the lot's light poles
+ * have no lamps to turn on. Follow the sun's HEIGHT rather than the shared
+ * getNightFactor(), which is flat through the whole of the day band.
+ *
  * The module keeps the store.js name and its initStore export so the
  * conductor in main.js reads like every other experience's.
  *
@@ -213,7 +221,11 @@ const LAYOUT = {
     // reads very slightly screen-left, his forward axis reads strongly
     // screen-left, so a mouse a little forward of the keys lands on the
     // correct side of both.
-    deskKeyboard: { reach: 0.62, w: 0.40, d: 0.14 },
+    // boardH and keyH are not decoration: they are what makes the surface
+    // a hand actually meets computable. The dealer's hands were solved
+    // against the DESK TOP, 22mm below the keys, and spent a QA round
+    // inside the keyboard because of it.
+    deskKeyboard: { reach: 0.62, w: 0.40, d: 0.14, boardH: 0.016, keyH: 0.006 },
     deskMouse: { right: 0.34, fwd: 0.15 },
 
     // CORNER SEATING (decision D8). John sits at the desk's WEST END, not
@@ -2076,10 +2088,10 @@ function createDeskItems() {
     const kit = new THREE.Group();
     kit.name = 'deskKeyboard';
     const board = new THREE.Mesh(
-        new THREE.BoxGeometry(K.w, 0.016, K.d),
+        new THREE.BoxGeometry(K.w, K.boardH, K.d),
         new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: 0.65, metalness: 0.1 })
     );
-    board.position.y = 0.008;
+    board.position.y = K.boardH / 2;
     kit.add(board);
     // The keys as three banded strips rather than a hundred little boxes:
     // at this distance a keyboard is a dark slab with a lighter grain.
@@ -2087,12 +2099,12 @@ function createDeskItems() {
         color: 0x4a4f57, roughness: 0.8, metalness: 0.0
     });
     for (let r = 0; r < 3; r++) {
-        const strip = new THREE.Mesh(new THREE.BoxGeometry(K.w - 0.05, 0.006, 0.022), keyMaterial);
-        strip.position.set(0, 0.019, -0.035 + r * 0.032);
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(K.w - 0.05, K.keyH, 0.022), keyMaterial);
+        strip.position.set(0, K.boardH + K.keyH / 2, -0.035 + r * 0.032);
         kit.add(strip);
     }
-    const space = new THREE.Mesh(new THREE.BoxGeometry(K.w * 0.45, 0.006, 0.018), keyMaterial);
-    space.position.set(0, 0.019, 0.046);
+    const space = new THREE.Mesh(new THREE.BoxGeometry(K.w * 0.45, K.keyH, 0.018), keyMaterial);
+    space.position.set(0, K.boardH + K.keyH / 2, 0.046);
     kit.add(space);
     kit.position.set(kbAt.x, D.topY, kbAt.z);
     kit.rotation.y = dealerFacing;
@@ -2340,6 +2352,45 @@ function dealerYaw() {
 /** Where the dealer's keyboard sits: straight out along his own facing, so
  *  both his hands reach the keys. sunnyvalejenn's rule, and the reason her
  *  typing pose reads. */
+/** Where the dealer's head has to point to look at his own screen, as
+ *  offsets from his body yaw and from his resting neck pitch.
+ *
+ *  Derived rather than stored, because it depends on three things that
+ *  have each moved during QA: where he sits, where the screen ended up
+ *  after the sight-line solve, and how far he turned toward his keyboard.
+ *
+ *  The YAW barely moves: from his chair the screen sits about 23 degrees
+ *  to his left and John about 37, so looking from one to the other is a
+ *  14 degree turn and would hardly read on its own. The PITCH is what
+ *  makes it legible. The screen's middle is 0.97 off the floor and his
+ *  eyes are around 1.2, so his head drops about 18 degrees to work and
+ *  comes back up to answer, which is what "looking up at John" looks
+ *  like. Both are returned so the neck can move on both axes at once. */
+function dealerScreenGaze() {
+    const yaw = dealerYaw();
+    const eyeY = seatHeightY(LAYOUT.chairSeatTop, 1) + 0.75 + 0.55 + 0.08 + 0.12 + 0.02;
+    const at = {
+        x: LAYOUT.desk.x + LAYOUT.deskScreen.dx,
+        y: LAYOUT.desk.topY + LAYOUT.deskScreen.midY,
+        z: LAYOUT.desk.z + LAYOUT.deskScreen.dz
+    };
+    const dx = at.x - LAYOUT.dealer.x, dz = at.z - LAYOUT.dealer.z;
+    // Level with John is the resting pitch, so the drop is measured from
+    // there rather than from the horizon.
+    return {
+        neckY: normalizeAngle(Math.atan2(dx, dz) - yaw),
+        pitch: Math.atan2(eyeY - at.y, Math.hypot(dx, dz))
+    };
+}
+
+/** How high above the desk top the surface a fingertip meets actually is.
+ *  The board, plus the keys standing on it. Read by the builder and by
+ *  specs/automan/verify-pose.mjs, so a hand solved onto it is solved onto
+ *  the thing it touches rather than onto the wood underneath. */
+function keyTopY() {
+    return LAYOUT.desk.topY + LAYOUT.deskKeyboard.boardH + LAYOUT.deskKeyboard.keyH;
+}
+
 function keyboardAt() {
     const yaw = dealerYaw();
     return { x: LAYOUT.dealer.x + Math.sin(yaw) * LAYOUT.deskKeyboard.reach,
@@ -2733,11 +2784,19 @@ const CUSTOMER_REST_ARM = { shoulder: -0.254, roll: -0.046, elbow: -0.734 };
 // stops reading as being to the LEFT of the keyboard from the camera,
 // which is the whole of QA round four's item 3.
 //
-// The arms are solved to put both hands ON the keys, 35mm above the desk,
-// 11cm either side of the keyboard's centre, with the torso carried as an
-// obstacle the way round three taught.
+// The arms are solved to put both hands ON THE KEYS: not the hand's centre
+// at a comfortable height, but the UNDERSIDE OF THE HAND resting on the
+// surface a fingertip meets, 11cm either side of the keyboard's centre,
+// with the torso carried as an obstacle the way round three taught.
+//
+// Both halves of that were wrong for a round. The pose put the hand's
+// centre 35mm above the DESK, which sounds like clearance and is not: the
+// keys stand 22mm up, and the hand is an ellipsoid reaching 29mm below its
+// own centre, so the hand rested 15mm INSIDE the keyboard. The check
+// agreed with it, because it measured the same point against the same
+// wrong surface.
 const DEALER_TURN = 0.24;
-const DEALER_TYPE_ARM = { shoulder: -1.045, roll: 0.211, elbow: -0.756 };
+const DEALER_TYPE_ARM = { shoulder: -1.044, roll: 0.217, elbow: -0.810 };
 const DEALER_LEAN = 0.296;
 // The lean tips his head with the rest of him, so the neck's rest angle
 // carries the offset: 0.296 of lean less 0.276 of neck leaves the same
@@ -2745,10 +2804,18 @@ const DEALER_LEAN = 0.296;
 // this rather than from a literal, so the two can never drift apart.
 const DEALER_NECK_REST = -0.276;
 // The typing bob, at the elbow, the way real typing does (and the way
-// Jenn's does). It only ever LIFTS: the hands rest above the keys and the
-// bob folds the forearm further, so no amount of it can drive a hand
-// through the desk.
+// Jenn's does).
+//
+// THE RESTING POSE IS THE LOWEST THE HANDS EVER GET, and every animated
+// term has to respect that or the hands go through the keys. The bob only
+// folds the forearm further, which lifts. The chair shift used to ADD
+// lean, which tips the torso forward and drove the hands 47mm into the
+// keyboard at the bottom of its cycle: that was the "sometimes" in the QA
+// note, because the shift runs on its own eleven-second clock. It leans
+// him BACK now, which lifts as well, and reads as a man easing off the
+// keys for a moment rather than pressing into them.
 const DEALER_TYPE_BOB = 0.055;
+const DEALER_SHIFT = 0.05;      // radians of ease-back at the top of the cycle
 
 /** Build one seated figure and rig it: seat, waist, neck, elbows. Returns
  *  everything the animation pass needs, so updateShowroom never has to go
@@ -2890,9 +2957,12 @@ function createCast() {
         glanceTo: normalizeAngle(faceToward(LAYOUT.customer, LAYOUT.john) - cast.customer.yaw)
     };
     cast.dealer.anim = {
-        mode: 'listening', modeT: 0, dur: 6.3, shiftT: 5.0,
+        // He starts on his work, so the first thing the visitor sees him
+        // do is stop and look up.
+        mode: 'typing', modeT: 0, dur: 5.0, shiftT: 5.0, typing: 1,
         headBase: cast.dealer.neck.rotation.y,
-        readTo: normalizeAngle(faceToward(LAYOUT.dealer, LAYOUT.dealSheet) - cast.dealer.yaw)
+        readTo: normalizeAngle(faceToward(LAYOUT.dealer, LAYOUT.dealSheet) - cast.dealer.yaw),
+        screenGaze: dealerScreenGaze()
     };
 }
 
@@ -3259,35 +3329,69 @@ function updateDealer(rig, deltaTime) {
     a.modeT += deltaTime;
     a.shiftT -= deltaTime;
 
-    if (a.mode === 'listening' && a.modeT >= a.dur) {
-        a.mode = Math.random() < 0.45 ? 'reading' : 'nodding';
+    // He types, then stops and looks up. 'listening' is the hub: from it
+    // he either answers with a nod, glances at the page, or goes back to
+    // work, and from typing there is only one way out, which is up.
+    if (a.mode === 'typing' && a.modeT >= a.dur) {
+        a.mode = 'listening';
         a.modeT = 0;
+        a.dur = 2.8 + Math.random() * 3.4;
+    } else if (a.mode === 'listening' && a.modeT >= a.dur) {
+        const roll = Math.random();
+        a.mode = roll < 0.26 ? 'reading' : roll < 0.52 ? 'nodding' : 'typing';
+        a.modeT = 0;
+        if (a.mode === 'typing') a.dur = 4.5 + Math.random() * 4.5;
     } else if (a.mode === 'nodding' && a.modeT >= 1.35) {
         a.mode = 'listening';
         a.modeT = 0;
-        a.dur = 4.8 + Math.random() * 4.5;
+        a.dur = 2.6 + Math.random() * 3.2;
     } else if (a.mode === 'reading' && a.modeT >= 2.1) {
         a.mode = 'listening';
         a.modeT = 0;
-        a.dur = 5.5 + Math.random() * 4.5;
+        a.dur = 3.0 + Math.random() * 3.4;
     }
 
-    const target = dealerTargets(a.mode, a.modeT, a.headBase, a.readTo);
+    const target = dealerTargets(a.mode, a.modeT, a.headBase, a.readTo, a.screenGaze);
     rig.neck.rotation.x = approach(rig.neck.rotation.x, target.neckX, 7, deltaTime);
     rig.neck.rotation.y = approach(rig.neck.rotation.y, target.neckY, 6, deltaTime);
 
-    // Typing. Each forearm folds a little further and comes back, out of
-    // phase with the other, so the hands work rather than hover.
+    // Typing, and only while he IS typing. The bob eases in and out
+    // rather than switching, so the hands settle onto the keys instead of
+    // stopping mid-stroke. Easing an AMOUNT and multiplying keeps the
+    // invariant intact: the bob is still never negative, so no phase of
+    // this can put a hand through the keyboard.
+    a.typing = approach(a.typing, a.mode === 'typing' ? 1 : 0, 5, deltaTime);
     rig.arms.forEach((entry) => {
-        entry.elbow.rotation.x = DEALER_TYPE_ARM.elbow - typeBob(_t, entry.phase || 0);
+        entry.elbow.rotation.x =
+            DEALER_TYPE_ARM.elbow - typeBob(_t, entry.phase || 0) * a.typing;
     });
 
     // A shift in the chair, on its own slow clock so it never lines up
     // with the nods.
     if (a.shiftT <= 0) a.shiftT = 11 + Math.random() * 9;
-    const shift = Math.max(0, Math.sin((1 - a.shiftT / 11) * Math.PI * 2)) * 0.05;
-    rig.waist.rotation.x = approach(rig.waist.rotation.x, DEALER_LEAN + shift, 3, deltaTime);
-    rig.group.rotation.y = approach(rig.group.rotation.y, rig.yaw + shift * 0.6, 3, deltaTime);
+    rig.waist.rotation.x = approach(rig.waist.rotation.x, dealerLeanAt(a.shiftT), 3, deltaTime);
+    rig.group.rotation.y = approach(
+        rig.group.rotation.y, rig.yaw + dealerShift(a.shiftT) * 0.6, 3, deltaTime);
+}
+
+/** The dealer's shift in the chair, at a point in its own slow cycle.
+ *  Never negative, and read by both the lean and the sway so they cannot
+ *  drift apart. */
+function dealerShift(shiftT) {
+    return Math.max(0, Math.sin((1 - shiftT / 11) * Math.PI * 2)) * DEALER_SHIFT;
+}
+
+/** His waist angle at that point, which is the whole reason the shift is a
+ *  function rather than a line inside updateDealer.
+ *
+ *  MINUS, not plus. His hands rest ON the keys, so the resting pose is the
+ *  lowest they are allowed to be, and a shift that ADDS lean tips his
+ *  torso forward and drives them through the keyboard: 47mm at the bottom
+ *  of the cycle, which is what QA saw as hands that "occasionally" pass
+ *  through. Easing BACK lifts them, and specs/automan/verify-pose.mjs
+ *  sweeps this function across a full cycle to prove nothing dips. */
+function dealerLeanAt(shiftT) {
+    return DEALER_LEAN - dealerShift(shiftT);
 }
 
 /** How far the dealer's forearm is folded past its resting angle, at time
@@ -3302,7 +3406,16 @@ function typeBob(t, phase) {
 /** The dealer's per-frame targets, pure so they can be tested. His head
  *  rests on John, dips for a nod, and turns down to the page when he
  *  reads it. */
-function dealerTargets(mode, modeT, headBase, readTo) {
+function dealerTargets(mode, modeT, headBase, readTo, screenGaze) {
+    // Head down and across to his own screen while he works. Everything
+    // else in his repertoire has his head on John, so this is the one
+    // state the "looking up" reads against.
+    if (mode === 'typing' && screenGaze) {
+        return {
+            neckX: DEALER_NECK_REST + screenGaze.pitch,
+            neckY: screenGaze.neckY
+        };
+    }
     if (mode === 'nodding') {
         return {
             neckX: DEALER_NECK_REST + (1 - Math.cos((modeT / 0.65) * Math.PI * 2)) / 2 * 0.19,
@@ -3357,7 +3470,8 @@ export const __test__ = {
     LAYOUT, PALETTE, JOHN_LOOK, HAND_SCALE,
     JOHN_SCALE, JOHN_POINT_ARM, JOHN_REST_ARM, JOHN_LEAN, JOHN_NECK_X,
     CUSTOMER_SCALE, CUSTOMER_REST_ARM, DEALER_LEAN,
-    DEALER_TURN, DEALER_TYPE_ARM, DEALER_NECK_REST, DEALER_TYPE_BOB,
+    DEALER_TURN, DEALER_TYPE_ARM, DEALER_NECK_REST, DEALER_TYPE_BOB, DEALER_SHIFT,
+    keyTopY, dealerShift, dealerLeanAt, dealerScreenGaze,
     dealerYaw, keyboardAt, screenAim, typeBob, drawDealerScreen,
     HIP_Y, NECK_Y, TAP_LIFT, TAP_EVERY, TAP_BURST,
     seatHeightY, faceToward, normalizeAngle, approach, stallStripeRun, stallStripeOffset, walkSpan,

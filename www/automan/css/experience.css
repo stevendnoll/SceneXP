@@ -18,6 +18,24 @@
  * on the floor without a word. Hence a file.
  */
 
+/* NO PAN AND ZOOM ROW.
+   The shared pan part always builds its bottom-center row of arrows and
+   zoom circles, and this scene hides it: the visitor this page is for is
+   not a confident computer user, and a row of controls under a scene whose
+   welcome card says "no controls needed" is an invitation to fiddle with
+   the frame instead of watching what is in it. Dragging, swiping,
+   pinching, the wheel and the arrow keys all still work, and hiding rather
+   than suppressing is what keeps them working: the part gates its keyboard
+   zoom on the zoom buttons existing, so removing them from the DOM would
+   take the +/- keys with them.
+
+   `body` in the selector is not decoration. The shared sheet's strongest
+   rule here is .pan-controls.always-on.visible, three classes, and this
+   has to beat it without depending on which stylesheet loads second. */
+body .pan-controls.no-chrome.visible {
+    display: none;
+}
+
 /* THE TOP-RIGHT STACK, right to left: Home, then the flyer.
    The shared .menu-btn anchors EVERY floating button to the same corner
    (top 20, right 20), so a second one has to step left by a button plus a

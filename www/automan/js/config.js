@@ -155,6 +155,14 @@ export const AUTOMAN_CONFIG = deepFreeze({
     // windowless bar the sky must look good at all times: the cycle is
     // disabled and the shared rig holds at noon. It is a bright midday on
     // the lot at every hour.
+    //
+    // It ran briefly on 2026-09-02 and was taken out again the same day.
+    // Two notes for anyone who tries again. The scene needs work beyond
+    // this flag: the clouds, the daylight through the glass and the lot's
+    // poles all assume a fixed noon (see the store.js header). And drive
+    // that work from the SUN'S HEIGHT, not from getNightFactor(), which
+    // holds one value through the whole of the day band and leaves the
+    // scene looking frozen at exactly the hours most people visit.
     dayNight: { enabled: false },
 
     // No comet over a suburban dealership. The SHARED clouds are off too,

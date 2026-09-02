@@ -328,14 +328,30 @@ function setupEventListeners() {
 
     // View controls: this room is wider than any frame, so even a desktop
     // landscape crops the coffee bar on one side and the sales board on
-    // the other. The shared part builds a bottom-center row at EVERY
-    // aspect for this scene (alwaysOn + the 'always-on' CSS variant, same
-    // as the karaoke bar): pan arrows that slowly yaw the view toward the
-    // waiting area on one side and the key board on the other, and a zoom
-    // pair that leans in on the deal sheet or widens the whole showroom.
-    // The zoom anchors to whichever FOV the current orientation composed
-    // with. Handing over the canvas as `surface` adds the touch paths:
-    // swipe to pan sideways or tilt up and down, pinch to zoom.
+    // the other. Every way of looking around is switched on at EVERY
+    // aspect (alwaysOn, same as the karaoke bar): drag or swipe to yaw and
+    // tilt, wheel or pinch to zoom, arrow keys to pan, W and S to tilt,
+    // and the zoom anchors to whichever FOV the current orientation
+    // composed with.
+    //
+    // WITH NO BUTTONS ON SCREEN. The shared part always builds its
+    // bottom-center row, so this scene hides it with a class of its own
+    // ('no-chrome', styled in css/experience.css) rather than by not
+    // asking for it. That is deliberate on both counts:
+    //
+    //  - the visitor this page is for is not a confident computer user,
+    //    and a row of arrows and plus/minus circles under a scene that
+    //    says "no controls needed" is an invitation to fiddle with the
+    //    frame rather than watch what is in it;
+    //  - hiding rather than suppressing keeps every INPUT alive. The mouse
+    //    takes the same path as the finger in the shared part, so a
+    //    desktop visitor can still drag, and the keyboard zoom is gated on
+    //    the zoom buttons EXISTING (not on their being visible), so
+    //    removing them from the DOM would quietly take the +/- keys with
+    //    them.
+    //
+    // Handing over the canvas as `surface` is what makes all of that
+    // reach the scene at all, so it matters more here than anywhere.
     initPortraitControls({
         getCamera,
         lookAt: AUTOMAN_CONFIG.camera.lookAt,
@@ -344,7 +360,7 @@ function setupEventListeners() {
         pan: AUTOMAN_CONFIG.camera.portrait.pan,
         zoom: AUTOMAN_CONFIG.camera.portrait.zoom,
         alwaysOn: true,
-        extraClass: 'always-on',
+        extraClass: 'always-on no-chrome',
         surface: canvas,
         onFirstUse: (kind) => track(`portrait-${kind}`),
         signal
