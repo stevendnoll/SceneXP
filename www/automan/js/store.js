@@ -32,11 +32,11 @@
  * corner.
  *
  *   +=============== glass wall / the lot beyond ===============+
- *   |  [key board]           (DEALER)         [ sales board ]   |
+ *   |  [key board]          (DEALER)          [ sales board ]   |
  *   |                 +-----------------+                       |
- *   |  [plant]        | [PAPERS] [keys] |                       |
- *   |                 |   [model car]   |=drawers               |
- *   |                 +-----------------+  [basket]             |
+ *   |  [plant]        |[scrn][keys][ms] |                       |
+ *   |                 | [PAPERS]  [car] |                       |
+ *   |                 +-----------------+                       |
  *   |             (JOHN)          (CUSTOMER)                    |
  *   |  [ vending ]                               [ CAMERA ]     |
  *   |  [ coffee bar ]                                           |
@@ -44,7 +44,7 @@
  *   |         [ chairs ]  [ brochures ]                         |
  *   +--------------- front wall (behind the camera) ------------+
  *
- * BUILD STATUS: milestone M13, the third screenshot QA round. The room is
+ * BUILD STATUS: milestone M14, the fourth screenshot QA round. The room is
  * furnished, everything in it answers a tap, and the interaction layer is
  * in. What remains is the accessibility pass at M9 and the assets,
  * directory entry, and Jest suite at M10. See specs/automan/TASKS.md.
@@ -62,6 +62,14 @@
  * check compared raw bearings against a range straddling +/-180, which is
  * where this room's window points. A check that agrees with a screenshot
  * is worth more than a check that agrees with its own arithmetic.
+ *
+ * The fourth round's note is about the DESK, which has now had three
+ * shapes. Each one solved the problem it was given and introduced the
+ * next: two inset blades cleared John's feet and read as a slab, a
+ * pedestal read as a desk and pointed its drawers at the customer. It is
+ * a plain four-leg table now, which has no front to face the wrong way.
+ * The general form: when a fix keeps producing a new fault, the thing to
+ * question is the shape, not the placement.
  */
 
 import { getScene } from '../../shared/js/scene-1.0.0.min.js';
@@ -133,19 +141,22 @@ const LAYOUT = {
     // The sales desk. Its top height and the sheet's position anchor
     // John's pointing pose, so both are fixed here and the arm solve at
     // M4 works from them rather than the other way round.
-    // A SINGLE-PEDESTAL DESK. pedestalW is a real drawer unit flush with
-    // the east end (nearest the visitor); legZ is the one slim leg holding
-    // up the west end, where John sits.
+    // A PLAIN FOUR-LEG TABLE, which is the third shape this desk has had.
     //
-    // This shape is a CLEARANCE, not a style. John sits at the desk's end,
-    // so his shoes run in under the top from x -1.54 to -1.21 and from
-    // z -2.81 to -2.44. Round two found his foot through a leg standing at
-    // -1.365; round three found the fix (two thin blades inset from both
-    // ends) reading as a slab hanging under the desk for no reason. A
-    // pedestal at the far end plus one leg at the near west corner clears
-    // him with 0.6m to spare and looks like a desk. Re-measure if anyone
-    // moves a seat: specs/automan/verify-pose.mjs checks every leg.
-    desk: { x: -0.45, z: -2.25, w: 1.90, d: 1.00, topY: 0.75, pedestalW: 0.46, legZ: -1.85 },
+    // It began as two thin blades inset from each end (round two, to clear
+    // John's feet), which read as a slab hanging under the top. Round
+    // three made it a single-pedestal desk, and the drawers ended up
+    // facing the CUSTOMER, because the only end with room for a pedestal
+    // is the end nearest her. A table has no front, so it cannot face the
+    // wrong way, and it is what Steve asked for after seeing both.
+    //
+    // The legs are inset 0.10 from the corners, and that number is
+    // measured rather than styled: John sits at the west end with his
+    // shoes under the top, and every seated figure's legs are re-checked
+    // against these four posts in specs/automan/verify-pose.mjs. There is
+    // no modesty panel now, so the visitor sees under the desk, which is
+    // what a table looks like.
+    desk: { x: -0.45, z: -2.25, w: 1.90, d: 1.00, topY: 0.75, legInset: 0.10, legW: 0.07 },
 
     // The deal sheet, and the whole reason the camera is where it is.
     // Solved rather than placed: it is the point on the desk top NEAREST
@@ -162,7 +173,17 @@ const LAYOUT = {
     // that is only checkable from outside has to be readable from
     // outside. specs/automan/verify-composition.mjs projects this box
     // against the dealer's and John's every run.
-    deskScreen: { dx: -0.35, dz: -0.33, w: 0.52, h: 0.32, midY: 0.30, rotY: 0.18 },
+    // It is SMALLER and TURNED now, and both are consequences of showing
+    // something on it. A screen the visitor can read has to face partway
+    // toward the camera, and a panel turned that far runs across the desk
+    // rather than along it: at 0.52 wide it hung 15cm off the back edge.
+    // At 0.30 it fits, and it still clears the nearest face by about 6% of
+    // the frame width, which is what the old blank 0.52 managed.
+    //
+    // rotY is NOT stored. It is solved at build time by screenAim() from
+    // the dealer's seat and the camera's eye, so the screen keeps serving
+    // both if anything moves. See createDeskItems.
+    deskScreen: { dx: -0.58, dz: -0.34, w: 0.30, h: 0.20, midY: 0.22 },
 
     // The dealer's keyboard and mouse, squarely in front of him. They live
     // beside the screen rather than under it because the screen is parked
@@ -171,15 +192,20 @@ const LAYOUT = {
     // desk centre, like deskScreen. Kept here so verify-composition can
     // check they stay on the desk, clear of the screen's foot, and clear
     // of where the dealer's own hands land.
-    // They are squared to the DEALER, not to the desk, and the mouse is
-    // placed along his own right axis rather than the world's. Square to
-    // the desk they read as two objects lying there rather than as his,
-    // and the handedness stops being legible: he is turned 37 degrees off
-    // the desk, so "to the right of the keyboard" and "on his right" are
-    // not the same direction. mouseRight and mouseFwd are metres in HIS
-    // frame, measured from the keyboard.
-    deskKeyboard: { dx: 0.15, dz: -0.31, w: 0.40, d: 0.14 },
-    deskMouse: { right: 0.30, fwd: 0.02 },
+    // THE KEYBOARD IS PLACED FROM THE DEALER, not from the desk: `reach`
+    // metres straight out along his own facing, squared to him, which is
+    // the rule sunnyvalejenn uses to get BOTH of a figure's hands onto the
+    // keys instead of one drifting onto the desk beside it.
+    //
+    // The mouse is in his frame too, and it has to satisfy two things at
+    // once: on HIS right (he is right handed) and to the LEFT of the
+    // keyboard as the visitor sees it. Those are different directions
+    // here, and only a forward offset reconciles them: his right axis
+    // reads very slightly screen-left, his forward axis reads strongly
+    // screen-left, so a mouse a little forward of the keys lands on the
+    // correct side of both.
+    deskKeyboard: { reach: 0.62, w: 0.40, d: 0.14 },
+    deskMouse: { right: 0.34, fwd: 0.15 },
 
     // CORNER SEATING (decision D8). John sits at the desk's WEST END, not
     // beside his customer on the near side, and that is load-bearing:
@@ -235,15 +261,12 @@ const LAYOUT = {
     // board, where it is seen instead of guessed at.
     waitingChairs: { xs: [-2.60, -1.88, -1.16], z: 2.60 },
     brochureRack: { x: -0.52, z: 2.74 },
-    // The basket stands OUTSIDE the desk on the visitor's side, TOUCHING
-    // its near face at the east corner. It began out in the room at
-    // (-2.20, -1.50), where the customer and her chair covered it
-    // completely and it stole every tap meant for her; then against the
-    // desk's near face; then at the nearest fully visible spot to the
-    // camera, which turned out to be 9cm off the desk and read as a bin
-    // abandoned in the middle of the floor. Visibility was never the
-    // problem after the first move. BELONGING to the desk was.
-    wasteBasket: { x: 0.45, z: -1.58 },
+    // (No waste basket. It moved three times in three QA rounds, from the
+    //  middle of the room to the desk's near face to its east corner, and
+    //  never once looked like it belonged there. A bin this near the lens
+    //  is a large dark cylinder in the foreground of a scene whose subject
+    //  is a conversation, so the fourth round removed it rather than move
+    //  it a fourth time.)
     plants: [
         { x: -3.15, z: -3.90, kind: 'tall' },
         { x: -3.45, z: -0.60, kind: 'snake' }
@@ -789,6 +812,84 @@ function drawDealSheet() {
     });
 
     return new THREE.CanvasTexture(canvas);
+}
+
+/** What is on the dealer's screen: the car, and the numbers beside it.
+ *
+ *  Deliberately unreadable, and that is not laziness. The panel is 0.30m
+ *  wide and about 4.5m from the eye, so the whole screen is roughly 60
+ *  pixels across: anything that reads as words at that size would be one
+ *  grey smear, and anything that DID resolve would be a price, which this
+ *  scene never shows (same rule as the deal sheet). A car in outline and
+ *  a column of ruled lines is exactly as much as the eye can take in, and
+ *  it is honest about what a dealer has up: the vehicle, and its figures. */
+function drawDealerScreen() {
+    const W = 256, H = 170;
+    const canvas = makeCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#16283c';
+    ctx.fillRect(0, 0, W, H);
+    // a header bar in the brand navy, with a gold rule under it
+    ctx.fillStyle = '#0e1c2c';
+    ctx.fillRect(0, 0, W, 22);
+    ctx.fillStyle = '#f0a51e';
+    ctx.fillRect(0, 22, W, 2);
+    ctx.fillStyle = '#7f97ad';
+    ctx.fillRect(10, 8, 62, 6);
+    ctx.fillRect(W - 34, 8, 24, 6);
+
+    // The car, in outline: a three-box side elevation with wheels.
+    ctx.strokeStyle = '#cfe0ef';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    const bx = 16, by = 58, bw = 128, bh = 34;
+    ctx.beginPath();
+    ctx.moveTo(bx, by + bh);
+    ctx.lineTo(bx + 4, by + 12);
+    ctx.lineTo(bx + 34, by + 8);
+    ctx.lineTo(bx + 52, by - 16);
+    ctx.lineTo(bx + 92, by - 16);
+    ctx.lineTo(bx + 104, by + 8);
+    ctx.lineTo(bx + bw - 4, by + 14);
+    ctx.lineTo(bx + bw, by + bh);
+    ctx.closePath();
+    ctx.stroke();
+    // glazing
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(bx + 56, by + 4);
+    ctx.lineTo(bx + 66, by - 11);
+    ctx.lineTo(bx + 88, by - 11);
+    ctx.lineTo(bx + 96, by + 4);
+    ctx.closePath();
+    ctx.stroke();
+    // wheels
+    ctx.lineWidth = 2.5;
+    for (const wx of [bx + 30, bx + 100]) {
+        ctx.beginPath();
+        ctx.arc(wx, by + bh, 11, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // The figures beside it, as ruled lines. Four rows, because a deal
+    // sheet has four boxes and this is the same conversation.
+    ctx.fillStyle = '#8fa8bd';
+    for (let i = 0; i < 5; i++) {
+        const y = 40 + i * 20;
+        ctx.fillRect(164, y, 34 + ((i * 13) % 26), 5);
+        ctx.fillStyle = '#f0a51e';
+        ctx.fillRect(224, y, 18 - ((i * 7) % 9), 5);
+        ctx.fillStyle = '#8fa8bd';
+    }
+    ctx.strokeStyle = '#2c4762';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(156, 30); ctx.lineTo(156, H - 12);
+    ctx.stroke();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    return texture;
 }
 
 /** A pennant string as one cutout strip: triangular flags hanging from a
@@ -1534,9 +1635,9 @@ function updateClouds(deltaTime) {
 // ============================================
 // THE SALES DESK
 // ============================================
-/** The desk itself: a pedestal desk with a modesty panel on the dealer's
- *  side. Its top height is the anchor for John's pointing pose, so it is
- *  fixed in LAYOUT rather than tuned here. */
+/** The desk itself: a plain rectangular table on four legs. Its top
+ *  height is the anchor for John's pointing pose, so it is fixed in
+ *  LAYOUT rather than tuned here. */
 function createDealerDesk() {
     const D = LAYOUT.desk;
     const desk = new THREE.Group();
@@ -1555,62 +1656,39 @@ function createDealerDesk() {
     top.receiveShadow = true;
     desk.add(top);
 
-    // A SINGLE-PEDESTAL DESK, and the asymmetry is the point.
+    // FOUR LEGS, one at each corner, inset 0.10.
     //
-    // This began as two thin blades inset from each end, which cleared
-    // John's feet and read, from the fixed camera, as a slab of wood
-    // hanging under the desk for no reason: the QA note was "a section
-    // sticking out at the bottom right." A desk that is honest about its
-    // own shape does not need explaining, so the east end (the end nearest
-    // the visitor, and the one they see most of) is now a real drawer
-    // pedestal flush with the top, and the west end, where John sits, is
-    // open knee space carried on one slim leg at its NEAR corner.
+    // A table has no front, which is the point: the pedestal desk this
+    // replaced put its drawers on the only end that had room for them, the
+    // end nearest the customer, so it read as facing the wrong way. The
+    // inset is measured, not styled. John sits at the west end with his
+    // shoes under the top, so every leg is checked against every seated
+    // figure's own legs in specs/automan/verify-pose.mjs.
     //
-    // The leg's corner is not free choice either. John's shoes occupy
-    // z -2.81 to -2.44 under the desk's west end, so a leg at the back
-    // corner would be through his foot. At the near corner it is 0.6m
-    // clear of him, and clear of the customer in x as well.
     // (Everything below is in the desk group's own coordinates: the group
     //  itself is placed at D.x, D.z at the end of this function.)
-    const pedX = D.w / 2 - D.pedestalW / 2;
-    const ped = new THREE.Mesh(
-        new THREE.BoxGeometry(D.pedestalW, D.topY - 0.055, D.d - 0.06), darkWood
-    );
-    ped.position.set(pedX, (D.topY - 0.055) / 2, 0);
-    ped.castShadow = true;
-    ped.receiveShadow = true;
-    desk.add(ped);
-
-    // Two drawer fronts on the pedestal's near face, so it reads as one.
-    const drawerFace = new THREE.MeshStandardMaterial({
-        color: 0x7a5c3f, roughness: 0.5, metalness: 0.03
+    [-1, 1].forEach((sx) => {
+        [-1, 1].forEach((sz) => {
+            const leg = new THREE.Mesh(
+                new THREE.BoxGeometry(D.legW, D.topY - 0.055, D.legW), darkWood
+            );
+            leg.position.set(sx * (D.w / 2 - D.legInset), (D.topY - 0.055) / 2,
+                             sz * (D.d / 2 - D.legInset));
+            leg.castShadow = true;
+            desk.add(leg);
+        });
     });
-    [-1, 1].forEach((s) => {
-        const front = new THREE.Mesh(
-            new THREE.BoxGeometry(D.pedestalW - 0.08, 0.20, 0.012), drawerFace
+
+    // A rail joining each pair of legs along the ends, which is what stops
+    // a four-leg table reading as a top on stilts. It runs along the ENDS
+    // only: a rail across the back would be through John's knees.
+    [-1, 1].forEach((sx) => {
+        const rail = new THREE.Mesh(
+            new THREE.BoxGeometry(D.legW * 0.7, 0.05, D.d - D.legInset * 2 - D.legW), darkWood
         );
-        front.position.set(pedX, D.topY / 2 + s * 0.13, (D.d - 0.06) / 2 + 0.006);
-        desk.add(front);
-        const pull = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.014, 0.014), brushedMetal);
-        pull.position.set(pedX, D.topY / 2 + s * 0.13, (D.d - 0.06) / 2 + 0.018);
-        desk.add(pull);
+        rail.position.set(sx * (D.w / 2 - D.legInset), D.topY - 0.20, 0);
+        desk.add(rail);
     });
-
-    const leg = new THREE.Mesh(
-        new THREE.BoxGeometry(0.07, D.topY - 0.055, 0.07), darkWood
-    );
-    leg.position.set(-D.w / 2 + 0.09, (D.topY - 0.055) / 2, D.legZ - D.z);
-    leg.castShadow = true;
-    desk.add(leg);
-    // The modesty panel now runs from the west end to the pedestal's inner
-    // face rather than the whole width: past that face it would be buried
-    // inside the pedestal, paying for geometry nobody can see.
-    const modestyW = D.w - D.pedestalW - 0.10;
-    const modesty = new THREE.Mesh(
-        new THREE.BoxGeometry(modestyW, D.topY - 0.28, 0.04), darkWood
-    );
-    modesty.position.set(-D.pedestalW / 2 - 0.01, (D.topY - 0.28) / 2 + 0.16, -(D.d / 2 - 0.09));
-    desk.add(modesty);
 
     // A slim brand rail along the near edge, the one place the gold
     // appears in the room's furniture.
@@ -1657,12 +1735,15 @@ function createDeskItems() {
     showroomGroup.add(registerOutdoorProp(sheetGroup, 'papers'));
 
     // ---- Loose supporting pages, fanned beside it ----
+    // WEST of the sheet, on John's side. Fanned east they sat exactly
+    // where the dealer's mouse has to go, and the papers are the movable
+    // ones: his hands are not.
     const loose = new THREE.Group();
     loose.name = 'loosePages';
     [
-        { x: 0.30, z: 0.14, r: 0.42 },
-        { x: 0.24, z: -0.16, r: -0.28 },
-        { x: 0.46, z: -0.02, r: 0.12 }
+        { x: -0.24, z: 0.13, r: 0.42 },
+        { x: -0.20, z: -0.15, r: -0.28 },
+        { x: -0.34, z: -0.01, r: 0.12 }
     ].forEach((p, i) => {
         const page = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.002, 0.29), paperWhite);
         page.position.set(S.x + p.x, D.topY + 0.002 + i * 0.002, S.z + p.z);
@@ -1671,62 +1752,63 @@ function createDeskItems() {
     });
     showroomGroup.add(loose);
 
-    // ---- The dealer's screen, turned away from the visitor ----
-    // It faces the dealer at -z, so from the camera it is a blank back,
-    // which is exactly the point: everything on it is knowable, and none
-    // of it is being shown to the customer.
-    //
+    // ---- The dealer's screen ----
     // WHERE IT SITS is a composition constraint, not a taste one. It
     // started at the desk's east end and stood squarely in front of the
     // dealer, hiding most of him: the camera looks almost straight down
-    // the line from the visitor to his chair, so anything on the desk
-    // east of centre lands on top of him. Moving it further east is no
-    // help either, because his silhouette runs to the edge of the desk in
-    // portrait. So it lives at the desk's WEST back corner, in the gap
-    // between John's shoulder and the dealer, with about 6% of the frame
-    // width clear on the tighter side. Measured, and it moves if the
-    // camera, the seats, or the desk do.
+    // the line from the visitor to his chair, so anything on the desk east
+    // of centre lands on top of him. Moving it further east is no help
+    // either, because his silhouette runs to the edge of the desk in
+    // portrait. So it lives at the desk's WEST back corner.
+    //
+    // WHICH WAY IT FACES is solved, not stored. It used to face the dealer
+    // alone and show the visitor a blank black back, and a blank black
+    // rectangle is not a screen, it is an absence. screenAim() turns it
+    // midway between his eye and the camera's, about 38 degrees off each,
+    // so the same panel serves the man using it and the visitor watching.
+    // That is also what a dealer does when the numbers are worth showing.
     const SC = LAYOUT.deskScreen;
+    const screenAt = { x: D.x + SC.dx, z: D.z + SC.dz };
     const screen = new THREE.Group();
     screen.name = 'dealerScreen';
     const panel = new THREE.Mesh(new THREE.BoxGeometry(SC.w, SC.h, 0.022), matteBlack);
     panel.position.y = SC.midY;
     screen.add(panel);
     const face = new THREE.Mesh(
-        new THREE.PlaneGeometry(SC.w - 0.04, SC.h - 0.04),
-        new THREE.MeshStandardMaterial({ color: 0x1b2a3a, roughness: 0.25, metalness: 0.2 })
+        new THREE.PlaneGeometry(SC.w - 0.024, SC.h - 0.024),
+        new THREE.MeshStandardMaterial({
+            map: drawDealerScreen(), roughness: 0.3, metalness: 0.1
+        })
     );
     face.position.set(0, SC.midY, -0.013);
     face.rotation.y = Math.PI;
     screen.add(face);
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.14, 8), brushedMetal);
-    neck.position.y = 0.09;
+    // The stand goes BEHIND the panel. At z 0 its 36mm of diameter stuck
+    // out through both sides of a 22mm panel, and the QA note for that was
+    // "the monitor's stand seems to be showing through its screen."
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.11, 8), brushedMetal);
+    neck.position.set(0, 0.075, 0.028);
     screen.add(neck);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.014, 0.13), brushedMetal);
-    foot.position.y = 0.02;
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.012, 0.11), brushedMetal);
+    foot.position.set(0, 0.02, 0.02);
     screen.add(foot);
-    screen.position.set(D.x + SC.dx, D.topY, D.z + SC.dz);
-    screen.rotation.y = SC.rotY;
+    screen.position.set(screenAt.x, D.topY, screenAt.z);
+    screen.rotation.y = screenAim(screenAt, LAYOUT.dealer, AUTOMAN_CONFIG.camera.position);
     showroomGroup.add(registerOutdoorProp(screen, 'computer'));
 
-    // ---- The dealer's keyboard and mouse, squarely in front of him ----
-    // The screen is parked away to the west for the sight-line reason
-    // above, but a dealer still types in front of himself, and an empty
-    // patch of desk in front of the one person working a computer read as
-    // an oversight. Geometry comes from LAYOUT so the check outside can
-    // read where they sit rather than restate it.
-    // Squared to the DEALER, not to the desk, and that is what makes the
-    // handedness legible. He sits 37 degrees off the desk's own axis, so a
+    // ---- The dealer's keyboard and mouse ----
+    // Placed from HIM, not from the desk: straight out along his own
+    // facing at K.reach, squared to him. That is sunnyvalejenn's rule and
+    // it is what gets BOTH his hands onto the keys rather than one
+    // drifting onto the desk beside it. It is also what makes the
+    // handedness legible: he sits 23 degrees off the desk's axis, so a
     // keyboard lying square to the desk reads as an object somebody left
     // there, and "to the right of the keyboard" stops meaning "on his
-    // right". Turned to his sight line, with the mouse placed along HIS
-    // right rather than the world's, the pair reads as his.
-    const dealerFacing = faceToward(LAYOUT.dealer, {
-        x: (LAYOUT.john.x + LAYOUT.customer.x) / 2,
-        z: (LAYOUT.john.z + LAYOUT.customer.z) / 2
-    });
+    // right".
+    const dealerFacing = dealerYaw();
     const dealerRight = { x: Math.cos(dealerFacing), z: -Math.sin(dealerFacing) };
     const dealerFwd = { x: Math.sin(dealerFacing), z: Math.cos(dealerFacing) };
+    const kbAt = keyboardAt();
 
     const K = LAYOUT.deskKeyboard;
     const kit = new THREE.Group();
@@ -1750,7 +1832,7 @@ function createDeskItems() {
     const space = new THREE.Mesh(new THREE.BoxGeometry(K.w * 0.45, 0.006, 0.018), keyMaterial);
     space.position.set(0, 0.019, 0.046);
     kit.add(space);
-    kit.position.set(D.x + K.dx, D.topY, D.z + K.dz);
+    kit.position.set(kbAt.x, D.topY, kbAt.z);
     kit.rotation.y = dealerFacing;
     showroomGroup.add(registerOutdoorProp(kit, 'deskkeyboard'));
 
@@ -1761,9 +1843,9 @@ function createDeskItems() {
     );
     mouse.scale.set(0.72, 0.42, 1.0);
     mouse.position.set(
-        D.x + K.dx + dealerRight.x * M.right + dealerFwd.x * M.fwd,
+        kbAt.x + dealerRight.x * M.right + dealerFwd.x * M.fwd,
         D.topY + 0.016,
-        D.z + K.dz + dealerRight.z * M.right + dealerFwd.z * M.fwd
+        kbAt.z + dealerRight.z * M.right + dealerFwd.z * M.fwd
     );
     mouse.rotation.y = dealerFacing;
     mouse.name = 'deskMouse';
@@ -1776,7 +1858,7 @@ function createDeskItems() {
     const deskKit = new THREE.Group();
     deskKit.name = 'deskKit';
     const calc = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.012, 0.16), matteBlack);
-    calc.position.set(D.x - 0.62, D.topY + 0.006, D.z - 0.30);
+    calc.position.set(D.x - 0.80, D.topY + 0.006, D.z - 0.10);
     calc.rotation.y = 0.3;
     deskKit.add(calc);
     const calcFace = new THREE.Mesh(
@@ -1784,7 +1866,7 @@ function createDeskItems() {
         new THREE.MeshStandardMaterial({ color: 0x9fb8a4, roughness: 0.4 })
     );
     calcFace.rotation.x = -Math.PI / 2;
-    calcFace.position.set(D.x - 0.605, D.topY + 0.013, D.z - 0.345);
+    calcFace.position.set(D.x - 0.785, D.topY + 0.013, D.z - 0.145);
     calcFace.rotation.z = 0.3;
     deskKit.add(calcFace);
     const pen = new THREE.Mesh(
@@ -1830,9 +1912,11 @@ function createDeskChairs() {
     [
         { seat: LAYOUT.john, target: LAYOUT.dealer, kind: 'john' },
         { seat: LAYOUT.customer, target: LAYOUT.dealer, kind: 'customer' },
-        { seat: LAYOUT.dealer, target: mid, kind: 'dealer' }
-    ].forEach(({ seat, target, kind }) => {
-        const yaw = faceToward(seat, target);
+        // The dealer's chair follows his TURNED yaw, not the pair: he has
+        // swung round to his keyboard and the chair went with him.
+        { seat: LAYOUT.dealer, target: mid, kind: 'dealer', yaw: dealerYaw() }
+    ].forEach(({ seat, target, kind, yaw: fixed }) => {
+        const yaw = fixed !== undefined ? fixed : faceToward(seat, target);
         // Nudge the chair a few centimetres back from the sitter, so the
         // backrest sits behind them rather than through them.
         const chair = createDeskChair(
@@ -1977,6 +2061,43 @@ function addElbow(arm) {
  *  moved chair keeps its sight line without a second number to update. */
 function faceToward(from, to) {
     return Math.atan2(to.x - from.x, to.z - from.z);
+}
+
+/** The dealer's body yaw. He squares up to the pair, then turns DEALER_TURN
+ *  away from John toward his own keyboard, which is what a man typing up
+ *  an offer while he listens actually does. Everything that has to agree
+ *  with where he is pointed (his chair, his keyboard, his hands, the aim of
+ *  his screen) reads it from here rather than repeating the arithmetic. */
+function dealerYaw() {
+    return faceToward(LAYOUT.dealer, {
+        x: (LAYOUT.john.x + LAYOUT.customer.x) / 2,
+        z: (LAYOUT.john.z + LAYOUT.customer.z) / 2
+    }) + DEALER_TURN;
+}
+
+/** Where the dealer's keyboard sits: straight out along his own facing, so
+ *  both his hands reach the keys. sunnyvalejenn's rule, and the reason her
+ *  typing pose reads. */
+function keyboardAt() {
+    const yaw = dealerYaw();
+    return { x: LAYOUT.dealer.x + Math.sin(yaw) * LAYOUT.deskKeyboard.reach,
+             z: LAYOUT.dealer.z + Math.cos(yaw) * LAYOUT.deskKeyboard.reach };
+}
+
+/** Which way the dealer's screen faces: midway between his own eye and the
+ *  visitor's, so the same panel serves the man using it and the person
+ *  watching. Solved rather than stored, because it depends on three things
+ *  that have each moved during QA.
+ *
+ *  Returned as a group rotation.y: the face plane's normal points -z in
+ *  the screen group's own space, hence the half turn. */
+function screenAim(at, dealer, eye) {
+    const toDealer = Math.atan2(dealer.x - at.x, dealer.z - at.z);
+    const toEye = Math.atan2(eye.x - at.x, eye.z - at.z);
+    let sweep = toEye - toDealer;
+    while (sweep > Math.PI) sweep -= Math.PI * 2;
+    while (sweep < -Math.PI) sweep += Math.PI * 2;
+    return (toDealer + sweep / 2) - Math.PI;
 }
 
 // ============================================
@@ -2167,35 +2288,6 @@ function createWaitingArea() {
     showroomGroup.add(registerOutdoorProp(row, 'chairs'));
 }
 
-/** The waste basket. Where the first offer goes, then the second. */
-function createWasteBasket() {
-    const B = LAYOUT.wasteBasket;
-    const basket = new THREE.Group();
-    basket.name = 'wasteBasket';
-    const bin = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.16, 0.13, 0.34, 14, 1, true),
-        new THREE.MeshStandardMaterial({
-            color: 0x4a4f57, roughness: 0.6, metalness: 0.4, side: THREE.DoubleSide
-        })
-    );
-    bin.position.y = 0.17;
-    basket.add(bin);
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.02, 14), matteBlack);
-    base.position.y = 0.01;
-    basket.add(base);
-    // One crumpled sheet, just showing over the rim
-    const ball = new THREE.Mesh(
-        new THREE.SphereGeometry(0.055, 7, 5),
-        new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.95 })
-    );
-    ball.position.set(0.03, 0.31, -0.02);
-    ball.scale.set(1, 0.8, 0.95);
-    basket.add(ball);
-
-    basket.position.set(B.x, 0, B.z);
-    showroomGroup.add(registerOutdoorProp(basket, 'basket'));
-}
-
 /** The brochure rack: glossy photographs and generous adjectives. */
 function createBrochureRack() {
     const R = LAYOUT.brochureRack;
@@ -2269,7 +2361,6 @@ function createFixtures() {
     createKeyBoard();
     createCoffeeBar();
     createWaitingArea();
-    createWasteBasket();
     createBrochureRack();
     createShowroomPlants();
     createVending();
@@ -2367,10 +2458,35 @@ const JOHN_NECK_X = -0.205;
 const CUSTOMER_SCALE = { x: 0.96, y: 0.97, z: 0.96 };
 const CUSTOMER_REST_ARM = { shoulder: -0.254, roll: -0.046, elbow: -0.734 };
 
-// The dealer: a light 0.10 lean with both forearms on his side of the
-// desk, hands landing within 48mm of the desk top.
-const DEALER_REST_ARM = { shoulder: -0.545, roll: 0.075, elbow: -1.160 };
-const DEALER_LEAN = 0.10;
+// THE DEALER IS WORKING. He used to sit squared up to the pair with his
+// forearms on the desk, which read as a man waiting. He now turns
+// DEALER_TURN away from John toward his own keyboard and types up the
+// offer while he listens, with his head still on John: that is the beat
+// the scene wanted, and it is sunnyvalejenn's typing pose adapted to a
+// figure who is turned.
+//
+// The turn is small on purpose. It is bounded at BOTH ends by things that
+// break: turn him less and his keyboard will not fit in front of him
+// without landing on the screen, turn him more and his own right hand
+// stops reading as being to the LEFT of the keyboard from the camera,
+// which is the whole of QA round four's item 3.
+//
+// The arms are solved to put both hands ON the keys, 35mm above the desk,
+// 11cm either side of the keyboard's centre, with the torso carried as an
+// obstacle the way round three taught.
+const DEALER_TURN = 0.24;
+const DEALER_TYPE_ARM = { shoulder: -1.045, roll: 0.211, elbow: -0.756 };
+const DEALER_LEAN = 0.296;
+// The lean tips his head with the rest of him, so the neck's rest angle
+// carries the offset: 0.296 of lean less 0.276 of neck leaves the same
+// 0.02 of downward pitch the old light lean did. dealerTargets works from
+// this rather than from a literal, so the two can never drift apart.
+const DEALER_NECK_REST = -0.276;
+// The typing bob, at the elbow, the way real typing does (and the way
+// Jenn's does). It only ever LIFTS: the hands rest above the keys and the
+// bob folds the forearm further, so no amount of it can drive a hand
+// through the desk.
+const DEALER_TYPE_BOB = 0.055;
 
 /** Build one seated figure and rig it: seat, waist, neck, elbows. Returns
  *  everything the animation pass needs, so updateShowroom never has to go
@@ -2475,15 +2591,21 @@ function createDealer() {
         z: (LAYOUT.john.z + LAYOUT.customer.z) / 2
     };
     const rig = seatFigure(dealer, LAYOUT.dealer, mid, 'dealer');
+    // seatFigure aims him at the pair; DEALER_TURN takes him the rest of
+    // the way round to his keyboard. rig.yaw carries the final angle, so
+    // the animation's sway works from the turned figure.
+    rig.yaw = dealerYaw();
+    rig.group.rotation.y = rig.yaw;
     rig.waist.rotation.x = DEALER_LEAN;
-    // His body squares up to the pair, but his attention is on John, so
-    // the head turns the rest of the way.
+    // His body is on his work, but his attention is on John, so the head
+    // turns the rest of the way back.
     rig.neck.rotation.y = faceToward(LAYOUT.dealer, LAYOUT.john) - rig.yaw;
-    rig.neck.rotation.x = -0.08;
+    rig.neck.rotation.x = DEALER_NECK_REST;
     rig.arms.forEach((entry) => {
-        entry.arm.rotation.x = DEALER_REST_ARM.shoulder;
-        entry.arm.rotation.z = -entry.side * DEALER_REST_ARM.roll;
-        entry.elbow.rotation.x = DEALER_REST_ARM.elbow;
+        entry.arm.rotation.x = DEALER_TYPE_ARM.shoulder;
+        entry.arm.rotation.z = -entry.side * DEALER_TYPE_ARM.roll;
+        entry.elbow.rotation.x = DEALER_TYPE_ARM.elbow;
+        entry.phase = entry.side < 0 ? 0 : 2.1;
     });
     return rig;
 }
@@ -2892,6 +3014,12 @@ function updateDealer(rig, deltaTime) {
     rig.neck.rotation.x = approach(rig.neck.rotation.x, target.neckX, 7, deltaTime);
     rig.neck.rotation.y = approach(rig.neck.rotation.y, target.neckY, 6, deltaTime);
 
+    // Typing. Each forearm folds a little further and comes back, out of
+    // phase with the other, so the hands work rather than hover.
+    rig.arms.forEach((entry) => {
+        entry.elbow.rotation.x = DEALER_TYPE_ARM.elbow - typeBob(_t, entry.phase || 0);
+    });
+
     // A shift in the chair, on its own slow clock so it never lines up
     // with the nods.
     if (a.shiftT <= 0) a.shiftT = 11 + Math.random() * 9;
@@ -2900,24 +3028,33 @@ function updateDealer(rig, deltaTime) {
     rig.group.rotation.y = approach(rig.group.rotation.y, rig.yaw + shift * 0.6, 3, deltaTime);
 }
 
+/** How far the dealer's forearm is folded past its resting angle, at time
+ *  t. NEVER NEGATIVE, which is the whole safety property: the pose rests
+ *  his hands 35mm above the keys and this only ever lifts them further,
+ *  so no phase of it can put a hand through the desk. Pure, so the check
+ *  can sweep it. */
+function typeBob(t, phase) {
+    return Math.max(0, Math.sin(t * 7.4 + phase)) * DEALER_TYPE_BOB;
+}
+
 /** The dealer's per-frame targets, pure so they can be tested. His head
  *  rests on John, dips for a nod, and turns down to the page when he
  *  reads it. */
 function dealerTargets(mode, modeT, headBase, readTo) {
     if (mode === 'nodding') {
         return {
-            neckX: -0.08 + (1 - Math.cos((modeT / 0.65) * Math.PI * 2)) / 2 * 0.19,
+            neckX: DEALER_NECK_REST + (1 - Math.cos((modeT / 0.65) * Math.PI * 2)) / 2 * 0.19,
             neckY: headBase
         };
     }
     if (mode === 'reading') {
         const envelope = Math.sin(Math.PI * Math.min(1, modeT / 2.1));
         return {
-            neckX: -0.08 + 0.34 * envelope,
+            neckX: DEALER_NECK_REST + 0.34 * envelope,
             neckY: headBase + (readTo - headBase) * envelope
         };
     }
-    return { neckX: -0.08, neckY: headBase };
+    return { neckX: DEALER_NECK_REST, neckY: headBase };
 }
 
 /**
@@ -2957,7 +3094,9 @@ export function getShowroomGroup() {
 export const __test__ = {
     LAYOUT, PALETTE, JOHN_LOOK, HAND_SCALE,
     JOHN_SCALE, JOHN_POINT_ARM, JOHN_REST_ARM, JOHN_LEAN, JOHN_NECK_X,
-    CUSTOMER_SCALE, CUSTOMER_REST_ARM, DEALER_REST_ARM, DEALER_LEAN,
+    CUSTOMER_SCALE, CUSTOMER_REST_ARM, DEALER_LEAN,
+    DEALER_TURN, DEALER_TYPE_ARM, DEALER_NECK_REST, DEALER_TYPE_BOB,
+    dealerYaw, keyboardAt, screenAim, typeBob, drawDealerScreen,
     HIP_Y, NECK_Y, TAP_LIFT, TAP_EVERY, TAP_BURST,
     seatHeightY, faceToward, normalizeAngle, approach, stallStripeRun, stallStripeOffset, walkSpan,
     LEG_SPLAY,

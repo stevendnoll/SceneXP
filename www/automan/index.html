@@ -96,6 +96,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css">
+    <link rel="stylesheet" href="css/experience.min.css">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -194,6 +195,25 @@
             <path d="M10 19v-5h4v5" stroke-linejoin="round" />
         </svg>
     </a>
+    <!-- John's own flyer, which is the one thing in here that is not a
+         stylization: a photograph of him, his promise, and his number, as
+         he hands it out. It sits behind a button rather than in the scene
+         because a 3D showroom is the wrong place to read a page of type.
+
+         A <button>, not an <a>: it opens a card in place and has nowhere
+         to go without JavaScript, and a link that goes nowhere is worse
+         than no link. The noscript block above already carries John's
+         pitch for that visitor. -->
+    <button id="help-btn" class="ui-float menu-btn" type="button"
+        title="See John's flyer"
+        aria-label="See John's flyer">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" />
+            <path d="M12 10.6v6.2" stroke-linecap="round" />
+            <circle cx="12" cy="7.4" r="1.05" stroke="none" fill="currentColor" />
+        </svg>
+    </button>
+
     <!-- There is deliberately NO second floating button here. The other
          featured-business experiences point that slot at the business's
          own website, but this page IS John's web presence, so the only
@@ -204,6 +224,36 @@
          button pointing away from all that was one route too many. The
          noscript block above still carries the contact-page link for
          anyone whose JavaScript never runs. -->
+
+    <!-- The flyer card. It reuses #help-modal because the shared
+         stylesheet scopes its modal rules to a fixed list of ids, and a
+         new one would arrive with no hiding and no layout (the same trap
+         #nudge-modal is named for below).
+
+         The image carries NO src. main.js sets it the first time the card
+         opens, so the flyer is never fetched by a visitor who does not ask
+         for it: it is a quarter of a megabyte, which is more than the rest
+         of this page put together.
+
+         The alt text describes the flyer but does NOT repeat the number or
+         the address printed on it, and that is decision D3 again rather
+         than an oversight: putting them here would put them in the markup
+         in plain text, which is the one thing D3 exists to avoid. It
+         points to the contact card instead, where the same details arrive
+         as live tel:, sms: and mailto: links, which is more use to a
+         screen reader than a spoken phone number anyway. Worth noting for
+         whoever settles D3: the flyer shows the number as pixels, so a
+         sighted visitor can already read it here. -->
+    <div id="help-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="poster-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card poster-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <h2 id="poster-title" class="sr-only">John Walker, The Auto Man: his flyer</h2>
+            <img id="poster-image" class="poster-image" width="1023" height="1537"
+                alt="John Walker's flyer. Come see Walker, The Auto Man, your local auto expert. A photograph of John, a bald man in a light blue shirt, standing between two pickup trucks on rocky ground. Free consultations on the phone or by Zoom, and a 100 percent satisfaction guarantee or your money returned. Let me help you get the best deal for your trade and I will desk the whole deal for you. Let me walk you through the process with extended warranties, tire and wheel protection and gap insurance. Do you need it? Maybe. Maybe not. But let me be your customer advocate. The flyer ends with a phone number and an email address, which this page gives as live call, text and email links on the card behind any of the three people at the desk."">
+            <p class="poster-note">John's own flyer, shown here with his blessing.</p>
+        </div>
+    </div>
 
     <!-- Dialog shown when something in the showroom is clicked: the host's
          voice, telling the story of a car deal one prop at a time. -->

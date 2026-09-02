@@ -10,18 +10,19 @@
  * it is a bright midday on the lot at every hour, though the cycle's
  * per-frame pass still runs for the fixed-time sky paint and the
  * shadow-map refresh). The interactions that do exist are featherweight:
- * the welcome overlay (dismissed with a click, tap, or key), the floating
- * Home button, the always-on pan and zoom row (shared pan part, with
- * swipe, tilt, and pinch on touch), and one raycast per tap to see what
- * the visitor pointed at, answered in the host's voice by the dialog
- * card.
+ * the welcome overlay (dismissed with a click, tap, or key), two floating
+ * buttons (Home, and one that opens John's own flyer), the always-on pan
+ * and zoom row (shared pan part, with swipe, tilt, and pinch on touch),
+ * and one raycast per tap to see what the visitor pointed at, answered in
+ * the host's voice by the dialog card.
  *
  * Unlike the other featured-business experiences, this one has nowhere
  * outward to send anybody: John has no separate website, because this
- * page is his web presence. So there is only ONE floating button, and
- * every card CTA leads to the contact card rather than off the site.
+ * page is his web presence. So NOTHING here links off the site: every card
+ * CTA leads to the contact card, and the second floating button opens a
+ * picture of John's flyer rather than sending anybody anywhere.
  *
- * BUILD STATUS: milestone M13, the third screenshot QA round. Every prop
+ * BUILD STATUS: milestone M14, the fourth screenshot QA round. Every prop
  * in the showroom answers a tap with its own story, the three people open
  * the contact card, and its call, text and email links are assembled from
  * the solved proof of work. See specs/automan/TASKS.md.
@@ -70,6 +71,14 @@ let nudgePending = false;
 let propClicks = 0;
 const NUDGE_EVERY = 4;
 
+// John's own flyer, behind the floating info button. The image is a
+// quarter of a megabyte, more than the rest of the page together, so it is
+// not in the markup's src: this holds the path and main.js sets it the
+// first time the card is opened. A visitor who never asks never pays.
+let posterModal, posterImage, posterBtn;
+let posterOpen = false;
+const POSTER_SRC = 'assets/poster.webp';
+
 let cleanupController = null;
 
 // One raycast per tap, with a little forgiveness for fingertips
@@ -99,6 +108,9 @@ async function init() {
     contactText = document.getElementById('contact-text');
     contactEmail = document.getElementById('contact-email');
     contactFallback = document.getElementById('contact-fallback');
+    posterModal = document.getElementById('help-modal');
+    posterImage = document.getElementById('poster-image');
+    posterBtn = document.getElementById('help-btn');
     // Hidden until a card actually opens, so an empty status line never
     // takes up room in the card.
     setShown(contactFallback, false);
@@ -280,6 +292,9 @@ function setupEventListeners() {
         el.addEventListener('click', closePropDialog, { signal }));
     if (nudgeModal) nudgeModal.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closeNudgeModal, { signal }));
+    if (posterModal) posterModal.querySelectorAll('[data-close]').forEach(el =>
+        el.addEventListener('click', closePoster, { signal }));
+    if (posterBtn) posterBtn.addEventListener('click', openPoster, { signal });
 
     // Every prop story leads on to the contact card. Closing the story
     // first keeps the two cards from ever being open together, and
@@ -306,7 +321,8 @@ function setupEventListeners() {
         });
     document.addEventListener('keydown', (event) => {
         if (event.code !== 'Escape') return;
-        if (nudgeOpen) closeNudgeModal();
+        if (posterOpen) closePoster();
+        else if (nudgeOpen) closeNudgeModal();
         else if (dialogOpen) closePropDialog();
     }, { signal });
 
@@ -363,8 +379,8 @@ function firstVisibleHit(targets) {
 // allowed to answer. The neighbors are large enough to spare the halo.
 // The awkward targets in this room, each small enough to be missed
 // beside a big neighbor: the die-cast on the desk corner, the wall
-// clock, the waste basket, and the dealer's keyboard.
-const SMALL_PROP_KINDS = ['modelcar', 'clock', 'basket', 'deskkeyboard'];
+// clock, and the dealer's keyboard.
+const SMALL_PROP_KINDS = ['modelcar', 'clock', 'deskkeyboard'];
 
 /** Direct hit first, then a couple of rings of sample rays around the
  *  point, so the model car on the desk corner is tappable with a
@@ -435,7 +451,7 @@ function getPropRoot(obj) {
 }
 
 function checkSceneTap(clientX, clientY) {
-    if (!state.isLoaded || dialogOpen || nudgeOpen) return;
+    if (!state.isLoaded || dialogOpen || nudgeOpen || posterOpen) return;
     const hit = pickSceneHit(clientX, clientY);
     if (!hit) return;
     const prop = getPropRoot(hit.object);
@@ -522,8 +538,8 @@ const PROP_CONTENT = {
     computer: {
         title: 'The Screen',
         lines: [
-            'The dealer\'s monitor, turned away from you. Everything on it is knowable, and most of it is public.',
-            'Rates, invoice, incentives, book value on your trade. John looks all of it up before you ever walk in.'
+            'The car, and the numbers beside it. He has turned it so you can see, which is a good sign and still only half the picture.',
+            'Rates, invoice, incentives, book value on your trade. All of it is knowable, and John looks it up before you ever walk in.'
         ]
     },
     deskkeyboard: {
@@ -573,13 +589,6 @@ const PROP_CONTENT = {
         lines: [
             'Where you sit while somebody takes your keys away to appraise your trade. The wait is a tactic as often as it is a queue.',
             'Know what your trade is worth before you hand over the keys, and the wait stops working.'
-        ]
-    },
-    basket: {
-        title: 'The Waste Basket',
-        lines: [
-            'Where the first offer goes. Then the second one. This is a normal part of the process and not a sign anything is wrong.',
-            'John has seen where the real number lives. He is happy to sit through as many of these as it takes.'
         ]
     },
     brochures: {
@@ -797,6 +806,35 @@ function closeNudgeModal() {
     nudgeModal.classList.add('hidden');
     nudgeOpen = false;
     restoreDialogFocus();
+}
+
+// ---- John's flyer ----------------------------------------------------------
+
+/** Open the flyer card, loading the image on the first open only.
+ *
+ *  The flyer is the one flat, wordy thing on the page, and it is here
+ *  because a 3D showroom is the wrong place to read a page of type: this
+ *  is John as he introduces himself on paper, photograph, promise, number
+ *  and all. Everything else in the scene is a stylization of him. */
+function openPoster() {
+    if (!posterModal || posterOpen) return;
+    // First open pays for the image; every later one is free.
+    if (posterImage && !posterImage.getAttribute('src')) {
+        posterImage.setAttribute('src', POSTER_SRC);
+    }
+    posterModal.classList.remove('hidden');
+    posterOpen = true;
+    track('poster-open');
+    const close = posterModal.querySelector('.modal-close');
+    if (close) close.focus();
+}
+
+/** Close it, and hand focus back to the button that opened it. */
+function closePoster() {
+    if (!posterModal || !posterOpen) return;
+    posterModal.classList.add('hidden');
+    posterOpen = false;
+    if (posterBtn) posterBtn.focus();
 }
 
 /** Dismiss the welcome overlay and settle in for the visit. */
