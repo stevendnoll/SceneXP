@@ -392,16 +392,38 @@ function searchHit(targets, camera) {
     return null;
 }
 
+// How far behind whatever is genuinely under the finger a small prop may
+// sit and still claim the tap. A hand's width: enough to cover the model
+// car standing proud of the desk it rests on, nowhere near enough to let
+// something across the room answer through a person.
+const SMALL_PROP_REACH_M = 0.25;
+
 /** Nearest visible hit under the screen point: the small props get first
- *  refusal at full tolerance, then everything answers as usual. */
+ *  refusal at full tolerance, then everything answers as usual.
+ *
+ *  That first refusal is DEPTH-CHECKED, and it has to be. The halo search
+ *  only asks whether a small prop is near the finger on screen, never
+ *  what stands in front of it, so the waste basket behind the customer
+ *  used to answer every tap meant for her: she is not a small prop, so
+ *  she never got to compete. The direct ray is cast first to find out
+ *  what is really under the finger, and a small prop wins its halo only
+ *  when it is at or in front of that. */
 function pickSceneHit(clientX, clientY) {
     const camera = getCamera();
     if (!camera) return null;
     const targets = getOutdoorPropMeshes();
     if (!targets.length) return null;
     pointer.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+
+    raycaster.setFromCamera(pointer, camera);
+    const direct = firstVisibleHit(targets);
+
     const small = targets.filter(g => g.userData && SMALL_PROP_KINDS.includes(g.userData.propKind));
-    return (small.length && searchHit(small, camera)) || searchHit(targets, camera);
+    if (small.length) {
+        const near = searchHit(small, camera);
+        if (near && (!direct || near.distance <= direct.distance + SMALL_PROP_REACH_M)) return near;
+    }
+    return direct || searchHit(targets, camera);
 }
 
 /** Walk up from a hit mesh to the nearest prop root (tagged isProp by

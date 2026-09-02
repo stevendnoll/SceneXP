@@ -37,16 +37,22 @@
  *   |  [plant]           | [ PAPERS ]   |          [ plant ]    |
  *   |                    | [model car]  |                       |
  *   |                    +--------------+                       |
- *   |             (JOHN)          (CUSTOMER)                    |
+ *   |             (JOHN)      [basket] (CUSTOMER)               |
  *   |                                            [ CAMERA ]     |
- *   |  [ coffee bar ]  [ basket ]  [ chairs ] [ vending ]       |
+ *   |  [ coffee bar ]              [ chairs ]  [ vending ]      |
  *   |  [ brochures ]                                            |
  *   +--------------- front wall (behind the camera) ------------+
  *
- * BUILD STATUS: milestone M7. The room is furnished and everything in it
- * answers a tap. What remains is the interaction layer at M8 (the person
- * taps opening the contact card, its assembled links, the nudge cadence)
- * and the accessibility pass at M9. See specs/automan/TASKS.md.
+ * BUILD STATUS: milestone M11, the first screenshot QA round. The room is
+ * furnished, everything in it answers a tap, and the interaction layer is
+ * in. What remains is the accessibility pass at M9 and the assets,
+ * directory entry, and Jest suite at M10. See specs/automan/TASKS.md.
+ *
+ * A note for whoever polishes this next: this scene is composed for ONE
+ * fixed eye, and the floor plan above is a convenience, not the truth.
+ * Four of the first QA round's eight findings were things the plan view
+ * cannot express, so anything moved here should be re-run through
+ * specs/automan/verify-composition.mjs before it is believed.
  */
 
 import { getScene } from '../../shared/js/scene-1.0.0.min.js';
@@ -129,6 +135,14 @@ const LAYOUT = {
     // is therefore the arm that points (task T4.3).
     dealSheet: { x: -0.93, z: -2.18 },
 
+    // The dealer's monitor, offset from the desk centre. It lives in the
+    // LAYOUT rather than inline in the builder because WHERE IT STANDS is
+    // a sight-line constraint (see createDeskItems), and a constraint
+    // that is only checkable from outside has to be readable from
+    // outside. specs/automan/verify-composition.mjs projects this box
+    // against the dealer's and John's every run.
+    deskScreen: { dx: -0.35, dz: -0.33, w: 0.52, h: 0.32, midY: 0.30, rotY: 0.18 },
+
     // CORNER SEATING (decision D8). John sits at the desk's WEST END, not
     // beside his customer on the near side, and that is load-bearing:
     // from the end he faces EAST across the desk toward the dealer, which
@@ -164,7 +178,13 @@ const LAYOUT = {
     // toward the south.
     waitingChairs: { xs: [-1.85, -1.15, -0.45], z: 1.70 },
     brochureRack: { x: -1.60, z: 2.85 },
-    wasteBasket: { x: -2.20, z: -1.50 },
+    // The basket stands against the near face of the desk. It began out
+    // in the room at (-2.20, -1.50) and was invisible from the fixed
+    // camera: the customer and her chair covered it completely, which
+    // ALSO made it answer every tap meant for her. Measured here rather
+    // than moved by eye, at 100% visible in both orientations. Anything
+    // this small has to be checked against the eye, not the floor plan.
+    wasteBasket: { x: -0.50, z: -1.55 },
     plants: [
         { x: -3.15, z: -3.90, kind: 'tall' },
         { x: -1.00, z: 2.50, kind: 'snake' }
@@ -230,31 +250,60 @@ const LAYOUT = {
 // trousers, a medium to slightly broad build. Keyed to the flyer in
 // specs/automan/image0.png. A stylized low-poly portrait rather than a
 // likeness, the same standard the rest of the site holds. Used from M4.
+//
+// He is also the biggest figure in the room, at SCALE 1.10. That is a
+// composition decision as much as a likeness one: he sits furthest from
+// the lens of the three, so perspective was quietly shrinking the one
+// person the whole page is about. See JOHN_SCALE below, which the pose
+// arithmetic depends on.
 const JOHN_LOOK = {
     skinTone: 0xe8c09a,
     bald: true,
     dressShirt: true,
-    shirtColor: 0xb2cbf0,     // the flyer's light blue
+    // The flyer's shirt, as it has to be MIXED rather than as it is
+    // sampled. A light blue picked straight off the artwork (0xb2cbf0)
+    // came back off the renderer as white: the showroom's own lighting
+    // has a lot of headroom, and a pale tint spends all of it. This is
+    // several steps deeper than the source so the result reads blue.
+    shirtColor: 0x6f9fd4,
     pantsColor: 0x2f3540,
-    eyeColor: 0x3d5a72
+    eyeColor: 0x3d5a72,
+    handScale: 1.4
 };
+
+// The shared rig's default hands are two thirds the size a hand reads at
+// on a figure this close to the lens, which leaves every gesture in the
+// scene ending in a point rather than a hand. All three of the cast get
+// the same enlargement, matching the other SceneXP scenes that put people
+// near the camera.
+const HAND_SCALE = 1.4;
 
 // The showroom palette. Bright and slightly cool on purpose: showrooms
 // are lit by their glass. The flyer's navy and gold do the accenting.
 //
-// PROVISIONAL: the navy, blue, and gold are working values derived from
+// PROVISIONAL: the navy and gold are working values derived from
 // specs/automan/image0.png, whose raw pixel values read darker than the
 // artwork displays. Confirm against the displayed flyer before these are
-// treated as settled (task T10.2 territory).
+// treated as settled (task T10.2 territory). The shirt blue has already
+// been through that loop once and is no longer the sampled value: see
+// JOHN_LOOK.
 const PALETTE = {
     navy: 0x12294a,
     signalBlue: 0x0d5bc4,
     gold: 0xf0a51e,
-    shirtBlue: 0xb2cbf0,
+    // John's shirt blue lives on JOHN_LOOK, not here. It was in both
+    // places and only one of them was ever read, which is how a colour
+    // gets fixed in the copy nobody renders.
     floorGrey: 0xd8d5d0,
-    wallWhite: 0xf2f1ee,
+    // The interior walls. A soft cool grey rather than white, because
+    // white walls plus a white ceiling plus a bright floor plus a wall of
+    // daylight left the room glaring, with nothing for the cast to read
+    // against. Applied as a TINT over the near-white paint texture, so
+    // this one constant moves every wall in the room and the mottle in
+    // the texture stays relative to it.
+    wallGrey: 0xbcc0c2,
     trimWhite: 0xf8f6f1,
-    ceiling: 0xfbfaf8,
+    ceiling: 0xe6e8e9,
     asphalt: 0x3c3b3a,
     leafGreen: 0x3f7d43,
     leafDeep: 0x2d5a27,
@@ -380,6 +429,19 @@ function createAsphaltTexture() {
     return texture;
 }
 
+/** How far, and WHICH WAY, one painted stall stripe travels in world x
+ *  between its near end and the far end of the stall. Signed metres.
+ *
+ *  Pulled out of the texture because the sign is the whole question and
+ *  it is not checkable once it has been drawn onto a canvas. A car parked
+ *  in the row carries rotation.y = angle, so its long axis runs along
+ *  (sin angle, cos angle): heading away from the showroom, into -Z, its x
+ *  FALLS. The paint has to fall with it. It did not, until QA looked out
+ *  of the window and found every car parked across its own bay. */
+function stallStripeRun(depth, angle) {
+    return -depth * Math.tan(angle);
+}
+
 /** One row of angled stall stripes, as a cutout texture laid just above
  *  the asphalt. The canvas covers exactly one stall pitch across and the
  *  full stall depth down, so repeating it along U walks the stripes down
@@ -387,14 +449,25 @@ function createAsphaltTexture() {
  *
  *  The line is drawn several times at multiples of the canvas width so it
  *  survives the wrap: a single stroke would simply be clipped at the edge
- *  and the pattern would break at every tile seam. */
+ *  and the pattern would break at every tile seam.
+ *
+ *  WHICH WAY THE STRIPE LEANS is not a free choice, and getting it wrong
+ *  parks every car across its own bay. The stripe plane is laid flat with
+ *  rotation.x = -PI/2, which sends the canvas TOP (v = 1) to world -Z, out
+ *  into the lot, and the canvas RIGHT (u = 1) to world +X. A car in the
+ *  row carries rotation.y = angle, so its long axis points along
+ *  (sin angle, cos angle): going away from the showroom, x DECREASES.
+ *  The stripe therefore has to travel LEFT across the canvas as it climbs
+ *  from bottom to top, which is where the minus below comes from. It was
+ *  a plus until QA caught the cars and the paint disagreeing. */
 function createStallStripeTexture(pitch, depth, angle) {
     const W = 256, H = 256;
     const canvas = makeCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // How far the stripe travels across, in pixels, over the full depth.
-    const runMetres = depth * Math.tan(angle);
+    // Signed metres of world x the stripe covers between its near end and
+    // its far end, one stall deep.
+    const runMetres = stallStripeRun(depth, angle);
     const runPx = (runMetres / pitch) * W;
 
     ctx.clearRect(0, 0, W, H);
@@ -624,8 +697,12 @@ function createShowroom() {
     ceiling.castShadow = true;
     room.add(ceiling);
 
+    // The paint texture is deliberately near-white: PALETTE.wallGrey does
+    // the colouring, so the roller mottle keeps its relative strength at
+    // any wall tone and there is exactly one number to turn.
     const wallMaterial = new THREE.MeshStandardMaterial({
-        map: createWallPaintTexture(), roughness: 0.85, metalness: 0.0
+        map: createWallPaintTexture(), color: PALETTE.wallGrey,
+        roughness: 0.85, metalness: 0.0
     });
 
     // --- East and west walls: single slabs the full depth of the room
@@ -1251,16 +1328,28 @@ function createDeskItems() {
     // It faces the dealer at -z, so from the camera it is a blank back,
     // which is exactly the point: everything on it is knowable, and none
     // of it is being shown to the customer.
+    //
+    // WHERE IT SITS is a composition constraint, not a taste one. It
+    // started at the desk's east end and stood squarely in front of the
+    // dealer, hiding most of him: the camera looks almost straight down
+    // the line from the visitor to his chair, so anything on the desk
+    // east of centre lands on top of him. Moving it further east is no
+    // help either, because his silhouette runs to the edge of the desk in
+    // portrait. So it lives at the desk's WEST back corner, in the gap
+    // between John's shoulder and the dealer, with about 6% of the frame
+    // width clear on the tighter side. Measured, and it moves if the
+    // camera, the seats, or the desk do.
+    const SC = LAYOUT.deskScreen;
     const screen = new THREE.Group();
     screen.name = 'dealerScreen';
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.32, 0.022), matteBlack);
-    panel.position.y = 0.30;
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(SC.w, SC.h, 0.022), matteBlack);
+    panel.position.y = SC.midY;
     screen.add(panel);
     const face = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.48, 0.28),
+        new THREE.PlaneGeometry(SC.w - 0.04, SC.h - 0.04),
         new THREE.MeshStandardMaterial({ color: 0x1b2a3a, roughness: 0.25, metalness: 0.2 })
     );
-    face.position.set(0, 0.30, -0.013);
+    face.position.set(0, SC.midY, -0.013);
     face.rotation.y = Math.PI;
     screen.add(face);
     const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.14, 8), brushedMetal);
@@ -1269,8 +1358,8 @@ function createDeskItems() {
     const foot = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.014, 0.13), brushedMetal);
     foot.position.y = 0.02;
     screen.add(foot);
-    screen.position.set(D.x + 0.42, D.topY, D.z - 0.30);
-    screen.rotation.y = 0.18;
+    screen.position.set(D.x + SC.dx, D.topY, D.z + SC.dz);
+    screen.rotation.y = SC.rotY;
     showroomGroup.add(registerOutdoorProp(screen, 'computer'));
 
     // ---- Calculator and pen, on the dealer's side of the page ----
@@ -1793,21 +1882,27 @@ function createFixtures() {
 // redo. Every angle below was SOLVED against the real transform chain,
 // not eyeballed. The chain, outermost first:
 //
-//   person   position (x, seatY, z), rotation.y = yaw
+//   person   position (x, seatY, z), rotation.y = yaw, scale s
 //     waist  pivot at local y 0.75, rotation.x = lean       (addWaist)
 //       arm  at (side*0.2125, 0.50, 0) from the waist pivot,
 //            rotation.x = shoulder, rotation.z as given
 //         elbow  at (0, -0.275, 0), rotation.x = bend       (addElbow)
 //           hand at (0, -0.295, 0), fingertip 0.045 beyond
 //
-// Seated, John's shoulder sits at y 1.02 and the deal sheet's near edge
-// is 0.85m away, while the rig's whole arm reaches 0.61m. He therefore
-// CANNOT touch the page sitting upright, which is why addWaist exists: a
-// 0.395 radian lean (22.6 degrees) carries the shoulder far enough
-// forward that the solved arm lands his hand 11mm above the desk top,
-// which is ON the page, with the elbow at 0.801 clearing the desk.
+// The scale multiplies every local offset in that chain, and seatHeightY
+// drops the figure to match, so a figure's size is part of the solve
+// rather than something applied afterwards.
 //
-// Two traps in solving this, both hit on the way here:
+// Seated at scale 1, John's shoulder sits at y 1.02 and the deal sheet is
+// 0.85m away, while the rig's whole arm reaches 0.61m. He therefore
+// CANNOT touch the page sitting upright, which is why addWaist exists,
+// and originally it took a 0.395 radian lean (22.6 degrees) to get him
+// there. Making him 10% bigger bought most of that hunch back: at scale
+// 1.10 a 0.300 lean (17.2 degrees) lands his hand 10mm above the desk
+// top and 9.9cm from the centre of the page, which is better placed than
+// the deeper lean managed, with the elbow at 0.831 clearing the desk.
+//
+// Three traps in solving this, all hit on the way here:
 //
 //  - Aim at the PAPER, not at a comfortable height above it. An earlier
 //    solve targeted 35mm up and read as a hover rather than a touch. At
@@ -1817,20 +1912,30 @@ function createFixtures() {
 //    so there is a family of answers and the cheapest is a ramrod
 //    STRAIGHT arm (elbow -0.01). It hits the mark and looks like a
 //    mannequin, and it leaves the tap nowhere to travel. The solve is
-//    shaped to prefer a natural bend near -0.75.
+//    shaped to prefer a natural bend near -0.72.
+//  - Weight the HEIGHT far above the sideways placement. The page is 30
+//    by 41cm, so 10cm off its centre is still squarely on it, while 10cm
+//    of air under the fingertip is a different gesture entirely. A solve
+//    that scores one 3D distance trades the height away every time.
 //
-// If the desk, the sheet, or any seat moves, re-solve rather than nudging
-// by eye. specs/automan/verify-pose.mjs re-checks all of it.
-const JOHN_POINT_ARM = { shoulder: -1.035, rotZ: -0.610, elbow: -0.700 };
-const JOHN_REST_ARM = { shoulder: -0.705, rotZ: -0.950, elbow: -0.840 };
-const JOHN_LEAN = 0.395;
+// If the desk, the sheet, any seat, or John's scale moves, re-solve
+// rather than nudging by eye. specs/automan/verify-pose.mjs re-checks all
+// of it.
+const JOHN_SCALE = 1.10;
+const JOHN_POINT_ARM = { shoulder: -0.850, rotZ: -0.587, elbow: -0.720 };
+const JOHN_REST_ARM = { shoulder: -0.603, rotZ: -0.849, elbow: -0.766 };
+const JOHN_LEAN = 0.300;
 // The lean tips his head down with the rest of him, so the neck takes
 // most of it back and leaves him looking level at the dealer rather than
-// at his own knees.
-const JOHN_NECK_X = -0.30;
+// at his own knees. It holds the same 0.095 residual pitch the deeper
+// lean did, so his eyeline did not move when he grew.
+const JOHN_NECK_X = -0.205;
 
 // The customer: upright, hands resting on her thighs. Solved the same
-// way, to land them at y 0.61 and 0.365 forward, which is the lap.
+// way, to land them at y 0.62, which is the lap. Slightly under life
+// size, which reads as a different person rather than the same figure
+// twice, and named here because seatFigure has to drop her to match.
+const CUSTOMER_SCALE = { x: 0.96, y: 0.97, z: 0.96 };
 const CUSTOMER_REST_ARM = { shoulder: -0.20, roll: 0.22, elbow: -0.95 };
 
 // The dealer: a light 0.10 lean with both forearms on his side of the
@@ -1846,7 +1951,11 @@ function seatFigure(person, seat, target, kind) {
     const hair = findHairGroup(person);
 
     poseSeated(person);
-    person.position.set(seat.x, seatHeightY(LAYOUT.chairSeatTop, 1), seat.z);
+    // The figure's own scale, not 1: the rig scales about the person
+    // origin at the hips, so a figure who is not exactly life size sits
+    // above or below the cushion unless the drop scales with them. Set
+    // person.scale BEFORE calling this.
+    person.position.set(seat.x, seatHeightY(LAYOUT.chairSeatTop, person.scale.y), seat.z);
     person.rotation.y = yaw;
 
     const waist = addWaist(person);
@@ -1870,8 +1979,10 @@ function createJohn() {
         shirtColor: JOHN_LOOK.shirtColor,
         pantsColor: JOHN_LOOK.pantsColor,
         skinTone: JOHN_LOOK.skinTone,
-        eyeColor: JOHN_LOOK.eyeColor
+        eyeColor: JOHN_LOOK.eyeColor,
+        handScale: JOHN_LOOK.handScale
     });
+    john.scale.setScalar(JOHN_SCALE);
 
     const rig = seatFigure(john, LAYOUT.john, LAYOUT.dealer, 'john');
     rig.waist.rotation.x = JOHN_LEAN;
@@ -1899,9 +2010,10 @@ function createCustomer() {
         pantsColor: 0x2f3540,
         skinTone: 0xd9a97f,
         hairColor: 0x3a2a1e,
-        eyeColor: 0x3b2a1c
+        eyeColor: 0x3b2a1c,
+        handScale: HAND_SCALE
     });
-    customer.scale.set(0.96, 0.97, 0.96);
+    customer.scale.set(CUSTOMER_SCALE.x, CUSTOMER_SCALE.y, CUSTOMER_SCALE.z);
 
     const rig = seatFigure(customer, LAYOUT.customer, LAYOUT.dealer, 'customer');
     rig.arms.forEach((entry) => {
@@ -1925,7 +2037,8 @@ function createDealer() {
         pantsColor: 0x23262c,
         skinTone: 0xe3b891,
         hairColor: 0x2e2a26,
-        eyeColor: 0x33261a
+        eyeColor: 0x33261a,
+        handScale: HAND_SCALE
     });
 
     const mid = {
@@ -2411,11 +2524,11 @@ export function getShowroomGroup() {
 
 // Exposed for unit tests only; production code uses the named exports above.
 export const __test__ = {
-    LAYOUT, PALETTE, JOHN_LOOK,
-    JOHN_POINT_ARM, JOHN_REST_ARM, JOHN_LEAN, JOHN_NECK_X,
-    CUSTOMER_REST_ARM, DEALER_REST_ARM, DEALER_LEAN,
+    LAYOUT, PALETTE, JOHN_LOOK, HAND_SCALE,
+    JOHN_SCALE, JOHN_POINT_ARM, JOHN_REST_ARM, JOHN_LEAN, JOHN_NECK_X,
+    CUSTOMER_SCALE, CUSTOMER_REST_ARM, DEALER_REST_ARM, DEALER_LEAN,
     HIP_Y, NECK_Y, TAP_LIFT, TAP_EVERY, TAP_BURST,
-    seatHeightY, faceToward, normalizeAngle, approach,
+    seatHeightY, faceToward, normalizeAngle, approach, stallStripeRun,
     johnTargets, customerTargets, dealerTargets,
     PASS_SPEED, PASS_FROM, PASS_TO, PASS_GAP,
     getPassingCar: () => passingCar,
