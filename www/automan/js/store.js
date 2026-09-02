@@ -33,17 +33,18 @@
  *
  *   +=============== glass wall / the lot beyond ===============+
  *   |  [key board]           (DEALER)         [ sales board ]   |
- *   |                    +--------------+                       |
- *   |  [plant]           | [ PAPERS ]   |          [ plant ]    |
- *   |                    | [model car]  |                       |
- *   |                    +--------------+                       |
- *   |             (JOHN)      [basket] (CUSTOMER)               |
- *   |                                            [ CAMERA ]     |
- *   |  [ coffee bar ]              [ chairs ]  [ vending ]      |
- *   |  [ brochures ]                                            |
+ *   |                 +-----------------+                       |
+ *   |  [plant]        | [PAPERS] [keys] |                       |
+ *   |                 |   [model car]   |=drawers               |
+ *   |                 +-----------------+  [basket]             |
+ *   |             (JOHN)          (CUSTOMER)                    |
+ *   |  [ vending ]                               [ CAMERA ]     |
+ *   |  [ coffee bar ]                                           |
+ *   |  [ plant ]                                                |
+ *   |         [ chairs ]  [ brochures ]                         |
  *   +--------------- front wall (behind the camera) ------------+
  *
- * BUILD STATUS: milestone M11, the first screenshot QA round. The room is
+ * BUILD STATUS: milestone M13, the third screenshot QA round. The room is
  * furnished, everything in it answers a tap, and the interaction layer is
  * in. What remains is the accessibility pass at M9 and the assets,
  * directory entry, and Jest suite at M10. See specs/automan/TASKS.md.
@@ -53,6 +54,14 @@
  * Four of the first QA round's eight findings were things the plan view
  * cannot express, so anything moved here should be re-run through
  * specs/automan/verify-composition.mjs before it is believed.
+ *
+ * And a note on the checks themselves, from the third round: two of them
+ * passed while the thing they guarded was plainly wrong on screen, because
+ * each measured the right property in the wrong PLACE. The stripe check
+ * compared a car against the far end of a leaning line, and the frame
+ * check compared raw bearings against a range straddling +/-180, which is
+ * where this room's window points. A check that agrees with a screenshot
+ * is worth more than a check that agrees with its own arithmetic.
  */
 
 import { getScene } from '../../shared/js/scene-1.0.0.min.js';
@@ -124,7 +133,19 @@ const LAYOUT = {
     // The sales desk. Its top height and the sheet's position anchor
     // John's pointing pose, so both are fixed here and the arm solve at
     // M4 works from them rather than the other way round.
-    desk: { x: -0.45, z: -2.25, w: 1.90, d: 1.00, topY: 0.75 },
+    // A SINGLE-PEDESTAL DESK. pedestalW is a real drawer unit flush with
+    // the east end (nearest the visitor); legZ is the one slim leg holding
+    // up the west end, where John sits.
+    //
+    // This shape is a CLEARANCE, not a style. John sits at the desk's end,
+    // so his shoes run in under the top from x -1.54 to -1.21 and from
+    // z -2.81 to -2.44. Round two found his foot through a leg standing at
+    // -1.365; round three found the fix (two thin blades inset from both
+    // ends) reading as a slab hanging under the desk for no reason. A
+    // pedestal at the far end plus one leg at the near west corner clears
+    // him with 0.6m to spare and looks like a desk. Re-measure if anyone
+    // moves a seat: specs/automan/verify-pose.mjs checks every leg.
+    desk: { x: -0.45, z: -2.25, w: 1.90, d: 1.00, topY: 0.75, pedestalW: 0.46, legZ: -1.85 },
 
     // The deal sheet, and the whole reason the camera is where it is.
     // Solved rather than placed: it is the point on the desk top NEAREST
@@ -142,6 +163,23 @@ const LAYOUT = {
     // outside. specs/automan/verify-composition.mjs projects this box
     // against the dealer's and John's every run.
     deskScreen: { dx: -0.35, dz: -0.33, w: 0.52, h: 0.32, midY: 0.30, rotY: 0.18 },
+
+    // The dealer's keyboard and mouse, squarely in front of him. They live
+    // beside the screen rather than under it because the screen is parked
+    // off to the west for the sight-line reason above, and a dealer types
+    // in front of himself whatever his monitor is doing. Offsets from the
+    // desk centre, like deskScreen. Kept here so verify-composition can
+    // check they stay on the desk, clear of the screen's foot, and clear
+    // of where the dealer's own hands land.
+    // They are squared to the DEALER, not to the desk, and the mouse is
+    // placed along his own right axis rather than the world's. Square to
+    // the desk they read as two objects lying there rather than as his,
+    // and the handedness stops being legible: he is turned 37 degrees off
+    // the desk, so "to the right of the keyboard" and "on his right" are
+    // not the same direction. mouseRight and mouseFwd are metres in HIS
+    // frame, measured from the keyboard.
+    deskKeyboard: { dx: 0.15, dz: -0.31, w: 0.40, d: 0.14 },
+    deskMouse: { right: 0.30, fwd: 0.02 },
 
     // CORNER SEATING (decision D8). John sits at the desk's WEST END, not
     // beside his customer on the near side, and that is load-bearing:
@@ -171,23 +209,44 @@ const LAYOUT = {
     clock: { x: -3.70, y: 2.05, z: -0.20, rotY: Math.PI / 2, r: 0.17 },
     keyBoard: { x: -3.66, y: 1.50, z: -3.40 },
     salesBoard: { x: -3.66, y: 1.60, z: -1.90, w: 1.40, h: 0.90 },
-    coffeeBar: { x: -3.35, z: 0.70 },
+    // Centred between the vending machine and the plant, which is a
+    // measurement rather than a look: the bar is 1.34 long, the machine's
+    // near face is at z 1.55 and the plant's at -0.40, so the only z that
+    // leaves the same gap on both sides is (1.55 + -0.40) / 2. At its old
+    // 0.70 the gaps were 0.18 and 0.43 and it read as jammed against the
+    // machine.
+    coffeeBar: { x: -3.35, z: 0.575 },
     vending: { x: -3.35, z: 2.00 },
 
-    // The waiting area, on the near side of the room, reachable by a pan
-    // toward the south.
-    waitingChairs: { xs: [-1.85, -1.15, -0.45], z: 1.70 },
-    brochureRack: { x: -1.60, z: 2.85 },
-    // The basket stands against the near face of the desk. It began out
-    // in the room at (-2.20, -1.50) and was invisible from the fixed
-    // camera: the customer and her chair covered it completely, which
-    // ALSO made it answer every tap meant for her. Measured here rather
-    // than moved by eye, at 100% visible in both orientations. Anything
-    // this small has to be checked against the eye, not the floor plan.
-    wasteBasket: { x: -0.50, z: -1.55 },
+    // THE WAITING AREA, along the rear wall, reachable by a pan toward the
+    // south.
+    //
+    // The camera looks DIAGONALLY across this corner, so the rear wall is
+    // seen at a glancing angle and west means further away: anything at
+    // the west end of the wall sits behind everything east of it. The row
+    // used to stand out in the room at z 1.70, where it hid two thirds of
+    // the vending machine, half the brochure rack and most of the plant.
+    // Measured, not eyeballed: 67%, 0% and 17% of them survived to the
+    // eye. Against the wall at z 2.60 the machine comes back to 96%.
+    //
+    // Only ONE slot east of the row is inside the landscape frame, so the
+    // brochure rack takes it (it is the prop worth reading) and the snake
+    // plant moved to the west wall between the coffee bar and the sales
+    // board, where it is seen instead of guessed at.
+    waitingChairs: { xs: [-2.60, -1.88, -1.16], z: 2.60 },
+    brochureRack: { x: -0.52, z: 2.74 },
+    // The basket stands OUTSIDE the desk on the visitor's side, TOUCHING
+    // its near face at the east corner. It began out in the room at
+    // (-2.20, -1.50), where the customer and her chair covered it
+    // completely and it stole every tap meant for her; then against the
+    // desk's near face; then at the nearest fully visible spot to the
+    // camera, which turned out to be 9cm off the desk and read as a bin
+    // abandoned in the middle of the floor. Visibility was never the
+    // problem after the first move. BELONGING to the desk was.
+    wasteBasket: { x: 0.45, z: -1.58 },
     plants: [
         { x: -3.15, z: -3.90, kind: 'tall' },
-        { x: -1.00, z: 2.50, kind: 'snake' }
+        { x: -3.45, z: -0.60, kind: 'snake' }
     ],
 
     // The ceiling fixtures: two runs of two, one over the desk and one
@@ -222,9 +281,21 @@ const LAYOUT = {
     // visitor looking at an empty lot. Recompute these whenever the
     // camera, the lookAt point, the FOV, or the glass width moves.
     lot: {
-        groundY: -0.14,        // the apron sits a kerb below the showroom slab
-        kerbZ: -4.45,
-        apronFarZ: -6.0,       // the concrete walkway right outside the glass
+        groundY: -0.14,        // the asphalt, a kerb below the concrete walk
+        // THE WALK. A raised concrete sidewalk runs the whole frontage,
+        // level to within 6cm of the showroom slab and a kerb above the
+        // lot, which is what a real dealership entrance does.
+        //
+        // It also closes a hole. The walk's plane was built 3.55m deep
+        // when it needed to be 8.0 (the old expression added the kerb gap
+        // instead of measuring from the far edge), so it stopped 0.63m
+        // INSIDE the building and the ground between the glass and the
+        // asphalt was simply missing. The visitor saw the sky background
+        // straight through the floor: the "sky blue band" under the
+        // window in the second QA round.
+        walkY: -0.06,
+        kerbZ: -4.45,          // the threshold step at the building line
+        apronFarZ: -6.0,       // where the walk ends and the kerb drops
         driveLaneZ: -7.4,      // where the passing car crosses (M6)
         asphaltFarZ: -29,
         grassFarZ: -62,
@@ -232,14 +303,76 @@ const LAYOUT = {
         maxX: 25,
         stallAngle: 0.52,      // ~30 degrees off square, standard angled parking
         stallDepth: 5.4,
-        // Three rows, receding, each cheaper to draw than the last.
+        // ONE stall size for the whole lot, because a parking bay is a
+        // parking bay. The pitch is measured ALONG the row, so the width
+        // a car actually gets is pitch * cos(stallAngle): at the old 2.6
+        // that was 2.26m for a body 1.86m wide, about 20cm a side, and
+        // every car looked parked on its own line. 3.15 gives 2.73m, a
+        // standard nine-foot bay, and 44cm a side.
+        //
+        // The rows still had their cars ON the paint even so, because the
+        // stripe texture starts a bay exactly where the loop starts a car.
+        // The cars are the composed thing, so the PAINT moves: the stripe
+        // texture carries a half-pitch offset and the cars sit mid-bay.
+        // from and to are bay centres, and (to - from) has to stay a whole
+        // number of pitches or the tiled stripes break at the row's end.
+        stallPitch: 3.15,
+        // Three rows, receding, each cheaper to draw than the last. Row
+        // ends run east past the frame now (the last row-one car sits at
+        // x 0.0, off the composed view but reachable with a pan), so the
+        // row never visibly stops inside the window.
         rows: [
-            { z: -11.0, tier: 1, from: -12.6, to: -2.2, pitch: 2.6 },
-            { z: -17.5, tier: 2, from: -22.0, to: -4.6, pitch: 2.9 },
-            { z: -24.0, tier: 3, from: -31.5, to: -7.0, pitch: 3.5 }
+            { z: -11.0, tier: 1, from: -12.6, to: 0.0 },
+            { z: -17.5, tier: 2, from: -22.05, to: 0.0 },
+            { z: -24.0, tier: 3, from: -31.5, to: -3.15 }
         ],
         poles: [{ x: -11.0, z: -14.5 }, { x: -21.0, z: -21.0 }],
-        pennants: { fromX: -15.0, toX: 1.0, z: -8.6, y: 3.6 }
+        // The pennant string has to cross the WHOLE window and show NO
+        // ends: a post in shot is a place where the flags stopped.
+        //
+        // The visible span at this depth is x -9.4 to 4.3 with the pan row
+        // allowed for. It was measured as -9.4 to 2.5 in round two, and
+        // that was wrong: the measuring tool compared raw atan2 bearings
+        // against a range straddling +/-180, which is exactly where the
+        // lot sits, so it truncated the frame at due north and declared a
+        // post at 3.5 to be off-screen while it stood in the middle of the
+        // glass. The string now runs well past both edges and there are no
+        // posts at all. The span stays a whole number of 4.0m texture
+        // tiles (20.0) or the last flag is cut in half at the seam.
+        pennants: { fromX: -12.5, toX: 7.5, z: -8.6, y: 3.6 },
+        // THE CLOUDS, and the reason they are here rather than left to the
+        // shared scenery part. That part hangs its clouds at y 45 to 75
+        // and 80 to 150m out, which is 26 degrees up: fine over an open
+        // world, invisible from inside a room. The window's own opening
+        // only passes elevations 0 to 19.5 degrees, and the treeline
+        // fills everything under about 8, so a cloud has to sit in a band
+        // 10 degrees tall to be seen at all. These are placed in it.
+        //
+        // Distance matters as much as height: the shared fog runs 40 to
+        // 200m (120m on a phone), so a cloud past about 90m is fog. Each
+        // drifts east and wraps, and the whole bank holds still under
+        // prefers-reduced-motion.
+        // Eleven, not five. Five left the sky empty for long stretches:
+        // they were placed by hand across a band the measuring tool had
+        // truncated (the bearing wrap, see pennants above), so half of
+        // them sat outside the window's real reach. Laid across the
+        // measured band instead, at bearings -190 to -130 and elevations
+        // 10.5 to 17 degrees, this bank keeps between 5 and 10 clouds in
+        // the landscape frame at any moment of the drift.
+        clouds: [
+            { x: 15.3, y: 17.9, z: -73.2, scale: 1.20, drift: 0.17 },
+            { x: 6.5, y: 18.1, z: -58.2, scale: 0.85, drift: 0.24 },
+            { x: -0.5, y: 17.4, z: -86.2, scale: 1.35, drift: 0.13 },
+            { x: -6.1, y: 16.9, z: -61.7, scale: 0.90, drift: 0.22 },
+            { x: -16.4, y: 25.3, z: -76.0, scale: 1.10, drift: 0.16 },
+            { x: -16.0, y: 12.4, z: -51.0, scale: 0.75, drift: 0.27 },
+            { x: -33.4, y: 23.4, z: -74.0, scale: 1.25, drift: 0.14 },
+            { x: -29.3, y: 14.2, z: -51.2, scale: 0.85, drift: 0.23 },
+            { x: -41.8, y: 22.8, z: -57.0, scale: 1.05, drift: 0.18 },
+            { x: -36.4, y: 14.4, z: -40.6, scale: 0.80, drift: 0.26 },
+            { x: -58.8, y: 17.0, z: -51.7, scale: 1.15, drift: 0.15 }
+        ],
+        cloudTravel: 46.0      // metres east before a cloud wraps west again
     }
 };
 
@@ -429,6 +562,68 @@ function createAsphaltTexture() {
     return texture;
 }
 
+/** Where the concrete walk outside the glass begins and ends, in world z.
+ *
+ *  Pulled out of the builder for the same reason stallStripeRun was: the
+ *  number that was wrong here was an EXPRESSION, not a constant, so a
+ *  check reading LAYOUT would have agreed with the bug. It ran the walk
+ *  2.0 + (kerbZ - apronFarZ) = 3.55m deep when the span from its back edge
+ *  to its front edge is 8.0, which stopped the concrete 0.63m INSIDE the
+ *  building and left the ground between the glass and the asphalt missing
+ *  altogether. The visitor saw the sky background through the hole and
+ *  reported a "sky blue band" under the window.
+ *
+ *  nearZ runs back under the showroom on purpose, so no camera move can
+ *  ever open a seam at the base rail. */
+function walkSpan(lot) {
+    const nearZ = 2.0;
+    return { nearZ, farZ: lot.apronFarZ, depth: nearZ - lot.apronFarZ,
+             centerZ: (nearZ + lot.apronFarZ) / 2 };
+}
+
+/** The walk outside the glass: poured concrete in slabs, with a control
+ *  joint at every edge and a little tonal drift between panels, so the
+ *  band between the showroom and the lot reads as a sidewalk rather than
+ *  as a grey plane. One canvas is one slab, tiled. */
+function createSidewalkTexture() {
+    const S = 128;
+    const canvas = makeCanvas(S, S);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#c3c0b9';
+    ctx.fillRect(0, 0, S, S);
+
+    // Broad tonal patches: concrete never pours evenly
+    for (let i = 0; i < 14; i++) {
+        ctx.fillStyle = ['#c7c4bd', '#bebbb4', '#c9c6c0'][i % 3];
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        ctx.arc(Math.random() * S, Math.random() * S, 12 + Math.random() * 26, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Fine aggregate, well under the tonal patches so it never sparkles
+    for (let i = 0; i < 900; i++) {
+        const g = 175 + Math.floor(Math.random() * 26);
+        ctx.fillStyle = `rgb(${g},${g - 2},${g - 7})`;
+        ctx.fillRect(Math.random() * S, Math.random() * S, 1, 1);
+    }
+
+    // The control joints, on two edges only: drawing all four would double
+    // every line where the tiles meet and the walk would read as tiling.
+    ctx.strokeStyle = '#a6a39c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0.5, 0); ctx.lineTo(0.5, S);
+    ctx.moveTo(0, 0.5); ctx.lineTo(S, 0.5);
+    ctx.stroke();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+}
+
 /** How far, and WHICH WAY, one painted stall stripe travels in world x
  *  between its near end and the far end of the stall. Signed metres.
  *
@@ -440,6 +635,29 @@ function createAsphaltTexture() {
  *  of the window and found every car parked across its own bay. */
 function stallStripeRun(depth, angle) {
     return -depth * Math.tan(angle);
+}
+
+/** The stripe texture's u offset that parks a car in the MIDDLE of its bay
+ *  instead of on a line, in tile widths.
+ *
+ *  This is the round-two fix, done properly. That round set the offset to
+ *  half a bay, reasoning that a stripe BEGINS where the loop puts a car.
+ *  It does, at the stripe's near end. But a stripe leans: over the stall's
+ *  depth it travels `run` metres in x, so at the row's mid-depth, which is
+ *  exactly where the car stands, it has already moved half of that. Half a
+ *  bay and half a run very nearly cancel, and the cars came back parked
+ *  along the paint rather than beside it.
+ *
+ *  The check that passed this compared the car against the stripe's near
+ *  END, which is a metre and a half from where the car actually is. Solve
+ *  for x at v = 0.5 and the answer falls out:
+ *
+ *      planeWest + (k - offset) * pitch + run / 2  =  carX + pitch / 2
+ *
+ *  with planeWest = from - pitch and carX = from + i * pitch. */
+function stallStripeOffset(pitch, depth, angle) {
+    const want = 0.5 + stallStripeRun(depth, angle) / (2 * pitch);
+    return want - Math.floor(want);
 }
 
 /** One row of angled stall stripes, as a cutout texture laid just above
@@ -1072,24 +1290,46 @@ function createLot() {
     const width = L.maxX - L.minX;
     const cxLot = (L.minX + L.maxX) / 2;
 
-    // --- The apron and its kerb. The glazing runs to the floor, so the
-    // ground outside is in plain view and the two planes must not simply
-    // meet: the lot sits a kerb lower, and the ground extends back UNDER
-    // the showroom so there can never be a gap at the seam whatever the
-    // camera does. (Decision D7's follow-on.) ---
-    const apron = new THREE.Mesh(
-        new THREE.PlaneGeometry(width, 2.0 + (L.kerbZ - L.apronFarZ)),
-        new THREE.MeshStandardMaterial({ color: 0xbdbab4, roughness: 0.85, metalness: 0.0 })
+    // --- The walk, its threshold, and its kerb. The glazing runs to the
+    // floor, so the ground outside is in plain view and the two planes
+    // must not simply meet: the walk sits a step below the showroom slab,
+    // a kerb above the asphalt, and it extends back UNDER the showroom so
+    // there can never be a gap at the seam whatever the camera does.
+    // (Decision D7's follow-on.)
+    //
+    // Its span comes from walkSpan(), which the check outside reads too,
+    // because the arithmetic here was wrong once and left a hole the
+    // visitor saw the sky through. ---
+    const W = walkSpan(L);
+    const walkTexture = createSidewalkTexture();
+    walkTexture.repeat.set(width / 1.35, W.depth / 1.35);
+    const walk = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, W.depth),
+        new THREE.MeshStandardMaterial({ map: walkTexture, roughness: 0.88, metalness: 0.0 })
     );
-    apron.rotation.x = -Math.PI / 2;
-    apron.position.set(cxLot, L.groundY, (2.0 + L.apronFarZ) / 2);
-    lot.add(apron);
+    walk.rotation.x = -Math.PI / 2;
+    walk.position.set(cxLot, L.walkY, W.centerZ);
+    walk.name = 'sidewalk';
+    lot.add(walk);
 
-    const kerb = new THREE.Mesh(
-        new THREE.BoxGeometry(width, -L.groundY, 0.14),
-        new THREE.MeshStandardMaterial({ color: 0xa9a6a0, roughness: 0.9, metalness: 0.0 })
+    // The threshold at the building line: the step down out of the door.
+    const threshold = new THREE.Mesh(
+        new THREE.BoxGeometry(width, -L.walkY, 0.10),
+        new THREE.MeshStandardMaterial({ color: 0xaeaba4, roughness: 0.9, metalness: 0.0 })
     );
-    kerb.position.set(cxLot, L.groundY / 2, L.kerbZ);
+    threshold.position.set(cxLot, L.walkY / 2, L.kerbZ);
+    lot.add(threshold);
+
+    // The kerb at the far edge, where the walk drops to the asphalt. Its
+    // top is held 3mm BELOW the walk on purpose: at exactly walkY the two
+    // faces are coplanar over the whole frontage and z-fight the length of
+    // the lot.
+    const kerb = new THREE.Mesh(
+        new THREE.BoxGeometry(width, L.walkY - L.groundY, 0.16),
+        new THREE.MeshStandardMaterial({ color: 0xb5b2ab, roughness: 0.9, metalness: 0.0 })
+    );
+    kerb.position.set(cxLot, (L.walkY + L.groundY) / 2 - 0.003, L.apronFarZ + 0.08);
+    kerb.name = 'kerb';
     lot.add(kerb);
 
     // --- The asphalt ---
@@ -1115,15 +1355,21 @@ function createLot() {
     // --- The stall rows, and the cars in them ---
     const materials = carMaterials();
     let colorTick = 0;
+    const pitch = L.stallPitch;
     L.rows.forEach((row, rowIndex) => {
-        const length = (row.to - row.from) + row.pitch * 2;
+        const length = (row.to - row.from) + pitch * 2;
         const centerX = (row.from + row.to) / 2;
 
         // Painted stripes: one cutout plane per row, a hair above the
         // asphalt. alphaTest rather than transparency, so it still writes
         // depth and never sorts oddly against the cars.
-        const stripeTexture = createStallStripeTexture(row.pitch, L.stallDepth, L.stallAngle);
-        stripeTexture.repeat.set(length / row.pitch, 1);
+        //
+        // The offset is what parks the cars BETWEEN the lines instead of
+        // on them, and it accounts for the stripe's own lean at the depth
+        // the car stands at. See stallStripeOffset.
+        const stripeTexture = createStallStripeTexture(pitch, L.stallDepth, L.stallAngle);
+        stripeTexture.repeat.set(length / pitch, 1);
+        stripeTexture.offset.set(stallStripeOffset(pitch, L.stallDepth, L.stallAngle), 0);
         const stripes = new THREE.Mesh(
             new THREE.PlaneGeometry(length, L.stallDepth),
             new THREE.MeshStandardMaterial({
@@ -1136,7 +1382,7 @@ function createLot() {
         stripes.name = `stallRow_${rowIndex}`;
         lot.add(stripes);
 
-        for (let x = row.from; x <= row.to + 1e-6; x += row.pitch) {
+        for (let x = row.from; x <= row.to + 1e-6; x += pitch) {
             const bodyMaterial = materials.bodies[colorTick++ % materials.bodies.length];
             const car = createParkedCar(row.tier, bodyMaterial);
             // Angled parking: every car in a row sits at the same angle,
@@ -1185,15 +1431,11 @@ function createLot() {
     pennants.position.set((P.fromX + P.toX) / 2, P.y, P.z);
     pennants.name = 'pennants';
     lot.add(pennants);
-
-    [P.fromX, P.toX].forEach((x, i) => {
-        const post = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.06, 0.07, P.y + 0.3, 6), brushedMetal
-        );
-        post.position.set(x, L.groundY + (P.y + 0.3) / 2, P.z);
-        post.name = `pennantPost_${i}`;
-        lot.add(post);
-    });
+    // No posts. The string used to carry one at each end, and the east one
+    // stood in the middle of the glass with the flags ending against it.
+    // A dealership's frontage has poles every twenty metres, so the honest
+    // reading of an unbroken line of flags is that its poles are outside
+    // the window, which is what this now is.
 
     // --- The backdrop: a treeline and a couple of low commercial blocks,
     // so the far edge of the lot resolves into something rather than
@@ -1219,10 +1461,74 @@ function createLot() {
         lot.add(block);
     });
 
+    // --- The clouds the window frames ---
+    createCloudBank(lot);
+
     // The car that crosses the lane between the glass and the first row.
     createPassingCar(lot);
 
     showroomGroup.add(lot);
+}
+
+// ---- The clouds -----------------------------------------------------------
+// Built here rather than taken from the shared scenery part, for the
+// reason in LAYOUT.lot.clouds: that part's clouds hang 26 degrees up and
+// the window only passes the first 19.5, so from inside this room there
+// has never been anything in the sky at all. These sit in the band the
+// glass actually shows.
+//
+// One geometry and one material across the whole bank, so five clouds cost
+// five draw calls and nothing else. The puffs are scaled per mesh rather
+// than built per size.
+let cloudBank = [];
+
+const CLOUD_PUFFS = [
+    { x: 0.0, y: 0.0, z: 0.0, r: 4.0 },
+    { x: 3.2, y: 0.4, z: -0.6, r: 3.2 },
+    { x: -3.4, y: 0.2, z: 0.5, r: 3.0 },
+    { x: 1.4, y: 1.5, z: 0.2, r: 2.6 },
+    { x: -1.7, y: 1.1, z: -0.3, r: 2.4 }
+];
+
+function createCloudBank(lot) {
+    cloudBank = [];
+    const L = LAYOUT.lot;
+    if (!L.clouds || !L.clouds.length) return;
+
+    const geometry = new THREE.SphereGeometry(1, 8, 6);
+    // Basic rather than standard: a cloud is not lit by a showroom, and
+    // the shared fog does the whole job of putting it in the distance.
+    const material = new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.92
+    });
+
+    L.clouds.forEach((c, i) => {
+        const cloud = new THREE.Group();
+        cloud.name = `cloud_${i}`;
+        // A small cloud gets four puffs rather than five: at this distance
+        // the fifth is under a pixel wide and costs a draw call anyway.
+        CLOUD_PUFFS.slice(0, c.scale >= 1.0 ? 5 : 4).forEach((puff) => {
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.set(puff.x * c.scale, puff.y * c.scale, puff.z * c.scale);
+            sphere.scale.set(puff.r * c.scale, puff.r * c.scale * 0.62, puff.r * c.scale);
+            cloud.add(sphere);
+        });
+        cloud.position.set(c.x, c.y, c.z);
+        lot.add(cloud);
+        cloudBank.push({ group: cloud, startX: c.x, drift: c.drift });
+    });
+}
+
+/** Drift the bank east, wrapping each cloud back to where it started. The
+ *  travel is one constant for the whole bank, so no cloud can wander out
+ *  of the band the window shows. */
+function updateClouds(deltaTime) {
+    const travel = LAYOUT.lot.cloudTravel;
+    cloudBank.forEach((c) => {
+        let x = c.group.position.x + c.drift * deltaTime;
+        if (x > c.startX + travel) x -= travel;
+        c.group.position.x = x;
+    });
 }
 
 // ============================================
@@ -1249,20 +1555,61 @@ function createDealerDesk() {
     top.receiveShadow = true;
     desk.add(top);
 
-    // Pedestals at each end, and the modesty panel closing the dealer's
-    // side so the visitor never sees straight through the desk.
-    [-1, 1].forEach((s) => {
-        const pedestal = new THREE.Mesh(
-            new THREE.BoxGeometry(0.09, D.topY - 0.06, D.d - 0.10), darkWood
-        );
-        pedestal.position.set(s * (D.w / 2 - 0.08), (D.topY - 0.06) / 2, 0);
-        pedestal.castShadow = true;
-        desk.add(pedestal);
-    });
-    const modesty = new THREE.Mesh(
-        new THREE.BoxGeometry(D.w - 0.22, D.topY - 0.28, 0.04), darkWood
+    // A SINGLE-PEDESTAL DESK, and the asymmetry is the point.
+    //
+    // This began as two thin blades inset from each end, which cleared
+    // John's feet and read, from the fixed camera, as a slab of wood
+    // hanging under the desk for no reason: the QA note was "a section
+    // sticking out at the bottom right." A desk that is honest about its
+    // own shape does not need explaining, so the east end (the end nearest
+    // the visitor, and the one they see most of) is now a real drawer
+    // pedestal flush with the top, and the west end, where John sits, is
+    // open knee space carried on one slim leg at its NEAR corner.
+    //
+    // The leg's corner is not free choice either. John's shoes occupy
+    // z -2.81 to -2.44 under the desk's west end, so a leg at the back
+    // corner would be through his foot. At the near corner it is 0.6m
+    // clear of him, and clear of the customer in x as well.
+    // (Everything below is in the desk group's own coordinates: the group
+    //  itself is placed at D.x, D.z at the end of this function.)
+    const pedX = D.w / 2 - D.pedestalW / 2;
+    const ped = new THREE.Mesh(
+        new THREE.BoxGeometry(D.pedestalW, D.topY - 0.055, D.d - 0.06), darkWood
     );
-    modesty.position.set(0, (D.topY - 0.28) / 2 + 0.16, -(D.d / 2 - 0.09));
+    ped.position.set(pedX, (D.topY - 0.055) / 2, 0);
+    ped.castShadow = true;
+    ped.receiveShadow = true;
+    desk.add(ped);
+
+    // Two drawer fronts on the pedestal's near face, so it reads as one.
+    const drawerFace = new THREE.MeshStandardMaterial({
+        color: 0x7a5c3f, roughness: 0.5, metalness: 0.03
+    });
+    [-1, 1].forEach((s) => {
+        const front = new THREE.Mesh(
+            new THREE.BoxGeometry(D.pedestalW - 0.08, 0.20, 0.012), drawerFace
+        );
+        front.position.set(pedX, D.topY / 2 + s * 0.13, (D.d - 0.06) / 2 + 0.006);
+        desk.add(front);
+        const pull = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.014, 0.014), brushedMetal);
+        pull.position.set(pedX, D.topY / 2 + s * 0.13, (D.d - 0.06) / 2 + 0.018);
+        desk.add(pull);
+    });
+
+    const leg = new THREE.Mesh(
+        new THREE.BoxGeometry(0.07, D.topY - 0.055, 0.07), darkWood
+    );
+    leg.position.set(-D.w / 2 + 0.09, (D.topY - 0.055) / 2, D.legZ - D.z);
+    leg.castShadow = true;
+    desk.add(leg);
+    // The modesty panel now runs from the west end to the pedestal's inner
+    // face rather than the whole width: past that face it would be buried
+    // inside the pedestal, paying for geometry nobody can see.
+    const modestyW = D.w - D.pedestalW - 0.10;
+    const modesty = new THREE.Mesh(
+        new THREE.BoxGeometry(modestyW, D.topY - 0.28, 0.04), darkWood
+    );
+    modesty.position.set(-D.pedestalW / 2 - 0.01, (D.topY - 0.28) / 2 + 0.16, -(D.d / 2 - 0.09));
     desk.add(modesty);
 
     // A slim brand rail along the near edge, the one place the gold
@@ -1362,11 +1709,74 @@ function createDeskItems() {
     screen.rotation.y = SC.rotY;
     showroomGroup.add(registerOutdoorProp(screen, 'computer'));
 
+    // ---- The dealer's keyboard and mouse, squarely in front of him ----
+    // The screen is parked away to the west for the sight-line reason
+    // above, but a dealer still types in front of himself, and an empty
+    // patch of desk in front of the one person working a computer read as
+    // an oversight. Geometry comes from LAYOUT so the check outside can
+    // read where they sit rather than restate it.
+    // Squared to the DEALER, not to the desk, and that is what makes the
+    // handedness legible. He sits 37 degrees off the desk's own axis, so a
+    // keyboard lying square to the desk reads as an object somebody left
+    // there, and "to the right of the keyboard" stops meaning "on his
+    // right". Turned to his sight line, with the mouse placed along HIS
+    // right rather than the world's, the pair reads as his.
+    const dealerFacing = faceToward(LAYOUT.dealer, {
+        x: (LAYOUT.john.x + LAYOUT.customer.x) / 2,
+        z: (LAYOUT.john.z + LAYOUT.customer.z) / 2
+    });
+    const dealerRight = { x: Math.cos(dealerFacing), z: -Math.sin(dealerFacing) };
+    const dealerFwd = { x: Math.sin(dealerFacing), z: Math.cos(dealerFacing) };
+
+    const K = LAYOUT.deskKeyboard;
+    const kit = new THREE.Group();
+    kit.name = 'deskKeyboard';
+    const board = new THREE.Mesh(
+        new THREE.BoxGeometry(K.w, 0.016, K.d),
+        new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: 0.65, metalness: 0.1 })
+    );
+    board.position.y = 0.008;
+    kit.add(board);
+    // The keys as three banded strips rather than a hundred little boxes:
+    // at this distance a keyboard is a dark slab with a lighter grain.
+    const keyMaterial = new THREE.MeshStandardMaterial({
+        color: 0x4a4f57, roughness: 0.8, metalness: 0.0
+    });
+    for (let r = 0; r < 3; r++) {
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(K.w - 0.05, 0.006, 0.022), keyMaterial);
+        strip.position.set(0, 0.019, -0.035 + r * 0.032);
+        kit.add(strip);
+    }
+    const space = new THREE.Mesh(new THREE.BoxGeometry(K.w * 0.45, 0.006, 0.018), keyMaterial);
+    space.position.set(0, 0.019, 0.046);
+    kit.add(space);
+    kit.position.set(D.x + K.dx, D.topY, D.z + K.dz);
+    kit.rotation.y = dealerFacing;
+    showroomGroup.add(registerOutdoorProp(kit, 'deskkeyboard'));
+
+    const M = LAYOUT.deskMouse;
+    const mouse = new THREE.Mesh(
+        new THREE.SphereGeometry(0.038, 10, 6),
+        new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: 0.55, metalness: 0.1 })
+    );
+    mouse.scale.set(0.72, 0.42, 1.0);
+    mouse.position.set(
+        D.x + K.dx + dealerRight.x * M.right + dealerFwd.x * M.fwd,
+        D.topY + 0.016,
+        D.z + K.dz + dealerRight.z * M.right + dealerFwd.z * M.fwd
+    );
+    mouse.rotation.y = dealerFacing;
+    mouse.name = 'deskMouse';
+    showroomGroup.add(mouse);
+
     // ---- Calculator and pen, on the dealer's side of the page ----
+    // The calculator sits west of the screen now. It used to stand where
+    // the keyboard does, which is the spot a keyboard has the better
+    // claim to.
     const deskKit = new THREE.Group();
     deskKit.name = 'deskKit';
     const calc = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.012, 0.16), matteBlack);
-    calc.position.set(D.x - 0.05, D.topY + 0.006, D.z - 0.24);
+    calc.position.set(D.x - 0.62, D.topY + 0.006, D.z - 0.30);
     calc.rotation.y = 0.3;
     deskKit.add(calc);
     const calcFace = new THREE.Mesh(
@@ -1374,7 +1784,7 @@ function createDeskItems() {
         new THREE.MeshStandardMaterial({ color: 0x9fb8a4, roughness: 0.4 })
     );
     calcFace.rotation.x = -Math.PI / 2;
-    calcFace.position.set(D.x - 0.05 + 0.015, D.topY + 0.013, D.z - 0.285);
+    calcFace.position.set(D.x - 0.605, D.topY + 0.013, D.z - 0.345);
     calcFace.rotation.z = 0.3;
     deskKit.add(calcFace);
     const pen = new THREE.Mesh(
@@ -1445,6 +1855,14 @@ function createDeskChairs() {
 function poseSeated(person, opts = {}) {
     const hipBend = opts.hipBend !== undefined ? opts.hipBend : -1.42;
     const kneeBend = opts.kneeBend !== undefined ? opts.kneeBend : 1.18;
+    // Knees apart. This is not decoration: it is what lets a figure put a
+    // hand on their own knee without the arm running through their chest.
+    // The rig's shoulder sits at x 0.2125 and its thighs at 0.095, so an
+    // arm rolled inward far enough to reach a lap goes INSIDE a torso that
+    // is 0.19 half-wide. Splaying moves the knee out to meet the hand
+    // instead. Euler order is XYZ, so rotation.z is applied inside the hip
+    // bend, which swings the knee outward rather than twisting the leg.
+    const splay = opts.splay || 0;
     person.children.forEach((group) => {
         if (!group.isGroup || group.userData.isArm) return;
         if (Math.abs(group.position.y - 0.75) > 0.02) return;
@@ -1458,6 +1876,7 @@ function poseSeated(person, opts = {}) {
         });
         group.add(lower);
         group.rotation.x = hipBend;
+        if (splay) group.rotation.z = (group.position.x < 0 ? -1 : 1) * splay;
         lower.rotation.x = kneeBend;
     });
 }
@@ -1814,31 +2233,13 @@ function createBrochureRack() {
     showroomGroup.add(registerOutdoorProp(rack, 'brochures'));
 }
 
-/** The product menu, standing on the desk: warranty, tire and wheel, GAP,
- *  presented as one page of yes or no. */
-function createProductMenu() {
-    const D = LAYOUT.desk;
-    const card = new THREE.Group();
-    card.name = 'productMenu';
-    const material = new THREE.MeshStandardMaterial({
-        color: 0xf4f1e9, roughness: 0.85, side: THREE.DoubleSide
-    });
-    [-1, 1].forEach((side) => {
-        const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.13), material);
-        leaf.position.set(0, 0.062, side * 0.022);
-        leaf.rotation.x = side * 0.28;
-        card.add(leaf);
-    });
-    const band = new THREE.Mesh(
-        new THREE.BoxGeometry(0.17, 0.022, 0.008),
-        new THREE.MeshStandardMaterial({ color: PALETTE.navy, roughness: 0.6 })
-    );
-    band.position.set(0, 0.115, 0.026);
-    card.add(band);
-    card.position.set(D.x + 0.10, D.topY, D.z - 0.30);
-    card.rotation.y = -0.5;
-    showroomGroup.add(registerOutdoorProp(card, 'warrantycard'));
-}
+// (There is no product menu on this desk any more. It was a little tent
+//  card listing warranty, tire and wheel, and GAP, and from the fixed
+//  camera it read as an upside-down V of white card beside the model car:
+//  too small at this distance to be the thing it was, and the only prop in
+//  the room a visitor had to be told about. Its story went with it. The
+//  same point is made by the deal sheet's own products line, which is
+//  printed on the page John is pointing at.)
 
 /** The green residents, from the shared furniture part rather than hand
  *  built: one tall plant softening the corner by the glass, and a snake
@@ -1870,7 +2271,6 @@ function createFixtures() {
     createWaitingArea();
     createWasteBasket();
     createBrochureRack();
-    createProductMenu();
     createShowroomPlants();
     createVending();
 }
@@ -1921,9 +2321,25 @@ function createFixtures() {
 // If the desk, the sheet, any seat, or John's scale moves, re-solve
 // rather than nudging by eye. specs/automan/verify-pose.mjs re-checks all
 // of it.
+// THE BODY IS IN THE WAY, and it took a third QA round to say so. The
+// shoulder sits at x 0.2125, the torso is 0.38 wide by 0.22 deep, and the
+// thighs are at 0.095: any arm rolled inward far enough to reach a lap
+// runs down INSIDE the chest. Both resting arms did.
+//
+// Two things fix it together. The legs SPLAY, which brings the knee out
+// to x 0.195 to meet the hand rather than the hand going in to meet the
+// knee (see poseSeated), and the solve now carries the torso as an
+// obstacle: every sampled point of the upper arm and forearm has to stay
+// outside a box of half-width 0.2125 and half-depth 0.1325, which is the
+// rig's own flush-arm position, with 5mm of margin. Anything further in
+// than a naturally hanging arm is the fault.
+const LEG_SPLAY = 0.27;
 const JOHN_SCALE = 1.10;
 const JOHN_POINT_ARM = { shoulder: -0.850, rotZ: -0.587, elbow: -0.720 };
-const JOHN_REST_ARM = { shoulder: -0.603, rotZ: -0.849, elbow: -0.766 };
+// His right side faces AWAY from the desk (he sits at its west end), so
+// this arm used to reach across his own chest to get a hand onto the desk
+// top, which is exactly how it read. It rests on his thigh now.
+const JOHN_REST_ARM = { shoulder: 0.008, rotZ: 0.046, elbow: -1.369 };
 const JOHN_LEAN = 0.300;
 // The lean tips his head down with the rest of him, so the neck takes
 // most of it back and leaves him looking level at the dealer rather than
@@ -1931,12 +2347,25 @@ const JOHN_LEAN = 0.300;
 // lean did, so his eyeline did not move when he grew.
 const JOHN_NECK_X = -0.205;
 
-// The customer: upright, hands resting on her thighs. Solved the same
-// way, to land them at y 0.62, which is the lap. Slightly under life
+// The customer: upright, hands resting ON her thighs. Slightly under life
 // size, which reads as a different person rather than the same figure
 // twice, and named here because seatFigure has to drop her to match.
+//
+// "In the lap" is not a height, it is a SURFACE, and that distinction cost
+// this pose a QA round. The first solve put her hands at y 0.637, which is
+// lap height by any reasonable test and which the pose check passed, but
+// her thighs at that seat are only 0.605 at the top: her hands hung 3cm
+// clear of them, in the air, and read exactly like that.
+//
+// The second solve landed the palms on the thigh and put her upper arms
+// 106mm inside her own chest doing it, which cost a THIRD round. With the
+// knees splayed her hands reach the leg with the arms hanging almost
+// straight (roll -0.046, against 0.297 before): the elbow now sits at
+// x 0.225, outside the torso, and the palms rest 90% of the way along the
+// thigh, at the knee. Solved against the leg AND the body together, which
+// is the only way this pose is solvable at all.
 const CUSTOMER_SCALE = { x: 0.96, y: 0.97, z: 0.96 };
-const CUSTOMER_REST_ARM = { shoulder: -0.20, roll: 0.22, elbow: -0.95 };
+const CUSTOMER_REST_ARM = { shoulder: -0.254, roll: -0.046, elbow: -0.734 };
 
 // The dealer: a light 0.10 lean with both forearms on his side of the
 // desk, hands landing within 48mm of the desk top.
@@ -1946,11 +2375,11 @@ const DEALER_LEAN = 0.10;
 /** Build one seated figure and rig it: seat, waist, neck, elbows. Returns
  *  everything the animation pass needs, so updateShowroom never has to go
  *  hunting through the scene graph. */
-function seatFigure(person, seat, target, kind) {
+function seatFigure(person, seat, target, kind, poseOpts) {
     const yaw = faceToward(seat, target);
     const hair = findHairGroup(person);
 
-    poseSeated(person);
+    poseSeated(person, poseOpts);
     // The figure's own scale, not 1: the rig scales about the person
     // origin at the hips, so a figure who is not exactly life size sits
     // above or below the cushion unless the drop scales with them. Set
@@ -1984,7 +2413,7 @@ function createJohn() {
     });
     john.scale.setScalar(JOHN_SCALE);
 
-    const rig = seatFigure(john, LAYOUT.john, LAYOUT.dealer, 'john');
+    const rig = seatFigure(john, LAYOUT.john, LAYOUT.dealer, 'john', { splay: LEG_SPLAY });
     rig.waist.rotation.x = JOHN_LEAN;
     rig.neck.rotation.x = JOHN_NECK_X;
 
@@ -2015,7 +2444,7 @@ function createCustomer() {
     });
     customer.scale.set(CUSTOMER_SCALE.x, CUSTOMER_SCALE.y, CUSTOMER_SCALE.z);
 
-    const rig = seatFigure(customer, LAYOUT.customer, LAYOUT.dealer, 'customer');
+    const rig = seatFigure(customer, LAYOUT.customer, LAYOUT.dealer, 'customer', { splay: LEG_SPLAY });
     rig.arms.forEach((entry) => {
         entry.arm.rotation.x = CUSTOMER_REST_ARM.shoulder;
         entry.arm.rotation.z = -entry.side * CUSTOMER_REST_ARM.roll;
@@ -2513,8 +2942,10 @@ export function updateShowroom(deltaTime) {
         updateDealer(cast.dealer, deltaTime);
     }
 
-    // A car crosses the lot every so often, behind the dealer's shoulder
+    // A car crosses the lot every so often, behind the dealer's shoulder,
+    // and the clouds cross the window rather more slowly than that
     updatePassingCar(deltaTime);
+    updateClouds(deltaTime);
 }
 
 /** The root showroom group (exposed for tests and future passes). */
@@ -2528,7 +2959,9 @@ export const __test__ = {
     JOHN_SCALE, JOHN_POINT_ARM, JOHN_REST_ARM, JOHN_LEAN, JOHN_NECK_X,
     CUSTOMER_SCALE, CUSTOMER_REST_ARM, DEALER_REST_ARM, DEALER_LEAN,
     HIP_Y, NECK_Y, TAP_LIFT, TAP_EVERY, TAP_BURST,
-    seatHeightY, faceToward, normalizeAngle, approach, stallStripeRun,
+    seatHeightY, faceToward, normalizeAngle, approach, stallStripeRun, stallStripeOffset, walkSpan,
+    LEG_SPLAY,
+    CLOUD_PUFFS, getCloudBank: () => cloudBank,
     johnTargets, customerTargets, dealerTargets,
     PASS_SPEED, PASS_FROM, PASS_TO, PASS_GAP,
     getPassingCar: () => passingCar,

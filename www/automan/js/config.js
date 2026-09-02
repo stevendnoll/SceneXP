@@ -28,7 +28,9 @@
  *
  * The glass wall makes the sky part of the room, so the day/night cycle
  * is DISABLED and the shared sky holds at noon. It is a bright midday on
- * the lot at every hour. Clouds stay on and drift past the glass.
+ * the lot at every hour, with a bank of clouds drifting past the glass
+ * (built in store.js rather than taken from the shared part: see the
+ * scenery key below).
  */
 
 function deepFreeze(obj) {
@@ -155,10 +157,15 @@ export const AUTOMAN_CONFIG = deepFreeze({
     // the lot at every hour.
     dayNight: { enabled: false },
 
-    // No comet over a suburban dealership, but the drifting clouds stay:
-    // the glass frames them, and they keep the lot alive between cars.
+    // No comet over a suburban dealership. The SHARED clouds are off too,
+    // and that is not the same as having no clouds: the shared part hangs
+    // them 45 to 75 metres up and 80 to 150 out, which is 26 degrees above
+    // the horizon, while this room's window only passes the first 19.5.
+    // Every one of them was behind the header, and the sky over the lot
+    // was empty. store.js builds its own bank in the band the glass
+    // actually shows (LAYOUT.lot.clouds), and drifts it there.
     comet: { enabled: false },
-    scenery: { clouds: true },
+    scenery: { clouds: false },
 
     // A friendly showroom at every hour.
     zombiesAtNight: false,

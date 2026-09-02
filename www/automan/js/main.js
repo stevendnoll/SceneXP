@@ -11,21 +11,20 @@
  * per-frame pass still runs for the fixed-time sky paint and the
  * shadow-map refresh). The interactions that do exist are featherweight:
  * the welcome overlay (dismissed with a click, tap, or key), the floating
- * Home and contact buttons, the always-on pan and zoom row (shared pan
- * part, with swipe, tilt, and pinch on touch), and one raycast per tap to
- * see what the visitor pointed at, answered in the host's voice by the
- * dialog card.
+ * Home button, the always-on pan and zoom row (shared pan part, with
+ * swipe, tilt, and pinch on touch), and one raycast per tap to see what
+ * the visitor pointed at, answered in the host's voice by the dialog
+ * card.
  *
  * Unlike the other featured-business experiences, this one has nowhere
  * outward to send anybody: John has no separate website, because this
- * page is his web presence. So the second floating button and every card
- * CTA lead to the contact card rather than off the site.
+ * page is his web presence. So there is only ONE floating button, and
+ * every card CTA leads to the contact card rather than off the site.
  *
- * BUILD STATUS: milestone M7. Every prop in the showroom answers a tap
- * with its own story. Still to come at M8: the person taps opening the
- * contact card rather than a story, the card's assembled call, text and
- * email links, and the rewired contact button. See
- * specs/automan/TASKS.md.
+ * BUILD STATUS: milestone M13, the third screenshot QA round. Every prop
+ * in the showroom answers a tap with its own story, the three people open
+ * the contact card, and its call, text and email links are assembled from
+ * the solved proof of work. See specs/automan/TASKS.md.
  *
  * Future contributors: this file (with www/jamar/js/main.js and
  * www/gavin/js/main.js) is the template for "living diorama"
@@ -292,15 +291,12 @@ function setupEventListeners() {
         openContactCard('story');
     }, { signal });
 
-    // The floating contact button. It keeps a real href to the site's
-    // contact page for anyone whose JavaScript never runs, so this
-    // intercepts rather than replaces it.
-    const bizBtn = document.getElementById('biz-btn');
-    if (bizBtn) bizBtn.addEventListener('click', (event) => {
-        if (!state.isLoaded || dialogOpen || nudgeOpen) return;
-        event.preventDefault();
-        openContactCard('button');
-    }, { signal });
+    // (There is no floating contact button to wire. It was removed after
+    // the second QA round: everything it offered is already in the scene,
+    // and its only no-JavaScript destination was the site's own contact
+    // page, which the noscript block still carries. The card opens from a
+    // tap on any of the three people, and from the invitation at the end
+    // of every prop story.)
 
     // Which of the three actions a visitor actually takes is the number
     // that tells John whether any of this worked.
@@ -366,9 +362,9 @@ function firstVisibleHit(targets) {
 // get the whole tolerance search to themselves before anything else is
 // allowed to answer. The neighbors are large enough to spare the halo.
 // The awkward targets in this room, each small enough to be missed
-// beside a big neighbour: the die-cast on the desk corner, the wall
-// clock, the waste basket, and the product menu standing on the desk.
-const SMALL_PROP_KINDS = ['modelcar', 'clock', 'basket', 'warrantycard'];
+// beside a big neighbor: the die-cast on the desk corner, the wall
+// clock, the waste basket, and the dealer's keyboard.
+const SMALL_PROP_KINDS = ['modelcar', 'clock', 'basket', 'deskkeyboard'];
 
 /** Direct hit first, then a couple of rings of sample rays around the
  *  point, so the model car on the desk corner is tappable with a
@@ -530,24 +526,24 @@ const PROP_CONTENT = {
             'Rates, invoice, incentives, book value on your trade. John looks all of it up before you ever walk in.'
         ]
     },
+    deskkeyboard: {
+        title: 'The Keyboard',
+        lines: [
+            'Every offer gets typed up before it gets walked back. The pause while that happens is not a technical delay, it is a conversation you are not in.',
+            'John fills that pause. He has already run your numbers, so the version that comes back has nothing in it you have not seen.'
+        ]
+    },
     modelcar: {
         title: 'The Model Car',
         lines: [
-            'A little die cast on the corner of the desk. Somebody\'s favourite thing in this room.',
+            'A little die cast on the corner of the desk. Somebody\'s favorite thing in this room.',
             'Buying a car is supposed to be fun. It usually stops being fun somewhere around the finance office.'
-        ]
-    },
-    warrantycard: {
-        title: 'The Menu',
-        lines: [
-            'Extended warranty, tire and wheel, GAP, paint protection. Presented as one page of yes or no.',
-            'Some of it is worth having and some of it is not, and it depends on you. John will tell you which is which.'
         ]
     },
     salesboard: {
         title: 'The Sales Board',
         lines: [
-            'The month\'s numbers, in marker, where everybody can see them. Timing matters more than most buyers realise.',
+            'The month\'s numbers, in marker, where everybody can see them. Timing matters more than most buyers realize.',
             'Knowing what a dealership needs at the end of a month is worth real money to the person sitting on the other side.'
         ]
     },
@@ -812,15 +808,16 @@ function beginVisiting() {
 
 /** Wire the outward-facing links from AUTOMAN_CONFIG.site. The Home
  *  button goes to the serving site's root in the same tab (Phase 5 rule:
- *  the marketing pages live at every hosting domain's root).
+ *  the marketing pages live at every hosting domain's root), and it is
+ *  the only floating control this page has.
  *
- *  There is deliberately no outbound business link here. The other
- *  featured-business experiences send the floating logo button to the
- *  business's own website, but this page IS John's web presence, so that
- *  button becomes the contact button instead. Wiring it to intercept its
- *  click and open the contact card is task T8.9; until then it keeps the
- *  href baked into the HTML, which is the site's own contact page, so it
- *  is never a dead control. */
+ *  There is deliberately no outbound business link and no floating
+ *  contact button. The other featured-business experiences send a second
+ *  floating button to the business's own website, but this page IS John's
+ *  web presence, so there was nowhere outward to send anybody: the button
+ *  was removed rather than pointed at the site's own contact page. The
+ *  contact card opens from a tap on any of the three people and from
+ *  every prop story's invitation. */
 function applySiteLinks() {
     const site = AUTOMAN_CONFIG.site;
     const home = document.getElementById('home-btn');
@@ -830,12 +827,6 @@ function applySiteLinks() {
         home.removeAttribute('rel');
         home.title = site.home.title;
         home.setAttribute('aria-label', site.home.title);
-    }
-    const bizBtn = document.getElementById('biz-btn');
-    if (bizBtn) {
-        const label = `Call, text, or email ${site.honoree.label}`;
-        bizBtn.title = label;
-        bizBtn.setAttribute('aria-label', label);
     }
 }
 

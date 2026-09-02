@@ -162,7 +162,12 @@
          scene and steps aside on the first click, tap, or keypress. -->
     <div id="blocker">
         <div id="instructions">
-            <img class="welcome-logo logo-card" src="assets/automan-1.webp" alt="John Walker, The Auto Man" width="110" height="110">
+            <!-- No logo on the welcome card. The one that stood here was a
+                 placeholder (assets/automan-1.webp, still provisional at
+                 task T10.2), and a placeholder mark is worse than none:
+                 the first thing a visitor met was a graphic that was not
+                 John's. The loading screen still uses it, where it reads
+                 as a loading device rather than as a brand. -->
             <p class="title">WELCOME</p>
             <p class="subtitle">John is at the desk, and he is doing the talking</p>
             <p class="click-prompt">Click to pull up a chair</p>
@@ -189,23 +194,16 @@
             <path d="M10 19v-5h4v5" stroke-linejoin="round" />
         </svg>
     </a>
-    <!-- The contact button, and the most important control on the page.
-         The other featured-business experiences point this slot at the
-         business's own website, but this page IS John's web presence, so
-         there is nowhere outward to send anybody. Instead main.js
-         intercepts the click and opens the contact card, which is wired
-         at task T8.9. Until then this button simply follows its href.
-
-         It stays an <a> rather than becoming a <button> for two reasons:
-         it inherits the .biz-btn styling unchanged, and it keeps a real
-         destination for anyone whose JavaScript never runs. That fallback
-         href is the site's own contact page rather than John's details,
-         which is another consequence of PRD decision D3. -->
-    <a id="biz-btn" class="ui-float menu-btn biz-btn biz-btn-snug" href="/contact.html"
-        title="Call, text, or email John Walker"
-        aria-label="Call, text, or email John Walker">
-        <img class="biz-logo-round" src="assets/automan-1.webp" alt="" width="26" height="26">
-    </a>
+    <!-- There is deliberately NO second floating button here. The other
+         featured-business experiences point that slot at the business's
+         own website, but this page IS John's web presence, so the only
+         thing it could have offered was the site's own contact page, and
+         everything a visitor needs to reach John is already inside the
+         scene: a tap on anyone at the desk opens his contact card, and so
+         does the invitation at the end of every prop story. A floating
+         button pointing away from all that was one route too many. The
+         noscript block above still carries the contact-page link for
+         anyone whose JavaScript never runs. -->
 
     <!-- Dialog shown when something in the showroom is clicked: the host's
          voice, telling the story of a car deal one prop at a time. -->
