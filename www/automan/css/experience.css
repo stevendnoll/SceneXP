@@ -275,23 +275,6 @@ body .pan-controls.no-chrome.visible {
         0 0 0 6px rgba(18, 41, 74, 0.8);
 }
 
-/* The caption above John's halo. Only he has one: three of these would be
-   a wall of labels over a room the visitor is meant to be looking at.
-   `margin-bottom` and not `margin-top`, because the column is reversed. */
-.coach-tip {
-    margin-bottom: 0.45rem;
-    padding: 0.35rem 0.7rem;
-    border-radius: 999px;
-    white-space: nowrap;
-    font-size: 0.82rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: #fff;
-    background: rgba(12, 24, 44, 0.88);
-    border: 1px solid rgba(240, 165, 30, 0.75);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-}
-
 /* THE INTRO PANEL along the bottom. It carries John's pitch, not just
    the controls, which is the whole reason it exists (D22): a visitor who
    never taps anything still has to learn what this man does.
@@ -490,9 +473,6 @@ body .pan-controls.no-chrome.visible {
         --coach-size: 2.6rem;
     }
 
-    .coach-tip {
-        font-size: 0.75rem;
-    }
 
     .intro-card {
         padding: 0.95rem 1.05rem 1rem;
@@ -1135,24 +1115,6 @@ body .pan-controls.no-chrome.visible {
     background: rgba(219, 179, 106, 0.92);
     border-color: rgba(219, 179, 106, 0.92);
     color: #16120a;
-}
-
-/* The caption over John's head. Same lacquer, same tracked capitals, at
-   the smallest size that still reads at arm's length on a phone. */
-.coach-tip {
-    padding: 0.4rem 0.75rem;
-    border-radius: 2px;
-    font-family: var(--lux-sans);
-    font-size: 0.62rem;
-    font-weight: 600;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--lux-gold-lift);
-    background: linear-gradient(176deg, rgba(22, 40, 61, 0.94), rgba(6, 13, 24, 0.94));
-    border: 1px solid rgba(219, 179, 106, 0.5);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.14),
-        0 5px 16px rgba(0, 0, 0, 0.45);
 }
 
 /* The halos go champagne with the rest. A thinner ring than the white one

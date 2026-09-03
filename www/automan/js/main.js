@@ -496,13 +496,44 @@ function getPropRoot(obj) {
     return null;
 }
 
+/** True while the arrival panel is still on screen. */
+function introShowing() {
+    return !!introEl && !introEl.classList.contains('coach-out');
+}
+
+/** True when a point is over the arrival panel itself.
+ *
+ *  The panel is `pointer-events: none` and stays that way, which is what
+ *  lets somebody start a swipe on it and look around: it covers a third
+ *  of a phone screen, and a panel that ate drags would be worse than one
+ *  that ate taps. But pointer-events none also meant a TAP on it fell
+ *  straight through and opened whatever prop happened to be behind the
+ *  text, which is what Steve found. So the panel is transparent to the
+ *  gesture layer and opaque to this one, and the only way to have both is
+ *  to ask where the tap landed. */
+function overIntro(clientX, clientY) {
+    if (!introShowing()) return false;
+    const r = introEl.getBoundingClientRect();
+    return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+}
+
 function checkSceneTap(clientX, clientY) {
     if (!state.isLoaded || dialogOpen || nudgeOpen || posterOpen) return;
-    // The STRIP goes on the first tap, hit or miss: it explains that the
-    // room answers a tap, and the tap has just proved that landed. The
-    // HALOS stay, because they say who to tap and that has not landed
-    // until somebody actually reaches a person. See the section comment.
-    fadeCoach(introEl);
+    // WHILE THE PANEL IS UP, THE HALOS ARE THE ONLY THINGS THAT OPEN
+    // ANYTHING. Steve's call, and it makes the arrival one decision
+    // instead of a room full of them: three rings, and a card explaining
+    // why. A tap anywhere else clears the panel and opens nothing, so it
+    // is never a dead tap (something visibly happens), and the very next
+    // tap works normally.
+    //
+    // The panel's own footnote is written to match. It leads with the
+    // marker and describes the rest of the room as a promise rather than
+    // an instruction, because an instruction there would be describing
+    // the scene one tap from now.
+    if (introShowing()) {
+        if (!overIntro(clientX, clientY)) fadeCoach(introEl);
+        return;
+    }
     const hit = pickSceneHit(clientX, clientY);
     if (!hit) return;
     const prop = getPropRoot(hit.object);
@@ -997,10 +1028,10 @@ const COACH_ARRIVE_MS = 900;    // the room alone first, then the guidance
 // The intro panel holds long enough to be READ, which is a different
 // number from the 15 seconds the old orientation strip wanted. It now
 // carries a little under ninety words counting the footnote, which is
-// close to twenty seven seconds at an unhurried pace, and a check in
+// close to twenty nine seconds at an unhurried pace, and a check in
 // verify-composition holds this number to the copy's own length. It
 // still goes early for anybody who taps, which is nearly everybody.
-const INTRO_MS = 28000;
+const INTRO_MS = 29000;
 // The halos do not leave at this point, they QUIETEN: a slower, dimmer
 // pulse that keeps pointing without strobing over a room somebody may
 // well be sitting and looking at. Only reaching a person ends them.
@@ -1024,11 +1055,19 @@ function wireCoaching(signal) {
     // "Click" is wrong on a phone and "Tap" is wrong on a desktop, and
     // this is the one piece of copy in the scene a visitor has to act on,
     // so it is worth getting right rather than saying "click or tap".
+    //
+    // THE MARKER LEADS, and that is not a style choice. While this panel
+    // is up the halos are the only things that OPEN anything (see
+    // checkSceneTap), so a footnote telling somebody to tap the desk
+    // would be describing the scene one tap from now. The second sentence
+    // is deliberately a promise rather than an instruction, because it is
+    // true either way.
     const verb = state.isMobile ? 'Tap' : 'Click';
     const hint = document.getElementById('intro-hint');
     if (hint) {
-        hint.textContent = `${verb} anyone at the desk to reach John, or anything in the `
-            + `showroom for a little of its story. ${state.isMobile ? 'Swipe' : 'Drag'} to look around.`;
+        hint.textContent = `${verb} a glowing marker to meet John. Everything else in the `
+            + `room has a story of its own, and you can ${state.isMobile ? 'swipe' : 'drag'} `
+            + 'to look around.';
     }
 
     const anchors = new Map(getPersonAnchors().map((entry) => [entry.kind, entry.object]));
@@ -1036,14 +1075,15 @@ function wireCoaching(signal) {
         .map((el) => ({ el, kind: el.dataset.who, anchor: anchors.get(el.dataset.who) }))
         .filter((mark) => mark.anchor);
 
+    // NO CAPTIONS ON THE HALOS. John's used to carry one reading "Tap
+    // John", which was the only piece of copy in the scene a visitor had
+    // to act on and the reason the verb above is resolved at all. It is
+    // gone: a label over one of three heads singles him out in a way the
+    // composition already does, and it is a second thing to read in a
+    // frame that is asking somebody to look. The halos say where, the
+    // panel says why, and the marks are announced to a screen reader by
+    // their own aria-label.
     coachMarks.forEach(({ el, kind }) => {
-        // Only John carries a caption. Three of them would be a wall of
-        // labels over the room the visitor is meant to be looking at, and
-        // he is the one the page is about. Keyed off the kind rather than
-        // off "whichever mark happens to have a span", so a caption added
-        // to one of the others cannot silently end up naming John.
-        const tip = kind === 'john' ? el.querySelector('.coach-tip') : null;
-        if (tip) tip.textContent = `${verb} John`;
         // A halo opens the same card the person under it opens. Falling
         // through to the prop story matches checkSceneTap, so a halo is
         // never a control that does nothing.
