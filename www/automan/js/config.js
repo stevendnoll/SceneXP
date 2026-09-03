@@ -57,6 +57,28 @@ export const AUTOMAN_CONFIG = deepFreeze({
         positionZ: -0.7
     },
 
+    // INTERIOR LIGHTING (M22, decision D26). The shared rig's defaults are
+    // hemi 0.8, corner 1.5, ceiling 3.5, and they are tuned for rooms that
+    // need to be legible everywhere. This room needs to be MODELLED.
+    //
+    // `hemi` is the flat sky-to-ground fill, and it is the enemy of
+    // anything looking expensive: it lands the same value on every face
+    // whichever way that face is pointing, so a low-poly figure loses the
+    // one thing that would have said it has volume. Dropping it and
+    // letting the ceiling grid dominate is what puts a lit side and a
+    // shaded side on everybody. The corner fills come down with it, for
+    // the same reason, and the ceiling track goes up to pay for the
+    // daylight the new dark floor stopped bouncing back.
+    //
+    // This is the cheapest of the M22 levers by a distance: four numbers,
+    // no geometry, and it does more for the cast than any material change
+    // could. `nightBoost` is inert here because the day/night cycle is
+    // frozen at noon (D16), and it is left at the default on purpose so
+    // nothing surprises whoever turns the cycle back on.
+    lighting: {
+        base: { rectArea: 3, hemi: 0.45, corner: 1.05, ceiling: 4.1 }
+    },
+
     // The fixed viewpoint: standing at the open right-hand corner of the
     // sales desk, about head height for someone beside it, aimed down at
     // the deal sheet. From here John and his customer sit in the near

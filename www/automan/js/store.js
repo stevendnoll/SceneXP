@@ -484,28 +484,71 @@ const SHOULDER_ROUND = 0.4;
 // treated as settled (task T10.2 territory). The shirt blue has already
 // been through that loop once and is no longer the sampled value: see
 // JOHN_LOOK.
+// THE PALETTE, RE-STRUCK FOR A LUXURY FLOOR (M22, decision D26).
+//
+// The room read as a bright, cheerful, cartoon showroom, and John is
+// repositioning on high end vehicles. What makes low-poly read as CHEAP
+// rather than as STYLIZED is almost never the polygon count. It is
+// colour and value:
+//
+//  - EVERY PLANE WAS LIGHT. A near-white floor under light grey walls
+//    under a white ceiling, with a wall of daylight behind it. Nothing
+//    was dark, so nothing modelled: flat shapes on a flat ground, which
+//    is exactly what "low budget 3D" looks like. The floor is now the
+//    dark end of the room, which is also what a real showroom does,
+//    because polished dark porcelain is the surface every marque parks
+//    its cars on.
+//  - TOO MANY HUES. A vivid green plant, an orange and blue pennant
+//    string, a red car, an olive car, four colours of brochure. In a
+//    luxury interior the ONLY saturated things are the merchandise and
+//    one brand accent. Everything else is a value, not a colour.
+//  - COOL EVERYWHERE. Warm interior against cool daylight is the split
+//    that makes a room feel enclosed and considered rather than lit by
+//    nothing in particular. The walls and ceiling carry warmth now.
+//
+// The two brand colours survive untouched: they are John's, off his
+// flyer, and they are the accent this restraint exists to make room for.
 const PALETTE = {
     navy: 0x12294a,
-    signalBlue: 0x0d5bc4,
     gold: 0xf0a51e,
     // John's shirt blue lives on JOHN_LOOK, not here. It was in both
     // places and only one of them was ever read, which is how a colour
     // gets fixed in the copy nobody renders.
-    floorGrey: 0xd8d5d0,
-    // The interior walls. A soft cool grey rather than white, because
-    // white walls plus a white ceiling plus a bright floor plus a wall of
+    //
+    // THE FLOOR IS THE BIGGEST SINGLE LEVER IN THE ROOM, and it is one
+    // constant, the way the walls already were: the porcelain texture is
+    // baked as a near-white LUMINANCE MAP and this tints it, so the
+    // mottle, the polish streaks and the grout all stay relative. It
+    // used to bake its own colour AND get tinted by this, which meant
+    // two places to change and a value nobody could predict (0xd8 twice
+    // is 0xb7, not 0xd8).
+    floorGrey: 0x4e4c48,
+    // The interior walls. A warm grey rather than white, because white
+    // walls plus a white ceiling plus a bright floor plus a wall of
     // daylight left the room glaring, with nothing for the cast to read
     // against. Applied as a TINT over the near-white paint texture, so
     // this one constant moves every wall in the room and the mottle in
-    // the texture stays relative to it.
-    wallGrey: 0xbcc0c2,
+    // the texture stays relative to it. Warmed and dropped a step at
+    // M22: against a dark floor the walls no longer have to carry the
+    // contrast on their own.
+    wallGrey: 0xb4b0aa,
     trimWhite: 0xf8f6f1,
-    ceiling: 0xe6e8e9,
+    // Warmer and a step down, so the ceiling stops being the brightest
+    // plane in the frame. The brightest thing in the room should be the
+    // daylight through the glass and the deal sheet John is pointing at.
+    ceiling: 0xdcd9d4,
     asphalt: 0x3c3b3a,
-    leafGreen: 0x3f7d43,
-    leafDeep: 0x2d5a27,
+    // Deepened. The plants were the loudest hue in the room and neither
+    // of them is John.
+    leafGreen: 0x35603a,
+    leafDeep: 0x27462a,
     potWhite: 0xe9e6de,
-    deskWood: 0x8a6a4a
+    // Walnut, not pine. The desk is the largest object in frame after
+    // the people, and an orange-brown slab in the middle of the shot was
+    // doing more to set the price point than anything else in the room.
+    // A dark top also makes the deal sheet the brightest small thing in
+    // the frame, which is the one place the eye should land.
+    deskWood: 0x4c3a2e
 };
 
 // ============================================
@@ -545,20 +588,26 @@ function createWallPaintTexture() {
  *  dealership puts under its cars. One canvas holds a 2 by 2 block of
  *  tiles, so the repeat below lands them at roughly 1.2 metres each. The
  *  mottling is deliberately soft and the grout lines are barely darker
- *  than the tile, because the floor's job is to bounce light and stay out
- *  of the way, not to draw the eye off the desk. */
+ *  than the tile, because the floor's job is to hold the room's dark end
+ *  and stay out of the way, not to draw the eye off the desk.
+ *
+ *  IT IS BAKED NEAR-WHITE AND TINTED BY PALETTE.floorGrey, which is the
+ *  same arrangement the walls have always had. Before M22 it baked its
+ *  own colour and was then tinted by an identical one, so the shipped
+ *  floor was the square of the value in both places and moving it meant
+ *  editing two numbers to get a third. */
 function createShowroomFloorTexture() {
     const S = 512;
     const canvas = makeCanvas(S, S);
     const ctx = canvas.getContext('2d');
 
-    ctx.fillStyle = '#d8d5d0';
+    ctx.fillStyle = '#f4f2ef';
     ctx.fillRect(0, 0, S, S);
 
     // Soft cloudy mottling, the way polished porcelain reads under
     // overhead light. Large and low-contrast on purpose.
     for (let i = 0; i < 90; i++) {
-        ctx.fillStyle = ['#dedbd6', '#d2cfc9', '#e3e0db'][i % 3];
+        ctx.fillStyle = ['#faf8f5', '#ece9e5', '#fffdfa'][i % 3];
         ctx.globalAlpha = 0.22;
         ctx.beginPath();
         ctx.arc(Math.random() * S, Math.random() * S, 30 + Math.random() * 70, 0, Math.PI * 2);
@@ -567,9 +616,11 @@ function createShowroomFloorTexture() {
     ctx.globalAlpha = 1;
 
     // A faint diagonal polish streak, which is what actually says
-    // "polished" rather than "matte" at a glance.
+    // "polished" rather than "matte" at a glance. Stronger since M22:
+    // the map is multiplied by a dark tint now, so a 5% white streak
+    // came back as a 2% one and the sheen went with it.
     for (let i = 0; i < 26; i++) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
         ctx.lineWidth = 6 + Math.random() * 14;
         const y = Math.random() * S;
         ctx.beginPath();
@@ -578,8 +629,10 @@ function createShowroomFloorTexture() {
         ctx.stroke();
     }
 
-    // Grout: one cross, so the canvas is a 2 by 2 block of tiles.
-    ctx.strokeStyle = 'rgba(150, 146, 140, 0.55)';
+    // Grout: one cross, so the canvas is a 2 by 2 block of tiles. Drawn
+    // as a fraction of the tile rather than as a grey, so the joint stays
+    // one step darker than whatever the tint makes the tile.
+    ctx.strokeStyle = 'rgba(90, 86, 80, 0.45)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(S / 2, 0); ctx.lineTo(S / 2, S);
@@ -935,7 +988,23 @@ function drawDealerScreen() {
 
 /** A pennant string as one cutout strip: triangular flags hanging from a
  *  cord, alternating through the brand colors. Cheaper than geometry and
- *  perfectly legible at the distance it hangs. */
+ *  perfectly legible at the distance it hangs.
+ *
+ *  M22 TOOK THE CARNIVAL OUT OF IT, and there is an open question left
+ *  behind. The string used to alternate gold, navy, off-white and a
+ *  signal blue, which is four saturated hues strung across the top of the
+ *  frame and, for the visitor, the loudest thing in the room. It runs on
+ *  navy and off-white now, on a dark cord, which is a frontage banner
+ *  rather than a fairground.
+ *
+ *  The open question is whether it should be here at all. The FORM is the
+ *  problem, not the colours: a string of triangular pennants is the
+ *  universal shorthand for a budget used car lot, which is the exact
+ *  thing John is repositioning away from, and no marque flies them.
+ *  Recoloured rather than removed because removing it is a composition
+ *  change (it fills the band above the parked rows, and three checks
+ *  measure its span), and that is Steve's call to make with a screenshot
+ *  in front of him. Recorded as decision D27. */
 function createPennantTexture() {
     const W = 512, H = 96;
     const canvas = makeCanvas(W, H);
@@ -943,10 +1012,10 @@ function createPennantTexture() {
     ctx.clearRect(0, 0, W, H);
 
     // The cord
-    ctx.fillStyle = '#4a4a4a';
+    ctx.fillStyle = '#2a2b2d';
     ctx.fillRect(0, 0, W, 4);
 
-    const colors = ['#f0a51e', '#12294a', '#e8e6dd', '#0d5bc4'];
+    const colors = ['#12294a', '#e8e6dd'];
     const n = 16;
     const step = W / n;
     for (let i = 0; i < n; i++) {
@@ -1216,7 +1285,14 @@ function createCurtainWall() {
 // materials are built once and shared across all 21 cars, so the row
 // count costs draw calls rather than memory.
 
-const CAR_COLORS = [0xdfe2e5, 0x9aa0a6, 0x1f2226, 0x1d3c66, 0x8c2130, 0x4a5a3f];
+// A PREMIUM LOT IS NEARLY MONOCHROME (M22). Pearl, silver, graphite,
+// black, deep navy and a dark bronze. The red and the olive that used to
+// be in here were the two loudest things visible through the glass, and a
+// lot full of primary colours is a used car lot: walk any marque's
+// forecourt and it is white, silver, grey and black, with one deep
+// colour. The rotation still gives every row variety, in VALUE rather
+// than in hue, which is also what makes the rows read as depth.
+const CAR_COLORS = [0xe8e9ea, 0xb9bcc0, 0x6e7276, 0x1a1c1f, 0x1c2f4a, 0x3a2f2c];
 
 /** The widest thing parked on the lot, across its body, including any
  *  cladding proud of the paint. The bay has to hold it, and the bay check
@@ -2523,7 +2599,10 @@ function createKeyBoard() {
     group.add(panel);
 
     const hookMaterial = brushedMetal;
-    const tagColors = [0xf0a51e, 0xdfe2e5, 0x0d5bc4, 0x8c2130];
+    // Key tags. Gold stays (it is the brand accent and these are the one
+    // place in the room it belongs on something small); the signal blue
+    // and the red left with the rest of the carnival at M22.
+    const tagColors = [0xf0a51e, 0xdfe2e5, 0x2a3f5c, 0x5a5f66];
     for (let row = 0; row < 4; row++) {
         for (let col = 0; col < 7; col++) {
             const z = -0.27 + col * 0.09;
@@ -2628,7 +2707,10 @@ function createBrochureRack() {
     foot.position.y = 0.015;
     rack.add(foot);
 
-    const covers = [0x1d3c66, 0x8c2130, 0x2f6f4a, 0xdfe2e5];
+    // Brochure covers. Four saturated hues on a rack in the near left of
+    // the frame was a magazine stand; a marque's brochures are one deep
+    // colour, a metallic and a stock white (M22).
+    const covers = [0x1c2f4a, 0x3a3d42, 0xc9b083, 0xe4e2dc];
     for (let tier = 0; tier < 3; tier++) {
         const shelfY = 0.42 + tier * 0.34;
         const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.02, 0.10), brushedMetal);
@@ -3539,6 +3621,7 @@ export const __test__ = {
     CLOUD_PUFFS, getCloudBank: () => cloudBank,
     johnTargets, customerTargets, dealerTargets,
     PASS_SPEED, PASS_FROM, PASS_TO, PASS_GAP, WHEEL_R, passingWheelDelta,
+    CAR_COLORS,
     SUV, widestVehicle, suvWidth, createLotSUV, suvGeometries,
     getPassingCar: () => passingCar,
     poseSeated, addElbow, addWaist, addNeck, findHairGroup,
