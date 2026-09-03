@@ -504,8 +504,8 @@ body .pan-controls.no-chrome.visible {
        `contain` keeps the whole flyer on screen when the cap bites,
        letterboxed on the card's own ground rather than cropped, because
        the phone number is printed across the bottom of it. */
-    max-height: 72vh;
-    max-height: 72dvh;
+    max-height: 80vh;
+    max-height: 80dvh;
     object-fit: contain;
     background: #0e1c2c;
     /* A hairline between the flyer and the story it introduces. The
