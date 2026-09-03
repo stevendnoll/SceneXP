@@ -190,17 +190,35 @@ const LAYOUT = {
     // that is only checkable from outside has to be readable from
     // outside. specs/automan/verify-composition.mjs projects this box
     // against the dealer's and John's every run.
-    // It is SMALLER and TURNED now, and both are consequences of showing
-    // something on it. A screen the visitor can read has to face partway
-    // toward the camera, and a panel turned that far runs across the desk
-    // rather than along it: at 0.52 wide it hung 15cm off the back edge.
-    // At 0.30 it fits, and it still clears the nearest face by about 6% of
-    // the frame width, which is what the old blank 0.52 managed.
+    // It is TURNED, and both its size and its position follow from that. A
+    // screen the visitor can read has to face partway toward the camera,
+    // and a panel turned 84 degrees runs across the desk's DEPTH rather
+    // than along its width, so the desk's 1.0m depth is what caps the width
+    // and not the 1.9m the eye expects to be the constraint. At 0.52 it
+    // hung 15cm off the back edge. At 0.30 it fit with 3mm to spare.
+    //
+    // 0.38 NOW, AND THE GROWTH IS ALL ON ONE SIDE. Steve's note was that
+    // the car on it looked silly, which at 0.30 it did: the panel came out
+    // 56 by 48 pixels in the composed frame, so the whole sketch had about
+    // 26 pixels of car. Widening it symmetrically was not available, since
+    // the far corner was already on the desk's back edge, so dz moves
+    // forward by half the growth as w grows and the far corner stays put.
+    // Every pixel of the increase therefore lands on the SCREEN-LEFT edge,
+    // which is the side Steve asked for, and the panel is 70 by 58 now.
+    //
+    // WHAT STOPPED IT THERE, in order of how close each came: the desk's
+    // back edge (the panel sits 1.1cm inside it), John's torso (26px of
+    // frame between them, down from 42), and the loose pages, which the
+    // monitor's foot walks onto somewhere around 0.40. Widths past 0.42
+    // start putting the foot on the paperwork. specs/automan has the sweep.
+    //
+    // The face is 16:10 now rather than 3:2, because the vehicle on it is a
+    // long low saloon and wanted the width more than the height.
     //
     // rotY is NOT stored. It is solved at build time by screenAim() from
     // the dealer's seat and the camera's eye, so the screen keeps serving
     // both if anything moves. See createDeskItems.
-    deskScreen: { dx: -0.58, dz: -0.34, w: 0.30, h: 0.20, midY: 0.22 },
+    deskScreen: { dx: -0.58, dz: -0.30, w: 0.38, h: 0.24, midY: 0.22 },
 
     // The dealer's keyboard and mouse, squarely in front of him. They live
     // beside the screen rather than under it because the screen is parked
@@ -1097,17 +1115,39 @@ function createStoneFacadeTexture() {
     return texture;
 }
 
-/** What is on the dealer's screen: the car, and the numbers beside it.
+/** What is on the dealer's screen: the vehicle, and the numbers beside it.
  *
- *  Deliberately unreadable, and that is not laziness. The panel is 0.30m
- *  wide and about 4.5m from the eye, so the whole screen is roughly 60
+ *  Deliberately unreadable, and that is not laziness. The panel is 0.38m
+ *  wide and about 4.5m from the eye, so the whole screen is roughly 70
  *  pixels across: anything that reads as words at that size would be one
  *  grey smear, and anything that DID resolve would be a price, which this
- *  scene never shows (same rule as the deal sheet). A car in outline and
- *  a column of ruled lines is exactly as much as the eye can take in, and
- *  it is honest about what a dealer has up: the vehicle, and its figures. */
+ *  scene never shows (same rule as the deal sheet). A vehicle in outline
+ *  and a column of ruled lines is exactly as much as the eye can take in,
+ *  and it is honest about what a dealer has up: the car, and its figures.
+ *
+ *  THE CAR IS A LONG SALOON NOW, and the shape is the whole change. The
+ *  first one was a three-box outline with a tall glasshouse sitting in the
+ *  middle of a short body: five straight segments, a trapezoid of glazing
+ *  and two circles. At 26 pixels of car it read, in Steve's words, silly,
+ *  and it was reading exactly what it was drawn as, which is a hatchback
+ *  from a road sign. The scene is meant to be a luxury desk.
+ *
+ *  What separates a luxury saloon from a generic car at 34 pixels is not
+ *  detail, it is PROPORTION, and there are only four numbers in it: a long
+ *  bonnet, a cabin set well back, a low fast roof, and a short rear deck.
+ *  This one is 170 long by 50 tall, which is the 3.4:1 of a real full-size
+ *  saloon rather than the 3.8:1 the old box happened to land on, with a
+ *  0.61 wheelbase and matched overhangs. The wheel ARCHES matter for the
+ *  same reason: a body with arches cut into it reads as a car at any size,
+ *  and a body sitting on top of two circles reads as a toy.
+ *
+ *  It faces LEFT, which is the way a profile is drawn, and it faces left on
+ *  screen too. The panel is turned a half turn about its own Y so that its
+ *  front is the side the camera is on, and a half turn about Y sends the
+ *  canvas's +x to world -x, which is exactly where that camera's right is.
+ *  The two cancel, so nothing here needs mirroring. */
 function drawDealerScreen() {
-    const W = 256, H = 170;
+    const W = 320, H = 202;              // 16:10, like the panel it maps onto
     const canvas = makeCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
@@ -1115,60 +1155,110 @@ function drawDealerScreen() {
     ctx.fillRect(0, 0, W, H);
     // a header bar in the brand navy, with a gold rule under it
     ctx.fillStyle = '#0e1c2c';
-    ctx.fillRect(0, 0, W, 22);
+    ctx.fillRect(0, 0, W, 26);
     ctx.fillStyle = '#f0a51e';
-    ctx.fillRect(0, 22, W, 2);
+    ctx.fillRect(0, 26, W, 2);
     ctx.fillStyle = '#7f97ad';
-    ctx.fillRect(10, 8, 62, 6);
-    ctx.fillRect(W - 34, 8, 24, 6);
+    ctx.fillRect(12, 10, 76, 7);
+    ctx.fillRect(W - 42, 10, 30, 7);
 
-    // The car, in outline: a three-box side elevation with wheels.
+    // ---- The saloon, in outline. GROUND is the tyre contact line, AX the
+    // two axle centres, and every other number hangs off those, so the car
+    // cannot come apart if it is moved or resized.
+    const NOSE = 22, TAIL = 192, GROUND = 152;
+    const AXLE_Y = GROUND - 13, SILL = AXLE_Y;
+    const AX = [56, 160], TYRE = 13, ARCH = 16;
+
     ctx.strokeStyle = '#cfe0ef';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.4;
     ctx.lineJoin = 'round';
-    const bx = 16, by = 58, bw = 128, bh = 34;
+    ctx.lineCap = 'round';
+    // The stations along the body, as fractions of its length, because that
+    // is what makes it a saloon rather than a shape: the bonnet ends at 42%,
+    // the roof starts at 53% and ends at 70%, and the rear screen is down by
+    // 85%. Those four are a full-size saloon's own proportions. The corners
+    // that a car actually rolls round (both bumpers, the crown of the roof)
+    // are quadratics, because the first draft drew them as mitres and the
+    // result read as a folded shape rather than a pressed one.
     ctx.beginPath();
-    ctx.moveTo(bx, by + bh);
-    ctx.lineTo(bx + 4, by + 12);
-    ctx.lineTo(bx + 34, by + 8);
-    ctx.lineTo(bx + 52, by - 16);
-    ctx.lineTo(bx + 92, by - 16);
-    ctx.lineTo(bx + 104, by + 8);
-    ctx.lineTo(bx + bw - 4, by + 14);
-    ctx.lineTo(bx + bw, by + bh);
+    ctx.moveTo(NOSE + 2, SILL);
+    ctx.quadraticCurveTo(NOSE - 1, SILL - 7, NOSE + 2, SILL - 15);   // bumper
+    ctx.lineTo(NOSE + 8, SILL - 20);                                 // headlamp
+    ctx.quadraticCurveTo(NOSE + 24, SILL - 24, NOSE + 44, SILL - 26);
+    ctx.lineTo(NOSE + 71, SILL - 28);              // the long bonnet, to the cowl
+    ctx.lineTo(NOSE + 90, SILL - 49);              // windscreen
+    ctx.quadraticCurveTo(NOSE + 104, SILL - 50.5, NOSE + 119, SILL - 50);   // roof
+    ctx.lineTo(NOSE + 144, SILL - 34);             // rear screen, fast
+    ctx.lineTo(NOSE + 160, SILL - 32);             // the short deck
+    ctx.quadraticCurveTo(TAIL, SILL - 31, TAIL, SILL - 22);
+    ctx.lineTo(TAIL, SILL - 12);                   // rear bumper
+    ctx.quadraticCurveTo(TAIL - 1, SILL - 3, TAIL - 9, SILL);
+    // Back along the sill, with an arch cut over each wheel.
+    ctx.lineTo(AX[1] + ARCH, SILL);
+    ctx.arc(AX[1], SILL, ARCH, 0, Math.PI, true);
+    ctx.lineTo(AX[0] + ARCH, SILL);
+    ctx.arc(AX[0], SILL, ARCH, 0, Math.PI, true);
     ctx.closePath();
     ctx.stroke();
-    // glazing
-    ctx.lineWidth = 1.5;
+
+    // The glasshouse, one opening from screen to screen with a pillar in it,
+    // inset three or four units inside the roofline so it cannot poke
+    // through. FILLED, not outlined: an outline puts a second line beside
+    // the roof and at this size the pair reads as a folded soft top, while
+    // a dark shape reads as glass at any size at all.
+    ctx.fillStyle = '#0f2035';
+    ctx.strokeStyle = '#9fbdd8';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(bx + 56, by + 4);
-    ctx.lineTo(bx + 66, by - 11);
-    ctx.lineTo(bx + 88, by - 11);
-    ctx.lineTo(bx + 96, by + 4);
+    ctx.moveTo(NOSE + 77, SILL - 31);
+    ctx.lineTo(NOSE + 92, SILL - 46);
+    ctx.lineTo(NOSE + 117, SILL - 47);
+    ctx.lineTo(NOSE + 138, SILL - 34);
     ctx.closePath();
+    ctx.fill();
     ctx.stroke();
-    // wheels
-    ctx.lineWidth = 2.5;
-    for (const wx of [bx + 30, bx + 100]) {
+    ctx.beginPath();
+    ctx.moveTo(NOSE + 104, SILL - 46.5);
+    ctx.lineTo(NOSE + 104, SILL - 32.5);
+    ctx.stroke();
+    ctx.strokeStyle = '#cfe0ef';
+
+    // Wheels, with a rim inside the tyre. Two circles at this size is all
+    // an alloy can be, and one alone reads as a caster.
+    ctx.lineWidth = 2.4;
+    for (const wx of AX) {
         ctx.beginPath();
-        ctx.arc(wx, by + bh, 11, 0, Math.PI * 2);
+        ctx.arc(wx, AXLE_Y, TYRE, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(wx, AXLE_Y, TYRE - 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.lineWidth = 2.4;
     }
 
-    // The figures beside it, as ruled lines. Four rows, because a deal
-    // sheet has four boxes and this is the same conversation.
+    // The floor it stands on, which is what turns an outline into a
+    // configurator rather than a car falling through space.
+    ctx.strokeStyle = '#2c4762';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(14, GROUND + 3); ctx.lineTo(200, GROUND + 3);
+    ctx.stroke();
+
+    // The figures beside it, as ruled lines. Five rows, because a deal
+    // sheet has that many boxes and this is the same conversation.
     ctx.fillStyle = '#8fa8bd';
     for (let i = 0; i < 5; i++) {
-        const y = 40 + i * 20;
-        ctx.fillRect(164, y, 34 + ((i * 13) % 26), 5);
+        const y = 50 + i * 24;
+        ctx.fillRect(220, y, 40 + ((i * 13) % 30), 6);
         ctx.fillStyle = '#f0a51e';
-        ctx.fillRect(224, y, 18 - ((i * 7) % 9), 5);
+        ctx.fillRect(288, y, 22 - ((i * 7) % 11), 6);
         ctx.fillStyle = '#8fa8bd';
     }
     ctx.strokeStyle = '#2c4762';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(156, 30); ctx.lineTo(156, H - 12);
+    ctx.moveTo(210, 38); ctx.lineTo(210, H - 14);
     ctx.stroke();
 
     const texture = new THREE.CanvasTexture(canvas);

@@ -805,29 +805,142 @@ body .pan-controls.no-chrome.visible {
     padding: 2.1rem 1.85rem 1.6rem;
 }
 
+/* JOHN'S PHOTOGRAPH. A circle, a champagne hairline, and nothing else.
+
+   It is the one place on this page where a real face appears, so the
+   treatment has to get out of its way: no ring in an accent fill, no
+   duotone, no border thick enough to read as a frame. The hairline is the
+   same 1px champagne the buttons, the coach marks and the card kickers all
+   use, so the portrait arrives as part of the same object rather than as
+   something pasted onto it.
+
+   THE SHADOW IS DOING THE SEPARATING, not the ring. The photograph is a
+   bright office with a white ceiling in it and the card under it is
+   lacquer, so the disc is the lightest thing on the card by a long way and
+   would otherwise look stuck on. A shadow beneath it puts it on the card
+   the way the card sits on the room.
+
+   object-fit is not optional even though the file is already square: the
+   width and height attributes are the file's 256, the CSS sizes are rem,
+   and without it a browser that has the attributes and not yet the file
+   lays out a 256px square and then reflows the whole card. */
+.john-portrait {
+    display: block;
+    width: 4.25rem;
+    height: 4.25rem;
+    margin: 0 0 1.1rem;
+    border: 1px solid rgba(219, 179, 106, 0.5);
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+
+/* The byline at the foot of the About card, where the photograph is beside
+   the name rather than over it and can be smaller for it. */
+.about-byline {
+    display: flex;
+    align-items: center;
+    gap: 0.95rem;
+    margin: 1.55rem 0 1.35rem;
+    padding-top: 1.35rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.john-portrait-sm {
+    flex: 0 0 auto;
+    width: 3.1rem;
+    height: 3.1rem;
+    margin: 0;
+}
+
+.about-byline-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.about-byline-name {
+    font-family: var(--lux-display);
+    font-size: 1.02rem;
+    line-height: 1.2;
+    color: #fff;
+}
+
+/* The role line is set like the card kickers, minus their rule: this row
+   already has a photograph and a divider above it, and a third device
+   would make a sign-off look like a section heading. */
+.about-byline-role {
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    line-height: 1.5;
+    text-transform: uppercase;
+    color: var(--lux-gold);
+}
+
+/* On a phone the contact card is already the tallest thing on the site and
+   scrolls, so the portrait gives back the height it can. It stops at 3.4rem
+   rather than going smaller: below about 50px a face at arm's length is a
+   thumbnail of a person rather than a person, which is the opposite of what
+   it is here for. */
+@media (max-width: 600px) {
+    .john-portrait {
+        width: 3.4rem;
+        height: 3.4rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .john-portrait-sm {
+        width: 2.8rem;
+        height: 2.8rem;
+    }
+}
+
 /* THE KICKER, and the gold rule that replaced its stars. A row of ★ is
    how a coupon announces a special offer. A 2rem hairline in champagne is
    how a marque announces anything, and it is the same mark the arrival
-   panel opens with, which is what ties the two together as one house. */
+   panel opens with, which is what ties the two together as one house.
+
+   THE CLOSE BUTTON SITS ON THIS ROW, so the row has to make space for it.
+   The control is 44px square at 0.55rem from the card's right edge, and the
+   content it floats over is inset 1.85rem, so it reaches 23px INTO the text
+   column. The kicker is the only thing up there and the longest one runs to
+   "FREE CONSULTATION, BY PHONE OR ZOOM", so on every contact card the first
+   line ran under the glyph and came out as "...BY PHONE OR" with a circle
+   through it. padding-right ends it: the line now wraps before the button
+   instead of behind it. 2.6rem is the button's reach plus a little air, and
+   it is on the kicker rather than on the whole card because the heading and
+   the paragraph below start under the button's bottom edge and want the
+   full measure. */
 #nudge-modal .complete-kicker,
 #dialog-modal .piece-title {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.7rem;
     margin: 0 0 0.85rem;
+    padding-right: 2.6rem;
     font-size: 0.66rem;
     font-weight: 600;
+    line-height: 1.5;
     letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--lux-gold);
 }
 
+/* The rule aligns with the FIRST line, not with the middle of a wrapped
+   block. Centring it was fine while the kicker was one line and put the
+   rule in the gap between two lines as soon as it was not, which reads as
+   a stray mark rather than as the start of a label. Half a line box down,
+   which is computable because the line-height above is set rather than
+   inherited. */
 #nudge-modal .complete-kicker::before,
 #dialog-modal .piece-title::before {
     content: '';
     flex: 0 0 auto;
     width: 1.75rem;
     height: 1px;
+    margin-top: 0.495rem;
     background: var(--lux-gold);
 }
 
@@ -858,15 +971,25 @@ body .pan-controls.no-chrome.visible {
 /* The prop stories. The shared sheet demotes the title to a small accent
    label and promotes the line into a tinted speech panel, which is the
    right structure and the wrong finish: an 8% blue tint is invisible on
-   lacquer. A champagne rule down the left says "someone is speaking"
-   without needing a panel at all. */
-/* (Its speaker label is set with the card kickers above, so the three
-   cards open on the same device rather than three near-misses.) */
+   lacquer.
+   (Its speaker label is set with the card kickers above, so the three
+   cards open on the same device rather than three near-misses.)
+
+   ONE GOLD RULE PER CARD. This paragraph used to carry a champagne rule
+   down its left edge as well, on the argument that a rule says "someone is
+   speaking" without needing a panel. It does, but it was the SECOND gold
+   hairline on a card whose only other ornament is the first one: a short
+   rule at the top left, then a long one down the left, four centimetres
+   apart and at ninety degrees to each other. Steve called it too many gold
+   lines for one card and he is right. The kicker's rule stays, because it
+   is the house device the arrival panel and all three cards share; this
+   one goes, and the story keeps the serif, which is what actually marks it
+   as the voice rather than the interface. */
 #dialog-modal #dialog-message {
     margin: 0 0 1.7rem;
-    padding: 0.1rem 0 0.1rem 1.15rem;
+    padding: 0.1rem 0;
     background: none;
-    border-left: 1px solid rgba(219, 179, 106, 0.55);
+    border-left: none;
     border-radius: 0;
     font-family: var(--lux-display);
     font-size: 1.12rem;

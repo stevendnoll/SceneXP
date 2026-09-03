@@ -369,6 +369,29 @@
                     get you the deal you want, you owe him nothing, and there is a 100 percent
                     satisfaction guarantee on the small fee if you are not happy. He works in
                     Baltimore, Maryland, and anywhere else by Zoom.</p>
+                <!-- And the same face signing the account off, which is what
+                     a byline is for. The flyer at the top of this card shows
+                     him too, but it shows him as artwork: standing between
+                     two trucks with a headline over his shoulder. This is
+                     the plain photograph, at the end of the two paragraphs
+                     that describe what he does, so the last thing anybody
+                     reads before the button is who they would be calling.
+
+                     alt is EMPTY on purpose. The name is right beside it in
+                     real text, and a screen reader that has just been told
+                     "John Walker, The Auto Man" as a heading does not need
+                     to be told it again as a picture. Its twin on the
+                     contact card DOES carry alt, because the heading there
+                     is a line like "She brought backup" and the photograph
+                     is the only thing naming him. -->
+                <div class="about-byline">
+                    <img class="john-portrait john-portrait-sm" src="assets/john-walker-avatar.webp"
+                        width="256" height="256" loading="lazy" decoding="async" alt="">
+                    <span class="about-byline-text">
+                        <span class="about-byline-name">John Walker</span>
+                        <span class="about-byline-role">The Auto Man &middot; Baltimore, Maryland</span>
+                    </span>
+                </div>
                 <button id="poster-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
             </div>
         </div>
@@ -418,6 +441,39 @@
         <div class="modal-container piece-card complete-card" tabindex="-1">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
             <div class="piece-card-content">
+                <!-- JOHN'S ACTUAL FACE, at the top of the card that carries
+                     his phone number. Everything else on this page is a
+                     low-poly figure with two dots for eyes, which is the
+                     right register for a showroom and the wrong one for
+                     "here is the man you would be calling".
+
+                     assets/john-walker-avatar.webp is a DERIVATIVE of
+                     assets/john-walker-profile.webp, which is the original
+                     Steve supplied: the square is cropped to head and
+                     shoulders so the circle lands on his face rather than
+                     on his shirt, and it is 256px because that covers this
+                     4.25rem disc on a 3x phone and no more. The full
+                     1080px original is 36KB and decodes to 4.7MB of bitmap
+                     for a 68px circle, which is the kind of thing that
+                     costs a mid-range phone a frame in a scene that is
+                     already running WebGL. To regenerate it after changing
+                     the original:
+
+                       crop (157, 107) to (807, 757), resize to 256, then
+                       cwebp -q 88 -sharp_yuv -m 6
+
+                     6.7KB at that setting, and the quality curve is flat
+                     past it: q94 costs another 4.9KB to move the error by
+                     0.6 of a level.
+
+                     The src is inline rather than set on open, unlike the
+                     flyer above. The flyer is a quarter of a megabyte and
+                     nobody should pay for it unopened; this is under seven
+                     kilobytes and the card it belongs to opens the moment
+                     anybody taps anyone at the desk, so a face that fades
+                     in afterwards would be worse than the bytes are. -->
+                <img class="john-portrait" src="assets/john-walker-avatar.webp"
+                    width="256" height="256" decoding="async" alt="John Walker">
                 <p class="complete-kicker" aria-hidden="true">Free consultation, by phone or Zoom</p>
                 <h2 id="nudge-title" class="piece-title">Let John handle it</h2>
                 <p id="nudge-message" class="piece-subtitle">John Walker has spent twenty five years on the other side
