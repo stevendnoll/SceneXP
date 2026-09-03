@@ -118,11 +118,12 @@ body .pan-controls.no-chrome.visible {
    The radius is a PERCENTAGE because the shared rule sizes the logo with
    clamp(110px, 22vw, 150px). 22% matches the 14/64 the SVG rounds its own
    corners by, so the hairline follows the artwork's edge at every size
-   rather than cutting across it. */
+   rather than cutting across it. The hairline is champagne, with the mark
+   it is drawn around (M24). */
 .automan-mark {
     border-radius: 22%;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45),
-                0 0 0 1px rgba(240, 165, 30, 0.28);
+                0 0 0 1px rgba(219, 179, 106, 0.32);
 }
 
 /* ==========================================================================
@@ -307,7 +308,7 @@ body .pan-controls.no-chrome.visible {
     bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 90;
-    width: min(92vw, 34rem);
+    width: min(94vw, 37rem);
     box-sizing: border-box;
     padding: 1.15rem 1.4rem 1.2rem;
     /* 3px, not 14. A tight radius reads as a machined edge; a soft one
@@ -395,22 +396,28 @@ body .pan-controls.no-chrome.visible {
    in the panel, which is the whole trick. The rule above it is the
    brand mark a logo would otherwise be doing. */
 .intro-kicker {
-    position: relative;
-    margin: 0 0 0.7rem;
-    padding-top: 0.85rem;
-    font-size: 0.62rem;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin: 0 0 0.75rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0.26em;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--lux-gold);
 }
 
+/* THE RULE SITS BESIDE THE NAME, NOT ABOVE IT. It used to float on its own
+   line at the top left, where Steve read it as a stray dash, and he was
+   right: a 2rem hairline alone above a line of type has nothing to belong
+   to. Beside the name it is unmistakably a device (the eyebrow rule every
+   marque sets its small caps against) and it costs the panel a line of
+   height rather than gaining one. Flex, so it stays centred on the caps
+   however the name wraps. */
 .intro-kicker::before {
     content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 2rem;
+    flex: 0 0 auto;
+    width: 1.75rem;
     height: 1px;
     background: var(--lux-gold);
 }
@@ -418,9 +425,9 @@ body .pan-controls.no-chrome.visible {
 /* The one line that has to land, in the serif, at a LIGHT weight. Bold is
    how a page shouts; size and a good face are how it does not have to. */
 .intro-lead {
-    margin: 0 0 0.55rem;
+    margin: 0 0 0.6rem;
     font-family: var(--lux-display);
-    font-size: 1.32rem;
+    font-size: 1.55rem;
     font-weight: 400;
     line-height: 1.28;
     letter-spacing: 0.005em;
@@ -428,10 +435,10 @@ body .pan-controls.no-chrome.visible {
 }
 
 .intro-body {
-    margin: 0 0 0.7rem;
-    font-size: 0.8rem;
-    line-height: 1.72;          /* air, which is most of what "premium" is */
-    letter-spacing: 0.012em;
+    margin: 0 0 0.75rem;
+    font-size: 0.94rem;
+    line-height: 1.7;           /* air, which is most of what "premium" is */
+    letter-spacing: 0.008em;
     color: var(--lux-mute);
 }
 
@@ -441,7 +448,7 @@ body .pan-controls.no-chrome.visible {
     margin: 0;
     padding-top: 0.7rem;
     border-top: 1px solid var(--lux-faint);
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     line-height: 1.55;
     letter-spacing: 0.05em;
     color: rgba(163, 178, 196, 0.78);
@@ -492,23 +499,27 @@ body .pan-controls.no-chrome.visible {
     }
 
     .intro-kicker {
-        margin-bottom: 0.55rem;
-        padding-top: 0.7rem;
-        font-size: 0.58rem;
-        letter-spacing: 0.22em;
+        margin-bottom: 0.6rem;
+        gap: 0.55rem;
+        font-size: 0.7rem;
+        letter-spacing: 0.18em;
+    }
+
+    .intro-kicker::before {
+        width: 1.3rem;
     }
 
     .intro-lead {
-        font-size: 1.12rem;
+        font-size: 1.3rem;
     }
 
     .intro-body {
-        font-size: 0.76rem;
+        font-size: 0.86rem;
         line-height: 1.62;
     }
 
     .intro-hint {
-        font-size: 0.66rem;
+        font-size: 0.74rem;
     }
 }
 
@@ -678,33 +689,38 @@ body .pan-controls.no-chrome.visible {
 }
 
 /* The affordance. Nobody knows a picture is tappable unless it says so,
-   and this is the only tappable picture on the page. Bottom LEFT: the
-   card's close button holds the top right corner, and the flyer's own
-   gold badges run down its right side. */
+   and this is the only tappable picture on the page.
+
+   IT IS A STRIP UNDER THE FLYER, NOT A BADGE ON IT. It floated bottom
+   left over the artwork until round nine, where it landed squarely on the
+   phone number John prints across the foot of his own flyer and hung half
+   off the card's edge. There is nowhere on that artwork it could have sat
+   without covering something: the top is his name, the right is his
+   guarantee badges, the bottom is how to reach him. So it stops being an
+   overlay. As a strip it also does the job the hairline was doing, which
+   is to say where the flyer ends and John's story begins. */
 .poster-zoom {
-    position: absolute;
-    left: 0.7rem;
-    bottom: 0.7rem;
-    padding: 0.3rem 0.62rem;
-    border-radius: 999px;
-    background: rgba(14, 28, 44, 0.82);
-    border: 1px solid rgba(240, 165, 30, 0.55);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
-    color: #f0d9a8;
-    font-size: 0.72rem;
+    display: block;
+    padding: 0.72rem 1rem;
+    border-bottom: 1px solid var(--lux-faint);
+    background: rgba(6, 13, 24, 0.55);
+    color: var(--lux-gold);
+    font-size: 0.62rem;
     font-weight: 600;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-align: center;
     line-height: 1.2;
-    /* The whole picture is the target, so the badge must never be the
+    transition: background 0.2s ease, color 0.2s ease;
+    /* The whole picture is the target, so the strip must never be the
        thing that swallowed the tap. */
     pointer-events: none;
 }
 
 @media (hover: hover) {
     .poster-link:hover .poster-zoom {
-        background: rgba(240, 165, 30, 0.92);
-        border-color: rgba(240, 165, 30, 0.92);
-        color: #12294a;
+        background: rgba(219, 179, 106, 0.9);
+        color: #16120a;
     }
 }
 
@@ -813,23 +829,24 @@ body .pan-controls.no-chrome.visible {
    how a coupon announces a special offer. A 2rem hairline in champagne is
    how a marque announces anything, and it is the same mark the arrival
    panel opens with, which is what ties the two together as one house. */
-#nudge-modal .complete-kicker {
-    position: relative;
+#nudge-modal .complete-kicker,
+#dialog-modal .piece-title {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
     margin: 0 0 0.85rem;
-    padding-top: 0.9rem;
-    font-size: 0.6rem;
+    font-size: 0.66rem;
     font-weight: 600;
-    letter-spacing: 0.26em;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--lux-gold);
 }
 
-#nudge-modal .complete-kicker::before {
+#nudge-modal .complete-kicker::before,
+#dialog-modal .piece-title::before {
     content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 2rem;
+    flex: 0 0 auto;
+    width: 1.75rem;
     height: 1px;
     background: var(--lux-gold);
 }
@@ -841,7 +858,7 @@ body .pan-controls.no-chrome.visible {
 #help-modal .about-title {
     margin: 0 0 0.5rem;
     font-family: var(--lux-display);
-    font-size: 1.62rem;
+    font-size: 1.82rem;
     font-weight: 400;
     line-height: 1.18;
     letter-spacing: 0.004em;
@@ -863,15 +880,8 @@ body .pan-controls.no-chrome.visible {
    right structure and the wrong finish: an 8% blue tint is invisible on
    lacquer. A champagne rule down the left says "someone is speaking"
    without needing a panel at all. */
-#dialog-modal .piece-title {
-    margin: 0 0 1rem;
-    font-size: 0.6rem;
-    font-weight: 600;
-    letter-spacing: 0.26em;
-    text-transform: uppercase;
-    color: var(--lux-gold);
-}
-
+/* (Its speaker label is set with the card kickers above, so the three
+   cards open on the same device rather than three near-misses.) */
 #dialog-modal #dialog-message {
     margin: 0 0 1.7rem;
     padding: 0.1rem 0 0.1rem 1.15rem;

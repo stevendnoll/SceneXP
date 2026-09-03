@@ -11,7 +11,10 @@
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
     <meta name="description" content="A living 3D visit to a car dealership desk, where John Walker, The Auto Man, sits on the buyer's side and argues the deal down for his customer. A car buying and selling advocate in Baltimore, Maryland, with a free consultation by phone or Zoom.">
-    <meta name="theme-color" content="#12294a">
+    <!-- The lacquer the whole interface is built on (M24), not the flyer's
+         navy: this is the color a phone paints its own chrome with, so it
+         should be the color of the page it is framing. -->
+    <meta name="theme-color" content="#0e1c2e">
     <meta name="author" content="Steve Noll">
 
     <!-- PER-DEPLOYMENT BLOCK (Phase 5). Crawlers read these without running
@@ -345,9 +348,13 @@
                 <img id="poster-image" class="poster-image" width="1023" height="1537"
                     alt="John Walker's flyer. Come see Walker, The Auto Man, your local auto expert. A photograph of John, a bald man in a light blue shirt, standing between two pickup trucks on rocky ground. Free consultations on the phone or by Zoom, and a 100 percent satisfaction guarantee or your money returned. Let me help you get the best deal for your trade and I will desk the whole deal for you. Let me walk you through the process with extended warranties, tire and wheel protection and gap insurance. Do you need it? Maybe. Maybe not. But let me be your customer advocate. The flyer ends with a phone number and an email address, which this page gives as live call, text and email links on the card behind any of the three people at the desk.">
                 <!-- Nobody knows a picture is tappable unless it says so.
-                     aria-hidden because the link's own label already says
-                     it, and saying it twice is worse than not saying it. -->
-                <span class="poster-zoom" aria-hidden="true">Full size &#8599;</span>
+                     A strip under the flyer rather than a badge on it:
+                     there is nowhere on John's artwork a badge could sit
+                     without covering his name, his guarantee or his phone
+                     number. aria-hidden because the link's own label
+                     already says this, and saying it twice is worse than
+                     not saying it. -->
+                <span class="poster-zoom" aria-hidden="true">View the flyer full size &#8599;</span>
             </a>
             <div class="about-text">
                 <h2 id="poster-title" class="about-title">John Walker, The Auto Man</h2>

@@ -405,22 +405,31 @@ const LAYOUT = {
         // Eleven, not five. Five left the sky empty for long stretches:
         // they were placed by hand across a band the measuring tool had
         // truncated by a bearing that wraps at due north, so half of
-        // them sat outside the window's real reach. Laid across the
-        // measured band instead, at bearings -190 to -130 and elevations
-        // 10.5 to 17 degrees, this bank keeps between 5 and 10 clouds in
-        // the landscape frame at any moment of the drift.
+        // them sat outside the window's real reach.
+        //
+        // RE-SOLVED AT M24, ABOVE THE SKYLINE. Once there were buildings
+        // out there rather than five metre blocks, the old band put
+        // clouds INSIDE four of them, one in FRONT of the whole row at
+        // z -40.6, and several below a roofline, which is what Steve saw:
+        // clouds lower than the buildings. A cloud is now placed the way
+        // the buildings are, by bearing: every one sits at z -70 or
+        // further out (the deepest block's back face is -68, so nothing
+        // can intersect one), and every one clears the roofline ALONG ITS
+        // OWN BEARING by more than its own underside hangs below its
+        // centre. Drift still carries them behind the towers, which is
+        // what a cloud passing a skyline does.
         clouds: [
-            { x: 15.3, y: 17.9, z: -73.2, scale: 1.20, drift: 0.17 },
-            { x: 6.5, y: 18.1, z: -58.2, scale: 0.85, drift: 0.24 },
-            { x: -0.5, y: 17.4, z: -86.2, scale: 1.35, drift: 0.13 },
-            { x: -6.1, y: 16.9, z: -61.7, scale: 0.90, drift: 0.22 },
-            { x: -16.4, y: 25.3, z: -76.0, scale: 1.10, drift: 0.16 },
-            { x: -16.0, y: 12.4, z: -51.0, scale: 0.75, drift: 0.27 },
-            { x: -33.4, y: 23.4, z: -74.0, scale: 1.25, drift: 0.14 },
-            { x: -29.3, y: 14.2, z: -51.2, scale: 0.85, drift: 0.23 },
-            { x: -41.8, y: 22.8, z: -57.0, scale: 1.05, drift: 0.18 },
-            { x: -36.4, y: 14.4, z: -40.6, scale: 0.80, drift: 0.26 },
-            { x: -58.8, y: 17.0, z: -51.7, scale: 1.15, drift: 0.15 }
+            { x: -1.8, y: 21.4, z: -58.1, scale: 1.20, drift: 0.17 },
+            { x: -7.0, y: 22.1, z: -65.6, scale: 0.90, drift: 0.24 },
+            { x: -17.3, y: 32.4, z: -91.2, scale: 1.35, drift: 0.13 },
+            { x: -20.5, y: 25.3, z: -79.0, scale: 1.00, drift: 0.22 },
+            { x: -28.7, y: 24.2, z: -84.7, scale: 1.15, drift: 0.16 },
+            { x: -21.3, y: 20.2, z: -53.2, scale: 0.80, drift: 0.27 },
+            { x: -36.5, y: 21.5, z: -53.5, scale: 1.25, drift: 0.14 },
+            { x: -45.3, y: 20.6, z: -56.8, scale: 0.95, drift: 0.23 },
+            { x: -56.1, y: 22.0, z: -60.4, scale: 1.10, drift: 0.18 },
+            { x: -64.7, y: 21.5, z: -60.2, scale: 0.85, drift: 0.26 },
+            { x: -71.4, y: 21.7, z: -53.4, scale: 1.30, drift: 0.15 }
         ],
         cloudTravel: 46.0      // metres east before a cloud wraps west again
     }
@@ -909,85 +918,178 @@ function drawDealSheet() {
 }
 
 // ---- The neighbourhood's facades ------------------------------------------
-// Two textures for the buildings across the road. Both are drawn as one
-// tile of roughly twelve metres square and repeated to suit each block, so
-// a wide building gets more bays rather than wider ones.
+// Three families, each with variants, because ROUND NINE'S NOTE WAS THAT
+// THE SKYLINE READ AS REPETITIVE. It was: two textures across nine
+// buildings meant every brick block carried the identical window grid, and
+// from a panned view three of them stood in a row.
 //
-// WHAT ACTUALLY READS AT FORTY FIVE METRES is the horizontal banding of
-// floor plates and the value of the wall. Nothing else survives: the
-// buildings sit behind a treeline, through a window, at a few dozen
-// pixels of screen height. So both of these are built out of bands and
-// values, and neither carries a detail that would turn to noise.
+// WHAT ACTUALLY READS AT FIFTY METRES is the horizontal banding of floor
+// plates and the VALUE of the wall. Nothing else survives the trip: these
+// sit behind a treeline, through a window, at a few dozen pixels of screen
+// height. So variety has to come from the same small vocabulary the eye
+// can still resolve, which is why the three families differ in banding
+// rhythm and value rather than in ornament, and why every block also
+// carries its own tint.
 
-/** A modern curtain-wall office block: dark vision glass in bays, with a
- *  lighter spandrel band at every floor line. The per-pane variation is
- *  what stops it reading as graph paper, and it is the sky it would
- *  actually be reflecting rather than random noise. */
-function createGlassFacadeTexture() {
-    const S = 256;
-    const canvas = makeCanvas(S, S);
+/** A curtain-wall tower, drawn as ONE WHOLE BUILDING rather than a tile.
+ *
+ *  THE REFLECTION IS PAINTED, and that is the honest way to do it here. A
+ *  real one wants a cube camera per building every frame, or a PMREM of
+ *  the sky applied as `scene.environment`, which would light every
+ *  material in the showroom too and undo the M22 palette. What glass
+ *  actually does at this distance is simple enough to draw: it holds the
+ *  SKY at the top, the horizon haze in the middle, and the dark of the
+ *  ground and its neighbours at the bottom, with cloud shapes smeared
+ *  across the upper floors and broken by every mullion.
+ *
+ *  That gradient is why this one is not tiled: a repeating map cannot
+ *  carry a top-to-bottom anything. The building gets ONE copy stretched
+ *  over its whole face (repeat 1, 1), so the bays widen with the building
+ *  instead of multiplying, which at fifty metres is invisible and buys a
+ *  reflection that never repeats. */
+function createGlassFacadeTexture(variant) {
+    const W = 256, H = 512;
+    const canvas = makeCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // The spandrel: the opaque band across each floor slab.
-    ctx.fillStyle = '#4c5b6b';
-    ctx.fillRect(0, 0, S, S);
+    // The sky it is standing in, top to bottom: high blue, horizon haze,
+    // then the ground and the buildings opposite.
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    // Each variant stands in a slightly different piece of sky, which is
+    // most of what stops three towers reading as one tower drawn thrice.
+    const tint = [
+        ['#a9c6e2', '#7e9cba'],
+        ['#b6cfe6', '#88a6c2'],
+        ['#9dbcda', '#7493b2']
+    ][variant % 3];
+    sky.addColorStop(0, tint[0]);
+    sky.addColorStop(0.42, tint[1]);
+    sky.addColorStop(0.72, '#42566a');
+    sky.addColorStop(1, '#26333f');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
 
-    const floors = 3, bays = 4;
-    const fh = S / floors, bw = S / bays;
+    // Reflected cloud, in the upper half only: a reflection puts the sky
+    // where the sky is. Soft and low contrast, because a hard-edged cloud
+    // on a building reads as a paint defect.
+    const puffs = [
+        [[40, 70, 62, 26], [130, 120, 78, 30], [190, 58, 46, 20]],
+        [[80, 96, 70, 24], [20, 150, 54, 22], [176, 112, 66, 28]],
+        [[150, 64, 84, 30], [46, 128, 60, 24], [220, 168, 48, 18]]
+    ][variant % 3];
+    puffs.forEach(([cx, cy, rx, ry]) => {
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rx);
+        g.addColorStop(0, 'rgba(255, 255, 255, 0.62)');
+        g.addColorStop(0.6, 'rgba(255, 255, 255, 0.26)');
+        g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Blinds and lit rooms, scattered and deterministic. This is what
+    // stops a reflective face reading as a mirror rather than a building.
+    const floors = [16, 14, 18][variant % 3], bays = 8;
+    const fh = H / floors, bw = W / bays;
     for (let f = 0; f < floors; f++) {
         for (let b = 0; b < bays; b++) {
-            // Vision glass, most of the floor height, inset from the bay.
-            const x = b * bw + 2, y = f * fh + 6, w = bw - 4, h = fh * 0.66;
-            // Each pane holds a little more or less of the sky. Deterministic,
-            // so the same building looks the same on every load.
-            const lift = ((f * 7 + b * 13) % 5) * 4;
-            const g = ctx.createLinearGradient(0, y, 0, y + h);
-            g.addColorStop(0, `rgb(${52 + lift}, ${68 + lift}, ${86 + lift})`);
-            g.addColorStop(1, `rgb(${30 + lift}, ${42 + lift}, ${56 + lift})`);
-            ctx.fillStyle = g;
-            ctx.fillRect(x, y, w, h);
+            const k = (f * 7 + b * 11 + variant * 3) % 9;
+            if (k > 2) continue;
+            ctx.fillStyle = k === 0
+                ? 'rgba(12, 20, 30, 0.30)'          // a blind, drawn down
+                : 'rgba(238, 224, 196, 0.13)';      // a room with a light on
+            ctx.fillRect(b * bw + 2, f * fh + 3, bw - 4, fh * 0.62);
         }
-        // The floor line itself, one value up from the spandrel.
-        ctx.fillStyle = '#68788a';
-        ctx.fillRect(0, f * fh + fh - 3, S, 2);
     }
-    // Vertical mullions, drawn last so they sit over the glass.
-    ctx.fillStyle = '#5a6a7a';
-    for (let b = 0; b <= bays; b++) ctx.fillRect(b * bw - 1, 0, 2, S);
+
+    // The frame. Floor lines first, then mullions over them, both a value
+    // up from whatever they cross so they hold at any point of the
+    // gradient.
+    ctx.fillStyle = 'rgba(216, 226, 236, 0.42)';
+    for (let f = 1; f < floors; f++) ctx.fillRect(0, f * fh - 1, W, 2);
+    ctx.fillStyle = 'rgba(196, 208, 220, 0.34)';
+    for (let b = 1; b < bays; b++) ctx.fillRect(b * bw - 1, 0, 2, H);
 
     const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
     return texture;
 }
 
 /** The industrial brick neighbour: a dark iron-spot brick field with tall
  *  punched openings and a pale stone reveal around each. Deliberately not
  *  an orange brick, which at this distance is the one colour that would
- *  pull the eye off the desk. */
-function createBrickFacadeTexture() {
+ *  pull the eye off the desk. Tiled, unlike the glass, because brick has
+ *  no top-to-bottom story to tell. */
+function createBrickFacadeTexture(variant) {
     const S = 256;
     const canvas = makeCanvas(S, S);
     const ctx = canvas.getContext('2d');
 
-    ctx.fillStyle = '#6a4a40';
+    ctx.fillStyle = ['#6a4a40', '#5b4640'][variant % 2];
     ctx.fillRect(0, 0, S, S);
     // Coursing. Barely there on purpose: at this range it is a texture,
     // not a pattern, and a legible brick course would read as stripes.
     ctx.fillStyle = 'rgba(0, 0, 0, 0.10)';
     for (let y = 0; y < S; y += 6) ctx.fillRect(0, y, S, 1);
 
-    const floors = 3, bays = 4;
+    // Variant 0 is a three-over-four warehouse grid; variant 1 is a taller,
+    // narrower four-over-five rhythm with a spandrel course between floors,
+    // which is a different building rather than the same one recoloured.
+    const floors = [3, 4][variant % 2], bays = [4, 5][variant % 2];
     const fh = S / floors, bw = S / bays;
     for (let f = 0; f < floors; f++) {
+        if (variant % 2 === 1) {
+            ctx.fillStyle = 'rgba(154, 144, 134, 0.22)';
+            ctx.fillRect(0, f * fh + fh - 5, S, 3);
+        }
         for (let b = 0; b < bays; b++) {
-            const w = bw * 0.52, h = fh * 0.58;
-            const x = b * bw + (bw - w) / 2, y = f * fh + fh * 0.22;
+            const w = bw * [0.52, 0.44][variant % 2], h = fh * [0.58, 0.62][variant % 2];
+            const x = b * bw + (bw - w) / 2, y = f * fh + fh * 0.2;
             // Stone reveal first, then the opening inside it.
             ctx.fillStyle = '#9a9086';
             ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
-            ctx.fillStyle = ((f + b) % 4 === 0) ? '#3a4652' : '#2b3541';
+            ctx.fillStyle = ((f + b + variant) % 4 === 0) ? '#3a4652' : '#2b3541';
             ctx.fillRect(x, y, w, h);
         }
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+}
+
+/** The third family, and the one that breaks up a street of only two: a
+ *  pale precast or limestone mid-rise, ribbon windows running the full
+ *  width of each floor rather than punched openings. Its rhythm is
+ *  HORIZONTAL where the brick's is a grid and the glass's is a field,
+ *  which is what makes three buildings in a row read as three buildings. */
+function createStoneFacadeTexture() {
+    const S = 256;
+    const canvas = makeCanvas(S, S);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#b3aa9d';
+    ctx.fillRect(0, 0, S, S);
+    // Panel joints, a faint grid of precast units.
+    ctx.fillStyle = 'rgba(120, 112, 100, 0.28)';
+    for (let x = 0; x < S; x += S / 4) ctx.fillRect(x, 0, 1, S);
+
+    const floors = 4;
+    const fh = S / floors;
+    for (let f = 0; f < floors; f++) {
+        const y = f * fh + fh * 0.26, h = fh * 0.42;
+        // The ribbon: one window the width of the building, held off the
+        // corners by a pier at each end.
+        ctx.fillStyle = '#2f3b47';
+        ctx.fillRect(10, y, S - 20, h);
+        // A deep reveal above it, which is the shadow line that makes a
+        // ribbon window read as recessed rather than painted on.
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+        ctx.fillRect(10, y, S - 20, 3);
+        // Mullions dividing the ribbon.
+        ctx.fillStyle = 'rgba(179, 170, 157, 0.85)';
+        for (let m = 1; m < 6; m++) ctx.fillRect(10 + (S - 20) * m / 6, y, 2, h);
     }
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -1987,35 +2089,39 @@ function createLot() {
 // street treeline (z -37 to -43) IN FRONT of the buildings rather than
 // growing through them.
 const SKYLINE = [
-    { x: 14.5, w: 11.6, h: 16.0, z: -60, kind: 'glass' },
-    { x: 5.8, w: 9.9, h: 23.5, z: -54, kind: 'glass', cap: { w: 11, h: 3.5 } },
-    { x: -1.1, w: 9.1, h: 12.0, z: -50, kind: 'brick' },
-    { x: -9.3, w: 10.8, h: 19.5, z: -56, kind: 'glass' },
-    { x: -15.6, w: 10.7, h: 13.0, z: -51, kind: 'brick' },
-    { x: -30.6, w: 15.4, h: 26.0, z: -62, kind: 'glass', cap: { w: 14, h: 4.5 } },
-    { x: -35, w: 15.6, h: 14.5, z: -52, kind: 'brick' },
-    { x: -55.1, w: 23.6, h: 20.5, z: -58, kind: 'glass' },
-    { x: -69.1, w: 31.5, h: 11.0, z: -53, kind: 'brick' }
+    { x: 14.5, w: 11.6, h: 12.0, z: -60, kind: 'glass', v: 0, tone: 0xd7dde4 },
+    { x: 5.8, w: 9.9, h: 10.5, z: -54, kind: 'glass', v: 1, tone: 0xe6ecf2, cap: { w: 11, h: 2.5 } },
+    { x: -1.1, w: 9.1, h: 9.5, z: -50, kind: 'brick', v: 0, tone: 0xdcd6cf },
+    { x: -9.3, w: 10.8, h: 12.5, z: -56, kind: 'glass', v: 2, tone: 0xccd4dd },
+    { x: -15.6, w: 10.7, h: 10.0, z: -51, kind: 'stone', v: 0, tone: 0xe8e3da },
+    { x: -30.6, w: 15.4, h: 13.0, z: -62, kind: 'glass', v: 0, tone: 0xe0e7ee, cap: { w: 14, h: 3.5 } },
+    { x: -35, w: 15.6, h: 11.5, z: -52, kind: 'brick', v: 1, tone: 0xc9c2ba },
+    { x: -55.1, w: 23.6, h: 14.0, z: -58, kind: 'glass', v: 1, tone: 0xd2d9e1 },
+    { x: -69.1, w: 31.5, h: 12.0, z: -53, kind: 'stone', v: 0, tone: 0xd3cec5 }
 ];
 
 /** The blocks across the road, and the parapet on each. */
 function createBackdropSkyline(lot) {
     const L = LAYOUT.lot;
-    // One tile of either facade is about twelve metres square, so a wider
-    // building gets MORE bays rather than wider ones. Rounded to whole
-    // tiles, or the repeat seam cuts the last window in half.
+    // A brick or stone tile is about twelve metres square and repeats to
+    // suit the block, so a wider building gets MORE bays rather than wider
+    // ones. Rounded to whole tiles, or the repeat seam cuts the last
+    // window in half. Glass is the exception and does not tile at all:
+    // its painted sky reflection runs top to bottom, which a repeating
+    // map cannot carry. See createGlassFacadeTexture.
     const TILE = 12;
-    const tex = { glass: createGlassFacadeTexture(), brick: createBrickFacadeTexture() };
-    const mat = {
+    const tex = {
+        glass: [0, 1, 2].map(createGlassFacadeTexture),
+        brick: [0, 1].map(createBrickFacadeTexture),
+        stone: [createStoneFacadeTexture()]
+    };
+    const base = {
         // The glass is smoother and a little metallic so the daylight
-        // catches it; the brick is flat, which is most of what tells the
-        // two apart at this distance.
-        glass: new THREE.MeshStandardMaterial({
-            color: 0xdfe4ea, roughness: 0.32, metalness: 0.22
-        }),
-        brick: new THREE.MeshStandardMaterial({
-            color: 0xdcd6cf, roughness: 0.95, metalness: 0.0
-        })
+        // catches it; the brick and stone are flat, which is most of what
+        // tells the families apart at this distance.
+        glass: { roughness: 0.22, metalness: 0.35 },
+        brick: { roughness: 0.95, metalness: 0.0 },
+        stone: { roughness: 0.85, metalness: 0.0 }
     };
     // The parapet: one slim dark band capping every block. It is the
     // cheapest possible "this is a finished building" cue, and without it
@@ -2030,11 +2136,17 @@ function createBackdropSkyline(lot) {
         // is per block: one THREE.Texture carries one repeat, so a shared
         // map would give every building the bay count of whichever was
         // built last.
-        const face = tex[b.kind].clone();
+        const face = tex[b.kind][b.v % tex[b.kind].length].clone();
         face.needsUpdate = true;
-        face.repeat.set(Math.max(1, Math.round(b.w / TILE)), Math.max(1, Math.round(b.h / TILE)));
-        const skin = mat[b.kind].clone();
-        skin.map = face;
+        if (b.kind === 'glass') face.repeat.set(1, 1);
+        else face.repeat.set(Math.max(1, Math.round(b.w / TILE)), Math.max(1, Math.round(b.h / TILE)));
+        // And every block carries its OWN tint. Nine buildings out of
+        // three textures is still nine buildings only if no two adjacent
+        // ones land on the same value.
+        const skin = new THREE.MeshStandardMaterial({
+            color: b.tone, map: face,
+            roughness: base[b.kind].roughness, metalness: base[b.kind].metalness
+        });
         const body = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, 12), skin);
         body.position.y = b.h / 2;
         block.add(body);
