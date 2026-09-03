@@ -19,8 +19,9 @@
  * without one. Nothing here needs a user gesture to start (no pointer
  * lock, no audio), so the card was a curtain in front of a finished room.
  * In its place the scene opens live and coaches on arrival: pulsing halos
- * over the three people and a strip of orientation along the bottom, all
- * of which leave on the first tap. See "Arrival coaching" below.
+ * over the three people and a strip of orientation along the bottom. The
+ * strip goes on the first tap; the halos hold until the visitor actually
+ * reaches one of the three. See "Arrival coaching" below.
  *
  * Unlike the other featured-business experiences, this one has nowhere
  * outward to send anybody: John has no separate website, because this
@@ -467,9 +468,11 @@ function getPropRoot(obj) {
 
 function checkSceneTap(clientX, clientY) {
     if (!state.isLoaded || dialogOpen || nudgeOpen || posterOpen) return;
-    // Somebody who has tapped the room has understood the room, whether or
-    // not they hit anything, so the coaching has done its job and goes.
-    endCoaching('tapped-scene');
+    // The STRIP goes on the first tap, hit or miss: it explains that the
+    // room answers a tap, and the tap has just proved that landed. The
+    // HALOS stay, because they say who to tap and that has not landed
+    // until somebody actually reaches a person. See the section comment.
+    fadeCoach(coachBarEl);
     const hit = pickSceneHit(clientX, clientY);
     if (!hit) return;
     const prop = getPropRoot(hit.object);
@@ -481,6 +484,10 @@ function checkSceneTap(clientX, clientY) {
     // every-fourth-story cadence: somebody who taps John has already
     // asked, and offering again two props later would be nagging.
     if (PERSON_KINDS.includes(kind)) {
+        // Reaching a person is the one thing the coaching was for, and
+        // it counts however they got here: the halo, or the figure
+        // underneath it, or a face they found on their own.
+        endCoaching('tapped-person');
         track('click-person', { who: kind });
         // If the card cannot open for any reason, fall through and at
         // least tell their story. That also keeps their PROP_CONTENT
@@ -638,6 +645,7 @@ function openPropDialog(kind) {
     const content = PROP_CONTENT[kind];
     if (!content || !dialogModal) return;
     dialogOpen = true;
+    holdCoaching();
     track('click-prop', { kind });
     if (dialogTitle) dialogTitle.textContent = content.title;
     if (dialogMessage) dialogMessage.textContent = content.lines[propTick++ % content.lines.length];
@@ -653,6 +661,7 @@ function closePropDialog() {
     if (!dialogModal) return;
     dialogModal.classList.add('hidden');
     dialogOpen = false;
+    holdCoaching();
     // A queued invitation surfaces the moment the story card closes, so
     // the two never stack. Focus restores when the invitation closes.
     if (nudgePending && nudgeModal) {
@@ -806,6 +815,7 @@ function openContactCard(entry) {
     }
 
     nudgeOpen = true;
+    holdCoaching();
     track('contact-open', { entry });
     nudgeModal.classList.remove('hidden');
     const lead = contact ? contactCall : nudgeModal.querySelector('[data-close]');
@@ -823,6 +833,7 @@ function closeNudgeModal() {
     if (!nudgeModal) return;
     nudgeModal.classList.add('hidden');
     nudgeOpen = false;
+    holdCoaching();
     restoreDialogFocus();
 }
 
@@ -842,6 +853,7 @@ function openPoster() {
     }
     posterModal.classList.remove('hidden');
     posterOpen = true;
+    holdCoaching();
     track('poster-open');
     const close = posterModal.querySelector('.modal-close');
     if (close) close.focus();
@@ -852,6 +864,7 @@ function closePoster() {
     if (!posterModal || !posterOpen) return;
     posterModal.classList.add('hidden');
     posterOpen = false;
+    holdCoaching();
     if (posterBtn) posterBtn.focus();
 }
 
@@ -860,7 +873,17 @@ function closePoster() {
 // This scene has no welcome overlay, so nothing has told the visitor that
 // the room answers a tap. Three pulsing halos ride over the heads of the
 // cast, John's carrying a caption, and a strip along the bottom says what
-// the room is and what to do with it. All of it leaves on the first tap.
+// the room is and what to do with it.
+//
+// THE HALOS STAY UNTIL THE VISITOR REACHES A PERSON, and nothing else
+// takes them away. An earlier cut ended the coaching on ANY tap, on the
+// reasoning that somebody who has tapped the room has understood the
+// room. That is true and it is beside the point: the halos are not there
+// to teach tapping, they are there to say WHO to tap. Taking them away
+// for a tap on the floor, or on a prop, or for a miss, rewards the one
+// visitor who most needs them by removing the only thing pointing at
+// John. The strip still goes on the first tap, because it is read once,
+// so the guidance narrows rather than disappears.
 //
 // The halos are projected from anchors above each head in store.js rather
 // than parked at fixed screen points, because the visitor can pan and zoom
@@ -869,13 +892,17 @@ function closePoster() {
 //
 // The one thing to keep in mind if this is ever extended: these buttons
 // are the ONLY keyboard route to the contact card. Everything else in the
-// scene is reached through a raycast from a pointer, so once the coaching
-// is gone a keyboard visitor has the Home button and the flyer and nothing
-// else. That is decision D4 territory and is not solved here.
+// scene is reached through a raycast from a pointer. Holding them until a
+// person is reached means a keyboard visitor keeps that route for as long
+// as they still need it, which is most of what D4 was worried about,
+// though a prop story is still pointer-only.
 
 const COACH_ARRIVE_MS = 900;    // the room alone first, then the guidance
 const COACH_BAR_MS = 15000;     // the strip goes first: it is read once
-const COACH_MARKS_MS = 30000;   // the halos hold longer, then give up
+// The halos do not leave at this point, they QUIETEN: a slower, dimmer
+// pulse that keeps pointing without strobing over a room somebody may
+// well be sitting and looking at. Only reaching a person ends them.
+const COACH_CALM_MS = 30000;
 const _coachPoint = new THREE.Vector3();
 
 let coachMarksEl = null;
@@ -946,7 +973,14 @@ function startCoaching() {
     }, COACH_ARRIVE_MS));
 
     coachTimers.push(setTimeout(() => fadeCoach(coachBarEl), COACH_BAR_MS));
-    coachTimers.push(setTimeout(() => endCoaching('waited'), COACH_MARKS_MS));
+    coachTimers.push(setTimeout(() => {
+        if (!coachRunning || !coachMarksEl) return;
+        coachMarksEl.classList.add('coach-calm');
+        // Not an ending, so it is not a coach-end reason. It is the
+        // honest measure of how many visitors sat half a minute with
+        // three rings over three heads and did not try one.
+        track('coach-calm');
+    }, COACH_CALM_MS));
 }
 
 /** Park each halo over its head. Runs after the frame is drawn, so the
@@ -958,7 +992,8 @@ function updateCoachMarks() {
     const w = window.innerWidth;
     const h = window.innerHeight;
 
-    coachMarks.forEach(({ el, anchor }) => {
+    coachMarks.forEach((mark) => {
+        const { el, anchor } = mark;
         anchor.getWorldPosition(_coachPoint);
         _coachPoint.project(camera);
         // z past the far plane means the point is behind the eye, which
@@ -982,8 +1017,17 @@ function updateCoachMarks() {
         // John at the back of the desk as for the two nearer the camera.
         // Both offsets stay in the transform so the browser never has to
         // lay the element out again.
-        el.style.transform =
-            `translate(${x}px, ${y}px) translate(-50%, -100%) translate(0, calc(-1 * var(--coach-gap)))`;
+        const next = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) `
+            + 'translate(-50%, -100%) translate(0, calc(-1 * var(--coach-gap)))';
+        // The halos now hold for as long as the visit does rather than
+        // for thirty seconds, and the camera only moves while somebody is
+        // dragging, so almost every frame would rewrite the same string.
+        // Comparing first skips the style write, which is the part that
+        // costs anything.
+        if (next !== mark.transform) {
+            mark.transform = next;
+            el.style.transform = next;
+        }
     });
 }
 
@@ -992,8 +1036,25 @@ function fadeCoach(el) {
     if (el) el.classList.add('coach-out');
 }
 
-/** End the coaching for good. Every route into the scene calls this: a
- *  tap on a halo, a tap anywhere in the room, and the long stop. */
+/** Park the halos while a card is up, and bring them back when it closes.
+ *
+ *  This became necessary the moment the halos stopped leaving on the first
+ *  tap. They sit at z-index 90, under every modal and its near-opaque
+ *  backdrop, so nobody SEES them behind a story card. A keyboard visitor
+ *  would still tab straight into three invisible buttons behind it. The
+ *  same `.coach-out` that ends them does the job, because it takes
+ *  `visibility` with it once the fade finishes, and the guard means a
+ *  card closing can never resurrect coaching that has already ended. */
+function holdCoaching() {
+    if (!coachMarksEl) return;
+    const covered = dialogOpen || nudgeOpen || posterOpen;
+    if (covered) fadeCoach(coachMarksEl);
+    else if (coachRunning && coachMarks.length) coachMarksEl.classList.remove('coach-out');
+}
+
+/** End the coaching for good. Only two things do this: a tap on a halo,
+ *  and reaching one of the three people by any other route. Waiting no
+ *  longer counts, and neither does a tap that misses. */
 function endCoaching(reason) {
     if (!coachRunning) return;
     coachRunning = false;

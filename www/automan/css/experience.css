@@ -129,6 +129,38 @@ body .pan-controls.no-chrome.visible {
     animation-delay: 1.3s;
 }
 
+/* AFTER HALF A MINUTE THE HALOS QUIETEN RATHER THAN LEAVE. Nothing takes
+   them away except reaching one of the three people, because they are the
+   only thing on screen saying WHO to tap, and a visitor who has not tried
+   yet is exactly the visitor who still needs them. But a ring pulsing at
+   full strength for an entire visit is a strobe over a room somebody may
+   be perfectly happy just looking at, so it slows down and dims instead:
+   still a marker, no longer a demand. */
+.coach-marks.coach-calm .coach-halo::before,
+.coach-marks.coach-calm .coach-halo::after {
+    animation-duration: 5.2s;
+}
+
+.coach-marks.coach-calm .coach-halo::after {
+    animation-delay: 2.6s;
+}
+
+.coach-marks.coach-calm .coach-halo {
+    border-color: rgba(255, 255, 255, 0.7);
+}
+
+.coach-marks.coach-calm .coach-mark {
+    opacity: 0.72;
+    transition: opacity 1.2s ease;
+}
+
+/* Except under the pointer or the keyboard, where it comes straight back:
+   somebody reaching for it is asking for it. */
+.coach-marks.coach-calm .coach-mark:hover,
+.coach-marks.coach-calm .coach-mark:focus-visible {
+    opacity: 1;
+}
+
 @keyframes coach-pulse {
     0% { transform: scale(0.7); opacity: 0; }
     15% { opacity: 0.9; }
