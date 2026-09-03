@@ -377,19 +377,19 @@ const LAYOUT = {
             { z: -24.0, tier: 3, from: -31.5, to: -3.15 }
         ],
         poles: [{ x: -11.0, z: -14.5 }, { x: -21.0, z: -21.0 }],
-        // The pennant string has to cross the WHOLE window and show NO
-        // ends: a post in shot is a place where the flags stopped.
+        // THERE IS NO PENNANT STRING (M23, decision D27 closed). One ran
+        // across the frontage at y 3.6 from round two until now, and the
+        // work that went into it was all about making it read CORRECTLY:
+        // no visible ends, no post in shot, a whole number of texture
+        // tiles so the last flag was not cut in half.
         //
-        // The visible span at this depth is x -9.4 to 4.3 with the pan row
-        // allowed for. It was measured as -9.4 to 2.5 in round two, and
-        // that was wrong: the measuring tool compared raw atan2 bearings
-        // against a range straddling +/-180, which is exactly where the
-        // lot sits, so it truncated the frame at due north and declared a
-        // post at 3.5 to be off-screen while it stood in the middle of the
-        // glass. The string now runs well past both edges and there are no
-        // posts at all. The span stays a whole number of 4.0m texture
-        // tiles (20.0) or the last flag is cut in half at the seam.
-        pennants: { fromX: -12.5, toX: 7.5, z: -8.6, y: 3.6 },
+        // None of which was the problem. A string of triangular pennants
+        // is the universal shorthand for a BUDGET USED CAR LOT, which is
+        // the exact thing John is repositioning away from, and no marque
+        // flies them. It was the wrong object, not the wrong colour, and
+        // recolouring it at M22 only made it a quieter wrong object.
+        // Steve's call on seeing it. The band it filled is the skyline's
+        // now.
         // THE CLOUDS, and the reason they are here rather than left to the
         // shared scenery part. That part hangs its clouds at y 45 to 75
         // and 80 to 150m out, which is 26 degrees up: fine over an open
@@ -404,7 +404,7 @@ const LAYOUT = {
         // prefers-reduced-motion.
         // Eleven, not five. Five left the sky empty for long stretches:
         // they were placed by hand across a band the measuring tool had
-        // truncated (the bearing wrap, see pennants above), so half of
+        // truncated by a bearing that wraps at due north, so half of
         // them sat outside the window's real reach. Laid across the
         // measured band instead, at bearings -190 to -130 and elevations
         // 10.5 to 17 degrees, this bank keeps between 5 and 10 clouds in
@@ -908,6 +908,93 @@ function drawDealSheet() {
     return new THREE.CanvasTexture(canvas);
 }
 
+// ---- The neighbourhood's facades ------------------------------------------
+// Two textures for the buildings across the road. Both are drawn as one
+// tile of roughly twelve metres square and repeated to suit each block, so
+// a wide building gets more bays rather than wider ones.
+//
+// WHAT ACTUALLY READS AT FORTY FIVE METRES is the horizontal banding of
+// floor plates and the value of the wall. Nothing else survives: the
+// buildings sit behind a treeline, through a window, at a few dozen
+// pixels of screen height. So both of these are built out of bands and
+// values, and neither carries a detail that would turn to noise.
+
+/** A modern curtain-wall office block: dark vision glass in bays, with a
+ *  lighter spandrel band at every floor line. The per-pane variation is
+ *  what stops it reading as graph paper, and it is the sky it would
+ *  actually be reflecting rather than random noise. */
+function createGlassFacadeTexture() {
+    const S = 256;
+    const canvas = makeCanvas(S, S);
+    const ctx = canvas.getContext('2d');
+
+    // The spandrel: the opaque band across each floor slab.
+    ctx.fillStyle = '#4c5b6b';
+    ctx.fillRect(0, 0, S, S);
+
+    const floors = 3, bays = 4;
+    const fh = S / floors, bw = S / bays;
+    for (let f = 0; f < floors; f++) {
+        for (let b = 0; b < bays; b++) {
+            // Vision glass, most of the floor height, inset from the bay.
+            const x = b * bw + 2, y = f * fh + 6, w = bw - 4, h = fh * 0.66;
+            // Each pane holds a little more or less of the sky. Deterministic,
+            // so the same building looks the same on every load.
+            const lift = ((f * 7 + b * 13) % 5) * 4;
+            const g = ctx.createLinearGradient(0, y, 0, y + h);
+            g.addColorStop(0, `rgb(${52 + lift}, ${68 + lift}, ${86 + lift})`);
+            g.addColorStop(1, `rgb(${30 + lift}, ${42 + lift}, ${56 + lift})`);
+            ctx.fillStyle = g;
+            ctx.fillRect(x, y, w, h);
+        }
+        // The floor line itself, one value up from the spandrel.
+        ctx.fillStyle = '#68788a';
+        ctx.fillRect(0, f * fh + fh - 3, S, 2);
+    }
+    // Vertical mullions, drawn last so they sit over the glass.
+    ctx.fillStyle = '#5a6a7a';
+    for (let b = 0; b <= bays; b++) ctx.fillRect(b * bw - 1, 0, 2, S);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+}
+
+/** The industrial brick neighbour: a dark iron-spot brick field with tall
+ *  punched openings and a pale stone reveal around each. Deliberately not
+ *  an orange brick, which at this distance is the one colour that would
+ *  pull the eye off the desk. */
+function createBrickFacadeTexture() {
+    const S = 256;
+    const canvas = makeCanvas(S, S);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#6a4a40';
+    ctx.fillRect(0, 0, S, S);
+    // Coursing. Barely there on purpose: at this range it is a texture,
+    // not a pattern, and a legible brick course would read as stripes.
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.10)';
+    for (let y = 0; y < S; y += 6) ctx.fillRect(0, y, S, 1);
+
+    const floors = 3, bays = 4;
+    const fh = S / floors, bw = S / bays;
+    for (let f = 0; f < floors; f++) {
+        for (let b = 0; b < bays; b++) {
+            const w = bw * 0.52, h = fh * 0.58;
+            const x = b * bw + (bw - w) / 2, y = f * fh + fh * 0.22;
+            // Stone reveal first, then the opening inside it.
+            ctx.fillStyle = '#9a9086';
+            ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
+            ctx.fillStyle = ((f + b) % 4 === 0) ? '#3a4652' : '#2b3541';
+            ctx.fillRect(x, y, w, h);
+        }
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+}
+
 /** What is on the dealer's screen: the car, and the numbers beside it.
  *
  *  Deliberately unreadable, and that is not laziness. The panel is 0.30m
@@ -983,54 +1070,6 @@ function drawDealerScreen() {
     ctx.stroke();
 
     const texture = new THREE.CanvasTexture(canvas);
-    return texture;
-}
-
-/** A pennant string as one cutout strip: triangular flags hanging from a
- *  cord, alternating through the brand colors. Cheaper than geometry and
- *  perfectly legible at the distance it hangs.
- *
- *  M22 TOOK THE CARNIVAL OUT OF IT, and there is an open question left
- *  behind. The string used to alternate gold, navy, off-white and a
- *  signal blue, which is four saturated hues strung across the top of the
- *  frame and, for the visitor, the loudest thing in the room. It runs on
- *  navy and off-white now, on a dark cord, which is a frontage banner
- *  rather than a fairground.
- *
- *  The open question is whether it should be here at all. The FORM is the
- *  problem, not the colours: a string of triangular pennants is the
- *  universal shorthand for a budget used car lot, which is the exact
- *  thing John is repositioning away from, and no marque flies them.
- *  Recoloured rather than removed because removing it is a composition
- *  change (it fills the band above the parked rows, and three checks
- *  measure its span), and that is Steve's call to make with a screenshot
- *  in front of him. Recorded as decision D27. */
-function createPennantTexture() {
-    const W = 512, H = 96;
-    const canvas = makeCanvas(W, H);
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, W, H);
-
-    // The cord
-    ctx.fillStyle = '#2a2b2d';
-    ctx.fillRect(0, 0, W, 4);
-
-    const colors = ['#12294a', '#e8e6dd'];
-    const n = 16;
-    const step = W / n;
-    for (let i = 0; i < n; i++) {
-        ctx.fillStyle = colors[i % colors.length];
-        const x = i * step;
-        ctx.beginPath();
-        ctx.moveTo(x + 2, 3);
-        ctx.lineTo(x + step - 2, 3);
-        ctx.lineTo(x + step / 2, H - 8);
-        ctx.closePath();
-        ctx.fill();
-    }
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     return texture;
 }
 
@@ -1734,9 +1773,8 @@ function updatePassingCar(deltaTime) {
 }
 
 /** The whole lot: the apron and its kerb, the asphalt, the painted stall
- *  rows, the parked cars, two light poles, a pennant string, and the
- *  grass and distant backdrop that keep the horizon from reading as an
- *  empty edge. */
+ *  rows, the parked cars, two light poles, and the grass, treeline and
+ *  skyline that keep the horizon from reading as an empty edge. */
 function createLot() {
     const L = LAYOUT.lot;
     const lot = new THREE.Group();
@@ -1881,31 +1919,9 @@ function createLot() {
         lot.add(pole);
     });
 
-    // --- The pennant string across the frontage ---
-    const P = L.pennants;
-    const span = P.toX - P.fromX;
-    const pennantTexture = createPennantTexture();
-    pennantTexture.repeat.set(span / 4.0, 1);
-    const pennants = new THREE.Mesh(
-        new THREE.PlaneGeometry(span, 0.62),
-        new THREE.MeshStandardMaterial({
-            map: pennantTexture, transparent: false, alphaTest: 0.5,
-            roughness: 0.85, metalness: 0.0, side: THREE.DoubleSide
-        })
-    );
-    pennants.position.set((P.fromX + P.toX) / 2, P.y, P.z);
-    pennants.name = 'pennants';
-    lot.add(pennants);
-    // No posts. The string used to carry one at each end, and the east one
-    // stood in the middle of the glass with the flags ending against it.
-    // A dealership's frontage has poles every twenty metres, so the honest
-    // reading of an unbroken line of flags is that its poles are outside
-    // the window, which is what this now is.
-
-    // --- The backdrop: a treeline and a couple of low commercial blocks,
-    // so the far edge of the lot resolves into something rather than
-    // running out at a bare horizon. Deliberately simple and unlit by
-    // anything but the ambient rig. ---
+    // --- The backdrop: a street treeline, and the neighbourhood behind
+    // it, so the far edge of the lot resolves into something rather than
+    // running out at a bare horizon. ---
     const canopy = new THREE.MeshStandardMaterial({ color: 0x33562f, roughness: 0.95 });
     for (let i = 0; i < 14; i++) {
         const x = -58 + i * 5.0 + ((i * 29) % 7) * 0.4;
@@ -1914,17 +1930,7 @@ function createLot() {
         blob.position.set(x, L.groundY + 2.4, -37 - ((i * 17) % 5) * 1.4);
         lot.add(blob);
     }
-    const blockMaterial = new THREE.MeshStandardMaterial({ color: 0xb4ab9d, roughness: 0.9 });
-    [
-        { x: -44, w: 16, h: 5.0, z: -45 },
-        { x: -20, w: 22, h: 4.2, z: -47 },
-        { x: 4, w: 14, h: 5.6, z: -44 }
-    ].forEach((b, i) => {
-        const block = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, 10), blockMaterial);
-        block.position.set(b.x, L.groundY + b.h / 2, b.z);
-        block.name = `backdropBlock_${i}`;
-        lot.add(block);
-    });
+    createBackdropSkyline(lot);
 
     // --- The clouds the window frames ---
     createCloudBank(lot);
@@ -1933,6 +1939,126 @@ function createLot() {
     createPassingCar(lot);
 
     showroomGroup.add(lot);
+}
+
+// ---- The neighbourhood ----------------------------------------------------
+// WHAT IS ACROSS THE ROAD SETS THE ADDRESS. The backdrop used to be three
+// flat beige boxes, four to five metres tall, sitting behind a five metre
+// treeline: a tan band peeking over green, which read as exactly what it
+// was built as, a row of drab warehouses. John is repositioning on high
+// end vehicles, and a dealership in a warehouse district is a different
+// business from a dealership in a good part of town, whatever the copy on
+// the page says. Steve's note, and he is right.
+//
+// FOUR THINGS DO THE WORK, none of them detail:
+//
+//  - HEIGHT. The old blocks were shorter than the trees in front of them.
+//    The window passes about nineteen metres of elevation at this depth,
+//    so these run nine to twenty three, and the tallest are cut off by
+//    the head of the glass. A building whose top you cannot see reads as
+//    taller than one you can, which is free.
+//  - SILHOUETTE. Varied heights, two setback crowns and a parapet on
+//    every block, because an extruded box with a flat top is the one
+//    shape that always reads as placeholder geometry.
+//  - HORIZONTAL BANDING. Floor plates at every level are the single
+//    strongest signal of "occupied office building" and they survive
+//    being shrunk to a few dozen pixels, which almost nothing else does.
+//  - DEPTH. They are staggered from 42 to 60 metres out, and the shared
+//    scene fog begins at 40, so the far ones haze toward the sky on their
+//    own. Atmospheric perspective for nothing.
+//
+// BOTH OF STEVE'S OPTIONS, mixed rather than chosen. Glass for the tall
+// ones and brick for the short ones is what an actual upscale district
+// looks like (nobody builds six identical towers), and the mix is also
+// what produces the height variation the silhouette needs. Nine blocks,
+// two shared materials, no shadows: it is scenery seen through a window
+// forty five metres away.
+//
+// THE NINE ARE PLACED BY BEARING, NOT BY EYE. Buildings at nine different
+// depths with touching x ranges do NOT touch on screen: what decides
+// where a block lands across the window is the ANGLE to it, and the first
+// hand-placed set left three holes of bare horizon between one and two
+// and a half degrees wide. These come out of a solve that divides the
+// window's visible band into nine slots and converts each slot's edges
+// back to world x at that block's own depth, with 1.6 degrees of overlap
+// on every join so nothing opens up when the visitor pans.
+//
+// Every front face sits at z -44 or further out, which is what keeps the
+// street treeline (z -37 to -43) IN FRONT of the buildings rather than
+// growing through them.
+const SKYLINE = [
+    { x: 14.5, w: 11.6, h: 16.0, z: -60, kind: 'glass' },
+    { x: 5.8, w: 9.9, h: 23.5, z: -54, kind: 'glass', cap: { w: 11, h: 3.5 } },
+    { x: -1.1, w: 9.1, h: 12.0, z: -50, kind: 'brick' },
+    { x: -9.3, w: 10.8, h: 19.5, z: -56, kind: 'glass' },
+    { x: -15.6, w: 10.7, h: 13.0, z: -51, kind: 'brick' },
+    { x: -30.6, w: 15.4, h: 26.0, z: -62, kind: 'glass', cap: { w: 14, h: 4.5 } },
+    { x: -35, w: 15.6, h: 14.5, z: -52, kind: 'brick' },
+    { x: -55.1, w: 23.6, h: 20.5, z: -58, kind: 'glass' },
+    { x: -69.1, w: 31.5, h: 11.0, z: -53, kind: 'brick' }
+];
+
+/** The blocks across the road, and the parapet on each. */
+function createBackdropSkyline(lot) {
+    const L = LAYOUT.lot;
+    // One tile of either facade is about twelve metres square, so a wider
+    // building gets MORE bays rather than wider ones. Rounded to whole
+    // tiles, or the repeat seam cuts the last window in half.
+    const TILE = 12;
+    const tex = { glass: createGlassFacadeTexture(), brick: createBrickFacadeTexture() };
+    const mat = {
+        // The glass is smoother and a little metallic so the daylight
+        // catches it; the brick is flat, which is most of what tells the
+        // two apart at this distance.
+        glass: new THREE.MeshStandardMaterial({
+            color: 0xdfe4ea, roughness: 0.32, metalness: 0.22
+        }),
+        brick: new THREE.MeshStandardMaterial({
+            color: 0xdcd6cf, roughness: 0.95, metalness: 0.0
+        })
+    };
+    // The parapet: one slim dark band capping every block. It is the
+    // cheapest possible "this is a finished building" cue, and without it
+    // a box ends by simply stopping.
+    const parapet = new THREE.MeshStandardMaterial({ color: 0x4b5158, roughness: 0.85 });
+
+    SKYLINE.forEach((b, i) => {
+        const block = new THREE.Group();
+        block.name = `backdropBlock_${i}`;
+
+        // The texture is cloned per block, not shared, because the repeat
+        // is per block: one THREE.Texture carries one repeat, so a shared
+        // map would give every building the bay count of whichever was
+        // built last.
+        const face = tex[b.kind].clone();
+        face.needsUpdate = true;
+        face.repeat.set(Math.max(1, Math.round(b.w / TILE)), Math.max(1, Math.round(b.h / TILE)));
+        const skin = mat[b.kind].clone();
+        skin.map = face;
+        const body = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, 12), skin);
+        body.position.y = b.h / 2;
+        block.add(body);
+
+        const capBar = new THREE.Mesh(new THREE.BoxGeometry(b.w + 0.4, 0.7, 12.4), parapet);
+        capBar.position.y = b.h + 0.35;
+        block.add(capBar);
+
+        // A setback crown on the two tallest, which is what stops a
+        // skyline reading as a bar chart.
+        if (b.cap) {
+            const upper = new THREE.Mesh(new THREE.BoxGeometry(b.cap.w, b.cap.h, 9), skin);
+            upper.position.y = b.h + b.cap.h / 2 + 0.7;
+            block.add(upper);
+            const upperCap = new THREE.Mesh(
+                new THREE.BoxGeometry(b.cap.w + 0.4, 0.6, 9.4), parapet
+            );
+            upperCap.position.y = b.h + b.cap.h + 1.0;
+            block.add(upperCap);
+        }
+
+        block.position.set(b.x, L.groundY, b.z);
+        lot.add(block);
+    });
 }
 
 // ---- The clouds -----------------------------------------------------------
@@ -3621,7 +3747,7 @@ export const __test__ = {
     CLOUD_PUFFS, getCloudBank: () => cloudBank,
     johnTargets, customerTargets, dealerTargets,
     PASS_SPEED, PASS_FROM, PASS_TO, PASS_GAP, WHEEL_R, passingWheelDelta,
-    CAR_COLORS,
+    CAR_COLORS, SKYLINE,
     SUV, widestVehicle, suvWidth, createLotSUV, suvGeometries,
     getPassingCar: () => passingCar,
     poseSeated, addElbow, addWaist, addNeck, findHairGroup,
