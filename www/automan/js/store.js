@@ -2744,58 +2744,135 @@ function screenAim(at, dealer, eye) {
 // ============================================
 // THE SHOWROOM'S OWN FIXTURES
 // ============================================
-/** The sales board: the month's numbers in marker, where everyone can
- *  see them. No figures, only names and tallies, because a number here
- *  would read as a claim about a real dealership. */
+// The hand. Every one of these ships with an operating system, so the
+// board is written rather than typeset without a byte being fetched, and
+// the CSP would have refused a webfont anyway. Bradley Hand (Apple) and
+// Segoe Print (Windows) are the two that actually turn up, and both are a
+// tidy marker hand rather than a scrawl, which is the brief: handwritten,
+// not sloppy. Comic Sans is last and is nobody's first choice, but it is
+// the one handwriting face that is installed almost everywhere, and a
+// board that falls back to Arial is not a board.
+//
+// Same convention as the whiteboards in www/interstate, www/sunnyvalejenn
+// and www/steve.
+const WB_FONT = '"Bradley Hand", "Segoe Print", "Ink Free", "Marker Felt", "Comic Sans MS", cursive';
+const WB_INK = '#2c3a4a';       // the black marker, which is really blue-black
+const WB_BLUE = '#2a5c9a';      // the blue one, for the time and the rules
+
+// A DETERMINISTIC WOBBLE. Handwriting is not straight, and a line drawn
+// with `lineTo` is the one thing that says "typeset" however good the
+// font is. This walks a segment in a few steps and nudges each one, so a
+// rule reads as drawn with a marker against nothing.
+//
+// Deterministic and not Math.random, unlike the interstate original: this
+// texture is baked once at load, so a random wobble would draw a
+// different board on every visit and no check could ever describe it.
+// `seed` is just an index, and the numbers are a fixed sequence.
+const WB_JIG = [0.31, -0.62, 0.48, -0.19, 0.71, -0.44, 0.12, -0.83];
+function wbLine(ctx, x1, y1, x2, y2, color, width, jitter, seed) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const segs = 7;
+    for (let i = 0; i <= segs; i++) {
+        const t = i / segs;
+        const j = (i === 0 || i === segs) ? 0 : jitter;     // the ends stay put
+        const w = WB_JIG[(i + (seed || 0)) % WB_JIG.length];
+        if (i === 0) ctx.moveTo(x1, y1);
+        else ctx.lineTo(x1 + (x2 - x1) * t + w * j, y1 + (y2 - y1) * t + w * j);
+    }
+    ctx.stroke();
+}
+
+/** THE DEALERSHIP'S OWN BOARD, AND JOHN'S NAME IS ON IT.
+ *
+ *  It used to be a month-to-date leaderboard: five surnames and a row of
+ *  tally marks. True to a sales floor and, as Steve put it, a little off
+ *  theme for a showroom selling expensive cars, and it did nothing for
+ *  the man the page is for.
+ *
+ *  What it says now is the day's schedule, and the two o'clock is John
+ *  Walker. That is a better advertisement for John than anything the page
+ *  could say in its own voice, because it is the OTHER SIDE saying it: a
+ *  dealership that puts his name on its own board and calls it the one
+ *  that matters has already conceded the whole argument.
+ *
+ *  IT IS NOT A NOTE ABOUT CHEATING ANYBODY, and that is decision D6
+ *  rather than squeamishness. Steve's first thought was a note to "make
+ *  the lowest offer possible", which is the obvious version and the
+ *  weaker one twice over. It makes the dealer a villain, which D6 rules
+ *  out and which this scene has been careful about since M0: the pitch is
+ *  "bring somebody who knows", not "dealers are crooks". And a beaten
+ *  villain is a much thinner endorsement than a respected professional
+ *  who has decided not to try anything. (It is also ambiguous. A dealer's
+ *  "lowest offer" is a low PRICE if you read it as the sale and a low
+ *  trade-in if you read it as the appraisal, and the one line on this
+ *  page that exists to sell John should not need a second reading.)
+ *
+ *  LESS ON IT THAN THERE WAS, which is Steve's second note and the right
+ *  one. The first draft carried a subtitle, four instructions and a month
+ *  end reminder, which is a lot of marker for something read at a glance
+ *  from four metres away. What is left is a heading, a rule, the
+ *  appointment, and two notes. The name is the point, so the name is the
+ *  biggest thing on the board and it is his FULL name.
+ *
+ *  What is actually legible from the visitor's chair is the heading and
+ *  the name: the board is about 205 screen pixels wide in the composed
+ *  frame, so 46px of a 768px canvas is twelve pixels of "Today's
+ *  schedule" and 70px is nineteen of "John Walker". The two notes are
+ *  marker-sized on purpose. They are texture at a glance and they are the
+ *  reward for leaning in, which this scene supports: it has pinch zoom.
+ *
+ *  Still no figures. A number on a board in a dealership reads as a claim
+ *  about a real dealership, which is why the old one had tally marks and
+ *  no money on it either. A time is not a claim. */
 function drawSalesBoard(W, H) {
     const canvas = makeCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    ctx.fillStyle = '#f7f7f5';
+    // A GLASS WRITING BOARD, not a school whiteboard. Same fixture, one
+    // tier up, which is the other half of Steve's first note: the frame
+    // was already brushed metal, so the face is what was letting it down.
+    // A cool pale tint instead of paper white, and one soft diagonal
+    // sheen, which is the same thing the arrival panel does to say
+    // "polished".
+    const ground = ctx.createLinearGradient(0, 0, 0, H);
+    ground.addColorStop(0, '#eef1f2');
+    ground.addColorStop(1, '#e2e6e8');
+    ctx.fillStyle = ground;
+    ctx.fillRect(0, 0, W, H);
+    const sheen = ctx.createLinearGradient(0, H, W * 0.75, 0);
+    sheen.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    sheen.addColorStop(0.55, 'rgba(255, 255, 255, 0.55)');
+    sheen.addColorStop(0.75, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = sheen;
     ctx.fillRect(0, 0, W, H);
 
-    ctx.strokeStyle = '#0d5bc4';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(30, 74); ctx.lineTo(W - 30, 74);
-    ctx.stroke();
-    ctx.fillStyle = '#12294a';
-    ctx.font = 'bold 46px system-ui, sans-serif';
-    ctx.fillText('THIS MONTH', 30, 58);
+    ctx.fillStyle = WB_INK;
+    ctx.font = `54px ${WB_FONT}`;
+    ctx.fillText("Today's schedule", 48, 96);
+    wbLine(ctx, 44, 128, W - 54, 124, WB_BLUE, 4, 3.2, 0);
 
-    // Names and tally marks. Marker blue, a little uneven, the way a
-    // board that gets updated every morning actually looks.
-    const rows = ['ALVAREZ', 'BRENNAN', 'OKAFOR', 'PARK', 'WHITFIELD'];
-    ctx.font = '30px system-ui, sans-serif';
-    rows.forEach((name, i) => {
-        const y = 130 + i * 54;
-        ctx.fillStyle = '#39414d';
-        ctx.fillText(name, 34, y);
-        ctx.strokeStyle = '#1d3f7a';
-        ctx.lineWidth = 4;
-        const tallies = 3 + ((i * 5) % 7);
-        for (let k = 0; k < tallies; k++) {
-            const gx = 300 + Math.floor(k / 5) * 62 + (k % 5) * 11;
-            if (k % 5 === 4) {           // the diagonal that closes a five
-                ctx.beginPath();
-                ctx.moveTo(gx - 46, y - 22); ctx.lineTo(gx + 4, y + 2);
-                ctx.stroke();
-            } else {
-                ctx.beginPath();
-                ctx.moveTo(gx, y - 22); ctx.lineTo(gx + 2, y + 2);
-                ctx.stroke();
-            }
-        }
-    });
+    // The appointment, and it is the only thing on the board. His full
+    // name, because a surname is what a dealership writes and a full name
+    // is what a visitor can match to the man in the chair and to the card
+    // that opens when they tap him.
+    ctx.fillStyle = WB_BLUE;
+    ctx.font = `54px ${WB_FONT}`;
+    ctx.fillText('2:00', 54, 238);
+    ctx.fillStyle = WB_INK;
+    ctx.font = `84px ${WB_FONT}`;
+    ctx.fillText('John Walker', 202, 244);
+    // Underlined by hand, the way somebody marks the one that matters.
+    wbLine(ctx, 204, 272, 674, 276, WB_BLUE, 5, 3.6, 3);
 
-    ctx.strokeStyle = '#f0a51e';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(30, H - 46); ctx.lineTo(W - 30, H - 46);
-    ctx.stroke();
-    ctx.fillStyle = '#8a6a1e';
-    ctx.font = 'italic 26px system-ui, sans-serif';
-    ctx.fillText('TARGET', 30, H - 14);
+    // AND NOTHING ELSE. The bottom half of this board is empty, which is
+    // the point twice over. The customer's head covers it from the
+    // visitor's chair, so anything written there was never going to be
+    // read (Steve's note, and the reason two notes and a subtitle came
+    // off). And an appointment alone on a day's schedule says more than
+    // any note under it could: they cleared the day for him.
 
     return new THREE.CanvasTexture(canvas);
 }

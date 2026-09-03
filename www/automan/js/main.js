@@ -519,32 +519,29 @@ function overIntro(clientX, clientY) {
 
 function checkSceneTap(clientX, clientY) {
     if (!state.isLoaded || dialogOpen || nudgeOpen || posterOpen) return;
-    // WHILE THE PANEL IS UP, THE HALOS ARE THE ONLY THINGS THAT OPEN
-    // ANYTHING. Steve's call, and it makes the arrival one decision
-    // instead of a room full of them: three rings, and a card explaining
-    // why. A tap anywhere else clears the panel and opens nothing, so it
-    // is never a dead tap (something visibly happens), and the very next
-    // tap works normally.
-    //
-    // The panel's own footnote is written to match. It leads with the
-    // marker and describes the rest of the room as a promise rather than
-    // an instruction, because an instruction there would be describing
-    // the scene one tap from now.
-    if (introShowing()) {
-        if (!overIntro(clientX, clientY)) fadeCoach(introEl);
-        return;
-    }
+
+    // THE ARRIVAL IS ONE DECISION, AND THE THREE PEOPLE ARE PART OF IT.
+    // While the panel is up, the only things that open anything are the
+    // halos and THE CAST THEY POINT AT. Steve's call, and it corrects the
+    // first version of this rule, which admitted only the halos: the ring
+    // floats above a head, so the natural thing to reach for is the
+    // person under it, and a tap on John's face that did nothing was the
+    // cost I flagged and he found. A tap anywhere else clears the panel
+    // and opens nothing, so it is still never a dead tap, and the next
+    // one works normally.
+    const arriving = introShowing();
+    if (arriving && overIntro(clientX, clientY)) return;
+    if (arriving) fadeCoach(introEl);
+
     const hit = pickSceneHit(clientX, clientY);
-    if (!hit) return;
-    const prop = getPropRoot(hit.object);
-    if (!prop) return;
-    const kind = prop.userData.propKind;
+    const prop = hit && getPropRoot(hit.object);
+    const kind = prop && prop.userData.propKind;
 
     // Tapping any of the three people goes straight to the contact card,
     // tailored to whoever was tapped. It does NOT count toward the
     // every-fourth-story cadence: somebody who taps John has already
     // asked, and offering again two props later would be nagging.
-    if (PERSON_KINDS.includes(kind)) {
+    if (kind && PERSON_KINDS.includes(kind)) {
         // Reaching a person is the one thing the coaching was for, and
         // it counts however they got here: the halo, or the figure
         // underneath it, or a face they found on their own.
@@ -555,7 +552,12 @@ function checkSceneTap(clientX, clientY) {
         // entries reachable rather than leaving three blocks of copy
         // nobody can ever see.
         if (openContactCard(kind)) return;
+        openPropDialog(kind);
+        return;
     }
+
+    // Everything else in the room waits for the panel to go.
+    if (arriving || !kind) return;
     openPropDialog(kind);
 }
 
@@ -689,8 +691,8 @@ const PROP_CONTENT = {
     salesboard: {
         title: 'The Sales Board',
         lines: [
-            'The month\'s numbers, in marker, where everybody can see them. Timing matters more than most buyers realize.',
-            'Knowing what a dealership needs at the end of a month is worth real money to the person sitting on the other side.'
+            'Somebody wrote John\'s name up there this morning, under the day\'s schedule, and underlined it. It is the only appointment on the board.',
+            'Twenty five years on the other side of that desk is why. They already know what he is going to ask for, so they are getting it ready.'
         ]
     },
     keyboard_keys: {
