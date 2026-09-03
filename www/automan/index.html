@@ -129,7 +129,7 @@
                 side and desked the deals, so he knows exactly where the
                 money moves: the trade valuation, the price, the financing
                 and the rate, the extended warranty, the tire and wheel
-                cover, the GAP insurance. He now does that work for the
+                protection, the GAP insurance. He now does that work for the
                 buyer instead of the dealer. In the 3D scene he is at the
                 desk with his customer, pointing at the deal sheet and
                 making her case, while the lot fills the window behind
@@ -205,13 +205,31 @@
         </button>
     </div>
 
-    <!-- The orientation the welcome card used to carry, moved to a strip
-         along the bottom that never covers the room and never has to be
-         dismissed. It fades out on its own, and on the first tap. -->
-    <div id="coach-bar" class="coach-bar coach-out">
-        <p class="coach-bar-lead">John is at the desk, and he is doing the talking.</p>
-        <p class="coach-bar-body" id="coach-bar-body">Click anyone at the desk to reach John, or
-            anything in the showroom for a little of its story. Drag to look around.</p>
+    <!-- WHAT JOHN ACTUALLY DOES, ON ARRIVAL, WITHOUT A TAP (decision D22).
+         This was the orientation strip, and orientation was all it said,
+         so a visitor who never tapped anything learned that the room
+         answers a tap and nothing whatsoever about the man it is for.
+         The pitch itself now leads and the mechanics close.
+
+         It is a PANEL, not an overlay: it docks along the bottom over the
+         empty floor, never covers the desk, blocks nothing, and asks to
+         be dismissed by nobody. That is what keeps decision D18 intact
+         while still answering the question the scene was leaving open.
+
+         Front-loaded on purpose. The visitor arrives from a link John
+         shared, on a phone, with about ten seconds of patience (PRD 12),
+         so the name and the one line that matters come first and the
+         terms follow for anyone still reading. #help-btn opens the same
+         story at length, for anyone who wants it after this has gone. -->
+    <div id="intro-card" class="intro-card coach-out">
+        <p class="intro-kicker">John Walker, The Auto Man</p>
+        <p class="intro-lead">He works for the buyer, not the dealership.</p>
+        <p class="intro-body">Twenty five years inside the business and more than 2,000 cars,
+            now spent on your side of the desk: the trade value, the price, the financing, and
+            the coverage they add at the end. The first call is free, and if he cannot get you the
+            deal you want, you owe him nothing.</p>
+        <p class="intro-hint" id="intro-hint">Tap anyone at the desk to reach John, or anything
+            in the room for a little of its story.</p>
     </div>
 
     <!-- Floating controls -->
@@ -238,8 +256,8 @@
          than no link. The noscript block above already carries John's
          pitch for that visitor. -->
     <button id="help-btn" class="ui-float menu-btn" type="button"
-        title="See John's flyer"
-        aria-label="See John's flyer">
+        title="About John"
+        aria-label="About John, and his flyer">
         <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="9" fill="none" />
             <path d="M12 10.6v6.2" stroke-linecap="round" />
@@ -281,10 +299,32 @@
         <div class="modal-backdrop" data-close></div>
         <div class="modal-container piece-card poster-card">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
-            <h2 id="poster-title" class="sr-only">John Walker, The Auto Man: his flyer</h2>
+            <!-- THE SERVICE IN WORDS, ABOVE THE FLYER (D22). The card used
+                 to be the flyer and nothing else, with its heading hidden
+                 from sight, which made the only full account of what John
+                 does an IMAGE OF TEXT: unselectable, untranslatable, and
+                 reachable by a screen reader only through one very long
+                 alt attribute. This is the same story the noscript block
+                 tells, in the same voice, as real text, and the flyer now
+                 illustrates it rather than carrying it alone. -->
+            <div class="about-text">
+                <h2 id="poster-title" class="about-title">John Walker, The Auto Man</h2>
+                <p class="about-lead">Your advocate before, during, and after the deal.</p>
+                <p class="about-body">John has spent more than twenty five years in sales and
+                    marketing, ten of them in the automotive industry, and more than 2,000
+                    vehicles have gone through his hands. He has worked the dealership side and
+                    desked the deals, so he knows exactly where the money moves: the trade
+                    valuation, the price, the financing and the rate, the extended warranty, the
+                    tire and wheel protection, the GAP insurance. He now does all of that for the
+                    buyer instead of the dealer.</p>
+                <p class="about-body">The consultation is free, by phone or by Zoom. If he cannot
+                    get you the deal you want, you owe him nothing, and there is a 100 percent
+                    satisfaction guarantee on the small fee if you are not happy. He works in
+                    Baltimore, Maryland, and anywhere else by Zoom.</p>
+                <button id="poster-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
+            </div>
             <img id="poster-image" class="poster-image" width="1023" height="1537"
                 alt="John Walker's flyer. Come see Walker, The Auto Man, your local auto expert. A photograph of John, a bald man in a light blue shirt, standing between two pickup trucks on rocky ground. Free consultations on the phone or by Zoom, and a 100 percent satisfaction guarantee or your money returned. Let me help you get the best deal for your trade and I will desk the whole deal for you. Let me walk you through the process with extended warranties, tire and wheel protection and gap insurance. Do you need it? Maybe. Maybe not. But let me be your customer advocate. The flyer ends with a phone number and an email address, which this page gives as live call, text and email links on the card behind any of the three people at the desk."">
-            <p class="poster-note">John's own flyer, shown here with his blessing.</p>
         </div>
     </div>
 

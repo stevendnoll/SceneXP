@@ -7,8 +7,9 @@
  * loader, and this scene uses all of them unchanged. It also carries a
  * welcome card, which this scene is the first one not to use.
  *
- * What is here is the ARRIVAL COACHING that replaced that welcome card,
- * and the POSTER CARD. The poster reuses #help-modal, and the id is
+ * What is here is the ARRIVAL COACHING that replaced that welcome card
+ * (the halos, and the intro panel that carries John's pitch), and the
+ * ABOUT CARD. The About card reuses #help-modal, and the id is
  * load-bearing: the shared stylesheet scopes its modal rules (the fixed
  * overlay, .hidden, the backdrop) to a fixed list of ids, so a new one
  * would arrive with no hiding, no layout, and a near-opaque generic
@@ -203,20 +204,30 @@ body .pan-controls.no-chrome.visible {
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
-/* The strip along the bottom. Two lines, out of the way of the desk, and
-   it never asks to be dismissed. */
-.coach-bar {
+/* THE INTRO PANEL along the bottom. It carries John's pitch, not just
+   the controls, which is the whole reason it exists (D22): a visitor who
+   never taps anything still has to learn what this man does.
+
+   A PANEL, NOT AN OVERLAY, and that distinction is the one that keeps
+   D18 intact. It docks over the empty floor at the bottom of the frame,
+   never reaches the desk, takes no pointer events, and asks nobody to
+   dismiss it. The room is live and complete behind it from the first
+   frame, which a welcome card could never be. */
+.intro-card {
     position: fixed;
     left: 50%;
     bottom: 1.25rem;
     bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 90;
-    width: min(92vw, 34rem);
+    width: min(92vw, 33rem);
     box-sizing: border-box;
-    padding: 0.85rem 1.15rem;
+    padding: 0.9rem 1.15rem 0.95rem;
     border-radius: 14px;
-    text-align: center;
+    /* Left aligned, where the old strip was centred. Centring is fine for
+       a line of orientation and poor for a paragraph: every line starts
+       somewhere new and the eye has to hunt for it. */
+    text-align: left;
     color: #f2f5f9;
     background: rgba(12, 24, 44, 0.86);
     border: 1px solid rgba(255, 255, 255, 0.16);
@@ -224,18 +235,41 @@ body .pan-controls.no-chrome.visible {
     pointer-events: none;       /* it explains the room, it is not part of it */
 }
 
-.coach-bar-lead {
-    margin: 0 0 0.3rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    line-height: 1.35;
+/* Read in the order somebody with ten seconds gives it: who, then the
+   one line that matters, then the terms, then the mechanics. Each step
+   down in size is a step down in how much it needs to be read. */
+.intro-kicker {
+    margin: 0 0 0.15rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #f0a51e;
 }
 
-.coach-bar-body {
-    margin: 0;
+.intro-lead {
+    margin: 0 0 0.4rem;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.intro-body {
+    margin: 0 0 0.45rem;
     font-size: 0.82rem;
-    line-height: 1.5;
-    color: #c9d6e4;
+    line-height: 1.55;
+    color: #d3dee9;
+}
+
+/* The mechanics, demoted to the footnote they always were. The rule
+   above it is doing the work of a heading change without one. */
+.intro-hint {
+    margin: 0;
+    padding-top: 0.45rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    font-size: 0.76rem;
+    line-height: 1.45;
+    color: #a9bccf;
 }
 
 /* ONE mechanism for both directions, and that is deliberate. Both layers
@@ -254,14 +288,14 @@ body .pan-controls.no-chrome.visible {
    order and the accessibility tree rather than leaving three invisible
    buttons behind. */
 .coach-marks,
-.coach-bar {
+.intro-card {
     opacity: 1;
     visibility: visible;
     transition: opacity 0.55s ease, visibility 0s;
 }
 
 .coach-marks.coach-out,
-.coach-bar.coach-out {
+.intro-card.coach-out {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -278,16 +312,21 @@ body .pan-controls.no-chrome.visible {
         font-size: 0.75rem;
     }
 
-    .coach-bar {
-        padding: 0.7rem 0.9rem;
+    .intro-card {
+        padding: 0.7rem 0.9rem 0.75rem;
     }
 
-    .coach-bar-lead {
-        font-size: 0.88rem;
+    .intro-lead {
+        font-size: 0.92rem;
     }
 
-    .coach-bar-body {
+    .intro-body {
         font-size: 0.78rem;
+        line-height: 1.5;
+    }
+
+    .intro-hint {
+        font-size: 0.72rem;
     }
 }
 
@@ -313,9 +352,9 @@ body .pan-controls.no-chrome.visible {
     }
 
     .coach-marks,
-    .coach-bar,
+    .intro-card,
     .coach-marks.coach-out,
-    .coach-bar.coach-out {
+    .intro-card.coach-out {
         transition: none;
     }
 }
@@ -359,20 +398,67 @@ body .pan-controls.no-chrome.visible {
     border: 0;
 }
 
-/* The card holding the flyer. The shared .piece-card is 380px wide and
-   built for a paragraph of text; a poster is a tall image and wants the
-   viewport, so this widens the card, drops its padding, and lets the
-   image set the height. */
+/* The card holding John's story and then his flyer. The shared
+   .piece-card is 380px wide and built for a paragraph of text; this holds
+   a few paragraphs AND a tall image, so it widens, drops its own padding
+   (each block brings its own), and SCROLLS.
+
+   `overflow-y: auto` is the change that came with the text (D22). While
+   this card was the flyer alone it was `overflow: hidden` and the image
+   was capped at 92vh, so the whole thing always fitted. Text above the
+   image means it no longer does, and hidden overflow would have cut the
+   flyer off with no way to reach it. */
 #help-modal .poster-card {
     width: auto;
     max-width: min(94vw, 560px);
     max-height: 92vh;
     max-height: 92dvh;
     padding: 0;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
     background: #0e1c2c;
     line-height: 0;             /* no descender gap under the image */
 }
+
+/* The service, in words. This is the only full account of what John does
+   that a screen reader, a translator or a text selection can actually
+   reach: the flyer is an image, and an image of text is not text. */
+.about-text {
+    padding: 1.35rem 1.35rem 1.1rem;
+    line-height: 1.6;           /* the card zeroes it for the image */
+    text-align: left;
+}
+
+.about-title {
+    margin: 0 0 0.2rem;
+    font-size: 1.15rem;
+    line-height: 1.3;
+    color: #fff;
+}
+
+.about-lead {
+    margin: 0 0 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #f0a51e;
+}
+
+.about-body {
+    margin: 0 0 0.85rem;
+    font-size: 0.86rem;
+    line-height: 1.65;
+    color: #cfdae6;
+}
+
+/* The one thing this card is for, after the reading: reaching him. It
+   wears the same .dialog-cta the prop stories end on, so the route out
+   of every card on this page looks the same. */
+#poster-cta {
+    margin: 0.25rem 0 0;
+}
+
 
 #help-modal .poster-card .modal-close {
     /* The flyer runs to the edges, so the close control needs its own
@@ -396,6 +482,11 @@ body .pan-controls.no-chrome.visible {
     max-height: 92dvh;
     object-fit: contain;
     background: #0e1c2c;
+    /* A hairline between John's story and his flyer. The captions that
+       used to introduce the image are gone, so this is what keeps the
+       two from running into each other when the flyer's own edge
+       happens to be dark. */
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* While the image is still on its way, hold the card's shape rather than
@@ -405,14 +496,3 @@ body .pan-controls.no-chrome.visible {
     width: min(94vw, 560px);
 }
 
-/* A caption strip under the flyer, for the one thing the image cannot
-   carry: that it is John's own artwork. */
-.poster-note {
-    margin: 0;
-    padding: 0.5rem 0.85rem 0.7rem;
-    font-size: 0.72rem;
-    line-height: 1.45;
-    color: #b9c6d4;
-    text-align: center;
-    background: #0e1c2c;
-}

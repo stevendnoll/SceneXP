@@ -10,7 +10,8 @@
  * it is a bright midday on the lot at every hour, though the cycle's
  * per-frame pass still runs for the fixed-time sky paint and the
  * shadow-map refresh). The interactions that do exist are featherweight:
- * two floating buttons (Home, and one that opens John's own flyer), the
+ * two floating buttons (Home, and one that opens the About card: what
+ * John does, in words, with his flyer under it), the
  * always-on pan and zoom row (shared pan part, with swipe, tilt, and pinch
  * on touch), and one raycast per tap to see what the visitor pointed at,
  * answered in the host's voice by the dialog card.
@@ -19,15 +20,18 @@
  * without one. Nothing here needs a user gesture to start (no pointer
  * lock, no audio), so the card was a curtain in front of a finished room.
  * In its place the scene opens live and coaches on arrival: pulsing halos
- * over the three people and a strip of orientation along the bottom. The
- * strip goes on the first tap; the halos hold until the visitor actually
- * reaches one of the three. See "Arrival coaching" below.
+ * over the three people, and an intro PANEL along the bottom carrying
+ * what John actually does for a buyer. The panel goes on the first tap or
+ * at twenty six seconds; the halos hold until the visitor actually
+ * reaches one of the three. #help-btn opens the same account at length,
+ * with John's flyer under it, for anyone who wants it later. See
+ * "Arrival coaching" below.
  *
  * Unlike the other featured-business experiences, this one has nowhere
  * outward to send anybody: John has no separate website, because this
  * page is his web presence. So NOTHING here links off the site: every card
- * CTA leads to the contact card, and the second floating button opens a
- * picture of John's flyer rather than sending anybody anywhere.
+ * CTA leads to the contact card, and the second floating button opens
+ * John's own story and flyer rather than sending anybody anywhere.
  *
  * BUILD STATUS: milestone M15, the fifth screenshot QA round. Every prop
  * in the showroom answers a tap with its own story, the three people open
@@ -306,6 +310,15 @@ function setupEventListeners() {
         openContactCard('story');
     }, { signal });
 
+    // The About card ends the same way every other card on this page does,
+    // at the contact card. Somebody who has just read what John does is
+    // the likeliest person in the scene to want him.
+    const posterCta = document.getElementById('poster-cta');
+    if (posterCta) posterCta.addEventListener('click', () => {
+        closePoster();
+        openContactCard('about');
+    }, { signal });
+
     // (There is no floating contact button to wire. It was removed after
     // the second QA round: everything it offered is already in the scene,
     // and its only no-JavaScript destination was the site's own contact
@@ -472,7 +485,7 @@ function checkSceneTap(clientX, clientY) {
     // room answers a tap, and the tap has just proved that landed. The
     // HALOS stay, because they say who to tap and that has not landed
     // until somebody actually reaches a person. See the section comment.
-    fadeCoach(coachBarEl);
+    fadeCoach(introEl);
     const hit = pickSceneHit(clientX, clientY);
     if (!hit) return;
     const prop = getPropRoot(hit.object);
@@ -612,7 +625,7 @@ const PROP_CONTENT = {
     chairs: {
         title: 'The Waiting Chairs',
         lines: [
-            'Where you sit while somebody takes your keys away to appraise your trade. The wait is a tactic as often as it is a queue.',
+            'Where you sit while somebody takes your keys away to appraise your trade. The wait is a tactic as often as it is a line.',
             'Know what your trade is worth before you hand over the keys, and the wait stops working.'
         ]
     },
@@ -712,6 +725,13 @@ const CONTACT_CARDS = {
         kicker: '★  A few stops into the visit  ★',
         title: 'Enjoying the showroom?',
         lead: 'Thank you for looking around. Everything in this room is something John has already thought about on a customer’s behalf. If you have a car to buy or sell, he would be glad to hear from you.'
+    },
+    // From the foot of the About card, so this is the one visitor in the
+    // scene who has just read the whole account. Nothing to re-explain.
+    about: {
+        kicker: '★  Free consultation, by phone or Zoom  ★',
+        title: 'That is the whole idea',
+        lead: 'No obligation and no pressure. Tell John what you are looking at, and he will tell you plainly what he sees in it.'
     },
     button: {
         kicker: '★  Free consultation, by phone or Zoom  ★',
@@ -852,6 +872,11 @@ function openPoster() {
         posterImage.setAttribute('src', POSTER_SRC);
     }
     posterModal.classList.remove('hidden');
+    // The card scrolls now that John's story sits above the flyer, so a
+    // second open has to start at the top rather than wherever the last
+    // reader left it.
+    const card = posterModal.querySelector('.poster-card');
+    if (card) card.scrollTop = 0;
     posterOpen = true;
     holdCoaching();
     track('poster-open');
@@ -898,7 +923,13 @@ function closePoster() {
 // though a prop story is still pointer-only.
 
 const COACH_ARRIVE_MS = 900;    // the room alone first, then the guidance
-const COACH_BAR_MS = 15000;     // the strip goes first: it is read once
+// The intro panel holds long enough to be READ, which is a different
+// number from the 15 seconds the old orientation strip wanted. It now
+// carries a little under ninety words counting the footnote, which is
+// close to twenty seven seconds at an unhurried pace, and a check in
+// verify-composition holds this number to the copy's own length. It
+// still goes early for anybody who taps, which is nearly everybody.
+const INTRO_MS = 28000;
 // The halos do not leave at this point, they QUIETEN: a slower, dimmer
 // pulse that keeps pointing without strobing over a room somebody may
 // well be sitting and looking at. Only reaching a person ends them.
@@ -906,7 +937,7 @@ const COACH_CALM_MS = 30000;
 const _coachPoint = new THREE.Vector3();
 
 let coachMarksEl = null;
-let coachBarEl = null;
+let introEl = null;
 let coachMarks = [];            // [{ el, kind, anchor }] once the cast exists
 let coachTimers = [];
 let coachRunning = false;
@@ -916,16 +947,16 @@ let coachRunning = false;
  *  loader clears and nothing is on screen yet. */
 function wireCoaching(signal) {
     coachMarksEl = document.getElementById('coach-marks');
-    coachBarEl = document.getElementById('coach-bar');
+    introEl = document.getElementById('intro-card');
     if (!coachMarksEl) return;
 
     // "Click" is wrong on a phone and "Tap" is wrong on a desktop, and
     // this is the one piece of copy in the scene a visitor has to act on,
     // so it is worth getting right rather than saying "click or tap".
     const verb = state.isMobile ? 'Tap' : 'Click';
-    const barBody = document.getElementById('coach-bar-body');
-    if (barBody) {
-        barBody.textContent = `${verb} anyone at the desk to reach John, or anything in the `
+    const hint = document.getElementById('intro-hint');
+    if (hint) {
+        hint.textContent = `${verb} anyone at the desk to reach John, or anything in the `
             + `showroom for a little of its story. ${state.isMobile ? 'Swipe' : 'Drag'} to look around.`;
     }
 
@@ -969,10 +1000,10 @@ function startCoaching() {
         // With no cast there are no halos, but the strip still says what
         // the room is, so the two are revealed independently.
         if (coachMarks.length) coachMarksEl.classList.remove('coach-out');
-        if (coachBarEl) coachBarEl.classList.remove('coach-out');
+        if (introEl) introEl.classList.remove('coach-out');
     }, COACH_ARRIVE_MS));
 
-    coachTimers.push(setTimeout(() => fadeCoach(coachBarEl), COACH_BAR_MS));
+    coachTimers.push(setTimeout(() => fadeCoach(introEl), INTRO_MS));
     coachTimers.push(setTimeout(() => {
         if (!coachRunning || !coachMarksEl) return;
         coachMarksEl.classList.add('coach-calm');
@@ -1061,7 +1092,7 @@ function endCoaching(reason) {
     coachTimers.forEach(clearTimeout);
     coachTimers = [];
     fadeCoach(coachMarksEl);
-    fadeCoach(coachBarEl);
+    fadeCoach(introEl);
     // Which of these three ends the coaching is the honest measure of
     // whether any of it worked.
     track('coach-end', { reason });
