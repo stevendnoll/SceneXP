@@ -186,6 +186,10 @@ test('every person variant builds (each flag walks its own branch)', () => {
   expect(people.createPerson({ bald: true, muscular: true })).toBeTruthy();
   expect(people.createPerson({ hasSuit: true, tieColor: 0x8c1d2c })).toBeTruthy();
   expect(people.createPerson({ dressShirt: true })).toBeTruthy();
+  // The rounded build, and the clamp that keeps an over-large radius from
+  // folding the shoulder outline back through itself.
+  expect(people.createPerson({ shoulderRound: 0.4 })).toBeTruthy();
+  expect(people.createPerson({ shoulderRound: 5, muscular: true })).toBeTruthy();
 });
 
 test('the people helpers behave (source parity with the min-bundle tests)', () => {

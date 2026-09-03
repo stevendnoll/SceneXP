@@ -117,7 +117,7 @@ initControls(CONFIG);        // spawn, bounds, speeds
 | `structures.js` | Walls, wall segments, window/door frames | self-attach + colliders |
 | `lighting.js` | Ceiling lights, night-brightening interior rig, dimmer, light switch, EXIT sign | `lighting: { base: { rectArea, hemi, corner, ceiling }, nightBoost }` |
 | `furniture.js` | Plants, sofa, lounge chair, vending machine | pure, return groups |
-| `people.js` | Procedural human figures | `createPerson(config)`, `shuffled`, `pickBalanced` |
+| `people.js` | Procedural human figures | `createPerson(config)`, `shuffled`, `pickBalanced`. `shoulderRound` (0 by default, so every existing cast is untouched) swaps the box torso for one with rounded shoulders and softened edges, and adds the shoulder ball that keeps the joint closed when a scene rotates an arm. Worth turning on, around 0.4, for any scene where a figure is close to the camera; a crowd seen at a distance does not need the triangles |
 | `npcs.js` | Indoor visitor wander AI, host look-at, dialog pause/resume, floating signs | `setWanderWaypoints(list)`, `initGalleryVisitors(count)`, `registerHost(person, rot)`, `setHelpSign(sign)` |
 | `gallery.js` | Framed wall art: procedural canvas pieces, placards, faked picture lights, clickable floor mats, NPC viewing waypoints | `initGallery({ sections, storeConfig })` — each experience's own `gallery.js` holds the GALLERY_SECTIONS content model; `resolveGalleryPiece(hit)`, `setPieceHighlight`, `getViewingWaypoints(standoff)` |
 | `pedestrians.js` | Sidewalk walkers + night zombies | `pedestrians: { count, sidewalkZ, minX, maxX }`, `zombiesAtNight`, `setRefugeFootprints(rects)` |

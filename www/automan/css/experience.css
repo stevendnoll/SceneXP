@@ -3,11 +3,12 @@
  * experience.css - John Walker, The Auto Man
  *
  * Everything this page needs that the shared stylesheet does not already
- * carry, which is very little: the shared sheet does the modals, the
- * floating buttons, the loader and the welcome card, and this scene uses
- * all of them unchanged.
+ * carry: the shared sheet does the modals, the floating buttons and the
+ * loader, and this scene uses all of them unchanged. It also carries a
+ * welcome card, which this scene is the first one not to use.
  *
- * What is here is the POSTER CARD. It reuses #help-modal, and the id is
+ * What is here is the ARRIVAL COACHING that replaced that welcome card,
+ * and the POSTER CARD. The poster reuses #help-modal, and the id is
  * load-bearing: the shared stylesheet scopes its modal rules (the fixed
  * overlay, .hidden, the backdrop) to a fixed list of ids, so a new one
  * would arrive with no hiding, no layout, and a near-opaque generic
@@ -34,6 +35,254 @@
    has to beat it without depending on which stylesheet loads second. */
 body .pan-controls.no-chrome.visible {
     display: none;
+}
+
+/* ==========================================================================
+   ARRIVAL COACHING
+   Three pulsing halos over the heads of the cast, one caption beside John,
+   and a strip of orientation along the bottom. This is what stands in for
+   the welcome overlay that every other experience opens with, and it has
+   to do that job for a visitor who may never have met a 3D scene in a
+   browser and does not know a tap will do anything at all.
+
+   Everything here is drawn OVER a bright showroom, not over a dark
+   dismissal card, so every element carries its own dark ground or its own
+   shadow. A white ring alone disappears against the ceiling.
+   ========================================================================== */
+
+.coach-marks {
+    position: fixed;
+    inset: 0;
+    z-index: 90;                /* under .menu-btn (110) and every modal */
+    pointer-events: none;       /* only the marks themselves take a tap */
+}
+
+/* The marks are positioned from JavaScript, which writes a translate() of
+   the projected screen point into the element's own transform. Anchoring
+   them at the top left and centring with a second translate keeps that
+   write to one property and one value. */
+.coach-mark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    pointer-events: auto;
+    color: #fff;
+    font-family: inherit;
+    /* A person can pass behind another or off the side of the frame when
+       the visitor pans, so JavaScript sets the `hidden` attribute rather
+       than letting a mark hang at the edge over nobody. */
+    --coach-size: 3.25rem;
+}
+
+.coach-mark[hidden] {
+    display: none;
+}
+
+/* The steady ring: a bright outline with a dark halo behind it, so it
+   holds its edge over the white ceiling AND over the navy of the lot. */
+.coach-halo {
+    position: relative;
+    width: var(--coach-size);
+    height: var(--coach-size);
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    background: radial-gradient(circle,
+            rgba(240, 165, 30, 0.28) 0%,
+            rgba(240, 165, 30, 0.10) 55%,
+            rgba(18, 41, 74, 0) 72%);
+    box-shadow:
+        0 0 0 1px rgba(12, 24, 44, 0.55),
+        0 0 14px rgba(12, 24, 44, 0.55),
+        inset 0 0 10px rgba(255, 255, 255, 0.35);
+}
+
+/* Two rings expanding out of it, half a cycle apart, which is what makes
+   it read as "look here" rather than as a target reticle. */
+.coach-halo::before,
+.coach-halo::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 2px solid rgba(240, 165, 30, 0.95);
+    animation: coach-pulse 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.coach-halo::after {
+    animation-delay: 1.3s;
+}
+
+@keyframes coach-pulse {
+    0% { transform: scale(0.7); opacity: 0; }
+    15% { opacity: 0.9; }
+    100% { transform: scale(2); opacity: 0; }
+}
+
+.coach-mark:hover .coach-halo,
+.coach-mark:focus-visible .coach-halo {
+    border-color: #fff;
+    background: radial-gradient(circle,
+            rgba(240, 165, 30, 0.45) 0%,
+            rgba(240, 165, 30, 0.16) 55%,
+            rgba(18, 41, 74, 0) 72%);
+}
+
+.coach-mark:focus-visible {
+    outline: none;
+}
+
+.coach-mark:focus-visible .coach-halo {
+    box-shadow:
+        0 0 0 3px rgba(255, 255, 255, 0.95),
+        0 0 0 6px rgba(18, 41, 74, 0.8);
+}
+
+/* The caption under John's halo. Only he has one: three of these would be
+   a wall of labels over a room the visitor is meant to be looking at. */
+.coach-tip {
+    margin-top: 0.5rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #fff;
+    background: rgba(12, 24, 44, 0.88);
+    border: 1px solid rgba(240, 165, 30, 0.75);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+/* The strip along the bottom. Two lines, out of the way of the desk, and
+   it never asks to be dismissed. */
+.coach-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 1.25rem;
+    bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 90;
+    width: min(92vw, 34rem);
+    box-sizing: border-box;
+    padding: 0.85rem 1.15rem;
+    border-radius: 14px;
+    text-align: center;
+    color: #f2f5f9;
+    background: rgba(12, 24, 44, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    pointer-events: none;       /* it explains the room, it is not part of it */
+}
+
+.coach-bar-lead {
+    margin: 0 0 0.3rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.coach-bar-body {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: #c9d6e4;
+}
+
+/* ONE mechanism for both directions, and that is deliberate. Both layers
+   start the page carrying .coach-out, so the arrival is the same
+   transition as the departure played the other way, and JavaScript only
+   ever adds or removes one class.
+
+   The obvious alternative, a keyframe fade-in, is a trap here: a running
+   or filled animation OUT-RANKS a plain declaration in the cascade, so an
+   arrival animation holding opacity 1 would quietly win against the
+   .coach-out that is trying to take the coaching away, and the halos
+   would never leave.
+
+   `visibility` rides the transition with a delay so it flips only once
+   the fade has finished, which is what takes the halos out of the tab
+   order and the accessibility tree rather than leaving three invisible
+   buttons behind. */
+.coach-marks,
+.coach-bar {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.55s ease, visibility 0s;
+}
+
+.coach-marks.coach-out,
+.coach-bar.coach-out {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.55s ease, visibility 0s linear 0.55s;
+}
+
+/* A phone has less room and holds the cast smaller in the frame. */
+@media (max-width: 600px) {
+    .coach-mark {
+        --coach-size: 2.6rem;
+    }
+
+    .coach-tip {
+        font-size: 0.75rem;
+    }
+
+    .coach-bar {
+        padding: 0.7rem 0.9rem;
+    }
+
+    .coach-bar-lead {
+        font-size: 0.88rem;
+    }
+
+    .coach-bar-body {
+        font-size: 0.78rem;
+    }
+}
+
+/* Reduced motion: the pulse is the whole point of the halo, so it is
+   replaced rather than removed. The ring holds at the size the pulse
+   would have reached, which still reads as a marker over a head, and the
+   arrival fade goes away entirely. */
+@media (prefers-reduced-motion: reduce) {
+
+    .coach-halo::before,
+    .coach-halo::after {
+        animation: none;
+        transform: scale(1.45);
+        opacity: 0.55;
+    }
+
+    .coach-halo::after {
+        transform: scale(1.9);
+        opacity: 0.3;
+    }
+
+    .coach-marks,
+    .coach-bar,
+    .coach-marks.coach-out,
+    .coach-bar.coach-out {
+        transition: none;
+    }
+}
+
+/* The ownership note at the foot of the contact card. It used to sit
+   under the welcome overlay's copy; the card is its home now, so it wants
+   the small print treatment the overlay gave it. */
+.ownership-note {
+    margin: 1.25rem 0 0;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: var(--text-dim, #9fb0c2);
+    opacity: 0.85;
 }
 
 /* THE TOP-RIGHT STACK, right to left: Home, then the flyer.

@@ -461,6 +461,20 @@ const JOHN_LOOK = {
 // near the camera.
 const HAND_SCALE = 1.4;
 
+// Rounded shoulders on all three, for the same reason as the hands: the
+// shared rig's plain box torso is built for a figure crossing a street,
+// and this camera sits at the end of their desk. Squared-off shoulders
+// were the first thing anyone noticed about the cast. 0.4 rounds each
+// shoulder over about a third of its width and leaves a flat span across
+// the top for the collar and the neck, which is why the collar and the
+// suit's lapels still sit where they were solved.
+//
+// It also turns on the shoulder ball at each arm pivot, and THAT is not
+// cosmetic here: every one of the three has at least one arm rotated well
+// away from its rest angle, which on the square build leaves an open disc
+// where the upper arm meets the body.
+const SHOULDER_ROUND = 0.4;
+
 // The showroom palette. Bright and slightly cool on purpose: showrooms
 // are lit by their glass. The flyer's navy and gold do the accenting.
 //
@@ -2854,7 +2868,8 @@ function createJohn() {
         pantsColor: JOHN_LOOK.pantsColor,
         skinTone: JOHN_LOOK.skinTone,
         eyeColor: JOHN_LOOK.eyeColor,
-        handScale: JOHN_LOOK.handScale
+        handScale: JOHN_LOOK.handScale,
+        shoulderRound: SHOULDER_ROUND
     });
     john.scale.setScalar(JOHN_SCALE);
 
@@ -2885,7 +2900,8 @@ function createCustomer() {
         skinTone: 0xd9a97f,
         hairColor: 0x3a2a1e,
         eyeColor: 0x3b2a1c,
-        handScale: HAND_SCALE
+        handScale: HAND_SCALE,
+        shoulderRound: SHOULDER_ROUND
     });
     customer.scale.set(CUSTOMER_SCALE.x, CUSTOMER_SCALE.y, CUSTOMER_SCALE.z);
 
@@ -2912,7 +2928,8 @@ function createDealer() {
         skinTone: 0xe3b891,
         hairColor: 0x2e2a26,
         eyeColor: 0x33261a,
-        handScale: HAND_SCALE
+        handScale: HAND_SCALE,
+        shoulderRound: SHOULDER_ROUND
     });
 
     const mid = {
@@ -2964,6 +2981,41 @@ function createCast() {
         readTo: normalizeAngle(faceToward(LAYOUT.dealer, LAYOUT.dealSheet) - cast.dealer.yaw),
         screenGaze: dealerScreenGaze()
     };
+
+    // An empty object riding just above each head, which main.js projects
+    // to the screen every frame to park the arrival coach marks over the
+    // three of them.
+    //
+    // It hangs off the NECK pivot rather than the person, so it inherits
+    // the figure's own scale (John is 10% larger than life here and his
+    // customer slightly under it) and it travels with the head as they
+    // nod and turn. A mark pinned to a fixed screen point would drift off
+    // its person the moment the visitor panned.
+    PERSON_ORDER.forEach((kind) => {
+        const anchor = new THREE.Object3D();
+        anchor.position.set(0, HEAD_ANCHOR_Y, 0);
+        cast[kind].neck.add(anchor);
+        cast[kind].anchor = anchor;
+    });
+}
+
+/** The three of them, in the order the coach marks should be read: the
+ *  man the page is about first. */
+const PERSON_ORDER = ['john', 'customer', 'dealer'];
+
+/** Height of the coach-mark anchor in neck-pivot coordinates. The shared
+ *  rig's head centre sits at 1.50 in person space, the neck pivot at
+ *  1.32, and the crown (hair included) reaches about 0.13 above the
+ *  centre, so this clears the tallest hair in the cast by roughly 15cm of
+ *  figure. */
+const HEAD_ANCHOR_Y = 0.46;
+
+/** The anchors, for the coach marks. Empty until the cast is built. */
+export function getPersonAnchors() {
+    if (!cast) return [];
+    return PERSON_ORDER
+        .filter((kind) => cast[kind] && cast[kind].anchor)
+        .map((kind) => ({ kind, object: cast[kind].anchor }));
 }
 
 /** Wrap an angle into [-pi, pi], so a head turn always takes the short
@@ -3467,7 +3519,8 @@ export function getShowroomGroup() {
 
 // Exposed for unit tests only; production code uses the named exports above.
 export const __test__ = {
-    LAYOUT, PALETTE, JOHN_LOOK, HAND_SCALE,
+    LAYOUT, PALETTE, JOHN_LOOK, HAND_SCALE, SHOULDER_ROUND,
+    PERSON_ORDER, HEAD_ANCHOR_Y,
     JOHN_SCALE, JOHN_POINT_ARM, JOHN_REST_ARM, JOHN_LEAN, JOHN_NECK_X,
     CUSTOMER_SCALE, CUSTOMER_REST_ARM, DEALER_LEAN,
     DEALER_TURN, DEALER_TYPE_ARM, DEALER_NECK_REST, DEALER_TYPE_BOB, DEALER_SHIFT,

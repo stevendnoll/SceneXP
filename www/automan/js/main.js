@@ -10,11 +10,17 @@
  * it is a bright midday on the lot at every hour, though the cycle's
  * per-frame pass still runs for the fixed-time sky paint and the
  * shadow-map refresh). The interactions that do exist are featherweight:
- * the welcome overlay (dismissed with a click, tap, or key), two floating
- * buttons (Home, and one that opens John's own flyer), the always-on pan
- * and zoom row (shared pan part, with swipe, tilt, and pinch on touch),
- * and one raycast per tap to see what the visitor pointed at, answered in
- * the host's voice by the dialog card.
+ * two floating buttons (Home, and one that opens John's own flyer), the
+ * always-on pan and zoom row (shared pan part, with swipe, tilt, and pinch
+ * on touch), and one raycast per tap to see what the visitor pointed at,
+ * answered in the host's voice by the dialog card.
+ *
+ * AND NO WELCOME OVERLAY, which makes it the first SceneXP experience
+ * without one. Nothing here needs a user gesture to start (no pointer
+ * lock, no audio), so the card was a curtain in front of a finished room.
+ * In its place the scene opens live and coaches on arrival: pulsing halos
+ * over the three people and a strip of orientation along the bottom, all
+ * of which leave on the first tap. See "Arrival coaching" below.
  *
  * Unlike the other featured-business experiences, this one has nowhere
  * outward to send anybody: John has no separate website, because this
@@ -41,7 +47,8 @@ import {
     updateDayNightCycle, removeTestObjects, isTouchDevice
 } from '../../shared/js/scene-1.0.0.min.js';
 import {
-    initStore, updateShowroom, updateBackgroundAnimations, updateInteriorAmbientLight
+    initStore, updateShowroom, updateBackgroundAnimations, updateInteriorAmbientLight,
+    getPersonAnchors
 } from './store.min.js';
 import { getOutdoorPropMeshes } from '../../shared/js/world-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
@@ -56,7 +63,7 @@ const state = {
 };
 
 // DOM references (resolved in init)
-let canvas, loadingScreen, blocker;
+let canvas, loadingScreen;
 let dialogModal, dialogTitle, dialogMessage, dialogCta;
 let dialogOpen = false;   // one dialog at a time; taps pause while it's up
 
@@ -95,7 +102,6 @@ async function init() {
 
     canvas = document.getElementById('game-canvas');
     loadingScreen = document.getElementById('loading-screen');
-    blocker = document.getElementById('blocker');
     dialogModal = document.getElementById('dialog-modal');
     dialogTitle = document.getElementById('dialog-title');
     dialogMessage = document.getElementById('dialog-message');
@@ -148,6 +154,10 @@ async function init() {
         loadingScreen.classList.add('hidden');
         state.isLoaded = true;
         document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
+        // The coaching arrives after the room does, not with it: there is
+        // no overlay to click through any more, so the first thing the
+        // visitor should see is the showroom itself.
+        startCoaching();
     }, 400);
 
     // Mark the start of this visit. Records the input mode so the log can tell
@@ -256,21 +266,10 @@ function setupEventListeners() {
     });
     window.addEventListener('pagehide', endSession);
 
-    // The welcome overlay: any click, tap, or keypress lets the visitor in.
-    // The scene is already alive behind it, so dismissing is all it does.
-    if (blocker) {
-        const dismiss = (e) => {
-            if (e) e.preventDefault();
-            beginVisiting();
-        };
-        blocker.addEventListener('click', dismiss, { signal });
-        blocker.addEventListener('touchend', dismiss, { signal });
-        document.addEventListener('keydown', (event) => {
-            if (event.code === 'Enter' || event.code === 'Space') {
-                if (!blocker.classList.contains('hidden')) beginVisiting();
-            }
-        }, { signal });
-    }
+    // (There is no welcome overlay to dismiss. See the note in index.html
+    // where #blocker used to be: this scene needs no gesture to start, so
+    // it opens live and the arrival coaching does the explaining.)
+    wireCoaching(signal);
 
     // A click or tap on the scene: any of the showroom's storytelling
     // props, or any of the three people at the desk (from M8).
@@ -468,6 +467,9 @@ function getPropRoot(obj) {
 
 function checkSceneTap(clientX, clientY) {
     if (!state.isLoaded || dialogOpen || nudgeOpen || posterOpen) return;
+    // Somebody who has tapped the room has understood the room, whether or
+    // not they hit anything, so the coaching has done its job and goes.
+    endCoaching('tapped-scene');
     const hit = pickSceneHit(clientX, clientY);
     if (!hit) return;
     const prop = getPropRoot(hit.object);
@@ -853,11 +855,151 @@ function closePoster() {
     if (posterBtn) posterBtn.focus();
 }
 
-/** Dismiss the welcome overlay and settle in for the visit. */
-function beginVisiting() {
-    if (!state.isLoaded || !blocker || blocker.classList.contains('hidden')) return;
-    blocker.classList.add('hidden');
-    track('begin-visiting');
+// ---- Arrival coaching -----------------------------------------------------
+//
+// This scene has no welcome overlay, so nothing has told the visitor that
+// the room answers a tap. Three pulsing halos ride over the heads of the
+// cast, John's carrying a caption, and a strip along the bottom says what
+// the room is and what to do with it. All of it leaves on the first tap.
+//
+// The halos are projected from anchors above each head in store.js rather
+// than parked at fixed screen points, because the visitor can pan and zoom
+// from the first frame and a mark that stayed put would slide off its
+// person immediately.
+//
+// The one thing to keep in mind if this is ever extended: these buttons
+// are the ONLY keyboard route to the contact card. Everything else in the
+// scene is reached through a raycast from a pointer, so once the coaching
+// is gone a keyboard visitor has the Home button and the flyer and nothing
+// else. That is decision D4 territory and is not solved here.
+
+const COACH_ARRIVE_MS = 900;    // the room alone first, then the guidance
+const COACH_BAR_MS = 15000;     // the strip goes first: it is read once
+const COACH_MARKS_MS = 30000;   // the halos hold longer, then give up
+const _coachPoint = new THREE.Vector3();
+
+let coachMarksEl = null;
+let coachBarEl = null;
+let coachMarks = [];            // [{ el, kind, anchor }] once the cast exists
+let coachTimers = [];
+let coachRunning = false;
+
+/** Resolve the coaching elements, fit the copy to the input device, and
+ *  wire the halos. Called from setupEventListeners, so it runs before the
+ *  loader clears and nothing is on screen yet. */
+function wireCoaching(signal) {
+    coachMarksEl = document.getElementById('coach-marks');
+    coachBarEl = document.getElementById('coach-bar');
+    if (!coachMarksEl) return;
+
+    // "Click" is wrong on a phone and "Tap" is wrong on a desktop, and
+    // this is the one piece of copy in the scene a visitor has to act on,
+    // so it is worth getting right rather than saying "click or tap".
+    const verb = state.isMobile ? 'Tap' : 'Click';
+    const barBody = document.getElementById('coach-bar-body');
+    if (barBody) {
+        barBody.textContent = `${verb} anyone at the desk to reach John, or anything in the `
+            + `showroom for a little of its story. ${state.isMobile ? 'Swipe' : 'Drag'} to look around.`;
+    }
+
+    const anchors = new Map(getPersonAnchors().map((entry) => [entry.kind, entry.object]));
+    coachMarks = Array.from(coachMarksEl.querySelectorAll('.coach-mark'))
+        .map((el) => ({ el, kind: el.dataset.who, anchor: anchors.get(el.dataset.who) }))
+        .filter((mark) => mark.anchor);
+
+    coachMarks.forEach(({ el, kind }) => {
+        // Only John carries a caption. Three of them would be a wall of
+        // labels over the room the visitor is meant to be looking at, and
+        // he is the one the page is about. Keyed off the kind rather than
+        // off "whichever mark happens to have a span", so a caption added
+        // to one of the others cannot silently end up naming John.
+        const tip = kind === 'john' ? el.querySelector('.coach-tip') : null;
+        if (tip) tip.textContent = `${verb} John`;
+        // A halo opens the same card the person under it opens. Falling
+        // through to the prop story matches checkSceneTap, so a halo is
+        // never a control that does nothing.
+        el.addEventListener('click', () => {
+            track('click-person', { who: kind, via: 'coach' });
+            endCoaching('tapped-mark');
+            if (!openContactCard(kind)) openPropDialog(kind);
+        }, { signal });
+    });
+}
+
+/** Show the coaching. Called once the loader has cleared.
+ *
+ *  Both layers start the page wearing .coach-out, so arriving is a matter
+ *  of taking that away and letting the same transition that will
+ *  eventually remove them play the other way. The short wait first is the
+ *  point of the whole exercise: the visitor meets the showroom on its own
+ *  for a moment, which is what the welcome card never allowed. */
+function startCoaching() {
+    if (!coachMarksEl || coachRunning) return;
+    coachRunning = true;
+
+    coachTimers.push(setTimeout(() => {
+        if (!coachRunning) return;      // a fast visitor already tapped
+        // With no cast there are no halos, but the strip still says what
+        // the room is, so the two are revealed independently.
+        if (coachMarks.length) coachMarksEl.classList.remove('coach-out');
+        if (coachBarEl) coachBarEl.classList.remove('coach-out');
+    }, COACH_ARRIVE_MS));
+
+    coachTimers.push(setTimeout(() => fadeCoach(coachBarEl), COACH_BAR_MS));
+    coachTimers.push(setTimeout(() => endCoaching('waited'), COACH_MARKS_MS));
+}
+
+/** Park each halo over its head. Runs after the frame is drawn, so the
+ *  camera's world matrix is the one the visitor is looking through. */
+function updateCoachMarks() {
+    if (!coachRunning || !coachMarks.length) return;
+    const camera = getCamera();
+    if (!camera) return;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    coachMarks.forEach(({ el, anchor }) => {
+        anchor.getWorldPosition(_coachPoint);
+        _coachPoint.project(camera);
+        // z past the far plane means the point is behind the eye, which
+        // projects to a mirrored position rather than to nowhere. The
+        // margins keep a halo from hanging half off the frame when the
+        // visitor pans a person out of shot.
+        const visible = _coachPoint.z < 1 &&
+            Math.abs(_coachPoint.x) < 0.96 && Math.abs(_coachPoint.y) < 0.94;
+        if (!visible) {
+            el.hidden = true;
+            return;
+        }
+        el.hidden = false;
+        const x = (_coachPoint.x * 0.5 + 0.5) * w;
+        const y = (-_coachPoint.y * 0.5 + 0.5) * h;
+        // The halo, not the button, is what sits on the anchor: the button
+        // is a column with the caption hanging under it, so it lifts by
+        // half a halo. Both offsets stay in the transform so the browser
+        // never has to lay the element out again.
+        el.style.transform =
+            `translate(${x}px, ${y}px) translate(-50%, calc(-0.5 * var(--coach-size)))`;
+    });
+}
+
+/** Fade one coaching layer out. Safe to call on an element already going. */
+function fadeCoach(el) {
+    if (el) el.classList.add('coach-out');
+}
+
+/** End the coaching for good. Every route into the scene calls this: a
+ *  tap on a halo, a tap anywhere in the room, and the long stop. */
+function endCoaching(reason) {
+    if (!coachRunning) return;
+    coachRunning = false;
+    coachTimers.forEach(clearTimeout);
+    coachTimers = [];
+    fadeCoach(coachMarksEl);
+    fadeCoach(coachBarEl);
+    // Which of these three ends the coaching is the honest measure of
+    // whether any of it worked.
+    track('coach-end', { reason });
 }
 
 /** Wire the outward-facing links from AUTOMAN_CONFIG.site. The Home
@@ -904,6 +1046,10 @@ function animate() {
     updatePortraitControls(deltaTime);
 
     render();
+
+    // After the draw, so the halos read the same camera matrices the
+    // frame was rendered with rather than the previous frame's.
+    updateCoachMarks();
 }
 
 // ---- Cleanup / state ------------------------------------------------------
@@ -913,6 +1059,9 @@ function cleanup() {
     const renderer = getRenderer();
     if (renderer) renderer.setAnimationLoop(null);
     if (cleanupController) cleanupController.abort();
+    coachTimers.forEach(clearTimeout);
+    coachTimers = [];
+    coachRunning = false;
 }
 
 // Dwell-time tracking: report a one-time session-end (with elapsed seconds) when

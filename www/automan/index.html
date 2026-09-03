@@ -158,27 +158,60 @@
         </div>
     </div>
 
-    <!-- The welcome overlay. This experience is watched, not walked: there
-         are no movement controls to explain, so the overlay just sets the
-         scene and steps aside on the first click, tap, or keypress. -->
-    <div id="blocker">
-        <div id="instructions">
-            <!-- No logo on the welcome card. The one that stood here was a
-                 placeholder (assets/automan-1.webp, still provisional at
-                 task T10.2), and a placeholder mark is worse than none:
-                 the first thing a visitor met was a graphic that was not
-                 John's. The loading screen still uses it, where it reads
-                 as a loading device rather than as a brand. -->
-            <p class="title">WELCOME</p>
-            <p class="subtitle">John is at the desk, and he is doing the talking</p>
-            <p class="click-prompt">Click to pull up a chair</p>
-            <div class="controls-hint">
-                <span>SIT BACK</span> No controls needed. The deal is already underway.
-                <span>LOOK CLOSER</span> Click anyone at the desk to reach John, or anything in the showroom for a little of its story.
-            </div>
-            <p class="welcome-footnote">The Auto Man name belongs to John Walker and appears here with
-                his blessing.</p>
-        </div>
+    <!-- THERE IS NO WELCOME OVERLAY HERE, and that is deliberate (decision
+         D18). Every other SceneXP experience opens on a dark card the
+         visitor has to click through, because most of them have something
+         to explain: controls, a goal, a pointer lock the browser will not
+         grant without a gesture. This one has none of that. It is watched,
+         not walked, it plays no audio, and three.js needs no user gesture
+         to start rendering, so the card was asking people to dismiss a
+         curtain in front of a room that was already finished behind it.
+         The scene now arrives live, and the coaching below arrives with
+         it.
+
+         If a welcome card is ever wanted back, the shared #blocker markup
+         and its stylesheet rules are untouched: it is this page that
+         stopped using them. -->
+
+    <!-- ARRIVAL COACHING. The visitor this page is built for may never
+         have met a 3D scene in a browser and has no reason to guess that
+         the people in it answer a tap. Three pulsing halos say where to
+         point, and the two captions say why.
+
+         The halos are real buttons, not decoration. Pointing at a person
+         already works through the canvas raycast, so these could have been
+         inert markers with pointer-events: none, but making them focusable
+         controls gives this scene its first keyboard route to John (the
+         canvas raycast has none), and it gives a shaky hand a target that
+         does not move when the head it sits over turns.
+
+         Positions are set from JavaScript each frame, projected from an
+         anchor above each head, so the marks follow the cast when the
+         visitor pans or zooms. Everything here is hidden until the scene
+         is loaded and removed for good on the first tap. -->
+    <div id="coach-marks" class="coach-marks coach-out">
+        <button type="button" class="coach-mark" data-who="john" hidden
+            aria-label="Meet John Walker, The Auto Man">
+            <span class="coach-halo" aria-hidden="true"></span>
+            <span class="coach-tip">Click John</span>
+        </button>
+        <button type="button" class="coach-mark" data-who="customer" hidden
+            aria-label="Meet John's customer">
+            <span class="coach-halo" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="coach-mark" data-who="dealer" hidden
+            aria-label="Meet the dealer">
+            <span class="coach-halo" aria-hidden="true"></span>
+        </button>
+    </div>
+
+    <!-- The orientation the welcome card used to carry, moved to a strip
+         along the bottom that never covers the room and never has to be
+         dismissed. It fades out on its own, and on the first tap. -->
+    <div id="coach-bar" class="coach-bar coach-out">
+        <p class="coach-bar-lead">John is at the desk, and he is doing the talking.</p>
+        <p class="coach-bar-body" id="coach-bar-body">Click anyone at the desk to reach John, or
+            anything in the showroom for a little of its story. Drag to look around.</p>
     </div>
 
     <!-- Floating controls -->
@@ -313,6 +346,13 @@
                 <p id="contact-fallback" class="piece-subtitle" role="status" aria-live="polite"></p>
                 <p class="piece-subtitle">Baltimore, Maryland, or anywhere by Zoom. 100% satisfaction guarantee.</p>
                 <button class="piece-cancel" data-close>Back to the showroom</button>
+                <!-- The ownership note used to live at the foot of the
+                     welcome overlay, which this page no longer has. It
+                     belongs on the card where the name is doing the most
+                     work rather than on a strip that fades away, so this
+                     is its permanent home. -->
+                <p class="ownership-note">The Auto Man name belongs to John Walker and appears here with his
+                    blessing.</p>
             </div>
         </div>
     </div>
