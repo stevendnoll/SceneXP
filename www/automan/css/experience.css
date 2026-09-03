@@ -578,16 +578,16 @@ body .pan-controls.no-chrome.visible {
     border: 0;
 }
 
-/* The card holding John's flyer and then his story. The shared
-   .piece-card is 380px wide and built for a paragraph of text; this holds
-   a tall image AND a few paragraphs, so it widens, drops its own padding
-   (each block brings its own), and SCROLLS.
+/* The card holding John's photograph and then his story. The shared
+   .piece-card is 380px wide and built for a paragraph of text; this leads
+   with a full-bleed image, so it widens, drops its own padding (each block
+   brings its own), and SCROLLS.
 
-   `overflow-y: auto` is the change that came with the text (D22). While
-   this card was the flyer alone it was `overflow: hidden` and the image
-   was capped at 92vh, so the whole thing always fitted. Words as well as
-   the flyer mean it no longer does, and hidden overflow would have cut
-   one of the two off with no way to reach it. */
+   `overflow-y: auto` came in with the text (D22). While this card was the
+   flyer alone it was `overflow: hidden` with the image capped at 92vh, so
+   the whole thing always fitted. It still scrolls now that the flyer is a
+   link (D37) rather than a 2:3 image: the card is much shorter, but two
+   paragraphs of story still run past a short phone in landscape. */
 #help-modal .poster-card {
     width: auto;
     max-width: min(94vw, 560px);
@@ -652,88 +652,78 @@ body .pan-controls.no-chrome.visible {
     z-index: 2;
 }
 
-/* THE FLYER OPENS FULL SIZE IN A NEW TAB. Inside the card it is about 350
-   pixels wide on a phone, which is enough to see that it is a flyer and
-   not enough to read the small print on it. The file is 1023 by 1537, so
-   a new tab hands over the browser's own zoom, pan and save. */
-.poster-link {
-    display: block;
-    position: relative;
-    line-height: 0;             /* no descender gap under the image */
-    cursor: zoom-in;
-}
+/* JOHN'S PHOTOGRAPH, ACROSS THE HEAD OF THE CARD (D37).
 
-.poster-link:focus-visible {
-    outline: 3px solid #f0a51e;
-    outline-offset: -3px;
-}
+   This replaces the flyer that used to lead here. A BAND rather than the
+   disc the contact card wears: at 68 pixels above a kicker a circle is
+   right, and at card width it reads as a social avatar. The photograph has
+   glass, daylight and a city behind him which rhyme with the showroom's
+   own curtain wall and skyline, so a wide crop reads as an editorial
+   profile instead, which is what D25 is for.
 
-/* The affordance. Nobody knows a picture is tappable unless it says so,
-   and this is the only tappable picture on the page.
+   THE ASPECT IS PINNED, NOT LEFT TO THE FILE. `aspect-ratio` plus
+   `object-fit: cover` means the band is 3:2 whatever gets dropped in here
+   later, so a replacement photograph at a different shape re-crops rather
+   than changing the card's proportions. The file is already 3:2, so
+   nothing is cropped today.
 
-   IT IS A STRIP UNDER THE FLYER, NOT A BADGE ON IT. It floated bottom
-   left over the artwork until round nine, where it landed squarely on the
-   phone number John prints across the foot of his own flyer and hung half
-   off the card's edge. There is nowhere on that artwork it could have sat
-   without covering something: the top is his name, the right is his
-   guarantee badges, the bottom is how to reach him. So it stops being an
-   overlay. As a strip it also does the job the hairline was doing, which
-   is to say where the flyer ends and John's story begins. */
-.poster-zoom {
-    display: block;
-    padding: 0.72rem 1rem;
-    border-bottom: 1px solid var(--lux-faint);
-    background: rgba(6, 13, 24, 0.55);
-    color: var(--lux-gold);
-    font-size: 0.62rem;
-    font-weight: 600;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    text-align: center;
-    line-height: 1.2;
-    transition: background 0.2s ease, color 0.2s ease;
-    /* The whole picture is the target, so the strip must never be the
-       thing that swallowed the tap. */
-    pointer-events: none;
-}
-
-@media (hover: hover) {
-    .poster-link:hover .poster-zoom {
-        background: rgba(219, 179, 106, 0.9);
-        color: #16120a;
-    }
-}
-
-.poster-image {
+   No cap and no scroll trick, unlike the flyer it replaces: at 3:2 it is
+   a third of the card's height at every size, so the heading and the
+   first lines of the story are always on the same screen. That is what
+   D23's 80dvh cap was working to achieve against a 2:3 image. */
+.about-portrait {
     display: block;
     width: 100%;
     height: auto;
-    /* THE FLYER LEADS THE CARD, SO IT MUST NOT FILL IT (D23). At its own
-       aspect the flyer is taller than the card on a wide screen, and a
-       card that opens as one full-height image looks finished: the story
-       under it would never be found. The cap leaves the heading and the
-       first lines of John's story showing on the same screen at every
-       size, which is what makes the scroll obvious.
-
-       `contain` keeps the whole flyer on screen when the cap bites,
-       letterboxed on the card's own ground rather than cropped, because
-       the phone number is printed across the bottom of it. */
-    max-height: 80vh;
-    max-height: 80dvh;
-    object-fit: contain;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+    object-position: 50% 42%;   /* his eyes, not the middle of the frame */
     background: #0e1c2c;
-    /* A hairline between the flyer and the story it introduces. The
-       captions that used to separate them are gone, so this is what keeps
-       the two from running into each other when the flyer's own edge
-       happens to be dark. */
+    /* A hairline where the photograph ends and his story begins, for the
+       sizes where the bottom of the picture happens to be dark. */
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-/* While the image is still on its way, hold the card's shape rather than
-   letting it snap open from nothing. The flyer is 1023 by 1537. */
-.poster-image:not([src]) {
-    aspect-ratio: 1023 / 1537;
-    width: min(94vw, 560px);
+/* THE FLYER, NOW A LINE OF TYPE ABOVE THE BUTTON. It is the only link on
+   this page that leaves it (to a same-origin file, in a new tab), so it is
+   marked as one: champagne, and an underline that is a border rather than
+   `text-decoration`, because a 1px rule offset from the baseline is what
+   the rest of this interface uses to say "line" and a browser underline
+   sits too close under tracked capitals to read as anything but a smudge.
+
+   It is quiet on purpose. The one filled control on this page is the call
+   button (D25), and the second-loudest thing on this card should be the
+   Talk to John outline directly under this line, not the flyer. */
+.about-flyer {
+    margin: 1.5rem 0 1.35rem;
+    padding-top: 1.35rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.62rem;
+    line-height: 1.5;
+}
+
+.about-flyer-link {
+    display: inline-block;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(219, 179, 106, 0.45);
+    color: var(--lux-gold);
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: color 0.18s ease, border-color 0.18s ease;
+}
+
+@media (hover: hover) {
+    .about-flyer-link:hover {
+        color: var(--lux-gold-lift);
+        border-bottom-color: var(--lux-gold-lift);
+    }
+}
+
+.about-flyer-link:focus-visible {
+    outline: 2px solid var(--lux-gold-lift);
+    outline-offset: 3px;
 }
 
 
@@ -835,51 +825,13 @@ body .pan-controls.no-chrome.visible {
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
 }
 
-/* The byline at the foot of the About card, where the photograph is beside
-   the name rather than over it and can be smaller for it. */
-.about-byline {
-    display: flex;
-    align-items: center;
-    gap: 0.95rem;
-    margin: 1.55rem 0 1.35rem;
-    padding-top: 1.35rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
+/* The About card wears him as a BAND across its head instead (D37), so the
+   disc belongs to the contact card alone. It had a smaller twin at the foot
+   of the About card for one round, and that came out with the flyer: his
+   photograph at the top and his photograph again in the byline is the same
+   face twice on one card.
 
-.john-portrait-sm {
-    flex: 0 0 auto;
-    width: 3.1rem;
-    height: 3.1rem;
-    margin: 0;
-}
-
-.about-byline-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-width: 0;
-}
-
-.about-byline-name {
-    font-family: var(--lux-display);
-    font-size: 1.02rem;
-    line-height: 1.2;
-    color: #fff;
-}
-
-/* The role line is set like the card kickers, minus their rule: this row
-   already has a photograph and a divider above it, and a third device
-   would make a sign-off look like a section heading. */
-.about-byline-role {
-    font-size: 0.6rem;
-    font-weight: 600;
-    letter-spacing: 0.18em;
-    line-height: 1.5;
-    text-transform: uppercase;
-    color: var(--lux-gold);
-}
-
-/* On a phone the contact card is already the tallest thing on the site and
+   On a phone the contact card is already the tallest thing on the site and
    scrolls, so the portrait gives back the height it can. It stops at 3.4rem
    rather than going smaller: below about 50px a face at arm's length is a
    thumbnail of a person rather than a person, which is the opposite of what
@@ -889,11 +841,6 @@ body .pan-controls.no-chrome.visible {
         width: 3.4rem;
         height: 3.4rem;
         margin-bottom: 0.85rem;
-    }
-
-    .john-portrait-sm {
-        width: 2.8rem;
-        height: 2.8rem;
     }
 }
 

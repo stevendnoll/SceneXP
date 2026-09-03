@@ -285,76 +285,59 @@
          noscript block above still carries the contact-page link for
          anyone whose JavaScript never runs. -->
 
-    <!-- The flyer card. It reuses #help-modal because the shared
+    <!-- The About card. It reuses #help-modal because the shared
          stylesheet scopes its modal rules to a fixed list of ids, and a
          new one would arrive with no hiding and no layout (the same trap
-         #nudge-modal is named for below).
-
-         The image carries NO src. main.js sets it the first time the card
-         opens, so the flyer is never fetched by a visitor who does not ask
-         for it: it is a quarter of a megabyte, which is more than the rest
-         of this page put together.
-
-         The alt text describes the flyer but does NOT repeat the number or
-         the address printed on it, and that is decision D3 again rather
-         than an oversight: putting them here would put them in the markup
-         in plain text, which is the one thing D3 exists to avoid. It
-         points to the contact card instead, where the same details arrive
-         as live tel:, sms: and mailto: links, which is more use to a
-         screen reader than a spoken phone number anyway. Worth noting for
-         whoever settles D3: the flyer shows the number as pixels, so a
-         sighted visitor can already read it here. -->
+         #nudge-modal is named for below). The `poster-card` class is kept
+         for the same reason: it is what the width, the scroll and the
+         close control are all hung off. -->
     <div id="help-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="poster-title">
         <div class="modal-backdrop" data-close></div>
         <div class="modal-container piece-card poster-card">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
-            <!-- THE FLYER LEADS (D23). It led before D22 as well, but back
-                 then it was the whole card, which made the only full
-                 account of what John does an IMAGE OF TEXT: unselectable,
-                 untranslatable, and reachable by a screen reader only
-                 through one very long alt attribute. D22 put the words in
-                 and, in doing so, pushed the flyer below the fold.
+            <!-- JOHN'S PHOTOGRAPH LEADS, AND THE FLYER IS NOW A LINK (D37).
+                 This reverses D23, which put the flyer on top of this card,
+                 and the reason is that the page moved underneath that
+                 decision. D23 landed at M20; the boutique layer (D25) and
+                 the re-struck 3D palette (D26) landed at M21 and M22, so
+                 the flyer was chosen as the card's opening image against a
+                 page that no longer exists. D30 already made this exact
+                 call once for the mark: on a page that is lacquer and
+                 champagne throughout, the flyer's saturated amber reads as
+                 the one thing nobody art-directed. D30 carved the flyer
+                 itself out as John's own printed artwork. This is the next
+                 step, and it does not throw the artwork away.
 
-                 This is the order that keeps both. John's own artwork is
-                 what somebody who taps "About John" came to look at, and
-                 it is the most persuasive thing on the page, so it opens
-                 the card. The same story then follows it as real text,
-                 which is what a screen reader, a translator and a text
-                 selection can actually reach, and the flyer illustrates it
-                 rather than carrying it alone. -->
-            <!-- AND IT OPENS FULL SIZE. Inside the card the flyer is about
-                 350 pixels wide on a phone, which is enough to see that it
-                 is a flyer and not enough to read the small print on it.
-                 The file is 1023 by 1537, so a new tab hands the visitor
-                 the browser's own zoom, pan and save, which no viewer built
-                 in here would beat.
+                 Three things it fixes at once. The card used to LEAD with
+                 an image of text and then follow with the same story as
+                 real text, which is the fault D22 identified and D23 half
+                 reintroduced; the card's own content is now entirely
+                 selectable, translatable and readable aloud. It used to
+                 fetch 292KB on every open, and that now happens only if
+                 somebody asks for the flyer. And it showed John's face
+                 twice, once here as artwork and once in the byline at the
+                 foot, so the byline photograph has gone with this change.
 
-                 A plain anchor, not a script: it works from the keyboard,
-                 it survives a popup blocker, and long-press gives the phone
-                 menu somebody would expect on a picture. Same-origin, so it
-                 does not break the rule that nothing on this page links off
-                 the site. `rel="noopener"` is habit rather than need here,
-                 for the same reason.
+                 A BAND, NOT A DISC. The contact card wears him as a
+                 circle, which is right at 68px above a kicker. At card
+                 width a circle reads as a social avatar, and this
+                 photograph has glass, daylight and a city behind him that
+                 rhyme with the showroom's own curtain wall and skyline, so
+                 a 3:2 band across the top reads as an editorial profile,
+                 which is the register D25 is for. Cropped (0, 40) to
+                 (1080, 760) from Steve's `john-walker-profile.webp` and
+                 re-encoded `cwebp -q 84 -sharp_yuv -m 6`: 1080 wide covers
+                 this 560px card on a 2x screen, at 21KB against the
+                 flyer's 292. q90 costs another 9.6KB to move the error by
+                 0.2 of a level, which is the flat part of the curve.
 
-                 The aria-label is what a screen reader announces for the
-                 LINK, and it names the action rather than reciting the alt
-                 below. The alt itself stays, unshortened, for crawlers and
-                 for anyone reading the image on its own, even though the
-                 two paragraphs under it now tell the same story in prose. -->
-            <a id="poster-link" class="poster-link" href="assets/poster.webp"
-                target="_blank" rel="noopener"
-                aria-label="Open John's flyer full size in a new tab">
-                <img id="poster-image" class="poster-image" width="1023" height="1537"
-                    alt="John Walker's flyer. Come see Walker, The Auto Man, your local auto expert. A photograph of John, a bald man in a light blue shirt, standing between two pickup trucks on rocky ground. Free consultations on the phone or by Zoom, and a 100 percent satisfaction guarantee or your money returned. Let me help you get the best deal for your trade and I will desk the whole deal for you. Let me walk you through the process with extended warranties, tire and wheel protection and gap insurance. Do you need it? Maybe. Maybe not. But let me be your customer advocate. The flyer ends with a phone number and an email address, which this page gives as live call, text and email links on the card behind any of the three people at the desk.">
-                <!-- Nobody knows a picture is tappable unless it says so.
-                     A strip under the flyer rather than a badge on it:
-                     there is nowhere on John's artwork a badge could sit
-                     without covering his name, his guarantee or his phone
-                     number. aria-hidden because the link's own label
-                     already says this, and saying it twice is worse than
-                     not saying it. -->
-                <span class="poster-zoom" aria-hidden="true">View the flyer full size &#8599;</span>
-            </a>
+                 It is eager, not lazy: it IS the top of the card, so a
+                 lazy image here would be a grey band every time the card
+                 opens. alt carries his name because a photograph at the
+                 head of a card is not decoration. -->
+            <img class="about-portrait" src="assets/john-walker-about.webp"
+                width="1080" height="720" decoding="async"
+                alt="John Walker, a bald man in a light blue shirt, smiling in a daylit office with a city skyline behind him.">
             <div class="about-text">
                 <h2 id="poster-title" class="about-title">John Walker, The Auto Man</h2>
                 <p class="about-lead">Your advocate before, during, and after the deal.</p>
@@ -369,29 +352,41 @@
                     get you the deal you want, you owe him nothing, and there is a 100 percent
                     satisfaction guarantee on the small fee if you are not happy. He works in
                     Baltimore, Maryland, and anywhere else by Zoom.</p>
-                <!-- And the same face signing the account off, which is what
-                     a byline is for. The flyer at the top of this card shows
-                     him too, but it shows him as artwork: standing between
-                     two trucks with a headline over his shoulder. This is
-                     the plain photograph, at the end of the two paragraphs
-                     that describe what he does, so the last thing anybody
-                     reads before the button is who they would be calling.
+                <!-- THE FLYER, AS A LINE OF TYPE. It is John's own printed
+                     artwork and it stays reachable, but it stops being the
+                     card's opening image (see the note at the top).
 
-                     alt is EMPTY on purpose. The name is right beside it in
-                     real text, and a screen reader that has just been told
-                     "John Walker, The Auto Man" as a heading does not need
-                     to be told it again as a picture. Its twin on the
-                     contact card DOES carry alt, because the heading there
-                     is a line like "She brought backup" and the photograph
-                     is the only thing naming him. -->
-                <div class="about-byline">
-                    <img class="john-portrait john-portrait-sm" src="assets/john-walker-avatar.webp"
-                        width="256" height="256" loading="lazy" decoding="async" alt="">
-                    <span class="about-byline-text">
-                        <span class="about-byline-name">John Walker</span>
-                        <span class="about-byline-role">The Auto Man &middot; Baltimore, Maryland</span>
-                    </span>
-                </div>
+                     Full size in a new tab is not a demotion, it is where
+                     the thing actually reads: embedded, it was about 350
+                     pixels wide on a phone, enough to see that it is a
+                     flyer and not enough to read a word of the small print.
+                     The file is 1023 by 1537, so a new tab hands over the
+                     browser's own zoom, pan and save, which no viewer built
+                     in here would beat.
+
+                     A plain anchor, not a script: it works from the
+                     keyboard, it survives a popup blocker, and long-press
+                     gives the phone menu somebody would expect. Same-origin,
+                     so it does not break the rule that nothing on this page
+                     links off the site. `rel="noopener"` is habit rather
+                     than need here, for the same reason.
+
+                     The link text says what it opens and the aria-label
+                     says what will happen, because "flyer" alone does not
+                     warn a screen reader that a new tab is about to appear.
+
+                     The flyer's long alt text went with the image, and its
+                     absence is worth a note for whoever settles D3: it used
+                     to be the only place John's offer appeared in the
+                     markup as words, and the two paragraphs above now carry
+                     that in full, in better prose, which is why nothing was
+                     lost with it. -->
+                <p class="about-flyer">
+                    <a id="poster-link" class="about-flyer-link" href="assets/poster.webp"
+                        target="_blank" rel="noopener"
+                        aria-label="Open John's printed flyer full size in a new tab">See
+                        John's printed flyer &#8599;</a>
+                </p>
                 <button id="poster-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
             </div>
         </div>

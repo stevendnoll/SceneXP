@@ -83,11 +83,15 @@ let nudgePending = false;
 let propClicks = 0;
 const NUDGE_EVERY = 4;
 
-// John's own flyer, behind the floating info button. The image is a
-// quarter of a megabyte, more than the rest of the page together, so it is
-// not in the markup's src: this holds the path and main.js sets it the
-// first time the card is opened. A visitor who never asks never pays.
-let posterModal, posterImage, posterBtn;
+// The About card, behind the floating info button. It used to LEAD with
+// John's flyer, which is a quarter of a megabyte, so this file held the
+// path and set the src the first time the card opened rather than shipping
+// it in the markup. D37 turned the flyer into a plain link, so the browser
+// now does that job on its own: nothing is fetched until somebody follows
+// the link, and there is no `src` here to manage. The path stays as the
+// one place the file is named in JavaScript, and verify-composition checks
+// the anchor's href against it so the two cannot drift.
+let posterModal, posterBtn;
 let posterOpen = false;
 const POSTER_SRC = 'assets/poster.webp';
 
@@ -125,7 +129,6 @@ async function init() {
     contactEmail = document.getElementById('contact-email');
     contactFallback = document.getElementById('contact-fallback');
     posterModal = document.getElementById('help-modal');
-    posterImage = document.getElementById('poster-image');
     posterBtn = document.getElementById('help-btn');
     // Hidden until a card actually opens, so an empty status line never
     // takes up room in the card.
@@ -962,22 +965,18 @@ function closeNudgeModal() {
 
 // ---- John's flyer ----------------------------------------------------------
 
-/** Open the flyer card, loading the image on the first open only.
+/** Open the About card.
  *
- *  The flyer is the one flat, wordy thing on the page, and it is here
- *  because a 3D showroom is the wrong place to read a page of type: this
- *  is John as he introduces himself on paper, photograph, promise, number
- *  and all. Everything else in the scene is a stylization of him. */
+ *  This is where the page says what John does in words, because a 3D
+ *  showroom is the wrong place to read a page of type: his photograph, the
+ *  account of the service, and a line out to his own printed flyer for
+ *  anybody who wants it. Everything else in the scene is a stylization of
+ *  him, and this is the one screen that is not. */
 function openPoster() {
     if (!posterModal || posterOpen) return;
-    // First open pays for the image; every later one is free.
-    if (posterImage && !posterImage.getAttribute('src')) {
-        posterImage.setAttribute('src', POSTER_SRC);
-    }
     posterModal.classList.remove('hidden');
-    // The card scrolls now that John's story sits above the flyer, so a
-    // second open has to start at the top rather than wherever the last
-    // reader left it.
+    // The card still scrolls on a short screen, so a second open has to
+    // start at the top rather than wherever the last reader left it.
     const card = posterModal.querySelector('.poster-card');
     if (card) card.scrollTop = 0;
     posterOpen = true;
