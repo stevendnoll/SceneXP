@@ -20,6 +20,75 @@
  * on the floor without a word. Hence a file.
  */
 
+/* ==========================================================================
+   THE BOUTIQUE LAYER
+   ==========================================================================
+
+   John is aiming this at people buying high end cars, and the room he is
+   sitting in is made of a few hundred flat polygons. Those two facts are
+   not in conflict as long as the FLAT LAYER carries the finish: nobody
+   reads a low-poly figure as cheap when everything drawn over it is
+   expensive. The 3D is the diorama in the window; this is the shop.
+
+   Four rules, taken from how the German marques actually present
+   themselves, and each one is the opposite of what the shared SceneXP
+   stylesheet does:
+
+   1. DARK LACQUER, NOT PAPER. The shared cards are near-white with dark
+      ink and a 16px radius, which is the friendly museum-label look every
+      other experience on this site wears. These are deep blue-black with
+      light type and a 3px radius. Luxury almost never rounds hard: a
+      tight radius reads as machined, a soft one reads as an app.
+
+   2. TWO TYPEFACES, BOTH ALREADY ON THE DEVICE. No webfont, and not only
+      because `font-src 'self'` forbids the CDN: a page that waits on a
+      font shows the visitor a flash of nothing, which is the least
+      expensive thing a page can do. A serif carries the display lines
+      (Hoefler Text, Iowan Old Style, Palatino Linotype and Georgia are the
+      same idea on the four platforms that matter) and a light system sans
+      carries everything else, always with real letter-spacing. WIDE
+      TRACKING ON SMALL CAPS is the single most legible signal of this
+      whole category, and it costs nothing.
+
+   3. HAIRLINES, NOT FILLS. A 1px rule in champagne does the work that a
+      colored panel does elsewhere. There is exactly ONE filled element on
+      the page (the Call button), which is what makes it the primary
+      action without needing to shout.
+
+   4. LIGHT HAS A DIRECTION. Every surface gets a bright top edge, a
+      darker bottom, and a soft shadow underneath, because that is what a
+      polished horizontal surface does under a showroom ceiling. The
+      arrival panel goes further and takes a specular sweep across it.
+
+   TWO GOLDS, ON PURPOSE. John's flyer and the favicon use #f0a51e, which
+   is a saturated road-sign amber: right for a badge, and on a lacquer
+   ground at paragraph size it reads as a warning label. The interface
+   uses a champagne struck from the same hue, lower in chroma and higher
+   in value. The badge being the more saturated of the two is how real
+   marques do it, and it keeps the mark reading as a mark. */
+
+:root {
+    /* The lacquer. Not black: a piano-black trim panel photographs blue. */
+    --lux-ink: #0a1322;
+    --lux-ink-lift: #16283d;      /* the lit top of a polished surface */
+    --lux-ink-deep: #060d18;      /* the shaded bottom of one */
+
+    --lux-gold: #dbb36a;          /* champagne, for hairlines and small caps */
+    --lux-gold-lift: #ecca8b;     /* the same, catching light */
+    --lux-ivory: #eef1f5;
+    --lux-mute: #a3b2c4;
+    --lux-faint: rgba(255, 255, 255, 0.10);
+
+    /* Both stacks are already installed on every platform this page will
+       meet. The serif degrades Hoefler Text (Apple) to Iowan Old Style
+       (iOS) to Palatino Linotype (Windows) to Georgia (everywhere), which
+       are four different faces but one voice. */
+    --lux-display: "Hoefler Text", "Iowan Old Style", "Palatino Linotype",
+        Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --lux-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+        Helvetica, Arial, sans-serif;
+}
+
 /* NO PAN AND ZOOM ROW.
    The shared pan part always builds its bottom-center row of arrows and
    zoom circles, and this scene hides it: the visitor this page is for is
@@ -238,56 +307,144 @@ body .pan-controls.no-chrome.visible {
     bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 90;
-    width: min(92vw, 33rem);
+    width: min(92vw, 34rem);
     box-sizing: border-box;
-    padding: 0.9rem 1.15rem 0.95rem;
-    border-radius: 14px;
+    padding: 1.15rem 1.4rem 1.2rem;
+    /* 3px, not 14. A tight radius reads as a machined edge; a soft one
+       reads as an app card, which is what this used to be. */
+    border-radius: 3px;
     /* Left aligned, where the old strip was centred. Centring is fine for
        a line of orientation and poor for a paragraph: every line starts
        somewhere new and the eye has to hunt for it. */
     text-align: left;
-    color: #f2f5f9;
-    background: rgba(12, 24, 44, 0.86);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    color: var(--lux-ivory);
+    font-family: var(--lux-sans);
+    /* THE SURFACE. Two gradients stacked: a short bright fall from the top
+       edge, which is the sheen a polished horizontal panel takes from a
+       ceiling, over a long body gradient that is lit at the top and
+       shaded at the bottom. A flat fill cannot read as a material because
+       a material is never one value. */
+    background:
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.11) 0%,
+            rgba(255, 255, 255, 0.03) 7%,
+            rgba(255, 255, 255, 0) 22%),
+        linear-gradient(176deg,
+            var(--lux-ink-lift) 0%,
+            #0c1a2b 52%,
+            var(--lux-ink-deep) 100%);
+    /* AND NO backdrop-filter, which was the first thing I reached for and
+       the wrong one twice over. It costs a full-screen blur of a LIVE
+       canvas every frame on a phone, for twenty eight seconds, to show
+       something through a panel that is already opaque enough to hide it.
+       And frosted glass is the wrong material anyway: glass is a phone
+       operating system, lacquer is a car interior. This is lacquer. */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    /* Light has a direction: a bright top edge, a dark bottom one, and a
+       deep soft shadow the panel appears to be sitting above. */
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.20),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+        0 22px 48px rgba(0, 0, 0, 0.42),
+        0 2px 10px rgba(0, 0, 0, 0.30);
+    /* Light type on a dark ground picks up weight on macOS unless this is
+       set, and the difference at 0.8rem is the difference between crisp
+       and muddy. */
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;           /* the sweep below rides inside the edge */
     pointer-events: none;       /* it explains the room, it is not part of it */
+}
+
+/* THE SPECULAR SWEEP. A soft band of light travels the panel twice after
+   it arrives, the way a showroom's ceiling lights run down the flank of a
+   car as you walk past it. This is the single detail that makes the
+   surface read as REFLECTIVE rather than merely dark, and it is one
+   moving gradient.
+
+   Twice, not forever: a shine on a loop is a loading skeleton, and this
+   panel is neither loading nor asking for attention. `background-position`
+   is the animated property (not opacity), so it cannot interfere with the
+   .coach-out class that later fades the whole panel away. */
+.intro-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(104deg,
+            rgba(255, 255, 255, 0) 34%,
+            rgba(255, 255, 255, 0.06) 44%,
+            rgba(255, 255, 255, 0.14) 50%,
+            rgba(255, 255, 255, 0.06) 56%,
+            rgba(255, 255, 255, 0) 66%);
+    background-size: 280% 100%;
+    background-position: 210% 0;
+    animation: lux-sweep 7.5s cubic-bezier(0.4, 0, 0.2, 1) 1.1s 2;
+    pointer-events: none;
+}
+
+@keyframes lux-sweep {
+    0% { background-position: 210% 0; }
+    55%, 100% { background-position: -110% 0; }
 }
 
 /* Read in the order somebody with ten seconds gives it: who, then the
    one line that matters, then the terms, then the mechanics. Each step
    down in size is a step down in how much it needs to be read. */
+/* The name, set the way a marque sets one: small, capitalised, and
+   TRACKED WIDE. At 0.62rem with a quarter of an em between the letters it
+   is barely bigger than the footnote and reads as the most expensive line
+   in the panel, which is the whole trick. The rule above it is the
+   brand mark a logo would otherwise be doing. */
 .intro-kicker {
-    margin: 0 0 0.15rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.09em;
+    position: relative;
+    margin: 0 0 0.7rem;
+    padding-top: 0.85rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.26em;
     text-transform: uppercase;
-    color: #f0a51e;
+    color: var(--lux-gold);
 }
 
+.intro-kicker::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2rem;
+    height: 1px;
+    background: var(--lux-gold);
+}
+
+/* The one line that has to land, in the serif, at a LIGHT weight. Bold is
+   how a page shouts; size and a good face are how it does not have to. */
 .intro-lead {
-    margin: 0 0 0.4rem;
-    font-size: 1rem;
-    font-weight: 600;
-    line-height: 1.3;
+    margin: 0 0 0.55rem;
+    font-family: var(--lux-display);
+    font-size: 1.32rem;
+    font-weight: 400;
+    line-height: 1.28;
+    letter-spacing: 0.005em;
+    color: #fff;
 }
 
 .intro-body {
-    margin: 0 0 0.45rem;
-    font-size: 0.82rem;
-    line-height: 1.55;
-    color: #d3dee9;
+    margin: 0 0 0.7rem;
+    font-size: 0.8rem;
+    line-height: 1.72;          /* air, which is most of what "premium" is */
+    letter-spacing: 0.012em;
+    color: var(--lux-mute);
 }
 
 /* The mechanics, demoted to the footnote they always were. The rule
    above it is doing the work of a heading change without one. */
 .intro-hint {
     margin: 0;
-    padding-top: 0.45rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.14);
-    font-size: 0.76rem;
-    line-height: 1.45;
-    color: #a9bccf;
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--lux-faint);
+    font-size: 0.7rem;
+    line-height: 1.55;
+    letter-spacing: 0.05em;
+    color: rgba(163, 178, 196, 0.78);
 }
 
 /* ONE mechanism for both directions, and that is deliberate. Both layers
@@ -331,20 +488,27 @@ body .pan-controls.no-chrome.visible {
     }
 
     .intro-card {
-        padding: 0.7rem 0.9rem 0.75rem;
+        padding: 0.95rem 1.05rem 1rem;
+    }
+
+    .intro-kicker {
+        margin-bottom: 0.55rem;
+        padding-top: 0.7rem;
+        font-size: 0.58rem;
+        letter-spacing: 0.22em;
     }
 
     .intro-lead {
-        font-size: 0.92rem;
+        font-size: 1.12rem;
     }
 
     .intro-body {
-        font-size: 0.78rem;
-        line-height: 1.5;
+        font-size: 0.76rem;
+        line-height: 1.62;
     }
 
     .intro-hint {
-        font-size: 0.72rem;
+        font-size: 0.66rem;
     }
 }
 
@@ -374,6 +538,13 @@ body .pan-controls.no-chrome.visible {
     .coach-marks.coach-out,
     .intro-card.coach-out {
         transition: none;
+    }
+
+    /* The sweep is the one thing on the panel that moves. The surface it
+       moves across is doing most of the work on its own, so this loses
+       nothing but the motion. */
+    .intro-card::before {
+        animation: none;
     }
 }
 
@@ -569,3 +740,484 @@ body .pan-controls.no-chrome.visible {
     width: min(94vw, 560px);
 }
 
+
+
+/* ==========================================================================
+   THE CARDS
+   ==========================================================================
+
+   Three of them, all reusing shared ids because the shared stylesheet
+   scopes its modal rules to a fixed list (see the header). What that
+   buys is the plumbing: the fixed overlay, .hidden, the backdrop, the
+   scroll container. What it also brings, and what everything below is
+   here to undo, is the SceneXP museum-label look: near-white paper, dark
+   ink, a 16px radius and a blue pill button, worn identically by every
+   other experience on this site.
+
+   These read as a car brochure instead. Same plumbing, different room.
+   ========================================================================== */
+
+/* The backdrop. A vignette rather than a flat wash, dark at the edges and
+   only half dark in the middle, so the showroom is still faintly there
+   behind the card instead of being switched off. The blur is doing real
+   work for this scene in particular: it turns a room of flat polygons
+   into depth of field, which is the cheapest luxury on the page. */
+#dialog-modal .modal-backdrop,
+#nudge-modal .modal-backdrop,
+#help-modal .modal-backdrop {
+    background:
+        radial-gradient(125% 95% at 50% 42%,
+            rgba(8, 17, 30, 0.58) 0%,
+            rgba(4, 9, 17, 0.88) 100%);
+    -webkit-backdrop-filter: blur(9px) saturate(112%);
+    backdrop-filter: blur(9px) saturate(112%);
+}
+
+/* The card itself: lacquer, a machined 3px edge, a lit top and a shaded
+   bottom, and a shadow deep enough that it is plainly ABOVE the room
+   rather than printed on it. */
+#dialog-modal .piece-card,
+#nudge-modal .piece-card,
+#help-modal .poster-card {
+    background:
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.09) 0%,
+            rgba(255, 255, 255, 0.02) 6%,
+            rgba(255, 255, 255, 0) 18%),
+        linear-gradient(174deg,
+            var(--lux-ink-lift) 0%,
+            #0b1829 46%,
+            var(--lux-ink-deep) 100%);
+    color: var(--lux-ivory);
+    font-family: var(--lux-sans);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 3px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+        0 34px 80px rgba(0, 0, 0, 0.55),
+        0 4px 16px rgba(0, 0, 0, 0.4);
+    -webkit-font-smoothing: antialiased;
+    /* Left, not centre. Centred type is a poster; a paragraph read on a
+       phone wants one place for the eye to return to. The actions put
+       their own text back in the middle below. */
+    text-align: left;
+}
+
+#dialog-modal .piece-card-content,
+#nudge-modal .piece-card-content {
+    padding: 2.1rem 1.85rem 1.6rem;
+}
+
+/* THE KICKER, and the gold rule that replaced its stars. A row of ★ is
+   how a coupon announces a special offer. A 2rem hairline in champagne is
+   how a marque announces anything, and it is the same mark the arrival
+   panel opens with, which is what ties the two together as one house. */
+#nudge-modal .complete-kicker {
+    position: relative;
+    margin: 0 0 0.85rem;
+    padding-top: 0.9rem;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--lux-gold);
+}
+
+#nudge-modal .complete-kicker::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2rem;
+    height: 1px;
+    background: var(--lux-gold);
+}
+
+/* The card headings, in the serif at a light weight. The shared rule is
+   1.8rem at weight 700, which is a shout; this is bigger AND quieter,
+   which is the whole difference between the two aesthetics. */
+#nudge-modal .piece-title,
+#help-modal .about-title {
+    margin: 0 0 0.5rem;
+    font-family: var(--lux-display);
+    font-size: 1.62rem;
+    font-weight: 400;
+    line-height: 1.18;
+    letter-spacing: 0.004em;
+    color: #fff;
+}
+
+#nudge-modal .piece-subtitle,
+#help-modal .about-body {
+    margin: 0 0 1.35rem;
+    font-size: 0.86rem;
+    font-weight: 400;
+    line-height: 1.72;
+    letter-spacing: 0.012em;
+    color: var(--lux-mute);
+}
+
+/* The prop stories. The shared sheet demotes the title to a small accent
+   label and promotes the line into a tinted speech panel, which is the
+   right structure and the wrong finish: an 8% blue tint is invisible on
+   lacquer. A champagne rule down the left says "someone is speaking"
+   without needing a panel at all. */
+#dialog-modal .piece-title {
+    margin: 0 0 1rem;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--lux-gold);
+}
+
+#dialog-modal #dialog-message {
+    margin: 0 0 1.7rem;
+    padding: 0.1rem 0 0.1rem 1.15rem;
+    background: none;
+    border-left: 1px solid rgba(219, 179, 106, 0.55);
+    border-radius: 0;
+    font-family: var(--lux-display);
+    font-size: 1.12rem;
+    font-weight: 400;
+    line-height: 1.62;
+    color: var(--lux-ivory);
+}
+
+/* ---- The actions --------------------------------------------------------
+
+   ONE FILLED ELEMENT ON THE WHOLE PAGE, and it is the call button. That
+   is not restraint for its own sake: a single fill among hairlines is
+   read before anything else on the card, so the most important control in
+   John's business gets the most emphasis available while the card stays
+   quiet. Everything else is an outline or a plain line of type.
+
+   The shared .piece-enter is a blue pill at weight 600. These are tracked
+   capitals at 0.72rem on a 2px edge, which is the button every German
+   marque has been shipping for fifteen years. */
+#nudge-modal #contact-call {
+    display: block;
+    width: 100%;
+    margin: 0.2rem 0 1.1rem;
+    padding: 1.05rem 1rem;
+    background: linear-gradient(180deg, var(--lux-gold-lift) 0%, var(--lux-gold) 100%);
+    color: #16120a;
+    border: none;
+    border-radius: 2px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.45),
+        0 6px 18px rgba(0, 0, 0, 0.4);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-align: center;
+    text-decoration: none;
+    transition: filter 0.18s ease, transform 0.12s ease;
+}
+
+#nudge-modal #contact-call:hover {
+    background: linear-gradient(180deg, #f5d49b 0%, var(--lux-gold-lift) 100%);
+    filter: none;
+}
+
+#nudge-modal #contact-call:active {
+    transform: translateY(1px);
+}
+
+#nudge-modal #contact-call:focus-visible {
+    outline: 2px solid var(--lux-gold-lift);
+    outline-offset: 3px;
+}
+
+/* Text and email: the same offer by a quieter route, so they are lines of
+   type with a hairline under them rather than buttons competing with the
+   one above. The email address is long, so it keeps its own size. */
+#nudge-modal #contact-text,
+#nudge-modal #contact-email {
+    display: block;
+    width: 100%;
+    margin: 0 0 0.7rem;
+    padding: 0.5rem 0;
+    border: none;
+    border-bottom: 1px solid var(--lux-faint);
+    color: var(--lux-ivory);
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    text-align: center;
+    text-decoration: none;
+    word-break: break-word;
+    transition: color 0.18s ease, border-color 0.18s ease;
+}
+
+#nudge-modal #contact-text:hover,
+#nudge-modal #contact-email:hover,
+#nudge-modal #contact-text:focus-visible,
+#nudge-modal #contact-email:focus-visible {
+    color: var(--lux-gold-lift);
+    border-bottom-color: rgba(219, 179, 106, 0.7);
+}
+
+/* The outlined action, on the prop story and the About card. It fills on
+   hover, which is the state change: an accent-tinted button at rest reads
+   as already pressed. */
+#dialog-modal #dialog-cta,
+#help-modal #poster-cta {
+    display: block;
+    width: 100%;
+    margin: 0.3rem 0 0;
+    padding: 0.92rem 1rem;
+    background: none;
+    color: var(--lux-gold);
+    border: 1px solid rgba(219, 179, 106, 0.55);
+    border-radius: 2px;
+    font-family: var(--lux-sans);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+#dialog-modal #dialog-cta:hover,
+#help-modal #poster-cta:hover {
+    background: var(--lux-gold);
+    border-color: var(--lux-gold);
+    color: #16120a;
+}
+
+#dialog-modal #dialog-cta:focus-visible,
+#help-modal #poster-cta:focus-visible {
+    outline: 2px solid var(--lux-gold-lift);
+    outline-offset: 3px;
+}
+
+/* The way out. Plain tracked capitals, no box: leaving should be easy to
+   find and impossible to mistake for the thing the card is asking. */
+/* `button.` and not `.piece-cancel` alone, which is load-bearing: the text
+   and email links wear that same class, and the tracked capitals below
+   would have set a whole email address in upper case. */
+#dialog-modal button.piece-cancel,
+#nudge-modal button.piece-cancel {
+    width: 100%;
+    margin-top: 1.15rem;
+    padding: 0.6rem 0;
+    background: none;
+    border: none;
+    color: var(--lux-mute);
+    font-family: var(--lux-sans);
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-align: center;
+    cursor: pointer;
+    transition: color 0.18s ease;
+}
+
+#dialog-modal button.piece-cancel:hover,
+#nudge-modal button.piece-cancel:hover {
+    color: var(--lux-gold-lift);
+}
+
+#nudge-modal #contact-text:focus-visible,
+#nudge-modal #contact-email:focus-visible {
+    outline: 2px solid var(--lux-gold-lift);
+    outline-offset: 2px;
+}
+
+/* Where he works, under a rule. It carries its own class rather than
+   being picked out by position: `:last-of-type` looked like it would find
+   it and would have found nothing, because the last <p> in this card is
+   the ownership note. */
+#nudge-modal .contact-where {
+    margin: 1.25rem 0 0;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--lux-faint);
+    font-size: 0.72rem;
+    line-height: 1.65;
+    letter-spacing: 0.05em;
+    color: rgba(163, 178, 196, 0.9);
+}
+
+/* The trademark line. Fine print is where a cheap page stops caring, so
+   this one is set properly and not shrunk into illegibility: it stays in
+   sentence case (a whole sentence in tracked capitals is a chore to read,
+   whatever it looks like) and it stays above 4.5:1 against the lacquer. */
+.ownership-note {
+    margin: 1.4rem 0 0;
+    font-size: 0.66rem;
+    line-height: 1.7;
+    letter-spacing: 0.04em;
+    color: rgba(163, 178, 196, 0.72);
+    opacity: 1;
+}
+
+/* The close control. The shared one is a filled orange square; this is a
+   hairline ring with a thin glyph in it, which is what a close control
+   looks like when it is not also trying to be a feature. The 44px target
+   underneath it is untouched. */
+#dialog-modal .modal-close,
+#nudge-modal .modal-close,
+#help-modal .poster-card .modal-close {
+    top: 0.55rem;
+    right: 0.55rem;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: rgba(6, 13, 24, 0.55);
+    border: 1px solid var(--lux-faint);
+    border-radius: 50%;
+    color: var(--lux-mute);
+    font-size: 1.15rem;
+    font-weight: 300;
+    line-height: 1;
+    transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+#dialog-modal .modal-close:hover,
+#nudge-modal .modal-close:hover,
+#help-modal .poster-card .modal-close:hover {
+    background: rgba(6, 13, 24, 0.8);
+    border-color: rgba(219, 179, 106, 0.6);
+    color: var(--lux-gold-lift);
+    transform: none;            /* the shared rule scales it up by a tenth */
+}
+
+/* The About card's lead line keeps the champagne, but at the size and
+   tracking the rest of the house uses. */
+#help-modal .about-lead {
+    margin: 0 0 1.15rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--lux-gold);
+}
+
+#help-modal .about-text {
+    padding: 1.85rem 1.85rem 1.6rem;
+}
+
+/* ==========================================================================
+   THE FLOATING BUTTONS AND THE COACH MARKS
+   ========================================================================== */
+
+/* Two dark discs in the corner. The shared pair are neutral grey with a
+   white ring; these take the lacquer and a champagne hairline, so they
+   belong to the same object as everything else on screen. */
+#home-btn.menu-btn,
+#help-btn.menu-btn {
+    background: rgba(8, 17, 30, 0.72);
+    border: 1px solid rgba(219, 179, 106, 0.42);
+    color: var(--lux-gold-lift);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+}
+
+#home-btn.menu-btn:hover,
+#help-btn.menu-btn:hover {
+    background: rgba(219, 179, 106, 0.92);
+    border-color: rgba(219, 179, 106, 0.92);
+    color: #16120a;
+}
+
+/* The caption over John's head. Same lacquer, same tracked capitals, at
+   the smallest size that still reads at arm's length on a phone. */
+.coach-tip {
+    padding: 0.4rem 0.75rem;
+    border-radius: 2px;
+    font-family: var(--lux-sans);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--lux-gold-lift);
+    background: linear-gradient(176deg, rgba(22, 40, 61, 0.94), rgba(6, 13, 24, 0.94));
+    border: 1px solid rgba(219, 179, 106, 0.5);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        0 5px 16px rgba(0, 0, 0, 0.45);
+}
+
+/* The halos go champagne with the rest. A thinner ring than the white one
+   it replaces, because a fine line reads as drawn and a thick one reads
+   as a target reticle. */
+.coach-halo {
+    border-width: 1px;
+    border-color: rgba(236, 202, 139, 0.9);
+    background: radial-gradient(circle,
+            rgba(219, 179, 106, 0.26) 0%,
+            rgba(219, 179, 106, 0.09) 55%,
+            rgba(10, 19, 34, 0) 72%);
+}
+
+.coach-halo::before,
+.coach-halo::after {
+    border-width: 1px;
+    border-color: rgba(236, 202, 139, 0.9);
+}
+
+.coach-marks.coach-calm .coach-halo {
+    border-color: rgba(236, 202, 139, 0.6);
+}
+
+/* ==========================================================================
+   THE LOADING SCREEN
+   ==========================================================================
+
+   The first thing anybody sees, and the shared version is a 300 by 8
+   rounded progress bar with a cyan gradient in it, which is a browser
+   game. A marque shows you a mark, a name in tracked capitals, and a
+   HAIRLINE that fills. One pixel high, because the less a progress
+   indicator does the more finished the thing behind it looks. */
+#loading-screen {
+    background:
+        radial-gradient(130% 100% at 50% 38%, #16283d 0%, #070e1a 62%, #04080f 100%);
+}
+
+#loading-screen .loader-title {
+    margin-bottom: 2.2rem;
+    font-family: var(--lux-sans);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.42em;
+    /* The tracking adds a space after the last letter that nothing
+       balances, so the line sits a third of a letter left of centre
+       unless it is pushed back. */
+    text-indent: 0.42em;
+    text-transform: uppercase;
+    color: var(--lux-ivory);
+}
+
+#loading-screen .loader-bar {
+    width: min(74vw, 300px);
+    height: 1px;
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: visible;
+}
+
+#loading-screen .loader-progress {
+    height: 1px;
+    border-radius: 0;
+    background: linear-gradient(90deg, rgba(219, 179, 106, 0.35), var(--lux-gold-lift));
+    box-shadow: 0 0 10px rgba(219, 179, 106, 0.55);
+    transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#loading-screen .loader-status {
+    margin-top: 1.15rem;
+    font-family: var(--lux-sans);
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.3em;
+    text-indent: 0.3em;
+    text-transform: uppercase;
+    color: rgba(163, 178, 196, 0.75);
+}

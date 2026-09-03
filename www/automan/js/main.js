@@ -764,39 +764,39 @@ function restoreDialogFocus() {
 // rather than the same advert wheeled out five different ways.
 const CONTACT_CARDS = {
     john: {
-        kicker: '★  Free consultation, by phone or Zoom  ★',
+        kicker: 'Free consultation, by phone or Zoom',
         title: 'Meet John Walker',
         lead: 'This is John, doing the part most people dread. Twenty five years of it, more than 2,000 cars, and now he does it for the buyer instead of the dealership. If he cannot get you the deal you want, you owe him nothing.'
     },
     customer: {
-        kicker: '★  Free consultation, by phone or Zoom  ★',
+        kicker: 'Free consultation, by phone or Zoom',
         title: 'She brought backup',
         lead: 'She walked in with somebody who knows what every line on that page is worth. The consultation that got her here was free, and so is yours.'
     },
     dealer: {
-        kicker: '★  Free consultation, by phone or Zoom  ★',
+        kicker: 'Free consultation, by phone or Zoom',
         title: 'The other side of the desk',
         lead: 'He is good at his job, and that is exactly the point. Nobody should have to sit across from a professional without one of their own.'
     },
     story: {
-        kicker: '★  Free consultation, by phone or Zoom  ★',
+        kicker: 'Free consultation, by phone or Zoom',
         title: 'Let John handle it',
         lead: 'John Walker has spent twenty five years on the other side of that desk, and more than 2,000 cars have gone through his hands. If he cannot get you the deal you want, you owe him nothing.'
     },
     nudge: {
-        kicker: '★  A few stops into the visit  ★',
+        kicker: 'A few stops into the visit',
         title: 'Enjoying the showroom?',
         lead: 'Thank you for looking around. Everything in this room is something John has already thought about on a customer’s behalf. If you have a car to buy or sell, he would be glad to hear from you.'
     },
     // From the foot of the About card, so this is the one visitor in the
     // scene who has just read the whole account. Nothing to re-explain.
     about: {
-        kicker: '★  Free consultation, by phone or Zoom  ★',
+        kicker: 'Free consultation, by phone or Zoom',
         title: 'That is the whole idea',
         lead: 'No obligation and no pressure. Tell John what you are looking at, and he will tell you plainly what he sees in it.'
     },
     button: {
-        kicker: '★  Free consultation, by phone or Zoom  ★',
+        kicker: 'Free consultation, by phone or Zoom',
         title: 'Talk to John',
         lead: 'By phone or by Zoom, before you ever set foot in a dealership. He will look at the numbers with you and tell you plainly what he sees.'
     }
