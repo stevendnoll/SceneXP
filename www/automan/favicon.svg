@@ -1,19 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="John Walker, The Auto Man">
-    <!-- PROVISIONAL (task T10.1). A simple car in the flyer's navy and
-         gold: an echo of John Walker's colors, not a copy of his artwork.
-         Drawn plain on purpose, because a favicon is read at 16px. -->
+    <!-- ONE MARK, TWO SIZES. This file is the browser tab icon at 16 pixels
+         and the logo on the loading screen at 150, so whatever somebody
+         watches while the showroom builds is the same thing that then sits
+         in their tab. It is drawn for the smaller of those two.
+
+         IT IS NOT A CAR ANY MORE. The placeholder this replaces was a
+         little gold sedan, which was the wrong idea twice over: a car at
+         16 pixels is a gold smudge with two dots under it, and the one
+         thing a car icon says at any size is DEALERSHIP, which is the side
+         of the desk John spent twenty five years leaving.
+
+         So it says his name instead. A W in his flyer's gold on his
+         flyer's navy, with the flyer's own underline beneath it: one
+         letter, one bar, no detail smaller than a whole pixel in a tab.
+         The rounded square is the ground every app icon shares, which is
+         what makes a lone letter read as a mark rather than as text. -->
     <rect width="64" height="64" rx="14" fill="#12294a"/>
-    <!-- Body: a low wedge with the cabin set back over the rear wheel -->
-    <path d="M10 40 L 11.5 33 L 19 32 L 25 23 L 41 23 L 48 32 L 55 34 L 56 40 L 56 44 L 10 44 Z"
-        fill="#f0a51e"/>
-    <!-- Windows, punched back to the ground color so the cabin reads small -->
-    <path d="M27 31 L 31.5 24.5 L 35 24.5 L 35 31 Z" fill="#12294a"/>
-    <path d="M37 24.5 L 41.5 24.5 L 46 31 L 37 31 Z" fill="#12294a"/>
-    <!-- Wheels -->
-    <circle cx="21" cy="44" r="7" fill="#f0a51e"/>
-    <circle cx="21" cy="44" r="3" fill="#12294a"/>
-    <circle cx="45" cy="44" r="7" fill="#f0a51e"/>
-    <circle cx="45" cy="44" r="3" fill="#12294a"/>
-    <!-- The road, one steady line -->
-    <rect x="8" y="52" width="48" height="3" rx="1.5" fill="#2f6fd0"/>
+    <!-- The W as one stroked polyline rather than a filled outline: the
+         round caps and joins are what keep it friendly instead of sharp,
+         and 9 units of stroke is 2.25 pixels at tab size, which survives.
+         The middle peak stops well short of the top so the two valleys
+         stay open and it cannot close up into an M. -->
+    <path d="M12.5 13 L 24 41 L 32 23.5 L 40 41 L 51.5 13" fill="none" stroke="#f0a51e"
+        stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- The underline from his flyer, where it sits under THE AUTO MAN.
+         Short and thick on purpose: a long hairline turns to grey at 16
+         pixels, and a short bar stays a bar. -->
+    <rect x="20" y="50.5" width="24" height="4.5" rx="2.25" fill="#f0a51e"/>
 </svg>

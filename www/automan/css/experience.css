@@ -38,6 +38,24 @@ body .pan-controls.no-chrome.visible {
     display: none;
 }
 
+/* THE MARK ON THE LOADING SCREEN.
+   It is favicon.svg at 150px, which already carries its own navy ground
+   and rounded corners, so it wants none of the shared .logo-card white
+   plate. What it does want is separation: the loader ground is #121832
+   and the mark's is #12294a, which are close enough that the square
+   would otherwise float with no edge. A gold hairline gives it one,
+   quietly, in the same gold as the W.
+
+   The radius is a PERCENTAGE because the shared rule sizes the logo with
+   clamp(110px, 22vw, 150px). 22% matches the 14/64 the SVG rounds its own
+   corners by, so the hairline follows the artwork's edge at every size
+   rather than cutting across it. */
+.automan-mark {
+    border-radius: 22%;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45),
+                0 0 0 1px rgba(240, 165, 30, 0.28);
+}
+
 /* ==========================================================================
    ARRIVAL COACHING
    Three pulsing halos over the heads of the cast, one caption beside John,
@@ -398,16 +416,16 @@ body .pan-controls.no-chrome.visible {
     border: 0;
 }
 
-/* The card holding John's story and then his flyer. The shared
+/* The card holding John's flyer and then his story. The shared
    .piece-card is 380px wide and built for a paragraph of text; this holds
-   a few paragraphs AND a tall image, so it widens, drops its own padding
+   a tall image AND a few paragraphs, so it widens, drops its own padding
    (each block brings its own), and SCROLLS.
 
    `overflow-y: auto` is the change that came with the text (D22). While
    this card was the flyer alone it was `overflow: hidden` and the image
-   was capped at 92vh, so the whole thing always fitted. Text above the
-   image means it no longer does, and hidden overflow would have cut the
-   flyer off with no way to reach it. */
+   was capped at 92vh, so the whole thing always fitted. Words as well as
+   the flyer mean it no longer does, and hidden overflow would have cut
+   one of the two off with no way to reach it. */
 #help-modal .poster-card {
     width: auto;
     max-width: min(94vw, 560px);
@@ -476,17 +494,25 @@ body .pan-controls.no-chrome.visible {
     display: block;
     width: 100%;
     height: auto;
-    /* Tall flyer, short window: keep the whole thing on screen rather
-       than cropping the phone number off the bottom. */
-    max-height: 92vh;
-    max-height: 92dvh;
+    /* THE FLYER LEADS THE CARD, SO IT MUST NOT FILL IT (D23). At its own
+       aspect the flyer is taller than the card on a wide screen, and a
+       card that opens as one full-height image looks finished: the story
+       under it would never be found. The cap leaves the heading and the
+       first lines of John's story showing on the same screen at every
+       size, which is what makes the scroll obvious.
+
+       `contain` keeps the whole flyer on screen when the cap bites,
+       letterboxed on the card's own ground rather than cropped, because
+       the phone number is printed across the bottom of it. */
+    max-height: 72vh;
+    max-height: 72dvh;
     object-fit: contain;
     background: #0e1c2c;
-    /* A hairline between John's story and his flyer. The captions that
-       used to introduce the image are gone, so this is what keeps the
-       two from running into each other when the flyer's own edge
+    /* A hairline between the flyer and the story it introduces. The
+       captions that used to separate them are gone, so this is what keeps
+       the two from running into each other when the flyer's own edge
        happens to be dark. */
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* While the image is still on its way, hold the card's shape rather than

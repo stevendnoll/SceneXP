@@ -93,6 +93,11 @@ const POSTER_SRC = 'assets/poster.webp';
 
 let cleanupController = null;
 
+// A card opens on the tap that asked for it, centered, which puts its
+// primary action roughly where the finger already is. See armCard().
+const CARD_ARM_MS = 450;
+let cardArmedAt = 0;
+
 // One raycast per tap, with a little forgiveness for fingertips
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -285,10 +290,22 @@ function setupEventListeners() {
         checkSceneTap(event.clientX, event.clientY);
     }, { signal });
     canvas.addEventListener('touchend', (event) => {
+        // Cancel the compatibility mouse click this touch would otherwise
+        // spawn. The shared pan part already cancels touchstart for the
+        // same reason, and this is the second of the two belts described
+        // above swallowGhostTap: a card is about to open under this
+        // finger, and the click would land on whatever the card puts
+        // there. Canceling also stops the tap raycasting twice, through
+        // the click handler above and this one.
+        if (event.cancelable) event.preventDefault();
         if (gestureClaimedTap()) return;
         const touch = event.changedTouches[0];
         if (touch) checkSceneTap(touch.clientX, touch.clientY);
-    }, { signal });
+    }, { passive: false, signal });
+
+    // The last line of defense for that same tap. Capture phase on the
+    // document, so it runs before anything inside a card can act.
+    document.addEventListener('click', swallowGhostTap, { capture: true, signal });
 
     // The story dialog's close buttons and backdrop, the contact card's,
     // and Escape for whichever is up
@@ -511,6 +528,50 @@ function checkSceneTap(clientX, clientY) {
     openPropDialog(kind);
 }
 
+// ---- The tap that opens a card must not also press it -----------------------
+//
+// Reported from a phone: tapping John started dialing him, and tapping the
+// customer sometimes started an email. Neither is a link doing anything
+// wrong. It is where the card lands.
+//
+// Every card on this page opens centered, and the three people stand in the
+// middle of the frame, so the card arrives directly under the finger that
+// asked for it. John's chest is about where the Call button appears, and
+// the customer's is about where the Email link does. Any second activation
+// at those coordinates presses them, and there are two ways to get one:
+//
+//  - the synthesized mouse click that follows a touch, dispatched at the
+//    same point against whatever is under it BY THEN. The shared pan part
+//    cancels touchstart on the canvas to suppress exactly this, and the
+//    canvas touchend below now cancels as well, but a page cannot rely on
+//    every browser and every assistive layer honoring that;
+//  - a second real tap from somebody who did not see the card appear.
+//
+// So the card arms itself instead of trusting the suppression. For
+// CARD_ARM_MS after any card opens, a pointer click inside it is swallowed
+// in the capture phase, before the link or button under it can act. Nobody
+// reads a new card and presses its one big button in under half a second,
+// so nothing deliberate is ever lost.
+//
+// Keyboard activation is exempt: Enter and Space on a focused control
+// arrive as a click with `detail` 0, and somebody tabbing has not been
+// handed a card under their finger at all.
+function armCard() {
+    cardArmedAt = Date.now();
+}
+
+function swallowGhostTap(event) {
+    if (!cardArmedAt || Date.now() - cardArmedAt > CARD_ARM_MS) return;
+    if (!event.detail) return;              // keyboard, not a pointer
+    const target = event.target;
+    if (!target || typeof target.closest !== 'function') return;
+    if (!target.closest('#nudge-modal, #dialog-modal, #help-modal')) return;
+    cardArmedAt = 0;                        // one swallow per opening
+    event.preventDefault();
+    event.stopPropagation();
+    track('ghost-tap');
+}
+
 // ---- The showroom's stories -------------------------------------------------
 // Title + two lines for each clickable thing in the showroom, in the same
 // warm host's voice as the rest of the site, free of em-dashes and
@@ -666,6 +727,7 @@ function openPropDialog(kind) {
     propClicks += 1;
     if (propClicks % NUDGE_EVERY === 0) nudgePending = true;
     dialogReturnFocus = document.activeElement;
+    armCard();
     dialogModal.classList.remove('hidden');
     if (dialogCta) dialogCta.focus();
 }
@@ -836,9 +898,17 @@ function openContactCard(entry) {
 
     nudgeOpen = true;
     holdCoaching();
+    armCard();
     track('contact-open', { entry });
     nudgeModal.classList.remove('hidden');
-    const lead = contact ? contactCall : nudgeModal.querySelector('[data-close]');
+    // Focus the CARD, not the call button. Landing on "Call" made a stray
+    // Enter dial John, put a screen reader into the actions before it had
+    // read who they belong to, and gave the tap that opened the card an
+    // already-focused target. The container carries tabindex="-1" so it
+    // can take focus without joining the tab order, and Tab from here
+    // reaches close, then call, text and email in reading order.
+    const lead = nudgeModal.querySelector('.modal-container')
+        || nudgeModal.querySelector('[data-close]');
     if (lead) lead.focus();
     return true;
 }
@@ -879,6 +949,7 @@ function openPoster() {
     if (card) card.scrollTop = 0;
     posterOpen = true;
     holdCoaching();
+    armCard();
     track('poster-open');
     const close = posterModal.querySelector('.modal-close');
     if (close) close.focus();

@@ -149,7 +149,14 @@
 
     <div id="loading-screen">
         <div class="loader-content">
-            <img class="loader-logo logo-card" src="assets/automan-1.webp" alt="" width="150" height="150">
+            <!-- The same file the tab loads as the favicon, at 150px
+                 instead of 16 (task T10.2). One mark in both places, so
+                 the thing somebody watches while the showroom builds is
+                 the thing that then sits in their tab. It brings its own
+                 navy ground, so it does NOT wear the shared .logo-card
+                 white plate: that treatment exists for white-backed JPGs
+                 and framed this one in a white square. -->
+            <img class="loader-logo automan-mark" src="favicon.svg" alt="" width="150" height="150">
             <div class="loader-title">John Walker, The Auto Man</div>
             <div class="loader-bar" aria-hidden="true">
                 <div class="loader-progress" id="load-progress"></div>
@@ -299,14 +306,22 @@
         <div class="modal-backdrop" data-close></div>
         <div class="modal-container piece-card poster-card">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
-            <!-- THE SERVICE IN WORDS, ABOVE THE FLYER (D22). The card used
-                 to be the flyer and nothing else, with its heading hidden
-                 from sight, which made the only full account of what John
-                 does an IMAGE OF TEXT: unselectable, untranslatable, and
-                 reachable by a screen reader only through one very long
-                 alt attribute. This is the same story the noscript block
-                 tells, in the same voice, as real text, and the flyer now
-                 illustrates it rather than carrying it alone. -->
+            <!-- THE FLYER LEADS (D23). It led before D22 as well, but back
+                 then it was the whole card, which made the only full
+                 account of what John does an IMAGE OF TEXT: unselectable,
+                 untranslatable, and reachable by a screen reader only
+                 through one very long alt attribute. D22 put the words in
+                 and, in doing so, pushed the flyer below the fold.
+
+                 This is the order that keeps both. John's own artwork is
+                 what somebody who taps "About John" came to look at, and
+                 it is the most persuasive thing on the page, so it opens
+                 the card. The same story then follows it as real text,
+                 which is what a screen reader, a translator and a text
+                 selection can actually reach, and the flyer illustrates it
+                 rather than carrying it alone. -->
+            <img id="poster-image" class="poster-image" width="1023" height="1537"
+                alt="John Walker's flyer. Come see Walker, The Auto Man, your local auto expert. A photograph of John, a bald man in a light blue shirt, standing between two pickup trucks on rocky ground. Free consultations on the phone or by Zoom, and a 100 percent satisfaction guarantee or your money returned. Let me help you get the best deal for your trade and I will desk the whole deal for you. Let me walk you through the process with extended warranties, tire and wheel protection and gap insurance. Do you need it? Maybe. Maybe not. But let me be your customer advocate. The flyer ends with a phone number and an email address, which this page gives as live call, text and email links on the card behind any of the three people at the desk.">
             <div class="about-text">
                 <h2 id="poster-title" class="about-title">John Walker, The Auto Man</h2>
                 <p class="about-lead">Your advocate before, during, and after the deal.</p>
@@ -323,8 +338,6 @@
                     Baltimore, Maryland, and anywhere else by Zoom.</p>
                 <button id="poster-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
             </div>
-            <img id="poster-image" class="poster-image" width="1023" height="1537"
-                alt="John Walker's flyer. Come see Walker, The Auto Man, your local auto expert. A photograph of John, a bald man in a light blue shirt, standing between two pickup trucks on rocky ground. Free consultations on the phone or by Zoom, and a 100 percent satisfaction guarantee or your money returned. Let me help you get the best deal for your trade and I will desk the whole deal for you. Let me walk you through the process with extended warranties, tire and wheel protection and gap insurance. Do you need it? Maybe. Maybe not. But let me be your customer advocate. The flyer ends with a phone number and an email address, which this page gives as live call, text and email links on the card behind any of the three people at the desk."">
         </div>
     </div>
 
@@ -365,7 +378,11 @@
          fallback note rather than left as dead links. -->
     <div id="nudge-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="nudge-title">
         <div class="modal-backdrop" data-close></div>
-        <div class="modal-container piece-card complete-card">
+        <!-- tabindex="-1" so main.js can move focus to the CARD when it
+             opens rather than onto the call button. Focusing the action
+             meant a stray Enter dialed John, and a screen reader met
+             "Call ..." before it had been told whose number it is. -->
+        <div class="modal-container piece-card complete-card" tabindex="-1">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
             <div class="piece-card-content">
                 <p class="complete-kicker" aria-hidden="true">★ &nbsp;Free consultation, by phone or Zoom&nbsp; ★</p>
