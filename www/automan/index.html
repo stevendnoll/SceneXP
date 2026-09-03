@@ -230,9 +230,47 @@
          so the name and the one line that matters come first and the
          terms follow for anyone still reading. #help-btn opens the same
          story at length, for anyone who wants it after this has gone. -->
+    <!-- HIS FACE ARRIVES WITH HIS NAME (D38). The panel is the first thing
+         anybody reads and the only thing that says who John is to a
+         visitor who taps nothing, and until now it said it in type alone
+         while the only person on screen was a low-poly figure with two
+         dots for eyes.
+
+         IT COSTS THE PANEL NO HEIGHT, which is the whole reason it can go
+         here. On the contact card the disc sits ABOVE the kicker and adds
+         about ninety pixels, which is affordable on a card somebody chose
+         to open. This panel arrives uninvited over a live room and already
+         covers a third of a phone screen, which is why it takes no taps at
+         all, so height here is the expensive dimension. Beside the name
+         and the lead it is not: those two lines stand about 61 pixels tall
+         together on a wide screen and the disc is 54, so the row is the
+         same height it always was.
+
+         AND THE BODY KEEPS THE FULL MEASURE. Only the header sits beside
+         the portrait. Putting the whole block beside it would have taken
+         about 13% off every line of the paragraph and the footnote, which
+         is four or five extra lines of wrapping, and it would have cost
+         far more height than it saved.
+
+         Same file as the contact card's disc, so it is one fetch and one
+         treatment for his face. `alt` is empty because his name is the
+         very next thing in the markup, in real text.
+
+         Note for whoever reads the screenshot: the lead is a long line and
+         the portrait takes about 13% of its measure, so on a wide screen
+         it may now break to two lines depending on which serif the device
+         has. That is not a fault (it breaks well, after "buyer,"), but if
+         Steve wants it back on one line the lever is the panel's own
+         `width: min(94vw, 37rem)`. -->
     <div id="intro-card" class="intro-card coach-out">
-        <p class="intro-kicker">John Walker, The Auto Man</p>
-        <p class="intro-lead">He works for the buyer, not the dealership.</p>
+        <div class="intro-head">
+            <img class="john-portrait intro-portrait" src="assets/john-walker-avatar.webp"
+                width="256" height="256" decoding="async" alt="">
+            <div class="intro-head-text">
+                <p class="intro-kicker">John Walker, The Auto Man</p>
+                <p class="intro-lead">He works for the buyer, not the dealership.</p>
+            </div>
+        </div>
         <p class="intro-body">Twenty five years inside the business and more than 2,000 cars,
             now spent on your side of the desk: the trade value, the price, the financing, and
             the coverage they add at the end. The first call is free, and if he cannot get you the

@@ -370,6 +370,57 @@ body .pan-controls.no-chrome.visible {
     55%, 100% { background-position: -110% 0; }
 }
 
+/* HIS PORTRAIT, BESIDE HIS NAME (D38).
+
+   THE ROW IS WHY THIS IS AFFORDABLE. The contact card wears the same disc
+   ABOVE its kicker, which costs it about ninety pixels, and that is fine
+   on a card somebody chose to open. This panel arrives uninvited over a
+   live room and already covers a third of a phone screen, so height is the
+   expensive dimension here and a stacked portrait was never available.
+   Beside the name and the lead it costs nothing: those two lines are about
+   61px tall together on a wide screen against a 54px disc, so the row is
+   the height it always was and the disc has air above and below it rather
+   than setting the height itself.
+
+   ONLY THE HEADER IS IN THE ROW. The paragraph and the footnote stay at
+   the panel's full measure. Putting the whole block beside the portrait
+   would take about 13% off every line of both, which is four or five
+   extra lines of wrapping and far more height than the row ever saved.
+
+   `align-items: center` rather than `flex-start`, because the lead can
+   break to two lines on a narrow screen and a disc pinned to the top of a
+   three-line column reads as a bullet rather than as a portrait. */
+.intro-head {
+    display: flex;
+    align-items: center;
+    gap: 1.05rem;
+    margin: 0 0 0.6rem;
+}
+
+/* min-width: 0 or a long unbroken word in the lead would refuse to shrink
+   and push the portrait off the panel's left edge. */
+.intro-head-text {
+    min-width: 0;
+}
+
+/* It inherits the circle, the champagne hairline and the shadow from
+   .john-portrait, so there is one treatment for his face across the page,
+   and overrides only what this surface needs.
+
+   TWO CLASSES IN THE SELECTOR, and that is not decoration. `.john-portrait`
+   is written 460 lines further down with the cards it was made for, and it
+   sets a width, a height and a bottom margin of its own. Two single-class
+   rules are the same specificity, so the later one wins, and a plain
+   `.intro-portrait` here would lose every declaration it makes to a rule
+   nowhere near it. Being deliberately more specific is what makes this
+   independent of where in the file either block sits. */
+.intro-card .intro-portrait {
+    flex: 0 0 auto;
+    width: 3.4rem;
+    height: 3.4rem;
+    margin: 0;
+}
+
 /* Read in the order somebody with ten seconds gives it: who, then the
    one line that matters, then the terms, then the mechanics. Each step
    down in size is a step down in how much it needs to be read. */
@@ -407,8 +458,10 @@ body .pan-controls.no-chrome.visible {
 
 /* The one line that has to land, in the serif, at a LIGHT weight. Bold is
    how a page shouts; size and a good face are how it does not have to. */
+/* No bottom margin: it is the last thing in .intro-head now, and the row
+   carries the space under it. */
 .intro-lead {
-    margin: 0 0 0.6rem;
+    margin: 0;
     font-family: var(--lux-display);
     font-size: 1.55rem;
     font-weight: 400;
@@ -487,6 +540,23 @@ body .pan-controls.no-chrome.visible {
 
     .intro-kicker::before {
         width: 1.3rem;
+    }
+
+    /* The header row is the tightest place on the panel on a phone, and
+       the lead is already two lines there, so the portrait comes down a
+       step and the gap with it. It stays a face rather than a bullet: at
+       2.9rem it is 46px, which is the same size the contact card's disc
+       drops to and about the floor for reading an expression. */
+    .intro-head {
+        gap: 0.85rem;
+        margin-bottom: 0.55rem;
+    }
+
+    /* Two classes again, for the reason above: the card's own phone
+       override of .john-portrait is further down this stylesheet. */
+    .intro-card .intro-portrait {
+        width: 2.9rem;
+        height: 2.9rem;
     }
 
     .intro-lead {
