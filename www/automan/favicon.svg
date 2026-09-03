@@ -2,7 +2,7 @@
     <!-- ONE MARK, TWO SIZES. This file is the browser tab icon at 16 pixels
          and the logo on the loading screen at 150, so whatever somebody
          watches while the showroom builds is the same thing that then sits
-         in their tab. It is drawn for the smaller of those two.
+         in their tab.
 
          IT IS NOT A CAR. The first placeholder was a little gold sedan,
          which was the wrong idea twice over: a car at 16 pixels is a gold
@@ -10,19 +10,37 @@
          at any size is DEALERSHIP, which is the side of the desk John
          spent twenty five years leaving.
 
-         RE-STRUCK AT M24, IN THE INTERFACE PALETTE. It was drawn in the
-         flyer's own navy and its saturated road-sign amber, on the
-         argument that a badge should be louder than the interface around
-         it. That argument was right about badges and wrong about this
-         one: the page it sits on is now lacquer and champagne throughout,
-         and the amber read as the one thing on screen that had not been
-         art-directed. So it takes the same two colors everything else
-         does, and the gradient down the W is the same "light has a
-         direction" the cards and the arrival panel are built on.
+         IT IS A SERIF W, because the page it belongs to is set in a serif
+         throughout and a monoline mark argued with every heading under it.
+         What says "serif" at 16 pixels is not the serifs, which are barely
+         half a pixel tall: it is STROKE CONTRAST. The down-strokes are 8
+         units against the up-strokes' 4.2, which is an old-style ratio a
+         text face would recognise and which a stroked polyline cannot
+         carry at all. That is why the letter is a filled path.
 
-         The flyer keeps its own amber. That is John's artwork, and it is
-         a photograph of a printed thing rather than part of this
-         interface. -->
+         THE MIDDLE STROKES CROSS, AND THAT IS THE WHOLE LETTER.
+         For three drafts the two V's met at a single POINT on the cap
+         line, which is geometrically tidy and reads, at tab size, as
+         V V: a point junction is subpixel at 16 pixels, so antialiasing
+         renders it as a break and the eye is left with two letters. What
+         fixes it is what old-style faces have always done. The thin
+         up-stroke carries PAST the apex and the thick down-stroke begins
+         before it, so the two overlap by five units and cross below the
+         cap line. The middle is then a solid mass rather than a pinch, at
+         every size, and no amount of antialiasing can take it apart.
+
+         Everything else tried first and rejected: heavier stems (made it
+         bold without joining it), wider serifs (made the halves look MORE
+         separate), a narrower letter (helped, kept). The join was the
+         problem, not the weight.
+
+         THE GEOMETRY IS SOLVED, NOT NUDGED. The two V's are one
+         construction run twice, so they cannot drift out of balance the
+         way an early draft did (23 units against 20, which showed up as
+         the right-hand serifs colliding). Each inner notch sits where the
+         arms actually cross, and the bottom vertices are short flats
+         rather than points, so the arms taper toward them the way a text
+         face's do. -->
     <defs>
         <!-- Lit from the top, like every other surface on the page. -->
         <linearGradient id="w-champagne" x1="0" y1="0" x2="0" y2="1">
@@ -40,20 +58,20 @@
         </linearGradient>
     </defs>
     <rect width="64" height="64" rx="14" fill="url(#w-lacquer)"/>
-    <!-- The bright top edge every surface in this interface carries. One
-         pixel of it survives at tab size as a slightly softer top corner,
-         which is all it is asked to do. -->
-    <path d="M14 1.2 H50 A12.8 12.8 0 0 1 62.8 14" fill="none"
-        stroke="rgba(255,255,255,0.16)" stroke-width="1.6" stroke-linecap="round"/>
-    <!-- The W as one stroked polyline rather than a filled outline: the
-         round caps and joins are what keep it friendly instead of sharp,
-         and 9 units of stroke is 2.25 pixels at tab size, which survives.
-         The middle peak stops well short of the top so the two valleys
-         stay open and it cannot close up into an M. -->
-    <path d="M12.5 13 L 24 41 L 32 23.5 L 40 41 L 51.5 13" fill="none"
-        stroke="url(#w-champagne)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Left V ends at 34.5, right V begins at 29.5: five units of overlap,
+         which is the crossing. -->
+    <path fill="url(#w-champagne)"
+        d="M12.4 15 L20.4 15 L25.35 32.94 L30.3 15 L34.5 15 L26.9 44 L20 44 Z
+           M29.5 15 L37.5 15 L42.45 32.94 L47.4 15 L51.6 15 L44 44 L37.1 44 Z"/>
+    <!-- Bracket serifs on all three top terminals. The middle one caps both
+         crossing strokes at once, which is the second thing holding the
+         letter together. The left is widest and the right narrowest,
+         because one caps a thick stem and the other a hairline. -->
+    <rect x="10.9" y="12.5" width="11" height="2.5" fill="url(#w-champagne)"/>
+    <rect x="28" y="12.5" width="11" height="2.5" fill="url(#w-champagne)"/>
+    <rect x="45.9" y="12.5" width="7.2" height="2.5" fill="url(#w-champagne)"/>
     <!-- The underline from his flyer, where it sits under THE AUTO MAN.
-         Short and thick on purpose: a long hairline turns to grey at 16
-         pixels, and a short bar stays a bar. -->
-    <rect x="20" y="50.5" width="24" height="4.5" rx="2.25" fill="#dbb36a"/>
+         A fine rule with square ends: the rounded bar this replaces was
+         the heaviest thing on the tile and read as a button. -->
+    <rect x="24" y="49.5" width="16" height="2.4" fill="#dbb36a"/>
 </svg>
