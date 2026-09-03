@@ -974,12 +974,16 @@ function updateCoachMarks() {
         el.hidden = false;
         const x = (_coachPoint.x * 0.5 + 0.5) * w;
         const y = (-_coachPoint.y * 0.5 + 0.5) * h;
-        // The halo, not the button, is what sits on the anchor: the button
-        // is a column with the caption hanging under it, so it lifts by
-        // half a halo. Both offsets stay in the transform so the browser
-        // never has to lay the element out again.
+        // THE ANCHOR IS THE CROWN, AND THE AIR ABOVE IT IS ADDED HERE, IN
+        // PIXELS. The mark is a reversed column, so its bottom edge is the
+        // bottom of the ring: `-100%` puts that edge on the head and the
+        // gap lifts it clear. Doing it this way rather than raising the
+        // anchor in the scene is what makes the clearance the same for
+        // John at the back of the desk as for the two nearer the camera.
+        // Both offsets stay in the transform so the browser never has to
+        // lay the element out again.
         el.style.transform =
-            `translate(${x}px, ${y}px) translate(-50%, calc(-0.5 * var(--coach-size)))`;
+            `translate(${x}px, ${y}px) translate(-50%, -100%) translate(0, calc(-1 * var(--coach-gap)))`;
     });
 }
 

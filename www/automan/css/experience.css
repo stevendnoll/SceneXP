@@ -60,13 +60,19 @@ body .pan-controls.no-chrome.visible {
 /* The marks are positioned from JavaScript, which writes a translate() of
    the projected screen point into the element's own transform. Anchoring
    them at the top left and centring with a second translate keeps that
-   write to one property and one value. */
+   write to one property and one value.
+
+   COLUMN-REVERSE PUTS THE HALO AT THE BOTTOM OF THE BOX, which is what
+   lets JavaScript anchor the whole mark by its own bottom edge and get a
+   clearance measured in pixels. The caption then stacks ABOVE the ring
+   rather than under it, so nothing in the mark is ever drawn across the
+   face it is pointing at. */
 .coach-mark {
     position: absolute;
     top: 0;
     left: 0;
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse;
     align-items: center;
     padding: 0;
     border: 0;
@@ -79,6 +85,10 @@ body .pan-controls.no-chrome.visible {
        the visitor pans, so JavaScript sets the `hidden` attribute rather
        than letting a mark hang at the edge over nobody. */
     --coach-size: 3.25rem;
+    /* Air between the bottom of the ring and the top of the head, in the
+       same units as the ring so a phone scales both together. main.js
+       reads this out of the transform it writes. */
+    --coach-gap: calc(var(--coach-size) * 0.34);
 }
 
 .coach-mark[hidden] {
@@ -144,10 +154,11 @@ body .pan-controls.no-chrome.visible {
         0 0 0 6px rgba(18, 41, 74, 0.8);
 }
 
-/* The caption under John's halo. Only he has one: three of these would be
-   a wall of labels over a room the visitor is meant to be looking at. */
+/* The caption above John's halo. Only he has one: three of these would be
+   a wall of labels over a room the visitor is meant to be looking at.
+   `margin-bottom` and not `margin-top`, because the column is reversed. */
 .coach-tip {
-    margin-top: 0.5rem;
+    margin-bottom: 0.45rem;
     padding: 0.35rem 0.7rem;
     border-radius: 999px;
     white-space: nowrap;
@@ -261,8 +272,11 @@ body .pan-controls.no-chrome.visible {
         opacity: 0.55;
     }
 
+    /* 1.7 and not the 2.0 the pulse reaches: a held ring is drawn every
+       frame, and the gap above the head is only about a third of a ring,
+       so the widest hold has to stop short of the forehead. */
     .coach-halo::after {
-        transform: scale(1.9);
+        transform: scale(1.7);
         opacity: 0.3;
     }
 

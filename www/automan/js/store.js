@@ -3003,12 +3003,19 @@ function createCast() {
  *  man the page is about first. */
 const PERSON_ORDER = ['john', 'customer', 'dealer'];
 
-/** Height of the coach-mark anchor in neck-pivot coordinates. The shared
- *  rig's head centre sits at 1.50 in person space, the neck pivot at
- *  1.32, and the crown (hair included) reaches about 0.13 above the
- *  centre, so this clears the tallest hair in the cast by roughly 15cm of
- *  figure. */
-const HEAD_ANCHOR_Y = 0.46;
+/** Height of the coach-mark anchor in neck-pivot coordinates. This is the
+ *  CROWN, not a point above it: head centre 1.50 in person space, neck
+ *  pivot 1.32, and the hair reaches about 0.13 above the centre.
+ *
+ *  THE GAP ABOVE THE HEAD IS NOT ADDED HERE, AND THAT IS THE POINT. The
+ *  halo is a fixed pixel size on the screen, so a world-space lift buys a
+ *  different clearance for every figure: it shrinks with distance exactly
+ *  when the halo does not. The first cut lifted the anchor to 0.46 and
+ *  the halo still landed on John's face, because he sits furthest from
+ *  the camera and 15cm of figure came back as four pixels. main.js does
+ *  the lift instead, in pixels, so all three clear their heads by the
+ *  same amount at any distance and any aspect. */
+const HEAD_ANCHOR_Y = 0.31;
 
 /** The anchors, for the coach marks. Empty until the cast is built. */
 export function getPersonAnchors() {
