@@ -302,13 +302,46 @@
          to go without JavaScript, and a link that goes nowhere is worse
          than no link. The noscript block above already carries John's
          pitch for that visitor. -->
+    <!-- JOHN'S W, NOT AN ⓘ (D39). Steve's call, and the loader is what
+         earns it: the same mark is the last thing a visitor watches before
+         the room appears and it is sitting in their tab the whole time, so
+         by the time they meet it in the corner they have already been
+         taught what it means. A monogram they had never seen would be a
+         worse control than the ⓘ it replaces, and this one they have.
+
+         SAME PATH DATA AS favicon.svg, CHARACTER FOR CHARACTER. The only
+         difference is the viewBox, which crops the 64-unit tile down to
+         the mark and drops the lacquer square, because this button already
+         brings its own dark disc. Copying the geometry rather than
+         re-deriving it is what stops the tab icon and the on-screen
+         control drifting apart, and verify-composition compares the two
+         strings so a change to one without the other fails.
+
+         The crop is the mark's bounds (x 4 to 60, y 17.52 to 46.48) plus
+         a unit of air all round. Not decoration: a box drawn exactly on
+         those bounds grazes the outermost pixel of every blade, which
+         clips the antialiasing along three edges, and it also made a
+         perfectly correct check fail on the last decimal place. The box's
+         58 by 31 is the aspect the CSS height is derived from, so nothing
+         letterboxes.
+
+         It is FILLED, where every other .menu-btn glyph on the site is a
+         2px stroke, so the shared `fill: none; stroke: currentColor` has
+         to be turned around for this one. currentColor either way, so the
+         hover still inverts it: the disc goes champagne and the mark goes
+         near-black with it.
+
+         The label is untouched. A wordmark says whose page this is and not
+         what the button does, so "About John, and his flyer" is carrying
+         more weight than it was. -->
     <button id="help-btn" class="ui-float menu-btn" type="button"
         title="About John"
         aria-label="About John, and his flyer">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" fill="none" />
-            <path d="M12 10.6v6.2" stroke-linecap="round" />
-            <circle cx="12" cy="7.4" r="1.05" stroke="none" fill="currentColor" />
+        <svg viewBox="3 16.5 58 31" aria-hidden="true">
+            <path
+                d="M 4.15 18.78 C 2.63 16.75 12.95 16.93 16.15 21.21 L 27.82 36.81 Q 31.75 42.05 24.87 46.48 Z
+                   M 22.08 18.78 C 20.56 16.75 30.89 16.93 34.09 21.21 L 45.75 36.81 Q 49.68 42.05 42.80 46.48 Z
+                   M 59.85 18.78 C 61.37 16.75 51.05 16.93 47.85 21.21 L 46.36 23.20 Q 43.46 27.07 49.37 32.79 Z" />
         </svg>
     </button>
 

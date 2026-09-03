@@ -632,6 +632,30 @@ body .pan-controls.no-chrome.visible {
     right: 82px;
 }
 
+/* THE W IN THE BUTTON (D39). Two things the shared rule cannot give it.
+
+   FILL, NOT STROKE. `.menu-btn svg` is `fill: none; stroke: currentColor;
+   stroke-width: 2`, which is right for the line-drawn glyphs every other
+   page uses and would draw this one as a 2px outline around three hollow
+   blades. It is a filled letterform, so the pair is turned around here.
+
+   AND IT IS WIDER THAN A PICTOGRAM. The shared box is 1.5rem square, which
+   suits a house or an ⓘ. This mark is 1.93 wide to 1 tall, so a square box
+   would render it 24px across and 12 high, which is under half the disc's
+   width and reads as small rather than as quiet. At 1.85rem it is about
+   30px across in a 50px disc, which puts the blades near 5.5px and the
+   gaps above 2.9, comfortably clear of where the tab icon has to live.
+   The height is the width over the VIEWBOX's 58/31, not a guess and not
+   the mark's own ratio: the box carries a unit of air around the mark, so
+   the two differ, and using the wrong one letterboxes the svg inside its
+   own element and quietly shrinks the mark to fit. */
+#help-btn svg {
+    width: 1.85rem;
+    height: 0.989rem;
+    fill: currentColor;
+    stroke: none;
+}
+
 /* The shared stylesheet has no screen-reader-only helper, so the card's
    heading (which labels the dialog and must not be drawn over the flyer)
    needs one here. Clip rather than display:none, or it stops being
