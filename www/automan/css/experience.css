@@ -490,6 +490,53 @@ body .pan-controls.no-chrome.visible {
     z-index: 2;
 }
 
+/* THE FLYER OPENS FULL SIZE IN A NEW TAB. Inside the card it is about 350
+   pixels wide on a phone, which is enough to see that it is a flyer and
+   not enough to read the small print on it. The file is 1023 by 1537, so
+   a new tab hands over the browser's own zoom, pan and save. */
+.poster-link {
+    display: block;
+    position: relative;
+    line-height: 0;             /* no descender gap under the image */
+    cursor: zoom-in;
+}
+
+.poster-link:focus-visible {
+    outline: 3px solid #f0a51e;
+    outline-offset: -3px;
+}
+
+/* The affordance. Nobody knows a picture is tappable unless it says so,
+   and this is the only tappable picture on the page. Bottom LEFT: the
+   card's close button holds the top right corner, and the flyer's own
+   gold badges run down its right side. */
+.poster-zoom {
+    position: absolute;
+    left: 0.7rem;
+    bottom: 0.7rem;
+    padding: 0.3rem 0.62rem;
+    border-radius: 999px;
+    background: rgba(14, 28, 44, 0.82);
+    border: 1px solid rgba(240, 165, 30, 0.55);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+    color: #f0d9a8;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    /* The whole picture is the target, so the badge must never be the
+       thing that swallowed the tap. */
+    pointer-events: none;
+}
+
+@media (hover: hover) {
+    .poster-link:hover .poster-zoom {
+        background: rgba(240, 165, 30, 0.92);
+        border-color: rgba(240, 165, 30, 0.92);
+        color: #12294a;
+    }
+}
+
 .poster-image {
     display: block;
     width: 100%;
