@@ -272,13 +272,20 @@ function setupEventListeners() {
         placeCamera();
     }, { signal });
 
-    // iOS Safari ignores `user-scalable=no` (Apple re-enabled zoom in iOS 10 for
-    // accessibility), so the only way to keep the immersive 3D view from being
-    // pinch-zoomed there is to block Safari's own gesture events. These are
-    // non-standard, Safari-only events; preventing gesturestart stops the pinch.
-    // Scoped to this page only: the 2D content pages stay zoomable.
+    // Safari's own pinch, blocked ON THE CANVAS ONLY (M39).
+    //
+    // These are non-standard, Safari-only events, and cancelling
+    // gesturestart is the only way to stop Safari page-zooming the
+    // immersive 3D view. They used to be canceled on the DOCUMENT, which
+    // took the page's zoom with them: together with the `user-scalable=no`
+    // that came off the viewport meta in the same round, this page could
+    // not be pinched larger at all, which is a WCAG 1.4.4 failure on a
+    // card carrying a phone number.
+    //
+    // Scoped to the canvas, a pinch that starts on the scene still belongs
+    // to the scene, and a pinch that starts on a card zooms the card.
     ['gesturestart', 'gesturechange', 'gestureend'].forEach(type =>
-        document.addEventListener(type, (e) => e.preventDefault(), { passive: false, signal }));
+        canvas.addEventListener(type, (e) => e.preventDefault(), { passive: false, signal }));
 
     // Session-end / dwell time. visibilitychange→hidden is the reliable terminal
     // signal (especially on mobile, where unload often doesn't fire); pagehide is
@@ -369,6 +376,7 @@ function setupEventListeners() {
         });
     if (contactShare) contactShare.addEventListener('click', shareRoom, { signal });
     document.addEventListener('keydown', (event) => {
+        if (event.key === 'Tab') { keepFocusInCard(event); return; }
         if (event.code !== 'Escape') return;
         if (posterOpen) closePoster();
         else if (nudgeOpen) closeNudgeModal();
@@ -902,6 +910,60 @@ function assembleContact() {
     return _contact;
 }
 
+// ---- Keeping the keyboard inside an open card (M39) -------------------------
+//
+// All three cards carry `aria-modal="true"`, which tells a screen reader
+// that the rest of the page is inert. Nothing was making that true for the
+// KEYBOARD: Tab from the last control in a card walked straight out into
+// the two floating buttons in the corner, which sit behind a near-opaque
+// backdrop, and then into the browser. A sighted keyboard visitor lost the
+// card without closing it.
+//
+// The halos and the arrival panel were already handled, by holdCoaching,
+// which fades both while a card is up. This is the same problem for
+// everything else on the page, solved once at the source instead.
+
+/** What can be tabbed to. `[tabindex="-1"]` is deliberately excluded: the
+ *  contact card's container carries one so focus can LAND on it when the
+ *  card opens (D24, so a stray Enter cannot dial John), and it must not
+ *  become a tab stop of its own. */
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), '
+    + 'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** The card currently up, in the order they stack. */
+function openCard() {
+    if (posterOpen) return posterModal;
+    if (nudgeOpen) return nudgeModal;
+    if (dialogOpen) return dialogModal;
+    return null;
+}
+
+/** Wrap Tab around the open card, so the keyboard cannot leave it.
+ *
+ *  The visible filter matters more here than it looks: the contact card
+ *  hides its three actions through `style.display` when the proof of work
+ *  has not resolved (setShown, because the shared sheet has no .hidden
+ *  rule), and a trap that counted them would wrap onto a control nobody
+ *  can see or reach. offsetWidth and offsetHeight are both zero for a
+ *  display:none element and non-zero for everything else in these cards. */
+function keepFocusInCard(event) {
+    const card = openCard();
+    if (!card) return;
+    const items = Array.from(card.querySelectorAll(FOCUSABLE))
+        .filter((el) => el.offsetWidth > 0 || el.offsetHeight > 0);
+    if (!items.length) return;
+
+    const first = items[0];
+    const last = items[items.length - 1];
+    const here = document.activeElement;
+    const outside = !card.contains(here);
+
+    if (event.shiftKey ? (here === first || outside) : (here === last || outside)) {
+        (event.shiftKey ? last : first).focus();
+        event.preventDefault();
+    }
+}
+
 /** Show or hide an element without touching classes.
  *
  *  The shared stylesheet has NO generic .hidden rule (it scopes hiding to
@@ -1059,7 +1121,7 @@ function copyOnDesktop(action) {
  *  which is most of the times it rejects, and it RESOLVES on dismissal on
  *  some platforms, so there is no reliable way to tell a send from a
  *  change of mind. The sheet is its own feedback. Thanking somebody who
- *  cancelled would be worse than saying nothing.
+ *  canceled would be worse than saying nothing.
  *
  *  The fragment is stripped, so a link that arrived with one is not passed
  *  on carrying it. */

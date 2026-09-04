@@ -3,7 +3,19 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <!-- NO `user-scalable=no`, and it was there until the accessibility
+         sweep at M39. Blocking zoom is a WCAG 1.4.4 failure, and it is a
+         cruel one on this page in particular: the cards carry John's phone
+         number and the whole account of what he does, set at 0.72rem in
+         places, and somebody who needs to pinch them larger is exactly the
+         visitor this page is built to reach.
+
+         The 3D view does not need it either. #game-canvas already carries
+         `touch-action: none`, so a pinch that starts on the scene belongs
+         to the scene, and the Safari gesture events are canceled on the
+         CANVAS rather than on the document (see setupEventListeners), so a
+         pinch that starts on a card zooms the card. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
     <meta http-equiv="Content-Security-Policy"
@@ -111,6 +123,18 @@
 <body>
     <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
     <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- THE PAGE'S ONLY HEADING, and it was missing entirely until the
+         accessibility sweep at M39. There was an h1 in the noscript block
+         below and three h2s inside cards that start hidden, so a visitor
+         navigating by heading found NOTHING on the live page: the first
+         thing they could reach was a heading inside a dialog nobody had
+         opened yet.
+
+         Screen-reader only, because the room itself is the title here and
+         a line of type across the top of it would be the welcome card D18
+         removed, one element at a time. -->
+    <h1 class="sr-only">John Walker, The Auto Man</h1>
 
     <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
          a plain-text introduction to John and his service.
@@ -663,7 +687,15 @@
         </div>
     </div>
 
-    <canvas id="game-canvas" aria-label="A living 3D car dealership desk: John Walker points at a deal sheet and makes his customer's case while she nods along, the dealer listens from across the desk, and cars roll past the lot beyond the glass wall behind them"></canvas>
+    <!-- role="img" added at M39. A <canvas> has no implicit role, and an
+         aria-label on a role-less element is ignored outright by several
+         screen readers, so this description was written and then not
+         announced. `img` is the honest role: to a screen reader this
+         surface is a picture, because every route into the room's stories
+         is a pointer raycast (decision D4). The three halos are real
+         buttons for exactly that reason, and they now hold for the whole
+         visit (D41), so the keyboard route to John never expires. -->
+    <canvas id="game-canvas" role="img" aria-label="A living 3D car dealership desk: John Walker points at a deal sheet and makes his customer's case while she nods along, the dealer listens from across the desk, and cars roll past the lot beyond the glass wall behind them"></canvas>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

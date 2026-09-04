@@ -668,10 +668,22 @@ body .pan-controls.no-chrome.visible {
     transition: opacity 0.55s ease, visibility 0s linear 0.55s;
 }
 
-/* A phone has less room and holds the cast smaller in the frame. */
+/* A phone has less room and holds the cast smaller in the frame.
+
+   THE RING COMES DOWN AND THE TARGET DOES NOT (M39). At 2.6rem the halo
+   is 41.6px, which clears WCAG 2.5.8's 24px comfortably and misses the
+   44px that 2.5.5 and every platform guideline ask for. The mark is a
+   reversed column with the ring at its bottom edge, and main.js anchors
+   the whole box by that edge, so a minimum on the BOX grows it upward and
+   outward without moving the ring off the head it is pointing at. These
+   three are the page's only keyboard route to John, and they are aimed at
+   somebody who is not confident with a computer, so the target is worth
+   more than the pixels it costs. */
 @media (max-width: 600px) {
     .coach-mark {
         --coach-size: 2.6rem;
+        min-width: 2.75rem;
+        min-height: 2.75rem;
     }
 
 
