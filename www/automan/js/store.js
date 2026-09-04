@@ -1185,37 +1185,63 @@ function drawDealerScreen() {
     ctx.fillRect(12, 10, 76, 7);
     ctx.fillRect(W - 42, 10, 30, 7);
 
-    // ---- The saloon, in outline. GROUND is the tyre contact line, AX the
-    // two axle centres, and every other number hangs off those, so the car
-    // cannot come apart if it is moved or resized.
+    // ---- THE VEHICLE, AND IT IS THE ONE PARKED OUTSIDE (M36).
+    //
+    // Steve's note: the lot is full of SUVs and the monitor was showing a
+    // low two-door. He is right, and the fix is not to redraw a shape that
+    // looks more like one. Every station below is READ OUT OF THE `SUV`
+    // TABLE, the same numbers createLotSUV builds the vehicles through the
+    // glass from, mapped through one scale. The elevation on this screen
+    // and the vehicles in the frame behind it can no longer disagree,
+    // whichever of them is changed.
+    //
+    // What actually says SUV at seventy pixels, in order: a SHORT bonnet
+    // (27% of the length against a saloon's 42), a long roof (half the
+    // vehicle), an upright liftgate almost at the tail, daylight under the
+    // body between the wheels, and a roof rail. The old drawing had a long
+    // bonnet, a fast rear screen and a short deck, which is a coupe however
+    // it is scaled.
+    const S = SUV;
     const NOSE = 22, TAIL = 192, GROUND = 152;
-    const AXLE_Y = GROUND - 13, SILL = AXLE_Y;
-    const AX = [56, 160], TYRE = 13, ARCH = 16;
+    const FZ = S.length / 2 + S.noseOver;       // the paint's front reach
+    const RZ = -S.length / 2;
+    const K = (TAIL - NOSE) / (FZ - RZ);        // pixels per metre
+    // The vehicle faces LEFT on this canvas, so its +z (the nose) maps to
+    // the small x. The panel is turned a half turn about its own Y, which
+    // sends canvas +x to world -x, so left here is left in the room too.
+    const px = (z) => NOSE + (FZ - z) * K;
+    const py = (y) => GROUND - y * K;
+
+    const G = S.glassZ;
+    const SILL = py(S.sill);                    // the body's underside
+    const BELT = py(S.beltline);                // and its top: the bonnet line
+    const GLASS = py(S.beltline + S.glassH);
+    const ROOF = py(S.beltline + S.glassH + S.roofT);
+    const AX = [px(S.axleZ), px(-S.axleZ)];
+    const AXLE_Y = py(S.wheelR);
+    const TYRE = S.wheelR * K;
+    const ARCH = TYRE + 3;                      // wider than the tyre it covers
 
     ctx.strokeStyle = '#cfe0ef';
     ctx.lineWidth = 2.4;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    // The stations along the body, as fractions of its length, because that
-    // is what makes it a saloon rather than a shape: the bonnet ends at 42%,
-    // the roof starts at 53% and ends at 70%, and the rear screen is down by
-    // 85%. Those four are a full-size saloon's own proportions. The corners
-    // that a car actually rolls round (both bumpers, the crown of the roof)
-    // are quadratics, because the first draft drew them as mitres and the
-    // result read as a folded shape rather than a pressed one.
     ctx.beginPath();
-    ctx.moveTo(NOSE + 2, SILL);
-    ctx.quadraticCurveTo(NOSE - 1, SILL - 7, NOSE + 2, SILL - 15);   // bumper
-    ctx.lineTo(NOSE + 8, SILL - 20);                                 // headlamp
-    ctx.quadraticCurveTo(NOSE + 24, SILL - 24, NOSE + 44, SILL - 26);
-    ctx.lineTo(NOSE + 71, SILL - 28);              // the long bonnet, to the cowl
-    ctx.lineTo(NOSE + 90, SILL - 49);              // windscreen
-    ctx.quadraticCurveTo(NOSE + 104, SILL - 50.5, NOSE + 119, SILL - 50);   // roof
-    ctx.lineTo(NOSE + 144, SILL - 34);             // rear screen, fast
-    ctx.lineTo(NOSE + 160, SILL - 32);             // the short deck
-    ctx.quadraticCurveTo(TAIL, SILL - 31, TAIL, SILL - 22);
-    ctx.lineTo(TAIL, SILL - 12);                   // rear bumper
-    ctx.quadraticCurveTo(TAIL - 1, SILL - 3, TAIL - 9, SILL);
+    // A near-vertical front, which is most of what separates an SUV's
+    // silhouette from a saloon's before the roof is even drawn.
+    ctx.moveTo(NOSE + 4, SILL);
+    ctx.quadraticCurveTo(NOSE - 1, SILL - 6, NOSE + 1, BELT + 7);
+    ctx.quadraticCurveTo(NOSE + 2, BELT + 1, NOSE + 8, BELT);
+    ctx.lineTo(px(G.front), BELT);                          // the short bonnet
+    // Screen, roof and liftgate, from the same profile the greenhouse of
+    // the real vehicle is extruded from.
+    ctx.quadraticCurveTo(px(G.screenCtrl), ROOF, px(G.roofFront), ROOF);
+    ctx.lineTo(px(G.roofRear), ROOF);
+    ctx.quadraticCurveTo(px(G.gate), ROOF, px(G.gate), py(S.beltline + S.glassH - S.gateDrop));
+    ctx.lineTo(px(G.base - 0.14), BELT);
+    ctx.quadraticCurveTo(TAIL, BELT, TAIL, BELT + 9);       // rear corner
+    ctx.lineTo(TAIL, SILL - 5);
+    ctx.quadraticCurveTo(TAIL, SILL, TAIL - 8, SILL);       // rear bumper
     // Back along the sill, with an arch cut over each wheel.
     ctx.lineTo(AX[1] + ARCH, SILL);
     ctx.arc(AX[1], SILL, ARCH, 0, Math.PI, true);
@@ -1224,27 +1250,49 @@ function drawDealerScreen() {
     ctx.closePath();
     ctx.stroke();
 
-    // The glasshouse, one opening from screen to screen with a pillar in it,
-    // inset three or four units inside the roofline so it cannot poke
-    // through. FILLED, not outlined: an outline puts a second line beside
-    // the roof and at this size the pair reads as a folded soft top, while
-    // a dark shape reads as glass at any size at all.
+    // The glasshouse, one long opening with two pillars in it. FILLED, not
+    // outlined: an outline puts a second line beside the roof and at this
+    // size the pair reads as a folded soft top, while a dark shape reads as
+    // glass at any size at all. Inset two units inside the roofline so it
+    // cannot poke through.
     ctx.fillStyle = '#0f2035';
     ctx.strokeStyle = '#9fbdd8';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(NOSE + 77, SILL - 31);
-    ctx.lineTo(NOSE + 92, SILL - 46);
-    ctx.lineTo(NOSE + 117, SILL - 47);
-    ctx.lineTo(NOSE + 138, SILL - 34);
+    ctx.moveTo(px(G.front - 0.06), BELT - 2);
+    ctx.lineTo(px(G.roofFront) + 3, GLASS + 2);
+    ctx.lineTo(px(G.roofRear) - 2, GLASS + 2);
+    ctx.lineTo(px(G.gate + 0.10), BELT - 2);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(NOSE + 104, SILL - 46.5);
-    ctx.lineTo(NOSE + 104, SILL - 32.5);
-    ctx.stroke();
+    // Two pillars, which is what makes it a cabin with rows in it rather
+    // than one long window.
+    [0.1, -1.05].forEach((z) => {
+        ctx.beginPath();
+        ctx.moveTo(px(z), GLASS + 2.5);
+        ctx.lineTo(px(z), BELT - 2.5);
+        ctx.stroke();
+    });
+
+    // THE ROOF RAIL, and it stands further off the roof than the real one
+    // does. On the vehicle it is 4cm proud, which is one pixel here and
+    // therefore nothing; at three it reads as a rail, which is the single
+    // most legible "this is an SUV" mark available at this size. Exaggerate
+    // the size in pixels, never the silhouette.
     ctx.strokeStyle = '#cfe0ef';
+    ctx.lineWidth = 1.6;
+    const railY = ROOF - 3.5;
+    ctx.beginPath();
+    ctx.moveTo(px(G.roofFront - 0.1), railY);
+    ctx.lineTo(px(G.roofRear + 0.15), railY);
+    ctx.stroke();
+    [G.roofFront - 0.1, G.roofRear + 0.15].forEach((z) => {
+        ctx.beginPath();
+        ctx.moveTo(px(z), railY);
+        ctx.lineTo(px(z), ROOF - 0.5);
+        ctx.stroke();
+    });
 
     // Wheels, with a rim inside the tyre. Two circles at this size is all
     // an alloy can be, and one alone reads as a caster.
@@ -1644,7 +1692,23 @@ const SUV = {
     // track in also matters for a reason a street has and a lot does not:
     // the widest point of the vehicle has to fit inside a painted bay.
     trackInset: 0.08,
-    sill: 0.42, beltline: 1.18, glassH: 0.50, glassW: 1.66
+    sill: 0.42, beltline: 1.18, glassH: 0.50, glassW: 1.66,
+    // HOISTED OUT OF THE BUILDERS AT M36, because the dealer's SCREEN now
+    // draws this same vehicle in elevation and the two must not be able to
+    // disagree. That disagreement is exactly what Steve found: the lot is
+    // full of SUVs and the monitor was showing a low two-door.
+    //
+    // The paint reaches 0.12 past the nominal nose, which is the extrusion
+    // bevel and the same 0.12 createLotSUV places the grille against.
+    axleZ: 1.62,            // both axles, front and rear
+    noseOver: 0.12,         // paint past length/2 at the front
+    roofT: 0.13,            // the roof cap's thickness above the glass
+    // The greenhouse's z stations, which are the numbers that say which way
+    // the vehicle points and, at 70 pixels on a monitor, the only ones that
+    // say it is an SUV at all: a SHORT bonnet, a long roof, and an upright
+    // liftgate almost at the tail.
+    glassZ: { base: -2.14, front: 1.24, screenCtrl: 1.02, roofFront: 0.52, roofRear: -2.02, gate: -2.2 },
+    gateDrop: 0.14          // how far the liftgate's top corner falls
 };
 
 /** The SUV's true width, which is NOT SUV.width: the widest point is the
@@ -1681,20 +1745,21 @@ function suvGeometries() {
     // The greenhouse profile is the one piece that says which way the
     // vehicle is pointed: a raked screen at the front, an upright liftgate
     // almost at the tail.
+    const G = S.glassZ;
     const glass = new THREE.Shape();
-    glass.moveTo(-2.14, 0);
-    glass.lineTo(1.24, 0);
-    glass.quadraticCurveTo(1.02, S.glassH, 0.52, S.glassH);
-    glass.lineTo(-2.02, S.glassH);
-    glass.quadraticCurveTo(-2.2, S.glassH, -2.2, S.glassH - 0.14);
-    glass.lineTo(-2.14, 0);
+    glass.moveTo(G.base, 0);
+    glass.lineTo(G.front, 0);
+    glass.quadraticCurveTo(G.screenCtrl, S.glassH, G.roofFront, S.glassH);
+    glass.lineTo(G.roofRear, S.glassH);
+    glass.quadraticCurveTo(G.gate, S.glassH, G.gate, S.glassH - S.gateDrop);
+    glass.lineTo(G.base, 0);
 
     _suvGeo = {
         body: suvPanel(roundedRectShape(rZ + 0.06, S.sill + 0.02, fZ + 0.06, S.beltline, 0.24), 0.06, S.width),
         // proud of the paint by 1.5cm so the two curved surfaces never
         // share a plane: flush panels z-fight into a speckled band
         clad: suvPanel(roundedRectShape(rZ + 0.02, S.sill - 0.02, fZ + 0.02, S.sill + 0.16, 0.14), 0.05, S.width + 0.03),
-        roof: suvPanel(roundedRectShape(-2.24, roofY, 0.55, roofY + 0.13, 0.10), 0.04, S.glassW + 0.06),
+        roof: suvPanel(roundedRectShape(-2.24, roofY, 0.55, roofY + S.roofT, 0.10), 0.04, S.glassW + 0.06),
         glass: new THREE.ExtrudeGeometry(glass, { depth: S.glassW, bevelEnabled: false, curveSegments: 8 }),
         rail: new THREE.BoxGeometry(0.06, 0.05, 2.5),
         tire: new THREE.CylinderGeometry(S.wheelR, S.wheelR, S.wheelW, 14),
@@ -1757,7 +1822,7 @@ function createLotSUV(bodyMaterial) {
     });
 
     suv.userData.wheels = [];
-    [[1, 1.62], [1, -1.62], [-1, 1.62], [-1, -1.62]].forEach(([sx, wz]) => {
+    [[1, S.axleZ], [1, -S.axleZ], [-1, S.axleZ], [-1, -S.axleZ]].forEach(([sx, wz]) => {
         const track = S.width / 2 - S.trackInset;
         const tire = new THREE.Mesh(g.tire, m.tire);
         tire.rotation.z = Math.PI / 2;
@@ -1777,7 +1842,7 @@ function createLotSUV(bodyMaterial) {
     // outline out by bevelSize at each end, so the paint reaches
     // length/2 + 0.12 at the front: a grille placed at the nominal nose is
     // buried inside its own bumper. Measured against real geometry.
-    const nose = S.length / 2 + 0.12, tailZ = -S.length / 2;
+    const nose = S.length / 2 + S.noseOver, tailZ = -S.length / 2;
     const grille = new THREE.Mesh(g.grille, m.suvTrim);
     grille.position.set(0, S.sill + 0.42, nose - 0.02);
     suv.add(grille);
