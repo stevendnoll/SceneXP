@@ -47,23 +47,41 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/automan/">
     <meta property="og:locale" content="en_US">
-    <!-- WebP per preference. og-automan.webp is a capture of the showroom
-         from the visitor's viewpoint (same flow as the other experiences).
-         If a platform (notably Facebook) won't render the preview, swap the
-         two image URLs below to .../og-automan.jpg (both live in assets/).
-         PROVISIONAL: both files land at task T10.3. -->
+    <!-- EXACTLY ONE og:image, and it names the WebP. Apple's link preview
+         renders every og:image it finds, so a JPEG listed underneath as a
+         "fallback" puts two identical cards in one message thread.
+         og-automan.jpg is built alongside it and lives in assets/: if a
+         platform (notably Facebook) will not render the WebP, swap the two
+         image URLs rather than adding a second tag.
+
+         THE CARD IS THE LOADING SCREEN, not a capture of the showroom, and
+         that is a change from the other experiences. The loader is the one
+         surface here that is pure lacquer and champagne with the mark on
+         it, which is what a link preview has to work as: it is shown at
+         about 500px in a timeline and smaller in a chat, where a room full
+         of low-poly figures is a smudge and a mark with a name under it is
+         legible. og-card.html in this folder is the page it is captured
+         from, so it can be re-shot the day the mark or the name changes.
+
+         Built with the house recipe, and the numbers are this frame's own
+         rather than the convention's: the display profile is converted to
+         sRGB BEFORE the strip (a bare strip moves this frame by 1.37%),
+         q92 sits on a smooth curve with no knee, and -sharp_yuv returns
+         12.5% of the error on the champagne mark for 1.3KB, measured on a
+         crop of the mark because a whole-frame average is drowned by the
+         gradient. 17KB WebP, 46KB JPEG at 4:4:4. -->
     <meta property="og:image" content="https://www.scenexp.com/automan/assets/og-automan.webp?v=1">
     <meta property="og:image:type" content="image/webp">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="A bright 3D car dealership desk seen from its open corner: John Walker points at a deal sheet while his customer nods beside him, the dealer listens from across the desk, and a wide glass wall behind them looks out on rows of cars in the lot.">
+    <meta property="og:image:alt" content="A dark navy card carrying John Walker's gold three-blade W above his name, John Walker, The Auto Man, set in wide-spaced capitals.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="John Walker, The Auto Man">
     <meta name="twitter:description" content="A living 3D visit to a dealership desk, where John Walker sits on the buyer's side of it.">
     <meta name="twitter:image" content="https://www.scenexp.com/automan/assets/og-automan.webp?v=1">
-    <meta name="twitter:image:alt" content="A bright 3D car dealership desk seen from its open corner: John Walker points at a deal sheet while his customer nods beside him, the dealer listens from across the desk, and a wide glass wall behind them looks out on rows of cars in the lot.">
+    <meta name="twitter:image:alt" content="A dark navy card carrying John Walker's gold three-blade W above his name, John Walker, The Auto Man, set in wide-spaced capitals.">
 
     <!-- Structured data: the experience, and the business it features.
          JSON-LD is a data block (not executed), so it is allowed under the CSP.

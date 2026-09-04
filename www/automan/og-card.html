@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- THIS IS A CAPTURE SOURCE, NOT A PAGE. It exists so the social card
+         can be photographed from the real loading screen instead of being
+         rebuilt in a drawing program, which is the only way the card and
+         the page it advertises can be guaranteed to match.
+
+         noindex because it is a tool. It is deliberately NOT in the sitemap
+         and nothing links to it, but "unlisted" is not "hidden" for the
+         experience itself (decision D1) and that distinction should not
+         leak onto a page that really is meant to be invisible. -->
+    <meta name="robots" content="noindex, nofollow">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'">
+
+    <title>Social card source</title>
+
+    <!-- THE SAME TWO STYLESHEETS THE EXPERIENCE LOADS, in the same order,
+         which is the whole point of doing it this way. The gradient, the
+         mark's size, the title's tracking and every colour come from the
+         real rules rather than from a copy of them, so this card cannot
+         quietly stop looking like the loading screen it is a picture of.
+
+         og-card.css only does two things on top: scales the composition up
+         so the name survives being shown at feed size, and takes out the
+         space the progress bar used to occupy. It sets no frame at all,
+         so the loader fills the window and the WINDOW is the frame: size
+         it to 1200 by 630 and capture, or to anything else. -->
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css">
+    <link rel="stylesheet" href="css/experience.min.css">
+    <link rel="stylesheet" href="css/og-card.min.css">
+</head>
+
+<body>
+    <!-- The loading screen's own markup, minus the progress bar and the
+         status line underneath it (Steve's ask: the mark, the name, and
+         the ground they sit on).
+
+         It keeps `id="loading-screen"` on purpose. That id is what carries
+         the radial gradient in experience.css and the flex centring and
+         full-viewport sizing in the shared sheet, so reusing it is what
+         makes this the loader itself rather than something that resembles
+         it. Nothing here overrides its size: it fills the window at every
+         aspect, exactly as it does on the real page. -->
+    <!-- (The gradient IS responsive, and always was: it is a
+         `radial-gradient(130% 100% at 50% 38%, ...)` on this element, so
+         it re-solves against whatever box the element is given.) -->
+    <div id="loading-screen" class="og-card">
+        <div class="loader-content">
+            <!-- The same favicon.svg the tab loads and the loader shows.
+                 An SVG, so it stays crisp however far the card is scaled
+                 up for the capture. -->
+            <img class="loader-logo automan-mark" src="favicon.svg" alt="" width="150" height="150">
+            <!-- NOTE FOR THE RENAME: this string is a second copy of the
+                 loader's title. If "The Auto Man" changes, it changes here
+                 too and the card has to be re-captured. A grep for the name
+                 finds this file. -->
+            <div class="loader-title">John Walker, The Auto Man</div>
+        </div>
+    </div>
+</body>
+
+</html>
