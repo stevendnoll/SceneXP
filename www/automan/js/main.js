@@ -53,7 +53,7 @@ import {
 } from '../../shared/js/scene-1.0.0.min.js';
 import {
     initStore, updateShowroom, updateBackgroundAnimations, updateInteriorAmbientLight,
-    getPersonAnchors
+    getPersonAnchors, requestPersonPortrait
 } from './store.min.js';
 import { getOutdoorPropMeshes } from '../../shared/js/world-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
@@ -76,7 +76,7 @@ let dialogOpen = false;   // one dialog at a time; taps pause while it's up
 // experiences surface theirs a few checklist discoveries in; this scene
 // has no checklist, so every fourth prop story earns it instead, shown
 // once that story's card closes so the two never stack).
-let nudgeModal, nudgeKicker, nudgeTitle, nudgeMessage;
+let nudgeModal, nudgeKicker, nudgeTitle, nudgeMessage, nudgePortrait;
 let contactCall, contactText, contactEmail, contactFallback;
 let nudgeOpen = false;
 let nudgePending = false;
@@ -124,6 +124,7 @@ async function init() {
     nudgeTitle = document.getElementById('nudge-title');
     nudgeMessage = document.getElementById('nudge-message');
     nudgeKicker = nudgeModal && nudgeModal.querySelector('.complete-kicker');
+    nudgePortrait = document.getElementById('nudge-portrait');
     contactCall = document.getElementById('contact-call');
     contactText = document.getElementById('contact-text');
     contactEmail = document.getElementById('contact-email');
@@ -171,6 +172,11 @@ async function init() {
         // no overlay to click through any more, so the first thing the
         // visitor should see is the showroom itself.
         startCoaching();
+        // The two rendered headshots, taken now rather than when a card
+        // asks for one. They cost a frame apiece and the visitor is looking
+        // at a room they have just arrived in, which is the cheapest frame
+        // in the visit to spend.
+        warmRenderedFaces();
     }, 400);
 
     // Mark the start of this visit. Records the input mode so the log can tell
@@ -506,14 +512,17 @@ function introShowing() {
 
 /** True when a point is over the arrival panel itself.
  *
- *  The panel is `pointer-events: none` and stays that way, which is what
- *  lets somebody start a swipe on it and look around: it covers a third
- *  of a phone screen, and a panel that ate drags would be worse than one
- *  that ate taps. But pointer-events none also meant a TAP on it fell
- *  straight through and opened whatever prop happened to be behind the
- *  text, which is what Steve found. So the panel is transparent to the
- *  gesture layer and opaque to this one, and the only way to have both is
- *  to ask where the tap landed. */
+ *  The panel's SURFACE is `pointer-events: none` and stays that way, which
+ *  is what lets somebody start a swipe on it and look around: it covers a
+ *  third of a phone screen, and a panel that ate drags would be worse than
+ *  one that ate taps. (D40 gave it three controls, and only those three
+ *  take pointer events. A tap on one of them is a DOM click that never
+ *  reaches the canvas, so it never reaches this function either.) But
+ *  pointer-events none also meant a TAP on it fell straight through and
+ *  opened whatever prop happened to be behind the text, which is what Steve
+ *  found. So the panel is transparent to the gesture layer and opaque to
+ *  this one, and the only way to have both is to ask where the tap
+ *  landed. */
 function overIntro(clientX, clientY) {
     if (!introShowing()) return false;
     const r = introEl.getBoundingClientRect();
@@ -534,7 +543,7 @@ function checkSceneTap(clientX, clientY) {
     // one works normally.
     const arriving = introShowing();
     if (arriving && overIntro(clientX, clientY)) return;
-    if (arriving) fadeCoach(introEl);
+    if (arriving) retireIntro();
 
     const hit = pickSceneHit(clientX, clientY);
     const prop = hit && getPropRoot(hit.object);
@@ -892,6 +901,88 @@ function setShown(el, shown) {
     if (el) el.style.display = shown ? '' : 'none';
 }
 
+// ---- The face on the contact card (D40) -------------------------------------
+//
+// Whoever the visitor tapped is who looks back at them. John's card carries
+// his photograph, which is the one real face on this page. His customer's
+// card and the dealer's carry a PORTRAIT OF THE FIGURE ITSELF, taken by
+// store.js with the scene's own renderer: John's face on the dealer's card
+// read as a mistake rather than as a house style, and a scene whose whole
+// premise is that these are people having a conversation may as well let two
+// of them sit for a picture.
+//
+// Every other way into this card (a prop story, the About card, the arrival
+// panel, the every-fourth invitation) is John inviting somebody to call him,
+// so those all keep his photograph.
+const JOHN_AVATAR = 'assets/john-walker-avatar.webp';
+const RENDERED_FACES = {
+    customer: 'The customer at the desk, drawn as one of the showroom’s low-poly '
+        + 'figures and posed for a portrait',
+    dealer: 'The dealer across the desk, drawn as one of the showroom’s low-poly '
+        + 'figures and posed for a portrait'
+};
+const faceCache = {};
+let faceShowing = null;     // which face the card is currently wearing
+
+/** Put the right face on the card before it opens.
+ *
+ *  A rendered portrait cannot be produced on demand: store.js has to take
+ *  it inside the render loop (see requestPersonPortrait). So the disc is
+ *  hidden rather than left wearing the last person's face, and appears when
+ *  the picture lands. In practice it never does land late, because both are
+ *  taken during the arrival, and the fallback if one cannot be taken at all
+ *  is John's photograph rather than an empty circle. */
+function setCardPortrait(entry) {
+    if (!nudgePortrait) return;
+    faceShowing = entry;
+
+    const alt = RENDERED_FACES[entry];
+    if (!alt) {
+        nudgePortrait.src = JOHN_AVATAR;
+        nudgePortrait.alt = 'John Walker';
+        nudgePortrait.style.visibility = '';
+        return;
+    }
+
+    nudgePortrait.alt = alt;
+    if (faceCache[entry]) {
+        nudgePortrait.src = faceCache[entry];
+        nudgePortrait.style.visibility = '';
+        return;
+    }
+
+    // `visibility`, not `display`: the disc keeps its box, so the card does
+    // not reflow around it when the picture arrives.
+    nudgePortrait.style.visibility = 'hidden';
+    requestPersonPortrait(entry, (url) => {
+        applyRenderedFace(entry, url);
+        if (faceShowing === entry) setCardPortrait(entry);
+    });
+}
+
+/** File one rendered portrait, or record that it could not be taken. */
+function applyRenderedFace(kind, url) {
+    if (url) {
+        faceCache[kind] = url;
+        return;
+    }
+    // No picture. John's photograph is the honest fallback: the card is
+    // about reaching him either way.
+    faceCache[kind] = JOHN_AVATAR;
+    RENDERED_FACES[kind] = 'John Walker';
+    track('portrait-failed', { who: kind });
+}
+
+/** Take both portraits during the arrival, so a card that opens later
+ *  already has its face. One per frame, and the two of them cost about as
+ *  much as two frames of the showroom. */
+function warmRenderedFaces() {
+    Object.keys(RENDERED_FACES).forEach((kind) => {
+        if (faceCache[kind]) return;
+        requestPersonPortrait(kind, (url) => applyRenderedFace(kind, url));
+    });
+}
+
 /** Open the contact card. `entry` says who asked for it, which picks the
  *  copy and is recorded so the log can tell which route actually works. */
 function openContactCard(entry) {
@@ -899,6 +990,7 @@ function openContactCard(entry) {
     const copy = CONTACT_CARDS[entry] || CONTACT_CARDS.story;
     if (!dialogReturnFocus) dialogReturnFocus = document.activeElement;
 
+    setCardPortrait(entry);
     if (nudgeKicker) nudgeKicker.textContent = copy.kicker;
     if (nudgeTitle) nudgeTitle.textContent = copy.title;
     if (nudgeMessage) nudgeMessage.textContent = copy.lead;
@@ -1044,6 +1136,12 @@ let introEl = null;
 let coachMarks = [];            // [{ el, kind, anchor }] once the cast exists
 let coachTimers = [];
 let coachRunning = false;
+// The panel's own life, tracked apart from the halos' now that it carries
+// controls (D40). It may only be on screen between these two: after it has
+// arrived, and before it has been retired. holdCoaching brings the halos
+// back when a card closes, and the panel must never come back with them.
+let introArrived = false;
+let introDone = false;
 
 /** Resolve the coaching elements, fit the copy to the input device, and
  *  wire the halos. Called from setupEventListeners, so it runs before the
@@ -1094,6 +1192,70 @@ function wireCoaching(signal) {
             if (!openContactCard(kind)) openPropDialog(kind);
         }, { signal });
     });
+
+    wireIntroControls(signal);
+}
+
+/** The three controls on the arrival panel (D40).
+ *
+ *  The panel spent every round until this one as a surface with nothing on
+ *  it: `pointer-events: none`, no way to dismiss it, and one job, which was
+ *  to say what John does while the visitor looked at the room. Steve's call
+ *  reverses that. It now carries a way out and the two routes anybody who
+ *  has just read it would want next, and the reasoning against (which is
+ *  recorded in TASKS.md at D31) is answered rather than ignored:
+ *
+ *  - THE SURFACE STILL TAKES NO POINTER EVENTS. Only these three controls
+ *    do. A swipe that starts anywhere else on the panel still reaches the
+ *    canvas and still looks around the room, which is the property that
+ *    made a panel affordable over a third of a phone screen in the first
+ *    place. The cost is a swipe that starts exactly on a button, and the
+ *    buttons are deliberately small and off to the left for that reason.
+ *  - THE ARRIVAL IS STILL ONE DECISION IN THE SCENE. checkSceneTap is
+ *    untouched: while the panel is up, the only things in the ROOM that
+ *    open anything are the halos and the three people under them. These
+ *    are page controls, not scene taps, and they sit in their own row
+ *    under the paragraph rather than competing with the halos.
+ *  - IT DOES NOT PUT JOHN'S NUMBER IN THE MARKUP. "Talk to John" opens the
+ *    contact card, which assembles the number from the proof of work the
+ *    way every other route into it does, so D3 is intact. */
+function wireIntroControls(signal) {
+    const close = document.getElementById('intro-close');
+    if (close) close.addEventListener('click', () => {
+        track('intro-dismiss', { via: 'close' });
+        retireIntro();
+    }, { signal });
+
+    // Reaching John is the one thing the whole arrival is for, so this ends
+    // the coaching outright rather than only retiring the panel: somebody
+    // who pressed it does not need three rings pointing at the man they are
+    // already talking to.
+    const talk = document.getElementById('intro-contact');
+    if (talk) talk.addEventListener('click', () => {
+        track('intro-action', { action: 'contact' });
+        endCoaching('intro-contact');
+        openContactCard('button');
+    }, { signal });
+
+    // The About card, behind the same three-blade W the floating button in
+    // the corner wears. The halos STAY: reading about John is not meeting
+    // him, and the marks are still the way to the three of them.
+    const about = document.getElementById('intro-about');
+    if (about) about.addEventListener('click', () => {
+        track('intro-action', { action: 'about' });
+        retireIntro();
+        openPoster();
+    }, { signal });
+}
+
+/** Retire the arrival panel for the rest of the visit.
+ *
+ *  Separate from fadeCoach because a fade is reversible and this is not:
+ *  holdCoaching brings the halos back every time a card closes, and the
+ *  panel must never come back with them. */
+function retireIntro() {
+    introDone = true;
+    fadeCoach(introEl);
 }
 
 /** Show the coaching. Called once the loader has cleared.
@@ -1112,10 +1274,13 @@ function startCoaching() {
         // With no cast there are no halos, but the strip still says what
         // the room is, so the two are revealed independently.
         if (coachMarks.length) coachMarksEl.classList.remove('coach-out');
-        if (introEl) introEl.classList.remove('coach-out');
+        if (introEl) {
+            introArrived = true;
+            introEl.classList.remove('coach-out');
+        }
     }, COACH_ARRIVE_MS));
 
-    coachTimers.push(setTimeout(() => fadeCoach(introEl), INTRO_MS));
+    coachTimers.push(setTimeout(retireIntro, INTRO_MS));
     coachTimers.push(setTimeout(() => {
         if (!coachRunning || !coachMarksEl) return;
         coachMarksEl.classList.add('coach-calm');
@@ -1179,7 +1344,7 @@ function fadeCoach(el) {
     if (el) el.classList.add('coach-out');
 }
 
-/** Park the halos while a card is up, and bring them back when it closes.
+/** Park the coaching while a card is up, and bring it back when it closes.
  *
  *  This became necessary the moment the halos stopped leaving on the first
  *  tap. They sit at z-index 90, under every modal and its near-opaque
@@ -1187,24 +1352,42 @@ function fadeCoach(el) {
  *  would still tab straight into three invisible buttons behind it. The
  *  same `.coach-out` that ends them does the job, because it takes
  *  `visibility` with it once the fade finishes, and the guard means a
- *  card closing can never resurrect coaching that has already ended. */
+ *  card closing can never resurrect coaching that has already ended.
+ *
+ *  THE PANEL IS IN HERE TOO NOW, for exactly the same reason and only
+ *  since D40: it used to be a surface with nothing focusable on it, and it
+ *  carries three controls today, so leaving it up behind a card would leave
+ *  three tab stops behind the backdrop. It comes back on the narrowest
+ *  terms it can: only if it had already arrived and has not been retired,
+ *  which is what stops a card opened and closed in the first second from
+ *  showing it early, and a card closed after its time from showing it
+ *  again. */
 function holdCoaching() {
     if (!coachMarksEl) return;
     const covered = dialogOpen || nudgeOpen || posterOpen;
-    if (covered) fadeCoach(coachMarksEl);
-    else if (coachRunning && coachMarks.length) coachMarksEl.classList.remove('coach-out');
+    if (covered) {
+        fadeCoach(coachMarksEl);
+        fadeCoach(introEl);
+        return;
+    }
+    if (coachRunning && coachMarks.length) coachMarksEl.classList.remove('coach-out');
+    if (coachRunning && introArrived && !introDone && introEl) {
+        introEl.classList.remove('coach-out');
+    }
 }
 
-/** End the coaching for good. Only two things do this: a tap on a halo,
- *  and reaching one of the three people by any other route. Waiting no
- *  longer counts, and neither does a tap that misses. */
+/** End the coaching for good. Only three things do this, and all three are
+ *  the same event: the visitor reached John. A tap on a halo, a tap on one
+ *  of the three people by any other route, and (since D40) the panel's own
+ *  "Talk to John" button. Waiting does not count, and neither does a tap
+ *  that misses. */
 function endCoaching(reason) {
     if (!coachRunning) return;
     coachRunning = false;
     coachTimers.forEach(clearTimeout);
     coachTimers = [];
     fadeCoach(coachMarksEl);
-    fadeCoach(introEl);
+    retireIntro();
     // Which of these three ends the coaching is the honest measure of
     // whether any of it worked.
     track('coach-end', { reason });

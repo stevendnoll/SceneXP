@@ -89,7 +89,7 @@
  * question is the shape, not the placement.
  */
 
-import { getScene } from '../../shared/js/scene-1.0.0.min.js';
+import { getScene, getRenderer } from '../../shared/js/scene-1.0.0.min.js';
 import { initWorld, getWorldGroup, registerOutdoorProp } from '../../shared/js/world-1.0.0.min.js';
 import { AUTOMAN_CONFIG } from './config.min.js';
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
@@ -3512,6 +3512,268 @@ export function getPersonAnchors() {
         .map((kind) => ({ kind, object: cast[kind].anchor }));
 }
 
+// ============================================
+// HEADSHOTS (D40)
+// ============================================
+/* A studio portrait of one of the low-poly figures, taken with the
+ *  scene's own renderer.
+ *
+ *  John's contact card carries his real face. His customer and the dealer
+ *  have no real face to carry, and John's photograph on THEIR cards read as
+ *  a mistake rather than as a house style, so they sit for a portrait
+ *  instead: the same figure the visitor just tapped, turned to camera and
+ *  lit against a studio grey. The joke only lands if it is unmistakably
+ *  them, which is what rules out drawing an avatar by hand. This is the
+ *  actual rig in the actual renderer, so it follows every later change to
+ *  how either of them looks, for nothing.
+ *
+ *  WHY IT BORROWS A CORNER OF THE MAIN CANVAS rather than rendering into a
+ *  WebGLRenderTarget. Three applies tone mapping and the sRGB output encode
+ *  only when it is drawing to the canvas: a render target keeps the linear
+ *  values, so the same lights through the same materials would come back a
+ *  visibly different picture from the one the visitor is looking at. The
+ *  square is scissored into the bottom left of the drawing buffer, read
+ *  straight back out with drawImage (which handles the row order and the
+ *  premultiplied alpha a manual readback would not), and painted over by
+ *  the frame's own render a few lines later. Nothing is ever composited
+ *  with the corner in it, which is the whole reason this runs from inside
+ *  updateShowroom instead of from a timer.
+ */
+
+/** The square the picture is taken at, in CSS pixels, and the size of the
+ *  file that comes out. The disc it lands in is 96px at its largest, so
+ *  this is a 2x source and no more. */
+const PORTRAIT_PX = 256;
+
+/** A portrait lens rather than a wide one. At 24 degrees the camera stands
+ *  about four head-widths back, which is far enough that the nose does not
+ *  run away with the face the way it does at the 60 the scene itself uses. */
+const PORTRAIT_FOV = 24;
+
+/** The framing, in neck-pivot units (the head's centre is 0.18 above the
+ *  pivot and its radius is 0.12, so the crown with hair reaches about
+ *  0.31). Aiming a little below the head's centre and holding a quarter of
+ *  a unit either side puts the crown 0.04 under the top edge and takes the
+ *  bottom edge to just below the shoulder line: head and shoulders, which
+ *  is the only framing that survives being cropped to a circle.
+ *
+ *  These are LOCAL units, inside the figure's own scale, so John at 1.1 and
+ *  his customer just under life size come out framed identically. */
+const PORTRAIT_FACE_Y = 0.10;
+const PORTRAIT_HALF = 0.25;
+
+/** Body three-quarters on, face to camera, and a couple of degrees of tilt.
+ *  The camera is placed in front of the FACE (the anchors below hang off
+ *  the neck pivot), so this angle is what turns the shoulders away rather
+ *  than what turns the head: it is the difference between a portrait and a
+ *  mugshot, and it costs one line. */
+const PORTRAIT_NECK = { x: 0.03, y: 0.34, z: 0.03 };
+
+/** A photographer's paper backdrop, and the fall-off painted onto it
+ *  afterwards in 2D. It is LIGHT on purpose: John's own photograph is a
+ *  bright office, and a dark disc beside a bright one on the same card
+ *  would read as two different treatments rather than as one. */
+const PORTRAIT_PAPER = 0xc4c9d1;
+const PORTRAIT_VIGNETTE_RGB = '38, 48, 62';
+const PORTRAIT_VIGNETTE_ALPHA = 0.42;
+
+let portraitStage = null;       // the studio: backdrop, lights, camera
+let portraitCamera = null;
+let portraitOut = null;         // the 2D canvas the file is encoded from
+const portraitFace = { at: null, eye: null };
+const portraitQueue = [];       // [{ kind, done }], drained inside a frame
+const _portraitA = new THREE.Vector3();
+const _portraitB = new THREE.Vector3();
+const _portraitView = new THREE.Vector4();
+const _portraitScissor = new THREE.Vector4();
+
+/** How far back the camera stands, for the framing above. */
+function portraitDistance() {
+    return PORTRAIT_HALF / Math.tan((PORTRAIT_FOV * Math.PI) / 360);
+}
+
+/** Build the studio once.
+ *
+ *  THE LIGHTS HANG OFF THE CAMERA, which is the one part of this that is
+ *  not obvious. A directional light is aimed by its position and target, so
+ *  a light fixed in the studio would strike John's customer from the front
+ *  and the dealer from behind: the two of them sit at different yaws, and
+ *  the figure keeps its own seat transform through all of this. Parented to
+ *  the camera, the key is always over the subject's left shoulder as the
+ *  picture sees it. */
+function buildPortraitStage() {
+    if (portraitStage) return true;
+    if (typeof THREE === 'undefined' || !THREE.Scene) return false;
+
+    portraitStage = new THREE.Scene();
+    portraitStage.background = new THREE.Color(PORTRAIT_PAPER);
+    portraitStage.add(new THREE.HemisphereLight(0xfff8f0, 0x39404c, 1.5));
+
+    portraitCamera = new THREE.PerspectiveCamera(PORTRAIT_FOV, 1, 0.05, 12);
+
+    const key = new THREE.DirectionalLight(0xfff3e2, 2.2);
+    key.position.set(-0.9, 1.0, 1.5);
+    const fill = new THREE.DirectionalLight(0xccdcf2, 0.7);
+    fill.position.set(1.4, 0.1, 1.1);
+    // The one that separates a dark suit from a grey wall.
+    const rim = new THREE.DirectionalLight(0xffe9c8, 1.4);
+    rim.position.set(1.5, 0.9, -1.3);
+    [key, fill, rim].forEach((light) => {
+        light.target.position.set(0, 0, 0);
+        portraitCamera.add(light);
+        portraitCamera.add(light.target);
+    });
+    // In the scene, so one updateMatrixWorld reaches the camera and the
+    // three lights riding on it.
+    portraitStage.add(portraitCamera);
+
+    portraitFace.at = new THREE.Object3D();
+    portraitFace.at.position.set(0, PORTRAIT_FACE_Y, 0);
+    portraitFace.eye = new THREE.Object3D();
+    portraitFace.eye.position.set(0, PORTRAIT_FACE_Y, portraitDistance());
+    return true;
+}
+
+/** The 2D canvas the picture is finished and encoded on. */
+function portraitCanvas() {
+    if (portraitOut) return portraitOut;
+    if (typeof document === 'undefined' || !document.createElement) return null;
+    portraitOut = document.createElement('canvas');
+    portraitOut.width = PORTRAIT_PX;
+    portraitOut.height = PORTRAIT_PX;
+    return portraitOut;
+}
+
+/** Take one picture. Returns a data URL, or null if anything is missing.
+ *
+ *  Everything it moves, it moves back: the figure's parent, its waist and
+ *  its neck, the renderer's viewport, scissor and scissor test. */
+function shootPortrait(kind) {
+    const rig = cast && cast[kind];
+    const renderer = getRenderer();
+    const out = portraitCanvas();
+    if (!rig || !rig.group || !renderer || !out || !buildPortraitStage()) return null;
+
+    const canvas = renderer.domElement;
+    const ctx = out.getContext && out.getContext('2d');
+    if (!canvas || !ctx || !canvas.width || !canvas.height) return null;
+
+    // The square is cut out of the drawing buffer, so it can never be
+    // larger than the buffer is: a short landscape phone gets a smaller
+    // picture, scaled up to the same file size on the way out.
+    const dpr = renderer.getPixelRatio ? renderer.getPixelRatio() : 1;
+    const side = Math.min(PORTRAIT_PX, Math.floor(canvas.width / dpr), Math.floor(canvas.height / dpr));
+    if (side < 64) return null;
+
+    // No parent means the figure is not in the scene, and the restore at
+    // the end would strand it in the studio rather than putting it back.
+    const parent = rig.group.parent;
+    if (!parent) return null;
+
+    const neck = rig.neck.rotation;
+    const waist = rig.waist.rotation;
+    const saved = {
+        neck: { x: neck.x, y: neck.y, z: neck.z },
+        waist: { x: waist.x, y: waist.y, z: waist.z }
+    };
+    // The lean comes out (both of them are leaning at a desk) and the head
+    // takes the portrait angle.
+    neck.set(PORTRAIT_NECK.x, PORTRAIT_NECK.y, PORTRAIT_NECK.z);
+    waist.set(0, 0, 0);
+    portraitStage.add(rig.group);
+    rig.neck.add(portraitFace.at);
+    rig.neck.add(portraitFace.eye);
+    rig.group.updateMatrixWorld(true);
+
+    // Both anchors ride inside the figure's own scale and yaw, so this is
+    // the whole of the camera solve: stand where the eye anchor is, look at
+    // the face anchor.
+    portraitFace.at.getWorldPosition(_portraitA);
+    portraitFace.eye.getWorldPosition(_portraitB);
+    portraitCamera.position.copy(_portraitB);
+    portraitCamera.up.set(0, 1, 0);
+    portraitCamera.lookAt(_portraitA);
+
+    const hadScissor = renderer.getScissorTest();
+    // The showroom's shadow map is refreshed ON DEMAND (autoUpdate is off
+    // and the day/night pass raises this flag), so a render that lands on
+    // the same frame as a pending refresh must not be the one that answers
+    // it: the shadows under John's hand would be cast by a studio that
+    // contains one figure and no floor. Nothing in the studio casts a
+    // shadow, so the flag survives on its own in every version of three
+    // that returns early on an empty light list, and this puts it back
+    // rather than depending on that.
+    const hadShadowUpdate = renderer.shadowMap.needsUpdate;
+    renderer.getViewport(_portraitView);
+    renderer.getScissor(_portraitScissor);
+    renderer.setViewport(0, 0, side, side);
+    renderer.setScissor(0, 0, side, side);
+    renderer.setScissorTest(true);
+    renderer.render(portraitStage, portraitCamera);
+    renderer.shadowMap.needsUpdate = hadShadowUpdate;
+    renderer.setScissorTest(hadScissor);
+    renderer.setViewport(_portraitView.x, _portraitView.y, _portraitView.z, _portraitView.w);
+    renderer.setScissor(_portraitScissor.x, _portraitScissor.y, _portraitScissor.z, _portraitScissor.w);
+
+    rig.neck.remove(portraitFace.at);
+    rig.neck.remove(portraitFace.eye);
+    neck.set(saved.neck.x, saved.neck.y, saved.neck.z);
+    waist.set(saved.waist.x, saved.waist.y, saved.waist.z);
+    parent.add(rig.group);
+
+    // WebGL counts rows from the bottom of the buffer and a canvas counts
+    // them from the top, so the square that was drawn at the origin is the
+    // one at the far end of the image.
+    const px = Math.round(side * dpr);
+    ctx.clearRect(0, 0, PORTRAIT_PX, PORTRAIT_PX);
+    ctx.drawImage(canvas, 0, canvas.height - px, px, px, 0, 0, PORTRAIT_PX, PORTRAIT_PX);
+
+    // The fall-off a photographer gets from lighting the paper unevenly,
+    // which is what stops a flat grey square reading as a flat grey square.
+    const half = PORTRAIT_PX / 2;
+    const fade = ctx.createRadialGradient(half, half * 0.86, half * 0.30, half, half, half * 1.02);
+    fade.addColorStop(0, `rgba(${PORTRAIT_VIGNETTE_RGB}, 0)`);
+    fade.addColorStop(1, `rgba(${PORTRAIT_VIGNETTE_RGB}, ${PORTRAIT_VIGNETTE_ALPHA})`);
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, 0, PORTRAIT_PX, PORTRAIT_PX);
+
+    // WebP where it is supported, and the specification says a canvas hands
+    // back a PNG when it is not, so there is nothing to fall back to.
+    return out.toDataURL('image/webp', 0.86);
+}
+
+/** Ask for a figure's portrait. The callback gets a data URL, or null if
+ *  the picture could not be taken, on some later frame.
+ *
+ *  It cannot be synchronous, and that is the point: the picture has to be
+ *  taken inside the render loop, between the last thing that moves the cast
+ *  and the frame's own draw, so that the corner it borrows is painted over
+ *  before the browser composites. */
+export function requestPersonPortrait(kind, done) {
+    if (!PERSON_ORDER.includes(kind)) {
+        if (done) done(null);
+        return;
+    }
+    portraitQueue.push({ kind, done });
+}
+
+/** Drain the queue. One picture per frame, so two requests made together
+ *  never cost one frame twice. */
+function drainPortraitQueue() {
+    const next = portraitQueue.shift();
+    if (!next) return;
+    let url = null;
+    try {
+        url = shootPortrait(next.kind);
+    } catch (err) {
+        // A portrait is a nicety. Losing one must never take the showroom
+        // down with it, and the caller has John's photograph to fall back
+        // on.
+        url = null;
+    }
+    if (next.done) next.done(url);
+}
+
 /** Wrap an angle into [-pi, pi], so a head turn always takes the short
  *  way round instead of spinning most of a full circle. */
 function normalizeAngle(a) {
@@ -3988,6 +4250,13 @@ function dealerTargets(mode, modeT, headBase, readTo, screenGaze) {
  * refresh, plus the drifting clouds).
  */
 export function updateShowroom(deltaTime) {
+    // BEFORE the reduced-motion return, and before anything moves the
+    // cast. A portrait borrows the bottom left of the drawing buffer, and
+    // main.js draws the frame a few lines after this call returns, so the
+    // corner is painted over before the browser ever composites it. A
+    // visitor who has asked for less motion still gets a face.
+    if (portraitQueue.length) drainPortraitQueue();
+
     if (_reducedMotion.matches) return;
     _t += deltaTime;
 
@@ -4029,6 +4298,8 @@ export const __test__ = {
     CAR_COLORS, SKYLINE,
     SUV, widestVehicle, suvWidth, createLotSUV, suvGeometries,
     getPassingCar: () => passingCar,
+    PORTRAIT_PX, PORTRAIT_FOV, PORTRAIT_FACE_Y, PORTRAIT_HALF, PORTRAIT_NECK,
+    portraitDistance,
     poseSeated, addElbow, addWaist, addNeck, findHairGroup,
     createDeskChair, createSucculent,
     getCast: () => cast

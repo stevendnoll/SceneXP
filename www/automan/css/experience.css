@@ -370,6 +370,53 @@ body .pan-controls.no-chrome.visible {
     55%, 100% { background-position: -110% 0; }
 }
 
+/* THE WAY OUT (D40), in the panel's top right corner, over the header row.
+   The panel leaves on its own after 29 seconds and on the first tap
+   anywhere in the room, so this is not the only exit, but a surface
+   covering a third of a phone screen with no visible way to close it is a
+   surface somebody has to guess about.
+
+   pointer-events: auto against the panel's own `none`. A child can take
+   events its parent refuses, and that is the whole mechanism that lets this
+   panel carry controls and still be swiped through everywhere else.
+
+   44px square on a glyph that draws about 13, which is the touch target
+   rather than the ink. No ring and no fill at rest: it is the quietest
+   control on the page until it is reached for, because it is the one thing
+   here that takes something away. */
+.intro-close {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: rgba(219, 179, 106, 0.6);
+    font-family: var(--lux-sans);
+    font-size: 1.35rem;
+    line-height: 1;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.intro-close:hover {
+    color: var(--lux-gold);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.intro-close:focus-visible {
+    outline: 2px solid var(--lux-gold);
+    outline-offset: -6px;
+    color: var(--lux-gold);
+}
+
 /* HIS PORTRAIT, BESIDE HIS NAME (D38).
 
    THE ROW IS WHY THIS IS AFFORDABLE. The contact card wears the same disc
@@ -390,11 +437,19 @@ body .pan-controls.no-chrome.visible {
    `align-items: center` rather than `flex-start`, because the lead can
    break to two lines on a narrow screen and a disc pinned to the top of a
    three-line column reads as a bullet rather than as a portrait. */
+   PADDING ON THE RIGHT, because the close button floats over this row and
+   over nothing else. That button is 2.75rem square at 0.35rem from the
+   panel's right edge and the content is inset 1.4rem, so it reaches 1.7rem
+   into the text column: this is that plus a little air. Reserving the space
+   here rather than on the panel keeps the paragraph, the actions and the
+   footnote at the full measure, which is exactly what the contact card's
+   kicker does with the same problem. */
 .intro-head {
     display: flex;
     align-items: center;
     gap: 1.05rem;
     margin: 0 0 0.6rem;
+    padding-right: 2rem;
 }
 
 /* min-width: 0 or a long unbroken word in the lead would refuse to shrink
@@ -404,16 +459,18 @@ body .pan-controls.no-chrome.visible {
 }
 
 /* It inherits the circle, the champagne hairline and the shadow from
-   .john-portrait, so there is one treatment for his face across the page,
-   and overrides only what this surface needs.
+   .portrait-disc, so there is one treatment for a face across the page, and
+   sets only what this surface needs.
 
-   TWO CLASSES IN THE SELECTOR, and that is not decoration. `.john-portrait`
-   is written 460 lines further down with the cards it was made for, and it
-   sets a width, a height and a bottom margin of its own. Two single-class
-   rules are the same specificity, so the later one wins, and a plain
-   `.intro-portrait` here would lose every declaration it makes to a rule
-   nowhere near it. Being deliberately more specific is what makes this
-   independent of where in the file either block sits. */
+   TWO CLASSES IN THE SELECTOR, and that is not decoration. `.portrait-disc`
+   is written 460 lines further down with the cards it was made for. It
+   carries NO size of its own, precisely so that the two places that use it
+   can each set their own without racing, but two single-class rules are the
+   same specificity and the later one wins, so the day somebody adds a width
+   down there this rule would silently lose it. Being deliberately more
+   specific is what makes the panel's size independent of where in the file
+   either block sits. The card's own rule does the same, for the same
+   reason. */
 .intro-card .intro-portrait {
     flex: 0 0 auto;
     width: 3.4rem;
@@ -476,6 +533,83 @@ body .pan-controls.no-chrome.visible {
     line-height: 1.7;           /* air, which is most of what "premium" is */
     letter-spacing: 0.008em;
     color: var(--lux-mute);
+}
+
+/* THE TWO ROUTES OUT OF THE PARAGRAPH (D40): reach him, or read the whole
+   account first.
+
+   BOTH ARE HAIRLINES. The one filled control on this page is the Call
+   button on the contact card, and that is the rule the whole flat layer is
+   built on (D25): a second filled control here would cost that button the
+   thing that makes it read as the action rather than as an option. The lead
+   of the two gets a brighter hairline instead, which is the same distinction
+   drawn a quieter way.
+
+   THE ROW IS LEFT ALIGNED AND THE BUTTONS ARE ONLY AS WIDE AS THEIR WORDS,
+   which is a gesture decision rather than a typographic one. These are the
+   only two places on this panel that take pointer events, so they are the
+   only two places a swipe cannot start, and the room is dragged from the
+   middle of the screen far more often than from the bottom left corner. */
+.intro-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 0 0 0.9rem;
+}
+
+.intro-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    min-height: 2.75rem;        /* the touch target, on 0.72rem of type */
+    padding: 0 1.05rem;
+    border: 1px solid rgba(219, 179, 106, 0.3);
+    /* 2px, like every other edge in this interface. A pill would read as an
+       app control and this is a plate. */
+    border-radius: 2px;
+    background: transparent;
+    color: var(--lux-gold);
+    font-family: var(--lux-sans);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    pointer-events: auto;
+    -webkit-font-smoothing: antialiased;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.intro-action-lead {
+    border-color: rgba(219, 179, 106, 0.6);
+    color: #f0d9a8;
+}
+
+.intro-action:hover {
+    border-color: var(--lux-gold);
+    background: rgba(219, 179, 106, 0.1);
+    color: #f7e6c4;
+}
+
+.intro-action:focus-visible {
+    outline: 2px solid var(--lux-gold);
+    outline-offset: 2px;
+}
+
+/* John's three-blade W, the same path the floating About button in the
+   corner carries. The height is the VIEWBOX's ratio (58 wide by 31 tall),
+   not the mark's own: the box is padded a little past the art on every side
+   so antialiasing has somewhere to go, and sizing to the mark would squash
+   it by that padding. Filled, not stroked: the shared sheet's .menu-btn svg
+   rule is `fill: none; stroke: currentColor`, and this is a solid mark. */
+.intro-action .intro-w {
+    flex: 0 0 auto;
+    width: 1.35rem;
+    height: 0.722rem;
+    fill: currentColor;
+    stroke: none;
 }
 
 /* The mechanics, demoted to the footnote they always were. The rule
@@ -552,8 +686,34 @@ body .pan-controls.no-chrome.visible {
         margin-bottom: 0.55rem;
     }
 
-    /* Two classes again, for the reason above: the card's own phone
-       override of .john-portrait is further down this stylesheet. */
+    /* The two buttons have to share one line on a phone, and they only
+       just can. At 0.72rem with a fifth of an em of tracking they run to
+       about 324px together, against roughly 304px of content inside a 94vw
+       panel on a 360px screen, so they wrapped to two rows and cost the
+       panel a whole line of height. This is the same row three sizes down:
+       about 282px, which fits with room to spare and still reads as the
+       same pair of controls. They keep the full 44px touch target.
+
+       flex-wrap stays on regardless, because a 320px phone is still a
+       phone and two stacked buttons are better than two clipped ones. */
+    .intro-actions {
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .intro-action {
+        padding: 0 0.85rem;
+        font-size: 0.66rem;
+        letter-spacing: 0.14em;
+    }
+
+    .intro-action .intro-w {
+        width: 1.2rem;
+        height: 0.641rem;
+    }
+
+    /* Two classes again, for the reason given on the desktop rule: the
+       card's own phone override is further down this stylesheet. */
     .intro-card .intro-portrait {
         width: 2.9rem;
         height: 2.9rem;
@@ -889,52 +1049,70 @@ body .pan-controls.no-chrome.visible {
     padding: 2.1rem 1.85rem 1.6rem;
 }
 
-/* JOHN'S PHOTOGRAPH. A circle, a champagne hairline, and nothing else.
+/* A FACE ON A DARK CARD. A circle, a champagne hairline, and nothing else.
 
-   It is the one place on this page where a real face appears, so the
-   treatment has to get out of its way: no ring in an accent fill, no
+   These are the only places on this page where a face appears at all, so
+   the treatment has to get out of the way: no ring in an accent fill, no
    duotone, no border thick enough to read as a frame. The hairline is the
    same 1px champagne the buttons, the coach marks and the card kickers all
    use, so the portrait arrives as part of the same object rather than as
    something pasted onto it.
 
-   THE SHADOW IS DOING THE SEPARATING, not the ring. The photograph is a
-   bright office with a white ceiling in it and the card under it is
-   lacquer, so the disc is the lightest thing on the card by a long way and
-   would otherwise look stuck on. A shadow beneath it puts it on the card
-   the way the card sits on the room.
+   THE SHADOW IS DOING THE SEPARATING, not the ring. John's photograph is a
+   bright office with a white ceiling in it, the rendered headshots stand
+   against a studio grey, and the card under all three is lacquer, so the
+   disc is the lightest thing on the card by a long way and would otherwise
+   look stuck on. A shadow beneath it puts it on the card the way the card
+   sits on the room.
 
-   object-fit is not optional even though the file is already square: the
-   width and height attributes are the file's 256, the CSS sizes are rem,
-   and without it a browser that has the attributes and not yet the file
-   lays out a 256px square and then reflows the whole card. */
-.john-portrait {
+   NO WIDTH, NO HEIGHT, NO MARGIN HERE, and that is deliberate. This class
+   is the treatment and nothing else; the arrival panel and the contact card
+   each set their own size, from their own rule, scoped to their own
+   surface. Sizes here would be a cascade race with whichever of those two
+   happens to be written later in the file.
+
+   object-fit is not optional even though every source is already square:
+   the width and height attributes are the file's 256, the CSS sizes are
+   rem, and without it a browser that has the attributes and not yet the
+   file lays out a 256px square and then reflows the whole card. */
+.portrait-disc {
     display: block;
-    width: 4.25rem;
-    height: 4.25rem;
-    margin: 0 0 1.1rem;
     border: 1px solid rgba(219, 179, 106, 0.5);
     border-radius: 50%;
     object-fit: cover;
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
 }
 
-/* The About card wears him as a BAND across its head instead (D37), so the
-   disc belongs to the contact card alone. It had a smaller twin at the foot
-   of the About card for one round, and that came out with the flyer: his
-   photograph at the top and his photograph again in the byline is the same
-   face twice on one card.
+/* THE CONTACT CARD'S DISC, centred in the body directly above the Call
+   button (D40).
 
-   On a phone the contact card is already the tallest thing on the site and
-   scrolls, so the portrait gives back the height it can. It stops at 3.4rem
+   It sat in the card's top left corner for one round, where it was the
+   first thing on the card, shared a line with the close button, and read as
+   a decoration outside the content rather than as part of it. Centred here
+   it is the last thing before the one action that matters, which is also
+   what earns it the extra size: 6rem where the corner version was 4.25.
+
+   The About card wears John as a BAND across its head instead (D37), so the
+   disc belongs to the contact card and the arrival panel alone.
+
+   Scoped to the card for the reason given on .portrait-disc above. */
+#nudge-modal .card-portrait {
+    width: 6rem;
+    height: 6rem;
+    margin: 0 auto 1.35rem;
+}
+
+/* On a phone the contact card is already the tallest thing on the site and
+   scrolls, so the portrait gives back the height it can. It stops at 5rem
    rather than going smaller: below about 50px a face at arm's length is a
    thumbnail of a person rather than a person, which is the opposite of what
-   it is here for. */
+   it is here for, and the rendered headshots need the size more than the
+   photograph does. */
 @media (max-width: 600px) {
-    .john-portrait {
-        width: 3.4rem;
-        height: 3.4rem;
-        margin-bottom: 0.85rem;
+    #nudge-modal .card-portrait {
+        width: 5rem;
+        height: 5rem;
+        margin-bottom: 1.1rem;
     }
 }
 
