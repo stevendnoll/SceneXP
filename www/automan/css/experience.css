@@ -218,13 +218,21 @@ body .pan-controls.no-chrome.visible {
     animation-delay: 1.3s;
 }
 
-/* AFTER HALF A MINUTE THE HALOS QUIETEN RATHER THAN LEAVE. Nothing takes
-   them away except reaching one of the three people, because they are the
-   only thing on screen saying WHO to tap, and a visitor who has not tried
-   yet is exactly the visitor who still needs them. But a ring pulsing at
-   full strength for an entire visit is a strobe over a room somebody may
-   be perfectly happy just looking at, so it slows down and dims instead:
-   still a marker, no longer a demand. */
+/* AFTER HALF A MINUTE THE HALOS SLOW DOWN. NOTHING EVER TAKES THEM AWAY
+   (D41): not the passage of time, not a prop story, and since D41 not even
+   reaching John himself. They are the only thing on screen that says the
+   room can be touched at all, and this page is built for somebody who is
+   not a confident computer user, so the moment they go the scene becomes a
+   picture and a second trip to the contact card has nothing pointing the
+   way.
+
+   Which leaves one problem to solve rather than two: a ring pulsing at full
+   RATE for an entire visit is a strobe over a room somebody may be
+   perfectly happy just looking at. So the pulse halves in speed and
+   NOTHING ELSE CHANGES. This block used to drop the mark to 0.72 opacity
+   and fade the ring's border as well, and both came out with D41: dimming
+   the one obvious control on the page is the opposite of what it is here
+   for. Slower, not quieter. */
 .coach-marks.coach-calm .coach-halo::before,
 .coach-marks.coach-calm .coach-halo::after {
     animation-duration: 5.2s;
@@ -232,22 +240,6 @@ body .pan-controls.no-chrome.visible {
 
 .coach-marks.coach-calm .coach-halo::after {
     animation-delay: 2.6s;
-}
-
-.coach-marks.coach-calm .coach-halo {
-    border-color: rgba(255, 255, 255, 0.7);
-}
-
-.coach-marks.coach-calm .coach-mark {
-    opacity: 0.72;
-    transition: opacity 1.2s ease;
-}
-
-/* Except under the pointer or the keyboard, where it comes straight back:
-   somebody reaching for it is asking for it. */
-.coach-marks.coach-calm .coach-mark:hover,
-.coach-marks.coach-calm .coach-mark:focus-visible {
-    opacity: 1;
 }
 
 @keyframes coach-pulse {
@@ -1477,9 +1469,9 @@ body .pan-controls.no-chrome.visible {
     border-color: rgba(236, 202, 139, 0.9);
 }
 
-.coach-marks.coach-calm .coach-halo {
-    border-color: rgba(236, 202, 139, 0.6);
-}
+/* (The calm state's champagne-at-0.6 ring came out with D41. The halos are
+   permanent now, so the calm changes the pulse RATE and nothing that makes
+   them harder to see.) */
 
 /* ==========================================================================
    THE LOADING SCREEN

@@ -557,7 +557,7 @@ function checkSceneTap(clientX, clientY) {
         // Reaching a person is the one thing the coaching was for, and
         // it counts however they got here: the halo, or the figure
         // underneath it, or a face they found on their own.
-        endCoaching('tapped-person');
+        notePersonReached('tapped-person');
         track('click-person', { who: kind });
         // If the card cannot open for any reason, fall through and at
         // least tell their story. That also keeps their PROP_CONTENT
@@ -1125,9 +1125,12 @@ const COACH_ARRIVE_MS = 900;    // the room alone first, then the guidance
 // verify-composition holds this number to the copy's own length. It
 // still goes early for anybody who taps, which is nearly everybody.
 const INTRO_MS = 29000;
-// The halos do not leave at this point, they QUIETEN: a slower, dimmer
-// pulse that keeps pointing without strobing over a room somebody may
-// well be sitting and looking at. Only reaching a person ends them.
+// The halos do not leave at this point, they QUIETEN, and since D41 that is
+// the only thing that ever happens to them: nothing ends them, so they hold
+// for the whole visit. What changes here is the RATE, not the presence. The
+// pulse halves in speed so a ring is not strobing over a room somebody may
+// well be sitting and looking at, and the marks stay at full strength,
+// because "always visible" is the point of keeping them.
 const COACH_CALM_MS = 30000;
 const _coachPoint = new THREE.Vector3();
 
@@ -1135,7 +1138,14 @@ let coachMarksEl = null;
 let introEl = null;
 let coachMarks = [];            // [{ el, kind, anchor }] once the cast exists
 let coachTimers = [];
+// Set once the coaching has started, and NEVER cleared: the halos hold for
+// the whole visit now (D41). It still exists because the halos are hidden
+// until the arrival, and holdCoaching has to know the difference between
+// "not yet" and "parked behind a card".
 let coachRunning = false;
+// Whether anybody has reached John by any of the three routes. It no longer
+// changes what is on screen, only what is logged.
+let personReached = false;
 // The panel's own life, tracked apart from the halos' now that it carries
 // controls (D40). It may only be on screen between these two: after it has
 // arrived, and before it has been retired. holdCoaching brings the halos
@@ -1188,7 +1198,7 @@ function wireCoaching(signal) {
         // never a control that does nothing.
         el.addEventListener('click', () => {
             track('click-person', { who: kind, via: 'coach' });
-            endCoaching('tapped-mark');
+            notePersonReached('tapped-mark');
             if (!openContactCard(kind)) openPropDialog(kind);
         }, { signal });
     });
@@ -1233,7 +1243,7 @@ function wireIntroControls(signal) {
     const talk = document.getElementById('intro-contact');
     if (talk) talk.addEventListener('click', () => {
         track('intro-action', { action: 'contact' });
-        endCoaching('intro-contact');
+        notePersonReached('intro-contact');
         openContactCard('button');
     }, { signal });
 
@@ -1270,7 +1280,7 @@ function startCoaching() {
     coachRunning = true;
 
     coachTimers.push(setTimeout(() => {
-        if (!coachRunning) return;      // a fast visitor already tapped
+        if (!coachRunning) return;      // the page went in the meantime
         // With no cast there are no halos, but the strip still says what
         // the room is, so the two are revealed independently.
         if (coachMarks.length) coachMarksEl.classList.remove('coach-out');
@@ -1286,8 +1296,11 @@ function startCoaching() {
         coachMarksEl.classList.add('coach-calm');
         // Not an ending, so it is not a coach-end reason. It is the
         // honest measure of how many visitors sat half a minute with
-        // three rings over three heads and did not try one.
-        track('coach-calm');
+        // three rings over three heads and did not try one, WHICH IS WHY
+        // it is guarded: the halos no longer go away when somebody reaches
+        // John (D41), so this timer now runs for every visitor and would
+        // otherwise count the ones who did try.
+        if (!personReached) track('coach-calm');
     }, COACH_CALM_MS));
 }
 
@@ -1347,12 +1360,15 @@ function fadeCoach(el) {
 /** Park the coaching while a card is up, and bring it back when it closes.
  *
  *  This became necessary the moment the halos stopped leaving on the first
- *  tap. They sit at z-index 90, under every modal and its near-opaque
- *  backdrop, so nobody SEES them behind a story card. A keyboard visitor
- *  would still tab straight into three invisible buttons behind it. The
- *  same `.coach-out` that ends them does the job, because it takes
- *  `visibility` with it once the fade finishes, and the guard means a
- *  card closing can never resurrect coaching that has already ended.
+ *  tap, and it is the ONE thing that still hides them now that nothing
+ *  else ever does (D41). They sit at z-index 90, under every modal and its
+ *  near-opaque backdrop, so nobody SEES them behind a story card, but a
+ *  keyboard visitor would still tab straight into three invisible buttons
+ *  behind it. The same `.coach-out` the arrival uses does the job, because
+ *  it takes `visibility` with it once the fade finishes.
+ *
+ *  The `coachRunning` guard is what stops a card closing from revealing the
+ *  halos before the arrival has run at all, or after the page has gone.
  *
  *  THE PANEL IS IN HERE TOO NOW, for exactly the same reason and only
  *  since D40: it used to be a surface with nothing focusable on it, and it
@@ -1376,20 +1392,32 @@ function holdCoaching() {
     }
 }
 
-/** End the coaching for good. Only three things do this, and all three are
- *  the same event: the visitor reached John. A tap on a halo, a tap on one
- *  of the three people by any other route, and (since D40) the panel's own
- *  "Talk to John" button. Waiting does not count, and neither does a tap
- *  that misses. */
-function endCoaching(reason) {
-    if (!coachRunning) return;
-    coachRunning = false;
-    coachTimers.forEach(clearTimeout);
-    coachTimers = [];
-    fadeCoach(coachMarksEl);
+/** The visitor reached John. Three routes do this and all three are the
+ *  same event: a tap on a halo, a tap on one of the three people by any
+ *  other route, and the panel's own "Talk to John" button.
+ *
+ *  THIS NO LONGER TAKES THE HALOS AWAY, and that is D41. It used to be
+ *  `endCoaching`, and the argument for ending them was that a visitor who
+ *  has met John does not need three rings telling them where he is. True,
+ *  and beaten by who this page is for: it is built for somebody who is not
+ *  a confident computer user, arriving from a link, and for that visitor
+ *  the rings ARE the interface. They are the only thing on screen that says
+ *  the room can be touched at all, so the moment they go the page becomes a
+ *  picture again, and a second visit to the contact card after reading a
+ *  prop story has nothing pointing the way. They stay up for the whole
+ *  visit now (Steve's call), quietening once at half a minute and no
+ *  further.
+ *
+ *  What still happens here: the arrival panel retires, because THAT is read
+ *  once, and the event is logged. `coach-end` keeps its name so the log
+ *  reads continuously across the change; it marks the end of the coaching's
+ *  JOB, which is the thing it always measured. */
+function notePersonReached(reason) {
     retireIntro();
-    // Which of these three ends the coaching is the honest measure of
-    // whether any of it worked.
+    if (personReached) return;
+    personReached = true;
+    // Which of the three routes gets somebody to John is the honest
+    // measure of whether any of this worked.
     track('coach-end', { reason });
 }
 

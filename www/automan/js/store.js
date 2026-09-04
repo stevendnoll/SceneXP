@@ -42,7 +42,7 @@
  *   +=============== glass wall / the lot beyond ===============+
  *   |  [key board]          (DEALER)          [ sales board ]   |
  *   |                 +-----------------+                       |
- *   |  [plant]        |[scrn][keys][ms] |                       |
+ *   |                 |[scrn][keys][ms] |                       |
  *   |                 | [PAPERS]  [car] |                       |
  *   |                 +-----------------+                       |
  *   |             (JOHN)          (CUSTOMER)                    |
@@ -306,8 +306,17 @@ const LAYOUT = {
     //  is a large dark cylinder in the foreground of a scene whose subject
     //  is a conversation, so the fourth round removed it rather than move
     //  it a fourth time.)
+    // ONE plant, and this list is read BY KIND rather than by index for
+    // that reason: the tall one at (-3.15, -3.90) came out at Steve's
+    // request (M33). It stood in the far corner by the glass, which from
+    // this camera is DIRECTLY BEHIND THE DEALER'S SCREEN: a green canopy
+    // filling the gap between the monitor and the dealer's shoulder, in the
+    // busiest part of the frame, where the eye should be going to the deal
+    // sheet and the three faces. The corner it was softening is barely
+    // visible from here anyway. The snake plant stays: it is on the west
+    // wall between the coffee bar and the sales board, where the frame is
+    // quiet and it is doing the job this one was supposed to do.
     plants: [
-        { x: -3.15, z: -3.90, kind: 'tall' },
         { x: -3.45, z: -0.60, kind: 'snake' }
     ],
 
@@ -3148,8 +3157,12 @@ function createBrochureRack() {
 //  printed on the page John is pointing at.)
 
 /** The green residents, from the shared furniture part rather than hand
- *  built: one tall plant softening the corner by the glass, and a snake
- *  plant by the waiting chairs. */
+ *  built. One of them now: the snake plant on the west wall. The tall
+ *  plant that stood in the corner by the glass came out at M33, for the
+ *  reason recorded on LAYOUT.plants.
+ *
+ *  The `tall` branch stays because the list is data: putting one back is a
+ *  line in LAYOUT rather than a line here. */
 function createShowroomPlants() {
     LAYOUT.plants.forEach((p, i) => {
         const plant = p.kind === 'tall' ? createTallPlant() : createSnakePlant();
