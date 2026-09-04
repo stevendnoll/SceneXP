@@ -1,5 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="John Walker, The Auto Man">
-    <!-- ONE MARK, TWO SIZES. This file is the browser tab icon at 16 pixels
+    <!-- THIS MARK IS NOT OURS AND IS NOT MIT LICENSED. The three-blade W
+         belongs to John Walker and appears here by his blessing, as part of
+         a tribute experience. The project's MIT license covers the code that
+         draws it and not the mark it draws, so copying this project grants
+         no right to reuse the shape. Please do not lift it. The same applies
+         to the two inline copies of this path in ../index.html. See LICENSE
+         and the README's "License, credits, and trademarks" section.
+
+         ONE MARK, TWO SIZES. This file is the browser tab icon at 16 pixels
          and the logo on the loading screen at 150, so whatever somebody
          watches while the showroom builds is the same thing that then sits
          in their tab.

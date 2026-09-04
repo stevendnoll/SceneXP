@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="A living 3D visit to the sunny home office of Sunnyvale Jenn Consulting. Jenn is at her desk untangling a small business's operations, the week's plan is on the whiteboard, and birds come and go on the fence outside her window.">
+    <meta name="theme-color" content="#1d4e5f">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK (Phase 5). Crawlers read these without running
+         JavaScript, so they cannot come from config.js and must stay literal
+         absolute URLs naming where this page is actually served (currently
+         www.scenexp.com/sunnyvalejenn; these are deployment metadata, not
+         outbound links). When serving from a new domain, update the URLs
+         here: canonical, og:url, og:image, twitter:image, and the JSON-LD
+         ids below. Everything else in the experience is relative,
+         config-driven (SVJ_CONFIG.site in js/config.js), or derived from
+         location. -->
+    <link rel="canonical" href="https://www.scenexp.com/sunnyvalejenn/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Sunnyvale Jenn Consulting">
+    <meta property="og:description" content="A living 3D visit to the home office of Sunnyvale Jenn Consulting. Jenn is at her desk, the sun is in the window, and the birds are on the fence.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/sunnyvalejenn/">
+    <meta property="og:locale" content="en_US">
+    <!-- WebP per preference. og-sunnyvalejenn.webp is a capture of the office
+         from the visitor's viewpoint (same flow as the other experiences).
+         If a platform (notably Facebook) won't render the preview, swap the
+         two image URLs below to .../og-sunnyvalejenn.jpg (both live in
+         assets/). -->
+    <meta property="og:image" content="https://www.scenexp.com/sunnyvalejenn/assets/og-sunnyvalejenn.webp?v=1">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A bright 3D home office: Jenn works at a light oak desk facing the doorway, the week's plan fills a whiteboard on one wall, a teal clock hangs above her monitor, and a sunny window looks out on a cedar fence and trees.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Sunnyvale Jenn Consulting">
+    <meta name="twitter:description" content="A living 3D visit to the home office of Sunnyvale Jenn Consulting. Jenn is at her desk, and the door is open.">
+    <meta name="twitter:image" content="https://www.scenexp.com/sunnyvalejenn/assets/og-sunnyvalejenn.webp?v=1">
+    <meta name="twitter:image:alt" content="A bright 3D home office: Jenn works at a light oak desk facing the doorway, the week's plan fills a whiteboard on one wall, a teal clock hangs above her monitor, and a sunny window looks out on a cedar fence and trees.">
+
+    <!-- Structured data: the experience, and the business it honors.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/sunnyvalejenn/#website",
+      "url": "https://www.scenexp.com/sunnyvalejenn/",
+      "name": "Sunnyvale Jenn Consulting",
+      "description": "A passive 3D visit to the sunny home office of Sunnyvale Jenn Consulting, built in tribute to Jenn, a talented entrepreneur and small business operations consultant.",
+      "inLanguage": "en-US",
+      "about": {
+        "@type": "Organization",
+        "name": "Sunnyvale Jenn Consulting",
+        "url": "https://sunnyvalejenn.com/"
+      }
+    }
+    </script>
+
+    <title>Sunnyvale Jenn Consulting</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text intro and links to Jenn's site and the classic site. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Sunnyvale Jenn Consulting</h1>
+            <p>This is a living 3D visit to the sunny home office of
+                Sunnyvale Jenn Consulting, and it needs JavaScript to run.
+                The developer built it in tribute to Jenn, a talented
+                entrepreneur and former colleague whose calling is helping
+                small businesses untangle and improve their operations. In
+                the 3D scene, Jenn works at her desk facing the doorway,
+                pausing now and then to wave hello. Behind her, a bright
+                window looks out on the back fence, where birds come and
+                go, the week's plan fills the whiteboard, and the rolled
+                yoga mat in the corner is a small nod to her days teaching
+                yoga before consulting. Everything in the room can be
+                clicked for a little of its story. If your business could
+                use calmer operations, Jenn would love to hear from you.
+                And if you would like a small world like this built for
+                someone you admire, so would the developer.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="https://sunnyvalejenn.com/" rel="noopener noreferrer">Sunnyvale Jenn Consulting website</a></li>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <img class="loader-logo logo-card" src="assets/svj-1.webp" alt="" width="150" height="150">
+            <div class="loader-title">Sunnyvale Jenn Consulting</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- The welcome overlay. This experience is watched, not walked: there
+         are no movement controls to explain, so the overlay just sets the
+         scene and steps aside on the first click, tap, or keypress. -->
+    <div id="blocker">
+        <div id="instructions">
+            <img class="welcome-logo logo-card" src="assets/svj-1.webp" alt="Sunnyvale Jenn Consulting" width="110" height="110">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">Jenn is in her home office, and the door is open</p>
+            <p class="click-prompt">Click to step inside</p>
+            <div class="controls-hint">
+                <span>SIT BACK</span> No controls needed. Jenn is happy to have the company.
+                <span>LOOK CLOSER</span> Click anything in the office, or Jenn herself, for a little of its story.
+            </div>
+            <p class="welcome-footnote">The Sunnyvale Jenn Consulting name and logo belong to Jenn and
+                appear here in tribute.</p>
+        </div>
+    </div>
+
+    <!-- Floating controls -->
+    <!-- The Home button returns to the serving site's root in the same tab
+         (applySiteLinks keeps it in sync with SVJ_CONFIG.site.home). No
+         settings cog and no autopilot: there is nothing to adjust and
+         nowhere to be driven. -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+    <!-- Featured business: straight to Sunnyvale Jenn Consulting's own website
+         in a new tab (applySiteLinks keeps it in sync with
+         SVJ_CONFIG.site.business). The Home button stays the way back to the
+         serving site's root. -->
+    <a id="biz-btn" class="ui-float menu-btn biz-btn biz-btn-snug" href="https://sunnyvalejenn.com/"
+        target="_blank" rel="noopener noreferrer"
+        title="Visit the Sunnyvale Jenn Consulting website"
+        aria-label="Visit the Sunnyvale Jenn Consulting website (opens in a new tab)">
+        <img class="biz-logo-round" src="assets/svj-1.webp" alt="" width="26" height="26">
+    </a>
+
+    <!-- Dialog shown when something in the office is clicked: the host's
+         voice, telling the story of Jenn's practice one prop at a time. -->
+    <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="dialog-title" class="piece-title">In the Office</h2>
+                <p id="dialog-message" class="piece-subtitle"></p>
+                <a id="dialog-cta" class="piece-enter dialog-cta hidden" href="https://sunnyvalejenn.com/"
+                    target="_blank" rel="noopener noreferrer">Visit Sunnyvale Jenn Consulting &rarr;</a>
+                <button class="piece-enter dialog-primary" type="button" data-close>Back to the visit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Every-few-taps "reach out" invitation. Reuses the celebration card
+         styling the garden and tire-shop experiences use for theirs: this
+         scene has no checklist, so instead of a discovery threshold it
+         follows every fourth prop story, once that story's card closes. -->
+    <div id="nudge-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="nudge-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card complete-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few stops into the visit&nbsp; ★</p>
+                <h2 id="nudge-title" class="piece-title">Enjoying Jenn's office?</h2>
+                <p class="piece-subtitle">Thank you for looking around. This room honors Jenn of Sunnyvale Jenn
+                    Consulting, who builds the operations that busy founders do not have time to build. If your
+                    business could use that kind of hand, she is a wonderful person to know.</p>
+                <a id="nudge-site" class="piece-enter" href="https://sunnyvalejenn.com/"
+                    target="_blank" rel="noopener noreferrer">Visit Sunnyvale Jenn Consulting &rarr;</a>
+                <a id="nudge-contact" class="piece-cancel" href="/contact.html">Want a world like this? Get in touch &rarr;</a>
+                <button class="piece-cancel" data-close>Keep exploring</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="game-canvas" aria-label="A living 3D home office: Jenn works at a light oak desk facing the doorway, pausing now and then to wave hello, while sunlight pours through the window behind her and birds come and go on the cedar fence outside"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

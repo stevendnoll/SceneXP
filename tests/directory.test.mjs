@@ -28,7 +28,7 @@ const CATEGORY_IDS = ['worlds', 'business', 'personal'];
 // drift into testing a grouping the site does not actually have.
 const CATEGORY_OF = {
     dad: 'personal', family: 'personal', roqui: 'personal', gavin: 'personal', jamar: 'personal',
-    interstate: 'business', seedtoseed: 'business',
+    automan: 'business', interstate: 'business', seedtoseed: 'business', sunnyvalejenn: 'business',
     steve: 'worlds', mandelbrot: 'worlds', earthdefense: 'worlds', highwater: 'worlds', garden: 'worlds',
 };
 
@@ -220,6 +220,86 @@ describe('the search box and the filter chips are gone for good', () => {
             home.indexOf('</div>', home.indexOf('class="section-head"')),
             home.indexOf('<section class="experience-group"'));
         expect(between).not.toMatch(/\shidden(\s|>)/);
+    });
+});
+
+// ---- The card image and the social image ------------------------------------
+//
+// EVERY CARD POINTS AT ITS SCENE'S SOCIAL IMAGE TODAY, SO NEITHER CAN DISAGREE
+// WITH THE OTHER. That stops being true the moment a scene wants a different
+// picture in the directory than it shows in a share preview, which is exactly
+// what The Auto Man needs: its social card is the gold W on navy, which names
+// the business instantly in a message thread and reads as a broken image in a
+// grid of thirteen scene renders.
+//
+// Once a scene has two images, they drift. Somebody reshooting the social card
+// has no reason to think about the directory, and somebody reshooting the
+// directory card has no reason to think about the share preview. So the
+// convention is pinned here instead: `og-<slug>` is the social image, and
+// `card-<slug>` is the optional directory-only one. A card may use either. A
+// page's og:image may only ever be the first.
+//
+// This is a PATH check, not a file-exists check, and it has to be. The
+// Interstate Tire and Seed to Seed captures show their owners' logos in-scene
+// and are withheld from the repository, so they are absent from a fresh clone
+// and a file-exists check would fail CI while the live site is perfectly fine.
+
+describe('the directory card image and the social image', () => {
+    // Each card's <img> tag, whole, so attribute order does not matter.
+    // COMMENTS ARE SKIPPED BETWEEN THE ANCHOR AND THE IMAGE, the same way the
+    // sitemap sweep above skips them. The first draft of this did not, and it
+    // failed the moment the automan card grew a note explaining why its
+    // picture is not its social image. That note is the right thing to have
+    // written, and a test that punishes a page for explaining itself is a test
+    // that gets deleted.
+    const cards = [...home.matchAll(
+        /data-slug="(\w+)">\s*<a href="\/\w+\/">\s*(?:<!--[\s\S]*?-->\s*)*(<img\b[\s\S]*?>)/g)]
+        .map((m) => ({ slug: m[1], tag: m[2] }));
+
+    test('every card in the grid was found, so the sweep below is not empty', () => {
+        expect(cards.map((c) => c.slug).sort()).toEqual(slugs.slice().sort());
+    });
+
+    test.each(cards)('$slug names one of the two allowed images, in its own folder', ({ slug, tag }) => {
+        const src = tag.match(/\bsrc="([^"]+)"/);
+        expect(src).not.toBeNull();
+        // Its own scene's assets folder, never another's. A card repointed at
+        // the wrong scene looks completely fine until somebody recognises the
+        // picture.
+        const path = src[1].replace(/\?.*$/, '');
+        expect(path.startsWith(`/${slug}/assets/`)).toBe(true);
+        const base = path.slice(`/${slug}/assets/`.length);
+        expect({ [slug]: base })
+            .toEqual({ [slug]: expect.stringMatching(new RegExp(`^(og|card)-${slug}\\.webp$`)) });
+    });
+
+    test.each(cards)('$slug carries alt text and its dimensions', ({ slug, tag }) => {
+        // A card is a link with no text of its own above the title, and the
+        // grid reflows while images load, so both of these are load bearing.
+        const alt = tag.match(/\balt="([^"]*)"/);
+        expect(alt).not.toBeNull();
+        expect(`${slug} alt length: ${alt[1].trim().length > 30}`).toBe(`${slug} alt length: true`);
+        expect(tag).toMatch(/\bwidth="1200"/);
+        expect(tag).toMatch(/\bheight="630"/);
+        expect(tag).toMatch(/\bloading="lazy"/);
+    });
+
+    test.each(slugs)('%s has exactly one social image, and it is the WebP', (slug) => {
+        // EXACTLY ONE og:image, NAMING THE WEBP. Apple's link preview renders
+        // every og:image it finds, so a JPEG "fallback" underneath puts two
+        // identical cards in a message thread rather than one. The .jpg twins
+        // exist on disk for scrapers that ask for them and are never named here.
+        const page = read('www', slug, 'index.html').replace(/<!--[\s\S]*?-->/g, '');
+        const og = [...page.matchAll(/<meta property="og:image"\s+content="([^"]+)"/g)].map((m) => m[1]);
+        const tw = [...page.matchAll(/<meta name="twitter:image"\s+content="([^"]+)"/g)].map((m) => m[1]);
+        expect({ [slug]: { og: og.length, twitter: tw.length } })
+            .toEqual({ [slug]: { og: 1, twitter: 1 } });
+        // And the social image is the og- one even when the card is not, so a
+        // directory-only picture can never quietly become the share preview.
+        for (const url of [...og, ...tw]) {
+            expect({ [slug]: url.replace(/\?.*$/, '') })
+                .toEqual({ [slug]: `https://www.scenexp.com/${slug}/assets/og-${slug}.webp` });
+        }
     });
 });
 

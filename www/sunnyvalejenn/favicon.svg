@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Sunnyvale Jenn Consulting">
+    <!-- A simple lotus over calm water, drawn in the office's teals: an
+         echo of Sunnyvale Jenn Consulting's colors, not a copy of the
+         logo (the real one appears, with permission, in the overlays). -->
+    <rect width="64" height="64" rx="14" fill="#173f4c"/>
+    <!-- Center petal -->
+    <path d="M32 8 C 27 15 27 24 32 30 C 37 24 37 15 32 8 Z" fill="#8fc7c0"/>
+    <!-- Side petals -->
+    <path d="M18 14 C 18 23 23 29 31 31 C 30 23 25 16.5 18 14 Z" fill="#2e8b83"/>
+    <path d="M46 14 C 46 23 41 29 33 31 C 34 23 39 16.5 46 14 Z" fill="#2e8b83"/>
+    <!-- Outer petals -->
+    <path d="M9 25 C 12 32 19 35.5 28 34.5 C 24.5 28 17.5 24.5 9 25 Z" fill="#5f9ea8"/>
+    <path d="M55 25 C 52 32 45 35.5 36 34.5 C 39.5 28 46.5 24.5 55 25 Z" fill="#5f9ea8"/>
+    <!-- The water, two calm bands -->
+    <path d="M12 41 C 19 45 45 45 52 41 C 50 49 14 49 12 41 Z" fill="#8fc7c0"/>
+    <path d="M18 50 C 24 53 40 53 46 50 C 44 56 20 56 18 50 Z" fill="#2e8b83"/>
+</svg>

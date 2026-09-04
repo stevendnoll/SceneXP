@@ -109,19 +109,31 @@
           "@type": "ItemList",
           "@id": "https://www.scenexp.com/#small-business-tributes",
           "name": "Small business tributes",
-          "description": "Walkable 3D worlds built for real small businesses, in place of another template website.",
+          "description": "3D worlds built for real small businesses, in place of another template website.",
           "itemListElement": [
             {
               "@type": "ListItem",
               "position": 1,
+              "url": "https://www.scenexp.com/automan/",
+              "name": "John Walker, The Auto Man"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
               "url": "https://www.scenexp.com/interstate/",
               "name": "The Interstate Tire Shop"
             },
             {
               "@type": "ListItem",
-              "position": 2,
+              "position": 3,
               "url": "https://www.scenexp.com/seedtoseed/",
               "name": "The Seed to Seed Garden"
+            },
+            {
+              "@type": "ListItem",
+              "position": 4,
+              "url": "https://www.scenexp.com/sunnyvalejenn/",
+              "name": "Sunnyvale Jenn Consulting"
             }
           ]
         },
@@ -364,6 +376,28 @@
                     aria-labelledby="small-business-tributes">
                     <h2 id="small-business-tributes">Small business tributes</h2>
                     <ul class="experience-grid">
+                        <li class="experience-card" data-slug="automan">
+                            <a href="/automan/">
+                                <!-- THE ONLY CARD ON THE PAGE THAT IS NOT ITS SCENE'S SOCIAL IMAGE.
+                                     og-automan.webp is the gold W on navy, which names the business
+                                     instantly in a message thread and reads as a broken image in a
+                                     grid of thirteen scene renders. The share preview keeps it, the
+                                     directory gets the room. tests/directory.test.mjs allows exactly
+                                     this split and holds the og:image to og-automan either way. -->
+                                <img src="/automan/assets/card-automan.webp?v=1" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A 3D dealership desk seen across the showroom floor: three figures sit around a dark wood table holding a deal sheet and a small yellow model car, a whiteboard behind them reads Today's schedule, 2:00 John Walker, and the glass frontage looks out on trucks parked in the lot.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">For a car buying advocate</p>
+                                    <h3>John Walker, The Auto Man</h3>
+                                    <p>Pull up to a dealership desk where John Walker is sitting on the
+                                        buyer's side of it. Twenty five years of arguing deals down and
+                                        more than 2,000 cars, in Baltimore or anywhere by Zoom. Tap
+                                        anyone at the desk to hear their side of it.</p>
+                                    <span class="experience-cta">Take a seat →</span>
+                                </div>
+                            </a>
+                        </li>
                         <li class="experience-card" data-slug="interstate">
                             <a href="/interstate/">
                                 <img src="/interstate/assets/og-interstate.webp" width="1200" height="630" loading="lazy"
@@ -390,6 +424,23 @@
                                     <p>Stroll a 3D backyard garden built for Seed to Seed, a home vegetable gardening
                                         company. Wander the raised beds, step inside the greenhouse, and meet the
                                         gardener.</p>
+                                    <span class="experience-cta">Step inside →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="sunnyvalejenn">
+                            <a href="/sunnyvalejenn/">
+                                <img src="/sunnyvalejenn/assets/og-sunnyvalejenn.webp?v=1" width="1200" height="630"
+                                    loading="lazy" decoding="async"
+                                    alt="A bright 3D home office: Jenn works at a light oak desk facing the doorway, the week's plan fills a whiteboard on one wall, a teal clock hangs above her monitor, and a sunny window looks out on a cedar fence and trees.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">For a small business operations consultant</p>
+                                    <h3>Sunnyvale Jenn Consulting</h3>
+                                    <p>Look in on the sunny home office of Sunnyvale Jenn Consulting,
+                                        built for a consultant who untangles the operations that busy
+                                        founders never find time for. Jenn is at her desk, the week's
+                                        plan is on the whiteboard, and the birds keep visiting the
+                                        fence.</p>
                                     <span class="experience-cta">Step inside →</span>
                                 </div>
                             </a>
@@ -502,9 +553,10 @@
                     </li>
                     <li class="audience-card">
                         <h3><a href="#small-business-tributes">Small business tributes</a></h3>
-                        <p>Real shops, rebuilt as places you can walk into. A tire shop on historic Railroad
-                            Ave with a car up on the lift, and a backyard vegetable garden with raised beds
-                            and a greenhouse to step inside.</p>
+                        <p>Real businesses, rebuilt as places you can visit. A dealership desk with a car
+                            buying advocate on the buyer's side of it, a tire shop on historic Railroad Ave
+                            with a car up on the lift, a backyard vegetable garden with a greenhouse, and a
+                            consultant's sunny home office.</p>
                     </li>
                     <li class="audience-card">
                         <h3><a href="#personal-tributes">Personal tributes</a></h3>

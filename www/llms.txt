@@ -14,7 +14,7 @@
 - [Contact](https://www.scenexp.com/contact.html): request a custom 3D experience built for someone you love or for your business.
 - [Contribute](https://www.scenexp.com/contribute.html): developer guide for building a new experience with the shared parts library and submitting it as a GitHub pull request. Covers the four interaction models (walkable first-person worlds with mobile joysticks, fixed-camera composed views with pan and zoom plus swipe and pinch, hands-off rides with play and pause, and piloted flight with a throttle and a look joystick) and the optional delight layers (discovery checklists, tap-to-talk prop dialogs, guided autopilot tours, and featured-business links).
 - [Privacy](https://www.scenexp.com/privacy.html): no accounts, no cookies, no third-party trackers, anonymized first-party usage counts only.
-- [Terms](https://www.scenexp.com/terms.html): plain-language terms of service covering site use, the MIT license and Three.js attribution, and the hosted Seed to Seed and Interstate Tire logo permissions.
+- [Terms](https://www.scenexp.com/terms.html): plain-language terms of service covering site use, the MIT license and Three.js attribution, and the hosted logo and likeness permissions for The Auto Man, Interstate Tire, Seed to Seed, and Sunnyvale Jenn Consulting.
 
 ## Experiences
 
@@ -32,10 +32,12 @@ Built for their own sake: games to play, worlds to wander, and simulations that 
 
 ### Small business tributes
 
-Walkable 3D worlds built for real small businesses, in place of another template website. Newest first. Anchor: https://www.scenexp.com/#small-business-tributes
+3D worlds built for real small businesses, in place of another template website. Some are walkable and some are a fixed view you look around from. Newest first. Anchor: https://www.scenexp.com/#small-business-tributes
 
+- [John Walker, The Auto Man](https://www.scenexp.com/automan/): a 3D visit to a car dealership desk where John Walker, The Auto Man, sits on the buyer's side of it. Built for a car buying and selling advocate in Baltimore, Maryland, who works for the buyer rather than the dealership, with twenty five years on the other side of that desk and more than 2,000 cars behind him. Free consultation by phone or Zoom, anywhere, with a 100% satisfaction guarantee and nothing owed if he cannot get the deal. Fixed viewpoint with swipe to look around and pinch to zoom, glowing markers over the people at the desk, and a card for each one. No welcome overlay: an arrival panel explains the service while the markers wait.
 - [The Interstate Tire Shop](https://www.scenexp.com/interstate/): a walkable 3D tire shop built for Interstate Tire in historic Cockeysville, Maryland, with a garage to explore and the 1892 Pennsylvania RR freight depot on Railroad Ave.
 - [The Seed to Seed Garden](https://www.scenexp.com/seedtoseed/): a walkable 3D backyard vegetable garden built for Seed to Seed, a home vegetable gardening company, with raised beds, a greenhouse, and a link to their services.
+- [Sunnyvale Jenn Consulting](https://www.scenexp.com/sunnyvalejenn/): a 3D visit to the sunny home office of Sunnyvale Jenn Consulting, built to honor Jenn, who builds the operations that busy founders do not have time to build. Jenn is at her desk, the week's plan fills a whiteboard, a teal clock hangs above her monitor, and birds come and go on the cedar fence outside the window. Fixed viewpoint with pan and zoom, a discovery checklist, and a guided tour of the room.
 
 ### Personal tributes
 

@@ -19,3 +19,31 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+---
+
+NOT COVERED BY THE LICENSE ABOVE
+
+The MIT license covers the code written for this project. It does not cover
+third-party assets or the trademarks and likenesses of the people and
+businesses these experiences honor. The full list, with the details, is in
+the "License, credits, and trademarks" section of README.md. In short:
+
+- www/lib/three.min.js is by the Three.js Authors and keeps its own license.
+- The Earth Defense planet and moon textures are by Solar System Scope, used
+  under CC BY 4.0. See www/earthdefense/assets/CREDITS.md.
+- The Interstate Tire, Seed to Seed, Sunnyvale Jenn Consulting, and The Auto
+  Man names, logos, and related graphics belong to their owners and appear
+  here by permission, as part of tribute experiences. Photographs of the
+  people these experiences honor belong to them as well.
+
+Most of that artwork is kept out of this repository through .gitignore. ONE
+TRADEMARK IS PRESENT IN THE SOURCE: John Walker's three-blade W. It is drawn
+as inline SVG path data in www/automan/index.html, again as the standalone
+www/automan/favicon.svg, and again on the social card at
+www/automan/assets/og-automan.webp. It is geometry rather than a loaded image,
+so it cannot be withheld. Copying this project's code does not grant any right
+to that mark. Please do not reuse it.
+
+Photographs of the people these experiences honor are never included here.
