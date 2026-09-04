@@ -3764,7 +3764,13 @@ function createCast() {
         customer: createCustomer(),
         dealer: createDealer()
     };
-    cast.john.anim = { mode: 'making', modeT: 0, dur: 8.5, glanceTo: -0.85 };
+    // The first look at his customer lands 8.5 seconds in, and every ten to
+    // fourteen seconds after that. The aim is solved from her seat rather
+    // than written down, so moving either of them moves his eyes.
+    cast.john.anim = {
+        mode: 'making', modeT: 0, dur: 8.5,
+        look: johnTurnAim(cast.john.yaw)
+    };
     cast.customer.anim = {
         mode: 'listening', modeT: 0, dur: 4.7,
         glanceTo: normalizeAngle(faceToward(LAYOUT.customer, LAYOUT.john) - cast.customer.yaw)
@@ -4326,11 +4332,97 @@ const TAP_EVERY = 3.2;
 const TAP_BURST = 0.9;
 const TAP_LIFT = 0.085;      // radians off the solved elbow bend
 
+/** HE TURNS AND LOOKS AT HIS CUSTOMER (M38, replacing M37's look at the
+ *  camera).
+ *
+ *  M37 aimed this beat at the VISITOR, on the reasoning that the camera
+ *  sits in the fourth seat at the desk. Steve's call reverses it: what a
+ *  man arguing your case does is turn to YOU, and the person he is arguing
+ *  for is in the room. So the beat stays and its target changes.
+ *
+ *  THE OLD GLANCE WAS NEVER REACHING HER, and that is the finding worth
+ *  keeping. It was hand set to -0.85 radians, 48.7 degrees, and she sits
+ *  86.6 degrees off his shoulder: he has been turning to a point in the
+ *  gap between his customer and the dealer this whole time, which is most
+ *  of why nobody watching ever read it as him looking at her.
+ *
+ *  HE STILL CANNOT REACH HER, and this is honest about that. 86.6 degrees
+ *  is past what a neck does, and the rest would have to come from the
+ *  WAIST, which on this rig carries the arms: a torso turn would swing his
+ *  pointing hand off the deal sheet it was solved onto, and that hand is
+ *  the whole subject of the scene. So he turns as far as a neck goes
+ *  (JOHN_NECK_MAX) and no further, which is what a person in his pose
+ *  actually does. It is 58 degrees against the old 49, aimed at her rather
+ *  than past her.
+ *
+ *  WHAT MAKES IT READ IS THE HOLD, not the angle. The old glance was a
+ *  plain half sine: it arrived and left in one motion and never rested, so
+ *  there was no moment at which he was LOOKING at anything. The camera
+ *  beat had a hold, and it was the one Steve noticed. The hold moves over
+ *  here, and it is a little longer than the camera's was, because that one
+ *  had six degrees of head lift helping it and this one has one and a half:
+ *  she is beside him at his own height, so there is almost nothing to lift.
+ *
+ *  EVERY GLANCE, not one in three. There is one beat now instead of two,
+ *  so it runs on the cadence the glance always had: a look about every ten
+ *  to fourteen seconds. Off entirely under prefers-reduced-motion, for
+ *  free, because updateShowroom returns before any of this runs. */
+const JOHN_TURN = { in: 0.5, hold: 1.05, out: 0.6 };
+const JOHN_TURN_DUR = JOHN_TURN.in + JOHN_TURN.hold + JOHN_TURN.out;
+
+/** As far as a seated man turns his head without turning his shoulders.
+ *  Comfortable range is about 60 degrees and this stops just inside it. */
+const JOHN_NECK_MAX = 1.02;
+
+/** Head centre in person-local space, from the shared rig: legs 0.75,
+ *  torso 0.55, a short neck and a 0.12 head. The same 1.50 the coach-mark
+ *  anchor's note is derived from, and the height his eyes are aimed from. */
+const HEAD_CENTRE_Y = 1.50;
+
+/** Where his customer is, from John's shoulders. Solved, not written down,
+ *  so moving either seat moves his eyes with it.
+ *
+ *  `to` is a neck YAW off his body, which faces the dealer, CLAMPED to
+ *  what a neck can do. `x` is a neck PITCH, and its sign is the part worth
+ *  stating: a positive rotation about x pitches the gaze DOWN (the waist's
+ *  own +0.30 is exactly his forward lean), so looking at a head below his
+ *  own is a small positive elevation, less the lean already applied. */
+function johnTurnAim(yaw) {
+    const her = LAYOUT.customer;
+    const hisHead = seatHeightY(LAYOUT.chairSeatTop, JOHN_SCALE) + HEAD_CENTRE_Y * JOHN_SCALE;
+    const herHead = seatHeightY(LAYOUT.chairSeatTop, CUSTOMER_SCALE.y)
+        + HEAD_CENTRE_Y * CUSTOMER_SCALE.y;
+    const reach = Math.hypot(her.x - LAYOUT.john.x, her.z - LAYOUT.john.z);
+    const want = normalizeAngle(faceToward(LAYOUT.john, her) - yaw);
+    return {
+        want,
+        to: Math.sign(want) * Math.min(Math.abs(want), JOHN_NECK_MAX),
+        x: -Math.atan2(herHead - hisHead, reach) - JOHN_LEAN
+    };
+}
+
+/** Ramp in, HOLD, ramp out.
+ *
+ *  The old glance was a plain half sine, which never rests at the far end:
+ *  it arrives and leaves in one motion, so there is no instant at which he
+ *  is looking at anything. A look AT somebody has to stop for a moment or
+ *  it reads as a flinch, and it has to leave slower than it arrives or it
+ *  reads as being caught looking. Smoothstepped at both ends, so neither
+ *  end snaps. */
+function johnTurnEnvelope(modeT) {
+    const smooth = (u) => u * u * (3 - 2 * u);
+    if (modeT <= 0) return 0;
+    if (modeT < JOHN_TURN.in) return smooth(modeT / JOHN_TURN.in);
+    if (modeT < JOHN_TURN.in + JOHN_TURN.hold) return 1;
+    const back = (modeT - JOHN_TURN.in - JOHN_TURN.hold) / JOHN_TURN.out;
+    return back >= 1 ? 0 : smooth(1 - back);
+}
+
 /** John: making his customer's case. The point is the resting state, not
  *  a gesture he breaks into, because that is what the scene is about. The
  *  finger taps the page a couple of times to land a sentence, his head
- *  moves a little as he talks, and now and then he turns to check his
- *  customer is with him.
+ *  moves a little as he talks, and every ten to fourteen seconds he turns
+ *  and looks at his customer for a moment (see JOHN_TURN above).
  *
  *  The tap only ever LIFTS. The pointing pose was solved to put the
  *  fingertip on the paper, so any tap that could go the other way would
@@ -4342,13 +4434,13 @@ function updateJohn(rig, deltaTime) {
     if (a.mode === 'making' && a.modeT >= a.dur) {
         a.mode = 'glancing';
         a.modeT = 0;
-    } else if (a.mode === 'glancing' && a.modeT >= 1.7) {
+    } else if (a.mode === 'glancing' && a.modeT >= JOHN_TURN_DUR) {
         a.mode = 'making';
         a.modeT = 0;
         a.dur = 7.5 + Math.random() * 4.5;
     }
 
-    const target = johnTargets(a.mode, a.modeT, _t, a.glanceTo);
+    const target = johnTargets(a.mode, a.modeT, _t, a.look);
     const point = rig.arms.find((entry) => entry.role === 'point');
     if (point) point.elbow.rotation.x = JOHN_POINT_ARM.elbow - target.lift;
     rig.neck.rotation.x = approach(rig.neck.rotation.x, target.neckX, 6, deltaTime);
@@ -4365,7 +4457,7 @@ function updateJohn(rig, deltaTime) {
  *  `lift` is always >= 0 by construction, which is the property that
  *  keeps his hand out of the desk: the pose puts it on the paper, so the
  *  tap has nowhere to go but up. */
-function johnTargets(mode, modeT, t, glanceTo) {
+function johnTargets(mode, modeT, t, look) {
     if (mode === 'making') {
         const phase = modeT % TAP_EVERY;
         const lift = phase < TAP_BURST
@@ -4377,14 +4469,16 @@ function johnTargets(mode, modeT, t, glanceTo) {
             neckY: Math.sin(t * 0.9) * 0.055
         };
     }
-    // The glance out and back on one envelope, so nothing snaps. His hand
-    // stays on the page: he looks at his customer, he does not stop
-    // making the point.
-    const envelope = Math.sin(Math.PI * Math.min(1, modeT / 1.7));
+    // The look at his customer: out, HELD, and back on one envelope, so
+    // nothing snaps at either end. His hand stays on the page throughout,
+    // because he has not stopped making the point, he has turned to see
+    // whether she is with him.
+    const aim = look || { to: 0, x: JOHN_NECK_X };
+    const e = johnTurnEnvelope(modeT);
     return {
         lift: 0,
-        neckX: JOHN_NECK_X + 0.05 * envelope,
-        neckY: glanceTo * envelope
+        neckX: JOHN_NECK_X + (aim.x - JOHN_NECK_X) * e,
+        neckY: aim.to * e
     };
 }
 
@@ -4599,6 +4693,8 @@ export const __test__ = {
     keyTopY, dealerShift, dealerLeanAt, dealerScreenGaze,
     dealerYaw, keyboardAt, screenAim, typeBob, drawDealerScreen,
     HIP_Y, NECK_Y, TAP_LIFT, TAP_EVERY, TAP_BURST,
+    JOHN_TURN, JOHN_TURN_DUR, JOHN_NECK_MAX, HEAD_CENTRE_Y,
+    johnTurnAim, johnTurnEnvelope,
     seatHeightY, faceToward, normalizeAngle, approach, stallStripeRun, stallStripeOffset, walkSpan,
     LEG_SPLAY,
     CLOUD_PUFFS, getCloudBank: () => cloudBank,

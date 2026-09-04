@@ -617,8 +617,40 @@
                 <a id="contact-call" class="piece-enter" href="">Call John</a>
                 <a id="contact-text" class="piece-cancel" href="">Send a text</a>
                 <a id="contact-email" class="piece-cancel" href="">Email John</a>
+                <!-- WHAT THE ACTIONS SAY BACK (M37). Empty until something
+                     is copied or shared, and cleared every time the card
+                     opens, so it is never stale.
+
+                     It exists because the three actions above are `tel:`,
+                     `sms:` and `mailto:`, and on a laptop those are
+                     unreliable: a visitor who clicks the Call action can see
+                     nothing happen at the exact moment they decided
+                     to act, and a laptop is where somebody lands when a
+                     friend sends them the link. On a non-touch device the
+                     number goes to the clipboard as well, and this line
+                     says so. The link is still followed either way, because
+                     plenty of desktops DO handle tel: through FaceTime or
+                     Teams. -->
+                <p id="contact-status" class="contact-status" role="status" aria-live="polite"></p>
                 <p id="contact-fallback" class="piece-subtitle" role="status" aria-live="polite"></p>
                 <p class="piece-subtitle contact-where">Baltimore, Maryland, or anywhere by Zoom. 100% satisfaction guarantee.</p>
+                <!-- THE OTHER THING A VISITOR CAN DO FOR JOHN (M37), and it
+                     is here rather than on the About card for one reason:
+                     this is the card somebody is looking at in the moment
+                     they decide NOT to call. "Not me, but I know someone"
+                     is the real alternative action, and until now the page
+                     offered no way to take it at all.
+
+                     A button, not a link: it opens the device's own share
+                     sheet where there is one and copies the address where
+                     there is not, and it has nowhere to go without
+                     JavaScript. Set as a quiet line of type rather than as
+                     a control, because a share button with an icon on it is
+                     the single fastest way to make a page like this read as
+                     marketing. -->
+                <p class="contact-share">
+                    <button id="contact-share" class="contact-share-link" type="button">Send this to someone who is car shopping</button>
+                </p>
                 <button class="piece-cancel" data-close>Back to the showroom</button>
                 <!-- The ownership note used to live at the foot of the
                      welcome overlay, which this page no longer has. It

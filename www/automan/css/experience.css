@@ -1383,6 +1383,66 @@ body .pan-controls.no-chrome.visible {
     outline-offset: 2px;
 }
 
+/* WHAT THE ACTIONS SAY BACK (M37). Empty and hidden until something is
+   copied or shared, so it costs the card nothing until it has something to
+   report, and it is set in the champagne rather than the body grey because
+   it is an ANSWER to a press rather than another piece of small print. */
+#nudge-modal .contact-status {
+    margin: 0.9rem 0 0;
+    font-size: 0.74rem;
+    line-height: 1.6;
+    letter-spacing: 0.03em;
+    color: var(--lux-gold);
+    /* A copied phone number is the one string in this card somebody may
+       need to read character by character, and it can be longer than the
+       column on a narrow phone. */
+    overflow-wrap: anywhere;
+}
+
+/* THE WAY TO PASS IT ON (M37).
+   A LINE OF TYPE, NOT A CONTROL, and that is the whole treatment brief. A
+   share button with an icon on it is the fastest way to make a page like
+   this read as marketing, and this card's one filled control is the Call
+   button (D25). So it is set exactly like the About card's flyer link: the
+   small tracked capitals the house uses for a secondary action, with a
+   hairline under it doing the work an underline does on a link.
+
+   Left aligned with the rest of the card's prose rather than centred,
+   because it is a sentence somebody reads before it is a thing somebody
+   presses. */
+#nudge-modal .contact-share {
+    margin: 1.15rem 0 0;
+}
+
+#nudge-modal .contact-share-link {
+    display: inline;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid rgba(219, 179, 106, 0.4);
+    background: none;
+    color: var(--lux-gold);
+    font-family: var(--lux-sans);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.7;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
+    -webkit-font-smoothing: antialiased;
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+#nudge-modal .contact-share-link:hover {
+    color: #f7e6c4;
+    border-bottom-color: var(--lux-gold);
+}
+
+#nudge-modal .contact-share-link:focus-visible {
+    outline: 2px solid var(--lux-gold);
+    outline-offset: 3px;
+}
+
 /* Where he works, under a rule. It carries its own class rather than
    being picked out by position: `:last-of-type` looked like it would find
    it and would have found nothing, because the last <p> in this card is

@@ -78,6 +78,7 @@ let dialogOpen = false;   // one dialog at a time; taps pause while it's up
 // once that story's card closes so the two never stack).
 let nudgeModal, nudgeKicker, nudgeTitle, nudgeMessage, nudgePortrait;
 let contactCall, contactText, contactEmail, contactFallback;
+let contactStatus, contactShare;
 let nudgeOpen = false;
 let nudgePending = false;
 let propClicks = 0;
@@ -129,11 +130,14 @@ async function init() {
     contactText = document.getElementById('contact-text');
     contactEmail = document.getElementById('contact-email');
     contactFallback = document.getElementById('contact-fallback');
+    contactStatus = document.getElementById('contact-status');
+    contactShare = document.getElementById('contact-share');
     posterModal = document.getElementById('help-modal');
     posterBtn = document.getElementById('help-btn');
     // Hidden until a card actually opens, so an empty status line never
     // takes up room in the card.
     setShown(contactFallback, false);
+    setShown(contactStatus, false);
 
     if (!canvas) return;
 
@@ -353,11 +357,17 @@ function setupEventListeners() {
     // of every prop story.)
 
     // Which of the three actions a visitor actually takes is the number
-    // that tells John whether any of this worked.
+    // that tells John whether any of this worked. On a desktop the action
+    // ALSO puts the address on the clipboard (see copyOnDesktop).
     [[contactCall, 'call'], [contactText, 'text'], [contactEmail, 'email']]
         .forEach(([el, action]) => {
-            if (el) el.addEventListener('click', () => track('contact-action', { action }), { signal });
+            if (!el) return;
+            el.addEventListener('click', () => {
+                track('contact-action', { action });
+                copyOnDesktop(action);
+            }, { signal });
         });
+    if (contactShare) contactShare.addEventListener('click', shareRoom, { signal });
     document.addEventListener('keydown', (event) => {
         if (event.code !== 'Escape') return;
         if (posterOpen) closePoster();
@@ -985,6 +995,98 @@ function warmRenderedFaces() {
     });
 }
 
+// ---- What the card says back, and the way out of it (M37) -------------------
+
+/** The card's own reply line. Empty hides it, so it never takes up room
+ *  before it has something to say. */
+function setStatus(text) {
+    if (!contactStatus) return;
+    contactStatus.textContent = text || '';
+    setShown(contactStatus, !!text);
+}
+
+/** Write to the clipboard, and never throw. Resolves to whether it worked.
+ *
+ *  navigator.clipboard needs a secure context, which production has and a
+ *  plain-http preview does not, and it can be refused by permission at any
+ *  moment. Both cases fall through to SHOWING the thing instead, which is
+ *  what the visitor actually needed. */
+function writeClipboard(text) {
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(text).then(() => true, () => false);
+        }
+    } catch (err) {
+        // A locked-down clipboard is not a reason to lose the number.
+    }
+    return Promise.resolve(false);
+}
+
+/** ON A DESKTOP THE ACTION ALSO GOES TO THE CLIPBOARD.
+ *
+ *  The three actions are `tel:`, `sms:` and `mailto:`, which are exactly
+ *  right on the phone this page was designed for and unreliable on a
+ *  laptop: some desktops hand a tel: to FaceTime or Teams and some do
+ *  nothing visible at all. A visitor who presses the Call action and sees
+ *  nothing has hit a dead end at the one moment that matters, and a
+ *  laptop is exactly where somebody lands when a friend sends them a link.
+ *
+ *  THE LINK IS NOT CANCELLED. A desktop that does handle tel: should still
+ *  get to dial; this runs alongside it, so the number is in hand either
+ *  way. And touch devices are left alone, because copying a number
+ *  somebody is one tap from dialling is noise. */
+function copyOnDesktop(action) {
+    if (state.isMobile || !contactStatus) return;
+    const contact = assembleContact();
+    if (!contact) return;
+    const what = action === 'email' ? contact.address : contact.display;
+    const label = action === 'email' ? 'email address' : 'number';
+    writeClipboard(what).then((ok) => {
+        setStatus(ok ? `Copied ${what} to your clipboard.` : `John's ${label} is ${what}.`);
+        track('contact-copy', { action, ok });
+    });
+}
+
+/** SEND THIS ROOM TO SOMEBODY.
+ *
+ *  The scene's second job is that a visitor passes it on, and until this
+ *  round nothing on the page served it at all. The device's own share
+ *  sheet where there is one, the clipboard where there is not, and a line
+ *  of type either way.
+ *
+ *  A CANCELLED SHEET IS NOT A FAILURE, and nothing is said on that path.
+ *  navigator.share rejects with an AbortError when somebody backs out,
+ *  which is most of the times it rejects, and it RESOLVES on dismissal on
+ *  some platforms, so there is no reliable way to tell a send from a
+ *  change of mind. The sheet is its own feedback. Thanking somebody who
+ *  cancelled would be worse than saying nothing.
+ *
+ *  The fragment is stripped, so a link that arrived with one is not passed
+ *  on carrying it. */
+function shareRoom() {
+    const url = window.location.href.split('#')[0];
+    if (typeof navigator.share === 'function') {
+        track('share', { how: 'sheet' });
+        try {
+            const opened = navigator.share({
+                title: 'John Walker, The Auto Man',
+                text: 'A 3D showroom, and the man who sits on the buyer’s side of the desk.',
+                url
+            });
+            if (opened && opened.catch) opened.catch(() => {});
+            return;
+        } catch (err) {
+            // No sheet after all. The clipboard below is the fallback.
+        }
+    }
+    track('share', { how: 'clipboard' });
+    writeClipboard(url).then((ok) => {
+        setStatus(ok
+            ? 'Link copied. Send it to anyone who is about to buy a car.'
+            : `Copy this link and send it on: ${url}`);
+    });
+}
+
 /** Open the contact card. `entry` says who asked for it, which picks the
  *  copy and is recorded so the log can tell which route actually works. */
 function openContactCard(entry) {
@@ -992,6 +1094,9 @@ function openContactCard(entry) {
     const copy = CONTACT_CARDS[entry] || CONTACT_CARDS.story;
     if (!dialogReturnFocus) dialogReturnFocus = document.activeElement;
 
+    // Whatever the last visit to this card said back, it is not true of
+    // this one.
+    setStatus('');
     setCardPortrait(entry);
     if (nudgeKicker) nudgeKicker.textContent = copy.kicker;
     if (nudgeTitle) nudgeTitle.textContent = copy.title;
