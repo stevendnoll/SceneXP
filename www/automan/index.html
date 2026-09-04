@@ -239,32 +239,34 @@
          while the only person on screen was a low-poly figure with two
          dots for eyes.
 
-         IT COSTS THE PANEL NO HEIGHT, which is the whole reason it can go
-         here. On the contact card the disc sits in the body above the Call
-         button and adds about a hundred and twenty pixels, which is
-         affordable on a card somebody chose to open. This panel arrives
-         uninvited over a live room and already covers a third of a phone
-         screen, so height here is the expensive dimension. Beside the name
-         and the lead it is not: those two lines stand about 61 pixels tall
-         together on a wide screen and the disc is 54, so the row is the
-         same height it always was.
+         IT SITS WITH HIS NAME AND NOTHING ELSE (M34). The row held the
+         name AND the lead in a column beside the disc for two rounds, and
+         Steve read the result as out of alignment. He was right, and the
+         first cause was a plain bug: a stray comment terminator in
+         experience.css had swallowed the `.intro-head` selector, so the
+         flex row was never applied at all and the disc was stacking above
+         the text. The second cause is the one worth keeping, because it is
+         a real design fault the bug was hiding: the lead is the one line
+         on this panel that has to land, and 13% off its measure broke it
+         to two lines on a wide screen. It is at the panel's full width
+         now, under a row that is the portrait and the name.
 
-         AND THE BODY KEEPS THE FULL MEASURE. Only the header sits beside
-         the portrait. Putting the whole block beside it would have taken
-         about 13% off every line of the paragraph and the footnote, which
-         is four or five extra lines of wrapping, and it would have cost
-         far more height than it saved.
+         IT STILL COSTS THE PANEL ALMOST NOTHING, which is the reason it
+         can be here at all. This panel arrives uninvited over a live room
+         and already covers a third of a phone screen, so height is the
+         expensive dimension. Against the stack it replaces it is about ten
+         pixels shorter on a phone, and on a wide screen it is the same
+         height with the lead back on one line.
+
+         AND THE NAME WRAPPING IS FREE. On a phone the tracked capitals run
+         to about 235px in a 223px row, so they take two lines, which come
+         to 34 pixels against a 46 pixel portrait. The row is the disc's
+         height either way, which is why the gold rule aligns to the FIRST
+         line rather than to the middle of the block.
 
          Same file as the contact card's disc, so it is one fetch and one
          treatment for his face. `alt` is empty because his name is the
-         very next thing in the markup, in real text.
-
-         Note for whoever reads the screenshot: the lead is a long line and
-         the portrait takes about 13% of its measure, so on a wide screen
-         it may now break to two lines depending on which serif the device
-         has. That is not a fault (it breaks well, after "buyer,"), but if
-         Steve wants it back on one line the lever is the panel's own
-         `width: min(94vw, 37rem)`. -->
+         very next thing in the markup, in real text. -->
     <div id="intro-card" class="intro-card coach-out">
         <!-- THE PANEL'S THREE CONTROLS (D40), and the only things on it that
              take pointer events. The surface itself stays
@@ -282,11 +284,9 @@
         <div class="intro-head">
             <img class="portrait-disc intro-portrait" src="assets/john-walker-avatar.webp"
                 width="256" height="256" decoding="async" alt="">
-            <div class="intro-head-text">
-                <p class="intro-kicker">John Walker, The Auto Man</p>
-                <p class="intro-lead">He works for the buyer, not the dealership.</p>
-            </div>
+            <p class="intro-kicker">John Walker, The Auto Man</p>
         </div>
+        <p class="intro-lead">He works for the buyer, not the dealership.</p>
         <p class="intro-body">Twenty five years inside the business and more than 2,000 cars,
             now spent on your side of the desk: the trade value, the price, the financing, and
             the coverage they add at the end. The first call is free, and if he cannot get you the

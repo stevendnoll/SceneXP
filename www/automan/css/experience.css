@@ -421,33 +421,35 @@ body .pan-controls.no-chrome.visible {
    the height it always was and the disc has air above and below it rather
    than setting the height itself.
 
-   ONLY THE HEADER IS IN THE ROW. The paragraph and the footnote stay at
-   the panel's full measure. Putting the whole block beside the portrait
-   would take about 13% off every line of both, which is four or five
-   extra lines of wrapping and far more height than the row ever saved.
+   ONLY THE NAME IS IN THE ROW, and that is M34's correction to D38. The
+   row used to hold the name AND the lead in a column beside the disc, and
+   the lead is the one line on this panel that has to land: at 13% off its
+   measure it broke to two lines on a wide screen, which cost more height
+   than the row ever saved and read worse. It sits at the panel's full
+   measure now, under a row that is the portrait and the name and nothing
+   else. Steve's own suggestion, and it is cheaper as well as better: about
+   ten pixels shorter than the stack on a phone, and the same height on a
+   desktop with the lead back on one line.
 
-   `align-items: center` rather than `flex-start`, because the lead can
-   break to two lines on a narrow screen and a disc pinned to the top of a
-   three-line column reads as a bullet rather than as a portrait. */
+   `align-items: center`, so the name is centred against the disc. The disc
+   is taller than the name at every size, which is what makes the name
+   WRAPPING free on a narrow screen: two lines of small capitals still fit
+   inside 3.4rem of portrait.
+
    PADDING ON THE RIGHT, because the close button floats over this row and
-   over nothing else. That button is 2.75rem square at 0.35rem from the
-   panel's right edge and the content is inset 1.4rem, so it reaches 1.7rem
-   into the text column: this is that plus a little air. Reserving the space
-   here rather than on the panel keeps the paragraph, the actions and the
-   footnote at the full measure, which is exactly what the contact card's
-   kicker does with the same problem. */
+   over nothing else (the disc is taller than the button, so the lead below
+   starts clear of it). The button is 2.75rem square at 0.35rem from the
+   panel's right edge and the content is inset 1.4rem on a wide screen and
+   1.05 on a phone, so it reaches 2.05rem into the row at its worst: this is
+   that plus air. Reserving it here rather than on the panel is what keeps
+   the lead, the paragraph, the actions and the footnote at full measure,
+   and it is what the contact card's kicker does with the same problem. */
 .intro-head {
     display: flex;
     align-items: center;
     gap: 1.05rem;
-    margin: 0 0 0.6rem;
-    padding-right: 2rem;
-}
-
-/* min-width: 0 or a long unbroken word in the lead would refuse to shrink
-   and push the portrait off the panel's left edge. */
-.intro-head-text {
-    min-width: 0;
+    margin: 0 0 0.55rem;
+    padding-right: 2.2rem;
 }
 
 /* It inherits the circle, the champagne hairline and the shadow from
@@ -474,17 +476,27 @@ body .pan-controls.no-chrome.visible {
    one line that matters, then the terms, then the mechanics. Each step
    down in size is a step down in how much it needs to be read. */
 /* The name, set the way a marque sets one: small, capitalised, and
-   TRACKED WIDE. At 0.62rem with a quarter of an em between the letters it
-   is barely bigger than the footnote and reads as the most expensive line
-   in the panel, which is the whole trick. The rule above it is the
-   brand mark a logo would otherwise be doing. */
+   TRACKED WIDE. At 0.78rem with better than a fifth of an em between the
+   letters it is barely bigger than the footnote and reads as the most
+   expensive line in the panel, which is the whole trick. The rule beside it
+   is the brand mark a logo would otherwise be doing.
+
+   No margin: it is the only text in the header row now (M34), and the row
+   carries the space under it.
+
+   min-width: 0 because it is a flex item inside a flex row, and without it
+   a nested flex container refuses to shrink below the width of its own
+   content, which would push the portrait off the panel's left edge on a
+   phone rather than wrapping the name. */
 .intro-kicker {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
+    min-width: 0;
     gap: 0.7rem;
-    margin: 0 0 0.75rem;
+    margin: 0;
     font-size: 0.78rem;
     font-weight: 600;
+    line-height: 1.5;
     letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--lux-gold);
@@ -495,22 +507,32 @@ body .pan-controls.no-chrome.visible {
    right: a 2rem hairline alone above a line of type has nothing to belong
    to. Beside the name it is unmistakably a device (the eyebrow rule every
    marque sets its small caps against) and it costs the panel a line of
-   height rather than gaining one. Flex, so it stays centred on the caps
-   however the name wraps. */
+   height rather than gaining one.
+
+   IT ALIGNS TO THE FIRST LINE, not to the middle of the block, which is the
+   same fix the contact card's kicker needed and for the same reason: the
+   name wraps to two lines on a phone now that it shares its row with the
+   portrait, and a rule centred on a two-line block sits in the gap between
+   them and reads as a stray mark again. Half a line box down, which is
+   computable because the line-height above is set rather than inherited:
+   0.78rem at 1.5 is a 1.17rem box, so half of it is 0.585. */
 .intro-kicker::before {
     content: '';
     flex: 0 0 auto;
     width: 1.75rem;
     height: 1px;
+    margin-top: 0.585rem;
     background: var(--lux-gold);
 }
 
 /* The one line that has to land, in the serif, at a LIGHT weight. Bold is
-   how a page shouts; size and a good face are how it does not have to. */
-/* No bottom margin: it is the last thing in .intro-head now, and the row
-   carries the space under it. */
+   how a page shouts; size and a good face are how it does not have to.
+   AT THE PANEL'S FULL MEASURE (M34): it spent one round in a column beside
+   the portrait, 13% narrower, which broke it to two lines on a wide screen.
+   The portrait's row is the name alone now, and this gets the whole width
+   back. */
 .intro-lead {
-    margin: 0;
+    margin: 0 0 0.55rem;
     font-family: var(--lux-display);
     font-size: 1.55rem;
     font-weight: 400;
@@ -657,25 +679,31 @@ body .pan-controls.no-chrome.visible {
         padding: 0.95rem 1.05rem 1rem;
     }
 
+    /* No margin here either: the header row carries the space. */
     .intro-kicker {
-        margin-bottom: 0.6rem;
         gap: 0.55rem;
         font-size: 0.7rem;
         letter-spacing: 0.18em;
     }
 
+    /* Half of 0.7rem at 1.5, for the reason on the desktop rule. THE NAME
+       DOES WRAP HERE: about 235px of tracked capitals into roughly 223px of
+       row, which is why the rule has to align to the first line. The wrap
+       costs the panel nothing, because two lines of this come to 34px
+       against a 46px portrait. */
     .intro-kicker::before {
         width: 1.3rem;
+        margin-top: 0.525rem;
     }
 
-    /* The header row is the tightest place on the panel on a phone, and
-       the lead is already two lines there, so the portrait comes down a
-       step and the gap with it. It stays a face rather than a bullet: at
-       2.9rem it is 46px, which is the same size the contact card's disc
-       drops to and about the floor for reading an expression. */
+    /* The header row is the tightest place on the panel on a phone, so the
+       portrait comes down a step and the gap with it. It stays a face
+       rather than a bullet: at 2.9rem it is 46px, which is the same size
+       the contact card's disc drops to and about the floor for reading an
+       expression. */
     .intro-head {
         gap: 0.85rem;
-        margin-bottom: 0.55rem;
+        margin-bottom: 0.5rem;
     }
 
     /* The two buttons have to share one line on a phone, and they only
@@ -712,6 +740,7 @@ body .pan-controls.no-chrome.visible {
     }
 
     .intro-lead {
+        margin-bottom: 0.5rem;
         font-size: 1.3rem;
     }
 
