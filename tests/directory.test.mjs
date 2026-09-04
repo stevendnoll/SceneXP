@@ -1,180 +1,89 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * Unit tests for www/js/directory.js — the live search over the home page's
- * static experience cards.
+ * Checks for the home page's experience directory.
  *
- * The script is an IIFE that registers a DOMContentLoaded listener on import,
- * so each test installs a capturing document stub first, imports a fresh
- * module instance, then fires the captured listener by hand and drives the
- * search box through its own captured 'input' listener.
+ * THERE IS NO DIRECTORY JAVASCRIPT ANY MORE. The page carried a live search box
+ * from the start and category filter chips for one day (2026-09-04), and both
+ * were removed: with a dozen scenes under three headings the grouping answers
+ * the question they answered, and on a phone they pushed the first card three
+ * hundred pixels below the fold. So these are all source-text checks over the
+ * shipped files, and that is the point of them. An experience listed in one of
+ * the site's four files and forgotten in the others, or a category renamed in
+ * four of the five places it is written out, is invisible in a browser and in a
+ * screenshot of any single part of the page.
  */
-import { jest } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// MUST MATCH THE CATALOG IN www/js/directory.js, IN ORDER. The module pairs
-// each catalog entry with a card looked up by slug, so an entry missing from
-// this fixture is an entry whose card comes back null, and the count in the
-// status line is taken straight from the catalog's length. Both assertions
-// below read that count, which is what makes a stale list here fail loudly
-// rather than quietly under-test the search.
-const SLUGS = ['dad', 'family', 'roqui', 'seedtoseed', 'interstate', 'steve', 'gavin', 'jamar', 'mandelbrot', 'earthdefense', 'highwater', 'garden'];
+const read = (...p) => readFileSync(join(process.cwd(), ...p), 'utf8');
+const home = read('www', 'index.html');
+const sitemap = read('www', 'sitemap.xml');
+const llms = read('www', 'llms.txt');
+const css = read('www', 'css', 'site.css');
 
-function makeDom({ withMarkup = true } = {}) {
-  const dom = {
-    listeners: {},
-    cards: {},
-    form: { hidden: true, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } },
-    input: { value: '', listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } },
-    status: { textContent: 'untouched' },
-    empty: { hidden: true },
-  };
-  SLUGS.forEach((slug) => { dom.cards[slug] = { hidden: false }; });
-  globalThis.document = {
-    addEventListener(type, fn) { dom.listeners[type] = fn; },
-    getElementById(id) {
-      if (!withMarkup) return null;
-      return {
-        'experience-search-form': dom.form,
-        'experience-search': dom.input,
-        'search-status': dom.status,
-        'search-empty': dom.empty,
-      }[id] ?? null;
-    },
-    querySelector(selector) {
-      const m = selector.match(/data-slug="([^"]+)"/);
-      return m ? dom.cards[m[1]] ?? null : null;
-    },
-  };
-  return dom;
-}
+// The category ids, in the order the groups appear on the page.
+const CATEGORY_IDS = ['worlds', 'business', 'personal'];
 
-// Import fresh and simulate the page load.
-async function load(dom) {
-  jest.resetModules();
-  await import('../www/js/directory.js');
-  dom.listeners.DOMContentLoaded();
-  return dom;
-}
+// Slug to category. Checked against the real markup below, so this cannot
+// drift into testing a grouping the site does not actually have.
+const CATEGORY_OF = {
+    dad: 'personal', family: 'personal', roqui: 'personal', gavin: 'personal', jamar: 'personal',
+    interstate: 'business', seedtoseed: 'business',
+    steve: 'worlds', mandelbrot: 'worlds', earthdefense: 'worlds', highwater: 'worlds', garden: 'worlds',
+};
 
-function search(dom, query) {
-  dom.input.value = query;
-  dom.input.listeners.input();
-}
+// THE MARKUP IS THE SOURCE OF TRUTH now that the catalog array is gone. Each
+// group section, its heading label, and the slugs of the cards inside it. A
+// group has no nested <section>, so the first closing tag is its own.
+const groups = [...home.matchAll(
+    /<section class="experience-group" data-category="(\w+)"[\s\S]*?<h2 id="([^"]+)">([^<]+)<\/h2>([\s\S]*?)<\/section>/g)]
+    .map((m) => ({
+        id: m[1],
+        anchor: m[2],
+        label: m[3],
+        slugs: [...m[4].matchAll(/experience-card" data-slug="([^"]+)"/g)].map((c) => c[1]),
+    }));
+const slugs = groups.flatMap((g) => g.slugs);
 
-const shownSlugs = (dom) => SLUGS.filter((slug) => !dom.cards[slug].hidden);
+describe('the fixtures above are the real directory', () => {
+    test('the groups are the three categories, in order', () => {
+        // Everything below leans on this. If it drifts, the rest quietly
+        // measures a page that does not exist.
+        expect(groups.map((g) => g.id)).toEqual(CATEGORY_IDS);
+    });
 
-afterEach(() => {
-  delete globalThis.document;
-});
+    test('every card is in the group the fixture puts it in', () => {
+        expect(Object.fromEntries(
+            groups.flatMap((g) => g.slugs.map((s) => [s, g.id]))))
+            .toEqual(CATEGORY_OF);
+    });
 
-test('reveals the search form (progressive enhancement)', async () => {
-  const dom = await load(makeDom());
-  expect(dom.form.hidden).toBe(false);
-});
-
-test('stays quiet on pages without the search markup', async () => {
-  const dom = makeDom({ withMarkup: false });
-  await expect(load(dom)).resolves.toBeDefined();
-  expect(dom.form.hidden).toBe(true);
-});
-
-test('filters cards live and reports the count politely', async () => {
-  const dom = await load(makeDom());
-  search(dom, 'zumba');
-  expect(shownSlugs(dom)).toEqual(['roqui']);
-  expect(dom.status.textContent).toBe(`1 of ${SLUGS.length} experiences shown`);
-  expect(dom.empty.hidden).toBe(true);
-});
-
-test('matching is case-insensitive, trims whitespace, and searches the tags', async () => {
-  const dom = await load(makeDom());
-  search(dom, '  PUTT  ');
-  expect(shownSlugs(dom)).toEqual(['family']);
-  // 'grow more food' only appears in the seedtoseed tag list.
-  search(dom, 'grow more food');
-  expect(shownSlugs(dom)).toEqual(['seedtoseed']);
-});
-
-test('no matches shows the empty message and a zero count', async () => {
-  const dom = await load(makeDom());
-  search(dom, 'xyzzy');
-  expect(shownSlugs(dom)).toEqual([]);
-  expect(dom.empty.hidden).toBe(false);
-  expect(dom.status.textContent).toBe(`0 of ${SLUGS.length} experiences shown`);
-});
-
-test('clearing the box restores every card and empties the status', async () => {
-  const dom = await load(makeDom());
-  search(dom, 'zumba');
-  search(dom, '');
-  expect(shownSlugs(dom)).toEqual(SLUGS);
-  expect(dom.empty.hidden).toBe(true);
-  expect(dom.status.textContent).toBe('');
-});
-
-test('the form never navigates (submit is prevented)', async () => {
-  const dom = await load(makeDom());
-  const event = { preventDefault: jest.fn() };
-  dom.form.listeners.submit(event);
-  expect(event.preventDefault).toHaveBeenCalled();
-});
-
-// ---- The garden's own way in (TASKS.md M6-5) --------------------------------
-
-test('the five words M6-5 names all find the Fractal Garden', async () => {
-  // These are not decoration. A visitor who half-remembers this scene
-  // remembers a word from it, not its title, and the catalog is the only place
-  // that association is written down.
-  const dom = await load(makeDom());
-  for (const word of ['tree', 'garden', 'fractal', 'seasons', 'snow']) {
-    search(dom, word);
-    expect(`${word}: ${shownSlugs(dom).includes('garden')}`).toBe(`${word}: true`);
-  }
-});
-
-test('the singular finds the plural, which is what a substring search buys', async () => {
-  // MATCHING IS `indexOf`, SO THE STORED FORM DECIDES WHAT ANSWERS. 'trees'
-  // answers both "tree" and "trees" while 'tree' answers only the first, and
-  // the same holds for 'seasons'. Storing the singular is the version of this
-  // that looks correct and quietly fails half the queries, so it is asserted
-  // in both directions rather than assumed.
-  const dom = await load(makeDom());
-  for (const word of ['tree', 'trees', 'season', 'seasons']) {
-    search(dom, word);
-    expect(`${word}: ${shownSlugs(dom).includes('garden')}`).toBe(`${word}: true`);
-  }
+    test('no group is empty and no card sits outside one', () => {
+        // An empty group ships a heading that only ever appears over blank
+        // space; a card outside every group is one nothing else here checks.
+        for (const g of groups) {
+            expect({ [g.label]: g.slugs.length > 0 }).toEqual({ [g.label]: true });
+        }
+        const all = [...home.matchAll(/experience-card" data-slug="([^"]+)"/g)].map((m) => m[1]);
+        expect(slugs.slice().sort()).toEqual(all.slice().sort());
+    });
 });
 
 // ---- One experience, four files ---------------------------------------------
 //
-// AN EXPERIENCE IS LISTED IN FOUR PLACES AND NOTHING HAS EVER CHECKED THAT THEY
-// AGREE. The catalog in directory.js, a static card in index.html, a sitemap
-// URL, and an llms.txt line. A card with no catalog entry cannot be searched
-// for, a catalog entry with no card searches a `null` and hides nothing, and a
-// missing sitemap or llms.txt line is invisible until somebody wonders why a
-// page never got indexed. All four are hand-edited, none of them near each
-// other, and this is the check that would have caught the omission.
+// AN EXPERIENCE IS LISTED IN FOUR PLACES AND NOTHING USED TO CHECK THAT THEY
+// AGREE. A static card in index.html, a sitemap URL, an llms.txt line, and the
+// JSON-LD in the head. A missing sitemap or llms.txt line is invisible until
+// somebody wonders why a page never got indexed. All four are hand-edited, none
+// of them near each other, and this is the check that would have caught the
+// omission.
 
-describe('every catalog entry is wired into the whole site', () => {
-    const read = (...p) => readFileSync(join(process.cwd(), ...p), 'utf8');
-    const catalog = read('www', 'js', 'directory.js');
-    const home = read('www', 'index.html');
-    const sitemap = read('www', 'sitemap.xml');
-    const llms = read('www', 'llms.txt');
-    const slugs = [...catalog.matchAll(/slug: '([^']+)'/g)].map((m) => m[1]);
-
-    test('the fixture above is the real catalog, in order', () => {
-        // The whole file leans on SLUGS being the truth. If it drifts, the
-        // counts in the status-line assertions quietly measure the wrong thing.
-        expect(slugs).toEqual(SLUGS);
-    });
-
-    test.each(slugs)('%s has a card, a sitemap URL, and an llms.txt line', (slug) => {
-        expect(home).toContain(`<li class="experience-card" data-slug="${slug}">`);
+describe('every card is wired into the whole site', () => {
+    test.each(slugs)('%s has a sitemap URL, an llms.txt line, and JSON-LD', (slug) => {
         expect(home).toContain(`<a href="/${slug}/">`);
         expect(sitemap).toContain(`<loc>https://www.scenexp.com/${slug}/</loc>`);
         expect(llms).toContain(`(https://www.scenexp.com/${slug}/)`);
+        expect(home).toContain(`"url": "https://www.scenexp.com/${slug}/"`);
     });
 
     test('the home page is never staler than the newest experience', () => {
@@ -211,30 +120,117 @@ describe('every catalog entry is wired into the whole site', () => {
         // its own noindex is gone and that no robots tag belongs here. That
         // note is the right thing to have written. A test that punishes a page
         // for explaining itself is a test that gets deleted.
-        const page = readFileSync(
-            join(process.cwd(), 'www', slug, 'index.html'), 'utf8')
-            .replace(/<!--[\s\S]*?-->/g, '');
+        const page = read('www', slug, 'index.html').replace(/<!--[\s\S]*?-->/g, '');
         expect(`${slug}: ${/<meta\s+name="robots"/i.test(page)}`).toBe(`${slug}: false`);
         expect(`${slug}: ${/noindex/i.test(page)}`).toBe(`${slug}: false`);
     });
+});
 
-    test('and no card exists that the catalog has never heard of', () => {
-        // The other direction, which is the one that leaves a card that cannot
-        // be filtered: it stays on screen through every search.
-        const carded = [...home.matchAll(/experience-card" data-slug="([^"]+)"/g)]
-            .map((m) => m[1]);
-        expect(carded.slice().sort()).toEqual(slugs.slice().sort());
+// ---- One taxonomy, five copies ----------------------------------------------
+//
+// THE CATEGORY NAME IS WRITTEN OUT FIVE TIMES and nothing shares it in code:
+// the group heading, the matching "What you will find here" card, the JSON-LD
+// name, the JSON-LD @id, and the llms.txt heading. There is no catalog array
+// left to hold it once, because every one of those has to be readable without
+// JavaScript. A rename that lands in four of the five is invisible in a
+// screenshot of any single part of the page.
+
+describe('the categories agree everywhere they are written down', () => {
+    test.each(groups)('$label has a heading, an anchor, a card, JSON-LD, and an llms.txt section',
+        ({ anchor, label }) => {
+            // The anchor is the label lowercased with spaces hyphenated, which
+            // is what makes every cross-reference below predictable.
+            expect(anchor).toBe(label.toLowerCase().replace(/ /g, '-'));
+            expect(home).toContain(`aria-labelledby="${anchor}"`);
+            // The "What you will find here" card, which is the same three names
+            // a second time and jumps to the group.
+            expect(home).toContain(`<h3><a href="#${anchor}">${label}</a></h3>`);
+            // The JSON-LD list for this category.
+            expect(home).toContain(`"@id": "https://www.scenexp.com/#${anchor}"`);
+            expect(home).toContain(`"name": "${label}"`);
+            // And llms.txt, which is the copy a model reads.
+            expect(llms).toContain(`### ${label}`);
+            expect(llms).toContain(`https://www.scenexp.com/#${anchor}`);
+        });
+
+    test('every listed experience appears under its category in llms.txt', () => {
+        // llms.txt is a flat file with no ids, so the check is positional: a
+        // scene has to fall between its own heading and the next one.
+        const sections = llms.split(/^### /m).slice(1);
+        expect(sections).toHaveLength(groups.length);
+        for (const [i, { label, slugs: mine }] of groups.entries()) {
+            expect(sections[i].startsWith(label)).toBe(true);
+            const listed = [...sections[i].matchAll(
+                /\(https:\/\/www\.scenexp\.com\/(\w+)\/\)/g)].map((m) => m[1]);
+            expect({ [label]: listed.slice().sort() })
+                .toEqual({ [label]: mine.slice().sort() });
+        }
+    });
+
+    test('every ItemList numbers its own entries 1..n, newest first', () => {
+        // Each category's list restarts at 1, and its order is the order of the
+        // cards in that group. Adding a scene means renumbering one list, which
+        // is exactly the hand edit that lands a second "position": 2.
+        const block = home.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+        expect(block).not.toBeNull();
+        const lists = JSON.parse(block[1])['@graph']
+            .filter((node) => node['@type'] === 'ItemList');
+        expect(lists.map((l) => l.name)).toEqual(groups.map((g) => g.label));
+        for (const [i, list] of lists.entries()) {
+            const positions = list.itemListElement.map((item) => item.position);
+            expect({ [list.name]: positions })
+                .toEqual({ [list.name]: positions.map((_, n) => n + 1) });
+            // AND THE LIST IS THE GROUP, IN THE SAME ORDER. Positions that run
+            // 1..n prove nothing on their own if the list names a different set
+            // of scenes, or the same ones in a different order.
+            const listed = list.itemListElement.map(
+                (item) => item.url.replace('https://www.scenexp.com/', '').replace('/', ''));
+            expect({ [list.name]: listed }).toEqual({ [list.name]: groups[i].slugs });
+        }
     });
 });
 
-test('the garden does not swallow another experience\'s search', async () => {
-  // A forty-term tag list is a big haystack, and the risk of one is that it
-  // starts answering questions that belong to somebody else.
-  const dom = await load(makeDom());
-  search(dom, 'zumba');
-  expect(shownSlugs(dom)).toEqual(['roqui']);
-  search(dom, 'tsunami');
-  expect(shownSlugs(dom)).toEqual(['highwater']);
-  search(dom, 'martian');
-  expect(shownSlugs(dom)).toEqual(['earthdefense']);
+// ---- The page is static again -----------------------------------------------
+
+describe('the search box and the filter chips are gone for good', () => {
+    // A HALF-REMOVAL IS THE FAILURE MODE HERE. Markup left behind after its
+    // script is deleted renders as an unstyled label and an inert text box that
+    // filters nothing, and CSS left behind is simply invisible. Neither shows
+    // up in a test that only reads what the page still does.
+    test.each([
+        'experience-search', 'search-status', 'search-empty', 'directory-controls',
+        'category-filter', 'category-chip', 'category-count', 'experience-group-note',
+    ])('%s appears in neither the markup nor the stylesheet', (name) => {
+        expect({ [name]: { html: home.includes(name), css: css.includes(name) } })
+            .toEqual({ [name]: { html: false, css: false } });
+    });
+
+    test('the home page loads no directory script', () => {
+        expect(home).not.toContain('directory.min.js');
+        // Only the two site-wide scripts remain, and both are still wired up.
+        expect(home).toContain('/js/theme.min.js');
+        expect(home).toContain('/js/nav.min.js');
+    });
+
+    test('nothing above the first card is progressive enhancement any more', () => {
+        // The section head runs straight into the first group. Anything `hidden`
+        // between them would be a control waiting for a script that no longer
+        // ships, which is a permanently invisible element.
+        const between = home.slice(
+            home.indexOf('</div>', home.indexOf('class="section-head"')),
+            home.indexOf('<section class="experience-group"'));
+        expect(between).not.toMatch(/\shidden(\s|>)/);
+    });
+});
+
+// ---- Heading levels ---------------------------------------------------------
+
+test('the outline runs h1, category h2, card h3 with no level skipped', () => {
+    // NO LEVEL MAY BE SKIPPED between the section's single h1, the category
+    // headings, and a card title. The cards were h2 before the grouping, and a
+    // card left behind at h2 reads as a sibling of the category it lives in.
+    expect([...home.matchAll(/<h1[ >]/g)]).toHaveLength(1);
+    expect(home).not.toMatch(/<div class="experience-card-body">[\s\S]{0,200}?<h2>/);
+    const titles = [...home.matchAll(/<h3>([^<]+)<\/h3>/g)].map((m) => m[1]);
+    expect(titles).toHaveLength(slugs.length);
 });

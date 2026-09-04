@@ -315,10 +315,25 @@ source of truth either way.
    automatically) and `npm test`. Please include an init test for your
    world, following the `tests/<experience>-init.test.mjs` pattern (see the
    Tests section above).
-6. **Add your world to the directory.** One card in `www/index.html`, one
-   entry in the catalog array in `www/js/directory.js`, and one URL in
-   `www/sitemap.xml`. Also please add a short description of your world
-   in the `www/llms.txt` file.
+6. **Add your world to the directory.** The directory is grouped into
+   categories, so start by choosing the one your world belongs to:
+   `worlds` (Worlds and games) for anything built for its own sake,
+   `business` (Small business tributes), or `personal` (Personal tributes).
+   Then add one card in `www/index.html`, at the top of that category's
+   group, and add your world at the top of that same category's JSON-LD
+   `ItemList` in the head of the same file, renumbering that list only.
+   The other two groups do not move. Finally, add one URL in
+   `www/sitemap.xml` and a short description under your category's heading
+   in `www/llms.txt`.
+
+   `tests/directory.test.mjs` checks all of that agrees, so if you put your
+   world in one place and forget another, the suite will tell you which.
+
+   There is no search box and no filter, so there is no catalog array to
+   update: the cards in `www/index.html` are the list. Both controls
+   existed and were removed on 2026-09-04, because a dozen scenes under
+   three headings are quicker to scan than to search, and on a phone the
+   controls pushed the first card below the fold.
 7. **If your world remembers anything, say so in the privacy policy.**
    `sessionStorage` needs nothing: it goes when the tab closes, and the
    policy already covers it. But anything you put in `localStorage` outlives

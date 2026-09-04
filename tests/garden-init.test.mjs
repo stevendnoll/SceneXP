@@ -1944,7 +1944,6 @@ describe('the species copy', () => {
     const FILES = [
         ['www', 'garden', 'index.html'],
         ['www', 'index.html'],
-        ['www', 'js', 'directory.js'],
         ['www', 'llms.txt']
     ];
     const read = (p) => readFileSync(join(process.cwd(), ...p), 'utf8');
@@ -2029,12 +2028,15 @@ describe('the species copy', () => {
         // forget: nothing breaks, the copy just describes a control that is not
         // there. Comments are allowed to say "slider", since the record of WHY
         // the disclosure went lives in one, so this reads the copy only.
+        // FILES lost www/js/directory.js on 2026-09-04 when the home page's
+        // live search was removed, and its `blurb:` line went with it. The home
+        // page's own card copy already said the same sentences, so the sweep
+        // still covers every place a visitor could be offered a slider.
         const visible = [
             ...[...read(FILES[0]).matchAll(/content="([^"]*)"/g)].map((m) => m[1]),
             ...[...read(FILES[0]).matchAll(/<p>([\s\S]*?)<\/p>/g)].map((m) => m[1]),
             ...[...read(FILES[1]).matchAll(/<p[^>]*>([\s\S]*?)<\/p>/g)].map((m) => m[1]),
-            ...[...read(FILES[2]).matchAll(/blurb: '([^']*)'/g)].map((m) => m[1]),
-            read(FILES[3])
+            read(FILES[2])
         ].join(' ');
         expect(visible).not.toMatch(/slider/i);
         expect(visible).not.toMatch(/shape your own/i);
