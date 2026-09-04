@@ -707,11 +707,13 @@ const PROP_CONTENT = {
             'Twenty five years on the other side of that desk is why. They already know what he is going to ask for, so they are getting it ready.'
         ]
     },
-    keyboard_keys: {
-        title: 'The Key Board',
+    // Replaced the key board at M35. A pegboard of tagged keys is a
+    // service department object, and this room sells expensive cars.
+    wallart: {
+        title: 'The Long Memory',
         lines: [
-            'Every key on the lot, tagged and hung. Somewhere on there is the one you drive home.',
-            'The trick is making sure the price on that tag is the price you should be paying.'
+            'A car somebody was proud of, hung where everyone who sits down can see it.',
+            'Twenty five years of them have come through rooms like this one, and John has seen what each was worth going in and coming out.'
         ]
     },
     coffeebar: {

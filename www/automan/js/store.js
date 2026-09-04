@@ -40,7 +40,7 @@
  * corner.
  *
  *   +=============== glass wall / the lot beyond ===============+
- *   |  [key board]          (DEALER)          [ sales board ]   |
+ *   |  [framed print]       (DEALER)          [ sales board ]   |
  *   |                 +-----------------+                       |
  *   |                 |[scrn][keys][ms] |                       |
  *   |                 | [PAPERS]  [car] |                       |
@@ -272,7 +272,21 @@ const LAYOUT = {
     //
     // Running north to south along the wall at x -3.65, facing +X.
     clock: { x: -3.70, y: 2.05, z: -0.20, rotY: Math.PI / 2, r: 0.17 },
-    keyBoard: { x: -3.66, y: 1.50, z: -3.40 },
+    // THE FRAMED PRINT, and it replaced a key board here at M35. Its
+    // position is unchanged and its position is the reason it had to go:
+    // measured from the eye this wall panel sits 2.0 degrees off the view
+    // axis, which is the OPTICAL CENTRE of the picture, and it is the
+    // deepest object in the room at 6.9m. A pegboard of twenty eight
+    // coloured key tags there was two faults at once. It was a service
+    // department object in a showroom selling expensive cars, which is
+    // Steve's note, and it was a grid of small hues at dead centre, which
+    // is the carnival D26 spent a whole round taking out of this room.
+    //
+    // Landscape, because the subject is a car. 0.95 by 0.62 at this range
+    // is about 115 by 84 pixels on a wide screen, so whatever is in it has
+    // to read as ONE thing: a filled silhouette against a lit ground, not a
+    // drawing with parts.
+    wallArt: { x: -3.66, y: 1.52, z: -3.40, w: 0.95, h: 0.62 },
     salesBoard: { x: -3.66, y: 1.60, z: -1.90, w: 1.40, h: 0.90 },
     // Centred between the vending machine and the plant, which is a
     // measurement rather than a look: the bar is 1.34 long, the machine's
@@ -1308,7 +1322,7 @@ export function initStore() {
     createDealerDesk();       // the sales desk itself
     createDeskItems();        // the deal sheet, the pages, the screen, the die-cast
     createDeskChairs();       // three chairs, aimed the way their sitters are
-    createFixtures();         // the sales board, key board, coffee bar, waiting area
+    createFixtures();         // the sales board, framed print, coffee bar, waiting area
     createCast();             // John, his customer, and the dealer
     createWallClock();        // real local time, on the west wall
     createShowroomLighting(); // the shared rig, reskinned as recessed panels
@@ -3000,46 +3014,263 @@ function createSalesBoard() {
     showroomGroup.add(registerOutdoorProp(board, 'salesboard'));
 }
 
-/** The key board: every key on the lot, tagged and hung. */
-function createKeyBoard() {
-    const K = LAYOUT.keyBoard;
+// ---- The framed print (M35) -------------------------------------------------
+//
+// The canvas the print is drawn on. 1.532:1, which is the frame's own
+// 0.95 by 0.62, so nothing is stretched. 512 wide is about four and a half
+// times what the frame covers on screen, which is enough for the mat's
+// edge to stay a crisp line rather than a grey band.
+const PRINT_W = 512;
+const PRINT_H = 334;
+// The mat, in canvas pixels. Wide enough that it reads as a mat (about
+// five pixels on screen at this range, which is what a mat looks like
+// across a room) and no wider, because every pixel of it is a pixel the
+// car does not get.
+const PRINT_MAT = 26;
+
+/** The car in the print, as DATA rather than as numbers inside the drawing
+ *  call, so verify-composition can measure it instead of restating it.
+ *
+ *  Everything here is in the image's own 460 by 282 coordinates, and every
+ *  pair is a point on the outline or a quadratic's control point. The
+ *  outline runs nose, over the bonnet, up the screen, along the roof, down
+ *  the fastback, over the deck, down the tail, and back along the sill with
+ *  an arch cut up into it at each axle.
+ *
+ *  THE ARCH RADIUS IS CAPPED BY THE BONNET, which is the one relationship
+ *  in here that is easy to get wrong and impossible to see at 85 pixels.
+ *  An arch is cut UP into the body from the sill, so its top has to stay
+ *  clear of the body's top edge AT THAT X, and the shallowest point on this
+ *  car is the bonnet over the front axle. The first draft had a 34 radius
+ *  against a body top four pixels lower than the arch reached, which would
+ *  have opened a hole through the bonnet. Checked now rather than eyeballed. */
+const PRINT_CAR = {
+    ground: 206,
+    axles: [120, 344],
+    tyre: 30,
+    sill: 170,                          // the body's underside
+    arch: 32,                           // two wider than the tyre, each side
+    nose: [42, 160],
+    noseCtrl: [40, 136],
+    noseTop: [58, 128],
+    bonnetCtrl: [130, 120],
+    screenBase: [204, 118],
+    roofFront: [240, 92],
+    roofCtrl: [273, 88],
+    roofRear: [306, 92],
+    backCtrl: [368, 102],
+    deckFront: [400, 128],
+    deckRear: [424, 136],
+    tailCtrl: [432, 148],
+    tail: [426, 160],
+    // The window band, and the two control points that curve its top and
+    // its rear. Every corner has to sit inside the body outline.
+    glass: [[214, 115], [245, 97], [303, 98], [364, 128]],
+    glassCtrl: [[273, 93], [345, 113]]
+};
+
+/** A monochrome print of a classic coupe, lit from above.
+ *
+ *  THE SILHOUETTE DOES ALL OF THE WORK, and that is a size decision rather
+ *  than a style one. The frame covers about 115 by 84 pixels from the
+ *  visitor's seat, so the car inside it is roughly 85 pixels long: at that
+ *  size an outline drawing is a tangle of grey lines, and a FILLED shape
+ *  against a light ground is a car. It is also what keeps this print
+ *  distinct from the outline car on the dealer's screen a few degrees away
+ *  in the same frame. Two line drawings of a car in one room would read as
+ *  one asset used twice.
+ *
+ *  A SIDE PROFILE, not the three-quarter view a photograph would have. A
+ *  three-quarter needs a windscreen, a bonnet and a flank to be separately
+ *  legible to read as anything at all, and none of them are at 85 pixels.
+ *  A profile is the shape everybody already knows.
+ *
+ *  THE LIGHT IS PAINTED IN. There is a picture light on the frame above,
+ *  and a real one would be a fourth light in a scene that carries three
+ *  plus a rig. So the fixture is metal that catches the ceiling grid, and
+ *  the POOL it throws is baked here: the mat and the image both fall off
+ *  from the top, which is what a lit picture actually looks like and what
+ *  no light at this distance could be trusted to produce.
+ *
+ *  It carries no year, no marque and no plate. It is a classic coupe, not
+ *  a specific one: a recognisable car would be somebody's trademark on a
+ *  wall in a scene that already carries one name with permission. */
+function drawFramedPrint() {
+    const canvas = makeCanvas(PRINT_W, PRINT_H);
+    const ctx = canvas.getContext('2d');
+    const M = PRINT_MAT;
+    const iw = PRINT_W - M * 2;         // the image inside the mat
+    const ih = PRINT_H - M * 2;
+
+    // The mat: warm off-white, brighter under the lamp.
+    const mat = ctx.createLinearGradient(0, 0, 0, PRINT_H);
+    mat.addColorStop(0, '#f2ece1');
+    mat.addColorStop(1, '#d9d3c8');
+    ctx.fillStyle = mat;
+    ctx.fillRect(0, 0, PRINT_W, PRINT_H);
+
+    // The image's ground: a studio sweep, light at the top where the lamp
+    // is and settling to a mid grey at the floor.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(M, M, iw, ih);
+    ctx.clip();
+    const sky = ctx.createLinearGradient(0, M, 0, M + ih);
+    sky.addColorStop(0, '#e8e2d6');
+    sky.addColorStop(0.55, '#c8c3bb');
+    sky.addColorStop(1, '#8f8b85');
+    ctx.fillStyle = sky;
+    ctx.fillRect(M, M, iw, ih);
+
+    // Everything below is in the image's own coordinates: 460 by 282.
+    ctx.translate(M, M);
+
+    // THE CAR, facing left, which is the way a profile is drawn. Every
+    // point comes from PRINT_CAR, so the checks measure the same numbers
+    // the drawing uses rather than a second copy of them.
+    const C = PRINT_CAR;
+    const INK = '#23262b';              // warm charcoal, not black
+
+    // The contact shadow first, so the car sits ON the ground rather than
+    // in front of it.
+    const shade = ctx.createRadialGradient(235, C.ground + 4, 24, 235, C.ground + 4, 215);
+    shade.addColorStop(0, 'rgba(40, 44, 52, 0.42)');
+    shade.addColorStop(1, 'rgba(40, 44, 52, 0)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, C.ground - 16, iw, 60);
+
+    ctx.beginPath();
+    ctx.moveTo(...C.nose);                                  // low rounded nose
+    ctx.quadraticCurveTo(...C.noseCtrl, ...C.noseTop);
+    // The long bonnet with a slight crown. This is the line that says
+    // "classic": it runs to almost half the car before the screen starts.
+    ctx.quadraticCurveTo(...C.bonnetCtrl, ...C.screenBase);
+    ctx.lineTo(...C.roofFront);                             // raked screen
+    ctx.quadraticCurveTo(...C.roofCtrl, ...C.roofRear);
+    // The fastback, which is the other half of the shape.
+    ctx.quadraticCurveTo(...C.backCtrl, ...C.deckFront);
+    ctx.lineTo(...C.deckRear);
+    ctx.quadraticCurveTo(...C.tailCtrl, ...C.tail);
+    ctx.lineTo(C.tail[0], C.sill - 4);
+    // Wheel arches cut UP into the sill, rather than a body sitting on top
+    // of two circles. Same rule and the same call as the dealer's screen
+    // car: a body with arches in it reads as a car at any size.
+    ctx.lineTo(C.axles[1] + C.arch, C.sill);
+    ctx.arc(C.axles[1], C.sill, C.arch, 0, Math.PI, true);
+    ctx.lineTo(C.axles[0] + C.arch, C.sill);
+    ctx.arc(C.axles[0], C.sill, C.arch, 0, Math.PI, true);
+    ctx.closePath();
+    ctx.fillStyle = INK;
+    ctx.fill();
+
+    // The glasshouse, a few steps lighter so the cabin separates from the
+    // body. Without it the whole car is one mass and reads as a wedge.
+    ctx.beginPath();
+    ctx.moveTo(...C.glass[0]);
+    ctx.lineTo(...C.glass[1]);
+    ctx.quadraticCurveTo(...C.glassCtrl[0], ...C.glass[2]);
+    ctx.quadraticCurveTo(...C.glassCtrl[1], ...C.glass[3]);
+    ctx.closePath();
+    ctx.fillStyle = '#6c727c';
+    ctx.fill();
+
+    // ONE highlight, down the shoulder, from the lamp above. Two would be
+    // a drawing and this is meant to be a photograph.
+    ctx.beginPath();
+    ctx.moveTo(66, 132);
+    ctx.quadraticCurveTo(135, 123, 200, 120);
+    ctx.strokeStyle = 'rgba(228, 224, 216, 0.5)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Wheels: a dark tyre with a bright rim inside it. The rim is the one
+    // piece of detail that survives at this size, and it is what stops the
+    // arches reading as two holes in the body.
+    C.axles.forEach((x) => {
+        [[C.tyre, '#1b1e22'], [C.tyre - 9, '#b9bcc0'], [C.tyre - 16, '#5c6068']]
+            .forEach(([r, fill]) => {
+                ctx.beginPath();
+                ctx.arc(x, C.ground - C.tyre, r, 0, Math.PI * 2);
+                ctx.fillStyle = fill;
+                ctx.fill();
+            });
+    });
+    ctx.restore();
+
+    // The mat's inner bevel, which is what makes it a mat and not a
+    // border: a bright edge on the lit side, a shadow on the other.
+    ctx.strokeStyle = 'rgba(255, 252, 246, 0.9)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(M - 1, M + ih + 1);
+    ctx.lineTo(M - 1, M - 1);
+    ctx.lineTo(M + iw + 1, M - 1);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(60, 56, 50, 0.35)';
+    ctx.beginPath();
+    ctx.moveTo(M + iw + 1, M - 1);
+    ctx.lineTo(M + iw + 1, M + ih + 1);
+    ctx.lineTo(M - 1, M + ih + 1);
+    ctx.stroke();
+
+    return new THREE.CanvasTexture(canvas);
+}
+
+/** The framed print on the west wall, and the picture light over it.
+ *
+ *  Three pieces: a dark frame, the print inset inside it, and a slim
+ *  brushed-metal lamp on an arm above. The lamp is not a light (see
+ *  drawFramedPrint) and it is not decoration either: it is the thing that
+ *  says the picture was hung deliberately rather than pinned up, and at
+ *  this distance it is a bright horizontal line above a dark rectangle,
+ *  which is exactly how a lit picture reads across a room. */
+function createWallArt() {
+    const A = LAYOUT.wallArt;
     const group = new THREE.Group();
-    group.name = 'keyBoard';
+    group.name = 'wallArt';
 
-    const panel = new THREE.Mesh(
-        new THREE.BoxGeometry(0.04, 0.86, 0.66),
-        new THREE.MeshStandardMaterial({ color: 0x7d6a52, roughness: 0.85 })
+    // The frame. 25mm of it shows all round the print, which is about
+    // three pixels on screen: enough to separate the mat from the wall.
+    const REVEAL = 0.025;
+    const frame = new THREE.Mesh(
+        new THREE.BoxGeometry(0.045, A.h, A.w),
+        new THREE.MeshStandardMaterial({ color: 0x2b2721, roughness: 0.45, metalness: 0.15 })
     );
-    group.add(panel);
+    frame.castShadow = true;
+    group.add(frame);
 
-    const hookMaterial = brushedMetal;
-    // Key tags. Gold stays (it is the brand accent and these are the one
-    // place in the room it belongs on something small); the signal blue
-    // and the red left with the rest of the carnival at M22.
-    const tagColors = [0xf0a51e, 0xdfe2e5, 0x2a3f5c, 0x5a5f66];
-    for (let row = 0; row < 4; row++) {
-        for (let col = 0; col < 7; col++) {
-            const z = -0.27 + col * 0.09;
-            const y = 0.32 - row * 0.20;
-            const hook = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.012, 0.012), hookMaterial);
-            hook.position.set(0.03, y, z);
-            group.add(hook);
-            // Skip a few, so the board reads as a working one rather than
-            // a full set nobody has touched.
-            if ((row * 7 + col) % 9 === 3) continue;
-            const tag = new THREE.Mesh(
-                new THREE.BoxGeometry(0.006, 0.075, 0.042),
-                new THREE.MeshStandardMaterial({
-                    color: tagColors[(row + col) % tagColors.length], roughness: 0.7
-                })
-            );
-            tag.position.set(0.042, y - 0.05, z);
-            group.add(tag);
-        }
-    }
+    // The print itself, sitting proud of the frame's face. A plane rather
+    // than a box: nothing ever sees its edge.
+    const print = new THREE.Mesh(
+        new THREE.PlaneGeometry(A.w - REVEAL * 2, A.h - REVEAL * 2),
+        new THREE.MeshStandardMaterial({ map: drawFramedPrint(), roughness: 0.85 })
+    );
+    // The wall faces +x and the plane is built in the xy plane, so a
+    // quarter turn about Y stands it up against the wall facing the room.
+    print.rotation.y = Math.PI / 2;
+    print.position.x = 0.024;
+    group.add(print);
 
-    group.position.set(K.x, K.y, K.z);
-    showroomGroup.add(registerOutdoorProp(group, 'keyboard_keys'));
+    // The picture light: a tube on two short arms, standing off the wall
+    // far enough to clear the frame's face.
+    const lamp = new THREE.Group();
+    const tube = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.022, 0.022, A.w * 0.52, 10),
+        brushedMetal
+    );
+    tube.rotation.x = Math.PI / 2;
+    tube.position.set(0.13, 0, 0);
+    lamp.add(tube);
+    [-1, 1].forEach((side) => {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.016, 0.016), brushedMetal);
+        arm.position.set(0.065, 0, side * A.w * 0.20);
+        lamp.add(arm);
+    });
+    lamp.position.y = A.h / 2 + 0.075;
+    group.add(lamp);
+
+    group.position.set(A.x, A.y, A.z);
+    showroomGroup.add(registerOutdoorProp(group, 'wallart'));
 }
 
 /** The coffee bar: free coffee, tiny cups, and a pot that has been on
@@ -3185,7 +3416,7 @@ function createVending() {
 /** Everything the showroom itself carries, as opposed to the desk. */
 function createFixtures() {
     createSalesBoard();
-    createKeyBoard();
+    createWallArt();
     createCoffeeBar();
     createWaitingArea();
     createBrochureRack();
@@ -4313,6 +4544,7 @@ export const __test__ = {
     getPassingCar: () => passingCar,
     PORTRAIT_PX, PORTRAIT_FOV, PORTRAIT_FACE_Y, PORTRAIT_HALF, PORTRAIT_NECK,
     portraitDistance,
+    PRINT_W, PRINT_H, PRINT_MAT, PRINT_CAR, drawFramedPrint,
     poseSeated, addElbow, addWaist, addNeck, findHairGroup,
     createDeskChair, createSucculent,
     getCast: () => cast
