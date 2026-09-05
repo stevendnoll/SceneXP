@@ -328,10 +328,21 @@
          filled control on this page is the Call button. -->
     <button id="intro-handle" class="intro-handle coach-out" type="button"
         aria-expanded="false" aria-controls="intro-card">
+        <!-- HIS FACE AND HIS NAME, in the order the panel's own header puts
+             them, so the collapsed state reads as a miniature of the thing it
+             collapsed from rather than a different object. Same file the panel
+             above already loaded, so it costs a cache hit and no request.
+
+             alt="" because the button's own text says his name a few pixels
+             later, and a described image here would have a screen reader read
+             "John Walker, The Auto Man" twice before saying it is a button.
+             The panel's portrait is decorative for the same reason. -->
+        <img class="portrait-disc intro-handle-portrait" src="assets/john-walker-avatar.webp"
+            width="256" height="256" decoding="async" alt="">
+        John Walker, The Auto Man
         <svg class="intro-handle-chevron" viewBox="0 0 12 8" aria-hidden="true">
             <path d="M 1 6.5 L 6 1.5 L 11 6.5" />
         </svg>
-        John Walker, The Auto Man
     </button>
 
     <div id="intro-card" class="intro-card coach-out" tabindex="-1">

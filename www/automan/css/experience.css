@@ -680,7 +680,10 @@ body .pan-controls.no-chrome.visible {
     max-width: 94vw;
     /* 44px, the same floor M39 put on the halos and the panel's controls. */
     min-height: 44px;
-    padding: 0 1.15rem;
+    /* Tighter on the left, where the portrait sits, than on the right, where
+       the chevron does. A disc reads as its own edge and wants less air than
+       a line of type. */
+    padding: 0 1.05rem 0 0.6rem;
     box-sizing: border-box;
     border: 1px solid rgba(219, 179, 106, 0.3);
     border-radius: 3px;
@@ -713,6 +716,30 @@ body .pan-controls.no-chrome.visible {
 .intro-handle:focus-visible {
     outline: 2px solid var(--lux-gold);
     outline-offset: 2px;
+}
+
+/* HIS FACE IN THE COLLAPSED BAR, sized by the pill rather than the other way
+   round. The handle's floor is 44px and it must not grow past it, so the disc
+   takes 1.65rem (26px) and leaves 9px of padding above and below.
+
+   That is small for a photograph and it is the right size anyway: this is an
+   affordance, not a portrait. At 26px a face reads as a FACE, which is the
+   whole job here (the room behind it is full of low-poly figures with two
+   dots for eyes, and a real one says a real person is on the other end of
+   this). The panel it opens carries the same picture at 3.4rem and the
+   contact card at 6rem, so nothing is being asked to carry a likeness at
+   this size.
+
+   The left padding comes in, because a disc needs less air beside it than a
+   line of tracked capitals does: at the full 1.15rem the pill looked as
+   though the portrait had been dropped into it. */
+.intro-handle-portrait {
+    flex: 0 0 auto;
+    width: 1.65rem;
+    height: 1.65rem;
+    /* The disc's own shadow is solved for a 96px circle on a card. At 26px on
+       a dark pill it is a smudge under the chin, so it comes off. */
+    box-shadow: none;
 }
 
 /* Stroked, not filled, unlike John's W a few pixels away: a chevron is a
@@ -773,10 +800,19 @@ body .pan-controls.no-chrome.visible {
        fits on a narrow screen without reaching the ellipsis. The 44px floor
        does NOT come down with them. */
     .intro-handle {
-        padding: 0 0.9rem;
+        padding: 0 0.85rem 0 0.5rem;
         gap: 0.5rem;
         font-size: 0.66rem;
         letter-spacing: 0.12em;
+    }
+
+    /* Down with the type, and the 44px floor above does NOT come with it.
+       Measured on the narrowest phone worth supporting: at 320px the pill
+       wants about 271px against the 300px that 94vw allows, so the name
+       still fits on one line without reaching the ellipsis. */
+    .intro-handle-portrait {
+        width: 1.5rem;
+        height: 1.5rem;
     }
 
     /* No margin here either: the header row carries the space. */
