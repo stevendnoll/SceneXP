@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
     <meta http-equiv="Content-Security-Policy"
@@ -81,6 +81,13 @@
 <body>
     <!-- Accessibility: jump straight to the section links without entering the 3D scene -->
     <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- The live page's heading. Screen-reader only: the room is the title
+         here, and a line of type across the top of it would be a caption on a
+         picture nobody asked to have captioned. The only other h1 on this page
+         is inside <noscript>, so without this one anybody navigating by
+         heading found nothing at all. -->
+    <h1 class="sr-only">Zumba with Roqui</h1>
 
     <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
          a plain-text intro and links to the classic site. -->
@@ -307,7 +314,7 @@
         </div>
     </div>
 
-    <canvas id="game-canvas" aria-label="A walkable 3D Zumba class led by Roqui"></canvas>
+    <canvas id="game-canvas" role="img" aria-label="A walkable 3D Zumba class led by Roqui"></canvas>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

@@ -326,6 +326,12 @@ source of truth either way.
    `www/sitemap.xml` and a short description under your category's heading
    in `www/llms.txt`.
 
+   One more file, and it is the one people miss because it is a test rather
+   than a page: add your slug and its category to the `CATEGORY_OF` map at
+   the top of `tests/directory.test.mjs`. That map is what holds the card
+   and the grouping together, so a world added correctly everywhere else
+   still fails the suite without it.
+
    `tests/directory.test.mjs` checks all of that agrees, so if you put your
    world in one place and forget another, the suite will tell you which.
 

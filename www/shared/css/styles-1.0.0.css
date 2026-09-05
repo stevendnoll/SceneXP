@@ -2278,6 +2278,28 @@ body {
     --gallery-accent: #3d5a80;
 }
 
+/* EVERY SCENE PAGE NEEDS A HEADING AND CANNOT SHOW ONE. A 3D experience is
+   a full-bleed canvas: a title printed across the room is the welcome card
+   these scenes have spent rounds removing. But the only h1 most of them had
+   was inside <noscript>, so anybody navigating by heading found nothing at
+   all on the live page, and screen reader users navigate by heading first.
+   An h1 with this class is the honest fix: announced, and not on screen.
+
+   Not `display: none` and not `visibility: hidden`, because both remove the
+   element from the accessibility tree, which would leave exactly the hole
+   this closes. The 1px clipped box is the standard technique for a reason. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 /* Skip link — visible only when focused (keyboard users) */
 .skip-link {
     position: fixed;

@@ -21,7 +21,7 @@
  */
 
 import { SVJ_CONFIG } from './config.min.js';
-import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
 import { initPortraitControls, updatePortraitControls, gestureClaimedTap } from '../../shared/js/pan-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getRenderer,
@@ -64,6 +64,41 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const _tolPointer = new THREE.Vector2();  // offset sample point for forgiving taps
 const TAP_TOLERANCE_PX = 26;              // matches the other experiences' tap radius
+
+// A CARD OPENS UNDER THE FINGER, and this is www/automan's decision D24
+// brought over here, where the same fault was live. The props stand in the
+// middle of the frame and a card opens centered, so the outbound link lands
+// about where Jenn's chair was: a tap on Jenn opened her card AND followed
+// the link to sunnyvalejenn.com, because the touch spawns a compatibility
+// mouse click a few milliseconds later and the card is already underneath
+// it. Two belts, because canceling the compatibility click is right and is
+// not a guarantee across browsers, and it does nothing about a second real
+// tap from somebody who did not see the card appear.
+//
+// For CARD_ARM_MS after any card opens, a pointer click inside it is
+// swallowed in the capture phase, before the link under it can act. Nobody
+// reads a card they have never seen and presses its one big button in under
+// half a second. Keyboard activation is exempt: Enter and Space arrive as a
+// click with `detail` 0, and somebody tabbing was never handed a card under
+// their finger.
+const CARD_ARM_MS = 450;
+let cardArmedAt = 0;
+
+function armCard() {
+    cardArmedAt = Date.now();
+}
+
+function swallowGhostTap(event) {
+    if (!cardArmedAt || Date.now() - cardArmedAt > CARD_ARM_MS) return;
+    if (!event.detail) return;              // keyboard, not a pointer
+    const target = event.target;
+    if (!target || typeof target.closest !== 'function') return;
+    if (!target.closest('#dialog-modal, #nudge-modal')) return;
+    cardArmedAt = 0;                        // one swallow per opening
+    event.preventDefault();
+    event.stopPropagation();
+    track('ghost-tap');
+}
 
 // ---- Initialization -------------------------------------------------------
 
@@ -173,6 +208,11 @@ function setupEventListeners() {
     cleanupController = new AbortController();
     const signal = cleanupController.signal;
 
+    // Make this page's aria-modal="true" true. Without it Tab walks out of
+    // an open card into the floating buttons behind the backdrop, while a
+    // screen reader is still announcing a dialog the visitor has left.
+    installCardFocusTrap({ signal });
+
     window.addEventListener('pagehide', cleanup);
     // Shared resize first (renderer size + pixel ratio), then re-derive the
     // fixed viewpoint for the new aspect (the portrait dolly above).
@@ -222,10 +262,21 @@ function setupEventListeners() {
         checkSceneTap(event.clientX, event.clientY);
     }, { signal });
     canvas.addEventListener('touchend', (event) => {
+        // Cancel the compatibility mouse click this touch would otherwise
+        // spawn. It is the first of the two belts described above
+        // swallowGhostTap: a card is about to open under this finger, and
+        // the click would land on whatever the card puts there. Canceling
+        // also stops the tap raycasting twice, through the click handler
+        // above and this one.
+        if (event.cancelable) event.preventDefault();
         if (gestureClaimedTap()) return;
         const touch = event.changedTouches[0];
         if (touch) checkSceneTap(touch.clientX, touch.clientY);
-    }, { signal });
+    }, { passive: false, signal });
+
+    // The last line of defense for that same tap. Capture phase on the
+    // document, so it runs before anything inside a card can act.
+    document.addEventListener('click', swallowGhostTap, { capture: true, signal });
 
     // The office dialog's close buttons and backdrop, the reach-out
     // invitation's, and Escape for whichever is up
@@ -313,16 +364,39 @@ function searchHit(targets, camera) {
     return null;
 }
 
+// How far behind whatever is genuinely under the finger a small prop may
+// sit and still claim the tap. A hand's width: enough to cover the mug
+// standing proud of the desk it rests on, nowhere near enough to let
+// something across the room answer through the monitor.
+const SMALL_PROP_REACH_M = 0.25;
+
 /** Nearest visible hit under the screen point: the small props get first
- *  refusal at full tolerance, then everything answers as usual. */
+ *  refusal at full tolerance, then everything answers as usual.
+ *
+ *  THAT FIRST REFUSAL IS DEPTH-CHECKED, and it has to be. The tolerance
+ *  search only asks whether a small prop is near the finger ON SCREEN,
+ *  never whether anything stands in front of it, so an unconditional
+ *  `small || everything` let an occluded prop answer through whatever was
+ *  covering it. Live here: the mug's proxy sits behind the monitor bezel
+ *  from the fixed eye, so taps on the lower bezel opened "The Tea Mug"
+ *  instead of "The Dashboard". Same rule and same constant as
+ *  www/automan. [[halo-tap-search-needs-a-depth-check]] */
 function pickSceneHit(clientX, clientY) {
     const camera = getCamera();
     if (!camera) return null;
     const targets = getOutdoorPropMeshes();
     if (!targets.length) return null;
     pointer.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+
+    raycaster.setFromCamera(pointer, camera);
+    const direct = firstVisibleHit(targets);
+
     const small = targets.filter(g => g.userData && SMALL_PROP_KINDS.includes(g.userData.propKind));
-    return (small.length && searchHit(small, camera)) || searchHit(targets, camera);
+    if (small.length) {
+        const near = searchHit(small, camera);
+        if (near && (!direct || near.distance <= direct.distance + SMALL_PROP_REACH_M)) return near;
+    }
+    return direct || searchHit(targets, camera);
 }
 
 /** Walk up from a hit mesh to the nearest prop root (tagged isProp by
@@ -491,8 +565,15 @@ function openPropDialog(kind) {
     propClicks += 1;
     if (propClicks % NUDGE_EVERY === 0) nudgePending = true;
     dialogReturnFocus = document.activeElement;
+    armCard();
     dialogModal.classList.remove('hidden');
-    const lead = (content.cta && dialogCta) ? dialogCta : dismiss;
+    // Focus the CARD, not the link. Landing on the CTA gave the tap that
+    // opened this card an already-focused outbound target, made a stray
+    // Enter leave the site, and put a screen reader into the action before
+    // it had read the story the action belongs to. The container carries
+    // tabindex="-1" so it can take focus without joining the tab order.
+    const lead = dialogModal.querySelector('.modal-container')
+        || dialogModal.querySelector('[data-close]');
     if (lead) lead.focus();
 }
 
@@ -526,9 +607,15 @@ function openNudgeModal() {
     if (!nudgeModal) return;
     nudgeOpen = true;
     track('contact-nudge');
+    armCard();
     nudgeModal.classList.remove('hidden');
-    const enter = nudgeModal.querySelector('.piece-enter');
-    if (enter) enter.focus();
+    // The card, not "Visit Sunnyvale Jenn Consulting". Same reasoning as
+    // the story card above, and it matters more here: this card arrives
+    // uninvited after every fourth story, so its outbound link is the one
+    // most likely to be under a finger that was aiming at the room.
+    const lead = nudgeModal.querySelector('.modal-container')
+        || nudgeModal.querySelector('[data-close]');
+    if (lead) lead.focus();
 }
 
 function closeNudgeModal() {
@@ -585,8 +672,10 @@ function animate() {
     // The day/night pass holds the sky at noon (the cycle is disabled in
     // config) but still paints the fixed-time sky and refreshes the
     // on-demand shadow map, so Jenn's wave and the birds keep their
-    // shadows honest. The background pass drifts the clouds past the
-    // window, and the interior pass keeps the room's rig balanced.
+    // shadows honest. The background pass runs the fence birds (the clouds
+    // it would also drift are off: they sit far above what this window can
+    // pass, see config), and the interior pass keeps the room's rig
+    // balanced.
     updateDayNightCycle(deltaTime);
     updateBackgroundAnimations(deltaTime);
     updateInteriorAmbientLight();

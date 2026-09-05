@@ -262,9 +262,14 @@ export const AUTOMAN_CONFIG = deepFreeze({
 
         // Native share sheet / clipboard copy. The shared URL itself is
         // derived from location at runtime.
+        // READ BY shareRoom(). It was not, for as long as both existed:
+        // main.js carried its own hardcoded copy and the two had already
+        // drifted apart, so editing the sentence here changed nothing on
+        // the page. No trailing colon, because the share sheet takes the
+        // URL as a field of its own and puts it where the platform wants.
         share: {
             title: 'John Walker, The Auto Man',
-            text: 'A tiny 3D dealership where John Walker is at the desk arguing the deal down for his customer, and the coffee is free:'
+            text: 'A tiny 3D dealership where John Walker is at the desk arguing the deal down for his customer, and the coffee is free.'
         },
 
         // The builder funnel. Root-relative on purpose.

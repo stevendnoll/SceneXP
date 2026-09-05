@@ -1145,9 +1145,12 @@ function shareRoom() {
     if (typeof navigator.share === 'function') {
         track('share', { how: 'sheet' });
         try {
+            // From CONFIG, which is where the comments have always said
+            // this copy lives. It was hardcoded here as well, and the two
+            // had drifted, so the sentence in config was dead text.
             const opened = navigator.share({
-                title: 'John Walker, The Auto Man',
-                text: 'A 3D showroom, and the man who sits on the buyer’s side of the desk.',
+                title: AUTOMAN_CONFIG.site.share.title,
+                text: AUTOMAN_CONFIG.site.share.text,
                 url
             });
             if (opened && opened.catch) opened.catch(() => {});
@@ -1207,9 +1210,21 @@ function openContactCard(kind) {
         // contact. (This is the cost of D3, recorded in the PRD.)
         [contactCall, contactText, contactEmail].forEach((el) => setShown(el, false));
         if (contactFallback) {
-            contactFallback.textContent = 'John’s direct line appears here over a secure '
-                + 'connection (https). In the meantime you can reach the developer through the '
-                + 'contact page and he will pass your message straight on.';
+            // A REAL LINK, not the words "contact page". This was prose set
+            // with textContent, so the one route out of a card with no
+            // contact details on it was a page the visitor had to go and
+            // find by hand, while the focus trap held them inside the card
+            // and the Home button sat behind the backdrop. The path has
+            // been in config for exactly this and was never read.
+            contactFallback.textContent = '';
+            const say = (t) => contactFallback.appendChild(document.createTextNode(t));
+            say('John’s direct line appears here over a secure connection '
+                + '(https). In the meantime you can ');
+            const out = document.createElement('a');
+            out.href = AUTOMAN_CONFIG.site.builder.contactPath;
+            out.textContent = 'reach the developer through the contact page';
+            contactFallback.appendChild(out);
+            say(' and he will pass your message straight on.');
         }
         setShown(contactFallback, true);
     }

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
     <meta http-equiv="Content-Security-Policy"
@@ -88,6 +88,13 @@
 <body>
     <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
     <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- The live page's heading. Screen-reader only: the room is the title
+         here, and a line of type across the top of it would be a caption on a
+         picture nobody asked to have captioned. The only other h1 on this page
+         is inside <noscript>, so without this one anybody navigating by
+         heading found nothing at all. -->
+    <h1 class="sr-only">Sunnyvale Jenn Consulting</h1>
 
     <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
          a plain-text intro and links to Jenn's site and the classic site. -->
@@ -177,7 +184,7 @@
          voice, telling the story of Jenn's practice one prop at a time. -->
     <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
         <div class="modal-backdrop" data-close></div>
-        <div class="modal-container piece-card">
+        <div class="modal-container piece-card" tabindex="-1">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
             <div class="piece-card-content">
                 <h2 id="dialog-title" class="piece-title">In the Office</h2>
@@ -195,7 +202,7 @@
          follows every fourth prop story, once that story's card closes. -->
     <div id="nudge-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="nudge-title">
         <div class="modal-backdrop" data-close></div>
-        <div class="modal-container piece-card complete-card">
+        <div class="modal-container piece-card complete-card" tabindex="-1">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
             <div class="piece-card-content">
                 <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few stops into the visit&nbsp; ★</p>
@@ -211,7 +218,7 @@
         </div>
     </div>
 
-    <canvas id="game-canvas" aria-label="A living 3D home office: Jenn works at a light oak desk facing the doorway, pausing now and then to wave hello, while sunlight pours through the window behind her and birds come and go on the cedar fence outside"></canvas>
+    <canvas id="game-canvas" role="img" aria-label="A living 3D home office: Jenn works at a light oak desk facing the doorway, pausing now and then to wave hello, while sunlight pours through the window behind her and birds come and go on the cedar fence outside"></canvas>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

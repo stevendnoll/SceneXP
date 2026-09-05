@@ -130,7 +130,7 @@ describe('the composition and config (pure)', () => {
     expect(Object.isFrozen(CFG.site.share)).toBe(true);
   });
 
-  test('the passive contract: no walking, a frozen noon sky, clouds on', () => {
+  test('the passive contract: no walking, a frozen noon sky', () => {
     // The third passive experience carries none of the walkable knobs.
     // Unlike the windowless bar it keeps the sky (the window frames it),
     // but frozen at noon: it is a bright morning in here at every hour.
@@ -140,8 +140,30 @@ describe('the composition and config (pure)', () => {
     expect(CFG.rootName).toBe('office');
     expect(CFG.dayNight.enabled).toBe(false);
     expect(CFG.comet.enabled).toBe(false);
-    expect(CFG.scenery.clouds).toBe(true);
     expect(CFG.zombiesAtNight).toBe(false);
+  });
+
+  test('the shared cloud layer is off, because this window cannot pass it', () => {
+    // THIS USED TO ASSERT `clouds === true`, which restated the config and
+    // proved nothing about the screen. The layer was enabled from the first
+    // commit and never rendered once: the window is the aperture, and it
+    // caps how high a ray can leave this room no matter where the camera
+    // aims, because elevation is constant along a straight ray.
+    //
+    // So the check is the GEOMETRY, and it fails if anybody turns the
+    // shared layer back on or moves the window somewhere it could work.
+    const R = T.LAYOUT.room;
+    const win = T.LAYOUT.window;
+    const eye = CFG.camera.position;
+    const ceilingDeg = Math.atan2(win.topY - eye.y, eye.z - R.minZ) * 180 / Math.PI;
+
+    // The shared bank's own lowest cloud, from www/shared/js/scenery-1.0.0.js.
+    const lowestCloud = { y: 45, z: -140 };
+    const cloudDeg = Math.atan2(lowestCloud.y - eye.y, eye.z - lowestCloud.z) * 180 / Math.PI;
+
+    expect(ceilingDeg).toBeLessThan(10);
+    expect(cloudDeg).toBeGreaterThan(ceilingDeg);
+    expect(CFG.scenery.clouds).toBe(false);
   });
 
   test('the building block mirrors the room for the shared lighting rig', () => {

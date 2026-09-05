@@ -30,8 +30,10 @@
  *
  * Unlike the windowless karaoke bar, this room has a window and the sky
  * matters: the day/night cycle is DISABLED so the shared sky holds at
- * noon, and it is a bright, sunny morning in here at every hour. Clouds
- * stay on and drift past the window.
+ * noon, and it is a bright, sunny morning in here at every hour. What the
+ * window actually shows is the fence, the trees and the birds, all of them
+ * close: the shared clouds sit far above the 8.8 degrees this opening can
+ * pass, so they are off. See the note beside `scenery` below.
  */
 
 function deepFreeze(obj) {
@@ -114,10 +116,25 @@ export const SVJ_CONFIG = deepFreeze({
     // Jenn's office at every hour.
     dayNight: { enabled: false },
 
-    // No comet (a quiet suburban sky), but the drifting clouds stay: the
-    // window frames them, and they keep the view alive between birds.
+    // No comet (a quiet suburban sky).
     comet: { enabled: false },
-    scenery: { clouds: true },
+
+    // CLOUDS OFF, because they were never once on screen. This read
+    // `clouds: true` from the first commit and the shared bank was drawing
+    // six meshes nobody could see. MEASURED: the window head is y 2.3 on
+    // the back wall at z -3.4 and the eye is (1.42, 2.3), so the steepest
+    // ray that can leave this room is atan(0.88 / 5.70) = 8.8 degrees. The
+    // shared bank sits at y 45-70, z -80 to -140, which is 17.0 to 36.6
+    // degrees. The nearest one is off by a factor of two, and elevation is
+    // constant along a straight ray, so pan, tilt (maxTilt 0.32) and zoom
+    // cannot reach it either: the APERTURE caps it, not the aim.
+    //
+    // If the sky through that glass should have clouds in it, the fix is a
+    // bank of this scene's own inside the 8.8 degree band, which is what
+    // www/automan did after hitting this same wall. Turning the shared one
+    // back on cannot work at any setting.
+    // [[a-feature-in-config-is-not-on-screen]]
+    scenery: { clouds: false },
 
     // A friendly office at every hour.
     zombiesAtNight: false,

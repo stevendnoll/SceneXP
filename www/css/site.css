@@ -448,13 +448,18 @@ a {
 }
 
 /* THE HEADER IS STICKY AND ABOUT 4rem TALL, so an anchor jump parks its target
-   underneath it and the visitor lands on a heading they cannot see. Every
-   in-page anchor on the site is listed here: the section the nav's Experiences
-   link points at, and the three category headings the "What you will find here"
-   cards point at. */
-#experiences,
-.experience-group h2 {
-    scroll-margin-top: 5rem;
+   underneath it and the visitor lands on a heading they cannot see.
+
+   ON THE SCROLL CONTAINER, NOT ON A LIST OF TARGETS. This was a list, and it
+   claimed in its own comment to name every in-page anchor on the site while
+   missing `#main`, which is the SKIP LINK's target on every page. So the one
+   control on the site that exists purely for keyboard and screen reader
+   visitors dropped them behind the header, onto the page's only h1. A list of
+   targets is a promise that has to be kept every time an anchor is added
+   anywhere; `scroll-padding-top` is the same rule stated once, and it covers
+   the pages this file serves that have no category headings at all. */
+html {
+    scroll-padding-top: 5rem;
 }
 
 .experience-group h2 {

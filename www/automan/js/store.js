@@ -1524,11 +1524,22 @@ function createCurtainWall() {
         side: THREE.DoubleSide
     });
 
+    // EVERY FRAME MEMBER CASTS. `createDaylightShaft` is the scene's only
+    // shadow-casting light and its whole argument is that "the pool arrives
+    // with the wall's own rhythm in it", which is why its map is 1024
+    // square. The piers cast, because they come from the shared
+    // `createWallSegment` which sets the flag; these did not, so the scene
+    // paid for the map and got a featureless wash. A mesh defaults to
+    // castShadow false, which is the quiet kind of wrong: nothing errors,
+    // the light works, and only the thing it was for is missing.
+    // [[a-feature-in-config-is-not-on-screen]] at the material level.
+
     // Base rail and head channel, running the full width.
     const rail = (h, y, name) => {
         const bar = new THREE.Mesh(new THREE.BoxGeometry(G.width, h, 0.1), frameMaterial);
         bar.position.set(G.x, y, innerN);
         bar.name = name;
+        bar.castShadow = true;
         wall.add(bar);
     };
     rail(G.baseRail, G.baseRail / 2, 'baseRail');
@@ -1546,6 +1557,7 @@ function createCurtainWall() {
         );
         mullion.position.set(firstMullionX + i * step, glassBottom + mullionH / 2, innerN);
         mullion.name = `mullion_${i}`;
+        mullion.castShadow = true;
         wall.add(mullion);
     }
 
@@ -1555,6 +1567,7 @@ function createCurtainWall() {
     );
     transom.position.set(G.x, G.transomY, innerN);
     transom.name = 'transom';
+    transom.castShadow = true;
     wall.add(transom);
 
     const lights = [
@@ -2670,8 +2683,17 @@ function createDeskItems() {
     die.rotation.y = -0.6;
     die.position.y = 0.012;
     model.add(die);
+    // MEASURED FROM THE CAR, not guessed. `createParkedCar` at tier 1 runs
+    // 1.94 across (the wheels stand proud of the 1.82 body) by 4.48 along
+    // (the lamps stand proud of the 4.40), so at 0.045 the model is 0.087
+    // by 0.202. The plinth was 0.15 by 0.09, which is those two numbers the
+    // wrong way round: it shares the car's -0.6 yaw, so its long side ran
+    // ACROSS the model. The car overhung 5.6cm at the nose and the tail,
+    // more than half the plinth's whole depth, while 3.1cm of bare plinth
+    // showed at each flank. About 23px of car floating off each end from
+    // the composed eye. 1.2cm of margin all round now.
     const plinth = new THREE.Mesh(
-        new THREE.BoxGeometry(0.15, 0.012, 0.09),
+        new THREE.BoxGeometry(0.11, 0.012, 0.225),
         new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.6, metalness: 0.2 })
     );
     plinth.position.y = 0.006;
@@ -3626,6 +3648,7 @@ const DEALER_NECK_REST = -0.276;
 // keys for a moment rather than pressing into them.
 const DEALER_TYPE_BOB = 0.055;
 const DEALER_SHIFT = 0.05;      // radians of ease-back at the top of the cycle
+const DEALER_SHIFT_PERIOD = 11; // seconds the ease-back itself takes, gap aside
 
 /** Build one seated figure and rig it: seat, waist, neck, elbows. Returns
  *  everything the animation pass needs, so updateShowroom never has to go
@@ -3995,20 +4018,17 @@ function shootPortrait(kind) {
     // takes the portrait angle.
     neck.set(PORTRAIT_NECK.x, PORTRAIT_NECK.y, PORTRAIT_NECK.z);
     waist.set(0, 0, 0);
-    portraitStage.add(rig.group);
-    rig.neck.add(portraitFace.at);
-    rig.neck.add(portraitFace.eye);
-    rig.group.updateMatrixWorld(true);
 
-    // Both anchors ride inside the figure's own scale and yaw, so this is
-    // the whole of the camera solve: stand where the eye anchor is, look at
-    // the face anchor.
-    portraitFace.at.getWorldPosition(_portraitA);
-    portraitFace.eye.getWorldPosition(_portraitB);
-    portraitCamera.position.copy(_portraitB);
-    portraitCamera.up.set(0, 1, 0);
-    portraitCamera.lookAt(_portraitA);
-
+    // EVERYTHING FROM HERE IS UNDONE IN THE `finally`, AND IT HAS TO BE.
+    // The figure is out of the showroom for the length of this block, with
+    // its lean zeroed, and a render call sits in the middle of it. The
+    // caller catches and swallows, on the reasoning that losing a portrait
+    // must never take the showroom down. Without the finally that reasoning
+    // inverted: a context loss during the warm-up shot, which fires 400ms
+    // after load on a phone, left the customer or the dealer parked in the
+    // studio for the rest of the visit. They vanish from the frame, and
+    // because their group is still in `outdoorProps` their halo and their
+    // tap target go on pointing at a figure that is not there.
     const hadScissor = renderer.getScissorTest();
     // The showroom's shadow map is refreshed ON DEMAND (autoUpdate is off
     // and the day/night pass raises this flag), so a render that lands on
@@ -4021,20 +4041,39 @@ function shootPortrait(kind) {
     const hadShadowUpdate = renderer.shadowMap.needsUpdate;
     renderer.getViewport(_portraitView);
     renderer.getScissor(_portraitScissor);
-    renderer.setViewport(0, 0, side, side);
-    renderer.setScissor(0, 0, side, side);
-    renderer.setScissorTest(true);
-    renderer.render(portraitStage, portraitCamera);
-    renderer.shadowMap.needsUpdate = hadShadowUpdate;
-    renderer.setScissorTest(hadScissor);
-    renderer.setViewport(_portraitView.x, _portraitView.y, _portraitView.z, _portraitView.w);
-    renderer.setScissor(_portraitScissor.x, _portraitScissor.y, _portraitScissor.z, _portraitScissor.w);
+    try {
+        portraitStage.add(rig.group);
+        rig.neck.add(portraitFace.at);
+        rig.neck.add(portraitFace.eye);
+        rig.group.updateMatrixWorld(true);
 
-    rig.neck.remove(portraitFace.at);
-    rig.neck.remove(portraitFace.eye);
-    neck.set(saved.neck.x, saved.neck.y, saved.neck.z);
-    waist.set(saved.waist.x, saved.waist.y, saved.waist.z);
-    parent.add(rig.group);
+        // Both anchors ride inside the figure's own scale and yaw, so this
+        // is the whole of the camera solve: stand where the eye anchor is,
+        // look at the face anchor.
+        portraitFace.at.getWorldPosition(_portraitA);
+        portraitFace.eye.getWorldPosition(_portraitB);
+        portraitCamera.position.copy(_portraitB);
+        portraitCamera.up.set(0, 1, 0);
+        portraitCamera.lookAt(_portraitA);
+
+        renderer.setViewport(0, 0, side, side);
+        renderer.setScissor(0, 0, side, side);
+        renderer.setScissorTest(true);
+        renderer.render(portraitStage, portraitCamera);
+    } finally {
+        // The renderer state goes back even if the render threw, because
+        // the next frame of the showroom draws through this viewport.
+        renderer.shadowMap.needsUpdate = hadShadowUpdate;
+        renderer.setScissorTest(hadScissor);
+        renderer.setViewport(_portraitView.x, _portraitView.y, _portraitView.z, _portraitView.w);
+        renderer.setScissor(_portraitScissor.x, _portraitScissor.y, _portraitScissor.z, _portraitScissor.w);
+
+        rig.neck.remove(portraitFace.at);
+        rig.neck.remove(portraitFace.eye);
+        neck.set(saved.neck.x, saved.neck.y, saved.neck.z);
+        waist.set(saved.waist.x, saved.waist.y, saved.waist.z);
+        parent.add(rig.group);
+    }
 
     // WebGL counts rows from the bottom of the buffer and a canvas counts
     // them from the top, so the square that was drawn at the origin is the
@@ -4579,7 +4618,8 @@ function updateDealer(rig, deltaTime) {
 
     // A shift in the chair, on its own slow clock so it never lines up
     // with the nods.
-    if (a.shiftT <= 0) a.shiftT = 11 + Math.random() * 9;
+    // One period of movement plus up to nine seconds of waiting before it.
+    if (a.shiftT <= 0) a.shiftT = DEALER_SHIFT_PERIOD + Math.random() * 9;
     rig.waist.rotation.x = approach(rig.waist.rotation.x, dealerLeanAt(a.shiftT), 3, deltaTime);
     rig.group.rotation.y = approach(
         rig.group.rotation.y, rig.yaw + dealerShift(a.shiftT) * 0.6, 3, deltaTime);
@@ -4587,9 +4627,25 @@ function updateDealer(rig, deltaTime) {
 
 /** The dealer's shift in the chair, at a point in its own slow cycle.
  *  Never negative, and read by both the lean and the sway so they cannot
- *  drift apart. */
+ *  drift apart.
+ *
+ *  A SHIFT IS A FIXED BEAT INSIDE A VARIABLE GAP, and it has to be written
+ *  that way because the period appeared here as a bare `11` while
+ *  `updateDealer` reset the clock to somewhere in 11 to 20. The two numbers
+ *  were the same value written twice and they only agreed on a draw of
+ *  exactly 11. On a draw of 20 the phase started at -5.14 radians, whose
+ *  sine is +0.92, so the lean JUMPED to 92% of full travel at the instant
+ *  it was supposed to be at rest, and the sine then swept nearly two turns
+ *  and played the ease-back twice. The invariant held throughout (the
+ *  clamp keeps it off the keyboard), so nothing broke: it simply never
+ *  played the beat it was written for.
+ *
+ *  Above the period he is waiting, which is what the random part of the
+ *  reset was always for. */
 function dealerShift(shiftT) {
-    return Math.max(0, Math.sin((1 - shiftT / 11) * Math.PI * 2)) * DEALER_SHIFT;
+    if (shiftT > DEALER_SHIFT_PERIOD) return 0;
+    return Math.max(0,
+        Math.sin((1 - shiftT / DEALER_SHIFT_PERIOD) * Math.PI * 2)) * DEALER_SHIFT;
 }
 
 /** His waist angle at that point, which is the whole reason the shift is a

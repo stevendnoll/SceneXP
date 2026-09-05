@@ -31,7 +31,7 @@
  */
 
 import { MANDELBROT_CONFIG } from './config.min.js';
-import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getRenderer,
     removeTestObjects, isTouchDevice
@@ -206,6 +206,11 @@ function updateLoadingStatus(message, progress) {
 function setupEventListeners() {
     cleanupController = new AbortController();
     const signal = cleanupController.signal;
+
+    // Make this page's aria-modal="true" true. Without it Tab walks out of
+    // an open card into the floating buttons behind the backdrop, while a
+    // screen reader is still announcing a dialog the visitor has left.
+    installCardFocusTrap({ signal });
 
     window.addEventListener('pagehide', cleanup);
     // Shared resize first (renderer size + pixel ratio), then re-derive the

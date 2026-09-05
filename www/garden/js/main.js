@@ -64,7 +64,7 @@ import {
     openLakeCard, closeLakeCard, isLakeOpen, getLakeCanvas, refreshLakeCard,
     syncTreeList, setTendPanelHidden, cardLines
 } from './ui.min.js';
-import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
 import {
     initPortraitControls, updatePortraitControls, gestureClaimedTap, resetPortraitAim,
     getPanAngle, getTiltAngle, setPanLimit
@@ -709,6 +709,11 @@ function noteStorageUnavailable() {
 function setupEventListeners() {
     cleanupController = new AbortController();
     const signal = cleanupController.signal;
+
+    // Make this page's aria-modal="true" true. Without it Tab walks out of
+    // an open card into the floating buttons behind the backdrop, while a
+    // screen reader is still announcing a dialog the visitor has left.
+    installCardFocusTrap({ signal });
 
     window.addEventListener('pagehide', cleanup);
     window.addEventListener('resize', onResize, { signal });

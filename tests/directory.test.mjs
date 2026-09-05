@@ -12,7 +12,7 @@
  * four of the five places it is written out, is invisible in a browser and in a
  * screenshot of any single part of the page.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 const read = (...p) => readFileSync(join(process.cwd(), ...p), 'utf8');
@@ -78,12 +78,50 @@ describe('the fixtures above are the real directory', () => {
 // of them near each other, and this is the check that would have caught the
 // omission.
 
+// THE LIST COMES OFF THE DISK, NOT OUT OF THE PAGE BEING CHECKED. `slugs` is
+// parsed from index.html, so a sweep driven by it can only ever ask "does
+// every card have a sitemap line", never "does every sitemap line have a
+// card". That direction existed while the list came from the independent
+// catalog in www/js/directory.js, and it left with that file: add a <loc> and
+// an llms.txt bullet while the card lands in a follow-up PR, and the site
+// advertises a URL the home page never links to, suite green.
+//
+// An experience is a folder under www/ with its own index.html, which is the
+// one description of the set that none of the four files can drift away from.
+const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
+const builtSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !IGNORED_DIRS.includes(d.name))
+    .map((d) => d.name)
+    .filter((name) => existsSync(join(process.cwd(), 'www', name, 'index.html')))
+    .filter((name) => readFileSync(join(process.cwd(), 'www', name, 'index.html'), 'utf8')
+        .includes('<canvas'))     // a scene page, not a directory blocker
+    .sort();
+
 describe('every card is wired into the whole site', () => {
     test.each(slugs)('%s has a sitemap URL, an llms.txt line, and JSON-LD', (slug) => {
         expect(home).toContain(`<a href="/${slug}/">`);
         expect(sitemap).toContain(`<loc>https://www.scenexp.com/${slug}/</loc>`);
         expect(llms).toContain(`(https://www.scenexp.com/${slug}/)`);
         expect(home).toContain(`"url": "https://www.scenexp.com/${slug}/"`);
+    });
+
+    test('and the four files list exactly the experiences that exist', () => {
+        // The other direction, and it has to be read OUT of each file
+        // rather than looked up in it. Filtering the built slugs by
+        // "is it mentioned here" only ever finds the ones that ARE built,
+        // so a <loc> for a world that does not exist sails through. Ask
+        // each file what it lists, then compare the two lists.
+        //
+        // A scene URL is one path segment with a trailing slash; the site's
+        // own pages (/privacy.html and friends, and the root) are not.
+        const sitemapSlugs = [...sitemap.matchAll(
+            /<loc>https:\/\/www\.scenexp\.com\/([^/<]+)\/<\/loc>/g)].map((m) => m[1]).sort();
+        const llmsSlugs = [...llms.matchAll(
+            /\(https:\/\/www\.scenexp\.com\/([^/)]+)\/\)/g)].map((m) => m[1]).sort();
+
+        expect([...slugs].sort()).toEqual(builtSlugs);
+        expect(sitemapSlugs).toEqual(builtSlugs);
+        expect(llmsSlugs).toEqual(builtSlugs);
     });
 
     test('the home page is never staler than the newest experience', () => {
