@@ -178,6 +178,16 @@ Each experience ships a 1200 by 630 card as `assets/og-<world>.webp` with a
 every experience in the collection. An earlier version of this note said the JPEG was what
 Twitter used, which was never true of any page in the repository.
 
+**One experience splits the two images, and it is worth knowing why before
+you copy it.** John Walker's `og:image` is `og-automan.webp`, his gold W on
+navy, because a wordmark is what names the business instantly in a message
+thread. His directory card is a different file, `card-automan.webp`, a render
+of the showroom, because that same wordmark reads as a broken image in a grid
+of fourteen scene renders. `tests/directory.test.mjs` allows exactly this
+split and still holds the `og:image` to `og-<world>.webp` either way. Split
+them only if your world has a mark worth leading a share with; otherwise one
+image doing both jobs is simpler and is what the other thirteen do.
+
 The JPEG is not referenced by any page. It ships for two reasons:
 
 - **The README embeds the JPEGs.** A README is rendered on hosts we do not

@@ -38,9 +38,11 @@ www/sunnyvalejenn/assets/svj-1.jpg
 # the mark is the intro panel's bullet and the info button's glyph rather than
 # a loaded image, so no rule here can hold the shape back. Once that is true,
 # withholding favicon.svg only costs the tab icon and the loading screen on a
-# fresh clone, and withholding og-automan.* only costs the home page card its
-# preview, while og-card.html and css/og-card.css ship the recipe that
-# regenerates it from favicon.svg anyway. None of that protects anything.
+# fresh clone, and withholding og-automan.* only costs the SHARE preview its
+# image (the home page card is a different file, card-automan.webp, a render
+# of the showroom rather than the mark), while og-card.html and
+# css/og-card.css ship the recipe that regenerates it from favicon.svg
+# anyway. None of that protects anything.
 #
 # So the mark ships and stays John's: our MIT license covers the code that
 # draws it and not the mark itself. That carve-out is stated in LICENSE, in

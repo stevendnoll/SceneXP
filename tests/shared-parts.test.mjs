@@ -186,10 +186,111 @@ test('every person variant builds (each flag walks its own branch)', () => {
   expect(people.createPerson({ bald: true, muscular: true })).toBeTruthy();
   expect(people.createPerson({ hasSuit: true, tieColor: 0x8c1d2c })).toBeTruthy();
   expect(people.createPerson({ dressShirt: true })).toBeTruthy();
-  // The rounded build, and the clamp that keeps an over-large radius from
-  // folding the shoulder outline back through itself.
+  // These two only prove the branches RUN. What they claimed to prove (the
+  // extruded torso keeps its box, and the clamp stops an over-large radius
+  // folding the outline through itself) is measured in the test below,
+  // because `createPerson` returns a Group and a Group is always truthy:
+  // delete the clamp entirely and both of these still pass.
   expect(people.createPerson({ shoulderRound: 0.4 })).toBeTruthy();
   expect(people.createPerson({ shoulderRound: 5, muscular: true })).toBeTruthy();
+});
+
+// MEASURED AGAINST REAL THREE, IN THE SUITE CI ACTUALLY RUNS. The test stub's
+// meshes have no vertices, so every Box3 taken against them is empty and no
+// assertion about a shape means anything (that is the standing rule for
+// anything extruded or bevelled). The measurements existed, in
+// specs/automan/verify-composition.mjs, and specs/ is git-ignored, so nothing
+// guarding the shared people library ran on a pull request.
+//
+// Loading the real build in a vm costs a few hundred milliseconds once.
+describe('the rounded torso, measured against real three', () => {
+  let RealTHREE;
+  let rounded;
+  let square;
+
+  beforeAll(async () => {
+    const vm = await import('node:vm');
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const sandbox = {
+      console: { ...console, warn() {} },   // r160 warns about the legacy build
+      document: { createElementNS: () => ({ style: {}, getContext: () => ({}) }) },
+      navigator: { userAgent: 'node' },
+    };
+    sandbox.window = sandbox;
+    sandbox.self = sandbox;
+    vm.createContext(sandbox);
+    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), sandbox);
+    RealTHREE = sandbox.THREE;
+
+    // createPerson reads the global THREE at CALL time, so the real build can
+    // be swapped in around these two calls. That means this measures the
+    // shipped builder rather than a copy of its arithmetic.
+    const stub = globalThis.THREE;
+    try {
+      globalThis.THREE = RealTHREE;
+      rounded = people.createPerson({ shoulderRound: 0.4, dressShirt: true });
+      square = people.createPerson({});
+    } finally {
+      globalThis.THREE = stub;
+    }
+  });
+
+  const torsoOf = (person, type) => person.children.find(
+    (c) => c.isMesh && c.geometry && c.geometry.type === type);
+
+  test('the rounded build really is a different geometry', () => {
+    expect(torsoOf(rounded, 'ExtrudeGeometry')).toBeDefined();
+    expect(torsoOf(square, 'BoxGeometry')).toBeDefined();
+  });
+
+  test('and it occupies exactly the box it replaced', () => {
+    // D19's whole promise: this is an opt-in OPTION, not a change. A rounded
+    // torso that grew or shrank would move every arm, collar and apron that
+    // was solved against the square one, in four shipped casts.
+    const size = (mesh) => new RealTHREE.Box3().setFromObject(mesh)
+      .getSize(new RealTHREE.Vector3());
+    const a = size(torsoOf(rounded, 'ExtrudeGeometry'));
+    const b = size(torsoOf(square, 'BoxGeometry'));
+    expect(a.x).toBeCloseTo(b.x, 2);
+    expect(a.y).toBeCloseTo(b.y, 2);
+    expect(a.z).toBeCloseTo(b.z, 2);
+  });
+
+  test('the clamp stops an over-large radius folding the outline through itself', () => {
+    const stub = globalThis.THREE;
+    let huge;
+    let control;
+    try {
+      globalThis.THREE = RealTHREE;
+      huge = people.createPerson({ shoulderRound: 5, muscular: true });
+      // THE CONTROL CARRIES THE SAME FLAGS. `muscular` widens the torso from
+      // 0.380 to 0.494, so comparing the rounded muscular build against a
+      // plain square one measures the muscle, not the clamp. That is how the
+      // first version of this test failed against correct code.
+      control = people.createPerson({ muscular: true });
+    } finally {
+      globalThis.THREE = stub;
+    }
+    const torso = torsoOf(huge, 'ExtrudeGeometry');
+    expect(torso).toBeDefined();
+
+    // THE ASSERTION IS THE SAME BOX, not "a plausible size". A radius of 5
+    // on a torso 0.38 wide gives a corner radius of 0.95 unclamped, which
+    // is far outside the profile: the arcs swing wide and the torso grows
+    // to several times its own width. A first draft of this test asked only
+    // that the result be finite and bigger than 0.1, which that mutant
+    // passes comfortably. What the clamp promises is that an over-large
+    // radius rounds the shoulders AWAY rather than changing the body's
+    // footprint, so the box is what has to be measured.
+    const s = new RealTHREE.Box3().setFromObject(torso)
+      .getSize(new RealTHREE.Vector3());
+    const sq = new RealTHREE.Box3().setFromObject(torsoOf(control, 'BoxGeometry'))
+      .getSize(new RealTHREE.Vector3());
+    expect(s.x).toBeCloseTo(sq.x, 2);
+    expect(s.y).toBeCloseTo(sq.y, 2);
+    expect(s.z).toBeCloseTo(sq.z, 2);
+  });
 });
 
 test('the people helpers behave (source parity with the min-bundle tests)', () => {
