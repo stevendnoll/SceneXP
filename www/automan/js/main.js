@@ -335,7 +335,9 @@ function setupEventListeners() {
         el.addEventListener('click', closeNudgeModal, { signal }));
     if (posterModal) posterModal.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closePoster, { signal }));
-    if (posterBtn) posterBtn.addEventListener('click', openPoster, { signal });
+    // Wrapped rather than passed straight through, because addEventListener
+    // hands the listener an Event and openPoster now takes a route name.
+    if (posterBtn) posterBtn.addEventListener('click', () => openPoster('corner'), { signal });
 
     // Every prop story leads on to the contact card. Closing the story
     // first keeps the two cards from ever being open together, and
@@ -572,15 +574,19 @@ function checkSceneTap(clientX, clientY) {
     // every-fourth-story cadence: somebody who taps John has already
     // asked, and offering again two props later would be nagging.
     if (kind && PERSON_KINDS.includes(kind)) {
-        // Reaching a person is the one thing the coaching was for, and
-        // it counts however they got here: the halo, or the figure
-        // underneath it, or a face they found on their own.
-        notePersonReached('tapped-person');
-        track('click-person', { who: kind });
+        // The arrival panel is read once, and somebody who has reached a
+        // person is past it however they got here: the halo, the figure
+        // underneath it, or a face they found on their own. The HALOS stay
+        // up regardless, which is D41.
+        retireIntro();
+        // NO SEPARATE click-person PING. It carried `who`, and the card
+        // this opens records the same name as `kind`, so it was a second
+        // request saying what the first already said. See the note on
+        // openContactCard.
         // If the card cannot open for any reason, fall through and at
         // least tell their story. That also keeps their PROP_CONTENT
         // entries reachable rather than leaving three blocks of copy
-        // nobody can ever see.
+        // nobody can ever see, and click-prop then names them instead.
         if (openContactCard(kind)) return;
         openPropDialog(kind);
         return;
@@ -1006,11 +1012,11 @@ let faceShowing = null;     // which face the card is currently wearing
  *  the picture lands. In practice it never does land late, because both are
  *  taken during the arrival, and the fallback if one cannot be taken at all
  *  is John's photograph rather than an empty circle. */
-function setCardPortrait(entry) {
+function setCardPortrait(kind) {
     if (!nudgePortrait) return;
-    faceShowing = entry;
+    faceShowing = kind;
 
-    const alt = RENDERED_FACES[entry];
+    const alt = RENDERED_FACES[kind];
     if (!alt) {
         nudgePortrait.src = JOHN_AVATAR;
         nudgePortrait.alt = 'John Walker';
@@ -1019,8 +1025,8 @@ function setCardPortrait(entry) {
     }
 
     nudgePortrait.alt = alt;
-    if (faceCache[entry]) {
-        nudgePortrait.src = faceCache[entry];
+    if (faceCache[kind]) {
+        nudgePortrait.src = faceCache[kind];
         nudgePortrait.style.visibility = '';
         return;
     }
@@ -1028,9 +1034,9 @@ function setCardPortrait(entry) {
     // `visibility`, not `display`: the disc keeps its box, so the card does
     // not reflow around it when the picture arrives.
     nudgePortrait.style.visibility = 'hidden';
-    requestPersonPortrait(entry, (url) => {
-        applyRenderedFace(entry, url);
-        if (faceShowing === entry) setCardPortrait(entry);
+    requestPersonPortrait(kind, (url) => {
+        applyRenderedFace(kind, url);
+        if (faceShowing === kind) setCardPortrait(kind);
     });
 }
 
@@ -1044,7 +1050,10 @@ function applyRenderedFace(kind, url) {
     // about reaching him either way.
     faceCache[kind] = JOHN_AVATAR;
     RENDERED_FACES[kind] = 'John Walker';
-    track('portrait-failed', { who: kind });
+    // `kind`, not `who`: it is the same value `click-prop` and `contact-open`
+    // report, and one idea under three attribute names is a log nobody can
+    // query in one go.
+    track('portrait-failed', { kind });
 }
 
 /** Take both portraits during the arrival, so a card that opens later
@@ -1105,7 +1114,13 @@ function copyOnDesktop(action) {
     const label = action === 'email' ? 'email address' : 'number';
     writeClipboard(what).then((ok) => {
         setStatus(ok ? `Copied ${what} to your clipboard.` : `John's ${label} is ${what}.`);
-        track('contact-copy', { action, ok });
+        // ONLY THE FAILURE IS WORTH A REQUEST. This runs alongside the
+        // contact-action ping for the same click, so on a desktop every
+        // call, text and email cost two hits and the second one almost
+        // always said the same thing: it worked. A silent clipboard is the
+        // interesting case, because the visitor is then reading the number
+        // off the status line instead.
+        if (!ok) track('contact-copy', { action, ok: false });
     });
 }
 
@@ -1149,17 +1164,23 @@ function shareRoom() {
     });
 }
 
-/** Open the contact card. `entry` says who asked for it, which picks the
- *  copy and is recorded so the log can tell which route actually works. */
-function openContactCard(entry) {
+/** Open the contact card. `kind` says who asked for it, which picks the copy
+ *  and is what the log records, under the same attribute name `click-prop`
+ *  uses for the same idea.
+ *
+ *  It carried a second argument, `via`, splitting a person into the halo
+ *  above them and the figure itself. That is gone (D48): it was a real
+ *  distinction and an unactionable one, because D41 settled that the halos
+ *  stay for the whole visit whichever number came back. */
+function openContactCard(kind) {
     if (!nudgeModal) return false;
-    const copy = CONTACT_CARDS[entry] || CONTACT_CARDS.story;
+    const copy = CONTACT_CARDS[kind] || CONTACT_CARDS.story;
     if (!dialogReturnFocus) dialogReturnFocus = document.activeElement;
 
     // Whatever the last visit to this card said back, it is not true of
     // this one.
     setStatus('');
-    setCardPortrait(entry);
+    setCardPortrait(kind);
     if (nudgeKicker) nudgeKicker.textContent = copy.kicker;
     if (nudgeTitle) nudgeTitle.textContent = copy.title;
     if (nudgeMessage) nudgeMessage.textContent = copy.lead;
@@ -1196,7 +1217,7 @@ function openContactCard(entry) {
     nudgeOpen = true;
     holdCoaching();
     armCard();
-    track('contact-open', { entry });
+    track('contact-open', { kind });
     nudgeModal.classList.remove('hidden');
     // Focus the CARD, not the call button. Landing on "Call" made a stray
     // Enter dial John, put a screen reader into the actions before it had
@@ -1233,7 +1254,7 @@ function closeNudgeModal() {
  *  account of the service, and a line out to his own printed flyer for
  *  anybody who wants it. Everything else in the scene is a stylization of
  *  him, and this is the one screen that is not. */
-function openPoster() {
+function openPoster(kind) {
     if (!posterModal || posterOpen) return;
     posterModal.classList.remove('hidden');
     // The card still scrolls on a short screen, so a second open has to
@@ -1243,7 +1264,11 @@ function openPoster() {
     posterOpen = true;
     holdCoaching();
     armCard();
-    track('poster-open');
+    // NOT defaulted to 'corner'. The corner button passes its own name, so
+    // a fallback of 'corner' would file a future route that forgot the
+    // argument under a control it never touched, which is the one thing a
+    // log must not do.
+    track('poster-open', { kind: kind || 'unknown' });
     const close = posterModal.querySelector('.modal-close');
     if (close) close.focus();
 }
@@ -1312,9 +1337,6 @@ let coachTimers = [];
 // until the arrival, and holdCoaching has to know the difference between
 // "not yet" and "parked behind a card".
 let coachRunning = false;
-// Whether anybody has reached John by any of the three routes. It no longer
-// changes what is on screen, only what is logged.
-let personReached = false;
 // The panel's own life, tracked apart from the halos' now that it carries
 // controls (D40). It may only be on screen between these two: after it has
 // arrived, and before it has been retired. holdCoaching brings the halos
@@ -1366,8 +1388,7 @@ function wireCoaching(signal) {
         // through to the prop story matches checkSceneTap, so a halo is
         // never a control that does nothing.
         el.addEventListener('click', () => {
-            track('click-person', { who: kind, via: 'coach' });
-            notePersonReached('tapped-mark');
+            retireIntro();
             if (!openContactCard(kind)) openPropDialog(kind);
         }, { signal });
     });
@@ -1401,18 +1422,21 @@ function wireCoaching(signal) {
 function wireIntroControls(signal) {
     const close = document.getElementById('intro-close');
     if (close) close.addEventListener('click', () => {
-        track('intro-dismiss', { via: 'close' });
+        // No `via`. The close button is the only thing that fires this, so
+        // the attribute was a constant riding along on every request.
+        track('intro-dismiss');
         retireIntro();
     }, { signal });
 
-    // Reaching John is the one thing the whole arrival is for, so this ends
-    // the coaching outright rather than only retiring the panel: somebody
-    // who pressed it does not need three rings pointing at the man they are
-    // already talking to.
+    // Reaching John is the one thing the whole arrival is for, so this
+    // retires the panel. It does NOT end the coaching: this comment used to
+    // say it ended it outright, which D41 stopped being true, because the
+    // halos are the page's permanent control rather than an arrival device.
     const talk = document.getElementById('intro-contact');
     if (talk) talk.addEventListener('click', () => {
-        track('intro-action', { action: 'contact' });
-        notePersonReached('intro-contact');
+        // No intro-action ping: the card's own kind is already 'button',
+        // which is this control and nothing else.
+        retireIntro();
         openContactCard('button');
     }, { signal });
 
@@ -1421,9 +1445,9 @@ function wireIntroControls(signal) {
     // him, and the marks are still the way to the three of them.
     const about = document.getElementById('intro-about');
     if (about) about.addEventListener('click', () => {
-        track('intro-action', { action: 'about' });
+        // No intro-action ping either: poster-open now names its own route.
         retireIntro();
-        openPoster();
+        openPoster('intro');
     }, { signal });
 }
 
@@ -1431,7 +1455,24 @@ function wireIntroControls(signal) {
  *
  *  Separate from fadeCoach because a fade is reversible and this is not:
  *  holdCoaching brings the halos back every time a card closes, and the
- *  panel must never come back with them. */
+ *  panel must never come back with them.
+ *
+ *  THE PANEL IS THE ONLY THING THAT RETIRES, and that is D41. Reaching a
+ *  person used to take the halos with it, on the argument that somebody who
+ *  has met John does not need three rings telling them where he is. True,
+ *  and beaten by who this page is for: a visitor who is not confident with a
+ *  computer, arriving from a link John sent, for whom the rings ARE the
+ *  interface. They are the only thing on screen saying the room can be
+ *  touched, so the moment they go the page is a picture again and a second
+ *  trip to the contact card has nothing pointing the way. The panel is
+ *  different because it is READ, once.
+ *
+ *  This is called from all three routes to a person as well as from the
+ *  timer, the close button and the first tap during arrival. It used to be
+ *  wrapped in `notePersonReached`, which existed to fire `coach-end` once
+ *  per visit with the route that worked; the event is gone, so the wrapper
+ *  went with it rather than staying on under a name for a thing it no
+ *  longer did. */
 function retireIntro() {
     introDone = true;
     fadeCoach(introEl);
@@ -1462,14 +1503,10 @@ function startCoaching() {
     coachTimers.push(setTimeout(retireIntro, INTRO_MS));
     coachTimers.push(setTimeout(() => {
         if (!coachRunning || !coachMarksEl) return;
+        // Slower pulse and nothing else. This used to ping `coach-calm`
+        // for a visitor who had sat half a minute without trying a halo,
+        // and it is a screen change now, not an event.
         coachMarksEl.classList.add('coach-calm');
-        // Not an ending, so it is not a coach-end reason. It is the
-        // honest measure of how many visitors sat half a minute with
-        // three rings over three heads and did not try one, WHICH IS WHY
-        // it is guarded: the halos no longer go away when somebody reaches
-        // John (D41), so this timer now runs for every visitor and would
-        // otherwise count the ones who did try.
-        if (!personReached) track('coach-calm');
     }, COACH_CALM_MS));
 }
 
@@ -1561,34 +1598,6 @@ function holdCoaching() {
     }
 }
 
-/** The visitor reached John. Three routes do this and all three are the
- *  same event: a tap on a halo, a tap on one of the three people by any
- *  other route, and the panel's own "Talk to John" button.
- *
- *  THIS NO LONGER TAKES THE HALOS AWAY, and that is D41. It used to be
- *  `endCoaching`, and the argument for ending them was that a visitor who
- *  has met John does not need three rings telling them where he is. True,
- *  and beaten by who this page is for: it is built for somebody who is not
- *  a confident computer user, arriving from a link, and for that visitor
- *  the rings ARE the interface. They are the only thing on screen that says
- *  the room can be touched at all, so the moment they go the page becomes a
- *  picture again, and a second visit to the contact card after reading a
- *  prop story has nothing pointing the way. They stay up for the whole
- *  visit now (Steve's call), quietening once at half a minute and no
- *  further.
- *
- *  What still happens here: the arrival panel retires, because THAT is read
- *  once, and the event is logged. `coach-end` keeps its name so the log
- *  reads continuously across the change; it marks the end of the coaching's
- *  JOB, which is the thing it always measured. */
-function notePersonReached(reason) {
-    retireIntro();
-    if (personReached) return;
-    personReached = true;
-    // Which of the three routes gets somebody to John is the honest
-    // measure of whether any of this worked.
-    track('coach-end', { reason });
-}
 
 /** Wire the outward-facing links from AUTOMAN_CONFIG.site. The Home
  *  button goes to the serving site's root in the same tab (Phase 5 rule:
