@@ -84,10 +84,23 @@ async function bootShowroom() {
   for (const id of ['dialog-modal', 'nudge-modal', 'help-modal']) {
     dom.el(id).classList.add('hidden');
   }
+  // Both coaching layers ship the hidden class in the markup and are revealed
+  // by taking it off, so a fade plays the same transition both ways rather
+  // than a keyframe that outranks the class trying to remove it. The stub
+  // auto-vivifies with an empty classList, so say so here.
+  for (const id of ['coach-marks', 'intro-card', 'intro-handle']) {
+    dom.el(id).classList.add('coach-out');
+  }
   dom.el('intro-card').getBoundingClientRect = () => PANEL_RECT;
   const main = await import('../www/automan/js/main.js');
   await flushAsync();
-  await jest.advanceTimersByTimeAsync(600);   // loading reveal + the 400ms warm-up
+  // PAST COACH_ARRIVE_MS (900), not just the loader. At 600 the panel had not
+  // arrived yet, and every test below still passed, because the stub
+  // auto-vivifies an element with an EMPTY classList: `introShowing()` asks
+  // whether `coach-out` is absent, and on a fixture that never had it, the
+  // answer is yes for free. The D31 tests were reading a panel that was
+  // never shown. Adding the class above is what exposed it.
+  await jest.advanceTimersByTimeAsync(1500);
   return main;
 }
 
@@ -235,6 +248,67 @@ describe('D31: the arrival is one decision in the room', () => {
     // and open whatever prop sat behind the text. The rect is asked instead.
     ray.hits = [propHit('john')];
     tap(dom.el('game-canvas'), OVER_PANEL.x, OVER_PANEL.y);
+    expect(dom.el('nudge-modal').classList.contains('hidden')).toBe(true);
+    expect(dom.el('intro-card').classList.contains('coach-out')).toBe(false);
+  });
+});
+
+describe('the arrival panel collapses to a handle instead of leaving', () => {
+  test('close collapses it, and the handle brings it back', async () => {
+    await bootShowroom();
+    const panel = dom.el('intro-card');
+    const handle = dom.el('intro-handle');
+
+    // Arrived: panel up, handle away.
+    expect(panel.classList.contains('coach-out')).toBe(false);
+    expect(handle.classList.contains('coach-out')).toBe(true);
+
+    tap(dom.el('intro-close'));
+    expect(panel.classList.contains('coach-out')).toBe(true);
+    expect(handle.classList.contains('coach-out')).toBe(false);
+    expect(handle.getAttribute('aria-expanded')).toBe('false');
+
+    // And back. This is the whole point: the panel is the only thing on the
+    // page that says what John does, so it has to stay reachable.
+    tap(handle);
+    expect(panel.classList.contains('coach-out')).toBe(false);
+    expect(handle.classList.contains('coach-out')).toBe(true);
+    expect(handle.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  test('the timer collapses it too, rather than ending it', async () => {
+    await bootShowroom();
+    await jest.advanceTimersByTimeAsync(35000);   // past INTRO_MS
+    expect(dom.el('intro-card').classList.contains('coach-out')).toBe(true);
+    expect(dom.el('intro-handle').classList.contains('coach-out')).toBe(false);
+  });
+
+  test('a card parks the handle and gives back the state it found', async () => {
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    const handle = dom.el('intro-handle');
+    expect(handle.classList.contains('coach-out')).toBe(false);
+
+    // Open a card: the handle is a real tab stop, so it must not sit behind
+    // the backdrop where a keyboard visitor reaches what nobody can see.
+    ray.hits = [propHit('john')];
+    tap(dom.el('game-canvas'));
+    expect(handle.classList.contains('coach-out')).toBe(true);
+
+    // Close it: the COLLAPSED state comes back, not the panel.
+    fire(dom.documentStub, 'keydown', { code: 'Escape', key: 'Escape' });
+    expect(handle.classList.contains('coach-out')).toBe(false);
+    expect(dom.el('intro-card').classList.contains('coach-out')).toBe(true);
+  });
+
+  test('expanding is not a scene tap', async () => {
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+
+    // The handle sits over the room. Pressing it must not also raycast a
+    // prop into a card underneath.
+    ray.hits = [propHit('john')];
+    tap(dom.el('intro-handle'));
     expect(dom.el('nudge-modal').classList.contains('hidden')).toBe(true);
     expect(dom.el('intro-card').classList.contains('coach-out')).toBe(false);
   });

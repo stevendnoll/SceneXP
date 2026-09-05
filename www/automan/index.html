@@ -129,7 +129,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=2">
-    <link rel="stylesheet" href="css/experience.min.css">
+    <link rel="stylesheet" href="css/experience.min.css?v=1">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -309,7 +309,32 @@
          Same file as the contact card's disc, so it is one fetch and one
          treatment for his face. `alt` is empty because his name is the
          very next thing in the markup, in real text. -->
-    <div id="intro-card" class="intro-card coach-out">
+    <!-- THE PANEL COLLAPSES TO THIS INSTEAD OF LEAVING. It used to retire for
+         good, on the reasoning that the panel is READ, once. True of the
+         reading and not of the room: this panel is the only thing on the page
+         that says what John does, and a visitor who looked at the showroom
+         first and then wondered what they were looking at had nothing left but
+         a monogram in the corner.
+
+         A PILL, NOT A BAR, and that is the whole shape of it. The panel's
+         surface stays `pointer-events: none` so a swipe starting on it still
+         looks around the room (D31), and a full-width handle would take
+         pointer events across the entire bottom of the screen, which on a
+         phone is exactly where a thumb starts a swipe. Shrink-wrapped to its
+         own text for the same reason the panel's two buttons are small.
+
+         A disclosure button, so `aria-expanded` says which state it is in and
+         `aria-controls` names what it opens. Hairline, because D25's one
+         filled control on this page is the Call button. -->
+    <button id="intro-handle" class="intro-handle coach-out" type="button"
+        aria-expanded="false" aria-controls="intro-card">
+        <svg class="intro-handle-chevron" viewBox="0 0 12 8" aria-hidden="true">
+            <path d="M 1 6.5 L 6 1.5 L 11 6.5" />
+        </svg>
+        John Walker, The Auto Man
+    </button>
+
+    <div id="intro-card" class="intro-card coach-out" tabindex="-1">
         <!-- THE PANEL'S THREE CONTROLS (D40), and the only things on it that
              take pointer events. The surface itself stays
              `pointer-events: none`, which is what lets a swipe start
@@ -322,7 +347,7 @@
              guess about. The glyph is the same multiply sign every card on
              this page closes with, and it is 44px square. -->
         <button id="intro-close" class="intro-close" type="button"
-            aria-label="Dismiss this introduction">&times;</button>
+            aria-label="Collapse this introduction">&times;</button>
         <div class="intro-head">
             <img class="portrait-disc intro-portrait" src="assets/john-walker-avatar.webp"
                 width="256" height="256" decoding="async" alt="">

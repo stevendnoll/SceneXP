@@ -653,15 +653,92 @@ body .pan-controls.no-chrome.visible {
    the fade has finished, which is what takes the halos out of the tab
    order and the accessibility tree rather than leaving three invisible
    buttons behind. */
+/* THE COLLAPSED PANEL. It sits exactly where the panel's own bottom edge
+   sits, so expanding reads as the same object growing upward out of the
+   same spot rather than a second thing appearing.
+
+   SHRINK-WRAPPED, NOT A BAR. The panel's surface is `pointer-events: none`
+   so a swipe starting on it still looks around the room, and this handle
+   HAS to take pointer events to be a button at all. A full-width bar would
+   therefore claim every swipe that starts along the bottom of the screen,
+   which on a phone is where a thumb naturally begins one. Sized to its own
+   text, it costs a pill's worth of that edge and no more.
+
+   Hairline and unfilled: D25's one filled control on this page is the Call
+   button on the contact card, and a lit pill sitting over the room all
+   visit would take that away from it. */
+.intro-handle {
+    position: fixed;
+    left: 50%;
+    bottom: 1.25rem;
+    bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 90;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.62rem;
+    max-width: 94vw;
+    /* 44px, the same floor M39 put on the halos and the panel's controls. */
+    min-height: 44px;
+    padding: 0 1.15rem;
+    box-sizing: border-box;
+    border: 1px solid rgba(219, 179, 106, 0.3);
+    border-radius: 3px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0) 100%),
+        linear-gradient(176deg, var(--lux-ink-lift) 0%, #0c1a2b 60%, var(--lux-ink-deep) 100%);
+    box-shadow:
+        inset 0 1px rgba(255, 255, 255, 0.16),
+        0 14px 30px rgba(0, 0, 0, 0.42);
+    color: var(--lux-gold);
+    font-family: var(--lux-sans);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    pointer-events: auto;
+    -webkit-font-smoothing: antialiased;
+    transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.intro-handle:hover {
+    border-color: var(--lux-gold);
+    color: #f7e6c4;
+}
+
+.intro-handle:focus-visible {
+    outline: 2px solid var(--lux-gold);
+    outline-offset: 2px;
+}
+
+/* Stroked, not filled, unlike John's W a few pixels away: a chevron is a
+   line by nature and a filled triangle at this size reads as a play button. */
+.intro-handle-chevron {
+    flex: 0 0 auto;
+    width: 0.75rem;
+    height: 0.5rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 .coach-marks,
-.intro-card {
+.intro-card,
+.intro-handle {
     opacity: 1;
     visibility: visible;
     transition: opacity 0.55s ease, visibility 0s;
 }
 
 .coach-marks.coach-out,
-.intro-card.coach-out {
+.intro-card.coach-out,
+.intro-handle.coach-out {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -689,6 +766,17 @@ body .pan-controls.no-chrome.visible {
 
     .intro-card {
         padding: 0.95rem 1.05rem 1rem;
+    }
+
+    /* The handle tracks the panel's own phone sizes: the same step down the
+       .intro-action buttons take, and tighter tracking so the name still
+       fits on a narrow screen without reaching the ellipsis. The 44px floor
+       does NOT come down with them. */
+    .intro-handle {
+        padding: 0 0.9rem;
+        gap: 0.5rem;
+        font-size: 0.66rem;
+        letter-spacing: 0.12em;
     }
 
     /* No margin here either: the header row carries the space. */
@@ -789,8 +877,10 @@ body .pan-controls.no-chrome.visible {
 
     .coach-marks,
     .intro-card,
+    .intro-handle,
     .coach-marks.coach-out,
-    .intro-card.coach-out {
+    .intro-card.coach-out,
+    .intro-handle.coach-out {
         transition: none;
     }
 

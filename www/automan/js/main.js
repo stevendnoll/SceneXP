@@ -526,6 +526,9 @@ function getPropRoot(obj) {
 }
 
 /** True while the arrival panel is still on screen. */
+/** Is the FULL panel on screen? The collapsed handle is not the panel: it
+ *  takes its own tap and never eats one meant for the room, so the D31
+ *  "arrival is one decision" rule below reads this and not the handle. */
 function introShowing() {
     return !!introEl && !introEl.classList.contains('coach-out');
 }
@@ -563,7 +566,7 @@ function checkSceneTap(clientX, clientY) {
     // one works normally.
     const arriving = introShowing();
     if (arriving && overIntro(clientX, clientY)) return;
-    if (arriving) retireIntro();
+    if (arriving) collapseIntro();
 
     const hit = pickSceneHit(clientX, clientY);
     const prop = hit && getPropRoot(hit.object);
@@ -578,7 +581,7 @@ function checkSceneTap(clientX, clientY) {
         // person is past it however they got here: the halo, the figure
         // underneath it, or a face they found on their own. The HALOS stay
         // up regardless, which is D41.
-        retireIntro();
+        collapseIntro();
         // NO SEPARATE click-person PING. It carried `who`, and the card
         // this opens records the same name as `kind`, so it was a second
         // request saying what the first already said. See the note on
@@ -1345,6 +1348,7 @@ const _coachPoint = new THREE.Vector3();
 
 let coachMarksEl = null;
 let introEl = null;
+let introHandle = null;
 let coachMarks = [];            // [{ el, kind, anchor }] once the cast exists
 let coachTimers = [];
 // Set once the coaching has started, and NEVER cleared: the halos hold for
@@ -1353,11 +1357,18 @@ let coachTimers = [];
 // "not yet" and "parked behind a card".
 let coachRunning = false;
 // The panel's own life, tracked apart from the halos' now that it carries
-// controls (D40). It may only be on screen between these two: after it has
-// arrived, and before it has been retired. holdCoaching brings the halos
-// back when a card closes, and the panel must never come back with them.
+// controls (D40). Nothing is on screen before it has arrived; after that it
+// is EITHER the full panel or the collapsed handle, never both and never
+// neither, except while a card is up and holdCoaching parks the pair.
+//
+// `introOpen` REPLACES a one-way `introDone`. The panel used to leave for
+// good, and the argument was that it is read once. That is true of the
+// reading and false about the room: this is the only thing on the page that
+// says what John does, so somebody who looked at the showroom first and then
+// wondered what they were looking at had a monogram in the corner and
+// nothing else. It collapses now, and the handle brings it back.
 let introArrived = false;
-let introDone = false;
+let introOpen = false;
 
 /** Resolve the coaching elements, fit the copy to the input device, and
  *  wire the halos. Called from setupEventListeners, so it runs before the
@@ -1365,6 +1376,7 @@ let introDone = false;
 function wireCoaching(signal) {
     coachMarksEl = document.getElementById('coach-marks');
     introEl = document.getElementById('intro-card');
+    introHandle = document.getElementById('intro-handle');
     if (!coachMarksEl) return;
 
     // "Click" is wrong on a phone and "Tap" is wrong on a desktop, and
@@ -1403,7 +1415,7 @@ function wireCoaching(signal) {
         // through to the prop story matches checkSceneTap, so a halo is
         // never a control that does nothing.
         el.addEventListener('click', () => {
-            retireIntro();
+            collapseIntro();
             if (!openContactCard(kind)) openPropDialog(kind);
         }, { signal });
     });
@@ -1438,10 +1450,19 @@ function wireIntroControls(signal) {
     const close = document.getElementById('intro-close');
     if (close) close.addEventListener('click', () => {
         // No `via`. The close button is the only thing that fires this, so
-        // the attribute was a constant riding along on every request.
+        // the attribute was a constant riding along on every request. The
+        // name stays `intro-dismiss` though the panel now collapses rather
+        // than leaving, because the thing it measures is unchanged: somebody
+        // read the panel and asked for the room back.
         track('intro-dismiss');
-        retireIntro();
+        collapseIntro();
     }, { signal });
+
+    // THE HANDLE, which is the panel's way back. Everything else in this
+    // function sends the visitor somewhere; this one just returns the copy
+    // they dismissed, so it is the one control here that does not need the
+    // arrival to still be running.
+    if (introHandle) introHandle.addEventListener('click', expandIntro, { signal });
 
     // Reaching John is the one thing the whole arrival is for, so this
     // retires the panel. It does NOT end the coaching: this comment used to
@@ -1451,7 +1472,7 @@ function wireIntroControls(signal) {
     if (talk) talk.addEventListener('click', () => {
         // No intro-action ping: the card's own kind is already 'button',
         // which is this control and nothing else.
-        retireIntro();
+        collapseIntro();
         openContactCard('button');
     }, { signal });
 
@@ -1461,36 +1482,59 @@ function wireIntroControls(signal) {
     const about = document.getElementById('intro-about');
     if (about) about.addEventListener('click', () => {
         // No intro-action ping either: poster-open now names its own route.
-        retireIntro();
+        collapseIntro();
         openPoster('intro');
     }, { signal });
 }
 
-/** Retire the arrival panel for the rest of the visit.
+/** Collapse the arrival panel to its handle.
  *
- *  Separate from fadeCoach because a fade is reversible and this is not:
- *  holdCoaching brings the halos back every time a card closes, and the
- *  panel must never come back with them.
+ *  IT USED TO RETIRE FOR GOOD, and the argument was that the panel is read
+ *  once. That is right about the reading and wrong about the room: this
+ *  panel is the only thing on the page that says what John does, so a
+ *  visitor who looked at the showroom first and then wondered what they were
+ *  looking at was left with a monogram in the corner. The handle keeps the
+ *  answer one tap away for the whole visit, which is the same argument D41
+ *  used to keep the halos up, applied to the other thing on screen that
+ *  explains the page.
  *
- *  THE PANEL IS THE ONLY THING THAT RETIRES, and that is D41. Reaching a
- *  person used to take the halos with it, on the argument that somebody who
- *  has met John does not need three rings telling them where he is. True,
- *  and beaten by who this page is for: a visitor who is not confident with a
- *  computer, arriving from a link John sent, for whom the rings ARE the
- *  interface. They are the only thing on screen saying the room can be
- *  touched, so the moment they go the page is a picture again and a second
- *  trip to the contact card has nothing pointing the way. The panel is
- *  different because it is READ, once.
+ *  THE HALOS ARE STILL UNTOUCHED HERE, and that is D41 itself. Reaching a
+ *  person used to take them away, on the reasoning that somebody who has met
+ *  John does not need three rings telling them where he is. True, and beaten
+ *  by who this page is for: a visitor who is not confident with a computer,
+ *  arriving from a link John sent, for whom the rings ARE the interface.
  *
- *  This is called from all three routes to a person as well as from the
- *  timer, the close button and the first tap during arrival. It used to be
- *  wrapped in `notePersonReached`, which existed to fire `coach-end` once
- *  per visit with the route that worked; the event is gone, so the wrapper
- *  went with it rather than staying on under a name for a thing it no
- *  longer did. */
-function retireIntro() {
-    introDone = true;
+ *  Called from all three routes to a person, the timer, the close button and
+ *  the first tap during arrival. Safe to call when already collapsed. */
+function collapseIntro() {
+    if (!introOpen && introArrived) return;
+    introOpen = false;
     fadeCoach(introEl);
+    // The handle only appears once the panel has actually arrived. Collapsing
+    // something the visitor never saw would put a pill on screen during the
+    // loader's last moments, pointing at copy that had not been shown yet.
+    if (introArrived) showIntroHandle(true);
+}
+
+/** Open it again from the handle. */
+function expandIntro() {
+    if (!introArrived || introOpen) return;
+    introOpen = true;
+    showIntroHandle(false);
+    if (introEl) introEl.classList.remove('coach-out');
+    track('intro-expand');
+    // Focus moves to the panel, because a keyboard visitor who just pressed
+    // the handle is now looking at a surface whose controls are below it and
+    // whose close button is the way back. The panel takes tabindex="-1" for
+    // this, the same arrangement the cards use.
+    if (introEl && typeof introEl.focus === 'function') introEl.focus();
+}
+
+/** Show or hide the collapsed handle, keeping `aria-expanded` honest. */
+function showIntroHandle(shown) {
+    if (!introHandle) return;
+    introHandle.classList.toggle('coach-out', !shown);
+    introHandle.setAttribute('aria-expanded', shown ? 'false' : 'true');
 }
 
 /** Show the coaching. Called once the loader has cleared.
@@ -1511,11 +1555,12 @@ function startCoaching() {
         if (coachMarks.length) coachMarksEl.classList.remove('coach-out');
         if (introEl) {
             introArrived = true;
+            introOpen = true;
             introEl.classList.remove('coach-out');
         }
     }, COACH_ARRIVE_MS));
 
-    coachTimers.push(setTimeout(retireIntro, INTRO_MS));
+    coachTimers.push(setTimeout(collapseIntro, INTRO_MS));
     coachTimers.push(setTimeout(() => {
         if (!coachRunning || !coachMarksEl) return;
         // Slower pulse and nothing else. This used to ping `coach-calm`
@@ -1605,11 +1650,18 @@ function holdCoaching() {
     if (covered) {
         fadeCoach(coachMarksEl);
         fadeCoach(introEl);
+        // THE HANDLE PARKS TOO. It is a real tab stop, so leaving it up
+        // behind a near-opaque backdrop is the D21 bug in miniature: a
+        // keyboard visitor tabs out of the card onto a button they cannot
+        // see, which is exactly what the M39 focus trap was added to stop.
+        showIntroHandle(false);
         return;
     }
     if (coachRunning && coachMarks.length) coachMarksEl.classList.remove('coach-out');
-    if (coachRunning && introArrived && !introDone && introEl) {
-        introEl.classList.remove('coach-out');
+    // Whichever of the two was up before the card comes back, and never both.
+    if (coachRunning && introArrived) {
+        if (introOpen && introEl) introEl.classList.remove('coach-out');
+        else showIntroHandle(true);
     }
 }
 
