@@ -179,7 +179,7 @@ every experience in the collection. An earlier version of this note said the JPE
 Twitter used, which was never true of any page in the repository.
 
 **One experience splits the two images, and it is worth knowing why before
-you copy it.** John Walker's `og:image` is `og-automan.webp`, his gold W on
+you copy it.** The www/automan scene's `og:image` is `og-automan.webp`, his gold W on
 navy, because a wordmark is what names the business instantly in a message
 thread. His directory card is a different file, `card-automan.webp`, a render
 of the showroom, because that same wordmark reads as a broken image in a grid
