@@ -448,33 +448,22 @@ describe('the QA console hooks stay off a visitor\'s page', () => {
 });
 
 describe('the rest of the site knows the scene exists', () => {
-    test('it is in the sitemap, llms.txt, the catalog and the directory page', async () => {
-        const [sitemap, llms, directory, home] = await Promise.all([
+    test('it is in the sitemap, llms.txt, and the directory page', async () => {
+        // THERE IS NO CATALOG ARRAY ANY MORE. This used to also assert a
+        // `slug: 'highwater'` entry in www/js/directory.js, which was the live
+        // search's copy of the collection; that script was deleted on
+        // 2026-09-04 along with the search box and the filter chips, and the
+        // cards in index.html are now the only list.
+        const [sitemap, llms, home] = await Promise.all([
             readFile(new URL('../www/sitemap.xml', import.meta.url), 'utf8'),
             readFile(new URL('../www/llms.txt', import.meta.url), 'utf8'),
-            readFile(new URL('../www/js/directory.js', import.meta.url), 'utf8'),
             readFile(new URL('../www/index.html', import.meta.url), 'utf8')
         ]);
         expect(sitemap).toContain(`<loc>${BASE}</loc>`);
         expect(llms).toContain(BASE);
-        expect(directory).toContain("slug: 'highwater'");
-        expect(directory).toContain("url: 'highwater/'");
-        // The catalog and the cards are paired by slug at runtime, so an entry
-        // in one without the other is a card that never filters or a filter
-        // that targets nothing.
         expect(home).toContain('data-slug="highwater"');
         expect(home).toContain('href="/highwater/"');
         expect(home).toContain(`"url": "${BASE}"`);
-    });
-
-    test('the ItemList positions run 1..n with no gap or repeat', async () => {
-        // Adding a scene means renumbering every entry below it, which is
-        // exactly the sort of hand edit that lands a second "position": 4.
-        const home = await readFile(new URL('../www/index.html', import.meta.url), 'utf8');
-        const positions = [...home.matchAll(/"position": (\d+),/g)].map((m) => Number(m[1]));
-        expect(positions.length).toBeGreaterThan(0);
-        expect([...positions].sort((a, b) => a - b))
-            .toEqual(positions.map((_, i) => i + 1));
     });
 
     test('robots.txt lets crawlers in and names the sitemap', async () => {

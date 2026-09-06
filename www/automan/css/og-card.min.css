@@ -1,0 +1,1 @@
+:root{--og-w: 1200;--og-h: 630;--og-scale: 2.3}html,body{margin:0;padding:0;background:#04080f}html{font-size:min(calc(100vw * 16 * var(--og-scale) / var(--og-w)),calc(100vh * 16 * var(--og-scale) / var(--og-h)))}.og-card{overflow:hidden}.og-card .loader-content .loader-logo{width:9.375rem}.og-card .loader-title{margin-bottom:0}

@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="John Walker, The Auto Man">
+    <!-- THIS MARK IS NOT OURS AND IS NOT MIT LICENSED. The three-blade W
+         belongs to John Walker and appears here by his blessing, as part of
+         a tribute experience. The project's MIT license covers the code that
+         draws it and not the mark it draws, so copying this project grants
+         no right to reuse the shape. Please do not lift it. The same applies
+         to the two inline copies of this path in ../index.html. See LICENSE
+         and the README's "License, credits, and trademarks" section.
+
+         ONE MARK, TWO SIZES. This file is the browser tab icon at 16 pixels
+         and the logo on the loading screen at 150, so whatever somebody
+         watches while the showroom builds is the same thing that then sits
+         in their tab.
+
+         IT IS NOT A CAR, and it is not a text-face W either. The first
+         placeholder was a little gold sedan, which said DEALERSHIP, the one
+         thing John spent twenty five years leaving. What replaced it was a
+         serif W with old-style stroke contrast and bracket serifs, drawn to
+         agree with the page's headings. It read well and it was not HIS.
+
+         THIS IS JOHN'S OWN W, traced from the mark he sent (the reference
+         photograph is in specs/automan/W-design.JPG). Three separate blades
+         and no joins: the two down-strokes of the two V's, and the top of
+         the final up-stroke. The second up-stroke, the one that would climb
+         out of the middle, is not drawn at all, and its absence is what
+         makes the middle gap read as part of the letter rather than as a
+         break in it.
+
+         HOW THE GEOMETRY WAS RECOVERED. The reference is a photograph of a
+         cut shape lying on corrugated cardboard, so it arrives with
+         perspective in it: the down-strokes narrow 25% from top to bottom
+         and their edges are not parallel on the print, although they plainly
+         are on the object. Nothing here was read straight off those pixels.
+         Each blade was sheared until one long edge stood vertical, both long
+         edges were then fitted as straight lines, and every point on the cap
+         and the taper was recorded as a fraction of the blade's own width at
+         that row, with the height accumulated as a sum of dy/width rather
+         than one division at the end. That last part matters: dividing the
+         total drop by the width at the foot makes the blade 15% taller than
+         it is, which put the first reconstruction's aspect at 1.40 against
+         the reference's 2.07. Normalised properly, the two down-strokes come
+         out at 2.856 and 2.827 blade widths tall with their cap tangents
+         within 0.011 of each other, which is the check that the method
+         worked: they are one shape drawn twice.
+
+         WHAT THE BLADE IS. Width 1, and:
+           - a cap that leaves the tip-side edge at 0.124 and rejoins the
+             other edge at 0.362, so it is not a dome but a slant, tight on
+             the side that runs to the point and long on the side that does
+             not;
+           - a straight run;
+           - a taper that leaves the far edge and sweeps to a point on the
+             tip-side edge, 0.95 of a blade width long.
+         The down-stroke is 2.842 tall and starts its taper at 1.893. The
+         up-stroke is the SAME blade mirrored and cut short: 1.499 tall, and
+         its taper starts at 0.557, so it is nearly all cap and point.
+         The lean is 0.748 (36.8 degrees off vertical), solved from the
+         up-stroke because that is the one blade the photograph holds almost
+         square: its width varies 2% top to bottom, against 25% for the other
+         two, so its bounding box is the only length in the picture that
+         perspective has not moved.
+
+         THE SPACING IS A RATIO, for the same reason. The blades sit 0.626
+         and 0.530 blade widths apart, measured as the shortest distance
+         between two outlines over the blade width at that row.
+
+         WHAT IT COSTS AT 16 PIXELS. The gaps come out at 1.6 and 1.4 device
+         pixels in a 16px tab icon, which is thin. It holds, because the tile
+         is dark and the blades are light and each one is still better than
+         two pixels wide, but this mark is at its limit there and would not
+         survive being made any smaller or any more finely spaced. It is
+         mostly seen at 2x anyway, and at 150 on the loader it is exactly the
+         shape John sent.
+
+         THE UNDERLINE IS GONE. The old tile carried a fine rule under the
+         letter, borrowed from where it sits under THE AUTO MAN on John's
+         flyer. This mark is 1.93 wide to 1 tall against the serif W's 1.35,
+         so it wants the tile's whole width, and a rule 5 units under it read
+         as crowding rather than as a device. Say the word and it comes
+         back, at the cost of about 4 units off the letter. -->
+    <defs>
+        <!-- Lit from the top, like every other surface on the page. -->
+        <linearGradient id="w-champagne" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#f0d29a"/>
+            <stop offset="0.55" stop-color="#dbb36a"/>
+            <stop offset="1" stop-color="#c39d55"/>
+        </linearGradient>
+        <!-- The lacquer, lighter at the top edge where a polished panel
+             catches the ceiling. Invisible as a gradient at 16 pixels, and
+             the reason the tile does not read as a flat swatch at 150. -->
+        <linearGradient id="w-lacquer" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#17293f"/>
+            <stop offset="0.6" stop-color="#0e1c2e"/>
+            <stop offset="1" stop-color="#080f1b"/>
+        </linearGradient>
+    </defs>
+    <rect width="64" height="64" rx="14" fill="url(#w-lacquer)"/>
+    <!-- Three subpaths, disjoint, so the winding of the mirrored one cannot
+         punch a hole in anything. -->
+    <path fill="url(#w-champagne)"
+        d="M 4.15 18.78 C 2.63 16.75 12.95 16.93 16.15 21.21 L 27.82 36.81 Q 31.75 42.05 24.87 46.48 Z
+           M 22.08 18.78 C 20.56 16.75 30.89 16.93 34.09 21.21 L 45.75 36.81 Q 49.68 42.05 42.80 46.48 Z
+           M 59.85 18.78 C 61.37 16.75 51.05 16.93 47.85 21.21 L 46.36 23.20 Q 43.46 27.07 49.37 32.79 Z"/>
+</svg>

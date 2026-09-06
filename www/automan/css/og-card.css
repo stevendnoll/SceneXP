@@ -1,0 +1,123 @@
+/* ==========================================================================
+   THE SOCIAL CARD'S CAPTURE SURFACE
+   ==========================================================================
+
+   Loaded by og-card.html only, on top of the shared sheet and
+   experience.css. It adds as little as it possibly can, because every rule
+   in here is a way the card and the real loading screen could come to
+   disagree.
+
+   IT IS THE LOADING SCREEN AT ANY SIZE. The first cut framed it in a fixed
+   1200 by 630 box, which made it a picture of the loader rather than the
+   loader, and it stopped being responsive at the one thing a capture
+   surface is for: being sized to whatever the shot needs. The box is gone.
+   `#loading-screen` fills the viewport exactly as it does on the real page,
+   so the WINDOW is the frame: set it to 1200 by 630 and capture, or to
+   1200 by 1200 for a square, or drag it around to see how the composition
+   holds. Nothing here knows what size it is going to be.
+
+   Two dials, plus the reference frame they are measured against:
+
+     --og-w / --og-h   the frame the scale is CALIBRATED for, unitless.
+                       1200 by 630 is the house social card. At exactly
+                       that size the composition is what --og-scale says.
+     --og-scale        how far the loader's content is blown up. See below.
+
+   HOW TO CAPTURE. The page holds nothing but the loader and the body has
+   no margin, so Chrome's "Capture full size screenshot" comes back exactly
+   the viewport. Do it through the device toolbar at 1200 x 630 with the
+   DPR set to 2, which gives a 2400 x 1260 capture to downscale: text at
+   this tracking is much cleaner downsampled than rendered at 1x.
+
+   THEN CONVERT BEFORE STRIPPING. A macOS screenshot arrives tagged sRGB
+   but encoded for the panel, so `-strip` on its own moves every colour
+   (measured at 2.77% RMSE on the garden's card). The house recipe:
+
+     magick in.png -profile "/System/Library/ColorSync/Profiles/sRGB Profile.icc" -strip master.png
+     cwebp -q 92 -sharp_yuv master.png -o og-automan.webp
+
+   and exactly ONE og:image in the markup, naming the WebP, because Apple's
+   link preview renders every og:image it finds. */
+
+:root {
+    /* Unitless, because they are divisors in the calc below. CSS can
+       divide a length by a number and not by another length. */
+    --og-w: 1200;
+    --og-h: 630;
+
+    /* WHY THE CONTENT IS ENLARGED AT ALL, since a straight capture of the
+       loader would be the simpler thing.
+
+       The loader is sized for a viewport somebody is holding. A social
+       card is sized for a frame in somebody's feed, and it is shown small:
+       around 500px wide in most timelines and smaller in a chat thread. At
+       scale 1 the title is 11.5px on a 1200px card, which is under 5px by
+       the time a feed has finished with it, and the mark is a tenth of the
+       width. The card would read as an empty gradient.
+
+       2.3 puts the title at about 26px and the mark's W at 302 by 156,
+       roughly a quarter of the frame's width, which survives being shown
+       at 500 and still leaves a hundred pixels of ground above and below. */
+    --og-scale: 2.3;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    background: #04080f;
+}
+
+/* THE WHOLE OF THE RESPONSIVE BEHAVIOUR, IN ONE DECLARATION.
+ *
+ * Everything the loader is built from is already relative: the title is
+ * 0.72rem, its tracking and its indent are ems of that, the mark's margin
+ * is 1.25rem. So one root size scales the entire composition and every
+ * proportion inside it stays exactly as the loading screen draws it. A
+ * transform would have done the same job; a font size does it without
+ * putting a second coordinate system over the top, and it keeps the
+ * loader's own rem relationships doing the work rather than restating
+ * them here.
+ *
+ * min() of the two axes is what makes it FIT rather than merely stretch:
+ * on a wide short window the height constrains it, on a tall narrow one
+ * the width does, and at exactly --og-w by --og-h the two agree and the
+ * result is 16px times --og-scale.
+ *
+ * Sizing the root in viewport units is normally a mistake, because it
+ * throws away the reader's own font size. It is right here and only here:
+ * nobody reads this page, it is noindex, and it exists to be photographed
+ * at a size chosen by whoever is holding the camera. Do not copy this rule
+ * onto anything with prose on it. */
+html {
+    font-size: min(
+        calc(100vw * 16 * var(--og-scale) / var(--og-w)),
+        calc(100vh * 16 * var(--og-scale) / var(--og-h)));
+}
+
+/* The gradient runs to the edges of whatever it is given, so nothing the
+   scale does can spill past it. */
+.og-card {
+    overflow: hidden;
+}
+
+/* THE MARK IS SIZED IN REM, and that is the one rule here doing real work.
+   The shared sheet gives it `clamp(110px, 22vw, 150px)`: px, so it would
+   sit still while everything around it scaled, and `vw`, so it would also
+   answer to the window's width behind the calc's back. 9.375rem IS the
+   shared 150px at a 16px root, so at the reference frame this is the same
+   number, and at every other size it moves with the rest of the block.
+
+   Three classes deep so it beats `.loader-content .loader-logo` whatever
+   order the sheets end up loading in. */
+.og-card .loader-content .loader-logo {
+    width: 9.375rem;
+}
+
+/* The title carries 2.2rem of margin under it in experience.css, which is
+   the gap to the progress bar. The bar is not in this markup, so that
+   margin is a block of nothing that would push the composition up off
+   centre by half of it. */
+.og-card .loader-title {
+    margin-bottom: 0;
+}

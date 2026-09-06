@@ -441,56 +441,34 @@ a {
     color: var(--text-soft);
 }
 
-/* --------------------------------------------------------------- search */
-
-.experience-search {
-    margin-top: 1.6rem;
-    max-width: 26rem;
-}
-
-.experience-search label {
-    display: block;
-    margin-bottom: 0.4rem;
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--text-soft);
-}
-
-.experience-search input {
-    width: 100%;
-    padding: 0.7rem 1.1rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--bg-raised);
-    color: var(--text);
-    font: inherit;
-}
-
-.experience-search input::placeholder {
-    color: var(--text-soft);
-    opacity: 0.8;
-}
-
-.search-status {
-    margin: 0.5rem 0 0;
-    min-height: 1.4em;
-    font-size: 0.9rem;
-    color: var(--text-soft);
-}
-
-.search-empty {
-    margin: 1.4rem 0 0;
-    padding: 1.4rem 1.6rem;
-    border: 1px dashed var(--line);
-    border-radius: 16px;
-    color: var(--text-soft);
-}
-
-.search-empty p {
-    margin: 0;
-}
-
 /* ------------------------------------------------------ experience grid */
+
+.experience-group {
+    margin-top: clamp(2rem, 4vw, 3rem);
+}
+
+/* THE HEADER IS STICKY AND ABOUT 4rem TALL, so an anchor jump parks its target
+   underneath it and the visitor lands on a heading they cannot see.
+
+   ON THE SCROLL CONTAINER, NOT ON A LIST OF TARGETS. This was a list, and it
+   claimed in its own comment to name every in-page anchor on the site while
+   missing `#main`, which is the SKIP LINK's target on every page. So the one
+   control on the site that exists purely for keyboard and screen reader
+   visitors dropped them behind the header, onto the page's only h1. A list of
+   targets is a promise that has to be kept every time an anchor is added
+   anywhere; `scroll-padding-top` is the same rule stated once, and it covers
+   the pages this file serves that have no category headings at all. */
+html {
+    scroll-padding-top: 5rem;
+}
+
+.experience-group h2 {
+    margin: 0;
+    font-size: clamp(1.25rem, 2.4vw, 1.55rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
 
 .experience-grid {
     display: grid;
@@ -543,10 +521,12 @@ a {
     color: var(--link);
 }
 
-/* h2 SINCE THE HERO WENT AWAY. The page's only h1 is the experiences section
-   head directly above these cards, so a card title is one level below it. It
-   was an h3 when the h1 lived in a hero and the section carried an h2. */
-.experience-card h2 {
+/* h3 SINCE THE COLLECTION WAS GROUPED. The page's only h1 is the experiences
+   section head, each category heading below it is an h2, and a card title sits
+   one level under the category it belongs to. It was an h2 when the cards were
+   the section's only children, and an h3 before that, when the h1 lived in a
+   hero and the section itself carried an h2. */
+.experience-card h3 {
     margin: 0.35rem 0 0;
     font-size: 1.25rem;
     font-weight: 800;
@@ -638,6 +618,24 @@ a {
     font-size: 1.15rem;
     font-weight: 800;
     letter-spacing: -0.015em;
+}
+
+/* On the home page these three headings jump to their matching category group.
+   They keep the heading's own color so the row does not turn into three purple
+   titles, and carry a soft underline for the affordance. */
+.audience-card h3 a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+    text-decoration-color: var(--line);
+    transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.audience-card h3 a:hover,
+.audience-card h3 a:focus-visible {
+    color: var(--link);
+    text-decoration-color: currentColor;
 }
 
 .audience-card p {

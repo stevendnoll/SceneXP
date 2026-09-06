@@ -8,6 +8,62 @@
  */
 
 /**
+ * A torso with rounded shoulders, in the same 0.38 x 0.55 x 0.22 envelope
+ * as the BoxGeometry it replaces.
+ *
+ * `round` is the shoulder radius as a fraction of the torso's half-width,
+ * so 0.4 rounds the top corners over about a third of each shoulder and
+ * leaves a flat span across the top for the neck to sit on. Every other
+ * edge gets a small uniform bevel, which is what takes the hardness out of
+ * the sides and the front corners as well.
+ *
+ * THE PROFILE IS SHRUNK BY THE BEVEL ON PURPOSE. ExtrudeGeometry offsets
+ * the body OUTWARD from the shape by `bevelSize` and puts only the end
+ * caps on the outline, so extruding a shape at the finished width yields a
+ * torso `bevelSize` too wide at every point except its own front and back
+ * faces. Measured, not assumed: a Box3 over the result of this function is
+ * exactly (w, h, d).
+ *
+ * @param {number} w Finished width
+ * @param {number} h Finished height
+ * @param {number} d Finished depth
+ * @param {number} round Shoulder radius as a fraction of the half-width
+ * @returns {THREE.ExtrudeGeometry}
+ */
+function roundedTorsoGeometry(w, h, d, round) {
+    // Small enough that it never eats a face, large enough to catch a
+    // highlight along each edge under the room's key light.
+    const bevel = Math.min(0.02, w / 4, h / 4, d / 4);
+    const hw = (w - 2 * bevel) / 2;
+    const hh = (h - 2 * bevel) / 2;
+    // Clamped so an over-large `round` rounds the shoulders away entirely
+    // rather than folding the outline back through itself.
+    const topR = Math.min(round * (w / 2), hw, hh);
+    const botR = Math.min(0.02, hw, hh);
+
+    const shape = new THREE.Shape();
+    shape.moveTo(-hw, -hh + botR);
+    shape.lineTo(-hw, hh - topR);
+    shape.absarc(-hw + topR, hh - topR, topR, Math.PI, Math.PI / 2, true);
+    shape.lineTo(hw - topR, hh);
+    shape.absarc(hw - topR, hh - topR, topR, Math.PI / 2, 0, true);
+    shape.lineTo(hw, -hh + botR);
+    shape.absarc(hw - botR, -hh + botR, botR, 0, -Math.PI / 2, true);
+    shape.lineTo(-hw + botR, -hh);
+    shape.absarc(-hw + botR, -hh + botR, botR, -Math.PI / 2, -Math.PI, true);
+
+    const depth = d - 2 * bevel;
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth, steps: 1, curveSegments: 5,
+        bevelEnabled: true, bevelSegments: 2,
+        bevelThickness: bevel, bevelSize: bevel, bevelOffset: 0
+    });
+    // Extrusion runs from z 0 forward; the figure's torso is centered.
+    geometry.translate(0, 0, -depth / 2);
+    return geometry;
+}
+
+/**
  * Create a detailed person figure
  * @param {Object} config - Person configuration
  * @returns {THREE.Group} The person group
@@ -33,7 +89,8 @@ export function createPerson(config) {
         footScale = 1,         // relative shoe size (1 = standard)
         hasSuit = false,       // jacket lapels, a dress shirt, and a necktie
         tieColor = 0x8c1d2c,   // necktie color (used when hasSuit)
-        dressShirt = false     // button-down dress shirt: center placket + long sleeves, no jacket/tie
+        dressShirt = false,    // button-down dress shirt: center placket + long sleeves, no jacket/tie
+        shoulderRound = 0      // 0 = square box torso; up to ~0.6 rounds the shoulders and softens every edge
     } = config;
 
     const person = new THREE.Group();
@@ -238,8 +295,15 @@ export function createPerson(config) {
     person.add(neck);
 
     // === TORSO ===
+    // Square by default (a plain box, as every figure built before this
+    // option existed). With shoulderRound above 0 the box becomes a
+    // soft-edged slab with rounded shoulders, which is what a figure seen
+    // close up in a seated scene wants: the box's hard top corners read as
+    // points from any three-quarter angle.
     const torso = new THREE.Mesh(
-        new THREE.BoxGeometry(torsoWidth, torsoHeight, torsoDepth),
+        shoulderRound > 0
+            ? roundedTorsoGeometry(torsoWidth, torsoHeight, torsoDepth, shoulderRound)
+            : new THREE.BoxGeometry(torsoWidth, torsoHeight, torsoDepth),
         shirtMaterial
     );
     torso.position.y = legLength + torsoHeight / 2;
@@ -372,6 +436,19 @@ export function createPerson(config) {
     // === ARMS ===
     [-1, 1].forEach(side => {
         const armGroup = new THREE.Group();
+
+        // Shoulder ball, on the rounded build only. The upper arm is a
+        // flat-topped cylinder pinned at the joint, so any scene that
+        // rotates an arm away from the body opens a disc-shaped hole where
+        // it meets the torso. A ball at the pivot fills it at every angle,
+        // and it is also the deltoid the square build never had.
+        if (shoulderRound > 0) {
+            const shoulder = new THREE.Mesh(
+                new THREE.SphereGeometry(armRadius * 1.15, 10, 8),
+                shirtMaterial
+            );
+            armGroup.add(shoulder);
+        }
 
         // Upper arm
         const upperArm = new THREE.Mesh(

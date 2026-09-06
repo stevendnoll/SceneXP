@@ -178,6 +178,16 @@ Each experience ships a 1200 by 630 card as `assets/og-<world>.webp` with a
 every experience in the collection. An earlier version of this note said the JPEG was what
 Twitter used, which was never true of any page in the repository.
 
+**One experience splits the two images, and it is worth knowing why before
+you copy it.** The www/automan scene's `og:image` is `og-automan.webp`, his gold W on
+navy, because a wordmark is what names the business instantly in a message
+thread. His directory card is a different file, `card-automan.webp`, a render
+of the showroom, because that same wordmark reads as a broken image in a grid
+of fourteen scene renders. `tests/directory.test.mjs` allows exactly this
+split and still holds the `og:image` to `og-<world>.webp` either way. Split
+them only if your world has a mark worth leading a share with; otherwise one
+image doing both jobs is simpler and is what the other thirteen do.
+
 The JPEG is not referenced by any page. It ships for two reasons:
 
 - **The README embeds the JPEGs.** A README is rendered on hosts we do not
@@ -315,10 +325,31 @@ source of truth either way.
    automatically) and `npm test`. Please include an init test for your
    world, following the `tests/<experience>-init.test.mjs` pattern (see the
    Tests section above).
-6. **Add your world to the directory.** One card in `www/index.html`, one
-   entry in the catalog array in `www/js/directory.js`, and one URL in
-   `www/sitemap.xml`. Also please add a short description of your world
-   in the `www/llms.txt` file.
+6. **Add your world to the directory.** The directory is grouped into
+   categories, so start by choosing the one your world belongs to:
+   `worlds` (Worlds and games) for anything built for its own sake,
+   `business` (Small business tributes), or `personal` (Personal tributes).
+   Then add one card in `www/index.html`, at the top of that category's
+   group, and add your world at the top of that same category's JSON-LD
+   `ItemList` in the head of the same file, renumbering that list only.
+   The other two groups do not move. Finally, add one URL in
+   `www/sitemap.xml` and a short description under your category's heading
+   in `www/llms.txt`.
+
+   One more file, and it is the one people miss because it is a test rather
+   than a page: add your slug and its category to the `CATEGORY_OF` map at
+   the top of `tests/directory.test.mjs`. That map is what holds the card
+   and the grouping together, so a world added correctly everywhere else
+   still fails the suite without it.
+
+   `tests/directory.test.mjs` checks all of that agrees, so if you put your
+   world in one place and forget another, the suite will tell you which.
+
+   There is no search box and no filter, so there is no catalog array to
+   update: the cards in `www/index.html` are the list. Both controls
+   existed and were removed on 2026-09-04, because a dozen scenes under
+   three headings are quicker to scan than to search, and on a phone the
+   controls pushed the first card below the fold.
 7. **If your world remembers anything, say so in the privacy policy.**
    `sessionStorage` needs nothing: it goes when the tab closes, and the
    policy already covers it. But anything you put in `localStorage` outlives

@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <!-- NO `user-scalable=no`, and it was there until the accessibility
+         sweep at M39. Blocking zoom is a WCAG 1.4.4 failure, and it is a
+         cruel one on this page in particular: the cards carry John's phone
+         number and the whole account of what he does, set at 0.72rem in
+         places, and somebody who needs to pinch them larger is exactly the
+         visitor this page is built to reach.
+
+         The 3D view does not need it either. #game-canvas already carries
+         `touch-action: none`, so a pinch that starts on the scene belongs
+         to the scene, and the Safari gesture events are canceled on the
+         CANVAS rather than on the document (see setupEventListeners), so a
+         pinch that starts on a card zooms the card. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="A living 3D visit to a car dealership desk, where John Walker, The Auto Man, sits on the buyer's side and argues the deal down for his customer. A car buying and selling advocate in Baltimore, Maryland, with a free consultation by phone or Zoom.">
+    <!-- The lacquer the whole interface is built on (M24), not the flyer's
+         navy: this is the color a phone paints its own chrome with, so it
+         should be the color of the page it is framing. -->
+    <meta name="theme-color" content="#0e1c2e">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK (Phase 5). Crawlers read these without running
+         JavaScript, so they cannot come from config.js and must stay literal
+         absolute URLs naming where this page is actually served (currently
+         www.scenexp.com/automan; these are deployment metadata, not
+         outbound links). When serving from a new domain, update the URLs
+         here: canonical, og:url, og:image, twitter:image, and the JSON-LD
+         ids below. Everything else in the experience is relative,
+         config-driven (AUTOMAN_CONFIG.site in js/config.js), or derived
+         from location. -->
+    <link rel="canonical" href="https://www.scenexp.com/automan/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="John Walker, The Auto Man">
+    <meta property="og:description" content="A living 3D visit to a dealership desk, where John Walker sits on the buyer's side of it. Tap anyone at the desk to reach him.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/automan/">
+    <meta property="og:locale" content="en_US">
+    <!-- EXACTLY ONE og:image, and it names the WebP. Apple's link preview
+         renders every og:image it finds, so a JPEG listed underneath as a
+         "fallback" puts two identical cards in one message thread.
+         og-automan.jpg is built alongside it and lives in assets/: if a
+         platform (notably Facebook) will not render the WebP, swap the two
+         image URLs rather than adding a second tag.
+
+         THE CARD IS THE LOADING SCREEN, not a capture of the showroom, and
+         that is a change from the other experiences. The loader is the one
+         surface here that is pure lacquer and champagne with the mark on
+         it, which is what a link preview has to work as: it is shown at
+         about 500px in a timeline and smaller in a chat, where a room full
+         of low-poly figures is a smudge and a mark with a name under it is
+         legible. og-card.html in this folder is the page it is captured
+         from, so it can be re-shot the day the mark or the name changes.
+
+         Built with the house recipe, and the numbers are this frame's own
+         rather than the convention's: the display profile is converted to
+         sRGB BEFORE the strip (a bare strip moves this frame by 1.37%),
+         q92 sits on a smooth curve with no knee, and -sharp_yuv returns
+         12.5% of the error on the champagne mark for 1.3KB, measured on a
+         crop of the mark because a whole-frame average is drowned by the
+         gradient. 17KB WebP, 46KB JPEG at 4:4:4. -->
+    <meta property="og:image" content="https://www.scenexp.com/automan/assets/og-automan.webp?v=1">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A dark navy card carrying John Walker's gold three-blade W above his name, John Walker, The Auto Man, set in wide-spaced capitals.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="John Walker, The Auto Man">
+    <meta name="twitter:description" content="A living 3D visit to a dealership desk, where John Walker sits on the buyer's side of it.">
+    <meta name="twitter:image" content="https://www.scenexp.com/automan/assets/og-automan.webp?v=1">
+    <meta name="twitter:image:alt" content="A dark navy card carrying John Walker's gold three-blade W above his name, John Walker, The Auto Man, set in wide-spaced capitals.">
+
+    <!-- Structured data: the experience, and the business it features.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP.
+
+         NOTE (PRD decision D3, still open): John's phone number and email
+         are deliberately absent here. They live in js/config.js as joined
+         fragments and are assembled only after the proof of work resolves,
+         which keeps them away from scrapers and equally away from search
+         engines and assistants. If D3 moves to option 2, "telephone" and
+         "email" properties go on the ProfessionalService node below, and
+         the noscript fallback gains them too. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/automan/#website",
+      "url": "https://www.scenexp.com/automan/",
+      "name": "John Walker, The Auto Man",
+      "description": "A passive 3D visit to a car dealership desk, built for John Walker, The Auto Man, a car buying and selling advocate who negotiates on the buyer's behalf.",
+      "inLanguage": "en-US",
+      "about": {
+        "@type": "ProfessionalService",
+        "@id": "https://www.scenexp.com/automan/#business",
+        "name": "John Walker, The Auto Man",
+        "url": "https://www.scenexp.com/automan/",
+        "description": "Car buying and selling advocacy. John Walker reviews the deal front to back, values your trade, checks the financing and the rate, and explains the warranties and protection products, so you walk into the dealership prepared. Free consultation by phone or Zoom.",
+        "areaServed": {
+          "@type": "Place",
+          "name": "Baltimore, Maryland, and remote via Zoom"
+        },
+        "founder": {
+          "@type": "Person",
+          "name": "John Walker"
+        },
+        "slogan": "Your advocate before, during, and after the deal."
+      }
+    }
+    </script>
+
+    <title>John Walker, The Auto Man</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=2" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=2">
+    <link rel="stylesheet" href="css/experience.min.css?v=1">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
+    <a class="skip-link" href="#home-btn">Skip to home link</a>
+
+    <!-- THE PAGE'S ONLY HEADING, and it was missing entirely until the
+         accessibility sweep at M39. There was an h1 in the noscript block
+         below and three h2s inside cards that start hidden, so a visitor
+         navigating by heading found NOTHING on the live page: the first
+         thing they could reach was a heading inside a dialog nobody had
+         opened yet.
+
+         Screen-reader only, because the room itself is the title here and
+         a line of type across the top of it would be the welcome card D18
+         removed, one element at a time. -->
+    <h1 class="sr-only">John Walker, The Auto Man</h1>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
+         a plain-text introduction to John and his service.
+
+         Under PRD decision D3 this fallback cannot carry John's phone
+         number or email, because they are assembled behind a proof of work
+         that needs JavaScript. That is a real cost of D3 and one of the
+         reasons it is flagged for revisiting. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>John Walker, The Auto Man</h1>
+            <p>This is a living 3D visit to a car dealership desk, and it
+                needs JavaScript to run. It was built for John Walker, who
+                goes by The Auto Man, because he does the part of buying a
+                car that most people quietly dread. John has spent more
+                than twenty five years in sales and marketing, ten of them
+                in the automotive industry, and more than 2,000 vehicles
+                have gone through his hands. He has worked the dealership
+                side and desked the deals, so he knows exactly where the
+                money moves: the trade valuation, the price, the financing
+                and the rate, the extended warranty, the tire and wheel
+                protection, the GAP insurance. He now does that work for the
+                buyer instead of the dealer. In the 3D scene he is at the
+                desk with his customer, pointing at the deal sheet and
+                making her case, while the lot fills the window behind
+                them. The consultation is free, by phone or by Zoom, and
+                if he cannot get you the deal you want, you owe him
+                nothing. He works in Baltimore, Maryland, and anywhere
+                else by Zoom.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/">The SceneXP experience directory</a></li>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <!-- The same file the tab loads as the favicon, at 150px
+                 instead of 16 (task T10.2). One mark in both places, so
+                 the thing somebody watches while the showroom builds is
+                 the thing that then sits in their tab. It brings its own
+                 navy ground, so it does NOT wear the shared .logo-card
+                 white plate: that treatment exists for white-backed JPGs
+                 and framed this one in a white square. -->
+            <img class="loader-logo automan-mark" src="favicon.svg" alt="" width="150" height="150">
+            <div class="loader-title">John Walker, The Auto Man</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- THERE IS NO WELCOME OVERLAY HERE, and that is deliberate (decision
+         D18). Every other SceneXP experience opens on a dark card the
+         visitor has to click through, because most of them have something
+         to explain: controls, a goal, a pointer lock the browser will not
+         grant without a gesture. This one has none of that. It is watched,
+         not walked, it plays no audio, and three.js needs no user gesture
+         to start rendering, so the card was asking people to dismiss a
+         curtain in front of a room that was already finished behind it.
+         The scene now arrives live, and the coaching below arrives with
+         it.
+
+         If a welcome card is ever wanted back, the shared #blocker markup
+         and its stylesheet rules are untouched: it is this page that
+         stopped using them. -->
+
+    <!-- ARRIVAL COACHING. The visitor this page is built for may never
+         have met a 3D scene in a browser and has no reason to guess that
+         the people in it answer a tap. Three pulsing halos say where to
+         point, and the two captions say why.
+
+         The halos are real buttons, not decoration. Pointing at a person
+         already works through the canvas raycast, so these could have been
+         inert markers with pointer-events: none, but making them focusable
+         controls gives this scene its first keyboard route to John (the
+         canvas raycast has none), and it gives a shaky hand a target that
+         does not move when the head it sits over turns.
+
+         Positions are set from JavaScript each frame, projected from an
+         anchor above each head, so the marks follow the cast when the
+         visitor pans or zooms. Everything here is hidden until the scene
+         is loaded and removed for good on the first tap. -->
+    <div id="coach-marks" class="coach-marks coach-out">
+        <button type="button" class="coach-mark" data-who="john" hidden
+            aria-label="Meet John Walker, The Auto Man">
+            <span class="coach-halo" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="coach-mark" data-who="customer" hidden
+            aria-label="Meet John's customer">
+            <span class="coach-halo" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="coach-mark" data-who="dealer" hidden
+            aria-label="Meet the dealer">
+            <span class="coach-halo" aria-hidden="true"></span>
+        </button>
+    </div>
+
+    <!-- WHAT JOHN ACTUALLY DOES, ON ARRIVAL, WITHOUT A TAP (decision D22).
+         This was the orientation strip, and orientation was all it said,
+         so a visitor who never tapped anything learned that the room
+         answers a tap and nothing whatsoever about the man it is for.
+         The pitch itself now leads and the mechanics close.
+
+         It is a PANEL, not an overlay: it docks along the bottom over the
+         empty floor, never covers the desk, and blocks nothing. That is
+         what keeps decision D18 intact while still answering the question
+         the scene was leaving open. It carries three controls of its own
+         since D40 and its SURFACE still takes no pointer events, so a
+         swipe that starts on it still looks around the room, and it still
+         leaves on its own whether anybody touches it or not.
+
+         Front-loaded on purpose. The visitor arrives from a link John
+         shared, on a phone, with about ten seconds of patience (PRD 12),
+         so the name and the one line that matters come first and the
+         terms follow for anyone still reading. #help-btn opens the same
+         story at length, for anyone who wants it after this has gone. -->
+    <!-- HIS FACE ARRIVES WITH HIS NAME (D38). The panel is the first thing
+         anybody reads and the only thing that says who John is to a
+         visitor who taps nothing, and until now it said it in type alone
+         while the only person on screen was a low-poly figure with two
+         dots for eyes.
+
+         IT SITS WITH HIS NAME AND NOTHING ELSE (M34). The row held the
+         name AND the lead in a column beside the disc for two rounds, and
+         Steve read the result as out of alignment. He was right, and the
+         first cause was a plain bug: a stray comment terminator in
+         experience.css had swallowed the `.intro-head` selector, so the
+         flex row was never applied at all and the disc was stacking above
+         the text. The second cause is the one worth keeping, because it is
+         a real design fault the bug was hiding: the lead is the one line
+         on this panel that has to land, and 13% off its measure broke it
+         to two lines on a wide screen. It is at the panel's full width
+         now, under a row that is the portrait and the name.
+
+         IT STILL COSTS THE PANEL ALMOST NOTHING, which is the reason it
+         can be here at all. This panel arrives uninvited over a live room
+         and already covers a third of a phone screen, so height is the
+         expensive dimension. Against the stack it replaces it is about ten
+         pixels shorter on a phone, and on a wide screen it is the same
+         height with the lead back on one line.
+
+         AND THE NAME WRAPPING IS FREE. On a phone the tracked capitals run
+         to about 235px in a 223px row, so they take two lines, which come
+         to 34 pixels against a 46 pixel portrait. The row is the disc's
+         height either way, which is why the gold rule aligns to the FIRST
+         line rather than to the middle of the block.
+
+         Same file as the contact card's disc, so it is one fetch and one
+         treatment for his face. `alt` is empty because his name is the
+         very next thing in the markup, in real text. -->
+    <!-- THE PANEL COLLAPSES TO THIS INSTEAD OF LEAVING. It used to retire for
+         good, on the reasoning that the panel is READ, once. True of the
+         reading and not of the room: this panel is the only thing on the page
+         that says what John does, and a visitor who looked at the showroom
+         first and then wondered what they were looking at had nothing left but
+         a monogram in the corner.
+
+         A PILL, NOT A BAR, and that is the whole shape of it. The panel's
+         surface stays `pointer-events: none` so a swipe starting on it still
+         looks around the room (D31), and a full-width handle would take
+         pointer events across the entire bottom of the screen, which on a
+         phone is exactly where a thumb starts a swipe. Shrink-wrapped to its
+         own text for the same reason the panel's two buttons are small.
+
+         A disclosure button, so `aria-expanded` says which state it is in and
+         `aria-controls` names what it opens. Hairline, because D25's one
+         filled control on this page is the Call button. -->
+    <button id="intro-handle" class="intro-handle coach-out" type="button"
+        aria-expanded="false" aria-controls="intro-card">
+        <!-- HIS FACE AND HIS NAME, in the order the panel's own header puts
+             them, so the collapsed state reads as a miniature of the thing it
+             collapsed from rather than a different object. Same file the panel
+             above already loaded, so it costs a cache hit and no request.
+
+             alt="" because the button's own text says his name a few pixels
+             later, and a described image here would have a screen reader read
+             "John Walker, The Auto Man" twice before saying it is a button.
+             The panel's portrait is decorative for the same reason. -->
+        <img class="portrait-disc intro-handle-portrait" src="assets/john-walker-avatar.webp"
+            width="256" height="256" decoding="async" alt="">
+        John Walker, The Auto Man
+        <svg class="intro-handle-chevron" viewBox="0 0 12 8" aria-hidden="true">
+            <path d="M 1 6.5 L 6 1.5 L 11 6.5" />
+        </svg>
+    </button>
+
+    <div id="intro-card" class="intro-card coach-out" tabindex="-1">
+        <!-- THE PANEL'S THREE CONTROLS (D40), and the only things on it that
+             take pointer events. The surface itself stays
+             `pointer-events: none`, which is what lets a swipe start
+             anywhere else on it and still look around the room.
+
+             A way out first. The panel leaves on its own after 29 seconds
+             and on the first tap anywhere in the room, so this is not the
+             only exit, but a surface covering a third of a phone screen
+             with no visible way to close it is a surface somebody has to
+             guess about. The glyph is the same multiply sign every card on
+             this page closes with, and it is 44px square. -->
+        <button id="intro-close" class="intro-close" type="button"
+            aria-label="Collapse this introduction">&times;</button>
+        <div class="intro-head">
+            <img class="portrait-disc intro-portrait" src="assets/john-walker-avatar.webp"
+                width="256" height="256" decoding="async" alt="">
+            <p class="intro-kicker">John Walker, The Auto Man</p>
+        </div>
+        <p class="intro-lead">He works for the buyer, not the dealership.</p>
+        <p class="intro-body">Twenty five years inside the business and more than 2,000 cars,
+            now spent on your side of the desk: the trade value, the price, the financing, and
+            the coverage they add at the end. The first call is free, and if he cannot get you the
+            deal you want, you owe him nothing.</p>
+        <!-- The two routes anybody who has just read that paragraph would
+             want next. Both are hairline controls, because the one filled
+             control on this page is the Call button on the contact card
+             and it stays that way (D25).
+
+             Buttons, not links. Neither has anywhere to go without
+             JavaScript: the first opens the contact card, which assembles
+             John's number from the proof of work rather than carrying it
+             in the markup (D3), and the second opens the About card in
+             place. The noscript block above already carries his pitch for
+             a visitor with no JavaScript at all.
+
+             The second wears John's own three-blade W, the same mark and
+             the same path data as the floating button in the corner that
+             opens the same card.
+
+             THAT PATH IS JOHN'S TRADEMARK, NOT MIT LICENSED CODE. It is
+             written out twice in this file and once more in favicon.svg,
+             and being geometry rather than a loaded image means no
+             .gitignore rule can hold it back, so it ships. Our license
+             covers the markup around it and not the shape. Please do not
+             reuse it. See LICENSE and the README. -->
+        <div class="intro-actions">
+            <button id="intro-contact" class="intro-action intro-action-lead" type="button">Talk to John</button>
+            <button id="intro-about" class="intro-action" type="button">
+                <svg class="intro-w" viewBox="3 16.5 58 31" aria-hidden="true">
+                    <path
+                        d="M 4.15 18.78 C 2.63 16.75 12.95 16.93 16.15 21.21 L 27.82 36.81 Q 31.75 42.05 24.87 46.48 Z
+                           M 22.08 18.78 C 20.56 16.75 30.89 16.93 34.09 21.21 L 45.75 36.81 Q 49.68 42.05 42.80 46.48 Z
+                           M 59.85 18.78 C 61.37 16.75 51.05 16.93 47.85 21.21 L 46.36 23.20 Q 43.46 27.07 49.37 32.79 Z" />
+                </svg>
+                What he does
+            </button>
+        </div>
+        <p class="intro-hint" id="intro-hint">Tap a glowing marker to meet John. Everything else
+            in the room has a story of its own, and you can swipe to look around.</p>
+    </div>
+
+    <!-- Floating controls -->
+    <!-- The Home button returns to the serving site's root in the same tab
+         (applySiteLinks keeps it in sync with AUTOMAN_CONFIG.site.home). No
+         settings cog and no autopilot: there is nothing to adjust and
+         nowhere to be driven. -->
+    <a id="home-btn" class="ui-float menu-btn" href="/"
+        title="Back to the main site"
+        aria-label="Back to the main site">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
+            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
+            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
+        </svg>
+    </a>
+    <!-- John's own flyer, which is the one thing in here that is not a
+         stylization: a photograph of him, his promise, and his number, as
+         he hands it out. It sits behind a button rather than in the scene
+         because a 3D showroom is the wrong place to read a page of type.
+
+         A <button>, not an <a>: it opens a card in place and has nowhere
+         to go without JavaScript, and a link that goes nowhere is worse
+         than no link. The noscript block above already carries John's
+         pitch for that visitor. -->
+    <!-- JOHN'S W, NOT AN ⓘ (D39). Steve's call, and the loader is what
+         earns it: the same mark is the last thing a visitor watches before
+         the room appears and it is sitting in their tab the whole time, so
+         by the time they meet it in the corner they have already been
+         taught what it means. A monogram they had never seen would be a
+         worse control than the ⓘ it replaces, and this one they have.
+
+         SAME PATH DATA AS favicon.svg, CHARACTER FOR CHARACTER. The only
+         difference is the viewBox, which crops the 64-unit tile down to
+         the mark and drops the lacquer square, because this button already
+         brings its own dark disc. Copying the geometry rather than
+         re-deriving it is what stops the tab icon and the on-screen
+         control drifting apart, and verify-composition compares the two
+         strings so a change to one without the other fails.
+
+         The crop is the mark's bounds (x 4 to 60, y 17.52 to 46.48) plus
+         a unit of air all round. Not decoration: a box drawn exactly on
+         those bounds grazes the outermost pixel of every blade, which
+         clips the antialiasing along three edges, and it also made a
+         perfectly correct check fail on the last decimal place. The box's
+         58 by 31 is the aspect the CSS height is derived from, so nothing
+         letterboxes.
+
+         It is FILLED, where every other .menu-btn glyph on the site is a
+         2px stroke, so the shared `fill: none; stroke: currentColor` has
+         to be turned around for this one. currentColor either way, so the
+         hover still inverts it: the disc goes champagne and the mark goes
+         near-black with it.
+
+         The label is untouched. A wordmark says whose page this is and not
+         what the button does, so "About John, and his flyer" is carrying
+         more weight than it was. -->
+    <button id="help-btn" class="ui-float menu-btn" type="button"
+        title="About John"
+        aria-label="About John, and his flyer">
+        <svg viewBox="3 16.5 58 31" aria-hidden="true">
+            <path
+                d="M 4.15 18.78 C 2.63 16.75 12.95 16.93 16.15 21.21 L 27.82 36.81 Q 31.75 42.05 24.87 46.48 Z
+                   M 22.08 18.78 C 20.56 16.75 30.89 16.93 34.09 21.21 L 45.75 36.81 Q 49.68 42.05 42.80 46.48 Z
+                   M 59.85 18.78 C 61.37 16.75 51.05 16.93 47.85 21.21 L 46.36 23.20 Q 43.46 27.07 49.37 32.79 Z" />
+        </svg>
+    </button>
+
+    <!-- There is deliberately NO second floating button here. The other
+         featured-business experiences point that slot at the business's
+         own website, but this page IS John's web presence, so the only
+         thing it could have offered was the site's own contact page, and
+         everything a visitor needs to reach John is already inside the
+         scene: a tap on anyone at the desk opens his contact card, and so
+         does the invitation at the end of every prop story. A floating
+         button pointing away from all that was one route too many. The
+         noscript block above still carries the contact-page link for
+         anyone whose JavaScript never runs. -->
+
+    <!-- The About card. It reuses #help-modal because the shared
+         stylesheet scopes its modal rules to a fixed list of ids, and a
+         new one would arrive with no hiding and no layout (the same trap
+         #nudge-modal is named for below). The `poster-card` class is kept
+         for the same reason: it is what the width, the scroll and the
+         close control are all hung off. -->
+    <div id="help-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="poster-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card poster-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <!-- JOHN'S PHOTOGRAPH LEADS, AND THE FLYER IS NOW A LINK (D37).
+                 This reverses D23, which put the flyer on top of this card,
+                 and the reason is that the page moved underneath that
+                 decision. D23 landed at M20; the boutique layer (D25) and
+                 the re-struck 3D palette (D26) landed at M21 and M22, so
+                 the flyer was chosen as the card's opening image against a
+                 page that no longer exists. D30 already made this exact
+                 call once for the mark: on a page that is lacquer and
+                 champagne throughout, the flyer's saturated amber reads as
+                 the one thing nobody art-directed. D30 carved the flyer
+                 itself out as John's own printed artwork. This is the next
+                 step, and it does not throw the artwork away.
+
+                 Three things it fixes at once. The card used to LEAD with
+                 an image of text and then follow with the same story as
+                 real text, which is the fault D22 identified and D23 half
+                 reintroduced; the card's own content is now entirely
+                 selectable, translatable and readable aloud. It used to
+                 fetch 292KB on every open, and that now happens only if
+                 somebody asks for the flyer. And it showed John's face
+                 twice, once here as artwork and once in the byline at the
+                 foot, so the byline photograph has gone with this change.
+
+                 A BAND, NOT A DISC. The contact card wears him as a
+                 circle, which is right at 68px above a kicker. At card
+                 width a circle reads as a social avatar, and this
+                 photograph has glass, daylight and a city behind him that
+                 rhyme with the showroom's own curtain wall and skyline, so
+                 a 3:2 band across the top reads as an editorial profile,
+                 which is the register D25 is for. Cropped (0, 40) to
+                 (1080, 760) from Steve's `john-walker-profile.webp` and
+                 re-encoded `cwebp -q 84 -sharp_yuv -m 6`: 1080 wide covers
+                 this 560px card on a 2x screen, at 21KB against the
+                 flyer's 292. q90 costs another 9.6KB to move the error by
+                 0.2 of a level, which is the flat part of the curve.
+
+                 It is eager, not lazy: it IS the top of the card, so a
+                 lazy image here would be a grey band every time the card
+                 opens. alt carries his name because a photograph at the
+                 head of a card is not decoration. -->
+            <img class="about-portrait" src="assets/john-walker-about.webp"
+                width="1080" height="720" decoding="async"
+                alt="John Walker, a bald man in a light blue shirt, smiling in a daylit office with a city skyline behind him.">
+            <div class="about-text">
+                <h2 id="poster-title" class="about-title">John Walker, The Auto Man</h2>
+                <p class="about-lead">Your advocate before, during, and after the deal.</p>
+                <p class="about-body">John has spent more than twenty five years in sales and
+                    marketing, ten of them in the automotive industry, and more than 2,000
+                    vehicles have gone through his hands. He has worked the dealership side and
+                    desked the deals, so he knows exactly where the money moves: the trade
+                    valuation, the price, the financing and the rate, the extended warranty, the
+                    tire and wheel protection, the GAP insurance. He now does all of that for the
+                    buyer instead of the dealer.</p>
+                <p class="about-body">The consultation is free, by phone or by Zoom. If he cannot
+                    get you the deal you want, you owe him nothing, and there is a 100 percent
+                    satisfaction guarantee on the small fee if you are not happy. He works in
+                    Baltimore, Maryland, and anywhere else by Zoom.</p>
+                <!-- THE FLYER, AS A LINE OF TYPE. It is John's own printed
+                     artwork and it stays reachable, but it stops being the
+                     card's opening image (see the note at the top).
+
+                     Full size in a new tab is not a demotion, it is where
+                     the thing actually reads: embedded, it was about 350
+                     pixels wide on a phone, enough to see that it is a
+                     flyer and not enough to read a word of the small print.
+                     The file is 1023 by 1537, so a new tab hands over the
+                     browser's own zoom, pan and save, which no viewer built
+                     in here would beat.
+
+                     A plain anchor, not a script: it works from the
+                     keyboard, it survives a popup blocker, and long-press
+                     gives the phone menu somebody would expect. Same-origin,
+                     so it does not break the rule that nothing on this page
+                     links off the site. `rel="noopener"` is habit rather
+                     than need here, for the same reason.
+
+                     The link text says what it opens and the aria-label
+                     says what will happen, because "flyer" alone does not
+                     warn a screen reader that a new tab is about to appear.
+
+                     The flyer's long alt text went with the image, and its
+                     absence is worth a note for whoever settles D3: it used
+                     to be the only place John's offer appeared in the
+                     markup as words, and the two paragraphs above now carry
+                     that in full, in better prose, which is why nothing was
+                     lost with it. -->
+                <p class="about-flyer">
+                    <a id="poster-link" class="about-flyer-link" href="assets/poster.webp"
+                        target="_blank" rel="noopener"
+                        aria-label="Open John's printed flyer full size in a new tab">See
+                        John's printed flyer &#8599;</a>
+                </p>
+                <button id="poster-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dialog shown when something in the showroom is clicked: the host's
+         voice, telling the story of a car deal one prop at a time. -->
+    <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="modal-backdrop" data-close></div>
+        <div class="modal-container piece-card">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <h2 id="dialog-title" class="piece-title">On the Showroom Floor</h2>
+                <p id="dialog-message" class="piece-subtitle"></p>
+                <!-- Leads on to the contact card rather than off the site.
+                     A <button> because it opens a card in place, wearing
+                     the .dialog-primary reset the same way the dismiss
+                     button below does. -->
+                <button id="dialog-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
+                <button id="dialog-dismiss" class="piece-cancel dialog-primary" type="button" data-close>Back to the showroom</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- The contact card. Reuses the celebration card styling the garden
+         and tire-shop experiences use for theirs, and keeps the
+         #nudge-modal id because the shared stylesheet scopes its modal
+         rules to a fixed list of ids: a new id would arrive with no
+         hiding, no layout, and a near-opaque generic backdrop.
+
+         Two ways in. Tapping any of the three people at the desk opens it
+         immediately, with the heading and opening line tailored to who was
+         tapped. Otherwise it follows every fourth prop story, once that
+         story's card has closed, so the two never stack.
+
+         The three action hrefs are empty here on purpose. main.js
+         assembles them from AUTOMAN_CONFIG.site.contact once the proof of
+         work resolves, which has always happened by the time this card can
+         open. If the proof is unavailable, the actions are replaced by the
+         fallback note rather than left as dead links. -->
+    <div id="nudge-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="nudge-title">
+        <div class="modal-backdrop" data-close></div>
+        <!-- tabindex="-1" so main.js can move focus to the CARD when it
+             opens rather than onto the call button. Focusing the action
+             meant a stray Enter dialed John, and a screen reader met
+             "Call ..." before it had been told whose number it is. -->
+        <div class="modal-container piece-card complete-card" tabindex="-1">
+            <button class="modal-close" aria-label="Close" data-close>&times;</button>
+            <div class="piece-card-content">
+                <p class="complete-kicker" aria-hidden="true">Free consultation, by phone or Zoom</p>
+                <h2 id="nudge-title" class="piece-title">Let John handle it</h2>
+                <p id="nudge-message" class="piece-subtitle">John Walker has spent twenty five years on the other side
+                    of that desk, and more than 2,000 cars have gone through his hands. If he cannot get you the deal
+                    you want, you owe him nothing.</p>
+                <!-- THE FACE, DIRECTLY ABOVE THE CALL BUTTON (D40).
+
+                     It spent one round in the top left corner of the card,
+                     where it was the first thing on the card and shared a
+                     line with the close button, and Steve read it as a
+                     decoration sitting outside the content rather than as
+                     part of it. Here it is the last thing before the one
+                     action that matters: the kicker says the call is free,
+                     the heading and the paragraph say who and why, and then
+                     the person on the other end of it looks back. That is
+                     also why it is a step larger than it was.
+
+                     WHOSE FACE DEPENDS ON WHO WAS TAPPED, which is set by
+                     main.js. John's card carries his photograph. His
+                     customer's card and the dealer's carry a PORTRAIT OF
+                     THE FIGURE ITSELF, rendered by store.js with the
+                     scene's own renderer during the arrival: John's
+                     photograph on the dealer's card read as a mistake
+                     rather than as a house style. Every other route into
+                     this card is John inviting somebody to call him, so
+                     those all keep his photograph, and it is his that ships
+                     in the markup for that reason.
+
+                     assets/john-walker-avatar.webp is a DERIVATIVE of
+                     assets/john-walker-profile.webp, which is the original
+                     Steve supplied: the square is cropped to head and
+                     shoulders so the circle lands on his face rather than
+                     on his shirt, and it is 256px because that covers this
+                     6rem disc at 2x, and the 5rem it drops to on a phone at
+                     3x, and no more. The full
+                     1080px original is 36KB and decodes to 4.7MB of bitmap
+                     for a 96px circle, which is the kind of thing that
+                     costs a mid-range phone a frame in a scene that is
+                     already running WebGL. To regenerate it after changing
+                     the original:
+
+                       crop (157, 107) to (807, 757), resize to 256, then
+                       cwebp -q 88 -sharp_yuv -m 6
+
+                     6.7KB at that setting, and the quality curve is flat
+                     past it: q94 costs another 4.9KB to move the error by
+                     0.6 of a level.
+
+                     The src is inline rather than set on open, unlike the
+                     flyer above. The flyer is a quarter of a megabyte and
+                     nobody should pay for it unopened; this is under seven
+                     kilobytes and the card it belongs to opens the moment
+                     anybody taps anyone at the desk, so a face that fades
+                     in afterwards would be worse than the bytes are. -->
+                <img id="nudge-portrait" class="portrait-disc card-portrait"
+                    src="assets/john-walker-avatar.webp"
+                    width="256" height="256" decoding="async" alt="John Walker">
+                <!-- The three actions and the fallback note are shown and
+                     hidden by main.js through style.display, NOT by adding
+                     a class. The shared stylesheet has no generic .hidden
+                     rule: it scopes hiding to named ids and a couple of
+                     specific classes, so `class="hidden"` on an anchor
+                     here would do exactly nothing and the dead links would
+                     stay on screen. -->
+                <a id="contact-call" class="piece-enter" href="">Call John</a>
+                <a id="contact-text" class="piece-cancel" href="">Send a text</a>
+                <a id="contact-email" class="piece-cancel" href="">Email John</a>
+                <!-- WHAT THE ACTIONS SAY BACK (M37). Empty until something
+                     is copied or shared, and cleared every time the card
+                     opens, so it is never stale.
+
+                     It exists because the three actions above are `tel:`,
+                     `sms:` and `mailto:`, and on a laptop those are
+                     unreliable: a visitor who clicks the Call action can see
+                     nothing happen at the exact moment they decided
+                     to act, and a laptop is where somebody lands when a
+                     friend sends them the link. On a non-touch device the
+                     number goes to the clipboard as well, and this line
+                     says so. The link is still followed either way, because
+                     plenty of desktops DO handle tel: through FaceTime or
+                     Teams. -->
+                <p id="contact-status" class="contact-status" role="status" aria-live="polite"></p>
+                <p id="contact-fallback" class="piece-subtitle" role="status" aria-live="polite"></p>
+                <p class="piece-subtitle contact-where">Baltimore, Maryland, or anywhere by Zoom. 100% satisfaction guarantee.</p>
+                <!-- THE OTHER THING A VISITOR CAN DO FOR JOHN (M37), and it
+                     is here rather than on the About card for one reason:
+                     this is the card somebody is looking at in the moment
+                     they decide NOT to call. "Not me, but I know someone"
+                     is the real alternative action, and until now the page
+                     offered no way to take it at all.
+
+                     A button, not a link: it opens the device's own share
+                     sheet where there is one and copies the address where
+                     there is not, and it has nowhere to go without
+                     JavaScript. Set as a quiet line of type rather than as
+                     a control, because a share button with an icon on it is
+                     the single fastest way to make a page like this read as
+                     marketing. -->
+                <p class="contact-share">
+                    <button id="contact-share" class="contact-share-link" type="button">Send this to someone who is car shopping</button>
+                </p>
+                <button class="piece-cancel" data-close>Back to the showroom</button>
+                <!-- The ownership note used to live at the foot of the
+                     welcome overlay, which this page no longer has. It
+                     belongs on the card where the name is doing the most
+                     work rather than on a strip that fades away, so this
+                     is its permanent home. -->
+                <p class="ownership-note">The Auto Man name belongs to John Walker and appears here with his
+                    blessing.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- role="img" added at M39. A <canvas> has no implicit role, and an
+         aria-label on a role-less element is ignored outright by several
+         screen readers, so this description was written and then not
+         announced. `img` is the honest role: to a screen reader this
+         surface is a picture, because every route into the room's stories
+         is a pointer raycast (decision D4). The three halos are real
+         buttons for exactly that reason, and they now hold for the whole
+         visit (D41), so the keyboard route to John never expires. -->
+    <canvas id="game-canvas" role="img" aria-label="A living 3D car dealership desk: John Walker points at a deal sheet and makes his customer's case while she nods along, the dealer listens from across the desk, and cars roll past the lot beyond the glass wall behind them"></canvas>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

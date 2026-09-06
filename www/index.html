@@ -38,7 +38,15 @@
     <meta name="twitter:image:alt" content="The SceneXP logo and wordmark on a dark background with the tagline, custom 3D experiences right in your browser.">
 
     <!-- Structured data: site identity plus the experience directory.
-         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+         JSON-LD is a data block (not executed), so it is allowed under the CSP.
+
+         ONE ItemList PER CATEGORY, in the order the groups appear on the page,
+         and each @id is the real fragment of that group's heading, so a
+         consumer that follows the id lands on the section it just read about.
+         Within a list, position 1 is the newest experience, matching the cards.
+
+         When adding a scene: add it at the top of its category's list here,
+         renumber that list, and leave the other two alone. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -61,72 +69,107 @@
         },
         {
           "@type": "ItemList",
-          "@id": "https://www.scenexp.com/#experiences",
-          "name": "SceneXP 3D experiences",
+          "@id": "https://www.scenexp.com/#worlds-and-games",
+          "name": "Worlds and games",
+          "description": "The experiences built for their own sake: games to play, worlds to wander, and simulations that exist to show what a browser can do.",
           "itemListElement": [
             {
               "@type": "ListItem",
               "position": 1,
+              "url": "https://www.scenexp.com/garden/",
+              "name": "Fractal Garden"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
               "url": "https://www.scenexp.com/highwater/",
               "name": "High Water"
             },
             {
               "@type": "ListItem",
-              "position": 2,
+              "position": 3,
               "url": "https://www.scenexp.com/earthdefense/",
               "name": "Earth Defense"
             },
             {
               "@type": "ListItem",
-              "position": 3,
+              "position": 4,
               "url": "https://www.scenexp.com/mandelbrot/",
               "name": "The Mandelbrot Set"
             },
             {
               "@type": "ListItem",
-              "position": 4,
-              "url": "https://www.scenexp.com/jamar/",
-              "name": "Jamar's Karaoke Night"
-            },
-            {
-              "@type": "ListItem",
               "position": 5,
-              "url": "https://www.scenexp.com/gavin/",
-              "name": "Gavin's Bug Patrol"
-            },
-            {
-              "@type": "ListItem",
-              "position": 6,
               "url": "https://www.scenexp.com/steve/",
               "name": "Steve's Home Office"
+            }
+          ]
+        },
+        {
+          "@type": "ItemList",
+          "@id": "https://www.scenexp.com/#small-business-tributes",
+          "name": "Small business tributes",
+          "description": "3D worlds built for real small businesses, in place of another template website.",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "url": "https://www.scenexp.com/automan/",
+              "name": "John Walker, The Auto Man"
             },
             {
               "@type": "ListItem",
-              "position": 7,
+              "position": 2,
               "url": "https://www.scenexp.com/interstate/",
               "name": "The Interstate Tire Shop"
             },
             {
               "@type": "ListItem",
-              "position": 8,
+              "position": 3,
               "url": "https://www.scenexp.com/seedtoseed/",
               "name": "The Seed to Seed Garden"
             },
             {
               "@type": "ListItem",
-              "position": 9,
+              "position": 4,
+              "url": "https://www.scenexp.com/sunnyvalejenn/",
+              "name": "Sunnyvale Jenn Consulting"
+            }
+          ]
+        },
+        {
+          "@type": "ItemList",
+          "@id": "https://www.scenexp.com/#personal-tributes",
+          "name": "Personal tributes",
+          "description": "Worlds built to honor a particular person, or to hold on to a particular memory.",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "url": "https://www.scenexp.com/jamar/",
+              "name": "Jamar's Karaoke Night"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "url": "https://www.scenexp.com/gavin/",
+              "name": "Gavin's Bug Patrol"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
               "url": "https://www.scenexp.com/roqui/",
               "name": "Zumba with Roqui"
             },
             {
               "@type": "ListItem",
-              "position": 10,
+              "position": 4,
               "url": "https://www.scenexp.com/family/",
               "name": "Putt Putt with Mom and Dad"
             },
             {
               "@type": "ListItem",
-              "position": 11,
+              "position": 5,
               "url": "https://www.scenexp.com/dad/",
               "name": "A Ride on the NCR Trail"
             }
@@ -138,14 +181,13 @@
 
     <title>SceneXP | 3D Worlds, Games, and Experiments</title>
 
-    <link rel="preload" href="/css/site.min.css?v=2" as="style">
+    <link rel="preload" href="/css/site.min.css?v=4" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/site.min.css?v=2">
+    <link rel="stylesheet" href="/css/site.min.css?v=4">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
     <script src="/js/nav.min.js?v=1" defer></script>
-    <script src="/js/directory.min.js?v=10" defer></script>
 </head>
 
 <body>
@@ -214,219 +256,278 @@
              duplicated. Two knock-on rules follow from that, and both live in
              site.css: `.section-head h1, .section-head h2` are styled together
              so the level stays an outline decision rather than a visual one,
-             and the cards below are h2 rather than h3 so no level is skipped
-             between this heading and theirs. -->
+             and the CATEGORY HEADINGS below are h2 so no level is skipped
+             between this heading and theirs. The card titles are h3, one level
+             under the category they sit in. They were h2 before the collection
+             was grouped, when the cards were the section's only children. -->
         <section id="experiences" class="section" aria-labelledby="experiences-heading">
             <div class="container">
                 <div class="section-head">
                     <h1 id="experiences-heading">3D worlds, games, and experiments, right in your browser</h1>
-                    <p>Worlds to walk through, games to play, stories to sit with, and experiments that
-                        exist to show you what a browser can do. Every one runs on any modern device with
-                        no app, no download, and nothing to install. New experiences land regularly, so it
-                        is worth checking back now and then.</p>
+                    <!-- SHORT ON PURPOSE. This paragraph and the cards are competing for
+                         the same few hundred pixels on a phone, and the cards are the
+                         product. Everything trimmed out of here is still said, at
+                         length, in the sections below the grid. -->
+                    <p>Worlds to walk through, games to play, and experiments that exist to show you
+                        what a browser can do. No app, no download, nothing to install.</p>
                 </div>
 
-                <!-- Search is progressive enhancement: directory.js reveals the form
-                     and filters the static cards below. No JS, no search box, full list. -->
-                <form id="experience-search-form" class="experience-search" role="search" hidden>
-                    <label for="experience-search">Search the experiences</label>
-                    <input type="search" id="experience-search" name="q" autocomplete="off"
-                        placeholder="Try trail, space, or garden">
-                </form>
-                <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
+                <!-- THREE CATEGORY GROUPS, newest experience first inside each one.
+                     When adding a scene, place its card at the TOP of its category's
+                     list here and renumber that category's JSON-LD ItemList in the
+                     head. The other two groups do not move.
 
-                <!-- Newest experience first. When adding a scene, place its card at
-                     the TOP of this list and renumber the JSON-LD ItemList in the
-                     head to match. -->
-                <ul class="experience-grid">
-                    <li class="experience-card" data-slug="garden">
-                        <a href="/garden/">
-                            <img src="/garden/assets/og-garden.webp?v=3" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below grey rolling hills, under a blue sky with white clouds.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">A garden you plant and tend yourself</p>
-                                <h2>Fractal Garden</h2>
-                                <p>Plant a garden of fractal trees, then watch it live through the
-                                    years. Choose from seventeen species, each one grown from its
-                                    own seed so no two are alike, then tend them through spring
-                                    blossom, summer fruit, autumn color and winter snow. Every tree
-                                    you plant is still standing when you come back.</p>
-                                <span class="experience-cta">Plant your first tree →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="highwater">
-                        <a href="/highwater/">
-                            <img src="/highwater/assets/og-highwater.webp?v=1" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="A view out to sea under a low grey storm sky, with a branching fork of lightning coming down to the horizon and a small orange and white navigation buoy standing in the heaving grey swell.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">A study of water and weather</p>
-                                <h2>High Water</h2>
-                                <p>Ninety seconds at the water's edge, beginning on an ordinary
-                                    bright afternoon. The sky closes over, lightning starts to work
-                                    along the cloud base, and the surf keeps rising. Please know
-                                    before you start that the sea does not stay where it belongs.</p>
-                                <span class="experience-cta">Stand at the shore →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="earthdefense">
-                        <a href="/earthdefense/">
-                            <img src="/earthdefense/assets/og-earthdefense.webp?v=2" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, and orange diamonds mark the incoming Martian raiders across a deep starfield.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">Built for the joy of flying through space</p>
-                                <h2>Earth Defense</h2>
-                                <p>Fly a single ship in orbit above a massive Earth while twelve
-                                    Martian raiders close on the installations below. There is no
-                                    fire button to learn: line a raider up in the middle of your
-                                    view and your guns take care of the rest.</p>
-                                <span class="experience-cta">Take the helm →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="mandelbrot">
-                        <a href="/mandelbrot/">
-                            <img src="/mandelbrot/assets/og-mandelbrot.webp" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="A deep zoom into the Mandelbrot set: a giant spiral of glowing red and gold fractal filaments coiling toward its center against dark space.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">For Benoit Mandelbrot</p>
-                                <h2>The Mandelbrot Set</h2>
-                                <p>The most famous shape in mathematics floats in a quiet starfield.
-                                    Choose a destination on its burning edge, press play, and the auto
-                                    zoom dives hundreds of billions of times deep, until the numbers
-                                    themselves run out.</p>
-                                <span class="experience-cta">Begin the dive →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="jamar">
-                        <a href="/jamar/">
-                            <img src="/jamar/assets/og-jamar.webp" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="A 3D karaoke bar at night: Jamar sings on the corner stage under a happy birthday banner while friends raise glasses from a red vinyl booth.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">Happy Birthday, Jamar!</p>
-                                <h2>Jamar's Karaoke Night</h2>
-                                <p>It is karaoke night at the corner bar, and the birthday singer is
-                                    Steve's best friend Jamar. Settle in, follow the rolling lyrics
-                                    screen, and tap the jukebox to pick what he sings next.</p>
-                                <span class="experience-cta">Pull up a stool →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="gavin">
-                        <a href="/gavin/">
-                            <img src="/gavin/assets/og-gavin.webp" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="A 3D close-up of a Confederate Jasmine in a cedar planter box, with three kids peering through the leaves in search of the bugs living there.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">For Gavin, age eleven</p>
-                                <h2>Gavin's Bug Patrol</h2>
-                                <p>Every spring, Steve's son Gavin releases ladybugs and praying mantises into
-                                    the patio plants. Settle in for a close-up of the jasmine, watch the garden
-                                    change shifts at dusk, and see if you can spot all three mantises.</p>
-                                <span class="experience-cta">Look closer →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="steve">
-                        <a href="/steve/">
-                            <img src="/steve/assets/og-steve.webp" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="Steve's 3D home office: he stands at his sit-stand desk working on SceneXP code while a tuxedo cat sleeps by the window.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">Where SceneXP gets built</p>
-                                <h2>Steve's Home Office</h2>
-                                <p>Step inside the little office in Steve's house where every one of these
-                                    experiences gets built. Peek at the code on the monitor, read the whiteboard,
-                                    watch for birds on the fence, and please mind the sleeping cat.</p>
-                                <span class="experience-cta">Step inside →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="interstate">
-                        <a href="/interstate/">
-                            <img src="/interstate/assets/og-interstate.webp" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="A 3D tire shop storefront with an open garage bay beneath the Interstate Tire sign.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">For a neighborhood tire shop</p>
-                                <h2>The Interstate Tire Shop</h2>
-                                <p>Walk into a 3D tire shop built for Interstate Tire in historic Cockeysville,
-                                    Maryland. See the car up on the lift, catch the waiting room TV, and stroll
-                                    Railroad Ave to the 1892 freight depot.</p>
-                                <span class="experience-cta">Step inside →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="seedtoseed">
-                        <a href="/seedtoseed/">
-                            <img src="/seedtoseed/assets/og-seedtoseed.webp" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="A 3D backyard vegetable garden with raised beds, a greenhouse, and a picket fence.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">For a gardening business</p>
-                                <h2>The Seed to Seed Garden</h2>
-                                <p>Stroll a 3D backyard garden built for Seed to Seed, a home vegetable gardening
-                                    company. Wander the raised beds, step inside the greenhouse, and meet the
-                                    gardener.</p>
-                                <span class="experience-cta">Step inside →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="roqui">
-                        <a href="/roqui/">
-                            <img src="/roqui/assets/og-roqui.webp" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="A joyful 3D Zumba class with dancers mid-step and a disco ball overhead.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">For a wonderful instructor</p>
-                                <h2>Zumba with Roqui</h2>
-                                <p>Step into a joyful 3D Zumba class and say hola to Roqui. Catch the beat, fire
-                                    up the speakers, and find the disco ball.</p>
-                                <span class="experience-cta">Step inside →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="family">
-                        <a href="/family/">
-                            <img src="/family/assets/og-family.webp" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="A 3D pirate mini golf course in Ocean City, with a pirate ship at its center.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">For a family summer memory</p>
-                                <h2>Putt Putt with Mom and Dad</h2>
-                                <p>Play a 3D round of pirate mini golf in Ocean City, Maryland, built from a
-                                    favorite summer memory. Board the ship and walk the plank hole.</p>
-                                <span class="experience-cta">Step inside →</span>
-                            </div>
-                        </a>
-                    </li>
-                    <li class="experience-card" data-slug="dad">
-                        <a href="/dad/">
-                            <img src="/dad/assets/og-dad.webp" width="1200" height="630" loading="lazy"
-                                decoding="async"
-                                alt="A walkable 3D stretch of the NCR Trail, with the Gunpowder River alongside.">
-                            <div class="experience-card-body">
-                                <p class="experience-eyebrow">In memory of a dad</p>
-                                <h2>A Ride on the NCR Trail</h2>
-                                <p>Take a quiet walk on a 3D stretch of Maryland's NCR Trail, built for a dad who
-                                    rode it nearly every weekend. Find the river and listen for the little
-                                    waterfall.</p>
-                                <span class="experience-cta">Step inside →</span>
-                            </div>
-                        </a>
-                    </li>
-                </ul>
+                     NO SEARCH BOX AND NO FILTER CHIPS, ON PURPOSE. Both were here
+                     briefly and both were removed on 2026-09-04: with a dozen scenes
+                     under three headings the grouping already answers the question
+                     they answered, and on a phone they pushed the first card 300px
+                     below the fold. The whole page is static again as a result, with
+                     no progressive enhancement to keep working. If the collection
+                     grows enough to need finding rather than scanning, they are in
+                     the git history along with the per-scene search tags. -->
+                <section class="experience-group" data-category="worlds"
+                    aria-labelledby="worlds-and-games">
+                    <h2 id="worlds-and-games">Worlds and games</h2>
+                    <ul class="experience-grid">
+                        <li class="experience-card" data-slug="garden">
+                            <a href="/garden/">
+                                <img src="/garden/assets/og-garden.webp?v=3" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below grey rolling hills, under a blue sky with white clouds.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">A garden you plant and tend yourself</p>
+                                    <h3>Fractal Garden</h3>
+                                    <p>Plant a garden of fractal trees, then watch it live through the
+                                        years. Choose from seventeen species, each one grown from its
+                                        own seed so no two are alike, then tend them through spring
+                                        blossom, summer fruit, autumn color and winter snow. Every tree
+                                        you plant is still standing when you come back.</p>
+                                    <span class="experience-cta">Plant your first tree →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="highwater">
+                            <a href="/highwater/">
+                                <img src="/highwater/assets/og-highwater.webp?v=1" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A view out to sea under a low grey storm sky, with a branching fork of lightning coming down to the horizon and a small orange and white navigation buoy standing in the heaving grey swell.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">A study of water and weather</p>
+                                    <h3>High Water</h3>
+                                    <p>Ninety seconds at the water's edge, beginning on an ordinary
+                                        bright afternoon. The sky closes over, lightning starts to work
+                                        along the cloud base, and the surf keeps rising. Please know
+                                        before you start that the sea does not stay where it belongs.</p>
+                                    <span class="experience-cta">Stand at the shore →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="earthdefense">
+                            <a href="/earthdefense/">
+                                <img src="/earthdefense/assets/og-earthdefense.webp?v=2" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, and orange diamonds mark the incoming Martian raiders across a deep starfield.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">Built for the joy of flying through space</p>
+                                    <h3>Earth Defense</h3>
+                                    <p>Fly a single ship in orbit above a massive Earth while twelve
+                                        Martian raiders close on the installations below. There is no
+                                        fire button to learn: line a raider up in the middle of your
+                                        view and your guns take care of the rest.</p>
+                                    <span class="experience-cta">Take the helm →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="mandelbrot">
+                            <a href="/mandelbrot/">
+                                <img src="/mandelbrot/assets/og-mandelbrot.webp" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A deep zoom into the Mandelbrot set: a giant spiral of glowing red and gold fractal filaments coiling toward its center against dark space.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">For Benoit Mandelbrot</p>
+                                    <h3>The Mandelbrot Set</h3>
+                                    <p>The most famous shape in mathematics floats in a quiet starfield.
+                                        Choose a destination on its burning edge, press play, and the auto
+                                        zoom dives hundreds of billions of times deep, until the numbers
+                                        themselves run out.</p>
+                                    <span class="experience-cta">Begin the dive →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="steve">
+                            <a href="/steve/">
+                                <img src="/steve/assets/og-steve.webp" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="Steve's 3D home office: he stands at his sit-stand desk working on SceneXP code while a tuxedo cat sleeps by the window.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">Where SceneXP gets built</p>
+                                    <h3>Steve's Home Office</h3>
+                                    <p>Step inside the little office in Steve's house where every one of these
+                                        experiences gets built. Peek at the code on the monitor, read the whiteboard,
+                                        watch for birds on the fence, and please mind the sleeping cat.</p>
+                                    <span class="experience-cta">Step inside →</span>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
+                </section>
 
-                <div id="search-empty" class="search-empty" hidden>
-                    <p>No matches just yet. Please try another word, like trail, space, or garden.</p>
-                </div>
+                <section class="experience-group" data-category="business"
+                    aria-labelledby="small-business-tributes">
+                    <h2 id="small-business-tributes">Small business tributes</h2>
+                    <ul class="experience-grid">
+                        <li class="experience-card" data-slug="automan">
+                            <a href="/automan/">
+                                <!-- THE ONLY CARD ON THE PAGE THAT IS NOT ITS SCENE'S SOCIAL IMAGE.
+                                     og-automan.webp is the gold W on navy, which names the business
+                                     instantly in a message thread and reads as a broken image in a
+                                     grid of thirteen scene renders. The share preview keeps it, the
+                                     directory gets the room. tests/directory.test.mjs allows exactly
+                                     this split and holds the og:image to og-automan either way. -->
+                                <img src="/automan/assets/card-automan.webp?v=1" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A 3D dealership desk seen across the showroom floor: three figures sit around a dark wood table holding a deal sheet and a small yellow model car, a whiteboard behind them reads Today's schedule, 2:00 John Walker, and the glass frontage looks out on trucks parked in the lot.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">For a car buying advocate</p>
+                                    <h3>John Walker, The Auto Man</h3>
+                                    <p>Pull up to a dealership desk where John Walker is sitting on the
+                                        buyer's side of it. Twenty five years of arguing deals down and
+                                        more than 2,000 cars, in Baltimore or anywhere by Zoom. Tap
+                                        anyone at the desk to hear their side of it.</p>
+                                    <span class="experience-cta">Take a seat →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="interstate">
+                            <a href="/interstate/">
+                                <img src="/interstate/assets/og-interstate.webp" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A 3D tire shop storefront with an open garage bay beneath the Interstate Tire sign.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">For a neighborhood tire shop</p>
+                                    <h3>The Interstate Tire Shop</h3>
+                                    <p>Walk into a 3D tire shop built for Interstate Tire in historic Cockeysville,
+                                        Maryland. See the car up on the lift, catch the waiting room TV, and stroll
+                                        Railroad Ave to the 1892 freight depot.</p>
+                                    <span class="experience-cta">Step inside →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="seedtoseed">
+                            <a href="/seedtoseed/">
+                                <img src="/seedtoseed/assets/og-seedtoseed.webp" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A 3D backyard vegetable garden with raised beds, a greenhouse, and a picket fence.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">For a gardening business</p>
+                                    <h3>The Seed to Seed Garden</h3>
+                                    <p>Stroll a 3D backyard garden built for Seed to Seed, a home vegetable gardening
+                                        company. Wander the raised beds, step inside the greenhouse, and meet the
+                                        gardener.</p>
+                                    <span class="experience-cta">Step inside →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="sunnyvalejenn">
+                            <a href="/sunnyvalejenn/">
+                                <img src="/sunnyvalejenn/assets/og-sunnyvalejenn.webp?v=1" width="1200" height="630"
+                                    loading="lazy" decoding="async"
+                                    alt="A bright 3D home office: Jenn works at a light oak desk facing the doorway, the week's plan fills a whiteboard on one wall, a teal clock hangs above her monitor, and a sunny window looks out on a cedar fence and trees.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">For a small business operations consultant</p>
+                                    <h3>Sunnyvale Jenn Consulting</h3>
+                                    <p>Look in on the sunny home office of Sunnyvale Jenn Consulting,
+                                        built for a consultant who untangles the operations that busy
+                                        founders never find time for. Jenn is at her desk, the week's
+                                        plan is on the whiteboard, and the birds keep visiting the
+                                        fence.</p>
+                                    <span class="experience-cta">Step inside →</span>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
+                </section>
+
+                <section class="experience-group" data-category="personal"
+                    aria-labelledby="personal-tributes">
+                    <h2 id="personal-tributes">Personal tributes</h2>
+                    <ul class="experience-grid">
+                        <li class="experience-card" data-slug="jamar">
+                            <a href="/jamar/">
+                                <img src="/jamar/assets/og-jamar.webp" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A 3D karaoke bar at night: Jamar sings on the corner stage under a happy birthday banner while friends raise glasses from a red vinyl booth.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">Happy Birthday, Jamar!</p>
+                                    <h3>Jamar's Karaoke Night</h3>
+                                    <p>It is karaoke night at the corner bar, and the birthday singer is
+                                        Steve's best friend Jamar. Settle in, follow the rolling lyrics
+                                        screen, and tap the jukebox to pick what he sings next.</p>
+                                    <span class="experience-cta">Pull up a stool →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="gavin">
+                            <a href="/gavin/">
+                                <img src="/gavin/assets/og-gavin.webp" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A 3D close-up of a Confederate Jasmine in a cedar planter box, with three kids peering through the leaves in search of the bugs living there.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">For Gavin, age eleven</p>
+                                    <h3>Gavin's Bug Patrol</h3>
+                                    <p>Every spring, Steve's son Gavin releases ladybugs and praying mantises into
+                                        the patio plants. Settle in for a close-up of the jasmine, watch the garden
+                                        change shifts at dusk, and see if you can spot all three mantises.</p>
+                                    <span class="experience-cta">Look closer →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="roqui">
+                            <a href="/roqui/">
+                                <img src="/roqui/assets/og-roqui.webp" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A joyful 3D Zumba class with dancers mid-step and a disco ball overhead.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">For a wonderful instructor</p>
+                                    <h3>Zumba with Roqui</h3>
+                                    <p>Step into a joyful 3D Zumba class and say hola to Roqui. Catch the beat, fire
+                                        up the speakers, and find the disco ball.</p>
+                                    <span class="experience-cta">Step inside →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="family">
+                            <a href="/family/">
+                                <img src="/family/assets/og-family.webp" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A 3D pirate mini golf course in Ocean City, with a pirate ship at its center.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">For a family summer memory</p>
+                                    <h3>Putt Putt with Mom and Dad</h3>
+                                    <p>Play a 3D round of pirate mini golf in Ocean City, Maryland, built from a
+                                        favorite summer memory. Board the ship and walk the plank hole.</p>
+                                    <span class="experience-cta">Step inside →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="dad">
+                            <a href="/dad/">
+                                <img src="/dad/assets/og-dad.webp" width="1200" height="630" loading="lazy"
+                                    decoding="async"
+                                    alt="A walkable 3D stretch of the NCR Trail, with the Gunpowder River alongside.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">In memory of a dad</p>
+                                    <h3>A Ride on the NCR Trail</h3>
+                                    <p>Take a quiet walk on a 3D stretch of Maryland's NCR Trail, built for a dad who
+                                        rode it nearly every weekend. Find the river and listen for the little
+                                        waterfall.</p>
+                                    <span class="experience-cta">Step inside →</span>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
+                </section>
+
             </div>
         </section>
 
@@ -434,28 +535,34 @@
             <div class="container">
                 <div class="section-head">
                     <h2 id="for-heading">What you will find here</h2>
-                    <p>The collection wanders on purpose. Some experiences are places, some are games, and
-                        some exist for no better reason than to find out whether a browser could do the
-                        thing at all.</p>
+                    <p>The collection wanders on purpose, so it is sorted into three groups above. Here is
+                        what each of them holds, and every heading below takes you straight to it.</p>
                 </div>
+                <!-- THESE THREE CARDS ARE THE THREE CATEGORIES, in the same order and
+                     under the same names as the groups above. They were a different
+                     three-way split before the directory was grouped, which meant the
+                     page taught a visitor two taxonomies at once. Whenever a category
+                     is added, renamed, or retired, it changes here too. -->
                 <ul class="audience-grid">
                     <li class="audience-card">
-                        <h3>Worlds and stories</h3>
-                        <p>Places you walk through in first person, or settle into and watch. A quiet trail
-                            along the Gunpowder, a karaoke night at the corner bar, a tire shop on Railroad
-                            Ave. Many of these were built to honor a real person or business.</p>
+                        <h3><a href="#worlds-and-games">Worlds and games</a></h3>
+                        <p>The ones built for their own sake. Defend Earth from a Martian fleet, dive
+                            hundreds of billions of times deep into the Mandelbrot set, watch a modelled
+                            ocean shoal and break on a measured beach, or plant a garden of fractal trees
+                            and tend it through the seasons.</p>
                     </li>
                     <li class="audience-card">
-                        <h3>Games and rides</h3>
-                        <p>Some hand you the controls and some fly themselves. Defend Earth from a Martian
-                            fleet, play a round of pirate mini golf, or take a hands-off dive hundreds of
-                            billions of times deep into the Mandelbrot set.</p>
+                        <h3><a href="#small-business-tributes">Small business tributes</a></h3>
+                        <p>Real businesses, rebuilt as places you can visit. A dealership desk with a car
+                            buying advocate on the buyer's side of it, a tire shop on historic Railroad Ave
+                            with a car up on the lift, a backyard vegetable garden with a greenhouse, and a
+                            consultant's sunny home office.</p>
                     </li>
                     <li class="audience-card">
-                        <h3>Experiments and simulations</h3>
-                        <p>The ones built to show you something. A physically modelled ocean that shoals and
-                            breaks on a measured beach, and a garden of fractal trees that grow, fruit, and
-                            go bare with the seasons while you tend them.</p>
+                        <h3><a href="#personal-tributes">Personal tributes</a></h3>
+                        <p>Worlds made for a particular person, or to hold on to a particular memory. A
+                            quiet trail along the Gunpowder, a karaoke night at the corner bar, a Zumba
+                            class, a bug hunt in the jasmine, a round of pirate mini golf.</p>
                     </li>
                 </ul>
             </div>

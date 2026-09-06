@@ -53,9 +53,9 @@
 
     <title>Contribute | SceneXP</title>
 
-    <link rel="preload" href="/css/site.min.css?v=2" as="style">
+    <link rel="preload" href="/css/site.min.css?v=4" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/site.min.css?v=2">
+    <link rel="stylesheet" href="/css/site.min.css?v=4">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
@@ -251,10 +251,15 @@ python3 -m http.server 8000
                         test for your world, following the <code>tests</code> folder's
                         <code>&lt;experience&gt;-init.test.mjs</code> pattern. Every pull request should
                         bring tests along for the code it adds or changes.</li>
-                    <li><strong>Add your world to the directory.</strong> One card in
-                        <code>www/index.html</code>, one entry in <code>www/js/directory.js</code>, one URL
-                        in <code>www/sitemap.xml</code>, and a short description in
-                        <code>www/llms.txt</code>.</li>
+                    <li><strong>Add your world to the directory.</strong> The home page groups the
+                        collection into three categories, so please pick the one your world belongs
+                        to: Worlds and games for anything built for its own sake, Small business
+                        tributes, or Personal tributes. Then add one card at the top of that group in
+                        <code>www/index.html</code>, add your world at the top of the same category's
+                        structured-data list in that file's head, one URL in
+                        <code>www/sitemap.xml</code>, and a short description under your category's
+                        heading in <code>www/llms.txt</code>. The test suite checks that all four
+                        agree.</li>
                     <li><strong>If your world remembers anything, say so in the privacy policy.</strong>
                         <code>sessionStorage</code> needs nothing, since it goes when the tab closes and the
                         policy already covers it. Anything you put in <code>localStorage</code> outlives the

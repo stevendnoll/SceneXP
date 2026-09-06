@@ -110,3 +110,80 @@ export async function getProofOfWork(options = {}) {
     if (proof) persistProof(proof);
     return proof;
 }
+
+// ---- Card focus trap (shared) ----------------------------------------------
+//
+// EVERY EXPERIENCE'S CARDS CLAIM `aria-modal="true"`, AND ONLY ONE OF THEM
+// MADE IT TRUE. That attribute is a promise to a screen reader that the rest
+// of the page is inert while the card is up, and nothing enforced it: Tab
+// walked straight out of the card into the floating Home and info buttons
+// behind the backdrop, and on the walkable scenes into the controls too. The
+// visitor is then operating a page they cannot see, with a reader announcing
+// a dialog they have already left.
+//
+// www/automan solved it per-scene during its accessibility sweep and this is
+// that solution moved somewhere the other twelve can have it, edited into the
+// existing shared part rather than cut as a new version (a duplicate file is
+// what costs coverage, an in-place addition does not).
+//
+// It needs NO per-scene bookkeeping, which is the point: it reads the DOM the
+// same way a screen reader does, so a scene wires it once and never has to
+// keep it told about which card is open.
+
+/** What can be tabbed to. `[tabindex="-1"]` is deliberately excluded: a card
+ *  container may carry one so focus can LAND on the card when it opens
+ *  (rather than on its primary action, which puts a stray Enter one keypress
+ *  from an outbound link), and it must not become a tab stop of its own. */
+const CARD_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), '
+    + 'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Visible in the layout sense, which is the sense that matters for a tab
+ *  stop. Both offsets are zero for a `display: none` element and non-zero for
+ *  anything laid out, so this catches BOTH ways these cards hide things: the
+ *  `.hidden` class on the card itself, and the inline `style.display` some
+ *  scenes use on individual actions that are not ready yet. A trap that
+ *  counted a hidden action would wrap onto a control nobody can reach. */
+function isLaidOut(el) {
+    return el.offsetWidth > 0 || el.offsetHeight > 0;
+}
+
+/** The card currently up. Last one in document order wins, on the assumption
+ *  these scenes only ever have one card open at a time, which is a rule they
+ *  all already keep for their own reasons. */
+function topmostOpenCard() {
+    const cards = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+    let open = null;
+    cards.forEach((card) => { if (isLaidOut(card)) open = card; });
+    return open;
+}
+
+/** Wrap Tab around the open card, so the keyboard cannot leave it.
+ *
+ *  Call once per scene, ideally with the scene's own AbortSignal so it comes
+ *  off with everything else at teardown. Safe to call when the page has no
+ *  cards: it does nothing until one is open. */
+export function installCardFocusTrap(options = {}) {
+    const opts = options.signal ? { capture: true, signal: options.signal }
+        : { capture: true };
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab') return;
+        const card = topmostOpenCard();
+        if (!card) return;
+
+        const items = Array.from(card.querySelectorAll(CARD_FOCUSABLE)).filter(isLaidOut);
+        if (!items.length) return;
+
+        const first = items[0];
+        const last = items[items.length - 1];
+        const here = document.activeElement;
+        // OUTSIDE COUNTS AS A WRAP. Focus can already be out of the card when
+        // this fires (the card opened while the button that opened it still
+        // had focus), and without this the first Tab of every visit escapes.
+        const outside = !card.contains(here);
+
+        if (event.shiftKey ? (here === first || outside) : (here === last || outside)) {
+            (event.shiftKey ? last : first).focus();
+            event.preventDefault();
+        }
+    }, opts);
+}

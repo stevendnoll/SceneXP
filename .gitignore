@@ -23,5 +23,33 @@ www/interstate/assets/og-interstate.jpg
 www/seedtoseed/assets/og-seedtoseed.webp
 www/seedtoseed/assets/og-seedtoseed.jpg
 
-# Omit from sitemap.xml, llms.txt, and the scene directory.
-www/sunnyvalejenn
+# Sunnyvale Jenn's logo is the only artwork held back from her experience.
+# The 3D room never reproduces the mark, it only borrows the teals, so
+# og-sunnyvalejenn.* is an ordinary scene capture and ships.
+www/sunnyvalejenn/assets/svj-1.webp
+www/sunnyvalejenn/assets/svj-1.jpg
+
+# John Walker's likeness, and only that. His photographs, and poster.webp,
+# which is his own printed flyer and carries his photograph, his phone
+# number, and his email address.
+#
+# HIS W IS NOT ON THIS LIST, on purpose, and neither is the social card the
+# W sits on. The path data is inline in www/automan/index.html twice, because
+# the mark is the intro panel's bullet and the info button's glyph rather than
+# a loaded image, so no rule here can hold the shape back. Once that is true,
+# withholding favicon.svg only costs the tab icon and the loading screen on a
+# fresh clone, and withholding og-automan.* only costs the SHARE preview its
+# image (the home page card is a different file, card-automan.webp, a render
+# of the showroom rather than the mark), while og-card.html and
+# css/og-card.css ship the recipe that regenerates it from favicon.svg
+# anyway. None of that protects anything.
+#
+# So the mark ships and stays John's: our MIT license covers the code that
+# draws it and not the mark itself. That carve-out is stated in LICENSE, in
+# README.md, in www/terms.html, in the comment at the top of favicon.svg, and
+# beside the inline paths in index.html. The line this list draws is likeness,
+# which cannot be regenerated from anything here.
+www/automan/assets/john-walker-about.webp
+www/automan/assets/john-walker-avatar.webp
+www/automan/assets/john-walker-profile.webp
+www/automan/assets/poster.webp
