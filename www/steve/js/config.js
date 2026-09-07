@@ -97,7 +97,7 @@ export const STEVE_CONFIG = deepFreeze({
     // marketing pages live at the serving domain's root), and anything that
     // names the serving domain is derived from location at runtime. This
     // experience has no featured business: it depicts the builder himself,
-    // so the Home button goes to the serving site's root in the same tab.
+    // so the welcome screen's directory link goes to the serving site's root.
     site: {
         // The person this experience celebrates. Meta by design: the host of
         // SceneXP, at the desk where SceneXP gets built.

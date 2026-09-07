@@ -66,13 +66,13 @@
 
     <title>The Mandelbrot Set</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=2" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
     <link rel="preload" href="css/experience.min.css?v=1" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=2">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
     <link rel="stylesheet" href="css/experience.min.css?v=1">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
@@ -83,8 +83,13 @@
 </head>
 
 <body>
-    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
-    <a class="skip-link" href="#home-btn">Skip to home link</a>
+    <!-- THERE IS NO SKIP LINK HERE ANY MORE. It read "Skip to home link" and
+         landed on the Home button, which was this page's only floating
+         control. With Home removed there is nothing left in the corner to
+         skip to, and a skip link whose target does not exist is worse than
+         none: it is the first thing a keyboard visitor reaches and it would
+         move focus nowhere. The directory link now lives at the foot of the
+         welcome overlay, which is already the first thing on the page. -->
 
     <!-- The live page's heading. Screen-reader only: the room is the title
          here, and a line of type across the top of it would be a caption on a
@@ -142,23 +147,24 @@
                 <span>DIVE</span> Tap a glowing ring and fall into the burning edge. The detail never ends.
                 <span>STEER</span> Pause, flip the direction, change the speed, or reset with the buttons below.
             </div>
+            <!-- The one link back to the directory, replacing the floating Home
+                 button (2026-09-07): Home sat in the corner of the live scene
+                 and read as "reset this view", so visitors tapped it, landed on
+                 the directory, and left instead of coming back. New tab, so
+                 this scene is still here afterwards. main.js syncs the href
+                 from config and shields it from the overlay's click-to-start,
+                 without which a tap here would just start the scene. -->
+            <a id="explore-link" class="welcome-explore" href="/" target="_blank" rel="noopener"
+                aria-label="More 3D worlds to explore at SceneXP.com (opens in a new tab)">More 3D worlds to explore at SceneXP.com</a>
         </div>
     </div>
 
-    <!-- Floating controls -->
-    <!-- The Home button returns to the serving site's root in the same tab
-         (there is no featured business here; applySiteLinks keeps it in sync
-         with MANDELBROT_CONFIG.site.home). The pan and zoom row is built by
-         the shared pan part at runtime. -->
-    <a id="home-btn" class="ui-float menu-btn" href="/"
-        title="Back to the main site"
-        aria-label="Back to the main site">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
-            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
-            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
-        </svg>
-    </a>
+    <!-- THE HOME BUTTON IS GONE (2026-09-07), and it was the only float in
+         the markup: visitors read it as "reset this view", tapped it, and
+         left from the directory rather than coming back. The way to the
+         directory is now a named link at the foot of the welcome overlay
+         above. The AUTOZOOM row and the pan and zoom row are still built by
+         main.js and the shared pan part at runtime. -->
 
     <!-- The depth chip: magnification readout during the infinite dive,
          updated by main.js, with a size comparison for company. Sits just

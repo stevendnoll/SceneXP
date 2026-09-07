@@ -72,7 +72,7 @@
 
     <title>Fractal Garden</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=2" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
     <link rel="preload" href="css/experience.min.css?v=17" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
@@ -82,7 +82,7 @@
          order the cascade needs: the shared one sets a universal reset and a
          dark body, and this scene wants a soft daylight behind a slow first
          frame. -->
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=2">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
     <link rel="stylesheet" href="css/experience.min.css?v=17">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
@@ -93,8 +93,19 @@
 </head>
 
 <body>
-    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
-    <a class="skip-link" href="#home-btn">Skip to home link</a>
+    <!-- THERE IS NO SKIP LINK HERE ANY MORE, and this one took some working
+         out. It read "Skip to home link" and landed on the Home button, which
+         was the ONLY float this scene leaves reachable while the welcome card
+         is up: How-to-play and Start-over are both `hidden` until the card is
+         dismissed, on purpose (one summons the card already filling the
+         screen, the other is destructive before the visitor has seen the
+         garden). So with Home gone there is no visible float to skip to at the
+         moment a skip link is used, and pointing it at a `hidden` target moves
+         focus nowhere at all, which is the exact failure it exists to prevent.
+
+         Nothing is lost. The card is the whole page on arrival, its directory
+         link is the first tab stop, and once the card goes the very next Tab
+         reaches How-to-play with no chrome in between. -->
 
     <!-- The live page's heading. Screen-reader only: the room is the title
          here, and a line of type across the top of it would be a caption on a
@@ -192,23 +203,31 @@
             <!-- Filled in only when the browser will not let the page save.
                  Empty and silent otherwise. -->
             <p id="storage-note" class="storage-note"></p>
+            <!-- The one link back to the directory, replacing the floating Home
+                 button (2026-09-07): Home sat in the corner of the live scene
+                 and read as "reset this view" (worse here than anywhere, next
+                 to a Start-a-new-garden button), so visitors tapped it, landed
+                 on the directory, and left instead of coming back. New tab, so
+                 the garden is still here afterwards. This card is also the How
+                 to play panel, reopened from the ? button, so unlike the other
+                 scenes the link is reachable again after the first dismissal.
+                 main.js syncs the href from config and shields it from the
+                 overlay's dismiss, without which a tap here would just close
+                 the card. -->
+            <a id="explore-link" class="welcome-explore" href="/" target="_blank" rel="noopener"
+                aria-label="More 3D worlds to explore at SceneXP.com (opens in a new tab)">More 3D worlds to explore at SceneXP.com</a>
         </div>
     </div>
 
-    <!-- Floating controls. The Home button returns to the serving site's root
-         in the same tab (applySiteLinks keeps it in sync with
-         GARDEN_CONFIG.site.home). Note it is display:none until main.js adds
-         .visible on load, which is true of every .ui-float element on the
-         site: correct markup on its own renders an invisible button. -->
-    <a id="home-btn" class="ui-float menu-btn" href="/"
-        title="Back to the main site"
-        aria-label="Back to the main site">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
-            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
-            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
-        </svg>
-    </a>
+    <!-- Floating controls. THE HOME BUTTON THAT LED THIS LIST IS GONE
+         (2026-09-07). It held the corner and returned to the serving site's
+         root, and next to a Start-a-new-garden button it read as "reset this
+         view" to enough visitors that tapping it and landing on the directory
+         made them leave rather than come back. The offer moved to a named link
+         at the foot of the welcome card above, and the two buttons below each
+         moved up a slot (css/experience.css). Note they are display:none until
+         main.js adds .visible on load, which is true of every .ui-float element
+         on the site: correct markup on its own renders an invisible button. -->
 
     <!-- HOW TO PLAY, AND IT IS THE WELCOME CARD ITSELF. Everything this scene
          explains about itself lived on a card that could be dismissed and never

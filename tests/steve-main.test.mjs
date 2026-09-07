@@ -140,9 +140,10 @@ test('auto-boots through the loading screen into the running state', async () =>
   expect(dom.el('load-progress').style.width).toBe('100%');
   expect(dom.el('loading-screen').classList.contains('hidden')).toBe(true);
 
-  // The Home button got its config-driven link and label.
-  expect(dom.el('home-btn').title.length).toBeGreaterThan(0);
-  expect(dom.el('home-btn').getAttribute('aria-label')).toBe(dom.el('home-btn').title);
+  // The welcome screen's directory link got its config-driven href. It
+  // replaced the Home button, and needs no label from config: unlike an
+  // icon-only button, it says SceneXP.com in its own text.
+  expect(dom.el('explore-link').href).toBe('/');
 
   expect(dom.loops.length).toBeGreaterThanOrEqual(1);
   stepFrames(120);

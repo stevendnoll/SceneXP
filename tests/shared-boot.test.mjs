@@ -114,3 +114,78 @@ describe('getProofOfWork', () => {
     expect(proof.hash.startsWith('1')).toBe(true);
   });
 });
+
+describe('shieldOverlayControl', () => {
+  /** A stand-in for a link on a welcome overlay, recording what was wired and
+   *  letting a test dispatch to it. Deliberately hand-built rather than taken
+   *  from the DOM stub: the property under test is which listeners get added
+   *  and what they do to the event, and the stub's auto-vivifying proxy would
+   *  answer "yes" to anything. */
+  function makeEl() {
+    const listeners = new Map();
+    return {
+      listeners,
+      addEventListener(type, fn, opts) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push({ fn, opts });
+      },
+      fire(type) {
+        let stopped = false;
+        let defaultPrevented = false;
+        const event = {
+          type,
+          stopPropagation() { stopped = true; },
+          preventDefault() { defaultPrevented = true; },
+        };
+        (listeners.get(type) || []).forEach(({ fn }) => fn(event));
+        return { stopped, defaultPrevented };
+      },
+    };
+  }
+
+  test('stops the three events a welcome overlay starts a scene on', async () => {
+    const { shieldOverlayControl } = await load();
+    const el = makeEl();
+    expect(shieldOverlayControl(el)).toBe(true);
+    // click for the mouse, touchstart because the garden arms on it, and
+    // touchend because that is the one the walkable scenes start from.
+    expect([...el.listeners.keys()].sort()).toEqual(['click', 'touchend', 'touchstart']);
+    for (const type of ['click', 'touchstart', 'touchend']) {
+      expect(`${type} stopped: ${el.fire(type).stopped}`).toBe(`${type} stopped: true`);
+    }
+  });
+
+  test('does NOT preventDefault, or the anchor would never follow its href', async () => {
+    // The one difference from Earth Defense's briefing button, which does this
+    // inline WITH a preventDefault because it is a <button> and has no default
+    // worth keeping. Getting this wrong is silent: the link stops starting the
+    // scene, which looks like the fix working, and stops navigating too.
+    const { shieldOverlayControl } = await load();
+    const el = makeEl();
+    shieldOverlayControl(el);
+    for (const type of ['click', 'touchstart', 'touchend']) {
+      expect(`${type} prevented: ${el.fire(type).defaultPrevented}`)
+        .toBe(`${type} prevented: false`);
+    }
+  });
+
+  test('passes an AbortSignal through so the wiring comes off at teardown', async () => {
+    const { shieldOverlayControl } = await load();
+    const el = makeEl();
+    const signal = new AbortController().signal;
+    shieldOverlayControl(el, { signal });
+    for (const [, entries] of el.listeners) {
+      entries.forEach(({ opts }) => expect(opts).toEqual({ signal }));
+    }
+  });
+
+  test('reports false for a missing element rather than throwing', async () => {
+    // Every caller passes getElementById(...) straight in, so a page that has
+    // not added the link yet hands this a null. A throw here would take the
+    // whole scene down during setup.
+    const { shieldOverlayControl } = await load();
+    expect(shieldOverlayControl(null)).toBe(false);
+    expect(shieldOverlayControl(undefined)).toBe(false);
+    expect(shieldOverlayControl({})).toBe(false);
+  });
+});

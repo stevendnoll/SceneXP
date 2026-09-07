@@ -249,12 +249,30 @@ body {
     justify-content: center;
     z-index: 100;
     cursor: pointer;
-    transition: opacity 0.3s ease;
+    visibility: visible;
+    /* Visibility is switched instantly on the way IN (the garden reopens this
+       card from its ? button and it must be usable at once) and held back
+       until the fade finishes on the way OUT, in the .hidden block below. */
+    transition: opacity 0.3s ease, visibility 0s;
 }
 
+/* DISMISSED, AND OUT OF THE TAB ORDER WITH IT. This was opacity plus
+   pointer-events only, which hides an overlay from the eye and the mouse and
+   from nothing else: everything focusable inside it stayed in the tab order,
+   invisible, and a keyboard visitor tabbing the page landed on controls that
+   were not on screen. Earth Defense had been shipping that since its briefing
+   grew two buttons, and the directory link added to every welcome screen on
+   2026-09-07 would have put one on eight more pages.
+
+   `visibility: hidden` is what fixes it: unlike opacity it takes descendants
+   out of the tab order AND out of the accessibility tree, and unlike
+   `display: none` it still fades. The 0.3s delay in the transition is what
+   keeps the fade: without it the card vanishes on the first frame. */
 #blocker.hidden {
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
+    transition: opacity 0.3s ease, visibility 0s linear 0.3s;
 }
 
 #instructions {
@@ -331,6 +349,51 @@ body {
     font-size: 0.875rem;
     color: var(--text-dim);
     letter-spacing: 0.1em;
+}
+
+/* THE ONE LINK BACK TO THE DIRECTORY, at the foot of the welcome overlay.
+   It replaced the floating Home button on 2026-09-07. Home sat in the corner
+   of the live scene and read as "reset this view", so visitors tapped it,
+   arrived at the directory, and left the site rather than going back. This
+   says where it goes before it is followed, it opens in a new tab so the
+   scene is never lost, and it is only on screen while the welcome overlay
+   is, which is before anybody has anything to lose.
+
+   QUIETER THAN EVERY OTHER LINE ON THE CARD, deliberately. The welcome
+   screen's job is to get a visitor into THIS scene; the directory is an
+   offer for afterwards, so it sits below the controls hint at small print
+   size and does not compete with the click prompt above it.
+
+   A REAL UNDERLINE RATHER THAN A COLOUR SHIFT. These overlays sit over a
+   moving 3D scene at low contrast, where an accent colour alone is not a
+   reliable signal that something is a link. The underline is offset so the
+   descenders in "Explore" and "SceneXP" stay legible.
+
+   Its tap target is padded out to a comfortable size: this is small print
+   over a full-screen click-to-start surface, so a near miss does not
+   quietly start the scene instead. */
+#instructions .welcome-explore,
+.welcome-explore {
+    display: inline-block;
+    margin: 2.25rem 0 0;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    letter-spacing: 0.06em;
+    line-height: 1.4;
+    color: var(--text-dim);
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+    text-decoration-thickness: 1px;
+    text-decoration-color: rgba(255, 255, 255, 0.35);
+    transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+
+#instructions .welcome-explore:hover,
+#instructions .welcome-explore:focus-visible,
+.welcome-explore:hover,
+.welcome-explore:focus-visible {
+    color: var(--text-light);
+    text-decoration-color: currentColor;
 }
 
 .controls-hint span {
@@ -1071,45 +1134,11 @@ body {
     stroke-linejoin: round;
 }
 
-/* Home button */
-.home-btn {
-    position: fixed;
-    top: 20px;
-    left: 200px;
-    width: 50px;
-    height: 50px;
-    background: rgba(30, 41, 59, 0.85);
-    border: 2px solid var(--accent);
-    border-radius: 50%;
-    color: var(--accent);
-    cursor: pointer;
-    z-index: 110;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s ease, border-color 0.2s ease;
-    pointer-events: auto;
-    text-decoration: none;
-}
-
-.home-btn:hover {
-    background: rgba(45, 166, 237, 0.25);
-    border-color: var(--primary);
-}
-
-.home-btn.visible {
-    display: flex;
-}
-
-.home-icon {
-    width: 1.4rem;
-    height: 1.4rem;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
+/* (The `.home-btn` and `.home-icon` rules that sat here belonged to the
+   retired multi-button toolbar and were removed on 2026-09-07, along with
+   their entries in the two media queries below. Nothing had carried the class
+   for some time: the scenes' own Home button was `#home-btn.menu-btn`, and
+   that is gone too now. See the slot-ladder note beside `.checklist-btn`.) */
 
 /* Filter panel */
 .filter-panel {
@@ -1236,12 +1265,6 @@ body {
         height: 50px;
     }
 
-    .home-btn {
-        left: calc(50vw + 75px);
-        width: 50px;
-        height: 50px;
-    }
-
     .settings-panel {
         top: 90px;
         left: calc(50vw - 220px);
@@ -1287,12 +1310,6 @@ body {
 
     .filter-btn {
         left: calc(50vw + 20px);
-        width: 60px;
-        height: 60px;
-    }
-
-    .home-btn {
-        left: calc(50vw + 100px);
         width: 60px;
         height: 60px;
     }
@@ -2569,16 +2586,29 @@ body {
     stroke-linecap: round;
 }
 
-/* Checklist toggle button: sits between the settings gear and the Home (2D)
-   button. Reuses the neutral .menu-btn circle look. */
+/* THE TOP-RIGHT SLOT LADDER, and why every number below moved on 2026-09-07.
+   Floats stack leftward from the corner on a 62px pitch (a 50px button plus a
+   12px gap): 20, 82, 144, 206. The FLOATING HOME BUTTON used to hold slot 1 on
+   all fourteen scenes, so every other control was defined one slot out from
+   the corner. Home was removed from the whole site (visitors read it as "reset
+   this scene", tapped it, landed on the directory, and left), which would have
+   left a button-shaped hole in every corner. So the ladder is re-based here,
+   once, rather than nine times in nine scene stylesheets: settings 82 -> 20,
+   business 144 -> 82, snug business 82 -> 20, checklist 144 -> 82.
+
+   tests/home-button-removed.test.mjs resolves these against the markup and
+   fails on a hole or on two buttons sharing a slot. */
+
+/* Checklist toggle button: takes the slot beside the settings gear.
+   Reuses the neutral .menu-btn circle look. */
 .checklist-btn {
     top: 20px;
     left: auto;
-    right: 144px;         /* menu (20) + settings slot (62) + this slot (62) */
+    right: 82px;          /* settings (20) + its 50px width + a 12px gap */
 }
 
-/* Autopilot tour toggle: the lone top-LEFT float (Home, Settings, and the
-   business button own the right cluster). Reuses the .menu-btn circle and
+/* Autopilot tour toggle: the lone top-LEFT float (Settings and the business
+   button own the right cluster). Reuses the .menu-btn circle and
    lights up while the tour is engaged. */
 .autopilot-btn {
     top: 20px;
@@ -2591,16 +2621,16 @@ body {
     border-color: rgba(170, 235, 195, 0.85);
 }
 
-/* Featured business button: a third slot in the top-right cluster, next to
+/* Featured business button: the second slot in the top-right cluster, next to
    Settings. Rendered only by experiences that feature a business (an <a>
    reusing the .menu-btn circle, carrying the experience favicon as its
    badge, opening the business's own site in a new tab). It shares the
    checklist button's slot; no experience currently renders both, and
-   whichever returns second takes the next slot left (right: 206px). */
+   whichever returns second takes the next slot left (right: 144px). */
 .biz-btn {
     top: 20px;
     left: auto;
-    right: 144px;         /* settings (right: 82) + its 50px width + a 12px gap */
+    right: 82px;          /* settings (right: 20) + its 50px width + a 12px gap */
 }
 
 .biz-btn img {
@@ -2610,10 +2640,10 @@ body {
     border-radius: 6px;
 }
 
-/* Snug variant for experiences with no settings cog: the business button
-   takes the slot right beside Home. */
+/* Snug variant for experiences with no settings cog: the business button is
+   the page's only float, so it takes the corner itself. */
 .biz-btn.biz-btn-snug {
-    right: 82px;          /* home (20) + its 50px width + a 12px gap */
+    right: 20px;
 }
 
 /* White-backed JPG badges read best as a round crop inside the circle. */
@@ -2639,34 +2669,21 @@ body {
     border-color: rgba(255, 255, 255, 0.6);
 }
 
-/* "Home (2D)" button: reuses the neutral .menu-btn circle look and sits in the
-   top-right cluster, now leftmost of the four (home, checklist, settings, menu).
-   Uses its own class so the legacy .home-btn rules and their media queries don't apply. */
-.home-2d-btn {
-    right: 206px;         /* menu (20) + settings (62) + checklist (62) + this slot (62) */
-    text-decoration: none;
-}
-
-.home-2d-btn svg {
-    stroke-linejoin: round;
-}
-
-/* The Home button shows a "2D" text label instead of an icon. */
-.btn-2d-label {
-    font-size: 1rem;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-}
+/* (The `.home-2d-btn` and `.btn-2d-label` rules that sat here were removed on
+   2026-09-07 with the rest of the Home chrome. They styled a "Home (2D)"
+   button that no page had rendered for some time, and leaving Home styling in
+   the sheet after retiring every Home button is how the next contributor ends
+   up building one.) */
 
 /* Re-skin the settings button to the neutral gallery look and pin it into the
-   top-right cluster between the Home and menu buttons. `left: auto` + `right`
-   also override the retired multi-button toolbar's centering/resizing media
-   queries (which otherwise move it mid-screen and grow it to 60px on wide
-   viewports — those rules appear earlier in the file, so this later block wins). */
+   top-right corner. `left: auto` + `right` also override the retired
+   multi-button toolbar's centering/resizing media queries (which otherwise
+   move it mid-screen and grow it to 60px on wide viewports — those rules
+   appear earlier in the file, so this later block wins). */
 .settings-btn {
     top: 20px;
     left: auto;
-    right: 82px;          /* menu button (right:20) + its 50px width + a 12px gap */
+    right: 20px;          /* the corner itself, now that Home has left it */
     width: 50px;
     height: 50px;
     background: rgba(20, 20, 20, 0.78);

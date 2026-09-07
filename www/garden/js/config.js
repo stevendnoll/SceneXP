@@ -2955,7 +2955,7 @@ export const GARDEN_CONFIG = deepFreeze({
     // Phase 5 hosting model: builder-funnel links are root-relative (the
     // marketing pages live at the serving domain's root), and anything that
     // names the serving domain is derived from location at runtime. This
-    // experience has no featured business and honors nobody, so the Home button
+    // experience has no featured business and honors nobody, so the welcome link
     // goes to the serving site's root in the same tab.
     site: {
         home: {

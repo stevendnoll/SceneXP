@@ -7,7 +7,7 @@
  * let the cosmos do the moving. There are no movement controls and no
  * collision. The interactions that do exist are featherweight: the
  * welcome overlay (dismissed with a click, tap, or key), the floating
- * Home button, the AUTOZOOM row, and one raycast per tap.
+ * welcome screen, the AUTOZOOM row, and one raycast per tap.
  *
  * The autozoom is the headline act: the dive flies itself. This file
  * builds a three-button cluster at the bottom center (reusing the
@@ -31,7 +31,7 @@
  */
 
 import { MANDELBROT_CONFIG } from './config.min.js';
-import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap, shieldOverlayControl } from '../../shared/js/boot-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getRenderer,
     removeTestObjects, isTouchDevice
@@ -110,7 +110,8 @@ async function init() {
 
     if (!canvas) return;
 
-    // Wire the Home button from MANDELBROT_CONFIG.site, so config stays the
+    // Wire the welcome screen's directory link from MANDELBROT_CONFIG.site,
+    // so config stays the
     // single home for these values. An equivalent fallback is baked into
     // the HTML for the no-JS path.
     applySiteLinks();
@@ -246,6 +247,13 @@ function setupEventListeners() {
         };
         blocker.addEventListener('click', dismiss, { signal });
         blocker.addEventListener('touchend', dismiss, { signal });
+
+        // THE DIRECTORY LINK SITS ON TOP OF ALL OF THAT. The whole overlay is
+        // the dismiss surface and `dismiss` calls preventDefault(), which on
+        // touch would swallow the synthetic click and leave the link inert.
+        // Stop the start events short of it so the anchor follows its href.
+        shieldOverlayControl(document.getElementById('explore-link'), { signal });
+
         document.addEventListener('keydown', (event) => {
             if (event.code === 'Enter' || event.code === 'Space') {
                 if (!blocker.classList.contains('hidden')) beginWatching();
@@ -628,18 +636,17 @@ function beginWatching() {
 
 /** Wire the outward-facing links from MANDELBROT_CONFIG.site. There is no
  *  featured business here: the experience honors Benoit Mandelbrot, so the
- *  Home button goes to the serving site's root in the same tab (Phase 5
+ *  welcome screen's directory link goes to the serving site's root (Phase 5
  *  rule: the marketing pages live at every hosting domain's root). */
 function applySiteLinks() {
     const site = MANDELBROT_CONFIG.site;
-    const home = document.getElementById('home-btn');
-    if (home) {
-        home.href = site.home.path;
-        home.removeAttribute('target');
-        home.removeAttribute('rel');
-        home.title = site.home.title;
-        home.setAttribute('aria-label', site.home.title);
-    }
+    // The directory link at the foot of the welcome overlay, which replaced
+    // the floating Home button. Only the href is wired: its text names
+    // SceneXP.com out loud, so unlike the old icon-only button it does not
+    // need a title or an aria-label supplied from config, and the markup
+    // carries an equivalent href for the no-JS path.
+    const explore = document.getElementById('explore-link');
+    if (explore) explore.href = site.home.path;
 }
 
 // ---- Render loop ----------------------------------------------------------

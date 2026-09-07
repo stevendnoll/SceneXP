@@ -105,7 +105,7 @@ export const GAVIN_CONFIG = deepFreeze({
     // marketing pages live at the serving domain's root), and anything that
     // names the serving domain is derived from location at runtime. This
     // experience has no featured business: it honors the builder's son, so
-    // the Home button goes to the serving site's root in the same tab.
+    // the welcome screen's directory link goes to the serving site's root.
     site: {
         // The person this experience celebrates.
         honoree: {

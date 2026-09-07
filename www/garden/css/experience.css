@@ -226,17 +226,23 @@ body {
     display: none;
 }
 
-/* The top-right stack, right to left: home, start over, how this works. The
-   shared .menu-btn anchors every floating button to the corner, so each one
-   past the first steps left by a button plus a gap. */
+/* The top-right stack, right to left: start over, how this works. The shared
+   .menu-btn anchors every floating button to the corner, so each one past the
+   first steps left by a button plus a gap.
+
+   BOTH MOVED UP A SLOT ON 2026-09-07, when the Home button that used to lead
+   this stack was removed from the whole site. Without this they would have
+   left a button-shaped hole in the corner. Start-over inherits the corner
+   rather than How-this-works because it kept its neighbour: the pair's
+   relative order is what a returning visitor's hand remembers. */
 .help-btn {
-    right: 144px;
+    right: 82px;
     background: rgba(20, 20, 20, 0.78);
     border: 1px solid rgba(255, 255, 255, 0.35);
 }
 
 .reset-btn {
-    right: 82px;
+    right: 20px;
     background: rgba(20, 20, 20, 0.78);
     border: 1px solid rgba(255, 255, 255, 0.35);
 }

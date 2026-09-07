@@ -208,9 +208,11 @@ test('boots, and the autozoom flies the dive to the precision floor and home aga
   expect(dom.el('loading-screen').classList.contains('hidden')).toBe(true);
   expect(dom.replaced).toHaveLength(0);
 
-  // The Home button was wired from config (same-tab, root-relative).
-  expect(dom.el('home-btn').href).toBe('/');
-  expect(dom.el('home-btn').attributes['aria-label']).toBeTruthy();
+  // The welcome screen's directory link was wired from config (root-relative,
+  // and it opens in a new tab so a dive is never lost). It replaced the Home
+  // button, and needs no aria-label from config: unlike an icon-only button,
+  // it says SceneXP.com in its own text.
+  expect(dom.el('explore-link').href).toBe('/');
 
   // The autozoom row: [direction] [play] [speed] [reset], defaults shown.
   expect(row.attributes['aria-label']).toBe('Auto zoom controls');

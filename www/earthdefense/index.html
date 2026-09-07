@@ -110,13 +110,13 @@
 
     <title>Earth Defense</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=2" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
     <link rel="preload" href="css/experience.min.css?v=2" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=2">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
     <link rel="stylesheet" href="css/experience.min.css?v=2">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
@@ -127,8 +127,10 @@
 </head>
 
 <body>
-    <!-- Accessibility: jump straight to the section links without entering the 3D scene -->
-    <a class="skip-link" href="#home-btn">Skip to home link</a>
+    <!-- Accessibility: jump straight to the floating control without entering
+         the 3D scene. It used to land on the Home button; with that button
+         gone, Pause is the only float left and it has taken the corner. -->
+    <a class="skip-link" href="#pause-btn">Skip to the pause button</a>
 
     <!-- The live page's heading. Screen-reader only: the room is the title
          here, and a line of type across the top of it would be a caption on a
@@ -241,6 +243,18 @@
                     <span>Seven and twelve</span> Seven installations to hold, and clearing all twelve raiders is how you win
                 </div>
             </div>
+            <!-- The one link back to the directory, replacing the floating Home
+                 button (2026-09-07): Home sat in the corner of the live game
+                 and read as "reset this run", so visitors tapped it, landed on
+                 the directory, and left instead of coming back. New tab, so the
+                 briefing is still here afterwards. It sits below the hints and
+                 after both buttons in the tab order, because taking the helm is
+                 what this screen is asking for and leaving is not. main.js
+                 syncs the href from config and shields it from the overlay's
+                 click-to-start, the same way the briefing button above does it
+                 inline. -->
+            <a id="explore-link" class="welcome-explore" href="/" target="_blank" rel="noopener"
+                aria-label="More 3D worlds to explore at SceneXP.com (opens in a new tab)">More 3D worlds to explore at SceneXP.com</a>
         </div>
     </div>
 
@@ -448,15 +462,12 @@
     </div>
 
     <!-- Floating controls -->
-    <a id="home-btn" class="ui-float menu-btn" href="/"
-        title="Back to the main site"
-        aria-label="Back to the main site">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
-            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
-            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
-        </svg>
-    </a>
+    <!-- THE HOME BUTTON IS GONE (2026-09-07). It held the corner (right: 20)
+         and returned to the serving site's root; visitors read it as "reset
+         this run", tapped it, and left from the directory rather than coming
+         back. Pause moved up into the corner it left (css/experience.css), and
+         the way to the directory is now a named link on the briefing screen
+         plus the quiet text link in the helm card further down. -->
 
     <!-- Pause. Esc reaches this on a keyboard; on a touch screen there is no
          Esc, so it needs a button of its own. Pausing must always be one
@@ -574,13 +585,16 @@
                     used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>.
                     Resized and recompressed for this experience.</p>
                 <button id="card-dismiss" class="piece-enter" type="button" data-close>Back to the helm</button>
-                <!-- The way home from INSIDE a run, which nothing offered
-                     before. The round home button in the corner is still there
-                     and still works from the welcome screen, from the end card
-                     and from a keyboard at any time, but a visitor mid-flight
-                     has a captured cursor and cannot reach it with a mouse.
-                     A quiet text link rather than a second big button: leaving
-                     is not what this card is for. -->
+                <!-- The way out from INSIDE a run. It used to be the second
+                     of two, the other being the round Home button in the
+                     corner, which a visitor mid-flight could not click because
+                     the cursor was captured. That button was removed from the
+                     whole site on 2026-09-07, so this is now the only way to
+                     the directory once the briefing screen is gone. A quiet
+                     text link rather than a second big button: leaving is not
+                     what this card is for. NOTE it still opens in the SAME
+                     tab, unlike the briefing screen's link, which is a
+                     deliberate open question rather than an oversight. -->
                 <p class="card-home">
                     <a id="home-link" href="/">Back to the main site</a>
                 </p>

@@ -64,12 +64,12 @@
 
     <title>Putt Putt with Mom and Dad</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=2" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=2">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -79,8 +79,11 @@
 </head>
 
 <body>
-    <!-- Accessibility: jump straight to the section links without entering the 3D scene -->
-    <a class="skip-link" href="#home-btn">Skip to home link</a>
+    <!-- Accessibility: jump straight to the floating controls without entering
+         the 3D scene. It used to land on the Home button, which was first in
+         the cluster and in the markup; with that button gone it lands on the
+         tour toggle, and tabbing on from there reaches the settings cog. -->
+    <a class="skip-link" href="#autopilot-btn">Skip to the page controls</a>
 
     <!-- The live page's heading. Screen-reader only: the room is the title
          here, and a line of type across the top of it would be a caption on a
@@ -129,6 +132,15 @@
                 <span>WASD</span> Move
                 <span>MOUSE</span> Look
             </div>
+            <!-- The one link back to the directory, replacing the floating Home
+                 button (2026-09-07): Home sat in the corner of the live scene
+                 and read as "reset this view", so visitors tapped it, landed on
+                 the directory, and left instead of coming back. New tab, so
+                 this scene is still here afterwards. main.js syncs the href
+                 from config and shields it from the overlay's click-to-start,
+                 without which a tap here would just start the scene. -->
+            <a id="explore-link" class="welcome-explore" href="/" target="_blank" rel="noopener"
+                aria-label="More 3D worlds to explore at SceneXP.com (opens in a new tab)">More 3D worlds to explore at SceneXP.com</a>
         </div>
     </div>
 
@@ -173,7 +185,6 @@
                     <li><strong>The conch shell:</strong> right here on the counter. Hold it to your ear and see.</li>
                     <li><strong>Autopilot:</strong> press <kbd>T</kbd> or the tour button (top-left) and the course will show you around. Move to take back the controls.</li>
                     <li><strong>Settings:</strong> the gear icon (top-right) adjusts movement and look sensitivity.</li>
-                    <li><strong>Heading out?</strong> The Home button (top-right) takes you back to the main site.</li>
                 </ul>
                 <button class="piece-cancel" data-close>Thanks, tee me up!</button>
             </div>
@@ -265,18 +276,12 @@
     </div>
 
     <!-- Floating controls -->
-    <!-- The Home button returns to the serving site's root in the same tab
-         (there is no featured business here; applySiteLinks keeps it in sync
-         with FAMILY_CONFIG.site.home). -->
-    <a id="home-btn" class="ui-float menu-btn" href="/"
-        title="Back to the main site"
-        aria-label="Back to the main site">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
-            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
-            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
-        </svg>
-    </a>
+    <!-- THE HOME BUTTON IS GONE (2026-09-07). It held the corner (right: 20)
+         and returned to the serving site's root. Visitors read it as "reset
+         this view", tapped it, and left the site from the directory rather
+         than coming back, so the offer moved to a named link on the welcome
+         screen above and the floats beside it each moved up a slot (the
+         shared sheet's ladder was re-based, so no rule is needed here). -->
     <!-- Autopilot tour toggle (keyboard shortcut T). Walks the visitor along
          a guided route of the sights; any movement input hands control back. -->
     <button id="autopilot-btn" class="ui-float menu-btn autopilot-btn" aria-pressed="false"

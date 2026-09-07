@@ -441,13 +441,16 @@ describe('the helm card', () => {
         expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
     });
 
-    test('both ways home point at the same place', async () => {
-        // The round button in the corner is the site-wide convention and the
-        // skip link's target; the card link is the one a visitor can actually
-        // click mid-flight, when the cursor is captured.
+    test('both ways out point at the same place', async () => {
+        // The round Home button that used to be the third of these was removed
+        // from the whole site on 2026-09-07. What is left is the briefing
+        // screen's named link, which a visitor reads before a run, and the
+        // card link, which is the one they can actually click mid-flight when
+        // the cursor is captured. Both still come from the same config value,
+        // which is the property this test was always about.
         await boot();
         const config = await CONFIG();
-        expect(dom.el('home-btn').href).toBe(config.site.home.path);
+        expect(dom.el('explore-link').href).toBe(config.site.home.path);
         expect(dom.el('home-link').href).toBe(config.site.home.path);
     });
 });
