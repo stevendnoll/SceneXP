@@ -285,3 +285,95 @@ describe('the composition and config (pure)', () => {
   });
 });
 
+
+describe('the primary action wears one gold, everywhere it appears (D42)', () => {
+  /* THE RULE THIS GUARDS, in Steve's words: use the Call button's colouring
+   * wherever we have a primary button. It replaced D25's "one filled control
+   * on the whole page", which had left the intro panel and both cards asking
+   * with a hairline; QA read the intro panel's pair as two equal options
+   * rather than as an ask and an aside.
+   *
+   * A rule like this rots quietly. The next primary button gets its own
+   * gradient pasted in, or an id rule quietly outranks the shared class and
+   * one of the four drifts, and neither shows up anywhere but a screenshot of
+   * the one card nobody reopened. */
+
+  /** Every button that IS the primary action of the surface it sits on. */
+  const PRIMARIES = ['intro-contact', 'poster-cta', 'dialog-cta', 'contact-call'];
+  /** Controls that are deliberately NOT filled: an aside, and two ways out. */
+  const NOT_PRIMARY = ['intro-about', 'intro-handle', 'dialog-dismiss'];
+
+  const RESTING = 'linear-gradient(180deg, var(--lux-gold-lift) 0%, var(--lux-gold) 100%)';
+
+  test('all four primaries carry the class, and nothing else does', async () => {
+    const html = await src('index.html');
+    for (const id of PRIMARIES) {
+      const tag = new RegExp(`<(?:a|button)[^>]*id="${id}"[^>]*>`).exec(html);
+      expect(`${id} present: ${Boolean(tag)}`).toBe(`${id} present: true`);
+      expect(`${id} primary: ${/class="[^"]*\blux-primary\b/.test(tag[0])}`)
+        .toBe(`${id} primary: true`);
+    }
+    for (const id of NOT_PRIMARY) {
+      const tag = new RegExp(`<(?:a|button)[^>]*id="${id}"[^>]*>`).exec(html);
+      expect(`${id} primary: ${/class="[^"]*\blux-primary\b/.test(tag[0])}`)
+        .toBe(`${id} primary: false`);
+    }
+  });
+
+  test('there is ONE gold to change, not four', async () => {
+    // The point of lifting the finish out of #contact-call. A second copy of
+    // this gradient means a future tweak moves three buttons and leaves one.
+    const css = await src('css/experience.css');
+    const copies = css.split(RESTING).length - 1;
+    expect(`resting gradient declared ${copies} time(s)`)
+      .toBe('resting gradient declared 1 time(s)');
+  });
+
+  test('no id rule re-declares the finish, which would silently outrank it', async () => {
+    // .lux-primary is a class (0,1,0). Any rule carrying an id beats it, so an
+    // `#dialog-cta { background: ... }` added later would take that one button
+    // back out of the system without failing anything else. Geometry in an id
+    // rule is fine and expected; the finish is not.
+    const css = (await src('css/experience.css')).replace(/\/\*[\s\S]*?\*\//g, '');
+    const FINISH = ['background', 'color', 'border', 'box-shadow'];
+    for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      if (!PRIMARIES.some(id => sel.includes(`#${id}`))) continue;
+      for (const prop of FINISH) {
+        const has = new RegExp(`(?:^|;)\\s*${prop}\\s*:`).test(body);
+        expect(`${sel.trim()} sets ${prop}: ${has}`)
+          .toBe(`${sel.trim()} sets ${prop}: false`);
+      }
+    }
+  });
+
+  test('the resting fill has somewhere brighter to go', async () => {
+    // A FILL IS A STATE. An accent-tinted control at rest reads as already
+    // pressed, which is exactly why these were outlines before. Filling them
+    // is only safe while hover moves somewhere visibly lighter, so assert the
+    // two are different rather than trusting the comment that says so.
+    const css = await src('css/experience.css');
+    const rest = /\.lux-primary\s*\{([^}]*)\}/.exec(css);
+    const hover = /\.lux-primary:hover\s*\{([^}]*)\}/.exec(css);
+    expect(`both states defined: ${Boolean(rest && hover)}`).toBe('both states defined: true');
+    const bg = (b) => /background:\s*([^;]+)/.exec(b)[1].trim();
+    expect(`hover differs: ${bg(hover[1]) !== bg(rest[1])}`).toBe('hover differs: true');
+  });
+
+  test('the ink clears AAA against the darker end of the fill', async () => {
+    // Small tracked capitals at 0.7rem, so this is the contrast that matters
+    // and it is measured rather than eyeballed. --lux-gold is the foot of the
+    // gradient and therefore the worst case.
+    const css = await src('css/experience.css');
+    const ink = /\.lux-primary\s*\{[^}]*color:\s*(#[0-9a-f]{6})/i.exec(css)[1];
+    const gold = /--lux-gold:\s*(#[0-9a-f]{6})/i.exec(css)[1];
+    const lum = (hex) => {
+      const ch = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    };
+    const [hi, lo] = [lum(ink), lum(gold)].sort((a, b) => b - a);
+    const ratio = (hi + 0.05) / (lo + 0.05);
+    expect(`${ink} on ${gold} clears 7:1: ${ratio >= 7}`)
+      .toBe(`${ink} on ${gold} clears 7:1: true`);
+  });
+});

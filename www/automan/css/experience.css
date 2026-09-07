@@ -552,12 +552,20 @@ body .pan-controls.no-chrome.visible {
 /* THE TWO ROUTES OUT OF THE PARAGRAPH (D40): reach him, or read the whole
    account first.
 
-   BOTH ARE HAIRLINES. The one filled control on this page is the Call
-   button on the contact card, and that is the rule the whole flat layer is
-   built on (D25): a second filled control here would cost that button the
-   thing that makes it read as the action rather than as an option. The lead
-   of the two gets a brighter hairline instead, which is the same distinction
-   drawn a quieter way.
+   THE FIRST IS FILLED, THE SECOND IS A HAIRLINE (D42, from QA). It used to
+   be two hairlines, the lead of the two carrying a brighter edge, on D25's
+   rule that the Call button was the one filled control on the page. QA read
+   the result as two equal options rather than as an ask and an aside, which
+   is the failure that rule was meant to prevent, one surface further up.
+
+   SO D25 IS NOW PER SURFACE, NOT PER PAGE: exactly one filled control on
+   whatever the visitor is looking at, wearing the same gold the Call button
+   wears (.lux-primary, defined once further down). Nothing is lost by it,
+   because no two of these are ever both legible at once: a card that opens
+   over this panel brings a backdrop that is 0.88 opaque at the edges with a
+   9px blur behind it, so the panel is not a competing surface, it is a
+   texture. What the change buys is that the primary action looks the same
+   everywhere it appears, which is what a visitor learns a control by.
 
    THE ROW IS LEFT ALIGNED AND THE BUTTONS ARE ONLY AS WIDE AS THEIR WORDS,
    which is a gesture decision rather than a typographic one. These are the
@@ -596,10 +604,10 @@ body .pan-controls.no-chrome.visible {
     transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
-.intro-action-lead {
-    border-color: rgba(219, 179, 106, 0.6);
-    color: #f0d9a8;
-}
+/* (`.intro-action-lead` sat here and drew the lead of the two with a brighter
+   hairline and a lighter ink. It came out with D42: the lead is filled now,
+   and it carries .lux-primary in the markup instead. Nothing else ever wore
+   the class.) */
 
 .intro-action:hover {
     border-color: var(--lux-gold);
@@ -664,9 +672,11 @@ body .pan-controls.no-chrome.visible {
    which on a phone is where a thumb naturally begins one. Sized to its own
    text, it costs a pill's worth of that edge and no more.
 
-   Hairline and unfilled: D25's one filled control on this page is the Call
-   button on the contact card, and a lit pill sitting over the room all
-   visit would take that away from it. */
+   Hairline and unfilled, and D42 did not change that. The filled control on
+   any surface is what that surface is ASKING for, and this handle asks for
+   nothing: it reopens a panel. A lit pill sitting over the room for the whole
+   visit would also be the one fill a visitor sees most and cares about
+   least. */
 .intro-handle {
     position: fixed;
     left: 50%;
@@ -1099,9 +1109,10 @@ body .pan-controls.no-chrome.visible {
    the rest of this interface uses to say "line" and a browser underline
    sits too close under tracked capitals to read as anything but a smudge.
 
-   It is quiet on purpose. The one filled control on this page is the call
-   button (D25), and the second-loudest thing on this card should be the
-   Talk to John outline directly under this line, not the flyer. */
+   It is quiet on purpose. This card's one filled control is the Talk to John
+   button directly under this line (D42, which moved D25's scarcity rule from
+   per page to per surface), and the second-loudest thing here should be that
+   button, not the flyer. */
 .about-flyer {
     margin: 1.5rem 0 1.35rem;
     padding-top: 1.35rem;
@@ -1373,20 +1384,56 @@ body .pan-controls.no-chrome.visible {
 
 /* ---- The actions --------------------------------------------------------
 
-   ONE FILLED ELEMENT ON THE WHOLE PAGE, and it is the call button. That
-   is not restraint for its own sake: a single fill among hairlines is
-   read before anything else on the card, so the most important control in
+   ONE FILLED ELEMENT PER SURFACE, and it is whatever that surface is asking
+   for: Call John here, Talk to John on the intro panel and on both cards.
+   That is not restraint for its own sake: a single fill among hairlines is
+   read before anything else on a card, so the most important control in
    John's business gets the most emphasis available while the card stays
    quiet. Everything else is an outline or a plain line of type.
 
-   The shared .piece-enter is a blue pill at weight 600. These are tracked
-   capitals at 0.72rem on a 2px edge, which is the button every German
-   marque has been shipping for fifteen years. */
+   IT WAS ONE FILL ON THE WHOLE PAGE UNTIL D42, which left the intro panel
+   and both cards asking with a hairline and reading, in QA, as a menu of
+   equal options. The scarcity is still the point; the unit it is counted in
+   is the surface. See the note beside .intro-actions above.
+
+   The finish itself is .lux-primary, below, so there is one gold to change
+   and not four. */
 #nudge-modal #contact-call {
     display: block;
     width: 100%;
     margin: 0.2rem 0 1.1rem;
     padding: 1.05rem 1rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-align: center;
+}
+
+/* THE PRIMARY ACTION, WHEREVER IT APPEARS. The gold the Call button has
+   always worn, lifted out of it so the intro panel's "Talk to John" and both
+   cards' "Talk to John" can wear the same one (D42). Geometry stays with each
+   button, because a shrink-wrapped control in a row and a full-width control
+   at the foot of a card are not the same shape; only the finish is shared.
+
+   THE SHARED .piece-enter IS A BLUE PILL at weight 600, and three of the four
+   buttons carry that class for its layout. This block is in a later
+   stylesheet at equal specificity, so it wins, and that is also why it has to
+   sit AFTER `.intro-action` in this file: same specificity again, source
+   order decides, and above that rule the intro button would come out
+   transparent with a hairline. Nothing here is written with an id, on
+   purpose, or adding the class to a fifth button would not be enough.
+
+   The type is tracked capitals on a 2px edge, which is the button every
+   German marque has been shipping for fifteen years. Ink #16120a on the
+   gradient's darker end is 9.5:1, so the small tracked capitals clear AAA at
+   every point of the fill. */
+/* NO `width` HERE, and that is the whole reason geometry stayed with the
+   buttons. The three card buttons are full-width blocks; the intro panel's is
+   an inline-flex item in a wrapping row, shrink-wrapped to its own words so
+   the rest of the bottom edge stays free for a thumb to start a swipe on. A
+   `width: 100%` in this block would take the whole row and push the About
+   button onto a second line, on a panel that is already a third of a phone. */
+.lux-primary {
     background: linear-gradient(180deg, var(--lux-gold-lift) 0%, var(--lux-gold) 100%);
     color: #16120a;
     border: none;
@@ -1394,25 +1441,27 @@ body .pan-controls.no-chrome.visible {
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.45),
         0 6px 18px rgba(0, 0, 0, 0.4);
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.2em;
+    font-family: var(--lux-sans);
     text-transform: uppercase;
-    text-align: center;
     text-decoration: none;
-    transition: filter 0.18s ease, transform 0.12s ease;
+    cursor: pointer;
+    transition: background 0.18s ease, transform 0.12s ease;
 }
 
-#nudge-modal #contact-call:hover {
+/* A LIGHTER GOLD, NOT A TINT ON A CLEAR BUTTON, which is the whole reason
+   these can be filled at rest at all. A control that rests at an accent tint
+   reads as already pressed, so a resting fill has to have somewhere brighter
+   to go. This is it. */
+.lux-primary:hover {
     background: linear-gradient(180deg, #f5d49b 0%, var(--lux-gold-lift) 100%);
     filter: none;
 }
 
-#nudge-modal #contact-call:active {
+.lux-primary:active {
     transform: translateY(1px);
 }
 
-#nudge-modal #contact-call:focus-visible {
+.lux-primary:focus-visible {
     outline: 2px solid var(--lux-gold-lift);
     outline-offset: 3px;
 }
@@ -1445,41 +1494,26 @@ body .pan-controls.no-chrome.visible {
     border-bottom-color: rgba(219, 179, 106, 0.7);
 }
 
-/* The outlined action, on the prop story and the About card. It fills on
-   hover, which is the state change: an accent-tinted button at rest reads
-   as already pressed. */
+/* THE PRIMARY ACTION ON THE PROP STORY AND ON THE ABOUT CARD, and it is the
+   same "Talk to John" the intro panel asks for, so as of D42 it is the same
+   filled gold. Geometry only here; .lux-primary above carries the finish and
+   all three states.
+
+   IT USED TO BE AN OUTLINE THAT FILLED ON HOVER, and the comment here made
+   the case that the fill had to be the state change because an accent-tinted
+   button at rest reads as already pressed. That argument still holds and is
+   the reason .lux-primary hovers to a LIGHTER gold rather than to a tint:
+   a resting fill needs somewhere brighter to go, or it has no state left. */
 #dialog-modal #dialog-cta,
 #help-modal #poster-cta {
     display: block;
     width: 100%;
     margin: 0.3rem 0 0;
     padding: 0.92rem 1rem;
-    background: none;
-    color: var(--lux-gold);
-    border: 1px solid rgba(219, 179, 106, 0.55);
-    border-radius: 2px;
-    font-family: var(--lux-sans);
     font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.2em;
-    text-transform: uppercase;
     text-align: center;
-    text-decoration: none;
-    cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
-
-#dialog-modal #dialog-cta:hover,
-#help-modal #poster-cta:hover {
-    background: var(--lux-gold);
-    border-color: var(--lux-gold);
-    color: #16120a;
-}
-
-#dialog-modal #dialog-cta:focus-visible,
-#help-modal #poster-cta:focus-visible {
-    outline: 2px solid var(--lux-gold-lift);
-    outline-offset: 3px;
 }
 
 /* The way out. Plain tracked capitals, no box: leaving should be easy to
@@ -1536,7 +1570,8 @@ body .pan-controls.no-chrome.visible {
    A LINE OF TYPE, NOT A CONTROL, and that is the whole treatment brief. A
    share button with an icon on it is the fastest way to make a page like
    this read as marketing, and this card's one filled control is the Call
-   button (D25). So it is set exactly like the About card's flyer link: the
+   button (D25, still true here: it is what this card asks for). So it is set
+   exactly like the About card's flyer link: the
    small tracked capitals the house uses for a secondary action, with a
    hairline under it doing the work an underline does on a link.
 

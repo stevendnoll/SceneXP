@@ -327,8 +327,9 @@
          own text for the same reason the panel's two buttons are small.
 
          A disclosure button, so `aria-expanded` says which state it is in and
-         `aria-controls` names what it opens. Hairline, because D25's one
-         filled control on this page is the Call button. -->
+         `aria-controls` names what it opens. Hairline: under D42 the filled
+         control on a surface is what that surface ASKS for, and this handle
+         asks for nothing, it reopens a panel. -->
     <button id="intro-handle" class="intro-handle coach-out" type="button"
         aria-expanded="false" aria-controls="intro-card">
         <!-- HIS FACE AND HIS NAME, in the order the panel's own header puts
@@ -373,9 +374,13 @@
             the coverage they add at the end. The first call is free, and if he cannot get you the
             deal you want, you owe him nothing.</p>
         <!-- The two routes anybody who has just read that paragraph would
-             want next. Both are hairline controls, because the one filled
-             control on this page is the Call button on the contact card
-             and it stays that way (D25).
+             want next. The first is FILLED and the second is a hairline
+             (D42). They were both hairlines, on D25's rule that the Call
+             button was the one filled control on the whole page, and QA read
+             the pair as two equal options rather than as an ask and an aside.
+             D25's scarcity now counts per surface instead: one fill on
+             whatever the visitor is looking at, in the same gold every
+             primary on this page wears (.lux-primary).
 
              Buttons, not links. Neither has anywhere to go without
              JavaScript: the first opens the contact card, which assembles
@@ -395,7 +400,7 @@
              covers the markup around it and not the shape. Please do not
              reuse it. See LICENSE and the README. -->
         <div class="intro-actions">
-            <button id="intro-contact" class="intro-action intro-action-lead" type="button">Talk to John</button>
+            <button id="intro-contact" class="intro-action lux-primary" type="button">Talk to John</button>
             <button id="intro-about" class="intro-action" type="button">
                 <svg class="intro-w" viewBox="3 16.5 58 31" aria-hidden="true">
                     <path
@@ -584,7 +589,7 @@
                         aria-label="Open John's printed flyer full size in a new tab">See
                         John's printed flyer &#8599;</a>
                 </p>
-                <button id="poster-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
+                <button id="poster-cta" class="piece-enter dialog-cta dialog-primary lux-primary" type="button">Talk to John &rarr;</button>
             </div>
         </div>
     </div>
@@ -602,7 +607,7 @@
                      A <button> because it opens a card in place, wearing
                      the .dialog-primary reset the same way the dismiss
                      button below does. -->
-                <button id="dialog-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
+                <button id="dialog-cta" class="piece-enter dialog-cta dialog-primary lux-primary" type="button">Talk to John &rarr;</button>
                 <button id="dialog-dismiss" class="piece-cancel dialog-primary" type="button" data-close>Back to the showroom</button>
             </div>
         </div>
@@ -697,7 +702,7 @@
                      specific classes, so `class="hidden"` on an anchor
                      here would do exactly nothing and the dead links would
                      stay on screen. -->
-                <a id="contact-call" class="piece-enter" href="">Call John</a>
+                <a id="contact-call" class="piece-enter lux-primary" href="">Call John</a>
                 <a id="contact-text" class="piece-cancel" href="">Send a text</a>
                 <a id="contact-email" class="piece-cancel" href="">Email John</a>
                 <!-- WHAT THE ACTIONS SAY BACK (M37). Empty until something
