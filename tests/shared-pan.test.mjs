@@ -947,6 +947,73 @@ describe('mouse drag', () => {
   });
 });
 
+// ---- Zoom without the looking around ---------------------------------------
+
+describe('an axis switched off with a zero', () => {
+  /* WHAT THIS IS FOR. automan wants the zoom and not the pan: the showroom is
+   * composed for one view, and once nothing in the room answers a tap (D43)
+   * a drag was offering work with no reward and a way to end up facing a
+   * wall. A scene says so by passing a zero.
+   *
+   * maxTilt has always honoured 0. maxAngle required `> 0` and so IGNORED a
+   * zero silently, leaving the 0.5 default in place and the scene panning
+   * anyway, while `setPanLimit(0)` two hundred lines below accepted it
+   * happily. That inconsistency is what this covers.
+   */
+  const OFF = { speed: 0.4, maxAngle: 0, maxTilt: 0 };
+
+  test('a drag moves neither the yaw nor the tilt', async () => {
+    const surface = makeSurface();
+    const { m, camera } = await setup({ pan: OFF, zoom: ZOOM, surface });
+    touch(surface, 'pointerdown', 1, 200, 400);
+    touch(surface, 'pointermove', 1, 189, 400);    // past the slop leg
+    touch(surface, 'pointermove', 1, 20, 700);     // a long drag, both axes
+    expect(m.getPanAngle()).toBe(0);
+    expect(m.getTiltAngle()).toBe(0);
+
+    // AND THE PART NEVER TOUCHES THE AIM AT ALL, which is stronger than
+    // "aims at the composed point" and is what the code actually does:
+    // `camera.lookAt` is called only while the yaw or tilt is off centre,
+    // so with both axes off the camera is left entirely to the experience.
+    // Asserted this way round because the first draft of this test looked
+    // for a lookAt call, found none, and read as a failure.
+    m.updatePortraitControls(1);
+    expect(camera.lookAtCalls).toHaveLength(0);
+  });
+
+  test('held arrow keys and buttons move nothing either', async () => {
+    // The arrows are still BUILT: automan hides them with a class rather than
+    // suppressing them, because the +/- zoom keys are gated on the zoom
+    // buttons existing. So they have to be inert rather than absent.
+    const { m, buttons } = await setup({ pan: OFF, zoom: ZOOM });
+    expect(buttons['Pan left']).toBeDefined();
+    press(buttons['Pan left']);
+    m.updatePortraitControls(1);
+    release(buttons['Pan left']);
+    expect(m.getPanAngle()).toBe(0);
+  });
+
+  test('BUT THE ZOOM IS UNTOUCHED, which is the whole point', async () => {
+    const surface = makeSurface();
+    const { m, camera } = await setup({ pan: OFF, zoom: ZOOM, surface });
+
+    // A pinch still zooms.
+    touch(surface, 'pointerdown', 1, 150, 400);
+    touch(surface, 'pointerdown', 2, 250, 400);
+    touch(surface, 'pointermove', 2, 250, 400);
+    touch(surface, 'pointermove', 2, 260, 400);
+    expect(m.getZoomOffset()).toBeLessThan(0);
+
+    // And so does the wheel, in both directions.
+    const inAt = m.getZoomOffset();
+    surface.fire('wheel', { deltaY: 100, deltaMode: 0, cancelable: true, preventDefault() {} });
+    expect(m.getZoomOffset()).toBeGreaterThan(inAt);
+
+    m.updatePortraitControls(1);
+    expect(camera.fov).not.toBe(BASE_FOV);
+  });
+});
+
 // ---- Wheel zoom ------------------------------------------------------------
 
 describe('wheel zoom', () => {

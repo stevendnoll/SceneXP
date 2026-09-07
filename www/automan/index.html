@@ -270,8 +270,9 @@
          what keeps decision D18 intact while still answering the question
          the scene was leaving open. It carries three controls of its own
          since D40 and its SURFACE still takes no pointer events, so a
-         swipe that starts on it still looks around the room, and it still
-         leaves on its own whether anybody touches it or not.
+         gesture that starts on it still reaches the canvas (a pinch zooms;
+         a drag does nothing at all since D44). It no longer leaves on its
+         own: D43 removed the timer, so it waits to be dismissed.
 
          Front-loaded on purpose. The visitor arrives from a link John
          shared, on a phone, with about ten seconds of patience (PRD 12),
@@ -320,8 +321,8 @@
          a monogram in the corner.
 
          A PILL, NOT A BAR, and that is the whole shape of it. The panel's
-         surface stays `pointer-events: none` so a swipe starting on it still
-         looks around the room (D31), and a full-width handle would take
+         surface stays `pointer-events: none` so a gesture starting on it
+         still reaches the canvas (D31), and a full-width handle would take
          pointer events across the entire bottom of the screen, which on a
          phone is exactly where a thumb starts a swipe. Shrink-wrapped to its
          own text for the same reason the panel's two buttons are small.
@@ -352,8 +353,8 @@
     <div id="intro-card" class="intro-card coach-out" tabindex="-1">
         <!-- THE PANEL'S THREE CONTROLS (D40), and the only things on it that
              take pointer events. The surface itself stays
-             `pointer-events: none`, which is what lets a swipe start
-             anywhere else on it and still look around the room.
+             `pointer-events: none`, which is what lets a gesture start
+             anywhere else on it and still reach the canvas underneath.
 
              A way out first, and since D43 it is close to the ONLY one.
              The panel used to leave on its own after 29 seconds and on the
@@ -413,13 +414,18 @@
                 What he does
             </button>
         </div>
-        <!-- The second sentence used to read "Everything else in the room has
-             a story of its own", which was true until D43 took the prop
-             stories out. Saying it now would send a visitor hunting for taps
-             that do nothing, which is the exact fault D43 was fixing. What is
-             left is the one instruction and the one promise. -->
-        <p class="intro-hint" id="intro-hint">Tap a glowing marker to meet John, and
-            swipe to look around the showroom.</p>
+        <!-- BOTH SENTENCES HAVE BEEN CUT DOWN, and each time because the copy
+             was offering something the scene had stopped doing. It read
+             "Everything else in the room has a story of its own" until D43
+             took the prop stories out, and "swipe to look around" until D44
+             took the pan out. Copy that promises a gesture which does nothing
+             is worse than no copy: it sends a visitor hunting.
+
+             main.js rewrites this line at runtime to say Tap or Click and
+             Pinch or Scroll, so what is here is the touch wording, which is
+             what a crawler and a no-JS visitor should read. -->
+        <p class="intro-hint" id="intro-hint">Tap a glowing marker to meet John.
+            Pinch to look closer.</p>
     </div>
 
     <!-- Floating controls -->

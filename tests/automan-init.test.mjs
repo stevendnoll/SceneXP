@@ -285,6 +285,45 @@ describe('the composition and config (pure)', () => {
     expect(T.seatHeightY(seat, 1.08)).toBeLessThan(T.seatHeightY(seat, 1));
   });
 
+  test('D44: the zoom is on and the looking around is off', () => {
+    /* The showroom is composed for one view. Once nothing in the room
+     * answered a tap (D43), a drag was offering work with no reward and a
+     * way to end up facing a wall, so QA asked for the pan out and the zoom
+     * kept.
+     *
+     * BOTH AXES HAVE TO BE ZERO. maxTilt alone leaves the yaw at the shared
+     * default of 0.5 radians and the scene still swings 29 degrees each way,
+     * which looks like the change worked until somebody drags sideways.
+     *
+     * And the zoom has to survive it, which is the half that would go
+     * unnoticed: a scene with no zoom numbers still builds, still runs, and
+     * simply never leans in on the deal sheet. */
+    expect(CFG.camera.portrait.pan.maxAngle).toBe(0);
+    expect(CFG.camera.portrait.pan.maxTilt).toBe(0);
+    expect(CFG.camera.portrait.zoom.maxIn).toBeGreaterThan(0);
+    expect(CFG.camera.portrait.zoom.maxOut).toBeGreaterThan(0);
+  });
+
+  test('and the copy does not promise a gesture that is gone', async () => {
+    // Twice now the hint has outlived what it described: the prop stories at
+    // D43, the drag at D44. Copy offering a gesture that does nothing is
+    // worse than no copy, because it sends a visitor hunting for it.
+    const [html, mainText] = await Promise.all([src('index.html'), src('js/main.js')]);
+    const hint = /<p class="intro-hint"[^>]*>([\s\S]*?)<\/p>/.exec(html);
+    expect(hint).not.toBeNull();
+    for (const word of [/swipe/i, /drag/i, /look around/i, /story of its own/i]) {
+      expect(`markup hint matches ${word}: ${word.test(hint[1])}`)
+        .toBe(`markup hint matches ${word}: false`);
+    }
+    // main.js rewrites the same line at runtime, so it has to agree.
+    const runtime = /hint\.textContent = ([\s\S]*?);\n/.exec(mainText);
+    expect(runtime).not.toBeNull();
+    for (const word of [/swipe/i, /\bdrag\b/i, /look around/i]) {
+      expect(`runtime hint matches ${word}: ${word.test(runtime[1])}`)
+        .toBe(`runtime hint matches ${word}: false`);
+    }
+  });
+
   test('the proof-of-work cache is shared across experiences', () => {
     expect(CFG.proofOfWork.storageKey).toBe('gallery-pow');
     expect(CFG.proofOfWork.prefix).toBe('11');

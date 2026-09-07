@@ -9,12 +9,14 @@
  * collision, and no moving day/night cycle (the sky is frozen at noon so
  * it is a bright midday on the lot at every hour, though the cycle's
  * per-frame pass still runs for the fixed-time sky paint and the
- * shadow-map refresh). The interactions that do exist are featherweight:
- * two floating buttons (Home, and one that opens the About card: what
- * John does, in words, with his flyer under it), the
- * always-on pan and zoom row (shared pan part, with swipe, tilt, and pinch
- * on touch), and one raycast per tap to see what the visitor pointed at,
- * answered in the host's voice by the dialog card.
+ * shadow-map refresh). The interactions that do exist are featherweight,
+ * and three rounds of QA have made them fewer: ONE floating button (the W,
+ * which opens the About card: what John does, in words, with his flyer
+ * under it), the arrival panel, the three halos, an always-on ZOOM (shared
+ * pan part with both look-around axes switched off at D44, so the wheel,
+ * the pinch and the +/- keys lean in on the deal sheet and nothing swings
+ * the view), and one raycast per tap, which now answers only if it lands
+ * on one of the three people (D43).
  *
  * AND NO WELCOME OVERLAY, which makes it the first SceneXP experience
  * without one. Nothing here needs a user gesture to start (no pointer
@@ -373,13 +375,23 @@ function setupEventListeners() {
         else if (nudgeOpen) closeNudgeModal();
     }, { signal });
 
-    // View controls: this room is wider than any frame, so even a desktop
-    // landscape crops the coffee bar on one side and the sales board on
-    // the other. Every way of looking around is switched on at EVERY
-    // aspect (alwaysOn, same as the karaoke bar): drag or swipe to yaw and
-    // tilt, wheel or pinch to zoom, arrow keys to pan, W and S to tilt,
-    // and the zoom anchors to whichever FOV the current orientation
-    // composed with.
+    // View controls: ZOOM ONLY, since D44.
+    //
+    // This room is wider than any frame, so every aspect crops the coffee
+    // bar on one side and the sales board on the other, and the answer used
+    // to be that a visitor could drag or swipe to yaw and tilt their way to
+    // either. QA's call to remove that, and it follows D43 rather than
+    // arriving out of nowhere: once nothing in the room answers a tap, there
+    // is nothing out at the edges to go and find, so the drag was offering
+    // work with no reward and a way to end up looking at a wall. The scene
+    // is composed for one view and now it holds it.
+    //
+    // WHAT IS LEFT is the wheel, the pinch and the +/- keys, still anchored
+    // to whichever FOV the current orientation composed with, so leaning in
+    // on the deal sheet still works. `pan.maxAngle` and `pan.maxTilt` are
+    // both 0 in config, which is how the shared part switches an axis off.
+    // alwaysOn stays (same as the karaoke bar) because the zoom is wanted at
+    // every aspect, not just portrait.
     //
     // WITH NO BUTTONS ON SCREEN. The shared part always builds its
     // bottom-center row, so this scene hides it with a class of its own
@@ -392,10 +404,10 @@ function setupEventListeners() {
     //    frame rather than watch what is in it;
     //  - hiding rather than suppressing keeps every INPUT alive. The mouse
     //    takes the same path as the finger in the shared part, so a
-    //    desktop visitor can still drag, and the keyboard zoom is gated on
-    //    the zoom buttons EXISTING (not on their being visible), so
-    //    removing them from the DOM would quietly take the +/- keys with
-    //    them.
+    //    keyboard zoom is gated on the zoom buttons EXISTING (not on their
+    //    being visible), so removing them from the DOM would quietly take
+    //    the +/- keys with them. (It also used to keep the desktop drag
+    //    alive, which D44 has since zeroed at the config instead.)
     //
     // Handing over the canvas as `surface` is what makes all of that
     // reach the scene at all, so it matters more here than anywhere.
@@ -535,8 +547,8 @@ function introShowing() {
 /** True when a point is over the arrival panel itself.
  *
  *  The panel's SURFACE is `pointer-events: none` and stays that way, which
- *  is what lets somebody start a swipe on it and look around: it covers a
- *  third of a phone screen, and a panel that ate drags would be worse than
+ *  is what lets a gesture start on it and reach the canvas: it covers a
+ *  third of a phone screen, and a panel that ate gestures would be worse than
  *  one that ate taps. (D40 gave it three controls, and only those three
  *  take pointer events. A tap on one of them is a DOM click that never
  *  reaches the canvas, so it never reaches this function either.) But
@@ -1262,8 +1274,8 @@ function wireCoaching(signal) {
     const verb = state.isMobile ? 'Tap' : 'Click';
     const hint = document.getElementById('intro-hint');
     if (hint) {
-        hint.textContent = `${verb} a glowing marker to meet John, and `
-            + `${state.isMobile ? 'swipe' : 'drag'} to look around the showroom.`;
+        hint.textContent = `${verb} a glowing marker to meet John. `
+            + `${state.isMobile ? 'Pinch' : 'Scroll'} to look closer.`;
     }
 
     const anchors = new Map(getPersonAnchors().map((entry) => [entry.kind, entry.object]));
@@ -1302,10 +1314,11 @@ function wireCoaching(signal) {
  *  recorded in TASKS.md at D31) is answered rather than ignored:
  *
  *  - THE SURFACE STILL TAKES NO POINTER EVENTS. Only these three controls
- *    do. A swipe that starts anywhere else on the panel still reaches the
- *    canvas and still looks around the room, which is the property that
- *    made a panel affordable over a third of a phone screen in the first
- *    place. The cost is a swipe that starts exactly on a button, and the
+ *    do. A gesture that starts anywhere else on the panel still reaches the
+ *    canvas, which is the property that made a panel affordable over a
+ *    third of a phone screen in the first place. It used to mean the room
+ *    could be looked around from there; since D44 it means the room can be
+ *    zoomed from there. The cost is a gesture that starts on a button, and the
  *    buttons are deliberately small and off to the left for that reason.
  *  - THE ARRIVAL IS STILL ONE DECISION IN THE SCENE. checkSceneTap is
  *    untouched: while the panel is up, the only things in the ROOM that

@@ -94,11 +94,12 @@
    zoom circles, and this scene hides it: the visitor this page is for is
    not a confident computer user, and a row of controls under a scene whose
    welcome card says "no controls needed" is an invitation to fiddle with
-   the frame instead of watching what is in it. Dragging, swiping,
-   pinching, the wheel and the arrow keys all still work, and hiding rather
-   than suppressing is what keeps them working: the part gates its keyboard
-   zoom on the zoom buttons existing, so removing them from the DOM would
-   take the +/- keys with them.
+   the frame instead of watching what is in it. Pinching, the wheel and the
+   +/- keys all still work, and hiding rather than suppressing is what keeps
+   them working: the part gates its keyboard zoom on the zoom buttons
+   EXISTING, so removing them from the DOM would take those keys with it.
+   (Dragging and the arrow keys used to work too. D44 zeroed both
+   look-around axes, so the arrows are built, hidden AND inert.)
 
    `body` in the selector is not decoration. The shared sheet's strongest
    rule here is .pan-controls.always-on.visible, three classes, and this
@@ -373,7 +374,7 @@ body .pan-controls.no-chrome.visible {
 
    pointer-events: auto against the panel's own `none`. A child can take
    events its parent refuses, and that is the whole mechanism that lets this
-   panel carry controls and still be swiped through everywhere else.
+   panel carry controls and still be gestured through everywhere else.
 
    44px square on a glyph that draws about 13, which is the touch target
    rather than the ink. No ring and no fill at rest: it is the quietest
@@ -573,7 +574,7 @@ body .pan-controls.no-chrome.visible {
    THE ROW IS LEFT ALIGNED AND THE BUTTONS ARE ONLY AS WIDE AS THEIR WORDS,
    which is a gesture decision rather than a typographic one. These are the
    only two places on this panel that take pointer events, so they are the
-   only two places a swipe cannot start, and the room is dragged from the
+   only two places a gesture cannot start, and the room is pinched from the
    middle of the screen far more often than from the bottom left corner. */
 .intro-actions {
     display: flex;
@@ -676,9 +677,9 @@ body .pan-controls.no-chrome.visible {
    same spot rather than a second thing appearing.
 
    SHRINK-WRAPPED, NOT A BAR. The panel's surface is `pointer-events: none`
-   so a swipe starting on it still looks around the room, and this handle
+   so a gesture starting on it still reaches the canvas, and this handle
    HAS to take pointer events to be a button at all. A full-width bar would
-   therefore claim every swipe that starts along the bottom of the screen,
+   therefore claim every gesture that starts along the bottom of the screen,
    which on a phone is where a thumb naturally begins one. Sized to its own
    text, it costs a pill's worth of that edge and no more.
 
@@ -1411,7 +1412,7 @@ body .pan-controls.no-chrome.visible {
 /* NO `width` HERE, and that is the whole reason geometry stayed with the
    buttons. The three card buttons are full-width blocks; the intro panel's is
    an inline-flex item in a wrapping row, shrink-wrapped to its own words so
-   the rest of the bottom edge stays free for a thumb to start a swipe on. A
+   the rest of the bottom edge stays free for a thumb to pinch from. A
    `width: 100%` in this block would take the whole row and push the About
    button onto a second line, on a panel that is already a third of a phone. */
 .lux-primary {

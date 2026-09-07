@@ -145,7 +145,7 @@
 let _getCamera = null;
 let _lookAt = null;         // {x, y, z} composed focus point from the config
 let _panSpeed = 0.4;        // radians per second while a pan arrow is held
-let _maxAngle = 0.5;        // pan clamp, radians each way from the composed view
+let _maxAngle = 0.5;        // pan clamp, radians each way (0 disables the yaw)
 let _maxTilt = 0.3;         // swipe tilt clamp, radians up or down (0 disables)
 let _baseFov = 0;           // the composed portrait FOV (degrees), anchor for zoom
 let _zoomSpeed = 18;        // degrees of FOV per second while a zoom button is held
@@ -580,8 +580,16 @@ export function initPortraitControls(options = {}) {
     _lookAt = options.lookAt || null;
     const pan = options.pan || {};
     if (typeof pan.speed === 'number' && pan.speed > 0) _panSpeed = pan.speed;
-    if (typeof pan.maxAngle === 'number' && pan.maxAngle > 0) _maxAngle = pan.maxAngle;
-    // Zero is meaningful here: it switches the swipe tilt off entirely.
+    // ZERO IS MEANINGFUL ON BOTH AXES: it switches that axis off entirely, for
+    // a scene that wants the zoom without the looking around.
+    //
+    // maxAngle used to require `> 0` and so ignored a 0 silently, leaving the
+    // 0.5 default in place and the scene panning anyway. That was an
+    // inconsistency rather than a decision: maxTilt has always honoured 0, and
+    // `setPanLimit` below explicitly accepts it (`maxAngle >= 0`), so the
+    // initializer was the only place in this part that disagreed. Nothing
+    // passed 0 before automan did.
+    if (typeof pan.maxAngle === 'number' && pan.maxAngle >= 0) _maxAngle = pan.maxAngle;
     if (typeof pan.maxTilt === 'number' && pan.maxTilt >= 0) _maxTilt = pan.maxTilt;
     const zoom = options.zoom || null;
     _zoomDelegate = (options.zoomDelegate && typeof options.zoomDelegate.onDelta === 'function')
