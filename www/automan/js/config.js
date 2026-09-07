@@ -290,7 +290,7 @@ export const AUTOMAN_CONFIG = deepFreeze({
         // URL as a field of its own and puts it where the platform wants.
         share: {
             title: 'John Walker, The Auto Man',
-            text: 'A tiny 3D dealership where John Walker is at the desk arguing the deal down for his customer, and the coffee is free.'
+            text: 'A tiny 3D dealership where John Walker does the car negotiating so his customer does not have to, and the coffee is free.'
         },
 
         // The builder funnel. Root-relative on purpose.

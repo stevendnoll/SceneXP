@@ -387,6 +387,98 @@ describe('the composition and config (pure)', () => {
     }
   });
 
+  /** EVERYTHING A VISITOR CAN READ, AND NOTHING ELSE. The first version of
+   *  the checks below scanned the source files whole and failed on "13% off
+   *  its measure", which is a line in a CSS layout comment about a broken
+   *  intro panel. A claim check that reads developer comments is checking the
+   *  wrong document: it will both cry wolf and, worse, teach whoever hits it
+   *  to loosen the pattern until it stops catching real copy.
+   *
+   *  So: markup with comments and tags removed, plus the copy tables' own
+   *  strings out of main.js and config.js. */
+  async function visibleCopy() {
+    const [html, mainText, cfgText] = await Promise.all([
+      src('index.html'), src('js/main.js'), src('js/config.js')
+    ]);
+    const markup = html
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<(script|style)[\s\S]*?<\/\1>/g, ' ')
+      .replace(/<[^>]+>/g, ' ');
+    // The JSON-LD block is markup a crawler reads, so its strings count.
+    const ld = (/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html) || ['', ''])[1];
+    const strings = (text) =>
+      [...text.matchAll(/(?:kicker|title|lead|text|textContent =)\s*[:=]\s*[`']((?:[^`'\\]|\\.)+)[`']/g)]
+        .map((m) => m[1]).join(' ');
+    return [markup, ld, strings(mainText), strings(cfgText)].join(' ');
+  }
+
+  test('D46: the page never invents a savings figure', async () => {
+    /* THE ONE THAT MATTERS MOST, because it is a claim about a real man's
+     * results on his own business page. John's printed flyer makes NO dollar
+     * or percentage claim anywhere: what he promises is a free consultation,
+     * a satisfaction guarantee, and that he will desk the whole deal for you.
+     * So this page promises the same things and no more.
+     *
+     * "Saves you thousands" is the line a copy pass reaches for at some point,
+     * and it would be the website inventing a number for the business. If a
+     * real figure ever comes from John it can go in deliberately, and this
+     * test is where it gets recorded. */
+    const visible = await visibleCopy();
+    const INVENTED = [
+      /\bsaves? (?:you )?\$?[\d,]+/i,
+      /\$[\d,]{3,}/,
+      /\bthousands of dollars\b/i,
+      /\b\d+\s*(?:percent|%)\s*(?:off|less|below|savings)/i,
+      /\baverage savings?\b/i,
+    ];
+    for (const pattern of INVENTED) {
+      const hit = pattern.exec(visible);
+      expect(`${pattern} found: ${hit ? hit[0] : 'no'}`).toBe(`${pattern} found: no`);
+    }
+  });
+
+  test('D46: the promise is that he negotiates INSTEAD of the buyer', async () => {
+    /* The audit that started this: 993 words of copy in which no phrase said
+     * John does the negotiating rather than coaching somebody through it, and
+     * one line said the opposite. The JSON-LD described him as explaining the
+     * products "so you walk into the dealership prepared", which promises the
+     * buyer still has to go and do the hard part. That is the line search
+     * engines and assistants retrieve, so it was the worst place for it. */
+    const html = await src('index.html');
+    expect(html).not.toMatch(/walk into the dealership prepared/i);
+
+    // The promise has to survive on the surfaces a stranger meets first.
+    const meta = (name) =>
+      new RegExp(`<meta (?:name|property)="${name}" content="([^"]*)"`).exec(html)[1];
+    for (const surface of ['description', 'og:description', 'twitter:description']) {
+      const text = meta(surface);
+      expect(`${surface} says he does it for you: ${/for you|never have to|on your side|on the buyer's side/i.test(text)}`)
+        .toBe(`${surface} says he does it for you: true`);
+    }
+    // And in the structured data, which is what an assistant reads.
+    const ld = /"@type": "ProfessionalService"[\s\S]*?"description": "([^"]*)"/.exec(html);
+    expect(ld).not.toBeNull();
+    expect(ld[1]).toMatch(/negotiat/i);
+  });
+
+  test('D46: American English, and no house-style punctuation', async () => {
+    // The audience is American. A -our/-ise regex cannot see "tire and wheel
+    // cover", so the vocabulary is checked too, and the house style bans
+    // em-dashes and semicolons in anything a visitor reads.
+    const visible = await visibleCopy();
+    const BRITISH = ['whilst', 'amongst', 'realise', 'organise', 'colour', 'favour',
+      'centre', 'licence', 'defence', 'practise', 'tyre', 'bonnet', 'windscreen',
+      'motorway', 'petrol', 'gearbox', 'saloon', 'car park', 'per cent', 'cheque',
+      'aluminium', 'kerb', 'speciality', 'number plate'];
+    for (const word of BRITISH) {
+      expect(`"${word}" in the copy: ${new RegExp(`\\b${word}\\b`, 'i').test(visible)}`)
+        .toBe(`"${word}" in the copy: false`);
+    }
+    // A compound number reads as a typo to an American eye either way.
+    expect(visible).not.toMatch(/\btwenty five\b/);
+    expect(`em-dashes: ${(visible.match(/\u2014/g) || []).length}`).toBe('em-dashes: 0');
+  });
+
   test('the proof-of-work cache is shared across experiences', () => {
     expect(CFG.proofOfWork.storageKey).toBe('gallery-pow');
     expect(CFG.proofOfWork.prefix).toBe('11');

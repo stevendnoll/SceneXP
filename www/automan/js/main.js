@@ -731,43 +731,66 @@ function restoreDialogFocus() {
 // Who opened it, and what it says when they did. Every route in gets its
 // own heading and opening line, so the card reads as an answer to the tap
 // rather than the same advert wheeled out five different ways.
+/* THE COPY THAT SELLS, AND WHAT CHANGED AT D46.
+ *
+ * An audit of the page found 993 words of visitor-facing copy in which
+ * "save", "money" and "pay less" appeared ZERO times, and so did any phrase
+ * about John doing the negotiating INSTEAD of the buyer. What it did have was
+ * twenty one mentions of his credentials and twenty one of the guarantee. It
+ * was selling how much he knows, to people who want to know what it gets
+ * them.
+ *
+ * SO THE PROMISE LEADS NOW, AND IT IS JOHN'S OWN. His printed flyer says "let
+ * me help you get the best deal for your trade and I will desk the whole deal
+ * for you", and that verb is the whole product: he does not coach the buyer
+ * through the negotiation, he does it for them. The credentials are still
+ * here, demoted to what they are, which is the proof that he can.
+ *
+ * NO NUMBERS, DELIBERATELY. John makes no dollar or percentage claim anywhere
+ * on his own flyer, so neither does this page. "Saves you thousands" would be
+ * a claim about a real man's results invented by his website, and the
+ * mechanism is vivid enough without one: there are four places money moves in
+ * a car deal and he works all four. If a real figure ever comes from John, it
+ * belongs here and in the About card, not scattered.
+ *
+ * `kind` says who asked, which picks the entry. `story` is the fallback for
+ * an unknown kind and `nudge` is unreachable since D43; both are kept because
+ * the fallback has to say something and the route name is reserved. */
 const CONTACT_CARDS = {
     john: {
         kicker: 'Free consultation, by phone or Zoom',
-        title: 'Meet John Walker',
-        lead: 'This is John, doing the part most people dread. Twenty five years of it, more than 2,000 cars, and now he does it for the buyer instead of the dealership. If he cannot get you the deal you want, you owe him nothing.'
+        title: 'He does the negotiating',
+        lead: 'This is John, doing the part most people dread, so that you do not have to do it at all. Twenty-five years inside the business and more than 2,000 cars, now spent on your side of the desk. He works every line that costs you money: the trade value, the price, the financing and the rate, and the coverage they add at the end. If he cannot get you the deal you want, you owe him nothing.'
     },
     customer: {
         kicker: 'Free consultation, by phone or Zoom',
-        title: 'She brought backup',
-        lead: 'She walked in with somebody who knows what every line on that page is worth. The consultation that got her here was free, and so is yours.'
+        title: 'She is not the one negotiating',
+        lead: 'She brought somebody who knows what every line on that page is really worth, and who is doing the arguing for her. That is the whole service: you tell John what you are looking at, and he goes and gets it. The consultation that got her here was free, and so is yours.'
     },
     dealer: {
         kicker: 'Free consultation, by phone or Zoom',
-        title: 'The other side of the desk',
-        lead: 'He is good at his job, and that is exactly the point. Nobody should have to sit across from a professional without one of their own.'
+        title: 'He does this every day',
+        lead: 'He is good at his job, and that is exactly the point. He desks deals for a living and you buy a car every few years, which is not a fair match. Nobody should have to sit across from a professional without one of their own, and with John on your side you do not have to sit there at all.'
     },
     story: {
         kicker: 'Free consultation, by phone or Zoom',
         title: 'Let John handle it',
-        lead: 'John Walker has spent twenty five years on the other side of that desk, and more than 2,000 cars have gone through his hands. If he cannot get you the deal you want, you owe him nothing.'
+        lead: 'In his own words, he will desk the whole deal for you: the trade valuation, the price, the financing and the rate, and the products they add at the end. Twenty-five years of doing that from the dealership side, now spent doing it from yours. If he cannot get you the deal you want, you owe him nothing.'
     },
     nudge: {
         kicker: 'A few stops into the visit',
-        title: 'Enjoying the showroom?',
-        lead: 'Thank you for looking around. Everything in this room is something John has already thought about on a customer’s behalf. If you have a car to buy or sell, he would be glad to hear from you.'
+        title: 'Buying a car soon?',
+        lead: 'Thank you for looking around. Everything in this room is a place a car deal quietly costs somebody money, and John works all of it on the buyer\u2019s behalf. If you have a car to buy or sell, he would be glad to hear from you.'
     },
-    // From the foot of the About card, so this is the one visitor in the
-    // scene who has just read the whole account. Nothing to re-explain.
     about: {
         kicker: 'Free consultation, by phone or Zoom',
         title: 'That is the whole idea',
-        lead: 'No obligation and no pressure. Tell John what you are looking at, and he will tell you plainly what he sees in it.'
+        lead: 'No obligation and no pressure. Tell John what you are looking at, and he will tell you plainly what it should cost, what the extras are worth, and what he thinks he can get it for.'
     },
     button: {
         kicker: 'Free consultation, by phone or Zoom',
-        title: 'Talk to John',
-        lead: 'By phone or by Zoom, before you ever set foot in a dealership. He will look at the numbers with you and tell you plainly what he sees.'
+        title: 'Talk to John first',
+        lead: 'By phone or by Zoom, before you ever set foot in a dealership. He will look at the numbers with you, tell you plainly what he sees in them, and then go and do the negotiating himself.'
     }
 };
 
