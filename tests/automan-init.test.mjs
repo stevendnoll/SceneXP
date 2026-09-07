@@ -346,6 +346,71 @@ describe('the primary action wears one gold, everywhere it appears (D42)', () =>
     }
   });
 
+  test('the hover state is SELF-CONTAINED, so nothing else can supply the rest', async () => {
+    /* THE BUG THIS EXISTS FOR, and it shipped. `.lux-primary:hover` declared
+     * only `background`. A hover rule inherits the resting value for every
+     * property it leaves out, which means any OTHER `:hover` at the same
+     * specificity gets to fill the gap, and `.intro-action:hover` duly put its
+     * pale outline cream on the gold fill: 1.16:1, reported from QA as the
+     * text going white on the one button that wears both classes.
+     *
+     * The rule, then: whatever the resting block establishes about the finish,
+     * the hover block restates. That is what makes this class safe to compose
+     * onto a button that already has styling of its own, which is the entire
+     * reason it is a class. */
+    const css = await src('css/experience.css');
+    const block = (sel) => new RegExp(`\\${sel}\\s*\\{([^}]*)\\}`).exec(css)[1];
+    const declared = (body) => new Set(
+      [...body.matchAll(/(?:^|;)\s*([a-z-]+)\s*:/g)].map((m) => m[1])
+    );
+    const rest = declared(block('.lux-primary'));
+    const hover = declared(block('.lux-primary:hover'));
+    for (const prop of ['background', 'color']) {
+      expect(`hover restates ${prop}: ${rest.has(prop) && hover.has(prop)}`)
+        .toBe(`hover restates ${prop}: true`);
+    }
+  });
+
+  test('no outline hover can repaint a filled primary', async () => {
+    /* The same defect from the other side. `.intro-action:hover` is the
+     * HAIRLINE button's hover, and its ink only works against the dark panel
+     * behind it. It has to exclude the filled variant explicitly, or adding
+     * .lux-primary to any button that already wears an outline class quietly
+     * reintroduces unreadable text. */
+    const html = await src('index.html');
+    const css = (await src('css/experience.css')).replace(/\/\*[\s\S]*?\*\//g, '');
+
+    // What each primary actually carries in the markup.
+    const tokensOf = (id) => {
+      const tag = new RegExp(`<(?:a|button)[^>]*id="${id}"[^>]*>`).exec(html)[0];
+      const cls = /class="([^"]*)"/.exec(tag)[1].split(/\s+/).filter(Boolean);
+      return new Set([`#${id}`, ...cls.map((c) => `.${c}`)]);
+    };
+
+    for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      if (!sel.includes(':hover')) continue;
+      if (!/(?:^|;)\s*color\s*:/.test(body)) continue;
+      for (const one of sel.split(',').map((s) => s.trim())) {
+        // The subject is the last compound; only it decides what is painted.
+        const subject = one.split(/\s+|>/).filter(Boolean).pop();
+        if (!subject) continue;
+        const excluded = [...subject.matchAll(/:not\(([^)]*)\)/g)].map((m) => m[1].trim());
+        const bare = subject.replace(/:not\([^)]*\)/g, '').replace(/:[a-z-]+/g, '');
+        const need = bare.match(/[#.][A-Za-z0-9_-]+/g) || [];
+        if (!need.length) continue;
+        for (const id of PRIMARIES) {
+          const has = tokensOf(id);
+          const matches = need.every((tok) => has.has(tok))
+            && !excluded.some((tok) => has.has(tok));
+          // .lux-primary's own hover is the one rule allowed to paint it.
+          const allowed = need.includes('.lux-primary');
+          expect(`"${one}" repaints ${id}: ${matches && !allowed}`)
+            .toBe(`"${one}" repaints ${id}: false`);
+        }
+      }
+    }
+  });
+
   test('the resting fill has somewhere brighter to go', async () => {
     // A FILL IS A STATE. An accent-tinted control at rest reads as already
     // pressed, which is exactly why these were outlines before. Filling them

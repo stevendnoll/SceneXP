@@ -609,13 +609,20 @@ body .pan-controls.no-chrome.visible {
    and it carries .lux-primary in the markup instead. Nothing else ever wore
    the class.) */
 
-.intro-action:hover {
+/* `:not(.lux-primary)` IS THE WHOLE POINT OF THESE TWO SELECTORS. This is the
+   HAIRLINE button's hover, and a hairline's hover ink is a pale cream that
+   only works against the dark panel behind it. D42 filled the lead button
+   with gold and left this rule matching it, so hovering "Talk to John" put
+   #f7e6c4 on #f5d49b: a measured 1.16:1, which is text you cannot read.
+   Scoping it here means the outline treatment can never repaint a filled one,
+   whatever else gets composed onto these buttons later. */
+.intro-action:not(.lux-primary):hover {
     border-color: var(--lux-gold);
     background: rgba(219, 179, 106, 0.1);
     color: #f7e6c4;
 }
 
-.intro-action:focus-visible {
+.intro-action:not(.lux-primary):focus-visible {
     outline: 2px solid var(--lux-gold);
     outline-offset: 2px;
 }
@@ -1451,9 +1458,20 @@ body .pan-controls.no-chrome.visible {
 /* A LIGHTER GOLD, NOT A TINT ON A CLEAR BUTTON, which is the whole reason
    these can be filled at rest at all. A control that rests at an accent tint
    reads as already pressed, so a resting fill has to have somewhere brighter
-   to go. This is it. */
+   to go. This is it.
+
+   IT RESTATES THE INK, and that is not redundancy. A hover rule inherits the
+   resting value for anything it does not declare, so whatever else on the page
+   has a `:hover` at the same specificity gets to supply the rest. This block
+   declared only `background` when it was written, and `.intro-action:hover`
+   duly supplied a pale cream for the one primary that also wears the outline
+   class: 1.16:1 on the lighter gold, reported from QA as the text going white.
+   So a state rule here declares everything the resting rule establishes, and
+   this class stays safe to compose onto any button. */
 .lux-primary:hover {
     background: linear-gradient(180deg, #f5d49b 0%, var(--lux-gold-lift) 100%);
+    color: #16120a;
+    border-color: transparent;
     filter: none;
 }
 
