@@ -225,3 +225,86 @@ export function shieldOverlayControl(el, options = {}) {
     OVERLAY_START_EVENTS.forEach((type) => el.addEventListener(type, stop, opts));
     return true;
 }
+
+// ---- Card scroll reset (shared) --------------------------------------------
+//
+// REPORTED FROM QA, AND IT WAS EVERY SCENE. Open a card, scroll down, close
+// it, open it again: the card comes back where it was left rather than at the
+// top. Twelve of the fourteen experiences never reset a card's scroll at all,
+// and the two that did reset one card each out of two and four.
+//
+// The cards scroll because the shared `.piece-card` caps at 85vh with
+// `overflow-y: auto` (and `.is-touch-device .modal-container` does the same on
+// a phone), so any card longer than the viewport has a scroll position to
+// keep. Whether it IS kept across `display: none` is a browser decision:
+// destroying the layout box resets it in some engines and not in others, so
+// this cannot be left to chance in either direction.
+//
+// WHY AN OBSERVER RATHER THAN A LINE IN EVERY open() FUNCTION. There are
+// roughly fifty of those across the site, they are the sort of thing a new
+// card forgets, and the two scenes that already had the line had it on one
+// card each. Same argument, and the same shape, as installCardFocusTrap
+// above: read the DOM the way the browser does, and no scene has to keep it
+// told about which card is open.
+
+/** Zero every scroll offset inside a card that has just been shown.
+ *
+ *  THE LAYOUT READ IS LOAD-BEARING. A card goes from `display: none` to
+ *  shown by a class change, and this runs in the microtask after that
+ *  mutation, before style and layout have been recomputed. A write to
+ *  `scrollTop` on a box that does not exist yet is silently dropped, so
+ *  `offsetHeight` is read first to force the flush. */
+function resetCardScroll(card) {
+    void card.offsetHeight;
+    if (card.scrollTop) card.scrollTop = 0;
+    if (card.scrollLeft) card.scrollLeft = 0;
+    // The scroller is usually .modal-container / .piece-card rather than the
+    // dialog itself, and which one it is varies by theme, so ask rather than
+    // assume. Reading first means nothing is written on the common path.
+    card.querySelectorAll('*').forEach((el) => {
+        if (el.scrollTop) el.scrollTop = 0;
+        if (el.scrollLeft) el.scrollLeft = 0;
+    });
+}
+
+/** Shown in the sense these scenes mean: neither the `.hidden` class the
+ *  cards use nor the `hidden` attribute a few controls use. */
+function cardIsShown(card) {
+    return !card.classList.contains('hidden')
+        && !(typeof card.hasAttribute === 'function' && card.hasAttribute('hidden'));
+}
+
+/** Put every card back to the top when it opens.
+ *
+ *  Call once per scene, ideally with the scene's own AbortSignal. Returns the
+ *  number of cards it is watching, so a caller can tell "none on this page"
+ *  from "not installed".
+ *
+ *  A no-op where MutationObserver is missing (Node, under test), rather than
+ *  a throw in the middle of a scene's setup. */
+export function installCardScrollReset(options = {}) {
+    if (typeof document === 'undefined' || typeof MutationObserver !== 'function') return 0;
+    const cards = Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"]'));
+    if (!cards.length) return 0;
+
+    const observers = cards.map((card) => {
+        // The card's own last-known state, so a class change that does not
+        // move it (a theme toggling something else on the same element) does
+        // not count as an open.
+        let shown = cardIsShown(card);
+        const observer = new MutationObserver(() => {
+            const now = cardIsShown(card);
+            if (now === shown) return;
+            shown = now;
+            if (now) resetCardScroll(card);
+        });
+        observer.observe(card, { attributes: true, attributeFilter: ['class', 'hidden'] });
+        return observer;
+    });
+
+    if (options.signal) {
+        options.signal.addEventListener('abort',
+            () => observers.forEach((o) => o.disconnect()), { once: true });
+    }
+    return cards.length;
+}

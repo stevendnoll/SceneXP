@@ -189,3 +189,142 @@ describe('shieldOverlayControl', () => {
     expect(shieldOverlayControl({})).toBe(false);
   });
 });
+
+describe('installCardScrollReset', () => {
+  /* THE BUG, reported from QA on automan and true of twelve other scenes:
+   * open a card, scroll down, close it, open it again, and it comes back
+   * where it was left. The cards scroll because the shared `.piece-card` caps
+   * at 85vh with `overflow-y: auto`, and whether a browser keeps that offset
+   * across `display: none` is an engine decision, so it cannot be left to
+   * chance in either direction.
+   *
+   * These drive the observer by hand, the same way the scene suites do:
+   * MutationObserver does not exist under Node. */
+
+  /** A card stub: a class list that records, a scroller, and a layout read
+   *  the reset is required to make before it writes. */
+  function makeCard({ scrollTop = 0, childScrollTop = 0 } = {}) {
+    const classes = new Set(['hidden']);
+    const child = { scrollTop: childScrollTop, scrollLeft: 0 };
+    let layoutReads = 0;
+    const card = {
+      scrollTop, scrollLeft: 0,
+      attrs: {},
+      classList: {
+        add: (c) => classes.add(c),
+        remove: (c) => classes.delete(c),
+        contains: (c) => classes.has(c),
+      },
+      hasAttribute: (a) => a in card.attrs,
+      get offsetHeight() { layoutReads += 1; return 400; },
+      querySelectorAll: () => [child],
+      child,
+      get layoutReads() { return layoutReads; },
+    };
+    return card;
+  }
+
+  /** Install the fake observer and a document that serves `cards`. */
+  async function withCards(cards) {
+    const fired = [];
+    class FakeMutationObserver {
+      constructor(cb) { this.cb = cb; }
+      observe(target, opts) { fired.push({ target, opts, cb: this.cb }); }
+      disconnect() { this.disconnected = true; }
+    }
+    globalThis.MutationObserver = FakeMutationObserver;
+    globalThis.document = { querySelectorAll: () => cards };
+    globalThis.window = { crypto: globalThis.crypto };
+    jest.resetModules();
+    const m = await import('../www/shared/js/boot-1.0.0.js');
+    return { m, fired };
+  }
+
+  afterEach(() => {
+    delete globalThis.MutationObserver;
+  });
+
+  test('a card that opens is put back to the top, inside and out', async () => {
+    const card = makeCard({ scrollTop: 320, childScrollTop: 180 });
+    const { m, fired } = await withCards([card]);
+    expect(m.installCardScrollReset()).toBe(1);
+    expect(fired).toHaveLength(1);
+    expect(fired[0].opts).toEqual({ attributes: true, attributeFilter: ['class', 'hidden'] });
+
+    card.classList.remove('hidden');   // the card opens
+    fired[0].cb();
+    expect(card.scrollTop).toBe(0);
+    // The scroller is usually the .modal-container inside, not the dialog.
+    expect(card.child.scrollTop).toBe(0);
+  });
+
+  test('it reads layout BEFORE writing, or the write is dropped', async () => {
+    /* THE PART THAT IS EASY TO LOSE. A card goes from `display: none` to
+     * shown by a class change, and this runs in the microtask after that
+     * mutation, before style and layout are recomputed. Writing scrollTop to
+     * a box that does not exist yet is silently ignored, so the reset has to
+     * force the flush first. Nothing else in the suite would notice if the
+     * `offsetHeight` read were tidied away as a useless statement. */
+    const card = makeCard({ scrollTop: 200 });
+    const { m, fired } = await withCards([card]);
+    m.installCardScrollReset();
+    expect(card.layoutReads).toBe(0);
+    card.classList.remove('hidden');
+    fired[0].cb();
+    expect(card.layoutReads).toBeGreaterThan(0);
+  });
+
+  test('closing does not reset, and a no-op class change does nothing', async () => {
+    // The reset belongs on the OPEN. Doing it on close as well would be two
+    // mechanisms for one job, and a class change that does not move the card
+    // (a theme toggling something else on the same element) is not an open.
+    const card = makeCard({ scrollTop: 90 });
+    const { m, fired } = await withCards([card]);
+    m.installCardScrollReset();
+
+    card.classList.add('some-theme-flag');   // still hidden
+    fired[0].cb();
+    expect(card.scrollTop).toBe(90);
+
+    card.classList.remove('hidden');          // now it opens
+    fired[0].cb();
+    expect(card.scrollTop).toBe(0);
+
+    card.scrollTop = 55;                      // scrolled again
+    fired[0].cb();                            // a spurious callback, still open
+    expect(card.scrollTop).toBe(55);
+  });
+
+  test('the `hidden` attribute counts as hidden too', async () => {
+    const card = makeCard({ scrollTop: 140 });
+    card.classList.remove('hidden');
+    card.attrs.hidden = '';
+    const { m, fired } = await withCards([card]);
+    m.installCardScrollReset();
+    delete card.attrs.hidden;                 // opened by dropping the attribute
+    fired[0].cb();
+    expect(card.scrollTop).toBe(0);
+  });
+
+  test('an AbortSignal disconnects every observer', async () => {
+    const cards = [makeCard(), makeCard(), makeCard()];
+    const { m, fired } = await withCards(cards);
+    const controller = new AbortController();
+    expect(m.installCardScrollReset({ signal: controller.signal })).toBe(3);
+    controller.abort();
+    expect(fired.every((f) => f.cb)).toBe(true);
+  });
+
+  test('no cards, or no MutationObserver, and it does nothing rather than throw', async () => {
+    // Every scene calls this during setup, and highwater has no dialogs at
+    // all. A throw here would take a whole page down at boot.
+    const { m } = await withCards([]);
+    expect(m.installCardScrollReset()).toBe(0);
+
+    delete globalThis.MutationObserver;
+    jest.resetModules();
+    globalThis.document = { querySelectorAll: () => [makeCard()] };
+    const m2 = await import('../www/shared/js/boot-1.0.0.js');
+    expect(m2.installCardScrollReset()).toBe(0);
+  });
+});

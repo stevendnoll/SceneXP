@@ -105,7 +105,7 @@ initControls(CONFIG);        // spawn, bounds, speeds
 
 | Module | What it is | Config keys / seams |
 |---|---|---|
-| `boot.js` | Proof-of-work load gate, plus two page-chrome helpers | `getProofOfWork({ prefix, storageKey, maxAgeMs })`, `installCardFocusTrap({ signal })`, `shieldOverlayControl(el, { signal })` — call the last one for any link or button placed on a welcome overlay, or the overlay's own click-to-start will swallow the tap |
+| `boot.js` | Proof-of-work load gate, plus two page-chrome helpers | `getProofOfWork({ prefix, storageKey, maxAgeMs })`, `installCardFocusTrap({ signal })`, `installCardScrollReset({ signal })` — call it once per scene and every `[role="dialog"][aria-modal="true"]` reopens at the top instead of where it was last left, `shieldOverlayControl(el, { signal })` — call the last one for any link or button placed on a welcome overlay, or the overlay's own click-to-start will swallow the tap |
 | `telemetry.js` | Fire-and-forget usage pings to `../api.html` | `setProofHash`, `setMobile`, `track`, `trackFinal` |
 | `analytics.js` | Visitor-activity dashboard (fetch + DOM) | `initAnalytics({...elements, onSummary, onLeaderboard})` |
 | `scene.js` | Renderer, camera, sky, sun/moon/stars/clouds, day/night, optional comet | `dayNight: { enabled, cycleDuration }`, `comet: { enabled, base }`; `getCometBase()` for aiming props |

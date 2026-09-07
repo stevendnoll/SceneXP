@@ -9,7 +9,7 @@
  */
 
 import { INTERSTATE_CONFIG } from './config.min.js';
-import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 import { checkCollision } from '../../shared/js/collision-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getScene, getRenderer,
@@ -332,6 +332,11 @@ function setupEventListeners() {
     // an open card into the floating buttons behind the backdrop, while a
     // screen reader is still announcing a dialog the visitor has left.
     installCardFocusTrap({ signal });
+    // Every card back to the top when it opens. Reported from QA on this
+    // scene and true of twelve others: a card closed halfway down came back
+    // halfway down. See the note in the shared boot part for why this is an
+    // observer rather than a line in each open() function.
+    installCardScrollReset({ signal });
 
     window.addEventListener('pagehide', cleanup);
     window.addEventListener('resize', handleResize, { signal });

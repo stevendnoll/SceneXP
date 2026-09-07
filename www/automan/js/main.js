@@ -47,7 +47,7 @@
  */
 
 import { AUTOMAN_CONFIG } from './config.min.js';
-import { getProofOfWork, bufToHex } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 import { initPortraitControls, updatePortraitControls, gestureClaimedTap } from '../../shared/js/pan-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getRenderer,
@@ -368,6 +368,14 @@ function setupEventListeners() {
             }, { signal });
         });
     if (contactShare) contactShare.addEventListener('click', shareRoom, { signal });
+    // Every card back to the top when it opens. QA reported it here first:
+    // the contact card came back where it was left, because openContactCard
+    // never reset it and openPoster only reset the About card. Twelve other
+    // scenes had it on every card. This page keeps its own Tab trap below
+    // rather than the shared installCardFocusTrap, so the reset is wired on
+    // its own here instead of beside it.
+    installCardScrollReset({ signal });
+
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Tab') { keepFocusInCard(event); return; }
         if (event.code !== 'Escape') return;
@@ -1153,10 +1161,11 @@ function closeNudgeModal() {
 function openPoster(kind) {
     if (!posterModal || posterOpen) return;
     posterModal.classList.remove('hidden');
-    // The card still scrolls on a short screen, so a second open has to
-    // start at the top rather than wherever the last reader left it.
-    const card = posterModal.querySelector('.poster-card');
-    if (card) card.scrollTop = 0;
+    // (The line that reset this card's scroll sat here. It is the shared
+    // installCardScrollReset's job now, for every card on the page rather
+    // than this one, and the shared version is the better of the two anyway:
+    // it forces a layout flush before writing, which this did not, so a write
+    // arriving before the card had a box again could be dropped.)
     posterOpen = true;
     holdCoaching();
     armCard();
