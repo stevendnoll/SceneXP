@@ -7,7 +7,7 @@
  * viewpoint, and let the garden do all the moving. There are no movement
  * controls, no collision, and no modals here. The interactions that do
  * exist are featherweight: the welcome overlay (dismissed with a click,
- * tap, or key), the floating Home button, the portrait-only pan and
+ * tap, or key), the portrait-only pan and
  * zoom row (shared pan part, so phones can see the
  * sides the narrow frame crops and lean in closer), and Mantis Watch,
  * one raycast per tap to see if the visitor spotted one of the two
@@ -19,7 +19,7 @@
  */
 
 import { GAVIN_CONFIG } from './config.min.js';
-import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap, shieldOverlayControl, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 import { initPortraitControls, updatePortraitControls, gestureClaimedTap } from '../../shared/js/pan-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getRenderer,
@@ -77,7 +77,8 @@ async function init() {
 
     if (!canvas) return;
 
-    // Wire the Home button from GAVIN_CONFIG.site, so config stays the
+    // Wire the welcome screen's directory link from GAVIN_CONFIG.site, so
+    // config stays the
     // single home for these values. An equivalent fallback is baked into
     // the HTML for the no-JS path.
     applySiteLinks();
@@ -171,6 +172,11 @@ function setupEventListeners() {
     // an open card into the floating buttons behind the backdrop, while a
     // screen reader is still announcing a dialog the visitor has left.
     installCardFocusTrap({ signal });
+    // Every card back to the top when it opens. Reported from QA on this
+    // scene and true of twelve others: a card closed halfway down came back
+    // halfway down. See the note in the shared boot part for why this is an
+    // observer rather than a line in each open() function.
+    installCardScrollReset({ signal });
 
     window.addEventListener('pagehide', cleanup);
     // Shared resize first (renderer size + pixel ratio), then re-derive the
@@ -206,6 +212,13 @@ function setupEventListeners() {
         };
         blocker.addEventListener('click', dismiss, { signal });
         blocker.addEventListener('touchend', dismiss, { signal });
+
+        // THE DIRECTORY LINK SITS ON TOP OF ALL OF THAT. The whole overlay is
+        // the dismiss surface and `dismiss` calls preventDefault(), which on
+        // touch would swallow the synthetic click and leave the link inert.
+        // Stop the start events short of it so the anchor follows its href.
+        shieldOverlayControl(document.getElementById('explore-link'), { signal });
+
         document.addEventListener('keydown', (event) => {
             if (event.code === 'Enter' || event.code === 'Space') {
                 if (!blocker.classList.contains('hidden')) beginWatching();
@@ -557,18 +570,17 @@ function beginWatching() {
 
 /** Wire the outward-facing links from GAVIN_CONFIG.site. There is no
  *  featured business here: the experience honors the builder's son, so the
- *  Home button goes to the serving site's root in the same tab (Phase 5
+ *  welcome screen's directory link goes to the serving site's root (Phase 5
  *  rule: the marketing pages live at every hosting domain's root). */
 function applySiteLinks() {
     const site = GAVIN_CONFIG.site;
-    const home = document.getElementById('home-btn');
-    if (home) {
-        home.href = site.home.path;
-        home.removeAttribute('target');
-        home.removeAttribute('rel');
-        home.title = site.home.title;
-        home.setAttribute('aria-label', site.home.title);
-    }
+    // The directory link at the foot of the welcome overlay, which replaced
+    // the floating Home button. Only the href is wired: its text names
+    // SceneXP.com out loud, so unlike the old icon-only button it does not
+    // need a title or an aria-label supplied from config, and the markup
+    // carries an equivalent href for the no-JS path.
+    const explore = document.getElementById('explore-link');
+    if (explore) explore.href = site.home.path;
 }
 
 // ---- Render loop ----------------------------------------------------------

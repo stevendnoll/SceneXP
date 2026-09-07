@@ -21,10 +21,11 @@
  * contract as the jamar, gavin, and sunnyvalejenn experiences: the camera
  * holds one composed viewpoint and the room does the living. So this
  * config carries no spawn point, no world bounds, and no checklist, and
- * main.js imports none of the walking controls. The shared pan/zoom row
- * (pan-1.0.0.js) runs at every aspect so visitors can look around the
- * showroom, tilt up and down, and lean in on the papers, with swipe and
- * pinch driving the same moves on touch.
+ * main.js imports none of the walking controls. The shared pan part
+ * (pan-1.0.0.js) runs at every aspect, but since D44 it runs as a ZOOM
+ * ONLY: both look-around axes are zeroed below, so a visitor can lean in
+ * on the papers with the wheel, a pinch or the +/- keys, and the frame
+ * itself never moves. The room is composed for one view and holds it.
  *
  * The glass wall makes the sky part of the room, so the day/night cycle
  * is DISABLED and the shared sky holds at noon. It is a bright midday on
@@ -154,16 +155,32 @@ export const AUTOMAN_CONFIG = deepFreeze({
             // pair is binocular-style FOV: up to maxIn degrees below the
             // current orientation's composed fov (leaning in on the deal
             // sheet) and maxOut degrees above it (widening the whole
-            // showroom), at speed degrees per second. Touch swipes drive
-            // the same yaw and zoom, and can also tilt the view up to
-            // maxTilt radians up or down (the ceiling panels up high, the
-            // waste basket down low). The tilt has no buttons: swipe it
-            // directly, or hold W/S or Shift+Up/Down at the pan speed.
-            // Rotating between orientations recenters everything.
+            // showroom), at speed degrees per second, driven by the wheel,
+            // a pinch, or the +/- keys. Rotating between orientations
+            // recenters everything.
+            //
+            // (The yaw and tilt this paragraph used to describe are off, see
+            // the pan block below. A touch swipe used to drive the same yaw
+            // and could tilt the view up to maxTilt radians either way, for
+            // the ceiling panels up high and the waste basket down low, with
+            // no buttons for the tilt: swipe it directly, or hold W/S or
+            // Shift+Up/Down at the pan speed.)
+            // BOTH AXES OFF (D44, from QA). The looking around is gone and
+            // the zoom stays. A zero on either axis switches it off in the
+            // shared part; the numbers that were here, 0.62 of yaw and 0.32
+            // of tilt, are kept in this comment because they are measured
+            // against THIS room (the yaw is what reaches the coffee bar and
+            // the sales board from the composed view) and re-deriving them
+            // would be a morning's work if the drag ever comes back.
+            //
+            // `speed` still matters: it is radians per second for a HELD pan
+            // arrow, and the arrows are still built (hidden by no-chrome) so
+            // the +/- zoom keys keep working. With maxAngle 0 they move
+            // nothing, which is the intent.
             pan: {
                 speed: 0.4,
-                maxAngle: 0.62,
-                maxTilt: 0.32
+                maxAngle: 0,
+                maxTilt: 0
             },
             zoom: {
                 speed: 18,
@@ -255,6 +272,10 @@ export const AUTOMAN_CONFIG = deepFreeze({
             emailSubject: 'A free consultation, please'
         },
 
+        // NOT RENDERED ANY MORE. The floating Home button that read this was
+        // removed from this experience; nothing on the page points here now.
+        // The block stays as the record of where the serving site's root is,
+        // so a scene that wants the button back has the value ready.
         home: {
             path: '/',
             title: 'Back to the main site'
@@ -269,7 +290,7 @@ export const AUTOMAN_CONFIG = deepFreeze({
         // URL as a field of its own and puts it where the platform wants.
         share: {
             title: 'John Walker, The Auto Man',
-            text: 'A tiny 3D dealership where John Walker is at the desk arguing the deal down for his customer, and the coffee is free.'
+            text: 'A tiny 3D dealership where John Walker does the car negotiating so his customer does not have to, and the coffee is free.'
         },
 
         // The builder funnel. Root-relative on purpose.

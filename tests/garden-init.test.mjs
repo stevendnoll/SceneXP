@@ -75,8 +75,9 @@ test('auto-boots through the loading screen into a running loop', async () => {
     expect(dom.el('load-progress').style.width).toBe('100%');
     expect(dom.el('loading-screen').classList.contains('hidden')).toBe(true);
 
-    // The Home button was wired from config rather than left to the markup.
-    expect(dom.el('home-btn').href).toBe('/');
+    // The welcome card's directory link was wired from config rather than
+    // left to the markup. It replaced the Home button that used to be here.
+    expect(dom.el('explore-link').href).toBe('/');
 
     // .ui-float elements are display:none until JavaScript says otherwise, so
     // "the markup is correct" is not the same as "the button is on screen".
@@ -1335,11 +1336,19 @@ describe('the first visit', () => {
         expect(dom.el('help-btn').hidden).toBe(true);
         expect(dom.el('reset-btn').hidden).toBe(true);
 
-        // HOME STAYS, and that is not an oversight: it is the way off the page,
-        // it works from the card, and it is the target of the "Skip to home
-        // link" that opens the document. Hiding it would break the skip link
-        // for exactly the visitors it exists for.
-        expect(dom.el('home-btn').hidden).toBe(false);
+        // AND THERE IS NOTHING LEFT THAT STAYS. Home used to, and that was
+        // not an oversight: it was the way off the page, it worked from the
+        // card, and it was the target of the "Skip to home link" that opened
+        // the document. Home was removed from the whole site on 2026-09-07,
+        // which leaves NO float reachable while the card is up, so the skip
+        // link went with it rather than pointing at a `hidden` target and
+        // moving focus nowhere. The way off the page is now the card's own
+        // directory link, which is in the card and so is never hidden with
+        // the two buttons above.
+        const markup = readFileSync(
+            join(process.cwd(), 'www', 'garden', 'index.html'), 'utf8');
+        expect(markup).not.toContain('class="skip-link"');
+        expect(markup).toContain('id="explore-link"');
 
         beginTending();
         expect(dom.el('help-btn').hidden).toBe(false);
@@ -1855,10 +1864,16 @@ describe('the visitor with no pointer', () => {
         // ---- THE ONE COLLISION IN THE FRAME, AND IT IS ARITHMETIC -------
         // Plant is the only float that shares a ROW with the menu buttons:
         // Water all sits at top 74 and the stack ends at 70, so it is below
-        // them entirely. Help is the leftmost of the three at `right: 144px`
-        // and 50px wide, so the stack reaches 194px in from the right edge
+        // them entirely. Help is the leftmost of the TWO at `right: 82px` and
+        // 50px wide, so the stack reaches 132px in from the right edge
         // whatever the screen is, and Plant at its full size reaches 130px in
-        // from the left. They meet below a 328px viewport.
+        // from the left. They meet below a 262px viewport.
+        //
+        // IT USED TO BE 328px, WITH HELP AT 144. The Home button that led this
+        // stack was removed on 2026-09-07 and both buttons moved up a slot, so
+        // the stack is 62px narrower and the frame it breaks at is 66px
+        // narrower with it. Nothing ships that narrow, and the guard below is
+        // kept because the numbers still live in two different stylesheets.
         //
         // This asserts the two numbers the arithmetic rests on, because both
         // live in DIFFERENT stylesheets: the width is the shared sheet's and
@@ -1874,7 +1889,7 @@ describe('the visitor with no pointer', () => {
         const btnWidth = Number(menu.match(/width:\s*(\d+)px/)[1]);
         const helpRight = Number(css.match(/\.help-btn \{[^}]*right:\s*(\d+)px/)[1]);
         expect(btnWidth).toBe(50);
-        expect(helpRight).toBe(144);
+        expect(helpRight).toBe(82);
 
         // And the narrow-phone rule exists to keep them apart, at the SAME
         // breakpoint the pan row already shrinks on rather than a third one.

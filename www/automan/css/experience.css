@@ -94,11 +94,12 @@
    zoom circles, and this scene hides it: the visitor this page is for is
    not a confident computer user, and a row of controls under a scene whose
    welcome card says "no controls needed" is an invitation to fiddle with
-   the frame instead of watching what is in it. Dragging, swiping,
-   pinching, the wheel and the arrow keys all still work, and hiding rather
-   than suppressing is what keeps them working: the part gates its keyboard
-   zoom on the zoom buttons existing, so removing them from the DOM would
-   take the +/- keys with them.
+   the frame instead of watching what is in it. Pinching, the wheel and the
+   +/- keys all still work, and hiding rather than suppressing is what keeps
+   them working: the part gates its keyboard zoom on the zoom buttons
+   EXISTING, so removing them from the DOM would take those keys with it.
+   (Dragging and the arrow keys used to work too. D44 zeroed both
+   look-around axes, so the arrows are built, hidden AND inert.)
 
    `body` in the selector is not decoration. The shared sheet's strongest
    rule here is .pan-controls.always-on.visible, three classes, and this
@@ -184,6 +185,49 @@ body .pan-controls.no-chrome.visible {
     display: none;
 }
 
+/* THE NAME OVER EACH HEAD (D45). Who the visitor is about to meet, so the
+   three rings stop being three identical invitations.
+
+   IT SITS ABOVE THE RING, and `.coach-mark` being a reversed column is what
+   puts it there: the mark is anchored by its own bottom edge just over the
+   crown, so the name grows upward and never lands on a face. `align-items:
+   center` on the mark centres it on the same vertical axis the ring uses.
+
+   IT HAS TO HOLD OVER TWO BACKGROUNDS, which is the same problem the ring
+   solves and the reason this is not just coloured text. Behind these heads
+   are a white ceiling on one side and the navy of the lot through the glass
+   on the other, and champagne type is legible on neither on its own. So it
+   takes the lacquer plate the rest of the interface is built from, with the
+   same champagne hairline the cards use.
+
+   SMALL AND TRACKED, not a label at reading size. The rings are the control
+   and the name is an aside on it; type any larger over three heads turns a
+   composed frame into a diagram. `white-space: nowrap` because "Dealer"
+   wrapping to two lines would push the ring off its own head. */
+.coach-name {
+    margin-bottom: 0.42rem;
+    padding: 0.2rem 0.5rem;
+    background: rgba(8, 17, 30, 0.82);
+    border: 1px solid rgba(219, 179, 106, 0.42);
+    border-radius: 2px;
+    color: var(--lux-gold-lift);
+    font-family: var(--lux-sans);
+    /* 0.64rem is about 10px, which is the floor this interface already uses
+       (the contact card's kicker is 0.66, the loader's title 0.72). A first
+       pass at 0.58 was smaller than anything else on the page, on a label
+       whose whole job is to be read at a glance. */
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    /* The tracking leaves a gap after the last letter that nothing balances,
+       so the word sits a third of a letter left of centre without this. */
+    text-indent: 0.18em;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+    -webkit-font-smoothing: antialiased;
+}
+
 /* The steady ring: a bright outline with a dark halo behind it, so it
    holds its edge over the white ceiling AND over the navy of the lot. */
 .coach-halo {
@@ -219,8 +263,9 @@ body .pan-controls.no-chrome.visible {
 }
 
 /* AFTER HALF A MINUTE THE HALOS SLOW DOWN. NOTHING EVER TAKES THEM AWAY
-   (D41): not the passage of time, not a prop story, and since D41 not even
-   reaching John himself. They are the only thing on screen that says the
+   (D41): not the passage of time, and not reaching John himself. Since D43
+   they are also the only thing in the room that answers a tap besides the
+   three people they point at. They are the only thing on screen that says the
    room can be touched at all, and this page is built for somebody who is
    not a confident computer user, so the moment they go the scene becomes a
    picture and a second trip to the contact card has nothing pointing the
@@ -363,14 +408,16 @@ body .pan-controls.no-chrome.visible {
 }
 
 /* THE WAY OUT (D40), in the panel's top right corner, over the header row.
-   The panel leaves on its own after 29 seconds and on the first tap
-   anywhere in the room, so this is not the only exit, but a surface
-   covering a third of a phone screen with no visible way to close it is a
-   surface somebody has to guess about.
+   The panel used to leave on its own after 29 seconds and on the first tap
+   anywhere in the room, and D43 removed both, so this is now close to the
+   only exit: it, the panel's own two actions, a halo or the person under it,
+   and the floating W. A surface covering a third of a phone screen has to
+   carry a visible way to close it, and it carries more weight now that
+   nothing takes the panel away by accident.
 
    pointer-events: auto against the panel's own `none`. A child can take
    events its parent refuses, and that is the whole mechanism that lets this
-   panel carry controls and still be swiped through everywhere else.
+   panel carry controls and still be gestured through everywhere else.
 
    44px square on a glyph that draws about 13, which is the touch target
    rather than the ink. No ring and no fill at rest: it is the quietest
@@ -552,17 +599,25 @@ body .pan-controls.no-chrome.visible {
 /* THE TWO ROUTES OUT OF THE PARAGRAPH (D40): reach him, or read the whole
    account first.
 
-   BOTH ARE HAIRLINES. The one filled control on this page is the Call
-   button on the contact card, and that is the rule the whole flat layer is
-   built on (D25): a second filled control here would cost that button the
-   thing that makes it read as the action rather than as an option. The lead
-   of the two gets a brighter hairline instead, which is the same distinction
-   drawn a quieter way.
+   THE FIRST IS FILLED, THE SECOND IS A HAIRLINE (D42, from QA). It used to
+   be two hairlines, the lead of the two carrying a brighter edge, on D25's
+   rule that the Call button was the one filled control on the page. QA read
+   the result as two equal options rather than as an ask and an aside, which
+   is the failure that rule was meant to prevent, one surface further up.
+
+   SO D25 IS NOW PER SURFACE, NOT PER PAGE: exactly one filled control on
+   whatever the visitor is looking at, wearing the same gold the Call button
+   wears (.lux-primary, defined once further down). Nothing is lost by it,
+   because no two of these are ever both legible at once: a card that opens
+   over this panel brings a backdrop that is 0.88 opaque at the edges with a
+   9px blur behind it, so the panel is not a competing surface, it is a
+   texture. What the change buys is that the primary action looks the same
+   everywhere it appears, which is what a visitor learns a control by.
 
    THE ROW IS LEFT ALIGNED AND THE BUTTONS ARE ONLY AS WIDE AS THEIR WORDS,
    which is a gesture decision rather than a typographic one. These are the
    only two places on this panel that take pointer events, so they are the
-   only two places a swipe cannot start, and the room is dragged from the
+   only two places a gesture cannot start, and the room is pinched from the
    middle of the screen far more often than from the bottom left corner. */
 .intro-actions {
     display: flex;
@@ -596,18 +651,25 @@ body .pan-controls.no-chrome.visible {
     transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
-.intro-action-lead {
-    border-color: rgba(219, 179, 106, 0.6);
-    color: #f0d9a8;
-}
+/* (`.intro-action-lead` sat here and drew the lead of the two with a brighter
+   hairline and a lighter ink. It came out with D42: the lead is filled now,
+   and it carries .lux-primary in the markup instead. Nothing else ever wore
+   the class.) */
 
-.intro-action:hover {
+/* `:not(.lux-primary)` IS THE WHOLE POINT OF THESE TWO SELECTORS. This is the
+   HAIRLINE button's hover, and a hairline's hover ink is a pale cream that
+   only works against the dark panel behind it. D42 filled the lead button
+   with gold and left this rule matching it, so hovering "Talk to John" put
+   #f7e6c4 on #f5d49b: a measured 1.16:1, which is text you cannot read.
+   Scoping it here means the outline treatment can never repaint a filled one,
+   whatever else gets composed onto these buttons later. */
+.intro-action:not(.lux-primary):hover {
     border-color: var(--lux-gold);
     background: rgba(219, 179, 106, 0.1);
     color: #f7e6c4;
 }
 
-.intro-action:focus-visible {
+.intro-action:not(.lux-primary):focus-visible {
     outline: 2px solid var(--lux-gold);
     outline-offset: 2px;
 }
@@ -658,15 +720,121 @@ body .pan-controls.no-chrome.visible {
    same spot rather than a second thing appearing.
 
    SHRINK-WRAPPED, NOT A BAR. The panel's surface is `pointer-events: none`
-   so a swipe starting on it still looks around the room, and this handle
+   so a gesture starting on it still reaches the canvas, and this handle
    HAS to take pointer events to be a button at all. A full-width bar would
-   therefore claim every swipe that starts along the bottom of the screen,
+   therefore claim every gesture that starts along the bottom of the screen,
    which on a phone is where a thumb naturally begins one. Sized to its own
    text, it costs a pill's worth of that edge and no more.
 
-   Hairline and unfilled: D25's one filled control on this page is the Call
-   button on the contact card, and a lit pill sitting over the room all
-   visit would take that away from it. */
+   Hairline and unfilled, and D42 did not change that. The filled control on
+   any surface is what that surface is ASKING for, and this handle asks for
+   nothing: it reopens a panel. A lit pill sitting over the room for the whole
+   visit would also be the one fill a visitor sees most and cares about
+   least. */
+/* THE IDLE NUDGE (D45). The garden's toast, re-struck in lacquer.
+
+   TOP CENTRE, which is the one clear band left in this frame: the W button
+   holds the top right, the cast and their name plates run through the middle,
+   and the collapsed pill and its hint own the bottom. It is also where a
+   visitor is NOT looking, which is right for something that must be findable
+   without being in the way.
+
+   pointer-events: none, because it is an announcement and not a control. A
+   toast that ate a tap would be taking the very tap it is asking for.
+
+   Hidden by opacity rather than display so it can fade, and `visibility` with
+   a delayed transition so it leaves the accessibility tree once it has gone
+   (the same pairing the coaching layer uses, for the same reason). */
+.showroom-toast {
+    position: fixed;
+    top: calc(20px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 120;
+    max-width: min(90vw, 32rem);
+    padding: 0.62rem 1.15rem;
+    background: rgba(8, 17, 30, 0.9);
+    border: 1px solid rgba(219, 179, 106, 0.42);
+    border-radius: 2px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    color: var(--lux-ivory);
+    font-family: var(--lux-sans);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+    text-align: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+    -webkit-font-smoothing: antialiased;
+}
+
+.showroom-toast.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.35s ease, visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .showroom-toast {
+        transition: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .showroom-toast {
+        padding: 0.55rem 0.9rem;
+        font-size: 0.74rem;
+    }
+}
+
+/* THE LINE ABOVE THE PILL (D45), saying what pressing it does.
+
+   IT IS POSITIONED FROM THE SAME BOTTOM EDGE THE HANDLE USES, and the
+   arithmetic is written out rather than guessed: the handle sits at
+   `max(1.25rem, safe-area)` and its floor is 44px, so this clears it by
+   those two plus a 0.45rem gap. Stated here in one place because the handle's
+   own `bottom` and `min-height` are the two numbers it depends on, and both
+   are a few lines below.
+
+   QUIETER THAN THE PILL. The handle is champagne on lacquer at 0.72rem; this
+   is dimmer, smaller and unboxed, because it is a caption on the control and
+   not a second control competing with it.
+
+   NO PLATE BEHIND IT, unlike the names over the heads. Those float over a
+   white ceiling and a navy lot and need one; this sits over the showroom
+   floor, which is dark lacquer everywhere the pill can appear. */
+.intro-handle-hint {
+    position: fixed;
+    left: 50%;
+    bottom: calc(1.25rem + 44px + 0.45rem);
+    bottom: calc(max(1.25rem, env(safe-area-inset-bottom, 0px)) + 44px + 0.45rem);
+    transform: translateX(-50%);
+    z-index: 90;
+    margin: 0;
+    padding: 0.15rem 0.3rem;
+    color: rgba(219, 179, 106, 0.82);
+    font-family: var(--lux-sans);
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-indent: 0.2em;
+    white-space: nowrap;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+    pointer-events: auto;
+    -webkit-font-smoothing: antialiased;
+    transition: color 0.2s ease;
+}
+
+.intro-handle-hint:hover {
+    color: var(--lux-gold-lift);
+}
+
 .intro-handle {
     position: fixed;
     left: 50%;
@@ -755,9 +923,15 @@ body .pan-controls.no-chrome.visible {
     stroke-linejoin: round;
 }
 
+/* THIS LIST IS THE WHOLE OF WHAT `.coach-out` HIDES, and it is a fixed one:
+   there is no generic rule for the class, so an element added to the coaching
+   layer and given `coach-out` in the markup is shown from the first frame and
+   never hides. The handle's hint (D45) is here for that reason and not
+   because it needed its own timing. */
 .coach-marks,
 .intro-card,
-.intro-handle {
+.intro-handle,
+.intro-handle-hint {
     opacity: 1;
     visibility: visible;
     transition: opacity 0.55s ease, visibility 0s;
@@ -765,7 +939,8 @@ body .pan-controls.no-chrome.visible {
 
 .coach-marks.coach-out,
 .intro-card.coach-out,
-.intro-handle.coach-out {
+.intro-handle.coach-out,
+.intro-handle-hint.coach-out {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -788,6 +963,19 @@ body .pan-controls.no-chrome.visible {
         --coach-size: 2.6rem;
         min-width: 2.75rem;
         min-height: 2.75rem;
+    }
+
+    /* The name steps down with the ring, but not as far: the ring is
+       decoration that scales, the word is type that has to stay readable.
+       The tracking comes in rather than the size going further, which buys
+       the width back on a narrow frame without costing legibility. Three
+       plates over three heads is the most crowded this scene ever gets. */
+    .coach-name {
+        margin-bottom: 0.34rem;
+        padding: 0.16rem 0.42rem;
+        font-size: 0.6rem;
+        letter-spacing: 0.12em;
+        text-indent: 0.12em;
     }
 
 
@@ -914,9 +1102,11 @@ body .pan-controls.no-chrome.visible {
     .coach-marks,
     .intro-card,
     .intro-handle,
+    .intro-handle-hint,
     .coach-marks.coach-out,
     .intro-card.coach-out,
-    .intro-handle.coach-out {
+    .intro-handle.coach-out,
+    .intro-handle-hint.coach-out {
         transition: none;
     }
 
@@ -939,17 +1129,12 @@ body .pan-controls.no-chrome.visible {
     opacity: 0.85;
 }
 
-/* THE TOP-RIGHT STACK, right to left: Home, then the flyer.
-   The shared .menu-btn anchors EVERY floating button to the same corner
-   (top 20, right 20), so a second one has to step left by a button plus a
-   gap or it lands on top of the first, which is exactly what it did. 82px
-   is that step, and it is the same slot the contact button used before it
-   was removed (the shared sheet spells it .biz-btn-snug). Home keeps the
-   corner: it is the control every page on the site has in the same place,
-   and this one is particular to this scene. */
-#help-btn {
-    right: 82px;
-}
+/* THE TOP-RIGHT STACK is one button now. The flyer used to step left by
+   82px (a button plus a gap) to clear the Home button, which held the
+   corner because it was the control every page on the site had in the same
+   place. Home came out, so that step came out with it and the flyer
+   inherits the shared .menu-btn corner (top 20, right 20) with no rule of
+   its own. If a second float ever lands here, it takes right: 82px. */
 
 /* THE W IN THE BUTTON (D39). Two things the shared rule cannot give it.
 
@@ -1045,9 +1230,10 @@ body .pan-controls.no-chrome.visible {
     color: #cfdae6;
 }
 
-/* The one thing this card is for, after the reading: reaching him. It
-   wears the same .dialog-cta the prop stories end on, so the route out
-   of every card on this page looks the same. */
+/* The one thing this card is for, after the reading: reaching him. It wore
+   the same .dialog-cta the prop stories ended on, so that the route out of
+   every card looked the same; the stories went at D43 and the class stays,
+   because the About card and the contact card still have to agree. */
 #poster-cta {
     margin: 0.25rem 0 0;
 }
@@ -1104,9 +1290,10 @@ body .pan-controls.no-chrome.visible {
    the rest of this interface uses to say "line" and a browser underline
    sits too close under tracked capitals to read as anything but a smudge.
 
-   It is quiet on purpose. The one filled control on this page is the call
-   button (D25), and the second-loudest thing on this card should be the
-   Talk to John outline directly under this line, not the flyer. */
+   It is quiet on purpose. This card's one filled control is the Talk to John
+   button directly under this line (D42, which moved D25's scarcity rule from
+   per page to per surface), and the second-loudest thing here should be that
+   button, not the flyer. */
 .about-flyer {
     margin: 1.5rem 0 1.35rem;
     padding-top: 1.35rem;
@@ -1161,7 +1348,6 @@ body .pan-controls.no-chrome.visible {
    behind the card instead of being switched off. The blur is doing real
    work for this scene in particular: it turns a room of flat polygons
    into depth of field, which is the cheapest luxury on the page. */
-#dialog-modal .modal-backdrop,
 #nudge-modal .modal-backdrop,
 #help-modal .modal-backdrop {
     background:
@@ -1175,7 +1361,6 @@ body .pan-controls.no-chrome.visible {
 /* The card itself: lacquer, a machined 3px edge, a lit top and a shaded
    bottom, and a shadow deep enough that it is plainly ABOVE the room
    rather than printed on it. */
-#dialog-modal .piece-card,
 #nudge-modal .piece-card,
 #help-modal .poster-card {
     background:
@@ -1202,8 +1387,6 @@ body .pan-controls.no-chrome.visible {
        their own text back in the middle below. */
     text-align: left;
 }
-
-#dialog-modal .piece-card-content,
 #nudge-modal .piece-card-content {
     padding: 2.1rem 1.85rem 1.6rem;
 }
@@ -1291,8 +1474,7 @@ body .pan-controls.no-chrome.visible {
    it is on the kicker rather than on the whole card because the heading and
    the paragraph below start under the button's bottom edge and want the
    full measure. */
-#nudge-modal .complete-kicker,
-#dialog-modal .piece-title {
+#nudge-modal .complete-kicker{
     display: flex;
     align-items: flex-start;
     gap: 0.7rem;
@@ -1312,8 +1494,7 @@ body .pan-controls.no-chrome.visible {
    a stray mark rather than as the start of a label. Half a line box down,
    which is computable because the line-height above is set rather than
    inherited. */
-#nudge-modal .complete-kicker::before,
-#dialog-modal .piece-title::before {
+#nudge-modal .complete-kicker::before{
     content: '';
     flex: 0 0 auto;
     width: 1.75rem;
@@ -1346,52 +1527,64 @@ body .pan-controls.no-chrome.visible {
     color: var(--lux-mute);
 }
 
-/* The prop stories. The shared sheet demotes the title to a small accent
-   label and promotes the line into a tinted speech panel, which is the
-   right structure and the wrong finish: an 8% blue tint is invisible on
-   lacquer.
-   (Its speaker label is set with the card kickers above, so the three
-   cards open on the same device rather than three near-misses.)
-
-   ONE GOLD RULE PER CARD. This paragraph used to carry a champagne rule
-   down its left edge as well, on the argument that a rule says "someone is
-   speaking" without needing a panel. It does, but it was the SECOND gold
-   hairline on a card whose only other ornament is the first one: a short
-   rule at the top left, then a long one down the left, four centimetres
-   apart and at ninety degrees to each other. Steve called it too many gold
-   lines for one card and he is right. The kicker's rule stays, because it
-   is the house device the arrival panel and all three cards share; this
-   one goes, and the story keeps the serif, which is what actually marks it
-   as the voice rather than the interface. */
-#dialog-modal #dialog-message {
-    margin: 0 0 1.7rem;
-    padding: 0.1rem 0;
-    background: none;
-    border-left: none;
-    border-radius: 0;
-    font-family: var(--lux-display);
-    font-size: 1.12rem;
-    font-weight: 400;
-    line-height: 1.62;
-    color: var(--lux-ivory);
-}
+/* (The prop story's own paragraph was styled here, in the serif, with a note
+   about why it carries no gold rule down its left edge: one hairline at the
+   top left plus a second down the side was too many gold lines for one card.
+   The card went with D43, and the argument survives it, because the kicker's
+   short rule is still the house device all three remaining cards share.) */
 
 /* ---- The actions --------------------------------------------------------
 
-   ONE FILLED ELEMENT ON THE WHOLE PAGE, and it is the call button. That
-   is not restraint for its own sake: a single fill among hairlines is
-   read before anything else on the card, so the most important control in
+   ONE FILLED ELEMENT PER SURFACE, and it is whatever that surface is asking
+   for: Call John here, Talk to John on the intro panel and on both cards.
+   That is not restraint for its own sake: a single fill among hairlines is
+   read before anything else on a card, so the most important control in
    John's business gets the most emphasis available while the card stays
    quiet. Everything else is an outline or a plain line of type.
 
-   The shared .piece-enter is a blue pill at weight 600. These are tracked
-   capitals at 0.72rem on a 2px edge, which is the button every German
-   marque has been shipping for fifteen years. */
+   IT WAS ONE FILL ON THE WHOLE PAGE UNTIL D42, which left the intro panel
+   and both cards asking with a hairline and reading, in QA, as a menu of
+   equal options. The scarcity is still the point; the unit it is counted in
+   is the surface. See the note beside .intro-actions above.
+
+   The finish itself is .lux-primary, below, so there is one gold to change
+   and not four. */
 #nudge-modal #contact-call {
     display: block;
     width: 100%;
     margin: 0.2rem 0 1.1rem;
     padding: 1.05rem 1rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-align: center;
+}
+
+/* THE PRIMARY ACTION, WHEREVER IT APPEARS. The gold the Call button has
+   always worn, lifted out of it so the intro panel's "Talk to John" and both
+   cards' "Talk to John" can wear the same one (D42). Geometry stays with each
+   button, because a shrink-wrapped control in a row and a full-width control
+   at the foot of a card are not the same shape; only the finish is shared.
+
+   THE SHARED .piece-enter IS A BLUE PILL at weight 600, and three of the four
+   buttons carry that class for its layout. This block is in a later
+   stylesheet at equal specificity, so it wins, and that is also why it has to
+   sit AFTER `.intro-action` in this file: same specificity again, source
+   order decides, and above that rule the intro button would come out
+   transparent with a hairline. Nothing here is written with an id, on
+   purpose, or adding the class to a fifth button would not be enough.
+
+   The type is tracked capitals on a 2px edge, which is the button every
+   German marque has been shipping for fifteen years. Ink #16120a on the
+   gradient's darker end is 9.5:1, so the small tracked capitals clear AAA at
+   every point of the fill. */
+/* NO `width` HERE, and that is the whole reason geometry stayed with the
+   buttons. The three card buttons are full-width blocks; the intro panel's is
+   an inline-flex item in a wrapping row, shrink-wrapped to its own words so
+   the rest of the bottom edge stays free for a thumb to pinch from. A
+   `width: 100%` in this block would take the whole row and push the About
+   button onto a second line, on a panel that is already a third of a phone. */
+.lux-primary {
     background: linear-gradient(180deg, var(--lux-gold-lift) 0%, var(--lux-gold) 100%);
     color: #16120a;
     border: none;
@@ -1399,25 +1592,38 @@ body .pan-controls.no-chrome.visible {
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.45),
         0 6px 18px rgba(0, 0, 0, 0.4);
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.2em;
+    font-family: var(--lux-sans);
     text-transform: uppercase;
-    text-align: center;
     text-decoration: none;
-    transition: filter 0.18s ease, transform 0.12s ease;
+    cursor: pointer;
+    transition: background 0.18s ease, transform 0.12s ease;
 }
 
-#nudge-modal #contact-call:hover {
+/* A LIGHTER GOLD, NOT A TINT ON A CLEAR BUTTON, which is the whole reason
+   these can be filled at rest at all. A control that rests at an accent tint
+   reads as already pressed, so a resting fill has to have somewhere brighter
+   to go. This is it.
+
+   IT RESTATES THE INK, and that is not redundancy. A hover rule inherits the
+   resting value for anything it does not declare, so whatever else on the page
+   has a `:hover` at the same specificity gets to supply the rest. This block
+   declared only `background` when it was written, and `.intro-action:hover`
+   duly supplied a pale cream for the one primary that also wears the outline
+   class: 1.16:1 on the lighter gold, reported from QA as the text going white.
+   So a state rule here declares everything the resting rule establishes, and
+   this class stays safe to compose onto any button. */
+.lux-primary:hover {
     background: linear-gradient(180deg, #f5d49b 0%, var(--lux-gold-lift) 100%);
+    color: #16120a;
+    border-color: transparent;
     filter: none;
 }
 
-#nudge-modal #contact-call:active {
+.lux-primary:active {
     transform: translateY(1px);
 }
 
-#nudge-modal #contact-call:focus-visible {
+.lux-primary:focus-visible {
     outline: 2px solid var(--lux-gold-lift);
     outline-offset: 3px;
 }
@@ -1450,41 +1656,25 @@ body .pan-controls.no-chrome.visible {
     border-bottom-color: rgba(219, 179, 106, 0.7);
 }
 
-/* The outlined action, on the prop story and the About card. It fills on
-   hover, which is the state change: an accent-tinted button at rest reads
-   as already pressed. */
-#dialog-modal #dialog-cta,
+/* THE PRIMARY ACTION ON THE ABOUT CARD, and it is the same "Talk to John"
+   the intro panel asks for, so as of D42 it is the same filled gold. Geometry
+   only here; .lux-primary above carries the finish and all three states.
+   (#dialog-cta shared this rule until D43 took the prop story card with it.)
+
+   IT USED TO BE AN OUTLINE THAT FILLED ON HOVER, and the comment here made
+   the case that the fill had to be the state change because an accent-tinted
+   button at rest reads as already pressed. That argument still holds and is
+   the reason .lux-primary hovers to a LIGHTER gold rather than to a tint:
+   a resting fill needs somewhere brighter to go, or it has no state left. */
 #help-modal #poster-cta {
     display: block;
     width: 100%;
     margin: 0.3rem 0 0;
     padding: 0.92rem 1rem;
-    background: none;
-    color: var(--lux-gold);
-    border: 1px solid rgba(219, 179, 106, 0.55);
-    border-radius: 2px;
-    font-family: var(--lux-sans);
     font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.2em;
-    text-transform: uppercase;
     text-align: center;
-    text-decoration: none;
-    cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
-
-#dialog-modal #dialog-cta:hover,
-#help-modal #poster-cta:hover {
-    background: var(--lux-gold);
-    border-color: var(--lux-gold);
-    color: #16120a;
-}
-
-#dialog-modal #dialog-cta:focus-visible,
-#help-modal #poster-cta:focus-visible {
-    outline: 2px solid var(--lux-gold-lift);
-    outline-offset: 3px;
 }
 
 /* The way out. Plain tracked capitals, no box: leaving should be easy to
@@ -1492,7 +1682,6 @@ body .pan-controls.no-chrome.visible {
 /* `button.` and not `.piece-cancel` alone, which is load-bearing: the text
    and email links wear that same class, and the tracked capitals below
    would have set a whole email address in upper case. */
-#dialog-modal button.piece-cancel,
 #nudge-modal button.piece-cancel {
     width: 100%;
     margin-top: 1.15rem;
@@ -1509,8 +1698,6 @@ body .pan-controls.no-chrome.visible {
     cursor: pointer;
     transition: color 0.18s ease;
 }
-
-#dialog-modal button.piece-cancel:hover,
 #nudge-modal button.piece-cancel:hover {
     color: var(--lux-gold-lift);
 }
@@ -1541,7 +1728,8 @@ body .pan-controls.no-chrome.visible {
    A LINE OF TYPE, NOT A CONTROL, and that is the whole treatment brief. A
    share button with an icon on it is the fastest way to make a page like
    this read as marketing, and this card's one filled control is the Call
-   button (D25). So it is set exactly like the About card's flyer link: the
+   button (D25, still true here: it is what this card asks for). So it is set
+   exactly like the About card's flyer link: the
    small tracked capitals the house uses for a secondary action, with a
    hairline under it doing the work an underline does on a link.
 
@@ -1612,7 +1800,6 @@ body .pan-controls.no-chrome.visible {
    hairline ring with a thin glyph in it, which is what a close control
    looks like when it is not also trying to be a feature. The 44px target
    underneath it is untouched. */
-#dialog-modal .modal-close,
 #nudge-modal .modal-close,
 #help-modal .poster-card .modal-close {
     top: 0.55rem;
@@ -1629,8 +1816,6 @@ body .pan-controls.no-chrome.visible {
     line-height: 1;
     transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
-
-#dialog-modal .modal-close:hover,
 #nudge-modal .modal-close:hover,
 #help-modal .poster-card .modal-close:hover {
     background: rgba(6, 13, 24, 0.8);
@@ -1658,10 +1843,9 @@ body .pan-controls.no-chrome.visible {
    THE FLOATING BUTTONS AND THE COACH MARKS
    ========================================================================== */
 
-/* Two dark discs in the corner. The shared pair are neutral grey with a
-   white ring; these take the lacquer and a champagne hairline, so they
-   belong to the same object as everything else on screen. */
-#home-btn.menu-btn,
+/* The dark disc in the corner. The shared float is neutral grey with a
+   white ring; this one takes the lacquer and a champagne hairline, so it
+   belongs to the same object as everything else on screen. */
 #help-btn.menu-btn {
     background: rgba(8, 17, 30, 0.72);
     border: 1px solid rgba(219, 179, 106, 0.42);
@@ -1671,7 +1855,6 @@ body .pan-controls.no-chrome.visible {
     backdrop-filter: blur(6px);
 }
 
-#home-btn.menu-btn:hover,
 #help-btn.menu-btn:hover {
     background: rgba(219, 179, 106, 0.92);
     border-color: rgba(219, 179, 106, 0.92);

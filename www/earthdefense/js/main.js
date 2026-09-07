@@ -36,7 +36,7 @@
  */
 
 import { EARTHDEFENSE_CONFIG, spawnPosition } from './config.min.js';
-import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap, shieldOverlayControl, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 import {
     initSpace, renderSpace, renderInset, resizeSpace, setMaxPixelRatio,
     getRenderer, getWorldCamera, isTouchDevice
@@ -1185,18 +1185,24 @@ function applyHelpVisibility() {
  *  is hidden, and that is the case the card link answers. */
 function applySiteLinks() {
     const site = EARTHDEFENSE_CONFIG.site;
-    const targets = [
-        document.getElementById('home-btn'),
-        document.getElementById('home-link')
-    ];
-    for (const home of targets) {
-        if (!home) continue;
+    // The helm card's quiet text link out, which since the floating Home
+    // button was removed is the only route to the directory once the briefing
+    // screen is gone. Same tab, deliberately: a visitor opening the helm card
+    // mid-run has stopped flying anyway.
+    const home = document.getElementById('home-link');
+    if (home) {
         home.href = site.home.path;
         home.removeAttribute('target');
         home.removeAttribute('rel');
         home.title = site.home.title;
         home.setAttribute('aria-label', site.home.title);
     }
+    // The briefing screen's directory link, which replaced the floating Home
+    // button. Only the href is wired: its text names SceneXP.com out loud, so
+    // unlike the old icon-only button it needs no title or aria-label from
+    // config, and the markup carries an equivalent href for the no-JS path.
+    const explore = document.getElementById('explore-link');
+    if (explore) explore.href = site.home.path;
 }
 
 // ---- Settings -------------------------------------------------------------
@@ -1519,6 +1525,11 @@ function setupEventListeners() {
     // an open card into the floating buttons behind the backdrop, while a
     // screen reader is still announcing a dialog the visitor has left.
     installCardFocusTrap({ signal });
+    // Every card back to the top when it opens. Reported from QA on this
+    // scene and true of twelve others: a card closed halfway down came back
+    // halfway down. See the note in the shared boot part for why this is an
+    // observer rather than a line in each open() function.
+    installCardScrollReset({ signal });
 
     window.addEventListener('pagehide', cleanup);
     window.addEventListener('resize', () => {
@@ -1617,6 +1628,13 @@ function setupEventListeners() {
         };
         blocker.addEventListener('click', dismiss, { signal });
         blocker.addEventListener('touchend', dismiss, { signal });
+
+        // THE DIRECTORY LINK SITS ON TOP OF ALL OF THAT, and `dismiss` calls
+        // preventDefault(), which on touch would swallow the synthetic click
+        // and leave the link inert. Same job the briefing button above does
+        // inline, minus the preventDefault: this is an anchor and still has
+        // to follow its own href.
+        shieldOverlayControl(document.getElementById('explore-link'), { signal });
         document.addEventListener('keydown', (event) => {
             if (event.code === 'Enter' || event.code === 'Space') {
                 // NOT WHILE THE CARD IS OVER THE BRIEFING. The welcome screen is

@@ -65,12 +65,12 @@
 
     <title>Steve's Home Office</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=2" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=2">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -80,8 +80,11 @@
 </head>
 
 <body>
-    <!-- Accessibility: jump straight to the section links without entering the 3D scene -->
-    <a class="skip-link" href="#home-btn">Skip to home link</a>
+    <!-- Accessibility: jump straight to the floating controls without entering
+         the 3D scene. It used to land on the Home button, which was first in
+         the cluster and in the markup; with that button gone the settings cog
+         is the page's only float, and it has the corner Home used to hold. -->
+    <a class="skip-link" href="#settings-btn">Skip to the settings button</a>
 
     <!-- The live page's heading. Screen-reader only: the room is the title
          here, and a line of type across the top of it would be a caption on a
@@ -131,6 +134,15 @@
                 <span>WASD</span> Move
                 <span>MOUSE</span> Look
             </div>
+            <!-- The one link back to the directory, replacing the floating Home
+                 button (2026-09-07): Home sat in the corner of the live scene
+                 and read as "reset this view", so visitors tapped it, landed on
+                 the directory, and left instead of coming back. New tab, so
+                 this scene is still here afterwards. main.js syncs the href
+                 from config and shields it from the overlay's click-to-start,
+                 without which a tap here would just start the scene. -->
+            <a id="explore-link" class="welcome-explore" href="/" target="_blank" rel="noopener"
+                aria-label="More 3D worlds to explore at SceneXP.com (opens in a new tab)">More 3D worlds to explore at SceneXP.com</a>
         </div>
     </div>
 
@@ -171,7 +183,6 @@
                     <li class="help-mobile"><strong>Move &amp; look:</strong> use the left joystick to walk and the right joystick to look around.</li>
                     <li><strong>Look around:</strong> <span class="help-verb">click</span> the things in here. Most of them have a story, and the whiteboard keeps track of what you have found.</li>
                     <li><strong>Settings:</strong> the gear icon (top-right) adjusts movement, look sensitivity, and brightness.</li>
-                    <li><strong>Heading out?</strong> The Home button (top-right) takes you back to the main site.</li>
                 </ul>
                 <button class="piece-cancel" data-close>Thanks, Steve!</button>
             </div>
@@ -262,18 +273,12 @@
     </div>
 
     <!-- Floating controls -->
-    <!-- The Home button returns to the serving site's root in the same tab
-         (there is no featured business here; applySiteLinks keeps it in sync
-         with STEVE_CONFIG.site.home). -->
-    <a id="home-btn" class="ui-float menu-btn" href="/"
-        title="Back to the main site"
-        aria-label="Back to the main site">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
-            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
-            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
-        </svg>
-    </a>
+    <!-- THE HOME BUTTON IS GONE (2026-09-07). It held the corner (right: 20)
+         and returned to the serving site's root. Visitors read it as "reset
+         this view", tapped it, and left the site from the directory rather
+         than coming back, so the offer moved to a named link on the welcome
+         screen above and the floats beside it each moved up a slot (the
+         shared sheet's ladder was re-based, so no rule is needed here). -->
     <!-- (No autopilot tour here: the office is one small room, best
          explored on foot.) -->
     <button id="settings-btn" class="ui-float settings-btn" title="Movement settings" aria-label="Movement settings"

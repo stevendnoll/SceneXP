@@ -23,6 +23,7 @@
 import { jest } from '@jest/globals';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
+import { readFile } from 'node:fs/promises';
 
 let dom;
 let ray; // test-controlled raycaster hits: ray.hits is what intersectObjects returns
@@ -81,7 +82,7 @@ const OVER_PANEL = { x: 640, y: 700 };   // on it
 
 async function bootShowroom() {
   // Mirror the real markup's initial state: all three cards start hidden.
-  for (const id of ['dialog-modal', 'nudge-modal', 'help-modal']) {
+  for (const id of ['nudge-modal', 'help-modal']) {
     dom.el(id).classList.add('hidden');
   }
   // Both coaching layers ship the hidden class in the markup and are revealed
@@ -113,7 +114,9 @@ test('auto-boots through the loading screen with the site links wired', async ()
 
   expect(dom.el('load-progress').style.width).toBe('100%');
   expect(dom.el('loading-screen').classList.contains('hidden')).toBe(true);
-  expect(dom.el('home-btn').href).toBe('/');
+  // (There is no Home button to check any more, and no applySiteLinks() to
+  // wire one. tests/home-button-removed.test.mjs guards its absence in the
+  // markup, which is the only place it could come back.)
 
   // The animate loop survives a few simulated seconds. This is where the
   // cast's animation, John's glance at his customer and the portrait queue
@@ -205,25 +208,60 @@ describe('the three routes to a person all reach the contact card', () => {
     });
 });
 
-describe('D31: the arrival is one decision in the room', () => {
-  test('a prop waits for the panel to go, then tells its story', async () => {
+describe('D43: the room is a picture, and only the people answer', () => {
+  test('a prop opens nothing, ever, and does not disturb the panel', async () => {
+    /* THE CHANGE THIS REPLACED. Fourteen props each told a story, the first
+     * tap cleared the arrival panel on the way past, and the second opened
+     * the story. QA's call: a room where some objects answer and most do not
+     * makes a visitor hunt, so now none of them do.
+     *
+     * Both halves matter and only one of them is visible. That a prop opens
+     * no card is obvious the first time anybody taps a chair. That a prop no
+     * longer COLLAPSES THE PANEL is not: a visitor reading the panel who taps
+     * the floor keeps their place, and the only way to notice the regression
+     * is to be mid-sentence when it happens. */
     const main = await bootShowroom();
     const { PROP_CONTENT, PERSON_KINDS } = main.__test__;
-    const kind = Object.keys(PROP_CONTENT).find((k) => !PERSON_KINDS.includes(k));
+    expect(Object.keys(PROP_CONTENT).sort()).toEqual([...PERSON_KINDS].sort());
 
-    // First tap: the panel is up, so this prop opens NOTHING. Nobody meets
-    // John's service for the first time through a story about a coffee
-    // machine. The tap is not dead, though: it clears the panel.
-    ray.hits = [propHit(kind)];
-    tap(dom.el('game-canvas'));
-    expect(dom.el('dialog-modal').classList.contains('hidden')).toBe(true);
-    expect(dom.el('intro-card').classList.contains('coach-out')).toBe(true);
+    const panel = dom.el('intro-card');
+    // A prop that is still registered in the scene, so it is a real hit and
+    // not just an unknown kind falling through.
+    ray.hits = [propHit('coffeebar')];
 
-    // Second tap, panel gone: the story opens normally.
     tap(dom.el('game-canvas'));
-    expect(dom.el('dialog-modal').classList.contains('hidden')).toBe(false);
-    expect(dom.el('dialog-title').textContent).toBe(PROP_CONTENT[kind].title);
-    expect(PROP_CONTENT[kind].lines).toContain(dom.el('dialog-message').textContent);
+    expect(panel.classList.contains('coach-out')).toBe(false);   // still up
+    expect(dom.el('nudge-modal').classList.contains('hidden')).toBe(true);
+
+    // And it stays that way however many times it is tapped, with the panel
+    // up or down. Dismiss the panel deliberately, then tap the prop again.
+    tap(dom.el('intro-close'));
+    expect(panel.classList.contains('coach-out')).toBe(true);
+    tap(dom.el('game-canvas'));
+    expect(dom.el('nudge-modal').classList.contains('hidden')).toBe(true);
+  });
+
+  test('the props are still RAYCAST TARGETS, so the room can block a tap', async () => {
+    /* The half of this that is easy to delete by accident. The props answer
+     * no taps, but they still have to STOP one: raycasting at the people
+     * alone would let a tap on the desk in front of John open John's card,
+     * and "the background is not clickable" has to mean the background is
+     * not a way through to something that is.
+     *
+     * So the scene still registers every prop, and pickSceneHit still casts
+     * against all of them. Asserted against the store's own registrations,
+     * because a future cleanup that unregistered them would leave every test
+     * above green and quietly make the desk a button. */
+    const storeText = await readFile(
+      new URL('../www/automan/js/store.js', import.meta.url), 'utf8');
+    const registered = [...storeText.matchAll(/registerOutdoorProp\([^;]*?'(\w+)'\)/g)]
+      .map((m) => m[1]);
+    expect(registered.length).toBeGreaterThanOrEqual(13);
+
+    const mainText = await readFile(
+      new URL('../www/automan/js/main.js', import.meta.url), 'utf8');
+    // The pick still asks the world for every prop, not for a person list.
+    expect(mainText).toMatch(/const targets = getOutdoorPropMeshes\(\);/);
   });
 
   test('but a person opens their card straight through the arrival', async () => {
@@ -276,11 +314,63 @@ describe('the arrival panel collapses to a handle instead of leaving', () => {
     expect(handle.getAttribute('aria-expanded')).toBe('true');
   });
 
-  test('the timer collapses it too, rather than ending it', async () => {
+  test('NOTHING TIMES IT OUT (D43)', async () => {
+    /* It used to collapse itself after 29 seconds, a number derived from its
+     * own word count. QA's call to remove it, and the reasoning is the page's
+     * whole audience: a timer decides for the visitor how fast they read, and
+     * this panel is the only thing on the page that says what John does. It
+     * was taking itself away mid-sentence from exactly the person who arrived
+     * from a link John sent them.
+     *
+     * Two minutes is well past any reading of ninety words, and past the
+     * halo calm-down at 30s, so a panel still up here is up on purpose. */
     await bootShowroom();
-    await jest.advanceTimersByTimeAsync(35000);   // past INTRO_MS
-    expect(dom.el('intro-card').classList.contains('coach-out')).toBe(true);
-    expect(dom.el('intro-handle').classList.contains('coach-out')).toBe(false);
+    await jest.advanceTimersByTimeAsync(120000);
+    expect(dom.el('intro-card').classList.contains('coach-out')).toBe(false);
+    expect(dom.el('intro-handle').classList.contains('coach-out')).toBe(true);
+  });
+
+  // THE LIST STEVE NAMED, one test each rather than a loop. A loop was tried
+  // and passed the first case then failed the second on a panel that was
+  // already collapsed: `beforeEach` is what resets the module registry and the
+  // DOM, so a second bootShowroom() inside one test re-imports a cached module
+  // onto the previous case's leftovers. test.each gets a fresh page per row.
+  test.each([
+    ['the close button', () => tap(dom.el('intro-close'))],
+    ['the floating W', () => tap(dom.el('help-btn'))],
+    ["the panel's own Talk to John", () => tap(dom.el('intro-contact'))],
+    ["the panel's own About", () => tap(dom.el('intro-about'))],
+    ['a tap on one of the three people', () => {
+      ray.hits = [propHit('john')];
+      tap(dom.el('game-canvas'));
+    }],
+  ])('%s collapses the panel', async (_label, act) => {
+    await bootShowroom();
+    const panel = dom.el('intro-card');
+    expect(panel.classList.contains('coach-out')).toBe(false);
+    act();
+    expect(panel.classList.contains('coach-out')).toBe(true);
+  });
+
+  test('and so does a halo, which this harness cannot click', async () => {
+    /* THE ONE CASE THAT IS ASSERTED FROM SOURCE, and the reason is worth
+     * writing down rather than quietly skipping. The halos are wired through
+     * `coachMarksEl.querySelectorAll('.coach-mark')`, and the DOM stub's
+     * ELEMENT querySelectorAll returns [] (only the DOCUMENT stub does a real
+     * class search). So under test `coachMarks` is empty and no halo listener
+     * is ever attached: a runtime click here would be clicking a fresh
+     * auto-vivified div and passing for the wrong reason, which is worse than
+     * not testing it.
+     *
+     * So this reads the handler instead. It is a weaker check and it is
+     * honest about being one: it catches the collapse being dropped from the
+     * halo, not the halo being unreachable. */
+    const mainText = await readFile(
+      new URL('../www/automan/js/main.js', import.meta.url), 'utf8');
+    const handler = /coachMarks\.forEach\([\s\S]*?\n    \}\);/.exec(mainText);
+    expect(handler).not.toBeNull();
+    expect(handler[0]).toContain('collapseIntro()');
+    expect(handler[0]).toContain('openContactCard(kind)');
   });
 
   test('a card parks the handle and gives back the state it found', async () => {
@@ -376,4 +466,86 @@ test('Escape closes whichever card is up', async () => {
 
   fire(dom.documentStub, 'keydown', { code: 'Escape', key: 'Escape' });
   expect(dom.el('nudge-modal').classList.contains('hidden')).toBe(true);
+});
+
+describe('D45: the idle nudge', () => {
+  const toast = () => dom.el('showroom-toast');
+  const idle = (ms) => jest.advanceTimersByTimeAsync(ms);
+
+  test('nothing while the arrival panel is still up', async () => {
+    // It is armed on collapse, not on load, and idleNudgeWanted() re-checks
+    // at the moment it fires. A visitor reading the panel is not idling.
+    await bootShowroom();
+    await idle(60000);
+    expect(toast().classList.contains('visible')).toBe(false);
+  });
+
+  test('five seconds after the panel is put away, it asks', async () => {
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    await idle(4000);
+    expect(toast().classList.contains('visible')).toBe(false);
+    await idle(1500);
+    expect(toast().classList.contains('visible')).toBe(true);
+    expect(toast().textContent).toMatch(/anyone at the desk/i);
+    // "Click" on a desktop; the stub reports a non-touch device.
+    expect(toast().textContent).toMatch(/^Click /);
+  });
+
+  test('ANY interaction restarts the five seconds', async () => {
+    /* The difference between an idle wait and a countdown, and the whole
+     * point of the feature: a visitor who is doing things should not be
+     * interrupted to be told how to do things. */
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    await idle(4000);
+    fire(dom.documentStub, 'pointerdown', {});   // still busy
+    await idle(4000);
+    expect(toast().classList.contains('visible')).toBe(false);
+    await idle(1500);
+    expect(toast().classList.contains('visible')).toBe(true);
+  });
+
+  test('it asks a few times, in different words, then gives up', async () => {
+    // A sentence repeated verbatim reads as a stuck screen rather than as a
+    // hint, which is the garden's lesson this borrowed its shape from.
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    // STEPPED FINELY, ON PURPOSE. A first pass sampled every 30 seconds and
+    // saw two of the three: the first nudge fires at 5s and the second at
+    // 27s, so by the 30s mark the first had already been overwritten. The
+    // gaps are what this asserts, so the sampling has to be finer than them.
+    const said = [];
+    for (let i = 0; i < 120; i++) {
+      await idle(1000);
+      const text = toast().textContent;
+      if (toast().classList.contains('visible') && text && !said.includes(text)) said.push(text);
+    }
+    expect(said).toHaveLength(3);
+    // Two minutes is far past the third, so this is the whole of what it
+    // will ever say: it gives up rather than cycling.
+    expect(said[0]).toMatch(/anyone at the desk/i);
+  });
+
+  test('it stops for good once the visitor has reached John', async () => {
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    ray.hits = [propHit('john')];
+    tap(dom.el('game-canvas'));                  // the contact card opens
+    expect(dom.el('nudge-modal').classList.contains('hidden')).toBe(false);
+    fire(dom.documentStub, 'keydown', { code: 'Escape', key: 'Escape' });
+    await idle(120000);
+    expect(toast().classList.contains('visible')).toBe(false);
+  });
+
+  test('and it says nothing over an open card', async () => {
+    // A prompt to tap somebody, on top of the card tapping somebody opened,
+    // would be the scene talking over itself.
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    tap(dom.el('help-btn'));                     // the About card
+    expect(dom.el('help-modal').classList.contains('hidden')).toBe(false);
+    await idle(60000);
+    expect(toast().classList.contains('visible')).toBe(false);
+  });
 });

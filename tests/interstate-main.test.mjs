@@ -155,8 +155,9 @@ test('auto-boots through the loading screen and wires the site links', async () 
   expect(dom.el('load-progress').style.width).toBe('100%');
   expect(dom.el('loading-screen').classList.contains('hidden')).toBe(true);
 
-  // Home/business links come from INTERSTATE_CONFIG.site.
-  expect(dom.el('home-btn').href).toBe(INTERSTATE_CONFIG.site.home.path);
+  // Business and builder links come from INTERSTATE_CONFIG.site. (The Home
+  // button they used to sit beside is gone, so site.home is wired to nothing;
+  // tests/home-button-removed.test.mjs guards its absence in the markup.)
   expect(dom.el('biz-btn').href).toBe(INTERSTATE_CONFIG.site.business.websiteUrl);
   expect(dom.el('card-site').href).toBe(INTERSTATE_CONFIG.site.business.websiteUrl);
   expect(dom.el('complete-contact').href).toBe(INTERSTATE_CONFIG.site.builder.contactPath);

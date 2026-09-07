@@ -8,7 +8,7 @@
  * collision, and no day/night cycle (the bar is windowless, so it is
  * karaoke night in here at every hour). The interactions that do exist
  * are featherweight: the welcome overlay (dismissed with a click, tap,
- * or key), the floating Home button, the portrait-only pan and zoom row
+ * or key), the portrait-only pan and zoom row
  * (shared pan part, so phones can see the sides the narrow frame crops
  * and lean in toward the stage), and one raycast per tap to see what the
  * visitor pointed at, answered in the host's voice by the dialog card.
@@ -22,7 +22,7 @@
  */
 
 import { JAMAR_CONFIG } from './config.min.js';
-import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 import { initPortraitControls, updatePortraitControls, gestureClaimedTap } from '../../shared/js/pan-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getRenderer,
@@ -78,11 +78,6 @@ async function init() {
     jukeboxSongs = document.getElementById('jukebox-songs');
 
     if (!canvas) return;
-
-    // Wire the Home button from JAMAR_CONFIG.site, so config stays the
-    // single home for these values. An equivalent fallback is baked into
-    // the HTML for the no-JS path.
-    applySiteLinks();
 
     // Soft bot deterrent: solve a tiny proof of work before building the scene
     // (or reuse a still-valid one from sessionStorage). Hand the hash to the
@@ -174,6 +169,11 @@ function setupEventListeners() {
     // an open card into the floating buttons behind the backdrop, while a
     // screen reader is still announcing a dialog the visitor has left.
     installCardFocusTrap({ signal });
+    // Every card back to the top when it opens. Reported from QA on this
+    // scene and true of twelve others: a card closed halfway down came back
+    // halfway down. See the note in the shared boot part for why this is an
+    // observer rather than a line in each open() function.
+    installCardScrollReset({ signal });
 
     window.addEventListener('pagehide', cleanup);
     // Shared resize first (renderer size + pixel ratio), then re-derive the
@@ -736,22 +736,15 @@ function beginWatching() {
     track('begin-watching');
 }
 
-/** Wire the outward-facing links from JAMAR_CONFIG.site. There is no
- *  featured business here: the experience honors the builder's best
- *  friend, so the Home button goes to the serving site's root in the same
- *  tab (Phase 5 rule: the marketing pages live at every hosting domain's
- *  root). */
-function applySiteLinks() {
-    const site = JAMAR_CONFIG.site;
-    const home = document.getElementById('home-btn');
-    if (home) {
-        home.href = site.home.path;
-        home.removeAttribute('target');
-        home.removeAttribute('rel');
-        home.title = site.home.title;
-        home.setAttribute('aria-label', site.home.title);
-    }
-}
+/* THERE IS NO applySiteLinks() HERE ANY MORE. Its whole job was the Home
+ * button, which pointed at the serving site's root; the button was removed,
+ * so the function went with it rather than staying on as an empty call in
+ * the boot sequence. There is no featured business here either, so this
+ * page now has no outward link of any kind on the live canvas.
+ *
+ * JAMAR_CONFIG.site.home is still there and is now read by nothing on this
+ * page. It stays because it documents where the serving site's root is, and
+ * the share copy sits beside it in the same object. */
 
 // ---- Render loop ----------------------------------------------------------
 

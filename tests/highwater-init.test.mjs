@@ -213,8 +213,15 @@ describe('the page carries the metadata a share and a crawler need', () => {
         // A <script> with a src is the pattern; a <script> with a body is not.
         const inlineScript = html.match(/<script(?![^>]*(?:src=|type="application\/ld))[^>]*>/g);
         expect(inlineScript).toBeNull();
-        expect(html).toContain('class="skip-link"');
-        expect(html).toContain('id="home-btn"');
+        // NO SKIP LINK AND NO HOME BUTTON, both removed on 2026-09-07. The
+        // Home button was this page's only float, so with it gone there was
+        // nothing left for a skip link to land on, and a skip link whose
+        // target does not exist moves focus nowhere. The way to the directory
+        // is the welcome card's named link, which is also the first thing in
+        // the tab order, so nothing was lost.
+        expect(html).not.toContain('class="skip-link"');
+        expect(html).not.toContain('id="home-btn"');
+        expect(html).toContain('id="explore-link"');
         expect(html).toContain('noscript-fallback');
         expect(html).toContain('data-ui-theme="surf"');
         expect(html).toContain('rel="icon"');
@@ -233,7 +240,13 @@ describe('the page carries the metadata a share and a crawler need', () => {
         // it looks on paper and is the right trade here: driving main.js needs a
         // canvas, a WebGL context and a full THREE, and the actual failure mode
         // is one missing line rather than anything subtle.
-        expect(html).toContain('class="ui-float menu-btn"');
+        // THE PAGE DECLARES NO FLOAT ANY MORE, so the reveal sweep has
+        // nothing to reveal. Both halves are asserted rather than deleted:
+        // the sweep stays in main.js for the pan row and anything a future
+        // revision adds, and a float added back to the markup without it
+        // would render invisible, which is the trap this test was written
+        // for. See www/shared/js/README.md.
+        expect(html).not.toContain('class="ui-float menu-btn"');
         expect(main).toMatch(/querySelectorAll\('\.ui-float'\)/);
         expect(main).toMatch(/classList\.add\('visible'\)/);
     });

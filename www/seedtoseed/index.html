@@ -71,12 +71,12 @@
 
     <title>The Seed to Seed Garden</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=2" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=2">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -86,8 +86,13 @@
 </head>
 
 <body>
-    <!-- Accessibility: jump straight to the section links without entering the 3D scene -->
-    <a class="skip-link" href="#home-btn">Skip to home link</a>
+    <!-- Accessibility: jump straight to the floating controls without entering
+         the 3D scene. It used to land on the Home button, which was first in
+         the cluster and in the markup; with that button gone it lands on the
+         services link, which is now both. Tabbing on from there still reaches
+         the autopilot toggle and the settings cog, which is why it points at
+         the first float rather than the most interesting one. -->
+    <a class="skip-link" href="#biz-btn">Skip to the page controls</a>
 
     <!-- The live page's heading. Screen-reader only: the room is the title
          here, and a line of type across the top of it would be a caption on a
@@ -184,7 +189,7 @@
                     <li class="help-mobile"><strong>Move &amp; look:</strong> use the left joystick to walk and the right joystick to look around.</li>
                     <li><strong>Autopilot:</strong> the garden shows you around on its own from the moment you step in. Move to take back the controls, and press <kbd>T</kbd> or the tour button (top-left) whenever you would like the tour to resume.</li>
                     <li><strong>Settings:</strong> the gear icon (top-right) adjusts movement and look sensitivity.</li>
-                    <li><strong>Heading out?</strong> The Home button (top-right) takes you back to the main site.</li>
+                    <li><strong>Seed to Seed:</strong> the logo button (top-right) opens the company's own website in a new tab, so you keep your place in the garden.</li>
                 </ul>
                 <a id="hello-services" class="piece-enter" href="https://bakersgardens.com/services.html"
                     target="_blank" rel="noopener">See what Seed to Seed offers →</a>
@@ -284,20 +289,14 @@
     </div>
 
     <!-- Floating controls -->
-    <!-- The Home button returns to the serving site's root in the same tab
-         (applySiteLinks keeps it in sync with SEED_CONFIG.site.home). -->
-    <a id="home-btn" class="ui-float menu-btn" href="/"
-        title="Back to the main site"
-        aria-label="Back to the main site">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
-            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
-            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
-        </svg>
-    </a>
+    <!-- THE HOME BUTTON IS GONE. It held the corner (right: 20) and returned
+         to the serving site's root; it was removed so the garden keeps the
+         corner to itself. The two floats below each moved one slot right to
+         close the gap (css/experience.css), and nothing on this page links
+         back to the directory now apart from the noscript block. -->
     <!-- Featured business: straight to Seed to Seed's own website in a new
          tab (applySiteLinks keeps it in sync with SEED_CONFIG.site.business).
-         The Home button stays the way back to the serving site's root. -->
+         It takes the corner now that Home is gone. -->
     <a id="biz-btn" class="ui-float menu-btn biz-btn" href="https://bakersgardens.com/welcome.html"
         target="_blank" rel="noopener"
         title="Visit the Seed to Seed website"

@@ -91,8 +91,9 @@ test('auto-boots through the loading screen with the site links wired', async ()
   expect(dom.el('load-progress').style.width).toBe('100%');
   expect(dom.el('loading-screen').classList.contains('hidden')).toBe(true);
 
-  // applySiteLinks wired every outward link from SVJ_CONFIG.site.
-  expect(dom.el('home-btn').href).toBe('/');
+  // applySiteLinks wired every outward link from SVJ_CONFIG.site. (The Home
+  // button it used to wire first is gone, so site.home reaches nothing;
+  // tests/home-button-removed.test.mjs guards its absence in the markup.)
   expect(dom.el('biz-btn').href).toBe('https://sunnyvalejenn.com/');
   expect(dom.el('biz-btn').title).toContain('Sunnyvale Jenn Consulting');
   expect(dom.el('dialog-cta').href).toBe('https://sunnyvalejenn.com/');

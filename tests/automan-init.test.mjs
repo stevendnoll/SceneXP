@@ -63,10 +63,21 @@ test('the whole showroom builds and holds a working afternoon', async () => {
   for (let i = 0; i < 1500; i++) store.updateShowroom(0.02);
 });
 
-test('every registered prop kind has a story, and every story has a prop', async () => {
-  // main.js says in a comment that this test enforces the pairing, so it had
-  // better. The build stub absorbs userData writes, so the wiring can only be
-  // read where it is written, in the source text.
+test('the props are all still registered, and only the people have a story', async () => {
+  /* THIS TEST INVERTED AT D43, and the new invariant is the more important
+   * one. It used to say "every registered prop has a story and every story
+   * has a prop", pairing seventeen registrations against seventeen entries.
+   * The fourteen prop stories are gone, but the fourteen REGISTRATIONS must
+   * not follow them, and that is the half a cleanup would get wrong.
+   *
+   * The props are still raycast targets so the room can BLOCK a tap: casting
+   * at the three people alone would let a tap on the desk in front of John
+   * open John's card, and "the background is not clickable" has to mean the
+   * background is not a way through to something that is. Unregister them and
+   * every other test here stays green while the desk quietly becomes a button.
+   *
+   * The build stub absorbs userData writes, so the wiring can only be read
+   * where it is written, in the source text. */
   const [storeText, mainText] = await Promise.all([src('js/store.js'), src('js/main.js')]);
 
   const registered = new Set(
@@ -76,20 +87,26 @@ test('every registered prop kind has a story, and every story has a prop', async
   // they never appear in that sweep and are added here from their own list.
   const personOrder = storeText.match(/const PERSON_ORDER = \[([^\]]*)\]/);
   expect(personOrder).not.toBeNull();
-  for (const m of personOrder[1].matchAll(/'(\w+)'/g)) registered.add(m[1]);
+  const people = [...personOrder[1].matchAll(/'(\w+)'/g)].map((m) => m[1]);
+  for (const who of people) registered.add(who);
+
+  // Still the whole room, not just the cast.
   expect(registered.size).toBeGreaterThanOrEqual(16);
+  expect(registered.size - people.length).toBeGreaterThanOrEqual(13);
 
   const contentBlock = mainText.match(/const PROP_CONTENT = \{([\s\S]*?)\n\};/);
   expect(contentBlock).not.toBeNull();
-  const contentKinds = new Set(
-    [...contentBlock[1].matchAll(/^ {4}(\w+): \{/gm)].map((m) => m[1])
-  );
+  const contentKinds = [...contentBlock[1].matchAll(/^ {4}(\w+): \{/gm)].map((m) => m[1]);
 
-  // Every tappable thing tells a story, and no story is orphaned.
-  expect([...registered].sort()).toEqual([...contentKinds].sort());
+  // ONLY the three people carry copy now, and each of them is a real
+  // registration rather than a name that drifted.
+  expect(contentKinds.sort()).toEqual([...people].sort());
+  for (const who of contentKinds) {
+    expect(`${who} is registered: ${registered.has(who)}`).toBe(`${who} is registered: true`);
+  }
 
-  // Two lines per prop, so a second tap gives something new.
-  expect([...contentBlock[1].matchAll(/lines: \[/g)]).toHaveLength(contentKinds.size);
+  // Two lines each, so the fallback never repeats itself.
+  expect([...contentBlock[1].matchAll(/lines: \[/g)]).toHaveLength(contentKinds.length);
 });
 
 test('each of the three people has a contact card of their own', async () => {
@@ -268,6 +285,200 @@ describe('the composition and config (pure)', () => {
     expect(T.seatHeightY(seat, 1.08)).toBeLessThan(T.seatHeightY(seat, 1));
   });
 
+  test('D44: the zoom is on and the looking around is off', () => {
+    /* The showroom is composed for one view. Once nothing in the room
+     * answered a tap (D43), a drag was offering work with no reward and a
+     * way to end up facing a wall, so QA asked for the pan out and the zoom
+     * kept.
+     *
+     * BOTH AXES HAVE TO BE ZERO. maxTilt alone leaves the yaw at the shared
+     * default of 0.5 radians and the scene still swings 29 degrees each way,
+     * which looks like the change worked until somebody drags sideways.
+     *
+     * And the zoom has to survive it, which is the half that would go
+     * unnoticed: a scene with no zoom numbers still builds, still runs, and
+     * simply never leans in on the deal sheet. */
+    expect(CFG.camera.portrait.pan.maxAngle).toBe(0);
+    expect(CFG.camera.portrait.pan.maxTilt).toBe(0);
+    expect(CFG.camera.portrait.zoom.maxIn).toBeGreaterThan(0);
+    expect(CFG.camera.portrait.zoom.maxOut).toBeGreaterThan(0);
+  });
+
+  test('and the copy does not promise a gesture that is gone', async () => {
+    // Twice now the hint has outlived what it described: the prop stories at
+    // D43, the drag at D44. Copy offering a gesture that does nothing is
+    // worse than no copy, because it sends a visitor hunting for it.
+    const [html, mainText] = await Promise.all([src('index.html'), src('js/main.js')]);
+    const hint = /<p class="intro-hint"[^>]*>([\s\S]*?)<\/p>/.exec(html);
+    expect(hint).not.toBeNull();
+    for (const word of [/swipe/i, /drag/i, /look around/i, /story of its own/i]) {
+      expect(`markup hint matches ${word}: ${word.test(hint[1])}`)
+        .toBe(`markup hint matches ${word}: false`);
+    }
+    // main.js rewrites the same line at runtime, so it has to agree.
+    const runtime = /hint\.textContent = ([\s\S]*?);\n/.exec(mainText);
+    expect(runtime).not.toBeNull();
+    for (const word of [/swipe/i, /\bdrag\b/i, /look around/i]) {
+      expect(`runtime hint matches ${word}: ${word.test(runtime[1])}`)
+        .toBe(`runtime hint matches ${word}: false`);
+    }
+  });
+
+  test('D45: the mouse is gone from the desk, the keyboard is not', async () => {
+    /* QA: at this distance a squashed sphere beside the keys reads as a dark
+     * lump, not a mouse. The keyboard survives the same treatment because a
+     * slab with a grain IS what a keyboard looks like small.
+     *
+     * Read from the SOURCE, not from the scene graph: the build stub absorbs
+     * every assignment, so a mesh added to the showroom group is not
+     * something this harness can go looking for. LAYOUT.deskMouse stays on
+     * purpose as the record of a solved placement, so its presence is not the
+     * check; whether anything is built from it is. */
+    const storeText = await src('js/store.js');
+    expect(storeText).not.toMatch(/showroomGroup\.add\(\s*mouse\s*\)/);
+    expect(storeText).not.toMatch(/mouse\.name = 'deskMouse'/);
+    // The keyboard is still built, and still registered so the room can block
+    // a tap aimed past it.
+    expect(storeText).toMatch(/registerOutdoorProp\(kit, 'deskkeyboard'\)/);
+  });
+
+  test('D45: each of the three carries a name over their head', async () => {
+    // The halos were three identical rings. The names say who a visitor is
+    // about to meet, which is what a ring cannot.
+    const html = await src('index.html');
+    for (const [who, name] of [['john', 'John'], ['customer', 'Buyer'], ['dealer', 'Dealer']]) {
+      const mark = new RegExp(`data-who="${who}"[\\s\\S]{0,400}?</button>`).exec(html);
+      expect(`${who} mark found: ${Boolean(mark)}`).toBe(`${who} mark found: true`);
+      expect(`${who} label: ${/class="coach-name"[^>]*>([^<]+)</.exec(mark[0])[1]}`)
+        .toBe(`${who} label: ${name}`);
+      // THE HALO HAS TO COME FIRST. `.coach-mark` is column-reverse, so the
+      // first child renders at the BOTTOM: halo-then-name is what puts the
+      // name above the ring. Swapping them drops the name onto the face.
+      expect(`${who} halo leads: ${mark[0].indexOf('coach-halo') < mark[0].indexOf('coach-name')}`)
+        .toBe(`${who} halo leads: true`);
+    }
+  });
+
+  test('D45: everything added to the coaching layer is hidden by coach-out', async () => {
+    /* THERE IS NO GENERIC `.coach-out` RULE. It is a fixed list of selectors,
+     * exactly like the shared sheet's `.hidden`, so an element added to this
+     * layer and given the class in the markup is shown from the first frame
+     * and never hides. The handle's hint was added at D45 and this is what
+     * would have caught it sitting on screen through the whole arrival. */
+    const [html, css] = await Promise.all([src('index.html'), src('css/experience.css')]);
+    const wearers = [...html.matchAll(/class="([^"]*\bcoach-out\b[^"]*)"/g)]
+      .map((m) => m[1].split(/\s+/).filter((c) => c && c !== 'coach-out'));
+    expect(wearers.length).toBeGreaterThan(0);
+
+    /* THE RULE THAT ACTUALLY HIDES, not any mention of the class. A first
+     * draft searched the whole stylesheet for `.<class>.coach-out`, which
+     * passed against a sheet where the hint had been dropped from the hiding
+     * block but was still named in the reduced-motion one. The hiding rule is
+     * the one that sets `visibility: hidden`. */
+    const hiding = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .filter(([, sel, body]) => sel.includes('.coach-out') && /visibility:\s*hidden/.test(body));
+    expect(hiding.length).toBeGreaterThan(0);
+    const hidden = hiding.map(([, sel]) => sel).join(',');
+
+    for (const classes of wearers) {
+      const covered = classes.some((c) => hidden.includes(`.${c}.coach-out`));
+      expect(`${classes.join('.')} is hidden by coach-out: ${covered}`)
+        .toBe(`${classes.join('.')} is hidden by coach-out: true`);
+    }
+  });
+
+  /** EVERYTHING A VISITOR CAN READ, AND NOTHING ELSE. The first version of
+   *  the checks below scanned the source files whole and failed on "13% off
+   *  its measure", which is a line in a CSS layout comment about a broken
+   *  intro panel. A claim check that reads developer comments is checking the
+   *  wrong document: it will both cry wolf and, worse, teach whoever hits it
+   *  to loosen the pattern until it stops catching real copy.
+   *
+   *  So: markup with comments and tags removed, plus the copy tables' own
+   *  strings out of main.js and config.js. */
+  async function visibleCopy() {
+    const [html, mainText, cfgText] = await Promise.all([
+      src('index.html'), src('js/main.js'), src('js/config.js')
+    ]);
+    const markup = html
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<(script|style)[\s\S]*?<\/\1>/g, ' ')
+      .replace(/<[^>]+>/g, ' ');
+    // The JSON-LD block is markup a crawler reads, so its strings count.
+    const ld = (/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html) || ['', ''])[1];
+    const strings = (text) =>
+      [...text.matchAll(/(?:kicker|title|lead|text|textContent =)\s*[:=]\s*[`']((?:[^`'\\]|\\.)+)[`']/g)]
+        .map((m) => m[1]).join(' ');
+    return [markup, ld, strings(mainText), strings(cfgText)].join(' ');
+  }
+
+  test('D46: the page never invents a savings figure', async () => {
+    /* THE ONE THAT MATTERS MOST, because it is a claim about a real man's
+     * results on his own business page. John's printed flyer makes NO dollar
+     * or percentage claim anywhere: what he promises is a free consultation,
+     * a satisfaction guarantee, and that he will desk the whole deal for you.
+     * So this page promises the same things and no more.
+     *
+     * "Saves you thousands" is the line a copy pass reaches for at some point,
+     * and it would be the website inventing a number for the business. If a
+     * real figure ever comes from John it can go in deliberately, and this
+     * test is where it gets recorded. */
+    const visible = await visibleCopy();
+    const INVENTED = [
+      /\bsaves? (?:you )?\$?[\d,]+/i,
+      /\$[\d,]{3,}/,
+      /\bthousands of dollars\b/i,
+      /\b\d+\s*(?:percent|%)\s*(?:off|less|below|savings)/i,
+      /\baverage savings?\b/i,
+    ];
+    for (const pattern of INVENTED) {
+      const hit = pattern.exec(visible);
+      expect(`${pattern} found: ${hit ? hit[0] : 'no'}`).toBe(`${pattern} found: no`);
+    }
+  });
+
+  test('D46: the promise is that he negotiates INSTEAD of the buyer', async () => {
+    /* The audit that started this: 993 words of copy in which no phrase said
+     * John does the negotiating rather than coaching somebody through it, and
+     * one line said the opposite. The JSON-LD described him as explaining the
+     * products "so you walk into the dealership prepared", which promises the
+     * buyer still has to go and do the hard part. That is the line search
+     * engines and assistants retrieve, so it was the worst place for it. */
+    const html = await src('index.html');
+    expect(html).not.toMatch(/walk into the dealership prepared/i);
+
+    // The promise has to survive on the surfaces a stranger meets first.
+    const meta = (name) =>
+      new RegExp(`<meta (?:name|property)="${name}" content="([^"]*)"`).exec(html)[1];
+    for (const surface of ['description', 'og:description', 'twitter:description']) {
+      const text = meta(surface);
+      expect(`${surface} says he does it for you: ${/for you|never have to|on your side|on the buyer's side/i.test(text)}`)
+        .toBe(`${surface} says he does it for you: true`);
+    }
+    // And in the structured data, which is what an assistant reads.
+    const ld = /"@type": "ProfessionalService"[\s\S]*?"description": "([^"]*)"/.exec(html);
+    expect(ld).not.toBeNull();
+    expect(ld[1]).toMatch(/negotiat/i);
+  });
+
+  test('D46: American English, and no house-style punctuation', async () => {
+    // The audience is American. A -our/-ise regex cannot see "tire and wheel
+    // cover", so the vocabulary is checked too, and the house style bans
+    // em-dashes and semicolons in anything a visitor reads.
+    const visible = await visibleCopy();
+    const BRITISH = ['whilst', 'amongst', 'realise', 'organise', 'colour', 'favour',
+      'centre', 'licence', 'defence', 'practise', 'tyre', 'bonnet', 'windscreen',
+      'motorway', 'petrol', 'gearbox', 'saloon', 'car park', 'per cent', 'cheque',
+      'aluminium', 'kerb', 'speciality', 'number plate'];
+    for (const word of BRITISH) {
+      expect(`"${word}" in the copy: ${new RegExp(`\\b${word}\\b`, 'i').test(visible)}`)
+        .toBe(`"${word}" in the copy: false`);
+    }
+    // A compound number reads as a typo to an American eye either way.
+    expect(visible).not.toMatch(/\btwenty five\b/);
+    expect(`em-dashes: ${(visible.match(/\u2014/g) || []).length}`).toBe('em-dashes: 0');
+  });
+
   test('the proof-of-work cache is shared across experiences', () => {
     expect(CFG.proofOfWork.storageKey).toBe('gallery-pow');
     expect(CFG.proofOfWork.prefix).toBe('11');
@@ -285,3 +496,168 @@ describe('the composition and config (pure)', () => {
   });
 });
 
+
+describe('the primary action wears one gold, everywhere it appears (D42)', () => {
+  /* THE RULE THIS GUARDS, in Steve's words: use the Call button's colouring
+   * wherever we have a primary button. It replaced D25's "one filled control
+   * on the whole page", which had left the intro panel and both cards asking
+   * with a hairline; QA read the intro panel's pair as two equal options
+   * rather than as an ask and an aside.
+   *
+   * A rule like this rots quietly. The next primary button gets its own
+   * gradient pasted in, or an id rule quietly outranks the shared class and
+   * one of the four drifts, and neither shows up anywhere but a screenshot of
+   * the one card nobody reopened. */
+
+  /** Every button that IS the primary action of the surface it sits on. */
+  // ('dialog-cta' was the fourth of these until D43 removed the prop story
+  //  card it sat on. The remaining three are every primary the page has.)
+  const PRIMARIES = ['intro-contact', 'poster-cta', 'contact-call'];
+  /** Controls that are deliberately NOT filled: the panel's aside, and the
+   *  handle that reopens it. ('dialog-dismiss', the prop story's way out, was
+   *  the third of these until D43 removed that card.) */
+  const NOT_PRIMARY = ['intro-about', 'intro-handle'];
+
+  const RESTING = 'linear-gradient(180deg, var(--lux-gold-lift) 0%, var(--lux-gold) 100%)';
+
+  test('every primary carries the class, and nothing else does', async () => {
+    const html = await src('index.html');
+    for (const id of PRIMARIES) {
+      const tag = new RegExp(`<(?:a|button)[^>]*id="${id}"[^>]*>`).exec(html);
+      expect(`${id} present: ${Boolean(tag)}`).toBe(`${id} present: true`);
+      expect(`${id} primary: ${/class="[^"]*\blux-primary\b/.test(tag[0])}`)
+        .toBe(`${id} primary: true`);
+    }
+    for (const id of NOT_PRIMARY) {
+      const tag = new RegExp(`<(?:a|button)[^>]*id="${id}"[^>]*>`).exec(html);
+      // Named rather than indexed straight into: when D43 deleted a control
+      // that was on this list, the test died with "cannot read properties of
+      // null" instead of saying which id had gone.
+      expect(`${id} present: ${Boolean(tag)}`).toBe(`${id} present: true`);
+      expect(`${id} primary: ${/class="[^"]*\blux-primary\b/.test(tag[0])}`)
+        .toBe(`${id} primary: false`);
+    }
+  });
+
+  test('there is ONE gold to change, not four', async () => {
+    // The point of lifting the finish out of #contact-call. A second copy of
+    // this gradient means a future tweak moves three buttons and leaves one.
+    const css = await src('css/experience.css');
+    const copies = css.split(RESTING).length - 1;
+    expect(`resting gradient declared ${copies} time(s)`)
+      .toBe('resting gradient declared 1 time(s)');
+  });
+
+  test('no id rule re-declares the finish, which would silently outrank it', async () => {
+    // .lux-primary is a class (0,1,0). Any rule carrying an id beats it, so an
+    // `#dialog-cta { background: ... }` added later would take that one button
+    // back out of the system without failing anything else. Geometry in an id
+    // rule is fine and expected; the finish is not.
+    const css = (await src('css/experience.css')).replace(/\/\*[\s\S]*?\*\//g, '');
+    const FINISH = ['background', 'color', 'border', 'box-shadow'];
+    for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      if (!PRIMARIES.some(id => sel.includes(`#${id}`))) continue;
+      for (const prop of FINISH) {
+        const has = new RegExp(`(?:^|;)\\s*${prop}\\s*:`).test(body);
+        expect(`${sel.trim()} sets ${prop}: ${has}`)
+          .toBe(`${sel.trim()} sets ${prop}: false`);
+      }
+    }
+  });
+
+  test('the hover state is SELF-CONTAINED, so nothing else can supply the rest', async () => {
+    /* THE BUG THIS EXISTS FOR, and it shipped. `.lux-primary:hover` declared
+     * only `background`. A hover rule inherits the resting value for every
+     * property it leaves out, which means any OTHER `:hover` at the same
+     * specificity gets to fill the gap, and `.intro-action:hover` duly put its
+     * pale outline cream on the gold fill: 1.16:1, reported from QA as the
+     * text going white on the one button that wears both classes.
+     *
+     * The rule, then: whatever the resting block establishes about the finish,
+     * the hover block restates. That is what makes this class safe to compose
+     * onto a button that already has styling of its own, which is the entire
+     * reason it is a class. */
+    const css = await src('css/experience.css');
+    const block = (sel) => new RegExp(`\\${sel}\\s*\\{([^}]*)\\}`).exec(css)[1];
+    const declared = (body) => new Set(
+      [...body.matchAll(/(?:^|;)\s*([a-z-]+)\s*:/g)].map((m) => m[1])
+    );
+    const rest = declared(block('.lux-primary'));
+    const hover = declared(block('.lux-primary:hover'));
+    for (const prop of ['background', 'color']) {
+      expect(`hover restates ${prop}: ${rest.has(prop) && hover.has(prop)}`)
+        .toBe(`hover restates ${prop}: true`);
+    }
+  });
+
+  test('no outline hover can repaint a filled primary', async () => {
+    /* The same defect from the other side. `.intro-action:hover` is the
+     * HAIRLINE button's hover, and its ink only works against the dark panel
+     * behind it. It has to exclude the filled variant explicitly, or adding
+     * .lux-primary to any button that already wears an outline class quietly
+     * reintroduces unreadable text. */
+    const html = await src('index.html');
+    const css = (await src('css/experience.css')).replace(/\/\*[\s\S]*?\*\//g, '');
+
+    // What each primary actually carries in the markup.
+    const tokensOf = (id) => {
+      const tag = new RegExp(`<(?:a|button)[^>]*id="${id}"[^>]*>`).exec(html)[0];
+      const cls = /class="([^"]*)"/.exec(tag)[1].split(/\s+/).filter(Boolean);
+      return new Set([`#${id}`, ...cls.map((c) => `.${c}`)]);
+    };
+
+    for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      if (!sel.includes(':hover')) continue;
+      if (!/(?:^|;)\s*color\s*:/.test(body)) continue;
+      for (const one of sel.split(',').map((s) => s.trim())) {
+        // The subject is the last compound; only it decides what is painted.
+        const subject = one.split(/\s+|>/).filter(Boolean).pop();
+        if (!subject) continue;
+        const excluded = [...subject.matchAll(/:not\(([^)]*)\)/g)].map((m) => m[1].trim());
+        const bare = subject.replace(/:not\([^)]*\)/g, '').replace(/:[a-z-]+/g, '');
+        const need = bare.match(/[#.][A-Za-z0-9_-]+/g) || [];
+        if (!need.length) continue;
+        for (const id of PRIMARIES) {
+          const has = tokensOf(id);
+          const matches = need.every((tok) => has.has(tok))
+            && !excluded.some((tok) => has.has(tok));
+          // .lux-primary's own hover is the one rule allowed to paint it.
+          const allowed = need.includes('.lux-primary');
+          expect(`"${one}" repaints ${id}: ${matches && !allowed}`)
+            .toBe(`"${one}" repaints ${id}: false`);
+        }
+      }
+    }
+  });
+
+  test('the resting fill has somewhere brighter to go', async () => {
+    // A FILL IS A STATE. An accent-tinted control at rest reads as already
+    // pressed, which is exactly why these were outlines before. Filling them
+    // is only safe while hover moves somewhere visibly lighter, so assert the
+    // two are different rather than trusting the comment that says so.
+    const css = await src('css/experience.css');
+    const rest = /\.lux-primary\s*\{([^}]*)\}/.exec(css);
+    const hover = /\.lux-primary:hover\s*\{([^}]*)\}/.exec(css);
+    expect(`both states defined: ${Boolean(rest && hover)}`).toBe('both states defined: true');
+    const bg = (b) => /background:\s*([^;]+)/.exec(b)[1].trim();
+    expect(`hover differs: ${bg(hover[1]) !== bg(rest[1])}`).toBe('hover differs: true');
+  });
+
+  test('the ink clears AAA against the darker end of the fill', async () => {
+    // Small tracked capitals at 0.7rem, so this is the contrast that matters
+    // and it is measured rather than eyeballed. --lux-gold is the foot of the
+    // gradient and therefore the worst case.
+    const css = await src('css/experience.css');
+    const ink = /\.lux-primary\s*\{[^}]*color:\s*(#[0-9a-f]{6})/i.exec(css)[1];
+    const gold = /--lux-gold:\s*(#[0-9a-f]{6})/i.exec(css)[1];
+    const lum = (hex) => {
+      const ch = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    };
+    const [hi, lo] = [lum(ink), lum(gold)].sort((a, b) => b - a);
+    const ratio = (hi + 0.05) / (lo + 0.05);
+    expect(`${ink} on ${gold} clears 7:1: ${ratio >= 7}`)
+      .toBe(`${ink} on ${gold} clears 7:1: true`);
+  });
+});

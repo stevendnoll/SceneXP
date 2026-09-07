@@ -154,8 +154,9 @@ test('auto-boots through the loading screen and wires the site links', async () 
   expect(dom.el('load-progress').style.width).toBe('100%');
   expect(dom.el('loading-screen').classList.contains('hidden')).toBe(true);
 
-  // Home, business, services, and builder links come from SEED_CONFIG.site.
-  expect(dom.el('home-btn').href).toBe(SEED_CONFIG.site.home.path);
+  // Business, services, and builder links come from SEED_CONFIG.site. (The
+  // Home button they used to sit beside is gone, so site.home is wired to
+  // nothing; tests/home-button-removed.test.mjs guards its absence.)
   expect(dom.el('biz-btn').href).toBe(SEED_CONFIG.site.business.websiteUrl);
   expect(dom.el('hello-services').href).toBe(SEED_CONFIG.site.business.servicesUrl);
   expect(dom.el('complete-contact').href).toBe(SEED_CONFIG.site.builder.contactPath);

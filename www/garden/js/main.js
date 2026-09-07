@@ -64,7 +64,7 @@ import {
     openLakeCard, closeLakeCard, isLakeOpen, getLakeCanvas, refreshLakeCard,
     syncTreeList, setTendPanelHidden, cardLines
 } from './ui.min.js';
-import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap, shieldOverlayControl, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 import {
     initPortraitControls, updatePortraitControls, gestureClaimedTap, resetPortraitAim,
     getPanAngle, getTiltAngle, setPanLimit
@@ -264,7 +264,7 @@ async function init() {
         if (loadingScreen) loadingScreen.classList.add('hidden');
         state.loaded = true;
         // EVERY .ui-float IS display:none UNTIL THIS LINE. Correct markup on
-        // its own renders an invisible Home button. The pan and zoom row tags
+        // its own renders an invisible button. The pan and zoom row tags
         // itself .ui-float too, so it is revealed by the same sweep.
         document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
         // AND STRAIGHT BACK OFF FOR WHATEVER HAS NOTHING TO DO YET. The sweep
@@ -714,6 +714,11 @@ function setupEventListeners() {
     // an open card into the floating buttons behind the backdrop, while a
     // screen reader is still announcing a dialog the visitor has left.
     installCardFocusTrap({ signal });
+    // Every card back to the top when it opens. Reported from QA on this
+    // scene and true of twelve others: a card closed halfway down came back
+    // halfway down. See the note in the shared boot part for why this is an
+    // observer rather than a line in each open() function.
+    installCardScrollReset({ signal });
 
     window.addEventListener('pagehide', cleanup);
     window.addEventListener('resize', onResize, { signal });
@@ -772,6 +777,15 @@ function setupEventListeners() {
             if (performance.now() - draggedAt < 600) return;
             dismiss(event);
         }, { signal });
+
+        // THE DIRECTORY LINK SITS ON TOP OF ALL OF THAT. Every one of the
+        // three handlers above would fire on a tap meant for the link, and
+        // `dismiss` calls preventDefault(), which on touch would swallow the
+        // synthetic click and leave the link inert. Stop the start events
+        // short of it so the anchor follows its href. (The card is also the
+        // How-to-play panel, so this matters on every reopen, not just the
+        // first arrival.)
+        shieldOverlayControl(document.getElementById('explore-link'), { signal });
         document.addEventListener('keydown', (event) => {
             if (blocker.classList.contains('hidden')) return;
             // Escape as well as Enter and Space, because the card is now a
@@ -1090,14 +1104,13 @@ function nudgeToPlant(round = 0) {
 
 function applySiteLinks() {
     const site = GARDEN_CONFIG.site;
-    const home = document.getElementById('home-btn');
-    if (home) {
-        home.href = site.home.path;
-        home.removeAttribute('target');
-        home.removeAttribute('rel');
-        home.title = site.home.title;
-        home.setAttribute('aria-label', site.home.title);
-    }
+    // The directory link at the foot of the welcome card, which replaced the
+    // floating Home button. Only the href is wired: its text names
+    // SceneXP.com out loud, so unlike the old icon-only button it does not
+    // need a title or an aria-label supplied from config, and the markup
+    // carries an equivalent href for the no-JS path.
+    const explore = document.getElementById('explore-link');
+    if (explore) explore.href = site.home.path;
 }
 
 // ---- Picking ---------------------------------------------------------------

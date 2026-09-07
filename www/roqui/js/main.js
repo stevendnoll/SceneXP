@@ -10,7 +10,7 @@
  */
 
 import { ROQUI_CONFIG } from './config.min.js';
-import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap, shieldOverlayControl, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 import { checkCollision } from '../../shared/js/collision-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getScene, getRenderer,
@@ -83,7 +83,7 @@ Object.defineProperty(state, 'isModalOpen', {
 // the dialog (the genuine focus-trap; `inert` also blocks pointer events, which
 // is fine because the modal's own backdrop covers the scene).
 const MODAL_BG_SELECTOR =
-    '.skip-link, #blocker, #hud, #touch-controls, #autopilot-btn, #home-btn, #settings-btn, #settings-panel, #game-canvas';
+    '.skip-link, #blocker, #hud, #touch-controls, #autopilot-btn, #settings-btn, #settings-panel, #game-canvas';
 let modalReturnFocus = null;
 
 function setBackgroundInert(on) {
@@ -188,7 +188,8 @@ async function init() {
 
     if (!canvas) return;
 
-    // Wire the Home button (the serving site's root) and the contact CTAs
+    // Wire the welcome screen's directory link (the serving site's root) and
+    // the contact CTAs
     // (the builder's marketing pages, also at the root) from ROQUI_CONFIG.site,
     // so config stays the single home for these values. Equivalent fallbacks
     // are baked into the HTML for the no-JS path.
@@ -288,6 +289,11 @@ function setupEventListeners() {
     // an open card into the floating buttons behind the backdrop, while a
     // screen reader is still announcing a dialog the visitor has left.
     installCardFocusTrap({ signal });
+    // Every card back to the top when it opens. Reported from QA on this
+    // scene and true of twelve others: a card closed halfway down came back
+    // halfway down. See the note in the shared boot part for why this is an
+    // observer rather than a line in each open() function.
+    installCardScrollReset({ signal });
 
     window.addEventListener('pagehide', cleanup);
     window.addEventListener('resize', handleResize, { signal });
@@ -319,6 +325,12 @@ function setupEventListeners() {
     } else {
         blocker.addEventListener('click', requestPointerLock, { signal });
     }
+
+    // THE DIRECTORY LINK SITS ON TOP OF ALL OF THAT. The whole overlay is the
+    // start button, and on touch the handler above calls preventDefault(),
+    // which would swallow the synthetic click and leave the link inert. Stop
+    // the start events short of it so the anchor can follow its own href.
+    shieldOverlayControl(document.getElementById('explore-link'), { signal });
 
     document.addEventListener('pointerlockchange', onPointerLockChange, { signal });
     document.addEventListener('pointerlockerror', () => {}, { signal });
@@ -1370,21 +1382,20 @@ function closeCompleteModal() {
 }
 
 /** Wire the outward-facing links from ROQUI_CONFIG.site. There is no featured
- *  business here: the experience honors a person, so the Home button goes to
- *  the serving site's root in the same tab (Phase 5 rule: the marketing pages
- *  live at every hosting domain's root). The contact CTAs point at the
+ *  business here: the experience honors a person, so the welcome screen's
+ *  directory link goes to the serving site's root (Phase 5 rule: the marketing
+ *  pages live at every hosting domain's root), in a new tab. The contact CTAs point at the
  *  builder's contact page, also root-relative; they may later be upgraded in
  *  place to one-tap mailtos, with that page as the fallback. */
 function applySiteLinks() {
     const site = ROQUI_CONFIG.site;
-    const home = document.getElementById('home-btn');
-    if (home) {
-        home.href = site.home.path;
-        home.removeAttribute('target');
-        home.removeAttribute('rel');
-        home.title = site.home.title;
-        home.setAttribute('aria-label', site.home.title);
-    }
+    // The directory link at the foot of the welcome overlay, which replaced
+    // the floating Home button. Only the href is wired: its text names
+    // SceneXP.com out loud, so unlike the old icon-only button it does not
+    // need a title or an aria-label supplied from config, and the markup
+    // carries an equivalent href for the no-JS path.
+    const explore = document.getElementById('explore-link');
+    if (explore) explore.href = site.home.path;
     ['complete-contact', 'nudge-contact'].forEach((id) => {
         const link = document.getElementById(id);
         if (link) link.href = site.builder.contactPath;

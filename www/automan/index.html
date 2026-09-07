@@ -22,7 +22,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="A living 3D visit to a car dealership desk, where John Walker, The Auto Man, sits on the buyer's side and argues the deal down for his customer. A car buying and selling advocate in Baltimore, Maryland, with a free consultation by phone or Zoom.">
+    <meta name="description" content="John Walker, The Auto Man, does your car negotiating for you. He desks the whole deal on the buyer's side: the trade valuation, the price, the financing and the rate, and the products they add at the end. Free consultation by phone or Zoom, in Baltimore, Maryland and anywhere by Zoom. Step into the 3D showroom and meet him.">
     <!-- The lacquer the whole interface is built on (M24), not the flyer's
          navy: this is the color a phone paints its own chrome with, so it
          should be the color of the page it is framing. -->
@@ -42,7 +42,7 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="John Walker, The Auto Man">
-    <meta property="og:description" content="A living 3D visit to a dealership desk, where John Walker sits on the buyer's side of it. Tap anyone at the desk to reach him.">
+    <meta property="og:description" content="You never have to negotiate with a car dealer again. John Walker desks the whole deal on your side of the desk. Step into the 3D showroom and meet him.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/automan/">
@@ -79,7 +79,7 @@
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="John Walker, The Auto Man">
-    <meta name="twitter:description" content="A living 3D visit to a dealership desk, where John Walker sits on the buyer's side of it.">
+    <meta name="twitter:description" content="You never have to negotiate with a car dealer again. John Walker desks the whole deal on your side of the desk.">
     <meta name="twitter:image" content="https://www.scenexp.com/automan/assets/og-automan.webp?v=1">
     <meta name="twitter:image:alt" content="A dark navy card carrying John Walker's gold three-blade W above his name, John Walker, The Auto Man, set in wide-spaced capitals.">
 
@@ -100,14 +100,14 @@
       "@id": "https://www.scenexp.com/automan/#website",
       "url": "https://www.scenexp.com/automan/",
       "name": "John Walker, The Auto Man",
-      "description": "A passive 3D visit to a car dealership desk, built for John Walker, The Auto Man, a car buying and selling advocate who negotiates on the buyer's behalf.",
+      "description": "A 3D showroom built for John Walker, The Auto Man, who does the negotiating for car buyers so they never have to do it themselves.",
       "inLanguage": "en-US",
       "about": {
         "@type": "ProfessionalService",
         "@id": "https://www.scenexp.com/automan/#business",
         "name": "John Walker, The Auto Man",
         "url": "https://www.scenexp.com/automan/",
-        "description": "Car buying and selling advocacy. John Walker reviews the deal front to back, values your trade, checks the financing and the rate, and explains the warranties and protection products, so you walk into the dealership prepared. Free consultation by phone or Zoom.",
+        "description": "John Walker negotiates car purchases and sales on the buyer's behalf. He desks the whole deal for you: the trade valuation, the price, the financing and the rate, and the extended warranty, tire and wheel protection and GAP insurance they add at the end. You do not negotiate with the dealership at all, he does it for you. Free consultation by phone or Zoom, and if he cannot get you the deal you want you owe him nothing.",
         "areaServed": {
           "@type": "Place",
           "name": "Baltimore, Maryland, and remote via Zoom"
@@ -116,19 +116,19 @@
           "@type": "Person",
           "name": "John Walker"
         },
-        "slogan": "Your advocate before, during, and after the deal."
+        "slogan": "He does the negotiating, so you never have to."
       }
     }
     </script>
 
     <title>John Walker, The Auto Man</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=2" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=2">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
     <link rel="stylesheet" href="css/experience.min.css?v=1">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
@@ -139,8 +139,11 @@
 </head>
 
 <body>
-    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
-    <a class="skip-link" href="#home-btn">Skip to home link</a>
+    <!-- Accessibility: jump straight to the floating control without entering
+         the 3D scene. It used to land on the Home button; with that button
+         gone, the flyer is the only float left and the corner it now sits in
+         is where the skip link has always pointed. -->
+    <a class="skip-link" href="#help-btn">Skip to the About button</a>
 
     <!-- THE PAGE'S ONLY HEADING, and it was missing entirely until the
          accessibility sweep at M39. There was an h1 in the noscript block
@@ -166,16 +169,20 @@
             <h1>John Walker, The Auto Man</h1>
             <p>This is a living 3D visit to a car dealership desk, and it
                 needs JavaScript to run. It was built for John Walker, who
-                goes by The Auto Man, because he does the part of buying a
-                car that most people quietly dread. John has spent more
-                than twenty five years in sales and marketing, ten of them
-                in the automotive industry, and more than 2,000 vehicles
-                have gone through his hands. He has worked the dealership
-                side and desked the deals, so he knows exactly where the
-                money moves: the trade valuation, the price, the financing
-                and the rate, the extended warranty, the tire and wheel
-                protection, the GAP insurance. He now does that work for the
-                buyer instead of the dealer. In the 3D scene he is at the
+                goes by The Auto Man, and what he does is simple: he does
+                the negotiating for you, so you never have to do it
+                yourself. In his own words, he will desk the whole deal on
+                your behalf. There are four places a car deal quietly
+                costs a buyer money, and he works all four of them: the
+                trade valuation, the price, the financing and the rate,
+                and the products they add at the end, like the extended
+                warranty, the tire and wheel protection and the GAP
+                insurance. John has spent more than twenty-five years in
+                sales and marketing, ten of them in the automotive
+                industry, with more than 2,000 vehicles through his hands,
+                and he spent them on the dealership side desking these
+                deals himself. He knows where the money is because he used
+                to be the one holding it. In the 3D scene he is at the
                 desk with his customer, pointing at the deal sheet and
                 making her case, while the lot fills the window behind
                 them. The consultation is free, by phone or by Zoom, and
@@ -241,18 +248,49 @@
          anchor above each head, so the marks follow the cast when the
          visitor pans or zooms. Everything here is hidden until the scene
          is loaded and removed for good on the first tap. -->
+    <!-- THE NAMES CAME BACK AT D45, and it is worth saying why, because they
+         were deliberately taken off once. John's halo used to carry a caption
+         reading "Tap John", and that went because it was an INSTRUCTION on one
+         of three heads: it singled him out in a way the composition already
+         does, and it was a second thing to read in a frame asking somebody to
+         look. These are different on both counts. All three carry one, and
+         they are NAMES rather than instructions, so they say who a visitor is
+         about to meet instead of telling them what to do.
+
+         The label stacks ABOVE the ring, which is what `.coach-mark` was
+         built as `column-reverse` for: the mark is anchored by its own bottom
+         edge just over the crown, so anything added grows upward and nothing
+         is ever drawn across the face it is pointing at. THE HALO COMES FIRST
+         IN THE MARKUP for that reason, and it reads backwards: column-reverse
+         puts the FIRST child at the BOTTOM, so halo-then-name is what renders
+         as name-above-ring.
+
+         aria-hidden, and each button keeps its fuller aria-label. A visible
+         "John" plus an aria-label of "Meet John Walker, The Auto Man" is not
+         a conflict: the label wins for a screen reader, and it is the better
+         of the two to hear. Marking the span hidden says that is on purpose
+         rather than an oversight.
+
+         "Buyer", not "Customer", though the code calls her `customer`
+         throughout: she is the one the visitor is meant to identify with, and
+         Buyer is what she is to John. The data-who stays `customer` because
+         renaming it would reach config, the contact cards and the telemetry
+         for a word nobody sees. -->
     <div id="coach-marks" class="coach-marks coach-out">
         <button type="button" class="coach-mark" data-who="john" hidden
             aria-label="Meet John Walker, The Auto Man">
             <span class="coach-halo" aria-hidden="true"></span>
+            <span class="coach-name" aria-hidden="true">John</span>
         </button>
         <button type="button" class="coach-mark" data-who="customer" hidden
-            aria-label="Meet John's customer">
+            aria-label="Meet John's customer, the buyer">
             <span class="coach-halo" aria-hidden="true"></span>
+            <span class="coach-name" aria-hidden="true">Buyer</span>
         </button>
         <button type="button" class="coach-mark" data-who="dealer" hidden
             aria-label="Meet the dealer">
             <span class="coach-halo" aria-hidden="true"></span>
+            <span class="coach-name" aria-hidden="true">Dealer</span>
         </button>
     </div>
 
@@ -267,8 +305,9 @@
          what keeps decision D18 intact while still answering the question
          the scene was leaving open. It carries three controls of its own
          since D40 and its SURFACE still takes no pointer events, so a
-         swipe that starts on it still looks around the room, and it still
-         leaves on its own whether anybody touches it or not.
+         gesture that starts on it still reaches the canvas (a pinch zooms;
+         a drag does nothing at all since D44). It no longer leaves on its
+         own: D43 removed the timer, so it waits to be dismissed.
 
          Front-loaded on purpose. The visitor arrives from a link John
          shared, on a phone, with about ten seconds of patience (PRD 12),
@@ -317,15 +356,58 @@
          a monogram in the corner.
 
          A PILL, NOT A BAR, and that is the whole shape of it. The panel's
-         surface stays `pointer-events: none` so a swipe starting on it still
-         looks around the room (D31), and a full-width handle would take
+         surface stays `pointer-events: none` so a gesture starting on it
+         still reaches the canvas (D31), and a full-width handle would take
          pointer events across the entire bottom of the screen, which on a
          phone is exactly where a thumb starts a swipe. Shrink-wrapped to its
          own text for the same reason the panel's two buttons are small.
 
          A disclosure button, so `aria-expanded` says which state it is in and
-         `aria-controls` names what it opens. Hairline, because D25's one
-         filled control on this page is the Call button. -->
+         `aria-controls` names what it opens. Hairline: under D42 the filled
+         control on a surface is what that surface ASKS for, and this handle
+         asks for nothing, it reopens a panel. -->
+    <!-- THE IDLE NUDGE (D45), borrowed in shape from the garden's plant
+         toasts. Once the arrival panel has been put away, a visitor who does
+         nothing for five seconds is shown, once, that the three people are
+         the thing to touch: the halos say WHERE without saying what happens,
+         and this scene has nothing else left that answers a tap.
+
+         role="status" with aria-live="polite" so it is announced when it
+         arrives without stealing focus, which is what a prompt nobody asked
+         for has to do. Empty in the markup: main.js writes the sentence, and
+         an empty live region announces nothing.
+
+         It asks a FEW times at a widening gap and then gives up, which is the
+         garden's lesson written down: one shot missed the visitor who was
+         still looking at the room when it arrived, and a sentence repeated
+         verbatim reads as a stuck screen rather than as a hint, so the later
+         ones are worded differently. -->
+    <div id="showroom-toast" class="showroom-toast" role="status" aria-live="polite"></div>
+
+    <!-- WHAT THE PILL IS FOR, ABOVE THE PILL (D45). The handle is John's face
+         and his name in a lacquer pill, which reads as a label rather than as
+         a control: QA watched it sit there unpressed. This says what pressing
+         it does, in the same voice as the rest of the interface.
+
+         A SEPARATE ELEMENT, NOT PART OF THE BUTTON, because the handle is a
+         single nowrap row with `overflow: hidden` and a 44px floor, and a
+         second line inside it would change the pill's whole shape. It is
+         positioned from the same bottom edge the handle uses, so the two move
+         together, and `showIntroHandle()` is the one place that shows or
+         hides either of them.
+
+         IT TAKES A TAP, and that is deliberate. A line reading "Tap to
+         re-open" that does nothing when tapped is the dead tap this scene has
+         already been caught by once, on John's own face. It is `aria-hidden`
+         and not focusable, so it never becomes a second control in the
+         accessibility tree: a keyboard or screen-reader visitor reaches the
+         real button a few pixels below, which does the same thing and is
+         announced properly.
+
+         main.js swaps Tap for Click on a desktop, the same way it does for
+         the arrival panel's hint. -->
+    <p id="intro-handle-hint" class="intro-handle-hint coach-out" aria-hidden="true">Tap to re-open</p>
+
     <button id="intro-handle" class="intro-handle coach-out" type="button"
         aria-expanded="false" aria-controls="intro-card">
         <!-- HIS FACE AND HIS NAME, in the order the panel's own header puts
@@ -348,14 +430,16 @@
     <div id="intro-card" class="intro-card coach-out" tabindex="-1">
         <!-- THE PANEL'S THREE CONTROLS (D40), and the only things on it that
              take pointer events. The surface itself stays
-             `pointer-events: none`, which is what lets a swipe start
-             anywhere else on it and still look around the room.
+             `pointer-events: none`, which is what lets a gesture start
+             anywhere else on it and still reach the canvas underneath.
 
-             A way out first. The panel leaves on its own after 29 seconds
-             and on the first tap anywhere in the room, so this is not the
-             only exit, but a surface covering a third of a phone screen
-             with no visible way to close it is a surface somebody has to
-             guess about. The glyph is the same multiply sign every card on
+             A way out first, and since D43 it is close to the ONLY one.
+             The panel used to leave on its own after 29 seconds and on the
+             first tap anywhere in the room; both went, so what closes it now
+             is this button, the panel's own two actions, a halo or the person
+             under it, and the floating W. A surface covering a third of a
+             phone screen has to have a visible way to close it, and that
+             matters more now that nothing else will do it by accident. The glyph is the same multiply sign every card on
              this page closes with, and it is 44px square. -->
         <button id="intro-close" class="intro-close" type="button"
             aria-label="Collapse this introduction">&times;</button>
@@ -364,15 +448,25 @@
                 width="256" height="256" decoding="async" alt="">
             <p class="intro-kicker">John Walker, The Auto Man</p>
         </div>
-        <p class="intro-lead">He works for the buyer, not the dealership.</p>
-        <p class="intro-body">Twenty five years inside the business and more than 2,000 cars,
-            now spent on your side of the desk: the trade value, the price, the financing, and
-            the coverage they add at the end. The first call is free, and if he cannot get you the
+        <!-- THE LEAD IS THE PROMISE, NOT THE POSITION (D46). It read "He works
+             for the buyer, not the dealership", which says whose side he is on
+             and stops there. What a visitor wants to know is what that gets
+             them, and the answer is the one on John's own flyer: he desks the
+             whole deal, so they never have to argue with anybody. -->
+        <p class="intro-lead">He does the negotiating, so you never have to.</p>
+        <p class="intro-body">Twenty-five years inside the business and more than 2,000 cars,
+            now spent working every line of a deal that costs you money: the trade value, the
+            price, the financing and the rate, and the coverage they add at the end. You do not
+            have to argue for any of it. The first call is free, and if he cannot get you the
             deal you want, you owe him nothing.</p>
         <!-- The two routes anybody who has just read that paragraph would
-             want next. Both are hairline controls, because the one filled
-             control on this page is the Call button on the contact card
-             and it stays that way (D25).
+             want next. The first is FILLED and the second is a hairline
+             (D42). They were both hairlines, on D25's rule that the Call
+             button was the one filled control on the whole page, and QA read
+             the pair as two equal options rather than as an ask and an aside.
+             D25's scarcity now counts per surface instead: one fill on
+             whatever the visitor is looking at, in the same gold every
+             primary on this page wears (.lux-primary).
 
              Buttons, not links. Neither has anywhere to go without
              JavaScript: the first opens the contact card, which assembles
@@ -392,7 +486,7 @@
              covers the markup around it and not the shape. Please do not
              reuse it. See LICENSE and the README. -->
         <div class="intro-actions">
-            <button id="intro-contact" class="intro-action intro-action-lead" type="button">Talk to John</button>
+            <button id="intro-contact" class="intro-action lux-primary" type="button">Talk to John</button>
             <button id="intro-about" class="intro-action" type="button">
                 <svg class="intro-w" viewBox="3 16.5 58 31" aria-hidden="true">
                     <path
@@ -403,24 +497,29 @@
                 What he does
             </button>
         </div>
-        <p class="intro-hint" id="intro-hint">Tap a glowing marker to meet John. Everything else
-            in the room has a story of its own, and you can swipe to look around.</p>
+        <!-- BOTH SENTENCES HAVE BEEN CUT DOWN, and each time because the copy
+             was offering something the scene had stopped doing. It read
+             "Everything else in the room has a story of its own" until D43
+             took the prop stories out, and "swipe to look around" until D44
+             took the pan out. Copy that promises a gesture which does nothing
+             is worse than no copy: it sends a visitor hunting.
+
+             main.js rewrites this line at runtime to say Tap or Click and
+             Pinch or Scroll, so what is here is the touch wording, which is
+             what a crawler and a no-JS visitor should read. -->
+        <p class="intro-hint" id="intro-hint">Tap a glowing marker to meet John.
+            Pinch to look closer.</p>
     </div>
 
     <!-- Floating controls -->
-    <!-- The Home button returns to the serving site's root in the same tab
-         (applySiteLinks keeps it in sync with AUTOMAN_CONFIG.site.home). No
-         settings cog and no autopilot: there is nothing to adjust and
-         nowhere to be driven. -->
-    <a id="home-btn" class="ui-float menu-btn" href="/"
-        title="Back to the main site"
-        aria-label="Back to the main site">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
-            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
-            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
-        </svg>
-    </a>
+    <!-- THE HOME BUTTON IS GONE. It returned to the serving site's root and
+         held the corner on every page of the site; it was removed here so
+         the room keeps the corner to itself. Nothing replaced it, so the
+         flyer moved out to the corner and this page no longer offers a way
+         back to the directory (the noscript block above still links it, and
+         the browser's own back button is the way for everybody else). No
+         settings cog and no autopilot either: there is nothing to adjust
+         and nowhere to be driven. -->
     <!-- John's own flyer, which is the one thing in here that is not a
          stylization: a photograph of him, his promise, and his number, as
          he hands it out. It sits behind a button rather than in the scene
@@ -478,8 +577,10 @@
          own website, but this page IS John's web presence, so the only
          thing it could have offered was the site's own contact page, and
          everything a visitor needs to reach John is already inside the
-         scene: a tap on anyone at the desk opens his contact card, and so
-         does the invitation at the end of every prop story. A floating
+         scene: a tap on anyone at the desk opens his contact card, as does
+         a tap on the halo above them and the panel's own button. (The
+         invitation at the end of every prop story was a fourth route until
+         D43 removed the stories.) A floating
          button pointing away from all that was one route too many. The
          noscript block above still carries the contact-page link for
          anyone whose JavaScript never runs. -->
@@ -539,14 +640,26 @@
                 alt="John Walker, a bald man in a light blue shirt, smiling in a daylit office with a city skyline behind him.">
             <div class="about-text">
                 <h2 id="poster-title" class="about-title">John Walker, The Auto Man</h2>
-                <p class="about-lead">Your advocate before, during, and after the deal.</p>
-                <p class="about-body">John has spent more than twenty five years in sales and
-                    marketing, ten of them in the automotive industry, and more than 2,000
-                    vehicles have gone through his hands. He has worked the dealership side and
-                    desked the deals, so he knows exactly where the money moves: the trade
-                    valuation, the price, the financing and the rate, the extended warranty, the
-                    tire and wheel protection, the GAP insurance. He now does all of that for the
-                    buyer instead of the dealer.</p>
+                <p class="about-lead">He desks the whole deal for you.</p>
+                <!-- THE ORDER CHANGED AT D46, not much else. Every fact here was
+                     already true and already good; they were simply arranged as a
+                     resume, so a visitor reached the end knowing how much John knows
+                     and not what it does for them. The list of places money moves now
+                     arrives as the reason the service is worth having rather than as
+                     evidence of his experience, and the paragraph ends on the promise
+                     from his own flyer instead of on a job description. -->
+                <p class="about-body">There are four places a car deal quietly costs you money:
+                    the trade valuation, the price, the financing and the rate, and the products
+                    they add at the end, like the extended warranty, the tire and wheel
+                    protection and the GAP insurance. John works all four on your behalf. He has
+                    spent more than twenty-five years in sales and marketing, ten of them in the
+                    automotive industry, with more than 2,000 vehicles through his hands, and he
+                    spent them on the dealership side desking these deals himself. He knows where
+                    the money is because he used to be the one holding it.</p>
+                <p class="about-body">In his own words: let me help you get the best deal for your
+                    trade, and I will desk the whole deal for you. That is the part worth
+                    repeating. You are not being coached through a negotiation. He does it, and
+                    you never have to sit across from anybody and argue about a price.</p>
                 <p class="about-body">The consultation is free, by phone or by Zoom. If he cannot
                     get you the deal you want, you owe him nothing, and there is a 100 percent
                     satisfaction guarantee on the small fee if you are not happy. He works in
@@ -586,29 +699,20 @@
                         aria-label="Open John's printed flyer full size in a new tab">See
                         John's printed flyer &#8599;</a>
                 </p>
-                <button id="poster-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
+                <button id="poster-cta" class="piece-enter dialog-cta dialog-primary lux-primary" type="button">Talk to John &rarr;</button>
             </div>
         </div>
     </div>
 
-    <!-- Dialog shown when something in the showroom is clicked: the host's
-         voice, telling the story of a car deal one prop at a time. -->
-    <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-        <div class="modal-backdrop" data-close></div>
-        <div class="modal-container piece-card">
-            <button class="modal-close" aria-label="Close" data-close>&times;</button>
-            <div class="piece-card-content">
-                <h2 id="dialog-title" class="piece-title">On the Showroom Floor</h2>
-                <p id="dialog-message" class="piece-subtitle"></p>
-                <!-- Leads on to the contact card rather than off the site.
-                     A <button> because it opens a card in place, wearing
-                     the .dialog-primary reset the same way the dismiss
-                     button below does. -->
-                <button id="dialog-cta" class="piece-enter dialog-cta dialog-primary" type="button">Talk to John &rarr;</button>
-                <button id="dialog-dismiss" class="piece-cancel dialog-primary" type="button" data-close>Back to the showroom</button>
-            </div>
-        </div>
-    </div>
+    <!-- THE PROP STORY CARD IS GONE (D43). Fourteen of the showroom's
+         objects were tappable and each told a little of a car deal, with an
+         invitation to call John every fourth one. QA's call: the room reads
+         as a picture to look at, and objects that answer a tap make a visitor
+         hunt for the ones that do. The only things in the scene that answer
+         now are the three people and the halos over them, so the stories and
+         the card that showed them came out together rather than being left
+         in the source unreachable. The three people's own copy stays in
+         PROP_CONTENT as the contact card's fallback. -->
 
     <!-- The contact card. Reuses the celebration card styling the garden
          and tire-shop experiences use for theirs, and keeps the
@@ -616,10 +720,12 @@
          rules to a fixed list of ids: a new id would arrive with no
          hiding, no layout, and a near-opaque generic backdrop.
 
-         Two ways in. Tapping any of the three people at the desk opens it
-         immediately, with the heading and opening line tailored to who was
-         tapped. Otherwise it follows every fourth prop story, once that
-         story's card has closed, so the two never stack.
+         THREE WAYS IN, ALL OF THEM ASKED FOR. Tapping any of the three
+         people at the desk opens it, with the heading and opening line
+         tailored to who was tapped; so does the halo above them, and so does
+         the arrival panel's own button. It used to arrive UNASKED as well,
+         after every fourth prop story, which was the one route a visitor did
+         not choose. D43 removed the stories and that route with them.
 
          The three action hrefs are empty here on purpose. main.js
          assembles them from AUTOMAN_CONFIG.site.contact once the proof of
@@ -636,10 +742,16 @@
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
             <div class="piece-card-content">
                 <p class="complete-kicker" aria-hidden="true">Free consultation, by phone or Zoom</p>
+                <!-- The markup fallback for this card. main.js overwrites both
+                     lines from CONTACT_CARDS the moment it opens, so what is
+                     here is what a crawler reads and what would show if the
+                     copy table were ever unreachable. Kept in step with the
+                     `story` entry, which is that table's own fallback. -->
                 <h2 id="nudge-title" class="piece-title">Let John handle it</h2>
-                <p id="nudge-message" class="piece-subtitle">John Walker has spent twenty five years on the other side
-                    of that desk, and more than 2,000 cars have gone through his hands. If he cannot get you the deal
-                    you want, you owe him nothing.</p>
+                <p id="nudge-message" class="piece-subtitle">In his own words, he will desk the whole deal for you:
+                    the trade valuation, the price, the financing and the rate, and the products they add at the end.
+                    Twenty-five years of doing that from the dealership side, now spent doing it from yours. If he
+                    cannot get you the deal you want, you owe him nothing.</p>
                 <!-- THE FACE, DIRECTLY ABOVE THE CALL BUTTON (D40).
 
                      It spent one round in the top left corner of the card,
@@ -699,7 +811,7 @@
                      specific classes, so `class="hidden"` on an anchor
                      here would do exactly nothing and the dead links would
                      stay on screen. -->
-                <a id="contact-call" class="piece-enter" href="">Call John</a>
+                <a id="contact-call" class="piece-enter lux-primary" href="">Call John</a>
                 <a id="contact-text" class="piece-cancel" href="">Send a text</a>
                 <a id="contact-email" class="piece-cancel" href="">Email John</a>
                 <!-- WHAT THE ACTIONS SAY BACK (M37). Empty until something

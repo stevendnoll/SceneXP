@@ -664,9 +664,11 @@ async function init() {
     // SHOW THE FLOATING CHROME. `.ui-float` is `display: none` in the shared
     // stylesheet and only `.ui-float.visible` is shown, which is how the other
     // experiences keep their buttons off the screen until the world behind them
-    // exists. Adding the markup without this line puts a home button on the page
+    // exists. Adding the markup without this line puts a button on the page
     // that nobody can see, which is exactly what shipped for an hour on
-    // 2026-08-21 and what Steve caught by looking at the scene.
+    // 2026-08-21 and what Steve caught by looking at the scene. (This page
+    // declares no float of its own since the Home button was retired on
+    // 2026-09-07; the sweep stays for the pan row and anything added later.)
     //
     // Done here rather than after a loading screen, because this scene has no
     // loading screen: the welcome card is the thing in front of the sea, and a
@@ -777,8 +779,9 @@ function installTuningAids() {
     // rendering at 60 per cent and being upscaled, and a soft social card with
     // no explanation is exactly how that would show up.
     //
-    // It also takes the floating home button out of shot, which is chrome
-    // rather than scene and does not belong on a picture of the sea.
+    // (It also used to take the floating home button out of shot. That button
+    // was retired on 2026-09-07, so there is no chrome left to hide, and the
+    // rest of what this does is unchanged.)
     //
     // Pass false to put both back.
     window.oceanCapture = (on = true) => {

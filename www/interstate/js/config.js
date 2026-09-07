@@ -120,8 +120,10 @@ export const INTERSTATE_CONFIG = deepFreeze({
             phone: '410-666-7333'
         },
 
-        // The floating Home button returns to the serving site's root in the
-        // same tab (the marketing pages live at every hosting domain's root).
+        // NOT RENDERED ANY MORE. The floating Home button that read this was
+        // removed from this experience; nothing on the page points here now.
+        // The block stays as the record of where the serving site's root is,
+        // so a scene that wants the button back has the value ready.
         home: {
             path: '/',
             title: 'Back to the main site'

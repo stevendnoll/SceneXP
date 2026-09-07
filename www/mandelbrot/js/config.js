@@ -182,7 +182,7 @@ export const MANDELBROT_CONFIG = deepFreeze({
     // marketing pages live at the serving domain's root), and anything that
     // names the serving domain is derived from location at runtime. This
     // experience has no featured business: it honors Benoit Mandelbrot and
-    // the mathematics he gave everyone, so the Home button goes to the
+    // the mathematics he gave everyone, so the welcome link goes to the
     // serving site's root in the same tab.
     site: {
         // The person this experience celebrates.

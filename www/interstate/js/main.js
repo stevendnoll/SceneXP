@@ -9,7 +9,7 @@
  */
 
 import { INTERSTATE_CONFIG } from './config.min.js';
-import { getProofOfWork, bufToHex, installCardFocusTrap } from '../../shared/js/boot-1.0.0.min.js';
+import { getProofOfWork, bufToHex, installCardFocusTrap, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 import { checkCollision } from '../../shared/js/collision-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getScene, getRenderer,
@@ -83,7 +83,7 @@ Object.defineProperty(state, 'isModalOpen', {
 // the dialog (the genuine focus-trap; `inert` also blocks pointer events, which
 // is fine because the modal's own backdrop covers the scene).
 const MODAL_BG_SELECTOR =
-    '.skip-link, #blocker, #hud, #touch-controls, #autopilot-btn, #home-btn, #biz-btn, #settings-btn, #settings-panel, #game-canvas';
+    '.skip-link, #blocker, #hud, #touch-controls, #autopilot-btn, #biz-btn, #settings-btn, #settings-panel, #game-canvas';
 let modalReturnFocus = null;
 
 function setBackgroundInert(on) {
@@ -212,10 +212,11 @@ async function init() {
 
     if (!canvas) return;
 
-    // Wire the Home button (the featured business's site) and the contact
+    // Wire the shop button (the featured business's site) and the contact
     // CTAs (the builder's marketing pages at the serving domain's root) from
     // INTERSTATE_CONFIG.site, so config stays the single home for these values.
     // Equivalent fallbacks are baked into the HTML for the no-JS path.
+    // (The Home button this used to wire first was removed from this scene.)
     applySiteLinks();
 
     // Soft bot deterrent: solve a tiny proof of work before building the scene
@@ -331,6 +332,11 @@ function setupEventListeners() {
     // an open card into the floating buttons behind the backdrop, while a
     // screen reader is still announcing a dialog the visitor has left.
     installCardFocusTrap({ signal });
+    // Every card back to the top when it opens. Reported from QA on this
+    // scene and true of twelve others: a card closed halfway down came back
+    // halfway down. See the note in the shared boot part for why this is an
+    // observer rather than a line in each open() function.
+    installCardScrollReset({ signal });
 
     window.addEventListener('pagehide', cleanup);
     window.addEventListener('resize', handleResize, { signal });
@@ -1884,9 +1890,9 @@ function closeCompleteModal() {
     resumeGameAfterModal();
 }
 
-/** Wire the outward-facing links from INTERSTATE_CONFIG.site. The Home button and
- *  the card modal's site link open the featured business's own website in a
- *  new tab (noopener, so that site gets no handle on the tour tab). The
+/** Wire the outward-facing links from INTERSTATE_CONFIG.site. The shop button
+ *  and the card modal's site link open the featured business's own website in
+ *  a new tab (noopener, so that site gets no handle on the tour tab). The
  *  contact CTAs point at the builder's marketing contact page at the serving
  *  domain's root; they may later be upgraded in place to one-tap mailtos,
  *  with that page as the fallback. The business-card modal is the business
@@ -1894,17 +1900,11 @@ function closeCompleteModal() {
 function applySiteLinks() {
     const site = INTERSTATE_CONFIG.site;
     const business = site.business;
-    // Home returns to the serving site's root in the same tab. The shop
-    // button beside it (and the in-card CTAs) open Interstate Tire's own
-    // website in a new tab, so visitors never lose their place in the tour.
-    const home = document.getElementById('home-btn');
-    if (home) {
-        home.href = site.home.path;
-        home.removeAttribute('target');
-        home.removeAttribute('rel');
-        home.title = site.home.title;
-        home.setAttribute('aria-label', site.home.title);
-    }
+    // The Home button this function used to wire is gone, and with it the
+    // only same-tab link off this page. The shop button (and the in-card
+    // CTAs) open Interstate Tire's own website in a new tab, so visitors
+    // never lose their place in the tour. site.home is still in config,
+    // read by nothing here, kept as the record of the serving root.
     const bizBtn = document.getElementById('biz-btn');
     if (bizBtn) {
         bizBtn.href = business.websiteUrl;

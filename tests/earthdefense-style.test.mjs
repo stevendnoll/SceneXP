@@ -241,14 +241,21 @@ describe('the top-right button cluster does not stack on itself', () => {
         return found;
     }
 
-    // TWO BUTTONS NOW, NOT THREE. The settings cog left the page: a floating
+    // ONE BUTTON NOW, DOWN FROM THREE. The settings cog left first: a floating
     // control cannot be clicked while the pointer is locked, and its panel was
     // buried under the pause card's backdrop the moment Escape made the cursor
-    // available. Both of its jobs moved into the card. The test still earns its
-    // keep with two, because pause moved back into the slot the cog vacated and
-    // that is the coordinate the original bug was about.
+    // available, so both of its jobs moved into the card. Then Home left on
+    // 2026-09-07 with the rest of the site's Home chrome, and pause moved up
+    // into the corner it had held.
+    //
+    // WITH ONE BUTTON THE OVERLAP LOOP HAS NOTHING TO COMPARE, so the pair
+    // below asserts the coordinate directly instead: pause must be AT the
+    // corner. That is the same bug in its current form. Two 50px circles on
+    // the same coordinate is what the loop caught; a corner nothing sits in
+    // is what a botched re-base would leave, and neither is visible in a
+    // screenshot until somebody goes looking. The site-wide version of this
+    // check lives in tests/home-button-removed.test.mjs.
     const CLUSTER = [
-        ['home', '.menu-btn'],
         ['pause', '.pause-btn']
     ];
 
@@ -268,6 +275,11 @@ describe('the top-right button cluster does not stack on itself', () => {
                     .toBe(`${a.label} vs ${b.label}: clear`);
             }
         }
+        // And with a single button the loop above is vacuous, so say the thing
+        // it can no longer say: the cluster starts AT the corner. A re-base
+        // that moved pause the wrong way leaves the corner empty and pause
+        // floating in the middle of the top edge.
+        expect(`pause at ${slots[0].from}px`).toBe('pause at 20px');
     });
 
     test('the elapsed clock sits clear of the whole cluster', () => {

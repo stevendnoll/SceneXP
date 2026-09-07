@@ -1276,7 +1276,7 @@ body.hull-hit::after {
 .pause-btn {
     top: 20px;
     left: auto;
-    right: 82px;
+    right: 20px;         /* the corner, now that Home has left it (2026-09-07) */
 }
 
 .settings-check {
