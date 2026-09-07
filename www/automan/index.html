@@ -139,8 +139,11 @@
 </head>
 
 <body>
-    <!-- Accessibility: jump straight to the home link without entering the 3D scene -->
-    <a class="skip-link" href="#home-btn">Skip to home link</a>
+    <!-- Accessibility: jump straight to the floating control without entering
+         the 3D scene. It used to land on the Home button; with that button
+         gone, the flyer is the only float left and the corner it now sits in
+         is where the skip link has always pointed. -->
+    <a class="skip-link" href="#help-btn">Skip to the About button</a>
 
     <!-- THE PAGE'S ONLY HEADING, and it was missing entirely until the
          accessibility sweep at M39. There was an h1 in the noscript block
@@ -408,19 +411,14 @@
     </div>
 
     <!-- Floating controls -->
-    <!-- The Home button returns to the serving site's root in the same tab
-         (applySiteLinks keeps it in sync with AUTOMAN_CONFIG.site.home). No
-         settings cog and no autopilot: there is nothing to adjust and
-         nowhere to be driven. -->
-    <a id="home-btn" class="ui-float menu-btn" href="/"
-        title="Back to the main site"
-        aria-label="Back to the main site">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 11.5 12 4l9 7.5" stroke-linejoin="round" />
-            <path d="M5.5 10v8.5h13V10" stroke-linejoin="round" />
-            <path d="M10 19v-5h4v5" stroke-linejoin="round" />
-        </svg>
-    </a>
+    <!-- THE HOME BUTTON IS GONE. It returned to the serving site's root and
+         held the corner on every page of the site; it was removed here so
+         the room keeps the corner to itself. Nothing replaced it, so the
+         flyer moved out to the corner and this page no longer offers a way
+         back to the directory (the noscript block above still links it, and
+         the browser's own back button is the way for everybody else). No
+         settings cog and no autopilot either: there is nothing to adjust
+         and nowhere to be driven. -->
     <!-- John's own flyer, which is the one thing in here that is not a
          stylization: a photograph of him, his promise, and his number, as
          he hands it out. It sits behind a button rather than in the scene

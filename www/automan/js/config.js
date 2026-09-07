@@ -255,6 +255,10 @@ export const AUTOMAN_CONFIG = deepFreeze({
             emailSubject: 'A free consultation, please'
         },
 
+        // NOT RENDERED ANY MORE. The floating Home button that read this was
+        // removed from this experience; nothing on the page points here now.
+        // The block stays as the record of where the serving site's root is,
+        // so a scene that wants the button back has the value ready.
         home: {
             path: '/',
             title: 'Back to the main site'

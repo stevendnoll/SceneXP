@@ -1,0 +1,39 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+/**
+ * seedtoseed/css/experience.css - the scene's only local stylesheet.
+ *
+ * Everything this page draws comes from the shared sheet. The one thing it
+ * needs of its own is the top-right cluster's arithmetic, because the Home
+ * button that used to anchor that cluster was removed from this experience
+ * and not from the eleven others that share the same rules.
+ */
+
+/* ==========================================================================
+   THE TOP-RIGHT CLUSTER, ONE SLOT RIGHT
+   ========================================================================== */
+
+/* The shared sheet lays the floats out in 62px slots measured from the right
+   edge (a 50px button plus a 12px gap), and it assumes Home is sitting in
+   the first one:
+
+       Home (20)  <-  Settings (82)  <-  Services (144)
+
+   Home is gone from this page, so those two would leave a button-shaped
+   hole in the corner. Each moves up one slot to close it:
+
+       Settings (20)  <-  Services (82)
+
+   These are id selectors on purpose. The shared .settings-btn and .biz-btn
+   rules still serve dad, family, roqui, and steve, so the offsets cannot
+   move there; an id (1,0,0) also clears the retired toolbar's old
+   .settings-btn media queries without having to repeat their breakpoints.
+   `left` and `width` are left alone, since the shared rules already settle
+   both. The autopilot toggle is untouched: it is the lone top-LEFT float
+   and never belonged to this cluster. */
+#settings-btn {
+    right: 20px;
+}
+
+#biz-btn {
+    right: 82px;
+}

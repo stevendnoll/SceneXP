@@ -141,11 +141,6 @@ async function init() {
 
     if (!canvas) return;
 
-    // Wire the Home and website buttons from AUTOMAN_CONFIG.site, so config
-    // stays the single home for these values. Equivalent fallbacks are
-    // baked into the HTML for the no-JS path.
-    applySiteLinks();
-
     // Soft bot deterrent: solve a tiny proof of work before building the scene
     // (or reuse a still-valid one from sessionStorage). Hand the hash to the
     // telemetry layer so it tags every ping.
@@ -1666,29 +1661,20 @@ function holdCoaching() {
 }
 
 
-/** Wire the outward-facing links from AUTOMAN_CONFIG.site. The Home
- *  button goes to the serving site's root in the same tab (Phase 5 rule:
- *  the marketing pages live at every hosting domain's root), and it is
- *  the only floating control this page has.
+/* THERE IS NO applySiteLinks() HERE ANY MORE, and no floating link at all.
+ * Its whole job was the Home button, which pointed at the serving site's
+ * root; the button was removed, so the function went with it rather than
+ * staying on as an empty call in the boot sequence.
  *
- *  There is deliberately no outbound business link and no floating
- *  contact button. The other featured-business experiences send a second
- *  floating button to the business's own website, but this page IS John's
- *  web presence, so there was nowhere outward to send anybody: the button
- *  was removed rather than pointed at the site's own contact page. The
- *  contact card opens from a tap on any of the three people and from
- *  every prop story's invitation. */
-function applySiteLinks() {
-    const site = AUTOMAN_CONFIG.site;
-    const home = document.getElementById('home-btn');
-    if (home) {
-        home.href = site.home.path;
-        home.removeAttribute('target');
-        home.removeAttribute('rel');
-        home.title = site.home.title;
-        home.setAttribute('aria-label', site.home.title);
-    }
-}
+ * There was never an outbound business link either. The other
+ * featured-business experiences send a floating button to the business's
+ * own website, but this page IS John's web presence, so there was nowhere
+ * outward to send anybody. The contact card opens from a tap on any of the
+ * three people and from every prop story's invitation.
+ *
+ * AUTOMAN_CONFIG.site.home is still there and is now read by nothing on
+ * this page. It stays because it documents where the serving site's root
+ * is, and the share copy sits beside it in the same object. */
 
 // ---- Render loop ----------------------------------------------------------
 

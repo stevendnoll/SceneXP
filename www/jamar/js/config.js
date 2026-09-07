@@ -117,13 +117,18 @@ export const JAMAR_CONFIG = deepFreeze({
     // marketing pages live at the serving domain's root), and anything that
     // names the serving domain is derived from location at runtime. This
     // experience has no featured business: it honors the builder's best
-    // friend, so the Home button goes to the serving site's root.
+    // friend, and since the Home button came out it has no outward link on
+    // the live canvas at all.
     site: {
         // The person this experience celebrates.
         honoree: {
             label: 'Jamar'
         },
 
+        // NOT RENDERED ANY MORE. The floating Home button that read this was
+        // removed from this experience; nothing on the page points here now.
+        // The block stays as the record of where the serving site's root is,
+        // so a scene that wants the button back has the value ready.
         home: {
             path: '/',
             title: 'Back to the main site'

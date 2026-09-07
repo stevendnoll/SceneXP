@@ -83,7 +83,7 @@ Object.defineProperty(state, 'isModalOpen', {
 // the dialog (the genuine focus-trap; `inert` also blocks pointer events, which
 // is fine because the modal's own backdrop covers the scene).
 const MODAL_BG_SELECTOR =
-    '.skip-link, #blocker, #hud, #touch-controls, #autopilot-btn, #home-btn, #biz-btn, #settings-btn, #settings-panel, #game-canvas';
+    '.skip-link, #blocker, #hud, #touch-controls, #autopilot-btn, #biz-btn, #settings-btn, #settings-panel, #game-canvas';
 let modalReturnFocus = null;
 
 function setBackgroundInert(on) {
@@ -189,10 +189,10 @@ async function init() {
 
     if (!canvas) return;
 
-    // Wire the Home button (the serving site's root), the builder contact
-    // CTAs, and the Seed to Seed services links from SEED_CONFIG.site, so
-    // config stays the single home for these values. Equivalent fallbacks
-    // are baked into the HTML for the no-JS path.
+    // Wire the builder contact CTAs and the Seed to Seed services links from
+    // SEED_CONFIG.site, so config stays the single home for these values.
+    // Equivalent fallbacks are baked into the HTML for the no-JS path.
+    // (The Home button this used to wire first was removed from this scene.)
     applySiteLinks();
 
     // Soft bot deterrent: solve a tiny proof of work before building the scene
@@ -1474,21 +1474,15 @@ function closeCompleteModal() {
     resumeGameAfterModal();
 }
 
-/** Wire the outward-facing links from SEED_CONFIG.site. The Home button goes
- *  to the serving site's root in the same tab (the marketing pages live at
- *  every hosting domain's root). The featured business's services links point
- *  at Seed to Seed's own site (new tab), and the builder CTAs point at the
- *  serving site's contact page, root-relative. */
+/** Wire the outward-facing links from SEED_CONFIG.site. The featured
+ *  business's services links point at Seed to Seed's own site (new tab), and
+ *  the builder CTAs point at the serving site's contact page, root-relative.
+ *
+ *  The Home button this function used to wire is gone, and with it the only
+ *  same-tab link off this page. SEED_CONFIG.site.home is still in config,
+ *  read by nothing here, kept as the record of the serving root. */
 function applySiteLinks() {
     const site = SEED_CONFIG.site;
-    const home = document.getElementById('home-btn');
-    if (home) {
-        home.href = site.home.path;
-        home.removeAttribute('target');
-        home.removeAttribute('rel');
-        home.title = site.home.title;
-        home.setAttribute('aria-label', site.home.title);
-    }
     ['complete-contact', 'nudge-contact'].forEach((id) => {
         const link = document.getElementById(id);
         if (link) link.href = site.builder.contactPath;

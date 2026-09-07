@@ -1,0 +1,35 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+/**
+ * sunnyvalejenn/css/experience.css - the scene's only local stylesheet.
+ *
+ * Everything this page draws comes from the shared sheet. The one thing it
+ * needs of its own is the top-right cluster's arithmetic, because the Home
+ * button that used to anchor that cluster was removed from this experience
+ * and not from the eleven others that share the same rules.
+ */
+
+/* ==========================================================================
+   THE TOP-RIGHT CLUSTER, ONE SLOT RIGHT
+   ========================================================================== */
+
+/* The shared sheet lays the floats out in 62px slots measured from the right
+   edge (a 50px button plus a 12px gap), and it assumes Home is sitting in
+   the first one. This page had only the two:
+
+       Home (20)  <-  Business (82, the shared .biz-btn-snug variant)
+
+   Home is gone, so the business link is the page's only float and it takes
+   the corner:
+
+       Business (20)
+
+   .biz-btn-snug came off the element in the markup, since the shared sheet
+   documents it as "the slot right beside Home" and there is no Home to be
+   beside. That leaves the plain .biz-btn at right: 144, three slots out from
+   the corner, so this rule brings it in. An id (1,0,0) is what does it: the
+   shared .biz-btn rules still serve interstate and seedtoseed, whose own
+   clusters keep the offset. `top`, `left`, and `width` are left alone, and
+   so is the .biz-logo-round crop on the img inside. */
+#biz-btn {
+    right: 20px;
+}

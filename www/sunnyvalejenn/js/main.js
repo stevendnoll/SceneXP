@@ -9,8 +9,8 @@
  * sunny morning in here at every hour, though the cycle's per-frame pass
  * still runs for the fixed-time sky paint and the shadow-map refresh).
  * The interactions that do exist are featherweight: the welcome overlay
- * (dismissed with a click, tap, or key), the floating Home and website
- * buttons, the always-on pan and zoom row (shared pan part, with swipe,
+ * (dismissed with a click, tap, or key), the floating website button,
+ * the always-on pan and zoom row (shared pan part, with swipe,
  * tilt, and pinch on touch), and one raycast per tap to see what the
  * visitor pointed at, answered in the host's voice by the dialog card.
  *
@@ -117,9 +117,10 @@ async function init() {
 
     if (!canvas) return;
 
-    // Wire the Home and website buttons from SVJ_CONFIG.site, so config
-    // stays the single home for these values. Equivalent fallbacks are
-    // baked into the HTML for the no-JS path.
+    // Wire the website button from SVJ_CONFIG.site, so config stays the
+    // single home for these values. Equivalent fallbacks are baked into the
+    // HTML for the no-JS path. (The Home button this used to wire first was
+    // removed from this scene.)
     applySiteLinks();
 
     // Soft bot deterrent: solve a tiny proof of work before building the scene
@@ -632,20 +633,15 @@ function beginVisiting() {
     track('begin-visiting');
 }
 
-/** Wire the outward-facing links from SVJ_CONFIG.site. The Home button
- *  goes to the serving site's root in the same tab (Phase 5 rule: the
- *  marketing pages live at every hosting domain's root), and the floating
- *  logo button opens the featured business's own website in a new tab. */
+/** Wire the outward-facing links from SVJ_CONFIG.site. The floating logo
+ *  button opens the featured business's own website in a new tab, and it is
+ *  the page's only float.
+ *
+ *  The Home button this function used to wire is gone, and with it the only
+ *  same-tab link off this page. SVJ_CONFIG.site.home is still in config,
+ *  read by nothing here, kept as the record of the serving root. */
 function applySiteLinks() {
     const site = SVJ_CONFIG.site;
-    const home = document.getElementById('home-btn');
-    if (home) {
-        home.href = site.home.path;
-        home.removeAttribute('target');
-        home.removeAttribute('rel');
-        home.title = site.home.title;
-        home.setAttribute('aria-label', site.home.title);
-    }
     const bizBtn = document.getElementById('biz-btn');
     if (bizBtn) {
         bizBtn.href = site.business.websiteUrl;

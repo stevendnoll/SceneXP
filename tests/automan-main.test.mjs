@@ -113,7 +113,9 @@ test('auto-boots through the loading screen with the site links wired', async ()
 
   expect(dom.el('load-progress').style.width).toBe('100%');
   expect(dom.el('loading-screen').classList.contains('hidden')).toBe(true);
-  expect(dom.el('home-btn').href).toBe('/');
+  // (There is no Home button to check any more, and no applySiteLinks() to
+  // wire one. tests/home-button-removed.test.mjs guards its absence in the
+  // markup, which is the only place it could come back.)
 
   // The animate loop survives a few simulated seconds. This is where the
   // cast's animation, John's glance at his customer and the portrait queue

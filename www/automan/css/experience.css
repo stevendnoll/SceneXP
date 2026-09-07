@@ -939,17 +939,12 @@ body .pan-controls.no-chrome.visible {
     opacity: 0.85;
 }
 
-/* THE TOP-RIGHT STACK, right to left: Home, then the flyer.
-   The shared .menu-btn anchors EVERY floating button to the same corner
-   (top 20, right 20), so a second one has to step left by a button plus a
-   gap or it lands on top of the first, which is exactly what it did. 82px
-   is that step, and it is the same slot the contact button used before it
-   was removed (the shared sheet spells it .biz-btn-snug). Home keeps the
-   corner: it is the control every page on the site has in the same place,
-   and this one is particular to this scene. */
-#help-btn {
-    right: 82px;
-}
+/* THE TOP-RIGHT STACK is one button now. The flyer used to step left by
+   82px (a button plus a gap) to clear the Home button, which held the
+   corner because it was the control every page on the site had in the same
+   place. Home came out, so that step came out with it and the flyer
+   inherits the shared .menu-btn corner (top 20, right 20) with no rule of
+   its own. If a second float ever lands here, it takes right: 82px. */
 
 /* THE W IN THE BUTTON (D39). Two things the shared rule cannot give it.
 
@@ -1658,10 +1653,9 @@ body .pan-controls.no-chrome.visible {
    THE FLOATING BUTTONS AND THE COACH MARKS
    ========================================================================== */
 
-/* Two dark discs in the corner. The shared pair are neutral grey with a
-   white ring; these take the lacquer and a champagne hairline, so they
-   belong to the same object as everything else on screen. */
-#home-btn.menu-btn,
+/* The dark disc in the corner. The shared float is neutral grey with a
+   white ring; this one takes the lacquer and a champagne hairline, so it
+   belongs to the same object as everything else on screen. */
 #help-btn.menu-btn {
     background: rgba(8, 17, 30, 0.72);
     border: 1px solid rgba(219, 179, 106, 0.42);
@@ -1671,7 +1665,6 @@ body .pan-controls.no-chrome.visible {
     backdrop-filter: blur(6px);
 }
 
-#home-btn.menu-btn:hover,
 #help-btn.menu-btn:hover {
     background: rgba(219, 179, 106, 0.92);
     border-color: rgba(219, 179, 106, 0.92);

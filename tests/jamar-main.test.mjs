@@ -97,9 +97,9 @@ test('auto-boots through the loading screen into the running state', async () =>
   expect(dom.el('load-progress').style.width).toBe('100%');
   expect(dom.el('loading-screen').classList.contains('hidden')).toBe(true);
 
-  // The Home button was wired from JAMAR_CONFIG.site.
-  expect(dom.el('home-btn').href).toBe('/');
-  expect(dom.el('home-btn').attributes['aria-label']).toBeTruthy();
+  // (There is no Home button to check any more, and no applySiteLinks() to
+  // wire one. This page has no floating controls at all now.
+  // tests/home-button-removed.test.mjs guards its absence in the markup.)
 
   // The jukebox song list was built at startup (one button per song).
   expect(dom.el('jukebox-songs').children.length).toBe(3);
