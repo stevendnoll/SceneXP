@@ -244,18 +244,49 @@
          anchor above each head, so the marks follow the cast when the
          visitor pans or zooms. Everything here is hidden until the scene
          is loaded and removed for good on the first tap. -->
+    <!-- THE NAMES CAME BACK AT D45, and it is worth saying why, because they
+         were deliberately taken off once. John's halo used to carry a caption
+         reading "Tap John", and that went because it was an INSTRUCTION on one
+         of three heads: it singled him out in a way the composition already
+         does, and it was a second thing to read in a frame asking somebody to
+         look. These are different on both counts. All three carry one, and
+         they are NAMES rather than instructions, so they say who a visitor is
+         about to meet instead of telling them what to do.
+
+         The label stacks ABOVE the ring, which is what `.coach-mark` was
+         built as `column-reverse` for: the mark is anchored by its own bottom
+         edge just over the crown, so anything added grows upward and nothing
+         is ever drawn across the face it is pointing at. THE HALO COMES FIRST
+         IN THE MARKUP for that reason, and it reads backwards: column-reverse
+         puts the FIRST child at the BOTTOM, so halo-then-name is what renders
+         as name-above-ring.
+
+         aria-hidden, and each button keeps its fuller aria-label. A visible
+         "John" plus an aria-label of "Meet John Walker, The Auto Man" is not
+         a conflict: the label wins for a screen reader, and it is the better
+         of the two to hear. Marking the span hidden says that is on purpose
+         rather than an oversight.
+
+         "Buyer", not "Customer", though the code calls her `customer`
+         throughout: she is the one the visitor is meant to identify with, and
+         Buyer is what she is to John. The data-who stays `customer` because
+         renaming it would reach config, the contact cards and the telemetry
+         for a word nobody sees. -->
     <div id="coach-marks" class="coach-marks coach-out">
         <button type="button" class="coach-mark" data-who="john" hidden
             aria-label="Meet John Walker, The Auto Man">
             <span class="coach-halo" aria-hidden="true"></span>
+            <span class="coach-name" aria-hidden="true">John</span>
         </button>
         <button type="button" class="coach-mark" data-who="customer" hidden
-            aria-label="Meet John's customer">
+            aria-label="Meet John's customer, the buyer">
             <span class="coach-halo" aria-hidden="true"></span>
+            <span class="coach-name" aria-hidden="true">Buyer</span>
         </button>
         <button type="button" class="coach-mark" data-who="dealer" hidden
             aria-label="Meet the dealer">
             <span class="coach-halo" aria-hidden="true"></span>
+            <span class="coach-name" aria-hidden="true">Dealer</span>
         </button>
     </div>
 
@@ -331,6 +362,48 @@
          `aria-controls` names what it opens. Hairline: under D42 the filled
          control on a surface is what that surface ASKS for, and this handle
          asks for nothing, it reopens a panel. -->
+    <!-- THE IDLE NUDGE (D45), borrowed in shape from the garden's plant
+         toasts. Once the arrival panel has been put away, a visitor who does
+         nothing for five seconds is shown, once, that the three people are
+         the thing to touch: the halos say WHERE without saying what happens,
+         and this scene has nothing else left that answers a tap.
+
+         role="status" with aria-live="polite" so it is announced when it
+         arrives without stealing focus, which is what a prompt nobody asked
+         for has to do. Empty in the markup: main.js writes the sentence, and
+         an empty live region announces nothing.
+
+         It asks a FEW times at a widening gap and then gives up, which is the
+         garden's lesson written down: one shot missed the visitor who was
+         still looking at the room when it arrived, and a sentence repeated
+         verbatim reads as a stuck screen rather than as a hint, so the later
+         ones are worded differently. -->
+    <div id="showroom-toast" class="showroom-toast" role="status" aria-live="polite"></div>
+
+    <!-- WHAT THE PILL IS FOR, ABOVE THE PILL (D45). The handle is John's face
+         and his name in a lacquer pill, which reads as a label rather than as
+         a control: QA watched it sit there unpressed. This says what pressing
+         it does, in the same voice as the rest of the interface.
+
+         A SEPARATE ELEMENT, NOT PART OF THE BUTTON, because the handle is a
+         single nowrap row with `overflow: hidden` and a 44px floor, and a
+         second line inside it would change the pill's whole shape. It is
+         positioned from the same bottom edge the handle uses, so the two move
+         together, and `showIntroHandle()` is the one place that shows or
+         hides either of them.
+
+         IT TAKES A TAP, and that is deliberate. A line reading "Tap to
+         re-open" that does nothing when tapped is the dead tap this scene has
+         already been caught by once, on John's own face. It is `aria-hidden`
+         and not focusable, so it never becomes a second control in the
+         accessibility tree: a keyboard or screen-reader visitor reaches the
+         real button a few pixels below, which does the same thing and is
+         announced properly.
+
+         main.js swaps Tap for Click on a desktop, the same way it does for
+         the arrival panel's hint. -->
+    <p id="intro-handle-hint" class="intro-handle-hint coach-out" aria-hidden="true">Tap to re-open</p>
+
     <button id="intro-handle" class="intro-handle coach-out" type="button"
         aria-expanded="false" aria-controls="intro-card">
         <!-- HIS FACE AND HIS NAME, in the order the panel's own header puts

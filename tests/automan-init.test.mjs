@@ -324,6 +324,69 @@ describe('the composition and config (pure)', () => {
     }
   });
 
+  test('D45: the mouse is gone from the desk, the keyboard is not', async () => {
+    /* QA: at this distance a squashed sphere beside the keys reads as a dark
+     * lump, not a mouse. The keyboard survives the same treatment because a
+     * slab with a grain IS what a keyboard looks like small.
+     *
+     * Read from the SOURCE, not from the scene graph: the build stub absorbs
+     * every assignment, so a mesh added to the showroom group is not
+     * something this harness can go looking for. LAYOUT.deskMouse stays on
+     * purpose as the record of a solved placement, so its presence is not the
+     * check; whether anything is built from it is. */
+    const storeText = await src('js/store.js');
+    expect(storeText).not.toMatch(/showroomGroup\.add\(\s*mouse\s*\)/);
+    expect(storeText).not.toMatch(/mouse\.name = 'deskMouse'/);
+    // The keyboard is still built, and still registered so the room can block
+    // a tap aimed past it.
+    expect(storeText).toMatch(/registerOutdoorProp\(kit, 'deskkeyboard'\)/);
+  });
+
+  test('D45: each of the three carries a name over their head', async () => {
+    // The halos were three identical rings. The names say who a visitor is
+    // about to meet, which is what a ring cannot.
+    const html = await src('index.html');
+    for (const [who, name] of [['john', 'John'], ['customer', 'Buyer'], ['dealer', 'Dealer']]) {
+      const mark = new RegExp(`data-who="${who}"[\\s\\S]{0,400}?</button>`).exec(html);
+      expect(`${who} mark found: ${Boolean(mark)}`).toBe(`${who} mark found: true`);
+      expect(`${who} label: ${/class="coach-name"[^>]*>([^<]+)</.exec(mark[0])[1]}`)
+        .toBe(`${who} label: ${name}`);
+      // THE HALO HAS TO COME FIRST. `.coach-mark` is column-reverse, so the
+      // first child renders at the BOTTOM: halo-then-name is what puts the
+      // name above the ring. Swapping them drops the name onto the face.
+      expect(`${who} halo leads: ${mark[0].indexOf('coach-halo') < mark[0].indexOf('coach-name')}`)
+        .toBe(`${who} halo leads: true`);
+    }
+  });
+
+  test('D45: everything added to the coaching layer is hidden by coach-out', async () => {
+    /* THERE IS NO GENERIC `.coach-out` RULE. It is a fixed list of selectors,
+     * exactly like the shared sheet's `.hidden`, so an element added to this
+     * layer and given the class in the markup is shown from the first frame
+     * and never hides. The handle's hint was added at D45 and this is what
+     * would have caught it sitting on screen through the whole arrival. */
+    const [html, css] = await Promise.all([src('index.html'), src('css/experience.css')]);
+    const wearers = [...html.matchAll(/class="([^"]*\bcoach-out\b[^"]*)"/g)]
+      .map((m) => m[1].split(/\s+/).filter((c) => c && c !== 'coach-out'));
+    expect(wearers.length).toBeGreaterThan(0);
+
+    /* THE RULE THAT ACTUALLY HIDES, not any mention of the class. A first
+     * draft searched the whole stylesheet for `.<class>.coach-out`, which
+     * passed against a sheet where the hint had been dropped from the hiding
+     * block but was still named in the reduced-motion one. The hiding rule is
+     * the one that sets `visibility: hidden`. */
+    const hiding = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .filter(([, sel, body]) => sel.includes('.coach-out') && /visibility:\s*hidden/.test(body));
+    expect(hiding.length).toBeGreaterThan(0);
+    const hidden = hiding.map(([, sel]) => sel).join(',');
+
+    for (const classes of wearers) {
+      const covered = classes.some((c) => hidden.includes(`.${c}.coach-out`));
+      expect(`${classes.join('.')} is hidden by coach-out: ${covered}`)
+        .toBe(`${classes.join('.')} is hidden by coach-out: true`);
+    }
+  });
+
   test('the proof-of-work cache is shared across experiences', () => {
     expect(CFG.proofOfWork.storageKey).toBe('gallery-pow');
     expect(CFG.proofOfWork.prefix).toBe('11');

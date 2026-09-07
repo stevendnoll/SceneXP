@@ -220,7 +220,7 @@ const LAYOUT = {
     // both if anything moves. See createDeskItems.
     deskScreen: { dx: -0.58, dz: -0.30, w: 0.38, h: 0.24, midY: 0.22 },
 
-    // The dealer's keyboard and mouse, squarely in front of him. They live
+    // The dealer's keyboard, squarely in front of him. It lives
     // beside the screen rather than under it because the screen is parked
     // off to the west for the sight-line reason above, and a dealer types
     // in front of himself whatever his monitor is doing. Offsets from the
@@ -232,11 +232,13 @@ const LAYOUT = {
     // the rule sunnyvalejenn uses to get BOTH of a figure's hands onto the
     // keys instead of one drifting onto the desk beside it.
     //
-    // The mouse is in his frame too, and it has to satisfy two things at
-    // once: on HIS right (he is right handed) and to the LEFT of the
-    // keyboard as the visitor sees it. Those are different directions
-    // here, and only a forward offset reconciles them: his right axis
-    // reads very slightly screen-left, his forward axis reads strongly
+    // THE MOUSE IS NO LONGER BUILT (D45), and `deskMouse` below is kept as
+    // the record of where it went, because that placement was the answer to
+    // a real geometric problem and re-deriving it would not be quick. It had
+    // to satisfy two things at once: on HIS right (he is right handed) and to
+    // the LEFT of the keyboard as the visitor sees it. Those are different
+    // directions here, and only a forward offset reconciles them: his right
+    // axis reads very slightly screen-left, his forward axis reads strongly
     // screen-left, so a mouse a little forward of the keys lands on the
     // correct side of both.
     // boardH and keyH are not decoration: they are what makes the surface
@@ -2528,9 +2530,10 @@ function createDeskItems() {
     showroomGroup.add(registerOutdoorProp(sheetGroup, 'papers'));
 
     // ---- Loose supporting pages, fanned beside it ----
-    // WEST of the sheet, on John's side. Fanned east they sat exactly
-    // where the dealer's mouse has to go, and the papers are the movable
-    // ones: his hands are not.
+    // WEST of the sheet, on John's side. Fanned east they sat exactly where
+    // the dealer's mouse used to go (D45 removed it) and, more to the point,
+    // where his hands land: the papers are the movable ones, his hands are
+    // not, so this holds whether or not anything is on that spot.
     const loose = new THREE.Group();
     loose.name = 'loosePages';
     [
@@ -2589,7 +2592,7 @@ function createDeskItems() {
     screen.rotation.y = screenAim(screenAt, LAYOUT.dealer, AUTOMAN_CONFIG.camera.position);
     showroomGroup.add(registerOutdoorProp(screen, 'computer'));
 
-    // ---- The dealer's keyboard and mouse ----
+    // ---- The dealer's keyboard ----
     // Placed from HIM, not from the desk: straight out along his own
     // facing at K.reach, squared to him. That is sunnyvalejenn's rule and
     // it is what gets BOTH his hands onto the keys rather than one
@@ -2599,8 +2602,8 @@ function createDeskItems() {
     // there, and "to the right of the keyboard" stops meaning "on his
     // right".
     const dealerFacing = dealerYaw();
-    const dealerRight = { x: Math.cos(dealerFacing), z: -Math.sin(dealerFacing) };
-    const dealerFwd = { x: Math.sin(dealerFacing), z: Math.cos(dealerFacing) };
+    // (His right and forward axes were derived here too, to place the mouse
+    // off the keyboard in his own frame. Both went with it at D45.)
     const kbAt = keyboardAt();
 
     const K = LAYOUT.deskKeyboard;
@@ -2629,20 +2632,13 @@ function createDeskItems() {
     kit.rotation.y = dealerFacing;
     showroomGroup.add(registerOutdoorProp(kit, 'deskkeyboard'));
 
-    const M = LAYOUT.deskMouse;
-    const mouse = new THREE.Mesh(
-        new THREE.SphereGeometry(0.038, 10, 6),
-        new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: 0.55, metalness: 0.1 })
-    );
-    mouse.scale.set(0.72, 0.42, 1.0);
-    mouse.position.set(
-        kbAt.x + dealerRight.x * M.right + dealerFwd.x * M.fwd,
-        D.topY + 0.016,
-        kbAt.z + dealerRight.z * M.right + dealerFwd.z * M.fwd
-    );
-    mouse.rotation.y = dealerFacing;
-    mouse.name = 'deskMouse';
-    showroomGroup.add(mouse);
+    // (THE MOUSE CAME OUT AT D45, on QA's call. It was a squashed sphere
+    // beside the keyboard, and at this distance that is what it read as: a
+    // dark lump on the desk rather than a mouse. The keyboard survives the
+    // same treatment because it is a slab with a grain, which is what a
+    // keyboard looks like small; a mouse has no such shorthand. Its offsets
+    // are kept in LAYOUT.deskMouse, since they were the solution to a real
+    // problem, see the note there.)
 
     // ---- Calculator and pen, on the dealer's side of the page ----
     // The calculator sits west of the screen now. It used to stand where

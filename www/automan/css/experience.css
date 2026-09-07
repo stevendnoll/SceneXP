@@ -185,6 +185,49 @@ body .pan-controls.no-chrome.visible {
     display: none;
 }
 
+/* THE NAME OVER EACH HEAD (D45). Who the visitor is about to meet, so the
+   three rings stop being three identical invitations.
+
+   IT SITS ABOVE THE RING, and `.coach-mark` being a reversed column is what
+   puts it there: the mark is anchored by its own bottom edge just over the
+   crown, so the name grows upward and never lands on a face. `align-items:
+   center` on the mark centres it on the same vertical axis the ring uses.
+
+   IT HAS TO HOLD OVER TWO BACKGROUNDS, which is the same problem the ring
+   solves and the reason this is not just coloured text. Behind these heads
+   are a white ceiling on one side and the navy of the lot through the glass
+   on the other, and champagne type is legible on neither on its own. So it
+   takes the lacquer plate the rest of the interface is built from, with the
+   same champagne hairline the cards use.
+
+   SMALL AND TRACKED, not a label at reading size. The rings are the control
+   and the name is an aside on it; type any larger over three heads turns a
+   composed frame into a diagram. `white-space: nowrap` because "Dealer"
+   wrapping to two lines would push the ring off its own head. */
+.coach-name {
+    margin-bottom: 0.42rem;
+    padding: 0.2rem 0.5rem;
+    background: rgba(8, 17, 30, 0.82);
+    border: 1px solid rgba(219, 179, 106, 0.42);
+    border-radius: 2px;
+    color: var(--lux-gold-lift);
+    font-family: var(--lux-sans);
+    /* 0.64rem is about 10px, which is the floor this interface already uses
+       (the contact card's kicker is 0.66, the loader's title 0.72). A first
+       pass at 0.58 was smaller than anything else on the page, on a label
+       whose whole job is to be read at a glance. */
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    /* The tracking leaves a gap after the last letter that nothing balances,
+       so the word sits a third of a letter left of centre without this. */
+    text-indent: 0.18em;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+    -webkit-font-smoothing: antialiased;
+}
+
 /* The steady ring: a bright outline with a dark halo behind it, so it
    holds its edge over the white ceiling AND over the navy of the lot. */
 .coach-halo {
@@ -688,6 +731,110 @@ body .pan-controls.no-chrome.visible {
    nothing: it reopens a panel. A lit pill sitting over the room for the whole
    visit would also be the one fill a visitor sees most and cares about
    least. */
+/* THE IDLE NUDGE (D45). The garden's toast, re-struck in lacquer.
+
+   TOP CENTRE, which is the one clear band left in this frame: the W button
+   holds the top right, the cast and their name plates run through the middle,
+   and the collapsed pill and its hint own the bottom. It is also where a
+   visitor is NOT looking, which is right for something that must be findable
+   without being in the way.
+
+   pointer-events: none, because it is an announcement and not a control. A
+   toast that ate a tap would be taking the very tap it is asking for.
+
+   Hidden by opacity rather than display so it can fade, and `visibility` with
+   a delayed transition so it leaves the accessibility tree once it has gone
+   (the same pairing the coaching layer uses, for the same reason). */
+.showroom-toast {
+    position: fixed;
+    top: calc(20px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 120;
+    max-width: min(90vw, 32rem);
+    padding: 0.62rem 1.15rem;
+    background: rgba(8, 17, 30, 0.9);
+    border: 1px solid rgba(219, 179, 106, 0.42);
+    border-radius: 2px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    color: var(--lux-ivory);
+    font-family: var(--lux-sans);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+    text-align: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+    -webkit-font-smoothing: antialiased;
+}
+
+.showroom-toast.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.35s ease, visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .showroom-toast {
+        transition: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .showroom-toast {
+        padding: 0.55rem 0.9rem;
+        font-size: 0.74rem;
+    }
+}
+
+/* THE LINE ABOVE THE PILL (D45), saying what pressing it does.
+
+   IT IS POSITIONED FROM THE SAME BOTTOM EDGE THE HANDLE USES, and the
+   arithmetic is written out rather than guessed: the handle sits at
+   `max(1.25rem, safe-area)` and its floor is 44px, so this clears it by
+   those two plus a 0.45rem gap. Stated here in one place because the handle's
+   own `bottom` and `min-height` are the two numbers it depends on, and both
+   are a few lines below.
+
+   QUIETER THAN THE PILL. The handle is champagne on lacquer at 0.72rem; this
+   is dimmer, smaller and unboxed, because it is a caption on the control and
+   not a second control competing with it.
+
+   NO PLATE BEHIND IT, unlike the names over the heads. Those float over a
+   white ceiling and a navy lot and need one; this sits over the showroom
+   floor, which is dark lacquer everywhere the pill can appear. */
+.intro-handle-hint {
+    position: fixed;
+    left: 50%;
+    bottom: calc(1.25rem + 44px + 0.45rem);
+    bottom: calc(max(1.25rem, env(safe-area-inset-bottom, 0px)) + 44px + 0.45rem);
+    transform: translateX(-50%);
+    z-index: 90;
+    margin: 0;
+    padding: 0.15rem 0.3rem;
+    color: rgba(219, 179, 106, 0.82);
+    font-family: var(--lux-sans);
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-indent: 0.2em;
+    white-space: nowrap;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+    pointer-events: auto;
+    -webkit-font-smoothing: antialiased;
+    transition: color 0.2s ease;
+}
+
+.intro-handle-hint:hover {
+    color: var(--lux-gold-lift);
+}
+
 .intro-handle {
     position: fixed;
     left: 50%;
@@ -776,9 +923,15 @@ body .pan-controls.no-chrome.visible {
     stroke-linejoin: round;
 }
 
+/* THIS LIST IS THE WHOLE OF WHAT `.coach-out` HIDES, and it is a fixed one:
+   there is no generic rule for the class, so an element added to the coaching
+   layer and given `coach-out` in the markup is shown from the first frame and
+   never hides. The handle's hint (D45) is here for that reason and not
+   because it needed its own timing. */
 .coach-marks,
 .intro-card,
-.intro-handle {
+.intro-handle,
+.intro-handle-hint {
     opacity: 1;
     visibility: visible;
     transition: opacity 0.55s ease, visibility 0s;
@@ -786,7 +939,8 @@ body .pan-controls.no-chrome.visible {
 
 .coach-marks.coach-out,
 .intro-card.coach-out,
-.intro-handle.coach-out {
+.intro-handle.coach-out,
+.intro-handle-hint.coach-out {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -809,6 +963,19 @@ body .pan-controls.no-chrome.visible {
         --coach-size: 2.6rem;
         min-width: 2.75rem;
         min-height: 2.75rem;
+    }
+
+    /* The name steps down with the ring, but not as far: the ring is
+       decoration that scales, the word is type that has to stay readable.
+       The tracking comes in rather than the size going further, which buys
+       the width back on a narrow frame without costing legibility. Three
+       plates over three heads is the most crowded this scene ever gets. */
+    .coach-name {
+        margin-bottom: 0.34rem;
+        padding: 0.16rem 0.42rem;
+        font-size: 0.6rem;
+        letter-spacing: 0.12em;
+        text-indent: 0.12em;
     }
 
 
@@ -935,9 +1102,11 @@ body .pan-controls.no-chrome.visible {
     .coach-marks,
     .intro-card,
     .intro-handle,
+    .intro-handle-hint,
     .coach-marks.coach-out,
     .intro-card.coach-out,
-    .intro-handle.coach-out {
+    .intro-handle.coach-out,
+    .intro-handle-hint.coach-out {
         transition: none;
     }
 

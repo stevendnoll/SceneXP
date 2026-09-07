@@ -467,3 +467,85 @@ test('Escape closes whichever card is up', async () => {
   fire(dom.documentStub, 'keydown', { code: 'Escape', key: 'Escape' });
   expect(dom.el('nudge-modal').classList.contains('hidden')).toBe(true);
 });
+
+describe('D45: the idle nudge', () => {
+  const toast = () => dom.el('showroom-toast');
+  const idle = (ms) => jest.advanceTimersByTimeAsync(ms);
+
+  test('nothing while the arrival panel is still up', async () => {
+    // It is armed on collapse, not on load, and idleNudgeWanted() re-checks
+    // at the moment it fires. A visitor reading the panel is not idling.
+    await bootShowroom();
+    await idle(60000);
+    expect(toast().classList.contains('visible')).toBe(false);
+  });
+
+  test('five seconds after the panel is put away, it asks', async () => {
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    await idle(4000);
+    expect(toast().classList.contains('visible')).toBe(false);
+    await idle(1500);
+    expect(toast().classList.contains('visible')).toBe(true);
+    expect(toast().textContent).toMatch(/anyone at the desk/i);
+    // "Click" on a desktop; the stub reports a non-touch device.
+    expect(toast().textContent).toMatch(/^Click /);
+  });
+
+  test('ANY interaction restarts the five seconds', async () => {
+    /* The difference between an idle wait and a countdown, and the whole
+     * point of the feature: a visitor who is doing things should not be
+     * interrupted to be told how to do things. */
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    await idle(4000);
+    fire(dom.documentStub, 'pointerdown', {});   // still busy
+    await idle(4000);
+    expect(toast().classList.contains('visible')).toBe(false);
+    await idle(1500);
+    expect(toast().classList.contains('visible')).toBe(true);
+  });
+
+  test('it asks a few times, in different words, then gives up', async () => {
+    // A sentence repeated verbatim reads as a stuck screen rather than as a
+    // hint, which is the garden's lesson this borrowed its shape from.
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    // STEPPED FINELY, ON PURPOSE. A first pass sampled every 30 seconds and
+    // saw two of the three: the first nudge fires at 5s and the second at
+    // 27s, so by the 30s mark the first had already been overwritten. The
+    // gaps are what this asserts, so the sampling has to be finer than them.
+    const said = [];
+    for (let i = 0; i < 120; i++) {
+      await idle(1000);
+      const text = toast().textContent;
+      if (toast().classList.contains('visible') && text && !said.includes(text)) said.push(text);
+    }
+    expect(said).toHaveLength(3);
+    // Two minutes is far past the third, so this is the whole of what it
+    // will ever say: it gives up rather than cycling.
+    expect(said[0]).toMatch(/anyone at the desk/i);
+  });
+
+  test('it stops for good once the visitor has reached John', async () => {
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    ray.hits = [propHit('john')];
+    tap(dom.el('game-canvas'));                  // the contact card opens
+    expect(dom.el('nudge-modal').classList.contains('hidden')).toBe(false);
+    fire(dom.documentStub, 'keydown', { code: 'Escape', key: 'Escape' });
+    await idle(120000);
+    expect(toast().classList.contains('visible')).toBe(false);
+  });
+
+  test('and it says nothing over an open card', async () => {
+    // A prompt to tap somebody, on top of the card tapping somebody opened,
+    // would be the scene talking over itself.
+    await bootShowroom();
+    tap(dom.el('intro-close'));
+    tap(dom.el('help-btn'));                     // the About card
+    expect(dom.el('help-modal').classList.contains('hidden')).toBe(false);
+    await idle(60000);
+    expect(toast().classList.contains('visible')).toBe(false);
+  });
+});

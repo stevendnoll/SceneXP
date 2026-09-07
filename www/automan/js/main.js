@@ -318,6 +318,15 @@ function setupEventListeners() {
     // document, so it runs before anything inside a card can act.
     document.addEventListener('click', swallowGhostTap, { capture: true, signal });
 
+    // WHAT COUNTS AS ACTIVITY for the idle nudge (D45). Pointer presses, keys
+    // and the wheel: things a visitor DID. Deliberately not pointermove, or a
+    // mouse resting on a trackpad and drifting a pixel would hold the prompt
+    // off forever, and a visitor watching the room with their hand still is
+    // exactly who it is for. Capture and passive, so nothing here can affect
+    // or delay the event it is watching.
+    ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((type) =>
+        document.addEventListener(type, armIdleNudge, { capture: true, passive: true, signal }));
+
     // The story dialog's close buttons and backdrop, the contact card's,
     // and Escape for whichever is up
     if (nudgeModal) nudgeModal.querySelectorAll('[data-close]').forEach(el =>
@@ -1064,6 +1073,9 @@ function shareRoom() {
  *  stay for the whole visit whichever number came back. */
 function openContactCard(kind) {
     if (!nudgeModal) return false;
+    // Whoever asked and however they got here, they have reached John, so the
+    // idle nudge has nothing left to ask for and stops for the visit (D45).
+    endIdleNudge();
     const copy = CONTACT_CARDS[kind] || CONTACT_CARDS.story;
     if (!dialogReturnFocus) dialogReturnFocus = document.activeElement;
 
@@ -1240,6 +1252,7 @@ const _coachPoint = new THREE.Vector3();
 let coachMarksEl = null;
 let introEl = null;
 let introHandle = null;
+let introHandleHint = null;   // the line above the collapsed pill (D45)
 let coachMarks = [];            // [{ el, kind, anchor }] once the cast exists
 let coachTimers = [];
 // Set once the coaching has started, and NEVER cleared: the halos hold for
@@ -1268,6 +1281,7 @@ function wireCoaching(signal) {
     coachMarksEl = document.getElementById('coach-marks');
     introEl = document.getElementById('intro-card');
     introHandle = document.getElementById('intro-handle');
+    introHandleHint = document.getElementById('intro-handle-hint');
     if (!coachMarksEl) return;
 
     // "Click" is wrong on a phone and "Tap" is wrong on a desktop, and
@@ -1286,6 +1300,9 @@ function wireCoaching(signal) {
         hint.textContent = `${verb} a glowing marker to meet John. `
             + `${state.isMobile ? 'Pinch' : 'Scroll'} to look closer.`;
     }
+    // The same verb on the collapsed pill's hint. The markup ships the touch
+    // wording, so a crawler and a no-JS visitor read the more common one.
+    if (introHandleHint) introHandleHint.textContent = `${verb} to re-open`;
 
     const anchors = new Map(getPersonAnchors().map((entry) => [entry.kind, entry.object]));
     coachMarks = Array.from(coachMarksEl.querySelectorAll('.coach-mark'))
@@ -1355,6 +1372,13 @@ function wireIntroControls(signal) {
     // arrival to still be running.
     if (introHandle) introHandle.addEventListener('click', expandIntro, { signal });
 
+    // AND THE HINT ABOVE IT DOES THE SAME (D45). It says "Tap to re-open", so
+    // a tap on it has to re-open: a line of type that instructs and then does
+    // nothing is the dead tap this scene was already caught by once, on
+    // John's own face. It is aria-hidden and not focusable, so this is a
+    // second POINTER route to one control rather than a second control.
+    if (introHandleHint) introHandleHint.addEventListener('click', expandIntro, { signal });
+
     // Reaching John is the one thing the whole arrival is for, so this
     // retires the panel. It does NOT end the coaching: this comment used to
     // say it ended it outright, which D41 stopped being true, because the
@@ -1405,6 +1429,9 @@ function collapseIntro() {
     // something the visitor never saw would put a pill on screen during the
     // loader's last moments, pointing at copy that had not been shown yet.
     if (introArrived) showIntroHandle(true);
+    // The panel is away, so the five seconds start here. Re-armed on every
+    // interaction after this, which is what makes it an idle wait.
+    armIdleNudge();
 }
 
 /** Open it again from the handle. */
@@ -1414,6 +1441,10 @@ function expandIntro() {
     showIntroHandle(false);
     if (introEl) introEl.classList.remove('coach-out');
     track('intro-expand');
+    // Reading the panel is not idling. The timer keeps running, but
+    // idleNudgeWanted() is false while it is up, so nothing is said and the
+    // round is not spent.
+    armIdleNudge();
     // Focus moves to the panel, because a keyboard visitor who just pressed
     // the handle is now looking at a surface whose controls are below it and
     // whose close button is the way back. The panel takes tabindex="-1" for
@@ -1422,10 +1453,94 @@ function expandIntro() {
 }
 
 /** Show or hide the collapsed handle, keeping `aria-expanded` honest. */
+// ---- The idle nudge (D45) --------------------------------------------------
+//
+// WHY IT EXISTS. Once the arrival panel is put away, the halos are the only
+// thing on screen saying the room can be touched, and a ring says WHERE
+// without saying what happens. QA asked for a prompt after five seconds of
+// nothing. Since D43 the three people are the only things in the scene that
+// answer a tap at all, so the prompt has exactly one thing to say.
+//
+// THE SHAPE IS THE GARDEN'S, and so is the reasoning: one shot at a fixed
+// delay missed the visitor who was still looking at the room when it arrived,
+// so it asks again at a widening gap and gives up after a few. The wording
+// changes each time, because a sentence repeated verbatim reads as a stuck
+// screen rather than as a hint.
+
+/** `%s` is Tap or Click, resolved per device the way the panel's hint is. */
+const IDLE_NUDGES = [
+    '%s anyone at the desk to hear their side of it.',
+    'John, the buyer and the dealer each see this deal differently. %s any of them.',
+    'The three glowing markers are people. %s one to meet them.'
+];
+const IDLE_FIRST_MS = 5000;    // QA's number: five seconds of nothing
+const IDLE_AGAIN_MS = 22000;   // and a long gap after, so it is not a nag
+
+let toastEl = null;
+let toastTimer = 0;
+let idleTimer = 0;
+let idleRound = 0;
+// Set the first time the contact card opens by ANY route. Somebody who has
+// reached John has had the message, whether they got there by tapping a
+// person, the panel's own button, or the About card.
+let metSomeone = false;
+
+function showToast(message, ms = 5200) {
+    if (!toastEl) toastEl = document.getElementById('showroom-toast');
+    if (!toastEl) return;
+    toastEl.textContent = message;
+    toastEl.classList.add('visible');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+        toastTimer = 0;
+        toastEl.classList.remove('visible');
+    }, ms);
+}
+
+/** The panel is away, nothing is over the scene, and the visitor has not
+ *  already reached John. All four have to hold at the moment the timer
+ *  fires, not when it was armed. */
+function idleNudgeWanted() {
+    return state.isLoaded && introArrived && !introOpen
+        && !nudgeOpen && !posterOpen && !metSomeone;
+}
+
+/** Arm (or re-arm) the idle timer. Called on every real interaction, which
+ *  is what makes the wait an IDLE wait rather than a countdown from the
+ *  moment the panel closed. */
+function armIdleNudge() {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = 0; }
+    if (idleRound >= IDLE_NUDGES.length || metSomeone) return;
+    idleTimer = setTimeout(() => {
+        idleTimer = 0;
+        // NOT COUNTED IF IT DID NOT SHOW. A visitor reading a card for half a
+        // minute has not declined the hint, so the round only advances when
+        // something was actually said; otherwise this simply waits again.
+        if (idleNudgeWanted()) {
+            const verb = state.isMobile ? 'Tap' : 'Click';
+            showToast(IDLE_NUDGES[idleRound].replace(/%s/g, verb));
+            idleRound += 1;
+        }
+        armIdleNudge();
+    }, idleRound === 0 ? IDLE_FIRST_MS : IDLE_AGAIN_MS);
+}
+
+/** Stop for good: the visitor has reached John, so the prompt has nothing
+ *  left to ask for. */
+function endIdleNudge() {
+    metSomeone = true;
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = 0; }
+}
+
 function showIntroHandle(shown) {
     if (!introHandle) return;
     introHandle.classList.toggle('coach-out', !shown);
     introHandle.setAttribute('aria-expanded', shown ? 'false' : 'true');
+    // The hint rides with it, from the one place that shows or hides either.
+    // It is a separate element only because the pill is a single nowrap row
+    // with a 44px floor; there is no state in which one should be up without
+    // the other, including behind a card (see holdCoaching).
+    if (introHandleHint) introHandleHint.classList.toggle('coach-out', !shown);
 }
 
 /** Show the coaching. Called once the loader has cleared.
@@ -1607,6 +1722,11 @@ function cleanup() {
     coachTimers.forEach(clearTimeout);
     coachTimers = [];
     coachRunning = false;
+    // The idle nudge's two timers are NOT listeners, so the AbortController
+    // above does not reach them. A pending toast firing after teardown would
+    // write to an element on a page that has gone.
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = 0; }
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = 0; }
 }
 
 // Dwell-time tracking: report a one-time session-end (with elapsed seconds) when
