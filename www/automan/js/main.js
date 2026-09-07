@@ -69,20 +69,18 @@ const state = {
 
 // DOM references (resolved in init)
 let canvas, loadingScreen;
-let dialogModal, dialogTitle, dialogMessage, dialogCta;
-let dialogOpen = false;   // one dialog at a time; taps pause while it's up
 
-// The every-few-taps "reach out" invitation (the garden and tire-shop
-// experiences surface theirs a few checklist discoveries in; this scene
-// has no checklist, so every fourth prop story earns it instead, shown
-// once that story's card closes so the two never stack).
+// The contact card. (`nudge` is its markup id and its telemetry name from
+// when it was an every-few-taps invitation, the way the garden and tire-shop
+// experiences surface theirs a few checklist discoveries in. This scene had
+// no checklist, so every fourth prop story earned it instead. D43 removed
+// the stories and the count; the card is now only ever opened on request,
+// and the id stays so the shared modal rules keep applying to it.)
 let nudgeModal, nudgeKicker, nudgeTitle, nudgeMessage, nudgePortrait;
 let contactCall, contactText, contactEmail, contactFallback;
 let contactStatus, contactShare;
 let nudgeOpen = false;
 let nudgePending = false;
-let propClicks = 0;
-const NUDGE_EVERY = 4;
 
 // The About card, behind the floating info button. It used to LEAD with
 // John's flyer, which is a quarter of a megabyte, so this file held the
@@ -117,10 +115,6 @@ async function init() {
 
     canvas = document.getElementById('game-canvas');
     loadingScreen = document.getElementById('loading-screen');
-    dialogModal = document.getElementById('dialog-modal');
-    dialogTitle = document.getElementById('dialog-title');
-    dialogMessage = document.getElementById('dialog-message');
-    dialogCta = document.getElementById('dialog-cta');
     nudgeModal = document.getElementById('nudge-modal');
     nudgeTitle = document.getElementById('nudge-title');
     nudgeMessage = document.getElementById('nudge-message');
@@ -324,24 +318,24 @@ function setupEventListeners() {
 
     // The story dialog's close buttons and backdrop, the contact card's,
     // and Escape for whichever is up
-    if (dialogModal) dialogModal.querySelectorAll('[data-close]').forEach(el =>
-        el.addEventListener('click', closePropDialog, { signal }));
     if (nudgeModal) nudgeModal.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closeNudgeModal, { signal }));
     if (posterModal) posterModal.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closePoster, { signal }));
     // Wrapped rather than passed straight through, because addEventListener
     // hands the listener an Event and openPoster now takes a route name.
-    if (posterBtn) posterBtn.addEventListener('click', () => openPoster('corner'), { signal });
-
-    // Every prop story leads on to the contact card. Closing the story
-    // first keeps the two cards from ever being open together, and
-    // clearing the queued invitation stops it arriving straight after.
-    if (dialogCta) dialogCta.addEventListener('click', () => {
-        nudgePending = false;
-        if (dialogModal) dialogModal.classList.add('hidden');
-        dialogOpen = false;
-        openContactCard('story');
+    //
+    // AND IT COLLAPSES THE PANEL, which it did not before D43. It used to
+    // only FADE the panel for as long as the card was up (holdCoaching), so
+    // the intro came back underneath when the card closed. That was right
+    // while a timer was going to take the panel away anyway; with the timer
+    // gone it would have left the panel there for the rest of the visit
+    // behind a card the visitor had already read. The floating W is one of
+    // the three things Steve named that should retire the panel, and this is
+    // where it does it. The intro's own W button already did the same.
+    if (posterBtn) posterBtn.addEventListener('click', () => {
+        collapseIntro();
+        openPoster('corner');
     }, { signal });
 
     // The About card ends the same way every other card on this page does,
@@ -357,8 +351,8 @@ function setupEventListeners() {
     // the second QA round: everything it offered is already in the scene,
     // and its only no-JavaScript destination was the site's own contact
     // page, which the noscript block still carries. The card opens from a
-    // tap on any of the three people, and from the invitation at the end
-    // of every prop story.)
+    // tap on any of the three people, from the halo above them, and from
+    // the arrival panel's own button.)
 
     // Which of the three actions a visitor actually takes is the number
     // that tells John whether any of this worked. On a desktop the action
@@ -377,7 +371,6 @@ function setupEventListeners() {
         if (event.code !== 'Escape') return;
         if (posterOpen) closePoster();
         else if (nudgeOpen) closeNudgeModal();
-        else if (dialogOpen) closePropDialog();
     }, { signal });
 
     // View controls: this room is wider than any frame, so even a desktop
@@ -444,13 +437,13 @@ function firstVisibleHit(targets) {
     return null;
 }
 
-// Props this size are easy to miss beside their big neighbors, so they
-// get the whole tolerance search to themselves before anything else is
-// allowed to answer. The neighbors are large enough to spare the halo.
-// The awkward targets in this room, each small enough to be missed
-// beside a big neighbor: the die-cast on the desk corner, the wall
-// clock, and the dealer's keyboard.
-const SMALL_PROP_KINDS = ['modelcar', 'clock', 'deskkeyboard'];
+// (SMALL_PROP_KINDS lived here: the die-cast on the desk corner, the wall
+// clock and the dealer's keyboard, each small enough to be missed beside a
+// big neighbor and so given the tolerance search to themselves. D43 made
+// every prop in the room unclickable, so there is nothing small left to
+// forgive. The tolerance search itself did not go: it moved to the three
+// PEOPLE, who are the only things that answer a tap now, and it keeps the
+// depth check that was written for the small props. See pickSceneHit.)
 
 /** Direct hit first, then a couple of rings of sample rays around the
  *  point, so the model car on the desk corner is tappable with a
@@ -474,22 +467,33 @@ function searchHit(targets, camera) {
     return null;
 }
 
-// How far behind whatever is genuinely under the finger a small prop may
-// sit and still claim the tap. A hand's width: enough to cover the model
-// car standing proud of the desk it rests on, nowhere near enough to let
-// something across the room answer through a person.
-const SMALL_PROP_REACH_M = 0.25;
+// How far behind whatever is genuinely under the finger a person may sit
+// and still claim a near-miss. A hand's width: enough to forgive a tap that
+// lands on the chair back John is sitting against, nowhere near enough to
+// let somebody across the room answer through the desk in front of them.
+const PERSON_REACH_M = 0.25;
 
-/** Nearest visible hit under the screen point: the small props get first
- *  refusal at full tolerance, then everything answers as usual.
+/** Nearest visible hit under the screen point.
  *
- *  That first refusal is DEPTH-CHECKED, and it has to be. The halo search
- *  only asks whether a small prop is near the finger on screen, never
- *  what stands in front of it, so the waste basket behind the customer
- *  used to answer every tap meant for her: she is not a small prop, so
- *  she never got to compete. The direct ray is cast first to find out
- *  what is really under the finger, and a small prop wins its halo only
- *  when it is at or in front of that. */
+ *  EVERY PROP IS STILL A TARGET, and that is the point rather than an
+ *  oversight. Since D43 only the three people ANSWER a tap, but the room
+ *  still has to be able to block one: raycasting at the people alone would
+ *  let a tap on the desk in front of John open John's card, and "the
+ *  background is not clickable" has to mean the background is not a way
+ *  through to something that is. So everything is cast against, and
+ *  checkSceneTap decides whether what came back is somebody.
+ *
+ *  THE PEOPLE GET FIRST REFUSAL AT FULL TOLERANCE, which is the forgiveness
+ *  the small props used to have. A ring floats above a head, so the thing a
+ *  visitor reaches for is the person under it, and a fingertip that lands
+ *  just off a shoulder should still reach them.
+ *
+ *  AND THAT REFUSAL IS DEPTH-CHECKED, which it has to be. A tolerance search
+ *  only asks whether a target is near the finger ON SCREEN, never what
+ *  stands in front of it, so without this the customer would answer a tap
+ *  meant for the desk she is sitting behind. The direct ray is cast first to
+ *  find what is really under the finger, and a person wins their tolerance
+ *  only when they are at or in front of that. */
 function pickSceneHit(clientX, clientY) {
     const camera = getCamera();
     if (!camera) return null;
@@ -500,12 +504,12 @@ function pickSceneHit(clientX, clientY) {
     raycaster.setFromCamera(pointer, camera);
     const direct = firstVisibleHit(targets);
 
-    const small = targets.filter(g => g.userData && SMALL_PROP_KINDS.includes(g.userData.propKind));
-    if (small.length) {
-        const near = searchHit(small, camera);
-        if (near && (!direct || near.distance <= direct.distance + SMALL_PROP_REACH_M)) return near;
+    const people = targets.filter(g => g.userData && PERSON_KINDS.includes(g.userData.propKind));
+    if (people.length) {
+        const near = searchHit(people, camera);
+        if (near && (!direct || near.distance <= direct.distance + PERSON_REACH_M)) return near;
     }
-    return direct || searchHit(targets, camera);
+    return direct;
 }
 
 /** Walk up from a hit mesh to the nearest prop root (tagged isProp by
@@ -548,51 +552,38 @@ function overIntro(clientX, clientY) {
 }
 
 function checkSceneTap(clientX, clientY) {
-    if (!state.isLoaded || dialogOpen || nudgeOpen || posterOpen) return;
+    if (!state.isLoaded || nudgeOpen || posterOpen) return;
 
-    // THE ARRIVAL IS ONE DECISION, AND THE THREE PEOPLE ARE PART OF IT.
-    // While the panel is up, the only things that open anything are the
-    // halos and THE CAST THEY POINT AT. Steve's call, and it corrects the
-    // first version of this rule, which admitted only the halos: the ring
-    // floats above a head, so the natural thing to reach for is the
-    // person under it, and a tap on John's face that did nothing was the
-    // cost I flagged and he found. A tap anywhere else clears the panel
-    // and opens nothing, so it is still never a dead tap, and the next
-    // one works normally.
-    const arriving = introShowing();
-    if (arriving && overIntro(clientX, clientY)) return;
-    if (arriving) collapseIntro();
+    // A TAP THAT IS NOT A PERSON IS NOT AN EVENT (D43). The showroom used to
+    // answer taps everywhere: fourteen props each told a story, and a tap on
+    // anything at all collapsed the arrival panel on the way past. Both are
+    // gone. The room is a picture now, and the only things in it that answer
+    // are the three people and the halos over them.
+    //
+    // THE PANEL IS NO LONGER COLLAPSED BY A STRAY TAP, which is the other
+    // half of the same decision and the reason this function no longer
+    // touches it except through a person. A visitor who taps the floor while
+    // reading keeps their place. The panel now leaves only when somebody
+    // asks it to: its close button, one of its own two actions, a halo or
+    // the person under it, or the floating W. Nothing times out.
+    //
+    // The panel still eats taps that land ON it, or a tap meant for the copy
+    // would raycast to whoever is standing behind it.
+    if (introShowing() && overIntro(clientX, clientY)) return;
 
     const hit = pickSceneHit(clientX, clientY);
     const prop = hit && getPropRoot(hit.object);
     const kind = prop && prop.userData.propKind;
+    if (!kind || !PERSON_KINDS.includes(kind)) return;
 
-    // Tapping any of the three people goes straight to the contact card,
-    // tailored to whoever was tapped. It does NOT count toward the
-    // every-fourth-story cadence: somebody who taps John has already
-    // asked, and offering again two props later would be nagging.
-    if (kind && PERSON_KINDS.includes(kind)) {
-        // The arrival panel is read once, and somebody who has reached a
-        // person is past it however they got here: the halo, the figure
-        // underneath it, or a face they found on their own. The HALOS stay
-        // up regardless, which is D41.
-        collapseIntro();
-        // NO SEPARATE click-person PING. It carried `who`, and the card
-        // this opens records the same name as `kind`, so it was a second
-        // request saying what the first already said. See the note on
-        // openContactCard.
-        // If the card cannot open for any reason, fall through and at
-        // least tell their story. That also keeps their PROP_CONTENT
-        // entries reachable rather than leaving three blocks of copy
-        // nobody can ever see, and click-prop then names them instead.
-        if (openContactCard(kind)) return;
-        openPropDialog(kind);
-        return;
-    }
-
-    // Everything else in the room waits for the panel to go.
-    if (arriving || !kind) return;
-    openPropDialog(kind);
+    // Reaching one of the three is what the arrival is for, so the panel
+    // steps aside on the way to the card. The HALOS stay up regardless,
+    // which is D41.
+    collapseIntro();
+    // NO SEPARATE click-person PING. It carried `who`, and the card this
+    // opens records the same name as `kind`, so it was a second request
+    // saying what the first already said. See the note on openContactCard.
+    openContactCard(kind);
 }
 
 // ---- The tap that opens a card must not also press it -----------------------
@@ -648,10 +639,19 @@ function swallowGhostTap(event) {
 // tests/automan-init.test.mjs asserts that this table and the registered
 // prop kinds match each other exactly, so a prop with no story and a
 // story with no prop both fail the build.
+/* THE THREE PEOPLE, AND ONLY THE THREE, since D43. Fourteen more entries sat
+ * here, one for each tappable prop in the showroom: the wall clock, the deal
+ * sheet, the desk, the glass, the dealer's screen and keyboard, the die-cast
+ * on the corner, the sales board, the wall art, the coffee bar, the vending
+ * machine, the waiting chairs, the brochures and the plant. Each had a title
+ * and a pair of alternating lines, and each ended at the invitation to call
+ * John. They came out with the taps that used to reach them.
+ *
+ * WHY THESE THREE STAY. A tap on a person opens the contact card, and this is
+ * what that falls back to if the card cannot open, so their copy is what
+ * stops a tap on John ever being a dead end. In the ordinary case none of it
+ * is on screen. */
 const PROP_CONTENT = {
-    // The three people. From M8 a tap on any of them opens the contact
-    // card instead, tailored to whoever was tapped (task T8.3). Their
-    // copy lives here in the meantime so a tap is never a dead end.
     john: {
         title: 'Meet John Walker',
         lines: [
@@ -673,149 +673,20 @@ const PROP_CONTENT = {
             'This is a fair conversation between two people who both know the business. That is all John is really here to arrange.'
         ]
     },
-    clock: {
-        title: 'The Wall Clock',
-        lines: [
-            'Look closely, it keeps your real local time. It is also the number nobody tells you about at a dealership: hours spent.',
-            'The days of spending all day at the dealership are over. That is more or less the whole promise.'
-        ]
-    },
-    papers: {
-        title: 'The Deal Sheet',
-        lines: [
-            'Four boxes on one page: price, trade, down payment, monthly. John reads it back to front, because the box they want you looking at is almost never the one that matters.',
-            'Every number on here is negotiable, and most people only ever argue with one of them.'
-        ]
-    },
-    desk: {
-        title: 'The Desk',
-        lines: [
-            'This is where it all happens, and where most buyers are at their least prepared. John comes to it having already done the homework.',
-            'Nothing gets signed at this desk that John has not read twice.'
-        ]
-    },
-    window: {
-        title: 'The Lot',
-        lines: [
-            'Rows and rows of them, all wearing a sticker. The right one for you is a different question from the one they want to sell you today.',
-            'Take a minute and watch. There is no hurry in here, and there does not have to be one out there either.'
-        ]
-    },
-    computer: {
-        title: 'The Screen',
-        lines: [
-            'The car, and the numbers beside it. He has turned it so you can see, which is a good sign and still only half the picture.',
-            'Rates, invoice, incentives, book value on your trade. All of it is knowable, and John looks it up before you ever walk in.'
-        ]
-    },
-    deskkeyboard: {
-        title: 'The Keyboard',
-        lines: [
-            'Every offer gets typed up before it gets walked back. The pause while that happens is not a technical delay, it is a conversation you are not in.',
-            'John fills that pause. He has already run your numbers, so the version that comes back has nothing in it you have not seen.'
-        ]
-    },
-    modelcar: {
-        title: 'The Model Car',
-        lines: [
-            'A little die cast on the corner of the desk. Somebody\'s favorite thing in this room.',
-            'Buying a car is supposed to be fun. It usually stops being fun somewhere around the finance office.'
-        ]
-    },
-    salesboard: {
-        title: 'The Sales Board',
-        lines: [
-            'Somebody wrote John\'s name up there this morning, under the day\'s schedule, and underlined it. It is the only appointment on the board.',
-            'Twenty five years on the other side of that desk is why. They already know what he is going to ask for, so they are getting it ready.'
-        ]
-    },
-    // Replaced the key board at M35. A pegboard of tagged keys is a
-    // service department object, and this room sells expensive cars.
-    wallart: {
-        title: 'The Long Memory',
-        lines: [
-            'A car somebody was proud of, hung where everyone who sits down can see it.',
-            'Twenty five years of them have come through rooms like this one, and John has seen what each was worth going in and coming out.'
-        ]
-    },
-    coffeebar: {
-        title: 'The Coffee Bar',
-        lines: [
-            'Free coffee, tiny cups, a pot that has been on since morning. Hospitality is cheap and the finance office is not.',
-            'John\'s consultation is free too, and that one actually saves you money.'
-        ]
-    },
-    vending: {
-        title: 'The Vending Machine',
-        lines: [
-            'The unofficial clock of every dealership. If you have been here long enough to visit it twice, the process has gone wrong.',
-            'Buying a car should not take all day. Walk in prepared and you can be home before the coffee wears off.'
-        ]
-    },
-    chairs: {
-        title: 'The Waiting Chairs',
-        lines: [
-            'Where you sit while somebody takes your keys away to appraise your trade. The wait is a tactic as often as it is a line.',
-            'Know what your trade is worth before you hand over the keys, and the wait stops working.'
-        ]
-    },
-    brochures: {
-        title: 'The Brochure Rack',
-        lines: [
-            'Glossy photographs, generous adjectives, and not one useful number.',
-            'The useful numbers are the trade value, the out the door price, and the rate. John brings those.'
-        ]
-    },
-    plant: {
-        title: 'The Showroom Plant',
-        lines: [
-            'Every dealership has one, and it is doing better than most of them. Slightly plastic, entirely unbothered.',
-            'It has watched a thousand deals go through. About half of them could have gone better.'
-        ]
-    }
 };
-let propTick = 0;   // rotates which line a prop shows, no Math.random needed
-
 let dialogReturnFocus = null;
 
-/** Open the showroom dialog for a tapped prop: its title and a line from
- *  its pair (alternating, so a second tap gives something new).
+/* openPropDialog / closePropDialog LIVED HERE, and went with D43. They
+ * showed a tapped prop's story and counted taps, queueing the invitation to
+ * call John after every fourth one, which closePropDialog then surfaced as
+ * the story card closed. With nothing in the room tappable but the people,
+ * neither the story nor the count has an input any more.
  *
- *  Every story leads with the same onward button, because unlike the
- *  other featured-business experiences there is nowhere else to send
- *  anybody: this page IS John's web presence. */
-function openPropDialog(kind) {
-    const content = PROP_CONTENT[kind];
-    if (!content || !dialogModal) return;
-    dialogOpen = true;
-    holdCoaching();
-    track('click-prop', { kind });
-    if (dialogTitle) dialogTitle.textContent = content.title;
-    if (dialogMessage) dialogMessage.textContent = content.lines[propTick++ % content.lines.length];
-    // Every few stories, queue the invitation to follow this one
-    propClicks += 1;
-    if (propClicks % NUDGE_EVERY === 0) nudgePending = true;
-    dialogReturnFocus = document.activeElement;
-    armCard();
-    dialogModal.classList.remove('hidden');
-    if (dialogCta) dialogCta.focus();
-}
-
-function closePropDialog() {
-    if (!dialogModal) return;
-    dialogModal.classList.add('hidden');
-    dialogOpen = false;
-    holdCoaching();
-    // A queued invitation surfaces the moment the story card closes, so
-    // the two never stack. Focus restores when the invitation closes.
-    if (nudgePending && nudgeModal) {
-        nudgePending = false;
-        // Focus restores when the contact card closes instead. If the
-        // card declined to open, fall through so focus is never stranded.
-        if (openNudgeModal()) return;
-    }
-    restoreDialogFocus();
-}
+ * WHAT THAT COST, recorded so it is a decision rather than a drift: the
+ * every-fourth invitation was the one route to the contact card that a
+ * visitor did not have to ask for. What is left is entirely opt-in, which
+ * is what QA asked for. `propTick` went too, having rotated which of a
+ * prop's two lines to show. */
 
 /** Hand keyboard focus back to wherever it was before the cards opened. */
 function restoreDialogFocus() {
@@ -938,7 +809,6 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), '
 function openCard() {
     if (posterOpen) return posterModal;
     if (nudgeOpen) return nudgeModal;
-    if (dialogOpen) return dialogModal;
     return null;
 }
 
@@ -989,9 +859,8 @@ function setShown(el, shown) {
 // premise is that these are people having a conversation may as well let two
 // of them sit for a picture.
 //
-// Every other way into this card (a prop story, the About card, the arrival
-// panel, the every-fourth invitation) is John inviting somebody to call him,
-// so those all keep his photograph.
+// Every other way into this card (the About card, the arrival panel) is John
+// inviting somebody to call him, so those all keep his photograph.
 const JOHN_AVATAR = 'assets/john-walker-avatar.webp';
 const RENDERED_FACES = {
     customer: 'The customer at the desk, drawn as one of the showroom’s low-poly '
@@ -1048,9 +917,9 @@ function applyRenderedFace(kind, url) {
     // about reaching him either way.
     faceCache[kind] = JOHN_AVATAR;
     RENDERED_FACES[kind] = 'John Walker';
-    // `kind`, not `who`: it is the same value `click-prop` and `contact-open`
-    // report, and one idea under three attribute names is a log nobody can
-    // query in one go.
+    // `kind`, not `who`: it is the same value `contact-open` reports, and one
+    // idea under two attribute names is a log nobody can query in one go.
+    // (`click-prop` was the third until D43 retired the prop stories.)
     track('portrait-failed', { kind });
 }
 
@@ -1166,8 +1035,8 @@ function shareRoom() {
 }
 
 /** Open the contact card. `kind` says who asked for it, which picks the copy
- *  and is what the log records, under the same attribute name `click-prop`
- *  uses for the same idea.
+ *  and is what the log records, under the same attribute name every other
+ *  ping on this page uses for the same idea.
  *
  *  It carried a second argument, `via`, splitting a person into the halo
  *  above them and the figure itself. That is gone (D48): it was a real
@@ -1244,11 +1113,13 @@ function openContactCard(kind) {
     return true;
 }
 
-/** Kept under its old name because closePropDialog calls it: the queued
- *  invitation that follows every fourth prop story. */
-function openNudgeModal() {
-    return openContactCard('nudge');
-}
+/* openNudgeModal() lived here. It was a one-line alias for
+ * openContactCard('nudge'), kept under its old name because
+ * closePropDialog called it to surface the queued invitation after every
+ * fourth prop story. D43 removed the stories, the count and the queue, so
+ * the alias had no caller left. The 'nudge' route name stays reserved in
+ * CONTACT_CARDS: if an unprompted invitation ever comes back on a
+ * different trigger, this is the name the analytics already understand. */
 
 function closeNudgeModal() {
     if (!nudgeModal) return;
@@ -1321,17 +1192,21 @@ function closePoster() {
 // are the ONLY keyboard route to the contact card. Everything else in the
 // scene is reached through a raycast from a pointer. Holding them until a
 // person is reached means a keyboard visitor keeps that route for as long
-// as they still need it, which is most of what D4 was worried about,
-// though a prop story is still pointer-only.
+// as they still need it, which was most of what D4 was worried about. D43
+// closed the rest of that gap by accident: the prop stories were the one
+// thing on this page a keyboard could never reach, and they are gone, so
+// there is nothing pointer-only left in the scene.
 
 const COACH_ARRIVE_MS = 900;    // the room alone first, then the guidance
-// The intro panel holds long enough to be READ, which is a different
-// number from the 15 seconds the old orientation strip wanted. It now
-// carries a little under ninety words counting the footnote, which is
-// close to twenty nine seconds at an unhurried pace, and a check in
-// verify-composition holds this number to the copy's own length. It
-// still goes early for anybody who taps, which is nearly everybody.
-const INTRO_MS = 29000;
+// (INTRO_MS was 29000: the panel used to collapse itself after twenty nine
+// seconds, timed against its own word count on the assumption that a panel
+// is read once and should then get out of the way. D43 removed it. A timer
+// decides for the visitor how fast they read, and it took the panel away
+// mid-sentence from exactly the person this page is built for: somebody who
+// is not fast with a computer, arriving from a link John sent them. The
+// panel now waits. It leaves when its close button, one of its own two
+// actions, a halo, one of the three people, or the floating W says so, and
+// the handle brings it back for the whole visit.)
 // The halos do not leave at this point, they QUIETEN, and since D41 that is
 // the only thing that ever happens to them: nothing ends them, so they hold
 // for the whole visit. What changes here is the RATE, not the presence. The
@@ -1387,9 +1262,8 @@ function wireCoaching(signal) {
     const verb = state.isMobile ? 'Tap' : 'Click';
     const hint = document.getElementById('intro-hint');
     if (hint) {
-        hint.textContent = `${verb} a glowing marker to meet John. Everything else in the `
-            + `room has a story of its own, and you can ${state.isMobile ? 'swipe' : 'drag'} `
-            + 'to look around.';
+        hint.textContent = `${verb} a glowing marker to meet John, and `
+            + `${state.isMobile ? 'swipe' : 'drag'} to look around the showroom.`;
     }
 
     const anchors = new Map(getPersonAnchors().map((entry) => [entry.kind, entry.object]));
@@ -1406,12 +1280,12 @@ function wireCoaching(signal) {
     // panel says why, and the marks are announced to a screen reader by
     // their own aria-label.
     coachMarks.forEach(({ el, kind }) => {
-        // A halo opens the same card the person under it opens. Falling
-        // through to the prop story matches checkSceneTap, so a halo is
-        // never a control that does nothing.
+        // A halo opens the same card the person under it opens, which is
+        // the whole of what either of them does now: since D43 there is no
+        // prop story left to fall through to.
         el.addEventListener('click', () => {
             collapseIntro();
-            if (!openContactCard(kind)) openPropDialog(kind);
+            openContactCard(kind);
         }, { signal });
     });
 
@@ -1555,7 +1429,6 @@ function startCoaching() {
         }
     }, COACH_ARRIVE_MS));
 
-    coachTimers.push(setTimeout(collapseIntro, INTRO_MS));
     coachTimers.push(setTimeout(() => {
         if (!coachRunning || !coachMarksEl) return;
         // Slower pulse and nothing else. This used to ping `coach-calm`
@@ -1641,7 +1514,7 @@ function fadeCoach(el) {
  *  again. */
 function holdCoaching() {
     if (!coachMarksEl) return;
-    const covered = dialogOpen || nudgeOpen || posterOpen;
+    const covered = nudgeOpen || posterOpen;
     if (covered) {
         fadeCoach(coachMarksEl);
         fadeCoach(introEl);
@@ -1670,7 +1543,7 @@ function holdCoaching() {
  * featured-business experiences send a floating button to the business's
  * own website, but this page IS John's web presence, so there was nowhere
  * outward to send anybody. The contact card opens from a tap on any of the
- * three people and from every prop story's invitation.
+ * three people, from the halo above them, and from the arrival panel.
  *
  * AUTOMAN_CONFIG.site.home is still there and is now read by nothing on
  * this page. It stays because it documents where the serving site's root
@@ -1783,7 +1656,7 @@ if (typeof document !== 'undefined') {
 // Call and reached the wrong number.
 export const __test__ = {
     bufToHex, hasWebGL,
-    CONTACT_CARDS, PERSON_KINDS, PROP_CONTENT, SMALL_PROP_KINDS, NUDGE_EVERY,
+    CONTACT_CARDS, PERSON_KINDS, PROP_CONTENT,
     assembleContact,
     setProof(proof) { _proof = proof; _contact = null; }
 };

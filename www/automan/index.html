@@ -355,11 +355,13 @@
              `pointer-events: none`, which is what lets a swipe start
              anywhere else on it and still look around the room.
 
-             A way out first. The panel leaves on its own after 29 seconds
-             and on the first tap anywhere in the room, so this is not the
-             only exit, but a surface covering a third of a phone screen
-             with no visible way to close it is a surface somebody has to
-             guess about. The glyph is the same multiply sign every card on
+             A way out first, and since D43 it is close to the ONLY one.
+             The panel used to leave on its own after 29 seconds and on the
+             first tap anywhere in the room; both went, so what closes it now
+             is this button, the panel's own two actions, a halo or the person
+             under it, and the floating W. A surface covering a third of a
+             phone screen has to have a visible way to close it, and that
+             matters more now that nothing else will do it by accident. The glyph is the same multiply sign every card on
              this page closes with, and it is 44px square. -->
         <button id="intro-close" class="intro-close" type="button"
             aria-label="Collapse this introduction">&times;</button>
@@ -411,8 +413,13 @@
                 What he does
             </button>
         </div>
-        <p class="intro-hint" id="intro-hint">Tap a glowing marker to meet John. Everything else
-            in the room has a story of its own, and you can swipe to look around.</p>
+        <!-- The second sentence used to read "Everything else in the room has
+             a story of its own", which was true until D43 took the prop
+             stories out. Saying it now would send a visitor hunting for taps
+             that do nothing, which is the exact fault D43 was fixing. What is
+             left is the one instruction and the one promise. -->
+        <p class="intro-hint" id="intro-hint">Tap a glowing marker to meet John, and
+            swipe to look around the showroom.</p>
     </div>
 
     <!-- Floating controls -->
@@ -481,8 +488,10 @@
          own website, but this page IS John's web presence, so the only
          thing it could have offered was the site's own contact page, and
          everything a visitor needs to reach John is already inside the
-         scene: a tap on anyone at the desk opens his contact card, and so
-         does the invitation at the end of every prop story. A floating
+         scene: a tap on anyone at the desk opens his contact card, as does
+         a tap on the halo above them and the panel's own button. (The
+         invitation at the end of every prop story was a fourth route until
+         D43 removed the stories.) A floating
          button pointing away from all that was one route too many. The
          noscript block above still carries the contact-page link for
          anyone whose JavaScript never runs. -->
@@ -594,24 +603,15 @@
         </div>
     </div>
 
-    <!-- Dialog shown when something in the showroom is clicked: the host's
-         voice, telling the story of a car deal one prop at a time. -->
-    <div id="dialog-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-        <div class="modal-backdrop" data-close></div>
-        <div class="modal-container piece-card">
-            <button class="modal-close" aria-label="Close" data-close>&times;</button>
-            <div class="piece-card-content">
-                <h2 id="dialog-title" class="piece-title">On the Showroom Floor</h2>
-                <p id="dialog-message" class="piece-subtitle"></p>
-                <!-- Leads on to the contact card rather than off the site.
-                     A <button> because it opens a card in place, wearing
-                     the .dialog-primary reset the same way the dismiss
-                     button below does. -->
-                <button id="dialog-cta" class="piece-enter dialog-cta dialog-primary lux-primary" type="button">Talk to John &rarr;</button>
-                <button id="dialog-dismiss" class="piece-cancel dialog-primary" type="button" data-close>Back to the showroom</button>
-            </div>
-        </div>
-    </div>
+    <!-- THE PROP STORY CARD IS GONE (D43). Fourteen of the showroom's
+         objects were tappable and each told a little of a car deal, with an
+         invitation to call John every fourth one. QA's call: the room reads
+         as a picture to look at, and objects that answer a tap make a visitor
+         hunt for the ones that do. The only things in the scene that answer
+         now are the three people and the halos over them, so the stories and
+         the card that showed them came out together rather than being left
+         in the source unreachable. The three people's own copy stays in
+         PROP_CONTENT as the contact card's fallback. -->
 
     <!-- The contact card. Reuses the celebration card styling the garden
          and tire-shop experiences use for theirs, and keeps the
@@ -619,10 +619,12 @@
          rules to a fixed list of ids: a new id would arrive with no
          hiding, no layout, and a near-opaque generic backdrop.
 
-         Two ways in. Tapping any of the three people at the desk opens it
-         immediately, with the heading and opening line tailored to who was
-         tapped. Otherwise it follows every fourth prop story, once that
-         story's card has closed, so the two never stack.
+         THREE WAYS IN, ALL OF THEM ASKED FOR. Tapping any of the three
+         people at the desk opens it, with the heading and opening line
+         tailored to who was tapped; so does the halo above them, and so does
+         the arrival panel's own button. It used to arrive UNASKED as well,
+         after every fourth prop story, which was the one route a visitor did
+         not choose. D43 removed the stories and that route with them.
 
          The three action hrefs are empty here on purpose. main.js
          assembles them from AUTOMAN_CONFIG.site.contact once the proof of

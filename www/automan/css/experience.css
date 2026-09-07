@@ -219,8 +219,9 @@ body .pan-controls.no-chrome.visible {
 }
 
 /* AFTER HALF A MINUTE THE HALOS SLOW DOWN. NOTHING EVER TAKES THEM AWAY
-   (D41): not the passage of time, not a prop story, and since D41 not even
-   reaching John himself. They are the only thing on screen that says the
+   (D41): not the passage of time, and not reaching John himself. Since D43
+   they are also the only thing in the room that answers a tap besides the
+   three people they point at. They are the only thing on screen that says the
    room can be touched at all, and this page is built for somebody who is
    not a confident computer user, so the moment they go the scene becomes a
    picture and a second trip to the contact card has nothing pointing the
@@ -363,10 +364,12 @@ body .pan-controls.no-chrome.visible {
 }
 
 /* THE WAY OUT (D40), in the panel's top right corner, over the header row.
-   The panel leaves on its own after 29 seconds and on the first tap
-   anywhere in the room, so this is not the only exit, but a surface
-   covering a third of a phone screen with no visible way to close it is a
-   surface somebody has to guess about.
+   The panel used to leave on its own after 29 seconds and on the first tap
+   anywhere in the room, and D43 removed both, so this is now close to the
+   only exit: it, the panel's own two actions, a halo or the person under it,
+   and the floating W. A surface covering a third of a phone screen has to
+   carry a visible way to close it, and it carries more weight now that
+   nothing takes the panel away by accident.
 
    pointer-events: auto against the panel's own `none`. A child can take
    events its parent refuses, and that is the whole mechanism that lets this
@@ -1057,9 +1060,10 @@ body .pan-controls.no-chrome.visible {
     color: #cfdae6;
 }
 
-/* The one thing this card is for, after the reading: reaching him. It
-   wears the same .dialog-cta the prop stories end on, so the route out
-   of every card on this page looks the same. */
+/* The one thing this card is for, after the reading: reaching him. It wore
+   the same .dialog-cta the prop stories ended on, so that the route out of
+   every card looked the same; the stories went at D43 and the class stays,
+   because the About card and the contact card still have to agree. */
 #poster-cta {
     margin: 0.25rem 0 0;
 }
@@ -1174,7 +1178,6 @@ body .pan-controls.no-chrome.visible {
    behind the card instead of being switched off. The blur is doing real
    work for this scene in particular: it turns a room of flat polygons
    into depth of field, which is the cheapest luxury on the page. */
-#dialog-modal .modal-backdrop,
 #nudge-modal .modal-backdrop,
 #help-modal .modal-backdrop {
     background:
@@ -1188,7 +1191,6 @@ body .pan-controls.no-chrome.visible {
 /* The card itself: lacquer, a machined 3px edge, a lit top and a shaded
    bottom, and a shadow deep enough that it is plainly ABOVE the room
    rather than printed on it. */
-#dialog-modal .piece-card,
 #nudge-modal .piece-card,
 #help-modal .poster-card {
     background:
@@ -1215,8 +1217,6 @@ body .pan-controls.no-chrome.visible {
        their own text back in the middle below. */
     text-align: left;
 }
-
-#dialog-modal .piece-card-content,
 #nudge-modal .piece-card-content {
     padding: 2.1rem 1.85rem 1.6rem;
 }
@@ -1304,8 +1304,7 @@ body .pan-controls.no-chrome.visible {
    it is on the kicker rather than on the whole card because the heading and
    the paragraph below start under the button's bottom edge and want the
    full measure. */
-#nudge-modal .complete-kicker,
-#dialog-modal .piece-title {
+#nudge-modal .complete-kicker{
     display: flex;
     align-items: flex-start;
     gap: 0.7rem;
@@ -1325,8 +1324,7 @@ body .pan-controls.no-chrome.visible {
    a stray mark rather than as the start of a label. Half a line box down,
    which is computable because the line-height above is set rather than
    inherited. */
-#nudge-modal .complete-kicker::before,
-#dialog-modal .piece-title::before {
+#nudge-modal .complete-kicker::before{
     content: '';
     flex: 0 0 auto;
     width: 1.75rem;
@@ -1359,35 +1357,11 @@ body .pan-controls.no-chrome.visible {
     color: var(--lux-mute);
 }
 
-/* The prop stories. The shared sheet demotes the title to a small accent
-   label and promotes the line into a tinted speech panel, which is the
-   right structure and the wrong finish: an 8% blue tint is invisible on
-   lacquer.
-   (Its speaker label is set with the card kickers above, so the three
-   cards open on the same device rather than three near-misses.)
-
-   ONE GOLD RULE PER CARD. This paragraph used to carry a champagne rule
-   down its left edge as well, on the argument that a rule says "someone is
-   speaking" without needing a panel. It does, but it was the SECOND gold
-   hairline on a card whose only other ornament is the first one: a short
-   rule at the top left, then a long one down the left, four centimetres
-   apart and at ninety degrees to each other. Steve called it too many gold
-   lines for one card and he is right. The kicker's rule stays, because it
-   is the house device the arrival panel and all three cards share; this
-   one goes, and the story keeps the serif, which is what actually marks it
-   as the voice rather than the interface. */
-#dialog-modal #dialog-message {
-    margin: 0 0 1.7rem;
-    padding: 0.1rem 0;
-    background: none;
-    border-left: none;
-    border-radius: 0;
-    font-family: var(--lux-display);
-    font-size: 1.12rem;
-    font-weight: 400;
-    line-height: 1.62;
-    color: var(--lux-ivory);
-}
+/* (The prop story's own paragraph was styled here, in the serif, with a note
+   about why it carries no gold rule down its left edge: one hairline at the
+   top left plus a second down the side was too many gold lines for one card.
+   The card went with D43, and the argument survives it, because the kicker's
+   short rule is still the house device all three remaining cards share.) */
 
 /* ---- The actions --------------------------------------------------------
 
@@ -1512,17 +1486,16 @@ body .pan-controls.no-chrome.visible {
     border-bottom-color: rgba(219, 179, 106, 0.7);
 }
 
-/* THE PRIMARY ACTION ON THE PROP STORY AND ON THE ABOUT CARD, and it is the
-   same "Talk to John" the intro panel asks for, so as of D42 it is the same
-   filled gold. Geometry only here; .lux-primary above carries the finish and
-   all three states.
+/* THE PRIMARY ACTION ON THE ABOUT CARD, and it is the same "Talk to John"
+   the intro panel asks for, so as of D42 it is the same filled gold. Geometry
+   only here; .lux-primary above carries the finish and all three states.
+   (#dialog-cta shared this rule until D43 took the prop story card with it.)
 
    IT USED TO BE AN OUTLINE THAT FILLED ON HOVER, and the comment here made
    the case that the fill had to be the state change because an accent-tinted
    button at rest reads as already pressed. That argument still holds and is
    the reason .lux-primary hovers to a LIGHTER gold rather than to a tint:
    a resting fill needs somewhere brighter to go, or it has no state left. */
-#dialog-modal #dialog-cta,
 #help-modal #poster-cta {
     display: block;
     width: 100%;
@@ -1539,7 +1512,6 @@ body .pan-controls.no-chrome.visible {
 /* `button.` and not `.piece-cancel` alone, which is load-bearing: the text
    and email links wear that same class, and the tracked capitals below
    would have set a whole email address in upper case. */
-#dialog-modal button.piece-cancel,
 #nudge-modal button.piece-cancel {
     width: 100%;
     margin-top: 1.15rem;
@@ -1556,8 +1528,6 @@ body .pan-controls.no-chrome.visible {
     cursor: pointer;
     transition: color 0.18s ease;
 }
-
-#dialog-modal button.piece-cancel:hover,
 #nudge-modal button.piece-cancel:hover {
     color: var(--lux-gold-lift);
 }
@@ -1660,7 +1630,6 @@ body .pan-controls.no-chrome.visible {
    hairline ring with a thin glyph in it, which is what a close control
    looks like when it is not also trying to be a feature. The 44px target
    underneath it is untouched. */
-#dialog-modal .modal-close,
 #nudge-modal .modal-close,
 #help-modal .poster-card .modal-close {
     top: 0.55rem;
@@ -1677,8 +1646,6 @@ body .pan-controls.no-chrome.visible {
     line-height: 1;
     transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
-
-#dialog-modal .modal-close:hover,
 #nudge-modal .modal-close:hover,
 #help-modal .poster-card .modal-close:hover {
     background: rgba(6, 13, 24, 0.8);

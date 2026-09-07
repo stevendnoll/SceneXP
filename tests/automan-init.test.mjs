@@ -63,10 +63,21 @@ test('the whole showroom builds and holds a working afternoon', async () => {
   for (let i = 0; i < 1500; i++) store.updateShowroom(0.02);
 });
 
-test('every registered prop kind has a story, and every story has a prop', async () => {
-  // main.js says in a comment that this test enforces the pairing, so it had
-  // better. The build stub absorbs userData writes, so the wiring can only be
-  // read where it is written, in the source text.
+test('the props are all still registered, and only the people have a story', async () => {
+  /* THIS TEST INVERTED AT D43, and the new invariant is the more important
+   * one. It used to say "every registered prop has a story and every story
+   * has a prop", pairing seventeen registrations against seventeen entries.
+   * The fourteen prop stories are gone, but the fourteen REGISTRATIONS must
+   * not follow them, and that is the half a cleanup would get wrong.
+   *
+   * The props are still raycast targets so the room can BLOCK a tap: casting
+   * at the three people alone would let a tap on the desk in front of John
+   * open John's card, and "the background is not clickable" has to mean the
+   * background is not a way through to something that is. Unregister them and
+   * every other test here stays green while the desk quietly becomes a button.
+   *
+   * The build stub absorbs userData writes, so the wiring can only be read
+   * where it is written, in the source text. */
   const [storeText, mainText] = await Promise.all([src('js/store.js'), src('js/main.js')]);
 
   const registered = new Set(
@@ -76,20 +87,26 @@ test('every registered prop kind has a story, and every story has a prop', async
   // they never appear in that sweep and are added here from their own list.
   const personOrder = storeText.match(/const PERSON_ORDER = \[([^\]]*)\]/);
   expect(personOrder).not.toBeNull();
-  for (const m of personOrder[1].matchAll(/'(\w+)'/g)) registered.add(m[1]);
+  const people = [...personOrder[1].matchAll(/'(\w+)'/g)].map((m) => m[1]);
+  for (const who of people) registered.add(who);
+
+  // Still the whole room, not just the cast.
   expect(registered.size).toBeGreaterThanOrEqual(16);
+  expect(registered.size - people.length).toBeGreaterThanOrEqual(13);
 
   const contentBlock = mainText.match(/const PROP_CONTENT = \{([\s\S]*?)\n\};/);
   expect(contentBlock).not.toBeNull();
-  const contentKinds = new Set(
-    [...contentBlock[1].matchAll(/^ {4}(\w+): \{/gm)].map((m) => m[1])
-  );
+  const contentKinds = [...contentBlock[1].matchAll(/^ {4}(\w+): \{/gm)].map((m) => m[1]);
 
-  // Every tappable thing tells a story, and no story is orphaned.
-  expect([...registered].sort()).toEqual([...contentKinds].sort());
+  // ONLY the three people carry copy now, and each of them is a real
+  // registration rather than a name that drifted.
+  expect(contentKinds.sort()).toEqual([...people].sort());
+  for (const who of contentKinds) {
+    expect(`${who} is registered: ${registered.has(who)}`).toBe(`${who} is registered: true`);
+  }
 
-  // Two lines per prop, so a second tap gives something new.
-  expect([...contentBlock[1].matchAll(/lines: \[/g)]).toHaveLength(contentKinds.size);
+  // Two lines each, so the fallback never repeats itself.
+  expect([...contentBlock[1].matchAll(/lines: \[/g)]).toHaveLength(contentKinds.length);
 });
 
 test('each of the three people has a contact card of their own', async () => {
@@ -299,13 +316,17 @@ describe('the primary action wears one gold, everywhere it appears (D42)', () =>
    * the one card nobody reopened. */
 
   /** Every button that IS the primary action of the surface it sits on. */
-  const PRIMARIES = ['intro-contact', 'poster-cta', 'dialog-cta', 'contact-call'];
-  /** Controls that are deliberately NOT filled: an aside, and two ways out. */
-  const NOT_PRIMARY = ['intro-about', 'intro-handle', 'dialog-dismiss'];
+  // ('dialog-cta' was the fourth of these until D43 removed the prop story
+  //  card it sat on. The remaining three are every primary the page has.)
+  const PRIMARIES = ['intro-contact', 'poster-cta', 'contact-call'];
+  /** Controls that are deliberately NOT filled: the panel's aside, and the
+   *  handle that reopens it. ('dialog-dismiss', the prop story's way out, was
+   *  the third of these until D43 removed that card.) */
+  const NOT_PRIMARY = ['intro-about', 'intro-handle'];
 
   const RESTING = 'linear-gradient(180deg, var(--lux-gold-lift) 0%, var(--lux-gold) 100%)';
 
-  test('all four primaries carry the class, and nothing else does', async () => {
+  test('every primary carries the class, and nothing else does', async () => {
     const html = await src('index.html');
     for (const id of PRIMARIES) {
       const tag = new RegExp(`<(?:a|button)[^>]*id="${id}"[^>]*>`).exec(html);
@@ -315,6 +336,10 @@ describe('the primary action wears one gold, everywhere it appears (D42)', () =>
     }
     for (const id of NOT_PRIMARY) {
       const tag = new RegExp(`<(?:a|button)[^>]*id="${id}"[^>]*>`).exec(html);
+      // Named rather than indexed straight into: when D43 deleted a control
+      // that was on this list, the test died with "cannot read properties of
+      // null" instead of saying which id had gone.
+      expect(`${id} present: ${Boolean(tag)}`).toBe(`${id} present: true`);
       expect(`${id} primary: ${/class="[^"]*\blux-primary\b/.test(tag[0])}`)
         .toBe(`${id} primary: false`);
     }
