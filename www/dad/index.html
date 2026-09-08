@@ -133,12 +133,22 @@
             <!-- The one link back to the directory, replacing the floating Home
                  button (2026-09-07): Home sat in the corner of the live scene
                  and read as "reset this view", so visitors tapped it, landed on
-                 the directory, and left instead of coming back. New tab, so
-                 this scene is still here afterwards. main.js syncs the href
-                 from config and shields it from the overlay's click-to-start,
-                 without which a tap here would just start the scene. -->
-            <a id="explore-link" class="welcome-explore" href="/" target="_blank" rel="noopener"
-                aria-label="More 3D worlds to explore at SceneXP.com (opens in a new tab)">More 3D worlds to explore at SceneXP.com</a>
+                 the directory, and left instead of coming back.
+
+                 SAME TAB (2026-09-08). It opened a new one until then, to
+                 keep the scene alive behind it. Back already does that: no
+                 scene on the site writes to history, so the directory is one
+                 press away, and a second tab holding a live WebGL context
+                 costs real memory on a phone. It also stacked up duplicate
+                 directory tabs, because the cards on the directory are
+                 same-tab links themselves. The aria-label went with the
+                 target, since it existed to warn about the new tab and
+                 otherwise only repeated the visible text.
+
+                 main.js syncs the href from config and shields it from the
+                 overlay's click-to-start, without which a tap here would just
+                 start the scene. -->
+            <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
         </div>
     </div>
 

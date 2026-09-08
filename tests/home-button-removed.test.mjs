@@ -192,11 +192,18 @@ test('the nine carry the directory link, and the five deliberately do not', asyn
   }
 });
 
-test('the directory link opens in a new tab and says where it goes', async () => {
-  // A NEW TAB IS THE WHOLE POINT. Home failed because following it cost the
-  // visitor the scene they were in and they did not come back; a link that
-  // leaves this tab alone cannot repeat that. `rel="noopener"` comes with
-  // target="_blank" as a matter of course.
+test('the directory link stays in this tab and says where it goes', async () => {
+  // SAME TAB (changed 2026-09-08; it opened a new one from 2026-09-07). The
+  // new tab was there to keep the scene alive behind the link, and Back
+  // already does that: nothing under www/ calls pushState, replaceState or
+  // sets location.hash, so every scene is exactly one Back press from the
+  // directory. Against that, a second tab holds a live WebGL context on a
+  // phone, and it stacked duplicate directory tabs, because the cards on the
+  // directory are same-tab links themselves.
+  //
+  // NO aria-label EITHER. It existed only to warn about the new tab, and with
+  // the warning gone it would just repeat the visible text, which is the
+  // classic way an accessible name drifts out of sync with what is on screen.
   //
   // AND IT NAMES ITSELF. The old button was an icon with an aria-label, so
   // nothing on screen said where it went, which is half of why it was read as
@@ -206,16 +213,24 @@ test('the directory link opens in a new tab and says where it goes', async () =>
     const m = /<a id="explore-link"[\s\S]{0,400}?<\/a>/.exec(html);
     expect(`${scene} has a link: ${Boolean(m)}`).toBe(`${scene} has a link: true`);
     const tag = m[0];
-    expect(`${scene} new tab: ${tag.includes('target="_blank"')}`)
-      .toBe(`${scene} new tab: true`);
-    expect(`${scene} noopener: ${/rel="[^"]*noopener/.test(tag)}`)
-      .toBe(`${scene} noopener: true`);
+    expect(`${scene} new tab: ${/target=/.test(tag)}`)
+      .toBe(`${scene} new tab: false`);
+    expect(`${scene} aria-label: ${/aria-label=/.test(tag)}`)
+      .toBe(`${scene} aria-label: false`);
     expect(`${scene} names the site: ${tag.includes('SceneXP.com')}`)
       .toBe(`${scene} names the site: true`);
-    // The accessible name has to warn about the new tab, the way the featured
-    // business buttons already do.
-    expect(`${scene} warns: ${/aria-label="[^"]*opens in a new tab/.test(tag)}`)
-      .toBe(`${scene} warns: true`);
+  }
+});
+
+test('no scene writes to history, so Back is one press to the directory', async () => {
+  // THE LOAD-BEARING FACT under the same-tab decision above. If any scene ever
+  // starts pushing history entries (a hash router for its cards, say), Back
+  // stops being one press and stops leaving the site, and the link in this
+  // tab becomes a trap rather than a way out. This test is the tripwire.
+  for (const scene of ALL) {
+    const main = await read(`www/${scene}/js/main.js`);
+    const writes = /history\.(pushState|replaceState)|location\.hash\s*=/.test(main);
+    expect(`${scene} writes history: ${writes}`).toBe(`${scene} writes history: false`);
   }
 });
 

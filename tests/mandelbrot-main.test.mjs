@@ -209,7 +209,8 @@ test('boots, and the autozoom flies the dive to the precision floor and home aga
   expect(dom.replaced).toHaveLength(0);
 
   // The welcome screen's directory link was wired from config (root-relative,
-  // and it opens in a new tab so a dive is never lost). It replaced the Home
+  // and same-tab since 2026-09-08, because Back is one press back to the dive
+  // and a second tab would hold a live WebGL context). It replaced the Home
   // button, and needs no aria-label from config: unlike an icon-only button,
   // it says SceneXP.com in its own text.
   expect(dom.el('explore-link').href).toBe('/');
