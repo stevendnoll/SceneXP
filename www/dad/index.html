@@ -31,11 +31,20 @@
     <meta property="og:site_name" content="A Ride on the NCR Trail">
     <meta property="og:url" content="https://www.scenexp.com/dad/">
     <meta property="og:locale" content="en_US">
-    <!-- WebP per preference. If a platform (notably Facebook) won't render the
-         preview, swap the two image URLs below to .../og-dad.jpg (both live in
-         assets/, converted from the specs/og-dad.png capture). -->
-    <meta property="og:image" content="https://www.scenexp.com/dad/assets/og-dad.webp?v=2">
-    <meta property="og:image:type" content="image/webp">
+    <!-- JPEG, NOT WEBP, SINCE 2026-09-08. LinkedIn does not render a WebP
+         link preview at all, and a promoted link that unfurls with no image is
+         a worse outcome than a heavier file that always shows. The WebP is
+         half the size and is still built beside this one, so swap the two
+         image URLs below back to .../og-dad.webp if that ever changes.
+
+         STILL EXACTLY ONE og:image. Apple's link preview renders every
+         og:image it finds, so listing both formats here would put two
+         identical cards in one message thread. See the longer note in
+         earthdefense, which is the page that shipped that bug.
+
+         og-dad.jpg is converted from the specs/og-dad.png capture. -->
+    <meta property="og:image" content="https://www.scenexp.com/dad/assets/og-dad.jpg?v=2">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="A walkable 3D stretch of the NCR trail, with the Gunpowder River alongside.">
@@ -44,7 +53,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="A Ride on the NCR Trail">
     <meta name="twitter:description" content="A quiet 3D walk on Maryland's NCR Trail, built in loving memory of a dad who rode it every weekend.">
-    <meta name="twitter:image" content="https://www.scenexp.com/dad/assets/og-dad.webp?v=2">
+    <meta name="twitter:image" content="https://www.scenexp.com/dad/assets/og-dad.jpg?v=2">
     <meta name="twitter:image:alt" content="A walkable 3D stretch of the NCR trail, with the Gunpowder River alongside.">
 
     <!-- Structured data: site identity for search engines.

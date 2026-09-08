@@ -32,11 +32,20 @@
     <meta property="og:site_name" content="The Seed to Seed Garden">
     <meta property="og:url" content="https://www.scenexp.com/seedtoseed/">
     <meta property="og:locale" content="en_US">
-    <!-- WebP per preference. If a platform (notably Facebook) won't render the
-         preview, swap the two image URLs below to .../og-seedtoseed.jpg (both
-         live in assets/, converted from the specs/og-seedtoseed.png capture). -->
-    <meta property="og:image" content="https://www.scenexp.com/seedtoseed/assets/og-seedtoseed.webp?v=2">
-    <meta property="og:image:type" content="image/webp">
+    <!-- JPEG, NOT WEBP, SINCE 2026-09-08. LinkedIn does not render a WebP
+         link preview at all, and a promoted link that unfurls with no image is
+         a worse outcome than a heavier file that always shows. The WebP is
+         half the size and is still built beside this one, so swap the two
+         image URLs below back to .../og-seedtoseed.webp if that ever changes.
+
+         STILL EXACTLY ONE og:image. Apple's link preview renders every
+         og:image it finds, so listing both formats here would put two
+         identical cards in one message thread. See the longer note in
+         earthdefense, which is the page that shipped that bug.
+
+         og-seedtoseed.jpg is converted from the specs/og-seedtoseed.png capture. -->
+    <meta property="og:image" content="https://www.scenexp.com/seedtoseed/assets/og-seedtoseed.jpg?v=2">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="A walkable 3D backyard vegetable garden with raised beds and a greenhouse.">
@@ -45,7 +54,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="The Seed to Seed Garden">
     <meta name="twitter:description" content="A 3D backyard garden built for Seed to Seed, a home vegetable gardening company. Wander the beds and meet the gardener.">
-    <meta name="twitter:image" content="https://www.scenexp.com/seedtoseed/assets/og-seedtoseed.webp?v=2">
+    <meta name="twitter:image" content="https://www.scenexp.com/seedtoseed/assets/og-seedtoseed.jpg?v=2">
     <meta name="twitter:image:alt" content="A walkable 3D backyard vegetable garden with raised beds and a greenhouse.">
 
     <!-- Structured data: the experience, and the business it honors.

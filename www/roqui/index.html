@@ -31,12 +31,21 @@
     <meta property="og:site_name" content="Zumba with Roqui">
     <meta property="og:url" content="https://www.scenexp.com/roqui/">
     <meta property="og:locale" content="en_US">
-    <!-- WebP per preference. og-roqui.webp is a capture of the studio in
-         party mode (from specs/og-roqui.png, same flow as og-dad). If a
-         platform (notably Facebook) won't render the preview, swap the two
-         image URLs below to .../og-roqui.jpg (both live in assets/). -->
-    <meta property="og:image" content="https://www.scenexp.com/roqui/assets/og-roqui.webp?v=1">
-    <meta property="og:image:type" content="image/webp">
+    <!-- JPEG, NOT WEBP, SINCE 2026-09-08. LinkedIn does not render a WebP
+         link preview at all, and a promoted link that unfurls with no image is
+         a worse outcome than a heavier file that always shows. The WebP is
+         half the size and is still built beside this one, so swap the two
+         image URLs below back to .../og-roqui.webp if that ever changes.
+
+         STILL EXACTLY ONE og:image. Apple's link preview renders every
+         og:image it finds, so listing both formats here would put two
+         identical cards in one message thread. See the longer note in
+         earthdefense, which is the page that shipped that bug.
+
+         og-roqui.jpg is a capture of the studio in party mode (from
+         specs/og-roqui.png, same flow as og-dad). -->
+    <meta property="og:image" content="https://www.scenexp.com/roqui/assets/og-roqui.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="Roqui's 3D Zumba class mid-song: lights down, disco ball spinning, the class dancing in front of the mirror wall.">
@@ -45,7 +54,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Zumba with Roqui">
     <meta name="twitter:description" content="A joyful 3D Zumba class, built with love for a wonderful instructor. Step in and catch the beat.">
-    <meta name="twitter:image" content="https://www.scenexp.com/roqui/assets/og-roqui.webp?v=1">
+    <meta name="twitter:image" content="https://www.scenexp.com/roqui/assets/og-roqui.jpg?v=1">
     <meta name="twitter:image:alt" content="Roqui's 3D Zumba class mid-song: lights down, disco ball spinning, the class dancing in front of the mirror wall.">
 
     <!-- Structured data: site identity for search engines.

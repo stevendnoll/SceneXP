@@ -58,12 +58,18 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/highwater/">
     <meta property="og:locale" content="en_US">
-    <!-- EXACTLY ONE og:image. Apple's link preview renders every og:image it
-         finds, so a second one as a fallback puts two identical cards in a
-         friend's message thread. See the longer note in earthdefense, which is
-         the page that shipped that bug. -->
-    <meta property="og:image" content="https://www.scenexp.com/highwater/assets/og-highwater.webp?v=1">
-    <meta property="og:image:type" content="image/webp">
+    <!-- JPEG, NOT WEBP, SINCE 2026-09-08. LinkedIn does not render a WebP
+         link preview at all, and a promoted link that unfurls with no image is
+         a worse outcome than a heavier file that always shows. The WebP is
+         half the size and is still built beside this one, so swap the two
+         image URLs below back to .../og-highwater.webp if that ever changes.
+
+         STILL EXACTLY ONE og:image. Apple's link preview renders every
+         og:image it finds, so listing both formats here would put two
+         identical cards in one message thread. See the longer note in
+         earthdefense, which is the page that shipped that bug. -->
+    <meta property="og:image" content="https://www.scenexp.com/highwater/assets/og-highwater.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <!-- READ AGAINST THE SHIPPED CAPTURE ON 2026-08-21 and corrected to match
@@ -77,10 +83,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="High Water">
     <meta name="twitter:description" content="Ninety seconds at the water's edge on an ordinary bright afternoon. The weather turns while you stand there.">
-    <!-- The same single WebP as og:image. Twitter takes exactly one image and
+    <!-- The same single JPEG as og:image. Twitter takes exactly one image and
          has no type property, so there was never anywhere to offer an
          alternative here anyway. -->
-    <meta name="twitter:image" content="https://www.scenexp.com/highwater/assets/og-highwater.webp?v=1">
+    <meta name="twitter:image" content="https://www.scenexp.com/highwater/assets/og-highwater.jpg?v=1">
     <meta name="twitter:image:alt" content="A view out to sea under a low grey storm sky. A single branching fork of lightning comes down left of centre, from the top of the frame to the horizon. The sea below is grey and heaving in long smooth swells, and a small orange and white navigation buoy stands just right of centre near the horizon, dwarfed by the water around it.">
 
     <!-- Structured data: site identity for search engines.

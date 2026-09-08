@@ -31,13 +31,21 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/steve/">
     <meta property="og:locale" content="en_US">
-    <!-- WebP per preference. og-steve.webp is a capture of the office from
-         the doorway (from the specs/og-steve.png capture, same flow as the other
-         experiences). If a platform (notably Facebook) won't render the
-         preview, swap the two image URLs below to .../og-steve.jpg (both
-         live in assets/). -->
-    <meta property="og:image" content="https://www.scenexp.com/steve/assets/og-steve.webp?v=1">
-    <meta property="og:image:type" content="image/webp">
+    <!-- JPEG, NOT WEBP, SINCE 2026-09-08. LinkedIn does not render a WebP
+         link preview at all, and a promoted link that unfurls with no image is
+         a worse outcome than a heavier file that always shows. The WebP is
+         half the size and is still built beside this one, so swap the two
+         image URLs below back to .../og-steve.webp if that ever changes.
+
+         STILL EXACTLY ONE og:image. Apple's link preview renders every
+         og:image it finds, so listing both formats here would put two
+         identical cards in one message thread. See the longer note in
+         earthdefense, which is the page that shipped that bug.
+
+         og-steve.jpg is a capture of the office from the doorway (from the
+         specs/og-steve.png capture, same flow as the other experiences). -->
+    <meta property="og:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk working on SceneXP code, a tuxedo cat sleeps on a small navy desk by the window, and a whiteboard on the green wall reads delight visitors, honor the honorees, ship it.">
@@ -46,7 +54,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Steve's Home Office">
     <meta name="twitter:description" content="A walkable 3D model of the tiny home office where SceneXP gets built. Step in and look around.">
-    <meta name="twitter:image" content="https://www.scenexp.com/steve/assets/og-steve.webp?v=1">
+    <meta name="twitter:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=1">
     <meta name="twitter:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk working on SceneXP code, a tuxedo cat sleeps on a small navy desk by the window, and a whiteboard on the green wall reads delight visitors, honor the honorees, ship it.">
 
     <!-- Structured data: site identity for search engines.

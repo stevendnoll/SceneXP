@@ -24,18 +24,44 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/">
     <meta property="og:locale" content="en_US">
-    <meta property="og:image" content="https://www.scenexp.com/assets/og-image.webp?v=2">
-    <meta property="og:image:type" content="image/webp">
+    <!-- THE CARD IS FOUR SCENES, NOT THE LOGO (rebuilt 2026-09-08, ?v=3). It
+         used to be the wordmark on a dark gradient over the line "Custom 3D
+         experiences, right in your browser", which had two problems by the
+         time anyone went to promote the site. That tagline is the retired
+         commissions-first positioning, so the card argued with the h1 on the
+         page it links to. And a logo shows nothing: this is a visual project
+         whose one attached image in every feed showed no 3D at all.
+
+         THE FOUR TILES ARE CHOSEN FOR CONTRAST, not for ranking. Mandelbrot
+         (red), Earth Defense (black and blue), Fractal Garden (green) and
+         Jamar's Karaoke Night (dark and warm) look nothing like each other at
+         thumbnail size. Seven of the fourteen scenes are blue sky over green
+         trees, so picking on quality alone gives four tiles that read as one
+         repeated picture. Each tile is a centre crop of that scene's own
+         og-*.jpg, so the card rebuilds from shipped assets.
+
+         q90 AT 4:4:4, WHICH WAS MEASURED OVER THE TEXT BAND rather than the
+         whole frame: mandelbrot's filaments dominate a global RMSE and nobody
+         will notice a filament move, while ringing on the wordmark would be
+         the one visible defect. The band reads 0.0054 at 90 against 0.0072 at
+         86, for 198.6 KB. Chroma subsampling stays off because the wordmark is
+         the only thing here that could show it.
+
+         The JPEG ships and the WebP sits beside it, per the note on every
+         experience page. og:image:alt describes THIS picture, so it is
+         rewritten whenever the card is. -->
+    <meta property="og:image" content="https://www.scenexp.com/assets/og-image.jpg?v=3">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="The SceneXP logo and wordmark on a dark background with the tagline, custom 3D experiences right in your browser.">
+    <meta property="og:image:alt" content="Four scenes from the SceneXP collection in a grid: a glowing orange fractal spiral, the blue curve of Earth seen from orbit with a targeting reticle and incoming raiders, a row of red-fruited trees in a green garden, and a karaoke stage in a dark bar. Below them the SceneXP.com wordmark and the line, 3D worlds, games, and experiments, right in your browser.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="SceneXP | 3D Worlds, Games, and Experiments">
     <meta name="twitter:description" content="3D worlds, games, experiments, and simulations, every one running entirely in your browser. No app and no download.">
-    <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.webp?v=2">
-    <meta name="twitter:image:alt" content="The SceneXP logo and wordmark on a dark background with the tagline, custom 3D experiences right in your browser.">
+    <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.jpg?v=3">
+    <meta name="twitter:image:alt" content="Four scenes from the SceneXP collection in a grid: a glowing orange fractal spiral, the blue curve of Earth seen from orbit with a targeting reticle and incoming raiders, a row of red-fruited trees in a green garden, and a karaoke stage in a dark bar. Below them the SceneXP.com wordmark and the line, 3D worlds, games, and experiments, right in your browser.">
 
     <!-- Structured data: site identity plus the experience directory.
          JSON-LD is a data block (not executed), so it is allowed under the CSP.
@@ -291,8 +317,20 @@
                     <ul class="experience-grid">
                         <li class="experience-card" data-slug="garden">
                             <a href="/garden/">
-                                <img src="/garden/assets/og-garden.webp?v=3" width="1200" height="630" loading="lazy"
-                                    decoding="async"
+                                <!-- THE ONLY EAGER IMAGE ON THE PAGE, and it has to stay the
+                                     only one. This is the first card in the first group, so it
+                                     is the Largest Contentful Paint element on any screen wide
+                                     enough to show it. `loading="lazy"` on an LCP element is a
+                                     measurable own goal: the browser will not begin the fetch
+                                     until layout has proved the image is needed, which is late
+                                     by definition. `fetchpriority="high"` then lets it jump the
+                                     queue ahead of the thirteen lazy cards below.
+                                     The other thirteen stay lazy, because eager on all
+                                     fourteen would fetch 650KB of card art nobody has scrolled
+                                     to yet. If the card order ever changes, these two
+                                     attributes move to whichever card is first. -->
+                                <img src="/garden/assets/og-garden.webp?v=3" width="1200" height="630" loading="eager"
+                                    fetchpriority="high" decoding="async"
                                     alt="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below grey rolling hills, under a blue sky with white clouds.">
                                 <div class="experience-card-body">
                                     <p class="experience-eyebrow">A garden you plant and tend yourself</p>
