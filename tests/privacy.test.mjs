@@ -46,7 +46,10 @@ const PERSISTENT = {
     'www/js/theme.js': 'the light or dark theme choice',
     'www/garden/js/main.js': 'the visitor’s saved garden',
     'www/earthdefense/js/main.js': 'sound and control settings',
-    'www/shared/js/gamestate-1.0.0.js': 'a best score'
+    'www/shared/js/gamestate-1.0.0.js': 'a best score',
+    'www/exesnohs/js/audio.js': 'whether sound is muted',
+    'www/exesnohs/js/playbook-ui.js': 'the last play called and the chosen defence',
+    'www/exesnohs/js/summary.js': 'the best score in X’s and O’s'
 };
 
 /** Source files only. The built .min copies are the same code twice. */

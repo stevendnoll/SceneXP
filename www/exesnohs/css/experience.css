@@ -1,0 +1,424 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+/*
+ * experience.css - X's and O's specifics, loaded after the shared stylesheet.
+ *
+ * The shared chrome (loading screen, welcome overlay, floating buttons,
+ * panels, modals, and #game-canvas itself) is already themed by
+ * data-ui-theme="neon" on <html>, so this file only carries what a floodlit
+ * stadium needs on top of it and reads the same --ui-* tokens so everything
+ * stays in step.
+ *
+ * PORTRAIT IS THE HARD CASE. The S1 camera spike is about whether a visitor
+ * can read a whole route concept on a phone held upright, so every size below
+ * is chosen against that frame first and given room in landscape, not the
+ * other way round.
+ *
+ * SHIPPED SO FAR (M0 and the field half of M1): the loading screen's stadium
+ * treatment and the night backdrop. Still to come: the playbook and its
+ * diagrams at M3, the HUD and result card at M4, the replay controls at M5.
+ */
+
+/* The page behind the canvas. The renderer paints a night sky, but the body
+ * shows for the moment before the first frame and in the overscroll on a
+ * phone, so it carries the same value rather than the shared sheet's default. */
+body {
+    background: #080b12;
+}
+
+/* ---- Loading screen -------------------------------------------------------
+ *
+ * The shared sheet supplies the layout. This gives it the floodlight: a cool
+ * wash from above centre, which is what the scene itself will look like a
+ * second later, so the load reads as the stadium lights coming up rather than
+ * as a progress bar that happens to precede a game.
+ */
+
+#loading-screen {
+    background:
+        radial-gradient(120% 80% at 50% -10%, #1b2740 0%, transparent 60%),
+        #080b12;
+}
+
+.loader-title {
+    letter-spacing: 0.22em;
+}
+
+/* ---- The turf's own light -------------------------------------------------
+ *
+ * A vignette over the canvas, pulling the corners down so the eye lands on the
+ * middle of the field. The play camera is high and wide by necessity, which
+ * leaves a lot of frame that is not the play, and this is the cheapest way to
+ * say which part matters. pointer-events: none so it never eats a tap meant
+ * for the scene.
+ */
+
+.field-vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    background: radial-gradient(115% 85% at 50% 45%, transparent 55%, rgba(4, 6, 11, 0.55) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .field-vignette {
+        transition: none;
+    }
+}
+
+/* ---- The playbook (M3) ----------------------------------------------------
+ *
+ * Its own names throughout, because the shared stylesheet scopes its modal
+ * rules by id and a new overlay id would inherit a near-opaque backdrop and no
+ * layout at all. The `[hidden]` rule below is load bearing: `display: flex` on
+ * the container beats the browser's default `[hidden] { display: none }`, so
+ * without it the overlay never closes.
+ *
+ * The diagrams are drawn light because that is what a play diagram is: ink on
+ * paper. They sit on cards rather than on the dark ground so the contrast is
+ * deliberate rather than accidental.
+ */
+
+.playbook {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(6, 9, 14, 0.82);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+}
+
+.playbook[hidden] {
+    display: none;
+}
+
+.playbook-panel {
+    width: min(72rem, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 1.25rem 1.25rem 1.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    background: #11151d;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.playbook-title {
+    margin: 0 0 0.9rem;
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: #f2f5fa;
+}
+
+.playbook-defence {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0 0 1.1rem;
+    color: #aeb6c6;
+    font-size: 0.95rem;
+}
+
+.playbook-defence select {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    background: #1a212c;
+    color: #f2f5fa;
+    font: inherit;
+}
+
+.playbook-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+    gap: 0.9rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* The whole card is the button, so there is one tab stop per play rather than
+ * a picture, a heading and a control that all have to be visited. */
+.play-choose {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: #1a212c;
+    color: #e8ecf3;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.play-choose:hover,
+.play-choose:focus-visible {
+    border-color: #ff992c;
+    transform: translateY(-2px);
+}
+
+.play-choose canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.play-name {
+    display: block;
+    padding: 0.6rem 0.8rem 0;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.play-blurb {
+    display: block;
+    padding: 0.25rem 0.8rem 0.8rem;
+    color: #a6afc0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+}
+
+.play-last {
+    display: inline-block;
+    margin: 0 0.8rem 0.8rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(255, 153, 44, 0.18);
+    color: #ff992c;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .play-choose {
+        transition: none;
+    }
+    .play-choose:hover,
+    .play-choose:focus-visible {
+        transform: none;
+    }
+}
+
+/* ---- HUD and cards (M4) ---------------------------------------------------
+ *
+ * Own names again, for the same reason the playbook has them: the shared sheet
+ * scopes its modal rules by id, so nothing here can borrow them.
+ *
+ * The HUD sits at the BOTTOM. The play camera looks downfield and the action
+ * moves away from the viewer, so the bottom of the frame is the emptiest part
+ * of it and the least costly place to spend on chrome. It is also where a
+ * thumb already is on a phone.
+ */
+
+.hud {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.7rem 0.9rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top, rgba(6, 9, 14, 0.92), rgba(6, 9, 14, 0));
+    pointer-events: none;
+}
+
+.hud[hidden] {
+    display: none;
+}
+
+.hud-bar {
+    display: flex;
+    justify-content: center;
+    gap: 1.4rem;
+    color: #b9c2d2;
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+}
+
+.hud-stat strong {
+    color: #f2f5fa;
+    font-size: 1.05rem;
+}
+
+.hud-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.6rem;    /* reserve the row so the HUD never jumps */
+}
+
+.hud-btn {
+    /* The row is pointer-events:none so the scene stays visible under it, so
+     * each button has to take its own events back. */
+    pointer-events: auto;
+    padding: 0.55rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    background: rgba(26, 33, 44, 0.94);
+    color: #e8ecf3;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.hud-btn:hover,
+.hud-btn:focus-visible {
+    border-color: #ff992c;
+    background: rgba(38, 47, 61, 0.96);
+}
+
+.hud-btn-primary {
+    border-color: #ff992c;
+    background: #ff992c;
+    color: #21140a;
+}
+
+.hud-btn-primary:hover,
+.hud-btn-primary:focus-visible {
+    background: #ffab52;
+    color: #21140a;
+}
+
+/* ---- The result and summary cards ---------------------------------------- */
+
+.card-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(6, 9, 14, 0.78);
+}
+
+.card-overlay[hidden] {
+    display: none;
+}
+
+.card-panel {
+    width: min(30rem, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 1.4rem 1.5rem 1.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    background: #11151d;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+    text-align: center;
+}
+
+.card-title {
+    margin: 0.2rem 0 0;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #f2f5fa;
+}
+
+.card-detail {
+    margin: 0.5rem 0 0;
+    color: #c3cbd9;
+}
+
+.card-meta {
+    margin: 0.4rem 0 0;
+    color: #8d97a8;
+    font-size: 0.9rem;
+}
+
+.card-actions {
+    margin-top: 1.2rem;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.result-points {
+    margin: 0;
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.result-points.is-good,
+.summary-pts.is-good { color: #6fe08a; }
+.result-points.is-bad,
+.summary-pts.is-bad { color: #ff7a7a; }
+.result-points.is-neutral,
+.summary-pts.is-neutral { color: #8d97a8; }
+
+.summary-total {
+    margin: 0.3rem 0 0;
+    font-size: 3.4rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #ff992c;
+}
+
+.summary-plays {
+    margin: 1.1rem 0 0;
+    padding: 0;
+    list-style: none;
+    text-align: left;
+}
+
+.summary-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.7rem;
+    padding: 0.3rem 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.92rem;
+}
+
+.summary-n {
+    width: 1.4rem;
+    color: #6e788a;
+    font-variant-numeric: tabular-nums;
+}
+
+.summary-what { flex: 1; color: #c3cbd9; }
+.summary-pts { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* The sound toggle. In the stat bar rather than the action row, because that
+ * row is rebuilt on every phase change and a control that disappears while you
+ * are reaching for it is worse than none. */
+.hud-mute {
+    pointer-events: auto;
+    padding: 0.15rem 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    background: rgba(26, 33, 44, 0.9);
+    color: #b9c2d2;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+/* The muted state reads dimmer than the live one, but it still has to be
+ * readable: #7d8698 measured 4.42:1 against the button, just under AA. */
+.hud-mute[aria-pressed="true"] {
+    color: #8a94a6;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.hud-mute:hover,
+.hud-mute:focus-visible {
+    border-color: #ff992c;
+    color: #f2f5fa;
+}
