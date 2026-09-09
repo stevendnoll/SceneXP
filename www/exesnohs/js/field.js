@@ -560,23 +560,80 @@ export function updateScoreboard({ play = 1, of = 10, score = 0 } = {}) {
     ctx.fillRect(0, 0, w, h);
 
     // A hairline border, which is what makes an unlit rectangle read as a
-    // screen rather than as a hole in the structure.
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.09)';
-    ctx.lineWidth = Math.max(2, h * 0.012);
+    // screen rather than as a hole in the structure, and a rule down the middle
+    // so the two readings are two panels rather than one crowded row.
+    ctx.strokeStyle = S.rule;
+    ctx.lineWidth = Math.max(2, h * 0.014);
     ctx.strokeRect(ctx.lineWidth, ctx.lineWidth, w - ctx.lineWidth * 2, h - ctx.lineWidth * 2);
+    ctx.beginPath();
+    ctx.moveTo(w / 2, h * 0.16);
+    ctx.lineTo(w / 2, h * 0.84);
+    ctx.stroke();
 
+    /**
+     * THE NUMERALS ARE LAMPS, WHICH IS WHY THEY ARE DRAWN TWICE.
+     *
+     * A scoreboard is a grid of bulbs behind a dark panel, so the glyph itself
+     * is near-white and the COLOUR is the halo it throws. Painting flat amber
+     * type made the board read as a user interface element, the same amber as
+     * the buttons at the bottom of the screen, sitting seventy metres away in a
+     * night sky. A shadow of the glow colour under a hot core costs one extra
+     * fill and does the whole job.
+     */
+    /**
+     * EVERY CELL IS FITTED TO ITS OWN HALF, and it was not before.
+     *
+     * The numerals were drawn at a fixed 46% of the board's height and centred
+     * on each half, with nothing checking that they fit. "1 / 10" at that size
+     * is about five hundred pixels wide in a half only five hundred and twelve
+     * across, so it ran to both edges and past the left one, and a two-digit
+     * score sat in the middle of a half that a five-character play count had
+     * already overflowed. It read as off-centre because part of it was outside
+     * the panel.
+     *
+     * Measuring the string and scaling down to fit is four lines and it cannot
+     * be wrong for any score the game can produce, including a three-digit
+     * negative one on the worst possible afternoon.
+     */
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const SAFE = 0.78;               // of a half-panel, so the rule has air
+
     const cell = (cx, label, value) => {
-        ctx.textBaseline = 'alphabetic';
         ctx.fillStyle = S.label;
-        ctx.font = `bold ${Math.round(h * 0.15)}px Tahoma, Geneva, sans-serif`;
-        ctx.fillText(label, cx, h * 0.34);
+        ctx.font = `600 ${Math.round(h * 0.115)}px Tahoma, Geneva, sans-serif`;
+        // Tracked out, because a small label in caps is the one place letter
+        // spacing does real work.
+        ctx.save();
+        ctx.translate(cx, h * 0.28);
+        ctx.scale(1.16, 1);
+        ctx.fillText(label, 0, 0);
+        ctx.restore();
+
+        const room = (w / 2) * SAFE;
+        let size = Math.round(h * 0.42);
+        ctx.font = `bold ${size}px Tahoma, Geneva, sans-serif`;
+        const wide = ctx.measureText(value).width;
+        if (wide > room) {
+            size = Math.max(12, Math.floor(size * (room / wide)));
+            ctx.font = `bold ${size}px Tahoma, Geneva, sans-serif`;
+        }
+
+        // The numerals are lamps: a hot near-white core over a halo of the
+        // colour, rather than flat amber type, which read as an interface
+        // element sitting seventy metres away in a night sky.
+        const baseline = h * 0.665;
+        ctx.shadowColor = S.glow;
+        ctx.shadowBlur = Math.round(h * 0.13);
+        ctx.fillStyle = S.glow;
+        ctx.fillText(value, cx, baseline);
+        ctx.shadowBlur = Math.round(h * 0.05);
         ctx.fillStyle = S.ink;
-        ctx.font = `bold ${Math.round(h * 0.44)}px Tahoma, Geneva, sans-serif`;
-        ctx.fillText(value, cx, h * 0.82);
+        ctx.fillText(value, cx, baseline);
+        ctx.shadowBlur = 0;
     };
-    cell(w * 0.27, 'PLAY', `${play} / ${of}`);
-    cell(w * 0.73, 'POINTS', `${score}`);
+    cell(w * 0.25, 'PLAY', `${play} / ${of}`);
+    cell(w * 0.75, 'POINTS', `${score}`);
 
     if (boardFace.texture) boardFace.texture.needsUpdate = true;
     return boardFace.canvas;

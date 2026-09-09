@@ -19,7 +19,9 @@ import { EXESNOHS_CONFIG as CFG, FIELD, simToWorld } from './config.min.js';
 import { initField, setBandAt, fadeBand, updateScoreboard } from './field.min.js';
 import { initRoster, figureFor } from './roster.min.js';
 import { initBall } from './ball.min.js';
-import { initMarkers, setPulse, initSpot, showSpot, hideSpot } from './markers.min.js';
+import {
+    initMarkers, setPulse, initSpot, showSpot, hideSpot, markerGeometry,
+} from './markers.min.js';
 import { syncFigures, syncBall, setViewCamera, resetBallFlight } from './view.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier,
@@ -264,7 +266,7 @@ function startPlay(offensive, defense) {
     cycle.accumulator = 0;
     cycle.playNumber += 1;
     syncFigures(cycle.play.game.objects, 0);
-    syncBall(null, ballCarrier(cycle.play));
+    showBall(cycle.play.game.objects, 0);
 
     setPlayNumber(cycle.playNumber, CFG.rules.playsPerGame);
     setScore(cycle.total);
@@ -415,9 +417,7 @@ function stepCycle(delta) {
         // quarterback's hands exactly as it does in the live play. The
         // recording does not store who is carrying, because before a throw it
         // is always the quarterback and after one the ball has its own slot.
-        const ball = objs.find((o) => o.settings.position === 'ball'
-            && !o.settings.benched && (o.coords.x || o.coords.y));
-        syncBall(ball || null, ball ? null : objs.find((o) => o.settings.position === 'qb'), delta);
+        showBall(objs, delta);
         if (done) {
             // Hold the last frame for a beat before the card, so the replay
             // ends on a composition rather than cutting away mid-motion.
@@ -435,7 +435,7 @@ function stepCycle(delta) {
     if (cycle.phase === 'presnap') {
         // Waiting on the snap button. The formation holds, nothing ticks.
         syncFigures(cycle.play.game.objects, delta);
-        syncBall(null, ballCarrier(cycle.play), delta);
+        showBall(cycle.play.game.objects, delta);
         return;
     }
     if (cycle.phase === 'live') {
@@ -461,7 +461,41 @@ function stepCycle(delta) {
     }
 
     syncFigures(cycle.play.game.objects, delta);
-    syncBall(null, ballCarrier(cycle.play), delta);
+    showBall(cycle.play.game.objects, delta);
+}
+
+/**
+ * DRAW THE BALL, WHEREVER IT IS, AND THE SAME WAY EVERY TIME.
+ *
+ * THIS EXISTS BECAUSE THE LIVE PLAY AND THE REPLAY HAD DIFFERENT ANSWERS. The
+ * replay path found the ball object and handed it over; both live paths passed
+ * a hard-coded `null` and only ever offered a CARRIER. So from the moment the
+ * quarterback let go until somebody caught it, nobody was carrying, and the
+ * ball was simply switched off. It was reported twice as "the ball is not
+ * visible in the air", and the arc was visible in the replay the whole time,
+ * which is exactly the shape of a bug that lives in one caller and not the
+ * other. One function, three call sites, no room for them to disagree again.
+ *
+ * A CATCH ENDS THE FLIGHT. The ball object stops where it was caught and keeps
+ * its coordinates, so a replay that only asks "is there a ball object" goes on
+ * drawing it lying on the turf while the receiver who caught it runs away
+ * empty-handed. Whoever has `hasBall` wins, and the flying object is only used
+ * when nobody does.
+ */
+export function showBall(objects, delta) {
+    const carrier = objects.find((o) => o.state && o.state.hasBall && !o.settings.benched);
+    if (carrier) { syncBall(null, carrier, delta); return 'carried'; }
+
+    const flying = objects.find((o) => o.settings.position === 'ball'
+        && !o.settings.benched && (o.coords.x || o.coords.y));
+    if (flying) { syncBall(flying, null, delta); return 'flying'; }
+
+    // Before the snap and before a throw there is no ball object at all, so it
+    // rides in the quarterback's hands. The recording does not store who is
+    // carrying, because until a throw it is always him.
+    const qb = objects.find((o) => o.settings.position === 'qb') || null;
+    syncBall(null, qb, delta);
+    return qb ? 'carried' : 'none';
 }
 
 /**
@@ -566,8 +600,34 @@ function animate(now) {
  * projections rather than a scene traversal, and it cannot be fooled by a
  * figure standing in front of another.
  */
-const TAP_RADIUS = 46;        // CSS pixels, a little over a fingertip
+const TAP_RADIUS = 52;        // CSS pixels, a little over a fingertip
 const projected = { v: null };
+
+/**
+ * WHERE A PLAYER CAN BE TAPPED, AND IT IS FOUR PLACES, NOT ONE.
+ *
+ * This tested a single point at chest height, which is a strange thing to ask a
+ * finger to find: a figure is 3.85m tall, so the head and the feet are each
+ * well outside a fingertip of the middle of him once the camera is raked over.
+ * And the LETTER TAG, which is the thing actually labelled A or B and the most
+ * obvious thing on the field to press, sits 1.2m in FRONT of his feet (D59) and
+ * was never a target at all. Pressing the disc marked B did nothing, which is
+ * the one gesture the marker exists to invite.
+ *
+ * Four probes and the nearest wins, so the whole player is live from his helmet
+ * to the letter under him. It costs four projections per candidate rather than
+ * one, on at most five candidates, once per tap.
+ */
+function tapProbes(figure) {
+    const s = CFG.figureScale;
+    const ahead = markerGeometry().tagOffset;
+    return [
+        [figure.position.x, 0.95 * s, figure.position.z],            // chest
+        [figure.position.x, 1.58 * s, figure.position.z],            // helmet
+        [figure.position.x, 0.05, figure.position.z],                // the ring
+        [figure.position.x - ahead, 0.05, figure.position.z],        // the letter
+    ];
+}
 
 /** Where a world point lands on screen, in CSS pixels. */
 function toScreen(x, y, z) {
@@ -603,12 +663,12 @@ function onCanvasPointer(event) {
     for (const target of targets) {
         const figure = figureFor(target.position);
         if (!figure || !figure.visible) continue;
-        // Aimed at the chest rather than the feet, because that is where the
-        // eye puts the player and therefore where a finger goes.
-        const at = toScreen(figure.position.x, 0.9 * CFG.figureScale, figure.position.z);
-        if (!at) continue;
-        const d = Math.hypot(at.x - event.clientX, at.y - event.clientY);
-        if (d <= TAP_RADIUS && (!best || d < best.d)) best = { d, target };
+        for (const [x, y, z] of tapProbes(figure)) {
+            const at = toScreen(x, y, z);
+            if (!at) continue;
+            const d = Math.hypot(at.x - event.clientX, at.y - event.clientY);
+            if (d <= TAP_RADIUS && (!best || d < best.d)) best = { d, target };
+        }
     }
     if (!best) return;
     event.preventDefault();
@@ -664,7 +724,7 @@ async function init() {
     initSpot(scene);
     initBall(scene);
     syncFigures(objects, 0);
-    syncBall(null, ballCarrier(cycle.play));
+    showBall(objects, 0);
 
     initAudio();
 

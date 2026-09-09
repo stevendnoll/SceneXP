@@ -352,12 +352,37 @@ export class MotionClass {
     return typeof s === 'number' && s > 0 ? s : 1;
   }
 
+  /**
+   * THE SPACE AROUND A PLAYER, IN FIELD UNITS, ADDED TO EVERY HALF-EXTENT.
+   *
+   * A SCALE ALONE CANNOT DO THIS, and that is the whole reason it exists. The
+   * 2D game gives a lineman twice the half-extent of everybody else, but every
+   * figure on this field is the same size, so any single multiplier that lifts
+   * a receiver's box out to his own shoulders throws a lineman's box out to
+   * twice that. Scale keeps the ported RATIO, and the pad sets the FLOOR.
+   *
+   * WHAT IT BUYS IS BLOCKING, not tidiness. A blocker whose engagement zone is
+   * smaller than his own body is a blocker a defender walks through, so the
+   * line never visibly holds anybody up and the offence rallying in front of a
+   * carrier, which is most of what makes a short pass worth watching, does not
+   * happen. Scaled but unpadded, a receiver's box reached 0.46m inside a 0.73m
+   * half-width: he was 63% of himself.
+   *
+   * Injected the same way the scale is, and defaults to 0, which is the 2D
+   * game's own behaviour.
+   */
+  collisionPad() {
+    const p = this.settings && this.settings.collisionPad;
+    return typeof p === 'number' && p > 0 ? p : 0;
+  }
+
   // eslint-disable-next-line
   checkCollisions(obj = {}, game = {}) {
-    // The switches below are the 2D game's, unedited, and the scale is applied
-    // once where the boxes are built. Multiplying inside each `case` would have
-    // been eight edits to ported constants for the same arithmetic.
+    // The switches below are the 2D game's, unedited. Scale and pad are applied
+    // once where the boxes are built, rather than as eight edits to ported
+    // constants for the same arithmetic.
     const k = this.collisionScale();
+    const pad = this.collisionPad();
     let r1 = 6;
     let r2 = 6;
     let rx1 = r1;
@@ -386,12 +411,12 @@ export class MotionClass {
       position: obj.settings.position,
       team: obj.settings.team,
       x: obj.coords.x,
-      x1: (obj.coords.x - rx1 * k),
-      x2: (obj.coords.x + rx1 * k),
+      x1: (obj.coords.x - (rx1 * k + pad)),
+      x2: (obj.coords.x + (rx1 * k + pad)),
       xSpeed: obj.state.xSpeed,
       y: obj.coords.y,
-      y1: (obj.coords.y - r1 * k),
-      y2: (obj.coords.y + r1 * k),
+      y1: (obj.coords.y - (r1 * k + pad)),
+      y2: (obj.coords.y + (r1 * k + pad)),
       ySpeed: obj.state.ySpeed
     }
     game.objects.forEach(object => {
@@ -429,12 +454,12 @@ export class MotionClass {
           position: object.settings.position,
           team: object.settings.team,
           x: object.coords.x,
-          x1: (object.coords.x - rx2 * k),
-          x2: (object.coords.x + rx2 * k),
+          x1: (object.coords.x - (rx2 * k + pad)),
+          x2: (object.coords.x + (rx2 * k + pad)),
           xSpeed: object.state.xSpeed,
           y: object.coords.y,
-          y1: (object.coords.y - r2 * k),
-          y2: (object.coords.y + r2 * k),
+          y1: (object.coords.y - (r2 * k + pad)),
+          y2: (object.coords.y + (r2 * k + pad)),
           ySpeed: object.state.ySpeed
         }
         if ( obj.state.xSpeed > 0 ) {

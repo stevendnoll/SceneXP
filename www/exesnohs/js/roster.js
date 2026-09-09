@@ -54,10 +54,12 @@ const KITS = {
 
 const SKIN = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3317];
 
-/** How far the arms swing, in radians, at a full run. Deliberately modest:
- *  an over-swung arm reads as flailing, and the previous design was abandoned
- *  partly for exactly that. */
-const ARM_SWING = 0.55;
+/* How far the arms swing at a full run now lives in `config.pose.armSwing`,
+ * alongside the three carries and the block, because they are one vocabulary
+ * and tuning them against each other from two files is how a quarterback ends
+ * up cocking an arm further than a lineman can reach. It is still deliberately
+ * modest: an over-swung arm reads as flailing, and the previous design was
+ * abandoned partly for exactly that. */
 
 let group = null;
 const figures = new Map();   // position -> THREE.Group
@@ -70,21 +72,108 @@ const figures = new Map();   // position -> THREE.Group
  * also most of the team colour the viewer sees.
  */
 function addHelmet(person, kit) {
+    const shellMat = new THREE.MeshStandardMaterial({
+        color: kit.helmet, roughness: 0.28, metalness: 0.2,
+    });
+    const maskMat = new THREE.MeshStandardMaterial({
+        color: kit.mask, roughness: 0.45, metalness: 0.45,
+    });
+
+    /**
+     * THE SHELL IS A SPHERE WITH A HOLE IN THE FRONT, and that hole is the
+     * whole difference between a helmet and a bubble.
+     *
+     * A full dome sitting on top of a head is a swimming cap however far down
+     * it comes, because a helmet is not a lid: it WRAPS, and what you see of
+     * the head is a face looking out of an opening. Three has no boolean, but
+     * it does not need one, because `SphereGeometry` takes a phi sweep. Leaving
+     * 72 degrees of it out, centred on the direction the figure faces, gives
+     * exactly that opening.
+     *
+     * WHICH WAY IS FORWARD, DERIVED RATHER THAN GUESSED. Three builds a sphere
+     * as `x = -r·cos(phi)·sin(theta)`, `z = r·sin(phi)·sin(theta)`, so phi = 0
+     * points at -X and phi = PI/2 points at +Z, and +Z is the way the rig
+     * faces. So the gap is centred on PI/2 and the shell starts half a gap past
+     * it. Guessing this puts the face opening over one ear.
+     *
+     * DOUBLE SIDED, because an open shell seen from in front is being looked at
+     * from the inside, and a single-sided one simply is not there.
+     */
+    const GAP = 1.26;                       // radians of face opening, about 72 degrees
     const helmet = new THREE.Mesh(
-        new THREE.SphereGeometry(0.145, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62),
-        new THREE.MeshStandardMaterial({ color: kit.helmet, roughness: 0.35, metalness: 0.15 })
+        new THREE.SphereGeometry(
+            0.158, 20, 12,
+            Math.PI / 2 + GAP / 2, Math.PI * 2 - GAP,
+            0, Math.PI * 0.86
+        ),
+        shellMat
     );
-    // The shared rig is 1.75 tall with the head centred near 1.62.
-    helmet.position.set(0, 1.63, 0);
+    shellMat.side = THREE.DoubleSide;
+    // The shared rig is 1.75 tall with the head centred near 1.62. A helmet is
+    // WIDER AND LONGER THAN IT IS TALL, which is the proportion that stops it
+    // reading as a ball: the crown is low and the shell runs back over the
+    // skull.
+    helmet.position.set(0, 1.632, -0.006);
+    helmet.scale.set(1.04, 0.92, 1.12);
     person.add(helmet);
 
-    const bar = new THREE.Mesh(
-        new THREE.TorusGeometry(0.075, 0.012, 5, 10, Math.PI),
-        new THREE.MeshStandardMaterial({ color: kit.mask, roughness: 0.5, metalness: 0.4 })
+    // THE BRIM. A real shell has a defined edge above the face opening, and it
+    // is most of what reads at a distance: a dark line under a bright crown.
+    const brim = new THREE.Mesh(
+        new THREE.TorusGeometry(0.128, 0.014, 6, 12, Math.PI * 0.62), shellMat
     );
-    bar.rotation.set(Math.PI / 2, 0, Math.PI);
-    bar.position.set(0, 1.575, 0.085);
-    person.add(bar);
+    brim.rotation.set(-Math.PI / 2, 0, 0);
+    brim.rotation.z = 0;
+    brim.position.set(0, 1.668, 0.006);
+    brim.rotation.x = -Math.PI / 2 + 0.30;
+    brim.rotation.y = Math.PI * 0.5 - Math.PI * 0.31;
+    person.add(brim);
+
+    /**
+     * THE FACEMASK HAS TO STAND CLEAR OF THE SHELL. The first version put the
+     * bars at z = 0.132 against a shell of radius 0.152, so they were buried
+     * inside it and all that showed was a few dark specks around the chin. A
+     * cage sits PROUD of the face, carried on stems, and the gaps between the
+     * bars are as much of its silhouette as the bars are.
+     */
+    for (const [y, halfWidth, z] of [
+        [1.612, 0.086, 0.163],
+        [1.566, 0.092, 0.176],
+        [1.522, 0.082, 0.168],
+    ]) {
+        const bar = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.0105, 0.0105, halfWidth * 2, 6), maskMat
+        );
+        bar.rotation.z = Math.PI / 2;
+        bar.position.set(0, y, z);
+        person.add(bar);
+    }
+    // The centre bar down the middle of the cage.
+    const centre = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.0095, 0.0095, 0.105, 6), maskMat
+    );
+    centre.position.set(0, 1.566, 0.176);
+    centre.rotation.x = 0.12;
+    person.add(centre);
+    // And the two stems that carry the whole cage back to the shell, which are
+    // what make it read as bolted on rather than floating in front of a face.
+    for (const side of [-1, 1]) {
+        const stem = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.0085, 0.0085, 0.115, 6), maskMat
+        );
+        stem.rotation.set(Math.PI / 2 - 0.22, 0, 0);
+        stem.position.set(side * 0.088, 1.592, 0.115);
+        person.add(stem);
+    }
+
+    // A chin strap under the jaw, dark, closing the shell.
+    const strap = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.010, 0.010, 0.19, 6), maskMat
+    );
+    strap.rotation.set(0, 0, Math.PI / 2);
+    strap.position.set(0, 1.500, 0.062);
+    person.add(strap);
+
     return helmet;
 }
 
@@ -111,39 +200,104 @@ function addContactShadow(person) {
 }
 
 /**
- * Swing the arms.
+ * WHERE THE ARMS GO, AND IT IS THE WHOLE BODY LANGUAGE THIS RIG HAS.
  *
- * The rig groups each arm at the shoulder and tags it, so the arms are the one
- * limb that can be animated: the legs are bare meshes with no pivot. Arms
- * alone are still the strongest running cue available, and unlike the letters
- * they cannot break the silhouette however far they go.
+ * The shared rig groups each arm at the shoulder and tags it, so the arms are
+ * the one limb that can be animated: the legs are bare meshes with no pivot.
+ * That makes four poses the entire vocabulary, and it is enough, because each
+ * of them answers a question a viewer is actually asking.
  *
- * THE TWO ARMS ARE IN ANTIPHASE, WHICH IS THE LESSON FROM THE LETTERS. Swinging
- * them together, however subtly, reads as a pulse rather than as a stride.
+ *   running      is he moving, and how fast
+ *   throwHold    is the quarterback looking downfield or has he tucked it
+ *   tuck         who has the ball right now
+ *   block        is my line holding anybody up
+ *
+ * THE TWO ARMS ARE IN ANTIPHASE WHEN RUNNING, which is the lesson from the
+ * letters attempt (D24). Swinging them together, however subtly, reads as a
+ * pulse rather than as a stride.
+ *
+ * NEGATIVE rotation.x IS FORWARD. The arm group hangs down its local -Y, and
+ * rotating about +X carries that to -Z while the rig faces +Z. Derived from the
+ * axes rather than guessed, because guessing it produces a quarterback throwing
+ * over his own back and a lineman blocking the man behind him.
+ *
+ * `armSide` is -1 on one arm and +1 on the other, and the THROWING ARM is the
+ * positive one, chosen once here so the ball and the arm cannot disagree.
  */
-export function poseFigure(figure, speed = 0, phase = 0) {
-    const arms = figure.userData.arms;
-    if (!arms || !arms.length) return;
-    const effort = Math.min(speed / 3.0, 1);
-    const swing = Math.sin(phase) * effort * ARM_SWING;
-    for (const arm of arms) {
-        arm.rotation.x = arm.userData.armSide < 0 ? swing : -swing;
-    }
-}
+export const THROWING_SIDE = 1;
+
+const lerp = (a, b, t) => a + (b - a) * t;
 
 /**
- * Wind up and release, for the quarterback.
+ * Pose one figure for this frame.
  *
- * `t` runs 0 to 1 across the throw: the near arm goes back, then whips
- * forward. M4 drives this; nothing calls it yet.
+ * `speed` is METRES PER SECOND, measured from how far the figure actually
+ * moved, and `phase` is a stride angle advanced by DISTANCE covered. Both of
+ * those are the caller's job and both used to be neither: the old version took
+ * the simulation's own speed field and advanced the phase once per rendered
+ * frame, so the arms ran at double rate on a 120Hz display and kept swinging
+ * after the whistle because nothing zeroes those fields when a play ends.
+ *
+ * `act` is what the figure is doing beyond running: `{ carry, throwT, block }`.
+ * Anything omitted is simply not applied, so a plain runner costs one lerp.
  */
-export function poseThrow(figure, t) {
+export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 60) {
     const arms = figure.userData.arms;
     if (!arms || !arms.length) return;
-    const arm = arms[arms.length - 1];
-    arm.rotation.x = t < 0.45
-        ? -1.6 * (t / 0.45)
-        : -1.6 + 3.4 * ((t - 0.45) / 0.55);
+    const P = CFG.pose;
+
+    const effort = Math.min(speed / P.fullEffort, 1);
+    const swing = Math.sin(phase) * effort * P.armSwing;
+
+    // NOTHING SNAPS, AND THAT IS MOST OF WHAT "GLITCHY" MEANT. Every input here
+    // is a per-frame judgement about a world that is still moving: whether a
+    // defender is inside a blocker's reach, whether the ball is still in a
+    // hand. Applied directly, a defender hovering at the edge of the reach
+    // flips a lineman between running and blocking on alternate frames, and a
+    // carry that changes state moves an arm through a right angle in one frame.
+    // The pose is a target and the arm eases toward it.
+    const ease = 1 - Math.exp(-delta / P.blend);
+
+    for (const arm of arms) {
+        const side = arm.userData.armSide;
+        const rest = arm.userData.restX !== undefined ? arm.userData.restX : 0.1;
+        const restZ = arm.userData.restZ !== undefined ? arm.userData.restZ : side * 0.15;
+
+        // The stride, which every pose below overrides or blends against.
+        let x = rest + (side < 0 ? swing : -swing);
+        let z = restZ;
+
+        if (act.block > 0) {
+            // Both arms out at the man in front. Held rather than swung: a
+            // blocker's arms are the one part of him that is not running.
+            x = lerp(x, P.block.armX, act.block);
+            z = lerp(z, side * P.block.armZ, act.block);
+        } else if (act.carry === 'throw') {
+            const H = P.throwHold;
+            if (side === THROWING_SIDE) {
+                // Cocked back, and swept forward across the release.
+                const t = act.throwT || 0;
+                x = lerp(H.armX, P.throwRelease.armX, t);
+                z = side * H.armZ * (1 - t * 0.7);
+            } else {
+                x = H.offX;
+                z = side * H.offZ;
+            }
+        } else if (act.carry === 'tuck' && side === THROWING_SIDE) {
+            // Only the carrying arm folds. The other one still runs, which is
+            // what makes a tuck read as a tuck rather than as a shrug.
+            x = P.tuck.armX;
+            z = side * P.tuck.armZ;
+        }
+
+        // THE SWEEP OF A THROW IS THE ONE THING THAT MAY SNAP. It is already a
+        // timed animation with its own easing, and blending it a second time
+        // would slow the release into a wave.
+        const snap = act.carry === 'throw' && side === THROWING_SIDE
+            && act.throwT > 0 && act.throwT < 1;
+        arm.rotation.x = snap ? x : arm.rotation.x + (x - arm.rotation.x) * ease;
+        arm.rotation.z = snap ? z : arm.rotation.z + (z - arm.rotation.z) * ease;
+    }
 }
 
 /**
@@ -235,6 +389,14 @@ export function initRoster(scene, objects) {
         const person = createPerson({
             role: 'customer',
             shirtColor: kit.shirt,
+            // LONG SLEEVES, AND THEY ARE NOT DECORATION. Bare forearms are the
+            // rig's default, and under floodlights on dark ground a dark skin
+            // tone makes the lower arm vanish while a pale one makes it read as
+            // a separate stick. Either way the limb stops being one limb, and
+            // swinging it is what got reported as glitchy arms. A sleeve in the
+            // team colour carries the arm from shoulder to wrist at any
+            // distance, and it is what a player in pads actually wears.
+            sleeveColor: kit.shirt,
             pantsColor: kit.pants,
             skinTone: SKIN[(i * 7 + team * 3) % SKIN.length],
             hairColor: 0x2b1d14,
@@ -257,7 +419,16 @@ export function initRoster(scene, objects) {
         person.userData.team = team;
         person.userData.phase = Math.random() * Math.PI * 2;  // nobody in step
         // The arms, found once at build time rather than searched every frame.
+        // THE RESTING ANGLES ARE CAPTURED, NOT ASSUMED. The shared rig sets a
+        // slight natural pose on every shoulder, and every pose below starts
+        // from it. Hard-coding the numbers here would work until people-1.0.0
+        // changed one of them, at which point every player would develop a
+        // permanent lean that nothing in this file explains.
         person.userData.arms = person.children.filter((c) => c.userData && c.userData.isArm);
+        for (const arm of person.userData.arms) {
+            arm.userData.restX = arm.rotation.x;
+            arm.userData.restZ = arm.rotation.z;
+        }
 
         person.visible = false;
         group.add(person);

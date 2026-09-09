@@ -29,6 +29,68 @@ import { EXESNOHS_CONFIG as CFG } from './config.min.js';
 let mesh = null;      // the ball itself
 let spot = null;      // the shadow on the grass under it
 
+/** Half the long axis and the radius at the waist, in metres before ballScale.
+ *  A real ball is about 11 inches by 6.7, or 1.64:1, and this is 1.70. */
+export const BALL_HALF = 0.238;
+export const BALL_FAT = 0.14;
+
+/**
+ * THE OUTLINE OF A FOOTBALL, AND THE EXPONENT IS THE WHOLE POINT.
+ *
+ * This was a sphere scaled along one axis, which is an ellipsoid, and an
+ * ellipsoid's end is ROUNDED: its profile is `r = R·(1 - t²)^0.5`, and near the
+ * tip that falls off as the SQUARE ROOT of the distance from the end, so the
+ * radius is still substantial a hair from the pole and the shape closes as a
+ * dome. A football closes as a point.
+ *
+ * Raising the exponent is the fix. At 1.0 the tip is a straight cone, at 0.5 it
+ * is an egg, and 0.78 sits where a football does: the same fat middle, and a
+ * last centimetre that comes to a nose. Pure, and exported, because "is the end
+ * of this ball pointy" is a question with an arithmetic answer and no amount of
+ * looking at a fourteen-pixel object in a screenshot settles it.
+ */
+export const BALL_TAPER = 0.78;
+
+/** The radius of the leather at a distance `x` from the middle, which is the
+ *  one question the laces have to ask and the old straight seam bar never did. */
+export function radiusAt(x) {
+    const t = x / BALL_HALF;
+    return BALL_FAT * Math.pow(Math.max(0, 1 - t * t), BALL_TAPER);
+}
+
+/**
+ * WHERE THE LACES SIT, AND WHY THIS IS A FUNCTION.
+ *
+ * There used to be a straight bar here as well, one box the length of the lace
+ * panel at a CONSTANT height, and the ball's surface is a curve. At the ends of
+ * the panel the leather has already fallen from 0.140 to 0.088 while the bar was
+ * still at 0.134, so it stood five centimetres proud of the ball, read as a rod
+ * driven through it, and covered the very stitches it was meant to sit under.
+ *
+ * Every stitch now takes its height FROM the profile, so it cannot float
+ * whatever anybody changes about the shape of the ball, and a test can say so.
+ */
+export function lacePositions(count = 9, span = 0.60) {
+    const out = [];
+    for (let i = 0; i < count; i += 1) {
+        const x = (i / (count - 1) - 0.5) * span * BALL_HALF * 2;
+        out.push({ x, y: radiusAt(x) - 0.003 });
+    }
+    return out;
+}
+
+export function ballProfile(rings = 16) {
+    const out = [];
+    for (let i = 0; i <= rings; i += 1) {
+        const t = -1 + (2 * i) / rings;      // -1 at one tip, +1 at the other
+        out.push({
+            r: BALL_FAT * Math.pow(Math.max(0, 1 - t * t), BALL_TAPER),
+            y: t * BALL_HALF,
+        });
+    }
+    return out;
+}
+
 /** An ellipsoid with a seam and two bands. Small enough at the play camera's
  *  distance that the laces would be a waste of triangles, but the long axis
  *  reads clearly when it is in the air, which is the only time anyone is
@@ -42,12 +104,23 @@ export function initBall(scene) {
     // floodlights at night and the sky behind the arc is nearly black, so a
     // regulation dark brown ball is invisible for the whole of its flight,
     // which was the complaint. This is roughly a new ball under stadium light.
+    //
+    // A LATHE, NOT A SCALED SPHERE, AND THE DIFFERENCE IS THE ENDS. A sphere
+    // stretched along one axis is an ellipsoid, and an ellipsoid's tip is
+    // ROUNDED: near the end its radius falls off as the square root of the
+    // distance, so it comes to a dome. A football comes to a point. Profiling
+    // the radius as `(1 - t²)^0.78` instead of `(1 - t²)^0.5` keeps the same
+    // middle and takes the last centimetre to a tip, which is the whole
+    // silhouette difference between a football and an egg.
     const leather = new THREE.Mesh(
-        new THREE.SphereGeometry(0.14, 14, 11),
+        new THREE.LatheGeometry(
+            ballProfile().map((pt) => new THREE.Vector2(pt.r, pt.y)), 14
+        ),
         new THREE.MeshStandardMaterial({ color: 0xb4642c, roughness: 0.62, metalness: 0 })
     );
-    // The long axis is local X, and everything that aims this ball assumes so.
-    leather.scale.set(1.7, 1, 1);
+    // The lathe spins about Y, and everything that aims this ball assumes the
+    // long axis is local X, so lay it over once here rather than in aimBall.
+    leather.rotation.z = Math.PI / 2;
     mesh.add(leather);
 
     const white = new THREE.MeshStandardMaterial({ color: 0xf4f0e6, roughness: 0.55 });
@@ -55,20 +128,44 @@ export function initBall(scene) {
     // THE TWO BANDS ARE WHAT MAKE THE SPIRAL VISIBLE. Without a mark off the
     // axis, spinning a solid of revolution about that axis changes nothing on
     // screen, and the ball would rotate correctly and look completely still.
+    // These are the stripes near each end of a real ball, and they encircle the
+    // long axis, which is what a torus about local X does.
     for (const side of [-1, 1]) {
-        const band = new THREE.Mesh(new THREE.TorusGeometry(0.104, 0.014, 6, 18), white);
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.096, 0.013, 6, 18), white);
         band.rotation.y = Math.PI / 2;
-        band.position.x = side * 0.115;
+        band.position.x = side * 0.125;
         mesh.add(band);
     }
 
-    const seam = new THREE.Mesh(
-        new THREE.TorusGeometry(0.1, 0.012, 5, 14, Math.PI * 0.9),
-        white
-    );
-    seam.rotation.set(0, Math.PI / 2, Math.PI / 2);
-    seam.position.y = 0.055;
-    mesh.add(seam);
+    // THE LACES RUN ALONG THE BALL, NOT AROUND IT.
+    //
+    // What was here was a third partial ring encircling the long axis, offset
+    // upward: a seam going the wrong way, which is what the last round of QA
+    // reported. Real laces are a short row of cross stitches lying ALONG the
+    // length, on one panel, and they are the only mark that tells you which way
+    // up a football is. Eight small bars on the top surface, spaced down the
+    // long axis, which is also a better spin cue than a ring because a ring
+    // about the axis of rotation does not appear to move at all.
+    // NO STRAIGHT SEAM BAR. There was one, a single box the length of the
+    // laces sitting at a CONSTANT height, and the ball's surface is a curve:
+    // at the ends of the lace panel the leather has dropped to 0.088 while the
+    // bar was still at 0.134, so it stood almost five centimetres proud of the
+    // ball and read as a rod driven through it, covering the very stitches it
+    // was meant to sit under. The stitches carry the laces on their own.
+    const laces = new THREE.Group();
+    for (const seat of lacePositions()) {
+        const stitch = new THREE.Mesh(
+            new THREE.BoxGeometry(0.016, 0.010, 0.060), white
+        );
+        stitch.position.set(seat.x, seat.y, 0);
+        // Lie each one along the surface rather than flat, so the row follows
+        // the curve of the panel instead of tilting off it at the ends.
+        stitch.rotation.z = Math.atan2(
+            radiusAt(seat.x + 0.02) - radiusAt(seat.x), 0.02
+        );
+        laces.add(stitch);
+    }
+    mesh.add(laces);
 
     // Bigger than life, on purpose: the ball is the one thing the visitor is
     // actually following and it is the smallest object on the field.

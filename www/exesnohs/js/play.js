@@ -17,12 +17,19 @@
  */
 import {
     measurements, containerWidth, containerHeight, formationSettings, SIM,
+    EXESNOHS_CONFIG as CFG, UNITS_TO_METRES,
 } from './config.min.js';
 import { TeamFormationsClass } from './formations.min.js';
 import { ObjectAnimationsClass } from './routes.min.js';
 import { MotionClass } from './motion.min.js';
 import { ExesAndOhsStateClass } from './playstate.min.js';
 import { classifyPlay } from './scoring.min.js';
+
+/** How many resolution passes, and how far apart bodies are held. The distance
+ *  is config's, in metres, and the simulation works in field units, so this is
+ *  the one conversion in the file. */
+const SEPARATION = CFG.separationPasses;
+const separationUnits = () => CFG.separation / UNITS_TO_METRES;
 
 /** Offense, then defense. Position group drives which route method runs. */
 const ROSTER = [
@@ -155,6 +162,13 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
     sim.tackled = false;
     sim.result = '';
     sim.ball = { caught: false, position: 'qb', team: 0 };
+
+    // AND SETTLE THE FORMATION BEFORE ANYBODY SEES IT. The library places both
+    // teams by their own designed spacing, which was tuned for a life-size
+    // figure, so at this figure scale ten of fourteen players began the play
+    // inside their nearest neighbour. Nothing pushes before the snap, so
+    // without this the crowd is exactly what the pre-snap frame shows.
+    separate(play, separationUnits(), SEPARATION.lineUp);
     return play.game.objects;
 }
 
@@ -191,6 +205,117 @@ export function tick(play) {
         if (obj.anim === 'formation') play.routes.runFormation(obj, play.game);
         else if (obj.anim === 'run-around') play.routes.runAround(obj, play.game);
     }
+
+    // AFTER EVERYONE HAS MOVED, NOT INSIDE ONE PLAYER'S STEP. The ported model
+    // damps speed on a collision and never resolves the overlap, so this is the
+    // half that keeps bodies out of each other. Running it per player would let
+    // whoever moved last be the only one who ends up where he asked.
+    separate(play, separationUnits(), SEPARATION.live);
+}
+
+/**
+ * KEEP BODIES OUT OF EACH OTHER. THE ONE THING THE PORTED MODEL DOES NOT DO.
+ *
+ * `motion.checkCollisions` detects an overlap and responds by DAMPING SPEED:
+ * it multiplies `xSpeed` by 0.2, or nudges an opponent along by one frame's
+ * travel. It never resolves the overlap it just found, and the route that
+ * owns the player re-accelerates him at his target on the very next frame, so
+ * two figures settle happily inside one another. Measured over 400 plays,
+ * players reached 0.01m apart at every collision radius from 0.46m to 1.5m,
+ * which is what proves the radius was never the lever: widening a box that
+ * only damps speed detects the same overlap earlier and still permits it.
+ *
+ * So this is a SEPARATION PASS, run once after every object has moved. Any two
+ * players closer than `minSeparation` are pushed apart along the line between
+ * them, half the shortfall each. It is the standard resolution step and it is
+ * the only piece of physics in this project that the 2D game did not have.
+ *
+ * IT LIVES HERE RATHER THAN IN motion.js, which is a port. It also has to run
+ * after the whole roster has moved rather than inside one player's step, or
+ * the last player to move would be the only one who ends up where he asked.
+ *
+ * THE SEPARATION MUST STAY SMALLER THAN THE COLLISION BOXES, and that is not a
+ * detail. A tackle fires when a carrier's box overlaps a tackler's, so pushing
+ * bodies further apart than the boxes reach would mean nobody could ever be
+ * brought down and no play would ever end. The pad in `collisionScale`'s
+ * sibling exists to keep that margin: at a 0.35m pad two receivers still
+ * detect each other 1.62m apart while their bodies are held 1.5m apart.
+ */
+export function separate(play, minSeparation, passes = 2) {
+    if (!(minSeparation > 0)) return 0;
+    const on = play.game.objects.filter((o) => !o.settings.benched
+        && o.settings.position !== 'ball' && o.settings.type !== 'ball');
+    let moved = 0;
+
+    /**
+     * THE MAN THE BALL WAS THROWN AT IS EXEMPT WHILE IT IS IN THE AIR.
+     *
+     * A throw aims at where the receiver is PROJECTED to be, and the catch is
+     * tested against the ball reaching that point. Anything that moves him
+     * afterwards is aiming the pass at a place he no longer runs through, and
+     * separation moves him every frame. Measured, that alone took completions
+     * from 41% to 33%: not a physics problem, a bookkeeping one, because the
+     * ball was thrown before the shove existed.
+     *
+     * It ends the moment somebody catches it, at which point he is the carrier
+     * and the carrier rules above take over.
+     */
+    const chasing = play.game.throwTo
+        && !(play.playState.state.ball && play.playState.state.ball.caught)
+        ? play.game.throwTo : '';
+
+    // MORE THAN ONE PASS, because every route re-accelerates its player at his
+    // target on the next frame and pushes straight back in. A single
+    // half-shortfall resolution reaches equilibrium well short of what it asked
+    // for: measured, one pass held bodies 0.86m apart against a 1.5m request,
+    // and two reach 1.4m. Three buys almost nothing over two.
+    for (let pass = 0; pass < passes; pass += 1) {
+        for (let i = 0; i < on.length; i += 1) {
+            for (let j = i + 1; j < on.length; j += 1) {
+                const a = on[i];
+                const b = on[j];
+
+                // A TACKLE IS CONTACT, AND CONTACT IS THE POINT OF IT.
+                //
+                // Holding a defender off the ball carrier does not read as good
+                // blocking, it reads as the play never ending: the ported model
+                // counts `state.tackle` up over consecutive frames of box
+                // overlap, so a tackler shoved out every frame never
+                // accumulates one.
+                //
+                // ONLY AGAINST OPPONENTS, and that limit was measured rather
+                // than assumed. Exempting the carrier from his OWN side too
+                // sounded right, on the grounds that a runner should not be
+                // jostled by his blockers, and it was worse on every count: the
+                // quarterback ended up standing inside his own line before the
+                // snap, bodies reached 0.03m during a play, and MORE plays ran
+                // out the backstop rather than fewer.
+                if (a.settings.team !== b.settings.team
+                    && (a.state.hasBall || b.state.hasBall)) continue;
+                if (chasing && (a.settings.position === chasing
+                    || b.settings.position === chasing)) continue;
+
+                let dx = b.coords.x - a.coords.x;
+                let dy = b.coords.y - a.coords.y;
+                let d = Math.hypot(dx, dy);
+                if (d >= minSeparation) continue;
+
+                // Exactly coincident happens: cover12 puts db2 and db3 on the
+                // same spot against run3. A zero vector has no direction to
+                // push along, so pick one rather than dividing by zero and
+                // sending both to NaN, which would take the play with it.
+                if (d < 1e-6) { dx = 1; dy = 0; d = 1; }
+
+                const push = (minSeparation - d) / 2;
+                const ux = (dx / d) * push;
+                const uy = (dy / d) * push;
+                a.coords.x -= ux; a.coords.y -= uy;
+                b.coords.x += ux; b.coords.y += uy;
+                moved += 1;
+            }
+        }
+    }
+    return moved;
 }
 
 /** The carrier, for the camera and for scoring. Null before the snap. */

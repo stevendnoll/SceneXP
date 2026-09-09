@@ -192,6 +192,46 @@ describe('a play, end to end', () => {
     });
 });
 
+describe('the ball is drawn wherever it is', () => {
+    /**
+     * THIS IS THE BUG THAT WAS REPORTED TWICE. The replay path found the ball
+     * object and handed it over; both LIVE paths passed a hard-coded `null` and
+     * only ever offered a carrier. So from the frame the quarterback let go
+     * until somebody caught it, nobody was carrying and the ball was simply
+     * switched off, while the replay of the same play showed the arc perfectly.
+     *
+     * One function now serves all three call sites, and these assert its
+     * choice. They would both pass against the old replay path and the second
+     * one fails against the old live path, which is the whole point.
+     */
+    const ball = (x, y) => ({ settings: { position: 'ball', benched: false },
+        coords: { x, y, z: 4 }, state: { xSpeed: 3, ySpeed: 1 } });
+    const man = (position, carrying) => ({ settings: { position, benched: false },
+        coords: { x: 200, y: 300, z: 0 }, state: { xSpeed: 0, ySpeed: 0, hasBall: carrying } });
+
+    test('in the air, with nobody holding it, it is still drawn', async () => {
+        const main = await boot();
+        expect(main.showBall([man('qb', false), man('wr1', false), ball(500, 400)], 0.016))
+            .toBe('flying');
+    });
+
+    test('once caught, the catcher holds it and it stops flying', async () => {
+        const main = await boot();
+        // The ball object survives a catch with its coordinates intact, which
+        // is why asking "is there a ball object" first left it on the turf.
+        expect(main.showBall([man('qb', false), man('wr1', true), ball(500, 400)], 0.016))
+            .toBe('carried');
+    });
+
+    test('before the snap it rides in the quarterback\'s hands', async () => {
+        const main = await boot();
+        expect(main.showBall([man('qb', true), man('wr1', false)], 0.016)).toBe('carried');
+        // And even with no hasBall recorded at all, which is the pre-throw
+        // shape of an older recording.
+        expect(main.showBall([man('qb', undefined)], 0.016)).toBe('carried');
+    });
+});
+
 describe('the markup and the stylesheet agree', () => {
     const read = (p) => import('node:fs').then((fs) =>
         fs.readFileSync(new URL(`../www/exesnohs/${p}`, import.meta.url), 'utf8'));

@@ -90,7 +90,8 @@ export function createPerson(config) {
         hasSuit = false,       // jacket lapels, a dress shirt, and a necktie
         tieColor = 0x8c1d2c,   // necktie color (used when hasSuit)
         dressShirt = false,    // button-down dress shirt: center placket + long sleeves, no jacket/tie
-        shoulderRound = 0      // 0 = square box torso; up to ~0.6 rounds the shoulders and softens every edge
+        shoulderRound = 0,     // 0 = square box torso; up to ~0.6 rounds the shoulders and softens every edge
+        sleeveColor = null     // long sleeves in this color; null keeps bare forearms
     } = config;
 
     const person = new THREE.Group();
@@ -133,7 +134,21 @@ export function createPerson(config) {
 
     // Forearms/elbows are bare skin by default (short sleeves); a suit or a
     // long-sleeved dress shirt covers them to the wrist with the shirt material.
-    const sleeveMaterial = (hasSuit || dressShirt) ? shirtMaterial : skinMaterial;
+    //
+    // `sleeveColor` OVERRIDES BOTH, and it exists because bare skin is not a
+    // neutral default in every scene. A figure lit by floodlights at night on
+    // dark ground reads its arm as three separate objects: a bright shoulder,
+    // a forearm that either glares or disappears depending on which skin tone
+    // the roster happened to deal, and a hand. www/exesnohs reported it as
+    // "the arms are very glitchy", which is what a limb looks like when a
+    // third of it is invisible and the rest of it is swinging.
+    //
+    // Default is null, so nothing that does not ask for it changes at all.
+    const sleeveMaterial = sleeveColor !== null
+        ? new THREE.MeshStandardMaterial({
+            color: sleeveColor, roughness: 0.75, metalness: 0.0,
+        })
+        : ((hasSuit || dressShirt) ? shirtMaterial : skinMaterial);
 
     // Body measurements (realistic proportions)
     const height = 1.75;

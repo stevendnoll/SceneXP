@@ -137,10 +137,51 @@ const FIELD = {
  */
 const FIGURE_SCALE = 2.2;
 
+/**
+ * THE SPACE AROUND EACH PLAYER, IN FIELD UNITS, ADDED TO EVERY COLLISION BOX.
+ *
+ * A SCALE ALONE CANNOT PUT A BOX OUTSIDE ITS OWN BODY. The 2D game gives a
+ * lineman twice the half-extent of everybody else, and every figure here is the
+ * same size, so any multiplier that lifts a receiver's box out to his own
+ * shoulders throws a lineman's out to twice that. `collisionScale` keeps the
+ * ported RATIO and this sets the FLOOR. At 12 units, or 0.42m, a receiver's box
+ * reaches 0.81m against a 0.73m half-width and a lineman's reaches 1.27m.
+ *
+ * IT HAS TO STAY LARGER THAN `separation`, and that is not a detail: a tackle
+ * fires on box overlap, so holding bodies further apart than the boxes reach
+ * would mean nobody could ever be brought down and no play would ever end.
+ */
+const COLLISION_PAD = 12;
+
 const SIM = {
     lineInterval: 200,       // field units per interval. See above.
     segments: FIELD.segments,
-    gutter: 5,               // the 2D game's gutters.x and .y, unchanged
+    /**
+     * THE GUTTER IS HOW FAR APART THE FORMATIONS STAND, and it was 5 because
+     * that is what the 2D game used.
+     *
+     * Every lateral position in the 144KB formation library is a count of
+     * these (D15 rewrote the last raw constants into exactly that shape), so
+     * this one number is the designed spacing of both teams. At 5, with figures
+     * drawn at 2.2 (see `figureScale`), TEN OF FOURTEEN players stood closer
+     * than one body width from their nearest neighbour before the ball was even
+     * snapped, and the closest pair was 0.53m apart inside bodies 1.45m across.
+     * The library is right and the figures are big.
+     *
+     * 8 IS SAFE BECAUSE THE ROUTES DO NOT DERIVE FROM IT. `containerWidth()`
+     * below inverts the routes' own lineInterval calculation, so widening the
+     * gutter leaves the downfield spacing pinned to the painted yard lines.
+     * Swept over all 190 combinations of ten offensive plays and nineteen
+     * defences: the derived interval stays 7.000m at every value, nobody lands
+     * outside a touchline, and the median nearest-neighbour gap goes from 0.89m
+     * to 1.51m, which is just over a body.
+     *
+     * IT ALSO PULLS THE OUTERMOST PLAYERS IN, which sounds wrong and is what
+     * makes this safe: `container.height` is `h - gutterY`, so a wider gutter
+     * spreads the crowded middle while narrowing the extremes. The widest
+     * player moved from 9.80m off centre to 9.38m against a 10.50m touchline.
+     */
+    gutter: 8,
 };
 
 /** One field unit in metres. The only scale factor in the project. */
@@ -239,6 +280,7 @@ function formationSettings() {
     return {
         style: { gutters: { x: SIM.gutter, y: SIM.gutter } },
         collisionScale: FIGURE_SCALE,
+        collisionPad: COLLISION_PAD,
     };
 }
 
@@ -461,6 +503,49 @@ const EXESNOHS_CONFIG = {
     ballScale: 2.6,
 
     /**
+     * THE BALL'S FLIGHT, AND THE UNIT ERROR THAT FLATTENED IT.
+     *
+     * `routes.getZIndex` returns a number that climbs 1, 1.5, 2 ... to a
+     * ceiling of 7 and back down. The 2D renderer used it to SCALE a drawn
+     * ellipse, which is how a flat plan view fakes height. view.js was handing
+     * it to `simToWorld` as though 7 were seven field units, and seven field
+     * units is 0.245 metres. Measured across a real throw, the entire arc was
+     * 24 CENTIMETRES, and a `Math.max(p.y, 0.2)` floor then squeezed it to
+     * four. That is both reported faults at once: the ball is not invisible in
+     * the air, it is skimming the grass behind everybody's legs, and it does
+     * not look like it travels in a straight line, it does.
+     *
+     * `apex` IS WHAT SEVEN MEANS IN METRES. About one and a half times a
+     * player's height at this figure scale, which is what a thrown ball looks
+     * like against people.
+     *
+     * `release` is where the arc starts and ends. Low, because the same value
+     * has to leave a hand and then lie on the turf when nobody catches it.
+     *
+     * THE STAIRCASE BECOMES A PARABOLA WITHOUT MOVING A SINGLE FRAME, which
+     * routes.js explicitly asks for: "keep its timing when the crude ramp is
+     * eventually replaced by a real parabola, so catches land on the frame they
+     * land on today". Normalising the index to u = (z - 1) / 6 gives a triangle
+     * over the flight, u = 2p rising and 2(1 - p) falling. A real arc is
+     * 4p(1 - p), and substituting gives 2u - u², or 1 - (1 - u)². So the shape
+     * is a closed-form function of the index the simulation already produces,
+     * every catch still lands on its own frame, and nothing in routes.js moved.
+     */
+    ball: {
+        apex: 5.8,           // metres above `release` at the top of the arc
+        /** The throw length, in metres, at which the arc reaches full height.
+         *  Below it the apex scales down, so a flick stays a bullet. Measured
+         *  against the library: passes run 1.5m to 13.5m, median 7.2m. */
+        fullArcAt: 12,
+        release: 0.28,       // metres, where the arc starts, ends and rests
+        indexFloor: 1,       // getZIndex at rest
+        indexCeil: 7,        // ...and at the top, which it clamps to
+        /** Seconds to ease the height toward its target. The index steps in
+         *  halves at 45Hz, so without this the ball climbs in visible stairs. */
+        smooth: 0.06,
+    },
+
+    /**
      * WHO IS WHO, AND IN WHAT COLOUR. ONE TABLE, TWO READERS.
      *
      * markers.js paints these onto the grass and hud.js paints them onto the
@@ -522,6 +607,50 @@ const EXESNOHS_CONFIG = {
      * game ever wants collisions that deliberately disagree with what is drawn.
      */
     collisionScale: FIGURE_SCALE,
+    collisionPad: COLLISION_PAD,
+
+    /**
+     * HOW CLOSE TWO BODIES MAY EVER GET, IN METRES, AND WHY IT IS NOT THE
+     * COLLISION RADIUS.
+     *
+     * `motion.checkCollisions` detects an overlap and responds by DAMPING
+     * SPEED. It never resolves the overlap it just found, and the route that
+     * owns the player re-accelerates him at his target on the very next frame,
+     * so two figures settle happily inside one another. Measured over 400
+     * plays, players reached 0.01m apart at EVERY collision radius from 0.46m
+     * to 1.5m, which is what proves the radius was never the lever on its own.
+     * `play.separate` is the missing half: it pushes bodies apart once
+     * everybody has moved.
+     *
+     * 1.45m IS EXACTLY ONE BODY WIDTH (1.75 x 0.38 x 2.2), so figures come to
+     * rest touching rather than overlapping.
+     *
+     * WHAT THE PAIR OF THEM BUYS IS BLOCKING. A blocker whose engagement zone
+     * is smaller than his own body is a blocker a defender walks through, so
+     * the line never visibly holds anybody up and the offense rallying in front
+     * of a carrier, which is most of what makes a short pass worth watching,
+     * does not happen. Measured against the old behaviour: bodies went from
+     * 0.01m apart to 1.22m, interceptions fell from 13% to 2%, which is roughly
+     * where the real game sits, and mean points rose from 8.1 to 9.8.
+     *
+     * THE COST IS A LONGER TAIL, and it was checked rather than assumed. Plays
+     * running past the twelve second backstop went from 0.5% to 7%. Every one
+     * of those scored, mean 26 points: they are long runs behind blockers,
+     * which is the thing this was built for, so the backstop stays at twelve.
+     */
+    separation: 1.45,
+
+    /**
+     * TWO PASSES ON LINE-UP AND ONE PER TICK, and the asymmetry is measured.
+     *
+     * A single pass resolves half the shortfall between each pair, so it
+     * reaches equilibrium short of what it asked for. At line-up, where nothing
+     * is pushing back, two passes reach 1.51m against one pass's 0.86m. During
+     * a play the opposite holds: one pass beats two on every measure, because
+     * two over-correct against routes that push back the next frame and the
+     * churn costs more than it buys.
+     */
+    separationPasses: { lineUp: 2, live: 1 },
 
     /**
      * THE FLAT DISC UNDER EACH PLAYER (see markers.js for why it exists).
@@ -546,6 +675,170 @@ const EXESNOHS_CONFIG = {
          *  down the pulse dips, so it never fades toward invisible. */
         pulseFloor: 0.55,
         pulseScale: 1.18,
+    },
+
+    /**
+     * HOW A PLAYER STANDS, RUNS, CARRIES AND BLOCKS.
+     *
+     * THE THREE CARRIES ARE THE 2D GAME'S OWN, read off `drawFrame` in
+     * exes-and-ohs.class.tsx, which picks between them by DRAW ORDER:
+     *
+     *   qb, hasBall, !state.run   ball drawn AFTER the player, on top of him
+     *   qb, hasBall,  state.run   ball drawn BEFORE, underneath him
+     *   anyone else with the ball  drawn before, offset to (x + 4, y + 8)
+     *
+     * On a flat plan view, drawing the ball over the player is how you say it
+     * is held UP, and drawing it under him is how you say it is tucked away.
+     * So the original already distinguished a quarterback surveying the field
+     * from a quarterback running with it, and a receiver carrying it at his
+     * hip. In 3D those become an actual cocked arm, an actual tuck, and an
+     * actual hip. `state.run` is the same flag, and `keepAndRun` already sets
+     * it. Nothing here is invented (D29).
+     *
+     * Offsets are in FIGURE-LOCAL units and multiplied by `figureScale`, so a
+     * bigger player holds the ball further from his own spine rather than
+     * inside it. `right` is toward the throwing hand, `up` is up, `ahead` is
+     * the way he is facing.
+     *
+     * Angles are radians on the shoulder pivot. NEGATIVE rotation.x IS FORWARD:
+     * the arm group hangs down local -Y, and rotating about +X carries it to
+     * -Z while the rig faces +Z. Worked out from the axes rather than guessed,
+     * because guessing it produces a player throwing over his own back.
+     */
+    pose: {
+        /** Cap on the stride swing, radians at the shoulder. */
+        armSwing: 0.55,
+        /**
+         * STRIDE ADVANCES WITH DISTANCE COVERED, IN RADIANS PER METRE, and the
+         * old version only claimed to. It read the simulation's `xSpeed` and
+         * `ySpeed` fields and advanced ONCE PER RENDERED FRAME, which is wrong
+         * twice over. Per frame means a 120Hz display swings the arms twice as
+         * fast as a 60Hz one for the same run. And reading the speed FIELD
+         * rather than measuring the movement means the arms keep swinging after
+         * the whistle: the simulation simply stops ticking, so nothing zeroes
+         * those fields, and measured at the whistle FOURTEEN OF FIFTEEN players
+         * still carry a speed above the stride deadzone while standing
+         * perfectly still. The quarterback sits at 3.32.
+         *
+         * Distance is frame-rate independent for free, and a player who is not
+         * moving covers no distance, so both faults close together.
+         *
+         * 1.4 rad/m puts a sprinting figure at about 1.7 arm cycles a second.
+         * A real sprinter is nearer 2.2, but these figures are 2.2 times life
+         * size and a giant taking normal-length steps reads as scurrying.
+         */
+        stridePerMetre: 1.4,
+        /** Metres per second at which the swing reaches full amplitude. */
+        fullEffort: 7.5,
+        /** Below this, in m/s, a player is standing and the arms settle. */
+        stillSpeed: 0.35,
+        /** Seconds for a pose to blend in or out. Nothing snaps. */
+        blend: 0.12,
+
+        /**
+         * SECONDS OF SMOOTHING ON THE MEASURED SPEED, AND WHY IT IS NOT ZERO.
+         *
+         * Distance covered is exact and needs no smoothing, but SPEED is that
+         * distance divided by a frame, and the frames do not all contain a
+         * simulation step: `simHz` runs on a fixed clock while the view runs
+         * once per rendered frame, so a 60Hz display sees no step on a quarter
+         * of its frames and a 120Hz display on three fifths of them. Those
+         * frames measure a dead stop. Fed straight to the swing amplitude, the
+         * arms collapsed and sprang back forty times a second, which is what
+         * "very glitchy" was.
+         *
+         * A tenth of a second bridges two missing steps at 120Hz and is still
+         * short enough that a player who stops drops his arms within a stride.
+         */
+        speedSmooth: 0.10,
+
+        /**
+         * AND SECONDS OF SMOOTHING ON THE DRAWN POSITION ITSELF.
+         *
+         * The same mismatch, one level up. Figures were placed straight from
+         * the simulation, so at 45Hz on a 120Hz display every position held for
+         * two or three frames and then jumped: motion that is correct and looks
+         * like a slideshow. Easing the drawn position toward the simulated one
+         * turns a stepped 60Hz feed into continuous movement at any display
+         * rate, for about fifty milliseconds of lag that nobody can see from
+         * sixty metres up.
+         *
+         * IT IS ALSO WHAT THE STRIDE IS MEASURED FROM, deliberately, so the
+         * legs and arms are driven by the motion actually on screen rather than
+         * by a position the figure has not reached yet.
+         */
+        motionSmooth: 0.05,
+
+        /**
+         * WHERE THE HAND ACTUALLY ENDS UP, DERIVED FROM THE SHARED RIG.
+         *
+         * people-1.0.0 puts the shoulder pivot at `legLength + torsoHeight -
+         * 0.05`, which is 1.25, hangs the hand `armLength + 0.02` below it at
+         * 0.57, and centres the head at 1.62. So rotating the shoulder by x
+         * puts the hand at y = 1.25 - 0.57·cos(x) and z = -0.57·sin(x).
+         *
+         * That arithmetic is the whole reason these angles are what they are.
+         * An arm cocked at 1.15 radians, which sounds like a lot, leaves the
+         * hand at y = 1.02 and BELOW the shoulder: a man holding a ball against
+         * his chest. Past a right angle it swings above the shoulder, and at
+         * 2.15 the hand reaches y = 1.56 and 0.47 behind, which is beside the
+         * ear with the ball behind the head. That is the pose.
+         *
+         * The ball offsets below are simply where that hand is, so the ball is
+         * never floating next to a hand that is somewhere else.
+         */
+        /** Surveying the field: ball up beside the ear, throwing arm cocked. */
+        throwHold: {
+            ball: { right: 0.26, up: 1.56, ahead: -0.44 },
+            armX: 2.15,          // positive is back, and past 90 degrees is up
+            armZ: 0.30,          // out, away from the head
+            offX: -0.45,         // the off arm points forward, across the body
+            offZ: 0.26,
+        },
+        /** Tucked and running, for the quarterback or anyone who caught it.
+         *  The hand sits at y = 0.77 with the arm at -0.55, and the ball rides
+         *  in the crook above it against the ribs. */
+        tuck: {
+            ball: { right: 0.22, up: 0.94, ahead: 0.11 },
+            armX: -0.55,         // forward and folded over the ball
+            armZ: -0.35,         // in, toward the chest
+        },
+        /**
+         * The release. `armX` sweeps from `throwHold` to this over `time`,
+         * carrying the hand up over the head and down in front: at -0.90 it
+         * finishes at y = 0.90 and 0.45 ahead, which is a follow-through rather
+         * than an arm that stopped where the ball left it.
+         */
+        throwRelease: { armX: -0.90, time: 0.34 },
+
+        /**
+         * BLOCKING: BOTH ARMS OUT AT THE MAN IN FRONT.
+         *
+         * There is no blocking flag in the ported simulation, so this is
+         * derived in the view: a lineman with an opponent inside `reach` is
+         * engaged. That is what the position group is FOR, and it is the whole
+         * visible content of a running play, so inferring it is worth more than
+         * waiting for the simulation to say so.
+         */
+        block: {
+            reach: 2.6,          // metres to the nearest opponent
+            /**
+             * -0.95, PULLED BACK FROM -1.30, AND THE LIMIT IS THE RIG.
+             *
+             * The shared figure's shoulder is a ball of radius `armRadius *
+             * 1.15` sitting in a flat-sided torso, which is enough to cover the
+             * stride's half-radian swing and not much more. At -1.30 the upper
+             * arm is 75 degrees off the body and clears the shoulder entirely,
+             * so the arm reads as a detached stick floating beside the player.
+             * That is most of what the screenshots show as glitchy arms.
+             *
+             * Under a radian the joint stays covered, and 0.95 is still an
+             * unmistakable reach: the hand comes forward 0.46 of the rig's own
+             * height, which at this figure scale is most of a metre.
+             */
+            armX: -0.95,         // forward, arms extended
+            armZ: 0.22,          // slightly out, to fill a gap
+        },
     },
 
     /** Floodlit night, deliberately. A day/night cycle is off: this is one
@@ -659,10 +952,22 @@ const EXESNOHS_CONFIG = {
         height: 5.4,
         standHeight: 5.2,           // metres of post under the board
         beyond: 6.5,                // metres past the far end line
-        face: '#0d1117',
+        /**
+         * A SCOREBOARD IS LAMPS BEHIND A DARK PANEL, not orange type on slate.
+         *
+         * The first pass borrowed the HUD's amber, which is the colour of an
+         * interface element and reads as one: flat, evenly lit, the same amber
+         * as the buttons at the bottom of the screen. A real board is a grid of
+         * bulbs, so the numerals are near-white at the centre with the colour
+         * in the GLOW around them, the panel behind is almost black, and the
+         * labels are dim because nobody is meant to read them twice.
+         */
+        face: '#05070b',
         frame: 0x2b3342,
-        ink: '#ffb14a',
-        label: '#7f8a9c',
+        ink: '#fff3d0',          // the lamps themselves, hot and nearly white
+        glow: '#ffa22a',         // and what they throw onto the panel
+        label: '#6f7d93',
+        rule: 'rgba(255, 255, 255, 0.07)',
         textureWidth: 1024,
     },
 
@@ -691,8 +996,43 @@ const EXESNOHS_CONFIG = {
      * At 45 the top speed is 7.6 m/s, which crosses the field in about six and
      * a half seconds. Raise it if the game ever feels sluggish, but raise it
      * here and nowhere else.
+     *
+     * BACK TO 60, AND THE PARAGRAPH ABOVE IS WHY IT IS SAFE NOW. It was written
+     * against a 50m field, and the field is 35m (D54), so its own reasoning no
+     * longer applies to the number it produced.
+     *
+     * WHAT MAKES IT NECESSARY IS `figureScale` AGAIN. Measured, the fastest
+     * anybody moved at 45Hz was 5.35 m/s, which sounds brisk until it is
+     * measured against the player rather than the pitch: a figure is drawn at
+     * 2.2 times life size, so 3.85m tall, and 5.35 m/s is 1.4 BODY-HEIGHTS PER
+     * SECOND. A real sprinter covers about 5.5. The figures grew and the clock
+     * did not, which is the same oversight as the collision radii and the
+     * replay camera heights.
+     *
+     * 60 takes it to 7.1 m/s, or 1.85 body-heights, and crosses the field in
+     * 4.9 seconds. Matching a real sprinter's APPARENT speed would need 21 m/s
+     * and a field crossed in a second and a half, which is not a game anybody
+     * can watch, so this is a deliberate compromise rather than a fix.
+     *
+     * AND THEN 80, BECAUSE 60 WAS STILL REPORTED AS TOO SLOW. That is the third
+     * time this number has moved and the reason has been the same every time,
+     * so it is worth stating plainly: the figures are 2.2 times life size and
+     * every judgement about speed is made against THEM, not against the pitch.
+     *
+     *     45   5.0 m/s   1.31 body-heights/s   crosses in 7.0s
+     *     60   7.1 m/s   1.85                  4.9s
+     *     72   8.6 m/s   2.22                  4.1s
+     *     80   9.5 m/s   2.47                  3.7s
+     *     90  10.7 m/s   2.78                  3.3s
+     *
+     * 80 is where it stops being a compromise and starts being a choice. It is
+     * still under half a real sprinter's apparent pace, and 3.7 seconds is the
+     * shortest a whole-field run can be and still be followed by an eye that
+     * has to find the ball first. Past 90 the play is over before the frame is
+     * read, which is the fault the original note at 45 was guarding against and
+     * was right about, on a field half as long again.
      */
-    simHz: 45,
+    simHz: 80,
 
     /** Ten plays make a game. Scoring runs from an intercepted -10 to 50 for
      *  taking it all the way across, per the PRD. */
