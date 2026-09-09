@@ -164,6 +164,96 @@ function throwProgress(obj) {
  * reaches out as a defender closes rather than snapping into a pose at a
  * threshold. Costs six players against eight opponents, once a frame.
  */
+/**
+ * WHO A DEFENDER IS WATCHING, AND THE LIBRARY ALREADY SAYS SO.
+ *
+ * Every defensive route carries a `type` and, for the man-coverage ones, the
+ * name of the receiver being shadowed:
+ *
+ *     cover   33 of them, each naming wr1 to wr4 in `route.cover`
+ *     blitz   30, coming for the quarterback
+ *     zone    51, minding a patch of grass
+ *
+ * So a defender facing the way he happens to be running is throwing that away.
+ * A corner running backwards down the sideline with his eyes on his receiver is
+ * one of the most recognisable pictures in the sport, and the data for it was
+ * sitting in the formation library the whole time (D29: nothing invented).
+ *
+ * CACHED AT LINE-UP, because `replay.frameAt` rebuilds objects from six floats
+ * and carries no routes at all. The replay follows the play it recorded, so the
+ * assignments are still the right ones. Same technique as the ball's flight
+ * span, and cleared by `resetAssignments` when a new play lines up.
+ */
+const watching = new Map();      // position -> { type, cover }
+
+export function resetAssignments() {
+    watching.clear();
+}
+
+function noteAssignments(objects) {
+    for (const obj of objects) {
+        const route = obj.settings.route;
+        if (!route || !route.type) continue;
+        watching.set(obj.settings.position, { type: route.type, cover: route.cover || '' });
+    }
+}
+
+/**
+ * The world point a player should be looking at, or null to face his running.
+ *
+ * Converging on the ball beats any assignment: once a defender is close enough
+ * to make the tackle he is looking at the man with the ball, whatever he was
+ * told to do before the snap.
+ */
+function lookTarget(obj, objects, carrier, here) {
+    if (obj.settings.team !== 1) return null;
+
+    const at = (o) => (o ? simToWorld(o.coords.x, o.coords.y, 0) : null);
+
+    if (carrier && carrier !== obj) {
+        const c = at(carrier);
+        if (Math.hypot(c.x - here.x, c.z - here.z) < CFG.pose.tackle.reach * 2.4) return c;
+    }
+
+    const job = watching.get(obj.settings.position);
+    if (!job) return null;
+    if (job.type === 'cover' && job.cover) {
+        return at(objects.find((o) => o.settings.position === job.cover && !BENCHED(o)));
+    }
+    if (job.type === 'blitz') {
+        return at(objects.find((o) => o.settings.position === 'qb' && !BENCHED(o)));
+    }
+    // A zone defender watches the ball, which before a throw is the
+    // quarterback. That is what standing in a zone actually looks like.
+    return carrier && carrier !== obj ? at(carrier) : null;
+}
+
+/**
+ * WHO IS MAKING THE TACKLE, as a 0-to-1 amount.
+ *
+ * The ported model counts `state.tackle` up over consecutive frames of contact
+ * and blows the whistle when it reaches the carrier's own threshold, so contact
+ * is a thing the simulation knows about and never showed. Anybody from the
+ * other side inside `reach` of the ball carrier is going in, and how far in
+ * scales with how close they are, so an arriving defender reaches rather than
+ * snapping into a pose at a threshold.
+ */
+function tacklersOn(objects, carrier) {
+    const out = new Map();
+    if (!carrier) return out;
+    const reach = CFG.pose.tackle.reach;
+    const c = simToWorld(carrier.coords.x, carrier.coords.y, 0);
+    for (const obj of objects) {
+        if (BENCHED(obj) || obj === carrier) continue;
+        if (obj.settings.team === carrier.settings.team) continue;
+        if (obj.settings.position === 'ball') continue;
+        const p = simToWorld(obj.coords.x, obj.coords.y, 0);
+        const d = Math.hypot(p.x - c.x, p.z - c.z);
+        if (d < reach) out.set(obj.settings.position, Math.min(1, (reach - d) / (reach * 0.6)));
+    }
+    return out;
+}
+
 function blockersEngaged(objects) {
     const out = new Map();
     const reach = CFG.pose.block.reach;
@@ -197,6 +287,8 @@ function blockersEngaged(objects) {
 export function syncFigures(objects, delta = 1 / 60) {
     const engaged = blockersEngaged(objects);
     const carrier = objects.find((o) => o.state && o.state.hasBall && !BENCHED(o));
+    noteAssignments(objects);
+    const tacklers = tacklersOn(objects, carrier);
     noteThrowRelease(objects, carrier, delta);
 
     for (const obj of objects) {
@@ -261,7 +353,13 @@ export function syncFigures(objects, delta = 1 / 60) {
 
         figure.position.set(p.x, 0, p.z);
 
-        const want = targetFacing(stepX, stepZ, mps);
+        // WATCHING SOMEBODY BEATS RUNNING SOMEWHERE. A corner shadowing his
+        // receiver has his eyes on the receiver, not on his own feet, and the
+        // library says who that is.
+        const look = lookTarget(obj, objects, carrier, p);
+        const want = look
+            ? Math.atan2(look.x - p.x, look.z - p.z)
+            : targetFacing(stepX, stepZ, mps);
         if (want !== null) figure.userData.facing = want;
         else if (figure.userData.facing === undefined) {
             figure.userData.facing = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -288,11 +386,24 @@ export function syncFigures(objects, delta = 1 / 60) {
         // Multiplying the metres actually travelled is frame-rate independent
         // for free, and a player who has not moved advances no phase at all.
         figure.userData.phase += moved * CFG.pose.stridePerMetre;
+        const lunge = tacklers.get(obj.settings.position) || 0;
         poseFigure(figure, mps, figure.userData.phase, {
             carry: carryFor(obj, carrier),
             throwT: throwProgress(obj),
             block: engaged.get(obj.settings.position) || 0,
+            tackle: lunge,
         }, delta);
+
+        // THE LEAN, WHICH IS THE WHOLE FIGURE, because the rig has no waist.
+        // A tackler pitches forward into the hit and the man being hit pitches
+        // back out of it. `rotation.order` is YXZ so this happens on the
+        // figure's own axis AFTER the yaw: on the default XYZ a defender facing
+        // across the field would tip sideways instead of forward.
+        const carried = carrier === obj && obj.state.tackle > 0;
+        const pitch = lunge > 0 ? CFG.pose.tackle.lean * lunge
+            : (carried ? CFG.pose.tackled.lean : 0);
+        figure.rotation.x += (pitch - figure.rotation.x)
+            * (1 - Math.exp(-delta / CFG.pose.blend));
 
         figure.visible = true;
 

@@ -787,29 +787,81 @@ const EXESNOHS_CONFIG = {
          * The ball offsets below are simply where that hand is, so the ball is
          * never floating next to a hand that is somewhere else.
          */
-        /** Surveying the field: ball up beside the ear, throwing arm cocked. */
+        /**
+         * THESE ANGLES WERE SOLVED, NOT CHOSEN, and they could not have been
+         * chosen because the arm now has TWO joints.
+         *
+         * people-1.0.0 gained an elbow, so a pose is a shoulder in two axes and
+         * a forearm in one, and where the hand ends up is the composition of
+         * all three. Searching that by eye is hopeless, and the previous
+         * single-joint version is why: with only a shoulder, the only way to
+         * get a hand up beside the ear is to swing the whole straight limb back
+         * over the shoulder, which reads as a javelin thrower rather than a
+         * quarterback.
+         *
+         * Forward kinematics, written out and searched. The shoulder sits at
+         * (0.2125, 1.25), the upper arm is 0.275 to the elbow and the forearm
+         * and hand 0.295 beyond it, and the forearm group inherits the
+         * shoulder's rotation, so the hand lands at
+         *
+         *     Rx(armX)·Rz(armZ)·[0,-1,0]·0.275   +
+         *     Rx(armX)·Rz(armZ)·Rx(foreX)·[0,-1,0]·0.295
+         *
+         * THE ELBOW FOLDS ON A POSITIVE foreX, which is the opposite of what it
+         * looks like it should do and cost a whole search to find: the first
+         * sweep only looked at negative values and reported that the target was
+         * unreachable by a quarter of a metre.
+         */
+        /** Surveying the field. Elbow up and back at (0.25, 1.36, -0.25), hand
+         *  beside the ear at (0.26, 1.65, -0.19), 78 degrees of elbow. */
         throwHold: {
-            ball: { right: 0.26, up: 1.56, ahead: -0.44 },
-            armX: 2.15,          // positive is back, and past 90 degrees is up
-            armZ: 0.30,          // out, away from the head
+            ball: { right: 0.25, up: 1.64, ahead: -0.16 },
+            armX: 1.99,          // positive is back, and past 90 degrees is up
+            armZ: 0.15,          // a little out, so the elbow clears the ribs
+            foreX: 1.36,         // and folded, which is what a cocked arm is
             offX: -0.45,         // the off arm points forward, across the body
             offZ: 0.26,
+            offFore: 0.85,       // and is bent, because a straight one is a plank
         },
         /** Tucked and running, for the quarterback or anyone who caught it.
-         *  The hand sits at y = 0.77 with the arm at -0.55, and the ball rides
-         *  in the crook above it against the ribs. */
+         *  The hand comes to (0.09, 0.78, -0.07), which is across the body at
+         *  the hip, and the ball rides in the crook just above it. */
         tuck: {
-            ball: { right: 0.22, up: 0.94, ahead: 0.11 },
-            armX: -0.55,         // forward and folded over the ball
-            armZ: -0.35,         // in, toward the chest
+            // Cradled just above and inside the hand, against the ribs, which
+            // is where the solved pose actually puts it (0.09, 0.78, -0.07).
+            ball: { right: 0.13, up: 0.86, ahead: 0.00 },
+            armX: -0.45,         // forward
+            armZ: -0.30,         // in, toward the chest
+            foreX: 1.10,         // folded across the ball
         },
         /**
-         * The release. `armX` sweeps from `throwHold` to this over `time`,
-         * carrying the hand up over the head and down in front: at -0.90 it
-         * finishes at y = 0.90 and 0.45 ahead, which is a follow-through rather
-         * than an arm that stopped where the ball left it.
+         * The release. The shoulder sweeps from `throwHold` to this over
+         * `time` while the elbow STRAIGHTENS, which is what a throw is: the
+         * hand finishes at (0.30, 0.99, 0.50), forward and down, a follow
+         * through rather than an arm that stopped where the ball left it.
          */
-        throwRelease: { armX: -0.90, time: 0.34 },
+        throwRelease: { armX: -1.20, foreX: 0.20, time: 0.34 },
+
+        /**
+         * GOING IN FOR THE TACKLE. Both arms out and low, reaching around the
+         * carrier rather than up at him, and the whole body pitched forward.
+         *
+         * The rig has no waist (its own note says so), so the lean is the whole
+         * figure rotating about its feet, which is what a diving tackle looks
+         * like anyway. It is applied on the LOCAL x axis after the yaw, so it
+         * has to be an Euler order of YXZ or a defender facing across the field
+         * tips sideways instead of forward.
+         */
+        tackle: {
+            reach: 2.2,          // metres to the carrier before he commits
+            armX: -1.05,
+            armZ: 0.34,
+            foreX: 0.45,
+            lean: 0.34,          // radians of forward pitch, whole figure
+        },
+        /** And the carrier, going down. Pitched back rather than forward, and
+         *  only once the simulation says contact has actually started. */
+        tackled: { lean: -0.26 },
 
         /**
          * BLOCKING: BOTH ARMS OUT AT THE MAN IN FRONT.

@@ -22,14 +22,16 @@ import { initBall } from './ball.min.js';
 import {
     initMarkers, setPulse, initSpot, showSpot, hideSpot, markerGeometry,
 } from './markers.min.js';
-import { syncFigures, syncBall, setViewCamera, resetBallFlight } from './view.min.js';
+import {
+    syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments,
+} from './view.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome,
 } from './play.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
-    clearActions, showResult, hideResult, announce, showWelcome,
+    clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
 } from './hud.min.js';
 import { showSummary, hideSummary } from './summary.min.js';
 import {
@@ -261,6 +263,9 @@ function openPlaybook() {
 function startPlay(offensive, defense) {
     lineUp(cycle.play, offensive, defense || '');
     resetBallFlight();
+    // Coverage assignments are cached for the replay, so a new line-up has to
+    // drop the last play's.
+    resetAssignments();
     cycle.phase = 'presnap';
     cycle.held = 0;
     cycle.accumulator = 0;
@@ -365,8 +370,11 @@ function presentResult() {
 function startReplay() {
     if (isEmpty()) { presentResult(); return; }
     hideResult();
-    clearActions();
-    showHud(false);
+    // THE HUD STAYS UP THROUGH A REPLAY, carrying one button. It used to be
+    // hidden for the duration, so a replay that started on its own (D36 plays
+    // the highlights unasked) had no way out but to wait for it.
+    showHud(true);
+    showSkipReplay();
     // The spot belongs to the end of the play, and a replay is about to start
     // at the beginning of it. Leaving it standing would give away the ending.
     hideSpot();
@@ -376,6 +384,15 @@ function startReplay() {
 }
 
 /** Onward from the result card: the next play, or the end of the game. */
+/** Out of a replay, whether it was asked for or started on its own. */
+function onSkipReplay() {
+    if (cycle.phase !== 'replay') return;
+    cycle.replayHold = 0;
+    showHud(true);
+    clearActions();
+    presentResult();
+}
+
 function onNext() {
     hideResult();
     if (cycle.playNumber >= CFG.rules.playsPerGame) {
@@ -424,6 +441,7 @@ function stepCycle(delta) {
             cycle.replayHold += delta;
             if (cycle.replayHold >= CFG.camera.replay.holdEnd) {
                 showHud(true);
+                clearActions();
                 presentResult();
             }
         }
@@ -733,6 +751,7 @@ async function init() {
     initHud({
         onSnap, onThrow, onRun, onNext,
         onReplay: startReplay,
+        onSkipReplay,
         onToggleMute: () => toggleMuted(),
         isMuted,
     });

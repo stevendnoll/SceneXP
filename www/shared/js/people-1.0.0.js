@@ -473,30 +473,52 @@ export function createPerson(config) {
         upperArm.position.y = -armLength * 0.25;
         armGroup.add(upperArm);
 
-        // Elbow
+        /**
+         * THE FOREARM HANGS FROM ITS OWN GROUP, SO THE ELBOW CAN BEND.
+         *
+         * It used to be three meshes pinned straight to the shoulder group at
+         * fixed offsets, which makes an arm one rigid stick: a scene could
+         * raise it and swing it and nothing else. That is enough for walking
+         * and not enough for anything a person does with their hands. A
+         * quarterback holding a ball by his ear has a bent elbow, and without
+         * one the only way to get his hand up there is to swing the whole limb
+         * back over his shoulder, which reads as a javelin thrower.
+         *
+         * The group sits AT the elbow and its children are re-based to it, so
+         * `rotation.x = 0` is exactly the straight arm this always drew.
+         * Nothing that does not touch it changes. Tagged the same way the arm
+         * is, so a scene can find it without knowing the child order.
+         */
+        const foreGroup = new THREE.Group();
+        foreGroup.position.y = -armLength * 0.5;
+        foreGroup.userData.isForearm = true;
+        foreGroup.userData.armSide = side;
+        armGroup.add(foreGroup);
+        armGroup.userData.forearm = foreGroup;
+
+        // Elbow, at the joint itself.
         const elbow = new THREE.Mesh(
             new THREE.SphereGeometry(armRadius * 1.05, 8, 8),
             sleeveMaterial
         );
-        elbow.position.y = -armLength * 0.5;
-        armGroup.add(elbow);
+        foreGroup.add(elbow);
 
         // Forearm
         const forearm = new THREE.Mesh(
             new THREE.CylinderGeometry(armRadius * 0.9, armRadius, armLength * 0.45, 8),
             sleeveMaterial
         );
-        forearm.position.y = -armLength * 0.75;
-        armGroup.add(forearm);
+        forearm.position.y = -armLength * 0.25;
+        foreGroup.add(forearm);
 
         // Hand (handScale enlarges it relative to the figure)
         const hand = new THREE.Mesh(
             new THREE.SphereGeometry(0.04 * handScale, 8, 8),
             skinMaterial
         );
-        hand.position.y = -armLength - 0.02;
+        hand.position.y = -armLength * 0.5 - 0.02;
         hand.scale.set(0.8, 1, 0.5);
-        armGroup.add(hand);
+        foreGroup.add(hand);
 
         // Position arm group at shoulder
         armGroup.position.set(

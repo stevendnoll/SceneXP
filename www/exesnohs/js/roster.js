@@ -71,110 +71,151 @@ const figures = new Map();   // position -> THREE.Group
  * player rather than a person standing on grass, and at this distance it is
  * also most of the team colour the viewer sees.
  */
+/**
+ * WHAT THE SHELL HAS TO COVER, TAKEN FROM THE RIG RATHER THAN GUESSED.
+ *
+ * people-1.0.0 puts the head at `legLength + torsoHeight + neckHeight +
+ * headRadius`, which is 1.62, with a radius of 0.12, and then hangs hair off
+ * it: `hairTop` at +0.05, `hairSide` at +0.06 and `hairBack` at -0.10, each
+ * about 0.125 across. So the thing a helmet has to hide runs from roughly 1.50
+ * to 1.70 and is 0.25 wide.
+ *
+ * THE PREVIOUS SHELL DID NOT REACH, and that is why the second attempt looked
+ * WORSE than the first. It stopped at 1.50 on paper and its scale pulled the
+ * real edge up above that, so a band of black hair showed all the way round the
+ * back below a big pale dome. A gap between a helmet and a head reads as a hat
+ * two sizes too small, and no amount of facemask fixes it.
+ */
+export const HEAD = { y: 1.62, r: 0.12, hairR: 0.128, hairLow: 1.50, hairHigh: 1.70 };
+
+/**
+ * The helmet, as a list of parts.
+ *
+ * SEPARATED FROM `addHelmet` SO IT CAN BE MEASURED. The test stub models no
+ * geometry, so every Box3 taken against it is empty and nothing about a shape
+ * can be asserted through it. Handing back plain meshes lets a suite build them
+ * against a real three in a `node:vm` and ask the only questions that matter:
+ * does the shell actually cover the head, and is the facemask in front of the
+ * face or buried inside the shell. Both were wrong, and neither was visible in
+ * a screenshot until somebody looked at a 60-pixel crop.
+ */
+export function buildHelmetParts(shellMat, maskMat) {
+    const parts = [];
+
+    /**
+     * THE SHELL IS A SPHERE WITH A HOLE IN THE FRONT, and that hole is the
+     * difference between a helmet and a swimming cap: a helmet WRAPS, and what
+     * you see of the head is a face looking out of an opening.
+     *
+     * Three has no boolean and does not need one, because `SphereGeometry`
+     * takes a phi sweep. Which way is forward is DERIVED from Three's own
+     * parameterisation (`z = r·sin(phi)·sin(theta)`, so phi = PI/2 is +Z, and
+     * +Z is the way the rig faces) rather than guessed, because guessing puts
+     * the face opening over one ear.
+     *
+     * IT IS SMALLER AND LONGER THAN THE LAST ONE. 0.145 against a 0.128 head
+     * with hair is a helmet's worth of padding; 0.158 was a bubble. And it now
+     * sweeps 0.92 of a half-turn instead of 0.86, which is what finally takes
+     * the back edge below the hair.
+     */
+    const GAP = 1.40;                  // radians of face opening, about 80 degrees
+    const shell = new THREE.Mesh(
+        new THREE.SphereGeometry(
+            0.145, 22, 14,
+            Math.PI / 2 + GAP / 2, Math.PI * 2 - GAP,
+            0, Math.PI * 0.92
+        ),
+        shellMat
+    );
+    shell.position.set(0, 1.622, -0.010);
+    // Wider than tall and longer than wide, which is the proportion that stops
+    // a helmet reading as a ball.
+    shell.scale.set(1.06, 1.04, 1.16);
+    shell.name = 'helmet-shell';
+    parts.push(shell);
+
+    /**
+     * THE EAR FLAPS ARE MOST OF THE SILHOUETTE. A football helmet is not round
+     * at the bottom: it drops in front of each ear into a flap that carries the
+     * chin strap, and from the side that step is what says "helmet" before the
+     * facemask is even legible.
+     */
+    for (const side of [-1, 1]) {
+        const flap = new THREE.Mesh(new THREE.SphereGeometry(0.062, 10, 8), shellMat);
+        flap.position.set(side * 0.128, 1.545, 0.016);
+        flap.scale.set(0.62, 1.02, 1.05);
+        flap.name = 'helmet-flap';
+        parts.push(flap);
+    }
+
+    /**
+     * THE FACEMASK HAS TO STAND CLEAR OF THE SHELL. The first version put its
+     * bars at z = 0.132 against a shell reaching 0.152, so they were buried
+     * inside it and all that showed was a few dark specks near the chin. A cage
+     * sits PROUD of the face on stems, and the gaps between its bars are as
+     * much of the silhouette as the bars are.
+     */
+    const MASK_Z = 0.185;
+    for (const [y, halfWidth, z] of [
+        [1.610, 0.084, MASK_Z - 0.022],
+        [1.563, 0.092, MASK_Z],
+        [1.516, 0.080, MASK_Z - 0.012],
+    ]) {
+        const bar = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.0115, 0.0115, halfWidth * 2, 6), maskMat
+        );
+        bar.rotation.z = Math.PI / 2;
+        bar.position.set(0, y, z);
+        bar.name = 'helmet-mask';
+        parts.push(bar);
+    }
+    const centre = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.0105, 0.0105, 0.11, 6), maskMat
+    );
+    centre.position.set(0, 1.562, MASK_Z - 0.004);
+    centre.rotation.x = 0.10;
+    centre.name = 'helmet-mask';
+    parts.push(centre);
+
+    // The stems that carry the cage back to the shell, which are what make it
+    // read as bolted on rather than floating in front of a face.
+    for (const side of [-1, 1]) {
+        const stem = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.0095, 0.0095, 0.125, 6), maskMat
+        );
+        stem.rotation.set(Math.PI / 2 - 0.26, 0, 0);
+        stem.position.set(side * 0.086, 1.596, 0.122);
+        stem.name = 'helmet-mask';
+        parts.push(stem);
+    }
+
+    // A chin strap under the jaw, closing the shell between the two flaps.
+    const strap = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.0105, 0.0105, 0.20, 6), maskMat
+    );
+    strap.rotation.set(0, 0, Math.PI / 2);
+    strap.position.set(0, 1.496, 0.058);
+    strap.name = 'helmet-strap';
+    parts.push(strap);
+
+    return parts;
+}
+
 function addHelmet(person, kit) {
     const shellMat = new THREE.MeshStandardMaterial({
         color: kit.helmet, roughness: 0.28, metalness: 0.2,
     });
+    // DOUBLE SIDED ON THE CONSTRUCTOR, not assigned afterwards. The shell has a
+    // hole cut in the front, so a viewer in front of a player is looking at the
+    // INSIDE of the back of it, and a single-sided shell simply is not there.
+    shellMat.side = THREE.DoubleSide;
     const maskMat = new THREE.MeshStandardMaterial({
         color: kit.mask, roughness: 0.45, metalness: 0.45,
     });
 
-    /**
-     * THE SHELL IS A SPHERE WITH A HOLE IN THE FRONT, and that hole is the
-     * whole difference between a helmet and a bubble.
-     *
-     * A full dome sitting on top of a head is a swimming cap however far down
-     * it comes, because a helmet is not a lid: it WRAPS, and what you see of
-     * the head is a face looking out of an opening. Three has no boolean, but
-     * it does not need one, because `SphereGeometry` takes a phi sweep. Leaving
-     * 72 degrees of it out, centred on the direction the figure faces, gives
-     * exactly that opening.
-     *
-     * WHICH WAY IS FORWARD, DERIVED RATHER THAN GUESSED. Three builds a sphere
-     * as `x = -r·cos(phi)·sin(theta)`, `z = r·sin(phi)·sin(theta)`, so phi = 0
-     * points at -X and phi = PI/2 points at +Z, and +Z is the way the rig
-     * faces. So the gap is centred on PI/2 and the shell starts half a gap past
-     * it. Guessing this puts the face opening over one ear.
-     *
-     * DOUBLE SIDED, because an open shell seen from in front is being looked at
-     * from the inside, and a single-sided one simply is not there.
-     */
-    const GAP = 1.26;                       // radians of face opening, about 72 degrees
-    const helmet = new THREE.Mesh(
-        new THREE.SphereGeometry(
-            0.158, 20, 12,
-            Math.PI / 2 + GAP / 2, Math.PI * 2 - GAP,
-            0, Math.PI * 0.86
-        ),
-        shellMat
-    );
-    shellMat.side = THREE.DoubleSide;
-    // The shared rig is 1.75 tall with the head centred near 1.62. A helmet is
-    // WIDER AND LONGER THAN IT IS TALL, which is the proportion that stops it
-    // reading as a ball: the crown is low and the shell runs back over the
-    // skull.
-    helmet.position.set(0, 1.632, -0.006);
-    helmet.scale.set(1.04, 0.92, 1.12);
-    person.add(helmet);
-
-    // THE BRIM. A real shell has a defined edge above the face opening, and it
-    // is most of what reads at a distance: a dark line under a bright crown.
-    const brim = new THREE.Mesh(
-        new THREE.TorusGeometry(0.128, 0.014, 6, 12, Math.PI * 0.62), shellMat
-    );
-    brim.rotation.set(-Math.PI / 2, 0, 0);
-    brim.rotation.z = 0;
-    brim.position.set(0, 1.668, 0.006);
-    brim.rotation.x = -Math.PI / 2 + 0.30;
-    brim.rotation.y = Math.PI * 0.5 - Math.PI * 0.31;
-    person.add(brim);
-
-    /**
-     * THE FACEMASK HAS TO STAND CLEAR OF THE SHELL. The first version put the
-     * bars at z = 0.132 against a shell of radius 0.152, so they were buried
-     * inside it and all that showed was a few dark specks around the chin. A
-     * cage sits PROUD of the face, carried on stems, and the gaps between the
-     * bars are as much of its silhouette as the bars are.
-     */
-    for (const [y, halfWidth, z] of [
-        [1.612, 0.086, 0.163],
-        [1.566, 0.092, 0.176],
-        [1.522, 0.082, 0.168],
-    ]) {
-        const bar = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.0105, 0.0105, halfWidth * 2, 6), maskMat
-        );
-        bar.rotation.z = Math.PI / 2;
-        bar.position.set(0, y, z);
-        person.add(bar);
-    }
-    // The centre bar down the middle of the cage.
-    const centre = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.0095, 0.0095, 0.105, 6), maskMat
-    );
-    centre.position.set(0, 1.566, 0.176);
-    centre.rotation.x = 0.12;
-    person.add(centre);
-    // And the two stems that carry the whole cage back to the shell, which are
-    // what make it read as bolted on rather than floating in front of a face.
-    for (const side of [-1, 1]) {
-        const stem = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.0085, 0.0085, 0.115, 6), maskMat
-        );
-        stem.rotation.set(Math.PI / 2 - 0.22, 0, 0);
-        stem.position.set(side * 0.088, 1.592, 0.115);
-        person.add(stem);
-    }
-
-    // A chin strap under the jaw, dark, closing the shell.
-    const strap = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.010, 0.010, 0.19, 6), maskMat
-    );
-    strap.rotation.set(0, 0, Math.PI / 2);
-    strap.position.set(0, 1.500, 0.062);
-    person.add(strap);
-
-    return helmet;
+    const parts = buildHelmetParts(shellMat, maskMat);
+    for (const part of parts) person.add(part);
+    return parts[0];      // the shell
 }
 
 /**
@@ -263,31 +304,46 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
         const rest = arm.userData.restX !== undefined ? arm.userData.restX : 0.1;
         const restZ = arm.userData.restZ !== undefined ? arm.userData.restZ : side * 0.15;
 
-        // The stride, which every pose below overrides or blends against.
+        // The stride, which every pose below overrides or blends against. A
+        // running arm carries a little permanent elbow, because a person
+        // sprinting with two straight arms reads as a mannequin on wheels.
         let x = rest + (side < 0 ? swing : -swing);
         let z = restZ;
+        let fore = 0.16 + effort * 0.55;
 
-        if (act.block > 0) {
+        if (act.tackle > 0) {
+            // Both arms low and reaching round him. Beats blocking, because a
+            // lineman who has arrived at the ball carrier is tackling.
+            const T = P.tackle;
+            x = lerp(x, T.armX, act.tackle);
+            z = lerp(z, side * T.armZ, act.tackle);
+            fore = lerp(fore, T.foreX, act.tackle);
+        } else if (act.block > 0) {
             // Both arms out at the man in front. Held rather than swung: a
             // blocker's arms are the one part of him that is not running.
             x = lerp(x, P.block.armX, act.block);
             z = lerp(z, side * P.block.armZ, act.block);
+            fore = lerp(fore, 0.30, act.block);
         } else if (act.carry === 'throw') {
             const H = P.throwHold;
             if (side === THROWING_SIDE) {
-                // Cocked back, and swept forward across the release.
+                // Cocked, and swept forward while the elbow straightens, which
+                // is what a throw is.
                 const t = act.throwT || 0;
                 x = lerp(H.armX, P.throwRelease.armX, t);
                 z = side * H.armZ * (1 - t * 0.7);
+                fore = lerp(H.foreX, P.throwRelease.foreX, t);
             } else {
                 x = H.offX;
                 z = side * H.offZ;
+                fore = H.offFore;
             }
         } else if (act.carry === 'tuck' && side === THROWING_SIDE) {
             // Only the carrying arm folds. The other one still runs, which is
             // what makes a tuck read as a tuck rather than as a shrug.
             x = P.tuck.armX;
             z = side * P.tuck.armZ;
+            fore = P.tuck.foreX;
         }
 
         // THE SWEEP OF A THROW IS THE ONE THING THAT MAY SNAP. It is already a
@@ -297,6 +353,15 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
             && act.throwT > 0 && act.throwT < 1;
         arm.rotation.x = snap ? x : arm.rotation.x + (x - arm.rotation.x) * ease;
         arm.rotation.z = snap ? z : arm.rotation.z + (z - arm.rotation.z) * ease;
+
+        // THE ELBOW, which the rig did not have until this round. A scene that
+        // never asks for one still gets the straight arm it always drew,
+        // because `foreX` of zero IS that arm.
+        const forearm = arm.userData.forearm;
+        if (forearm) {
+            forearm.rotation.x = snap
+                ? fore : forearm.rotation.x + (fore - forearm.rotation.x) * ease;
+        }
     }
 }
 
@@ -418,6 +483,12 @@ export function initRoster(scene, objects) {
         person.userData.position = position;
         person.userData.team = team;
         person.userData.phase = Math.random() * Math.PI * 2;  // nobody in step
+        // YXZ, SO A LEAN HAPPENS ON THE FIGURE'S OWN AXIS. The tackle pitch is
+        // applied to rotation.x alongside the yaw in rotation.y, and on the
+        // default XYZ order the pitch is taken about the WORLD x axis first,
+        // which tips a player facing across the field sideways instead of
+        // forward.
+        person.rotation.order = 'YXZ';
         // The arms, found once at build time rather than searched every frame.
         // THE RESTING ANGLES ARE CAPTURED, NOT ASSUMED. The shared rig sets a
         // slight natural pose on every shoulder, and every pose below starts

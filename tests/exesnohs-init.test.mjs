@@ -232,6 +232,47 @@ describe('the ball is drawn wherever it is', () => {
     });
 });
 
+describe('a replay can be got out of', () => {
+    /**
+     * THE GAME PLAYS THE HIGHLIGHTS UNASKED (D36), which is a good default and
+     * was a dead end: the HUD was hidden for the duration, so a replay that
+     * started on its own could only be waited out. The default stays and the
+     * dead end goes.
+     */
+    test('the button is there while a replay is running, and it takes focus', async () => {
+        const main = await toLivePlay();
+        dom.el('hud-actions').children[0].click();          // snap
+        await flushAsync();
+        dom.el('hud-actions').children[0].click();          // throw
+        await flushAsync();
+        for (let i = 0; i < 900 && dom.el('result').hidden !== false; i += 1) {
+            dom.loops[0](i * 16.7);
+        }
+        // Ask for the replay from the result card.
+        const watch = dom.el('result-actions').children
+            .find((b) => b.textContent === 'Watch the replay');
+        expect(watch).toBeTruthy();
+        watch.click();
+        await flushAsync();
+        dom.loops[0](50000);
+
+        const skip = dom.el('hud-actions').children
+            .find((b) => b.textContent === 'Skip replay');
+        expect(skip).toBeTruthy();
+        expect(skip.getAttribute('aria-label')).toBe('Skip the replay and see the result');
+        expect(dom.el('game-hud').hidden).toBe(false);
+        expect(skip.focused).toBe(true);
+
+        // And pressing it lands back on the result rather than nowhere.
+        expect(dom.el('result').hidden).toBe(true);
+        skip.click();
+        await flushAsync();
+        expect(dom.el('result').hidden).toBe(false);
+        expect(dom.el('hud-actions').children.length).toBe(0);
+        void main;
+    });
+});
+
 describe('the markup and the stylesheet agree', () => {
     const read = (p) => import('node:fs').then((fs) =>
         fs.readFileSync(new URL(`../www/exesnohs/${p}`, import.meta.url), 'utf8'));

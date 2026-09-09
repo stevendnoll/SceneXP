@@ -211,6 +211,28 @@ export function clearActions() {
 }
 
 /**
+ * WHILE A REPLAY IS RUNNING, ONE WAY OUT.
+ *
+ * The game shows the highlights unasked and offers the rest (D36), which means
+ * a visitor sometimes gets a replay they did not ask for and, until now, no way
+ * to stop it: the HUD was hidden for the duration and the only choice was to
+ * wait. That is a fine default and a bad dead end, and the two are separable.
+ *
+ * It takes focus, so a keyboard visitor can press Enter to get out of something
+ * that started on its own, which is the case that matters most.
+ */
+export function showSkipReplay() {
+    const box = actions();
+    if (!box) return;
+    const skip = button('Skip replay', 'hud-btn',
+        () => handlers.onSkipReplay && handlers.onSkipReplay(),
+        'Skip the replay and see the result');
+    skip.id = 'skip-replay-btn';
+    box.appendChild(skip);
+    skip.focus();
+}
+
+/**
  * The welcome card.
  *
  * Shown once, before the first playbook. It states the scoring ladder in words,

@@ -743,18 +743,78 @@ describe('the arms', () => {
      * the same shoulder arithmetic as the angles, so a retune that moves one
      * and forgets the other leaves a ball floating beside an empty hand.
      */
-    test('each carry puts the ball within reach of its own posed hand', () => {
-        const hand = (armX) => ({
-            up: SHOULDER - 0.57 * Math.cos(armX),
-            ahead: -0.57 * Math.sin(armX),
+    /**
+     * THE ARM HAS TWO JOINTS NOW, so where the hand ends up is the composition
+     * of three angles and cannot be eyeballed. This is the same forward
+     * kinematics the angles were solved against, written out once:
+     *
+     *     Rx(armX)·Rz(armZ)·[0,-1,0]·UPPER
+     *   + Rx(armX)·Rz(armZ)·Rx(foreX)·[0,-1,0]·FORE
+     *
+     * If a later retune moves an angle and forgets the ball, or adds an elbow
+     * bend and leaves the ball where a straight arm put it, the two come apart
+     * and this says so. The one-joint version of this test could not: it
+     * modelled a rigid stick and passed on poses that put the hand nowhere near
+     * the ball.
+     */
+    const SHOULDER_X = 0.2125;
+    const UPPER = 0.275;
+    const FORE = 0.295;
+
+    function handAt(armX, armZ, foreX, side = 1) {
+        const rotZ = (v, a) => ({
+            x: v.x * Math.cos(a) - v.y * Math.sin(a),
+            y: v.x * Math.sin(a) + v.y * Math.cos(a), z: v.z,
         });
-        for (const [pose, ball] of [
-            [CFG.pose.throwHold.armX, CFG.pose.throwHold.ball],
-            [CFG.pose.tuck.armX, CFG.pose.tuck.ball],
-        ]) {
-            const h = hand(pose);
-            expect(Math.hypot(h.up - ball.up, h.ahead - ball.ahead)).toBeLessThan(0.3);
+        const rotX = (v, a) => ({
+            x: v.x,
+            y: v.y * Math.cos(a) - v.z * Math.sin(a),
+            z: v.y * Math.sin(a) + v.z * Math.cos(a),
+        });
+        const down = { x: 0, y: -1, z: 0 };
+        const up = rotX(rotZ(down, side * armZ), armX);
+        const fore = rotX(rotZ(rotX(down, foreX), side * armZ), armX);
+        return {
+            right: side * SHOULDER_X + up.x * UPPER + fore.x * FORE,
+            up: SHOULDER + up.y * UPPER + fore.y * FORE,
+            ahead: up.z * UPPER + fore.z * FORE,
+        };
+    }
+
+    test('each carry puts the ball in the hand the pose actually makes', () => {
+        for (const P of [CFG.pose.throwHold, CFG.pose.tuck]) {
+            const h = handAt(P.armX, P.armZ, P.foreX);
+            const gap = Math.hypot(
+                h.right - P.ball.right, h.up - P.ball.up, h.ahead - P.ball.ahead
+            );
+            expect(gap).toBeLessThan(0.18);
         }
+    });
+
+    test('the throwing hand comes up beside the head, not over the shoulder', () => {
+        const h = handAt(CFG.pose.throwHold.armX, CFG.pose.throwHold.armZ,
+            CFG.pose.throwHold.foreX);
+        expect(h.up).toBeGreaterThan(SHOULDER);       // above the shoulder
+        expect(h.up).toBeLessThan(HEAD + 0.12);       // and not over the crown
+        expect(h.ahead).toBeLessThan(0);              // cocked, so behind
+        expect(Math.abs(h.right)).toBeGreaterThan(0.14);   // clear of the head
+    });
+
+    /**
+     * AND THE ELBOW HAS TO BE BENT. Without a bend the only way to get a hand
+     * up beside the ear is to swing the whole straight limb back over the
+     * shoulder, which is a javelin thrower rather than a quarterback, and it is
+     * exactly what the single-joint version had to do.
+     */
+    test('the throwing arm is bent at the elbow', () => {
+        const bend = Math.abs(CFG.pose.throwHold.foreX) * 180 / Math.PI;
+        expect(bend).toBeGreaterThan(45);
+        expect(bend).toBeLessThan(140);
+    });
+
+    test('and it straightens through the release', () => {
+        expect(Math.abs(CFG.pose.throwRelease.foreX))
+            .toBeLessThan(Math.abs(CFG.pose.throwHold.foreX));
     });
 });
 
