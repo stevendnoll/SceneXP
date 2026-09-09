@@ -18,9 +18,10 @@
  * carries no arithmetic worth getting wrong: the maths is in config.js, which
  * is pure and asserted directly.
  */
-import { simToWorld, FIELD } from './config.min.js';
+import { EXESNOHS_CONFIG as CFG, simToWorld, FIELD } from './config.min.js';
 import { figureFor, poseFigure } from './roster.min.js';
-import { getBall } from './ball.min.js';
+import { getBall, aimBall, placeSpot } from './ball.min.js';
+import { markerFor } from './markers.min.js';
 
 /** Is this player sitting out this formation?
  *
@@ -87,7 +88,7 @@ export function syncFigures(objects, delta = 1 / 60) {
     for (const obj of objects) {
         const figure = figureFor(obj.settings.position);
         if (!figure) continue;
-        if (BENCHED(obj)) { figure.visible = false; continue; }
+        if (BENCHED(obj)) { figure.visible = false; hideMarkerFor(obj); continue; }
 
         const p = simToWorld(obj.coords.x, obj.coords.y, 0);
         figure.position.set(p.x, 0, p.z);
@@ -120,7 +121,23 @@ export function syncFigures(objects, delta = 1 / 60) {
         poseFigure(figure, speed, figure.userData.phase);
 
         figure.visible = true;
+
+        // The marker slides under the feet. It is NOT a child of the figure,
+        // so it keeps its own orientation and a letter stays the right way up
+        // however the receiver turns (see markers.js).
+        const marker = markerFor(obj.settings.position);
+        if (marker) {
+            marker.position.set(p.x, marker.position.y, p.z);
+            marker.visible = true;
+        }
     }
+}
+
+/** Hide the marker of anyone who is not on the field, so a benched player's
+ *  letter does not sit on the grass with nobody standing on it. */
+function hideMarkerFor(obj) {
+    const marker = markerFor(obj.settings.position);
+    if (marker) marker.visible = false;
 }
 
 /**
@@ -130,31 +147,84 @@ export function syncFigures(objects, delta = 1 / 60) {
  * that figure rather than anything the simulation models. In flight it uses
  * its own sim object, whose `coords.z` is the arc getZIndex produced.
  */
-export function syncBall(ballObj, carrier) {
+/**
+ * The ball's own state between frames.
+ *
+ * THE VELOCITY IS MEASURED, NOT READ. The obvious source is the sim object's
+ * `xSpeed` and `ySpeed`, and that is what the old version used, but those are
+ * the two HORIZONTAL components only. The whole vertical arc lives in
+ * `coords.z`, produced by `routes.getZIndex`, and there is no `zSpeed` to go
+ * with it. So a ball aimed from the state fields is always dead level, however
+ * steeply it is climbing, which is the reported "slope and angle do not match
+ * the trajectory".
+ *
+ * Differencing the world position picks up all three axes and needs nothing
+ * from the simulation, which also means it works unchanged during a replay,
+ * where the objects are rebuilt from a recording and their speed fields are
+ * whatever they were when recorded.
+ */
+const flight = { x: 0, y: 0, z: 0, has: false, spin: 0, dir: { x: 1, y: 0, z: 0 } };
+
+/** Turns per second of a thrown ball. A real spiral is nearer 10, which at
+ *  60Hz aliases into a slow backwards crawl. This is the fastest rate that
+ *  still reads as spin rather than as strobing. */
+const SPIRAL_HZ = 3.2;
+
+/** Reset between plays, so a new throw does not inherit the last one's
+ *  heading for its first frame. */
+export function resetBallFlight() {
+    flight.has = false;
+    flight.spin = 0;
+    flight.dir = { x: 1, y: 0, z: 0 };
+}
+
+export function syncBall(ballObj, carrier, delta = 1 / 60) {
     const ball = getBall();
     if (!ball) return;
 
     if (ballObj && !BENCHED(ballObj)) {
         const p = simToWorld(ballObj.coords.x, ballObj.coords.y, ballObj.coords.z || 0);
-        ball.position.set(p.x, Math.max(p.y, 0.2), p.z);
-        ball.rotation.y = Math.atan2(
-            ballObj.state?.xSpeed || 1, ballObj.state?.ySpeed || 0
-        );
+        const y = Math.max(p.y, 0.2);
+
+        if (flight.has) {
+            const d = { x: p.x - flight.x, y: y - flight.y, z: p.z - flight.z };
+            // Below a threshold the difference is rounding noise, and
+            // normalising noise points the ball in a random direction every
+            // frame. Under it, the last good heading is kept.
+            if (Math.hypot(d.x, d.y, d.z) > 0.004) flight.dir = d;
+        }
+        flight.x = p.x; flight.y = y; flight.z = p.z; flight.has = true;
+
+        flight.spin += delta * SPIRAL_HZ * Math.PI * 2;
+        ball.position.set(p.x, y, p.z);
+        aimBall(flight.dir, flight.spin);
         ball.visible = true;
+        // Only while it is genuinely up. A ball rolling on the grass with a
+        // shadow pinned under it just looks like it has a hole beneath it.
+        placeSpot(p.x, y, p.z, y > 0.6);
         return;
     }
+
+    resetBallFlight();
+    placeSpot(0, 0, 0, false);
 
     if (carrier) {
         const figure = figureFor(carrier.settings.position);
         if (figure) {
             // Chest height, slightly to the figure's right, carried rather
-            // than thrown.
+            // than thrown. Both offsets ride figureScale, or a bigger player
+            // would hold the ball inside their own chest.
+            const reach = 0.18 * CFG.figureScale;
             ball.position.set(
-                figure.position.x + Math.cos(figure.rotation.y) * 0.18,
-                1.15,
-                figure.position.z - Math.sin(figure.rotation.y) * 0.18
+                figure.position.x + Math.cos(figure.rotation.y) * reach,
+                0.66 * CFG.figureScale,
+                figure.position.z - Math.sin(figure.rotation.y) * reach
             );
-            ball.rotation.y = figure.rotation.y;
+            // Tucked, so the long axis lies across the carrier rather than
+            // pointing wherever the last throw left it.
+            aimBall({
+                x: Math.sin(figure.rotation.y), y: 0, z: Math.cos(figure.rotation.y),
+            }, 0);
             ball.visible = true;
             return;
         }

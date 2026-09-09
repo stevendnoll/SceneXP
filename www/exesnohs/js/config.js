@@ -54,12 +54,40 @@ function deepFreeze(obj) {
  * cramped would be the wrong kind of accurate.
  */
 const FIELD = {
-    lineInterval: 10,        // one of five segments down the field, metres
-    segments: 5,             // so the playing area is 50m long
-    width: 30,               // sideline to sideline. TUNE IN M1, then freeze.
-    endZone: 5,              // metres beyond the goal line at each end
-    sideline: 2.2,           // metres of paint and grass outside each sideline
+    lineInterval: 7,         // one of five segments down the field, metres
+    segments: 5,             // so the playing area is 35m long
+    width: 21,               // sideline to sideline
+    endZone: 3.5,            // metres beyond the goal line at each end
+    sideline: 1.55,          // metres of paint and grass outside each sideline
 };
+
+/*
+ * SHRUNK FROM 50m x 30m ON 2026-09-08, AND THE REASON IS PHONES.
+ *
+ * A phone held upright is the primary way this game will be played, and on a
+ * 390 pixel screen the whole field has to fit. It did, and a player came out
+ * 23 pixels tall, which is not enough to follow.
+ *
+ * The camera cannot fix that. It always frames to fit, so the absolute size of
+ * the field is invisible: halve it and the camera simply comes closer.
+ * EXCEPT for the players. They are a fixed 1.75 metres while the field is
+ * measured in tens, so shrinking the field makes them a larger fraction of it,
+ * and therefore of the screen. It is the only lever that moves the number
+ * without either hiding part of the field or reaching for a telephoto lens
+ * that turns the scene into a tactics diagram.
+ *
+ * At 35 x 21 a player is 34 pixels on that same phone, up 42%.
+ *
+ * THE FLOOR IS ABOUT A 5.4 METRE INTERVAL, and it is set by collisions rather
+ * than by looks. `motion.js` hard-codes its radii in FIELD UNITS (12 for a
+ * lineman, 6 for everyone else), so they shrink with the field while the
+ * players do not. Below 5.4 the radius drops under a player's half-width and
+ * figures begin walking through each other. Seven leaves a comfortable margin:
+ * 0.42m of radius against 0.33m of half-width.
+ *
+ * NOTHING IN THE SIMULATION CHANGED. It works in field units and only
+ * `UNITS_TO_METRES` moved, which is exactly the separation D17 bought.
+ */
 
 /**
  * THE SIMULATION KEEPS ITS OWN UNITS. THE VIEW CONVERTS. (M2, 2026-09-08)
@@ -203,13 +231,49 @@ const EXESNOHS_CONFIG = {
 
     camera: {
         fov: 46,
-        /** Portrait gets a wider vertical field of view, because a tall thin
-         *  frame converts very little of it into the horizontal angle that
-         *  actually decides whether the field fits. */
-        portraitFov: 58,
-        /** Metres of grass that must stay visible beyond each sideline. The
-         *  camera pulls back until this is true, however narrow the screen. */
-        sideMargin: 1.5,
+        /** Metres of grass that must stay visible beyond each sideline. */
+        sideMargin: 1.05,
+
+        /**
+         * THE FRAMING SOLVE, which replaced a width-only one.
+         *
+         * The first version only guaranteed the field's WIDTH fitted, and
+         * bought that by pulling the camera back at a fixed height. That
+         * flattens the pitch, and a flat pitch drags the bottom of the frame
+         * far behind the field: on a phone in portrait the visible ground
+         * started 18m behind an end zone that begins at -5, so a quarter of the
+         * screen was empty black under a field that had shrunk to fit.
+         *
+         * So the solve now fits BOTH axes. It aims at mid-field, puts the near
+         * edge of the frame just behind the near end line, and searches for the
+         * narrowest field of view and closest camera that still show the whole
+         * width. Narrower and further turns out to make players BIGGER, not
+         * smaller, because apparent size is distance divided by the tangent of
+         * the half-angle and the angle falls away faster than the distance
+         * grows.
+         */
+        solve: {
+            nearBehind: 1,    // metres of ground visible behind the near end line
+            farBeyond: 1,     // and past the far one
+            minPitch: 28,     // degrees. Flatter than this stops reading as a field
+            /**
+             * 68, NOT 50, AND THE REASON IS PORTRAIT.
+             *
+             * A tall narrow frame has to look further DOWN to fit a long field,
+             * and the steeper it looks the closer it can sit, which is what
+             * finally gets both sidelines into shot. Capped at 50 there was no
+             * solution at all on a phone and the camera fell back to a default
+             * that clipped the touchlines clean off the screen.
+             *
+             * Landscape is unaffected: the search keeps whichever framing makes
+             * a player biggest, and on a wide screen that is still a raked 28
+             * degrees. Nothing above about 68 is worth having, because at that
+             * point the field reads as a diagram rather than a place.
+             */
+            maxPitch: 68,
+            minFov: 28,
+            maxFov: 60,
+        },
         near: 0.5,
         far: 400,
         // The play driver. Behind the offence's own goal line, up high.
@@ -246,21 +310,113 @@ const EXESNOHS_CONFIG = {
          * establish from behind the line, track the carrier low, then settle
          * and hold on where it ended. Fractions are of the whole recording.
          */
+        /**
+         * THE REPLAY DRIVER. Low, close, and allowed to be about one thing.
+         *
+         * EVERY DISTANCE IS IN INTERVALS, NOT METRES, and that is the whole
+         * point of this comment. They were metres, and when the field shrank
+         * from 50m to 35m they did not shrink with it: the camera ended up
+         * 13m behind a carrier on a 35m field, which put it at x = -6 when the
+         * near goal post stands at -3.5. Every replay was shot through the
+         * uprights, with a player filling three quarters of the frame.
+         *
+         * Multiply by FIELD.lineInterval and they follow the field wherever it
+         * goes next.
+         */
         replay: {
-            fov: 38,             // narrower than the play camera's 46
-            establishBack: 24,   // metres behind the anchor at the start
-            establishHeight: 9,
-            establishFor: 0.3,   // fraction of the replay spent getting there
-            trackBack: 13,       // metres behind the carrier once tracking
-            trackHeight: 3.2,    // shoulder height, which the play camera never is
-            swing: 9,            // metres of lateral orbit across the replay
-            lead: 3,             // aim slightly ahead of the carrier
-            settleFrom: 0.78,    // when the closing move begins
-            settleCloseness: 0.72,
-            settleZoom: 7,       // degrees of fov given up on the settle
-            speed: 0.85,         // playback rate. Under 1 is slow motion
-            holdEnd: 1.0,        // seconds to hold the last frame
+            fov: 46,                 // widened from 38: at these distances a
+                                     // narrower lens fills the frame with one
+                                     // torso and shows none of the play
+            /**
+             * IT ORBITS THE CARRIER RATHER THAN CHASING HIM.
+             *
+             * A camera directly behind needs field behind the ball, and on a
+             * 35m field there is barely any: with the carrier at the line of
+             * scrimmage a two-interval chase wanted to stand behind the goal
+             * post, so it spent the whole replay pinned against a clamp,
+             * static, at the one distance it was allowed.
+             *
+             * Swinging round a circle instead keeps the distance CONSTANT, so
+             * the framing never changes size, and trades the space behind the
+             * ball for space beside it, which a field has plenty of.
+             *
+             * THE RADIUS IS CAPPED BY THE TIGHTEST SPOT ON THE FIELD, which is
+             * a carrier standing on the near try line in the middle. From
+             * there the camera has 3m of room behind before the goal post and
+             * 12m to either touchline before the seats, so no circle wider
+             * than sqrt(3^2 + 12^2), about 12.4m, has anywhere to be. 12.6m is
+             * that limit less a whisker, and it puts a player at roughly a
+             * third of the frame height, which is a replay rather than a
+             * portrait.
+             */
+            radius: 1.8,             // intervals from the carrier, held
+            minRadius: 1.1,          // ...unless the seats force it closer
+            angleFrom: 168,          // degrees. 180 is directly behind
+            angleTo: 118,            // swinging round to the side
+            establishHeight: 1.2,    // intervals
+            establishFor: 0.3,       // fraction of the replay spent getting there
+            trackHeight: 0.55,
+            lead: 0.4,               // aim slightly ahead of the carrier
+            settleFrom: 0.78,
+            settleCloseness: 0.82,   // was 0.72, which closed in too hard
+            settleZoom: 6,
+            speed: 0.85,
+            holdEnd: 1.0,
         },
+    },
+
+    /**
+     * HOW BIG THE PLAYERS AND THE BALL LOOK.
+     *
+     * Deliberately not life size. A 1.75m figure on a 50m field seen from a
+     * raked camera is a handful of pixels, and this is a game rather than a
+     * simulation: legibility beats scale accuracy every time. The same reason
+     * the field itself is compressed to five intervals rather than a hundred
+     * yards (D3).
+     *
+     * The ball is pushed harder than the players because it is the one object
+     * whose position the visitor is actually tracking, and it starts smaller
+     * than anything else on the field.
+     *
+     * 2.2 AND 2.6, RAISED FROM 1.3 AND 1.5, AND HERE IS THE MEASUREMENT.
+     * Projected through a real camera at 393x852, a player at 1.3 stood 9
+     * pixels tall at the line of scrimmage and 2 in the near end zone, because
+     * a 66 degree pitch views a standing figure almost end on. At 2.2 that
+     * becomes 15 and 4, and the figure's WIDTH, which the pitch does not
+     * foreshorten, goes from 12 pixels to 21.
+     *
+     * Width is why the number stops at 2.2 rather than climbing until the
+     * height looks right. Reaching a comfortable 30 pixels of height would
+     * take about 3.9, and a 6.8m player is taller than the goal post crossbar
+     * and a third the width of the field. The rest of the legibility comes
+     * from the ground markers below, which do not foreshorten at all.
+     */
+    figureScale: 2.2,
+    ballScale: 2.6,
+
+    /**
+     * THE FLAT DISC UNDER EACH PLAYER (see markers.js for why it exists).
+     *
+     * Sizes are world metres, not intervals, because what matters is how many
+     * pixels they cover and that is set by the camera rather than by the
+     * field. A 0.6m radius measures 16 to 23 pixels everywhere on the field,
+     * against a figure that swings between 2 and 21.
+     */
+    markers: {
+        // The plain ring is deliberately the quieter of the two. Six linemen
+        // stand shoulder to shoulder at the line of scrimmage, so anything
+        // bigger or brighter merges into one orange puddle and the eye goes
+        // to the wrong place. The lettered discs are the ones meant to be
+        // read, and they are the ones a visitor presses.
+        plainRadius: 0.55,      // the team-coloured ring under everybody
+        namedRadius: 0.78,      // the lettered disc under a receiver or the QB
+        plainOpacity: 0.42,
+        namedOpacity: 0.92,
+        lift: 0.035,            // above the turf and the painted lines
+        /** The breath on a marker that can be tapped. The floor is how far
+         *  down the pulse dips, so it never fades toward invisible. */
+        pulseFloor: 0.55,
+        pulseScale: 1.18,
     },
 
     /** Floodlit night, deliberately. A day/night cycle is off: this is one

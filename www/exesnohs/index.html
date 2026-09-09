@@ -173,6 +173,47 @@
 
     <canvas id="game-canvas"></canvas>
 
+    <!-- THE WELCOME CARD.
+         The one thing a visitor needs before the playbook makes any sense:
+         that they are always on offence, that there are ten plays, and that
+         distance is what a play is worth. The 2D game can leave the last part
+         to the field itself, because it paints "0 pts / 5 pts / 15 pts /
+         30 pts / 50 pts" along the touchline. The 3D field does not carry
+         those bands yet, so the ladder has to be stated here.
+
+         It is a plain card rather than the shared #blocker overlay, because
+         this scene has no click-to-start surface: every action is a button,
+         and adding a full-screen click target would be the one exception. -->
+    <div id="welcome" class="card-overlay" hidden>
+        <div class="card-panel welcome-panel" role="dialog" aria-modal="true"
+            aria-labelledby="welcome-title">
+            <h2 id="welcome-title" class="card-title">X's and O's</h2>
+            <p class="card-detail">Ten plays, and you are on offence for every one
+                of them. The further you carry the ball, the more the play is worth.</p>
+
+            <ol class="welcome-steps">
+                <li><strong>Call a play.</strong> Pick one from the playbook, and
+                    choose a defence to face or leave it to chance.</li>
+                <li><strong>Snap the ball.</strong> Take as long as you like reading
+                    the formation first.</li>
+                <li><strong>Throw or run.</strong> Hit a receiver, or keep it
+                    yourself and see how far you get.</li>
+            </ol>
+
+            <p class="welcome-ladder-title">What a play is worth</p>
+            <ul class="welcome-ladder">
+                <li><span class="ladder-pts is-good">5</span> past the first line</li>
+                <li><span class="ladder-pts is-good">15</span> past the second</li>
+                <li><span class="ladder-pts is-good">30</span> past the third</li>
+                <li><span class="ladder-pts is-good">50</span> all the way across</li>
+                <li><span class="ladder-pts is-bad">-5</span> sacked holding the ball</li>
+                <li><span class="ladder-pts is-bad">-10</span> intercepted</li>
+            </ul>
+
+            <div id="welcome-actions" class="card-actions"></div>
+        </div>
+    </div>
+
     <!-- THE PLAYBOOK (M3). Its contents are built by playbook-ui.js from the
          play table, because ten cards of identical shape are data, not markup.
          The shell is here so the stylesheet has something stable to hang on.

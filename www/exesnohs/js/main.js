@@ -17,16 +17,17 @@
  */
 import { EXESNOHS_CONFIG as CFG, FIELD, simToWorld } from './config.min.js';
 import { initField } from './field.min.js';
-import { initRoster } from './roster.min.js';
+import { initRoster, figureFor } from './roster.min.js';
 import { initBall } from './ball.min.js';
-import { syncFigures, syncBall, setViewCamera } from './view.min.js';
+import { initMarkers, setPulse } from './markers.min.js';
+import { syncFigures, syncBall, setViewCamera, resetBallFlight } from './view.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome,
 } from './play.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
-    clearActions, showResult, hideResult, announce,
+    clearActions, showResult, hideResult, announce, showWelcome,
 } from './hud.min.js';
 import { showSummary, hideSummary } from './summary.min.js';
 import {
@@ -45,6 +46,7 @@ const state = {
     isRunning: false,
     isLoaded: false,
     lastFrame: 0,
+    elapsed: 0,
 };
 
 /**
@@ -255,6 +257,7 @@ function openPlaybook() {
  *  An empty `defence` is the library's own signal to pick one at random. */
 function startPlay(offensive, defence) {
     lineUp(cycle.play, offensive, defence || '');
+    resetBallFlight();
     cycle.phase = 'presnap';
     cycle.held = 0;
     cycle.accumulator = 0;
@@ -390,7 +393,7 @@ function stepCycle(delta) {
         // is always the quarterback and after one the ball has its own slot.
         const ball = objs.find((o) => o.settings.position === 'ball'
             && !o.settings.benched && (o.coords.x || o.coords.y));
-        syncBall(ball || null, ball ? null : objs.find((o) => o.settings.position === 'qb'));
+        syncBall(ball || null, ball ? null : objs.find((o) => o.settings.position === 'qb'), delta);
         if (done) {
             // Hold the last frame for a beat before the card, so the replay
             // ends on a composition rather than cutting away mid-motion.
@@ -408,7 +411,7 @@ function stepCycle(delta) {
     if (cycle.phase === 'presnap') {
         // Waiting on the snap button. The formation holds, nothing ticks.
         syncFigures(cycle.play.game.objects, delta);
-        syncBall(null, ballCarrier(cycle.play));
+        syncBall(null, ballCarrier(cycle.play), delta);
         return;
     }
     if (cycle.phase === 'live') {
@@ -434,7 +437,7 @@ function stepCycle(delta) {
     }
 
     syncFigures(cycle.play.game.objects, delta);
-    syncBall(null, ballCarrier(cycle.play));
+    syncBall(null, ballCarrier(cycle.play), delta);
 }
 
 /** Which side a slot belongs to, for playback. The recording stores positions,
@@ -449,9 +452,92 @@ function animate(now) {
     state.lastFrame = now;
 
     stepCycle(delta);
+    state.elapsed += delta;
+    pulseTargets(state.elapsed);
     setDriver(driverForPhase(cycle.phase));
     applyCamera(updateCamera(delta, cameraState()));
     renderer.render(scene, camera);
+}
+
+// ---- Tapping the players ----------------------------------------------------
+
+/**
+ * TAP THE QUARTERBACK TO SNAP IT, TAP A RECEIVER TO THROW TO THEM.
+ *
+ * This is how the 2D game is played, and the buttons along the bottom are the
+ * accessible equivalent rather than the primary control. Both stay: the buttons
+ * are the only keyboard route into a throw, they are what a screen reader
+ * announces, and they name the receivers for anyone who cannot tell the discs
+ * apart. Nothing is reachable ONLY by tapping the canvas, which is the trap a
+ * pointer-driven scene falls into.
+ *
+ * IT IS NOT A RAYCAST. A player is between 2 and 21 pixels tall on a phone, so
+ * hitting one with a fingertip would be a game of its own. Instead every
+ * candidate is projected to screen space and the nearest one within a
+ * finger-sized radius wins. That gives a forgiving target, it costs five
+ * projections rather than a scene traversal, and it cannot be fooled by a
+ * figure standing in front of another.
+ */
+const TAP_RADIUS = 46;        // CSS pixels, a little over a fingertip
+const projected = { v: null };
+
+/** Where a world point lands on screen, in CSS pixels. */
+function toScreen(x, y, z) {
+    if (!projected.v) projected.v = new THREE.Vector3();
+    projected.v.set(x, y, z).project(camera);
+    if (projected.v.z > 1) return null;      // behind the camera
+    return {
+        x: (projected.v.x * 0.5 + 0.5) * window.innerWidth,
+        y: (1 - (projected.v.y * 0.5 + 0.5)) * window.innerHeight,
+    };
+}
+
+/** Who can be tapped right now, and what tapping them does. */
+function tapTargets() {
+    if (!cycle.play) return [];
+    if (cycle.phase === 'presnap') return [{ position: 'qb', act: onSnap }];
+    if (cycle.phase === 'live' && !cycle.play.game.throwTo && !cycle.play.game.runForYourLife) {
+        return [
+            ...eligibleReceivers(cycle.play).map((pos) => ({
+                position: pos, act: () => onThrow(pos),
+            })),
+            { position: 'qb', act: onRun },
+        ];
+    }
+    return [];
+}
+
+function onCanvasPointer(event) {
+    const targets = tapTargets();
+    if (!targets.length) return;
+
+    let best = null;
+    for (const target of targets) {
+        const figure = figureFor(target.position);
+        if (!figure || !figure.visible) continue;
+        // Aimed at the chest rather than the feet, because that is where the
+        // eye puts the player and therefore where a finger goes.
+        const at = toScreen(figure.position.x, 0.9 * CFG.figureScale, figure.position.z);
+        if (!at) continue;
+        const d = Math.hypot(at.x - event.clientX, at.y - event.clientY);
+        if (d <= TAP_RADIUS && (!best || d < best.d)) best = { d, target };
+    }
+    if (!best) return;
+    event.preventDefault();
+    best.target.act();
+}
+
+/**
+ * Make the tappable players look tappable.
+ *
+ * A slow breath on the marker under whoever can be pressed. Without it the
+ * gesture is undiscoverable, and with anything faster it competes with the
+ * play. Held still for anyone who asked not to be moved about, who still gets
+ * the brighter resting opacity so the affordance is not lost entirely.
+ */
+function pulseTargets(elapsed) {
+    const live = new Set(tapTargets().map((t) => t.position));
+    setPulse(live, reducedMotion ? 1 : 0.72 + Math.sin(elapsed * 3.4) * 0.28);
 }
 
 function onResize() {
@@ -486,6 +572,7 @@ async function init() {
     // play a visitor chose is remembered, so a returning visitor sees theirs.
     const objects = lineUp(cycle.play, getSettings().lastPlay || 'pass2', '');
     initRoster(scene, objects);
+    initMarkers(scene, objects);
     initBall(scene);
     syncFigures(objects, 0);
     syncBall(null, ballCarrier(cycle.play));
@@ -523,7 +610,14 @@ async function init() {
     installCardScrollReset({ signal });
 
     window.addEventListener('resize', onResize, { signal });
-    startGame();
+    // Tapping a player is the 2D game's own control. The HUD buttons remain
+    // the keyboard and screen reader route, so nothing here is the only way
+    // to reach anything.
+    canvas.addEventListener('pointerdown', onCanvasPointer, { signal });
+    // THE WELCOME CARD COMES FIRST, and only on arrival. "Play again" from the
+    // summary goes straight back to the playbook, because somebody who has
+    // just finished ten plays does not need the rules again.
+    showWelcome(startGame);
 
     state.isLoaded = true;
     state.isRunning = true;

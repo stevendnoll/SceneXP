@@ -31,6 +31,7 @@
  * fixing it needs a new joint in the shared part rather than anything here.
  */
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
+import { EXESNOHS_CONFIG as CFG } from './config.min.js';
 
 /** The 2D game's own team colours and names. */
 export const TEAMS = {
@@ -246,6 +247,10 @@ export function initRoster(scene, objects) {
         });
         addHelmet(person, kit);
         addContactShadow(person);
+        // Scaled as a whole, so the helmet, the contact shadow and every limb
+        // pivot move together. Scaling the rig's parts individually would put
+        // the helmet through the head.
+        person.scale.setScalar(CFG.figureScale);
 
         person.name = `player-${position}`;
         person.userData.position = position;

@@ -422,3 +422,68 @@ body {
     border-color: #ff992c;
     color: #f2f5fa;
 }
+
+/* ---- The welcome card -----------------------------------------------------
+ *
+ * Wider than the result card because it is the only place the scoring ladder
+ * is written down. The 2D game paints those bands along the touchline, so it
+ * never had to explain them in words.
+ */
+
+.welcome-panel {
+    width: min(34rem, 100%);
+    text-align: left;
+}
+
+.welcome-panel .card-title,
+.welcome-panel .card-detail {
+    text-align: center;
+}
+
+.welcome-steps {
+    margin: 1.2rem 0 0;
+    padding-left: 1.3rem;
+    color: #c3cbd9;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.welcome-steps li { margin-top: 0.45rem; }
+.welcome-steps strong { color: #f2f5fa; }
+
+.welcome-ladder-title {
+    margin: 1.3rem 0 0.5rem;
+    color: #8d97a8;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.welcome-ladder {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+    gap: 0.35rem 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: #c3cbd9;
+    font-size: 0.92rem;
+}
+
+.welcome-ladder li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.ladder-pts {
+    min-width: 2.2rem;
+    font-weight: 800;
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.ladder-pts.is-good { color: #6fe08a; }
+.ladder-pts.is-bad { color: #ff7a7a; }

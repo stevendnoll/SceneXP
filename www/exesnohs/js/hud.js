@@ -134,6 +134,28 @@ export function clearActions() {
 }
 
 /**
+ * The welcome card.
+ *
+ * Shown once, before the first playbook. It is the only place the scoring
+ * ladder is written down: the 2D game paints those bands along the touchline
+ * so it never had to say them in words, and the 3D field does not carry them
+ * yet.
+ */
+export function showWelcome(onStart) {
+    const card = el('welcome');
+    if (!card) { if (onStart) onStart(); return; }
+    const box = el('welcome-actions');
+    box.textContent = '';
+    const start = button('Take the field', 'hud-btn hud-btn-primary', () => {
+        card.hidden = true;
+        if (onStart) onStart();
+    });
+    box.appendChild(start);
+    card.hidden = false;
+    start.focus();
+}
+
+/**
  * The result card.
  *
  * Opens after every whistle with what happened and what it was worth, and one
