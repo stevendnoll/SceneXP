@@ -373,6 +373,104 @@ describe('the ball flies', () => {
     });
 });
 
+describe('the playbook is the 2D game\'s playbook', () => {
+    const book = () => import(join(scene, 'playbook-ui.js'));
+    const sim = () => import(join(scene, 'play.js'));
+
+    /**
+     * ALL SEVENTEEN. Seven were left out on a misreading of `formationRouteQb`:
+     * the switch names ten slugs, and the conclusion drawn was that the rest
+     * "have diagrams but no routes". It has a `default:` that hands the
+     * quarterback a full drop-back, so every one of them runs.
+     */
+    test('every play the 2D game has is here', async () => {
+        const { PLAYS } = await book();
+        expect(PLAYS.length).toBe(17);
+    });
+
+    test('every card has a play behind it that the simulation will run', async () => {
+        const { PLAYS } = await book();
+        const { OFFENSIVE_PLAYS } = await sim();
+        for (const play of PLAYS) expect(OFFENSIVE_PLAYS).toContain(play.slug);
+        expect(OFFENSIVE_PLAYS.length).toBe(PLAYS.length);
+    });
+
+    /**
+     * THE SLUG-TO-DIAGRAM MAP IS NOT SEQUENTIAL AND CANNOT BE GUESSED, so it is
+     * checked against the source it was copied from rather than trusted.
+     * `PlaybookOverlay.tsx` is the 2D game's own list and it is gitignored, so
+     * this reads the mapping out of the ported drawing code instead: every
+     * diagram a card names must exist as a `drawPlayN` method.
+     */
+    test('every diagram a card names actually exists', async () => {
+        const { PLAYS } = await book();
+        const source = readFileSync(join(scene, 'playbook.js'), 'utf8');
+        for (const play of PLAYS) {
+            expect(source).toContain(`drawPlay${play.diagram}(`);
+        }
+    });
+
+    test('no two plays share a diagram', async () => {
+        const { PLAYS } = await book();
+        const seen = PLAYS.map((p) => p.diagram);
+        expect(new Set(seen).size).toBe(seen.length);
+    });
+
+    test('and no two share a slug or a name', async () => {
+        const { PLAYS } = await book();
+        expect(new Set(PLAYS.map((p) => p.slug)).size).toBe(PLAYS.length);
+        expect(new Set(PLAYS.map((p) => p.name)).size).toBe(PLAYS.length);
+    });
+
+    /**
+     * THE NAME HAS TO DESCRIBE THE ROUTES, which is the whole of the second
+     * complaint. The old names came from averaging where receivers ENDED UP
+     * over twelve runs, and an end position throws the route away: a receiver
+     * who runs deep and cuts back finishes where one who drifted finishes. So a
+     * play with all four running straight was called Deep Split, and the name
+     * Four Verticals sat on a play where three of them break left.
+     *
+     * This asserts the one name whose meaning is unambiguous. Four verticals is
+     * four receivers running straight down the field, and it is measurable: net
+     * lateral movement near zero on all four, and real depth on all four.
+     */
+    test('Four Verticals is four receivers running straight down the field', async () => {
+        const { PLAYS } = await book();
+        const { createPlay, lineUp, snap, tick } = await sim();
+        const card = PLAYS.find((p) => p.name === 'Four Verticals');
+        expect(card).toBeTruthy();
+
+        const play = createPlay();
+        lineUp(play, card.slug, 'cover2');
+        // The library randomises every player, so freeze them: this is about
+        // the shape of the route, not about dice.
+        for (const o of play.game.objects) {
+            if (o.physics) { o.physics.maxSpeed = 2.0; o.physics.accel = 1.0; }
+        }
+        snap(play);
+        const start = new Map();
+        for (const o of play.game.objects) {
+            if (/^wr\d$/.test(o.settings.position)) {
+                start.set(o.settings.position, { x: o.coords.x, y: o.coords.y });
+            }
+        }
+        for (let f = 0; f < 400; f += 1) tick(play);
+        play.live = false;
+
+        let counted = 0;
+        for (const o of play.game.objects) {
+            if (!/^wr\d$/.test(o.settings.position) || o.settings.benched) continue;
+            const a = start.get(o.settings.position);
+            const depth = (o.coords.x - a.x) * UNITS_TO_METRES;
+            const across = Math.abs(o.coords.y - a.y) * UNITS_TO_METRES;
+            expect(depth).toBeGreaterThan(15);      // genuinely deep
+            expect(across).toBeLessThan(3);         // and genuinely straight
+            counted += 1;
+        }
+        expect(counted).toBe(4);
+    });
+});
+
 describe('the flight recorder knows who is holding the ball', () => {
     /**
      * A CAUGHT PASS LEAVES THE BALL OBJECT LYING WHERE IT WAS CAUGHT, with its

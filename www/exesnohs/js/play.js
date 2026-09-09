@@ -39,10 +39,20 @@ const ROSTER = [
     ['db', 'db5', 1], ['db', 'db6', 1], ['s', 's1', 1], ['s', 's2', 1],
 ];
 
-/** Offensive plays the library actually defines, read off formationRouteQb. */
+/**
+ * Every offensive play the library will run, which is all seventeen.
+ *
+ * IT WAS TEN, ON A MISREADING OF `formationRouteQb`. That switch names ten
+ * slugs, and the conclusion drawn was that the other seven "have diagrams but
+ * no routes". It has a `default:` that gives the quarterback a full drop-back
+ * with boundaries, so the seven run perfectly well: played end to end they
+ * produce catches, incompletes and receivers travelling 4 to 22 metres. The
+ * named cases are variations on the default, not the only way in.
+ */
 export const OFFENSIVE_PLAYS = [
-    'jumbo1', 'jumbo2', 'screen1', 'screen2',
-    'pass2', 'pass5', 'pass8', 'run1', 'run2', 'run3',
+    'pass1', 'pass2', 'pass3', 'pass4', 'pass5', 'pass6', 'pass7', 'pass8',
+    'run1', 'run2', 'run3',
+    'jumbo1', 'jumbo2', 'screen1', 'screen2', 'slant1', 'slant2',
 ];
 
 /**

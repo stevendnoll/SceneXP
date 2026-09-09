@@ -52,6 +52,9 @@ beforeAll(async () => {
 });
 
 const named = (name) => parts.filter((p) => p.name === name);
+/** The dome is now TWO pieces, a closed crown cap and the band below it that
+ *  carries the face opening, so "the shell" is their union. */
+const shellBox = () => unionOf([...named('helmet-crown'), ...named('helmet-shell')]);
 const unionOf = (list) => {
     const b = new THREE.Box3();
     for (const p of list) b.union(box(p));
@@ -67,15 +70,16 @@ describe('the shell covers the head', () => {
      * amount of facemask fixes it.
      */
     test('it reaches below the hair at the back', () => {
-        expect(box(parts[0]).min.y).toBeLessThanOrEqual(HEAD.hairLow);
+        expect(shellBox().min.y).toBeLessThanOrEqual(HEAD.hairLow);
     });
 
     test('and over the top of it', () => {
-        expect(box(parts[0]).max.y).toBeGreaterThanOrEqual(HEAD.hairHigh);
+        expect(shellBox().max.y).toBeGreaterThanOrEqual(HEAD.hairHigh);
     });
 
     test('it is wider than the head, and not by a silly amount', () => {
-        const halfWidth = (box(parts[0]).max.x - box(parts[0]).min.x) / 2;
+        const b = shellBox();
+        const halfWidth = (b.max.x - b.min.x) / 2;
         expect(halfWidth).toBeGreaterThan(HEAD.hairR);
         // A bubble was the first fault. Anything past about half again as wide
         // as the head it is covering stops being a helmet.
@@ -83,7 +87,7 @@ describe('the shell covers the head', () => {
     });
 
     test('it runs further back than it does forward, which is the shape', () => {
-        const b = box(parts[0]);
+        const b = shellBox();
         expect(Math.abs(b.min.z)).toBeGreaterThan(b.max.z);
     });
 });
@@ -101,7 +105,7 @@ describe('the facemask is in front of the face', () => {
 
     test('and clear of the shell it is bolted to', () => {
         expect(unionOf(named('helmet-mask')).max.z)
-            .toBeGreaterThan(box(parts[0]).max.z);
+            .toBeGreaterThan(shellBox().max.z);
     });
 
     test('it spans the face rather than sitting on the chin', () => {
@@ -135,8 +139,33 @@ describe('the silhouette', () => {
      * off the arguments: the shell's vertices should thin out ahead of the head
      * and not behind it.
      */
+    /**
+     * AND THE CROWN IS CLOSED. A phi sweep removes a wedge of longitude and
+     * longitudes MEET AT THE POLE, so a gap left for the face runs all the way
+     * up and takes a pie slice out of the top of the helmet. That is exactly
+     * what it did. The cap above the opening has the full sweep.
+     */
+    test('the crown has no wedge missing from it', () => {
+        const pos = named('helmet-crown')[0].geometry.attributes.position;
+        // Every quadrant around the axis should carry vertices. A gap shows up
+        // as one of them empty.
+        const quads = [0, 0, 0, 0];
+        for (let i = 0; i < pos.count; i += 1) {
+            const a = Math.atan2(pos.getZ(i), pos.getX(i));
+            quads[Math.floor(((a + Math.PI) / (Math.PI / 2)) % 4)] += 1;
+        }
+        for (const n of quads) expect(n).toBeGreaterThan(pos.count * 0.15);
+    });
+
+    test('and the crown reaches down to meet the opening below it', () => {
+        const crown = box(named('helmet-crown')[0]);
+        const band = box(named('helmet-shell')[0]);
+        // They overlap or touch: a gap between them would be a visible seam.
+        expect(crown.min.y).toBeLessThanOrEqual(band.max.y + 1e-6);
+    });
+
     test('the opening is at the front, not over an ear', () => {
-        const pos = parts[0].geometry.attributes.position;
+        const pos = named('helmet-shell')[0].geometry.attributes.position;
         let ahead = 0;
         let behind = 0;
         let left = 0;

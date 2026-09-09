@@ -18,42 +18,68 @@ import { OffensivePlaybookClass } from './playbook.min.js';
 import { EXESNOHS_CONFIG as CFG } from './config.min.js';
 
 /**
- * The ten live plays.
+ * ALL SEVENTEEN PLAYS, WHICH IS WHAT THE 2D GAME HAS.
  *
  * `diagram` maps a play's slug to its drawPlay number, read off the 2D game's
  * PlaybookOverlay component. The mapping is NOT sequential and cannot be
  * guessed: pass8 draws diagram 11, jumbo2 draws 14, screen1 draws 13.
  *
- * The library defines seven more (pass1, pass3, pass4, pass6, pass7, slant1,
- * slant2) whose cases are commented out in formationRouteQb, so they have
- * diagrams but no routes. They are deliberately not listed.
+ * SEVEN OF THESE WERE LEFT OUT ON A MISREADING, and it is worth writing down
+ * because it cost the playbook 40% of its contents. The note here used to say
+ * that pass1, pass3, pass4, pass6, pass7, slant1 and slant2 had their cases
+ * "commented out in formationRouteQb, so they have diagrams but no routes".
+ * The switch does only name ten slugs, but it has a `default:` that hands the
+ * quarterback a full drop-back with boundaries, so every one of the seven runs.
+ * Checked by playing them: they produce catches, incompletes and receivers who
+ * travel 4 to 22 metres, which is a working play by any definition.
  *
- * `blurb` IS DERIVED, NOT INVENTED. Each one was measured by running the play
- * twelve times through the real simulation and averaging where each receiver
- * ended up, because player speeds are randomised per snap. Nothing here claims
- * a route the code does not actually run.
+ * `name` AND `blurb` ARE MEASURED FROM THE ROUTE SHAPE, which is the second
+ * thing that was wrong. They used to be derived by running each play twelve
+ * times and averaging where each receiver ENDED UP, and an end position throws
+ * away the route: a receiver who runs deep and cuts back across finishes in the
+ * same place as one who drifted. So a play whose four receivers run straight
+ * down the field was called Deep Split and the name Four Verticals was on a
+ * play where three of them break left.
+ *
+ * They are now taken from the whole path: depth, net lateral travel and where
+ * the break falls. `pass4` really is four verticals, all four running 25m with
+ * under half a metre of drift between them, and it now carries the name.
  */
 export const PLAYS = [
-    { slug: 'pass2', diagram: 2, name: 'Four Verticals',
-      blurb: 'All four receivers run deep, three of them breaking left.' },
+    { slug: 'pass1', diagram: 1, name: 'Split Verticals',
+      blurb: 'Two receivers straight down the middle while the other two peel to opposite sidelines.' },
+    { slug: 'pass2', diagram: 2, name: 'Flood Left',
+      blurb: 'All four go deep and three of them break the same way, flooding that side.' },
+    { slug: 'pass3', diagram: 3, name: 'Deep Drift',
+      blurb: 'Four deep routes with three drifting left, the widest crossing the field.' },
+    { slug: 'pass4', diagram: 4, name: 'Four Verticals',
+      blurb: 'All four receivers run straight down the field. Nobody breaks.' },
     { slug: 'pass5', diagram: 5, name: 'Deep Split',
       blurb: 'Four deep routes split either side of the field.' },
+    { slug: 'pass6', diagram: 6, name: 'Three Short, One Deep',
+      blurb: 'Three receivers stay underneath while one clears out deep to the left.' },
+    { slug: 'pass7', diagram: 7, name: 'Stack Right',
+      blurb: 'Two short to the right, with a deep route running either side of them.' },
     { slug: 'pass8', diagram: 11, name: 'Short Cross',
-      blurb: 'Three receivers work short and across, one clears out deep left.' },
-    { slug: 'screen1', diagram: 13, name: 'Screen Left',
-      blurb: 'One receiver stays short as a target, the other clears deep left.' },
-    { slug: 'screen2', diagram: 15, name: 'Screen Short',
-      blurb: 'Two short options underneath with a medium route to the right.' },
+      blurb: 'Everybody works short, the widest pair drifting left.' },
     { slug: 'run1', diagram: 8, name: 'Run Right',
-      blurb: 'Three receivers block short right while one clears deep.' },
+      blurb: 'Blockers work right while one receiver comes back to the left.' },
     { slug: 'run2', diagram: 9, name: 'Run Left',
-      blurb: 'Everybody works short and to the left.' },
+      blurb: 'Every receiver works left, and none of them go deep.' },
     { slug: 'run3', diagram: 10, name: 'Run Middle',
       blurb: 'Short and medium routes through the middle of the field.' },
     { slug: 'jumbo1', diagram: 12, name: 'Jumbo Split',
-      blurb: 'A heavy line, with two receivers deep on opposite sides.' },
+      blurb: 'A heavy line, with the two receivers deep to opposite sidelines.' },
     { slug: 'jumbo2', diagram: 14, name: 'Jumbo Right',
-      blurb: 'A heavy line, with both receivers deep to the right.' },
+      blurb: 'A heavy line, with both receivers working to the right.' },
+    { slug: 'screen1', diagram: 13, name: 'Screen Left',
+      blurb: 'One receiver stays short as a target while the other clears deep left.' },
+    { slug: 'screen2', diagram: 15, name: 'Screen Short',
+      blurb: 'Two receivers stay very short, with a medium route out to the right.' },
+    { slug: 'slant1', diagram: 16, name: 'Twin Slants Right',
+      blurb: 'Two receivers slant deep to the right while one crosses the other way.' },
+    { slug: 'slant2', diagram: 17, name: 'Deep Crossers',
+      blurb: 'Deep crossing routes both ways, the widest running clean across the field.' },
 ];
 
 /** The defensive formations the library will actually run, in the order its

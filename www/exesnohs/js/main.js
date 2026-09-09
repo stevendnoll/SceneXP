@@ -67,7 +67,7 @@ const state = {
  */
 const cycle = {
     play: null,
-    phase: 'playbook',    // playbook -> presnap -> live -> settle -> result
+    phase: 'welcome',     // welcome -> playbook -> presnap -> live -> settle -> result
     held: 0,
     accumulator: 0,
     playNumber: 0,        // 1 to CFG.rules.playsPerGame
@@ -200,6 +200,11 @@ function applyCamera(shot) {
  * because it is the one that never moves.
  */
 function driverForPhase(phase) {
+    // THE WELCOME CARD GETS THE STILL CAMERA. The idle dolly exists so the
+    // field does not look paused behind the playbook, and behind a card of
+    // reading matter it is just a moving background: a visitor trying to read
+    // six lines of rules watches the pitch slide sideways underneath them.
+    if (phase === 'welcome') return 'play';
     if (phase === 'playbook') return 'idle';
     if (phase === 'replay') return 'replay';
     return 'play';
@@ -418,7 +423,7 @@ function startGame() {
  *  readable state machine rather than a pile of conditions in the frame loop. */
 function stepCycle(delta) {
     if (!cycle.play) return;
-    if (cycle.phase === 'playbook') {
+    if (cycle.phase === 'playbook' || cycle.phase === 'welcome') {
         // The field simply holds its last frame behind the overlay. Nothing
         // ticks, so a visitor reading the playbook is not burning a phone
         // battery on a simulation nobody is watching.

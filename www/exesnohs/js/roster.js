@@ -118,19 +118,47 @@ export function buildHelmetParts(shellMat, maskMat) {
      * sweeps 0.92 of a half-turn instead of 0.86, which is what finally takes
      * the back edge below the hair.
      */
+    /**
+     * IN TWO PIECES, AND THAT IS THE FIX FOR THE PIE SLICE.
+     *
+     * A phi sweep removes a wedge of longitude, and longitudes MEET AT THE
+     * POLE, so a gap left for the face runs all the way up and takes a slice
+     * out of the crown with it. Reported exactly that way: a pie-slice cutout
+     * in the front top centre.
+     *
+     * So the crown is its own cap with the full sweep, closed all the way
+     * round, and only the band below it carries the opening. They share a
+     * radius, a scale and a centre, so they meet seamlessly at the join.
+     */
     const GAP = 1.40;                  // radians of face opening, about 80 degrees
+    const R = 0.145;
+    const AT = [0, 1.622, -0.010];
+    const SCALE = [1.06, 1.04, 1.16];
+    // Where the crown stops and the face opening begins. At 0.42 of a
+    // half-turn the join sits at y = 1.66, which is above the eyes, so the
+    // opening starts at the brow the way a real shell does.
+    const CROWN = Math.PI * 0.42;
+
+    const crown = new THREE.Mesh(
+        new THREE.SphereGeometry(R, 22, 8, 0, Math.PI * 2, 0, CROWN), shellMat
+    );
+    crown.position.set(...AT);
+    crown.scale.set(...SCALE);
+    crown.name = 'helmet-crown';
+    parts.push(crown);
+
     const shell = new THREE.Mesh(
         new THREE.SphereGeometry(
-            0.145, 22, 14,
+            R, 22, 10,
             Math.PI / 2 + GAP / 2, Math.PI * 2 - GAP,
-            0, Math.PI * 0.92
+            CROWN, Math.PI * 0.92 - CROWN
         ),
         shellMat
     );
-    shell.position.set(0, 1.622, -0.010);
+    shell.position.set(...AT);
     // Wider than tall and longer than wide, which is the proportion that stops
     // a helmet reading as a ball.
-    shell.scale.set(1.06, 1.04, 1.16);
+    shell.scale.set(...SCALE);
     shell.name = 'helmet-shell';
     parts.push(shell);
 
@@ -287,7 +315,11 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
     if (!arms || !arms.length) return;
     const P = CFG.pose;
 
-    const effort = Math.min(speed / P.fullEffort, 1);
+    // A MAN ON HIS BACK IS NOT RUNNING. Without this the legs and arms keep
+    // striding while the body is horizontal, which is the one thing that would
+    // make a knockdown funny rather than final.
+    const upright = 1 - Math.min(1, (act.down || 0) * 1.6);
+    const effort = Math.min(speed / P.fullEffort, 1) * upright;
     const swing = Math.sin(phase) * effort * P.armSwing;
 
     // NOTHING SNAPS, AND THAT IS MOST OF WHAT "GLITCHY" MEANT. Every input here

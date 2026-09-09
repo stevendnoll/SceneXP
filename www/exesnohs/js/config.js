@@ -181,7 +181,7 @@ const SIM = {
      * spreads the crowded middle while narrowing the extremes. The widest
      * player moved from 9.80m off centre to 9.38m against a 10.50m touchline.
      */
-    gutter: 8,
+    gutter: 5,
 };
 
 /** One field unit in metres. The only scale factor in the project. */
@@ -854,14 +854,36 @@ const EXESNOHS_CONFIG = {
          */
         tackle: {
             reach: 2.2,          // metres to the carrier before he commits
-            armX: -1.05,
-            armZ: 0.34,
-            foreX: 0.45,
-            lean: 0.34,          // radians of forward pitch, whole figure
+            armX: -1.30,
+            armZ: 0.40,
+            foreX: 0.30,
+            lean: 0.52,          // radians of forward pitch, whole figure
+            /** Seconds to commit. Much shorter than the general pose blend,
+             *  because a tackle that eases in is not a tackle. */
+            snap: 0.05,
         },
-        /** And the carrier, going down. Pitched back rather than forward, and
-         *  only once the simulation says contact has actually started. */
-        tackled: { lean: -0.26 },
+        /**
+         * AND THE CARRIER GOES DOWN.
+         *
+         * The first version leaned him back a quarter of a radian, which is a
+         * flinch. A tackle in this game ends the play, and the play ending is
+         * the thing the whole ten-play structure hangs on, so it is worth more
+         * than a wobble.
+         *
+         * He rotates about his own feet, because the rig has no waist. That is
+         * not a compromise here: driven backwards off your feet is exactly a
+         * body pivoting about where it was standing, and at 1.35 radians the
+         * head finishes about a fifth of the way up from the turf, which is
+         * down. The legs stop striding on the way, or he runs while horizontal.
+         */
+        tackled: {
+            lean: -1.35,         // radians, most of the way onto his back
+            fall: 0.30,          // seconds from upright to down
+            rise: 0.9,           // and how long the next play takes to reset it
+            /** How committed a tackler has to be before the carrier goes. Below
+             *  this he is being reached for rather than hit. */
+            trigger: 0.72,
+        },
 
         /**
          * BLOCKING: BOTH ARMS OUT AT THE MAN IN FRONT.

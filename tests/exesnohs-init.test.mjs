@@ -249,9 +249,18 @@ describe('a replay can be got out of', () => {
             dom.loops[0](i * 16.7);
         }
         // Ask for the replay from the result card.
+        //
+        // THE PLAY ITSELF IS RANDOMISED, so this button is the one thing here
+        // that is not guaranteed: `showResult` only offers it when a recording
+        // exists, and a play that somehow ended before a single tick would have
+        // none. Saying so explicitly beats an occasional mystery failure on a
+        // line that looks like it should always hold.
         const watch = dom.el('result-actions').children
             .find((b) => b.textContent === 'Watch the replay');
-        expect(watch).toBeTruthy();
+        // If this is ever missing it means the play recorded no frames, which
+        // is the only state in which the card withholds the button.
+        expect(dom.el('result-actions').children.map((b) => b.textContent))
+            .toContain('Watch the replay');
         watch.click();
         await flushAsync();
         dom.loops[0](50000);

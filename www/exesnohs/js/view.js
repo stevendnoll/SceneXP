@@ -289,6 +289,13 @@ export function syncFigures(objects, delta = 1 / 60) {
     const carrier = objects.find((o) => o.state && o.state.hasBall && !BENCHED(o));
     noteAssignments(objects);
     const tacklers = tacklersOn(objects, carrier);
+    // The hardest hit anybody is putting on the carrier this frame, which is
+    // what decides whether he stays on his feet. Taken once, because every
+    // figure in the loop below needs the same answer.
+    let hardestTackle = 0;
+    for (const amount of tacklers.values()) {
+        if (amount > hardestTackle) hardestTackle = amount;
+    }
     noteThrowRelease(objects, carrier, delta);
 
     for (const obj of objects) {
@@ -356,10 +363,19 @@ export function syncFigures(objects, delta = 1 / 60) {
         // WATCHING SOMEBODY BEATS RUNNING SOMEWHERE. A corner shadowing his
         // receiver has his eyes on the receiver, not on his own feet, and the
         // library says who that is.
-        const look = lookTarget(obj, objects, carrier, p);
-        const want = look
-            ? Math.atan2(look.x - p.x, look.z - p.z)
-            : targetFacing(stepX, stepZ, mps);
+        // A QUARTERBACK READING COVERAGE NEVER TURNS HIS BACK ON IT. He drops
+        // back, which is movement AWAY from the receivers, so facing the way he
+        // is going spins him round to look at his own end zone at exactly the
+        // moment the visitor needs to see him looking downfield. He backpedals
+        // instead: pinned downfield for as long as he is holding it and still
+        // looking to throw. The moment he tucks it and runs he is a runner
+        // again and faces where he is going like everybody else.
+        const surveying = carrier === obj && carryFor(obj, carrier) === 'throw';
+        const look = surveying ? null : lookTarget(obj, objects, carrier, p);
+        const want = surveying
+            ? Math.PI / 2
+            : (look ? Math.atan2(look.x - p.x, look.z - p.z)
+                : targetFacing(stepX, stepZ, mps));
         if (want !== null) figure.userData.facing = want;
         else if (figure.userData.facing === undefined) {
             figure.userData.facing = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -387,23 +403,51 @@ export function syncFigures(objects, delta = 1 / 60) {
         // for free, and a player who has not moved advances no phase at all.
         figure.userData.phase += moved * CFG.pose.stridePerMetre;
         const lunge = tacklers.get(obj.settings.position) || 0;
+
+        /**
+         * GOING DOWN, WHICH IS A ONE-WAY TRIP.
+         *
+         * Driven by how committed the nearest tackler is rather than by
+         * `state.tackle`, and that is deliberate: the recorder does not store
+         * the counter, so a replay would have shown a man being hit and staying
+         * upright. Commitment is computed from positions and comes out the same
+         * live or in playback.
+         *
+         * It ACCUMULATES rather than tracking, so once he is going down he
+         * keeps going down even as the tackler's own number wobbles. Coming
+         * back up is slower than going down and only happens between plays,
+         * because nobody bounces up mid-hit.
+         */
+        const hit = carrier === obj && hardestTackle >= CFG.pose.tackled.trigger;
+        const T = CFG.pose.tackled;
+        if (figure.userData.down === undefined) figure.userData.down = 0;
+        figure.userData.down = hit
+            ? Math.min(1, figure.userData.down + delta / T.fall)
+            : Math.max(0, figure.userData.down - delta / T.rise);
+        const down = figure.userData.down;
+
         poseFigure(figure, mps, figure.userData.phase, {
             carry: carryFor(obj, carrier),
             throwT: throwProgress(obj),
             block: engaged.get(obj.settings.position) || 0,
             tackle: lunge,
+            down,
         }, delta);
 
         // THE LEAN, WHICH IS THE WHOLE FIGURE, because the rig has no waist.
-        // A tackler pitches forward into the hit and the man being hit pitches
-        // back out of it. `rotation.order` is YXZ so this happens on the
+        // A tackler pitches forward into the hit and the man being hit goes
+        // over backwards. `rotation.order` is YXZ so this happens on the
         // figure's own axis AFTER the yaw: on the default XYZ a defender facing
         // across the field would tip sideways instead of forward.
-        const carried = carrier === obj && obj.state.tackle > 0;
-        const pitch = lunge > 0 ? CFG.pose.tackle.lean * lunge
-            : (carried ? CFG.pose.tackled.lean : 0);
+        //
+        // A TACKLE SNAPS AND EVERYTHING ELSE EASES. The general pose blend is a
+        // tenth of a second, which is right for an arm changing its mind and
+        // wrong for a collision: eased in, a hit reads as a lean.
+        const pitch = down > 0 ? T.lean * down
+            : (lunge > 0 ? CFG.pose.tackle.lean * lunge : 0);
+        const rate = (down > 0 || lunge > 0) ? CFG.pose.tackle.snap : CFG.pose.blend;
         figure.rotation.x += (pitch - figure.rotation.x)
-            * (1 - Math.exp(-delta / CFG.pose.blend));
+            * (1 - Math.exp(-delta / rate));
 
         figure.visible = true;
 
