@@ -151,7 +151,9 @@ function makeElement(tag = 'div') {
     children: [],
     parentElement: null,
     parentNode: null,
-    textContent: '',
+    // textContent is defined below, as an accessor. Left out of the literal
+    // deliberately: a plain field here would be redefined a moment later, and
+    // the pair reads as though one of them were live.
     value: '',
     href: '',
     disabled: false,
@@ -256,6 +258,35 @@ function makeElement(tag = 'div') {
       el._html = String(value);
     },
   });
+  // ---- AND SO DOES `textContent = ''`, FOR EXACTLY THE SAME REASON ---------
+  //
+  // It was a plain string field, which is the same bug the block above already
+  // fixed once for its sibling and left standing here. `textContent = ''` is
+  // the ordinary way to empty a container, and www/exesnohs's HUD clears its
+  // action row that way on EVERY phase change: the snap button, four throw
+  // buttons and a keep button all pile into one row, so a suite reads six
+  // controls where a browser shows one, and clicking "the first button" clicks
+  // a control that stopped existing two phases ago. The play never got thrown.
+  //
+  // Reading it back AGGREGATES, which is what a real node does: its own text
+  // first, then each child's. A button built as a swatch plus a label read as
+  // empty before, so a test could only assert the aria-label and never what a
+  // visitor actually sees.
+  Object.defineProperty(el, 'textContent', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      const own = el._text || '';
+      return own + el.children.map((c) => (c && c.textContent) || '').join('');
+    },
+    set(value) {
+      for (const child of el.children.splice(0)) {
+        child.parentElement = null;
+        child.parentNode = null;
+      }
+      el._text = String(value);
+    },
+  });
   // `className` AND `classList` ARE THE SAME STATE. As two plain fields they
   // drift the moment any code sets one and reads the other, and a class
   // assigned by `el.className = 'a b'` is then invisible to `contains('a')`,
@@ -337,6 +368,20 @@ export function installDom({ innerWidth = 1280, innerHeight = 800 } = {}) {
     title: '',
     listeners: documentListeners,
     createElement: (tag) => makeElement(tag),
+    // INLINE SVG IS BUILT, NOT PARSED, under a policy that forbids `innerHTML`
+    // markup, so a scene that draws its own icon reaches for this rather than
+    // for createElement. www/exesnohs builds the sound toggle's speaker from
+    // two paths. Without it the whole boot throws on a missing method, which
+    // the suite reports as "3D init failed" and not as "the stub is thin".
+    //
+    // The namespace is recorded and otherwise ignored: nothing in the codebase
+    // asks a node what namespace it is in, and an element is an element as far
+    // as appendChild and setAttribute are concerned.
+    createElementNS: (ns, tag) => {
+      const el = makeElement(tag);
+      el.namespaceURI = ns;
+      return el;
+    },
     createTextNode: (t) => ({ textContent: t }),
     getElementById(id) {
       if (!byId.has(id)) byId.set(id, makeElement('div'));

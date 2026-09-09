@@ -3,7 +3,7 @@
  * playbook-ui.js - Choosing a play.
  *
  * The overlay above the field: ten plays, each with its diagram, its name and a
- * description of where the receivers actually go, plus a choice of what defence
+ * description of where the receivers actually go, plus a choice of what defense
  * to face. playbook.js draws the diagrams; this file builds the cards around
  * them, handles the choosing, and remembers what was chosen.
  *
@@ -58,7 +58,7 @@ export const PLAYS = [
 
 /** The defensive formations the library will actually run, in the order its
  *  own `defense` array lists them. */
-export const DEFENCES = [
+export const DEFENSES = [
     'cover2', 'cover3', 'cover5', 'cover7', 'cover9', 'cover11', 'cover12',
     'cover13', 'cover14', 'cover15', 'cover16',
     'zone4', 'zone5', 'zone6', 'zone7', 'zone8', 'zone9', 'zone10', 'zone11',
@@ -66,19 +66,27 @@ export const DEFENCES = [
 
 /** 'cover13' reads as 'Cover 13'. Mechanical, so a new formation needs no
  *  table entry and no name can drift from its slug. */
-const defenceLabel = (slug) => slug.replace(/^([a-z]+)(\d+)$/, (_m, w, n) =>
+const defenseLabel = (slug) => slug.replace(/^([a-z]+)(\d+)$/, (_m, w, n) =>
     `${w[0].toUpperCase()}${w.slice(1)} ${n}`);
 
 const book = new OffensivePlaybookClass({});
 let onChoose = null;
-let settings = { lastPlay: '', defence: '' };
+let settings = { lastPlay: '', defense: '' };
 
 // ---- Persistence -----------------------------------------------------------
 
 function load() {
     try {
         const raw = localStorage.getItem(CFG.storage.play);
-        if (raw) settings = { ...settings, ...JSON.parse(raw) };
+        if (!raw) return;
+        const stored = JSON.parse(raw);
+        // A VISITOR'S SAVED CHOICE SURVIVES THE SPELLING FIX. This shipped
+        // briefly writing `defence`, and the whole point of persisting a
+        // preference is that somebody does not have to set it again. Read the
+        // old key, write only the new one.
+        if (stored.defence && !stored.defense) stored.defense = stored.defence;
+        delete stored.defence;
+        settings = { ...settings, ...stored };
     } catch (e) { /* private mode, or a value from an older shape. Defaults. */ }
 }
 
@@ -88,32 +96,134 @@ function save() {
     } catch (e) { /* nothing here is worth failing a play over */ }
 }
 
+// ---- Drawing the diagrams dark ---------------------------------------------
+
+/**
+ * THE DIAGRAMS ARE DRAWN IN THE 2D GAME'S PALETTE AND SHOWN IN OURS.
+ *
+ * playbook.js is a port and stays one (D7): its 1026 lines carry the exact
+ * coordinates of sixteen plays and not one of them has been touched. What it
+ * also carries is a colour scheme for a light page, and this page is a night
+ * stadium. Ten near-white rectangles glowing out of a dark overlay is the first
+ * thing the eye goes to, and the eye should be going to the plays.
+ *
+ * SO THE COLOURS ARE REMAPPED ON THE WAY OUT, not edited on the way in. Every
+ * colour the ported file sets is one of eleven exact strings (grep says so:
+ * 94 uses of the letter grey, 74 of B's blue, and so on down to one white and
+ * one football brown). A small proxy over the 2D context watches `fillStyle`
+ * and `strokeStyle` and swaps those eleven for their dark-ground equivalents.
+ *
+ * Two things fall out of doing it this way rather than as a filter. The ROUTE
+ * COLOURS SURVIVE AS HUES, so A is still red on the card and red on the grass
+ * and red on its throw button, which a CSS `invert` would have destroyed. And
+ * anything the ported file draws that is NOT in the table comes through
+ * untouched, so a colour arriving here that nobody planned for is visible
+ * rather than silently wrong.
+ *
+ * The route hues are the same four `config.receivers` hands to the markers, so
+ * there is still exactly one place a receiver's colour is decided.
+ */
+/** Light ink on a dark ground always reads thinner than the same weight the
+ *  other way round, and every route in the ported file is one pixel. */
+const DIAGRAM_LINE_BOOST = 1.4;
+
+export const DIAGRAM_INK = {
+    'rgb(235, 235, 235)': '#161d28',      // the card ground
+    '30, 30, 30, 0.8': '235, 240, 248, 0.92',   // player letters
+    '10, 10, 10, 0.9': '226, 232, 242, 0.95',   // heavier marks
+    '50, 50, 50, 0.8': '150, 161, 178, 0.85',   // the quieter ones
+    '125, 0, 0, 0.8': hexToRgba(CFG.receivers.wr1.ink, 0.95),
+    '0, 0, 125, 0.8': hexToRgba(CFG.receivers.wr2.ink, 0.95),
+    '125, 0, 125, 0.8': hexToRgba(CFG.receivers.wr3.ink, 0.95),
+    '0, 125, 0, 0.8': hexToRgba(CFG.receivers.wr4.ink, 0.95),
+    '0, 125, 0, 0.4': '120, 200, 140, 0.35',    // the line of scrimmage
+    'rgb(111, 15, 10)': '#c2603a',        // the football
+    'rgb(255, 255, 255)': '#12171f',      // ...and its lacing, now dark on it
+};
+
+/** '#ff6a5e' at 0.95 becomes '255, 106, 94, 0.95', which is the shape the
+ *  ported drawing helpers wrap in `rgba(...)`. */
+function hexToRgba(hex, alpha) {
+    const n = parseInt(hex.slice(1), 16);
+    return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha}`;
+}
+
+/**
+ * Hand a canvas a context that recolours as it draws.
+ *
+ * The ported methods find their canvas by selector and call `getContext('2d')`
+ * on it themselves, so the swap has to happen on the element. Overriding
+ * `getContext` for these ten canvases and nothing else keeps the whole trick
+ * inside this function.
+ *
+ * The proxy forwards everything: methods are bound to the real context so
+ * `this` is right, and only the two colour properties are intercepted on the
+ * way in. Line width is nudged up because a one-pixel route drawn as dark ink
+ * on paper is a one-pixel route drawn as light ink on slate, and light-on-dark
+ * always looks thinner than the same weight the other way round.
+ */
+function themeCanvas(canvas) {
+    if (!canvas.getContext) return canvas;
+    const real = canvas.getContext('2d');
+    if (!real) return canvas;
+    const proxy = new Proxy(real, {
+        get(target, prop) {
+            const value = target[prop];
+            return typeof value === 'function' ? value.bind(target) : value;
+        },
+        set(target, prop, value) {
+            if ((prop === 'fillStyle' || prop === 'strokeStyle')
+                && typeof value === 'string') {
+                const key = value.startsWith('rgba(')
+                    ? value.slice(5, -1) : value;
+                const mapped = DIAGRAM_INK[key];
+                if (mapped) {
+                    target[prop] = mapped.startsWith('#') ? mapped : `rgba(${mapped})`;
+                    return true;
+                }
+            }
+            if (prop === 'lineWidth' && typeof value === 'number') {
+                target[prop] = value * DIAGRAM_LINE_BOOST;
+                return true;
+            }
+            target[prop] = value;
+            return true;
+        },
+    });
+    // The type argument is honoured rather than ignored, so this cannot quietly
+    // hand a 2D context to something that asked for anything else.
+    const native = canvas.getContext.bind(canvas);
+    canvas.getContext = (type, ...rest) =>
+        (type === '2d' ? proxy : native(type, ...rest));
+    return canvas;
+}
+
 // ---- Building --------------------------------------------------------------
 
-function buildDefenceRow() {
+function buildDefenseRow() {
     const wrap = document.createElement('p');
-    wrap.className = 'playbook-defence';
+    wrap.className = 'playbook-defense';
 
     const label = document.createElement('label');
-    label.htmlFor = 'defence-select';
-    label.textContent = 'Defence to face';
+    label.htmlFor = 'defense-select';
+    label.textContent = 'Defense to face';
     wrap.appendChild(label);
 
     const select = document.createElement('select');
-    select.id = 'defence-select';
+    select.id = 'defense-select';
     const random = document.createElement('option');
     random.value = '';
     random.textContent = 'Surprise me';
     select.appendChild(random);
-    for (const slug of DEFENCES) {
+    for (const slug of DEFENSES) {
         const opt = document.createElement('option');
         opt.value = slug;
-        opt.textContent = defenceLabel(slug);
+        opt.textContent = defenseLabel(slug);
         select.appendChild(opt);
     }
-    select.value = settings.defence || '';
+    select.value = settings.defense || '';
     select.addEventListener('change', () => {
-        settings.defence = select.value;
+        settings.defense = select.value;
         save();
     });
     wrap.appendChild(select);
@@ -137,6 +247,9 @@ function buildCard(play) {
     // information as text, so a screen reader is not read a picture it cannot
     // see. This is the "text alternative for every diagram" M3 asks for.
     canvas.setAttribute('aria-hidden', 'true');
+    // Hand it a context that repaints the 2D game's light palette for a dark
+    // room. Done here rather than in playbook.js, which is a port.
+    themeCanvas(canvas);
     button.appendChild(canvas);
 
     const name = document.createElement('span');
@@ -176,7 +289,7 @@ function choose(slug) {
     settings.lastPlay = slug;
     save();
     hide();
-    if (onChoose) onChoose(slug, settings.defence);
+    if (onChoose) onChoose(slug, settings.defense);
 }
 
 // ---- Public surface --------------------------------------------------------
@@ -190,7 +303,7 @@ export function initPlaybook(handler) {
     const body = root.querySelector('.playbook-body');
     if (!body) return;
     body.textContent = '';
-    body.appendChild(buildDefenceRow());
+    body.appendChild(buildDefenseRow());
 
     const grid = document.createElement('ul');
     grid.className = 'playbook-grid';

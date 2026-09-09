@@ -74,9 +74,12 @@ body {
  * the container beats the browser's default `[hidden] { display: none }`, so
  * without it the overlay never closes.
  *
- * The diagrams are drawn light because that is what a play diagram is: ink on
- * paper. They sit on cards rather than on the dark ground so the contrast is
- * deliberate rather than accidental.
+ * THE DIAGRAMS ARE DRAWN DARK, and they used to be drawn light because that is
+ * what a play diagram is: ink on paper. On this page it was not ink on paper,
+ * it was ten near-white rectangles glowing out of a night stadium, and the eye
+ * went to the brightness rather than to the plays. They are now painted for the
+ * room they are in, hues intact, by the palette map in playbook-ui.js. The
+ * ported drawing code was not touched (D7).
  */
 
 .playbook {
@@ -115,7 +118,7 @@ body {
     color: #f2f5fa;
 }
 
-.playbook-defence {
+.playbook-defense {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -125,7 +128,7 @@ body {
     font-size: 0.95rem;
 }
 
-.playbook-defence select {
+.playbook-defense select {
     padding: 0.4rem 0.6rem;
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 8px;
@@ -293,6 +296,46 @@ body {
     color: #21140a;
 }
 
+/* ---- The throw buttons ----------------------------------------------------
+ *
+ * Each one wears its receiver's colour, so "Throw C" names somebody a visitor
+ * can actually pick out on the grass. The hue arrives as --throw-ink from
+ * hud.js, out of the same config table markers.js paints the discs from.
+ *
+ * THE SWATCH CARRIES THE COLOUR AND THE LABEL STAYS WHITE. These four hues sit
+ * between about 3:1 and 4.5:1 on this pill, so a button whose own text was the
+ * tinted part would have two of the four failing AA. A filled dot has nothing
+ * to pass, the label keeps its 12:1, and the border tint is decoration on top
+ * of a border that already exists.
+ *
+ * The dot is a real element rather than a ::before, because a pseudo-element
+ * cannot be given a per-button colour without a rule per receiver.
+ */
+.hud-btn-throw {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border-color: color-mix(in srgb, var(--throw-ink, #ffffff) 55%, transparent);
+}
+
+.hud-btn-throw:hover,
+.hud-btn-throw:focus-visible {
+    /* Beats the generic .hud-btn:hover that would otherwise supply the orange,
+     * which is the trap a :hover block that only names some properties falls
+     * into: whatever it leaves out, a competing rule provides. */
+    border-color: var(--throw-ink, #ff992c);
+    background: rgba(38, 47, 61, 0.96);
+}
+
+.throw-dot {
+    width: 0.72rem;
+    height: 0.72rem;
+    flex: none;
+    border-radius: 50%;
+    background: var(--throw-ink, #ffffff);
+    box-shadow: 0 0 0 1px rgba(6, 9, 14, 0.55);
+}
+
 /* ---- The result and summary cards ---------------------------------------- */
 
 .card-overlay {
@@ -308,6 +351,30 @@ body {
 
 .card-overlay[hidden] {
     display: none;
+}
+
+/* ---- The result card sits low -----------------------------------------------
+ *
+ * A play finishes somewhere on the grass, and the grass is what the card is
+ * reporting on. Centred over a dimmed field, it landed on the ball more often
+ * than not: the middle of the screen is the middle of the field, and the middle
+ * of the field is where a play tends to end.
+ *
+ * Anchoring it to the bottom hands the upper two thirds of the frame back,
+ * which is where the play went. It also lands nearer the thumb on a phone. The
+ * backdrop lightens for the same reason, and the lit spot marker rises past the
+ * card from below so the ball is findable even when the card is over it.
+ *
+ * ONLY THE RESULT CARD. The welcome card and the summary are read rather than
+ * looked past, so they stay centred over a properly dimmed field.
+ */
+.card-overlay-low {
+    align-items: flex-end;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top,
+        rgba(6, 9, 14, 0.86) 0%,
+        rgba(6, 9, 14, 0.62) 40%,
+        rgba(6, 9, 14, 0.28) 100%);
 }
 
 .card-panel {
@@ -395,32 +462,67 @@ body {
 .summary-what { flex: 1; color: #c3cbd9; }
 .summary-pts { font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* The sound toggle. In the stat bar rather than the action row, because that
- * row is rebuilt on every phase change and a control that disappears while you
- * are reaching for it is worse than none. */
+/* ---- The sound toggle -----------------------------------------------------
+ *
+ * In the stat bar rather than the action row, because that row is rebuilt on
+ * every phase change and a control that disappears while you are reaching for
+ * it is worse than none.
+ *
+ * IT DID NOT READ AS A CONTROL, and the stat bar is why. "Sound off" sat
+ * between "Play 1 of 10" and "Score 0", which are statements, so a third short
+ * phrase in the same row read as a third statement. It now carries a speaker
+ * icon, sits at the same weight as the buttons below it, and lifts on hover,
+ * which are the three things that say "press me" before any word is read.
+ */
 .hud-mute {
     pointer-events: auto;
-    padding: 0.15rem 0.6rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.65rem 0.2rem 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.24);
     border-radius: 999px;
-    background: rgba(26, 33, 44, 0.9);
-    color: #b9c2d2;
+    background: rgba(26, 33, 44, 0.94);
+    color: #c6cedc;
     font: inherit;
     font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.5;
     cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.hud-mute-icon {
+    width: 1.05rem;
+    height: 1.05rem;
+    flex: none;
+    display: block;
 }
 
 /* The muted state reads dimmer than the live one, but it still has to be
  * readable: #7d8698 measured 4.42:1 against the button, just under AA. */
 .hud-mute[aria-pressed="true"] {
     color: #8a94a6;
-    border-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.14);
 }
 
+/* NAMES EVERY PROPERTY THE RESTING RULES SET, including the ones the pressed
+ * state changes. A :hover block inherits the resting value for anything it
+ * leaves out, so omitting `color` here would let the pressed rule keep supplying
+ * its dimmed grey to a hovered button. */
 .hud-mute:hover,
-.hud-mute:focus-visible {
+.hud-mute:focus-visible,
+.hud-mute[aria-pressed="true"]:hover,
+.hud-mute[aria-pressed="true"]:focus-visible {
     border-color: #ff992c;
+    background: rgba(38, 47, 61, 0.96);
     color: #f2f5fa;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hud-mute {
+        transition: none;
+    }
 }
 
 /* ---- The welcome card -----------------------------------------------------
@@ -487,3 +589,18 @@ body {
 
 .ladder-pts.is-good { color: #6fe08a; }
 .ladder-pts.is-bad { color: #ff7a7a; }
+
+/* The number to beat. Set apart from the ladder above it, because the ladder is
+ * reference and this is the point of the game. */
+.welcome-target {
+    margin: 1.1rem 0 0;
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    color: #c3cbd9;
+    font-size: 0.95rem;
+    text-align: center;
+}
+
+.welcome-target strong {
+    color: #ff992c;
+}

@@ -24,7 +24,7 @@ import { MotionClass } from './motion.min.js';
 import { ExesAndOhsStateClass } from './playstate.min.js';
 import { classifyPlay } from './scoring.min.js';
 
-/** Offence, then defence. Position group drives which route method runs. */
+/** Offense, then defense. Position group drives which route method runs. */
 const ROSTER = [
     ['qb', 'qb', 0], ['wr', 'wr1', 0], ['wr', 'wr2', 0], ['wr', 'wr3', 0], ['wr', 'wr4', 0],
     ['x', 'x1', 0], ['x', 'x2', 0], ['x', 'x3', 0], ['x', 'x4', 0], ['x', 'x5', 0], ['x', 'x6', 0],

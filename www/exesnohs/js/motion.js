@@ -332,8 +332,32 @@ export class MotionClass {
     return this.handleCatchResult(game, caughtByList, caughtByIndexList, caughtByPositionList);
   }
 
+  /**
+   * HOW MUCH BIGGER THAN THE 2D GAME'S PLAYER THIS ONE IS.
+   *
+   * The half-extents in `checkCollisions` are the 2D game's, in field units,
+   * and they are left exactly as written. What has changed is the player they
+   * were written for: `config.figureScale` draws a figure at 2.2 times life
+   * size, so a receiver was carrying a 0.21m collision radius inside a 0.73m
+   * half-width and bodies passed through each other.
+   *
+   * INJECTED, NOT IMPORTED, for the reason audio is (D40): this file is
+   * simulation and must not reach for config, or the physics stops being
+   * testable with plain numbers. It arrives on the settings object the class is
+   * already constructed with, and it defaults to 1, which is the 2D game's own
+   * behaviour and what a caller that knows nothing about this will get.
+   */
+  collisionScale() {
+    const s = this.settings && this.settings.collisionScale;
+    return typeof s === 'number' && s > 0 ? s : 1;
+  }
+
   // eslint-disable-next-line
   checkCollisions(obj = {}, game = {}) {
+    // The switches below are the 2D game's, unedited, and the scale is applied
+    // once where the boxes are built. Multiplying inside each `case` would have
+    // been eight edits to ported constants for the same arithmetic.
+    const k = this.collisionScale();
     let r1 = 6;
     let r2 = 6;
     let rx1 = r1;
@@ -362,12 +386,12 @@ export class MotionClass {
       position: obj.settings.position,
       team: obj.settings.team,
       x: obj.coords.x,
-      x1: (obj.coords.x - rx1),
-      x2: (obj.coords.x + rx1),
+      x1: (obj.coords.x - rx1 * k),
+      x2: (obj.coords.x + rx1 * k),
       xSpeed: obj.state.xSpeed,
       y: obj.coords.y,
-      y1: (obj.coords.y - r1),
-      y2: (obj.coords.y + r1),
+      y1: (obj.coords.y - r1 * k),
+      y2: (obj.coords.y + r1 * k),
       ySpeed: obj.state.ySpeed
     }
     game.objects.forEach(object => {
@@ -383,8 +407,17 @@ export class MotionClass {
           case 'x4':
           case 'x5':
           case 'x6':
-            r1 = 12;
-            rx1 = 10;
+            // FIXED HERE, AND WORTH FIXING AT exesnohs.com TOO. The 2D source
+            // assigns `r1` and `rx1` in this case, which are the OUTER
+            // player's half-extents and were baked into `set1` before the loop
+            // began. So the assignment reached nothing, `r2` and `rx2` kept
+            // whatever the previous object in the list had left them at, and a
+            // lineman standing in somebody's way was measured as a 6-unit
+            // receiver, or as a 3-unit ball. It is the same shape of typo as
+            // the jumbo1 multiply in formationRouteX4 (D18): a sibling case
+            // copied and one character not changed.
+            r2 = 12;
+            rx2 = 10;
             break;
           default:
             r2 = 6;
@@ -396,12 +429,12 @@ export class MotionClass {
           position: object.settings.position,
           team: object.settings.team,
           x: object.coords.x,
-          x1: (object.coords.x - rx2),
-          x2: (object.coords.x + rx2),
+          x1: (object.coords.x - rx2 * k),
+          x2: (object.coords.x + rx2 * k),
           xSpeed: object.state.xSpeed,
           y: object.coords.y,
-          y1: (object.coords.y - r2),
-          y2: (object.coords.y + r2),
+          y1: (object.coords.y - r2 * k),
+          y2: (object.coords.y + r2 * k),
           ySpeed: object.state.ySpeed
         }
         if ( obj.state.xSpeed > 0 ) {

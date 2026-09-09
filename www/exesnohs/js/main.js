@@ -16,10 +16,10 @@
  * to a suite.
  */
 import { EXESNOHS_CONFIG as CFG, FIELD, simToWorld } from './config.min.js';
-import { initField } from './field.min.js';
+import { initField, setBandAt, fadeBand, updateScoreboard } from './field.min.js';
 import { initRoster, figureFor } from './roster.min.js';
 import { initBall } from './ball.min.js';
-import { initMarkers, setPulse } from './markers.min.js';
+import { initMarkers, setPulse, initSpot, showSpot, hideSpot } from './markers.min.js';
 import { syncFigures, syncBall, setViewCamera, resetBallFlight } from './view.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier,
@@ -71,6 +71,7 @@ const cycle = {
     results: [],
     lastOutcome: null,
     replayHold: 0,
+    spotAt: null,         // world metres, where the last play finished
 };
 
 /** Whoever asked not to be moved about. Checked once: a visitor who changes it
@@ -205,10 +206,8 @@ function driverForPhase(phase) {
 function cameraState() {
     if (cycle.phase !== 'replay') return {};
     const total = Math.max(1, frameCount());
-    const focus = simToWorld(...(() => {
-        const f = focusAt(playheadFrame());
-        return [f.x, f.y, f.z || 0];
-    })());
+    const f = replayFocus();
+    const focus = simToWorld(f.x, f.y, f.z || 0);
     return { progress: playheadFrame() / total, focus };
 }
 
@@ -248,15 +247,17 @@ function initLighting() {
 function openPlaybook() {
     cycle.phase = 'playbook';
     cycle.held = 0;
+    cycle.spotAt = null;
     discard();            // one recording is held at a time and no more
+    hideSpot();
     showHud(false);
     showPlaybook();
 }
 
 /** The visitor chose. Line both teams up and wait for them to snap it.
- *  An empty `defence` is the library's own signal to pick one at random. */
-function startPlay(offensive, defence) {
-    lineUp(cycle.play, offensive, defence || '');
+ *  An empty `defense` is the library's own signal to pick one at random. */
+function startPlay(offensive, defense) {
+    lineUp(cycle.play, offensive, defense || '');
     resetBallFlight();
     cycle.phase = 'presnap';
     cycle.held = 0;
@@ -267,6 +268,12 @@ function startPlay(offensive, defence) {
 
     setPlayNumber(cycle.playNumber, CFG.rules.playsPerGame);
     setScore(cycle.total);
+    // The board carries what the HUD carries, updated at the same two moments,
+    // so it can never be a play behind what the bar says.
+    updateScoreboard({
+        play: cycle.playNumber, of: CFG.rules.playsPerGame, score: cycle.total,
+    });
+    hideSpot();
     showHud(true);
     // THE SNAP IS THE VISITOR'S, NOT A TIMER'S. The pre-snap hold used to be
     // 1.8 seconds of waiting; making it a button means somebody can read the
@@ -322,6 +329,14 @@ function finishPlay() {
     cycle.total += result.points;
     cycle.results.push(result);
     setScore(cycle.total);
+    updateScoreboard({
+        play: cycle.playNumber, of: CFG.rules.playsPerGame, score: cycle.total,
+    });
+
+    // REMEMBER WHERE IT ENDED. Read here, at the whistle, because a replay is
+    // about to rewind the world and `ballWorldPoint` would then answer with
+    // wherever the playhead happens to be.
+    cycle.spotAt = ballWorldPoint();
 
     // The highlights play themselves. Anything else waits to be asked for.
     if (!reducedMotion && !isEmpty() && worthWatching(result)) {
@@ -333,6 +348,12 @@ function finishPlay() {
 
 function presentResult() {
     cycle.phase = 'result';
+    // STAND A LIGHT WHERE IT ENDED, under the card that is about to open over
+    // it. The result card is centred, the middle of the screen is the middle of
+    // the field, and the middle of the field is where a play tends to finish,
+    // so without this the card hides the one thing it is reporting on. The
+    // column rises past the card, which a ring on the grass could not.
+    if (cycle.spotAt) showSpot(cycle.spotAt.x, cycle.spotAt.z);
     showResult(cycle.lastOutcome, cycle.playNumber, CFG.rules.playsPerGame,
         cycle.total, !isEmpty());
 }
@@ -344,6 +365,9 @@ function startReplay() {
     hideResult();
     clearActions();
     showHud(false);
+    // The spot belongs to the end of the play, and a replay is about to start
+    // at the beginning of it. Leaving it standing would give away the ending.
+    hideSpot();
     rewind();
     cycle.phase = 'replay';
     cycle.replayHold = 0;
@@ -440,6 +464,69 @@ function stepCycle(delta) {
     syncBall(null, ballCarrier(cycle.play), delta);
 }
 
+/**
+ * LIGHT THE BAND THE BALL IS IN, and put the spot where the play ended.
+ *
+ * The 2D game's touchline labels do two jobs: they say where the rungs of the
+ * ladder are, which the numerals painted on the turf now do, and they light the
+ * one the ball has reached, which is this. Together they turn "the further you
+ * carry it the more it is worth" from a sentence on the welcome card into
+ * something a visitor watches happen.
+ *
+ * ONE READING OF THE CARRIER, shared by both. The band wants where the ball is
+ * now and the spot wants where it stopped, and they are the same measurement a
+ * moment apart, so taking it once means they can never disagree about which
+ * player was carrying.
+ */
+const BAND_PHASES = new Set(['live', 'settle', 'replay', 'result']);
+
+function trackBall(delta) {
+    // ON THE RESULT CARD IT HOLDS WHERE IT FINISHED, rather than going out at
+    // the whistle. The card says "+15" and the field says which fifteen, which
+    // is the pair the 2D game's touchline shows and the reason the band is
+    // worth having at all.
+    const at = cycle.phase === 'result' ? cycle.spotAt : ballWorldPoint();
+    const lit = !!at && BAND_PHASES.has(cycle.phase);
+    setBandAt(lit ? at.x : 0, lit);
+    fadeBand(delta);
+}
+
+/**
+ * Where the ball is, in world metres, whichever way the game is running it.
+ *
+ * During a replay the live simulation is finished and its objects hold the last
+ * frame, so the answer has to come from the recording. It is read through
+ * `focusAt`, which is the same track the replay camera aims at, so the lit band
+ * and the shot cannot disagree about where the ball got to.
+ */
+function ballWorldPoint() {
+    if (cycle.phase === 'replay') {
+        const f = replayFocus();
+        return f ? simToWorld(f.x, f.y, 0) : null;
+    }
+    if (!cycle.play) return null;
+    const carrier = ballCarrier(cycle.play);
+    return carrier ? simToWorld(carrier.coords.x, carrier.coords.y, 0) : null;
+}
+
+/**
+ * Where the recording says the ball was, memoised for the frame being drawn.
+ *
+ * `focusAt` rebuilds a whole frame of twenty objects to answer, and by the time
+ * the lit band and the camera both wanted it, a replay was doing that three
+ * times a frame and throwing sixty objects away. The playhead does not move
+ * within a frame, so its value is the key: this collapses back to one.
+ */
+const focusMemo = { at: -1, value: null };
+function replayFocus() {
+    const frame = playheadFrame();
+    if (focusMemo.at !== frame) {
+        focusMemo.at = frame;
+        focusMemo.value = focusAt(frame);
+    }
+    return focusMemo.value;
+}
+
 /** Which side a slot belongs to, for playback. The recording stores positions,
  *  not teams, because a position's team never changes. */
 function teamOfPosition(position) {
@@ -453,6 +540,7 @@ function animate(now) {
 
     stepCycle(delta);
     state.elapsed += delta;
+    trackBall(delta);
     pulseTargets(state.elapsed);
     setDriver(driverForPhase(cycle.phase));
     applyCamera(updateCamera(delta, cameraState()));
@@ -573,6 +661,7 @@ async function init() {
     const objects = lineUp(cycle.play, getSettings().lastPlay || 'pass2', '');
     initRoster(scene, objects);
     initMarkers(scene, objects);
+    initSpot(scene);
     initBall(scene);
     syncFigures(objects, 0);
     syncBall(null, ballCarrier(cycle.play));

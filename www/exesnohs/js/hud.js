@@ -16,13 +16,17 @@
  * THROW_TO_D, and are built from the receivers who are ACTUALLY eligible on
  * this play: several formations bench a receiver, and offering a target that
  * cannot be thrown to is worse than offering three.
+ *
+ * EACH ONE WEARS ITS RECEIVER'S COLOUR, from the one table in config that
+ * markers.js paints onto the grass. A letter on a button only means something
+ * if the same letter can be found on the field, and for a while it could not.
  */
 
-const el = (id) => document.getElementById(id);
-let handlers = {};
+import { EXESNOHS_CONFIG as CFG } from './config.min.js';
 
-/** A to D, in roster order, which is how the 2D game numbered them. */
-const THROW_LABEL = { wr1: 'A', wr2: 'B', wr3: 'C', wr4: 'D' };
+const el = (id) => document.getElementById(id);
+const SVG_NS = 'http://www.w3.org/2000/svg';
+let handlers = {};
 
 function button(label, className, onClick, describedBy) {
     const b = document.createElement('button');
@@ -32,6 +36,76 @@ function button(label, className, onClick, describedBy) {
     if (describedBy) b.setAttribute('aria-label', describedBy);
     b.addEventListener('click', onClick);
     return b;
+}
+
+/**
+ * A throw button, wearing its receiver's colour.
+ *
+ * THE BUTTON AND THE PLAYER HAVE TO AGREE. "Throw C" is only an instruction if
+ * a visitor can find C, and the receivers are told apart on the grass by the
+ * colour of the disc they stand in front of. Four identical dark pills asked
+ * somebody to remember which letter went with which colour, which is a memory
+ * game nobody signed up for. The table lives in config so the disc, the route
+ * on the playbook diagram and this swatch are one colour rather than three that
+ * happen to match.
+ *
+ * THE SWATCH CARRIES THE COLOUR AND THE LABEL STAYS WHITE, deliberately. Ink at
+ * these hues on this dark pill runs from about 4:1 down to 3:1 depending on the
+ * receiver, and a control's own text should not be the thing that has to pass.
+ * A filled dot has no contrast requirement to meet, and the letter is still
+ * written out in words for anyone who cannot see it at all.
+ */
+function throwButton(position, letter, ink, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'hud-btn hud-btn-throw';
+    b.style.setProperty('--throw-ink', ink);
+    b.setAttribute('aria-label', `Throw to receiver ${letter}`);
+    b.dataset.receiver = position;
+
+    const dot = document.createElement('span');
+    dot.className = 'throw-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    b.appendChild(dot);
+    b.appendChild(document.createTextNode(`Throw ${letter}`));
+
+    b.addEventListener('click', onClick);
+    return b;
+}
+
+/**
+ * A speaker, with or without a slash.
+ *
+ * THE PILL DID NOT READ AS A CONTROL. It said "Sound off" in the stat bar
+ * between "Play 1 of 10" and "Score 0", which is a row of statements, so it
+ * read as a third statement rather than as the one thing on that row a visitor
+ * can press. An icon is what says "control" before any of the words are read.
+ *
+ * Drawn rather than fetched: `img-src` allows `data:` but a sprite is a file to
+ * keep in step with a stylesheet, and this is two paths.
+ */
+function speakerIcon(off) {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'hud-mute-icon');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+
+    const cone = document.createElementNS(SVG_NS, 'path');
+    cone.setAttribute('d', 'M4 9.5h3.6L12 5.6v12.8L7.6 14.5H4z');
+    cone.setAttribute('fill', 'currentColor');
+    svg.appendChild(cone);
+
+    const stroke = document.createElementNS(SVG_NS, 'path');
+    stroke.setAttribute('d', off
+        ? 'M15.5 9.5l5 5m0-5l-5 5'                       // a cross, not a wave
+        : 'M15.4 9a4.2 4.2 0 0 1 0 6M18 6.6a7.6 7.6 0 0 1 0 10.8');
+    stroke.setAttribute('fill', 'none');
+    stroke.setAttribute('stroke', 'currentColor');
+    stroke.setAttribute('stroke-width', '1.9');
+    stroke.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(stroke);
+    return svg;
 }
 
 export function initHud(callbacks) {
@@ -54,7 +128,11 @@ function wireMute() {
     const paint = () => {
         const off = handlers.isMuted();
         btn.setAttribute('aria-pressed', off ? 'true' : 'false');
-        btn.textContent = off ? 'Sound off' : 'Sound on';
+        btn.textContent = '';
+        btn.appendChild(speakerIcon(off));
+        const label = document.createElement('span');
+        label.textContent = off ? 'Sound off' : 'Sound on';
+        btn.appendChild(label);
     };
     btn.addEventListener('click', () => {
         if (handlers.onToggleMute) handlers.onToggleMute();
@@ -114,11 +192,10 @@ export function showInPlay(receivers) {
     const box = actions();
     if (!box) return;
     for (const pos of receivers) {
-        const label = THROW_LABEL[pos] || pos;
-        box.appendChild(button(
-            `Throw ${label}`, 'hud-btn',
-            () => handlers.onThrow && handlers.onThrow(pos),
-            `Throw to receiver ${label}`
+        const who = CFG.receivers[pos];
+        box.appendChild(throwButton(
+            pos, who ? who.letter : pos, who ? who.ink : CFG.teamInk[0],
+            () => handlers.onThrow && handlers.onThrow(pos)
         ));
     }
     box.appendChild(button('Keep it', 'hud-btn hud-btn-primary',
@@ -136,10 +213,12 @@ export function clearActions() {
 /**
  * The welcome card.
  *
- * Shown once, before the first playbook. It is the only place the scoring
- * ladder is written down: the 2D game paints those bands along the touchline
- * so it never had to say them in words, and the 3D field does not carry them
- * yet.
+ * Shown once, before the first playbook. It states the scoring ladder in words,
+ * which the field now also paints on the grass (see field.js). That is not a
+ * duplication to tidy up: the card is read before a visitor has ever seen the
+ * field, and the numerals are read while a play is running. The one that could
+ * be dropped is the card's, and it is the one worth keeping, because somebody
+ * arriving needs to know what game this is before they are shown a pitch.
  */
 export function showWelcome(onStart) {
     const card = el('welcome');

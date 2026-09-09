@@ -21,7 +21,7 @@
 import { EXESNOHS_CONFIG as CFG, simToWorld, FIELD } from './config.min.js';
 import { figureFor, poseFigure } from './roster.min.js';
 import { getBall, aimBall, placeSpot } from './ball.min.js';
-import { markerFor } from './markers.min.js';
+import { placeMarker, hideMarker } from './markers.min.js';
 
 /** Is this player sitting out this formation?
  *
@@ -66,8 +66,8 @@ const wrapAngle = (a) => {
     return d;
 };
 
-/** The heading a player WANTS. Standing players face the play: the offence
- *  downfield, the defence back at them. */
+/** The heading a player WANTS. Standing players face the play: the offense
+ *  downfield, the defense back at them. */
 function targetFacing(obj, speed) {
     if (speed > HEADING_DEADZONE) {
         // world x = sim x and world z = sim y, so a heading in the simulation
@@ -88,7 +88,13 @@ export function syncFigures(objects, delta = 1 / 60) {
     for (const obj of objects) {
         const figure = figureFor(obj.settings.position);
         if (!figure) continue;
-        if (BENCHED(obj)) { figure.visible = false; hideMarkerFor(obj); continue; }
+        if (BENCHED(obj)) {
+            figure.visible = false;
+            // A benched player's letter must not sit on the grass with nobody
+            // standing on it.
+            hideMarker(obj.settings.position);
+            continue;
+        }
 
         const p = simToWorld(obj.coords.x, obj.coords.y, 0);
         figure.position.set(p.x, 0, p.z);
@@ -125,19 +131,13 @@ export function syncFigures(objects, delta = 1 / 60) {
         // The marker slides under the feet. It is NOT a child of the figure,
         // so it keeps its own orientation and a letter stays the right way up
         // however the receiver turns (see markers.js).
-        const marker = markerFor(obj.settings.position);
-        if (marker) {
-            marker.position.set(p.x, marker.position.y, p.z);
-            marker.visible = true;
-        }
+        //
+        // markers.js does the placing rather than this file writing to a mesh
+        // position, because a named marker's ring is not at the centre of its
+        // own plane and where the plane has to sit to put the ring on a pair of
+        // feet is a fact about the texture layout.
+        placeMarker(obj.settings.position, p.x, p.z);
     }
-}
-
-/** Hide the marker of anyone who is not on the field, so a benched player's
- *  letter does not sit on the grass with nobody standing on it. */
-function hideMarkerFor(obj) {
-    const marker = markerFor(obj.settings.position);
-    if (marker) marker.visible = false;
 }
 
 /**

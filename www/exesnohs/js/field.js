@@ -17,9 +17,53 @@
  * NO GAME RULES LIVE HERE. This module builds meshes and returns them. It
  * never reads player state and never runs a tick.
  */
-import { EXESNOHS_CONFIG as CFG, FIELD } from './config.min.js';
+import { EXESNOHS_CONFIG as CFG, FIELD, SIM, UNITS_TO_METRES } from './config.min.js';
+import { ladderBands } from './scoring.min.js';
 
 let group = null;
+let band = null;
+let boardFace = null;
+
+/**
+ * THE LINE OF SCRIMMAGE, MEASURED RATHER THAN ASSUMED.
+ *
+ * Lining up pass2, run3 and jumbo1 puts the centre at sim x = 200 every time,
+ * with the rest of the line inside 5 units either side and the quarterback 15
+ * behind. 200 units is one lineInterval, so the ball is snapped from the first
+ * yard line and camera.js has been assuming the same number all along.
+ */
+export const SCRIMMAGE_X = FIELD.lineInterval;
+
+/**
+ * WHERE THE SCORING LADDER FALLS ON THE GRASS, in world metres.
+ *
+ * scoring.js works in field units because that is what the simulation hands it,
+ * so this is the one conversion. The paint cannot claim a rung the arithmetic
+ * does not award, which is the entire reason this is not a list of numbers
+ * typed into the turf painter.
+ *
+ * CLIPPED TO THE PLAYING SURFACE, both ends. The outer bands run to infinity in
+ * the arithmetic, which is correct for deciding a score and useless for
+ * deciding where to put paint: unclipped, the 50 band's midpoint lands three
+ * metres inside the far end zone. Every caller here wants the visible stretch,
+ * and `pointsForPosition` is still the only thing that decides what a carrier
+ * is worth.
+ */
+let ladderMetres = null;
+
+export function ladderInMetres() {
+    // Worked out once. Config is frozen and the ladder is a constant, and this
+    // is read on every frame of every play by the lit band.
+    if (ladderMetres) return ladderMetres;
+    const playLength = FIELD.lineInterval * FIELD.segments;
+    const clip = (v) => Math.min(Math.max(v, 0), playLength);
+    ladderMetres = ladderBands(SIM.lineInterval).map((b) => ({
+        points: b.points,
+        from: clip(b.from === -Infinity ? 0 : b.from * UNITS_TO_METRES),
+        to: clip(b.to === Infinity ? playLength : b.to * UNITS_TO_METRES),
+    }));
+    return ladderMetres;
+}
 
 /** Metres to texture pixels, so the paint lands exactly where the simulation
  *  thinks the lines are. */
@@ -105,7 +149,84 @@ export function paintMarkings(doc = document) {
         }
     }
 
+    paintLadder(ctx, k, originX, originY, fieldH);
+    paintScrimmage(ctx, k, originX, originY, fieldH);
+
     return { canvas, ctx };
+}
+
+/**
+ * What each stretch of field is worth, written on the grass.
+ *
+ * THE NUMERALS ARE TURNED AND STRETCHED, and both are forced by the camera.
+ *
+ * TURNED, because this camera stands behind an end zone rather than on a
+ * touchline. A real field's numbers read from the side; these have to read from
+ * the end, so the glyph's top points downfield. Working that out by
+ * transforming the axes rather than trying rotations: after `rotate(PI/2)` the
+ * text's own up vector, local (0,-1), lands on canvas +x, and canvas +x is
+ * world +X, which is up the screen. Its baseline runs across the field, which
+ * is the direction that is not foreshortened.
+ *
+ * STRETCHED, because the glyph's HEIGHT now runs downfield, and downfield is
+ * the axis the rake eats: a length there projects as sin(pitch), which is 0.47
+ * at the 28 degrees a wide screen uses and 0.87 at the 60-odd a phone does. An
+ * unstretched number reads as a squashed smudge on desktop. Scaling local y
+ * before drawing stretches exactly that axis and nothing else.
+ *
+ * TWO OF EACH, one inside each touchline, for the same reason a real field has
+ * two: whichever side the play goes to, a number is near it. The middle is left
+ * clear because the middle is where the football happens.
+ */
+function paintLadder(ctx, k, originX, originY, fieldH) {
+    const turf = CFG.turf;
+    const rows = [
+        originY + turf.ladderInset * k,
+        originY + fieldH - turf.ladderInset * k,
+    ];
+
+    ctx.save();
+    ctx.fillStyle = turf.ladderInk;
+    ctx.font = `bold ${Math.round(turf.ladderHeight * k)}px Tahoma, Geneva, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (const rung of ladderInMetres()) {
+        // The band worth nothing gets no numeral. A "0" painted on the grass is
+        // visual noise for a fact nobody is aiming at, and the 2D game only had
+        // room for it because its labels sat in a bar under the field rather
+        // than on it.
+        if (rung.points <= 0) continue;
+        const cx = originX + ((rung.from + rung.to) / 2) * k;
+        for (const cy of rows) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(Math.PI / 2);
+            ctx.scale(1, turf.ladderStretch);
+            ctx.fillText(`${rung.points}`, 0, 0);
+            ctx.restore();
+        }
+    }
+    ctx.restore();
+}
+
+/**
+ * The line the ball is snapped from, in the 2D game's yellow.
+ *
+ * Painted LAST so it sits over the white yard line it shares a position with,
+ * and wider than one, because it is the only line on this field that a visitor
+ * has to be able to find at a glance.
+ */
+function paintScrimmage(ctx, k, originX, originY, fieldH) {
+    const x = originX + SCRIMMAGE_X * k;
+    ctx.save();
+    ctx.strokeStyle = CFG.turf.scrimmage;
+    ctx.lineWidth = Math.max(2, CFG.turf.scrimmageWidth * k);
+    ctx.beginPath();
+    ctx.moveTo(x, originY);
+    ctx.lineTo(x, originY + fieldH);
+    ctx.stroke();
+    ctx.restore();
 }
 
 /** The turf plane, markings and all. */
@@ -274,6 +395,194 @@ function buildPylons() {
 }
 
 /**
+ * THE LIT BAND, which is the half of the 2D game's touchline labels that paint
+ * alone cannot do.
+ *
+ * The numerals say where the rungs are. This says which one the ball is on, and
+ * it says it while the play is running, which is the only moment it matters.
+ *
+ * ONE MESH THAT MOVES, not a repaint. The markings are baked into a single
+ * 2048px canvas texture, so lighting a band by repainting would re-upload the
+ * whole field every time a carrier crossed a line.
+ */
+function buildBand() {
+    const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({
+            color: CFG.band.ink,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            toneMapped: false,
+        })
+    );
+    // Local X runs downfield and local Y across, once it is laid down.
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = CFG.band.lift;
+    // Under the player markers (renderOrder 2), over the turf.
+    mesh.renderOrder = 1;
+    mesh.scale.set(FIELD.lineInterval, FIELD.width, 1);
+    mesh.name = 'band';
+    mesh.visible = false;
+    mesh.userData.lit = false;
+    return mesh;
+}
+
+/**
+ * Light the band a carrier at `x` metres is standing in, or put it out.
+ *
+ * Takes the bands from the same list the numerals were painted from, so the lit
+ * stretch and the number written on it can never disagree.
+ */
+export function setBandAt(x, visible = true) {
+    if (!band) return null;
+
+    const rung = visible
+        ? ladderInMetres().find((b) => x >= b.from && x < b.to) : null;
+    // Behind the first rung there is nothing to light: a band worth nothing is
+    // not news, and lighting it at the snap would make the highlight look like
+    // decoration rather than like a score.
+    if (!rung || rung.points <= 0 || rung.to <= rung.from) {
+        // WANTED OUT, NOT HIDDEN. `fadeBand` owns `visible`, because a mesh
+        // switched off here would take its own fade with it: the opacity would
+        // ease down over something nobody could see and the band would simply
+        // vanish at the whistle. Config carries a fade time for both
+        // directions and this is what lets the second one happen.
+        band.userData.lit = false;
+        return null;
+    }
+
+    band.scale.set(rung.to - rung.from, FIELD.width, 1);
+    band.position.set((rung.from + rung.to) / 2, CFG.band.lift, 0);
+    band.userData.lit = true;
+    return rung;
+}
+
+/** Ease the band in and out rather than switching it, so crossing a line reads
+ *  as arriving somewhere rather than as a flicker. */
+export function fadeBand(delta) {
+    if (!band) return;
+    const target = band.userData.lit ? CFG.band.opacity : 0;
+    const rate = CFG.band.fade > 0 ? delta / CFG.band.fade : 1;
+    const gap = target - band.material.opacity;
+    band.material.opacity += gap * Math.min(1, Math.max(0, rate));
+    // Below this it contributes nothing and is only a draw call.
+    band.visible = band.material.opacity > 0.002;
+}
+
+/**
+ * THE SCOREBOARD BEYOND THE FAR END ZONE.
+ *
+ * It is here to fill a hole and it does a job while it is there. The hole is
+ * real: the play camera looks downfield and slightly up, so the top quarter of
+ * every frame is empty black above the far goal post, and the crowd that fills
+ * the same strip in the 2D game was dropped (D8) and never replaced.
+ *
+ * ITS FACE IS A CANVAS TEXTURE, redrawn on the two occasions the numbers change
+ * rather than per frame. It carries what the HUD carries, which is what lets it
+ * be small and far away: nothing here is the only place a number is readable,
+ * so it is allowed to be atmosphere.
+ */
+function buildScoreboard() {
+    const S = CFG.scoreboard;
+    const playLength = FIELD.lineInterval * FIELD.segments;
+    const board = new THREE.Group();
+
+    const frame = new THREE.MeshStandardMaterial({
+        color: S.frame, roughness: 0.85, metalness: 0.15,
+    });
+    for (const side of [-1, 1]) {
+        const post = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.32, 0.4, S.standHeight, 6), frame
+        );
+        post.position.set(0, S.standHeight / 2, side * (S.width / 2 - 1.4));
+        board.add(post);
+    }
+
+    const shell = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, S.height + 0.7, S.width + 0.7), frame
+    );
+    shell.position.y = S.standHeight + S.height / 2;
+    board.add(shell);
+
+    boardFace = paintScoreboard();
+    const texture = new THREE.CanvasTexture(boardFace.canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    const face = new THREE.Mesh(
+        new THREE.PlaneGeometry(S.width, S.height),
+        // Unlit, so the board reads as a lit sign rather than as a painted
+        // panel that happens to be facing away from both floodlights.
+        new THREE.MeshBasicMaterial({ map: texture, toneMapped: false })
+    );
+    // Turned to face back down the field, at the near side of the shell.
+    face.rotation.y = -Math.PI / 2;
+    face.position.set(-0.28, S.standHeight + S.height / 2, 0);
+    board.add(face);
+    boardFace.texture = texture;
+    // Paint it once here rather than waiting for the first play, or the board
+    // stands blank behind the welcome card and the whole first playbook.
+    updateScoreboard({ play: 1, of: CFG.rules.playsPerGame, score: 0 });
+
+    board.position.set(playLength + FIELD.endZone + S.beyond, 0, 0);
+    board.name = 'scoreboard';
+    return board;
+}
+
+/** Draw the board's face. Returns the canvas and its context so the numbers can
+ *  be redrawn without rebuilding anything. */
+function paintScoreboard(doc = (typeof document === 'undefined' ? null : document)) {
+    const S = CFG.scoreboard;
+    // Headless, the board is simply not drawn, which is the same answer the
+    // markers give and for the same reason.
+    if (!doc || !doc.createElement) return { canvas: null, ctx: null, texture: null };
+    const canvas = doc.createElement('canvas');
+    canvas.width = S.textureWidth;
+    canvas.height = Math.round(S.textureWidth * (S.height / S.width));
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    return { canvas, ctx, texture: null };
+}
+
+/**
+ * Put the play count and the score on the board.
+ *
+ * Called from main.js at exactly the two moments the HUD is told the same
+ * thing, so the board can never be a play behind.
+ */
+export function updateScoreboard({ play = 1, of = 10, score = 0 } = {}) {
+    if (!boardFace || !boardFace.ctx) return null;
+    const S = CFG.scoreboard;
+    const { ctx, canvas } = boardFace;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.fillStyle = S.face;
+    ctx.fillRect(0, 0, w, h);
+
+    // A hairline border, which is what makes an unlit rectangle read as a
+    // screen rather than as a hole in the structure.
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.09)';
+    ctx.lineWidth = Math.max(2, h * 0.012);
+    ctx.strokeRect(ctx.lineWidth, ctx.lineWidth, w - ctx.lineWidth * 2, h - ctx.lineWidth * 2);
+
+    ctx.textAlign = 'center';
+    const cell = (cx, label, value) => {
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = S.label;
+        ctx.font = `bold ${Math.round(h * 0.15)}px Tahoma, Geneva, sans-serif`;
+        ctx.fillText(label, cx, h * 0.34);
+        ctx.fillStyle = S.ink;
+        ctx.font = `bold ${Math.round(h * 0.44)}px Tahoma, Geneva, sans-serif`;
+        ctx.fillText(value, cx, h * 0.82);
+    };
+    cell(w * 0.27, 'PLAY', `${play} / ${of}`);
+    cell(w * 0.73, 'POINTS', `${score}`);
+
+    if (boardFace.texture) boardFace.texture.needsUpdate = true;
+    return boardFace.canvas;
+}
+
+/**
  * Build the standing scene and add it to `scene`.
  *
  * Returns the group so a caller can dispose it, and so the S1 camera spike can
@@ -285,6 +594,10 @@ export function initField(scene) {
     group.add(buildTurf());
     group.add(buildStands());
     group.add(buildPylons());
+    group.add(buildScoreboard());
+
+    band = buildBand();
+    group.add(band);
 
     // ON THE END LINE, AT THE BACK OF THE END ZONE, which is where a real goal
     // post stands and where it stays out of the way. They were at 0.4 of the
@@ -304,6 +617,8 @@ export function getFieldGroup() {
 
 /** Release everything this module made. Safe to call more than once. */
 export function disposeField() {
+    band = null;
+    boardFace = null;
     if (!group) return;
     group.traverse((obj) => {
         if (obj.geometry) obj.geometry.dispose();

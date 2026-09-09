@@ -22,7 +22,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="A 3D American football game where you are always on offense. Call a play, snap the ball, and pick your receiver. Ten plays make a game, and the further you carry it the more it is worth.">
+    <meta name="description" content="A 3D American football game where you are always on offense. Call a play, snap the ball, and pick your receiver. Ten plays make a game, and the farther you carry it the more it is worth.">
     <meta name="theme-color" content="#080b12">
     <meta name="author" content="Steve Noll">
 
@@ -35,7 +35,7 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="X's and O's">
-    <meta property="og:description" content="Call a play, snap the ball, pick your receiver. Ten plays make a game, and the further you carry it the more it is worth.">
+    <meta property="og:description" content="Call a play, snap the ball, pick your receiver. Ten plays make a game, and the farther you carry it the more it is worth.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/exesnohs/">
@@ -61,7 +61,7 @@
          one image and has no type property. -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="X's and O's">
-    <meta name="twitter:description" content="A 3D football game where you are always on offense. Ten plays, and the further you carry it the more it is worth.">
+    <meta name="twitter:description" content="A 3D football game where you are always on offense. Ten plays, and the farther you carry it the more it is worth.">
     <meta name="twitter:image" content="https://www.scenexp.com/exesnohs/assets/og-exesnohs.jpg?v=1">
     <meta name="twitter:image:alt" content="A floodlit 3D football field at night seen from high behind the offense, with the two teams lined up across the line of scrimmage.">
 
@@ -100,13 +100,13 @@
     <title>X's and O's</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=1" as="style">
+    <link rel="preload" href="css/experience.min.css?v=2" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=1">
+    <link rel="stylesheet" href="css/experience.min.css?v=2">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -147,9 +147,10 @@
                 would like to face or leave it to chance. Then you snap the ball
                 and decide, in the moment, whether to throw to one of your
                 receivers or keep it and run.</p>
-            <p>Ten plays make a game. The further you carry the ball the more
+            <p>Ten plays make a game. The farther you carry the ball the more
                 the play is worth, all the way to fifty points for crossing the
-                field, and an interception costs you ten.</p>
+                field, and an interception costs you ten. Fifty a play is the
+                most on offer, so 500 is a perfect game.</p>
             <p>SceneXP is a home for 3D experiences that run right in your
                 browser. This one is simply a game.</p>
             <nav aria-label="Site sections">
@@ -175,11 +176,12 @@
 
     <!-- THE WELCOME CARD.
          The one thing a visitor needs before the playbook makes any sense:
-         that they are always on offence, that there are ten plays, and that
-         distance is what a play is worth. The 2D game can leave the last part
-         to the field itself, because it paints "0 pts / 5 pts / 15 pts /
-         30 pts / 50 pts" along the touchline. The 3D field does not carry
-         those bands yet, so the ladder has to be stated here.
+         that they are always on offense, that there are ten plays, and that
+         distance is what a play is worth. The field carries the same ladder,
+         painted on the grass the way the 2D game paints "0 pts / 5 pts /
+         15 pts / 30 pts / 50 pts" along its touchline, and that is not a
+         duplication to tidy away: this card is read before a visitor has ever
+         seen the field, and the numerals are read while a play is running.
 
          It is a plain card rather than the shared #blocker overlay, because
          this scene has no click-to-start surface: every action is a button,
@@ -188,12 +190,12 @@
         <div class="card-panel welcome-panel" role="dialog" aria-modal="true"
             aria-labelledby="welcome-title">
             <h2 id="welcome-title" class="card-title">X's and O's</h2>
-            <p class="card-detail">Ten plays, and you are on offence for every one
-                of them. The further you carry the ball, the more the play is worth.</p>
+            <p class="card-detail">Ten plays, and you are on offense for every one
+                of them. The farther you carry the ball, the more the play is worth.</p>
 
             <ol class="welcome-steps">
                 <li><strong>Call a play.</strong> Pick one from the playbook, and
-                    choose a defence to face or leave it to chance.</li>
+                    choose a defense to face or leave it to chance.</li>
                 <li><strong>Snap the ball.</strong> Take as long as you like reading
                     the formation first.</li>
                 <li><strong>Throw or run.</strong> Hit a receiver, or keep it
@@ -209,6 +211,14 @@
                 <li><span class="ladder-pts is-bad">-5</span> sacked holding the ball</li>
                 <li><span class="ladder-pts is-bad">-10</span> intercepted</li>
             </ul>
+
+            <!-- THE 2D GAME GIVES YOU A NUMBER TO BEAT, and it is worth having.
+                 "500 is a perfect score" turns ten separate plays into one
+                 game with a target, which is most of the reason somebody plays
+                 a second time. The figure is not invented: ten plays at the
+                 fifty a crossing is worth. -->
+            <p class="welcome-target">Fifty a play is the most you can get, so
+                <strong>500 is a perfect game</strong>. Good luck.</p>
 
             <div id="welcome-actions" class="card-actions"></div>
         </div>
@@ -264,8 +274,12 @@
          interrupts something the visitor is already reading. -->
     <p id="hud-live" class="sr-only" role="status" aria-live="polite"></p>
 
-    <!-- The result of one play. -->
-    <div id="result" class="card-overlay" hidden>
+    <!-- The result of one play.
+         IT SITS LOW AND LETS THE FIELD THROUGH, which the summary card does
+         not need to. A play finishes somewhere on the grass, and a centred card
+         over a dimmed field covered the one thing it was reporting on. The lit
+         spot marker (markers.js) rises past it from below. -->
+    <div id="result" class="card-overlay card-overlay-low" hidden>
         <div class="card-panel" role="dialog" aria-modal="true"
             aria-labelledby="result-headline">
             <p id="result-points" class="result-points">+0</p>

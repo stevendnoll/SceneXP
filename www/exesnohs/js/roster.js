@@ -7,8 +7,8 @@
  * made. It knows nothing about the game: it never reads a route, a formation
  * or a score.
  *
- * THE LETTERS WERE TRIED AND DROPPED (2026-09-08, D22). The offence were
- * animated X's and the defence O's, in these same two colours, on the grounds
+ * THE LETTERS WERE TRIED AND DROPPED (2026-09-08, D22). The offense were
+ * animated X's and the defense O's, in these same two colours, on the grounds
  * that it is what the game is called and that a bold glyph reads better than a
  * small figure at 45m. Three rounds of animation could not make them look
  * good: too fast, then creepy when the swing flattened the letterform, then

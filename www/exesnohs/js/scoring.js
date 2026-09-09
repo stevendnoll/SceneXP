@@ -42,6 +42,45 @@ export function pointsForPosition(x, lineInterval) {
 }
 
 /**
+ * The ladder as a list of BANDS, nearest the offense first.
+ *
+ * `{ from, to, points }` in the same field units `lineInterval` came in, where
+ * `to` is Infinity for the last one. The first band is the one worth nothing,
+ * which is not a rung of the ladder but is a stretch of the field, and the
+ * field is what this is for.
+ *
+ * IT EXISTS SO THE PAINT CANNOT LIE. field.js writes these numbers onto the
+ * turf and main.js lights the band the carrier is standing in, and if either of
+ * them carried its own copy of the thresholds it would be one edit away from
+ * telling a visitor they had reached a rung the scoring did not award. Both ask
+ * here, and `pointsForPosition` above is still the only thing that decides.
+ */
+export function ladderBands(lineInterval) {
+    const rungs = [...LADDER].reverse().map((step) => ({
+        from: LADDER_ORIGIN + lineInterval * step.intervals,
+        points: step.points,
+    }));
+    // Each band runs to where the next one starts, and the richest runs on.
+    const bands = rungs.map((rung, i) => ({
+        from: rung.from,
+        to: i + 1 < rungs.length ? rungs[i + 1].from : Infinity,
+        points: rung.points,
+    }));
+    return [{ from: -Infinity, to: bands[0].from, points: 0 }, ...bands];
+}
+
+/**
+ * The band a carrier at `x` is standing in.
+ *
+ * Never null: somebody behind their own goal line is in the band worth nothing,
+ * which is a true and useful answer.
+ */
+export function bandAt(x, lineInterval) {
+    const bands = ladderBands(lineInterval);
+    return bands.find((b) => x >= b.from && x < b.to) || bands[0];
+}
+
+/**
  * Classify a finished play.
  *
  * Reads the same five facts the 2D game reads: whether the quarterback ran,

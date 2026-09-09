@@ -85,6 +85,14 @@ const FIELD = {
  * figures begin walking through each other. Seven leaves a comfortable margin:
  * 0.42m of radius against 0.33m of half-width.
  *
+ * THAT MARGIN WAS SPENT LATER THE SAME DAY, and the paragraph above is left
+ * standing because it is the reasoning, not because the numbers still hold.
+ * 0.33m is a LIFE SIZE player's half-width, and figures are drawn at 2.2 (see
+ * `figureScale`), so the real comparison became 0.42m against 0.73m and the
+ * figures did begin walking through each other, on a field that never got
+ * anywhere near 5.4. The fix is `collisionScale`, which keeps the radii in step
+ * with how big the players are actually drawn. Read that note next.
+ *
  * NOTHING IN THE SIMULATION CHANGED. It works in field units and only
  * `UNITS_TO_METRES` moved, which is exactly the separation D17 bought.
  */
@@ -120,6 +128,15 @@ const FIELD = {
  * receiver is at full speed in a tenth of a second). That is the 2D game's
  * feel and it is deliberately preserved, not corrected.
  */
+/**
+ * How much bigger than life the players are drawn.
+ *
+ * Named here rather than written inline because TWO things have to agree with
+ * it: how big a figure looks (`figureScale`) and how big it is to the physics
+ * (`collisionScale`). They came apart once already. See the long note at each.
+ */
+const FIGURE_SCALE = 2.2;
+
 const SIM = {
     lineInterval: 200,       // field units per interval. See above.
     segments: FIELD.segments,
@@ -206,11 +223,23 @@ function containerHeight() {
 }
 
 /**
- * The settings object the ported class expects, whose `style.gutters` is the
+ * The settings object the ported classes expect, whose `style.gutters` is the
  * unit every formation counts in. In the 2D game both were 5 pixels.
+ *
+ * `collisionScale` RIDES ALONG HERE, and this is the only route it takes.
+ * motion.js hard-codes its half-extents for a life-size player and we draw one
+ * at 2.2, so the physics has to be told. It arrives on the settings object the
+ * class is already constructed with rather than by importing config, because
+ * the ported simulation reaching for config is the thing that would stop it
+ * being testable with plain numbers (PLANNING D1, and the same reasoning as
+ * D40's injected audio). Anything constructing MotionClass without it gets 1,
+ * which is the 2D game's own behaviour.
  */
 function formationSettings() {
-    return { style: { gutters: { x: SIM.gutter, y: SIM.gutter } } };
+    return {
+        style: { gutters: { x: SIM.gutter, y: SIM.gutter } },
+        collisionScale: FIGURE_SCALE,
+    };
 }
 
 const EXESNOHS_CONFIG = {
@@ -276,7 +305,7 @@ const EXESNOHS_CONFIG = {
         },
         near: 0.5,
         far: 400,
-        // The play driver. Behind the offence's own goal line, up high.
+        // The play driver. Behind the offense's own goal line, up high.
         play: {
             height: 30,
             back: 34,               // metres behind the line of scrimmage
@@ -324,9 +353,24 @@ const EXESNOHS_CONFIG = {
          * goes next.
          */
         replay: {
-            fov: 46,                 // widened from 38: at these distances a
-                                     // narrower lens fills the frame with one
-                                     // torso and shows none of the play
+            /**
+             * 52, WIDENED FROM 38 AND THEN FROM 46, FOR THE SAME REASON BOTH
+             * TIMES: at these distances a narrow lens fills the frame with one
+             * torso and shows none of the play.
+             *
+             * The radius comment below claims a player comes out "roughly a
+             * third of the frame height", and it did when this was written for
+             * a life-size figure. At `figureScale` 2.2 a player is 3.85m and
+             * the settled shot sits 11.1m away, so at 46 degrees he was 48% of
+             * the frame: half the picture is one man, which is a portrait.
+             *
+             * A third is not actually reachable. It wants either a 58 degree
+             * lens, which bends a figure noticeably at eleven metres, or a
+             * radius past the 12.4m the field's tightest corner allows. 52 puts
+             * him at 41%, which is the most this field has room for, and the
+             * honest version of the sentence below.
+             */
+            fov: 52,
             /**
              * IT ORBITS THE CARRIER RATHER THAN CHASING HIM.
              *
@@ -350,15 +394,37 @@ const EXESNOHS_CONFIG = {
              * portrait.
              */
             radius: 1.8,             // intervals from the carrier, held
-            minRadius: 1.1,          // ...unless the seats force it closer
+            /**
+             * THE HARD FLOOR ON HOW CLOSE IT EVER GETS, raised from 1.1.
+             *
+             * These heights and distances are in intervals, which is what makes
+             * them follow the field (see the note above). What they do NOT
+             * follow is `figureScale`, and that is how the replay ended up
+             * inside the pack rather than watching it.
+             *
+             * A player is 1.75m, so at 2.2 they stand 3.85m, which is 0.55 of
+             * an interval. `trackHeight` was 0.55. The camera was flying at
+             * EXACTLY head height, which is why the close replay frames are a
+             * wall of shoulders with the ball somewhere behind them, and why
+             * everything the low-poly rig does not have (a face, hands, a seam
+             * between two figures) is the first thing the shot shows.
+             *
+             * 0.95 puts the lens a little under two players up, looking down
+             * over them, so figures read against grass instead of against each
+             * other. 1.35 of an interval is 9.4m, at which a 3.85m player is
+             * about a third of the frame: a replay rather than a portrait,
+             * which is what the radius comment above always claimed it was.
+             */
+            minRadius: 1.35,         // ...unless the seats force it closer
             angleFrom: 168,          // degrees. 180 is directly behind
             angleTo: 118,            // swinging round to the side
-            establishHeight: 1.2,    // intervals
+            establishHeight: 1.5,    // intervals
             establishFor: 0.3,       // fraction of the replay spent getting there
-            trackHeight: 0.55,
+            trackHeight: 0.95,
             lead: 0.4,               // aim slightly ahead of the carrier
             settleFrom: 0.78,
-            settleCloseness: 0.82,   // was 0.72, which closed in too hard
+            settleCloseness: 0.88,   // was 0.72, which closed in too hard, then
+                                     // 0.82, which still finished inside the pack
             settleZoom: 6,
             speed: 0.85,
             holdEnd: 1.0,
@@ -391,8 +457,71 @@ const EXESNOHS_CONFIG = {
      * and a third the width of the field. The rest of the legibility comes
      * from the ground markers below, which do not foreshorten at all.
      */
-    figureScale: 2.2,
+    figureScale: FIGURE_SCALE,
     ballScale: 2.6,
+
+    /**
+     * WHO IS WHO, AND IN WHAT COLOUR. ONE TABLE, TWO READERS.
+     *
+     * markers.js paints these onto the grass and hud.js paints them onto the
+     * throw buttons, and the whole point of a receiver's letter is that the
+     * button and the player agree. Two copies of this table would agree right
+     * up until somebody edited one of them, so there is one.
+     *
+     * THE HUES ARE THE 2D GAME'S OWN, read off playbook.class.tsx where each
+     * route is drawn: A is rgb(125, 0, 0), B is rgb(0, 0, 125), C is
+     * rgb(125, 0, 125) and D is rgb(0, 125, 0). Those are chosen as dark ink on
+     * a near-white diagram, so they are lifted here to sit on floodlit grass at
+     * night and on a dark button, but the hue is unchanged. A receiver's disc,
+     * their route on the playbook card and their throw button are all the same
+     * colour, which is what makes "Throw B" mean something.
+     */
+    receivers: {
+        wr1: { letter: 'A', ink: '#ff6a5e' },   // was 125, 0, 0
+        wr2: { letter: 'B', ink: '#6d9cff' },   // was 0, 0, 125
+        wr3: { letter: 'C', ink: '#e57bff' },   // was 125, 0, 125
+        wr4: { letter: 'D', ink: '#5fd873' },   // was 0, 125, 0
+    },
+
+    /** The quarterback is the other thing a visitor presses, and an unmarked
+     *  figure does not look pressable. */
+    qb: { letter: 'Q', ink: '#ffd166' },
+
+    /** The two kits, from the 2D game's own rgba(255,153,44) and
+     *  rgba(155,207,255). Two hues rather than two values, which is what keeps
+     *  them separable at 45m under floodlights (D23). */
+    teamInk: { 0: '#ff992c', 1: '#9bcfff' },
+
+    /**
+     * HOW BIG A PLAYER IS TO THE PHYSICS, AND WHY IT IS NOT 1.
+     *
+     * `motion.js` hard-codes its collision half-extents in FIELD UNITS: 12
+     * across and 10 downfield for a lineman, 6 and 5 for everybody else. Those
+     * were tuned in the 2D game against a player drawn as a 20-unit letter, so
+     * the collision box came out at roughly 0.6 of the drawn player. Two bodies
+     * overlapped a little at the edges and nobody minded.
+     *
+     * `figureScale` broke that ratio without anybody noticing. The comment in
+     * config's field block still reasons about "0.42m of radius against 0.33m
+     * of half-width", and that comparison was made when a figure was life size.
+     * At 2.2 a player is 1.45m across, so a receiver carries a 0.21m collision
+     * radius inside a 0.73m half-width and the ratio is 0.29 rather than 0.6.
+     * Figures walk through each other, which is exactly what the screenshots
+     * show at the line of scrimmage and in every close replay.
+     *
+     * Scaling the radii by the same number the figures are scaled by restores
+     * the 2D game's own ratio: a receiver goes to 0.46m against 0.73m, or 0.63.
+     * NOTHING IN motion.js IS RETUNED BY HAND. It reads this one factor through
+     * the settings object it is already handed, in the same way audio is
+     * injected (D40), so the ported constants stay the constants the 2D game
+     * wrote and there is one number to argue with.
+     *
+     * It tracks figureScale deliberately rather than being a free number: if a
+     * future change makes the players smaller, the physics should follow them
+     * without anybody having to remember. Give it its own value only if the
+     * game ever wants collisions that deliberately disagree with what is drawn.
+     */
+    collisionScale: FIGURE_SCALE,
 
     /**
      * THE FLAT DISC UNDER EACH PLAYER (see markers.js for why it exists).
@@ -439,6 +568,102 @@ const EXESNOHS_CONFIG = {
         endZone: '#7a1220',
         stripes: 10,                // mown bands across the playing area
         textureWidth: 2048,
+
+        /**
+         * THE LINE OF SCRIMMAGE, IN THE 2D GAME'S YELLOW.
+         *
+         * Every other line on this field is the same white, so from the play
+         * camera there is nothing to say where the play starts. The 2D game
+         * never had that problem: it paints the scrimmage line yellow and it is
+         * the most useful mark on the screen.
+         *
+         * It lands on the first yard line at x = FIELD.lineInterval, which is
+         * measured rather than assumed: lining up pass2, run3 and jumbo1 puts
+         * the centre at exactly 200 field units and the rest of the line within
+         * 5 either side. The 5-point threshold sits at 196 units, 14cm short of
+         * it, so ONE painted line is both the scrimmage line and the first rung
+         * of the scoring ladder, which is exactly what the 2D game shows.
+         */
+        scrimmage: '#f4d03f',
+        scrimmageWidth: 0.22,       // metres of paint, wider than a yard line
+
+        /**
+         * THE SCORING LADDER, PAINTED ON THE GRASS.
+         *
+         * The 2D game writes "0 pts / 5 pts / 15 pts / 30 pts / 50 pts" along
+         * the touchline, so a visitor always knows what the ball is worth right
+         * now and how far the next rung is. Without them the 3D field is five
+         * identical white stripes and the ladder has to live in prose on the
+         * welcome card, which is a card nobody can see once the play starts
+         * (D47 predicted exactly this).
+         *
+         * THEY ARE STRETCHED DOWNFIELD, and that is not decoration. The camera
+         * pitches between 28 degrees on a wide screen and 68 on a phone, and a
+         * numeral painted square on the turf loses its height to that rake: a
+         * downfield length projects as sin(pitch), which is 0.47 at 28 degrees
+         * and 0.87 at 60. Real fields stretch their numbers for the same reason
+         * a road paints an elongated arrow. 1.6 is the middle of the range this
+         * camera actually uses, so the numbers read as numbers at both ends of
+         * it rather than being correct at one.
+         *
+         * THE POSITIONS ARE NOT WRITTEN DOWN HERE. field.js asks scoring.js for
+         * the real thresholds, so the paint cannot claim a rung the arithmetic
+         * does not award.
+         */
+        ladderInk: 'rgba(238, 242, 240, 0.5)',
+        ladderHeight: 2.6,          // metres of numeral, across the field
+        ladderStretch: 1.6,         // ...times taller downfield, for the rake
+        ladderInset: 2.4,           // metres in from each touchline
+    },
+
+    /**
+     * THE BAND THE BALL IS IN, LIT WHILE THE PLAY RUNS.
+     *
+     * The other half of what the 2D game's touchline labels do: the band the
+     * carrier is standing in lights up, so "the farther you carry it the more
+     * it is worth" is something a visitor watches happen rather than something
+     * they were told once. Painted numerals alone say where the rungs are; this
+     * says which one you are on.
+     *
+     * A SEPARATE MESH RATHER THAN A REPAINT. The markings are baked into one
+     * 2048px canvas texture, and re-uploading that every time the carrier
+     * crosses a line would be the most expensive thing in the frame. A single
+     * translucent plane that moves is free.
+     */
+    band: {
+        ink: 0xffb14a,
+        opacity: 0.13,
+        lift: 0.02,                 // above the turf, below the markers
+        fade: 0.18,                 // seconds to cross-fade between bands
+    },
+
+    /**
+     * THE SCOREBOARD BEYOND THE FAR END ZONE.
+     *
+     * IT IS THERE TO FILL A HOLE, and the hole is real: the play camera looks
+     * downfield and slightly up, so the top quarter of every frame is empty
+     * black above the far goal post. The 2D game fills the same strip with a
+     * crowd, which was dropped (D8) and never replaced.
+     *
+     * A board rather than scenery, because it can do a job while it is there.
+     * The score and the play count already live in the HUD, so this is not the
+     * only place they are readable, which is what allows it to be small enough
+     * to sit in the distance and be atmosphere rather than instrumentation.
+     *
+     * The stadium as a whole is deliberately unfinished (the night setting is
+     * not settled), so nothing here tries to be the last word on how the far
+     * end looks. It is a structure standing where a structure belongs.
+     */
+    scoreboard: {
+        width: 13,
+        height: 5.4,
+        standHeight: 5.2,           // metres of post under the board
+        beyond: 6.5,                // metres past the far end line
+        face: '#0d1117',
+        frame: 0x2b3342,
+        ink: '#ffb14a',
+        label: '#7f8a9c',
+        textureWidth: 1024,
     },
 
     /** Storage keys. Every one of these outlives the visit, so all three are

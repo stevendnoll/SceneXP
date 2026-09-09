@@ -230,7 +230,11 @@ test('settings, nav, and checklist panels open, adjust, and close', async () => 
 
   // Sliders update live and persist on commit.
   fire(dom.el('walk-speed-slider'), 'input', { target: { value: '7' } });
-  expect(dom.el('walk-speed-value').textContent).toBe(7);
+  // A STRING, because `textContent` is one. The panel assigns the number it
+  // parsed and a browser stringifies it on the way in, which is what every
+  // other assertion in this block already expects ('1.5', '80%'). This one
+  // read back a number only because the stub stored the raw value.
+  expect(dom.el('walk-speed-value').textContent).toBe('7');
   fire(dom.el('walk-speed-slider'), 'change', { target: { value: '7' } });
   fire(dom.el('look-speed-slider'), 'input', { target: { value: '1.5' } });
   expect(dom.el('look-speed-value').textContent).toBe('1.5');
