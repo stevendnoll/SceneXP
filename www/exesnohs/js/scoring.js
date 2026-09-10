@@ -162,3 +162,52 @@ export function verdictFor(total) {
     if (total > 0) return 'Hard yards.';
     return 'One of those games.';
 }
+
+/**
+ * HOW THE GAME IS GOING, AS ONE SIGNED RUN OF PLAYS.
+ *
+ * The 2D game kept a count of successful or unsuccessful plays in a row and
+ * leaned on the difficulty accordingly, which is the right instinct for a game
+ * you mostly WATCH: somebody scoring fifty every play has stopped being
+ * surprised, and somebody who cannot move the ball has stopped watching.
+ *
+ * ONE SIGNED NUMBER RATHER THAN TWO COUNTERS. Positive is a run of good plays
+ * and negative a run of bad ones, so a success after a bad run does not have to
+ * clear one counter and start another: it crosses zero on its own.
+ *
+ * A MIDDLING PLAY DECAYS IT RATHER THAN BREAKING IT. Five points is neither a
+ * triumph nor a disaster, and a game that reset its whole reading on every
+ * ordinary play would never build a run at all. It steps one toward zero, so a
+ * streak fades if the visitor stops repeating themselves.
+ */
+export function nextStreak(streak, points, { good = 30, bad = 0 } = {}) {
+    const was = Number.isFinite(streak) ? streak : 0;
+    if (points >= good) return was >= 0 ? was + 1 : 1;
+    if (points <= bad) return was <= 0 ? was - 1 : -1;
+    if (was > 0) return was - 1;
+    if (was < 0) return was + 1;
+    return 0;
+}
+
+/** The whole game so far, for a visitor coming back to a saved one. */
+export function streakOver(results, options) {
+    let streak = 0;
+    for (const result of results || []) {
+        streak = nextStreak(streak, (result && result.points) || 0, options);
+    }
+    return streak;
+}
+
+/**
+ * ...AND WHAT THAT IS WORTH AS A DIFFICULTY, from -1 to +1.
+ *
+ * Positive means the visitor is dominating and the game should lean back. It
+ * saturates at `run` plays, because "three fifties in a row" and "seven fifties
+ * in a row" want the same answer: the game is already as hard as this dial
+ * makes it, and a longer run should not keep making it worse.
+ */
+export function difficultyFor(streak, { run = 3 } = {}) {
+    if (!(run > 0) || !Number.isFinite(streak)) return 0;
+    const t = streak / run;
+    return t > 1 ? 1 : (t < -1 ? -1 : t);
+}

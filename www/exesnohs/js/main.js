@@ -29,10 +29,11 @@ import {
 } from './view.min.js';
 import { takedownLength, tacklerFor, contactFraction } from './takedown.min.js';
 import {
-    createPlay, lineUp, snap, tick, ballCarrier, markAirborne,
+    createPlay, lineUp, snap, tick, ballCarrier, markAirborne, setDifficulty,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome,
 } from './play.min.js';
 import { readGame, saveGame, clearGame } from './progress.min.js';
+import { nextStreak, streakOver, difficultyFor } from './scoring.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
@@ -92,6 +93,16 @@ const cycle = {
     /** Who brought whom down, decided once at the whistle so the replay ends
      *  with the same tackle the live play did. */
     tackle: { tackler: '', carrier: '' },
+    /**
+     * HOW THE GAME IS GOING, as a signed run of plays. Positive is a run of
+     * good ones and negative a run of bad ones, and it leans the next line-up's
+     * speed roll (see `scoring.nextStreak` and `config.difficulty`).
+     *
+     * NOT SAVED SEPARATELY, and deliberately: it is recomputed from `results`,
+     * which the save already carries, so a resumed game cannot come back with a
+     * streak that disagrees with the plays behind it.
+     */
+    streak: 0,
 };
 
 /** Whoever asked not to be moved about. Checked once: a visitor who changes it
@@ -319,6 +330,7 @@ function onPlaybookChoice(offensive, defense) {
  */
 function changePlay(offensive, defense) {
     uiClick();
+    setDifficulty(cycle.play, difficultyFor(cycle.streak, CFG.difficulty));
     lineUp(cycle.play, offensive, defense || '');
     resetBallFlight();
     resetAssignments();
@@ -354,6 +366,9 @@ function startPlay(offensive, defense) {
     // Choosing a play off the playbook is the click the `snap` sample is for.
     uiClick();
     resetRelocate();
+    // BEFORE THE LINE-UP, because the lean is applied where every player's
+    // speed is rolled and that happens once, here.
+    setDifficulty(cycle.play, difficultyFor(cycle.streak, CFG.difficulty));
     lineUp(cycle.play, offensive, defense || '');
     resetBallFlight();
     // Coverage assignments are cached for the replay, so a new line-up has to
@@ -484,6 +499,10 @@ function finishPlay() {
     cycle.lastOutcome = result;
     cycle.total += result.points;
     cycle.results.push(result);
+    // AND THE GAME TAKES NOTE. A run of fifties leans the next line-up toward a
+    // quicker defense, a run of nothing leans it the other way, and the visitor
+    // is never told either way.
+    cycle.streak = nextStreak(cycle.streak, result.points, CFG.difficulty);
     setScore(cycle.total);
     updateScoreboard({
         play: cycle.playNumber, of: CFG.rules.playsPerGame, score: cycle.total,
@@ -578,6 +597,7 @@ function startGame() {
     cycle.total = 0;
     cycle.results = [];
     cycle.lastOutcome = null;
+    cycle.streak = 0;
     clearGame();
     hideSummary();
     hideResult();
@@ -598,6 +618,11 @@ function resumeGame(saved) {
     cycle.total = saved.total;
     cycle.results = saved.results;
     cycle.lastOutcome = null;
+    // REBUILT FROM THE PLAYS RATHER THAN STORED, so a resumed game cannot come
+    // back with a run that disagrees with the results behind it, and the save
+    // shape does not have to change (which would discard every game in
+    // progress on the version bump).
+    cycle.streak = streakOver(cycle.results, CFG.difficulty);
     hideSummary();
     hideResult();
     setPlayNumber(cycle.playNumber, CFG.rules.playsPerGame);

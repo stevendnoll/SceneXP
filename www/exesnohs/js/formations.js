@@ -4234,6 +4234,32 @@ export class TeamFormationsClass {
       maxSpeed = 2;
     }
 
+    /**
+     * AND THEN THE GAME LEANS ON IT, WHICH IS THE ADAPTIVE DIFFICULTY.
+     *
+     * APPLIED HERE, AFTER THE FLOORS, and that is not a detail: the two clamps
+     * above raise a slow player back up, so a bias applied before them would be
+     * undone for exactly the players it was meant to slow down.
+     *
+     * The lever is the roll this function already makes. Every player gets a
+     * random top speed and acceleration on every line-up, and all this does is
+     * lean the whole band one way: the offense slower and the defense quicker
+     * when the visitor is dominating, and the reverse when he is struggling.
+     * Nothing new is invented and the ported arithmetic above is untouched.
+     *
+     * INJECTED, NEVER IMPORTED, like `collisionScale` and the audio: it arrives
+     * on the settings object this class is already constructed with, and
+     * defaults to no lean at all, which is the 2D game's own behaviour.
+     */
+    const lean = this.settings && this.settings.difficulty;
+    const swing = this.settings && this.settings.difficultySwing;
+    if (typeof lean === 'number' && lean !== 0 && typeof swing === 'number' && swing > 0) {
+      // Team 0 is the offense, and the visitor is always on offense.
+      const bias = 1 + swing * lean * (team === 0 ? -1 : 1);
+      accel *= bias;
+      maxSpeed *= bias;
+    }
+
     return {
       anim: 'formation',
       coords: {

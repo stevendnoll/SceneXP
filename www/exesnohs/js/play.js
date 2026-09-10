@@ -127,6 +127,25 @@ export function createPlay(audioObject = null) {
 }
 
 /**
+ * HOW HARD THE GAME IS LEANING, FROM -1 TO +1.
+ *
+ * Set before a line-up, because the lean is applied where every player's random
+ * speed and acceleration are rolled, and that happens once per line-up. Setting
+ * it mid-play would do nothing at all, which is worth saying out loud: this is
+ * a dial on the NEXT play, not on this one.
+ *
+ * It is written onto the settings object the ported formations class was
+ * constructed with, which is the same route `collisionScale` takes.
+ */
+export function setDifficulty(play, value) {
+    const lean = Number.isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0;
+    if (play.formations && play.formations.settings) {
+        play.formations.settings.difficulty = lean;
+    }
+    return lean;
+}
+
+/**
  * Line both teams up.
  *
  * Pass no defensive formation and the library picks one at random, which is

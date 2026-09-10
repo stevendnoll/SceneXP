@@ -245,6 +245,11 @@ const CATCH_NEAR = 14;     // metres: below this a throw is unchanged
 const CATCH_FAR = 30;      // ...and at this it is as hard as it gets
 const CATCH_FAR_SCALE = 0.42;   // what the receiver's box is multiplied by there
 
+/** The fraction a team's speed and acceleration move at full difficulty. Up
+ *  here because `formationSettings` has to hand it to the ported formations
+ *  class. See `difficulty` in the config below for what it means. */
+const DIFFICULTY_SWING = 0.10;
+
 const SIM = {
     lineInterval: 200,       // field units per interval. See above.
     segments: FIELD.segments,
@@ -398,6 +403,10 @@ function formationSettings() {
         catchNear: CATCH_NEAR / UNITS_TO_METRES,
         catchFar: CATCH_FAR / UNITS_TO_METRES,
         catchFarScale: CATCH_FAR_SCALE,
+        /** How hard the game is leaning right now, -1 to +1, written by
+         *  `play.setDifficulty` before each line-up. See `difficulty` below. */
+        difficulty: 0,
+        difficultySwing: DIFFICULTY_SWING,
     };
 }
 
@@ -1716,6 +1725,41 @@ const EXESNOHS_CONFIG = {
         label: '#6f7d93',
         rule: 'rgba(255, 255, 255, 0.07)',
         textureWidth: 1024,
+    },
+
+    /**
+     * LEANING ON THE GAME WHEN IT IS GOING TOO WELL, OR TOO BADLY.
+     *
+     * The 2D game kept a count of successful or unsuccessful plays in a row and
+     * adjusted difficulty from it, and the right lever is the one it used: the
+     * random speed and acceleration every player is rolled on every line-up
+     * (see `formations.generateTeamFormationObject`). Nothing new is invented.
+     * The roll already exists, and this leans the whole band one way or the
+     * other.
+     *
+     * IT IS SILENT. The visitor is never told, because being told that the game
+     * has decided to go easy on you is worse than the game being hard.
+     *
+     * `swing` IS THE WHOLE FEEL OF IT and is deliberately small. It is the
+     * fraction by which a team's top speed and acceleration move at full
+     * difficulty, applied in opposite directions to the two sides, so the gap
+     * between them opens by twice it. At 0.10 a dominant visitor faces a
+     * defense 10% quicker than usual while his own side is 10% slower, which is
+     * roughly one step of the game's own random roll: enough to feel, not
+     * enough to make a play look broken.
+     */
+    difficulty: {
+        /** Points at or above which a play counts as a success, which is the
+         *  third rung: past two lines is a good play by anybody's reckoning. */
+        good: 30,
+        /** ...and at or below which it counts as a failure. Zero, so an
+         *  incompletion counts alongside a sack and an interception. */
+        bad: 0,
+        /** How many in a row saturate it. Three, because "three fifties" and
+         *  "seven fifties" want the same answer. */
+        run: 3,
+        /** The fraction a team's speed and acceleration move at full tilt. */
+        swing: 0.10,
     },
 
     /** Storage keys. Every one of these outlives the visit, so all three are

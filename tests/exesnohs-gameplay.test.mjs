@@ -32,7 +32,12 @@ const {
 } = await import(join(scene, 'config.js'));
 const {
     pointsForPosition, ladderBands, bandAt,
+    nextStreak, streakOver, difficultyFor,
 } = await import(join(scene, 'scoring.js'));
+const {
+    createPlay: createPlayForDifficulty, lineUp, snap, tick, isDone,
+    keepAndRun, outcome, setDifficulty, OFFENSIVE_PLAYS,
+} = await import(join(scene, 'play.js'));
 const { markerGeometry } = await import(join(scene, 'markers.js'));
 const { MotionClass } = await import(join(scene, 'motion.js'));
 const { solveArm, handAt } = await import(join(scene, 'arm.js'));
@@ -1406,5 +1411,124 @@ describe('a short pass and a hail mary are not the same event', () => {
         const bare = new MotionClass({}, {}, silent);
         expect(bare.throwStretch(throwOf(60))).toBe(0);
         expect(bare.catchFarScale()).toBe(1);
+    });
+});
+
+describe('the game leans on a run of plays', () => {
+    /**
+     * The 2D game kept a count of successful or unsuccessful plays in a row and
+     * adjusted difficulty from it, which is the right instinct for a game you
+     * mostly WATCH: somebody scoring fifty every play has stopped being
+     * surprised, and somebody who cannot move the ball has stopped watching.
+     */
+    const D = () => CFG.difficulty;
+
+    test('a run of good plays builds, and one bad play breaks it', () => {
+        let s = 0;
+        for (const p of [50, 50, 50]) s = nextStreak(s, p, D());
+        expect(s).toBe(3);
+        // Not "back to zero": the reversal starts a run the other way, which is
+        // the whole reason it is one signed number rather than two counters.
+        s = nextStreak(s, 0, D());
+        expect(s).toBe(-1);
+    });
+
+    test('and a run of bad plays does the same in reverse', () => {
+        let s = 0;
+        for (const p of [-10, 0, -5]) s = nextStreak(s, p, D());
+        expect(s).toBe(-3);
+        expect(nextStreak(s, 50, D())).toBe(1);
+    });
+
+    /**
+     * A MIDDLING PLAY DECAYS IT RATHER THAN BREAKING IT. Five points is neither
+     * a triumph nor a disaster, and a reading that reset on every ordinary play
+     * would never build a run at all.
+     */
+    test('an ordinary play fades a run rather than ending it', () => {
+        let s = 3;
+        s = nextStreak(s, 15, D());
+        expect(s).toBe(2);
+        s = nextStreak(s, 5, D());
+        expect(s).toBe(1);
+        // ...all the way to nothing, and no further.
+        s = nextStreak(s, 15, D());
+        expect(s).toBe(0);
+        expect(nextStreak(0, 15, D())).toBe(0);
+    });
+
+    test('the lean saturates, so a longer run does not keep making it worse', () => {
+        expect(difficultyFor(D().run, D())).toBe(1);
+        expect(difficultyFor(D().run * 10, D())).toBe(1);
+        expect(difficultyFor(-D().run * 10, D())).toBe(-1);
+        expect(difficultyFor(0, D())).toBe(0);
+        // And it is monotonic in between, which is what "leaning" means.
+        let last = -2;
+        for (let s = -D().run; s <= D().run; s += 1) {
+            const now = difficultyFor(s, D());
+            expect(now).toBeGreaterThan(last);
+            last = now;
+        }
+    });
+
+    test('a whole saved game rebuilds the same run its plays imply', () => {
+        const results = [{ points: 50 }, { points: 50 }, { points: 0 }];
+        let s = 0;
+        for (const r of results) s = nextStreak(s, r.points, D());
+        expect(streakOver(results, D())).toBe(s);
+        expect(streakOver([], D())).toBe(0);
+        expect(streakOver(undefined, D())).toBe(0);
+    });
+
+    test('the dial is written where the speed roll can see it, and is clamped', () => {
+        const play = createPlayForDifficulty();
+        expect(setDifficulty(play, 0.5)).toBe(0.5);
+        expect(play.formations.settings.difficulty).toBe(0.5);
+        expect(setDifficulty(play, 9)).toBe(1);
+        expect(setDifficulty(play, -9)).toBe(-1);
+        expect(setDifficulty(play, undefined)).toBe(0);
+        expect(setDifficulty(play, NaN)).toBe(0);
+    });
+
+    /**
+     * AND IT HAS TO ACTUALLY MOVE THE GAME. A difficulty dial that changes
+     * nothing is worse than no dial, because it looks like it is working. The
+     * measure is the FIFTIES: what should become rare when somebody is
+     * dominating is the big play, not every play.
+     */
+    test('leaning back makes the big play rarer than easing off does', () => {
+        const fiftiesAt = (lean) => {
+            let fifty = 0;
+            let n = 0;
+            for (const slug of OFFENSIVE_PLAYS) {
+                for (const defence of ['cover1', 'cover2', 'cover4',
+                    'cover7', 'cover11', 'cover14']) {
+                    const play = createPlayForDifficulty();
+                    setDifficulty(play, lean);
+                    lineUp(play, slug, defence);
+                    snap(play);
+                    let acted = false;
+                    for (let f = 0; f < CFG.simHz * 9 && !isDone(play); f += 1) {
+                        tick(play);
+                        if (!acted && f === Math.round(CFG.simHz * 1.6)) {
+                            keepAndRun(play);
+                            acted = true;
+                        }
+                    }
+                    n += 1;
+                    if ((outcome(play).points || 0) === 50) fifty += 1;
+                }
+            }
+            return fifty / n;
+        };
+        /**
+         * Measured over a much larger sweep this is 19% against 7%. The margin
+         * is what makes the test mean something: a bare `>` on a random
+         * quantity passes half the time when the dial does NOTHING, which is
+         * exactly the regression worth catching. Three points of difference is
+         * far more than a hundred plays produces by chance and far less than
+         * the twelve the lean actually buys.
+         */
+        expect(fiftiesAt(-1)).toBeGreaterThan(fiftiesAt(1) + 0.03);
     });
 });
