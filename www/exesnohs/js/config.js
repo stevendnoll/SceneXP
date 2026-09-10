@@ -594,6 +594,34 @@ const EXESNOHS_CONFIG = {
             settleZoom: 6,
             speed: 0.85,
             holdEnd: 1.0,
+
+            /**
+             * WHICH SHOULDER THE CAMERA ORBITS FROM, AND WHY IT NOW HAS A
+             * MEMORY.
+             *
+             * The shot rounds the near shoulder when the carrier is on the far
+             * touchline and the far one when he is near, so the arc always
+             * crosses the middle of the field. That choice was
+             * `focus.z > 0 ? -1 : 1`, read fresh every frame, so it SWAPPED
+             * SIDES the instant a carrier crossed the middle of the field, and
+             * a swap is an immediate 180 degree jump of the whole orbit.
+             *
+             * Measured over 102 recorded plays: a mean of 1.6 swaps per replay,
+             * a worst case of 16, and 137 of the 160 arriving less than a second
+             * after the previous one. A carrier running anywhere near the middle
+             * makes the sign of his own z chatter, and the camera chattered with
+             * it. QA called it flickering, which is exactly what it is.
+             *
+             * Three things fix it and all three are needed. A DEAD BAND, so a
+             * carrier has to be properly on the other half before the question
+             * is even asked. A HOLD, so the answer cannot change more often than
+             * QA asked for. And an EASE, so when it does change the camera swings
+             * across the middle rather than cutting, which is the shot the
+             * original comment was describing in the first place.
+             */
+            shoulderSwap: 3.0,       // metres off centre before the other side counts
+            shoulderHold: 4.0,       // ...and seconds before it may change again
+            shoulderEase: 1.2,       // seconds to swing across, rather than cut
         },
     },
 

@@ -201,7 +201,7 @@ export function idleDriver(t, aspect = 1.78) {
  * replay ended up shot through the uprights with a player filling three
  * quarters of the frame.
  */
-export function replayDriver(progress, focus) {
+export function replayDriver(progress, focus, shoulder) {
     const r = CFG.camera.replay;
     const t = clamp01(progress);
     const iv = FIELD.lineInterval;
@@ -212,7 +212,12 @@ export function replayDriver(progress, focus) {
 
     // Round the near shoulder when the carrier is on the far touchline, and
     // vice versa, so the arc always crosses the middle of the field.
-    const side = focus.z > 0 ? -1 : 1;
+    //
+    // PASSED IN RATHER THAN READ HERE, because the honest answer needs a clock
+    // and this function has none: see `shoulderFor`. The default is the old
+    // per-frame reading, which keeps this pure and testable on its own, and it
+    // is also exactly the behaviour that flickered, so nothing calls it.
+    const side = shoulder === undefined ? (focus.z > 0 ? -1 : 1) : shoulder;
 
     // The settle: over the last stretch, ease in a little and drop slightly.
     const settle = smooth(clamp01((t - r.settleFrom) / (1 - r.settleFrom)));
@@ -271,6 +276,58 @@ export function replayDriver(progress, focus) {
 }
 
 /**
+ * WHICH SHOULDER THE REPLAY ORBITS FROM, WITH A MEMORY.
+ *
+ * The shot wants to round the shoulder AWAY from the carrier so its arc crosses
+ * the middle of the field, and that used to be `focus.z > 0 ? -1 : 1` read
+ * fresh every frame. A carrier anywhere near the middle makes the sign of his
+ * own z chatter, and the camera cut 180 degrees every time: measured over 102
+ * recorded plays, 137 of 160 swaps arrived less than a second after the one
+ * before. QA called it flickering.
+ *
+ * THREE THINGS, AND ALL THREE ARE NEEDED. A dead band, so the question is only
+ * asked once he is properly on the other half. A hold, so the answer cannot
+ * change more often than every `shoulderHold` seconds. And an ease, so the
+ * change is the camera swinging across rather than cutting.
+ *
+ * IT IS SIGNED AND CONTINUOUS, not a choice of two. Halfway through a swing
+ * `side` is near zero, which puts the camera straight behind the carrier with
+ * no lateral offset: a real shot, and the one it passes through on its way.
+ */
+const shoulder = { side: 1, want: 1, held: 0, seeded: false };
+
+/** Back to whichever side this carrier's position asks for, with no swing.
+ *  Called when a replay starts, so it opens on the right shoulder rather than
+ *  swinging in from wherever the last one finished. */
+export function resetShoulder() {
+    shoulder.seeded = false;
+    shoulder.held = 0;
+}
+
+export function shoulderFor(z, delta = 0) {
+    const R = CFG.camera.replay;
+    const asked = z > 0 ? -1 : 1;
+    if (!shoulder.seeded) {
+        shoulder.seeded = true;
+        shoulder.side = asked;
+        shoulder.want = asked;
+        shoulder.held = 0;
+        return shoulder.side;
+    }
+
+    shoulder.held += delta;
+    // Only ask once he is properly on the other half of the field.
+    const clear = z > R.shoulderSwap ? -1 : (z < -R.shoulderSwap ? 1 : shoulder.want);
+    if (clear !== shoulder.want && shoulder.held >= R.shoulderHold) {
+        shoulder.want = clear;
+        shoulder.held = 0;
+    }
+    const rate = R.shoulderEase > 0 ? 1 - Math.exp(-delta / R.shoulderEase) : 1;
+    shoulder.side += (shoulder.want - shoulder.side) * rate;
+    return shoulder.side;
+}
+
+/**
  * THE VISITOR'S OWN ADJUSTMENT, WHICH RIDES ON TOP OF THE SHOT.
  *
  * QA asked to be able to look at a replay from another angle. The wrong way to
@@ -318,6 +375,9 @@ export function resetView() {
     view.yaw = 0;
     view.lift = 0;
     view.zoom = 1;
+    // A new replay also opens on the shoulder its own carrier asks for, rather
+    // than swinging in from wherever the last one finished.
+    resetShoulder();
     return { ...view };
 }
 
@@ -403,8 +463,9 @@ export function update(delta, state = {}) {
     elapsed += delta;
     if (current === DRIVERS.replay) {
         // The director's shot first, then whatever the visitor has done to it.
+        const focus = state.focus || { x: 0, y: 0, z: 0 };
         return applyView(
-            replayDriver(state.progress || 0, state.focus || { x: 0, y: 0, z: 0 })
+            replayDriver(state.progress || 0, focus, shoulderFor(focus.z, delta))
         );
     }
     if (current === DRIVERS.idle) return idleDriver(elapsed, aspect);

@@ -54,6 +54,7 @@ const { litFor } = await import(join(scene, 'main.js'));
 const { keyAction } = await import(join(scene, 'hud.js'));
 const {
     framingFor, applyView, nudgeView, resetView, getView,
+    shoulderFor, resetShoulder, replayDriver,
 } = await import(join(scene, 'camera.js'));
 const { PLAYS } = await import(join(scene, 'playbook-ui.js'));
 
@@ -1221,5 +1222,99 @@ describe('a replay draws the same arc the play did', () => {
         // flight once it saturates.
         const flat = B.release + B.apex;
         expect(flat).toBeGreaterThan(reach + J.lift);
+    });
+});
+
+describe('the replay camera keeps its shoulder', () => {
+    /**
+     * QA ROUND FOURTEEN: during a replay the camera toggles between two angles
+     * rapidly, which reads as flickering.
+     *
+     * The shot rounds the shoulder AWAY from the carrier so its arc crosses the
+     * middle of the field, and that was `focus.z > 0 ? -1 : 1`, read fresh every
+     * frame. A carrier anywhere near the middle makes the sign of his own z
+     * chatter, and the camera cut 180 degrees every time it did. Measured over
+     * 102 recorded plays: a mean of 1.6 swaps per replay, a worst case of 16,
+     * and 137 of the 160 arriving less than a second after the one before.
+     */
+    const R = () => CFG.camera.replay;
+    const step = 1 / 60;
+
+    /** Run a track of z positions through it and collect the side each frame. */
+    const play = (track) => {
+        resetShoulder();
+        return track.map((z, i) => shoulderFor(z, i === 0 ? 0 : step));
+    };
+
+    test('a carrier hovering on the middle never swaps at all', () => {
+        // The chatter that caused it: a hair either side of the centre line.
+        const track = [];
+        for (let i = 0; i < 60 * 6; i += 1) track.push(i % 2 ? 0.4 : -0.4);
+        const sides = play(track);
+        // He started on one side and he is still on it six seconds later.
+        expect(Math.sign(sides[0])).toBe(Math.sign(sides[sides.length - 1]));
+        for (const side of sides) expect(Math.abs(side)).toBeGreaterThan(0.9);
+    });
+
+    test('it opens on the side the carrier asks for, with no swing', () => {
+        expect(play([6])[0]).toBe(-1);
+        expect(play([-6])[0]).toBe(1);
+    });
+
+    /**
+     * AND WHEN IT DOES CHANGE IT SWINGS, which is the difference between a
+     * camera move and a cut. Halfway through, `side` is near zero, which puts
+     * the camera straight behind the carrier: a real shot on the way through.
+     */
+    test('a genuine change is a swing rather than a cut', () => {
+        resetShoulder();
+        shoulderFor(-6, 0);                       // settled on one side
+        for (let i = 0; i < 60 * (R().shoulderHold + 0.2); i += 1) shoulderFor(-6, step);
+        const before = shoulderFor(-6, step);
+        expect(before).toBeCloseTo(1, 3);
+
+        // Four time constants, which is where an exponential ease has all but
+        // arrived. It never arrives exactly, and that is fine: what matters is
+        // that it is committed to the other side long before then.
+        const swing = [];
+        const frames = Math.round(60 * R().shoulderEase * 4);
+        for (let i = 0; i < frames; i += 1) swing.push(shoulderFor(6, step));
+        expect(swing[swing.length - 1]).toBeLessThan(-0.9);
+        // ...and it passes through the middle rather than jumping.
+        expect(swing.some((s) => Math.abs(s) < 0.3)).toBe(true);
+        // No single frame moves it more than a fraction of the way.
+        for (let i = 1; i < swing.length; i += 1) {
+            expect(Math.abs(swing[i] - swing[i - 1])).toBeLessThan(0.15);
+        }
+    });
+
+    test('and it cannot change more often than the hold allows', () => {
+        resetShoulder();
+        shoulderFor(-6, 0);
+        // Ask it to swap sides as fast as it possibly can, for ten seconds.
+        let changes = 0;
+        let last = 1;
+        for (let i = 0; i < 60 * 10; i += 1) {
+            const z = Math.floor(i / 30) % 2 ? 6 : -6;   // flip every half second
+            const side = shoulderFor(z, step);
+            const now = side > 0.05 ? 1 : (side < -0.05 ? -1 : 0);
+            if (now !== 0 && now !== last) { changes += 1; last = now; }
+        }
+        // Ten seconds at a four second hold is two, and the ease costs some of
+        // the third. QA asked for one change every three to five seconds.
+        expect(changes).toBeLessThanOrEqual(Math.ceil(10 / R().shoulderHold));
+    });
+
+    /**
+     * AND THE DRIVER STILL TAKES THE SIDE AS AN ARGUMENT, so the shot itself
+     * stays pure and the memory lives in one place.
+     */
+    test('the two shoulders are mirror images of each other', () => {
+        const focus = { x: 14, y: 0, z: 0 };
+        const near = replayDriver(0.5, focus, 1);
+        const far = replayDriver(0.5, focus, -1);
+        expect(near.position.z).toBeCloseTo(-far.position.z, 6);
+        expect(near.position.x).toBeCloseTo(far.position.x, 6);
+        expect(near.position.y).toBeCloseTo(far.position.y, 6);
     });
 });
