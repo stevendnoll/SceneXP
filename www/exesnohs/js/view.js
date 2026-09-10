@@ -12,11 +12,18 @@
  * scale factor (D17). If a player is in the wrong place, there are exactly two
  * files to read: the route that positioned them, and this one.
  *
- * NOTHING HERE IS TESTABLE BY ASSERTION, and that is by design. The test stub
+ * MOST OF IT IS NOT TESTABLE BY ASSERTION, and that is by design. The test stub
  * is a Proxy that absorbs every assignment written onto a mesh, so a suite can
  * confirm this module runs without throwing and nothing more. That is why it
- * carries no arithmetic worth getting wrong: the maths is in config.js, which
+ * carries as little arithmetic as it can: the maths belongs in config.js, which
  * is pure and asserted directly.
+ *
+ * WHAT COULD NOT BE KEPT OUT IS `toWorld` AND `carryHold`, and both are
+ * exported precisely because of that rule rather than in spite of it. Placing
+ * the held ball needs the figure's PITCH as well as its yaw, and getting that
+ * wrong is the fault QA reported as a tackled carrier leaving the ball hanging
+ * in the air above him. Neither function touches a mesh: they take numbers and
+ * return numbers, so they are asserted like anything else pure.
  */
 import { EXESNOHS_CONFIG as CFG, simToWorld, FIELD, UNITS_TO_METRES } from './config.min.js';
 import { figureFor, poseFigure, THROWING_SIDE, FIGURE_LIFT } from './roster.min.js';
@@ -58,8 +65,8 @@ export function setViewCamera(camera) { viewCamera = camera; }
  * of snapping to it. The rate is per second, not per frame, so the turn looks
  * the same on a 120Hz display as on a struggling phone.
  */
-const HEADING_DEADZONE = 1.1;    // METRES PER SECOND of measured movement
-const TURN_RESPONSE = 7;         // higher turns quicker
+export const HEADING_DEADZONE = 1.1;    // METRES PER SECOND of measured movement
+export const TURN_RESPONSE = 7;         // higher turns quicker
 
 const wrapAngle = (a) => {
     let d = a;
@@ -154,6 +161,45 @@ function throwProgress(obj) {
 }
 
 /**
+ * THE SNAP, WHICH IS QA ITEM 1 AND HAS ITS OWN CLOCK.
+ *
+ * Before it, the quarterback waits under centre with the ball out in front in
+ * both hands. After it, he brings it back and the arm up as he looks
+ * downfield. `snapT` runs 0 to 1 across `pose.snap.time` and both the arms and
+ * the ball read it, so the ball can never arrive at a hand the hand has not
+ * reached yet.
+ *
+ * TOLD, NOT DETECTED, and it is the one animation here that is. The throw and
+ * the ball's landing are both inferred from the world changing under them,
+ * because nothing announces either. The snap is different: main.js already has
+ * a function called `onSnap` that exists because a visitor pressed a button,
+ * and a replay rewinds to a recording that begins ON the snap. Both of those
+ * are the cue itself, so asking for it is honest and it means the motion plays
+ * in a replay for free.
+ */
+const snapAt = { t: -1 };
+
+/** Start the snap motion. Called on the visitor's own press, and again when a
+ *  replay rewinds to the first recorded frame, which is the same instant. */
+export function beginSnapMotion() {
+    snapAt.t = 0;
+}
+
+/** Hold him under centre. A new line-up, and the presnap frames. */
+export function resetSnapMotion() {
+    snapAt.t = -1;
+}
+
+/** 0 while he is still waiting for it, easing to 1 once it is away. */
+export function snapProgress() {
+    if (snapAt.t < 0) return 0;
+    const T = CFG.pose.snap.time;
+    if (!(T > 0)) return 1;
+    const t = Math.min(1, snapAt.t / T);
+    return t * t * (3 - 2 * t);
+}
+
+/**
  * WHO IS BLOCKING SOMEBODY, DERIVED RATHER THAN DECLARED.
  *
  * The ported simulation has no blocking flag. It has linemen, it has routes
@@ -207,10 +253,18 @@ function noteAssignments(objects) {
  * to make the tackle he is looking at the man with the ball, whatever he was
  * told to do before the snap.
  */
-function lookTarget(obj, objects, carrier, here) {
-    if (obj.settings.team !== 1) return null;
-
+function lookTarget(obj, objects, carrier, here, standing) {
     const at = (o) => (o ? simToWorld(o.coords.x, o.coords.y, 0) : null);
+
+    if (obj.settings.team !== 1) {
+        // A RECEIVER WHO HAS ARRIVED LOOKS BACK FOR THE BALL. QA item 3 asks
+        // for exactly this, and it is also the only thing that makes standing
+        // still read as waiting rather than as having given up: he faces
+        // whoever has it, which before a throw is the quarterback.
+        if (!standing || !carrier || carrier === obj) return null;
+        if (!/^wr\d$/.test(obj.settings.position)) return null;
+        return at(carrier);
+    }
 
     if (carrier && carrier !== obj) {
         const c = at(carrier);
@@ -381,6 +435,31 @@ export function takedownClock() {
 }
 
 /**
+ * HAS THIS FIGURE STOPPED GETTING ANYWHERE?
+ *
+ * NOT "IS HE SLOW", WHICH IS THE QUESTION `mps` ANSWERS AND THE WRONG ONE. A
+ * receiver at the end of his route orbits a small circle at full speed, so his
+ * speed clears the heading deadzone comfortably the whole time he is going
+ * nowhere. That is why the deadzone never stopped the spin. NET displacement
+ * over a window can tell the two apart, and it is measured on the position
+ * actually DRAWN, so it reads the same during a replay, where the objects are
+ * rebuilt from six floats a frame and nothing knows what a route was.
+ *
+ * The history is a flat array of x, z pairs on the figure's own userData,
+ * trimmed to the window, so it costs one push and one compare a frame.
+ */
+function updateStanding(figure, delta) {
+    const S = CFG.pose.standing;
+    const span = Math.max(1, Math.round(S.window / Math.max(delta, 1e-4)));
+    const ring = figure.userData.track || (figure.userData.track = []);
+    const at = figure.userData.at;
+    ring.push(at.x, at.z);
+    while (ring.length > (span + 1) * 2) ring.splice(0, 2);
+    if (ring.length <= span * 2) return false;
+    return Math.hypot(at.x - ring[0], at.z - ring[1]) < S.net;
+}
+
+/**
  * Move every figure to where the simulation says its player is.
  *
  * Called once per frame after play.tick(). Benched players are hidden rather
@@ -388,9 +467,15 @@ export function takedownClock() {
  * figure out there is both invisible and a waste of a draw call.
  *
  * `opts.presnap` freezes everybody facing the other team, which is QA item 12
- * and is what a huddle breaking actually looks like.
+ * and is what a huddle breaking actually looks like. `opts.live` says the play
+ * is running, and it gates the standing pose: after the whistle everybody is
+ * standing, and a receiver putting his hands up over a finished play would be
+ * asking for a ball nobody is going to throw.
  */
 export function syncFigures(objects, delta = 1 / 60, opts = {}) {
+    // The snap's own clock, advanced once a frame whatever else is happening.
+    if (snapAt.t >= 0) snapAt.t += delta;
+    const snapped = snapProgress();
     const engaged = blockersEngaged(objects);
     const carrier = objects.find((o) => o.state && o.state.hasBall && !BENCHED(o));
     noteAssignments(objects);
@@ -427,6 +512,10 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // from wherever the last play left it.
         const target = simToWorld(obj.coords.x, obj.coords.y, 0);
         const held = figure.visible ? figure.userData.at : null;
+        // A figure arriving for a new play brings no history with it. Keeping
+        // the last play's would have him judged to be standing still on the
+        // strength of where he was when the last whistle went.
+        if (!held) figure.userData.track = null;
         const ease = 1 - Math.exp(-delta / CFG.pose.motionSmooth);
         const p = held
             ? { x: held.x + (target.x - held.x) * ease, z: held.z + (target.z - held.z) * ease }
@@ -462,7 +551,20 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         if (figure.userData.mps === undefined) figure.userData.mps = 0;
         figure.userData.mps += (raw - figure.userData.mps)
             * (1 - Math.exp(-delta / CFG.pose.speedSmooth));
-        const mps = figure.userData.mps < CFG.pose.stillSpeed ? 0 : figure.userData.mps;
+
+        // AND WHETHER HE IS GETTING ANYWHERE, WHICH IS A DIFFERENT QUESTION.
+        // A man circling a half-metre patch is fast and stationary at the same
+        // time (see `updateStanding`). Standing beats speed: his legs stop and
+        // his heading holds, because both of those are asking whether he is
+        // travelling rather than how quickly he is moving.
+        // A formation waiting on the snap carries no history into the play. It
+        // would otherwise be the LAST play's, and a receiver would spend the
+        // first half second of this one being judged against where he was
+        // standing when the last whistle went.
+        if (opts.presnap) figure.userData.track = null;
+        const standing = !opts.presnap && updateStanding(figure, delta);
+        const mps = (standing || figure.userData.mps < CFG.pose.stillSpeed)
+            ? 0 : figure.userData.mps;
 
         // THE TACKLE MOVES HIM, AND NOTHING ELSE IN THIS FILE DOES. Every other
         // figure is drawn exactly where the simulation put him; these two are
@@ -505,10 +607,14 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         const downfield = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
         const surveying = carrier === obj && carryFor(obj, carrier) === 'throw';
         const look = (opts.presnap || surveying)
-            ? null : lookTarget(obj, objects, carrier, p);
+            ? null : lookTarget(obj, objects, carrier, p, standing);
         const want = opts.presnap ? downfield
             : (surveying ? Math.PI / 2
                 : (look ? Math.atan2(look.x - p.x, look.z - p.z)
+                    // A MAN GOING NOWHERE KEEPS THE HEADING HE HAD. Passing a
+                    // zeroed `mps` here is what stops the spin: the deadzone
+                    // was never crossed by a slow player, it was crossed by a
+                    // fast one running in a circle.
                     : targetFacing(stepX, stepZ, mps)));
         if (want !== null) figure.userData.facing = want;
         else if (figure.userData.facing === undefined) {
@@ -565,13 +671,23 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
                 figure.position, figure.rotation.y, CFG.figureScale)
             : null;
 
+        // ASKING FOR IT. A receiver who has stopped getting anywhere while the
+        // play is still running has finished his route, so he turns back to
+        // whoever has the ball (above) and puts his hands up. Gated on the
+        // play being live, or every receiver would raise his arms over a
+        // finished play while the result card opened.
+        const posting = (opts.live && standing && obj.settings.team === 0
+            && /^wr\d$/.test(obj.settings.position) && carrier !== obj) ? 1 : 0;
+
         poseFigure(figure, mps, figure.userData.phase, {
             carry: carryFor(obj, carrier),
             throwT: throwProgress(obj),
+            snapT: snapped,
             block: engaged.get(obj.settings.position) || 0,
             tackle: isTackler ? 1 : lunge,
             reach,
             reachAt,
+            posting,
             down,
         }, delta);
 
@@ -588,7 +704,13 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         if (role) {
             figure.rotation.x = role.lean;
         } else {
-            const pitch = lunge > 0 ? CFG.pose.tackle.lean * lunge : 0;
+            // AND A QUARTERBACK UNDER CENTRE IS BENT OVER THE BALL. The rig
+            // has no waist, so this is the whole figure tipping about its own
+            // feet, which is the same thing the tackle does with a much bigger
+            // number. It unwinds across the snap along with the arms.
+            const ready = surveying
+                ? CFG.pose.underCentre.lean * (1 - snapped) : 0;
+            const pitch = lunge > 0 ? CFG.pose.tackle.lean * lunge : ready;
             const rate = lunge > 0 ? CFG.pose.tackle.snap : CFG.pose.blend;
             figure.rotation.x += (pitch - figure.rotation.x)
                 * (1 - Math.exp(-delta / rate));
@@ -675,6 +797,9 @@ export function resetBallFlight() {
     endFlight();
     gather.at = -1;
     resetThrow();
+    // And put the quarterback back under centre, or the next formation lines
+    // up with a man already wound up to throw.
+    resetSnapMotion();
 }
 
 /**
@@ -800,6 +925,77 @@ function flightSpan(c) {
     return flight.span;
 }
 
+/**
+ * A POINT IN A FIGURE'S OWN SPACE, PUT WHERE THAT FIGURE ACTUALLY IS.
+ *
+ * THIS IS QA ITEM 6, AND THE MISSING TERM IS THE PITCH. The held ball used to
+ * be placed with the figure's YAW and nothing else, and its height written
+ * flat as `FIGURE_LIFT + y * scale`. That is correct for a man standing up and
+ * wrong for every other thing this game does to a body. A tackled carrier goes
+ * over backwards through `rotation.x`, so the ball stayed at standing chest
+ * height in the air above him while he lay on the grass, which is exactly the
+ * "he drops the ball, or it hangs there" report. The quarterback's new
+ * under-centre lean would have done the same thing on every single snap.
+ *
+ * The rig's rotation order is YXZ, so a local point is pitched about x FIRST
+ * and then turned about y, and doing those two the other way round puts the
+ * ball out to the side of a man lying on his back. `figure.position` carries
+ * the lift and the tackler's leap, so it is read rather than reconstructed.
+ *
+ * `direction` skips the translation, for aiming rather than placing.
+ */
+export function toWorld(figure, v, direction = false) {
+    const s = CFG.figureScale;
+    const pitch = figure.rotation.x || 0;
+    const yaw = figure.rotation.y || 0;
+    const cp = Math.cos(pitch);
+    const sp = Math.sin(pitch);
+    const y = v.y * cp - v.z * sp;
+    const z = v.y * sp + v.z * cp;
+    const fx = Math.sin(yaw);
+    const fz = Math.cos(yaw);
+    if (direction) {
+        return { x: v.x * fz + z * fx, y, z: -v.x * fx + z * fz };
+    }
+    return {
+        x: figure.position.x + (v.x * fz + z * fx) * s,
+        y: figure.position.y + y * s,
+        z: figure.position.z + (-v.x * fx + z * fz) * s,
+    };
+}
+
+/**
+ * WHERE THE BALL SITS AND WHICH WAY IT POINTS, in the rig's own space.
+ *
+ * THE SNAP IS AN INTERPOLATION AND NOT A SWITCH, which is QA item 1. Before
+ * it, the quarterback holds it out in front in both hands; after it, back and
+ * up beside his ear. Both ends are written in `config.pose`, both are read
+ * through the same `snapT` the ARMS are read through, so the ball is carried
+ * by the hands rather than merely arriving at the same time as them.
+ *
+ * `x` is mirrored onto the throwing side here, once, in the same way the poses
+ * in roster.js mirror a hand.
+ */
+export function carryHold(mode, snapped) {
+    const P = CFG.pose;
+    const side = THROWING_SIDE;
+    const put = (spot, aim) => ({
+        ball: { x: side * spot.x, y: spot.y, z: spot.z },
+        aim: { x: side * aim.x, y: aim.y, z: aim.z },
+    });
+    if (mode !== 'throw') return put(P.tuck.ball, P.tuck.aim);
+
+    const from = P.underCentre;
+    const to = P.throwHold;
+    const t = Math.min(1, Math.max(0, snapped));
+    const mix = (a, b) => ({
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+        z: a.z + (b.z - a.z) * t,
+    });
+    return put(mix(from.ball, to.ball), mix(from.aim, to.aim));
+}
+
 export function syncBall(ballObj, carrier, delta = 1 / 60) {
     const ball = getBall();
     if (!ball) return;
@@ -884,28 +1080,15 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             // the same answer, so the ball is always in the hand that is posed
             // to be holding it.
             const mode = carryFor(carrier, carrier);
-            const spot = mode === 'throw' ? CFG.pose.throwHold.ball : CFG.pose.tuck.ball;
+            const hold = carryHold(mode, snapProgress());
 
-            // The rig faces +z, so forward is (sin y, cos y) and the throwing
-            // side is 90 degrees off it. Every offset rides figureScale, or a
-            // bigger player holds the ball inside his own chest.
-            //
             // THE OFFSET IS THE SAME RIG SPACE THE POSES ARE WRITTEN IN, so the
             // ball's `x` runs along the throwing side and its `z` is the way he
             // is facing, exactly as `pose.tuck.hand` does. That is what keeps a
             // ball in the hand that is posed to be holding it: the two numbers
             // are read off the same picture rather than converted between two.
-            const yaw = figure.rotation.y;
-            const fx = Math.sin(yaw);
-            const fz = Math.cos(yaw);
-            const s = CFG.figureScale;
-            const side = THROWING_SIDE;
-
-            const want = {
-                x: figure.position.x + (fz * side * spot.x + fx * spot.z) * s,
-                y: FIGURE_LIFT + spot.y * s,
-                z: figure.position.z + (-fx * side * spot.x + fz * spot.z) * s,
-            };
+            const want = toWorld(figure, hold.ball);
+            const aim = toWorld(figure, hold.aim, true);
 
             // GATHERING IT IN. On the frame a pass is caught the ball is still
             // out in front of the receiver's hands, and jumping it to his ribs
@@ -926,12 +1109,13 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             }
 
             ball.position.set(at.x, at.y, at.z);
-            // Held across the body rather than pointing wherever the last throw
-            // left it. On the throwing hold it cants up, the way a ball sits
-            // when somebody is about to let go of it.
-            aimBall(mode === 'throw'
-                ? { x: fx * 0.7, y: 0.7, z: fz * 0.7 }
-                : { x: fx, y: 0, z: fz }, 0);
+            // AIMED IN THE SAME SPACE IT IS PLACED IN, so the heading comes
+            // out of `config.pose` alongside the position rather than being a
+            // second opinion assembled from the yaw. It cants up on the
+            // throwing hold, lies across both hands under centre, and points
+            // where the carrier is going in the tuck: three pictures, one
+            // number each, all carried by the body's pitch and yaw.
+            aimBall(aim, 0);
             ball.visible = true;
             return;
         }

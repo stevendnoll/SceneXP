@@ -289,6 +289,129 @@ function addHelmet(person, kit) {
  * it, unlit and writing no depth. This survived from the letters experiment
  * and it was worth keeping.
  */
+/**
+ * THE TORSO A MARK HAS TO FIT ON, TAKEN OFF THE FIGURE RATHER THAN ASSUMED.
+ *
+ * This is the D93 lesson and the helmet's own history: `buildHelmetParts` was
+ * measured against a head height written down in this file, the shared part
+ * moved the head, and the test went on passing while every player wore a
+ * floating hat. So the jersey mark is sized from a Box3 taken over the torso
+ * that was actually built.
+ *
+ * The fallback is not decoration either. The test stub models no geometry, so
+ * every Box3 through it is empty, and a mark sized from an empty box is a mark
+ * of size zero that no assertion would ever notice. `muscular` is the one
+ * thing that changes these numbers, and roster.js already knows who is a
+ * lineman, so the fallback can be right rather than merely present.
+ */
+export function measureTorso(person, muscular = false) {
+    const fallback = {
+        width: 0.38 * (muscular ? 1.3 : 1),
+        height: 0.55,
+        depth: 0.22 * (muscular ? 1.18 : 1),
+        y: 0.75 + 0.55 / 2,
+    };
+    const mesh = (person.children || []).find((c) => c && c.isMesh && c.castShadow
+        && c.geometry && (c.geometry.type === 'ExtrudeGeometry'
+            || c.geometry.type === 'BoxGeometry'));
+    if (!mesh || !mesh.geometry.computeBoundingBox) return fallback;
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox;
+    if (!box || !Number.isFinite(box.min.x) || !Number.isFinite(box.max.x)) return fallback;
+    const width = box.max.x - box.min.x;
+    const height = box.max.y - box.min.y;
+    const depth = box.max.z - box.min.z;
+    if (!(width > 0 && height > 0 && depth > 0)) return fallback;
+    // The geometry is centred on the mesh, and the mesh is placed up the body.
+    return { width, height, depth, y: (mesh.position.y || 0) + (box.max.y + box.min.y) / 2 };
+}
+
+/**
+ * THE X AND THE O, FRONT AND BACK. QA ITEM 4.
+ *
+ * DRAWN RATHER THAN PRINTED, and the reason is the torso. It is an extruded
+ * rounded profile, not a box, so it has no UV layout anybody here can reason
+ * about, and a canvas texture would also need a font, a texture upload per kit
+ * and a decision about what happens at 45m. Two crossed bars and a flat ring
+ * need none of that, hold their edges at every distance the camera reaches,
+ * and are interned by `shareGeometryAndMaterials` along with everything else,
+ * so the whole roster costs two geometries and one material.
+ *
+ * PURE, AND SEPARATED FROM THE FIGURE FOR THE SAME REASON THE HELMET IS. It
+ * takes measurements and returns meshes, so a test can build it against a real
+ * three in a node:vm and ask whether the mark actually covers half the shirt,
+ * which is the only thing QA asked for and the only thing a screenshot of a
+ * 40-pixel figure cannot settle.
+ *
+ * `glyph` is 'X' or 'O'. Anything else gets no mark rather than a wrong one.
+ */
+export function buildJerseyParts(glyph, torso, material) {
+    const J = CFG.jersey;
+    const h = torso.height * J.height;
+    const w = torso.width * J.width;
+    const stroke = h * J.stroke;
+    // Front and back. Both sit on the torso's own centre line, out past the
+    // shirt by a fraction of its depth: enough that nothing z-fights, little
+    // enough that it reads as painted on rather than pinned to him.
+    const faces = [1, -1].map((f) => f * torso.depth * (0.5 + J.lift));
+    const parts = [];
+
+    for (const z of faces) {
+        if (glyph === 'X') {
+            /**
+             * THE BARS RUN CORNER TO CORNER, which is what makes it an X
+             * rather than a cross. A box built along its own y points at
+             * (0, 1); rotating it by theta about z sends that to
+             * (-sin, cos), and the corner of a w by h box is (w, h), so
+             * theta is minus atan(w / h) for one bar and plus it for the
+             * other. Their length is the diagonal, not the height, or the
+             * arms of the X stop short of its corners.
+             */
+            const tilt = Math.atan2(w, h);
+            const diagonal = Math.hypot(w, h);
+            for (const sign of [-1, 1]) {
+                const bar = new THREE.Mesh(
+                    new THREE.BoxGeometry(stroke, diagonal, stroke * 0.5), material
+                );
+                bar.position.set(0, torso.y, z);
+                bar.rotation.z = sign * tilt;
+                bar.name = 'jersey-mark';
+                parts.push(bar);
+            }
+        } else if (glyph === 'O') {
+            // A ring, squashed to the mark's own proportions. A torus is
+            // already built in the xy plane facing +z, which is the way the
+            // rig faces, so nothing has to be turned to stand it up.
+            const ring = new THREE.Mesh(
+                new THREE.TorusGeometry(h / 2 - stroke / 2, stroke / 2, 6, 20), material
+            );
+            ring.position.set(0, torso.y, z);
+            ring.scale.set(w / h, 1, 1);
+            ring.name = 'jersey-mark';
+            parts.push(ring);
+        }
+    }
+    return parts;
+}
+
+function addJersey(person, glyph, muscular) {
+    const J = CFG.jersey;
+    const material = new THREE.MeshStandardMaterial({
+        color: J.colour,
+        roughness: 0.55,
+        metalness: 0.0,
+        // Four floodlights and a dark field: a white mark on the shaded side
+        // of a player otherwise sits at the same value as the shirt under it,
+        // and the letter this game is named after stops being legible exactly
+        // when the player turns away from the light.
+        emissive: J.colour,
+        emissiveIntensity: J.glow,
+    });
+    const parts = buildJerseyParts(glyph, measureTorso(person, muscular), material);
+    for (const part of parts) person.add(part);
+    return parts;
+}
+
 function addContactShadow(person) {
     const disc = new THREE.Mesh(
         new THREE.CircleGeometry(0.34, 12),
@@ -448,24 +571,70 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
             z = lerp(z, a.armZ, act.block);
             fore = lerp(fore, a.foreX, act.block);
         } else if (act.carry === 'throw') {
+            /**
+             * THE SNAP, AND THEN THE THROW, AS ONE CHAIN OF SOLVED POSES.
+             *
+             * `snapT` runs 0 to 1 from the moment the ball is snapped, and
+             * carries BOTH arms from the under-centre hold up into the cocked
+             * one: the ball comes back, the throwing arm goes up, and the off
+             * hand comes off the ball and up in front of the chest. `throwT`
+             * then takes the throwing arm on from there. Neither is a
+             * keyframe. Both are the interpolation between two hand positions
+             * that were each solved once, which is what made the throw itself
+             * fall out of its two ends (see `throwRelease`).
+             */
             const H = P.throwHold;
+            const snapped = act.snapT === undefined ? 1 : act.snapT;
+            const ready = anglesFor(P.underCentre.hand, side);
             if (side === THROWING_SIDE) {
                 // Cocked, and swept forward while the elbow straightens, which
                 // is what a throw is. Interpolating the two solved poses runs
                 // the hand up over the shoulder, past the ear and down across
                 // the body, so the whole motion falls out of its two ends.
+                /**
+                 * THE SNAP IS THE OUTER BLEND AND THE THROW IS THE INNER ONE,
+                 * AND THAT ORDER IS NOT ARBITRARY.
+                 *
+                 * The throw buttons appear on the frame the ball is snapped, so
+                 * a visitor who has already decided can press one well inside
+                 * the 0.55 seconds the arm takes to come up. Blended the other
+                 * way round, that throw would sweep from a HALF-RAISED hand,
+                 * which sits at almost the same place as the release: the arm
+                 * would barely move and the most important animation in the
+                 * game would play as a twitch.
+                 *
+                 * This way the inner lerp always travels the full cocked-to-
+                 * release arc, and the snap carries the whole sweep out of the
+                 * under-centre hold. It reads as a quick release, it lands on
+                 * the release pose exactly (the snap finishes first either
+                 * way), and at `snapped` of 1, which is every ordinary throw,
+                 * it reduces to precisely what it was.
+                 */
                 const t = act.throwT || 0;
-                const from = anglesFor(H.hand, side);
+                const cocked = anglesFor(H.hand, side);
                 const to = anglesFor(P.throwRelease.hand, side);
-                x = lerp(from.armX, to.armX, t);
-                z = lerp(from.armZ, to.armZ, t);
-                fore = lerp(from.foreX, to.foreX, t);
+                x = lerp(ready.armX, lerp(cocked.armX, to.armX, t), snapped);
+                z = lerp(ready.armZ, lerp(cocked.armZ, to.armZ, t), snapped);
+                fore = lerp(ready.foreX, lerp(cocked.foreX, to.foreX, t), snapped);
             } else {
                 const a = anglesFor(H.offHand, side);
-                x = a.armX;
-                z = a.armZ;
-                fore = a.foreX;
+                x = lerp(ready.armX, a.armX, snapped);
+                z = lerp(ready.armZ, a.armZ, snapped);
+                fore = lerp(ready.foreX, a.foreX, snapped);
             }
+        } else if (act.posting > 0 && (act.carry || 'none') === 'none') {
+            /**
+             * WANTING IT. Both hands up, which is the second half of QA item
+             * 3: a receiver who has run out of route turns back to the ball
+             * and asks for it rather than milling on the spot.
+             *
+             * Below the carries deliberately. A man holding the ball is not
+             * asking anybody for it.
+             */
+            const a = anglesFor(P.posting.hand, side);
+            x = lerp(x, a.armX, act.posting);
+            z = lerp(z, a.armZ, act.posting);
+            fore = lerp(fore, a.foreX, act.posting);
         } else if (act.carry === 'tuck' && side === THROWING_SIDE) {
             // Only the carrying arm folds. The other one still runs, which is
             // what makes a tuck read as a tuck rather than as a shrug.
@@ -634,6 +803,12 @@ export function initRoster(scene, objects) {
             shoulderRound: 0.35,
         });
         addHelmet(person, kit);
+        // THE LETTERS ARE BACK, ON THE SHIRT RATHER THAN INSTEAD OF IT. D22
+        // dropped animated X and O figures because three rounds of animation
+        // could not make a letterform read as a person. A mark on a jersey is
+        // the opposite trade: the person carries the scene and the letter
+        // carries the name.
+        addJersey(person, TEAMS[team].glyph, isLineman);
         addContactShadow(person);
         // Read before anything overwrites it, and only when it is a real
         // number: under the test stub every property is a proxy.

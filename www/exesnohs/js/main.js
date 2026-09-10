@@ -24,7 +24,7 @@ import {
 } from './markers.min.js';
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments,
-    beginTakedown, resetTakedown, takedownClock,
+    beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
 } from './view.min.js';
 import { takedownLength, tacklerFor } from './takedown.min.js';
 import {
@@ -358,6 +358,11 @@ function onSnap() {
     playSound('snap', 120);
 
     snap(cycle.play);
+    // AND HE BRINGS IT BACK. QA item 1: up to here he has been waiting under
+    // centre with the ball out in front, and this is the cue that lifts it to
+    // his ear while he looks downfield. Told rather than inferred, because the
+    // press IS the cue and there is nothing to infer it from.
+    beginSnapMotion();
     cycle.phase = 'live';
     cycle.held = 0;
     startRecording(cycle.play.game.objects);
@@ -442,6 +447,10 @@ function startReplay() {
     // the playhead is going back to the first.
     resetTakedown();
     rewind();
+    // The recording begins ON the snap, so the playhead going back to frame
+    // one is the same instant the visitor's press was, and he takes the ball
+    // back again.
+    beginSnapMotion();
     cycle.phase = 'replay';
     cycle.replayHold = 0;
 }
@@ -533,7 +542,10 @@ function stepCycle(delta) {
     if (cycle.phase === 'replay') {
         const done = advance(delta, CFG.simHz, CFG.camera.replay.speed);
         const objs = frameAt(playheadFrame(), teamOfPosition);
-        syncFigures(objs, delta);
+        // A replay is a live play until the playhead runs out. After that the
+        // last frame simply repeats, and a receiver holding his hands up over
+        // a play that finished two seconds ago is asking for nothing.
+        syncFigures(objs, delta, { live: !done });
         // Before the throw there is no ball object, so it rides in the
         // quarterback's hands exactly as it does in the live play. The
         // recording does not store who is carrying, because before a throw it
@@ -587,7 +599,7 @@ function stepCycle(delta) {
         return;
     }
 
-    syncFigures(cycle.play.game.objects, delta);
+    syncFigures(cycle.play.game.objects, delta, { live: cycle.phase === 'live' });
     showBall(cycle.play.game.objects, delta);
 }
 
@@ -862,7 +874,9 @@ async function init() {
     initMarkers(scene, objects);
     initSpot(scene);
     initBall(scene);
-    syncFigures(objects, 0);
+    // The formation idling behind the playbook is a pre-snap formation, so it
+    // faces the other team and the quarterback waits under centre.
+    syncFigures(objects, 0, { presnap: true });
     showBall(objects, 0);
 
     initAudio();

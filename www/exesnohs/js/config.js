@@ -503,6 +503,39 @@ const EXESNOHS_CONFIG = {
     ballScale: 2.6,
 
     /**
+     * THE X AND THE O ON THE SHIRT, WHICH IS WHAT THE GAME IS CALLED.
+     *
+     * Drawn as GEOMETRY rather than as a texture, and that is a deliberate
+     * choice rather than a convenience. A canvas texture needs a font, needs a
+     * UV layout on a torso that is an extruded rounded profile rather than a
+     * box, and costs a texture upload per kit. Two crossed bars and a flat
+     * ring need none of those, stay crisp at every distance the camera ever
+     * reaches, and are interned by `shareGeometryAndMaterials` like everything
+     * else on the roster, so seventeen players cost two geometries.
+     *
+     * SIZED AS FRACTIONS OF THE TORSO THAT IS ACTUALLY THERE, never as
+     * metres. Linemen are built `muscular`, which is 30% wider and 18% deeper
+     * than everybody else, and a mark written in absolute numbers would be a
+     * different size on them. `height` is the fraction of the torso's own
+     * height: 0.55 puts a mark a little over half the shirt, which is the
+     * "at least half" a real number on a real jersey occupies.
+     */
+    jersey: {
+        height: 0.55,       // of the torso's height
+        width: 0.62,        // of the torso's width
+        stroke: 0.15,       // of the mark's own height
+        /** How far clear of the shirt the mark floats, as a fraction of the
+         *  torso's depth. Enough to clear the extruded bevel on the front face
+         *  without reading as a sticker held off the chest. */
+        lift: 0.10,
+        colour: 0xffffff,
+        /** A little glow, because this field is lit by four floodlights and a
+         *  white mark on the shaded side of a player is otherwise the same
+         *  value as the shirt it is on. */
+        glow: 0.35,
+    },
+
+    /**
      * THE BALL'S FLIGHT, AND THE UNIT ERROR THAT FLATTENED IT.
      *
      * `routes.getZIndex` returns a number that climbs 1, 1.5, 2 ... to a
@@ -678,6 +711,52 @@ const EXESNOHS_CONFIG = {
     separationPasses: { lineUp: 2, live: 1 },
 
     /**
+     * WHAT TO DO WITH A RECEIVER WHO HAS RUN OUT OF ROUTE. QA ITEM 3.
+     *
+     * THE SPIN IS A LIMIT CYCLE, AND HERE IS THE MEASUREMENT. Every route in
+     * the ported library steers with a bang-bang controller and no arrival
+     * behaviour: `if (y < target) accelerate one way, else accelerate the
+     * other`, on two axes, with nothing that ever decelerates. A player who
+     * reaches his target therefore overshoots, is accelerated back, overshoots
+     * again, and settles into a circle. Traced frame by frame, jumbo2's wr1
+     * orbits a 0.4m circle with a 27 frame period at 6 m/s, forever. Across
+     * all 17 plays, 38 of 61 receivers spend the last second of the play
+     * turning through more than 180 degrees while covering under 1.5m of
+     * ground, and the worst of them turns 4,355 degrees, which is twelve full
+     * rotations in one second.
+     *
+     * THE CURE IS A SPEED CAP, NOT A STOP, AND THAT IS THE WHOLE TRICK. The
+     * radius of that circle is v squared over twice the acceleration, so
+     * cutting the speed to a tenth shrinks the orbit a hundredfold, from 0.4m
+     * to a few millimetres. A man who genuinely has somewhere to be still
+     * covers ground at the capped speed, so he clears the `net` test below
+     * within one window and gets his legs back. Nothing is frozen, nothing is
+     * exempted by name, and a receiver who has merely paused mid-route jogs
+     * for half a second instead of sprinting. Zeroing the speed instead was
+     * tried and is worse: the route re-accelerates from zero every frame, so
+     * he jitters at one acceleration step per frame and never releases.
+     *
+     * MEASURED ON THE DRAWN TRACK, which is the only one anybody sees: median
+     * rotation over the last second falls from 305 degrees to 29, and the
+     * receivers who turn more than 180 while going nowhere fall from 97 to 3.
+     * The three that remain are covered by the view's own standing test.
+     *
+     * IT MOVES THE GAME, AND HERE IS BY HOW MUCH. A stationary receiver is an
+     * easier target, so over 204 measured throws completions go from 37.3% to
+     * 43.6% and the mean play from 4.2 points to 5.9.
+     */
+    settle: {
+        /** Seconds of history the arrival test looks back over. */
+        window: 0.45,
+        /** Metres of NET travel in that window below which he has arrived.
+         *  Net, not path: a man going in circles covers plenty of path. */
+        net: 1.0,
+        /** ...and the fraction of his own top speed he is held to while he
+         *  has. Not zero. See above. */
+        speed: 0.10,
+    },
+
+    /**
      * THE FLAT DISC UNDER EACH PLAYER (see markers.js for why it exists).
      *
      * Sizes are world metres, not intervals, because what matters is how many
@@ -768,6 +847,32 @@ const EXESNOHS_CONFIG = {
         fullEffort: 7.5,
         /** Below this, in m/s, a player is standing and the arms settle. */
         stillSpeed: 0.35,
+
+        /**
+         * AND WHEN A PLAYER HAS STOPPED GETTING ANYWHERE, WHICH IS NOT THE
+         * SAME QUESTION.
+         *
+         * `stillSpeed` asks how fast he is going. A man circling a half-metre
+         * patch is going 6 m/s and is not going anywhere, and speed cannot
+         * tell the difference: it is the reason the heading deadzone alone
+         * never stopped the spin, because the deadzone was comfortably
+         * exceeded the whole time. NET DISPLACEMENT over a window can tell the
+         * difference, and it is the same test `settle` runs on the simulation
+         * side, applied here to the position actually DRAWN.
+         *
+         * A figure that is standing by this test holds the heading he had,
+         * stops striding, and if he is a receiver, turns to whoever has the
+         * ball and puts his hands up. Measured over 183 receivers, adding this
+         * on top of the simulation's cap takes the median drawn rotation in
+         * the last second of a play from 34 degrees to 0.1, and leaves 3
+         * turning on the spot rather than 97.
+         *
+         * The window is slightly shorter than the simulation's and the
+         * distance slightly smaller, deliberately: the view should notice a
+         * man has stopped a little AFTER he has actually stopped, never
+         * before, or it poses a receiver who is still running.
+         */
+        standing: { window: 0.45, net: 0.9 },
         /** Seconds for a pose to blend in or out. Nothing snaps. */
         blend: 0.12,
 
@@ -830,11 +935,101 @@ const EXESNOHS_CONFIG = {
          */
         throwHold: {
             hand: { x: 0.41, y: 1.50, z: -0.13 },
-            /** The off arm across the chest, ready rather than dangling. */
-            offHand: { x: 0.02, y: 1.22, z: 0.28 },
-            /** And the ball itself, in the hand that is holding it. */
-            ball: { x: 0.44, y: 1.53, z: -0.15 },
+            /**
+             * THE OFF ARM, AND IT USED TO BE INSIDE HIS CHEST.
+             *
+             * This asked for a hand at x 0.02, which is on the body's own
+             * midline, and the rig cannot get a hand there from the far
+             * shoulder without carrying the elbow across with it. Solved, the
+             * old target put the elbow at x +0.063 on the arm whose shoulder
+             * is at -0.2125: a horizontal upper arm buried 5cm inside the
+             * torso, running from the shoulder to the sternum. That is QA
+             * item 2's "right arm disappears through his body", and it was
+             * never an animation fault. It was a target the arm could only
+             * reach by going through him.
+             *
+             * 0.21 is the nearest the hand can come to the middle while the
+             * elbow stays OUTSIDE the ribs, checked by sampling the upper arm
+             * along its length: the elbow lands at (-0.208, 0.986, 0.077),
+             * which is a hand held up in front of the chest with the elbow
+             * down at the side. That is what a quarterback's off hand does.
+             */
+            offHand: { x: 0.21, y: 1.19, z: 0.29 },
+            /**
+             * AND THE BALL, WHICH IS HELD BY ITS BACK POINT AND NOT BY ITS
+             * MIDDLE.
+             *
+             * `ballScale` is 2.6 against `figureScale` 2.2, so the ball is
+             * 1.24m long beside a head 0.53m across. That is a deliberate
+             * legibility choice and it stays. What could not stay is drawing
+             * its CENTRE at the hand: a 1.24m object centred on a 0.18m hand
+             * hides the hand, the wrist and most of the forearm, and what a
+             * visitor sees is a football parked over a shoulder with no arm
+             * attached. Both screenshots of the hold show exactly that.
+             *
+             * So the ball is pushed up its own axis until the hand sits near
+             * its back point, which is also where a hand actually goes. It is
+             * canted forward and up along `aim`, clearing the helmet by 15cm
+             * and finishing below the crown, so the arm reads as an arm.
+             */
+            ball: { x: 0.386, y: 1.560, z: 0.061 },
+            /** Which way it points, in the rig's own space, so the yaw and the
+             *  body's pitch both carry it. Nose forward and up. */
+            aim: { x: -0.12, y: 0.30, z: 0.95 },
         },
+
+        /**
+         * BEFORE THE SNAP, WHICH IS QA ITEM 1 AND DID NOT EXIST.
+         *
+         * The quarterback stood in the cocked throwing pose from the moment
+         * the formation appeared, so a visitor reading the play saw a man who
+         * had already wound up to throw, and the snap changed nothing because
+         * there was nothing to change from.
+         *
+         * He now waits under centre: both hands out in front at waist height
+         * with the ball across them, and the whole figure pitched a little
+         * forward. The rig has no waist, so the pitch is the figure rotating
+         * about its own feet, which is the same trick the tackle uses.
+         *
+         * THE HANDS DO NOT MEET AT THE MIDLINE, AND THAT IS THE RIG. Bringing
+         * them together carries both elbows inside the chest, for the same
+         * reason the off hand did. At x 0.17 the elbow sits at 0.181, which is
+         * an arm pressed against the ribs rather than through them, and the
+         * hands finish 0.75m apart at figure scale. Against a ball 1.24m long
+         * that reads as two hands ON the ball, which is what it is.
+         */
+        underCentre: {
+            hand: { x: 0.17, y: 0.96, z: 0.36 },
+            ball: { x: 0, y: 0.97, z: 0.36 },
+            /** Lying across both hands rather than pointing anywhere. */
+            aim: { x: 1, y: 0, z: 0 },
+            /** Radians of forward pitch on the whole figure. Small: at this
+             *  figure scale a tenth of a radian already carries the helmet a
+             *  third of a metre downfield. */
+            lean: 0.13,
+        },
+
+        /**
+         * AND THE SNAP ITSELF: the seconds it takes him to bring the ball back
+         * and the arm up.
+         *
+         * Both ends are solved hand positions, so the sweep between them is a
+         * real motion rather than a keyframe, exactly like the throw. The ball
+         * rides the same interpolation, so it can never arrive before or after
+         * the hand carrying it.
+         */
+        snap: { time: 0.55 },
+
+        /**
+         * WANTING THE BALL, WHICH IS QA ITEM 3'S SECOND HALF.
+         *
+         * A receiver who has run out of route used to keep milling on the
+         * spot. Now he stops, turns back to whoever has the ball, and puts
+         * both hands up. Solved at (0.32, 1.60, 0.18) the elbows land at
+         * (0.317, 1.313, 0.246), which is both arms raised and forward with
+         * the hands at head height and nothing near the torso.
+         */
+        posting: { hand: { x: 0.32, y: 1.60, z: 0.18 } },
         /**
          * TUCKED, HIGH AND TIGHT, which is where a ball carrier actually holds
          * it and not where this used to put it.
@@ -848,6 +1043,9 @@ const EXESNOHS_CONFIG = {
         tuck: {
             hand: { x: 0.20, y: 1.06, z: 0.26 },
             ball: { x: 0.17, y: 1.02, z: 0.12 },
+            /** Nose forward, in the rig's own space. Written the same way the
+             *  throwing hold writes it so the two cannot drift apart. */
+            aim: { x: 0, y: 0, z: 1 },
         },
         /**
          * THE RELEASE, AND THE SWEEP BETWEEN THE TWO IS A REAL THROW.
@@ -918,6 +1116,36 @@ const EXESNOHS_CONFIG = {
             leap: 0.70,
             /** How far back the carrier is driven, in metres. */
             driven: 1.05,
+            /**
+             * WHERE THE BODIES ACTUALLY MEET, IN METRES BETWEEN THEIR CENTRES,
+             * AND THIS IS QA ITEM 5.
+             *
+             * The carrier's fall used to be clocked from the END of the dive,
+             * so he stood upright through the whole thing and only started to
+             * go over once the tackler had landed. Measured against the median
+             * 1.85m gap, the two of them are within a body's width of each
+             * other 17% of the way in, which leaves 0.28 of a second of a
+             * defender lying on the grass beside a man who has not been
+             * touched yet. That is exactly what QA reported.
+             *
+             * So contact is now solved from the geometry rather than assumed:
+             * the fall starts on the frame the closing gap first reaches this
+             * distance. One body width, which is `separation`, because that is
+             * already the distance at which this game says two figures are
+             * touching.
+             */
+            contact: 1.45,
+            /**
+             * ...clamped to this window of the dive, because neither end is a
+             * tackle. A hit on the first frame is the whistle knocking a man
+             * over on its own, and one at the very end is what we started
+             * with. Fractions of `dive`.
+             */
+            contactAt: { min: 0.22, max: 0.62 },
+            /** How much of the carrier's drive the tackler is carried along
+             *  with, 0 to 1. A tackler who stops dead while the man he hit
+             *  flies backwards has not tackled him, he has been run into. */
+            carry: 0.55,
             /** Radians of pitch: the tackler laid out flat, and the carrier on
              *  his back. Negative is backwards. */
             tacklerLean: 1.15,

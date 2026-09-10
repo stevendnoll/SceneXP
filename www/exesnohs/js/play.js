@@ -226,6 +226,86 @@ export function tick(play) {
     // it: separation can push a man off the edge of the field, so a clamp that
     // ran first would be undone by it on the same frame.
     keepInbounds(play);
+    // AND LAST OF ALL, a receiver who has run out of route stops running in
+    // circles. It reads the position AFTER the shove and the clamp, because
+    // those move him too and a man being shoved is not a man who has arrived.
+    settleArrived(play);
+}
+
+/**
+ * A RECEIVER WHO HAS FINISHED HIS ROUTE STOPS. QA ITEM 3.
+ *
+ * WHAT HE WAS DOING INSTEAD, MEASURED. Every route in the ported library
+ * steers by comparing a coordinate to a target and accelerating one way or the
+ * other. There is no deadzone and nothing ever decelerates, so arriving means
+ * overshooting, being accelerated back, and overshooting again. Traced frame
+ * by frame, jumbo2's wr1 orbits a 0.4m circle at 6 m/s with a 27 frame period
+ * and never leaves it. Across the 17 plays, 38 of 61 receivers spend the last
+ * second turning through more than 180 degrees while covering under 1.5m, and
+ * the worst turns 4,355 degrees in one second. That is QA's "spins around in a
+ * circle while standing in one place", and it is not an animation fault: the
+ * simulation genuinely runs him round in a circle.
+ *
+ * IT CAPS HIS SPEED RATHER THAN STOPPING HIM, and that is the whole design.
+ * The radius of that orbit is v squared over twice the acceleration, so
+ * holding him to a tenth of his top speed shrinks it a hundredfold, to a few
+ * millimetres, which is a man standing still. But a receiver who genuinely has
+ * somewhere to be still travels at the capped speed, covers more than `net`
+ * within one window, and is released with nothing having to know his route.
+ * Nothing is frozen and nobody is exempted by name, so the worst a false
+ * reading can do is make a man jog for half a second.
+ *
+ * ZEROING THE SPEED WAS TRIED AND IS WORSE. This runs after the routes have
+ * already moved everybody, so a zeroed speed only affects the next frame, and
+ * the route re-accelerates from zero every single frame: he jitters at one
+ * acceleration step per frame forever and the release test can never fire,
+ * because a frozen man never covers any ground.
+ *
+ * IT LIVES HERE, like `separate` and `keepInbounds`, rather than in motion.js,
+ * which is a port and stays one.
+ */
+export function settleArrived(play) {
+    const S = CFG.settle;
+    const window = Math.max(1, Math.round(CFG.simHz * S.window));
+    const net = S.net / UNITS_TO_METRES;
+    const st = play.playState.state;
+    // ONCE THE BALL IS LOOSE NOBODY IS RUNNING A ROUTE ANY MORE. A catch or a
+    // quarterback taking off turns every receiver into a blocker, and the
+    // library's own route code tests the same two flags to decide it.
+    const loose = play.game.runForYourLife === true
+        || !!(st.ball && st.ball.caught);
+    let held = 0;
+
+    for (const obj of play.game.objects) {
+        if (!obj.settings || obj.settings.benched) continue;
+        if (obj.settings.positionGroup !== 'wr') continue;
+        const s = obj.state;
+
+        // The man the ball is on its way to has somewhere to be, and so does
+        // anybody carrying it. Both drop their history, so a receiver who is
+        // thrown at while settled starts the test again from scratch rather
+        // than from where he was standing.
+        if (loose || s.hasBall || play.game.throwTo === obj.settings.position) {
+            s.arrival = null;
+            continue;
+        }
+
+        if (!s.arrival) s.arrival = [];
+        s.arrival.push(obj.coords.x, obj.coords.y);
+        while (s.arrival.length > (window + 1) * 2) s.arrival.splice(0, 2);
+        if (s.arrival.length <= window * 2) continue;
+
+        const moved = Math.hypot(
+            obj.coords.x - s.arrival[0], obj.coords.y - s.arrival[1]
+        );
+        if (moved >= net) continue;
+
+        const cap = S.speed * obj.physics.maxSpeed;
+        if (Math.abs(s.xSpeed) > cap) s.xSpeed = Math.sign(s.xSpeed) * cap;
+        if (Math.abs(s.ySpeed) > cap) s.ySpeed = Math.sign(s.ySpeed) * cap;
+        held += 1;
+    }
+    return held;
 }
 
 /**

@@ -29,11 +29,55 @@ const smooth = (t) => t * t * (3 - 2 * t);
 /** Fast out of the blocks and slowing into the hit, which is a lunge. */
 const launch = (t) => 1 - (1 - t) * (1 - t);
 
-/** How long the whole thing lasts, which is what main.js has to wait for
- *  before it puts a card over the top of it. */
-export function takedownLength() {
+/**
+ * WHEN THE TWO OF THEM MEET, as a fraction of the dive. QA ITEM 5.
+ *
+ * The carrier used to be knocked over on a clock that started at the END of
+ * the dive, so the order a visitor saw was: the defender leaves his feet, the
+ * defender lands, and THEN the man he was tackling begins to fall. Reported
+ * exactly that way.
+ *
+ * The gap is not crossed at a constant rate, so the moment of contact is not a
+ * constant fraction either: `launch` covers most of the distance early. This
+ * solves the crossing outright. The tackler's remaining distance at dive
+ * fraction u is
+ *
+ *     gap - travel · launch(u),   launch(u) = 1 - (1 - u)²
+ *
+ * and setting that equal to `contact` gives launch(u) directly, which inverts
+ * to u = 1 - sqrt(1 - launch). Clamped into `contactAt`, because a hit on the
+ * first frame is the whistle knocking a man down by itself and a hit at the
+ * very end is the fault this replaces.
+ *
+ * Exported because it is the interesting number and a test should be able to
+ * ask for it without reconstructing the algebra.
+ */
+export function contactFraction(gap) {
     const T = CFG.pose.takedown;
-    return T.dive + T.fall + T.settle;
+    const travel = Math.max(0, gap - T.close);
+    const need = travel > 0 ? (gap - T.contact) / travel : 0;
+    // Out of reach in either direction: nothing to solve, take the window.
+    if (!(need > 0)) return T.contactAt.min;
+    if (need >= 1) return T.contactAt.max;
+    const u = 1 - Math.sqrt(1 - need);
+    return Math.min(T.contactAt.max, Math.max(T.contactAt.min, u));
+}
+
+/**
+ * How long the whole thing lasts, which is what main.js has to wait for
+ * before it puts a card over the top of it.
+ *
+ * IT DEPENDS ON THE GAP NOW, because the carrier's fall starts at contact
+ * rather than after the dive, and contact moves with how far the tackler had
+ * to come. The tackler is still travelling until `dive` whatever happens, so
+ * the answer is whichever of the two finishes last. Called with no gap it
+ * assumes the worst case, which is what a caller wanting a safe hold wants.
+ */
+export function takedownLength(gap = Infinity) {
+    const T = CFG.pose.takedown;
+    const hit = Number.isFinite(gap)
+        ? contactFraction(gap) : T.contactAt.max;
+    return Math.max(T.dive, hit * T.dive + T.fall) + T.settle;
 }
 
 /**
@@ -68,28 +112,40 @@ export function takedownAt(t, from, to) {
     const travel = Math.max(0, gap - T.close);
 
     const dive = Math.min(1, Math.max(0, t / T.dive));
-    const after = Math.min(1, Math.max(0, (t - T.dive) / T.fall));
+
+    // THE FALL IS CLOCKED FROM THE HIT, NOT FROM THE END OF THE DIVE. That one
+    // line is QA item 5: the carrier now starts going over on the frame the
+    // two of them meet, while the tackler is still in the air and still
+    // driving through him.
+    const hit = contactFraction(gap) * T.dive;
+    const after = Math.min(1, Math.max(0, (t - hit) / T.fall));
 
     // AND HE LEAVES HIS FEET. A dive is airborne: up on the way in and down on
     // the way through, which is a single arc rather than a jump and a landing.
     const air = Math.sin(Math.PI * dive) * T.leap;
     const settled = Math.max(0, 1 - after * 1.6);
 
+    // How far the carrier has been driven back, which BOTH of them ride: the
+    // tackler is carried along with the man he has hold of, or he stops dead
+    // while his own tackle flies away from him.
+    const drivenX = ux * T.driven * smooth(after);
+    const drivenZ = uz * T.driven * smooth(after);
+
     return {
         tackler: {
-            x: ux * travel * launch(dive),
+            x: ux * travel * launch(dive) + drivenX * T.carry,
             y: air * settled,
-            z: uz * travel * launch(dive),
+            z: uz * travel * launch(dive) + drivenZ * T.carry,
             lean: T.tacklerLean * smooth(dive),
         },
         carrier: {
             // Driven backwards along the same line, and only once he has been
             // hit: before that he is standing exactly where the play left him.
-            x: ux * T.driven * smooth(after),
-            z: uz * T.driven * smooth(after),
+            x: drivenX,
+            z: drivenZ,
             lean: T.carrierLean * smooth(after),
         },
-        contact: dive >= 1 ? 1 : 0,
+        contact: t >= hit ? 1 : 0,
     };
 }
 

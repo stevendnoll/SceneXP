@@ -892,8 +892,14 @@ describe('the arms', () => {
         const up = CFG.pose.throwHold.ball.y;
         expect(up).toBeGreaterThan(SHOULDER);
         expect(up).toBeLessThan(HEAD + 0.20);
-        // And behind him, which is what "cocked" means.
-        expect(CFG.pose.throwHold.ball.z).toBeLessThan(0);
+        // AND COCKED, WHICH IS NOW MEASURED ON THE HAND. This used to ask for
+        // the BALL's centre to be behind him, and that stopped being the right
+        // question when the hold moved to gripping the ball by its back point:
+        // the hand is behind the shoulder line and the ball reaches forward
+        // from it, which is a quarterback about to throw rather than one
+        // holding a football behind his own back.
+        expect(CFG.pose.throwHold.hand.z).toBeLessThan(0);
+        expect(CFG.pose.throwHold.aim.z).toBeGreaterThan(0);
     });
 
     test('a carrier tucks it high and tight, not down at his knee', () => {
@@ -904,21 +910,80 @@ describe('the arms', () => {
     });
 
     /**
-     * AND THE BALL HAS TO BE WHERE THE HAND IS.
+     * AND THE HAND HAS TO BE ON THE BALL.
      *
-     * The pose is now a hand position and the ball offset is a point beside it,
-     * so this is the assertion that keeps them one picture rather than two
-     * numbers that happen to agree. It fails against a retune that moves a hand
-     * and forgets the ball, which is the fault it has always been guarding.
+     * THIS USED TO ASK WHETHER THE BALL'S CENTRE WAS NEAR THE HAND, and that
+     * was the wrong question in a way that mattered. `ballScale` is 2.6 against
+     * `figureScale` 2.2, so the ball is 1.24m long: a centre "near" the hand
+     * puts 0.6m of leather over the hand, the wrist and most of the forearm,
+     * which is precisely the screenshot QA sent back, a football over a
+     * shoulder with no arm attached. A centre-to-centre threshold cannot see
+     * that, because the ball passing the test IS the ball hiding the arm.
+     *
+     * So the property is the one a person would state: the hand is ON THE
+     * LEATHER. Project the hand onto the ball's own axis, check it lands
+     * within the ball's length, and check it is no further from the axis than
+     * the ball is fat at that point. That fails against a ball floating off
+     * the hand AND against a ball swallowing it, and it is measured in world
+     * metres because the two scales are different numbers.
      */
-    test('each carry puts the ball in the hand the pose actually makes', () => {
+    test('each carry puts the hand on the ball, not under it', () => {
+        const F = CFG.figureScale;
+        const B = CFG.ballScale;
+        const HALF = 0.238;                 // ball.js BALL_HALF, before ballScale
+        const FAT = 0.14;                   // ...and BALL_FAT
+        const TAPER = 0.78;
+        const fatAt = (x) => {
+            const t = Math.min(1, Math.abs(x) / HALF);
+            return FAT * Math.pow(Math.max(0, 1 - t * t), TAPER);
+        };
+
         for (const P of [CFG.pose.throwHold, CFG.pose.tuck]) {
             const solved = solveArm(P.hand, 1);
             const hand = handAt(solved.armX, solved.armZ, solved.foreX, 1);
-            const gap = Math.hypot(hand.x - P.ball.x, hand.y - P.ball.y,
-                hand.z - P.ball.z);
-            expect(gap).toBeLessThan(0.20);
+            // Both into world metres, which is the only space they share.
+            const to = {
+                x: (hand.x - P.ball.x) * F,
+                y: (hand.y - P.ball.y) * F,
+                z: (hand.z - P.ball.z) * F,
+            };
+            const mag = Math.hypot(P.aim.x, P.aim.y, P.aim.z);
+            const axis = { x: P.aim.x / mag, y: P.aim.y / mag, z: P.aim.z / mag };
+            const along = to.x * axis.x + to.y * axis.y + to.z * axis.z;
+            const perp = Math.hypot(
+                to.x - along * axis.x, to.y - along * axis.y, to.z - along * axis.z
+            );
+            // Along the ball rather than off either end...
+            expect(Math.abs(along)).toBeLessThan(HALF * B);
+            // ...and against the leather rather than floating beside it. The
+            // hand is a sphere of its own, so it may sit that far proud.
+            const handRadius = 0.04 * F;
+            expect(perp).toBeLessThan(fatAt(along / B) * B + handRadius);
         }
+    });
+
+    /**
+     * AND IT IS HELD BY ITS BACK POINT, WHICH IS THE OTHER HALF OF THAT.
+     *
+     * A hand exactly on the middle of a 1.24m ball satisfies the test above
+     * and still hides the arm behind half a metre of leather. What a person
+     * actually does with a football is put a hand near its back point, so the
+     * ball reaches AWAY from the arm carrying it. Stated as a fraction rather
+     * than a distance, because it is a fact about the grip and not about how
+     * big this game happens to draw the ball.
+     */
+    test('the throwing hold grips the ball behind its middle', () => {
+        const P = CFG.pose.throwHold;
+        const mag = Math.hypot(P.aim.x, P.aim.y, P.aim.z);
+        const solved = solveArm(P.hand, 1);
+        const hand = handAt(solved.armX, solved.armZ, solved.foreX, 1);
+        const along = ((hand.x - P.ball.x) * P.aim.x
+            + (hand.y - P.ball.y) * P.aim.y
+            + (hand.z - P.ball.z) * P.aim.z) / mag;
+        // Behind the middle, by a real fraction of the ball's half length.
+        const half = 0.238 * CFG.ballScale / CFG.figureScale;
+        expect(along / half).toBeLessThan(-0.5);
+        expect(along / half).toBeGreaterThan(-1);
     });
 
     test('the throwing hand comes up beside the head, not over the shoulder', () => {
