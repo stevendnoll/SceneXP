@@ -500,6 +500,47 @@ export function takedownClock() {
 }
 
 /**
+ * WALKING TO A NEW FORMATION, WHICH IS QA'S "CHANGE PLAY".
+ *
+ * Re-lining up before the snap moves every figure on the field, sometimes right
+ * across it. The drawn position normally EASES toward the simulated one over
+ * `motionSmooth`, which is fifty milliseconds and exists to turn a stepped 45Hz
+ * feed into movement: run a ten metre relocation through it and every player
+ * teleports.
+ *
+ * So a relocation is a TIMED transition instead, from wherever each figure was
+ * actually drawn to wherever the new formation puts him, on a smoothstep so it
+ * eases out of the old spot and into the new one rather than starting at full
+ * speed.
+ *
+ * AND THE JOG COMES FOR FREE, which is the reason to do it here rather than by
+ * lengthening the ease. Everything about how a figure looks while moving is
+ * already derived from the position that was DRAWN: the stride phase advances
+ * with distance covered, the arm swing scales with measured speed, and the
+ * heading follows the movement. Move him along a curve and he runs along it.
+ */
+const relocate = { at: -1 };
+
+/** Start one. Every visible figure remembers where it is standing now, and
+ *  `syncFigures` carries it to wherever the new line-up put it. */
+export function beginRelocate() {
+    relocate.at = 0;
+}
+
+export function resetRelocate() {
+    relocate.at = -1;
+}
+
+/** 0 to 1 across the walk, or -1 when nobody is walking. */
+export function relocateProgress() {
+    if (relocate.at < 0) return -1;
+    const T = CFG.pose.relocate.time;
+    if (!(T > 0)) return 1;
+    const t = Math.min(1, relocate.at / T);
+    return t * t * (3 - 2 * t);
+}
+
+/**
  * HOW HIGH A STANDING RECEIVER'S FINGERTIPS GET, in world metres.
  *
  * Measured off the rig rather than written down, so it follows the shared part
@@ -611,6 +652,13 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
     const reaching = reachersFor(objects);
     noteThrowRelease(objects, carrier, delta);
 
+    // ...and the walk to a new formation, which has its own too.
+    if (relocate.at >= 0) {
+        relocate.at += delta;
+        if (relocate.at > CFG.pose.relocate.time) relocate.at = -1;
+    }
+    const walking = relocateProgress();
+
     // The tackle's own clock, advanced once whatever else is happening.
     if (takedown.at >= 0) takedown.at += delta;
     const hit = takedown.at >= 0
@@ -644,10 +692,29 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // the last play's would have him judged to be standing still on the
         // strength of where he was when the last whistle went.
         if (!held) { figure.userData.track = null; clearJump(figure); }
+
+        // WHERE HE STARTED WALKING FROM, latched on the first frame of the
+        // relocation rather than read every frame: reading it every frame would
+        // make the walk a chase of its own tail and never arrive.
+        if (walking >= 0 && held && !figure.userData.walkFrom) {
+            figure.userData.walkFrom = { x: held.x, z: held.z };
+        } else if (walking < 0 && figure.userData.walkFrom) {
+            figure.userData.walkFrom = null;
+        }
+
+        const from = figure.userData.walkFrom;
         const ease = 1 - Math.exp(-delta / CFG.pose.motionSmooth);
-        const p = held
-            ? { x: held.x + (target.x - held.x) * ease, z: held.z + (target.z - held.z) * ease }
-            : { x: target.x, z: target.z };
+        let p;
+        if (from) {
+            p = {
+                x: from.x + (target.x - from.x) * walking,
+                z: from.z + (target.z - from.z) * walking,
+            };
+        } else {
+            p = held
+                ? { x: held.x + (target.x - held.x) * ease, z: held.z + (target.z - held.z) * ease }
+                : { x: target.x, z: target.z };
+        }
 
         // HOW FAST HE IS ACTUALLY GOING, MEASURED FROM WHERE HE ACTUALLY WENT.
         //
@@ -741,6 +808,10 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // A defender's coverage assignment is a fine thing to face DURING a
         // play and wrong before one: it had corners standing at the line with
         // their backs to the ball.
+        // A MAN WALKING TO A NEW SPOT FACES THE WAY HE IS WALKING. The pre-snap
+        // rule turns everybody to face the other team, which is right for a
+        // formation and wrong for the seconds it takes to get into one.
+        const relocating = !!from && walking < 1;
         const downfield = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
         const surveying = carrier === obj && carryFor(obj, carrier) === 'throw';
         const engagement = engaged.get(obj.settings.position) || null;
@@ -748,7 +819,8 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             ? null
             : lookTarget(obj, objects, carrier, p, standing,
                 engagement ? engagement.against : '');
-        const want = opts.presnap ? downfield
+        const want = (opts.presnap && relocating) ? targetFacing(stepX, stepZ, mps)
+            : opts.presnap ? downfield
             : (surveying ? Math.PI / 2
                 : (look ? Math.atan2(look.x - p.x, look.z - p.z)
                     // A MAN GOING NOWHERE KEEPS THE HEADING HE HAD. Passing a

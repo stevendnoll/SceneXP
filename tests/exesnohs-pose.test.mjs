@@ -40,6 +40,7 @@ const { takedownAt, takedownLength, contactFraction } = await import(join(scene,
 const {
     toWorld, carryHold, HEADING_DEADZONE, TURN_RESPONSE,
     syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged,
+    beginRelocate, resetRelocate, relocateProgress,
 } = await import(join(scene, 'view.js'));
 const {
     createPlay, lineUp, snap, tick, isDone, settleArrived, throwTo,
@@ -1004,5 +1005,83 @@ describe('the playbook opens on the play you just called', () => {
         const slugs = PLAYS.map((p) => p.slug);
         expect(new Set(slugs).size).toBe(slugs.length);
         expect(slugs.length).toBeGreaterThan(10);
+    });
+});
+
+describe('walking to a new formation', () => {
+    /**
+     * QA ROUND ELEVEN. Changing the play before the snap moves every figure on
+     * the field, sometimes right across it. The drawn position normally eases
+     * toward the simulated one over `motionSmooth`, which is fifty milliseconds
+     * and exists to smooth a stepped simulation feed: run a ten metre
+     * relocation through it and everybody teleports.
+     *
+     * THE JOG IS NOT ANIMATED, IT IS A CONSEQUENCE. Every part of how a figure
+     * looks while moving is already derived from the position that was DRAWN,
+     * so carrying him along a curve makes him run along it. What the test can
+     * assert is the curve.
+     */
+    const qb = () => [{
+        settings: { position: 'qb', team: 0, benched: false, positionGroup: 'qb' },
+        coords: { x: 200, y: 300, z: 0 },
+        state: { xSpeed: 0, ySpeed: 0, hasBall: true },
+    }];
+
+    test('it runs for the time the config says and then stops', () => {
+        resetRelocate();
+        expect(relocateProgress()).toBe(-1);
+
+        beginRelocate();
+        expect(relocateProgress()).toBe(0);
+
+        const step = 0.05;
+        let elapsed = 0;
+        let last = 0;
+        // Halfway, and it should be halfway: a smoothstep is symmetric.
+        while (elapsed < CFG.pose.relocate.time / 2 - step) {
+            syncFigures(qb(), step, { presnap: true });
+            elapsed += step;
+            const now = relocateProgress();
+            expect(now).toBeGreaterThanOrEqual(last);      // never goes backwards
+            last = now;
+        }
+        expect(relocateProgress()).toBeGreaterThan(0.3);
+        expect(relocateProgress()).toBeLessThan(0.7);
+
+        while (elapsed < CFG.pose.relocate.time + step * 2) {
+            syncFigures(qb(), step, { presnap: true });
+            elapsed += step;
+        }
+        expect(relocateProgress()).toBe(-1);
+    });
+
+    /**
+     * AND IT EASES AT BOTH ENDS, which is the difference between a team getting
+     * set and seventeen figures launched across the field. An exponential ease
+     * starts at full speed, which is why this is a timed smoothstep instead.
+     */
+    test('it starts slowly and arrives slowly', () => {
+        resetRelocate();
+        beginRelocate();
+        const step = CFG.pose.relocate.time / 20;
+        const samples = [];
+        for (let i = 0; i < 20; i += 1) {
+            syncFigures(qb(), step, { presnap: true });
+            samples.push(relocateProgress());
+        }
+        const speeds = samples.slice(1).map((v, i) => v - samples[i]);
+        const middle = speeds[Math.floor(speeds.length / 2)];
+        // The first and last steps cover less ground than the middle one.
+        expect(speeds[0]).toBeLessThan(middle);
+        expect(speeds[speeds.length - 2]).toBeLessThan(middle);
+        resetRelocate();
+    });
+
+    test('and a new play cancels a walk that was still running', () => {
+        resetRelocate();
+        beginRelocate();
+        expect(relocateProgress()).toBe(0);
+        resetRelocate();
+        expect(relocateProgress()).toBe(-1);
     });
 });

@@ -185,6 +185,25 @@ function actions() {
 export function showSnap() {
     const box = actions();
     if (!box) return;
+
+    /**
+     * SECOND THOUGHTS ARE ALLOWED, WHICH IS THE POINT OF A PRE-SNAP HOLD.
+     *
+     * The snap is the visitor's rather than a timer's precisely so they can
+     * read the formation for as long as they like, and reading a formation is
+     * how somebody works out they have called the wrong play. Offering only one
+     * way forward from there makes the reading pointless.
+     *
+     * IT COMES FIRST IN THE ROW AND SECOND IN THE EYE. Snapping is what most
+     * visitors do most of the time, so it keeps the filled button and the
+     * focus; changing is the quieter outline one beside it.
+     */
+    const change = bindKeys(button('Change play', 'hud-btn',
+        () => handlers.onChangePlay && handlers.onChangePlay(),
+        'Change the play before snapping'), [CHANGE_KEY]);
+    change.id = 'change-play-btn';
+    box.appendChild(change);
+
     const snap = button('Snap the ball', 'hud-btn hud-btn-primary',
         () => handlers.onSnap && handlers.onSnap());
     snap.id = 'snap-btn';
@@ -211,6 +230,10 @@ export function showSnap() {
  */
 const SNAP_KEYS = [' ', 'S', 'Q'];
 const KEEP_KEY = 'K';
+/** C, and it only ever means anything before the snap. During a play the same
+ *  key throws to receiver C, and the two can never both be on screen: the
+ *  lookup below asks what is actually there rather than what the key "is". */
+const CHANGE_KEY = 'C';
 
 /** Tag a button with the keys that press it, for the handler and for anything
  *  reading the page out loud. */
@@ -263,9 +286,13 @@ export function initKeys(signal) {
         // ONLY WHAT IS ON SCREEN. The row is emptied between phases, so this
         // finds nothing before the snap is offered and nothing after the ball
         // is in the air, which is exactly right.
+        // A LETTER MEANS WHATEVER IS ON SCREEN WEARING IT. C throws to receiver
+        // C during a play and changes the play before one, and those two rows
+        // never coexist, so the right answer is to look rather than to decide.
         const wanted = want === 'snap' || want === 'keep'
             ? box.querySelector(`[data-keys*="${want === 'snap' ? 'S' : KEEP_KEY}"]`)
-            : box.querySelector(`[data-letter="${want}"]`);
+            : (box.querySelector(`[data-letter="${want}"]`)
+                || box.querySelector(`[data-keys*="${want}"]`));
         if (!wanted) return;
 
         // The space bar scrolls a page and Enter is the browser's own way of

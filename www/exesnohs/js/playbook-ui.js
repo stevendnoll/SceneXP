@@ -476,10 +476,20 @@ export function initPlaybook(handler, startOver = null) {
     return root;
 }
 
-export function show() {
+/**
+ * SHOW THE BOOK.
+ *
+ * `opts.canCancel` is the difference between the two reasons it opens. Between
+ * plays there is no way out but forward, and that is right: a play has to be
+ * called. Opened over a formation by "Change play" it is a second thought, and
+ * a second thought has to be allowed to be a third one, so it grows a way back
+ * and answers Escape.
+ */
+export function show(opts = {}) {
     const root = document.getElementById('playbook');
     if (!root) return;
     root.hidden = false;
+    setCancel(root, opts.canCancel ? opts.onCancel : null);
     // Read the last play HERE, every time, rather than once at boot: it is the
     // only moment at which the answer is current (QA item 1).
     syncRepeatCard(root);
@@ -493,7 +503,46 @@ export function show() {
 
 export function hide() {
     const root = document.getElementById('playbook');
-    if (root) root.hidden = true;
+    if (!root) return;
+    root.hidden = true;
+    setCancel(root, null);
+}
+
+/**
+ * The way back out, and the Escape key with it.
+ *
+ * BOTH LIVE AND DIE TOGETHER, in one function, because the failure here is a
+ * listener that outlives the button: opened, cancelled and opened again for a
+ * different reason, an Escape handler left behind would close a book that has
+ * to be answered. Removing and rebuilding is cheaper to reason about than
+ * tracking whether one is already installed.
+ */
+let escapeCancel = null;
+
+function setCancel(root, onCancel) {
+    const head = root.querySelector('.playbook-head');
+    const old = root.querySelector('.playbook-cancel');
+    if (old) old.remove();
+    if (escapeCancel) {
+        document.removeEventListener('keydown', escapeCancel);
+        escapeCancel = null;
+    }
+    if (!onCancel || !head) return;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'playbook-restart-btn playbook-cancel';
+    btn.textContent = 'Keep this play';
+    btn.setAttribute('aria-keyshortcuts', 'Escape');
+    btn.addEventListener('click', onCancel);
+    head.appendChild(btn);
+
+    escapeCancel = (event) => {
+        if (event.key !== 'Escape' || root.hidden) return;
+        event.preventDefault();
+        onCancel();
+    };
+    document.addEventListener('keydown', escapeCancel);
 }
 
 export function isOpen() {

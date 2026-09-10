@@ -1166,6 +1166,25 @@ const EXESNOHS_CONFIG = {
         snap: { time: 0.55 },
 
         /**
+         * WALKING TO A NEW FORMATION. "Change play", before the snap.
+         *
+         * ONE CLOCK FOR EVERYBODY, not a speed each. A formation is a shape, and
+         * a shape that assembles itself all at once reads as a team getting set;
+         * one where each man travels at his own pace and arrives when he arrives
+         * reads as everybody wandering. So the far side of the field and the man
+         * who has to shuffle a metre take the same two seconds, which also means
+         * the visitor knows exactly when they can snap it.
+         *
+         * Two seconds because of what it does to the man who moves FURTHEST. A
+         * smoothstep peaks at one and a half times the average, so the widest
+         * relocation in the library, about twelve metres, tops out near 10 m/s.
+         * That is a brisk jog for a figure 3.85m tall and it is under
+         * `fullEffort`, so his arms are swinging at full amplitude when he
+         * arrives rather than clipping.
+         */
+        relocate: { time: 2.0 },
+
+        /**
          * GOING UP FOR IT, AND THIS TIME KEYED TO WHERE THE BALL ACTUALLY IS.
          *
          * A JUMP WAS BUILT ONCE BEFORE AND BACKED OUT (D149). That version rode

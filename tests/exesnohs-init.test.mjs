@@ -128,12 +128,28 @@ describe('the sound toggle is a control', () => {
     });
 });
 
+/**
+ * PRESS A CONTROL BY ITS NAME, NOT BY WHERE IT SITS.
+ *
+ * These used to press `children[0]`, which was the snap button right up until
+ * the pre-snap row grew a "Change play" beside it, at which point four tests
+ * started snapping by pressing the wrong control. A test that knows the order
+ * of a row is a test that has to be edited every time the row changes, and it
+ * fails in a way that says nothing about what actually broke.
+ */
+const press = (label) => {
+    const btn = dom.el('hud-actions').children
+        .find((b) => (b.textContent || '').includes(label));
+    if (!btn) throw new Error(`no control labelled ${label}: ${actionLabels().join(', ')}`);
+    btn.click();
+};
+
 describe('a play, end to end', () => {
     test('reaches the snap button and then the throw row', async () => {
         await toLivePlay();
-        expect(actionLabels()).toEqual(['Snap the ball']);
+        expect(actionLabels()).toEqual(['Change play', 'Snap the ball']);
 
-        dom.el('hud-actions').children[0].click();
+        press('Snap the ball');
         await flushAsync();
 
         const labels = actionLabels();
@@ -153,7 +169,7 @@ describe('a play, end to end', () => {
     test('each throw button wears its own receiver\'s colour', async () => {
         const { EXESNOHS_CONFIG: CFG } = await import('../www/exesnohs/js/config.js');
         await toLivePlay();
-        dom.el('hud-actions').children[0].click();
+        press('Snap the ball');
         await flushAsync();
 
         const throws = dom.el('hud-actions').children
@@ -174,9 +190,9 @@ describe('a play, end to end', () => {
 
     test('runs to a whistle and shows what it was worth', async () => {
         await toLivePlay();
-        dom.el('hud-actions').children[0].click();     // snap
+        press('Snap the ball');
         await flushAsync();
-        dom.el('hud-actions').children[0].click();     // throw to the first target
+        press('Throw');
         await flushAsync();
 
         // Twelve seconds of frames at 60Hz is past PLAY_TIMEOUT whatever the
@@ -241,9 +257,9 @@ describe('a replay can be got out of', () => {
      */
     test('the button is there while a replay is running, and it takes focus', async () => {
         const main = await toLivePlay();
-        dom.el('hud-actions').children[0].click();          // snap
+        press('Snap the ball');
         await flushAsync();
-        dom.el('hud-actions').children[0].click();          // throw
+        press('Throw');
         await flushAsync();
         for (let i = 0; i < 900 && dom.el('result').hidden !== false; i += 1) {
             dom.loops[0](i * 16.7);
@@ -317,5 +333,86 @@ describe('the markup and the stylesheet agree', () => {
         for (const path of ['index.html', 'css/experience.css']) {
             expect(await read(path)).not.toMatch(/\b(offence|defence)\b/i);
         }
+    });
+});
+
+describe('changing the play before the snap', () => {
+    /**
+     * QA ROUND ELEVEN. The snap is the visitor's rather than a timer's precisely
+     * so they can read the formation for as long as they like, and reading a
+     * formation is how somebody works out they called the wrong play. Offering
+     * only one way forward from there makes the reading pointless.
+     *
+     * THE PROPERTY THAT MATTERS IS THE PLAY NUMBER. A change of mind is not a
+     * play: a visitor who re-reads the formation and picks again has not used
+     * one of their ten, and getting that wrong is a bug nobody would notice
+     * until the game ended two plays early.
+     */
+    const openBook = async () => {
+        press('Change play');
+        await flushAsync();
+    };
+    const anyCard = () => {
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        return deep(body).find((n) => n.dataset && n.dataset.slug);
+    };
+
+    test('the pre-snap row offers it, and it opens the book', async () => {
+        await toLivePlay();
+        expect(actionLabels()).toContain('Change play');
+        expect(dom.el('playbook').hidden).toBe(true);
+        await openBook();
+        expect(dom.el('playbook').hidden).toBe(false);
+    });
+
+    test('picking again does not spend a play', async () => {
+        await toLivePlay();
+        const before = dom.el('hud-play').textContent;
+        await openBook();
+        anyCard().click();
+        await flushAsync();
+        expect(dom.el('hud-play').textContent).toBe(before);
+        // And it comes back to a formation waiting on a snap, not to a live play.
+        expect(actionLabels()).toEqual(['Change play', 'Snap the ball']);
+        expect(dom.el('playbook').hidden).toBe(true);
+    });
+
+    test('snapping after a change still starts exactly one play', async () => {
+        await toLivePlay();
+        const before = Number(dom.el('hud-play').textContent);
+        await openBook();
+        anyCard().click();
+        await flushAsync();
+        press('Snap the ball');
+        await flushAsync();
+        expect(Number(dom.el('hud-play').textContent)).toBe(before);
+        // The throw row, which is what being live looks like.
+        expect(actionLabels().some((l) => /^Throw /.test(l))).toBe(true);
+    });
+
+    /**
+     * AND THERE IS A WAY BACK OUT. A second thought has to be allowed to be a
+     * third one. Between plays the book still has no exit, because a play has to
+     * be called.
+     */
+    test('the book opened for a change can be backed out of', async () => {
+        await toLivePlay();
+        await openBook();
+        const head = dom.el('playbook').querySelector('.playbook-head');
+        const cancel = deep(head).find((n) => (n.textContent || '') === 'Keep this play');
+        expect(cancel).toBeTruthy();
+        cancel.click();
+        await flushAsync();
+        expect(dom.el('playbook').hidden).toBe(true);
+        expect(actionLabels()).toEqual(['Change play', 'Snap the ball']);
+    });
+
+    test('and the book opened between plays has no way out', async () => {
+        await boot();
+        dom.el('welcome-actions').children[0].click();
+        await flushAsync();
+        const head = dom.el('playbook').querySelector('.playbook-head');
+        const cancel = deep(head).find((n) => (n.textContent || '') === 'Keep this play');
+        expect(cancel).toBeFalsy();
     });
 });

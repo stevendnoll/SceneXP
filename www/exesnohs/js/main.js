@@ -25,6 +25,7 @@ import {
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments,
     beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
+    beginRelocate, resetRelocate,
 } from './view.min.js';
 import { takedownLength, tacklerFor, contactFraction } from './takedown.min.js';
 import {
@@ -49,7 +50,9 @@ import {
     initAudio, unlock as unlockAudio, play as playSound, simAudio,
     isMuted, toggleMuted,
 } from './audio.min.js';
-import { initPlaybook, show as showPlaybook, getSettings } from './playbook-ui.min.js';
+import {
+    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings,
+} from './playbook-ui.min.js';
 import { installCardFocusTrap, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 
 const state = {
@@ -289,9 +292,68 @@ function openPlaybook() {
 
 /** The visitor chose. Line both teams up and wait for them to snap it.
  *  An empty `defense` is the library's own signal to pick one at random. */
+/**
+ * THE PLAYBOOK CHOSE SOMETHING, AND THERE ARE TWO REASONS IT MIGHT HAVE.
+ *
+ * Between plays it is the next play, and the play number moves on. Before the
+ * snap it is a CHANGE OF MIND, and it must not: a visitor who reads the
+ * formation, decides they called the wrong thing and picks again has not used
+ * up one of their ten. Same handler either way, because the playbook has no
+ * business knowing which of the two it is being opened for.
+ */
+function onPlaybookChoice(offensive, defense) {
+    if (cycle.phase === 'presnap') changePlay(offensive, defense);
+    else startPlay(offensive, defense);
+}
+
+/**
+ * CHANGE THE PLAY, AND LET THEM WALK TO IT.
+ *
+ * Everything a new line-up resets EXCEPT the play number, the score and the
+ * clock, because none of those have happened yet. The one addition is
+ * `beginRelocate`, which turns what would be seventeen figures teleporting into
+ * seventeen figures jogging to their new spots: view.js carries each of them
+ * from where he is actually drawn to where the new formation puts him, and the
+ * stride, the arm swing and the heading all fall out of that movement because
+ * every one of them is already derived from the position that is drawn.
+ */
+function changePlay(offensive, defense) {
+    uiClick();
+    lineUp(cycle.play, offensive, defense || '');
+    resetBallFlight();
+    resetAssignments();
+    resetTakedown();
+    cycle.tackle = { tackler: '', carrier: '' };
+    cycle.held = 0;
+    cycle.accumulator = 0;
+    beginRelocate();
+    // Delta zero, so this frame draws them exactly where they already were and
+    // the walk starts from there rather than from the new formation.
+    syncFigures(cycle.play.game.objects, 0, { presnap: true });
+    showBall(cycle.play.game.objects, 0);
+    showSnap();
+    announce('Play changed. The teams are lining up again.');
+}
+
+/** Open the playbook over the formation, without ending anything. */
+function onChangePlay() {
+    if (cycle.phase !== 'presnap') return;
+    uiClick();
+    clearActions();
+    showPlaybook({ canCancel: true, onCancel: onKeepPlay });
+}
+
+/** ...and back out of it, having decided the play was fine after all. */
+function onKeepPlay() {
+    if (cycle.phase !== 'presnap') return;
+    hidePlaybook();
+    showSnap();
+}
+
 function startPlay(offensive, defense) {
     // Choosing a play off the playbook is the click the `snap` sample is for.
     uiClick();
+    resetRelocate();
     lineUp(cycle.play, offensive, defense || '');
     resetBallFlight();
     // Coverage assignments are cached for the replay, so a new line-up has to
@@ -1109,9 +1171,9 @@ async function init() {
     initAudio();
 
     setProgress(0.85, 'Opening the playbook…');
-    initPlaybook(startPlay, onStartOver);
+    initPlaybook(onPlaybookChoice, onStartOver);
     initHud({
-        onSnap, onThrow, onRun, onNext,
+        onSnap, onThrow, onRun, onNext, onChangePlay,
         onReplay: startReplay,
         onSkipReplay,
         onToggleMute: () => toggleMuted(),
