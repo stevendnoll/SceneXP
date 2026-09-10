@@ -25,7 +25,8 @@
  * in the air above him. Neither function touches a mesh: they take numbers and
  * return numbers, so they are asserted like anything else pure.
  */
-import { EXESNOHS_CONFIG as CFG, simToWorld, FIELD, UNITS_TO_METRES } from './config.min.js';
+import { EXESNOHS_CONFIG as CFG, simToWorld, FIELD, SIM, UNITS_TO_METRES } from './config.min.js';
+import { bandAt } from './scoring.min.js';
 import { figureFor, poseFigure, THROWING_SIDE, FIGURE_LIFT } from './roster.min.js';
 import { getBall, aimBall, placeSpot, BALL_FAT } from './ball.min.js';
 import { placeMarker, hideMarker } from './markers.min.js';
@@ -657,6 +658,32 @@ function intendedReceiver(objects) {
     return best;
 }
 
+/**
+ * HOW FAR OVER HIS FINGERTIPS THE BALL HAS TO BE, WHICH DEPENDS ON WHERE THE
+ * PASS WAS AIMED.
+ *
+ * QA ROUND TWENTY: too many passes into the 15 and 30 point zones are
+ * overthrown. In those bands he goes up for a ball that has only just cleared
+ * his hands rather than one clearly above them, and since a man in the air is
+ * excused the ported height gate, going up for it is most of the way to
+ * catching it. See the measured table in config.
+ *
+ * IT ASKS THE LADDER RATHER THAN CARRYING ITS OWN THRESHOLDS, for the same
+ * reason field.js does: two copies of where the 30 band starts is one edit away
+ * from a receiver leaping in a place the paint says is worth something else.
+ *
+ * The target comes off `flight.span`, so a replay answers the same: playback
+ * carries no throw, and the span survives the play.
+ */
+export function jumpClearance(span) {
+    const J = CFG.pose.jump;
+    const aim = span === undefined ? flight.span : span;
+    if (!aim || aim.tx === undefined) return J.clearance;
+    if (!Array.isArray(J.zones) || typeof J.zoneClearance !== 'number') return J.clearance;
+    const band = bandAt(aim.tx, SIM.lineInterval);
+    return J.zones.indexOf(band.points) === -1 ? J.clearance : J.zoneClearance;
+}
+
 function updateJump(figure, reach, at, live, delta) {
     const J = CFG.pose.jump;
     const u = figure.userData;
@@ -678,8 +705,9 @@ function updateJump(figure, reach, at, live, delta) {
     if (Math.hypot(flight.x - at.x, flight.z - at.z) > J.range) return 0;
     const top = standingReach();
     // Clearly OVER HIS HEAD, and not so far over that no jump would get there.
-    // The clearance is what makes this rare: see the note in config.
-    if (flight.y < top + J.clearance || flight.y > top + J.lift) return 0;
+    // The clearance is what makes this rare, and it is gentler in the scoring
+    // zones: see `jumpClearance` and the measured table in config.
+    if (flight.y < top + jumpClearance() || flight.y > top + J.lift) return 0;
     u.jumpAt = 0;
     return 0;
 }

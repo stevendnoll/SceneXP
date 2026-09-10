@@ -1326,6 +1326,50 @@ const EXESNOHS_CONFIG = {
              * jumping, lower it and he starts jumping for everything.
              */
             clearance: 0.4,
+            /**
+             * ...AND HOW LITTLE HE NEEDS IN THE SCORING ZONES.
+             *
+             * QA ROUND TWENTY: too many passes into the 15 and 30 bands are
+             * overthrown. Measured, they are: the ball's target is a median
+             * 1.5m past the man it was aimed at, and it goes by him a median
+             * 0.5 to 0.7m away.
+             *
+             * WHAT DOES NOT FIX IT IS A HIGHER JUMP, and the measurement is an
+             * exact zero rather than a small number: over 612 throws, not one
+             * incompletion in any band failed the gate that asks whether the
+             * ball is further up than a jump would get. Raising `lift` to 1.9m
+             * moves every figure in the table by nothing at all.
+             *
+             * What stops him is the OTHER end of the same window. The ball
+             * comes over him early in its arc, while it is still up, and he
+             * declines to leave his feet for it unless it clears his fingertips
+             * by 0.4m. Ask for half that in the painted zones and he goes up as
+             * it arrives, and the jump carries the rest: a man in the air has a
+             * `JUMP_RANGE` box in every direction and is excused the ported
+             * height gate, so going up for it IS catching it.
+             *
+             *     gate in 15 and 30    5 pt   15 pt   30 pt   50 pt   he jumped
+             *     0.40 (as it was)      82%     75%     65%     50%         20%
+             *     0.20                  82%     83%     82%     50%         35%
+             *     0.00                  82%     86%     88%     50%         43%
+             *    -0.20                  82%     87%     88%     50%         46%
+             *
+             * 0.20 takes most of what is there and leaves the jump an event.
+             * Past it the returns fall off and he starts going up on half the
+             * passes in the game.
+             */
+            zoneClearance: 0.2,
+            /**
+             * WHICH PAINTED BANDS PLAY BY THAT GENTLER RULE, by their points.
+             *
+             * KEYED ON WHERE THE BALL WAS AIMED rather than where the receiver
+             * is standing, and the difference is not cosmetic: a man catching a
+             * fifty is usually still short of the target when it comes over
+             * him, so keying on his own feet would hand the same help to the
+             * hail mary and undo round seventeen. Measured that way the 50 band
+             * went 50% to 61%. Keyed on the throw it does not move at all.
+             */
+            zones: [15, 30],
         },
 
         /**

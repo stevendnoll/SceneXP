@@ -34,14 +34,14 @@ const scene = join(here, '..', 'www', 'exesnohs', 'js');
 installThree();
 
 const CONFIG_MODULE = await import(join(scene, 'config.js'));
-const { EXESNOHS_CONFIG: CFG, UNITS_TO_METRES, FIELD } = CONFIG_MODULE;
+const { EXESNOHS_CONFIG: CFG, UNITS_TO_METRES, FIELD, SIM } = CONFIG_MODULE;
 const { solveArm, handAt, RIG } = await import(join(scene, 'arm.js'));
 const { takedownAt, takedownLength, contactFraction } = await import(join(scene, 'takedown.js'));
 const {
     toWorld, carryHold, HEADING_DEADZONE, TURN_RESPONSE,
     syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged,
     beginRelocate, resetRelocate, relocateProgress,
-    syncBall, resetBallFlight, ballSpan, turnFor, frontOf,
+    syncBall, resetBallFlight, ballSpan, turnFor, frontOf, jumpClearance,
 } = await import(join(scene, 'view.js'));
 const {
     createPlay, lineUp, snap, tick, isDone, settleArrived, throwTo,
@@ -57,6 +57,7 @@ const {
     shoulderFor, resetShoulder, replayDriver,
 } = await import(join(scene, 'camera.js'));
 const { PLAYS } = await import(join(scene, 'playbook-ui.js'));
+const { ladderBands, bandAt } = await import(join(scene, 'scoring.js'));
 
 /**
  * THE TORSO, FROM people-1.0.0's OWN CONSTRUCTOR. Half width, the y span, and
@@ -1528,5 +1529,76 @@ describe('he turns to the ball rather than reaching out of his own back', () => 
             const left = Math.abs(wrap(want - turnFor(want, 0)));
             expect(left).toBeLessThanOrEqual(CFG.pose.catching.armLimit + 1e-9);
         }
+    });
+});
+
+describe('he goes up for it sooner in the scoring zones', () => {
+    /**
+     * QA ROUND TWENTY: too many passes into the 15 and 30 point zones are
+     * overthrown. Measured, they are, and the ball's target is a median 1.5m
+     * past the man it was aimed at.
+     *
+     * WHAT DOES NOT FIX IT IS A HIGHER JUMP. Across 612 throws, not one
+     * incompletion in any band failed the gate that asks whether the ball is
+     * further up than a jump would get: raising `lift` to 1.9m moved every
+     * measured figure by nothing at all. It is the OTHER end of the same
+     * window. The ball comes over him early in its arc, while it is still up,
+     * and he declines to leave his feet unless it clears his fingertips by
+     * 0.4m. Ask for half that in the painted zones and he goes up as it
+     * arrives, and the jump carries the rest: a man in the air is excused the
+     * ported height gate and reaches the same distance in every direction.
+     */
+    test('a throw into the 15 or 30 band lowers the bar, and nothing else does', () => {
+        const middle = (b) => (b.to === Infinity ? b.from + 100 : (b.from + b.to) / 2);
+        const gate = {};
+        for (const band of ladderBands(SIM.lineInterval)) {
+            gate[band.points] = jumpClearance({ tx: middle(band), ty: 0 });
+        }
+        // Named rather than read back out of the config, which is the whole
+        // claim: THESE two bands, and not the short game or the hail mary.
+        expect(gate[15]).toBeLessThan(gate[5]);
+        expect(gate[30]).toBeLessThan(gate[5]);
+        expect(gate[50]).toBe(gate[5]);
+        expect(gate[0]).toBe(gate[5]);
+        expect(gate[15]).toBe(gate[30]);
+    });
+
+    test('and it is a lower bar, not merely a different one', () => {
+        expect(CFG.pose.jump.zoneClearance).toBeLessThan(CFG.pose.jump.clearance);
+        // ...and still a bar. At or below his own fingertips it stops being a
+        // jump for a ball over his head and becomes how he catches everything.
+        expect(CFG.pose.jump.zoneClearance).toBeGreaterThan(0);
+    });
+
+    /**
+     * THE ZONES ARE NAMED BY THEIR POINTS, so a typo would not fail: it would
+     * silently match no band and quietly restore the old behaviour, which is
+     * the kind of regression a QA round finds a month later.
+     */
+    test('every zone named is a band the ladder actually pays', () => {
+        const paid = ladderBands(SIM.lineInterval).map((b) => b.points);
+        expect(CFG.pose.jump.zones.length).toBeGreaterThan(0);
+        for (const points of CFG.pose.jump.zones) expect(paid).toContain(points);
+    });
+
+    /**
+     * KEYED ON WHERE THE BALL WAS AIMED, NOT ON WHERE THE MAN IS STANDING, and
+     * that is not a detail. A receiver catching a fifty is usually still short
+     * of the target when the ball comes over him, so keying on his own feet
+     * would hand the same help to the hail mary: measured that way the 50 band
+     * went 50% to 61%, which is round seventeen coming undone.
+     */
+    test('a hail mary keeps the hard gate even as it crosses the 30 band', () => {
+        const bands = ladderBands(SIM.lineInterval);
+        const deep = bands.find((b) => b.points === 50);
+        const mid = bands.find((b) => b.points === 30);
+        // The man is standing in the 30 band; the ball is aimed past him.
+        expect(bandAt(mid.from + 1, SIM.lineInterval).points).toBe(30);
+        expect(jumpClearance({ tx: deep.from + 1, ty: 0 })).toBe(CFG.pose.jump.clearance);
+    });
+
+    test('and with no throw on record he uses the ordinary gate', () => {
+        expect(jumpClearance(null)).toBe(CFG.pose.jump.clearance);
+        expect(jumpClearance({})).toBe(CFG.pose.jump.clearance);
     });
 });
