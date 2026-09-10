@@ -992,12 +992,35 @@ const SPIRAL_HZ = 3.2;
 /** The end of one flight, which happens every frame the ball is in somebody's
  *  hands. Kept separate from the per-play reset below so a catch does not wipe
  *  the gather it just started. */
+/**
+ * The end of one flight, which happens every frame the ball is in somebody's
+ * hands.
+ *
+ * IT USED TO THROW THE SPAN AWAY, AND THAT IS WHY NOBODY EVER JUMPED IN A
+ * REPLAY.
+ *
+ * `flight.span` is the throw's start, target and length, cached the first time
+ * the ball is seen in the air, and it exists precisely BECAUSE the recorder
+ * does not store any of it: `frameAt` rebuilds each object from six floats, so
+ * during playback the ball has no idea where it was aimed. The cache is what
+ * lets a replay draw the same parabola the live play drew.
+ *
+ * But this runs on every frame the ball is HELD, which includes every frame of
+ * a replay before the recorded throw. So the cache was reliably wiped a second
+ * or two before the only moment it was needed, `arcHeight` fell back to the
+ * index, and the index is the crude clamped ramp the whole span mechanism was
+ * built to replace: it saturates a third of the way up and cruises flat across
+ * the top. The replay's ball therefore sat ABOVE the jump's band for the whole
+ * flight, and a receiver who had leapt for it live never left his feet again.
+ *
+ * A play has exactly one throw, `throwTo` refuses a second, so the span belongs
+ * to the PLAY and is cleared with the play, below.
+ */
 function endFlight() {
     flight.has = false;
     flight.spin = 0;
     flight.dir = { x: 1, y: 0, z: 0 };
     flight.height = CFG.ball.release;
-    flight.span = null;
     flight.still = 0;
     flight.rest = -1;
     flight.restHeading = null;
@@ -1007,11 +1030,20 @@ function endFlight() {
  *  heading for its first frame. */
 export function resetBallFlight() {
     endFlight();
+    // THE SPAN IS THE PLAY'S, and this is the only place it goes. See above.
+    flight.span = null;
     gather.at = -1;
     resetThrow();
     // And put the quarterback back under centre, or the next formation lines
     // up with a man already wound up to throw.
     resetSnapMotion();
+}
+
+/** The throw this play, or null before one. Exported because it is the piece of
+ *  state a replay depends on and cannot rebuild, which makes it worth being
+ *  able to ask about. */
+export function ballSpan() {
+    return flight.span;
 }
 
 /**

@@ -22,7 +22,7 @@
  * pose moves both. A test that says the upper arm stays outside the ribs keeps
  * failing against any future pose that puts it back through them.
  */
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect, beforeAll } from '@jest/globals';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -41,6 +41,7 @@ const {
     toWorld, carryHold, HEADING_DEADZONE, TURN_RESPONSE,
     syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged,
     beginRelocate, resetRelocate, relocateProgress,
+    syncBall, resetBallFlight, ballSpan,
 } = await import(join(scene, 'view.js'));
 const {
     createPlay, lineUp, snap, tick, isDone, settleArrived, throwTo,
@@ -1132,5 +1133,93 @@ describe('walking to a new formation', () => {
         expect(relocateProgress()).toBe(0);
         resetRelocate();
         expect(relocateProgress()).toBe(-1);
+    });
+});
+
+describe('a replay draws the same arc the play did', () => {
+    /**
+     * QA ROUND THIRTEEN: a receiver jumps for the ball live and never jumps in
+     * the replay of the same catch.
+     *
+     * THE JUMP IS DERIVED FROM THE DRAWN BALL, so a replay that draws a
+     * different ball gets a different answer. `flight.span` is the throw's
+     * start, target and length, cached the first time the ball is seen in the
+     * air, and it exists precisely because the recorder stores none of it:
+     * `frameAt` rebuilds each object from six floats, so in playback the ball
+     * has no idea where it was aimed.
+     *
+     * `endFlight` was clearing that cache, and it runs on every frame the ball
+     * is HELD, which includes every frame of a replay before the recorded
+     * throw. So it was reliably wiped a second before the only moment it was
+     * needed, `arcHeight` fell back to the index, and the index is the clamped
+     * ramp the span exists to replace: it saturates a third of the way up and
+     * cruises flat across the top, well ABOVE the jump's band.
+     *
+     * The property: a throw's span survives the ball being in somebody's hands,
+     * and does not survive the next play.
+     */
+    const flying = () => ({
+        settings: { position: 'ball', benched: false },
+        coords: {
+            x: 300, y: 300, z: 2,
+            startX: 200, startY: 300, targetX: 800, targetY: 300,
+        },
+        state: { xSpeed: 4, ySpeed: 0 },
+    });
+    const holder = (position) => ({
+        settings: { position, team: 0, benched: false },
+        coords: { x: 800, y: 300, z: 1 },
+        state: { xSpeed: 0, ySpeed: 0, hasBall: true },
+    });
+
+    beforeAll(async () => {
+        // THE MIN BUILD, DELIBERATELY. view.js imports `./ball.min.js`, so that
+        // is the module instance holding the mesh it reads: initialising the
+        // source file builds a ball in a different copy of the module and
+        // `syncBall` goes on returning early because it can still see nothing
+        // to draw. Same family as config defaults coming from the min build.
+        const { initBall } = await import(join(scene, 'ball.min.js'));
+        initBall({ add() {} });
+    });
+
+    test('the throw is remembered once the ball is in somebody hands', () => {
+        resetBallFlight();
+        expect(ballSpan()).toBeFalsy();
+
+        // In the air: the span is cached from the ball's own aim.
+        syncBall(flying(), null, 1 / 60);
+        const span = ballSpan();
+        expect(span).toBeTruthy();
+        expect(span.total).toBeGreaterThan(0);
+
+        // Caught, and then carried for a while, which is what a replay spends
+        // its first second or two doing.
+        for (let i = 0; i < 60; i += 1) syncBall(null, holder('wr1'), 1 / 60);
+        expect(ballSpan()).toBe(span);
+    });
+
+    test('and it is forgotten when the next play lines up', () => {
+        resetBallFlight();
+        syncBall(flying(), null, 1 / 60);
+        expect(ballSpan()).toBeTruthy();
+        resetBallFlight();
+        expect(ballSpan()).toBeFalsy();
+    });
+
+    /**
+     * AND WITHOUT IT THE ARC IS A DIFFERENT SHAPE, which is the part that
+     * actually reached QA. Stated against the two heights rather than against
+     * the code: the index fallback is flat across the top, and a ball parked up
+     * there is above anything a receiver can jump to.
+     */
+    test('the fallback arc sits above the jump band, which is why it mattered', () => {
+        const B = CFG.ball;
+        const J = CFG.pose.jump;
+        const reach = (RIG.shoulderY + RIG.upper + RIG.lower) * CFG.figureScale
+            + 0.055 * CFG.figureScale;
+        // The index fallback at its ceiling, which is where it spends most of a
+        // flight once it saturates.
+        const flat = B.release + B.apex;
+        expect(flat).toBeGreaterThan(reach + J.lift);
     });
 });
