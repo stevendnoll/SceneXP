@@ -277,6 +277,39 @@ export class MotionClass {
   }
 
   /**
+   * HOW FAR THIS PARTICULAR BALL WAS THROWN, 0 to 1 across the falloff.
+   *
+   * A SHORT PASS AND A HAIL MARY ARE NOT THE SAME EVENT AND WERE BEING JUDGED
+   * IDENTICALLY. `catchScale` was one number for every throw, so widening it to
+   * stop short passes falling incomplete widened the bomb by exactly as much.
+   * Measured before this: a throw past 26m still completed 52% of the time and
+   * scored fifty on 27% of attempts, which makes the deep ball the obvious play
+   * and turns a game meant to be WATCHED into one answer repeated ten times.
+   *
+   * The ramp is one number used twice, which is the whole idea: the further it
+   * is thrown, the less of the field the receiver covers and the more the
+   * defender does. Below `catchNear` nothing changes at all, so the short game
+   * this was widened for is untouched.
+   */
+  throwStretch(obj = {}) {
+    const c = obj.coords || {};
+    if (c.startX === undefined || c.targetX === undefined) return 0;
+    const near = this.settings && this.settings.catchNear;
+    const far = this.settings && this.settings.catchFar;
+    if (!(far > near)) return 0;
+    const len = Math.hypot(c.targetX - c.startX, c.targetY - c.startY);
+    const t = (len - near) / (far - near);
+    return t < 0 ? 0 : (t > 1 ? 1 : t);
+  }
+
+  /** What the receiver's box is multiplied by at full stretch. 1 is no
+   *  falloff, which is what a caller that says nothing gets. */
+  catchFarScale() {
+    const s = this.settings && this.settings.catchFarScale;
+    return typeof s === 'number' && s > 0 ? s : 1;
+  }
+
+  /**
    * ...and how much of that a DEFENDER gets, as a fraction of it.
    *
    * A separate number because the two are not the same question. Widening the
@@ -324,8 +357,11 @@ export class MotionClass {
     const caughtByPositionList = [];
     // The half-extents below are the 2D game's, unedited. The scale is applied
     // once where the boxes are built, exactly as `checkCollisions` does it.
-    const k = this.catchScale();
-    const share = this.interceptShare();
+    // THE SAME RAMP DOES BOTH: the receiver shrinks and the defender grows.
+    const stretch = this.throwStretch(obj);
+    const k = this.catchScale() * (1 + (this.catchFarScale() - 1) * stretch);
+    const base = this.interceptShare();
+    const share = base + (1 - base) * stretch;
     const set1 = {
       position: obj.settings.position,
       team: obj.settings.team,
@@ -354,7 +390,12 @@ export class MotionClass {
          * covers the same distance in every direction, which is what the view
          * measured before it let him jump.
          */
-        const air = object.state && object.state.airborne ? this.airborneReach() : 0;
+        // A LEAPING CATCH FALLS AWAY WITH THE THROW TOO. A receiver going up
+        // for a bomb and just missing it is the picture of a failed hail mary,
+        // and a guaranteed one would put the deep ball straight back where it
+        // was.
+        const air = object.state && object.state.airborne
+            ? this.airborneReach() * (1 + (this.catchFarScale() - 1) * stretch) : 0;
         const set2 = air > 0 ? {
           position: object.settings.position,
           team: object.settings.team,

@@ -1321,3 +1321,90 @@ describe('a man in the air can actually catch it', () => {
             .toBe(false);
     });
 });
+
+describe('a short pass and a hail mary are not the same event', () => {
+    /**
+     * `catchScale` was one number for every throw, so widening it to stop short
+     * passes falling incomplete widened the deep ball by exactly as much.
+     * Measured by throw length before this: 87% caught inside 8m, and still
+     * 52% past 26m, with a bomb scoring fifty on 27% of attempts.
+     *
+     * That makes the deep ball the obvious play, and this game is meant to be
+     * WATCHED: the pleasure is a short pass that turns into a run nobody can
+     * predict, not one answer repeated ten times.
+     */
+    const silent = { catch() {}, collide() {}, incomplete() {} };
+    const motion = () => new MotionClass(formationSettings(), {}, silent);
+    /** A ball thrown `metres`, mid-flight. */
+    const throwOf = (metres) => ({
+        coords: {
+            x: 300, y: 300, z: 1,
+            startX: 200, startY: 300,
+            targetX: 200 + metres / UNITS_TO_METRES, targetY: 300,
+        },
+    });
+
+    test('a short throw is judged exactly as it always was', () => {
+        const m = motion();
+        expect(m.throwStretch(throwOf(1))).toBe(0);
+        expect(m.throwStretch(throwOf(8))).toBe(0);
+        // Right up to where the falloff is declared to begin.
+        expect(m.throwStretch(throwOf(formationSettings().catchNear * UNITS_TO_METRES)))
+            .toBeCloseTo(0, 6);
+    });
+
+    test('and a long one is judged as hard as it gets', () => {
+        const m = motion();
+        expect(m.throwStretch(throwOf(60))).toBe(1);
+        expect(m.catchFarScale()).toBeLessThan(1);
+        expect(m.catchFarScale()).toBeGreaterThan(0);
+    });
+
+    test('the ramp between them only ever goes one way', () => {
+        const m = motion();
+        let last = -1;
+        for (let metres = 0; metres <= 45; metres += 1.5) {
+            const t = m.throwStretch(throwOf(metres));
+            expect(t).toBeGreaterThanOrEqual(last);
+            last = t;
+        }
+    });
+
+    /**
+     * AND THE SAME RAMP MOVES BOTH SIDES, which is the whole idea: the further
+     * it is thrown, the less of the field the receiver covers and the more the
+     * defender does, because a ball hanging in the air that long is one a
+     * defender has time to get under.
+     */
+    test('the receiver shrinks and the defender grows, together', () => {
+        const s = formationSettings();
+        const stretch = 1;
+        const nearBox = s.catchScale;
+        const farBox = s.catchScale * (1 + (s.catchFarScale - 1) * stretch);
+        expect(farBox).toBeLessThan(nearBox);
+
+        const nearShare = s.interceptShare;
+        const farShare = nearShare + (1 - nearShare) * stretch;
+        expect(farShare).toBeGreaterThan(nearShare);
+        expect(farShare).toBeCloseTo(1, 6);
+    });
+
+    /**
+     * A BALL WITH NO RECORDED AIM IS TREATED AS SHORT, which is the safe way
+     * round. `replay.frameAt` rebuilds objects from six floats and carries no
+     * target, so a playback frame that reached here would otherwise be judged
+     * as the hardest throw in the game.
+     */
+    test('a ball that does not know where it was aimed is not penalised', () => {
+        const m = motion();
+        expect(m.throwStretch({ coords: { x: 300, y: 300 } })).toBe(0);
+        expect(m.throwStretch({})).toBe(0);
+        expect(m.throwStretch()).toBe(0);
+    });
+
+    test('a MotionClass told nothing has no falloff at all', () => {
+        const bare = new MotionClass({}, {}, silent);
+        expect(bare.throwStretch(throwOf(60))).toBe(0);
+        expect(bare.catchFarScale()).toBe(1);
+    });
+});

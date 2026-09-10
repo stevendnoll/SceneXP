@@ -217,6 +217,34 @@ const INTERCEPT_SHARE = 0.40;
  */
 const JUMP_RANGE = 1.5;
 
+/**
+ * A SHORT PASS AND A HAIL MARY ARE NOT THE SAME EVENT.
+ *
+ * `CATCH_SCALE` was one number for every throw, so widening it to stop short
+ * passes falling incomplete widened the deep ball by exactly as much. Measured
+ * by throw length before this:
+ *
+ *     0-8m     87% caught,  1% intercepted, 16% scored fifty
+ *     8-14m    81%,         3%,              5%
+ *     14-20m   74%,         8%,              7%
+ *     20-26m   74%,        14%,             11%
+ *     26m+     52%,        21%,             27%
+ *
+ * A bomb completing over half the time and scoring fifty on a quarter of
+ * attempts makes it the obvious play, and this game is meant to be WATCHED: the
+ * pleasure is a short pass that turns into a run nobody can predict, not one
+ * answer repeated ten times.
+ *
+ * So the catch now falls off with the length of the throw. Below `near`
+ * nothing changes, which leaves the short game exactly where it was tuned. From
+ * there the receiver's box shrinks toward `farScale` and, on the same ramp, the
+ * defender's share of it rises to a full share, because a ball hanging in the
+ * air that long is one a defender has time to get under.
+ */
+const CATCH_NEAR = 14;     // metres: below this a throw is unchanged
+const CATCH_FAR = 30;      // ...and at this it is as hard as it gets
+const CATCH_FAR_SCALE = 0.42;   // what the receiver's box is multiplied by there
+
 const SIM = {
     lineInterval: 200,       // field units per interval. See above.
     segments: FIELD.segments,
@@ -367,6 +395,9 @@ function formationSettings() {
         // distance the view required before it let him leave the ground. See
         // `pose.jump.range` and the note on `airborneReach` in motion.js.
         airborneReach: JUMP_RANGE / UNITS_TO_METRES,
+        catchNear: CATCH_NEAR / UNITS_TO_METRES,
+        catchFar: CATCH_FAR / UNITS_TO_METRES,
+        catchFarScale: CATCH_FAR_SCALE,
     };
 }
 
