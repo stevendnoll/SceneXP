@@ -1487,6 +1487,32 @@ const EXESNOHS_CONFIG = {
             /** Seconds for the ball to settle from the catch into the tuck. A
              *  ball that teleports to the hip is a ball nobody caught. */
             gather: 0.26,
+            /**
+             * HOW FAR OFF HIS RUNNING LINE HE WILL TURN TO GO FOR IT, in
+             * radians, and it only applies WHILE HE IS RUNNING.
+             *
+             * A receiver tracking a ball over his shoulder turns his shoulders
+             * to it and keeps running the line he was running. Turned the whole
+             * way he would be drawn running backwards at six metres a second,
+             * because the stride follows the body. 120 degrees is a man looking
+             * hard over his shoulder, which is the picture, and it leaves the
+             * ball inside `armLimit` so his hands still get to it.
+             *
+             * A man who has STOPPED has no stride to protect and turns all the
+             * way round, which is what a receiver waiting on a ball does.
+             */
+            turn: 2.09,
+            /**
+             * ...and how far round from his own forward an arm will go, which
+             * is a fact about a shoulder rather than a tuning.
+             *
+             * QA: a ball passing behind a player had both arms sticking out
+             * BACKWARDS through his own back. The solver was doing as it was
+             * told: `reachAt` is the ball in his local space and nothing said
+             * the ball could be behind him. 100 degrees is past square and
+             * short of the shoulder blade.
+             */
+            armLimit: 1.75,
         },
 
         /**

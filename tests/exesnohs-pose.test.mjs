@@ -41,7 +41,7 @@ const {
     toWorld, carryHold, HEADING_DEADZONE, TURN_RESPONSE,
     syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged,
     beginRelocate, resetRelocate, relocateProgress,
-    syncBall, resetBallFlight, ballSpan,
+    syncBall, resetBallFlight, ballSpan, turnFor, frontOf,
 } = await import(join(scene, 'view.js'));
 const {
     createPlay, lineUp, snap, tick, isDone, settleArrived, throwTo,
@@ -1432,5 +1432,101 @@ describe('the view tells the simulation who is in the air', () => {
         expect(span.tx).toBe(800);
         expect(span.ty).toBe(420);
         resetBallFlight();
+    });
+});
+
+describe('he turns to the ball rather than reaching out of his own back', () => {
+    /**
+     * QA ROUND NINETEEN. A ball passing close behind a player put both his arms
+     * straight out BACKWARDS, through his own back, and two short recordings of
+     * it made the shape unmistakable.
+     *
+     * Nothing was broken. `reachAt` is the ball expressed in the figure's own
+     * space, arm.js solves for whatever target it is handed, and no part of
+     * that chain had ever been told that the ball could be behind him. So the
+     * fix is two rules, and they are separate because they answer different
+     * questions: WHICH WAY IS HE FACING, and WHERE WILL AN ARM GO.
+     */
+    const deg = (r) => (r * 180) / Math.PI;
+    const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+    test('a runner turns toward it and no further than his stride allows', () => {
+        // Running straight down the field, ball dead behind him.
+        expect(deg(turnFor(Math.PI, 0))).toBeCloseTo(deg(CFG.pose.catching.turn), 6);
+        expect(deg(turnFor(-Math.PI, 0))).toBeCloseTo(-deg(CFG.pose.catching.turn), 6);
+        // ...and a ball he could already see does not move him off his line by
+        // one degree more than it takes to look at it.
+        expect(turnFor(0.4, 0)).toBeCloseTo(0.4, 6);
+        expect(turnFor(-1.2, 0)).toBeCloseTo(-1.2, 6);
+    });
+
+    test('the cap is measured against his line, not against the field', () => {
+        // The same ball, the same man, running the other way: the cap has to
+        // travel with him or it is a rule about the stadium.
+        // Dead behind him, so which shoulder he looks over is a coin toss and
+        // only the size of the turn is a claim worth making.
+        const running = 2.5;
+        const want = wrap(running + Math.PI);
+        expect(Math.abs(wrap(turnFor(want, running) - running)))
+            .toBeCloseTo(CFG.pose.catching.turn, 6);
+        // Off one shoulder, where the side is not a coin toss at all.
+        const off = wrap(running + 2.6);
+        expect(wrap(turnFor(off, running) - running))
+            .toBeCloseTo(CFG.pose.catching.turn, 6);
+    });
+
+    /**
+     * A MAN WHO HAS STOPPED HAS NO STRIDE TO PROTECT. The cap exists so a
+     * receiver is not drawn sprinting backwards down the field, which is not a
+     * risk for somebody standing still waiting on the ball, and turning him
+     * only part of the way would leave him watching it over his shoulder with
+     * nowhere to go.
+     */
+    test('a man standing still turns the whole way round', () => {
+        expect(turnFor(Math.PI, null)).toBe(Math.PI);
+        expect(turnFor(-2.9, null)).toBe(-2.9);
+    });
+
+    test('an arm does not go out the back of the shoulder it hangs from', () => {
+        const behind = { x: 0.1, y: 1.9, z: -0.62 };
+        const held = frontOf(behind);
+        // Stated as a fact about a shoulder rather than as whatever the config
+        // happens to say: a hand goes past square and it does not go round to
+        // the shoulder blade. Reading the limit back out of the config here
+        // would make the test agree with any number somebody put in it.
+        expect(Math.abs(Math.atan2(held.x, held.z))).toBeLessThan(2.0);
+        expect(Math.abs(Math.atan2(held.x, held.z)))
+            .toBeLessThanOrEqual(CFG.pose.catching.armLimit + 1e-9);
+        // AND IT KEEPS ITS DISTANCE AND ITS HEIGHT. Clamping the coordinate
+        // instead would drag the hand in toward the chest as the ball went
+        // further behind, so a receiver would visibly lose interest exactly as
+        // it arrived. Swung round the limit, the arm stays at full stretch.
+        expect(Math.hypot(held.x, held.z))
+            .toBeCloseTo(Math.hypot(behind.x, behind.z), 9);
+        expect(held.y).toBe(behind.y);
+    });
+
+    test('and a ball in front of him is left exactly where it is', () => {
+        const front = { x: -0.24, y: 2.1, z: 0.45 };
+        const held = frontOf(front);
+        expect(held.x).toBe(front.x);
+        expect(held.y).toBe(front.y);
+        expect(held.z).toBe(front.z);
+    });
+
+    /**
+     * THE TWO NUMBERS HAVE TO AGREE WITH EACH OTHER, and this is the assertion
+     * worth having. Once the turn has finished, the ball is inside the arm's
+     * own limit for every bearing there is, so the clamp above is only ever
+     * catching the half second he is still turning. Lower the turn without
+     * raising the arm limit and a receiver goes back to reaching sideways at a
+     * ball he has already turned to face.
+     */
+    test('a man who has finished turning can always reach it', () => {
+        for (let b = -180; b <= 180; b += 5) {
+            const want = (b * Math.PI) / 180;
+            const left = Math.abs(wrap(want - turnFor(want, 0)));
+            expect(left).toBeLessThanOrEqual(CFG.pose.catching.armLimit + 1e-9);
+        }
     });
 });

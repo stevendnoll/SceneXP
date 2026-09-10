@@ -446,6 +446,60 @@ function reachersFor(objects) {
 }
 
 /**
+ * THE ARM STAYS IN FRONT OF THE SHOULDER IT HANGS FROM.
+ *
+ * QA: a ball passing close behind a player put both his arms straight out
+ * BACKWARDS, through his own back. Nothing was broken. `reachAt` is the ball
+ * expressed in the figure's own space, arm.js solves for the target it is
+ * handed, and no part of that chain had ever been told that a shoulder does not
+ * open past square.
+ *
+ * The cure is a limit on the target's BEARING and not on its coordinates. A
+ * clamped `z` would drag the hand in toward the chest as the ball went further
+ * behind, so a receiver would appear to lose interest exactly as the ball got
+ * close. Swinging the target round the limit instead keeps its distance and its
+ * height, so the arm goes out to the side and stays at full stretch, which is
+ * the trailing-arm reach it should have been all along.
+ *
+ * Mostly it does not bind: `syncFigures` turns the man toward the ball first,
+ * and this catches the half second he is still turning and the man who is
+ * pinned by something else.
+ */
+/**
+ * HOW FAR ROUND HE WILL ACTUALLY TURN TO GO FOR IT.
+ *
+ * `want` is where the ball is and `running` is the line he is running, or null
+ * for a man who has stopped getting anywhere.
+ *
+ * A receiver tracking a ball over his shoulder turns to it and KEEPS RUNNING
+ * THE LINE HE WAS RUNNING. Everything about how a figure looks while moving
+ * hangs off its yaw, so turning him the whole way round would draw him
+ * sprinting backwards down the field at six metres a second. Capping the turn
+ * against his running line leaves him looking hard over one shoulder with his
+ * legs still carrying him downfield, and it costs the simulation nothing:
+ * his path was never this file's to change.
+ *
+ * A MAN WHO HAS STOPPED TURNS ALL THE WAY ROUND, because the cap exists to
+ * protect a stride and he does not have one. That is a receiver at the end of
+ * his route waiting on the ball, and it should look like one.
+ */
+export function turnFor(want, running) {
+    if (want === null || running === null) return want;
+    const limit = CFG.pose.catching.turn;
+    const off = wrapAngle(want - running);
+    return running + (off < -limit ? -limit : (off > limit ? limit : off));
+}
+
+export function frontOf(target) {
+    const limit = CFG.pose.catching.armLimit;
+    const bearing = Math.atan2(target.x, target.z);
+    if (Math.abs(bearing) <= limit) return target;
+    const held = bearing < 0 ? -limit : limit;
+    const out = Math.hypot(target.x, target.z);
+    return { x: out * Math.sin(held), y: target.y, z: out * Math.cos(held) };
+}
+
+/**
  * THE TACKLE, WHICH IS AN EVENT AND HAS ITS OWN CLOCK.
  *
  * Started by main.js at the whistle rather than inferred from a distance,
@@ -871,19 +925,35 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         const downfield = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
         const surveying = carrier === obj && carryFor(obj, carrier) === 'throw';
         const engagement = engaged.get(obj.settings.position) || null;
+        // A MAN WITH HIS HANDS ON SOMEBODY IS NOT CATCHING A PASS. The ball
+        // leaves at chest height over a line of men who are 3.85m tall, so it
+        // passes inside a defensive lineman's `defenderRange` on most throws,
+        // and without this the reach beat the block in both the pose and the
+        // facing: two men locked together sprang apart to look up at it.
+        const reach = engagement ? 0 : (reaching.get(obj.settings.position) || 0);
+
+        // A MAN GOING FOR THE BALL IS LOOKING AT THE BALL, and it beats every
+        // other reason to be facing somewhere: his coverage, his block, and the
+        // way his own feet happen to be pointing. Read from the DRAWN flight
+        // for the same reason `reachersFor` is, which is that the arc the
+        // visitor can see is the only one worth turning toward.
+        const going = (!opts.presnap && !surveying && reach > 0 && flight.has)
+            ? { x: flight.x, z: flight.z } : null;
         const look = (opts.presnap || surveying)
             ? null
-            : lookTarget(obj, objects, carrier, p, standing,
+            : going || lookTarget(obj, objects, carrier, p, standing,
                 engagement ? engagement.against : '');
-        const want = (opts.presnap && relocating) ? targetFacing(stepX, stepZ, mps)
+        // A MAN GOING NOWHERE KEEPS THE HEADING HE HAD. Passing a zeroed `mps`
+        // here is what stops the spin: the deadzone was never crossed by a slow
+        // player, it was crossed by a fast one running in a circle.
+        const running = targetFacing(stepX, stepZ, mps);
+        let want = (opts.presnap && relocating) ? running
             : opts.presnap ? downfield
             : (surveying ? Math.PI / 2
-                : (look ? Math.atan2(look.x - p.x, look.z - p.z)
-                    // A MAN GOING NOWHERE KEEPS THE HEADING HE HAD. Passing a
-                    // zeroed `mps` here is what stops the spin: the deadzone
-                    // was never crossed by a slow player, it was crossed by a
-                    // fast one running in a circle.
-                    : targetFacing(stepX, stepZ, mps)));
+                : (look ? Math.atan2(look.x - p.x, look.z - p.z) : running));
+
+        // ...BUT HE DOES NOT STOP RUNNING TO DO IT. See `turnFor`.
+        if (going) want = turnFor(want, running);
         if (want !== null) figure.userData.facing = want;
         else if (figure.userData.facing === undefined) {
             figure.userData.facing = downfield;
@@ -933,10 +1003,11 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // The hands go to the ball, as a point in this figure's own space. Done
         // here rather than in roster.js because it is the one pose that needs
         // to know where the figure is standing and which way it is facing.
-        const reach = reaching.get(obj.settings.position) || 0;
+        // Taken AFTER the yaw above has been eased, so the target follows him
+        // round as he turns, and held in front of his shoulders by `frontOf`.
         const reachAt = reach > 0
-            ? toRigSpace({ x: flight.x, y: flight.y, z: flight.z },
-                figure.position, figure.rotation.y, CFG.figureScale)
+            ? frontOf(toRigSpace({ x: flight.x, y: flight.y, z: flight.z },
+                figure.position, figure.rotation.y, CFG.figureScale))
             : null;
 
         // ASKING FOR IT. A receiver who has stopped getting anywhere while the
