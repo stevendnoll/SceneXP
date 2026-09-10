@@ -62,6 +62,11 @@ function throwButton(position, letter, ink, onClick) {
     b.style.setProperty('--throw-ink', ink);
     b.setAttribute('aria-label', `Throw to receiver ${letter}`);
     b.dataset.receiver = position;
+    // The letter IS the key, which is why the throw buttons need no hint: the
+    // disc on the grass, the route on the diagram and the keystroke are one
+    // letter rather than three things to remember.
+    b.dataset.letter = letter;
+    b.setAttribute('aria-keyshortcuts', letter);
 
     const dot = document.createElement('span');
     dot.className = 'throw-dot';
@@ -183,8 +188,91 @@ export function showSnap() {
     const snap = button('Snap the ball', 'hud-btn hud-btn-primary',
         () => handlers.onSnap && handlers.onSnap());
     snap.id = 'snap-btn';
+    bindKeys(snap, SNAP_KEYS);
     box.appendChild(snap);
     snap.focus();
+}
+
+/**
+ * THE KEYBOARD, WHICH DRIVES THE BUTTONS RATHER THAN THE GAME.
+ *
+ * Every binding here finds the control that is actually on screen and clicks
+ * it. That is the whole design and it is worth stating: a key that called
+ * `handlers.onThrow` directly would go on working after the throw row had been
+ * cleared, would fire for a receiver who is not in this formation, and would
+ * need its own copy of every rule about when a thing is pressable. Clicking the
+ * button inherits all of that for free and can never disagree with what the
+ * visitor can see.
+ *
+ * `Q` is the quarterback's own letter, which is painted on the grass in front
+ * of him and is what a visitor taps to snap it. `S` and the space bar are the
+ * two anybody would try. A, B, C and D are the receivers' letters, from the
+ * same table the discs and the buttons read.
+ */
+const SNAP_KEYS = [' ', 'S', 'Q'];
+const KEEP_KEY = 'K';
+
+/** Tag a button with the keys that press it, for the handler and for anything
+ *  reading the page out loud. */
+function bindKeys(node, keys) {
+    node.dataset.keys = keys.join('');
+    // The space bar has a name rather than a character in this attribute.
+    node.setAttribute('aria-keyshortcuts',
+        keys.map((k) => (k === ' ' ? 'Space' : k)).join(' '));
+    return node;
+}
+
+/**
+ * Which on-screen control this key presses, or nothing.
+ *
+ * EXPORTED AND PURE, because the interesting part is the decision and the
+ * decision is the part that can be wrong. It takes the event's own fields
+ * rather than an event, so a test can ask about a modifier or a text field
+ * without building a DOM.
+ */
+export function keyAction(key, { inField = false, modified = false } = {}) {
+    if (inField || modified || !key) return '';
+    const up = key.length === 1 ? key.toUpperCase() : key;
+    if (SNAP_KEYS.includes(up)) return 'snap';
+    if (up === KEEP_KEY) return 'keep';
+    if (/^[A-D]$/.test(up)) return up;
+    return '';
+}
+
+/**
+ * Wire the document up.
+ *
+ * A SIGNAL, ALWAYS, so the listener dies with the scene. Every other
+ * document-level handler on this page takes one and a bare one outlives
+ * whatever installed it.
+ */
+export function initKeys(signal) {
+    if (typeof document === 'undefined' || !document.addEventListener) return;
+    document.addEventListener('keydown', (event) => {
+        const target = event.target || {};
+        const tag = (target.tagName || '').toLowerCase();
+        const want = keyAction(event.key, {
+            inField: tag === 'input' || tag === 'textarea' || tag === 'select'
+                || target.isContentEditable === true,
+            modified: event.metaKey || event.ctrlKey || event.altKey,
+        });
+        if (!want) return;
+
+        const box = el('hud-actions');
+        if (!box) return;
+        // ONLY WHAT IS ON SCREEN. The row is emptied between phases, so this
+        // finds nothing before the snap is offered and nothing after the ball
+        // is in the air, which is exactly right.
+        const wanted = want === 'snap' || want === 'keep'
+            ? box.querySelector(`[data-keys*="${want === 'snap' ? 'S' : KEEP_KEY}"]`)
+            : box.querySelector(`[data-letter="${want}"]`);
+        if (!wanted) return;
+
+        // The space bar scrolls a page and Enter is the browser's own way of
+        // pressing a focused button, so this one is ours to take.
+        event.preventDefault();
+        wanted.click();
+    }, signal ? { signal } : undefined);
 }
 
 /** Live: throw to any eligible receiver, or keep it. */
@@ -198,9 +286,9 @@ export function showInPlay(receivers) {
             () => handlers.onThrow && handlers.onThrow(pos)
         ));
     }
-    box.appendChild(button('Keep it', 'hud-btn hud-btn-primary',
+    box.appendChild(bindKeys(button('Keep it', 'hud-btn hud-btn-primary',
         () => handlers.onRun && handlers.onRun(),
-        'Keep the ball and run'));
+        'Keep the ball and run'), [KEEP_KEY]));
     const first = box.querySelector('.hud-btn');
     if (first) first.focus();
 }

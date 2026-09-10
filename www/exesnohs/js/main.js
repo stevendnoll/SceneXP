@@ -26,7 +26,7 @@ import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments,
     beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
 } from './view.min.js';
-import { takedownLength, tacklerFor } from './takedown.min.js';
+import { takedownLength, tacklerFor, contactFraction } from './takedown.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome,
@@ -35,6 +35,7 @@ import { readGame, saveGame, clearGame } from './progress.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
+    initKeys,
 } from './hud.min.js';
 import { showSummary, hideSummary } from './summary.min.js';
 import {
@@ -287,6 +288,8 @@ function openPlaybook() {
 /** The visitor chose. Line both teams up and wait for them to snap it.
  *  An empty `defense` is the library's own signal to pick one at random. */
 function startPlay(offensive, defense) {
+    // Choosing a play off the playbook is the click the `snap` sample is for.
+    uiClick();
     lineUp(cycle.play, offensive, defense || '');
     resetBallFlight();
     // Coverage assignments are cached for the replay, so a new line-up has to
@@ -346,7 +349,7 @@ function beginSettle() {
     if (!tackler) return;
 
     cycle.tackle = { tackler, carrier: carrier.settings.position };
-    beginTakedown(tackler, carrier.settings.position);
+    startTakedown(cycle.play.game.objects, tackler, carrier.settings.position);
     // Long enough to land the hit and let him lie there for a beat. A card
     // opening over a man in mid-air is worse than no animation at all.
     cycle.settleFor = Math.max(HOLD_SETTLE, takedownLength() + 0.2);
@@ -355,11 +358,18 @@ function beginSettle() {
 /** Snap it. From here the routes run themselves and the visitor has one
  *  decision left: who gets the ball. */
 function onSnap() {
-    // THE FIRST REAL GESTURE IN THE GAME. Browsers will not start audio without
-    // one, so this is where the library wakes up and the iOS keep-alive begins.
     unlockAudio();
+    /**
+     * THE HIKE, AND NOTHING ELSE.
+     *
+     * A `snap` sample used to play 120ms behind it, which reads as sensible
+     * right up until you know what that sample is FOR. In the 2D game it is
+     * the UI CLICK: the sound of choosing a play off the playbook. It is a
+     * finger on a control, not a ball leaving a centre's hands, and putting it
+     * under the hike gave the one moment the game has a mouse click on top of
+     * it. It now plays where it belongs, on the chrome (see `uiClick`).
+     */
     playSound('hike');
-    playSound('snap', 120);
 
     snap(cycle.play);
     // AND HE BRINGS IT BACK. QA item 1: up to here he has been waiting under
@@ -397,7 +407,14 @@ function finishPlay() {
     if (result.points === 50 || result.result === 'interception' || result.result === 'sack') {
         playSound('whistle', 120);
     }
-    if (result.result === 'sack' || result.result === 'run' || result.result === 'catch') {
+    // THE GRUNT BELONGS TO THE HIT, NOT TO THE CARD. It used to play here, and
+    // `finishPlay` runs after the whole settle hold, so a play that ended in a
+    // tackle sounded its own contact a second and a bit late: the carrier was
+    // already flat on the grass. It is now scheduled from `startTakedown` at
+    // the frame the two bodies meet. This is the case with no takedown to hang
+    // it on, which is a man who ran out of bounds or over the line.
+    if (!cycle.tackle.tackler
+        && (result.result === 'sack' || result.result === 'run' || result.result === 'catch')) {
         playSound('grunt');
     }
     cycle.lastOutcome = result;
@@ -439,6 +456,7 @@ function presentResult() {
  *  objects from the buffer, so a replay can never disturb what it recorded. */
 function startReplay() {
     if (isEmpty()) { presentResult(); return; }
+    uiClick();
     hideResult();
     // THE HUD STAYS UP THROUGH A REPLAY, carrying one button. It used to be
     // hidden for the duration, so a replay that started on its own (D36 plays
@@ -464,6 +482,7 @@ function startReplay() {
 /** Out of a replay, whether it was asked for or started on its own. */
 function onSkipReplay() {
     if (cycle.phase !== 'replay') return;
+    uiClick();
     cycle.replayHold = 0;
     showHud(true);
     clearActions();
@@ -471,6 +490,7 @@ function onSkipReplay() {
 }
 
 function onNext() {
+    uiClick();
     hideResult();
     if (cycle.playNumber >= CFG.rules.playsPerGame) {
         showHud(false);
@@ -528,8 +548,56 @@ function resumeGame(saved) {
  * a game now saved across reloads an accidental press costs something real.
  */
 function onStartOver() {
+    uiClick();
     clearGame();
     startGame();
+}
+
+/**
+ * THE SOUND OF PRESSING SOMETHING, which is what the `snap` sample always was.
+ *
+ * The 2D game plays it when a play is chosen off the playbook, and this scene
+ * had it under the hike instead. It belongs on the CHROME: the playbook, the
+ * result card, the replay controls. Deliberately NOT on the three in-play
+ * controls, because a snap, a throw and a keeper each have a sound of their own
+ * and a click on top of them is a click on top of the game.
+ *
+ * It unlocks the library on the way through, so the first press a visitor makes
+ * is also the gesture the browser wants before any audio at all.
+ */
+function uiClick() {
+    unlockAudio();
+    playSound('snap');
+}
+
+/**
+ * START A TACKLE, AND SOUND IT ON THE FRAME THE TWO OF THEM MEET.
+ *
+ * THE GRUNT WAS A SECOND LATE AND THIS IS WHY. It used to play from
+ * `finishPlay`, which runs after the entire settle hold, so a play that ended
+ * in a tackle sounded its own contact once the carrier was already flat on the
+ * grass. QA heard exactly that.
+ *
+ * Contact is not the start of the dive either: the tackler crosses the gap on
+ * an easing curve, so `takedown.contactFraction` solves the moment the closing
+ * gap first reaches a body width and that is what the sample is delayed by.
+ * `play` takes milliseconds, and the whole thing is a tenth of a second or two,
+ * which is the difference between a hit and a sound effect.
+ *
+ * ONE FUNCTION FOR BOTH CALLERS, because the live whistle and the end of a
+ * replay start the same tackle and had no reason to disagree about it.
+ */
+function startTakedown(objects, tacklerPos, carrierPos) {
+    if (!beginTakedown(tacklerPos, carrierPos)) return false;
+    const at = (position) => {
+        const o = objects.find((x) => x.settings.position === position);
+        return o ? simToWorld(o.coords.x, o.coords.y, 0) : null;
+    };
+    const from = at(tacklerPos);
+    const to = at(carrierPos);
+    const gap = from && to ? Math.hypot(to.x - from.x, to.z - from.z) : 0;
+    playSound('grunt', contactFraction(gap) * CFG.pose.takedown.dive * 1000);
+    return true;
 }
 
 /** Advance the play cycle. Kept apart from rendering so the whole thing is one
@@ -562,7 +630,7 @@ function stepCycle(delta) {
             // started here from the pair decided at the whistle. Positions,
             // not objects, precisely so this works on a rebuilt frame.
             if (cycle.tackle.tackler && takedownClock() < 0) {
-                beginTakedown(cycle.tackle.tackler, cycle.tackle.carrier);
+                startTakedown(objs, cycle.tackle.tackler, cycle.tackle.carrier);
             }
             // Hold the last frame for a beat before the card, so the replay
             // ends on a composition rather than cutting away mid-motion.
@@ -957,6 +1025,10 @@ async function init() {
     const { signal } = cleanup;
     installCardFocusTrap({ signal });
     installCardScrollReset({ signal });
+    // A, B, C, D throw, Q, S or the space bar snaps, K keeps it. They press the
+    // buttons that are on screen rather than calling the game, so they can
+    // never offer something the visitor cannot see (see hud.js).
+    initKeys(signal);
 
     window.addEventListener('resize', onResize, { signal });
     // Tapping a player is the 2D game's own control. The HUD buttons remain
@@ -973,7 +1045,15 @@ async function init() {
     // opens on play five, and one entry point is simpler to reason about than
     // two. The card just changes what its button says.
     const saved = readGame();
-    showWelcome(saved ? () => resumeGame(saved) : startGame, saved, startGame);
+    // THE FIRST PRESS IN THE GAME, and the gesture every browser wants before
+    // it will play anything at all. Wrapped so the welcome card sounds like the
+    // rest of the chrome and so the library is awake by the playbook.
+    const takeTheField = (go) => () => { uiClick(); go(); };
+    showWelcome(
+        takeTheField(saved ? () => resumeGame(saved) : startGame),
+        saved,
+        takeTheField(startGame)
+    );
 
     state.isLoaded = true;
     state.isRunning = true;

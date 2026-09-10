@@ -442,16 +442,36 @@ export function separate(play, minSeparation, passes = 2) {
 export function keepInbounds(play) {
     const height = play.playState.state.measurements.height;
     if (!(height > 0)) return 0;
+    /**
+     * THE WALL HOLDS A BODY, NOT A COORDINATE, AND IT DID NOT BEFORE.
+     *
+     * The clamp works exactly as written: measured over 17 plays against three
+     * defences, nobody's centre ever crosses the touchline and plenty of them
+     * reach it to the centimetre. That is the fault. A figure is 1.45m across
+     * at `figureScale`, so a man pinned to the paint has three quarters of a
+     * metre of himself, and all of his shadow, out past the line, and a
+     * quarterback backpedalling into it parks there with half his body over the
+     * side. QA reported it as the quarterback escaping the boundary, and he had
+     * not: the boundary simply never knew how wide he was.
+     *
+     * Same lesson as `collisionScale` and the catch box (see config): a number
+     * tuned against a letterform on a canvas is not a number about a person.
+     * Half a shoulder width, in field units, from the one factor that says how
+     * big a figure is drawn.
+     */
+    const body = (SIM.bodyWidth * CFG.figureScale / 2) / UNITS_TO_METRES;
+    const lo = Math.min(body, height / 2);
+    const hi = Math.max(height - body, height / 2);
     let moved = 0;
     for (const obj of play.game.objects) {
         if (!obj.settings || obj.settings.benched) continue;
         if (obj.settings.position === 'ball' || obj.settings.type === 'ball') continue;
-        if (obj.coords.y < 0) {
-            obj.coords.y = 0;
+        if (obj.coords.y < lo) {
+            obj.coords.y = lo;
             if (obj.state) obj.state.ySpeed = 0;
             moved += 1;
-        } else if (obj.coords.y > height) {
-            obj.coords.y = height;
+        } else if (obj.coords.y > hi) {
+            obj.coords.y = hi;
             if (obj.state) obj.state.ySpeed = 0;
             moved += 1;
         }

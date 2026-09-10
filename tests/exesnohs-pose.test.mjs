@@ -39,16 +39,17 @@ const { solveArm, handAt, RIG } = await import(join(scene, 'arm.js'));
 const { takedownAt, takedownLength, contactFraction } = await import(join(scene, 'takedown.js'));
 const {
     toWorld, carryHold, HEADING_DEADZONE, TURN_RESPONSE,
-    syncFigures, beginSnapMotion, resetThrow, throwClock,
+    syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged,
 } = await import(join(scene, 'view.js'));
 const {
     createPlay, lineUp, snap, tick, isDone, settleArrived, throwTo,
-    eligibleReceivers, outcome, OFFENSIVE_PLAYS,
+    eligibleReceivers, outcome, keepInbounds, OFFENSIVE_PLAYS,
 } = await import(join(scene, 'play.js'));
 const {
     startRecording, record, rewind, focusAt,
 } = await import(join(scene, 'replay.js'));
 const { litFor } = await import(join(scene, 'main.js'));
+const { keyAction } = await import(join(scene, 'hud.js'));
 
 /**
  * THE TORSO, FROM people-1.0.0's OWN CONSTRUCTOR. Half width, the y span, and
@@ -695,5 +696,150 @@ describe('catching the ball', () => {
         expect(s.interceptShare).toBeLessThan(1);
         // And a defender ends up no better off than the 2D game left him.
         expect(s.catchScale * s.interceptShare).toBeLessThanOrEqual(1);
+    });
+});
+
+describe('the sideline holds a body, not a coordinate', () => {
+    /**
+     * QA ROUND NINE, ITEM 3: "there are still some plays where the QB runs off
+     * the bottom of the screen, escaping the invisible field boundary wall".
+     *
+     * He never left it. Measured over 17 plays against three defences, nobody's
+     * CENTRE ever crossed the touchline and plenty of them reached it to the
+     * centimetre, which is the fault: a figure is 1.45m across at figure scale,
+     * so a man pinned to the paint has three quarters of a metre of himself,
+     * and all of his shadow, out past the line. Same family as `collisionScale`
+     * and the catch box: a number tuned against a letterform is not a number
+     * about a person.
+     */
+    test('a player comes to rest with his whole body inside the paint', () => {
+        const play = createPlay();
+        lineUp(play, 'pass2', 'cover1');
+        const height = play.playState.state.measurements.height;
+        const half = CFG.figureScale * 0.505 / 2;      // half a shoulder width
+
+        for (const obj of play.game.objects) {
+            if (obj.settings.position === 'ball' || obj.settings.benched) continue;
+            obj.coords.y = -500;
+        }
+        keepInbounds(play);
+        for (const obj of play.game.objects) {
+            if (obj.settings.position === 'ball' || obj.settings.benched) continue;
+            // His own edge, in metres from the touchline he was shoved through.
+            expect(obj.coords.y * UNITS_TO_METRES).toBeGreaterThanOrEqual(half - 1e-9);
+        }
+
+        for (const obj of play.game.objects) {
+            if (obj.settings.position === 'ball' || obj.settings.benched) continue;
+            obj.coords.y = height + 500;
+        }
+        keepInbounds(play);
+        for (const obj of play.game.objects) {
+            if (obj.settings.position === 'ball' || obj.settings.benched) continue;
+            expect((height - obj.coords.y) * UNITS_TO_METRES)
+                .toBeGreaterThanOrEqual(half - 1e-9);
+        }
+    });
+
+    test('and the ball is not held to it, because a ball has no shoulders', () => {
+        const play = createPlay();
+        lineUp(play, 'pass2', 'cover1');
+        const ball = { settings: { position: 'ball' }, coords: { x: 0, y: -900 }, state: {} };
+        play.game.objects.push(ball);
+        keepInbounds(play);
+        expect(ball.coords.y).toBe(-900);
+    });
+});
+
+describe('a block takes two', () => {
+    /**
+     * QA ROUND NINE, ITEM 5. Only the offensive lineman was ever posed, so he
+     * reached out and the man he was reaching at ran past him with his arms
+     * swinging, which reads as neither of them blocking.
+     */
+    const man = (position, team, x, y) => ({
+        settings: { position, team, benched: false, positionGroup: /^x/.test(position) ? 'x' : 'db' },
+        coords: { x, y, z: 1 },
+        state: { xSpeed: 0, ySpeed: 0 },
+    });
+
+    test('both men are in it, and each is pointed at the other', () => {
+        const near = 1.0 / UNITS_TO_METRES;        // a metre apart, well inside reach
+        const pair = blockersEngaged([
+            man('x1', 0, 0, 0),
+            man('db1', 1, near, 0),
+            // ...and somebody far away, who is in nothing.
+            man('x2', 0, 0, 900),
+        ]);
+        expect(pair.get('x1')).toMatchObject({ against: 'db1' });
+        expect(pair.get('db1')).toMatchObject({ against: 'x1' });
+        expect(pair.get('x1').amount).toBeGreaterThan(0);
+        expect(pair.get('x1').amount).toBe(pair.get('db1').amount);
+        expect(pair.has('x2')).toBe(false);
+    });
+
+    test('a defender worked by two keeps the one further along', () => {
+        const close = 0.6 / UNITS_TO_METRES;
+        const far = 2.2 / UNITS_TO_METRES;
+        const pair = blockersEngaged([
+            man('x1', 0, 0, 0),
+            man('x2', 0, 0, far - close),
+            man('db1', 1, 0, close),
+        ]);
+        // x1 is nearer him than x2 is, so that is the engagement he is in.
+        expect(pair.get('db1').against).toBe('x1');
+        expect(pair.get('db1').amount).toBe(pair.get('x1').amount);
+    });
+
+    /**
+     * AND THEIR HANDS REACH EACH OTHER. `separation` holds two bodies a body's
+     * width apart, so a pose that stops short of that is two men pushing at
+     * thin air between them. Stated against the distance the game actually
+     * holds them at rather than a number that felt about right.
+     */
+    test('the pose reaches across the gap the game holds them at', () => {
+        const chestGap = CFG.separation - 0.22 * CFG.figureScale;   // torso depth
+        const forward = CFG.pose.block.hand.z * CFG.figureScale;
+        expect(forward).toBeGreaterThanOrEqual(chestGap);
+        // ...and level with the shoulder rather than down at the ribs.
+        expect(CFG.pose.block.hand.y).toBeGreaterThanOrEqual(RIG.shoulderY);
+    });
+});
+
+describe('the keyboard', () => {
+    /**
+     * QA ROUND NINE, ITEM 7. The letters are the ones already painted on the
+     * grass, on the playbook diagram and on the buttons, so the keys are what a
+     * visitor has been reading all along rather than a scheme to learn.
+     */
+    test('the receivers letters throw, and Q, S and space snap', () => {
+        for (const key of ['A', 'B', 'C', 'D']) {
+            expect(keyAction(key)).toBe(key);
+            expect(keyAction(key.toLowerCase())).toBe(key);
+        }
+        for (const key of [' ', 'S', 's', 'Q', 'q']) expect(keyAction(key)).toBe('snap');
+        expect(keyAction('K')).toBe('keep');
+    });
+
+    test('and every letter that means something on screen has a control', () => {
+        // A binding that names a receiver the game does not have is a key that
+        // does nothing, so the two tables have to agree.
+        const letters = Object.values(CFG.receivers).map((r) => r.letter).sort();
+        expect(letters).toEqual(['A', 'B', 'C', 'D']);
+    });
+
+    test('nothing fires while somebody is typing, or with a modifier held', () => {
+        expect(keyAction('A', { inField: true })).toBe('');
+        expect(keyAction(' ', { inField: true })).toBe('');
+        expect(keyAction('S', { modified: true })).toBe('');
+        // Reload, find, and every other browser shortcut stays the browser's.
+        expect(keyAction('R', { modified: true })).toBe('');
+    });
+
+    test('and no other key does anything at all', () => {
+        for (const key of ['E', 'Z', '1', 'Enter', 'Tab', 'Escape', 'ArrowLeft', '']) {
+            expect(keyAction(key)).toBe('');
+        }
+        expect(keyAction(undefined)).toBe('');
     });
 });

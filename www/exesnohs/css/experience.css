@@ -468,6 +468,29 @@ body {
     font-size: 0.9rem;
 }
 
+/**
+ * THE KEYBOARD LINE ON THE WELCOME CARD.
+ *
+ * A key cap has to read as a THING TO PRESS rather than as emphasis, and at
+ * this size the only cues that carry are a border and a monospace face. The
+ * line itself is `card-meta` grey, so the caps sit a step brighter than the
+ * sentence holding them without competing with the ladder above.
+ *
+ * It is a nicety on a phone, where there is no keyboard at all, so it must
+ * never grow the card: no padding that wraps the line and no minimum width.
+ */
+.welcome-keys kbd {
+    display: inline-block;
+    padding: 0.05em 0.4em;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #d7dde8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    line-height: 1.5;
+}
+
 .card-actions {
     margin-top: 1.2rem;
     display: flex;

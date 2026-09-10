@@ -285,8 +285,17 @@ function noteAssignments(objects) {
  * to make the tackle he is looking at the man with the ball, whatever he was
  * told to do before the snap.
  */
-function lookTarget(obj, objects, carrier, here, standing) {
+function lookTarget(obj, objects, carrier, here, standing, blocking) {
     const at = (o) => (o ? simToWorld(o.coords.x, o.coords.y, 0) : null);
+
+    // A BLOCK BEATS EVERY OTHER REASON TO BE LOOKING SOMEWHERE, on both sides
+    // of it. Two men with their hands on each other are looking at each other,
+    // and a lineman facing the way he last happened to move while wrestling
+    // somebody beside him is most of why the line did not read as a line.
+    if (blocking) {
+        const foe = at(objects.find((o) => o.settings.position === blocking && !BENCHED(o)));
+        if (foe) return foe;
+    }
 
     if (obj.settings.team !== 1) {
         // A RECEIVER WHO HAS ARRIVED LOOKS BACK FOR THE BALL. QA item 3 asks
@@ -342,25 +351,49 @@ function tacklersOn(objects, carrier) {
     return out;
 }
 
-function blockersEngaged(objects) {
+/**
+ * A BLOCK TAKES TWO, AND ONLY ONE OF THEM WAS IN IT.
+ *
+ * This used to pose the offensive lineman alone: he reached out and the man he
+ * was reaching at ran past him with his arms swinging. A block is two players
+ * with their hands on each other's shoulders, and half of that reads as neither.
+ *
+ * So the pairing is returned rather than a list of blockers, and BOTH ends get
+ * the pose and, more importantly, get turned to face each other. A lineman
+ * facing the way he last moved while wrestling somebody beside him is most of
+ * why the line never looked like a line.
+ *
+ * ONE PARTNER EACH, and the nearest wins. A defender worked by two blockers
+ * keeps whichever engagement is further along, because he can only be leaning
+ * on one man at a time and the closer one is the one he is leaning on.
+ */
+export function blockersEngaged(objects) {
     const out = new Map();
     const reach = CFG.pose.block.reach;
     const foes = objects.filter((o) => !BENCHED(o) && o.settings.team === 1);
     if (!foes.length) return out;
 
+    const hold = (position, amount, against) => {
+        const had = out.get(position);
+        if (!had || amount > had.amount) out.set(position, { amount, against });
+    };
+
     for (const obj of objects) {
         if (BENCHED(obj) || !/^x\d$/.test(obj.settings.position)) continue;
         let nearest = Infinity;
+        let partner = null;
+        const p = simToWorld(obj.coords.x, obj.coords.y, 0);
         for (const foe of foes) {
-            const p = simToWorld(obj.coords.x, obj.coords.y, 0);
             const q = simToWorld(foe.coords.x, foe.coords.y, 0);
             const d = Math.hypot(p.x - q.x, p.z - q.z);
-            if (d < nearest) nearest = d;
+            if (d < nearest) { nearest = d; partner = foe; }
         }
         // Full commitment at half the reach, nothing at all beyond it.
         const amount = nearest >= reach ? 0
             : Math.min(1, (reach - nearest) / (reach * 0.5));
-        if (amount > 0) out.set(obj.settings.position, amount);
+        if (amount <= 0 || !partner) continue;
+        hold(obj.settings.position, amount, partner.settings.position);
+        hold(partner.settings.position, amount, obj.settings.position);
     }
     return out;
 }
@@ -638,8 +671,11 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // their backs to the ball.
         const downfield = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
         const surveying = carrier === obj && carryFor(obj, carrier) === 'throw';
+        const engagement = engaged.get(obj.settings.position) || null;
         const look = (opts.presnap || surveying)
-            ? null : lookTarget(obj, objects, carrier, p, standing);
+            ? null
+            : lookTarget(obj, objects, carrier, p, standing,
+                engagement ? engagement.against : '');
         const want = opts.presnap ? downfield
             : (surveying ? Math.PI / 2
                 : (look ? Math.atan2(look.x - p.x, look.z - p.z)
@@ -715,7 +751,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             carry: carryFor(obj, carrier),
             throwT: throwProgress(obj),
             snapT: snapped,
-            block: engaged.get(obj.settings.position) || 0,
+            block: engagement ? engagement.amount : 0,
             tackle: isTackler ? 1 : lunge,
             reach,
             reachAt,

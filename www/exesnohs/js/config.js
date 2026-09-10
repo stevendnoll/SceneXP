@@ -231,6 +231,22 @@ const SIM = {
      * player moved from 9.80m off centre to 9.38m against a 10.50m touchline.
      */
     gutter: 5,
+
+    /**
+     * HOW WIDE A PLAYER IS, IN METRES BEFORE `figureScale`.
+     *
+     * people-1.0.0 builds a torso 0.38 across and hangs an arm off each side,
+     * which comes to 0.505 shoulder to shoulder. Kept here rather than read off
+     * a figure because `play.keepInbounds` is simulation and must not reach
+     * into a Three module to find out how big somebody is drawn.
+     *
+     * IT EXISTS BECAUSE THE TOUCHLINE DID NOT KNOW. The wall clamped a
+     * COORDINATE, so a man came to rest with his centre exactly on the paint
+     * and three quarters of a metre of himself beyond it. That is the
+     * quarterback QA watched run off the side of the field, and he never
+     * actually left it.
+     */
+    bodyWidth: 0.505,
 };
 
 /** One field unit in metres. The only scale factor in the project. */
@@ -353,8 +369,17 @@ const EXESNOHS_CONFIG = {
 
     camera: {
         fov: 46,
-        /** Metres of grass that must stay visible beyond each sideline. */
-        sideMargin: 1.05,
+        /**
+         * Metres of grass that must stay visible beyond each sideline.
+         *
+         * 0.6, DOWN FROM 1.05, alongside `nearBehind` and `farBeyond`. The
+         * painted surface already carries 1.55m of grass outside each
+         * touchline, so this is a margin on top of a margin, and QA asked for
+         * the field rather than the stadium. It stays above zero because a
+         * touchline running exactly along the edge of the screen reads as the
+         * field having been cropped rather than framed.
+         */
+        sideMargin: 0.6,
 
         /**
          * THE FRAMING SOLVE, which replaced a width-only one.
@@ -375,8 +400,18 @@ const EXESNOHS_CONFIG = {
          * grows.
          */
         solve: {
-            nearBehind: 1,    // metres of ground visible behind the near end line
-            farBeyond: 1,     // and past the far one
+            /**
+             * METRES OF GROUND THE FRAME MUST KEEP BEYOND EACH END LINE.
+             *
+             * HALVED FROM 1, WHICH IS THE SMALL HALF OF QA ITEM 4. It is a
+             * comfort margin so the turf does not end exactly at the edge of
+             * the screen, and a metre of it at each end is a metre of stadium
+             * nobody asked for. Measured, the pair of them plus `sideMargin`
+             * are worth about three points of screen coverage between them,
+             * which is real but is not where the space was going.
+             */
+            nearBehind: 0.5,  // metres of ground visible behind the near end line
+            farBeyond: 0.5,   // and past the far one
             minPitch: 28,     // degrees. Flatter than this stops reading as a field
             /**
              * 68, NOT 50, AND THE REASON IS PORTRAIT.
@@ -393,7 +428,45 @@ const EXESNOHS_CONFIG = {
              * point the field reads as a diagram rather than a place.
              */
             maxPitch: 68,
-            minFov: 28,
+            /**
+             * 18, DOWN FROM 28, AND THIS IS WHERE THE SCREEN WAS GOING.
+             *
+             * QA ITEM 4: too much stadium, not enough field. Projected through
+             * the real camera at 1196x826, the turf covered 79% of the width
+             * and 72% of the height, so nearly half the screen was not the
+             * game.
+             *
+             * The instinct is to steepen the shot, and it is wrong. Measured,
+             * forcing the frame's far edge down to the end line takes the
+             * height from 72% to 88% and the WIDTH from 79% to 43%, because a
+             * steeper camera sits further away from everything: the field's
+             * area on screen falls from 57% to 38%. It looks better on one axis
+             * and is worse overall.
+             *
+             * What was actually binding is this floor. A 28 degree lens from
+             * 29m is a wide shot with a lot of perspective divergence, so the
+             * far end of the field shrinks away from the near end and the
+             * rectangle cannot fill a rectangle. A LONGER lens from further
+             * back flattens that convergence, and the field fills more of the
+             * frame while every player gets BIGGER rather than smaller:
+             *
+             *     minFov   fov  height   area   player px
+             *       28      28    29m     57%      48
+             *       20      20    36m     64%      54
+             *       18      18    39m     65%      55
+             *       16      16    43m     66%      57
+             *
+             * 18 is where it flattens off. The chosen PITCH is unchanged at 28
+             * degrees on every landscape shape, so the rake and the character
+             * of the shot are the same: it is the same view through a longer
+             * lens from further away, which is also what a real broadcast
+             * camera is.
+             *
+             * Portrait is untouched by this. There the width is binding, the
+             * solve picks a 51 degree lens at 68 degrees of pitch whatever this
+             * says, and it gains only from the margins above.
+             */
+            minFov: 18,
             maxFov: 60,
         },
         near: 0.5,
@@ -760,6 +833,7 @@ const EXESNOHS_CONFIG = {
      * churn costs more than it buys.
      */
     separationPasses: { lineUp: 2, live: 1 },
+
 
     /**
      * WHAT TO DO WITH A RECEIVER WHO HAS RUN OUT OF ROUTE. QA ITEM 3.
@@ -1249,9 +1323,36 @@ const EXESNOHS_CONFIG = {
          * Asking for a hand position rather than an angle makes that limit
          * something the solver respects for free.
          */
+        /**
+         * BLOCKING, AND IT TAKES TWO. QA ITEM 5.
+         *
+         * Only the offensive lineman was ever posed, so he reached out and the
+         * man he was reaching at ran past him with his arms swinging, which
+         * reads as neither of them blocking. view.js now pairs them and both
+         * ends get this pose and, more to the point, both get turned to face
+         * each other.
+         *
+         * THE HANDS WENT UP ONTO THE SHOULDERS. At y 1.20 they were below the
+         * shoulder joint at 1.25, which is a man pushing somebody's ribs. At
+         * 1.26 they are level with it and 1.01m in front of his own chest.
+         *
+         * AND THEY REACH, which had to be checked rather than assumed:
+         * `separation` holds bodies 1.45m apart, so with a torso 0.48m deep at
+         * figure scale their chests are 0.97m apart. Any less and they push at
+         * thin air.
+         *
+         * 1.26 AND NOT 1.32, AND A TEST SAID SO. The shared rig's shoulder ball
+         * is `armRadius * 1.15` in a flat-sided torso, and past about a radian
+         * of `armX` the upper arm clears the joint entirely and the limb reads
+         * as a detached stick, which is what the old screenshots called glitchy
+         * arms. At 1.32 the solve came out at 1.085 and
+         * `exesnohs-gameplay`'s "no held pose swings an arm out of its own
+         * shoulder" failed. This is the highest and furthest forward the hands
+         * go while the shoulder still covers them, at 0.939.
+         */
         block: {
             reach: 2.6,          // metres to the nearest opponent
-            hand: { x: 0.26, y: 1.20, z: 0.42 },
+            hand: { x: 0.26, y: 1.26, z: 0.46 },
         },
     },
 
