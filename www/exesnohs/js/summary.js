@@ -86,6 +86,19 @@ export function showSummary(plays, onAgain) {
 
     const box = el('summary-actions');
     box.textContent = '';
+
+    // SHARING IS THE POINT OF A SCORE. A number nobody else ever sees is a
+    // number that stops mattering the moment the card closes, and this is the
+    // one screen in the game where a visitor has something to say.
+    const share = document.createElement('button');
+    share.type = 'button';
+    share.className = 'hud-btn';
+    share.id = 'summary-share';
+    share.textContent = 'Share';
+    share.setAttribute('aria-label', 'Share your score');
+    share.addEventListener('click', () => shareScore(stats.total));
+    box.appendChild(share);
+
     const again = document.createElement('button');
     again.type = 'button';
     again.className = 'hud-btn hud-btn-primary';
@@ -96,6 +109,62 @@ export function showSummary(plays, onAgain) {
     card.hidden = false;
     again.focus();
     return stats;
+}
+
+/**
+ * What a visitor sends, which carries the score and nothing else.
+ *
+ * Exported and pure so the wording can be asserted without a share sheet: it
+ * has to name the game, the number and the perfect score, because a bare "230"
+ * arriving in somebody's messages means nothing at all.
+ */
+export function shareText(total) {
+    const perfect = CFG.rules.playsPerGame * CFG.rules.crossing;
+    return `I scored ${total} out of a possible ${perfect} in X's and O's, `
+        + 'a browser football game on SceneXP.';
+}
+
+/**
+ * The device's own share sheet, a clipboard copy, or an email, in that order.
+ *
+ * The same ladder every other scene on this site uses. The URL is derived from
+ * where the page is actually being served rather than written down, so a share
+ * is correct on localhost, on a staging host and in production without anybody
+ * remembering to change a constant.
+ */
+export async function shareScore(total) {
+    const url = new URL('.', window.location.href).href;
+    const data = { title: "X's and O's", text: shareText(total), url };
+    try {
+        if (navigator.share) {
+            await navigator.share(data);
+            return 'native';
+        }
+    } catch (e) {
+        // Backing out of the sheet is not a failure and must not fall through
+        // to a clipboard copy the visitor did not ask for.
+        if (e && e.name === 'AbortError') return 'cancelled';
+    }
+    try {
+        await navigator.clipboard.writeText(`${data.text} ${url}`);
+        flashShared('Link copied');
+        return 'copy';
+    } catch (e) {
+        window.location.href = `mailto:?subject=${encodeURIComponent(data.title)}`
+            + `&body=${encodeURIComponent(`${data.text} ${url}`)}`;
+        return 'mail';
+    }
+}
+
+/** Say so on the button itself, because a copy with no acknowledgement reads
+ *  as a button that did nothing. */
+function flashShared(message) {
+    const btn = el('summary-share');
+    if (!btn) return;
+    const was = btn.textContent;
+    btn.textContent = message;
+    btn.disabled = true;
+    window.setTimeout(() => { btn.textContent = was; btn.disabled = false; }, 1800);
 }
 
 export function hideSummary() {

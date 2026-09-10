@@ -19,9 +19,11 @@
  * is pure and asserted directly.
  */
 import { EXESNOHS_CONFIG as CFG, simToWorld, FIELD, UNITS_TO_METRES } from './config.min.js';
-import { figureFor, poseFigure, THROWING_SIDE } from './roster.min.js';
-import { getBall, aimBall, placeSpot } from './ball.min.js';
+import { figureFor, poseFigure, THROWING_SIDE, FIGURE_LIFT } from './roster.min.js';
+import { getBall, aimBall, placeSpot, BALL_FAT } from './ball.min.js';
 import { placeMarker, hideMarker } from './markers.min.js';
+import { toRigSpace } from './arm.min.js';
+import { takedownAt } from './takedown.min.js';
 
 /** Is this player sitting out this formation?
  *
@@ -278,25 +280,129 @@ function blockersEngaged(objects) {
 }
 
 /**
+ * WHO IS GOING UP FOR THE BALL, AND HOW COMMITTED THEY ARE.
+ *
+ * QA ITEM 5: a receiver should put his hands on a pass rather than have it
+ * arrive at his hip. The pose itself is in roster.js and the arithmetic is in
+ * arm.js; this decides who is doing it and by how much.
+ *
+ * A RECEIVER GOES FOR ANY BALL IN THE AIR NEAR HIM, on the grounds that the
+ * only ball in the air was thrown at somebody, and a defender only goes for one
+ * he could plausibly get to. That difference is what stops a whole secondary
+ * waving its arms at a pass sailing over their heads on the far hash.
+ *
+ * Read from the ball's DRAWN position rather than its simulated one, which is
+ * the same lesson as the stride: `flight` carries the arc the visitor can
+ * actually see, including its height, and the simulation's `coords.z` is an
+ * index that was never a height (see `arcHeight`).
+ */
+function reachersFor(objects) {
+    const out = new Map();
+    const C = CFG.pose.catching;
+    if (!flight.has) return out;
+
+    for (const obj of objects) {
+        if (BENCHED(obj) || obj.settings.position === 'ball') continue;
+        if (obj.state && obj.state.hasBall) continue;
+        const receiver = obj.settings.team === 0 && /^wr\d$/.test(obj.settings.position);
+        const defender = obj.settings.team === 1;
+        if (!receiver && !defender) continue;
+
+        const p = simToWorld(obj.coords.x, obj.coords.y, 0);
+        // Measured to the chest, because a ball six metres over a defender's
+        // head is not a ball he is going up for.
+        const chest = 1.0 * CFG.figureScale;
+        const d = Math.hypot(p.x - flight.x, flight.y - chest, p.z - flight.z);
+        const range = receiver ? C.range : C.defenderRange;
+        if (d >= range) continue;
+        out.set(obj.settings.position,
+            Math.min(1, Math.max(0, (range - d) / Math.max(0.01, range - C.close))));
+    }
+    return out;
+}
+
+/**
+ * THE TACKLE, WHICH IS AN EVENT AND HAS ITS OWN CLOCK.
+ *
+ * Started by main.js at the whistle rather than inferred from a distance,
+ * because the distance never arrives: measured, the nearest defender at the
+ * whistle is a median 1.85m away and the old proximity trigger fired on none of
+ * 84 tackles (see takedown.js). The names are positions, so the same call works
+ * on a live play and on a frame rebuilt from the recording.
+ */
+const takedown = { at: -1, tackler: '', carrier: '', from: null, to: null };
+
+export function beginTakedown(tacklerPos, carrierPos) {
+    if (!tacklerPos || !carrierPos) return false;
+    if (takedown.tackler === tacklerPos && takedown.carrier === carrierPos
+        && takedown.at >= 0) return false;
+    takedown.at = 0;
+    takedown.tackler = tacklerPos;
+    takedown.carrier = carrierPos;
+    // Where each of them was standing when it started. Held, so the dive runs
+    // from a fixed point even though `syncFigures` keeps being handed the
+    // simulation's last frame over and over.
+    takedown.from = null;
+    takedown.to = null;
+    return true;
+}
+
+/** Where the two of them were standing when it started, latched on the first
+ *  frame. The simulation has stopped by then, so these never change, but
+ *  reading them once means the dive cannot be restarted by a caller that hands
+ *  over the same frame twice. */
+function takedownFrom(objects) {
+    if (!takedown.from) {
+        const o = objects.find((x) => x.settings.position === takedown.tackler);
+        takedown.from = o ? simToWorld(o.coords.x, o.coords.y, 0) : { x: 0, y: 0, z: 0 };
+    }
+    return takedown.from;
+}
+
+function takedownTo(objects) {
+    if (!takedown.to) {
+        const o = objects.find((x) => x.settings.position === takedown.carrier);
+        takedown.to = o ? simToWorld(o.coords.x, o.coords.y, 0) : { x: 0, y: 0, z: 0 };
+    }
+    return takedown.to;
+}
+
+export function resetTakedown() {
+    takedown.at = -1;
+    takedown.tackler = '';
+    takedown.carrier = '';
+    takedown.from = null;
+    takedown.to = null;
+}
+
+/** How far into the tackle we are, in seconds, or -1 when there is not one. */
+export function takedownClock() {
+    return takedown.at;
+}
+
+/**
  * Move every figure to where the simulation says its player is.
  *
  * Called once per frame after play.tick(). Benched players are hidden rather
  * than moved, because the library parks them ten thousand units away and a
  * figure out there is both invisible and a waste of a draw call.
+ *
+ * `opts.presnap` freezes everybody facing the other team, which is QA item 12
+ * and is what a huddle breaking actually looks like.
  */
-export function syncFigures(objects, delta = 1 / 60) {
+export function syncFigures(objects, delta = 1 / 60, opts = {}) {
     const engaged = blockersEngaged(objects);
     const carrier = objects.find((o) => o.state && o.state.hasBall && !BENCHED(o));
     noteAssignments(objects);
     const tacklers = tacklersOn(objects, carrier);
-    // The hardest hit anybody is putting on the carrier this frame, which is
-    // what decides whether he stays on his feet. Taken once, because every
-    // figure in the loop below needs the same answer.
-    let hardestTackle = 0;
-    for (const amount of tacklers.values()) {
-        if (amount > hardestTackle) hardestTackle = amount;
-    }
+    const reaching = reachersFor(objects);
     noteThrowRelease(objects, carrier, delta);
+
+    // The tackle's own clock, advanced once whatever else is happening.
+    if (takedown.at >= 0) takedown.at += delta;
+    const hit = takedown.at >= 0
+        ? takedownAt(takedown.at, takedownFrom(objects), takedownTo(objects))
+        : null;
 
     for (const obj of objects) {
         const figure = figureFor(obj.settings.position);
@@ -358,7 +464,22 @@ export function syncFigures(objects, delta = 1 / 60) {
             * (1 - Math.exp(-delta / CFG.pose.speedSmooth));
         const mps = figure.userData.mps < CFG.pose.stillSpeed ? 0 : figure.userData.mps;
 
-        figure.position.set(p.x, 0, p.z);
+        // THE TACKLE MOVES HIM, AND NOTHING ELSE IN THIS FILE DOES. Every other
+        // figure is drawn exactly where the simulation put him; these two are
+        // drawn where the tackle is carrying them, which is the only motion in
+        // the game the simulation does not own (see takedown.js for why).
+        const isTackler = !!hit && obj.settings.position === takedown.tackler;
+        const isFloored = !!hit && obj.settings.position === takedown.carrier;
+        const role = isTackler ? hit.tackler : (isFloored ? hit.carrier : null);
+
+        // AND HIS FEET GO ON THE GRASS, NOT THROUGH IT. The rig stands itself
+        // at y = 0.055 because its shoes hang below its own origin, and writing
+        // a flat zero here buried every player on the field to the ankle.
+        figure.position.set(
+            p.x + (role ? role.x : 0),
+            FIGURE_LIFT + (role && role.y ? role.y : 0),
+            p.z + (role ? role.z : 0)
+        );
 
         // WATCHING SOMEBODY BEATS RUNNING SOMEWHERE. A corner shadowing his
         // receiver has his eyes on the receiver, not on his own feet, and the
@@ -370,15 +491,28 @@ export function syncFigures(objects, delta = 1 / 60) {
         // instead: pinned downfield for as long as he is holding it and still
         // looking to throw. The moment he tucks it and runs he is a runner
         // again and faces where he is going like everybody else.
+        //
+        // AND BEFORE THE SNAP EVERYBODY FACES THE OTHER TEAM, which is QA item
+        // 12 and is simply what a football team lining up looks like. It needed
+        // saying because nothing else here would ever say it: a figure standing
+        // still is not moving, so `targetFacing` declines to re-aim him and he
+        // keeps whatever heading the LAST play left him with. Two plays in, the
+        // pre-snap formation was eleven men looking in eleven directions.
+        //
+        // A defender's coverage assignment is a fine thing to face DURING a
+        // play and wrong before one: it had corners standing at the line with
+        // their backs to the ball.
+        const downfield = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
         const surveying = carrier === obj && carryFor(obj, carrier) === 'throw';
-        const look = surveying ? null : lookTarget(obj, objects, carrier, p);
-        const want = surveying
-            ? Math.PI / 2
-            : (look ? Math.atan2(look.x - p.x, look.z - p.z)
-                : targetFacing(stepX, stepZ, mps));
+        const look = (opts.presnap || surveying)
+            ? null : lookTarget(obj, objects, carrier, p);
+        const want = opts.presnap ? downfield
+            : (surveying ? Math.PI / 2
+                : (look ? Math.atan2(look.x - p.x, look.z - p.z)
+                    : targetFacing(stepX, stepZ, mps)));
         if (want !== null) figure.userData.facing = want;
         else if (figure.userData.facing === undefined) {
-            figure.userData.facing = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
+            figure.userData.facing = downfield;
         }
         if (!figure.visible) {
             // First placement after a line-up: arrive facing the right way
@@ -405,32 +539,39 @@ export function syncFigures(objects, delta = 1 / 60) {
         const lunge = tacklers.get(obj.settings.position) || 0;
 
         /**
-         * GOING DOWN, WHICH IS A ONE-WAY TRIP.
+         * GOING DOWN, WHICH IS NOW SOMETHING THAT HAPPENED RATHER THAN
+         * SOMETHING INFERRED.
          *
-         * Driven by how committed the nearest tackler is rather than by
-         * `state.tackle`, and that is deliberate: the recorder does not store
-         * the counter, so a replay would have shown a man being hit and staying
-         * upright. Commitment is computed from positions and comes out the same
-         * live or in playback.
+         * The previous version watched how close the nearest defender was and
+         * knocked the carrier over past a threshold. It never fired: measured
+         * over 84 tackles the nearest defender at the whistle was a median of
+         * 1.85m away against a trigger that needed 1.25m, and it crossed it on
+         * NONE of them. The lean was nine degrees. That is QA item 3, twice
+         * reported, and it was never going to be visible.
          *
-         * It ACCUMULATES rather than tracking, so once he is going down he
-         * keeps going down even as the tackler's own number wobbles. Coming
-         * back up is slower than going down and only happens between plays,
-         * because nobody bounces up mid-hit.
+         * `takedown.js` owns it now, driven off the whistle, and it applies to
+         * exactly two men. Everybody else stands where they stopped.
          */
-        const hit = carrier === obj && hardestTackle >= CFG.pose.tackled.trigger;
-        const T = CFG.pose.tackled;
-        if (figure.userData.down === undefined) figure.userData.down = 0;
-        figure.userData.down = hit
-            ? Math.min(1, figure.userData.down + delta / T.fall)
-            : Math.max(0, figure.userData.down - delta / T.rise);
-        const down = figure.userData.down;
+        const down = isFloored
+            ? Math.min(1, Math.abs(role.lean) / Math.abs(CFG.pose.takedown.carrierLean))
+            : 0;
+
+        // The hands go to the ball, as a point in this figure's own space. Done
+        // here rather than in roster.js because it is the one pose that needs
+        // to know where the figure is standing and which way it is facing.
+        const reach = reaching.get(obj.settings.position) || 0;
+        const reachAt = reach > 0
+            ? toRigSpace({ x: flight.x, y: flight.y, z: flight.z },
+                figure.position, figure.rotation.y, CFG.figureScale)
+            : null;
 
         poseFigure(figure, mps, figure.userData.phase, {
             carry: carryFor(obj, carrier),
             throwT: throwProgress(obj),
             block: engaged.get(obj.settings.position) || 0,
-            tackle: lunge,
+            tackle: isTackler ? 1 : lunge,
+            reach,
+            reachAt,
             down,
         }, delta);
 
@@ -440,14 +581,18 @@ export function syncFigures(objects, delta = 1 / 60) {
         // figure's own axis AFTER the yaw: on the default XYZ a defender facing
         // across the field would tip sideways instead of forward.
         //
-        // A TACKLE SNAPS AND EVERYTHING ELSE EASES. The general pose blend is a
-        // tenth of a second, which is right for an arm changing its mind and
-        // wrong for a collision: eased in, a hit reads as a lean.
-        const pitch = down > 0 ? T.lean * down
-            : (lunge > 0 ? CFG.pose.tackle.lean * lunge : 0);
-        const rate = (down > 0 || lunge > 0) ? CFG.pose.tackle.snap : CFG.pose.blend;
-        figure.rotation.x += (pitch - figure.rotation.x)
-            * (1 - Math.exp(-delta / rate));
+        // A TACKLE IS APPLIED WHOLE, AND EVERYTHING ELSE EASES. The takedown is
+        // already a timed animation with its own easing, so blending it a
+        // second time turns a hit into a lean, which is exactly what the last
+        // version looked like. A defender merely closing still eases.
+        if (role) {
+            figure.rotation.x = role.lean;
+        } else {
+            const pitch = lunge > 0 ? CFG.pose.tackle.lean * lunge : 0;
+            const rate = lunge > 0 ? CFG.pose.tackle.snap : CFG.pose.blend;
+            figure.rotation.x += (pitch - figure.rotation.x)
+                * (1 - Math.exp(-delta / rate));
+        }
 
         figure.visible = true;
 
@@ -459,7 +604,12 @@ export function syncFigures(objects, delta = 1 / 60) {
         // position, because a named marker's ring is not at the centre of its
         // own plane and where the plane has to sit to put the ring on a pair of
         // feet is a fact about the texture layout.
-        placeMarker(obj.settings.position, p.x, p.z);
+        //
+        // It follows a man being tackled, because a letter left standing on the
+        // spot he was hit at while he goes over backwards reads as him having
+        // left his own shadow behind.
+        placeMarker(obj.settings.position,
+            p.x + (role ? role.x : 0), p.z + (role ? role.z : 0));
     }
 }
 
@@ -486,22 +636,82 @@ export function syncFigures(objects, delta = 1 / 60) {
  * where the objects are rebuilt from a recording and their speed fields are
  * whatever they were when recorded.
  */
-const flight = { x: 0, y: 0, z: 0, has: false, spin: 0, dir: { x: 1, y: 0, z: 0 }, height: undefined, span: null };
+const flight = {
+    x: 0, y: 0, z: 0, has: false, spin: 0, dir: { x: 1, y: 0, z: 0 },
+    height: undefined, span: null,
+    /** Seconds the ball has not moved for, and the clock on its landing.
+     *  THE LANDING IS DETECTED, NOT SIGNALLED, for the same reason the throw
+     *  release is (D90): nothing in the simulation announces it, the ball
+     *  simply stops, and reading it here means it also happens in a replay. */
+    still: 0, rest: -1, restFrom: 0, restHeading: null,
+};
+
+/** Where the ball is on its way from a catch into the tuck. A caught ball that
+ *  teleports to a hip is a ball nobody saw anyone catch. */
+const gather = { at: -1, from: { x: 0, y: 0, z: 0 } };
 
 /** Turns per second of a thrown ball. A real spiral is nearer 10, which at
  *  60Hz aliases into a slow backwards crawl. This is the fastest rate that
  *  still reads as spin rather than as strobing. */
 const SPIRAL_HZ = 3.2;
 
-/** Reset between plays, so a new throw does not inherit the last one's
- *  heading for its first frame. */
-export function resetBallFlight() {
+/** The end of one flight, which happens every frame the ball is in somebody's
+ *  hands. Kept separate from the per-play reset below so a catch does not wipe
+ *  the gather it just started. */
+function endFlight() {
     flight.has = false;
     flight.spin = 0;
     flight.dir = { x: 1, y: 0, z: 0 };
     flight.height = CFG.ball.release;
     flight.span = null;
+    flight.still = 0;
+    flight.rest = -1;
+    flight.restHeading = null;
+}
+
+/** Reset between plays, so a new throw does not inherit the last one's
+ *  heading for its first frame. */
+export function resetBallFlight() {
+    endFlight();
+    gather.at = -1;
     resetThrow();
+}
+
+/**
+ * HOW HIGH A BALL THAT HAS ALREADY LANDED IS, which is QA item 6.
+ *
+ * An incomplete pass used to finish its flight at `release` height and simply
+ * stop there, still pointing wherever it was last travelling, still spiralling.
+ * Its last measured heading is nearly straight down, so what a visitor saw was
+ * a football standing on its nose in mid-air, turning. That is the screenshot.
+ *
+ * A real one hits, takes a bounce or two off the point, and finishes lying on
+ * its side. This is that, in one curve: a fall under gravity rather than a
+ * lerp, two bounces each shorter than the last, and then nothing.
+ */
+export function landingHeight(t, fromY) {
+    const L = CFG.ball.landing;
+    const rest = BALL_FAT * CFG.ballScale;
+    if (t < L.drop) {
+        const u = t / L.drop;
+        return fromY + (rest - fromY) * u * u;
+    }
+    let after = t - L.drop;
+    let amp = L.hop;
+    let span = L.bounce;
+    for (let i = 0; i < 2; i += 1) {
+        if (after < span) return rest + Math.sin(Math.PI * (after / span)) * amp;
+        after -= span;
+        amp *= 0.38;
+        span *= 0.62;
+    }
+    return rest;
+}
+
+/** How long a landing takes, so a caller can hold the frame for it. */
+export function landingLength() {
+    const L = CFG.ball.landing;
+    return L.drop + L.bounce * (1 + 0.62);
 }
 
 /**
@@ -596,8 +806,49 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
 
     if (ballObj && !BENCHED(ballObj)) {
         const p = simToWorld(ballObj.coords.x, ballObj.coords.y, 0);
-        const y = arcHeight(ballObj, delta);
 
+        // HAS IT STOPPED? A ball still travelling covers ground every frame;
+        // one that has arrived and not been caught covers none, because the
+        // simulation has blown its whistle and is no longer ticking. Two
+        // frames' worth of stillness is the cue, and it reads identically
+        // during playback, where the playhead simply runs out.
+        const moved = flight.has ? Math.hypot(p.x - flight.x, p.z - flight.z) : 1;
+        flight.still = moved < CFG.ball.landing.stillStep
+            ? flight.still + delta : 0;
+        if (flight.rest < 0 && flight.still > CFG.ball.landing.stillFor) {
+            flight.rest = 0;
+            flight.restFrom = flight.y;
+            // The way it was going, flattened. A ball lands on the heading it
+            // arrived on and then lies along it, which is also why it must be
+            // taken before the fall starts: by the time it is down, its only
+            // measured movement is vertical.
+            const h = Math.hypot(flight.dir.x, flight.dir.z);
+            flight.restHeading = h > 1e-4
+                ? { x: flight.dir.x / h, y: 0, z: flight.dir.z / h }
+                : { x: 1, y: 0, z: 0 };
+        }
+
+        let y;
+        if (flight.rest >= 0) {
+            flight.rest += delta;
+            y = landingHeight(flight.rest, flight.restFrom);
+            // It creeps forward as it bounces, and the spiral becomes a roll
+            // about the axis it is now lying on, decaying to a stop.
+            const L = CFG.ball.landing;
+            const crept = Math.min(1, flight.rest / Math.max(0.01, landingLength()));
+            const decay = Math.exp(-flight.rest / L.roll);
+            flight.spin += delta * SPIRAL_HZ * Math.PI * 2 * decay;
+            ball.position.set(
+                p.x + flight.restHeading.x * L.creep * crept, y,
+                p.z + flight.restHeading.z * L.creep * crept
+            );
+            aimBall(flight.restHeading, flight.spin);
+            ball.visible = true;
+            placeSpot(0, 0, 0, false);
+            return;
+        }
+
+        y = arcHeight(ballObj, delta);
         if (flight.has) {
             const d = { x: p.x - flight.x, y: y - flight.y, z: p.z - flight.z };
             // Below a threshold the difference is rounding noise, and
@@ -617,7 +868,10 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
         return;
     }
 
-    resetBallFlight();
+    // A CATCH IS A HANDOVER AND NOT A TELEPORT, so where the ball was in the
+    // air on the last frame is worth keeping for a quarter of a second.
+    const caughtFrom = flight.has ? { x: flight.x, y: flight.y, z: flight.z } : null;
+    endFlight();
     placeSpot(0, 0, 0, false);
 
     if (carrier) {
@@ -635,17 +889,43 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             // The rig faces +z, so forward is (sin y, cos y) and the throwing
             // side is 90 degrees off it. Every offset rides figureScale, or a
             // bigger player holds the ball inside his own chest.
+            //
+            // THE OFFSET IS THE SAME RIG SPACE THE POSES ARE WRITTEN IN, so the
+            // ball's `x` runs along the throwing side and its `z` is the way he
+            // is facing, exactly as `pose.tuck.hand` does. That is what keeps a
+            // ball in the hand that is posed to be holding it: the two numbers
+            // are read off the same picture rather than converted between two.
             const yaw = figure.rotation.y;
             const fx = Math.sin(yaw);
             const fz = Math.cos(yaw);
             const s = CFG.figureScale;
             const side = THROWING_SIDE;
 
-            ball.position.set(
-                figure.position.x + (fz * side * spot.right + fx * spot.ahead) * s,
-                spot.up * s,
-                figure.position.z + (-fx * side * spot.right + fz * spot.ahead) * s
-            );
+            const want = {
+                x: figure.position.x + (fz * side * spot.x + fx * spot.z) * s,
+                y: FIGURE_LIFT + spot.y * s,
+                z: figure.position.z + (-fx * side * spot.x + fz * spot.z) * s,
+            };
+
+            // GATHERING IT IN. On the frame a pass is caught the ball is still
+            // out in front of the receiver's hands, and jumping it to his ribs
+            // is the moment the catch stops being visible. A quarter of a second
+            // carries it in along the path his arms are already following.
+            if (caughtFrom) { gather.at = 0; gather.from = caughtFrom; }
+            let at = want;
+            if (gather.at >= 0) {
+                gather.at += delta;
+                const t = Math.min(1, gather.at / CFG.pose.catching.gather);
+                const e = t * t * (3 - 2 * t);
+                at = {
+                    x: gather.from.x + (want.x - gather.from.x) * e,
+                    y: gather.from.y + (want.y - gather.from.y) * e,
+                    z: gather.from.z + (want.z - gather.from.z) * e,
+                };
+                if (t >= 1) gather.at = -1;
+            }
+
+            ball.position.set(at.x, at.y, at.z);
             // Held across the body rather than pointing wherever the last throw
             // left it. On the throwing hold it cants up, the way a ball sits
             // when somebody is about to let go of it.

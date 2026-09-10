@@ -28,6 +28,7 @@ let THREE;
 let parts;
 let HEAD;
 let box;
+let realHead;
 
 beforeAll(async () => {
     // three.min.js is a UMD bundle that expects a browser global, so it is run
@@ -49,6 +50,35 @@ beforeAll(async () => {
     for (const p of parts) group.add(p);
     group.updateMatrixWorld(true);
     box = (o) => new THREE.Box3().setFromObject(o);
+
+    /**
+     * AND A REAL HEAD TO MEASURE THE HELMET AGAINST, WHICH IS THE HOLE THIS
+     * SUITE HAD.
+     *
+     * Everything below used to be checked against `roster.HEAD`, and
+     * `roster.HEAD` is where the fault lived: it put the head at 1.62 by adding
+     * the head's own radius twice, the helmet was built around that number, and
+     * every test agreed the shell covered a head that is not there. The rig
+     * actually puts it at 1.50, so the shell floated a quarter of a metre above
+     * the skull at figure scale, in plain sight, for two rounds of QA.
+     *
+     * A number checked against itself is not a measurement. This builds an
+     * actual `createPerson` and reads the actual head and hair, so the only way
+     * to pass now is to cover the head the game really draws.
+     */
+    const people = await import(join(root, 'www/shared/js/people-1.0.0.js'));
+    const person = people.createPerson({ role: 'customer', shoulderRound: 0.35 });
+    person.position.set(0, 0, 0);
+    person.updateMatrixWorld(true);
+    // Everything above the neck: the head sphere, the hair, the ears and the
+    // face. The neck cylinder tops out at 1.38, so this cannot catch a torso.
+    const above = new THREE.Box3();
+    person.traverse((o) => {
+        if (!o.isMesh) return;
+        const b = box(o);
+        if (b.min.y > 1.385) above.union(b);
+    });
+    realHead = above;
 });
 
 const named = (name) => parts.filter((p) => p.name === name);
@@ -63,6 +93,18 @@ const unionOf = (list) => {
 
 describe('the shell covers the head', () => {
     /**
+     * MEASURED AGAINST A PERSON, NOT AGAINST A CONSTANT. See the note in
+     * `beforeAll`: the constant was wrong for two rounds and every assertion
+     * here agreed with it, which is the whole failure mode of a test that
+     * restates the code.
+     */
+    test('the constant this file used to trust matches the real rig', () => {
+        // `HEAD.y` is the head's centre, and the sphere is `r` either side.
+        expect(HEAD.y - HEAD.r).toBeCloseTo(1.38, 2);
+        expect(HEAD.hairHigh).toBeCloseTo(realHead.max.y, 2);
+    });
+
+    /**
      * THE FAULT THAT MADE IT LOOK WORSE. The previous shell reached 1.50 on
      * paper and its own scale pulled the real edge above that, so a band of
      * black hair showed all the way round the back below a pale dome. A gap
@@ -73,8 +115,27 @@ describe('the shell covers the head', () => {
         expect(shellBox().min.y).toBeLessThanOrEqual(HEAD.hairLow);
     });
 
-    test('and over the top of it', () => {
-        expect(shellBox().max.y).toBeGreaterThanOrEqual(HEAD.hairHigh);
+    test('and over the top of the head the rig actually builds', () => {
+        expect(shellBox().max.y).toBeGreaterThanOrEqual(realHead.max.y);
+    });
+
+    /**
+     * AND IT SITS ON HIM RATHER THAN OVER HIM. A shell whose centre is a long
+     * way from the head's is a helmet floating above a bare head, which is
+     * precisely what shipped. Half the head's own radius is generous and still
+     * an order of magnitude tighter than the 0.12 that was wrong.
+     */
+    test('the shell is centred on the head, not hovering above it', () => {
+        const shell = shellBox();
+        const middle = (shell.max.y + shell.min.y) / 2;
+        expect(Math.abs(middle - HEAD.y)).toBeLessThan(HEAD.r * 0.5);
+    });
+
+    /** And it covers the ears, which is where a real one drops into its flaps
+     *  and the reason a helmet reads as a helmet from the side. */
+    test('the whole assembly comes below the ear line', () => {
+        const all = unionOf(parts);
+        expect(all.min.y).toBeLessThan(1.482);
     });
 
     test('it is wider than the head, and not by a silly amount', () => {

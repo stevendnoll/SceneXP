@@ -543,6 +543,31 @@ const EXESNOHS_CONFIG = {
         /** Seconds to ease the height toward its target. The index steps in
          *  halves at 45Hz, so without this the ball climbs in visible stairs. */
         smooth: 0.06,
+
+        /**
+         * AND WHAT IT DOES WHEN NOBODY CATCHES IT, which is QA item 6.
+         *
+         * Nothing, until now. The flight ended and the ball stopped, holding
+         * whatever attitude its last measured movement gave it, which on the
+         * way down is nearly vertical, and holding its spiral, which never
+         * stops on its own. So an incomplete pass finished as a football
+         * balanced on its nose in mid-air, turning: reported exactly that way.
+         *
+         * `stillStep` and `stillFor` are how the landing is DETECTED rather
+         * than announced, which is the same trick the throw release uses (D90)
+         * and works unchanged in a replay. Nothing in the simulation says the
+         * ball has arrived; it simply stops covering ground, because the
+         * whistle has gone and nothing is ticking it any more.
+         */
+        landing: {
+            stillStep: 0.02,   // metres a frame, under which it is not moving
+            stillFor: 0.07,    // seconds of that before it counts as down
+            drop: 0.16,        // seconds from where it stopped to the turf
+            hop: 0.42,         // metres of the first bounce
+            bounce: 0.34,      // seconds that bounce takes
+            creep: 0.55,       // metres it travels on while bouncing
+            roll: 0.30,        // seconds for the spin to die away
+        },
     },
 
     /**
@@ -695,15 +720,26 @@ const EXESNOHS_CONFIG = {
      * actual hip. `state.run` is the same flag, and `keepAndRun` already sets
      * it. Nothing here is invented (D29).
      *
-     * Offsets are in FIGURE-LOCAL units and multiplied by `figureScale`, so a
-     * bigger player holds the ball further from his own spine rather than
-     * inside it. `right` is toward the throwing hand, `up` is up, `ahead` is
-     * the way he is facing.
+     * POSITIONS ARE WHERE THE HAND IS, IN THE RIG'S OWN SPACE, and they used to
+     * be angles. The change is not cosmetic and it is the fix for QA item 2.
      *
-     * Angles are radians on the shoulder pivot. NEGATIVE rotation.x IS FORWARD:
-     * the arm group hangs down local -Y, and rotating about +X carries it to
-     * -Z while the rig faces +Z. Worked out from the axes rather than guessed,
-     * because guessing it produces a player throwing over his own back.
+     * The rig grew an elbow last round and every angle written against it was
+     * POSITIVE, which is the wrong sign: the forearm hangs down its local -Y, so
+     * rotating it about +X carries the hand to -Z, and the rig faces +Z. Every
+     * pose in this file was hyperextending an elbow. It was reported as the
+     * players' arms being on backwards, and that is exactly what it was.
+     *
+     * Flipping the signs would not have fixed it, because three angles through
+     * two joints do not put a hand anywhere a person can predict: D121 searched
+     * for this pose once already, looked at one sign only, and concluded the
+     * target was unreachable. So a pose is now the one thing about it that can
+     * be pictured and checked, which is WHERE THE HAND IS, and arm.js solves the
+     * three angles that reach it. `x` is toward the throwing hand, `y` is up,
+     * `z` is the way he is facing, all in rig metres before `figureScale`.
+     *
+     * THE BALL RIDES WHERE THE HAND ENDS UP, which is the same relationship
+     * D88 wanted and had to maintain by hand. Every ball offset below sits on
+     * or beside its own pose's hand, so the two cannot drift apart.
      */
     pose: {
         /** Cap on the stride swing, radians at the shoulder. */
@@ -770,77 +806,63 @@ const EXESNOHS_CONFIG = {
         motionSmooth: 0.05,
 
         /**
-         * WHERE THE HAND ACTUALLY ENDS UP, DERIVED FROM THE SHARED RIG.
+         * HOW MUCH ELBOW A RUNNER CARRIES, in radians of FLEXION.
          *
-         * people-1.0.0 puts the shoulder pivot at `legLength + torsoHeight -
-         * 0.05`, which is 1.25, hangs the hand `armLength + 0.02` below it at
-         * 0.57, and centres the head at 1.62. So rotating the shoulder by x
-         * puts the hand at y = 1.25 - 0.57·cos(x) and z = -0.57·sin(x).
-         *
-         * That arithmetic is the whole reason these angles are what they are.
-         * An arm cocked at 1.15 radians, which sounds like a lot, leaves the
-         * hand at y = 1.02 and BELOW the shoulder: a man holding a ball against
-         * his chest. Past a right angle it swings above the shoulder, and at
-         * 2.15 the hand reaches y = 1.56 and 0.47 behind, which is beside the
-         * ear with the ball behind the head. That is the pose.
-         *
-         * The ball offsets below are simply where that hand is, so the ball is
-         * never floating next to a hand that is somewhere else.
+         * Stated as a positive amount and applied as a negative angle, because
+         * flexion has one direction and writing it as a signed number here is
+         * how the sign got lost in the first place. A person standing still
+         * carries a little; a sprinter holds close to a right angle, and a
+         * figure sprinting with two straight arms reads as a mannequin on
+         * wheels.
          */
+        runElbow: { rest: 0.22, sprint: 0.95 },
+
         /**
-         * THESE ANGLES WERE SOLVED, NOT CHOSEN, and they could not have been
-         * chosen because the arm now has TWO joints.
+         * SURVEYING THE FIELD, and this is the pose the whole rewrite was for.
          *
-         * people-1.0.0 gained an elbow, so a pose is a shoulder in two axes and
-         * a forearm in one, and where the hand ends up is the composition of
-         * all three. Searching that by eye is hopeless, and the previous
-         * single-joint version is why: with only a shoulder, the only way to
-         * get a hand up beside the ear is to swing the whole straight limb back
-         * over the shoulder, which reads as a javelin thrower rather than a
-         * quarterback.
-         *
-         * Forward kinematics, written out and searched. The shoulder sits at
-         * (0.2125, 1.25), the upper arm is 0.275 to the elbow and the forearm
-         * and hand 0.295 beyond it, and the forearm group inherits the
-         * shoulder's rotation, so the hand lands at
-         *
-         *     Rx(armX)·Rz(armZ)·[0,-1,0]·0.275   +
-         *     Rx(armX)·Rz(armZ)·Rx(foreX)·[0,-1,0]·0.295
-         *
-         * THE ELBOW FOLDS ON A POSITIVE foreX, which is the opposite of what it
-         * looks like it should do and cost a whole search to find: the first
-         * sweep only looked at negative values and reported that the target was
-         * unreachable by a quarter of a metre.
+         * Solved rather than chosen, and then checked against a real three: the
+         * hand at (0.41, 1.50, -0.13) puts the elbow at (0.49, 1.25, 0.00),
+         * which is straight out to the side at exactly shoulder height with 74
+         * degrees of elbow and the ball up beside the ear. That is a
+         * quarterback. The previous version reached the same hand position by
+         * bending the elbow the wrong way, which from behind is the one angle
+         * that hides it and from the side is unmistakable.
          */
-        /** Surveying the field. Elbow up and back at (0.25, 1.36, -0.25), hand
-         *  beside the ear at (0.26, 1.65, -0.19), 78 degrees of elbow. */
         throwHold: {
-            ball: { right: 0.25, up: 1.64, ahead: -0.16 },
-            armX: 1.99,          // positive is back, and past 90 degrees is up
-            armZ: 0.15,          // a little out, so the elbow clears the ribs
-            foreX: 1.36,         // and folded, which is what a cocked arm is
-            offX: -0.45,         // the off arm points forward, across the body
-            offZ: 0.26,
-            offFore: 0.85,       // and is bent, because a straight one is a plank
-        },
-        /** Tucked and running, for the quarterback or anyone who caught it.
-         *  The hand comes to (0.09, 0.78, -0.07), which is across the body at
-         *  the hip, and the ball rides in the crook just above it. */
-        tuck: {
-            // Cradled just above and inside the hand, against the ribs, which
-            // is where the solved pose actually puts it (0.09, 0.78, -0.07).
-            ball: { right: 0.13, up: 0.86, ahead: 0.00 },
-            armX: -0.45,         // forward
-            armZ: -0.30,         // in, toward the chest
-            foreX: 1.10,         // folded across the ball
+            hand: { x: 0.41, y: 1.50, z: -0.13 },
+            /** The off arm across the chest, ready rather than dangling. */
+            offHand: { x: 0.02, y: 1.22, z: 0.28 },
+            /** And the ball itself, in the hand that is holding it. */
+            ball: { x: 0.44, y: 1.53, z: -0.15 },
         },
         /**
-         * The release. The shoulder sweeps from `throwHold` to this over
-         * `time` while the elbow STRAIGHTENS, which is what a throw is: the
-         * hand finishes at (0.30, 0.99, 0.50), forward and down, a follow
-         * through rather than an arm that stopped where the ball left it.
+         * TUCKED, HIGH AND TIGHT, which is where a ball carrier actually holds
+         * it and not where this used to put it.
+         *
+         * The old pose dropped the hand to the hip at y 0.78 and hung the ball
+         * off it. A carrier clamps the elbow at his side and brings the forearm
+         * up across the ribs, so the ball rides in the crook between the two
+         * with a hand over its point. The hand lands at (0.20, 1.06, 0.26) and
+         * the elbow at (0.19, 0.98, -0.02), which is that.
          */
-        throwRelease: { armX: -1.20, foreX: 0.20, time: 0.34 },
+        tuck: {
+            hand: { x: 0.20, y: 1.06, z: 0.26 },
+            ball: { x: 0.17, y: 1.02, z: 0.12 },
+        },
+        /**
+         * THE RELEASE, AND THE SWEEP BETWEEN THE TWO IS A REAL THROW.
+         *
+         * Interpolating the solved angles from `throwHold` to here carries the
+         * hand up over the shoulder, forward past the ear and down across the
+         * body: measured at five points it runs (0.41, 1.50, -0.13) to
+         * (0.48, 1.56, 0.07) to (0.48, 1.46, 0.33) to (0.38, 1.20, 0.49) to
+         * (0.20, 0.92, 0.44). That is an over-the-top throwing motion with a
+         * follow through, and none of it had to be keyframed.
+         */
+        throwRelease: {
+            hand: { x: 0.20, y: 0.92, z: 0.44 },
+            time: 0.34,
+        },
 
         /**
          * GOING IN FOR THE TACKLE. Both arms out and low, reaching around the
@@ -854,35 +876,81 @@ const EXESNOHS_CONFIG = {
          */
         tackle: {
             reach: 2.2,          // metres to the carrier before he commits
-            armX: -1.30,
-            armZ: 0.40,
-            foreX: 0.30,
+            hand: { x: 0.15, y: 0.95, z: 0.40 },
             lean: 0.52,          // radians of forward pitch, whole figure
             /** Seconds to commit. Much shorter than the general pose blend,
              *  because a tackle that eases in is not a tackle. */
             snap: 0.05,
         },
+
         /**
-         * AND THE CARRIER GOES DOWN.
+         * AND THE TACKLE ITSELF, WHICH IS AN EVENT AND NOT A DISTANCE.
          *
-         * The first version leaned him back a quarter of a radian, which is a
-         * flinch. A tackle in this game ends the play, and the play ending is
-         * the thing the whole ten-play structure hangs on, so it is worth more
-         * than a wobble.
+         * THIS IS QA ITEM 3, AND THE MEASUREMENT IS WHY IT NEVER FIRED ONCE.
+         * The knockdown used to be driven by how close the nearest defender
+         * was: full commitment inside 1.25m, and the carrier went over at 0.72
+         * of it. But the ported simulation does not blow its whistle when two
+         * bodies touch, it blows it when two COLLISION BOXES overlap, and those
+         * boxes are drawn for a figure 2.2 times life size. Measured over 84
+         * tackles the nearest defender at the whistle was a median of 1.85m
+         * away, the commitment came out at a median of 0.31, and it reached the
+         * trigger on NONE of them. The lean was nine degrees and the carrier
+         * never fell over in the entire history of the game.
          *
-         * He rotates about his own feet, because the rig has no waist. That is
-         * not a compromise here: driven backwards off your feet is exactly a
-         * body pivoting about where it was standing, and at 1.35 radians the
-         * head finishes about a fifth of the way up from the turf, which is
-         * down. The legs stop striding on the way, or he runs while horizontal.
+         * So it is no longer inferred. `state.tackled` is a fact the simulation
+         * already knows, and when it says so, the nearest opponent DIVES: he
+         * covers the last two metres himself, leaves his feet, and puts the
+         * carrier on his back. Everything below is that animation, in seconds.
          */
-        tackled: {
-            lean: -1.35,         // radians, most of the way onto his back
-            fall: 0.30,          // seconds from upright to down
-            rise: 0.9,           // and how long the next play takes to reset it
-            /** How committed a tackler has to be before the carrier goes. Below
-             *  this he is being reached for rather than hit. */
-            trigger: 0.72,
+        takedown: {
+            /** Seconds for the tackler to cross the gap and arrive. */
+            dive: 0.34,
+            /** ...for the carrier to be driven off his feet once hit. */
+            fall: 0.42,
+            /** ...and to lie there before the result card opens over it. */
+            settle: 0.40,
+            /** How close the dive finishes, in metres. Not zero: a tackler who
+             *  ends up standing exactly where the carrier is has walked through
+             *  him rather than hit him. */
+            close: 0.55,
+            /** How high he leaves the ground at the top of the dive, in metres
+             *  at figure scale. */
+            leap: 0.70,
+            /** How far back the carrier is driven, in metres. */
+            driven: 1.05,
+            /** Radians of pitch: the tackler laid out flat, and the carrier on
+             *  his back. Negative is backwards. */
+            tacklerLean: 1.15,
+            carrierLean: -1.45,
+            /** And how far the tackler's hands reach on the way in. */
+            hand: { x: 0.16, y: 1.02, z: 0.46 },
+        },
+
+        /**
+         * CATCHING IT, WHICH IS QA ITEM 5 AND THE ONLY POSE SOLVED PER FRAME.
+         *
+         * Everything else here is a fixed hand position that arm.js turns into
+         * angles once. A catch cannot be: the hands go to the BALL, which is
+         * somewhere different on every frame of every throw. So the target is
+         * the ball's own position expressed in the receiver's local space, and
+         * the same solver answers it.
+         *
+         * IT RAMPS IN WITH DISTANCE rather than switching on, because a
+         * receiver puts his hands up as the ball arrives and not the instant it
+         * is thrown. Full commitment at `close`, nothing at all beyond `range`.
+         */
+        catching: {
+            range: 8.0,          // metres from the ball before he reaches at all
+            close: 2.6,          // ...and where his hands are fully up
+            /** The two hands cradle the ball rather than both stabbing at its
+             *  centre, in rig metres either side of it. */
+            split: 0.11,
+            /** A defender only goes up for a ball he could plausibly get to,
+             *  measured in metres from where it is passing. */
+            defenderRange: 3.4,
+            /** Seconds for the ball to settle from the catch into the tuck. A
+             *  ball that teleports to the hip is a ball nobody caught. */
+            gather: 0.26,
         },
 
         /**
@@ -893,25 +961,18 @@ const EXESNOHS_CONFIG = {
          * engaged. That is what the position group is FOR, and it is the whole
          * visible content of a running play, so inferring it is worth more than
          * waiting for the simulation to say so.
+         *
+         * The hand at (0.26, 1.20, 0.42) puts the elbow at (0.25, 1.04, 0.17),
+         * which is hands up and elbows down: a blocker, and also a pose that
+         * keeps the upper arm inside the shoulder ball. The previous version
+         * had to be pulled back from -1.30 to -0.95 radians because at 75
+         * degrees off the body the joint stopped being covered at all (D102).
+         * Asking for a hand position rather than an angle makes that limit
+         * something the solver respects for free.
          */
         block: {
             reach: 2.6,          // metres to the nearest opponent
-            /**
-             * -0.95, PULLED BACK FROM -1.30, AND THE LIMIT IS THE RIG.
-             *
-             * The shared figure's shoulder is a ball of radius `armRadius *
-             * 1.15` sitting in a flat-sided torso, which is enough to cover the
-             * stride's half-radian swing and not much more. At -1.30 the upper
-             * arm is 75 degrees off the body and clears the shoulder entirely,
-             * so the arm reads as a detached stick floating beside the player.
-             * That is most of what the screenshots show as glitchy arms.
-             *
-             * Under a radian the joint stays covered, and 0.95 is still an
-             * unmistakable reach: the hand comes forward 0.46 of the rig's own
-             * height, which at this figure scale is most of a metre.
-             */
-            armX: -0.95,         // forward, arms extended
-            armZ: 0.22,          // slightly out, to fill a gap
+            hand: { x: 0.26, y: 1.20, z: 0.42 },
         },
     },
 
@@ -1051,6 +1112,10 @@ const EXESNOHS_CONFIG = {
         audio: 'exes-n-ohs-audio-settings',
         play: 'exes-n-ohs-play-settings',
         best: 'exes-n-ohs-best-score',
+        /** The game in progress, so a reload does not cost ten plays. Written
+         *  at each whistle by progress.js, cleared when a game ends or is
+         *  started over. Named in www/privacy.html like every other key here. */
+        game: 'exes-n-ohs-game',
     },
 
     /**

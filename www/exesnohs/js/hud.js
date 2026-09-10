@@ -242,16 +242,40 @@ export function showSkipReplay() {
  * be dropped is the card's, and it is the one worth keeping, because somebody
  * arriving needs to know what game this is before they are shown a pitch.
  */
-export function showWelcome(onStart) {
+export function showWelcome(onStart, saved = null, onFresh = null) {
     const card = el('welcome');
     if (!card) { if (onStart) onStart(); return; }
     const box = el('welcome-actions');
     box.textContent = '';
-    const start = button('Take the field', 'hud-btn hud-btn-primary', () => {
-        card.hidden = true;
-        if (onStart) onStart();
-    });
+
+    // A GAME LEFT HALF PLAYED IS OFFERED BACK, NOT RESUMED SILENTLY. Somebody
+    // coming back to a tab they left open needs to be told where they are
+    // before the playbook opens on play five, and being able to say no is part
+    // of the offer: a visitor who wants a clean run should not have to finish
+    // somebody else's game to get one.
+    const note = el('welcome-resume');
+    if (note) {
+        note.hidden = !saved;
+        if (saved) {
+            note.textContent = `You are ${saved.playNumber} plays into a game, `
+                + `with ${saved.total} on the board.`;
+        }
+    }
+
+    const start = button(saved ? 'Back to the game' : 'Take the field',
+        'hud-btn hud-btn-primary', () => {
+            card.hidden = true;
+            if (onStart) onStart();
+        });
     box.appendChild(start);
+
+    if (saved && onFresh) {
+        box.appendChild(button('Start a new game', 'hud-btn', () => {
+            card.hidden = true;
+            onFresh();
+        }, 'Discard that game and start a new one'));
+    }
+
     card.hidden = false;
     start.focus();
 }

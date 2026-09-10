@@ -220,6 +220,11 @@
             <p class="welcome-target">Fifty a play is the most you can get, so
                 <strong>500 is a perfect game</strong>. Good luck.</p>
 
+            <!-- Shown only when there is a game to come back to. A visitor
+                 returning to a tab they left open is told where they are before
+                 the playbook opens on play five. -->
+            <p id="welcome-resume" class="card-meta welcome-resume" hidden></p>
+
             <div id="welcome-actions" class="card-actions"></div>
         </div>
     </div>
@@ -240,7 +245,13 @@
     <div id="playbook" class="playbook" hidden>
         <div class="playbook-panel" role="dialog" aria-modal="true"
             aria-labelledby="playbook-title">
-            <h2 id="playbook-title" class="playbook-title">Choose your play</h2>
+            <!-- The heading shares its row with the restart control, which
+                 playbook-ui.js builds: it asks twice before it does anything,
+                 so it is three buttons rather than one and belongs in script
+                 with the state that decides which is showing. -->
+            <div class="playbook-head">
+                <h2 id="playbook-title" class="playbook-title">Choose your play</h2>
+            </div>
             <div class="playbook-body"></div>
         </div>
     </div>

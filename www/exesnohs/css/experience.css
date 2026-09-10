@@ -110,12 +110,73 @@ body {
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
 
-.playbook-title {
+/* The heading and the restart control share a row. It wraps rather than
+   shrinking, so on a narrow phone the buttons drop under the title instead of
+   squeezing it. */
+.playbook-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
     margin: 0 0 0.9rem;
+}
+
+.playbook-title {
+    margin: 0;
     font-size: 1.3rem;
     font-weight: 800;
     letter-spacing: -0.01em;
     color: #f2f5fa;
+}
+
+/* QUIET UNTIL IT IS WANTED. Starting over ends a game that now survives a
+   reload, so it must be findable and must not compete with seventeen plays for
+   attention: a small outline button, and the confirm step wears the warning
+   colour rather than the resting one. */
+.playbook-restart {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.playbook-restart-btn {
+    padding: 0.3rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: transparent;
+    color: #aab4c4;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.playbook-restart-btn:hover,
+.playbook-restart-btn:focus-visible {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #f2f5fa;
+}
+
+.playbook-restart-btn.is-confirm {
+    border-color: rgba(255, 107, 92, 0.55);
+    color: #ff8c7d;
+}
+
+/* A hover rule inherits everything it does not say, so the confirm button's
+   own colour has to be restated here or the rule above supplies it (see the
+   note in the shared sheet about partial overrides). */
+.playbook-restart-btn.is-confirm:hover,
+.playbook-restart-btn.is-confirm:focus-visible {
+    border-color: #ff8c7d;
+    color: #ffb3a8;
+}
+
+/* The line on the welcome card that says how far into a game you are. */
+.welcome-resume {
+    margin-top: 0.9rem;
+    color: #ff992c;
+    font-weight: 600;
 }
 
 .playbook-defense {

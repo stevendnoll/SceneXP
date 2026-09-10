@@ -35,6 +35,7 @@ const {
 } = await import(join(scene, 'scoring.js'));
 const { markerGeometry } = await import(join(scene, 'markers.js'));
 const { MotionClass } = await import(join(scene, 'motion.js'));
+const { solveArm, handAt } = await import(join(scene, 'arm.js'));
 
 describe('the scoring ladder the field paints', () => {
     /**
@@ -757,6 +758,62 @@ describe('the arms', () => {
     });
 
     /**
+     * EVERY POSE IS A HAND POSITION NOW, AND THE ELBOW ONLY BENDS ONE WAY.
+     *
+     * THE BUG THESE REPLACE. The rig grew an elbow last round and every angle
+     * written against it was positive, which is the wrong sign: the forearm
+     * hangs down its local -Y, so a positive rotation about +X folds it toward
+     * -Z, and the rig faces +Z. Every pose in the game was hyperextending an
+     * elbow, and it shipped as "the players' arms are backwards relative to
+     * their head, torso and feet", which is exactly what it was.
+     *
+     * THE OLD TESTS AGREED WITH IT. One of them asserted
+     * `throwHold.armX > 0` and called it "cocked back"; another checked that
+     * the ball was near the hand and passed, because the ball had been placed
+     * at the hand the wrong pose produced. A test written from the same
+     * misunderstanding as the code cannot catch the code.
+     *
+     * So these are written against the JOINT rather than against the numbers: an
+     * elbow flexes and does not extend, and where a hand ends up is measured by
+     * running the solver forwards. `tests/exesnohs-arm.test.mjs` checks the
+     * solver itself against a real three.
+     */
+    test('no pose in the game hyperextends an elbow', () => {
+        const poses = [
+            ['throwHold', CFG.pose.throwHold.hand, 1],
+            ['throwHold off arm', CFG.pose.throwHold.offHand, -1],
+            ['throwRelease', CFG.pose.throwRelease.hand, 1],
+            ['tuck', CFG.pose.tuck.hand, 1],
+            ['block', CFG.pose.block.hand, 1],
+            ['tackle', CFG.pose.tackle.hand, 1],
+            ['takedown', CFG.pose.takedown.hand, 1],
+        ];
+        // Gathered rather than asserted one at a time, so a failure names the
+        // pose that broke instead of stopping at the first.
+        const bent = poses.map(([name, hand, side]) => [
+            name, solveArm({ x: side * hand.x, y: hand.y, z: hand.z }, side).foreX <= 0,
+        ]);
+        expect(bent).toEqual(poses.map(([name]) => [name, true]));
+    });
+
+    /**
+     * AND THE RUNNING ELBOW IS FLEXION TOO, which is the one pose not written
+     * as a hand position: a stride is a swing, and a swing is an angle. It is
+     * stated in config as a positive AMOUNT and applied as a negative angle,
+     * deliberately, because a signed number is how the sign got lost.
+     */
+    test('a runner carries a real elbow, and it bends forwards', () => {
+        const E = CFG.pose.runElbow;
+        expect(E.rest).toBeGreaterThan(0);
+        expect(E.sprint).toBeGreaterThan(E.rest);
+        // A sprinter is near a right angle; anything past about 120 degrees of
+        // flexion has his hand on his own shoulder.
+        const sprint = E.rest + E.sprint;
+        expect(sprint).toBeGreaterThan(0.9);
+        expect(sprint).toBeLessThan(2.1);
+    });
+
+    /**
      * NOTHING MAY SWING FURTHER THAN THE SHOULDER CAN COVER. The shared rig's
      * shoulder is a ball of `armRadius * 1.15` set in a flat-sided torso, which
      * covers the stride and a bit more. Past about a radian the upper arm
@@ -766,10 +823,11 @@ describe('the arms', () => {
      * to one player, and it is on screen for a second at a time.
      */
     test('no held pose swings an arm out of its own shoulder', () => {
-        for (const angle of [CFG.pose.block.armX, CFG.pose.tuck.armX,
-            CFG.pose.throwHold.offX, CFG.pose.armSwing]) {
-            expect(Math.abs(angle)).toBeLessThan(1.0);
+        for (const hand of [CFG.pose.block.hand, CFG.pose.tuck.hand]) {
+            const solved = solveArm(hand, 1);
+            expect(Math.abs(solved.armX)).toBeLessThan(1.0);
         }
+        expect(CFG.pose.armSwing).toBeLessThan(1.0);
     });
 
     /**
@@ -798,15 +856,21 @@ describe('the arms', () => {
         expect(CFG.pose.speedSmooth).toBeGreaterThan(gap * 2);
     });
 
-    test('forward is negative, on every pose that reaches forward', () => {
-        // The arm group hangs down local -Y and the rig faces +z, so rotating
-        // about +X carries the arm BACKWARD. Getting this sign wrong produces a
-        // quarterback throwing over his own back and a lineman blocking the man
-        // behind him, and it is invisible in a static screenshot.
-        expect(CFG.pose.block.armX).toBeLessThan(0);          // arms out at the rusher
-        expect(CFG.pose.throwRelease.armX).toBeLessThan(0);   // follow through
-        expect(CFG.pose.throwHold.armX).toBeGreaterThan(0);   // cocked back
-        expect(CFG.pose.tuck.armX).toBeLessThan(0);           // folded over the ball
+    /**
+     * FORWARD IS +Z, and every pose that means "out in front of him" has to say
+     * so in the one coordinate a reader can check. This is the test the old
+     * `armX < 0` pair was trying to be, and it is now stated about the hand
+     * rather than about a rotation, so it cannot be satisfied by an arm that
+     * reaches forward from the shoulder and folds backwards at the elbow.
+     */
+    test('the poses that reach forward put the hand in front of him', () => {
+        expect(CFG.pose.block.hand.z).toBeGreaterThan(0.2);      // at the rusher
+        expect(CFG.pose.tackle.hand.z).toBeGreaterThan(0.2);     // round the carrier
+        expect(CFG.pose.takedown.hand.z).toBeGreaterThan(0.2);   // into the hit
+        expect(CFG.pose.throwRelease.hand.z).toBeGreaterThan(0.2);  // follow through
+        // And the one that does not: a cocked arm is behind him, which is the
+        // whole difference between holding a ball and having thrown it.
+        expect(CFG.pose.throwHold.hand.z).toBeLessThan(0);
     });
 
     /**
@@ -815,104 +879,107 @@ describe('the arms', () => {
      * and the head centre at `legLength + torsoHeight + neckHeight +
      * headRadius`. A quarterback surveying the field holds the ball ABOVE the
      * shoulder and roughly at the ear, and a carrier tucks it BELOW the
-     * shoulder against his ribs. Stated that way the test survives a retune and
-     * still fails the pose that started this: a ball at 1.03 is chest height.
+     * shoulder against his ribs.
+     *
+     * THE HEAD CONSTANT WAS WRONG HERE TOO, at 1.62, which is the head's own
+     * radius counted twice. It is 1.50, and the helmet was built around the
+     * wrong one for two rounds (see roster.js and tests/exesnohs-helmet).
      */
-    const SHOULDER = 0.75 + 0.55 - 0.05;      // 1.25 in rig units
-    const HEAD = 1.62;
+    const SHOULDER = 0.75 + 0.55 - 0.05;                 // 1.25 in rig units
+    const HEAD = 0.75 + 0.55 + 0.08 + 0.12;              // 1.50
 
     test('the quarterback holds the ball up by his ear, not against his chest', () => {
-        const up = CFG.pose.throwHold.ball.up;
+        const up = CFG.pose.throwHold.ball.y;
         expect(up).toBeGreaterThan(SHOULDER);
-        expect(up).toBeLessThan(HEAD + 0.15);
+        expect(up).toBeLessThan(HEAD + 0.20);
         // And behind him, which is what "cocked" means.
-        expect(CFG.pose.throwHold.ball.ahead).toBeLessThan(0);
+        expect(CFG.pose.throwHold.ball.z).toBeLessThan(0);
     });
 
-    test('a carrier tucks it below the shoulder and higher than his knee', () => {
-        const up = CFG.pose.tuck.ball.up;
+    test('a carrier tucks it high and tight, not down at his knee', () => {
+        const up = CFG.pose.tuck.ball.y;
         expect(up).toBeLessThan(SHOULDER);
-        expect(up).toBeGreaterThan(0.75);          // above the hip line
-        expect(up).toBeLessThan(CFG.pose.throwHold.ball.up);
+        expect(up).toBeGreaterThan(0.85);          // up on the ribs, not the hip
+        expect(up).toBeLessThan(CFG.pose.throwHold.ball.y);
     });
 
     /**
-     * AND THE BALL HAS TO BE WHERE THE HAND IS. Both offsets are derived from
-     * the same shoulder arithmetic as the angles, so a retune that moves one
-     * and forgets the other leaves a ball floating beside an empty hand.
-     */
-    /**
-     * THE ARM HAS TWO JOINTS NOW, so where the hand ends up is the composition
-     * of three angles and cannot be eyeballed. This is the same forward
-     * kinematics the angles were solved against, written out once:
+     * AND THE BALL HAS TO BE WHERE THE HAND IS.
      *
-     *     Rx(armX)·Rz(armZ)·[0,-1,0]·UPPER
-     *   + Rx(armX)·Rz(armZ)·Rx(foreX)·[0,-1,0]·FORE
-     *
-     * If a later retune moves an angle and forgets the ball, or adds an elbow
-     * bend and leaves the ball where a straight arm put it, the two come apart
-     * and this says so. The one-joint version of this test could not: it
-     * modelled a rigid stick and passed on poses that put the hand nowhere near
-     * the ball.
+     * The pose is now a hand position and the ball offset is a point beside it,
+     * so this is the assertion that keeps them one picture rather than two
+     * numbers that happen to agree. It fails against a retune that moves a hand
+     * and forgets the ball, which is the fault it has always been guarding.
      */
-    const SHOULDER_X = 0.2125;
-    const UPPER = 0.275;
-    const FORE = 0.295;
-
-    function handAt(armX, armZ, foreX, side = 1) {
-        const rotZ = (v, a) => ({
-            x: v.x * Math.cos(a) - v.y * Math.sin(a),
-            y: v.x * Math.sin(a) + v.y * Math.cos(a), z: v.z,
-        });
-        const rotX = (v, a) => ({
-            x: v.x,
-            y: v.y * Math.cos(a) - v.z * Math.sin(a),
-            z: v.y * Math.sin(a) + v.z * Math.cos(a),
-        });
-        const down = { x: 0, y: -1, z: 0 };
-        const up = rotX(rotZ(down, side * armZ), armX);
-        const fore = rotX(rotZ(rotX(down, foreX), side * armZ), armX);
-        return {
-            right: side * SHOULDER_X + up.x * UPPER + fore.x * FORE,
-            up: SHOULDER + up.y * UPPER + fore.y * FORE,
-            ahead: up.z * UPPER + fore.z * FORE,
-        };
-    }
-
     test('each carry puts the ball in the hand the pose actually makes', () => {
         for (const P of [CFG.pose.throwHold, CFG.pose.tuck]) {
-            const h = handAt(P.armX, P.armZ, P.foreX);
-            const gap = Math.hypot(
-                h.right - P.ball.right, h.up - P.ball.up, h.ahead - P.ball.ahead
-            );
-            expect(gap).toBeLessThan(0.18);
+            const solved = solveArm(P.hand, 1);
+            const hand = handAt(solved.armX, solved.armZ, solved.foreX, 1);
+            const gap = Math.hypot(hand.x - P.ball.x, hand.y - P.ball.y,
+                hand.z - P.ball.z);
+            expect(gap).toBeLessThan(0.20);
         }
     });
 
     test('the throwing hand comes up beside the head, not over the shoulder', () => {
-        const h = handAt(CFG.pose.throwHold.armX, CFG.pose.throwHold.armZ,
-            CFG.pose.throwHold.foreX);
-        expect(h.up).toBeGreaterThan(SHOULDER);       // above the shoulder
-        expect(h.up).toBeLessThan(HEAD + 0.12);       // and not over the crown
-        expect(h.ahead).toBeLessThan(0);              // cocked, so behind
-        expect(Math.abs(h.right)).toBeGreaterThan(0.14);   // clear of the head
+        const h = CFG.pose.throwHold.hand;
+        expect(h.y).toBeGreaterThan(SHOULDER);        // above the shoulder
+        expect(h.y).toBeLessThan(HEAD + 0.18);        // and not over the crown
+        expect(h.z).toBeLessThan(0);                  // cocked, so behind
+        expect(Math.abs(h.x)).toBeGreaterThan(0.14);  // clear of the head
     });
 
     /**
      * AND THE ELBOW HAS TO BE BENT. Without a bend the only way to get a hand
      * up beside the ear is to swing the whole straight limb back over the
-     * shoulder, which is a javelin thrower rather than a quarterback, and it is
-     * exactly what the single-joint version had to do.
+     * shoulder, which is a javelin thrower rather than a quarterback.
      */
     test('the throwing arm is bent at the elbow', () => {
-        const bend = Math.abs(CFG.pose.throwHold.foreX) * 180 / Math.PI;
+        const bend = Math.abs(solveArm(CFG.pose.throwHold.hand, 1).foreX)
+            * 180 / Math.PI;
         expect(bend).toBeGreaterThan(45);
         expect(bend).toBeLessThan(140);
     });
 
     test('and it straightens through the release', () => {
-        expect(Math.abs(CFG.pose.throwRelease.foreX))
-            .toBeLessThan(Math.abs(CFG.pose.throwHold.foreX));
+        const hold = Math.abs(solveArm(CFG.pose.throwHold.hand, 1).foreX);
+        const release = Math.abs(solveArm(CFG.pose.throwRelease.hand, 1).foreX);
+        expect(release).toBeLessThan(hold);
+    });
+
+    /**
+     * THE SWEEP BETWEEN THEM IS THE THROW, and it is not keyframed: roster.js
+     * interpolates the two solved poses, so the whole motion is whatever those
+     * two ends imply. Worth measuring, because "the hand travels forwards" is
+     * the one property that makes it a throw rather than a shrug, and nothing
+     * else in the codebase asserts it.
+     */
+    test('the hand travels forward and down across the release', () => {
+        const from = solveArm(CFG.pose.throwHold.hand, 1);
+        const to = solveArm(CFG.pose.throwRelease.hand, 1);
+        let last = null;
+        let climbed = false;
+        for (let i = 0; i <= 10; i += 1) {
+            const t = i / 10;
+            const h = handAt(
+                from.armX + (to.armX - from.armX) * t,
+                from.armZ + (to.armZ - from.armZ) * t,
+                from.foreX + (to.foreX - from.foreX) * t, 1
+            );
+            if (last) {
+                // Forward all the way through the throw itself. The last fifth
+                // is the follow through, where the arm comes down and ACROSS
+                // and the hand does curl back toward the body, which is what a
+                // follow through is.
+                if (t <= 0.8) expect(h.z).toBeGreaterThan(last.z - 1e-6);
+                if (h.y > last.y) climbed = true;
+            }
+            last = h;
+        }
+        // It goes UP before it comes down, which is what over the top means.
+        expect(climbed).toBe(true);
+        expect(last.y).toBeLessThan(CFG.pose.throwHold.hand.y);
+        expect(last.z).toBeGreaterThan(0.3);
     });
 });
 

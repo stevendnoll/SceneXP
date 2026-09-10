@@ -179,6 +179,7 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
     // inside their nearest neighbour. Nothing pushes before the snap, so
     // without this the crowd is exactly what the pre-snap frame shows.
     separate(play, separationUnits(), SEPARATION.lineUp);
+    keepInbounds(play);
     return play.game.objects;
 }
 
@@ -221,6 +222,10 @@ export function tick(play) {
     // half that keeps bodies out of each other. Running it per player would let
     // whoever moved last be the only one who ends up where he asked.
     separate(play, separationUnits(), SEPARATION.live);
+    // AND THE TOUCHLINE IS THE LAST WORD, after the shove rather than before
+    // it: separation can push a man off the edge of the field, so a clamp that
+    // ran first would be undone by it on the same frame.
+    keepInbounds(play);
 }
 
 /**
@@ -323,6 +328,52 @@ export function separate(play, minSeparation, passes = 2) {
                 b.coords.x += ux; b.coords.y += uy;
                 moved += 1;
             }
+        }
+    }
+    return moved;
+}
+
+/**
+ * KEEP EVERYBODY ON THE FIELD.
+ *
+ * QA ITEM 4 REPORTED THE QUARTERBACK STEPPING OUT OF BOUNDS ON A DROP-BACK, and
+ * he is simply the one anybody watches. Measured over 190 plays, EVERY position
+ * group leaves the field: quarterbacks on 0.71% of frames, receivers on 0.86,
+ * the line on 1.00 and the secondary on 1.04, with a worst case of 14.53m
+ * against a touchline at 10.50 and a sideline strip that runs out at 12.05. So
+ * roughly one frame in a hundred has somebody standing in the crowd.
+ *
+ * THE ROUTES ARE NOT WRONG, THEY ARE UNBOUNDED. Several formations hand a
+ * player a boundary at `height - gutterY`, which is the touchline itself, and
+ * the ported motion model overshoots a target it is accelerating toward. There
+ * is nothing anywhere that says the field has edges.
+ *
+ * So this says it, in the one place a positional constraint belongs: after
+ * everybody has moved, exactly like `separate`. The cross-field axis only,
+ * because nobody has ever come close to the ends. `ySpeed` is zeroed with the
+ * position, or the model keeps accelerating into the paint and the player
+ * sticks there and then leaves like a slingshot when his route turns him round.
+ *
+ * IT IS A WALL AND NOT A RULE. In real football a ball carrier who steps out is
+ * down at that spot, and adding that would change how plays end and what they
+ * score, which is a bigger decision than a fix for a drop-back. Recorded as an
+ * open question rather than smuggled in here.
+ */
+export function keepInbounds(play) {
+    const height = play.playState.state.measurements.height;
+    if (!(height > 0)) return 0;
+    let moved = 0;
+    for (const obj of play.game.objects) {
+        if (!obj.settings || obj.settings.benched) continue;
+        if (obj.settings.position === 'ball' || obj.settings.type === 'ball') continue;
+        if (obj.coords.y < 0) {
+            obj.coords.y = 0;
+            if (obj.state) obj.state.ySpeed = 0;
+            moved += 1;
+        } else if (obj.coords.y > height) {
+            obj.coords.y = height;
+            if (obj.state) obj.state.ySpeed = 0;
+            moved += 1;
         }
     }
     return moved;

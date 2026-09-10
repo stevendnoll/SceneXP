@@ -24,11 +24,14 @@ import {
 } from './markers.min.js';
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments,
+    beginTakedown, resetTakedown, takedownClock,
 } from './view.min.js';
+import { takedownLength, tacklerFor } from './takedown.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome,
 } from './play.min.js';
+import { readGame, saveGame, clearGame } from './progress.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
@@ -76,6 +79,10 @@ const cycle = {
     lastOutcome: null,
     replayHold: 0,
     spotAt: null,         // world metres, where the last play finished
+    settleFor: 0,         // seconds to hold after the whistle, see beginSettle
+    /** Who brought whom down, decided once at the whistle so the replay ends
+     *  with the same tackle the live play did. */
+    tackle: { tackler: '', carrier: '' },
 };
 
 /** Whoever asked not to be moved about. Checked once: a visitor who changes it
@@ -84,11 +91,21 @@ const reducedMotion = typeof window !== 'undefined' && window.matchMedia
     ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
     : false;
 
-/** Worth showing unasked: a big gain, or a turnover. Everything else is
- *  available from the result card but does not interrupt. */
-function worthWatching(result) {
-    return result.points >= 30 || result.points < 0;
-}
+/**
+ * NO REPLAY EVER STARTS ON ITS OWN, WHICH IS QA ITEM 7.
+ *
+ * The game used to show the highlights unasked (D36): anything worth 30 or
+ * more, and every turnover. It reads well in a list of features and it was
+ * wrong in practice, because the replay opened BEFORE the result card, so the
+ * one moment a visitor needs to be told what happened was spent watching it
+ * happen again without knowing what it was. On an interception in particular,
+ * the first thing you saw was the same throw a second time and no explanation.
+ *
+ * So the order is fixed by removing the shortcut: the whistle goes, the card
+ * says what it was and what it was worth, and "Watch the replay" is on the card
+ * for anybody who wants it. D124's skip button stays, because a replay a
+ * visitor DID ask for should still be interruptible.
+ */
 
 /** The simulation's speeds are PER FRAME, not per second, because that is how
  *  the 2D game was written. So it is stepped on a fixed clock rather than once
@@ -271,11 +288,16 @@ function startPlay(offensive, defense) {
     // Coverage assignments are cached for the replay, so a new line-up has to
     // drop the last play's.
     resetAssignments();
+    // And so does the last play's tackle, or a man who was on his back when the
+    // whistle went lines up for this one lying down.
+    resetTakedown();
+    cycle.tackle = { tackler: '', carrier: '' };
     cycle.phase = 'presnap';
     cycle.held = 0;
     cycle.accumulator = 0;
+    cycle.settleFor = HOLD_SETTLE;
     cycle.playNumber += 1;
-    syncFigures(cycle.play.game.objects, 0);
+    syncFigures(cycle.play.game.objects, 0, { presnap: true });
     showBall(cycle.play.game.objects, 0);
 
     setPlayNumber(cycle.playNumber, CFG.rules.playsPerGame);
@@ -292,6 +314,38 @@ function startPlay(offensive, defense) {
     // formation for as long as they like, which is the whole point of having
     // chosen a play.
     showSnap();
+}
+
+/**
+ * THE WHISTLE HAS GONE. Hold the frame, and if somebody was brought down, run
+ * the tackle before anything opens a card over the top of it.
+ *
+ * The simulation already knows: `state.tackled` is set by the collision boxes
+ * and is what ended the play. What it does not do is show it, because at the
+ * whistle the two men are a median 1.85m apart (see takedown.js), and the
+ * previous version inferred a knockdown from that distance and therefore never
+ * showed one. This is the cue, and the dive covers the gap.
+ */
+function beginSettle() {
+    cycle.play.live = false;
+    cycle.phase = 'settle';
+    cycle.held = 0;
+    cycle.settleFor = HOLD_SETTLE;
+    cycle.tackle = { tackler: '', carrier: '' };
+    resetTakedown();
+    clearActions();
+
+    if (!cycle.play.playState.state.tackled) return;
+    const carrier = ballCarrier(cycle.play);
+    if (!carrier) return;
+    const tackler = tacklerFor(cycle.play.game.objects, carrier);
+    if (!tackler) return;
+
+    cycle.tackle = { tackler, carrier: carrier.settings.position };
+    beginTakedown(tackler, carrier.settings.position);
+    // Long enough to land the hit and let him lie there for a beat. A card
+    // opening over a man in mid-air is worse than no animation at all.
+    cycle.settleFor = Math.max(HOLD_SETTLE, takedownLength() + 0.2);
 }
 
 /** Snap it. From here the routes run themselves and the visitor has one
@@ -350,11 +404,12 @@ function finishPlay() {
     // wherever the playhead happens to be.
     cycle.spotAt = ballWorldPoint();
 
-    // The highlights play themselves. Anything else waits to be asked for.
-    if (!reducedMotion && !isEmpty() && worthWatching(result)) {
-        startReplay();
-        return;
-    }
+    // AND SAVE IT, so a reload during play five does not cost plays one to
+    // four. Written here rather than on "Next play" because the play is over
+    // and scored at this point, and a visitor who closes the tab while the
+    // result card is open has finished it just as much as one who clicks on.
+    saveGame(cycle);
+
     presentResult();
 }
 
@@ -383,6 +438,9 @@ function startReplay() {
     // The spot belongs to the end of the play, and a replay is about to start
     // at the beginning of it. Leaving it standing would give away the ending.
     hideSpot();
+    // So does the tackle: it belongs to the last frame of the recording, and
+    // the playhead is going back to the first.
+    resetTakedown();
     rewind();
     cycle.phase = 'replay';
     cycle.replayHold = 0;
@@ -402,6 +460,10 @@ function onNext() {
     hideResult();
     if (cycle.playNumber >= CFG.rules.playsPerGame) {
         showHud(false);
+        // THE SAVED GAME GOES WHEN THE GAME DOES. A finished ten is not
+        // something to resume into, and leaving it behind would mean a visitor
+        // who reloads is handed a game with no plays left in it.
+        clearGame();
         showSummary(cycle.results, startGame);
         return;
     }
@@ -413,10 +475,47 @@ function startGame() {
     cycle.playNumber = 0;
     cycle.total = 0;
     cycle.results = [];
+    cycle.lastOutcome = null;
+    clearGame();
     hideSummary();
     hideResult();
     setScore(0);
     openPlaybook();
+}
+
+/**
+ * PICK UP WHERE THEY LEFT OFF (QA item 10).
+ *
+ * Only the scoreboard is restored, because only the scoreboard was saved: the
+ * next thing that happens is the playbook, which is exactly where somebody who
+ * has just finished play four should be. See progress.js for why a play in
+ * flight is deliberately not resumable.
+ */
+function resumeGame(saved) {
+    cycle.playNumber = saved.playNumber;
+    cycle.total = saved.total;
+    cycle.results = saved.results;
+    cycle.lastOutcome = null;
+    hideSummary();
+    hideResult();
+    setPlayNumber(cycle.playNumber, CFG.rules.playsPerGame);
+    setScore(cycle.total);
+    updateScoreboard({
+        play: cycle.playNumber, of: CFG.rules.playsPerGame, score: cycle.total,
+    });
+    openPlaybook();
+}
+
+/**
+ * START OVER (QA item 11).
+ *
+ * Reachable from the playbook, which is where somebody between plays already
+ * is, and confirmed there rather than here: the button asks twice, because with
+ * a game now saved across reloads an accidental press costs something real.
+ */
+function onStartOver() {
+    clearGame();
+    startGame();
 }
 
 /** Advance the play cycle. Kept apart from rendering so the whole thing is one
@@ -441,10 +540,19 @@ function stepCycle(delta) {
         // is always the quarterback and after one the ball has its own slot.
         showBall(objs, delta);
         if (done) {
+            // THE REPLAY ENDS ON THE SAME TACKLE THE PLAY DID. The recording
+            // stops at the whistle, which is where the hit starts, so it is
+            // started here from the pair decided at the whistle. Positions,
+            // not objects, precisely so this works on a rebuilt frame.
+            if (cycle.tackle.tackler && takedownClock() < 0) {
+                beginTakedown(cycle.tackle.tackler, cycle.tackle.carrier);
+            }
             // Hold the last frame for a beat before the card, so the replay
             // ends on a composition rather than cutting away mid-motion.
             cycle.replayHold += delta;
-            if (cycle.replayHold >= CFG.camera.replay.holdEnd) {
+            const hold = CFG.camera.replay.holdEnd
+                + (cycle.tackle.tackler ? takedownLength() : 0);
+            if (cycle.replayHold >= hold) {
                 showHud(true);
                 clearActions();
                 presentResult();
@@ -456,8 +564,9 @@ function stepCycle(delta) {
     cycle.held += delta;
 
     if (cycle.phase === 'presnap') {
-        // Waiting on the snap button. The formation holds, nothing ticks.
-        syncFigures(cycle.play.game.objects, delta);
+        // Waiting on the snap. The formation holds, nothing ticks, and every
+        // player faces the other team (QA item 12).
+        syncFigures(cycle.play.game.objects, delta, { presnap: true });
         showBall(cycle.play.game.objects, delta);
         return;
     }
@@ -472,13 +581,8 @@ function stepCycle(delta) {
             cycle.accumulator -= SIM_STEP;
         }
         // The simulation blows its own whistle. A timeout is only a backstop.
-        if (isDone(cycle.play) || cycle.held >= PLAY_TIMEOUT) {
-            cycle.play.live = false;
-            cycle.phase = 'settle';
-            cycle.held = 0;
-            clearActions();
-        }
-    } else if (cycle.held >= HOLD_SETTLE) {
+        if (isDone(cycle.play) || cycle.held >= PLAY_TIMEOUT) beginSettle();
+    } else if (cycle.held >= cycle.settleFor) {
         finishPlay();
         return;
     }
@@ -679,6 +783,18 @@ function tapTargets() {
 }
 
 function onCanvasPointer(event) {
+    // TAPPING ANYWHERE SNAPS IT (QA item 8). Before the snap there is exactly
+    // one thing a visitor can do, the whole field is a picture of them waiting
+    // to do it, and asking a finger to find the quarterback among seventeen
+    // figures is a hunt for no reason. The quarterback stays tappable because
+    // he is still the one under the finger most of the time, and the marker
+    // under him still breathes, so the gesture the 2D game taught still works.
+    if (cycle.phase === 'presnap') {
+        event.preventDefault();
+        onSnap();
+        return;
+    }
+
     const targets = tapTargets();
     if (!targets.length) return;
 
@@ -752,7 +868,7 @@ async function init() {
     initAudio();
 
     setProgress(0.85, 'Opening the playbook…');
-    initPlaybook(startPlay);
+    initPlaybook(startPlay, onStartOver);
     initHud({
         onSnap, onThrow, onRun, onNext,
         onReplay: startReplay,
@@ -790,7 +906,14 @@ async function init() {
     // THE WELCOME CARD COMES FIRST, and only on arrival. "Play again" from the
     // summary goes straight back to the playbook, because somebody who has
     // just finished ten plays does not need the rules again.
-    showWelcome(startGame);
+    //
+    // A GAME LEFT UNFINISHED IS OFFERED BACK on the same card rather than
+    // resumed silently. Somebody returning to a tab they left open an hour ago
+    // needs to be told they are four plays into something before the playbook
+    // opens on play five, and one entry point is simpler to reason about than
+    // two. The card just changes what its button says.
+    const saved = readGame();
+    showWelcome(saved ? () => resumeGame(saved) : startGame, saved, startGame);
 
     state.isLoaded = true;
     state.isRunning = true;

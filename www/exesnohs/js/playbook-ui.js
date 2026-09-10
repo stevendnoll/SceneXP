@@ -97,6 +97,7 @@ const defenseLabel = (slug) => slug.replace(/^([a-z]+)(\d+)$/, (_m, w, n) =>
 
 const book = new OffensivePlaybookClass({});
 let onChoose = null;
+let onStartOver = null;
 let settings = { lastPlay: '', defense: '' };
 
 // ---- Persistence -----------------------------------------------------------
@@ -288,16 +289,35 @@ function buildCard(play) {
     blurb.textContent = play.blurb;
     button.appendChild(blurb);
 
-    if (settings.lastPlay === play.slug) {
-        const last = document.createElement('span');
-        last.className = 'play-last';
-        last.textContent = 'Last play';
-        button.appendChild(last);
-    }
-
+    // The "Last play" tag is not built here. See `markLastPlay`.
     button.addEventListener('click', () => choose(play.slug));
     item.appendChild(button);
     return item;
+}
+
+/**
+ * MOVE THE "LAST PLAY" TAG TO THE PLAY THAT WAS ACTUALLY LAST.
+ *
+ * QA ITEM 1. It used to be built into the card, once, inside `initPlaybook`,
+ * which runs a single time at boot against whatever was in localStorage when
+ * the page loaded. `choose` then updated that stored value and never rebuilt
+ * anything, so the tag stayed pinned to the play from the PREVIOUS VISIT for
+ * the whole session however many plays were called. A returning visitor saw it
+ * on a play they had not touched today, and a first-time visitor never saw it
+ * at all.
+ *
+ * Re-applied every time the playbook opens, which is the only moment it can be
+ * read, so it cannot go stale: there is nowhere for it to be wrong.
+ */
+function markLastPlay(root) {
+    for (const tag of root.querySelectorAll('.play-last')) tag.remove();
+    if (!settings.lastPlay) return;
+    const button = root.querySelector(`.play-choose[data-slug="${settings.lastPlay}"]`);
+    if (!button) return;
+    const tag = document.createElement('span');
+    tag.className = 'play-last';
+    tag.textContent = 'Last play';
+    button.appendChild(tag);
 }
 
 /** Draw every diagram. Must run AFTER the canvases are in the document,
@@ -320,12 +340,83 @@ function choose(slug) {
 
 // ---- Public surface --------------------------------------------------------
 
-export function initPlaybook(handler) {
+/**
+ * STARTING OVER, AND IT ASKS TWICE.
+ *
+ * QA ITEM 11: a visitor who has had three bad plays should not have to sit
+ * through seven more to get a fresh ten. It lives here rather than in the HUD
+ * because the playbook is where somebody between plays already is, and because
+ * a control that can end a game should not be sitting next to the score during
+ * one.
+ *
+ * The confirm is not decoration. A game now survives a reload (progress.js), so
+ * this button destroys something real, and one press of a small word in a
+ * corner is not enough intent for that. The second press is the decision; a
+ * cancel or reopening the playbook puts it back.
+ */
+function buildStartOver() {
+    const wrap = document.createElement('div');
+    wrap.className = 'playbook-restart';
+
+    const ask = document.createElement('button');
+    ask.type = 'button';
+    ask.className = 'playbook-restart-btn';
+    ask.textContent = 'Start over';
+
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.className = 'playbook-restart-btn is-confirm';
+    confirm.textContent = 'Start over?';
+    confirm.hidden = true;
+    confirm.setAttribute('aria-label', 'Confirm starting a new game');
+
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'playbook-restart-btn';
+    cancel.textContent = 'Keep playing';
+    cancel.hidden = true;
+
+    const settle = () => { ask.hidden = false; confirm.hidden = true; cancel.hidden = true; };
+    ask.addEventListener('click', () => {
+        ask.hidden = true;
+        confirm.hidden = false;
+        cancel.hidden = false;
+        confirm.focus();
+    });
+    cancel.addEventListener('click', () => { settle(); ask.focus(); });
+    confirm.addEventListener('click', () => {
+        settle();
+        if (onStartOver) onStartOver();
+    });
+
+    // appendChild rather than append: the headless DOM the suite boots this
+    // module against implements one and not the other, and a builder that
+    // throws leaves the playbook with no cards in it at all.
+    wrap.appendChild(ask);
+    wrap.appendChild(confirm);
+    wrap.appendChild(cancel);
+    return wrap;
+}
+
+/** Put the restart control back to its resting state, so a playbook that opens
+ *  never opens mid-question. */
+function settleStartOver(root) {
+    const wrap = root.querySelector('.playbook-restart');
+    if (!wrap) return;
+    const buttons = wrap.querySelectorAll('.playbook-restart-btn');
+    buttons.forEach((b, i) => { b.hidden = i !== 0; });
+}
+
+export function initPlaybook(handler, startOver = null) {
     onChoose = handler;
+    onStartOver = startOver;
     load();
 
     const root = document.getElementById('playbook');
     if (!root) return;
+    const head = root.querySelector('.playbook-head');
+    if (head && onStartOver) head.appendChild(buildStartOver());
+
     const body = root.querySelector('.playbook-body');
     if (!body) return;
     body.textContent = '';
@@ -344,6 +435,10 @@ export function show() {
     const root = document.getElementById('playbook');
     if (!root) return;
     root.hidden = false;
+    // Read the last play HERE, every time, rather than once at boot: it is the
+    // only moment at which the answer is current (QA item 1).
+    markLastPlay(root);
+    settleStartOver(root);
     // Focus the first play so a keyboard visitor lands somewhere useful rather
     // than at the top of the document.
     const first = root.querySelector('.play-choose');

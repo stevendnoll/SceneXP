@@ -32,6 +32,7 @@
  */
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
 import { EXESNOHS_CONFIG as CFG } from './config.min.js';
+import { solveArm, calibrate } from './arm.min.js';
 
 /** The 2D game's own team colours and names. */
 export const TEAMS = {
@@ -74,19 +75,48 @@ const figures = new Map();   // position -> THREE.Group
 /**
  * WHAT THE SHELL HAS TO COVER, TAKEN FROM THE RIG RATHER THAN GUESSED.
  *
- * people-1.0.0 puts the head at `legLength + torsoHeight + neckHeight +
- * headRadius`, which is 1.62, with a radius of 0.12, and then hangs hair off
- * it: `hairTop` at +0.05, `hairSide` at +0.06 and `hairBack` at -0.10, each
- * about 0.125 across. So the thing a helmet has to hide runs from roughly 1.50
- * to 1.70 and is 0.25 wide.
+ * AND IT WAS NOT TAKEN FROM THE RIG, WHICH IS WHY THE HELMET FLOATED.
  *
- * THE PREVIOUS SHELL DID NOT REACH, and that is why the second attempt looked
- * WORSE than the first. It stopped at 1.50 on paper and its scale pulled the
- * real edge up above that, so a band of black hair showed all the way round the
- * back below a big pale dome. A gap between a helmet and a head reads as a hat
- * two sizes too small, and no amount of facemask fixes it.
+ * people-1.0.0 puts the head at `legLength + torsoHeight + neckHeight +
+ * headRadius`. That is 0.75 + 0.55 + 0.08 + 0.12, which is 1.50. This said
+ * 1.62, because the head's own radius had been added twice, and the whole
+ * helmet assembly was built around it: a shell 0.12 too high in a rig whose
+ * head is 0.24 across, scaled by 2.2, which is a quarter of a metre of daylight
+ * between a helmet and the skull it is supposed to be on.
+ *
+ * That is the "hat two sizes too small" D117 set out to fix and made worse, and
+ * it is visible in every screenshot of this game as a coloured dome sitting
+ * above a bare head. Nothing caught it because `buildHelmetParts` is measured
+ * against THESE NUMBERS rather than against a person: the test asked whether
+ * the shell covered a head at 1.62, and it did.
+ *
+ * Read off a figure built against a real three: head centre 1.500, radius 0.12,
+ * hair spheres centred 1.55 (top), 1.56 (side) and 1.40 (back) at 0.126 across,
+ * so the thing a helmet has to hide runs from 1.29 to 1.68.
  */
-export const HEAD = { y: 1.62, r: 0.12, hairR: 0.128, hairLow: 1.50, hairHigh: 1.70 };
+export const HEAD = { y: 1.50, r: 0.12, hairR: 0.128, hairLow: 1.395, hairHigh: 1.671 };
+
+/**
+ * EVERY PART OF THE HELMET IS WRITTEN RELATIVE TO THE HEAD, so a measurement
+ * that moves takes the whole assembly with it rather than leaving the crown
+ * behind. That is the only real protection against this happening again: the
+ * previous version wrote seven absolute y values against a head height that was
+ * wrong, and moving the head meant finding all seven.
+ *
+ * The offsets are derived from the envelope, measured against a real three: the
+ * head sphere runs 1.380 to 1.620 and the hair group 1.395 to 1.671, so a shell
+ * centred 0.020 above the head with a half-height of 0.158 reaches 1.678 over
+ * the hair and, sweeping 0.92 of a half-turn, drops to 1.367 at the back, which
+ * is below the ears at 1.482.
+ */
+const HELMET = {
+    up: 0.020,          // the shell's centre, just above the head's
+    flap: -0.030,       // the ear flaps, over ears that sit at -0.02 to +0.02
+    mask: [-0.020, -0.065, -0.110],
+    bridge: -0.062,
+    stem: -0.024,
+    strap: -0.124,
+};
 
 /**
  * The helmet, as a list of parts.
@@ -132,11 +162,15 @@ export function buildHelmetParts(shellMat, maskMat) {
      */
     const GAP = 1.40;                  // radians of face opening, about 80 degrees
     const R = 0.145;
-    const AT = [0, 1.622, -0.010];
-    const SCALE = [1.06, 1.04, 1.16];
+    const AT = [0, HEAD.y + HELMET.up, -0.010];
+    // TALLER THAN IT WAS, and that is the other half of the floating shell. At
+    // 1.04 the half-height was 0.151 and the hair reaches 0.171 above the head's
+    // centre, so even a correctly placed shell of that size left the top of the
+    // hair outside it. 1.09 covers the lot with 3mm to spare.
+    const SCALE = [1.06, 1.09, 1.16];
     // Where the crown stops and the face opening begins. At 0.42 of a
-    // half-turn the join sits at y = 1.66, which is above the eyes, so the
-    // opening starts at the brow the way a real shell does.
+    // half-turn the join sits at y = 1.56, which is above the eyes at 1.52, so
+    // the opening starts at the brow the way a real shell does.
     const CROWN = Math.PI * 0.42;
 
     const crown = new THREE.Mesh(
@@ -170,7 +204,7 @@ export function buildHelmetParts(shellMat, maskMat) {
      */
     for (const side of [-1, 1]) {
         const flap = new THREE.Mesh(new THREE.SphereGeometry(0.062, 10, 8), shellMat);
-        flap.position.set(side * 0.128, 1.545, 0.016);
+        flap.position.set(side * 0.128, HEAD.y + HELMET.flap, 0.016);
         flap.scale.set(0.62, 1.02, 1.05);
         flap.name = 'helmet-flap';
         parts.push(flap);
@@ -185,9 +219,9 @@ export function buildHelmetParts(shellMat, maskMat) {
      */
     const MASK_Z = 0.185;
     for (const [y, halfWidth, z] of [
-        [1.610, 0.084, MASK_Z - 0.022],
-        [1.563, 0.092, MASK_Z],
-        [1.516, 0.080, MASK_Z - 0.012],
+        [HEAD.y + HELMET.mask[0], 0.084, MASK_Z - 0.022],
+        [HEAD.y + HELMET.mask[1], 0.092, MASK_Z],
+        [HEAD.y + HELMET.mask[2], 0.080, MASK_Z - 0.012],
     ]) {
         const bar = new THREE.Mesh(
             new THREE.CylinderGeometry(0.0115, 0.0115, halfWidth * 2, 6), maskMat
@@ -200,7 +234,7 @@ export function buildHelmetParts(shellMat, maskMat) {
     const centre = new THREE.Mesh(
         new THREE.CylinderGeometry(0.0105, 0.0105, 0.11, 6), maskMat
     );
-    centre.position.set(0, 1.562, MASK_Z - 0.004);
+    centre.position.set(0, HEAD.y + HELMET.bridge, MASK_Z - 0.004);
     centre.rotation.x = 0.10;
     centre.name = 'helmet-mask';
     parts.push(centre);
@@ -212,7 +246,7 @@ export function buildHelmetParts(shellMat, maskMat) {
             new THREE.CylinderGeometry(0.0095, 0.0095, 0.125, 6), maskMat
         );
         stem.rotation.set(Math.PI / 2 - 0.26, 0, 0);
-        stem.position.set(side * 0.086, 1.596, 0.122);
+        stem.position.set(side * 0.086, HEAD.y + HELMET.stem, 0.122);
         stem.name = 'helmet-mask';
         parts.push(stem);
     }
@@ -222,7 +256,7 @@ export function buildHelmetParts(shellMat, maskMat) {
         new THREE.CylinderGeometry(0.0105, 0.0105, 0.20, 6), maskMat
     );
     strap.rotation.set(0, 0, Math.PI / 2);
-    strap.position.set(0, 1.496, 0.058);
+    strap.position.set(0, HEAD.y + HELMET.strap, 0.058);
     strap.name = 'helmet-strap';
     parts.push(strap);
 
@@ -273,22 +307,30 @@ function addContactShadow(person) {
  *
  * The shared rig groups each arm at the shoulder and tags it, so the arms are
  * the one limb that can be animated: the legs are bare meshes with no pivot.
- * That makes four poses the entire vocabulary, and it is enough, because each
- * of them answers a question a viewer is actually asking.
+ * That makes six poses the entire vocabulary, and it is enough, because each of
+ * them answers a question a viewer is actually asking.
  *
  *   running      is he moving, and how fast
  *   throwHold    is the quarterback looking downfield or has he tucked it
  *   tuck         who has the ball right now
  *   block        is my line holding anybody up
+ *   catching     is he going to get to this ball
+ *   tackle       is somebody about to bring him down
  *
  * THE TWO ARMS ARE IN ANTIPHASE WHEN RUNNING, which is the lesson from the
  * letters attempt (D24). Swinging them together, however subtly, reads as a
  * pulse rather than as a stride.
  *
- * NEGATIVE rotation.x IS FORWARD. The arm group hangs down its local -Y, and
- * rotating about +X carries that to -Z while the rig faces +Z. Derived from the
- * axes rather than guessed, because guessing it produces a quarterback throwing
- * over his own back and a lineman blocking the man behind him.
+ * EVERY POSE BUT THE RUN IS A HAND POSITION, NOT AN ANGLE, and that is this
+ * round's change. Angles are how the elbow ended up hyperextended in all five
+ * of them at once: the sign that folds a forearm forward is not the sign it
+ * looks like it should be (see arm.js), and no amount of looking at a
+ * screenshot of a 40-pixel figure settles which one is in front. A hand
+ * position can be pictured, argued about and measured, and arm.js turns it into
+ * the three angles that reach it.
+ *
+ * A pose's `hand` is written for the arm on the POSITIVE side and mirrored in x
+ * for the other one, which is why there is only one number for both.
  *
  * `armSide` is -1 on one arm and +1 on the other, and the THROWING ARM is the
  * positive one, chosen once here so the ball and the arm cannot disagree.
@@ -296,6 +338,31 @@ function addContactShadow(person) {
 export const THROWING_SIDE = 1;
 
 const lerp = (a, b, t) => a + (b - a) * t;
+
+/**
+ * The three angles for a fixed hand position, worked out once.
+ *
+ * The solve is a handful of trig calls and could run every frame for every arm
+ * without anybody noticing, but a constant target has a constant answer and
+ * caching it says so. The catch pose deliberately does NOT come through here:
+ * its target is the ball, which is somewhere different on every frame.
+ */
+const solved = new Map();
+function anglesFor(hand, side) {
+    const key = `${hand.x},${hand.y},${hand.z},${side}`;
+    let got = solved.get(key);
+    if (!got) {
+        got = solveArm({ x: side * hand.x, y: hand.y, z: hand.z }, side);
+        solved.set(key, got);
+    }
+    return got;
+}
+
+/** Dropped when the rig's measurements change under us, which only happens in
+ *  a test that calibrates twice. */
+export function forgetSolvedPoses() {
+    solved.clear();
+}
 
 /**
  * Pose one figure for this frame.
@@ -307,8 +374,9 @@ const lerp = (a, b, t) => a + (b - a) * t;
  * frame, so the arms ran at double rate on a 120Hz display and kept swinging
  * after the whistle because nothing zeroes those fields when a play ends.
  *
- * `act` is what the figure is doing beyond running: `{ carry, throwT, block }`.
- * Anything omitted is simply not applied, so a plain runner costs one lerp.
+ * `act` is what the figure is doing beyond running:
+ * `{ carry, throwT, block, tackle, down, reach, reachAt }`. Anything omitted is
+ * simply not applied, so a plain runner costs one lerp.
  */
 export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 60) {
     const arms = figure.userData.arms;
@@ -337,45 +405,74 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
         const restZ = arm.userData.restZ !== undefined ? arm.userData.restZ : side * 0.15;
 
         // The stride, which every pose below overrides or blends against. A
-        // running arm carries a little permanent elbow, because a person
-        // sprinting with two straight arms reads as a mannequin on wheels.
+        // running arm carries a real elbow, because a person sprinting with two
+        // straight arms reads as a mannequin on wheels. Written as an amount of
+        // FLEXION and applied as a negative angle, which is the one direction
+        // an elbow bends.
         let x = rest + (side < 0 ? swing : -swing);
         let z = restZ;
-        let fore = 0.16 + effort * 0.55;
+        let fore = -(P.runElbow.rest + effort * P.runElbow.sprint);
 
-        if (act.tackle > 0) {
+        if (act.reach > 0 && act.reachAt) {
+            /**
+             * GOING UP FOR THE BALL, AND THE TARGET IS THE BALL ITSELF.
+             *
+             * The two hands cradle it rather than both stabbing at its centre,
+             * which is why the split is applied along the arm's own side. A
+             * target further away than the arm can stretch is not an error and
+             * not clamped away: arm.js points the limb at it and extends, so a
+             * receiver who cannot quite get there is visibly reaching for it,
+             * which is most of what makes a catch look like a catch.
+             */
+            const target = {
+                x: act.reachAt.x + side * P.catching.split,
+                y: act.reachAt.y,
+                z: act.reachAt.z,
+            };
+            const a = solveArm(target, side);
+            x = lerp(x, a.armX, act.reach);
+            z = lerp(z, a.armZ, act.reach);
+            fore = lerp(fore, a.foreX, act.reach);
+        } else if (act.tackle > 0) {
             // Both arms low and reaching round him. Beats blocking, because a
             // lineman who has arrived at the ball carrier is tackling.
-            const T = P.tackle;
-            x = lerp(x, T.armX, act.tackle);
-            z = lerp(z, side * T.armZ, act.tackle);
-            fore = lerp(fore, T.foreX, act.tackle);
+            const a = anglesFor(P.tackle.hand, side);
+            x = lerp(x, a.armX, act.tackle);
+            z = lerp(z, a.armZ, act.tackle);
+            fore = lerp(fore, a.foreX, act.tackle);
         } else if (act.block > 0) {
             // Both arms out at the man in front. Held rather than swung: a
             // blocker's arms are the one part of him that is not running.
-            x = lerp(x, P.block.armX, act.block);
-            z = lerp(z, side * P.block.armZ, act.block);
-            fore = lerp(fore, 0.30, act.block);
+            const a = anglesFor(P.block.hand, side);
+            x = lerp(x, a.armX, act.block);
+            z = lerp(z, a.armZ, act.block);
+            fore = lerp(fore, a.foreX, act.block);
         } else if (act.carry === 'throw') {
             const H = P.throwHold;
             if (side === THROWING_SIDE) {
                 // Cocked, and swept forward while the elbow straightens, which
-                // is what a throw is.
+                // is what a throw is. Interpolating the two solved poses runs
+                // the hand up over the shoulder, past the ear and down across
+                // the body, so the whole motion falls out of its two ends.
                 const t = act.throwT || 0;
-                x = lerp(H.armX, P.throwRelease.armX, t);
-                z = side * H.armZ * (1 - t * 0.7);
-                fore = lerp(H.foreX, P.throwRelease.foreX, t);
+                const from = anglesFor(H.hand, side);
+                const to = anglesFor(P.throwRelease.hand, side);
+                x = lerp(from.armX, to.armX, t);
+                z = lerp(from.armZ, to.armZ, t);
+                fore = lerp(from.foreX, to.foreX, t);
             } else {
-                x = H.offX;
-                z = side * H.offZ;
-                fore = H.offFore;
+                const a = anglesFor(H.offHand, side);
+                x = a.armX;
+                z = a.armZ;
+                fore = a.foreX;
             }
         } else if (act.carry === 'tuck' && side === THROWING_SIDE) {
             // Only the carrying arm folds. The other one still runs, which is
             // what makes a tuck read as a tuck rather than as a shrug.
-            x = P.tuck.armX;
-            z = side * P.tuck.armZ;
-            fore = P.tuck.foreX;
+            const a = anglesFor(P.tuck.hand, side);
+            x = a.armX;
+            z = a.armZ;
+            fore = a.foreX;
         }
 
         // THE SWEEP OF A THROW IS THE ONE THING THAT MAY SNAP. It is already a
@@ -472,6 +569,38 @@ export function getRosterStats() {
     return lastShareStats;
 }
 
+/**
+ * HOW HIGH A FIGURE'S OWN ORIGIN HAS TO SIT, which is not zero.
+ *
+ * `createPerson` finishes by placing itself at y = 0.055, because its shoes
+ * hang below its origin and that is what puts them on the floor. view.js writes
+ * `position.set(x, 0, z)` and threw that away, so every player on this field has
+ * been standing 12cm deep in the turf: small on a 1.75m person and a visible
+ * ankle on one scaled to 3.85m.
+ *
+ * Measured off the rig rather than copied, and multiplied by `figureScale`
+ * because it is a length like any other.
+ */
+export let FIGURE_LIFT = 0.055 * CFG.figureScale;
+
+/** Take the arm's geometry off a real figure and hand it to the solver. */
+function measureArm(person) {
+    const arm = (person.userData.arms || [])[0];
+    if (!arm || !arm.userData || !arm.userData.forearm) return;
+    const hand = arm.userData.forearm.children.find(
+        (c) => c.isMesh && c.geometry && c.geometry.type === 'SphereGeometry'
+            && c.geometry.parameters && c.geometry.parameters.radius < 0.045
+    );
+    calibrate({
+        shoulderX: Math.abs(arm.position.x),
+        shoulderY: arm.position.y,
+        upper: Math.abs(arm.userData.forearm.position.y),
+        lower: hand ? Math.abs(hand.position.y) : 0,
+        restZ: Math.abs(arm.userData.restZ),
+    });
+    forgetSolvedPoses();
+}
+
 /** Build every figure. Nothing is positioned here: view.js owns placement. */
 export function initRoster(scene, objects) {
     disposeRoster();
@@ -506,6 +635,11 @@ export function initRoster(scene, objects) {
         });
         addHelmet(person, kit);
         addContactShadow(person);
+        // Read before anything overwrites it, and only when it is a real
+        // number: under the test stub every property is a proxy.
+        if (Number.isFinite(person.position.y) && person.position.y > 0) {
+            FIGURE_LIFT = person.position.y * CFG.figureScale;
+        }
         // Scaled as a whole, so the helmet, the contact shadow and every limb
         // pivot move together. Scaling the rig's parts individually would put
         // the helmet through the head.
@@ -532,6 +666,12 @@ export function initRoster(scene, objects) {
             arm.userData.restX = arm.rotation.x;
             arm.userData.restZ = arm.rotation.z;
         }
+        // AND THE ARM'S MEASUREMENTS GO THE SAME WAY, for the same reason.
+        // arm.js has to know where the shoulder is and how long the two
+        // segments are to put a hand anywhere, and reading them off a figure
+        // that was actually built means a change in the shared part arrives
+        // here rather than quietly moving every pose in the game.
+        measureArm(person);
 
         person.visible = false;
         group.add(person);
