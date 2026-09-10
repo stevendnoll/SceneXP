@@ -369,28 +369,22 @@ export function showSkipReplay() {
     skip.id = 'skip-replay-btn';
     box.appendChild(skip);
     skip.focus();
-
-    /**
-     * AND A LINE SAYING THE CAMERA IS YOURS.
-     *
-     * A control nobody is told about is a feature nobody has. It is a HINT
-     * rather than a control: it names the ways in, it is not a tab stop, and it
-     * goes the moment the visitor uses any of them, because at that point it is
-     * telling them something they have just done.
-     */
-    const hint = document.createElement('p');
-    hint.id = 'replay-hint';
-    hint.className = 'hud-hint';
-    hint.textContent = 'Switch view for another angle, scroll or pinch to zoom';
-    box.appendChild(hint);
 }
 
-/** The visitor has moved the camera, so the hint has done its job. Safe to
- *  call on every frame of a drag: it is a no-op once the node has gone. */
-export function hideReplayHint() {
-    const hint = el('replay-hint');
-    if (hint && hint.parentNode) hint.parentNode.removeChild(hint);
-}
+/**
+ * THERE IS NO LONGER A LINE UNDER THESE EXPLAINING THEM, and it is worth saying
+ * why rather than leaving the gap.
+ *
+ * It read "Switch view for another angle, scroll or pinch to zoom", and it was
+ * written when the camera was a DRAG: a gesture nobody is told about is a
+ * feature nobody has. A labelled button is not a gesture. It says what it does
+ * on its face, so the line under it was repeating the button and taking a strip
+ * of the picture to do it (QA round twenty-three).
+ *
+ * The zoom lost its only mention along with it, which is the deliberate trade:
+ * pinching and scrolling are what everything else on a phone does to a picture,
+ * and the button is the one that needed announcing.
+ */
 
 /**
  * The welcome card.

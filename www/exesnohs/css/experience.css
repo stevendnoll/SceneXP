@@ -483,22 +483,6 @@ body {
 }
 
 /**
- * THE LINE UNDER THE REPLAY BUTTON THAT SAYS THE CAMERA IS YOURS.
- *
- * It is a hint, not a control, so it sits quieter than the button above it and
- * has no box of its own. `pointer-events: none` because the one thing a visitor
- * might do next is drag the field, and a caption that eats the first drag is
- * worse than no caption.
- */
-.hud-hint {
-    margin: 0.45rem 0 0;
-    color: #8d97a8;
-    font-size: 0.8rem;
-    text-align: center;
-    pointer-events: none;
-}
-
-/**
  * THE KEYBOARD LINE ON THE WELCOME CARD.
  *
  * A key cap has to read as a THING TO PRESS rather than as emphasis, and at

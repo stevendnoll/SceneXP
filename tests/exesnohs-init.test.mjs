@@ -309,9 +309,12 @@ describe('a replay can be got out of', () => {
         // would be holding a second copy of the module's state and it would
         // answer 0 forever however many times the button was pressed.
         const camera = await import('../www/exesnohs/js/camera.min.js');
-        const hinted = () => dom.el('hud-actions').children
-            .some((n) => n.id === 'replay-hint');
-        expect(hinted()).toBe(true);
+        // AND NOTHING UNDER THEM EXPLAINING THEM. A labelled button is not a
+        // gesture: it says what it does on its face, so the line that used to
+        // sit here was repeating the button and taking a strip of the picture
+        // to do it (QA round twenty-three).
+        expect(dom.el('hud-actions').children.map((n) => n.tagName))
+            .not.toContain('P');
         const before = camera.viewQuarter();
         swap.click();
         await flushAsync();
@@ -329,6 +332,80 @@ describe('a replay can be got out of', () => {
         expect(dom.el('result').hidden).toBe(false);
         expect(dom.el('hud-actions').children.length).toBe(0);
         void main;
+    });
+
+    /**
+     * QA ROUND TWENTY-THREE: A SECOND LOOK AT THE SAME PLAY KEEPS THE ANGLE.
+     *
+     * Somebody who switches the view and then presses "Watch the replay" again
+     * is asking for THAT play from THAT angle, and handing them the default
+     * back makes the button they just pressed look broken. The next play is a
+     * new question and opens on the shot the director composed.
+     */
+    test('a second look at the same play opens where the first one left off', async () => {
+        const camera = await import('../www/exesnohs/js/camera.min.js');
+        // ONE CLOCK FOR THE WHOLE TEST. The frame loop reads its timestamp, so
+        // restarting the count for the second play hands it a jump backwards
+        // and nothing advances: the second replay would sit on frame one and
+        // the test would be measuring the wrong thing while passing.
+        let now = 0;
+        const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+        const toResult = () => {
+            for (let i = 0; i < 900 && dom.el('result').hidden !== false; i += 1) frames(1);
+        };
+        const watch = async () => {
+            const b = dom.el('result-actions').children
+                .find((x) => x.textContent === 'Watch the replay');
+            expect(b).toBeTruthy();
+            b.click();
+            await flushAsync();
+            frames(2);
+        };
+        const pressIn = (label) => {
+            const b = dom.el('hud-actions').children.find((x) => x.textContent === label);
+            expect(b).toBeTruthy();
+            b.click();
+        };
+
+        await toLivePlay();
+        press('Snap the ball');
+        await flushAsync();
+        press('Throw');
+        await flushAsync();
+        toResult();
+
+        await watch();
+        expect(camera.viewQuarter()).toBe(0);
+        pressIn('Switch view');
+        pressIn('Switch view');
+        const chosen = camera.viewQuarter();
+        expect(chosen).not.toBe(0);
+        pressIn('Skip replay');
+        await flushAsync();
+
+        // Same play, second look: the angle they chose is still there.
+        await watch();
+        expect(camera.viewQuarter()).toBe(chosen);
+        pressIn('Skip replay');
+        await flushAsync();
+
+        // On to play two, which is a new question and opens on the shot the
+        // director composed.
+        dom.el('result-actions').children
+            .find((b) => b.textContent === 'Next play').click();
+        await flushAsync();
+        // The playbook is open again, reached the way `toLivePlay` reaches it.
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        press('Snap the ball');
+        await flushAsync();
+        press('Throw');
+        await flushAsync();
+        toResult();
+
+        await watch();
+        expect(camera.viewQuarter()).toBe(0);
     });
 });
 

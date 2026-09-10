@@ -37,7 +37,7 @@ import { nextStreak, streakOver, difficultyFor } from './scoring.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
-    initKeys, hideReplayHint,
+    initKeys,
 } from './hud.min.js';
 import { showSummary, hideSummary } from './summary.min.js';
 import {
@@ -46,6 +46,7 @@ import {
 } from './replay.min.js';
 import {
     setDriver, setAspect, update as updateCamera, nudgeView, resetView, switchView,
+    resetShoulder,
 } from './camera.min.js';
 import {
     initAudio, unlock as unlockAudio, play as playSound, simAudio,
@@ -85,6 +86,16 @@ const cycle = {
     results: [],
     lastOutcome: null,
     replayHold: 0,
+    /**
+     * WHICH PLAY THE CHOSEN CAMERA ANGLE BELONGS TO.
+     *
+     * A visitor who switches the view and then watches the same play again is
+     * asking to see THAT play from THAT angle, so a second look opens where the
+     * first one left off. The next play is a new question and opens on the
+     * director's own shot. -1 belongs to no play, so the first replay of a game
+     * always resets.
+     */
+    viewPlay: -1,
     spotAt: null,         // world metres, where the last play finished
     /** ...and where the scoring band should light, which is NOT the same
      *  point: an interception has a spot and is worth no band. */
@@ -549,10 +560,27 @@ function startReplay() {
     // The spot belongs to the end of the play, and a replay is about to start
     // at the beginning of it. Leaving it standing would give away the ending.
     hideSpot();
-    // AND EVERY REPLAY OPENS ON THE SHOT IT WAS COMPOSED WITH. A visitor who
-    // swung the camera round on the last one is not asking for that angle on
-    // this one.
-    resetView();
+    /**
+     * AND EVERY REPLAY OPENS ON THE SHOT IT WAS COMPOSED WITH, unless it is a
+     * SECOND LOOK AT THE SAME PLAY.
+     *
+     * A visitor who switched the view on the last play is not asking for that
+     * angle on this one, which is why this was an unconditional reset. But one
+     * who switched the view and then pressed "Watch the replay" again is asking
+     * for exactly that angle, on exactly that play, and handing them the
+     * default back makes the button they just pressed look broken (QA round
+     * twenty-three).
+     *
+     * THE SHOULDER IS RESET EITHER WAY. It is the director's own choice of
+     * which side to orbit from for THIS carrier, not the visitor's, and a
+     * replay that starts mid-swing opens on a shot nobody composed.
+     */
+    if (cycle.viewPlay !== cycle.playNumber) {
+        cycle.viewPlay = cycle.playNumber;
+        resetView();
+    } else {
+        resetShoulder();
+    }
     // So does the tackle: it belongs to the last frame of the recording, and
     // the playhead is going back to the first.
     resetTakedown();
@@ -587,7 +615,6 @@ function onSwitchView() {
     if (!replayLive()) return;
     uiClick();
     switchView();
-    hideReplayHint();
 }
 
 function onNext() {
@@ -608,6 +635,7 @@ function onNext() {
 /** A fresh ten. */
 function startGame() {
     cycle.playNumber = 0;
+    cycle.viewPlay = -1;
     cycle.total = 0;
     cycle.results = [];
     cycle.lastOutcome = null;
@@ -629,6 +657,9 @@ function startGame() {
  */
 function resumeGame(saved) {
     cycle.playNumber = saved.playNumber;
+    // A resumed game has no replay to go back to, so nothing is remembered
+    // about how the last one was watched.
+    cycle.viewPlay = -1;
     cycle.total = saved.total;
     cycle.results = saved.results;
     cycle.lastOutcome = null;
@@ -1082,7 +1113,6 @@ function onCanvasDragMove(event) {
     if (drag.spread > 0 && spread > 0) {
         event.preventDefault();
         nudgeView({ zoom: drag.spread / spread });
-        hideReplayHint();
     }
     drag.spread = spread;
 }
@@ -1096,7 +1126,6 @@ function onCanvasWheel(event) {
     if (!replayLive()) return;
     event.preventDefault();
     nudgeView({ zoom: event.deltaY > 0 ? ZOOM_PER_NOTCH : 1 / ZOOM_PER_NOTCH });
-    hideReplayHint();
 }
 
 /**
@@ -1113,7 +1142,6 @@ function onReplayKey(event) {
     if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
         event.preventDefault();
         switchView(event.key === 'ArrowRight' ? 1 : -1);
-        hideReplayHint();
         return;
     }
     const zooms = {
@@ -1126,7 +1154,6 @@ function onReplayKey(event) {
     if (!zoom) return;
     event.preventDefault();
     nudgeView({ zoom });
-    hideReplayHint();
 }
 
 function onCanvasPointer(event) {
