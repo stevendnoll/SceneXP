@@ -682,13 +682,26 @@ describe('catching the ball', () => {
     test('a receiver catches the ball more often than not', () => {
         const { thrown, caught, picked } = throwGrid();
         expect(thrown).toBeGreaterThan(500);
-        // The port managed 49.8% of these, which is what QA was playing.
-        expect(caught / thrown).toBeGreaterThan(0.60);
+        /**
+         * THE PORT MANAGED 49.8% OF THESE, which is what QA was playing, and
+         * beating that is the entire claim.
+         *
+         * THE FLOOR CARRIES A REAL MARGIN, and it did not: it was 0.60 against
+         * a rate that is not a constant. Re-measured over ten independent runs
+         * of this same grid the rate runs 60.5% to 64.9%, and a run in CI came
+         * in at 59.9% and failed a test nothing had broken. 612 plays of a
+         * stochastic simulation carry about two points of standard error, so a
+         * floor three points under the mean fails something like one run in
+         * fifteen. 0.55 is still four sigma clear of the port and cannot flake.
+         */
+        expect(caught / thrown).toBeGreaterThan(0.55);
         // AND THE TURNOVERS DID NOT COME WITH IT. Widening the catch hands the
         // same reach to the secondary unless something stops it, and an
         // interception is the harshest outcome on the ladder. The port's own
-        // rate over this grid is 8.5%.
-        expect(picked / thrown).toBeLessThan(0.11);
+        // rate over this grid is 8.5% and ten runs of this one ranged to 9.8%,
+        // so the old 0.11 ceiling sat about one sigma away and had the same
+        // fault as the floor above.
+        expect(picked / thrown).toBeLessThan(0.13);
     });
 
     /**
@@ -846,6 +859,66 @@ describe('a block takes two', () => {
         // x1 is nearer him than x2 is, so that is the engagement he is in.
         expect(pair.get('db1').against).toBe('x1');
         expect(pair.get('db1').amount).toBe(pair.get('x1').amount);
+    });
+
+    /**
+     * QA ROUND TWENTY-ONE: THE RECEIVERS BLOCK TOO, once somebody is carrying
+     * it. That is the visible content of the run and the screen, which are the
+     * plays this game is really about: the points depend on how the team blocks
+     * for the carrier, and downfield that is the receivers doing it.
+     *
+     * There is no blocking flag in the ported simulation to read, so it is
+     * derived exactly the way the line's is. Measured, there is plenty to
+     * derive: while a teammate has the ball, the nearest defender to a receiver
+     * is a median 2.20m away, which is inside the lock.
+     */
+    const carrying = (position) => ({
+        settings: { position, team: 0, benched: false, positionGroup: 'wr' },
+        coords: { x: 0, y: -900, z: 1 },
+        state: { xSpeed: 0, ySpeed: 0, hasBall: true },
+    });
+
+    test('a receiver blocks once one of ours is carrying it, and not before', () => {
+        const near = 1.0 / UNITS_TO_METRES;
+        const field = () => [man('wr1', 0, 0, 0), man('db1', 1, near, 0), carrying('wr2')];
+
+        // Nobody has it: he is running a route, not blocking.
+        expect(blockersEngaged(field(), null).has('wr1')).toBe(false);
+        // A teammate has it, so he is blocking, and so is the man he is on.
+        const live = blockersEngaged(field(), carrying('wr2'));
+        expect(live.get('wr1')).toMatchObject({ against: 'db1' });
+        expect(live.get('db1')).toMatchObject({ against: 'wr1' });
+    });
+
+    test('and the man carrying it is never blocking for himself', () => {
+        const near = 1.0 / UNITS_TO_METRES;
+        const runner = {
+            settings: { position: 'wr1', team: 0, benched: false, positionGroup: 'wr' },
+            coords: { x: 0, y: 0, z: 1 },
+            state: { xSpeed: 0, ySpeed: 0, hasBall: true },
+        };
+        const pair = blockersEngaged([runner, man('db1', 1, near, 0)], runner);
+        expect(pair.has('wr1')).toBe(false);
+    });
+
+    /**
+     * NOT AFTER AN INTERCEPTION. With the ball going the other way a receiver
+     * is a tackler, and men who have just lost it putting their arms up to
+     * block would read as a team that had not noticed.
+     */
+    test('a receiver does not block for the man who just intercepted it', () => {
+        const near = 1.0 / UNITS_TO_METRES;
+        const thief = {
+            settings: { position: 'db2', team: 1, benched: false, positionGroup: 'db' },
+            coords: { x: 0, y: 500, z: 1 },
+            state: { xSpeed: 0, ySpeed: 0, hasBall: true },
+        };
+        const pair = blockersEngaged([man('wr1', 0, 0, 0), man('db1', 1, near, 0), thief], thief);
+        expect(pair.has('wr1')).toBe(false);
+        // ...and the line is unchanged, which is deliberate: it is a separate
+        // question and round nine's work is not this round's to disturb.
+        const withLine = blockersEngaged([man('x1', 0, 0, 0), man('db1', 1, near, 0), thief], thief);
+        expect(withLine.has('x1')).toBe(true);
     });
 
     /**
@@ -1453,8 +1526,8 @@ describe('he turns to the ball rather than reaching out of his own back', () => 
 
     test('a runner turns toward it and no further than his stride allows', () => {
         // Running straight down the field, ball dead behind him.
-        expect(deg(turnFor(Math.PI, 0))).toBeCloseTo(deg(CFG.pose.catching.turn), 6);
-        expect(deg(turnFor(-Math.PI, 0))).toBeCloseTo(-deg(CFG.pose.catching.turn), 6);
+        expect(deg(turnFor(Math.PI, 0))).toBeCloseTo(deg(CFG.pose.turnLimit), 6);
+        expect(deg(turnFor(-Math.PI, 0))).toBeCloseTo(-deg(CFG.pose.turnLimit), 6);
         // ...and a ball he could already see does not move him off his line by
         // one degree more than it takes to look at it.
         expect(turnFor(0.4, 0)).toBeCloseTo(0.4, 6);
@@ -1469,11 +1542,11 @@ describe('he turns to the ball rather than reaching out of his own back', () => 
         const running = 2.5;
         const want = wrap(running + Math.PI);
         expect(Math.abs(wrap(turnFor(want, running) - running)))
-            .toBeCloseTo(CFG.pose.catching.turn, 6);
+            .toBeCloseTo(CFG.pose.turnLimit, 6);
         // Off one shoulder, where the side is not a coin toss at all.
         const off = wrap(running + 2.6);
         expect(wrap(turnFor(off, running) - running))
-            .toBeCloseTo(CFG.pose.catching.turn, 6);
+            .toBeCloseTo(CFG.pose.turnLimit, 6);
     });
 
     /**

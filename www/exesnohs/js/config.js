@@ -1507,6 +1507,26 @@ const EXESNOHS_CONFIG = {
         },
 
         /**
+         * HOW FAR OFF HIS RUNNING LINE ANY FIGURE WILL TURN TO ATTEND TO
+         * SOMEBODY, in radians, and it only applies WHILE HE IS RUNNING.
+         *
+         * ONE NUMBER BECAUSE IT IS ONE JOINT. A receiver tracking a ball over
+         * his shoulder and a blocker squaring up to the man he is on are the
+         * same question: how far do the shoulders come off the direction the
+         * legs are carrying him. Turned the whole way either of them is drawn
+         * travelling backwards at six metres a second, because everything about
+         * how a figure looks while moving hangs off its yaw.
+         *
+         * 120 degrees is a man looking hard over one shoulder, which is the
+         * picture in both cases, and for the catch it leaves the ball inside
+         * `catching.armLimit` so his hands still get to it.
+         *
+         * A man who has STOPPED has no stride to protect and turns all the way
+         * round: a receiver waiting on a ball, or a lineman wrestling somebody.
+         */
+        turnLimit: 2.09,
+
+        /**
          * CATCHING IT, WHICH IS QA ITEM 5 AND THE ONLY POSE SOLVED PER FRAME.
          *
          * Everything else here is a fixed hand position that arm.js turns into
@@ -1531,21 +1551,6 @@ const EXESNOHS_CONFIG = {
             /** Seconds for the ball to settle from the catch into the tuck. A
              *  ball that teleports to the hip is a ball nobody caught. */
             gather: 0.26,
-            /**
-             * HOW FAR OFF HIS RUNNING LINE HE WILL TURN TO GO FOR IT, in
-             * radians, and it only applies WHILE HE IS RUNNING.
-             *
-             * A receiver tracking a ball over his shoulder turns his shoulders
-             * to it and keeps running the line he was running. Turned the whole
-             * way he would be drawn running backwards at six metres a second,
-             * because the stride follows the body. 120 degrees is a man looking
-             * hard over his shoulder, which is the picture, and it leaves the
-             * ball inside `armLimit` so his hands still get to it.
-             *
-             * A man who has STOPPED has no stride to protect and turns all the
-             * way round, which is what a receiver waiting on a ball does.
-             */
-            turn: 2.09,
             /**
              * ...and how far round from his own forward an arm will go, which
              * is a fact about a shoulder rather than a tuning.

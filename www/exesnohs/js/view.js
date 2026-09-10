@@ -367,12 +367,28 @@ function tacklersOn(objects, carrier) {
  * ONE PARTNER EACH, and the nearest wins. A defender worked by two blockers
  * keeps whichever engagement is further along, because he can only be leaning
  * on one man at a time and the closer one is the one he is leaning on.
+ *
+ * AND ONCE SOMEBODY IS CARRYING IT, THE RECEIVERS ARE BLOCKERS TOO. QA round
+ * twenty-one, and it is the visible content of the run and screen plays: the
+ * points depend on how the team blocks for the carrier, and downfield that is
+ * the receivers doing it. There is no blocking flag in the ported simulation to
+ * read, so it is derived the same way the line's is, and measured there is
+ * plenty to derive: while a teammate has the ball, the nearest defender to a
+ * receiver is a median 2.20m away, which is inside the lock.
+ *
+ * NOT AFTER AN INTERCEPTION. The carrier has to be one of ours: with the ball
+ * going the other way a receiver is a tackler, and men who have just lost it
+ * putting their arms up to block would read as a team that had not noticed.
  */
-export function blockersEngaged(objects) {
+export function blockersEngaged(objects, carrier) {
     const out = new Map();
     const reach = CFG.pose.block.reach;
     const foes = objects.filter((o) => !BENCHED(o) && o.settings.team === 1);
     if (!foes.length) return out;
+
+    const ours = !!carrier && carrier.settings.team === 0;
+    const blocks = (obj) => /^x\d$/.test(obj.settings.position)
+        || (ours && obj !== carrier && /^wr\d$/.test(obj.settings.position));
 
     const hold = (position, amount, against) => {
         const had = out.get(position);
@@ -380,7 +396,7 @@ export function blockersEngaged(objects) {
     };
 
     for (const obj of objects) {
-        if (BENCHED(obj) || !/^x\d$/.test(obj.settings.position)) continue;
+        if (BENCHED(obj) || !blocks(obj)) continue;
         let nearest = Infinity;
         let partner = null;
         const p = simToWorld(obj.coords.x, obj.coords.y, 0);
@@ -467,26 +483,27 @@ function reachersFor(objects) {
  * pinned by something else.
  */
 /**
- * HOW FAR ROUND HE WILL ACTUALLY TURN TO GO FOR IT.
+ * HOW FAR ROUND HE WILL ACTUALLY TURN TO ATTEND TO SOMEBODY.
  *
- * `want` is where the ball is and `running` is the line he is running, or null
- * for a man who has stopped getting anywhere.
+ * `want` is where the thing he is attending to is, and `running` is the line he
+ * is running, or null for a man who has stopped getting anywhere.
  *
- * A receiver tracking a ball over his shoulder turns to it and KEEPS RUNNING
- * THE LINE HE WAS RUNNING. Everything about how a figure looks while moving
- * hangs off its yaw, so turning him the whole way round would draw him
- * sprinting backwards down the field at six metres a second. Capping the turn
- * against his running line leaves him looking hard over one shoulder with his
- * legs still carrying him downfield, and it costs the simulation nothing:
- * his path was never this file's to change.
+ * A receiver tracking a ball over his shoulder, and a blocker squaring up to
+ * the man he is on, both KEEP RUNNING THE LINE THEY WERE RUNNING. Everything
+ * about how a figure looks while moving hangs off its yaw, so turning either of
+ * them the whole way round would draw him travelling backwards at six metres a
+ * second. Capping the turn against his running line leaves him looking hard
+ * over one shoulder with his legs still carrying him along, and it costs the
+ * simulation nothing: his path was never this file's to change.
  *
  * A MAN WHO HAS STOPPED TURNS ALL THE WAY ROUND, because the cap exists to
  * protect a stride and he does not have one. That is a receiver at the end of
- * his route waiting on the ball, and it should look like one.
+ * his route waiting on the ball, or a lineman wrestling somebody, and both
+ * should look like it.
  */
 export function turnFor(want, running) {
     if (want === null || running === null) return want;
-    const limit = CFG.pose.catching.turn;
+    const limit = CFG.pose.turnLimit;
     const off = wrapAngle(want - running);
     return running + (off < -limit ? -limit : (off > limit ? limit : off));
 }
@@ -779,8 +796,10 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
     // The snap's own clock, advanced once a frame whatever else is happening.
     if (snapAt.t >= 0) snapAt.t += delta;
     const snapped = snapProgress();
-    const engaged = blockersEngaged(objects);
+    // The carrier is found first because the blocks depend on him: once one of
+    // ours has it, the receivers are blocking for him too.
     const carrier = objects.find((o) => o.state && o.state.hasBall && !BENCHED(o));
+    const engaged = blockersEngaged(objects, carrier);
     noteAssignments(objects);
     const tacklers = tacklersOn(objects, carrier);
     const reaching = reachersFor(objects);
@@ -981,7 +1000,14 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
                 : (look ? Math.atan2(look.x - p.x, look.z - p.z) : running));
 
         // ...BUT HE DOES NOT STOP RUNNING TO DO IT. See `turnFor`.
-        if (going) want = turnFor(want, running);
+        //
+        // A BLOCKER IS CAPPED THE SAME WAY, and it started to matter when the
+        // receivers began blocking: a lineman wrestling somebody is barely
+        // travelling, so the cap never bound, but a receiver blocking downfield
+        // is doing a median 3.7 metres a second and a tenth of them are at a
+        // full sprint. Squared up without the cap, those are drawn sprinting
+        // backwards.
+        if (going || engagement) want = turnFor(want, running);
         if (want !== null) figure.userData.facing = want;
         else if (figure.userData.facing === undefined) {
             figure.userData.facing = downfield;
