@@ -860,6 +860,53 @@ describe('a block takes two', () => {
         // ...and level with the shoulder rather than down at the ribs.
         expect(CFG.pose.block.hand.y).toBeGreaterThanOrEqual(RIG.shoulderY);
     });
+
+    /**
+     * THE BLOCK CAN ACTUALLY FINISH, WHICH IT COULD NOT.
+     *
+     * The ramp ran to full commitment at HALF the reach, 1.30m, and two bodies
+     * in this game are never closer than `separation` at 1.45m. So the pose was
+     * unreachable by construction: measured over 204 plays, a pair the pose
+     * calls engaged sits a median 2.23m apart, at which it was 28% of the way
+     * into a block with both men's hands 0.21m short of each other. QA read it
+     * as "a blitzer often doesn't get close enough to the blocker for them to
+     * lock arms", and they never locked because it never finished.
+     */
+    test('a block completes at a distance two bodies can actually be', () => {
+        const B = CFG.pose.block;
+        expect(B.lock).toBeGreaterThan(CFG.separation);
+        expect(B.lock).toBeLessThan(B.reach);
+        // The measured median engagement, which is where the physics parks a
+        // pair, has to be a finished block rather than a quarter of one.
+        const at = (d) => Math.min(1, Math.max(0, (B.reach - d) / (B.reach - B.lock)));
+        expect(at(2.23)).toBe(1);
+        expect(at(B.reach + 0.01)).toBe(0);
+    });
+
+    /**
+     * AND THE LEAN CLOSES A GAP THE ARMS CANNOT.
+     *
+     * A lineman's collision box is 2.38m across against a drawn body of 1.45m,
+     * so the game holds an engaged pair further apart than two men can reach.
+     * The figures close it themselves. The property is that at the distance
+     * they are actually held at, leaning, their hands MEET, and that at the
+     * closest the physics ever puts them their heads still do not.
+     */
+    test('leaning into it is what makes their hands meet', () => {
+        const B = CFG.pose.block;
+        const F = CFG.figureScale;
+        // How far forward a hand gets, pitched about the figure's own feet.
+        const reachAt = (lean) => (B.hand.z * Math.cos(lean)
+            + B.hand.y * Math.sin(lean)) * F;
+
+        expect(reachAt(B.lean) * 2).toBeGreaterThan(2.25);   // the median pair
+        expect(reachAt(0) * 2).toBeLessThan(2.25);           // and without it
+
+        // At the closest the physics ever holds a pair, their heads still have
+        // room: a shoulder only comes forward by so much.
+        const shoulder = RIG.shoulderY * F * Math.sin(B.lean);
+        expect(shoulder * 2).toBeLessThan(1.58 - 0.4);
+    });
 });
 
 describe('the keyboard', () => {

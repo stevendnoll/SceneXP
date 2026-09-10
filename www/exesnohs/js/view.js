@@ -388,9 +388,14 @@ export function blockersEngaged(objects) {
             const d = Math.hypot(p.x - q.x, p.z - q.z);
             if (d < nearest) { nearest = d; partner = foe; }
         }
-        // Full commitment at half the reach, nothing at all beyond it.
+        // FULLY LOCKED BY `lock`, NOTHING AT ALL BEYOND `reach`. It used to
+        // ramp to full at half the reach, which is 1.30m, and two bodies in
+        // this game are never closer than 1.45m: the pose could not finish, so
+        // an engaged pair stood at 28% of a block with their hands short of
+        // each other. See the note in config.
+        const span = Math.max(0.01, reach - CFG.pose.block.lock);
         const amount = nearest >= reach ? 0
-            : Math.min(1, (reach - nearest) / (reach * 0.5));
+            : Math.min(1, (reach - nearest) / span);
         if (amount <= 0 || !partner) continue;
         hold(obj.settings.position, amount, partner.settings.position);
         hold(partner.settings.position, amount, obj.settings.position);
@@ -973,7 +978,15 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             // number. It unwinds across the snap along with the arms.
             const ready = surveying
                 ? CFG.pose.underCentre.lean * (1 - snapped) : 0;
-            const pitch = lunge > 0 ? CFG.pose.tackle.lean * lunge : ready;
+            // AND A MAN IN A BLOCK LEANS INTO IT. The game holds an engaged
+            // pair further apart than two men can reach, so without this their
+            // arms finish short of each other however far out they go. Whoever
+            // is leaning hardest wins: a lineman who has become a tackler is
+            // tackling.
+            const blocking = engagement
+                ? CFG.pose.block.lean * engagement.amount : 0;
+            const pitch = lunge > 0
+                ? CFG.pose.tackle.lean * lunge : Math.max(ready, blocking);
             const rate = lunge > 0 ? CFG.pose.tackle.snap : CFG.pose.blend;
             figure.rotation.x += (pitch - figure.rotation.x)
                 * (1 - Math.exp(-delta / rate));

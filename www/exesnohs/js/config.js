@@ -1494,8 +1494,45 @@ const EXESNOHS_CONFIG = {
          * go while the shoulder still covers them, at 0.939.
          */
         block: {
-            reach: 2.6,          // metres to the nearest opponent
+            /**
+             * WHERE A BLOCK STARTS AND WHERE IT IS FULLY LOCKED, AND THE
+             * SECOND ONE USED TO BE UNREACHABLE.
+             *
+             * The ramp ran to full commitment at HALF the reach, which is
+             * 1.30m, and two bodies in this game are never closer than 1.45m.
+             * So the pose could not complete: measured over 204 plays, a pair
+             * the pose calls engaged sits a median 2.23m apart, at which it was
+             * only 28% of the way into the block, with both men's hands 0.21m
+             * short of each other. QA read that exactly right as "a blitzer
+             * often doesn't get close enough to the blocker for them to lock
+             * arms". They never locked, because the pose never finished.
+             *
+             * `lock` is now the distance the PHYSICS actually holds an engaged
+             * pair at, so arriving there is arriving. `reach` is where they
+             * start reaching for each other, a stride before it.
+             */
+            reach: 2.7,          // metres: nothing beyond this
+            lock: 2.3,           // ...and fully into it by here
             hand: { x: 0.26, y: 1.26, z: 0.46 },
+            /**
+             * AND THEY LEAN INTO IT, WHICH IS WHAT CLOSES THE LAST GAP.
+             *
+             * A lineman's collision box is 2.38m across against a drawn body of
+             * 1.45m, so the game holds an engaged pair further apart than two
+             * men can reach: at 2.23m their hands finish 0.21m short whatever
+             * the pose does with their arms. That box is load-bearing for the
+             * whole game and is not this file's to shrink (see the note in
+             * TASKS), so the figures close it themselves.
+             *
+             * 0.14 radians carries a shoulder 0.54m forward at this figure
+             * scale. At the median 2.25m the two men's hands then pass each
+             * other by 0.27m, which is arms locked; at the tenth percentile of
+             * 1.58m their heads still finish half a metre apart, which is why
+             * it is not more. It rides the engagement, so a pair only reaching
+             * for each other only leans a little. The rig has no waist, so it
+             * is the whole figure about its feet, the same as the tackle.
+             */
+            lean: 0.14,
         },
     },
 
