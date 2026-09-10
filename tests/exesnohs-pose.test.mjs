@@ -55,6 +55,7 @@ const { keyAction } = await import(join(scene, 'hud.js'));
 const {
     framingFor, applyView, nudgeView, resetView, getView,
     shoulderFor, resetShoulder, replayDriver,
+    switchView, viewQuarter, REPLAY_VIEWS,
 } = await import(join(scene, 'camera.js'));
 const { PLAYS } = await import(join(scene, 'playbook-ui.js'));
 const { ladderBands, bandAt } = await import(join(scene, 'scoring.js'));
@@ -996,6 +997,30 @@ describe('the keyboard', () => {
         }
         for (const key of [' ', 'S', 's', 'Q', 'q']) expect(keyAction(key)).toBe('snap');
         expect(keyAction('K')).toBe('keep');
+        // V switches the replay camera. It reaches nothing at any other time,
+        // because the row it presses only exists during a replay.
+        expect(keyAction('V')).toBe('view');
+        expect(keyAction('v')).toBe('view');
+    });
+
+    /**
+     * AND NO TWO ACTIONS ANSWER TO THE SAME KEY, which is the property rather
+     * than a list: adding a binding that collides with one already there is the
+     * mistake, and it would show up as a button somebody could never press.
+     */
+    test('every binding is its own key', () => {
+        const keys = ['A', 'B', 'C', 'D', ' ', 'S', 'Q', 'K', 'V'];
+        const seen = new Map();
+        for (const key of keys) {
+            const act = keyAction(key);
+            expect(act).not.toBe('');
+            const had = seen.get(key);
+            expect(had === undefined || had === act).toBe(true);
+            seen.set(key, act);
+        }
+        // Snap has three keys and the rest have one each, so nine keys reach
+        // seven actions.
+        expect(new Set(seen.values()).size).toBe(7);
     });
 
     test('and every letter that means something on screen has a control', () => {
@@ -1161,7 +1186,7 @@ describe('looking round a replay', () => {
         expect(Number.isFinite(s.position.x)).toBe(true);
         expect(s.position.y).toBeGreaterThan(0);
         resetView();
-        expect(getView()).toEqual({ yaw: 0, lift: 0, zoom: 1 });
+        expect(getView()).toMatchObject({ yaw: 0, lift: 0, zoom: 1 });
     });
 });
 
@@ -1673,5 +1698,103 @@ describe('he goes up for it sooner in the scoring zones', () => {
     test('and with no throw on record he uses the ordinary gate', () => {
         expect(jumpClearance(null)).toBe(CFG.pose.jump.clearance);
         expect(jumpClearance({})).toBe(CFG.pose.jump.clearance);
+    });
+});
+
+describe('four ways to watch a replay', () => {
+    /**
+     * QA ROUND TWENTY-TWO. Looking round a replay was a one-finger drag, and a
+     * drag asks somebody to fly a camera around a moving subject while watching
+     * something else: "too hard to control", which it was. It is four fixed
+     * vantage points now, one press each.
+     *
+     * THEY ARE AN OFFSET ON THE DIRECTOR'S SHOT, not four camera positions, and
+     * that is what makes them right rather than merely cheap: `applyView` turns
+     * the shot about its own target, so every one of the four is at the same
+     * height and looks down at the same angle BY CONSTRUCTION. There is no
+     * second set of numbers that could drift out of step with the first, and
+     * the camera goes on establishing, tracking and settling in all of them.
+     */
+    const shot = () => ({
+        position: { x: 18, y: 9, z: 6 },
+        target: { x: 4, y: 1.2, z: -2 },
+        fov: 32,
+        progress: 0.5,
+    });
+    const radius = (s) => Math.hypot(
+        s.position.x - s.target.x, s.position.y - s.target.y, s.position.z - s.target.z
+    );
+    const elevation = (s) => Math.asin((s.position.y - s.target.y) / radius(s));
+
+    test('every view is the same height and the same angle down', () => {
+        resetView();
+        const first = applyView(shot(), getView());
+        const seen = new Set();
+        for (let i = 0; i < REPLAY_VIEWS; i += 1) {
+            const s = applyView(shot(), getView());
+            expect(radius(s)).toBeCloseTo(radius(first), 6);
+            expect(elevation(s)).toBeCloseTo(elevation(first), 6);
+            expect(s.position.y).toBeCloseTo(first.position.y, 6);
+            // ...and it is still pointed at the same place.
+            expect(s.target).toEqual(shot().target);
+            seen.add(`${s.position.x.toFixed(3)},${s.position.z.toFixed(3)}`);
+            switchView();
+        }
+        // Four presses, four DIFFERENT places to stand.
+        expect(seen.size).toBe(REPLAY_VIEWS);
+    });
+
+    test('and the fourth press brings it home', () => {
+        resetView();
+        expect(viewQuarter()).toBe(0);
+        for (let i = 1; i < REPLAY_VIEWS; i += 1) {
+            switchView();
+            expect(viewQuarter()).toBe(i);
+        }
+        switchView();
+        expect(viewQuarter()).toBe(0);
+        expect(applyView(shot(), getView())).toEqual(shot());
+    });
+
+    /**
+     * THE FIRST PRESS IS THE BIGGEST CHANGE, which is the whole reason the
+     * order is not 0, 90, 180, 270. Somebody pressing "switch view" wants a
+     * different picture rather than a nudge, so the opposite end of the field
+     * comes first and the two touchlines follow.
+     */
+    test('the first press is the opposite side of the field', () => {
+        resetView();
+        const before = applyView(shot(), getView());
+        switchView();
+        const across = applyView(shot(), getView());
+        // Straight through the subject: the two camera positions and the target
+        // are collinear, with the target between them.
+        const t = shot().target;
+        const a = Math.atan2(before.position.z - t.z, before.position.x - t.x);
+        const b = Math.atan2(across.position.z - t.z, across.position.x - t.x);
+        const apart = Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+        expect(apart).toBeCloseTo(Math.PI, 6);
+        // ...and it really is the far side, not the same side mirrored: the
+        // target sits between the two of them.
+        expect(Math.sign(before.position.x - t.x)).toBe(-Math.sign(across.position.x - t.x));
+        expect(Math.sign(before.position.z - t.z)).toBe(-Math.sign(across.position.z - t.z));
+    });
+
+    test('it can be walked backwards, which is what the left arrow does', () => {
+        resetView();
+        switchView(-1);
+        expect(viewQuarter()).toBe(REPLAY_VIEWS - 1);
+        switchView(1);
+        expect(viewQuarter()).toBe(0);
+    });
+
+    /** A new replay opens on the director's own shot rather than on whatever
+     *  the last one was left showing. */
+    test('a new replay starts back on the default view', () => {
+        switchView();
+        switchView();
+        expect(viewQuarter()).not.toBe(0);
+        resetView();
+        expect(viewQuarter()).toBe(0);
     });
 });

@@ -45,7 +45,7 @@ import {
     rewind, advance, playheadFrame, isEmpty, discard,
 } from './replay.min.js';
 import {
-    setDriver, setAspect, update as updateCamera, nudgeView, resetView,
+    setDriver, setAspect, update as updateCamera, nudgeView, resetView, switchView,
 } from './camera.min.js';
 import {
     initAudio, unlock as unlockAudio, play as playSound, simAudio,
@@ -576,6 +576,20 @@ function onSkipReplay() {
     presentResult();
 }
 
+/**
+ * ANOTHER SIDE OF THE FIELD. QA ROUND TWENTY-TWO.
+ *
+ * The camera owns the four vantage points and what a quarter turn means; this
+ * is the press. The hint goes with it, because at that point it is telling the
+ * visitor something they have just done.
+ */
+function onSwitchView() {
+    if (!replayLive()) return;
+    uiClick();
+    switchView();
+    hideReplayHint();
+}
+
 function onNext() {
     uiClick();
     hideResult();
@@ -1011,23 +1025,25 @@ function tapTargets() {
 }
 
 /**
- * LOOKING ROUND A REPLAY. QA ITEM 4.
+ * LOOKING ROUND A REPLAY. QA ITEM 4, AND ROUND TWENTY-TWO.
  *
- * A replay is a directed shot, and the visitor's drag is an OFFSET on top of it
- * rather than a takeover: the camera goes on establishing, tracking and
+ * A replay is a directed shot, and the visitor's adjustment is an OFFSET on top
+ * of it rather than a takeover: the camera goes on establishing, tracking and
  * settling, and their adjustment rides along. camera.js owns the arithmetic and
  * the limits, and this is only the gestures.
+ *
+ * THE ORBIT WAS A DRAG AND IS NOW A BUTTON. QA: "too hard to control", which it
+ * was, and the reason is that a one-finger drag asks somebody to fly a camera
+ * around a moving subject while watching something else. Four fixed vantage
+ * points, one press each, and nothing to get wrong. See `switchView` and
+ * `onSwitchView`. What is left here is the ZOOM, which was the half of it that
+ * worked: a pinch and a wheel are one gesture with one meaning.
  *
  * IT COSTS NOTHING ELSE, because a replay is the one phase with nothing on the
  * field to press. Outside it, every pointer on this canvas is still a tap that
  * snaps the ball or throws to somebody.
  */
 const drag = { points: new Map(), spread: 0 };
-/** Radians per CSS pixel of drag, and per key press. A full turn is about two
- *  thirds of a phone screen, which is a flick rather than a wrist exercise. */
-const ORBIT_PER_PX = 0.008;
-const LIFT_PER_PX = 0.005;
-const ORBIT_PER_KEY = 0.18;
 const ZOOM_PER_KEY = 1.12;
 /** A wheel notch is about 100 in `deltaY` on a mouse and a few units on a
  *  trackpad, so it is capped rather than scaled: one gesture, one step. */
@@ -1055,31 +1071,20 @@ function onCanvasDragStart(event) {
 
 function onCanvasDragMove(event) {
     if (!replayLive() || !drag.points.has(event.pointerId)) return;
-    const was = drag.points.get(event.pointerId);
-    const dx = event.clientX - was.x;
-    const dy = event.clientY - was.y;
     drag.points.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
-    // TWO FINGERS PINCH AND ONE FINGER TURNS. With two down, the spread is the
-    // only thing read: a pinch that also orbited would swing the camera every
-    // time somebody zoomed, because two fingers never move by exactly the same
-    // amount.
-    if (drag.points.size >= 2) {
-        const spread = spreadOf();
-        if (drag.spread > 0 && spread > 0) {
-            event.preventDefault();
-            nudgeView({ zoom: drag.spread / spread });
-            hideReplayHint();
-        }
-        drag.spread = spread;
-        return;
+    // TWO FINGERS PINCH AND ONE FINGER DOES NOTHING. One finger used to orbit,
+    // and a single finger left free is not an oversight: it is what stops a
+    // pinch that drifts from also swinging the camera, and there is nothing on
+    // the field to press during a replay anyway.
+    if (drag.points.size < 2) return;
+    const spread = spreadOf();
+    if (drag.spread > 0 && spread > 0) {
+        event.preventDefault();
+        nudgeView({ zoom: drag.spread / spread });
+        hideReplayHint();
     }
-    if (!dx && !dy) return;
-    event.preventDefault();
-    // Dragging right swings the camera left, which is what dragging a THING
-    // does. The lift is inverted for the same reason.
-    nudgeView({ yaw: -dx * ORBIT_PER_PX, lift: dy * LIFT_PER_PX });
-    hideReplayHint();
+    drag.spread = spread;
 }
 
 function onCanvasDragEnd(event) {
@@ -1100,20 +1105,27 @@ function onCanvasWheel(event) {
  */
 function onReplayKey(event) {
     if (!replayLive() || event.metaKey || event.ctrlKey || event.altKey) return;
-    const moves = {
-        ArrowLeft: { yaw: ORBIT_PER_KEY },
-        ArrowRight: { yaw: -ORBIT_PER_KEY },
-        ArrowUp: { lift: ORBIT_PER_KEY * 0.5 },
-        ArrowDown: { lift: -ORBIT_PER_KEY * 0.5 },
-        '+': { zoom: 1 / ZOOM_PER_KEY },
-        '=': { zoom: 1 / ZOOM_PER_KEY },
-        '-': { zoom: ZOOM_PER_KEY },
-        _: { zoom: ZOOM_PER_KEY },
+    // THE ARROWS WALK THE FOUR VIEWS. They used to orbit by a fixed step, which
+    // was the keyboard's copy of the drag QA could not control. Stepping
+    // between the same four the button offers means the two routes into the
+    // feature land in the same places, rather than the keyboard having its own
+    // private camera.
+    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+        event.preventDefault();
+        switchView(event.key === 'ArrowRight' ? 1 : -1);
+        hideReplayHint();
+        return;
+    }
+    const zooms = {
+        '+': 1 / ZOOM_PER_KEY,
+        '=': 1 / ZOOM_PER_KEY,
+        '-': ZOOM_PER_KEY,
+        _: ZOOM_PER_KEY,
     };
-    const move = moves[event.key];
-    if (!move) return;
+    const zoom = zooms[event.key];
+    if (!zoom) return;
     event.preventDefault();
-    nudgeView(move);
+    nudgeView({ zoom });
     hideReplayHint();
 }
 
@@ -1210,6 +1222,7 @@ async function init() {
         onSnap, onThrow, onRun, onNext, onChangePlay,
         onReplay: startReplay,
         onSkipReplay,
+        onSwitchView,
         onToggleMute: () => toggleMuted(),
         isMuted,
     });

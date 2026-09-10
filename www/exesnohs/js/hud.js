@@ -234,6 +234,9 @@ const KEEP_KEY = 'K';
  *  key throws to receiver C, and the two can never both be on screen: the
  *  lookup below asks what is actually there rather than what the key "is". */
 const CHANGE_KEY = 'C';
+/** V, and it only ever means anything while a replay is running: the row it
+ *  presses does not exist at any other time. */
+const VIEW_KEY = 'V';
 
 /** Tag a button with the keys that press it, for the handler and for anything
  *  reading the page out loud. */
@@ -258,6 +261,7 @@ export function keyAction(key, { inField = false, modified = false } = {}) {
     const up = key.length === 1 ? key.toUpperCase() : key;
     if (SNAP_KEYS.includes(up)) return 'snap';
     if (up === KEEP_KEY) return 'keep';
+    if (up === VIEW_KEY) return 'view';
     if (/^[A-D]$/.test(up)) return up;
     return '';
 }
@@ -289,8 +293,9 @@ export function initKeys(signal) {
         // A LETTER MEANS WHATEVER IS ON SCREEN WEARING IT. C throws to receiver
         // C during a play and changes the play before one, and those two rows
         // never coexist, so the right answer is to look rather than to decide.
-        const wanted = want === 'snap' || want === 'keep'
-            ? box.querySelector(`[data-keys*="${want === 'snap' ? 'S' : KEEP_KEY}"]`)
+        const named = { snap: 'S', keep: KEEP_KEY, view: VIEW_KEY }[want];
+        const wanted = named
+            ? box.querySelector(`[data-keys*="${named}"]`)
             : (box.querySelector(`[data-letter="${want}"]`)
                 || box.querySelector(`[data-keys*="${want}"]`));
         if (!wanted) return;
@@ -339,6 +344,25 @@ export function clearActions() {
 export function showSkipReplay() {
     const box = actions();
     if (!box) return;
+
+    /**
+     * AND ONE WAY TO SEE IT FROM SOMEWHERE ELSE.
+     *
+     * QA round twenty-two. Looking round a replay used to be a drag, and a drag
+     * asks a visitor to fly a camera around a moving subject with one finger
+     * while watching something else: "too hard to control", which it was. This
+     * is one press and cannot be got wrong.
+     *
+     * IT COMES FIRST because it is the one somebody actually wants during a
+     * replay, and the skip is the way out rather than the point. The skip still
+     * takes focus for the same reason it always did.
+     */
+    const swap = bindKeys(button('Switch view', 'hud-btn',
+        () => handlers.onSwitchView && handlers.onSwitchView(),
+        'Watch the replay from another side of the field'), [VIEW_KEY]);
+    swap.id = 'switch-view-btn';
+    box.appendChild(swap);
+
     const skip = button('Skip replay', 'hud-btn',
         () => handlers.onSkipReplay && handlers.onSkipReplay(),
         'Skip the replay and see the result');
@@ -349,16 +373,15 @@ export function showSkipReplay() {
     /**
      * AND A LINE SAYING THE CAMERA IS YOURS.
      *
-     * A replay can be orbited and zoomed, and a gesture nobody is told about is
-     * a feature nobody has. It is a HINT rather than a control: it names the
-     * three ways in, it is not a tab stop, and it goes the moment the visitor
-     * uses any of them, because at that point it is telling them something they
-     * have just done.
+     * A control nobody is told about is a feature nobody has. It is a HINT
+     * rather than a control: it names the ways in, it is not a tab stop, and it
+     * goes the moment the visitor uses any of them, because at that point it is
+     * telling them something they have just done.
      */
     const hint = document.createElement('p');
     hint.id = 'replay-hint';
     hint.className = 'hud-hint';
-    hint.textContent = 'Drag to look around, scroll or pinch to zoom';
+    hint.textContent = 'Switch view for another angle, scroll or pinch to zoom';
     box.appendChild(hint);
 }
 

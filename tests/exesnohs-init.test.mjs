@@ -288,6 +288,40 @@ describe('a replay can be got out of', () => {
         expect(dom.el('game-hud').hidden).toBe(false);
         expect(skip.focused).toBe(true);
 
+        /**
+         * AND A WAY TO SEE IT FROM SOMEWHERE ELSE, QA ROUND TWENTY-TWO. The
+         * drag it replaces was "too hard to control", and the reason a button
+         * beats it is that a button cannot be got wrong.
+         *
+         * IT DOES NOT TAKE FOCUS. The skip still does, because it is the way
+         * out of something that started on its own, which is the case that
+         * matters most for somebody on a keyboard.
+         */
+        const swap = dom.el('hud-actions').children
+            .find((b) => b.textContent === 'Switch view');
+        expect(swap).toBeTruthy();
+        expect(swap.getAttribute('aria-label'))
+            .toBe('Watch the replay from another side of the field');
+        expect(swap.getAttribute('aria-keyshortcuts')).toBe('V');
+        expect(swap.focused).not.toBe(true);
+        // Pressing it changes the camera and leaves the replay running.
+        // THE MIN BUILD, because main.js imports that one: asking `camera.js`
+        // would be holding a second copy of the module's state and it would
+        // answer 0 forever however many times the button was pressed.
+        const camera = await import('../www/exesnohs/js/camera.min.js');
+        const hinted = () => dom.el('hud-actions').children
+            .some((n) => n.id === 'replay-hint');
+        expect(hinted()).toBe(true);
+        const before = camera.viewQuarter();
+        swap.click();
+        await flushAsync();
+        expect(camera.viewQuarter()).not.toBe(before);
+        expect(dom.el('result').hidden).toBe(true);
+        // The hint going away is NOT asserted here, and deliberately: it is
+        // removed through `document.getElementById`, and the stub's lookup only
+        // knows the ids the fixture declares, so it hands back a fresh detached
+        // node and the removal is a no-op that proves nothing either way.
+
         // And pressing it lands back on the result rather than nowhere.
         expect(dom.el('result').hidden).toBe(true);
         skip.click();

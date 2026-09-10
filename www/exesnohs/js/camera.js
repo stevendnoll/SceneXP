@@ -342,8 +342,53 @@ export function shoulderFor(z, delta = 0) {
  * Spherical about the shot's own TARGET, so orbiting keeps the carrier in the
  * middle of the frame and zooming moves toward him rather than toward wherever
  * the camera happens to be pointing.
+ *
+ * THE YAW IS NOW A CHOICE OF FOUR RATHER THAN A DRAG. QA round twenty-two: the
+ * free drag was "too hard to control", which it was, and the reason is that it
+ * asks a visitor to fly a camera around a moving subject with one finger while
+ * watching something else. Four fixed vantage points ask for one press and
+ * cannot be got wrong. See `switchView`.
  */
-const view = { yaw: 0, lift: 0, zoom: 1 };
+const view = { yaw: 0, lift: 0, zoom: 1, quarter: 0 };
+
+/**
+ * THE FOUR VANTAGE POINTS, AS QUARTER TURNS ABOUT THE SHOT'S OWN TARGET.
+ *
+ * Expressed as an offset on the director's shot rather than as four fixed
+ * camera positions, and that is what makes them cheap AND correct: `applyView`
+ * turns the shot about its target, keeping the radius and the elevation, so all
+ * four are at the same height and look down at the same angle by construction.
+ * There is no second set of numbers to keep in step with the first, and the
+ * camera goes on establishing, tracking and settling in every one of them.
+ *
+ * THE ORDER IS NOT 0, 90, 180, 270, and that is deliberate. The first press
+ * should be the biggest change, because a visitor pressing "switch view" wants
+ * a different picture rather than a nudge: the opposite end of the field comes
+ * first, then the two touchlines.
+ */
+const QUARTERS = [0, Math.PI, Math.PI / 2, -Math.PI / 2];
+
+/** How many there are, for anything that wants to say so. */
+export const REPLAY_VIEWS = QUARTERS.length;
+
+/**
+ * Move to the next vantage point and say which one it is.
+ *
+ * IT CUTS RATHER THAN SWINGS. A quarter turn eased across would take a second
+ * of a replay that runs for four, and switching cameras mid-replay is a cut
+ * everywhere else in the sport.
+ */
+export function switchView(step = 1) {
+    const n = QUARTERS.length;
+    view.quarter = (((view.quarter + step) % n) + n) % n;
+    view.yaw = QUARTERS[view.quarter];
+    return view.quarter;
+}
+
+/** Which of the four is showing, 0 for the director's own. */
+export function viewQuarter() {
+    return view.quarter;
+}
 
 /** How far a visitor may take it. The floor on elevation is what keeps the
  *  camera out of the turf, and the ceiling stops a plan view, which is the shot
@@ -361,6 +406,12 @@ const clamp = (v, lo, hi) => (v < lo ? lo : (v > hi ? hi : v));
  *
  * `yaw` and `lift` are radians and `zoom` is a MULTIPLIER, so a wheel notch and
  * a pinch compose the same way and neither has to know the current value.
+ *
+ * ONLY THE ZOOM IS WIRED TO ANYTHING NOW. The yaw belongs to `switchView` and
+ * the lift to nobody: four vantage points at one height is the whole point of
+ * them, and a visitor who could also tilt would be back to flying a camera.
+ * Both stay here because this is the primitive the offset is made of and the
+ * arithmetic is worth keeping in one piece.
  */
 export function nudgeView({ yaw = 0, lift = 0, zoom = 1 } = {}) {
     view.yaw += yaw;
@@ -375,6 +426,7 @@ export function resetView() {
     view.yaw = 0;
     view.lift = 0;
     view.zoom = 1;
+    view.quarter = 0;
     // A new replay also opens on the shoulder its own carrier asks for, rather
     // than swinging in from wherever the last one finished.
     resetShoulder();
