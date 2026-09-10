@@ -438,9 +438,13 @@ export function separate(play, minSeparation, passes = 2) {
  * down at that spot, and adding that would change how plays end and what they
  * score, which is a bigger decision than a fix for a drop-back. Recorded as an
  * open question rather than smuggled in here.
+ *
+ * BOTH AXES NOW. See the note beside the downfield clamp for why the sentence
+ * that used to say "the cross-field axis only" was wrong.
  */
 export function keepInbounds(play) {
     const height = play.playState.state.measurements.height;
+    const width = play.playState.state.measurements.width;
     if (!(height > 0)) return 0;
     /**
      * THE WALL HOLDS A BODY, NOT A COORDINATE, AND IT DID NOT BEFORE.
@@ -462,6 +466,35 @@ export function keepInbounds(play) {
     const body = (SIM.bodyWidth * CFG.figureScale / 2) / UNITS_TO_METRES;
     const lo = Math.min(body, height / 2);
     const hi = Math.max(height - body, height / 2);
+
+    /**
+     * AND THE ENDS OF THE FIELD, WHICH THIS AXIS NEVER HAD.
+     *
+     * The note above used to finish "the cross-field axis only, because nobody
+     * has ever come close to the ends". Measured against plays where the
+     * visitor simply HOLDS the ball, which the game explicitly lets them do,
+     * the quarterback's own back edge reaches 15.4m behind the goal line and he
+     * drags three linemen out with him. The earlier measurement missed it
+     * because it always threw or ran at 1.4 seconds: nobody had asked what
+     * happens if you never do either, and the drop-back has no end.
+     *
+     * THE WALL IS THE GREEN, NOT THE PAINT. The end zones are off limits too,
+     * which is QA's call and is the simpler rule to state.
+     *
+     * IT DOES NOT COST THE TOUCHDOWN, which had to be checked rather than
+     * assumed: `runWrFormation` awards it at `-4 + lineInterval * 4`, which is
+     * 27.9m, well inside the far wall at 35m. What it does make unreachable is
+     * the ported `coords.x > 0` out-of-bounds branch at the BACK, and that is
+     * accounted for rather than overlooked: measured, no receiver ever gets
+     * near it, and the men who do are the quarterback before he has thrown and
+     * the line in front of him, neither of whom is on that branch.
+     *
+     * The same half a shoulder width does both axes. A body is deeper than it
+     * is wide from some angles and the figure turns, so the larger of the two
+     * is the one that keeps him on the paint whichever way he is facing.
+     */
+    const back = Math.min(body, width / 2);
+    const front = Math.max(width - body, width / 2);
     let moved = 0;
     for (const obj of play.game.objects) {
         if (!obj.settings || obj.settings.benched) continue;
@@ -473,6 +506,20 @@ export function keepInbounds(play) {
         } else if (obj.coords.y > hi) {
             obj.coords.y = hi;
             if (obj.state) obj.state.ySpeed = 0;
+            moved += 1;
+        }
+        if (!(width > 0)) continue;
+        if (obj.coords.x < back) {
+            obj.coords.x = back;
+            // Zeroed for the same reason the cross-field one is: the model goes
+            // on accelerating into the paint, so a player left with speed
+            // sticks to the wall and then leaves it like a slingshot when his
+            // route turns him round.
+            if (obj.state) obj.state.xSpeed = 0;
+            moved += 1;
+        } else if (obj.coords.x > front) {
+            obj.coords.x = front;
+            if (obj.state) obj.state.xSpeed = 0;
             moved += 1;
         }
     }

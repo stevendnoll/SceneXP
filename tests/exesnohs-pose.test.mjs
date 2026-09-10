@@ -746,6 +746,55 @@ describe('the sideline holds a body, not a coordinate', () => {
         }
     });
 
+    /**
+     * AND THE ENDS OF THE FIELD, WHICH THIS AXIS NEVER HAD.
+     *
+     * The wall was cross-field only, on the stated grounds that "nobody has
+     * ever come close to the ends". Measured against plays where the visitor
+     * simply HOLDS the ball, which the game explicitly lets them do, the
+     * quarterback's own back edge reaches 15.4m behind the goal line and drags
+     * three linemen out with him. The earlier measurement missed it because it
+     * always threw or ran at 1.4 seconds: nobody had asked what happens if you
+     * never do either, and the drop-back has no end.
+     */
+    test('nobody can walk out the back or the front of the green', () => {
+        const play = createPlay();
+        lineUp(play, 'pass2', 'cover1');
+        const width = play.playState.state.measurements.width;
+        const half = CFG.figureScale * 0.505 / 2;
+        const live = () => play.game.objects.filter((o) => o.settings.position !== 'ball'
+            && !o.settings.benched);
+
+        for (const obj of live()) obj.coords.x = -900;
+        keepInbounds(play);
+        for (const obj of live()) {
+            expect(obj.coords.x * UNITS_TO_METRES).toBeGreaterThanOrEqual(half - 1e-9);
+        }
+
+        for (const obj of live()) obj.coords.x = width + 900;
+        keepInbounds(play);
+        for (const obj of live()) {
+            expect((width - obj.coords.x) * UNITS_TO_METRES)
+                .toBeGreaterThanOrEqual(half - 1e-9);
+        }
+    });
+
+    /**
+     * AND THE WALL DOES NOT COST THE TOUCHDOWN, which had to be checked rather
+     * than assumed. `routes.runWrFormation` awards it at `-4 + lineInterval * 4`
+     * in field units, and a carrier who can never reach that line can never
+     * score the fifty the whole ladder is built around.
+     */
+    test('a carrier can still reach the line that scores fifty', () => {
+        const play = createPlay();
+        lineUp(play, 'pass2', 'cover1');
+        const width = play.playState.state.measurements.width;
+        const interval = play.playState.state.measurements.lineInterval;
+        const crossing = -4 + interval * 4;
+        const half = (CFG.figureScale * 0.505 / 2) / UNITS_TO_METRES;
+        expect(crossing).toBeLessThan(width - half);
+    });
+
     test('and the ball is not held to it, because a ball has no shoulders', () => {
         const play = createPlay();
         lineUp(play, 'pass2', 'cover1');
