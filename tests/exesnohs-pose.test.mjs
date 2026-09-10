@@ -34,7 +34,7 @@ const scene = join(here, '..', 'www', 'exesnohs', 'js');
 installThree();
 
 const CONFIG_MODULE = await import(join(scene, 'config.js'));
-const { EXESNOHS_CONFIG: CFG, UNITS_TO_METRES } = CONFIG_MODULE;
+const { EXESNOHS_CONFIG: CFG, UNITS_TO_METRES, FIELD } = CONFIG_MODULE;
 const { solveArm, handAt, RIG } = await import(join(scene, 'arm.js'));
 const { takedownAt, takedownLength, contactFraction } = await import(join(scene, 'takedown.js'));
 const {
@@ -50,6 +50,10 @@ const {
 } = await import(join(scene, 'replay.js'));
 const { litFor } = await import(join(scene, 'main.js'));
 const { keyAction } = await import(join(scene, 'hud.js'));
+const {
+    framingFor, applyView, nudgeView, resetView, getView,
+} = await import(join(scene, 'camera.js'));
+const { PLAYS } = await import(join(scene, 'playbook-ui.js'));
 
 /**
  * THE TORSO, FROM people-1.0.0's OWN CONSTRUCTOR. Half width, the y span, and
@@ -841,5 +845,164 @@ describe('the keyboard', () => {
             expect(keyAction(key)).toBe('');
         }
         expect(keyAction(undefined)).toBe('');
+    });
+});
+
+describe('the scoreboard is in shot', () => {
+    /**
+     * QA ROUND TEN, ITEM 1: "could we re-add the scoreboard". It was never
+     * removed. D147 traded a 28 degree lens for an 18 degree one, and a longer
+     * lens is a narrower frame, so the board's face landed at 1.38 in a frame
+     * that ends at 1.0 and went off the top of the screen.
+     *
+     * The frame's top edge is a ray `fov / 2` below the camera's own pitch, so
+     * whether a point is in shot is arithmetic rather than an opinion. This
+     * asserts it for the board's HIGHEST corner, which is the one that leaves
+     * first, on every screen shape the game solves for.
+     */
+    const inShot = (aspect, x, y) => {
+        const shot = framingFor(aspect);
+        const cam = { x: FIELD.lineInterval - shot.back, y: shot.height };
+        // The camera aims at the ground, so its pitch is the angle down to the
+        // aim point, and the top of the frame is half a field of view above it.
+        const pitch = Math.atan2(cam.y, shot.aimX - cam.x);
+        const top = pitch - (shot.fov * Math.PI / 180) / 2;
+        const toPoint = Math.atan2(cam.y - y, x - cam.x);
+        // Larger angle means further below the top edge, so in shot.
+        return toPoint > top;
+    };
+
+    test('every corner of the board is inside the frame, on every shape', () => {
+        const B = CFG.scoreboard;
+        const x = FIELD.lineInterval * FIELD.segments + FIELD.endZone + B.beyond;
+        for (const aspect of [1196 / 826, 16 / 9, 4 / 3, 393 / 852, 852 / 393]) {
+            expect({ aspect, top: inShot(aspect, x, B.standHeight + B.height) })
+                .toEqual({ aspect, top: true });
+            expect(inShot(aspect, x, B.standHeight)).toBe(true);
+        }
+    });
+
+    test('and it still stands behind the end line rather than on the field', () => {
+        expect(CFG.scoreboard.beyond).toBeGreaterThan(0);
+        expect(CFG.scoreboard.standHeight).toBeGreaterThan(0);
+    });
+});
+
+describe('the ball arrives where hands are', () => {
+    /**
+     * QA ROUND TEN, ITEM 2 turned out to rest on this. `ball.release` was 0.28m
+     * and its own comment said why: "the same value has to leave a hand and then
+     * lie on the turf". A hand is 3.5m up at this figure scale. Measured over
+     * 612 throws, the ball was a median 0.60m off the ground at the frame a
+     * receiver was closest to it, so every pass in the game arrived below his
+     * knee, and nobody jumps for that.
+     */
+    test('the arc starts and ends above a receiver waist, not at his feet', () => {
+        const waist = 0.9 * CFG.figureScale;
+        expect(CFG.ball.release).toBeGreaterThan(waist);
+    });
+
+    test('and the peak stays a sane height over a player', () => {
+        const player = 1.75 * CFG.figureScale;
+        const peak = CFG.ball.release + CFG.ball.apex;
+        expect(peak).toBeGreaterThan(player);
+        expect(peak).toBeLessThan(player * 2.2);
+    });
+
+    /**
+     * AND THE JUMP ONLY HAPPENS FOR A BALL THAT IS GENUINELY OVER HIS HEAD.
+     *
+     * This is the number the whole feature turns on. Everything else was swept
+     * and none of it separated: at a ball merely level with his hands a receiver
+     * leaves his feet on 86% of throws, whatever the range and whether or not
+     * the closest approach is solved for. Requiring real clearance takes it to
+     * 22%, and one step further takes it to never.
+     */
+    test('a jump asks for clearance over his own fingertips', () => {
+        const J = CFG.pose.jump;
+        expect(J.clearance).toBeGreaterThan(0);
+        // And the band it opens is reachable: there is no point asking for
+        // clearance a jump of this size could never cover.
+        expect(J.clearance).toBeLessThan(J.lift);
+        expect(J.hang).toBeGreaterThan(0.3);
+        expect(J.range).toBeGreaterThan(0);
+    });
+});
+
+describe('looking round a replay', () => {
+    /**
+     * QA ROUND TEN, ITEM 4. The adjustment is an OFFSET on the director's shot
+     * rather than a takeover, so the replay goes on establishing, tracking and
+     * settling underneath it. That is the interesting property and it is the one
+     * that can go wrong: an orbit that quietly changes the distance, or a zoom
+     * that walks the camera into the ground, are both invisible in a screenshot.
+     */
+    const shot = () => ({
+        position: { x: 10, y: 6, z: 8 },
+        target: { x: 0, y: 1, z: 0 },
+        fov: 40,
+    });
+    const radius = (s) => Math.hypot(
+        s.position.x - s.target.x, s.position.y - s.target.y, s.position.z - s.target.z
+    );
+
+    test('an untouched view is the director shot, to the last decimal', () => {
+        resetView();
+        expect(applyView(shot())).toEqual(shot());
+    });
+
+    test('orbiting turns around the subject without moving nearer to it', () => {
+        const before = shot();
+        const after = applyView(before, { yaw: 0.9, lift: 0, zoom: 1 });
+        expect(radius(after)).toBeCloseTo(radius(before), 6);
+        // It has genuinely moved, and it still points at the same place.
+        expect(after.position.x).not.toBeCloseTo(before.position.x, 3);
+        expect(after.target).toEqual(before.target);
+        expect(after.fov).toBe(before.fov);
+    });
+
+    test('zooming moves along the line to the subject, not past it', () => {
+        const before = shot();
+        const closer = applyView(before, { yaw: 0, lift: 0, zoom: 0.5 });
+        expect(radius(closer)).toBeCloseTo(radius(before) * 0.5, 6);
+        const further = applyView(before, { yaw: 0, lift: 0, zoom: 2 });
+        expect(radius(further)).toBeCloseTo(radius(before) * 2, 6);
+    });
+
+    test('and it can never end up under the pitch', () => {
+        // All the way down, and all the way in, which is the corner a visitor
+        // finds by dragging until it stops.
+        for (const zoom of [0.45, 1, 2.4]) {
+            const under = applyView(shot(), { yaw: 0, lift: -3, zoom });
+            expect(under.position.y).toBeGreaterThan(0);
+        }
+    });
+
+    test('the limits hold however hard somebody drags', () => {
+        resetView();
+        for (let i = 0; i < 200; i += 1) nudgeView({ lift: 0.5, zoom: 0.5 });
+        const hard = getView();
+        expect(hard.zoom).toBeGreaterThan(0);
+        expect(Number.isFinite(hard.lift)).toBe(true);
+        const s = applyView(shot(), hard);
+        expect(Number.isFinite(s.position.x)).toBe(true);
+        expect(s.position.y).toBeGreaterThan(0);
+        resetView();
+        expect(getView()).toEqual({ yaw: 0, lift: 0, zoom: 1 });
+    });
+});
+
+describe('the playbook opens on the play you just called', () => {
+    /**
+     * QA ROUND TEN, ITEM 3, and it is what the 2D game does: the play you just
+     * called is the FIRST card in the book and is still in its own place, so
+     * running it again is one press and browsing the book is unchanged.
+     */
+    test('the repeat card is a second card, not a moved one', () => {
+        // The property, stated against the play list rather than the DOM: every
+        // play still has exactly one home, so the grid cannot develop a hole.
+        const slugs = PLAYS.map((p) => p.slug);
+        expect(new Set(slugs).size).toBe(slugs.length);
+        expect(slugs.length).toBeGreaterThan(10);
     });
 });

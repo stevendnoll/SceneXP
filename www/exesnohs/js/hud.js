@@ -318,6 +318,28 @@ export function showSkipReplay() {
     skip.id = 'skip-replay-btn';
     box.appendChild(skip);
     skip.focus();
+
+    /**
+     * AND A LINE SAYING THE CAMERA IS YOURS.
+     *
+     * A replay can be orbited and zoomed, and a gesture nobody is told about is
+     * a feature nobody has. It is a HINT rather than a control: it names the
+     * three ways in, it is not a tab stop, and it goes the moment the visitor
+     * uses any of them, because at that point it is telling them something they
+     * have just done.
+     */
+    const hint = document.createElement('p');
+    hint.id = 'replay-hint';
+    hint.className = 'hud-hint';
+    hint.textContent = 'Drag to look around, scroll or pinch to zoom';
+    box.appendChild(hint);
+}
+
+/** The visitor has moved the camera, so the hint has done its job. Safe to
+ *  call on every frame of a drag: it is a no-op once the node has gone. */
+export function hideReplayHint() {
+    const hint = el('replay-hint');
+    if (hint && hint.parentNode) hint.parentNode.removeChild(hint);
 }
 
 /**

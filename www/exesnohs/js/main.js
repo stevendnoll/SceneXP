@@ -35,14 +35,16 @@ import { readGame, saveGame, clearGame } from './progress.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
-    initKeys,
+    initKeys, hideReplayHint,
 } from './hud.min.js';
 import { showSummary, hideSummary } from './summary.min.js';
 import {
     startRecording, record, frameCount, frameAt, focusAt,
     rewind, advance, playheadFrame, isEmpty, discard,
 } from './replay.min.js';
-import { setDriver, setAspect, update as updateCamera } from './camera.min.js';
+import {
+    setDriver, setAspect, update as updateCamera, nudgeView, resetView,
+} from './camera.min.js';
 import {
     initAudio, unlock as unlockAudio, play as playSound, simAudio,
     isMuted, toggleMuted,
@@ -466,6 +468,10 @@ function startReplay() {
     // The spot belongs to the end of the play, and a replay is about to start
     // at the beginning of it. Leaving it standing would give away the ending.
     hideSpot();
+    // AND EVERY REPLAY OPENS ON THE SHOT IT WAS COMPOSED WITH. A visitor who
+    // swung the camera round on the last one is not asking for that angle on
+    // this one.
+    resetView();
     // So does the tackle: it belongs to the last frame of the recording, and
     // the playhead is going back to the first.
     resetTakedown();
@@ -908,6 +914,113 @@ function tapTargets() {
     return [];
 }
 
+/**
+ * LOOKING ROUND A REPLAY. QA ITEM 4.
+ *
+ * A replay is a directed shot, and the visitor's drag is an OFFSET on top of it
+ * rather than a takeover: the camera goes on establishing, tracking and
+ * settling, and their adjustment rides along. camera.js owns the arithmetic and
+ * the limits, and this is only the gestures.
+ *
+ * IT COSTS NOTHING ELSE, because a replay is the one phase with nothing on the
+ * field to press. Outside it, every pointer on this canvas is still a tap that
+ * snaps the ball or throws to somebody.
+ */
+const drag = { points: new Map(), spread: 0 };
+/** Radians per CSS pixel of drag, and per key press. A full turn is about two
+ *  thirds of a phone screen, which is a flick rather than a wrist exercise. */
+const ORBIT_PER_PX = 0.008;
+const LIFT_PER_PX = 0.005;
+const ORBIT_PER_KEY = 0.18;
+const ZOOM_PER_KEY = 1.12;
+/** A wheel notch is about 100 in `deltaY` on a mouse and a few units on a
+ *  trackpad, so it is capped rather than scaled: one gesture, one step. */
+const ZOOM_PER_NOTCH = 1.1;
+
+function replayLive() {
+    return cycle.phase === 'replay';
+}
+
+/** How far apart two fingers are, or 0 when there are not two. */
+function spreadOf() {
+    if (drag.points.size !== 2) return 0;
+    const [a, b] = [...drag.points.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function onCanvasDragStart(event) {
+    if (!replayLive()) return;
+    drag.points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    drag.spread = spreadOf();
+    if (event.target && event.target.setPointerCapture) {
+        try { event.target.setPointerCapture(event.pointerId); } catch (e) { /* fine */ }
+    }
+}
+
+function onCanvasDragMove(event) {
+    if (!replayLive() || !drag.points.has(event.pointerId)) return;
+    const was = drag.points.get(event.pointerId);
+    const dx = event.clientX - was.x;
+    const dy = event.clientY - was.y;
+    drag.points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    // TWO FINGERS PINCH AND ONE FINGER TURNS. With two down, the spread is the
+    // only thing read: a pinch that also orbited would swing the camera every
+    // time somebody zoomed, because two fingers never move by exactly the same
+    // amount.
+    if (drag.points.size >= 2) {
+        const spread = spreadOf();
+        if (drag.spread > 0 && spread > 0) {
+            event.preventDefault();
+            nudgeView({ zoom: drag.spread / spread });
+            hideReplayHint();
+        }
+        drag.spread = spread;
+        return;
+    }
+    if (!dx && !dy) return;
+    event.preventDefault();
+    // Dragging right swings the camera left, which is what dragging a THING
+    // does. The lift is inverted for the same reason.
+    nudgeView({ yaw: -dx * ORBIT_PER_PX, lift: dy * LIFT_PER_PX });
+    hideReplayHint();
+}
+
+function onCanvasDragEnd(event) {
+    drag.points.delete(event.pointerId);
+    drag.spread = spreadOf();
+}
+
+function onCanvasWheel(event) {
+    if (!replayLive()) return;
+    event.preventDefault();
+    nudgeView({ zoom: event.deltaY > 0 ? ZOOM_PER_NOTCH : 1 / ZOOM_PER_NOTCH });
+    hideReplayHint();
+}
+
+/**
+ * AND FROM THE KEYBOARD, because a scene whose only route into a feature is a
+ * pointer gesture has no keyboard story at all, and no test would say so.
+ */
+function onReplayKey(event) {
+    if (!replayLive() || event.metaKey || event.ctrlKey || event.altKey) return;
+    const moves = {
+        ArrowLeft: { yaw: ORBIT_PER_KEY },
+        ArrowRight: { yaw: -ORBIT_PER_KEY },
+        ArrowUp: { lift: ORBIT_PER_KEY * 0.5 },
+        ArrowDown: { lift: -ORBIT_PER_KEY * 0.5 },
+        '+': { zoom: 1 / ZOOM_PER_KEY },
+        '=': { zoom: 1 / ZOOM_PER_KEY },
+        '-': { zoom: ZOOM_PER_KEY },
+        _: { zoom: ZOOM_PER_KEY },
+    };
+    const move = moves[event.key];
+    if (!move) return;
+    event.preventDefault();
+    nudgeView(move);
+    hideReplayHint();
+}
+
 function onCanvasPointer(event) {
     // TAPPING ANYWHERE SNAPS IT (QA item 8). Before the snap there is exactly
     // one thing a visitor can do, the whole field is a picture of them waiting
@@ -1035,6 +1148,15 @@ async function init() {
     // the keyboard and screen reader route, so nothing here is the only way
     // to reach anything.
     canvas.addEventListener('pointerdown', onCanvasPointer, { signal });
+    // The replay's own look-around. Separate handlers rather than more branches
+    // inside the tap, because a drag and a tap are different gestures and only
+    // one of them exists during a replay.
+    canvas.addEventListener('pointerdown', onCanvasDragStart, { signal });
+    canvas.addEventListener('pointermove', onCanvasDragMove, { signal });
+    canvas.addEventListener('pointerup', onCanvasDragEnd, { signal });
+    canvas.addEventListener('pointercancel', onCanvasDragEnd, { signal });
+    canvas.addEventListener('wheel', onCanvasWheel, { signal, passive: false });
+    document.addEventListener('keydown', onReplayKey, { signal });
     // THE WELCOME CARD COMES FIRST, and only on arrival. "Play again" from the
     // summary goes straight back to the playbook, because somebody who has
     // just finished ten plays does not need the rules again.

@@ -252,6 +252,20 @@ body {
     line-height: 1.45;
 }
 
+/**
+ * THE LAST PLAY, REPEATED AT THE TOP OF THE BOOK.
+ *
+ * It is a SECOND card rather than a moved one, so it needs to read as a
+ * shortcut and not as the book having duplicated itself. The "Last play" badge
+ * already names it, so this is one hairline of the team's own orange down the
+ * leading edge: enough to say "this one is here on purpose", not enough to
+ * compete with the diagram it frames.
+ */
+.play-card.is-repeat .play-choose {
+    border-color: rgba(255, 153, 44, 0.45);
+    box-shadow: inset 3px 0 0 0 rgba(255, 153, 44, 0.75);
+}
+
 .play-last {
     display: inline-block;
     margin: 0 0.8rem 0.8rem;
@@ -466,6 +480,22 @@ body {
     margin: 0.4rem 0 0;
     color: #8d97a8;
     font-size: 0.9rem;
+}
+
+/**
+ * THE LINE UNDER THE REPLAY BUTTON THAT SAYS THE CAMERA IS YOURS.
+ *
+ * It is a hint, not a control, so it sits quieter than the button above it and
+ * has no box of its own. `pointer-events: none` because the one thing a visitor
+ * might do next is drag the field, and a caption that eats the first drag is
+ * worse than no caption.
+ */
+.hud-hint {
+    margin: 0.45rem 0 0;
+    color: #8d97a8;
+    font-size: 0.8rem;
+    text-align: center;
+    pointer-events: none;
 }
 
 /**

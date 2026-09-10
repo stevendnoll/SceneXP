@@ -29,7 +29,7 @@ import { EXESNOHS_CONFIG as CFG, simToWorld, FIELD, UNITS_TO_METRES } from './co
 import { figureFor, poseFigure, THROWING_SIDE, FIGURE_LIFT } from './roster.min.js';
 import { getBall, aimBall, placeSpot, BALL_FAT } from './ball.min.js';
 import { placeMarker, hideMarker } from './markers.min.js';
-import { toRigSpace } from './arm.min.js';
+import { toRigSpace, RIG } from './arm.min.js';
 import { takedownAt } from './takedown.min.js';
 
 /** Is this player sitting out this formation?
@@ -500,6 +500,69 @@ export function takedownClock() {
 }
 
 /**
+ * HOW HIGH A STANDING RECEIVER'S FINGERTIPS GET, in world metres.
+ *
+ * Measured off the rig rather than written down, so it follows the shared part
+ * if its proportions ever move: the shoulder's own height plus both arm
+ * segments, at figure scale, plus the lift that puts his shoes on the grass.
+ * That is a man standing with his hands straight up, which is the line a ball
+ * has to be above before leaving the ground is worth anything.
+ */
+function standingReach() {
+    return (RIG.shoulderY + RIG.upper + RIG.lower) * CFG.figureScale + FIGURE_LIFT;
+}
+
+/**
+ * GOING UP FOR THE BALL. Returns the metres this figure is off the ground.
+ *
+ * KEYED TO THE DRAWN BALL AND NOTHING ELSE, which is the whole difference
+ * between this and the version that was built and thrown away (D149). `flight`
+ * carries where the ball really is and how high it really is, because view.js
+ * solves the arc from the throw's own start and target rather than trusting the
+ * simulation's index. So the question this asks is the one a person would: is
+ * the ball close, and is it over my hands.
+ *
+ * IT REPRODUCES IN A REPLAY FOR FREE. Playback rebuilds the ball from the
+ * recording and this file recomputes the same arc from it, so the same receiver
+ * leaves the ground on the same frame without anything having been stored.
+ *
+ * ONCE HE HAS GONE HE IS COMMITTED, because a jump you can call off is not a
+ * jump. The pose needs no help: `catching` already solves his hands onto the
+ * ball, so the arms follow it up on their own.
+ */
+function updateJump(figure, reach, at, live, delta) {
+    const J = CFG.pose.jump;
+    const u = figure.userData;
+    if (u.jumpAt === undefined) u.jumpAt = -1;
+
+    if (u.jumpAt >= 0) {
+        u.jumpAt += delta;
+        const t = u.jumpAt / J.hang;
+        if (t >= 1) { u.jumpAt = -1; return 0; }
+        // Up and down once. A sine rather than a parabola, because the hang at
+        // the top is the part anybody actually reads.
+        return Math.sin(Math.PI * t) * J.lift;
+    }
+
+    // FULLY COMMITTED, NOT MERELY INTERESTED. `reachersFor` ramps from
+    // `catching.range` at 8m, which on a field with four receivers means
+    // somebody is always mildly interested in the ball.
+    if (!live || !(reach >= 1) || !flight.has) return 0;
+    if (Math.hypot(flight.x - at.x, flight.z - at.z) > J.range) return 0;
+    const top = standingReach();
+    // Clearly OVER HIS HEAD, and not so far over that no jump would get there.
+    // The clearance is what makes this rare: see the note in config.
+    if (flight.y < top + J.clearance || flight.y > top + J.lift) return 0;
+    u.jumpAt = 0;
+    return 0;
+}
+
+/** Nobody is in the air between plays. */
+function clearJump(figure) {
+    figure.userData.jumpAt = -1;
+}
+
+/**
  * HAS THIS FIGURE STOPPED GETTING ANYWHERE?
  *
  * NOT "IS HE SLOW", WHICH IS THE QUESTION `mps` ANSWERS AND THE WRONG ONE. A
@@ -580,7 +643,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // A figure arriving for a new play brings no history with it. Keeping
         // the last play's would have him judged to be standing still on the
         // strength of where he was when the last whistle went.
-        if (!held) figure.userData.track = null;
+        if (!held) { figure.userData.track = null; clearJump(figure); }
         const ease = 1 - Math.exp(-delta / CFG.pose.motionSmooth);
         const p = held
             ? { x: held.x + (target.x - held.x) * ease, z: held.z + (target.z - held.z) * ease }
@@ -639,12 +702,21 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         const isFloored = !!hit && obj.settings.position === takedown.carrier;
         const role = isTackler ? hit.tackler : (isFloored ? hit.carrier : null);
 
+        // GOING UP FOR IT, which is the one other thing that lifts a figure off
+        // the grass. Offensive receivers only: a whole secondary leaving its
+        // feet on every pass is a different game.
+        const airborne = (obj.settings.team === 0
+            && /^wr\d$/.test(obj.settings.position) && !role)
+            ? updateJump(figure, reaching.get(obj.settings.position) || 0,
+                { x: p.x, z: p.z }, opts.live, delta)
+            : 0;
+
         // AND HIS FEET GO ON THE GRASS, NOT THROUGH IT. The rig stands itself
         // at y = 0.055 because its shoes hang below its own origin, and writing
         // a flat zero here buried every player on the field to the ankle.
         figure.position.set(
             p.x + (role ? role.x : 0),
-            FIGURE_LIFT + (role && role.y ? role.y : 0),
+            FIGURE_LIFT + (role && role.y ? role.y : 0) + airborne,
             p.z + (role ? role.z : 0)
         );
 

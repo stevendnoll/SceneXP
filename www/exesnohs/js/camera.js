@@ -270,6 +270,106 @@ export function replayDriver(progress, focus) {
     };
 }
 
+/**
+ * THE VISITOR'S OWN ADJUSTMENT, WHICH RIDES ON TOP OF THE SHOT.
+ *
+ * QA asked to be able to look at a replay from another angle. The wrong way to
+ * do that is to hand over the camera, because the replay is a directed shot
+ * that establishes, tracks and settles, and a visitor who takes it over gets a
+ * static view of a play they have already seen. So this is an OFFSET: the
+ * director keeps working and the adjustment is applied to whatever it produced,
+ * which is the same shape as the shared pan part's yaw (and the same trap, so
+ * it is stated plainly here: this is added every frame to a moving shot, not
+ * stored as an absolute camera).
+ *
+ * Spherical about the shot's own TARGET, so orbiting keeps the carrier in the
+ * middle of the frame and zooming moves toward him rather than toward wherever
+ * the camera happens to be pointing.
+ */
+const view = { yaw: 0, lift: 0, zoom: 1 };
+
+/** How far a visitor may take it. The floor on elevation is what keeps the
+ *  camera out of the turf, and the ceiling stops a plan view, which is the shot
+ *  the play camera already gives them. */
+const VIEW = {
+    lift: { min: -0.5, max: 0.9 },       // radians added to the shot's elevation
+    zoom: { min: 0.45, max: 2.4 },
+    floor: 1.2,                          // metres: never below this off the grass
+};
+
+const clamp = (v, lo, hi) => (v < lo ? lo : (v > hi ? hi : v));
+
+/**
+ * Turn, raise or zoom, relative to wherever the visitor already had it.
+ *
+ * `yaw` and `lift` are radians and `zoom` is a MULTIPLIER, so a wheel notch and
+ * a pinch compose the same way and neither has to know the current value.
+ */
+export function nudgeView({ yaw = 0, lift = 0, zoom = 1 } = {}) {
+    view.yaw += yaw;
+    view.lift = clamp(view.lift + lift, VIEW.lift.min, VIEW.lift.max);
+    view.zoom = clamp(view.zoom * zoom, VIEW.zoom.min, VIEW.zoom.max);
+    return { ...view };
+}
+
+/** Back to the director's own shot. Called when a replay starts, so every
+ *  replay opens on the composition it was designed with. */
+export function resetView() {
+    view.yaw = 0;
+    view.lift = 0;
+    view.zoom = 1;
+    return { ...view };
+}
+
+export function getView() {
+    return { ...view };
+}
+
+/** Has the visitor moved it at all? The hint on screen goes away once they
+ *  have, because it has done its job. */
+export function viewMoved() {
+    return view.yaw !== 0 || view.lift !== 0 || view.zoom !== 1;
+}
+
+/**
+ * Apply the offset to a finished shot.
+ *
+ * PURE, and separated from `update` precisely so it can be asserted: an orbit
+ * that quietly changes the distance, or a zoom that walks the camera into the
+ * ground, are both things a test can catch and a screenshot cannot.
+ */
+export function applyView(shot, offset = view) {
+    if (!offset || (offset.yaw === 0 && offset.lift === 0 && offset.zoom === 1)) {
+        return shot;
+    }
+    const t = shot.target;
+    const dx = shot.position.x - t.x;
+    const dy = shot.position.y - t.y;
+    const dz = shot.position.z - t.z;
+    const radius = Math.hypot(dx, dy, dz) || 1e-6;
+
+    const azimuth = Math.atan2(dz, dx) + offset.yaw;
+    // Elevation is measured off the horizontal, and held inside a right angle
+    // either way so the camera can never pass through its own subject.
+    const elevation = clamp(
+        Math.asin(clamp(dy / radius, -1, 1)) + offset.lift, -1.45, 1.45
+    );
+    const reach = radius * offset.zoom;
+    const flat = Math.cos(elevation) * reach;
+
+    return {
+        ...shot,
+        position: {
+            x: t.x + Math.cos(azimuth) * flat,
+            // NEVER UNDER THE PITCH. A visitor who drags all the way down would
+            // otherwise be looking up through the grass at the underside of the
+            // world, which has no back face and is simply the void.
+            y: Math.max(t.y + Math.sin(elevation) * reach, VIEW.floor),
+            z: t.z + Math.sin(azimuth) * flat,
+        },
+    };
+}
+
 // ---- The director -----------------------------------------------------------
 
 const DRIVERS = { play: 'play', replay: 'replay', idle: 'idle' };
@@ -302,7 +402,10 @@ export function getDriver() {
 export function update(delta, state = {}) {
     elapsed += delta;
     if (current === DRIVERS.replay) {
-        return replayDriver(state.progress || 0, state.focus || { x: 0, y: 0, z: 0 });
+        // The director's shot first, then whatever the visitor has done to it.
+        return applyView(
+            replayDriver(state.progress || 0, state.focus || { x: 0, y: 0, z: 0 })
+        );
     }
     if (current === DRIVERS.idle) return idleDriver(elapsed, aspect);
     return playDriver(aspect);

@@ -257,17 +257,25 @@ function buildDefenseRow() {
     return wrap;
 }
 
-function buildCard(play) {
+function buildCard(play, repeat = false) {
     const item = document.createElement('li');
-    item.className = 'play-card';
+    item.className = repeat ? 'play-card is-repeat' : 'play-card';
 
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'play-choose';
     button.dataset.slug = play.slug;
+    if (repeat) {
+        // THE SAME PLAY IN TWO PLACES NEEDS TWO NAMES, in the document and to
+        // anything reading it out. An id may appear once, and a control that
+        // announces itself identically twice is a visitor wondering which one
+        // they are on.
+        button.dataset.repeat = 'true';
+        button.setAttribute('aria-label', `${play.name}, your last play, again`);
+    }
 
     const canvas = document.createElement('canvas');
-    canvas.id = `play-diagram-${play.slug}`;
+    canvas.id = repeat ? `play-diagram-repeat-${play.slug}` : `play-diagram-${play.slug}`;
     canvas.width = 300;
     canvas.height = 150;
     // The diagram is decoration: the name and blurb below carry the same
@@ -312,12 +320,49 @@ function buildCard(play) {
 function markLastPlay(root) {
     for (const tag of root.querySelectorAll('.play-last')) tag.remove();
     if (!settings.lastPlay) return;
-    const button = root.querySelector(`.play-choose[data-slug="${settings.lastPlay}"]`);
-    if (!button) return;
-    const tag = document.createElement('span');
-    tag.className = 'play-last';
-    tag.textContent = 'Last play';
-    button.appendChild(tag);
+    // ALL of them, because the last play now appears twice: once at the top of
+    // the book and once where it always lives.
+    const buttons = root.querySelectorAll(
+        `.play-choose[data-slug="${settings.lastPlay}"]`
+    );
+    for (const button of buttons) {
+        const tag = document.createElement('span');
+        tag.className = 'play-last';
+        tag.textContent = 'Last play';
+        button.appendChild(tag);
+    }
+}
+
+/**
+ * PUT THE LAST PLAY AT THE TOP OF THE BOOK, AND LEAVE IT WHERE IT LIVES.
+ *
+ * The 2D game does exactly this: the play you just called is the first card in
+ * the book AND is still in its own place, so a visitor running the same play
+ * twice does not go hunting for it, and one browsing the book still finds it
+ * where they left it.
+ *
+ * REBUILT ON EVERY OPEN, like the tag itself, because the play that was last is
+ * only knowable at the moment the book opens. The card is a second, separate
+ * card rather than a moved one: moving it would leave a hole in the grid and
+ * change where every other play sits from one play to the next, which is the
+ * one thing a book you are learning to read must not do.
+ */
+function syncRepeatCard(root) {
+    const grid = root.querySelector('.playbook-grid');
+    if (!grid) return;
+    for (const old of grid.querySelectorAll('.play-card.is-repeat')) old.remove();
+    if (!settings.lastPlay) return;
+    const play = PLAYS.find((p) => p.slug === settings.lastPlay);
+    if (!play) return;
+
+    const card = buildCard(play, true);
+    grid.insertBefore(card, grid.firstChild);
+    // AFTER it is in the document: the ported drawPlay methods find their
+    // canvas by selector, so one that has not been inserted is not there.
+    const method = `drawPlay${play.diagram}`;
+    if (typeof book[method] === 'function') {
+        book[method](`#play-diagram-repeat-${play.slug}`);
+    }
 }
 
 /** Draw every diagram. Must run AFTER the canvases are in the document,
@@ -437,6 +482,7 @@ export function show() {
     root.hidden = false;
     // Read the last play HERE, every time, rather than once at boot: it is the
     // only moment at which the answer is current (QA item 1).
+    syncRepeatCard(root);
     markLastPlay(root);
     settleStartOver(root);
     // Focus the first play so a keyboard visitor lands somewhere useful rather

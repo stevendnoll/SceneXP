@@ -676,8 +676,28 @@ const EXESNOHS_CONFIG = {
      * player's height at this figure scale, which is what a thrown ball looks
      * like against people.
      *
-     * `release` is where the arc starts and ends. Low, because the same value
-     * has to leave a hand and then lie on the turf when nobody catches it.
+     * `release` IS WHERE A HAND IS, AND IT USED TO BE WHERE THE GRASS IS.
+     *
+     * One number was doing two jobs, and the note here said so outright: "low,
+     * because the same value has to leave a hand and then lie on the turf when
+     * nobody catches it". A hand is 3.5m up at this figure scale and the turf is
+     * 0.36m, so at 0.28 every pass was drawn LEAVING the quarterback's hand at
+     * shoelace height and ARRIVING at the receiver's feet.
+     *
+     * Measured over 612 throws, at the frame a receiver is closest to the ball
+     * it is a median 0.60m off the ground on a catch, against figures 3.85m
+     * tall. That is a ball caught below the knee, every time, and it is why
+     * catches never looked like catches.
+     *
+     * The two jobs are already separate in the code and nobody noticed:
+     * `view.landingHeight` computes the resting height itself, as
+     * `BALL_FAT * ballScale`, and eases an uncaught ball down to it. So this
+     * value never had to describe the turf at all. It is now the height a ball
+     * leaves a hand at and arrives at a pair of hands at, which is what an arc
+     * that starts and ends at the same height means.
+     *
+     * `apex` came down with it, from 5.8, so the peak over the GROUND is
+     * unchanged: it was 6.08m and is now 6.4m, or about 1.7 times a player.
      *
      * THE STAIRCASE BECOMES A PARABOLA WITHOUT MOVING A SINGLE FRAME, which
      * routes.js explicitly asks for: "keep its timing when the crude ramp is
@@ -689,12 +709,12 @@ const EXESNOHS_CONFIG = {
      * every catch still lands on its own frame, and nothing in routes.js moved.
      */
     ball: {
-        apex: 5.8,           // metres above `release` at the top of the arc
+        apex: 3.4,           // metres above `release` at the top of the arc
         /** The throw length, in metres, at which the arc reaches full height.
          *  Below it the apex scales down, so a flick stays a bullet. Measured
          *  against the library: passes run 1.5m to 13.5m, median 7.2m. */
         fullArcAt: 12,
-        release: 0.28,       // metres, where the arc starts, ends and rests
+        release: 3.0,        // metres: hand height, where the arc starts and ends
         indexFloor: 1,       // getZIndex at rest
         indexCeil: 7,        // ...and at the top, which it clamps to
         /** Seconds to ease the height toward its target. The index steps in
@@ -1146,6 +1166,61 @@ const EXESNOHS_CONFIG = {
         snap: { time: 0.55 },
 
         /**
+         * GOING UP FOR IT, AND THIS TIME KEYED TO WHERE THE BALL ACTUALLY IS.
+         *
+         * A JUMP WAS BUILT ONCE BEFORE AND BACKED OUT (D149). That version rode
+         * the simulation's `coords.z`, which is `getZIndex`, which is a crude
+         * ramp with a clamp that view.js had ALREADY replaced with a real
+         * parabola. It fired on 95% of throws at moments that had nothing to do
+         * with where the ball was, and it converted nothing.
+         *
+         * WHAT WAS ACTUALLY MISSING WAS THE ARC'S HEIGHT. `ball.release` was
+         * 0.28m, doing duty as both a hand and the turf, so every pass was drawn
+         * arriving at a receiver's ankles: measured, the ball was a median 0.60m
+         * off the ground at the frame he was closest to it, against figures
+         * 3.85m tall. Nobody jumps for that. With the arc running hand to hands
+         * the same measurement reads 3.19m on a catch and 3.92m on a miss, and
+         * 93 of 212 misses are balls passing just above his fingertips.
+         *
+         * So the jump is a VIEW animation keyed to the DRAWN ball: how high it
+         * really is, and how far from him it really is. Nothing in the
+         * simulation moves, which also means a replay reproduces it exactly,
+         * because playback recomputes the same arc from the same recording.
+         */
+        jump: {
+            /** Metres of world lift at the peak. A person leaves the ground by
+             *  about 0.6m and these figures are drawn at 2.2. */
+            lift: 1.32,
+            /** Seconds off the ground. A real standing leap is nearer 0.5, and
+             *  a giant who hangs for a normal time reads as being on wires. */
+            hang: 0.62,
+            /** Metres from the ball, measured flat on the ground. */
+            range: 1.5,
+            /**
+             * AND HOW FAR ABOVE HIS OWN FINGERTIPS IT HAS TO BE. THIS IS THE
+             * NUMBER THAT DECIDES WHETHER A JUMP IS AN EVENT.
+             *
+             * Everything else was swept and none of it separated: at a ball
+             * merely LEVEL with his hands, a receiver leaves his feet on 86% of
+             * throws whatever the range, whatever the prediction, and whether or
+             * not the closest approach is solved for. A ball that is genuinely
+             * over his head is rare, and that is the whole difference.
+             *
+             *     clearance   range 1.0m   range 1.5m
+             *       -0.35        65%          86%
+             *        0.0         37%          75%
+             *        0.4         19%          22%
+             *        0.8          0%           0%
+             *
+             * 0.4 is the last step before it never happens at all, which is
+             * also what makes it an event rather than a mannerism: a receiver
+             * goes up on about a fifth of passes. Raise it and he stops
+             * jumping, lower it and he starts jumping for everything.
+             */
+            clearance: 0.4,
+        },
+
+        /**
          * WANTING THE BALL, WHICH IS QA ITEM 3'S SECOND HALF.
          *
          * A receiver who has run out of route used to keep milling on the
@@ -1463,10 +1538,31 @@ const EXESNOHS_CONFIG = {
      * end looks. It is a structure standing where a structure belongs.
      */
     scoreboard: {
+        /**
+         * LOWERED AND BROUGHT IN, BECAUSE THE CAMERA MOVED UNDER IT.
+         *
+         * D147 traded a 28 degree lens for an 18 degree one to fill the screen
+         * with field, and a longer lens is a narrower frame: the visible ground
+         * now stops at x = 57m and, more to the point, HEIGHT climbs toward the
+         * top edge much faster. Projected, the board's face landed at 1.38 in a
+         * frame that ends at 1.0, so it was entirely off the top of the screen.
+         * QA reported it as the scoreboard having gone.
+         *
+         * Solved rather than nudged. The frame's top edge is a ray 19 degrees
+         * below horizontal from a camera 38.8m up at x = -55.5, so a point is in
+         * shot while `y <= 38.8 - 0.3443 * (x + 55.5)`: 4.2m of headroom at the
+         * old x = 45, and 5.9m at x = 40. Lower AND closer, therefore. At a
+         * 1.0m stand, 1.5m past the end line and a 4.0m face, it runs from 0.71
+         * to 0.94 of the frame on every landscape shape and 0.63 to 0.80 in
+         * portrait, which is in shot with a margin at both ends.
+         *
+         * It sits behind the end line either way, so nothing about this puts it
+         * in front of the field.
+         */
         width: 13,
-        height: 5.4,
-        standHeight: 5.2,           // metres of post under the board
-        beyond: 6.5,                // metres past the far end line
+        height: 4.0,
+        standHeight: 1.0,           // metres of post under the board
+        beyond: 1.5,                // metres past the far end line
         /**
          * A SCOREBOARD IS LAMPS BEHIND A DARK PANEL, not orange type on slate.
          *

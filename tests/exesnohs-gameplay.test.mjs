@@ -367,10 +367,31 @@ describe('the ball flies', () => {
         expect(heightAt(0.5, 2)).toBeLessThan(1.75 * CFG.figureScale);
     });
 
-    test('it starts and finishes at the same height, near the turf', () => {
+    /**
+     * IT STARTS AND FINISHES WHERE A HAND IS, AND IT USED TO SAY "NEAR THE
+     * TURF".
+     *
+     * That assertion was wrong in the same way the value was: `release` was
+     * doing two jobs, a hand and the grass, and the grass won. Measured over
+     * 612 throws, the ball was a median 0.60m off the ground at the frame a
+     * receiver was closest to it, against figures 3.85m tall. Every pass in the
+     * game arrived below the knee, and this test agreed that it should.
+     *
+     * The property is the one a person would state: an arc that starts and ends
+     * at the same height starts and ends where the BALL IS HELD, which is
+     * between the tuck at the ribs and the throwing hold by the ear. Where an
+     * uncaught ball comes to rest is a different question and `landingHeight`
+     * already answers it on its own.
+     */
+    test('it starts and finishes at the height a ball is held at', () => {
         expect(heightAt(0, 12)).toBeCloseTo(B().release, 6);
         expect(heightAt(1, 12)).toBeCloseTo(B().release, 6);
-        expect(B().release).toBeLessThan(0.5);
+
+        const held = (spot) => spot.y * CFG.figureScale;
+        expect(B().release).toBeGreaterThan(held(CFG.pose.tuck.ball) * 0.8);
+        expect(B().release).toBeLessThan(held(CFG.pose.throwHold.ball) * 1.1);
+        // And well clear of the grass, which is where it used to start.
+        expect(B().release).toBeGreaterThan(1.0);
     });
 });
 
