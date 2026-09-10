@@ -290,6 +290,33 @@ export class MotionClass {
     return typeof s === 'number' && s > 0 ? s : 1;
   }
 
+  /**
+   * HOW FAR A MAN IN THE AIR CAN REACH, in FIELD UNITS, and 0 for nobody.
+   *
+   * A jump is decided by the view, from the ball's real drawn arc and its real
+   * distance, and it only fires when the ball is genuinely within reach of a
+   * leaping receiver. That is a better answer to "can he get to it" than
+   * anything in here, so while he is off the ground his box becomes this and
+   * the promise the jump makes is the promise the catch keeps.
+   *
+   * Injected and defaulting to 0, which leaves the ported boxes exactly as they
+   * were for a caller that never mentions jumping.
+   */
+  airborneReach() {
+    const s = this.settings && this.settings.airborneReach;
+    return typeof s === 'number' && s > 0 ? s : 0;
+  }
+
+  /** Is anybody off the ground right now? Nineteen objects, once a frame. */
+  // eslint-disable-next-line
+  anyoneAirborne(game = {}) {
+    const list = (game && game.objects) || [];
+    for (let i = 0; i < list.length; i += 1) {
+      if (list[i].state && list[i].state.airborne) return true;
+    }
+    return false;
+  }
+
   // eslint-disable-next-line
   checkCatch(obj = {}, game = {}) {
     const caughtByIndexList = [];
@@ -318,7 +345,29 @@ export class MotionClass {
         // A defender reaches by his own share of it. The man the ball was
         // thrown at gets all of it.
         const g = object.settings.team === 1 ? k * share : k;
-        const set2 = {
+        /**
+         * AND A MAN IN THE AIR IS A DIFFERENT SHAPE.
+         *
+         * The ported box is 11 units across and 18 deep, lopsided because it
+         * wrapped a letterform drawn upward from its own baseline. Somebody who
+         * has left his feet with both hands up has no baseline and no front: he
+         * covers the same distance in every direction, which is what the view
+         * measured before it let him jump.
+         */
+        const air = object.state && object.state.airborne ? this.airborneReach() : 0;
+        const set2 = air > 0 ? {
+          position: object.settings.position,
+          team: object.settings.team,
+          x: object.coords.x,
+          x1: (object.coords.x - air),
+          x2: (object.coords.x + air),
+          xSpeed: object.state.xSpeed,
+          y: object.coords.y,
+          y1: (object.coords.y - air),
+          y2: (object.coords.y + air),
+          ySpeed: object.state.ySpeed,
+          z: object.coords.z
+        } : {
           position: object.settings.position,
           team: object.settings.team,
           x: object.coords.x,
@@ -331,7 +380,28 @@ export class MotionClass {
           ySpeed: object.state.ySpeed,
           z: object.coords.z
         }
-        if ( set1.z === set2.z && (set2.team === 1 || set2.position === game.throwTo) ) {
+        /**
+         * THE HEIGHT GATE, AND WHY A MAN IN THE AIR IS EXCUSED IT.
+         *
+         * `coords.z` is `getZIndex`, a ramp that climbs in half steps to a
+         * clamp at 7, and this asked for the ball and the player to be on the
+         * same step. Every player sits at 1 and never moves, so it meant "the
+         * ball is back down".
+         *
+         * MEASURED, THAT IS WHAT REFUSES A LEAPING CATCH. On 166 jumps that
+         * ended in no catch, the ball's index at its closest approach was a
+         * median of 4.5 against his 1, and 88 of them would have been caught on
+         * the boxes alone. The visitor watches a receiver leave his feet with
+         * the ball half a metre away and come down with nothing.
+         *
+         * It is not re-tested for him because it has ALREADY been tested, and
+         * better: view.js let him jump on the strength of the ball's real drawn
+         * height against his own real reach, and the index is a proxy that
+         * view.js itself stopped believing (see `arcHeight`). Asking it twice
+         * would only overrule the accurate answer with the crude one.
+         */
+        const up = object.state && object.state.airborne;
+        if ( (up || set1.z === set2.z) && (set2.team === 1 || set2.position === game.throwTo) ) {
           // Check left.
           if ( (set1.y1 >= set2.y1 && set1.y1 <= set2.y2) || (set1.y2 >= set2.y1 && set1.y2 <= set2.y2) ) {
             if ( set1.x1 <= set2.x2 && set1.x1 >= set2.x1 ) {
@@ -990,7 +1060,10 @@ export class MotionClass {
 
   // eslint-disable-next-line
   moveBallObject(obj = {}, game = {}) {
-    if ( obj.coords.z < 2 ) {
+    // THE CEILING IS ABOVE EVERY REACH BELOW IT, so it has to lift too: the 2D
+    // game stops asking about a catch once the ball is above index 2, and a
+    // leaping receiver whose question is never asked cannot answer it.
+    if ( obj.coords.z < 2 || this.anyoneAirborne(game) ) {
       this.checkCatch(obj, game);
     }
     obj.coords.x = (obj.coords.x + obj.state.xSpeed);

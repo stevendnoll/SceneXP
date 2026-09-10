@@ -45,7 +45,7 @@ const {
 } = await import(join(scene, 'view.js'));
 const {
     createPlay, lineUp, snap, tick, isDone, settleArrived, throwTo,
-    eligibleReceivers, outcome, keepInbounds, OFFENSIVE_PLAYS,
+    eligibleReceivers, outcome, keepInbounds, markAirborne, OFFENSIVE_PLAYS,
 } = await import(join(scene, 'play.js'));
 const {
     startRecording, record, rewind, focusAt,
@@ -1316,5 +1316,74 @@ describe('the replay camera keeps its shoulder', () => {
         expect(near.position.z).toBeCloseTo(-far.position.z, 6);
         expect(near.position.x).toBeCloseTo(far.position.x, 6);
         expect(near.position.y).toBeCloseTo(far.position.y, 6);
+    });
+});
+
+describe('the view tells the simulation who is in the air', () => {
+    /**
+     * QA ROUND FIFTEEN. The jump is decided by the view, because it is the only
+     * half that knows where the ball really is: it reads the drawn parabola
+     * against the man's real reach, where the simulation has only `getZIndex`,
+     * a clamped ramp view.js itself stopped believing. A catch that then refused
+     * him is a receiver leaving his feet with the ball half a metre away and
+     * coming down with nothing.
+     *
+     * IT CROSSES AS A PLAIN FLAG ON A PLAIN OBJECT, which is what keeps
+     * PLANNING D1 intact: play.js and motion.js still never import THREE, and
+     * neither knows why anybody is airborne.
+     */
+    test('the flag lands on the named men and comes off everybody else', () => {
+        const play = createPlay();
+        lineUp(play, 'pass2', 'cover1');
+        const named = new Set(['wr1', 'wr3']);
+
+        expect(markAirborne(play, named)).toBe(2);
+        for (const obj of play.game.objects) {
+            if (!obj.state) continue;
+            expect({ p: obj.settings.position, up: obj.state.airborne })
+                .toEqual({ p: obj.settings.position, up: named.has(obj.settings.position) });
+        }
+
+        // And it is cleared rather than left behind, which is the failure that
+        // would leave somebody permanently able to catch anything.
+        expect(markAirborne(play, new Set())).toBe(0);
+        for (const obj of play.game.objects) {
+            if (obj.state) expect(obj.state.airborne).toBe(false);
+        }
+    });
+
+    test('an empty set is what a play with nobody up looks like', () => {
+        const play = createPlay();
+        lineUp(play, 'pass2', 'cover1');
+        expect(markAirborne(play)).toBe(0);
+    });
+
+    /**
+     * AND ONLY THE MAN IT WAS THROWN AT LEAVES HIS FEET.
+     *
+     * Measured with anybody allowed to go up: 47 of 47 jumps that ended in no
+     * catch were a receiver who was NOT the target. The ported rule lets only
+     * the intended man catch a pass, so everyone else was leaving his feet for
+     * a ball he could never have. With the jump restricted to him, every jump
+     * ends in a catch, and there are fewer of them.
+     *
+     * The view finds him from the throw's own target, which `flight.span`
+     * carries, so it answers the same in a replay: playback has no `throwTo`
+     * and the span survives the play.
+     */
+    test('the throw remembers where it was aimed, not just how far', () => {
+        resetBallFlight();
+        syncBall({
+            settings: { position: 'ball', benched: false },
+            coords: {
+                x: 300, y: 300, z: 2,
+                startX: 200, startY: 300, targetX: 800, targetY: 420,
+            },
+            state: { xSpeed: 4, ySpeed: 0 },
+        }, null, 1 / 60);
+        const span = ballSpan();
+        expect(span.tx).toBe(800);
+        expect(span.ty).toBe(420);
+        resetBallFlight();
     });
 });

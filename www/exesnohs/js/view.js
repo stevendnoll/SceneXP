@@ -571,6 +571,33 @@ function standingReach() {
  * jump. The pose needs no help: `catching` already solves his hands onto the
  * ball, so the arms follow it up on their own.
  */
+/**
+ * WHO THE BALL WAS THROWN AT, WHICH IS THE ONLY MAN WHO MAY JUMP FOR IT.
+ *
+ * MEASURED: with anybody allowed to go up, 47 of 47 jumps that ended in no
+ * catch were a receiver who was not the target. The ported rule lets only the
+ * intended man catch a pass, so everyone else was leaving his feet for a ball
+ * he could never have, which is precisely the picture QA reported.
+ *
+ * It reads the throw's own target out of `flight.span` rather than being told,
+ * which means it answers identically in a replay: playback carries no
+ * `throwTo`, but the span survives the play and it does.
+ */
+function intendedReceiver(objects) {
+    if (!flight.span || flight.span.tx === undefined) return '';
+    const aim = simToWorld(flight.span.tx, flight.span.ty, 0);
+    let best = '';
+    let near = Infinity;
+    for (const obj of objects) {
+        if (BENCHED(obj) || obj.settings.team !== 0) continue;
+        if (!/^wr\d$/.test(obj.settings.position)) continue;
+        const p = simToWorld(obj.coords.x, obj.coords.y, 0);
+        const d = Math.hypot(p.x - aim.x, p.z - aim.z);
+        if (d < near) { near = d; best = obj.settings.position; }
+    }
+    return best;
+}
+
 function updateJump(figure, reach, at, live, delta) {
     const J = CFG.pose.jump;
     const u = figure.userData;
@@ -601,6 +628,26 @@ function updateJump(figure, reach, at, live, delta) {
 /** Nobody is in the air between plays. */
 function clearJump(figure) {
     figure.userData.jumpAt = -1;
+}
+
+/**
+ * WHO IS OFF THE GROUND RIGHT NOW, by position.
+ *
+ * THE SIMULATION HAS TO KNOW, AND THIS IS HOW IT FINDS OUT WITHOUT LEARNING
+ * WHAT A MESH IS. A jump that the catch does not honour is a receiver leaving
+ * his feet with the ball half a metre away and coming down with nothing, which
+ * is exactly what QA reported. But the decision belongs here: it is made from
+ * the ball's real drawn arc and the man's real reach, neither of which the
+ * simulation has.
+ *
+ * So the view reports and main.js carries it across as a plain flag on a plain
+ * object, which keeps PLANNING D1 intact: play.js and motion.js still never
+ * import THREE, and neither of them knows why somebody is airborne.
+ */
+const inTheAir = new Set();
+
+export function airborne() {
+    return inTheAir;
 }
 
 /**
@@ -658,6 +705,9 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         if (relocate.at > CFG.pose.relocate.time) relocate.at = -1;
     }
     const walking = relocateProgress();
+    inTheAir.clear();
+    // Only the man it was thrown at goes up for it. See `intendedReceiver`.
+    const intended = intendedReceiver(objects);
 
     // The tackle's own clock, advanced once whatever else is happening.
     if (takedown.at >= 0) takedown.at += delta;
@@ -773,10 +823,11 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // the grass. Offensive receivers only: a whole secondary leaving its
         // feet on every pass is a different game.
         const airborne = (obj.settings.team === 0
-            && /^wr\d$/.test(obj.settings.position) && !role)
+            && obj.settings.position === intended && !role)
             ? updateJump(figure, reaching.get(obj.settings.position) || 0,
                 { x: p.x, z: p.z }, opts.live, delta)
             : 0;
+        if (airborne > 0) inTheAir.add(obj.settings.position);
 
         // AND HIS FEET GO ON THE GRASS, NOT THROUGH IT. The rig stands itself
         // at y = 0.055 because its shoes hang below its own origin, and writing
@@ -1158,6 +1209,11 @@ function flightSpan(c) {
     flight.span = {
         sx: c.startX,
         sy: c.startY,
+        // WHERE IT WAS AIMED, kept for the same reason the rest of this is: the
+        // recorder stores none of it, so without the cache a replay has no idea
+        // who the ball was thrown at (see `intendedReceiver`).
+        tx: c.targetX,
+        ty: c.targetY,
         total,
         // HOW HIGH THIS PARTICULAR THROW GOES. Measured, the library's passes
         // run from 1.5m to 13.5m with a median of 7.2m, and its own ramp keeps

@@ -25,11 +25,11 @@ import {
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments,
     beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
-    beginRelocate, resetRelocate,
+    beginRelocate, resetRelocate, airborne,
 } from './view.min.js';
 import { takedownLength, tacklerFor, contactFraction } from './takedown.min.js';
 import {
-    createPlay, lineUp, snap, tick, ballCarrier,
+    createPlay, lineUp, snap, tick, ballCarrier, markAirborne,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome,
 } from './play.min.js';
 import { readGame, saveGame, clearGame } from './progress.min.js';
@@ -727,6 +727,15 @@ function stepCycle(delta) {
         // Fixed 60Hz steps, however fast the display runs. Capped so a tab
         // that was backgrounded for a minute does not try to catch up on
         // three thousand frames at once.
+        // WHO IS IN THE AIR, CARRIED ACROSS BEFORE THE STEPS THAT CARE.
+        //
+        // The view decided it on the LAST frame, from the ball's real drawn arc
+        // against a receiver's real reach, which is a better answer than
+        // anything the simulation has. One rendered frame of lag against a jump
+        // that lasts 0.62 seconds is not a thing anybody can see, and it is the
+        // only order that can work: the view cannot know where the ball is
+        // drawn until it has drawn it.
+        markAirborne(cycle.play, airborne());
         cycle.accumulator = Math.min(cycle.accumulator + delta, 0.25);
         while (cycle.accumulator >= SIM_STEP) {
             tick(cycle.play);

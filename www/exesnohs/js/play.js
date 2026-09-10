@@ -233,6 +233,32 @@ export function tick(play) {
 }
 
 /**
+ * WHO IS OFF THE GROUND, TOLD RATHER THAN WORKED OUT.
+ *
+ * The jump is decided by the view, because it is the only half that knows where
+ * the ball really is: it reads the drawn parabola against the man's real reach,
+ * where this side has only `getZIndex`, a clamped ramp that view.js itself
+ * stopped believing. A catch that then refused him would be a receiver leaving
+ * his feet with the ball half a metre away and coming down with nothing, which
+ * is what QA watched.
+ *
+ * It arrives as a set of POSITION NAMES and lands as a plain boolean on a plain
+ * object, so nothing here has to know what a mesh is and PLANNING D1 holds:
+ * `motion.checkCatch` reads `state.airborne` and asks no further questions.
+ */
+export function markAirborne(play, positions) {
+    const up = positions || new Set();
+    let count = 0;
+    for (const obj of play.game.objects) {
+        if (!obj.state || !obj.settings) continue;
+        const now = up.has(obj.settings.position);
+        obj.state.airborne = now;
+        if (now) count += 1;
+    }
+    return count;
+}
+
+/**
  * A RECEIVER WHO HAS FINISHED HIS ROUTE STOPS. QA ITEM 3.
  *
  * WHAT HE WAS DOING INSTEAD, MEASURED. Every route in the ported library

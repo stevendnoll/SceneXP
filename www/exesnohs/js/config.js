@@ -202,6 +202,21 @@ const CATCH_SCALE = 1.9;
  */
 const INTERCEPT_SHARE = 0.40;
 
+/**
+ * HOW FAR A LEAPING RECEIVER REACHES, IN METRES, and it is deliberately the
+ * SAME NUMBER `pose.jump.range` uses to decide he may jump at all.
+ *
+ * That is the whole point of it. The view lets him leave his feet when the ball
+ * is within this distance and over his hands; the catch then honours exactly
+ * that promise, rather than measuring him again with a box drawn for a
+ * letterform. Measured, a jump that ends in no catch has the ball a median of
+ * 0.45m away, which is well inside it.
+ *
+ * It lives up here rather than inside `pose` because `formationSettings` has to
+ * hand it to the ported physics and `pose` is the drawing half.
+ */
+const JUMP_RANGE = 1.5;
+
 const SIM = {
     lineInterval: 200,       // field units per interval. See above.
     segments: FIELD.segments,
@@ -348,6 +363,10 @@ function formationSettings() {
         collisionPad: COLLISION_PAD,
         catchScale: CATCH_SCALE,
         interceptShare: INTERCEPT_SHARE,
+        // How far a man in the air reaches, in FIELD UNITS, which is the same
+        // distance the view required before it let him leave the ground. See
+        // `pose.jump.range` and the note on `airborneReach` in motion.js.
+        airborneReach: JUMP_RANGE / UNITS_TO_METRES,
     };
 }
 
@@ -1241,8 +1260,10 @@ const EXESNOHS_CONFIG = {
             /** Seconds off the ground. A real standing leap is nearer 0.5, and
              *  a giant who hangs for a normal time reads as being on wires. */
             hang: 0.62,
-            /** Metres from the ball, measured flat on the ground. */
-            range: 1.5,
+            /** Metres from the ball, measured flat on the ground. THE SAME
+             *  NUMBER the catch honours, so the two cannot come apart: see
+             *  `JUMP_RANGE`. */
+            range: JUMP_RANGE,
             /**
              * AND HOW FAR ABOVE HIS OWN FINGERTIPS IT HAS TO BE. THIS IS THE
              * NUMBER THAT DECIDES WHETHER A JUMP IS AN EVENT.

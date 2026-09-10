@@ -1232,3 +1232,92 @@ function player(position, team, x, y, state = {}) {
         },
     };
 }
+
+describe('a man in the air can actually catch it', () => {
+    /**
+     * QA: a receiver jumps for the ball and comes down with nothing.
+     *
+     * THE HEIGHT GATE IS WHAT REFUSED HIM. `checkCatch` asks for the ball and
+     * the player to be on the same `getZIndex` step, every player sits at 1 and
+     * never moves, so it means "the ball is back down". Measured over 166 jumps
+     * that ended in no catch, the ball's index at its closest approach was a
+     * median of 4.5 against his 1, and 88 of them would have been caught on the
+     * boxes alone. The catch was being refused by a ramp that view.js itself
+     * stopped believing, after the view had already made the same judgement
+     * against the ball's REAL drawn height.
+     */
+    const at = (position, team, x, y, state = {}) => ({
+        settings: { position, team, positionGroup: 'wr', benched: false, tackled: 3 },
+        coords: { x, y, z: 1 },
+        physics: { accel: 0.4, maxSpeed: 2.35, decel: 0.1 },
+        state: { xSpeed: 0, ySpeed: 0, ...state },
+    });
+    /** A ball at a given height index, right on top of him. */
+    const ballAt = (z) => ({
+        settings: { position: 'ball', team: 0, benched: false, tackled: 3 },
+        coords: { x: 400, y: 300, z },
+        physics: { accel: 0.4, maxSpeed: 7, decel: 0.1 },
+        state: { xSpeed: 0, ySpeed: 0 },
+    });
+    const caught = (motion, receiver, z) => {
+        const gameState = { state: { ball: { caught: false, position: '', team: 0 }, anim: {} } };
+        motion.gameState = gameState;
+        const ball = ballAt(z);
+        const game = { objects: [ball, receiver], throwTo: 'wr1' };
+        motion.checkCatch(ball, game);
+        return gameState.state.ball.caught === true;
+    };
+    const settings = () => ({ ...formationSettings() });
+    // The ported physics calls into an injected audio object from inside the
+    // catch, exactly as play.js supplies one. Silence is the headless default.
+    const silence = { catch() {}, collide() {}, incomplete() {} };
+
+    test('the port is unchanged for anybody with his feet on the ground', () => {
+        const motion = new MotionClass(settings(), {}, silence);
+        // Level with him, which is the only case the port allows.
+        expect(caught(motion, at('wr1', 0, 400, 300), 1)).toBe(true);
+        // And over his head, which it refuses.
+        expect(caught(motion, at('wr1', 0, 400, 300), 4.5)).toBe(false);
+    });
+
+    test('and a man who has left his feet gets the one over his head', () => {
+        const motion = new MotionClass(settings(), {}, silence);
+        expect(caught(motion, at('wr1', 0, 400, 300, { airborne: true }), 4.5)).toBe(true);
+    });
+
+    /**
+     * AND THE CEILING ABOVE THE REACH HAD TO LIFT WITH IT. The 2D game stops
+     * asking about a catch at all once the ball is above index 2, so a leaping
+     * receiver whose question is never asked cannot answer it. That was found
+     * the hard way once already, on a sweep that moved nothing.
+     */
+    test('the ball is still worth asking about while somebody is up', () => {
+        const motion = new MotionClass(settings(), {}, silence);
+        const high = ballAt(4.5);
+        expect(motion.anyoneAirborne({ objects: [at('wr1', 0, 400, 300)] })).toBe(false);
+        expect(motion.anyoneAirborne({
+            objects: [at('wr1', 0, 400, 300, { airborne: true })],
+        })).toBe(true);
+        expect(high.coords.z).toBeGreaterThan(2);
+    });
+
+    /**
+     * HIS REACH IS THE SAME DISTANCE THE VIEW REQUIRED BEFORE IT LET HIM JUMP,
+     * which is the whole point: the promise the jump makes is the promise the
+     * catch keeps, from one number.
+     */
+    test('his reach in the air is the distance the jump was allowed at', () => {
+        const motion = new MotionClass(settings(), {}, silence);
+        expect(motion.airborneReach() * UNITS_TO_METRES)
+            .toBeCloseTo(CFG.pose.jump.range, 6);
+        // ...and a MotionClass told nothing still behaves as the 2D game did.
+        expect(new MotionClass({}, {}, {}).airborneReach()).toBe(0);
+    });
+
+    test('a ball beyond that reach is still not caught, airborne or not', () => {
+        const motion = new MotionClass(settings(), {}, silence);
+        const far = (CFG.pose.jump.range * 2.5) / UNITS_TO_METRES;
+        expect(caught(motion, at('wr1', 0, 400 + far, 300, { airborne: true }), 4.5))
+            .toBe(false);
+    });
+});
