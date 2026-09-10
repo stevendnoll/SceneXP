@@ -250,37 +250,84 @@ export class MotionClass {
     }
   }
 
+  /**
+   * HOW MUCH BIGGER A CATCH IS THAN THE 2D GAME DREW IT, and why there is a
+   * number here at all.
+   *
+   * `checkCatch` builds two boxes by hand: five units either side of the ball,
+   * and eleven across by eighteen deep around the player. Those were measured
+   * against a player DRAWN AS A 20-UNIT LETTER, which is the same assumption
+   * `collisionScale` exists to correct. At `figureScale` 2.2 the figure on
+   * screen is 1.45m across and the box that decides whether he caught it is
+   * 0.385m: he can be standing squarely under the ball with three quarters of
+   * his body outside the only part of him that can catch.
+   *
+   * That is why so many passes fall incomplete, and it is not a fault of the
+   * ported routes: the throw is aimed correctly, the receiver arrives, and a
+   * box drawn for a letterform decides he did not reach it.
+   *
+   * SAME SHAPE AS `collisionScale`, deliberately. Injected on the settings
+   * object rather than imported, defaulting to 1, which is the 2D game's own
+   * behaviour and what a caller that knows nothing about this gets. The RATIO
+   * between the two boxes is the port's and is not touched.
+   */
+  catchScale() {
+    const s = this.settings && this.settings.catchScale;
+    return typeof s === 'number' && s > 0 ? s : 1;
+  }
+
+  /**
+   * ...and how much of that a DEFENDER gets, as a fraction of it.
+   *
+   * A separate number because the two are not the same question. Widening the
+   * catch alone would hand the secondary the same gift and turn every generous
+   * pass into an interception, and interceptions are already the harshest
+   * outcome on the ladder at minus ten. Defaults to 1, which is the ported
+   * behaviour of both boxes being the same.
+   */
+  interceptShare() {
+    const s = this.settings && this.settings.interceptShare;
+    return typeof s === 'number' && s > 0 ? s : 1;
+  }
+
   // eslint-disable-next-line
   checkCatch(obj = {}, game = {}) {
     const caughtByIndexList = [];
     const caughtByList = [];
     const caughtByPositionList = [];
+    // The half-extents below are the 2D game's, unedited. The scale is applied
+    // once where the boxes are built, exactly as `checkCollisions` does it.
+    const k = this.catchScale();
+    const share = this.interceptShare();
     const set1 = {
       position: obj.settings.position,
       team: obj.settings.team,
       x: obj.coords.x,
-      x1: (obj.coords.x - 5),
-      x2: (obj.coords.x + 5),
+      x1: (obj.coords.x - 5 * k),
+      x2: (obj.coords.x + 5 * k),
       xSpeed: obj.state.xSpeed,
       y: obj.coords.y,
-      y1: (obj.coords.y - 3),
-      y2: (obj.coords.y + 3),
+      y1: (obj.coords.y - 3 * k),
+      y2: (obj.coords.y + 3 * k),
       ySpeed: obj.state.ySpeed,
       z: obj.coords.z
     }
     let i = 0;
     game.objects.forEach(object => {
       if ( ['ball', 'qb', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6'].indexOf(object.settings.position) === -1 ) {
+        // A defender reaches by his own share of it. The man the ball was
+        // thrown at gets all of it.
+        const g = object.settings.team === 1 ? k * share : k;
         const set2 = {
           position: object.settings.position,
           team: object.settings.team,
           x: object.coords.x,
-          x1: (object.coords.x - 5),
-          x2: (object.coords.x + 6),
+          x1: (object.coords.x - 5 * g),
+          x2: (object.coords.x + 6 * g),
           xSpeed: object.state.xSpeed,
           y: object.coords.y,
-          y1: (object.coords.y - 14),
-          y2: (object.coords.y + 4),
+          y1: (object.coords.y - 14 * g),
+          y2: (object.coords.y + 4 * g),
           ySpeed: object.state.ySpeed,
           z: object.coords.z
         }

@@ -79,6 +79,9 @@ const cycle = {
     lastOutcome: null,
     replayHold: 0,
     spotAt: null,         // world metres, where the last play finished
+    /** ...and where the scoring band should light, which is NOT the same
+     *  point: an interception has a spot and is worth no band. */
+    bandAt: null,
     settleFor: 0,         // seconds to hold after the whistle, see beginSettle
     /** Who brought whom down, decided once at the whistle so the replay ends
      *  with the same tackle the live play did. */
@@ -274,6 +277,7 @@ function openPlaybook() {
     cycle.phase = 'playbook';
     cycle.held = 0;
     cycle.spotAt = null;
+    cycle.bandAt = null;
     discard();            // one recording is held at a time and no more
     hideSpot();
     showHud(false);
@@ -408,6 +412,7 @@ function finishPlay() {
     // about to rewind the world and `ballWorldPoint` would then answer with
     // wherever the playhead happens to be.
     cycle.spotAt = ballWorldPoint();
+    cycle.bandAt = bandPoint();
 
     // AND SAVE IT, so a reload during play five does not cost plays one to
     // four. Written here rather than on "Next play" because the play is over
@@ -658,10 +663,51 @@ function trackBall(delta) {
     // the whistle. The card says "+15" and the field says which fifteen, which
     // is the pair the 2D game's touchline shows and the reason the band is
     // worth having at all.
-    const at = cycle.phase === 'result' ? cycle.spotAt : ballWorldPoint();
+    const at = cycle.phase === 'result' ? cycle.bandAt : bandPoint();
     const lit = !!at && BAND_PHASES.has(cycle.phase);
     setBandAt(lit ? at.x : 0, lit);
     fadeBand(delta);
+}
+
+/**
+ * WHERE THE BAND SHOULD LIGHT, OR NULL FOR NOWHERE.
+ *
+ * NOT THE SAME QUESTION AS "WHERE IS THE BALL", WHICH IS WHAT IT USED TO ASK.
+ * The band paints what the ball is WORTH, and the ladder only pays the offense:
+ * an interception is minus ten wherever it happens. So a defender carrying the
+ * ball into the 50 band used to light the 50 band, which tells a visitor they
+ * have just scored fifty points for throwing a pick. Reported from the
+ * recording, where it is most visible, because a replay follows the man who
+ * intercepted it all the way back.
+ *
+ * THE SPOT IS DELIBERATELY NOT GATED THE SAME WAY. It marks where the play
+ * finished, and where an interception happened is a true and useful thing to
+ * show. It is the SCORING band that would be lying.
+ */
+function bandPoint() {
+    if (cycle.phase === 'replay') {
+        const f = replayFocus();
+        return f && litFor(f.holder) ? simToWorld(f.x, f.y, 0) : null;
+    }
+    if (!cycle.play) return null;
+    const carrier = ballCarrier(cycle.play);
+    return carrier && litFor(carrier.settings.position)
+        ? simToWorld(carrier.coords.x, carrier.coords.y, 0) : null;
+}
+
+/**
+ * Does the man holding the ball light the band he is standing in?
+ *
+ * ONE RULE, ASKED THE SAME WAY BY BOTH BRANCHES, and taking a position rather
+ * than a team so the live play and the recording can answer it identically:
+ * playback rebuilds objects from six floats and stores positions, not teams,
+ * because a position's team never changes.
+ *
+ * Empty means nobody is holding it, which is a ball in the air or on the
+ * grass, and neither lights anything.
+ */
+export function litFor(position) {
+    return !!position && teamOfPosition(position) === 0;
 }
 
 /**

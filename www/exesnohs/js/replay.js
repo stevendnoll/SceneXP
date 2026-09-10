@@ -156,19 +156,30 @@ export function frameAt(index, teamOf) {
     return out;
 }
 
-/** Where the ball, or whoever is carrying it, was on this frame. The camera
- *  follows this. Falls back to the quarterback so a caller never null-checks. */
+/**
+ * Where the ball, or whoever is carrying it, was on this frame. The camera
+ * follows this. Falls back to the quarterback so a caller never null-checks.
+ *
+ * IT ALSO SAYS WHO HAS IT, in `holder`, and that is not for the camera. The
+ * field lights the scoring band the ball has reached, and on an INTERCEPTION
+ * the man carrying it is on the other side: lighting the 50 band because a
+ * defender ran the ball into it tells a visitor they have scored fifty points
+ * for being intercepted. Position rather than team, because the recording
+ * stores positions and a position's team never changes.
+ *
+ * Empty when nobody is holding it, which is a ball in flight or on the grass.
+ */
 export function focusAt(index) {
     const frame = frameAt(index);
     // WHOEVER IS HOLDING IT COMES FIRST. The ball object stops where it was
     // caught and keeps its coordinates, so asking it first left the camera
     // aimed at the spot of the catch while the man who made it ran out of shot.
     const carrier = frame.find((o) => o.state.hasBall && !o.settings.benched);
-    if (carrier) return carrier.coords;
+    if (carrier) return { ...carrier.coords, holder: carrier.settings.position };
     const ball = frame.find((o) => o.settings.position === 'ball' && !o.settings.benched);
-    if (ball && (ball.coords.x || ball.coords.y)) return ball.coords;
+    if (ball && (ball.coords.x || ball.coords.y)) return { ...ball.coords, holder: '' };
     const qb = frame.find((o) => o.settings.position === 'qb');
-    return qb ? qb.coords : { x: 0, y: 0, z: 0 };
+    return qb ? { ...qb.coords, holder: '' } : { x: 0, y: 0, z: 0, holder: '' };
 }
 
 // ---- Playback --------------------------------------------------------------

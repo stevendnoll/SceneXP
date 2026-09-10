@@ -33,15 +33,22 @@ const scene = join(here, '..', 'www', 'exesnohs', 'js');
 
 installThree();
 
-const { EXESNOHS_CONFIG: CFG, UNITS_TO_METRES } = await import(join(scene, 'config.js'));
+const CONFIG_MODULE = await import(join(scene, 'config.js'));
+const { EXESNOHS_CONFIG: CFG, UNITS_TO_METRES } = CONFIG_MODULE;
 const { solveArm, handAt, RIG } = await import(join(scene, 'arm.js'));
 const { takedownAt, takedownLength, contactFraction } = await import(join(scene, 'takedown.js'));
 const {
     toWorld, carryHold, HEADING_DEADZONE, TURN_RESPONSE,
+    syncFigures, beginSnapMotion, resetThrow, throwClock,
 } = await import(join(scene, 'view.js'));
 const {
-    createPlay, lineUp, snap, tick, isDone, settleArrived, OFFENSIVE_PLAYS,
+    createPlay, lineUp, snap, tick, isDone, settleArrived, throwTo,
+    eligibleReceivers, outcome, OFFENSIVE_PLAYS,
 } = await import(join(scene, 'play.js'));
+const {
+    startRecording, record, rewind, focusAt,
+} = await import(join(scene, 'replay.js'));
+const { litFor } = await import(join(scene, 'main.js'));
 
 /**
  * THE TORSO, FROM people-1.0.0's OWN CONSTRUCTOR. Half width, the y span, and
@@ -503,5 +510,190 @@ describe('a receiver who has run out of route', () => {
             settleArrived(play);
         }
         expect(wr.state.xSpeed).toBe(wr.physics.maxSpeed);
+    });
+});
+
+describe('a replay starts from the snap, not from the last thing that happened', () => {
+    /**
+     * QA ROUND EIGHT, ITEM 1: "in replays, the QB's arm is not raised to be
+     * holding the ball", and the recording shows him with the ball up by his
+     * ear and both arms hanging at his sides.
+     *
+     * `release.at` is seconds since the ball left his hand and nothing was
+     * clearing it between a play and its own replay. A play that ended in a
+     * pass left it at several seconds, so the throw sweep saturated at 1 and
+     * the arm sat in the FOLLOW THROUGH from the first frame of playback until
+     * the recorded throw came round again. The ball is placed from the carry
+     * rather than from the sweep, so it went on riding correctly beside an arm
+     * that had already thrown it.
+     *
+     * `syncFigures` does the noticing before it touches a single figure, so
+     * this drives the real thing with plain objects and no roster at all.
+     */
+    const qb = (hasBall) => ({
+        settings: { position: 'qb', team: 0, benched: false, positionGroup: 'qb' },
+        coords: { x: 200, y: 300, z: 0 },
+        state: { xSpeed: 0, ySpeed: 0, hasBall },
+    });
+
+    test('the throw clock is cleared when the snap motion begins', () => {
+        resetThrow();
+        expect(throwClock()).toBeLessThan(0);
+
+        // He has it, then he does not: that is a throw, and nothing announces
+        // it. The clock starts and runs on.
+        syncFigures([qb(true)], 0.1, {});
+        syncFigures([qb(false)], 0.1, {});
+        expect(throwClock()).toBeGreaterThanOrEqual(0);
+        for (let i = 0; i < 30; i += 1) syncFigures([qb(false)], 0.1, {});
+        // Well past the sweep, which is where a finished play leaves it.
+        expect(throwClock()).toBeGreaterThan(CFG.pose.throwRelease.time);
+
+        // Rewinding to the snap is a play that has not thrown it yet.
+        beginSnapMotion();
+        expect(throwClock()).toBeLessThan(0);
+    });
+
+    test('and the throw is noticed again from the playback own frames', () => {
+        beginSnapMotion();
+        // Playback opens with him holding it, exactly as the live play did.
+        syncFigures([qb(true)], 0.1, {});
+        expect(throwClock()).toBeLessThan(0);
+        syncFigures([qb(false)], 0.1, {});
+        expect(throwClock()).toBeGreaterThanOrEqual(0);
+    });
+});
+
+describe('the scoring band belongs to the offense', () => {
+    /**
+     * QA ROUND EIGHT, ITEM 2: the field lit the 50 band when a DEFENDER ran an
+     * interception into it, which tells a visitor they have scored fifty points
+     * for throwing a pick. The ladder only ever pays the offense, and an
+     * interception is minus ten wherever on the field it happens.
+     *
+     * Two facts are needed and both are asserted here: the recording has to say
+     * WHO is holding it, and the rule has to classify every position on the
+     * roster correctly. The band itself is a mesh and cannot be asserted (see
+     * view.js on the stub), but neither of these is.
+     */
+    test('the recording says who is carrying, not just where the ball is', () => {
+        const play = createPlay();
+        lineUp(play, 'pass2', 'cover1');
+        const objects = play.game.objects;
+        startRecording(objects);
+
+        const carrier = (position) => {
+            for (const o of objects) {
+                if (o.state) o.state.hasBall = o.settings.position === position;
+            }
+            record(objects);
+        };
+        carrier('qb');       // frame 0
+        carrier('wr1');      // frame 1, a catch
+        carrier('db3');      // frame 2, taken away
+        rewind();
+
+        expect(focusAt(0).holder).toBe('qb');
+        expect(focusAt(1).holder).toBe('wr1');
+        expect(focusAt(2).holder).toBe('db3');
+        // And it is still a point, because the camera follows this.
+        expect(Number.isFinite(focusAt(2).x)).toBe(true);
+        expect(Number.isFinite(focusAt(2).y)).toBe(true);
+    });
+
+    test('every offensive position lights it and no defensive one does', () => {
+        for (const position of ['qb', 'wr1', 'wr2', 'wr3', 'wr4',
+            'x1', 'x2', 'x3', 'x4', 'x5', 'x6']) {
+            expect({ position, lit: litFor(position) })
+                .toEqual({ position, lit: true });
+        }
+        for (const position of ['db1', 'db2', 'db3', 'db4', 'db5', 'db6',
+            's1', 's2']) {
+            expect({ position, lit: litFor(position) })
+                .toEqual({ position, lit: false });
+        }
+        // A ball nobody is holding lights nothing at all.
+        expect(litFor('')).toBe(false);
+        expect(litFor(undefined)).toBe(false);
+    });
+});
+
+describe('catching the ball', () => {
+    /**
+     * QA ROUND EIGHT, ITEM 3: "a lot of passes have been falling incomplete".
+     *
+     * It is the same oversight `collisionScale` exists to correct.
+     * `motion.checkCatch` builds its boxes by hand, five units either side of
+     * the ball against eleven by eighteen around the player, and those were
+     * measured for a player DRAWN AS A 20-UNIT LETTER. At `figureScale` 2.2 the
+     * figure is 1.45m across and the part of him that can catch is 0.385m, so
+     * he can stand squarely under the ball with three quarters of himself
+     * outside his own hands.
+     *
+     * THIS PLAYS REAL PLAYS. A threshold on the config number would assert
+     * nothing except that somebody typed it; what matters is the rate a visitor
+     * experiences, so this throws 612 passes and counts them. Measured, the
+     * port catches 49.8% and the shipped scale catches 67.8%.
+     */
+    const DEFENCES = ['cover1', 'cover4', 'cover11'];
+
+    function throwGrid() {
+        let thrown = 0;
+        let caught = 0;
+        let picked = 0;
+        for (const name of OFFENSIVE_PLAYS) {
+            for (const defence of DEFENCES) {
+                for (const wait of [1.0, 1.6, 2.4]) {
+                    for (let which = 0; which < 4; which += 1) {
+                        const play = createPlay();
+                        lineUp(play, name, defence);
+                        snap(play);
+                        const at = Math.round(CFG.simHz * wait);
+                        let sent = false;
+                        for (let f = 0; f < CFG.simHz * 9 && !isDone(play); f += 1) {
+                            tick(play);
+                            if (!sent && f >= at) {
+                                const open = eligibleReceivers(play);
+                                if (open.length) throwTo(play, open[which % open.length]);
+                                sent = true;
+                            }
+                        }
+                        if (!sent) continue;
+                        thrown += 1;
+                        const st = play.playState.state;
+                        if (st.ball && st.ball.caught) caught += 1;
+                        if ((outcome(play).points || 0) === -10) picked += 1;
+                    }
+                }
+            }
+        }
+        return { thrown, caught, picked };
+    }
+
+    test('a receiver catches the ball more often than not', () => {
+        const { thrown, caught, picked } = throwGrid();
+        expect(thrown).toBeGreaterThan(500);
+        // The port managed 49.8% of these, which is what QA was playing.
+        expect(caught / thrown).toBeGreaterThan(0.60);
+        // AND THE TURNOVERS DID NOT COME WITH IT. Widening the catch hands the
+        // same reach to the secondary unless something stops it, and an
+        // interception is the harshest outcome on the ladder. The port's own
+        // rate over this grid is 8.5%.
+        expect(picked / thrown).toBeLessThan(0.11);
+    });
+
+    /**
+     * AND A DEFENDER REACHES LESS FAR THAN THE MAN THE BALL WAS THROWN AT,
+     * which is the trade that buys the line above and is worth stating outright
+     * rather than leaving as an emergent property of two numbers.
+     */
+    test('the defender box is smaller than the receiver box', () => {
+        const { formationSettings } = CONFIG_MODULE;
+        const s = formationSettings();
+        expect(s.catchScale).toBeGreaterThan(1);
+        expect(s.interceptShare).toBeGreaterThan(0);
+        expect(s.interceptShare).toBeLessThan(1);
+        // And a defender ends up no better off than the 2D game left him.
+        expect(s.catchScale * s.interceptShare).toBeLessThanOrEqual(1);
     });
 });

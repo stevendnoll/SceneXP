@@ -153,6 +153,55 @@ const FIGURE_SCALE = 2.2;
  */
 const COLLISION_PAD = 12;
 
+/**
+ * HOW BIG A CATCH IS, AND IT IS THE SAME OVERSIGHT `collisionScale` FIXED.
+ *
+ * `motion.checkCatch` builds its own boxes by hand and was never given the
+ * treatment the collision boxes got: five units either side of the ball against
+ * eleven by eighteen around the player, all measured for a player DRAWN AS A
+ * 20-UNIT LETTER. At `figureScale` 2.2 the figure on screen is 1.45m across and
+ * the part of him that can catch is 0.385m, so he can stand squarely under the
+ * ball with three quarters of himself outside his own hands. QA reported it as
+ * "a lot of passes falling incomplete", and it is not the ported routes: the
+ * throw is aimed correctly and the receiver gets there.
+ *
+ * MEASURED OVER 1,224 THROWS, which is all 17 plays against six defensive
+ * formations at three release times to each of four receivers. Completions:
+ *
+ *     1.0   49.8%     the port, and what QA was playing
+ *     1.4   59.4%
+ *     1.7   65.7%
+ *     1.9   67.8%
+ *     2.2   77.7%
+ *
+ * 1.9 lands just above a real completion rate, which is around 65%, and it is
+ * where the curve starts to flatten. It is deliberately NOT tied to
+ * `figureScale` the way `collisionScale` is, because this one is a difficulty
+ * knob as well as a fidelity fix and it should be turnable without moving the
+ * physics.
+ */
+const CATCH_SCALE = 1.9;
+
+/**
+ * ...AND HOW MUCH OF IT A DEFENDER GETS, WHICH IS LESS.
+ *
+ * Widening the catch hands the same reach to the secondary, and an interception
+ * is the harshest outcome on the ladder at minus ten. Measured over the same
+ * 1,224 throws at a catch scale of 1.9, interceptions run:
+ *
+ *     share 1.0   17.9%     both boxes widened together
+ *     share 0.7   15.0%
+ *     share 0.55  10.6%
+ *     share 0.4    8.3%     the port's own rate is 8.5%
+ *
+ * QA asked for more catches, not more turnovers, so this is set where the
+ * turnover rate is the one the game already had. It does mean a defender's box
+ * finishes at 0.76 of the ported one, which is a deliberate trade and is
+ * written down rather than hidden: the receiver gets the body he is drawn with
+ * and the defender keeps the reach the 2D game gave him.
+ */
+const INTERCEPT_SHARE = 0.40;
+
 const SIM = {
     lineInterval: 200,       // field units per interval. See above.
     segments: FIELD.segments,
@@ -281,6 +330,8 @@ function formationSettings() {
         style: { gutters: { x: SIM.gutter, y: SIM.gutter } },
         collisionScale: FIGURE_SCALE,
         collisionPad: COLLISION_PAD,
+        catchScale: CATCH_SCALE,
+        interceptShare: INTERCEPT_SHARE,
     };
 }
 

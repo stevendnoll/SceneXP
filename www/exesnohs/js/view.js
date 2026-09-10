@@ -135,6 +135,10 @@ const release = { at: -1, position: '' };
 export function resetThrow() {
     release.at = -1;
     release.position = '';
+    // AND FORGET WHETHER HE WAS HOLDING IT, so the next play or the next
+    // playback re-seeds from its own first frame. Left set, the last thing the
+    // previous play did to the ball is still what this one starts from.
+    release.held = undefined;
 }
 
 function noteThrowRelease(objects, carrier, delta) {
@@ -151,6 +155,15 @@ function noteThrowRelease(objects, carrier, delta) {
         release.position = 'qb';
     }
     release.held = held;
+}
+
+/** Seconds since the ball left his hand, or -1 when nobody has thrown one.
+ *  Exported for the same reason `takedownClock` is: it is the one piece of
+ *  state a caller has to be able to ask about, and a replay starting with it
+ *  still running is what put a quarterback's arm at his side through the whole
+ *  of playback. */
+export function throwClock() {
+    return release.at;
 }
 
 /** 0 to 1 across the arm sweep, or 0 for anybody not throwing right now. */
@@ -179,10 +192,29 @@ function throwProgress(obj) {
  */
 const snapAt = { t: -1 };
 
-/** Start the snap motion. Called on the visitor's own press, and again when a
- *  replay rewinds to the first recorded frame, which is the same instant. */
+/**
+ * Start the snap motion. Called on the visitor's own press, and again when a
+ * replay rewinds to the first recorded frame, which is the same instant.
+ *
+ * IT CLEARS THE THROW TOO, AND THAT IS THE FIX FOR A REPLAY DRAWING A
+ * QUARTERBACK WITH HIS ARM AT HIS SIDE.
+ *
+ * `release.at` is seconds since the ball left his hand, and nothing was
+ * resetting it between a play and its own replay: a play that ended in a pass
+ * left it at several seconds, so `throwProgress` saturated at 1 and the arm sat
+ * in the FOLLOW THROUGH from the first frame of playback until the recorded
+ * throw came round again. The ball, meanwhile, is placed from the carry rather
+ * than from the sweep, so it hung correctly up by his ear beside an arm that
+ * had already finished throwing it. QA saw exactly that and called it the arm
+ * not being raised.
+ *
+ * It belongs here rather than in main.js because these are one fact, not two:
+ * a play that is starting from the snap has not thrown the ball yet. Both
+ * callers get it, and neither has to remember.
+ */
 export function beginSnapMotion() {
     snapAt.t = 0;
+    resetThrow();
 }
 
 /** Hold him under centre. A new line-up, and the presnap frames. */
