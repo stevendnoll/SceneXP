@@ -187,6 +187,116 @@ describe('the physics knows how big the players are drawn', () => {
         motion.checkCollisions(carrier, { objects: [carrier, lineman] });
         expect(carrier.state.tackle).toBeGreaterThan(0);
     });
+
+    /**
+     * QA ROUND TWENTY-FOUR: THE LINE IS A LITTLE TOO GOOD AT BLOCKING.
+     *
+     * The 2D game gives a lineman exactly twice everybody else's half-extents,
+     * and `linemanScale` cuts into that doubling ALONE. It is a separate number
+     * from `collisionScale` because it is a separate question: that one
+     * corrects every box on the field for a figure drawn at 2.2 times life
+     * size, and shrinking it to loosen the line would walk receivers and
+     * defenders through each other again.
+     */
+    test('the lineman scale touches the lineman and nobody else', () => {
+        const touchesAt = (settings, position, gap) => {
+            const gameState = { state: { tackled: false } };
+            const motion = new MotionClass(settings, gameState, {});
+            const carrier = player('wr1', 0, 0, 0, { hasBall: true });
+            const foe = player(position, 1, 0, gap);
+            motion.checkCollisions(carrier, { objects: [carrier, foe] });
+            return carrier.state.tackle > 0;
+        };
+        // 15 apart: a full-sized lineman reaches 12 and touches, and at 0.5 he
+        // reaches 6 and does not.
+        expect(touchesAt({}, 'x1', 15)).toBe(true);
+        expect(touchesAt({ linemanScale: 0.5 }, 'x1', 15)).toBe(false);
+        // ...and a defender at the same distance is untouched by the setting,
+        // which is the whole of the request.
+        expect(touchesAt({}, 'db1', 9)).toBe(true);
+        expect(touchesAt({ linemanScale: 0.5 }, 'db1', 9)).toBe(true);
+        expect(touchesAt({}, 'db1', 15)).toBe(false);
+        expect(touchesAt({ linemanScale: 0.5 }, 'db1', 15)).toBe(false);
+    });
+
+    /**
+     * QA ROUND TWENTY-FIVE: THE WALL IS NOT A BOX SIZE, IT IS A ONE-SIDED
+     * SHOVE, and finding that cost a round of measuring boxes.
+     *
+     * The four collision responders treat the two men completely differently
+     * when they meet. The blocker is set to 40% of his own TOP speed and then
+     * bodily displaces the other man after zeroing his speed. The defender, on
+     * his own pass through the same pair, keeps a fifth of whatever he had. So
+     * a rusher who met a lineman was stopped dead, shoved backwards and damped,
+     * every frame, for the whole play: a blocker shoves and a rusher had no way
+     * to shed.
+     */
+    const shoveOnto = (settings, route, extras = {}) => {
+        const gameState = { state: { tackled: false } };
+        const motion = new MotionClass(settings, gameState, { collide() {} });
+        const blocker = player('x1', 0, 0, 0);
+        blocker.settings.positionGroup = 'x';
+        // Offset so an EDGE of the blocker's box lands inside the rusher's:
+        // the ported test asks whether my edge is inside your span, which is
+        // never true when my box strictly contains yours.
+        const rusher = player('db1', 1, 8, 10, { xSpeed: -1.5 });
+        rusher.settings.route = route;
+        const qb = player('qb', 0, -30, 0, { hasBall: true });
+        motion.checkCollisions(blocker, { objects: [blocker, rusher, qb], ...extras });
+        return { speed: rusher.state.xSpeed, at: rusher.coords.x };
+    };
+
+    test('a blitzer in the pocket keeps some of his drive, and nobody else does', () => {
+        const blitz = { type: 'blitz' };
+        const ported = shoveOnto({}, blitz);
+        // The 2D game's own shove: stopped dead and moved backwards. Written
+        // as a magnitude because the shed multiplies rather than assigns, so a
+        // man running the other way stops at -0, which `toBe(0)` calls a
+        // different number and arithmetic does not.
+        expect(Math.abs(ported.speed)).toBe(0);
+        expect(ported.at).toBeGreaterThan(8);
+
+        const shed = shoveOnto({ rushShed: 0.75 }, blitz);
+        expect(Math.abs(shed.speed)).toBeGreaterThan(0);
+        expect(shed.at).toBeLessThan(ported.at);
+
+        // A defender who is NOT blitzing is walled off exactly as before, which
+        // is what keeps a lineman a lineman everywhere else on the field.
+        const covering = shoveOnto({ rushShed: 0.75 }, { type: 'cover' });
+        expect(Math.abs(covering.speed)).toBe(0);
+        expect(covering.at).toBe(ported.at);
+    });
+
+    /**
+     * AND ONLY IN THE POCKET. A blitz route runs at whoever has the ball, so on
+     * a running play a shedding blitzer sheds the blocks in front of the
+     * CARRIER. Measured that way the run game lost 18% of its points, 17.5 a
+     * play down to 14.3 with the screen from 28.2 to 21.1, and those plays are
+     * the ones this game is really about.
+     */
+    test('once he has taken off or thrown it, a blocker shoves as he always did', () => {
+        const blitz = { type: 'blitz' };
+        const ported = shoveOnto({}, blitz);
+        for (const gone of [{ runForYourLife: true }, { throwTo: 'wr1' }]) {
+            const after = shoveOnto({ rushShed: 0.75 }, blitz, gone);
+            expect(Math.abs(after.speed)).toBe(Math.abs(ported.speed));
+            expect(after.at).toBe(ported.at);
+        }
+    });
+
+    test('and a MotionClass told nothing keeps the ported doubling', () => {
+        expect(new MotionClass({}, {}, {}).linemanScale()).toBe(1);
+        expect(new MotionClass({ linemanScale: 0 }, {}, {}).linemanScale()).toBe(1);
+        expect(new MotionClass(undefined, {}, {}).linemanScale()).toBe(1);
+        // And the shipped value is a SLIGHT cut, not a rebuild of the line.
+        expect(formationSettings().linemanScale).toBeGreaterThan(0.7);
+        expect(formationSettings().linemanScale).toBeLessThan(1);
+        // ...and the shed defaults to the ported shove.
+        expect(new MotionClass({}, {}, {}).rushShed()).toBe(0);
+        expect(new MotionClass({ rushShed: 4 }, {}, {}).rushShed()).toBe(1);
+        expect(formationSettings().rushShed).toBeGreaterThan(0);
+        expect(formationSettings().rushShed).toBeLessThan(1);
+    });
 });
 
 describe('bodies stay out of each other', () => {

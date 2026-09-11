@@ -199,6 +199,28 @@ export class ObjectAnimationsClass {
     }
   }
 
+  /**
+   * THE BLITZ, AND A NOTE ABOUT WHAT WAS TRIED HERE AND BACKED OUT.
+   *
+   * Straight at whoever has the ball, which is the 2D game's own blitz and is
+   * all this needs to be.
+   *
+   * A RUSH LANE WAS BUILT HERE AND REMOVED, and the reason is worth keeping so
+   * nobody builds it again. `runTo` has no notion of anything being in the way,
+   * and measured, on 95% of the frames a blitzer made no progress toward the
+   * quarterback there was a blocker sitting in the corridor between them, a
+   * median 0.76m off his line. That looked exactly like a man who needed
+   * steering round the obstacle, so he was given a lane: aim beside the blocker
+   * until you are past him, with the side latched so he could not jink.
+   *
+   * IT BOUGHT NOTHING. Sacks at a 3.4 second hold went 5% to 5%. Worse, with
+   * the real fix in place it made things slightly WORSE, 19% down to 16%,
+   * because a rusher who detours around a man is a rusher not driving through
+   * him. The corridor measurement was true and it was a SYMPTOM: he was in
+   * contact with a blocker, not pointed the wrong way. What actually held him
+   * is in motion.js, where a blocker shoves and a rusher had no way to shed
+   * (see `rushShed`).
+   */
   // eslint-disable-next-line
   runBlitzRoute(obj = {}, game = {}) {
     const coverObj = this.getObjectByPosition(game.objects, this.gameState.state.ball.position);

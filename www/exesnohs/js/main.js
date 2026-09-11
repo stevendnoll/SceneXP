@@ -23,7 +23,7 @@ import {
     initMarkers, setPulse, initSpot, showSpot, hideSpot, markerGeometry,
 } from './markers.min.js';
 import {
-    syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments,
+    syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments, noteThrow,
     beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
     beginRelocate, resetRelocate, airborne,
 } from './view.min.js';
@@ -475,6 +475,11 @@ function onSnap() {
 
 function onThrow(position) {
     if (throwTo(cycle.play, position)) {
+        // TELLING THE VIEW WHO IT WENT TO, rather than leaving it to work the
+        // answer out from where the ball is aimed. Only the man it was thrown
+        // to may leave his feet for it, and an inference that is wrong 13% of
+        // the time puts the wrong man in the air (QA round twenty-four).
+        noteThrow(position);
         playSound('wind');
         clearActions();
     }

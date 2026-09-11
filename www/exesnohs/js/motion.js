@@ -534,6 +534,28 @@ export class MotionClass {
     return typeof p === 'number' && p > 0 ? p : 0;
   }
 
+  /**
+   * ...AND HOW MUCH OF HIS OWN DOUBLE-SIZED BOX A LINEMAN KEEPS.
+   *
+   * The 2D game gives an offensive lineman half-extents of 12 by 10 against
+   * everybody else's 6 by 5: exactly twice the man. That is what makes the line
+   * hold, and QA round twenty-four says it holds TOO WELL, with a blitzer never
+   * really reaching the quarterback.
+   *
+   * A SEPARATE NUMBER BECAUSE IT IS A SEPARATE QUESTION. `collisionScale`
+   * corrects every box on the field for a figure drawn at 2.2 times life size
+   * and must not move: shrinking that to loosen the line would walk receivers
+   * and defenders through each other as well, which is the fault it was added
+   * to fix. This one touches the lineman's own ported doubling and nothing
+   * else, so the request "the offensive line only" is what the code says.
+   *
+   * Injected and defaulting to 1, which is the ported behaviour.
+   */
+  linemanScale() {
+    const s = this.settings && this.settings.linemanScale;
+    return typeof s === 'number' && s > 0 ? s : 1;
+  }
+
   // eslint-disable-next-line
   checkCollisions(obj = {}, game = {}) {
     // The switches below are the 2D game's, unedited. Scale and pad are applied
@@ -541,6 +563,8 @@ export class MotionClass {
     // constants for the same arithmetic.
     const k = this.collisionScale();
     const pad = this.collisionPad();
+    // The lineman's own doubling, and his alone. See `linemanScale`.
+    const L = this.linemanScale();
     let r1 = 6;
     let r2 = 6;
     let rx1 = r1;
@@ -556,8 +580,8 @@ export class MotionClass {
       case 'x4':
       case 'x5':
       case 'x6':
-        r1 = 12;
-        rx1 = 10;
+        r1 = 12 * L;
+        rx1 = 10 * L;
         break;
       default:
         r1 = 6;
@@ -568,6 +592,9 @@ export class MotionClass {
       hasBall: obj.state.hasBall,
       position: obj.settings.position,
       team: obj.settings.team,
+      // IS THIS PASS PROTECTION? Carried on the pair rather than passed as a
+      // fifth argument to four ported functions. See `shedFor`.
+      pocket: !game.runForYourLife && !game.throwTo,
       x: obj.coords.x,
       x1: (obj.coords.x - (rx1 * k + pad)),
       x2: (obj.coords.x + (rx1 * k + pad)),
@@ -599,8 +626,8 @@ export class MotionClass {
             // receiver, or as a 3-unit ball. It is the same shape of typo as
             // the jumbo1 multiply in formationRouteX4 (D18): a sibling case
             // copied and one character not changed.
-            r2 = 12;
-            rx2 = 10;
+            r2 = 12 * L;
+            rx2 = 10 * L;
             break;
           default:
             r2 = 6;
@@ -674,6 +701,59 @@ export class MotionClass {
     });
   }
 
+  /**
+   * HOW MUCH OF A BLITZER'S DRIVE SURVIVES CONTACT WITH A BLOCKER.
+   *
+   * THE WALL IS NOT A BOX SIZE, IT IS A ONE-SIDED SHOVE, and finding that took
+   * a whole round of measuring boxes. The four `checkCollisions*` responders
+   * below treat a blocker and a defender completely differently when they meet:
+   * the blocker (`positionGroup` x or wr) is set to 40% of his own TOP speed
+   * and then DISPLACES the other man, `object.coords.x += obj.state.xSpeed`,
+   * after zeroing his speed outright. The defender, on his own pass through the
+   * same pair, merely keeps 20% of whatever speed he had.
+   *
+   * So a rusher who meets a lineman is stopped dead, pushed backwards, and
+   * damped to a fifth, every frame, for the whole play. Measured over 133
+   * plays, on 95% of the frames a blitzer made no progress toward the
+   * quarterback there was a blocker in the corridor between them. That is the
+   * 2D game's own arithmetic and it is what makes blocking work for the run,
+   * which is the half of it worth keeping: a blocker SHOVES and a rusher never
+   * SHEDS.
+   *
+   * This is the shed, and it is deliberately narrow. It applies only to a man
+   * whose route says `blitz`, so it is the designed pass rush that gets to
+   * fight through and nothing else on the field changes: a lineman still walls
+   * off a defender in coverage exactly as he did.
+   *
+   * 0 is the ported behaviour and the default. 1 would be a blocker nobody can
+   * feel. Injected, like every other setting this class has been given.
+   */
+  rushShed() {
+    const s = this.settings && this.settings.rushShed;
+    return typeof s === 'number' && s > 0 ? (s > 1 ? 1 : s) : 0;
+  }
+
+  /**
+   * ...AND IT IS ONLY THE BLITZ, AND ONLY IN THE POCKET.
+   *
+   * `pocket` is "the quarterback still has it and has neither thrown it nor
+   * taken off", which is pass protection and nothing else. THE SCOPE IS THE
+   * WHOLE DESIGN. A blitz route runs at whoever has the ball, so on a running
+   * play a shedding blitzer is shedding the blocks in front of the CARRIER, and
+   * measured that way the run game lost 18% of its points: 17.5 a play down to
+   * 14.3, with the screen from 28.2 to 21.1. Those plays are the ones this game
+   * is really about, and the pass rush is not worth them.
+   *
+   * A blocker still shoves exactly as the 2D game shoves, everywhere else on
+   * the field and on every running play.
+   */
+  // eslint-disable-next-line
+  shedFor(object = {}, pocket = false) {
+    if (!pocket) return 0;
+    const route = object.settings && object.settings.route;
+    return route && route.type === 'blitz' ? this.rushShed() : 0;
+  }
+
   // eslint-disable-next-line
   checkCollisionsToRightSideline(obj = {}, object = {}, set1 = {}, set2 = {}) {
     if ( (set1.x1 >= set2.x1 && set1.x1 <= set2.x2) || (set1.x2 >= set2.x1 && set1.x2 <= set2.x2) ) {
@@ -682,10 +762,13 @@ export class MotionClass {
           if ( ['x', 'wr'].indexOf(obj.settings.positionGroup) !== -1 ) {
             this.audio.collide();
             obj.state.ySpeed = (obj.physics.maxSpeed * 0.4);
-            object.state.ySpeed = 0;
-            object.coords.y += obj.state.ySpeed;
+            // A BLITZER FIGHTS THROUGH IT. See `rushShed`: at 0 this is the
+            // ported shove exactly, a dead stop and a shove backwards.
+            const shed = this.shedFor(object, set1.pocket);
+            object.state.ySpeed = (object.state.ySpeed * shed);
+            object.coords.y += obj.state.ySpeed * (1 - shed);
           } else {
-            obj.state.ySpeed = (obj.state.ySpeed * 0.2);
+            obj.state.ySpeed = (obj.state.ySpeed * (0.2 + 0.8 * this.shedFor(obj, set1.pocket)));
           }
           this.decelUpfield(obj);
           this.accelDownfield(obj);
@@ -715,10 +798,13 @@ export class MotionClass {
           if ( ['x', 'wr'].indexOf(obj.settings.positionGroup) !== -1 ) {
             this.audio.collide();
             obj.state.xSpeed = ((obj.physics.maxSpeed * 0.4) * -1);
-            object.state.xSpeed = 0;
-            object.coords.x -= obj.state.xSpeed;
+            // A BLITZER FIGHTS THROUGH IT. See `rushShed`: at 0 this is the
+            // ported shove exactly, a dead stop and a shove backwards.
+            const shed = this.shedFor(object, set1.pocket);
+            object.state.xSpeed = (object.state.xSpeed * shed);
+            object.coords.x -= obj.state.xSpeed * (1 - shed);
           } else {
-            obj.state.xSpeed = (obj.state.xSpeed * 0.2);
+            obj.state.xSpeed = (obj.state.xSpeed * (0.2 + 0.8 * this.shedFor(obj, set1.pocket)));
           }
           if ( set1.y <= set2.y ) {
             this.decelToRightSideline(obj);
@@ -753,10 +839,13 @@ export class MotionClass {
           if ( ['x', 'wr'].indexOf(obj.settings.positionGroup) !== -1 ) {
             this.audio.collide();
             obj.state.xSpeed = (obj.physics.maxSpeed * 0.4);
-            object.state.xSpeed = 0;
-            object.coords.x += obj.state.xSpeed;
+            // A BLITZER FIGHTS THROUGH IT. See `rushShed`: at 0 this is the
+            // ported shove exactly, a dead stop and a shove backwards.
+            const shed = this.shedFor(object, set1.pocket);
+            object.state.xSpeed = (object.state.xSpeed * shed);
+            object.coords.x += obj.state.xSpeed * (1 - shed);
           } else {
-            obj.state.xSpeed = (obj.state.xSpeed * 0.2);
+            obj.state.xSpeed = (obj.state.xSpeed * (0.2 + 0.8 * this.shedFor(obj, set1.pocket)));
           }
           if ( set1.y <= set2.y ) {
             this.decelToRightSideline(obj);
@@ -791,10 +880,13 @@ export class MotionClass {
           if ( ['x', 'wr'].indexOf(obj.settings.positionGroup) !== -1 ) {
             this.audio.collide();
             obj.state.ySpeed = ((obj.physics.maxSpeed * 0.4) * -1);
-            object.state.ySpeed = 0;
-            object.coords.y -= obj.state.ySpeed;
+            // A BLITZER FIGHTS THROUGH IT. See `rushShed`: at 0 this is the
+            // ported shove exactly, a dead stop and a shove backwards.
+            const shed = this.shedFor(object, set1.pocket);
+            object.state.ySpeed = (object.state.ySpeed * shed);
+            object.coords.y -= obj.state.ySpeed * (1 - shed);
           } else {
-            obj.state.ySpeed = (obj.state.ySpeed * 0.2);
+            obj.state.ySpeed = (obj.state.ySpeed * (0.2 + 0.8 * this.shedFor(obj, set1.pocket)));
           }
           this.decelUpfield(obj);
           this.accelDownfield(obj);

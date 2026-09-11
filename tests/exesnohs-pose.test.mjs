@@ -42,6 +42,7 @@ const {
     syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged,
     beginRelocate, resetRelocate, relocateProgress,
     syncBall, resetBallFlight, ballSpan, turnFor, frontOf, jumpClearance,
+    noteThrow, airborne, intendedReceiver,
 } = await import(join(scene, 'view.js'));
 const {
     createPlay, lineUp, snap, tick, isDone, settleArrived, throwTo,
@@ -1796,5 +1797,89 @@ describe('four ways to watch a replay', () => {
         expect(viewQuarter()).not.toBe(0);
         resetView();
         expect(viewQuarter()).toBe(0);
+    });
+});
+
+describe('only the man it was thrown to leaves his feet', () => {
+    /**
+     * QA ROUND TWENTY-FOUR, AND ONE CAUSE UNDER THREE REPORTS.
+     *
+     * "A receiver sometimes jumps as soon as the ball is thrown", "a receiver
+     * who already has the ball randomly jumps while running", and "non-targeted
+     * receivers still seem to jump". All three are the same fault.
+     *
+     * The view worked out who the ball was thrown to by finding the receiver
+     * NEAREST THE AIM POINT, and it asked again on every frame. Measured over
+     * 202 flights, the answer changed during 21% of them and 11% of all jumps
+     * were started by a man the ball was not thrown to. Worse, `updateJump`
+     * advances a figure's own jump clock, so a man who stopped being the answer
+     * while he was in the air kept that clock FROZEN: he dropped to the grass
+     * on the spot, and when the answer came back round to him it picked up
+     * where it left off and he popped into the air again, out of context and
+     * sometimes with the ball in his hands.
+     *
+     * main.js knew the answer outright the whole time.
+     */
+    const onField = (position, x, y) => ({
+        settings: { position, team: 0, benched: false }, coords: { x, y, z: 1 }, state: {},
+    });
+    const throwOnRecord = () => {
+        resetBallFlight();
+        syncBall({
+            settings: { position: 'ball', benched: false },
+            coords: {
+                x: 300, y: 300, z: 2,
+                startX: 200, startY: 300, targetX: 800, targetY: 420,
+            },
+            state: { xSpeed: 4, ySpeed: 0 },
+        }, null, 1 / 60);
+        expect(ballSpan()).toBeTruthy();
+    };
+
+    test('being told beats working it out', () => {
+        throwOnRecord();
+        // wr1 is standing exactly on the aim point and wr3 is nowhere near it,
+        // so the derivation would name wr1. It went to wr3.
+        const field = [onField('wr1', 800, 420), onField('wr3', 100, -400)];
+        expect(intendedReceiver(field)).toBe('wr1');      // ...told nothing
+        noteThrow('wr3');
+        expect(intendedReceiver(field)).toBe('wr3');
+        resetBallFlight();
+    });
+
+    /**
+     * AND WHEN NOBODY TELLS IT, THE ANSWER IS LATCHED. A wrong answer held is a
+     * receiver going up for a ball he will not get, which is one bad jump. A
+     * wrong answer that keeps CHANGING leaves the man it abandons frozen in
+     * mid-air, which is three of them.
+     */
+    test('the fallback answers once and then stops changing its mind', () => {
+        throwOnRecord();
+        const field = [onField('wr1', 800, 420), onField('wr3', 100, -400)];
+        expect(intendedReceiver(field)).toBe('wr1');
+        // wr3 runs onto the aim point and wr1 leaves it. The answer holds.
+        const moved = [onField('wr1', -900, -900), onField('wr3', 800, 420)];
+        expect(intendedReceiver(moved)).toBe('wr1');
+        resetBallFlight();
+    });
+
+    test('and nobody is named before there is a throw to name one for', () => {
+        resetBallFlight();
+        expect(intendedReceiver([onField('wr1', 800, 420)])).toBe('');
+    });
+
+    /**
+     * AND THE NOTE IS THE PLAY'S. The replay of that same play still needs it,
+     * because playback carries no throw, and the next line-up must not inherit
+     * it: a receiver going up for last play's ball is the fault this round is
+     * about, one play later.
+     */
+    test('the note lives as long as the play does', () => {
+        resetBallFlight();
+        noteThrow('wr2');
+        // Whatever else happens, a line-up clears it. `resetBallFlight` is what
+        // startPlay calls, and it is the only place the span goes too.
+        resetBallFlight();
+        expect(ballSpan()).toBeFalsy();
     });
 });

@@ -660,8 +660,30 @@ function standingReach() {
  * which means it answers identically in a replay: playback carries no
  * `throwTo`, but the span survives the play and it does.
  */
-function intendedReceiver(objects) {
+let aimedAt = '';
+
+/**
+ * WHO IT WAS ACTUALLY THROWN TO, WHICH BEATS ANY AMOUNT OF INFERENCE.
+ *
+ * QA round twenty-four. Deriving it from the aim point was wrong 13% of the
+ * time and, worse, it was derived EVERY FRAME: measured over 202 flights the
+ * answer changed during 18% of them. main.js knows the answer outright, and it
+ * still knows it during the replay, because the replay is always of the play
+ * that just finished. `resetBallFlight` drops it at the next line-up.
+ */
+export function noteThrow(position) {
+    aimedAt = position || '';
+}
+
+export function intendedReceiver(objects) {
     if (!flight.span || flight.span.tx === undefined) return '';
+    if (aimedAt) return aimedAt;
+    // NOTHING TOLD US, so fall back to the nearest man to the aim point. LATCHED
+    // on the first frame of the flight rather than asked again every frame: an
+    // answer that changes mid-flight is the fault this exists to avoid, and a
+    // wrong answer held is a receiver jumping for a ball he will not get, while
+    // a wrong answer that keeps changing leaves jumps frozen in mid-air.
+    if (flight.aimed) return flight.aimed;
     const aim = simToWorld(flight.span.tx, flight.span.ty, 0);
     let best = '';
     let near = Infinity;
@@ -672,6 +694,7 @@ function intendedReceiver(objects) {
         const d = Math.hypot(p.x - aim.x, p.z - aim.z);
         if (d < near) { near = d; best = obj.settings.position; }
     }
+    flight.aimed = best;
     return best;
 }
 
@@ -928,8 +951,23 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // GOING UP FOR IT, which is the one other thing that lifts a figure off
         // the grass. Offensive receivers only: a whole secondary leaving its
         // feet on every pass is a different game.
-        const airborne = (obj.settings.team === 0
-            && obj.settings.position === intended && !role)
+        /**
+         * AND NOBODY ELSE EVEN HOLDS A CLOCK.
+         *
+         * `clearJump` on the way past is not tidiness, it is the fix for QA
+         * round twenty-four's second and third items. `updateJump` advances a
+         * figure's own jump clock, so a figure that stops being eligible while
+         * he is in the air keeps that clock FROZEN at whatever it held: he
+         * drops to the grass on the spot, and the moment he becomes eligible
+         * again it picks up where it left off and he pops back into the air,
+         * out of context and sometimes with the ball already in his hands.
+         * Measured before the latch above, 20 clocks a hundred plays were left
+         * frozen like that.
+         */
+        const mayJump = obj.settings.team === 0
+            && obj.settings.position === intended && !role;
+        if (!mayJump) clearJump(figure);
+        const airborne = mayJump
             ? updateJump(figure, reaching.get(obj.settings.position) || 0,
                 { x: p.x, z: p.z }, opts.live, delta)
             : 0;
@@ -1161,7 +1199,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
  */
 const flight = {
     x: 0, y: 0, z: 0, has: false, spin: 0, dir: { x: 1, y: 0, z: 0 },
-    height: undefined, span: null,
+    height: undefined, span: null, aimed: '',
     /** Seconds the ball has not moved for, and the clock on its landing.
      *  THE LANDING IS DETECTED, NOT SIGNALLED, for the same reason the throw
      *  release is (D90): nothing in the simulation announces it, the ball
@@ -1220,7 +1258,11 @@ function endFlight() {
 export function resetBallFlight() {
     endFlight();
     // THE SPAN IS THE PLAY'S, and this is the only place it goes. See above.
+    // So is who it was thrown to, which the replay of that same play still
+    // needs and the next line-up must not inherit.
     flight.span = null;
+    flight.aimed = '';
+    aimedAt = '';
     gather.at = -1;
     resetThrow();
     // And put the quarterback back under centre, or the next formation lines

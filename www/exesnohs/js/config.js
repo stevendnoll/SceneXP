@@ -154,6 +154,71 @@ const FIGURE_SCALE = 2.2;
 const COLLISION_PAD = 12;
 
 /**
+ * HOW MUCH OF HIS OWN DOUBLE-SIZED BOX AN OFFENSIVE LINEMAN KEEPS.
+ *
+ * The 2D game gives a lineman half-extents of 12 by 10 against everybody else's
+ * 6 by 5: exactly twice the man, which is what makes a line hold. QA round
+ * twenty-four says it holds TOO WELL, with a blitzer never really reaching the
+ * quarterback.
+ *
+ * IT IS THE LINEMAN'S OWN DOUBLING AND NOTHING ELSE, which is what the request
+ * asked for. `collisionScale` corrects every box on the field for a figure
+ * drawn at 2.2 times life size and must not move: shrinking that to loosen the
+ * line would walk receivers and defenders through each other again.
+ *
+ * Measured over 612 plays, and the line is a REAL limiter rather than the whole
+ * story. At 1.00 the keenest rusher closes 3.59m and stops 4.54m short; at 0.85
+ * he gets a third of a metre further in and the share of plays where somebody
+ * reaches the pocket goes 29% to 35%. Nothing else moves: completions 60% to
+ * 59%, sacks 1% either way.
+ *
+ *     lineman box   rushers closing 2m+   the keenest closed   ...stopping at
+ *         1.00           0.97 a play            3.59m              4.54m
+ *         0.85           1.27 a play            4.36m              4.07m
+ *         0.60           1.40 a play            4.74m              3.80m
+ *
+ * It is deliberately a SLIGHT cut, as asked. Most of the four metres a blitzer
+ * still finishes short is not the line at all, and shrinking this far enough to
+ * close it would let defenders through the middle of the line rather than round
+ * it (see TASKS D171, still open).
+ */
+const LINEMAN_SCALE = 0.85;
+
+/**
+ * HOW MUCH OF A BLITZER'S DRIVE SURVIVES CONTACT WITH A BLOCKER.
+ *
+ * QA ROUND TWENTY-FIVE, AND THE WALL WAS NEVER A BOX SIZE. The four collision
+ * responders in motion.js treat a blocker and a defender completely
+ * differently: the blocker is set to 40% of his own TOP speed and then bodily
+ * DISPLACES the other man after zeroing his speed, while the defender, on his
+ * own pass through the same pair, merely keeps a fifth of whatever he had. A
+ * blocker shoves; a rusher had no way to shed. That is the 2D game's own
+ * arithmetic and it is exactly why blocking works for the run, which is the
+ * half worth keeping.
+ *
+ * SCOPED TO THE POCKET, which is the whole design. A blitz route runs at
+ * whoever has the ball, so on a running play a shedding blitzer sheds the
+ * blocks in front of the CARRIER: measured that way the run game lost 18% of
+ * its points, 17.5 a play down to 14.3 with the screen from 28.2 to 21.1.
+ * Those are the plays this game is really about. Held to pass protection, the
+ * run game does not move at all: 17.5 to 17.8.
+ *
+ * WHAT IT BUYS IS A CLOCK ON THE POCKET, which the game did not have. Holding
+ * the ball used to be free. Over 323 plays at each hold:
+ *
+ *     held for        1.0s   1.8s   2.6s   3.4s
+ *     as it was         0%     1%     3%     5%   sacked
+ *     shed 0.75         0%     2%    10%    19%
+ *     shed 1.00         0%     8%    24%    37%
+ *
+ * 0.75, because a quick throw stays free and dawdling costs something, and
+ * because 1.00 collapses the pocket: points per play fall from 10.4 to 5.5 and
+ * the quarterback is on his back a third of the time. Completions do not move
+ * at any of these, 63% to 67%.
+ */
+const RUSH_SHED = 0.75;
+
+/**
  * HOW BIG A CATCH IS, AND IT IS THE SAME OVERSIGHT `collisionScale` FIXED.
  *
  * `motion.checkCatch` builds its own boxes by hand and was never given the
@@ -394,6 +459,8 @@ function formationSettings() {
         style: { gutters: { x: SIM.gutter, y: SIM.gutter } },
         collisionScale: FIGURE_SCALE,
         collisionPad: COLLISION_PAD,
+        linemanScale: LINEMAN_SCALE,
+        rushShed: RUSH_SHED,
         catchScale: CATCH_SCALE,
         interceptShare: INTERCEPT_SHARE,
         // How far a man in the air reaches, in FIELD UNITS, which is the same
@@ -897,6 +964,8 @@ const EXESNOHS_CONFIG = {
      */
     collisionScale: FIGURE_SCALE,
     collisionPad: COLLISION_PAD,
+    linemanScale: LINEMAN_SCALE,
+    rushShed: RUSH_SHED,
 
     /**
      * HOW CLOSE TWO BODIES MAY EVER GET, IN METRES, AND WHY IT IS NOT THE
