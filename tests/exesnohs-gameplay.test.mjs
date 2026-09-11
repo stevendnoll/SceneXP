@@ -37,6 +37,7 @@ const {
 const {
     createPlay: createPlayForDifficulty, lineUp, snap, tick, isDone,
     keepAndRun, outcome, setDifficulty, OFFENSIVE_PLAYS,
+    markHeading, throwTo, eligibleReceivers,
 } = await import(join(scene, 'play.js'));
 const { markerGeometry } = await import(join(scene, 'markers.js'));
 const { MotionClass } = await import(join(scene, 'motion.js'));
@@ -1640,5 +1641,207 @@ describe('the game leans on a run of plays', () => {
          * the twelve the lean actually buys.
          */
         expect(fiftiesAt(-1)).toBeGreaterThan(fiftiesAt(1) + 0.03);
+    });
+});
+
+/**
+ * THE STEER HAD NO THIRD BRANCH, AND BOTH FAULTS REPORTED ON 2026-09-11 CAME
+ * OUT OF IT.
+ *
+ * Every route in the ported library holds a player on a line by accelerating
+ * one way when he is below it and the other way when he is above it. There is
+ * no deceleration anywhere in that law, which makes it an undamped oscillator:
+ * the acceleration always opposes the displacement and no term ever removes
+ * energy, so whatever lateral speed a man carries when he first crosses his
+ * line he keeps for the whole play.
+ *
+ * The cases below are written against the PROPERTY (does he settle, is the aim
+ * point stable) rather than against the deadband's value, and each one was
+ * checked to fail with `steerDeadband` set back to 0, which is the ported law
+ * exactly.
+ */
+const { MotionClass: Motion } = await import(join(scene, 'motion.js'));
+
+describe('a man asked to run straight runs straight', () => {
+    const lonePlayer = (settings, y, vy) => ({
+        coords: { x: 0, y, startX: 0, startY: 50, z: 1 },
+        physics: { accel: 0.4, decel: 1.5, maxSpeed: 2.15, xMulti: 1, yMulti: 1 },
+        settings: { position: 'wr1', positionGroup: 'wr', team: 0, route: { type: 'go', boundaries: {} } },
+        state: { xSpeed: 2.15, ySpeed: vy, hasBall: false, tackle: 0, direction: '' },
+    });
+
+    /** One man, no defenders, no collisions: just the steering law. */
+    const runLine = (deadband, vy, frames = 400) => {
+        const motion = new Motion(
+            { style: { gutters: { x: SIM.gutter, y: SIM.gutter } }, steerDeadband: deadband },
+            { state: { measurements: { height: 400, width: 1000, lineInterval: SIM.lineInterval, gutterX: 5, gutterY: 5 } } },
+            { collide() {}, catch() {}, incomplete() {} }
+        );
+        const man = lonePlayer(null, 50, vy);
+        const track = [];
+        for (let f = 0; f < frames; f += 1) {
+            motion.steerToY(man, 50);
+            man.coords.y += man.state.ySpeed;
+            track.push({ y: man.coords.y - 50, vy: man.state.ySpeed });
+        }
+        return track;
+    };
+
+    /**
+     * THE ONE THAT MATTERS. A receiver who arrives on his line carrying lateral
+     * speed must lose it. Under the ported law he never does: measured, a man
+     * arriving at his own top speed of 2.15 settles into a permanent cycle
+     * 6.4 units wide with |vy| reaching 2.15 every 11 frames, for as long as he
+     * runs. That is the squiggle, and it is also a receiver who is genuinely
+     * sprinting sideways while appearing to run straight.
+     *
+     * Asserted on the SECOND HALF of the run so that the arrival itself is not
+     * what is being measured: the question is whether it ever ends.
+     */
+    test('lateral speed decays instead of being conserved forever', () => {
+        for (const arrivedAt of [0.4, 1.0, 2.0, 2.15]) {
+            const late = runLine(CFG.steerDeadband, arrivedAt).slice(200);
+            const worstSpeed = Math.max(...late.map((p) => Math.abs(p.vy)));
+            expect(worstSpeed).toBeLessThan(0.05);
+        }
+    });
+
+    /**
+     * ...and the ported law is kept honest in the same breath, because a test
+     * that only proves the new code works cannot tell you the old code was
+     * broken. At a deadband of 0 motion.js runs the 2D game's own two-way test,
+     * and this is the fault, stated as a fact.
+     */
+    test('and the ported law, for comparison, conserves it exactly', () => {
+        const late = runLine(0, 2.15).slice(200);
+        const worstSpeed = Math.max(...late.map((p) => Math.abs(p.vy)));
+        expect(worstSpeed).toBeGreaterThan(2);
+    });
+
+    /** He must also still HOLD the line: settling is worthless if he settles
+     *  somewhere else. The band is what he is allowed, and nothing wider. */
+    test('and he settles on his line rather than beside it', () => {
+        for (const arrivedAt of [0.4, 2.15]) {
+            const late = runLine(CFG.steerDeadband, arrivedAt).slice(200);
+            const worstOffset = Math.max(...late.map((p) => Math.abs(p.y)));
+            expect(worstOffset).toBeLessThanOrEqual(CFG.steerDeadband);
+        }
+    });
+
+    /** A caller that says nothing about a deadband gets the 2D game, which is
+     *  the promise every other injected setting in motion.js makes. */
+    test('a motion built without the setting is the port, unchanged', () => {
+        const bare = new Motion({ style: { gutters: { x: 5, y: 5 } } }, {}, {});
+        expect(bare.steerDeadband()).toBe(0);
+    });
+});
+
+describe('a pass is led off where the receiver is going', () => {
+    /**
+     * WHAT WAS WRONG: `generateBallObject` leads the throw off
+     * `receiver.state.ySpeed` AT THE INSTANT of the tap, multiplied by as much
+     * as 45. One frame of a velocity is the wrong thing to ask even of a clean
+     * simulation, and with the undamped steer above it is a square wave at full
+     * speed. Measured over 2550 pairs of throws made one frame apart on the
+     * same play from the same seed, the aim point moved a mean of 0.162m and as
+     * much as 5.41m, purely on which frame the visitor pressed.
+     *
+     * The property is that ADJACENT FRAMES AGREE: the receiver's real route
+     * does not change between one frame and the next, so neither should the
+     * place the ball is sent.
+     */
+    const aimOnFrame = (slug, defence, throwFrame) => {
+        const play = createPlayForDifficulty();
+        lineUp(play, slug, defence);
+        snap(play);
+        for (let f = 0; f < 400 && !isDone(play); f += 1) {
+            tick(play);
+            if (f === throwFrame) {
+                const elig = eligibleReceivers(play);
+                if (!elig.length || !throwTo(play, elig[0])) return null;
+                const ball = play.game.objects
+                    .find((o) => o.settings.position === 'ball');
+                return ball ? ball.coords.targetY : null;
+            }
+        }
+        return null;
+    };
+
+    test('throwing one frame later does not move the aim point by a body width', () => {
+        const jumps = [];
+        for (const slug of OFFENSIVE_PLAYS) {
+            for (let f = 30; f < 44; f += 1) {
+                const a = aimOnFrame(slug, 'cover2', f);
+                const b = aimOnFrame(slug, 'cover2', f + 1);
+                if (a === null || b === null) continue;
+                jumps.push(Math.abs(a - b) * UNITS_TO_METRES);
+            }
+        }
+        expect(jumps.length).toBeGreaterThan(50);
+        const mean = jumps.reduce((s, v) => s + v, 0) / jumps.length;
+        // The ported build measures 0.162m mean and 5.41m worst over a much
+        // larger sweep. Both bounds are far inside that and far outside what
+        // the damped build produces (0.040m mean, 0.60m worst).
+        expect(mean).toBeLessThan(0.09);
+        expect(Math.max(...jumps)).toBeLessThan(1.5);
+    });
+
+    /**
+     * AND THE HEADING IS A WINDOW, WHICH IS THE WHOLE REASON IT CANCELS A
+     * WOBBLE. Net travel over the window divided by its length, so a man who
+     * ends where he started contributes nothing and a man genuinely crossing
+     * the field contributes all of it.
+     */
+    test('the heading is net travel over the window, not this frame speed', () => {
+        const play = createPlayForDifficulty();
+        lineUp(play, 'pass2', 'cover2');
+        snap(play);
+        const frames = Math.max(1, Math.round(CFG.simHz * CFG.lead.window));
+        const man = play.game.objects
+            .find((o) => o.settings.position === 'wr1' && !o.settings.benched);
+        expect(man).toBeTruthy();
+
+        // Nothing to average over yet, so nothing is claimed.
+        tick(play);
+        expect(man.state.heading).toBeFalsy();
+
+        for (let f = 0; f < frames + 4; f += 1) tick(play);
+        expect(man.state.heading).toBeTruthy();
+
+        // Re-measure it by hand from the man's own recorded track.
+        const span = (man.state.track.length / 2) - 1;
+        expect(span).toBe(frames);
+        expect(man.state.heading.y).toBeCloseTo(
+            (man.coords.y - man.state.track[1]) / frames, 10);
+        expect(man.state.heading.x).toBeCloseTo(
+            (man.coords.x - man.state.track[0]) / frames, 10);
+    });
+
+    /**
+     * A SQUARE WAVE AVERAGED OVER ITS OWN PERIOD IS ZERO, and that is not an
+     * accident of tuning: `lead.window` is one full cycle of the undamped
+     * wobble at simHz. It is asserted directly so that a future change to
+     * either number has to face the reason both exist.
+     */
+    test('a man wobbling about a line has a heading of nothing', () => {
+        const frames = Math.max(1, Math.round(CFG.simHz * CFG.lead.window));
+        const play = createPlayForDifficulty();
+        lineUp(play, 'pass2', 'cover2');
+        snap(play);
+        const man = play.game.objects
+            .find((o) => o.settings.position === 'wr1' && !o.settings.benched);
+        // Drive him by hand through a wobble, letting markHeading keep its own
+        // track exactly as it does in a live frame. The window is an even
+        // number of frames, so a two-frame wobble ends the window on the side
+        // it began and the net travel across it is nothing.
+        expect(frames % 2).toBe(0);
+        man.state.track = null;
+        for (let f = 0; f < frames * 3; f += 1) {
+            man.coords.y = 100 + (f % 2 ? 3 : -3);
+            markHeading(play);
+        }
+        // He is back where he started on the axis, so the lead is nothing,
+        // however fast he was moving on the frame the visitor pressed.
+        expect(Math.abs(man.state.heading.y)).toBeLessThan(0.2);
     });
 });

@@ -4030,30 +4030,56 @@ export class TeamFormationsClass {
         default:
           break;
       }
+      /**
+       * WHERE HE IS GOING, NOT WHERE HE HAPPENED TO BE GOING THIS FRAME.
+       *
+       * THE MULTIPLIERS BELOW ARE THE 2D GAME'S AND NONE OF THEM MOVES. What
+       * changes is the number they multiply. `state.ySpeed` is ONE FRAME of a
+       * velocity, and the ported steer has no deceleration term anywhere, so a
+       * receiver asked to run straight up the field holds his line by crossing
+       * it at full speed in alternate directions (see `steerDeadband` in
+       * motion.js). Multiplied by the 45 below, sampling that square wave on
+       * the frame the visitor pressed led the SAME MAN ON THE SAME STRAIGHT
+       * ROUTE anywhere from 0.08m to 3.78m sideways, at random.
+       *
+       * `state.heading` is his net travel over `lead.window` divided by it,
+       * written by `play.markHeading` after everything that moves a player has
+       * finished moving him. A wobble that ends where it started averages to
+       * nothing and a man genuinely crossing the field averages to his real
+       * crossing speed, which is the number these multipliers were always
+       * meant to be reading.
+       *
+       * IT FALLS BACK TO THE PORTED SPEEDS when there is no heading yet, which
+       * is a throw inside the first `lead.window` of the snap and is the 2D
+       * game's own behaviour.
+       */
+      const heading = receiverObj.state.heading;
+      const recVx = heading ? heading.x : receiverObj.state.xSpeed;
+      const recVy = heading ? heading.y : receiverObj.state.ySpeed;
       // Find closest defender.
       const defenderObj = this.gameState.getClosestTeamObjectToPosition(game.objects, 1, (recX - 20), recY, 30, ['db1', 'db2', 'db3', 'db4', 'db6', 's1', 's2']);
       if ( defenderObj ) {
         const defX = defenderObj.coords.x;
         if ( defX < recX ) {
-          xLead = (receiverObj.state.xSpeed * 10);
+          xLead = (recVx * 10);
         }
       }
-      if ( receiverObj.state.xSpeed !== 0 ) {
-        let xSpeed = receiverObj.state.xSpeed;
+      if ( recVx !== 0 ) {
+        let xSpeed = recVx;
         if ( xSpeed < 0 ) {
           xSpeed = 0.1;
         }
         targetX += (xSpeed * (xDist / xDistDiv)) + xLead;
       }
-      if ( receiverObj.state.ySpeed !== 0 ) {
-        if ( targetY < qbObj.coords.y && receiverObj.state.ySpeed < 0 ) {
-          targetY += (receiverObj.state.ySpeed * (yDist / 4)) + (receiverObj.state.ySpeed * 45);
-        } else if ( targetY >= qbObj.coords.y && receiverObj.state.ySpeed < 0 ) {
-          targetY += (receiverObj.state.ySpeed * (yDist / 4)) + (receiverObj.state.ySpeed * 10);
-        } else if ( targetY >= qbObj.coords.y && receiverObj.state.ySpeed > 0 ) {
-          targetY += (receiverObj.state.ySpeed * (yDist / 4)) + (receiverObj.state.ySpeed * 12);
+      if ( recVy !== 0 ) {
+        if ( targetY < qbObj.coords.y && recVy < 0 ) {
+          targetY += (recVy * (yDist / 4)) + (recVy * 45);
+        } else if ( targetY >= qbObj.coords.y && recVy < 0 ) {
+          targetY += (recVy * (yDist / 4)) + (recVy * 10);
+        } else if ( targetY >= qbObj.coords.y && recVy > 0 ) {
+          targetY += (recVy * (yDist / 4)) + (recVy * 12);
         } else {
-          targetY += (receiverObj.state.ySpeed * (yDist / 4)) + (receiverObj.state.ySpeed * 25);
+          targetY += (recVy * (yDist / 4)) + (recVy * 25);
         }
       }
       if ( targetX > xMax ) {

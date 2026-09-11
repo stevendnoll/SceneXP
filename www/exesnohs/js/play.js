@@ -249,6 +249,65 @@ export function tick(play) {
     // circles. It reads the position AFTER the shove and the clamp, because
     // those move him too and a man being shoved is not a man who has arrived.
     settleArrived(play);
+    // ...and once everybody has finished being moved, record where each of them
+    // is actually going, which is what a pass is led off. It has to be the last
+    // thing in the frame for the same reason `settleArrived` is late: separate
+    // and keepInbounds move people, and a heading measured before them is a
+    // heading for a journey the player did not take.
+    markHeading(play);
+}
+
+/**
+ * WHERE EACH PLAYER IS ACTUALLY GOING, AVERAGED OVER `lead.window`.
+ *
+ * THE PORTED THROW LEADS OFF ONE FRAME. `formations.generateBallObject` reads
+ * `receiverObj.state.ySpeed` at the instant the visitor pressed the button and
+ * multiplies it by as much as 45. One frame of a velocity is the wrong thing to
+ * ask even of a clean simulation, and this one is not clean: the ported steer
+ * has no deceleration term anywhere (see `steerDeadband` in motion.js), so a
+ * receiver asked to run straight holds his line by crossing it at full speed in
+ * alternate directions. Sampling that square wave once, the SAME MAN ON THE
+ * SAME STRAIGHT ROUTE was led anywhere between 0.08m and 3.78m sideways
+ * depending only on which frame of an 11-frame cycle the tap landed on. The
+ * visitor sees a receiver running straight up the field and a pass thrown four
+ * metres wide of him, and nothing on screen explains why.
+ *
+ * A WINDOW, NOT A SMOOTHING FACTOR. Net displacement over the window divided by
+ * its length is the average velocity over it, which is the plain-English answer
+ * to "where is he going": a wobble that ends where it started contributes
+ * nothing, and a man genuinely crossing the field contributes all of it. An
+ * exponential average would not have that property, and the wobble is a square
+ * wave rather than noise, so cancelling it exactly is worth having.
+ *
+ * IT IS WRITTEN AS A PLAIN FIELD ON A PLAIN OBJECT, exactly like
+ * `state.airborne`, and the ported formations class reads it and asks no
+ * further questions. Nothing here knows what a mesh is and PLANNING D1 holds.
+ * A player with no history yet has no `heading`, and the port falls back to the
+ * ported single-frame speeds, which is the 2D game's own behaviour.
+ */
+export function markHeading(play) {
+    const frames = Math.max(1, Math.round(CFG.simHz * CFG.lead.window));
+    let marked = 0;
+    for (const obj of play.game.objects) {
+        if (!obj.state || !obj.settings) continue;
+        // The ball is not running anywhere, it is on rails.
+        if (obj.settings.position === 'ball' || obj.settings.type === 'ball') continue;
+        if (obj.settings.benched) continue;
+        const s = obj.state;
+        if (!s.track) s.track = [];
+        s.track.push(obj.coords.x, obj.coords.y);
+        while (s.track.length > (frames + 1) * 2) s.track.splice(0, 2);
+        // Not enough history to average yet. Leave `heading` absent rather than
+        // writing a bad one: absent means "use the ported speeds".
+        if (s.track.length < (frames + 1) * 2) continue;
+        const span = (s.track.length / 2) - 1;
+        s.heading = {
+            x: (obj.coords.x - s.track[0]) / span,
+            y: (obj.coords.y - s.track[1]) / span,
+        };
+        marked += 1;
+    }
+    return marked;
 }
 
 /**

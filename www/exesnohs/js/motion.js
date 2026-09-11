@@ -25,6 +25,112 @@ export class MotionClass {
     this.state = {};
   }
 
+  /**
+   * HOW CLOSE TO HIS LINE COUNTS AS ON IT, IN FIELD UNITS. 0 IS THE PORT.
+   *
+   * EVERY STEER IN THIS FILE AND IN routes.js IS THE SAME TWO-WAY TEST: if the
+   * coordinate is below the target accelerate one way, if it is above it
+   * accelerate the other. There is no third branch, so NOTHING EVER
+   * DECELERATES, and that is not a rounding problem. It is an undamped
+   * oscillator: acceleration always opposes displacement and nothing ever
+   * removes energy, so whatever lateral speed a player carries when he first
+   * crosses his line is conserved for the rest of the play.
+   *
+   * MEASURED ON THE STEERING LAW ALONE, one man, no collisions, no defenders:
+   * a receiver nudged one unit off a straight go route never returns to it. He
+   * limit-cycles forever, and the cycle is set by the speed he arrived with:
+   *
+   *     arrives with 0.40 -> settles into +/-0.40 units, |vy| up to 0.40
+   *     arrives with 1.00 -> settles into +/-1.80 units, |vy| up to 1.00
+   *     arrives with 2.15 -> settles into +/-6.40 units, |vy| up to 2.15
+   *
+   * The last of those is his FULL TOP SPEED, sideways, reversing every 11
+   * frames, for as long as he runs. That is the squiggle: a man asked to run
+   * straight who is really sprinting left, then right, then left again, and who
+   * only looks like he is going straight because the excursion is 0.22m.
+   *
+   * IT IS ALSO THE THROW, AND THAT IS THE EXPENSIVE HALF. `generateBallObject`
+   * leads the pass off the receiver's ySpeed AT THE INSTANT the visitor pressed
+   * the button, multiplied by as much as 45. Sampling a full-speed square wave
+   * once, the same receiver on the same straight route is led anywhere from
+   * 0.08m to 3.78m sideways depending only on which frame of the cycle the tap
+   * landed on. See `state.heading` in play.js for the other half of this.
+   *
+   * WHAT THE THIRD BRANCH IS. Inside the band he is on his line, so the steer
+   * stops asking for a correction and BLEEDS the lateral speed instead, which
+   * is the energy the cycle was living on. Outside it he accelerates as he
+   * always did, and brakes if he is closing faster than `decel` could stop him
+   * in the distance that is left. `decel` is 1.5 against an accel of 0.4, so a
+   * man who reaches the band at top speed stops within 3 units of its edge and
+   * runs straight from there.
+   *
+   * INJECTED AND DEFAULTING TO 0, like `collisionScale` and `rushShed` before
+   * it, and at 0 every steer below is the 2D game's two-way test exactly.
+   */
+  steerDeadband() {
+    const d = this.settings && this.settings.steerDeadband;
+    return typeof d === 'number' && d > 0 ? d : 0;
+  }
+
+  /**
+   * ONE AXIS OF A DAMPED STEER. `pos` and `target` are that axis's coordinate,
+   * `speed` its velocity, and the four callbacks are the accel and decel pair
+   * this file already has for it. It is written this way because the x and y
+   * pairs are not symmetrical in naming (downfield/upfield against
+   * right/left), and a shared law that reaches for the names directly would
+   * have to know which axis it is on twice over.
+   */
+  // eslint-disable-next-line
+  steerAxis(obj, pos, target, speed, accelUp, accelDown, bleed) {
+    const dead = this.steerDeadband();
+    // 0 IS THE PORT, and it is an early return rather than a band of zero
+    // width so that "off" means the ported code path, not a narrower version
+    // of the new one.
+    if (!(dead > 0)) {
+      if (pos < target) accelUp();
+      else if (pos > target) accelDown();
+      return false;
+    }
+    const err = target - pos;
+    // On his line. Stop asking for a correction and take the energy out.
+    if (Math.abs(err) <= dead) {
+      bleed();
+      return true;
+    }
+    // Closing faster than he can stop in what is left. Brake, do not steer.
+    const d = obj.physics && obj.physics.decel > 0 ? obj.physics.decel : 0;
+    if (d > 0 && speed * err > 0 && (speed * speed) >= (2 * d * (Math.abs(err) - dead))) {
+      bleed();
+      return true;
+    }
+    if (err > 0) accelUp();
+    else accelDown();
+    return false;
+  }
+
+  /** The damped replacement for the bare `y < target ? right : left` pair.
+   *  Used by every route in routes.js that holds a man on a line. */
+  // eslint-disable-next-line
+  steerToY(obj = {}, yTarget = 0) {
+    return this.steerAxis(
+      obj, obj.coords.y, yTarget, obj.state.ySpeed,
+      () => this.accelToRightSideline(obj),
+      () => this.accelToLeftSideline(obj),
+      () => this.decelY(obj)
+    );
+  }
+
+  /** ...and the same for the downfield axis. */
+  // eslint-disable-next-line
+  steerToX(obj = {}, xTarget = 0) {
+    return this.steerAxis(
+      obj, obj.coords.x, xTarget, obj.state.xSpeed,
+      () => this.accelDownfield(obj),
+      () => this.accelUpfield(obj),
+      () => this.decelX(obj)
+    );
+  }
+
   // eslint-disable-next-line
   accelToRightSideline(obj = {}, multi = 1) {
     if ( typeof(multi) === 'undefined' ) {
@@ -160,42 +266,32 @@ export class MotionClass {
 
   // eslint-disable-next-line
   accelTo(obj = {}, xTarget = 0, yTarget = 0) {
-    if ( obj.coords.x < xTarget ) {
-      this.accelDownfield(obj);
-    } else if ( obj.coords.x > xTarget ) {
-      this.accelUpfield(obj);
-    } else {
-      obj.coords.x = xTarget;
-    }
-    if ( obj.coords.y < yTarget ) {
-      this.accelToRightSideline(obj);
-    } else if ( obj.coords.y > yTarget ) {
-      this.accelToLeftSideline(obj);
-    } else {
-      obj.coords.y = yTarget;
-    }
+    // The ported `else obj.coords.x = xTarget` branches are gone with no change
+    // of behaviour: they only ran on exact equality, where they assigned a
+    // coordinate the value it already held. See `steerDeadband`.
+    this.steerToX(obj, xTarget);
+    this.steerToY(obj, yTarget);
   }
 
   // eslint-disable-next-line
   accelToBall(obj = {}, ball = {}) {
-    if ( obj.coords.x > ball.coords.targetX ) {
-      this.decelDownfield(obj);
-      this.accelUpfield(obj);
-    } else if ( obj.coords.x < ball.coords.targetX ) {
-      this.decelUpfield(obj);
-      this.accelDownfield(obj);
-    } else {
-      obj.coords.x = ball.coords.targetX;
-    }
-    if ( obj.coords.y < ball.coords.targetY ) {
-      this.decelToLeftSideline(obj);
-      this.accelToRightSideline(obj);
-    } else if ( obj.coords.y > ball.coords.targetY ) {
-      this.decelToRightSideline(obj);
-      this.accelToLeftSideline(obj);
-    } else {
-      obj.coords.y = ball.coords.targetY;
-    }
+    // THIS ONE ALREADY HALF-DAMPED ITSELF, and the decel-assisted turn is kept:
+    // it kills the speed going the wrong way at `decel` before adding any the
+    // right way, which is what makes chasing a ball feel sharper than running a
+    // route. What it still had no branch for is ARRIVING, so it is the same
+    // deadband and the same brake as every other steer, wrapped round the pair.
+    this.steerAxis(
+      obj, obj.coords.x, ball.coords.targetX, obj.state.xSpeed,
+      () => { this.decelUpfield(obj); this.accelDownfield(obj); },
+      () => { this.decelDownfield(obj); this.accelUpfield(obj); },
+      () => this.decelX(obj)
+    );
+    this.steerAxis(
+      obj, obj.coords.y, ball.coords.targetY, obj.state.ySpeed,
+      () => { this.decelToLeftSideline(obj); this.accelToRightSideline(obj); },
+      () => { this.decelToRightSideline(obj); this.accelToLeftSideline(obj); },
+      () => this.decelY(obj)
+    );
   }
 
   // eslint-disable-next-line
@@ -1280,38 +1376,14 @@ export class MotionClass {
 
   // eslint-disable-next-line
   runTo(obj = {}, targetX = 0, targetY = 0) {
-    if ( obj.coords.x > targetX ) {
-      this.accelUpfield(obj);
-    } else if ( obj.coords.x < targetX ) {
-      this.accelDownfield(obj);
-    } else {
-      obj.coords.x = targetX;
-    }
-    if ( obj.coords.y < targetY ) {
-      this.accelToRightSideline(obj);
-    } else if ( obj.coords.y > targetY ) {
-      this.accelToLeftSideline(obj);
-    } else {
-      obj.coords.y = targetY;
-    }
+    this.steerToX(obj, targetX);
+    this.steerToY(obj, targetY);
   }
 
   // eslint-disable-next-line
   runToBall(obj = {}, ball = {}) {
-    if ( obj.coords.x > ball.coords.targetX ) {
-      this.accelUpfield(obj);
-    } else if ( obj.coords.x < ball.coords.targetX ) {
-      this.accelDownfield(obj);
-    } else {
-      obj.coords.x = ball.coords.targetX;
-    }
-    if ( obj.coords.y < ball.coords.targetY ) {
-      this.accelToRightSideline(obj);
-    } else if ( obj.coords.y > ball.coords.targetY ) {
-      this.accelToLeftSideline(obj);
-    } else {
-      obj.coords.y = ball.coords.targetY;
-    }
+    this.steerToX(obj, ball.coords.targetX);
+    this.steerToY(obj, ball.coords.targetY);
   }
 
   // eslint-disable-next-line

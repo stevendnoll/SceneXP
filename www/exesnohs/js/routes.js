@@ -587,11 +587,9 @@ export class ObjectAnimationsClass {
       } else {
         this.motion.decelX(obj);
       }
-      if ( obj.coords.y < obj.coords.startY ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > obj.coords.startY ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // HOLD THE LANE. Damped, because the bare two-way test this replaces is
+      // what made a straight route a squiggle. See `steerDeadband` in motion.js.
+      this.motion.steerToY(obj, obj.coords.startY);
     } else {
       this.motion.runTo(obj, xTarget, yTarget);
     }
@@ -614,11 +612,9 @@ export class ObjectAnimationsClass {
       } else {
         this.motion.decelX(obj);
       }
-      if ( obj.coords.y < obj.coords.startY ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > obj.coords.startY ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // HOLD THE LANE. Damped, because the bare two-way test this replaces is
+      // what made a straight route a squiggle. See `steerDeadband` in motion.js.
+      this.motion.steerToY(obj, obj.coords.startY);
     } else {
       this.motion.runTo(obj, xTarget, yTarget);
     }
@@ -637,17 +633,12 @@ export class ObjectAnimationsClass {
       } else {
         this.motion.decelX(obj);
       }
-      if ( obj.coords.y < obj.coords.startY ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > obj.coords.startY ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // HOLD THE LANE. Damped, because the bare two-way test this replaces is
+      // what made a straight route a squiggle. See `steerDeadband` in motion.js.
+      this.motion.steerToY(obj, obj.coords.startY);
     } else {
-      if ( obj.coords.y < yTarget ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > yTarget ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // Same duplicate pair as the deep routes above, same reason. `accelTo`
+      // steers this axis at this target already.
       this.motion.accelTo(obj, xTarget, yTarget);
     }
   }
@@ -856,11 +847,11 @@ export class ObjectAnimationsClass {
     } else {
       this.motion.decelX(obj);
     }
-    if ( obj.coords.y < yTarget ) {
-      this.motion.accelToRightSideline(obj);
-    } else if ( obj.coords.y > yTarget ) {
-      this.motion.accelToLeftSideline(obj);
-    }
+    // THE STRAIGHT ROUTE, AND THE ONE THE SQUIGGLE WAS REPORTED ON. `yTarget`
+    // here is the man's own starting line, so this is "run straight", and
+    // undamped it was the worst case: he held the line only by sprinting
+    // across it and back. See `steerDeadband` in motion.js.
+    this.motion.steerToY(obj, yTarget);
   }
 
   // eslint-disable-next-line
@@ -878,17 +869,13 @@ export class ObjectAnimationsClass {
       } else {
         this.motion.decelX(obj);
       }
-      if ( obj.coords.y < obj.coords.startY ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > obj.coords.startY ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // HOLD THE LANE. Damped, because the bare two-way test this replaces is
+      // what made a straight route a squiggle. See `steerDeadband` in motion.js.
+      this.motion.steerToY(obj, obj.coords.startY);
     } else {
-      if ( obj.coords.y < yTarget ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > yTarget ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // THE Y PAIR THAT STOOD HERE WAS A DUPLICATE. `runTo` tests the same
+      // coordinate against the same `yTarget` on the next line, so the steer
+      // was applied twice and the lateral gain was double the downfield one.
       this.motion.runTo(obj, xTarget, yTarget);
     }
   }
@@ -908,17 +895,13 @@ export class ObjectAnimationsClass {
       } else {
         this.motion.decelX(obj);
       }
-      if ( obj.coords.y < obj.coords.startY ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > obj.coords.startY ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // HOLD THE LANE. Damped, because the bare two-way test this replaces is
+      // what made a straight route a squiggle. See `steerDeadband` in motion.js.
+      this.motion.steerToY(obj, obj.coords.startY);
     } else {
-      if ( obj.coords.y < yTarget ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > yTarget ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // THE Y PAIR THAT STOOD HERE WAS A DUPLICATE. `runTo` tests the same
+      // coordinate against the same `yTarget` on the next line, so the steer
+      // was applied twice and the lateral gain was double the downfield one.
       this.motion.runTo(obj, xTarget, yTarget);
     }
   }
@@ -937,17 +920,12 @@ export class ObjectAnimationsClass {
       } else {
         this.motion.decelX(obj);
       }
-      if ( obj.coords.y < obj.coords.startY ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > obj.coords.startY ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // HOLD THE LANE. Damped, because the bare two-way test this replaces is
+      // what made a straight route a squiggle. See `steerDeadband` in motion.js.
+      this.motion.steerToY(obj, obj.coords.startY);
     } else {
-      if ( obj.coords.y < yTarget ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > yTarget ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // Same duplicate pair as the deep routes above, same reason. `accelTo`
+      // steers this axis at this target already.
       this.motion.accelTo(obj, xTarget, yTarget);
     }
   }
@@ -967,17 +945,13 @@ export class ObjectAnimationsClass {
       } else {
         this.motion.decelX(obj);
       }
-      if ( obj.coords.y < obj.coords.startY ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > obj.coords.startY ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // HOLD THE LANE. Damped, because the bare two-way test this replaces is
+      // what made a straight route a squiggle. See `steerDeadband` in motion.js.
+      this.motion.steerToY(obj, obj.coords.startY);
     } else {
-      if ( obj.coords.y < yTarget ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > yTarget ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // THE Y PAIR THAT STOOD HERE WAS A DUPLICATE. `runTo` tests the same
+      // coordinate against the same `yTarget` on the next line, so the steer
+      // was applied twice and the lateral gain was double the downfield one.
       this.motion.runTo(obj, xTarget, yTarget);
     }
   }
@@ -1057,11 +1031,9 @@ export class ObjectAnimationsClass {
       } else {
         this.motion.decelX(obj);
       }
-      if ( obj.coords.y < obj.coords.startY ) {
-        this.motion.accelToRightSideline(obj);
-      } else if ( obj.coords.y > obj.coords.startY ) {
-        this.motion.accelToLeftSideline(obj);
-      }
+      // HOLD THE LANE. Damped, because the bare two-way test this replaces is
+      // what made a straight route a squiggle. See `steerDeadband` in motion.js.
+      this.motion.steerToY(obj, obj.coords.startY);
     } else {
       this.motion.runTo(obj, xTarget, yTarget);
     }

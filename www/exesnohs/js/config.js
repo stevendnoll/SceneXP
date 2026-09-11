@@ -310,6 +310,55 @@ const CATCH_NEAR = 14;     // metres: below this a throw is unchanged
 const CATCH_FAR = 30;      // ...and at this it is as hard as it gets
 const CATCH_FAR_SCALE = 0.42;   // what the receiver's box is multiplied by there
 
+/**
+ * HOW CLOSE TO HIS LINE COUNTS AS ON IT, IN METRES.
+ *
+ * THE PORTED STEER HAS NO THIRD BRANCH. Every route holds a player on a line by
+ * accelerating one way when he is below it and the other way when he is above
+ * it, and nothing anywhere decelerates. That is an undamped oscillator: the
+ * acceleration always opposes the displacement and no term ever removes energy,
+ * so whatever lateral speed a man carries when he first crosses his line he
+ * keeps for the whole play. Measured on the steering law alone, a receiver on a
+ * straight go route who arrives on his line at top speed oscillates across it
+ * at TOP SPEED, reversing every 11 frames, forever.
+ *
+ * That is both of the faults reported on 2026-09-11. The visible one is the
+ * squiggle. The expensive one is that `generateBallObject` leads a pass off the
+ * receiver's ySpeed at the instant of the tap, times as much as 45, so the same
+ * man on the same straight route is led anywhere from 0.08m to 3.78m sideways
+ * depending on which frame of the cycle the visitor pressed.
+ *
+ * 0.15m IS ABOUT A FIFTH OF A BODY WIDTH, so a man held inside it is running a
+ * line nobody can see a kink in, and it is wider than the 0.22m peak-to-peak the
+ * undamped cycle reached, which is what lets him settle rather than skim the
+ * edge of the band. Inside it the steer bleeds lateral speed at `decel` (1.5
+ * against an accel of 0.4), so he is straight within three units of entering.
+ *
+ * SET IT TO 0 TO GET THE 2D GAME BACK EXACTLY, which is what motion.js defaults
+ * to for any caller that does not mention it.
+ */
+const STEER_DEADBAND = 0.15;
+
+/**
+ * ...AND HOW LONG A HEADING IS AVERAGED OVER BEFORE A PASS IS LED OFF IT.
+ *
+ * THE SECOND HALF OF THE SAME FAULT, and it is kept as its own number because
+ * it is its own question. Damping the steer removes the wobble at source, but
+ * the throw would still be leading off a SINGLE FRAME of a receiver's velocity,
+ * and a single frame is the wrong thing to ask either way: a man cutting has a
+ * different velocity every frame and the one the visitor happened to tap on is
+ * not the direction he is going.
+ *
+ * 0.15s IS ONE FULL CYCLE OF THE UNDAMPED WOBBLE at simHz 80, deliberately. An
+ * average over exactly one period of a square wave is zero, so even with the
+ * deadband turned off a straight runner leads at nothing, which is the right
+ * answer. A man genuinely crossing the field averages his real crossing speed
+ * and is still led properly, half a frame-window late.
+ *
+ * See `state.heading` in play.js, which is where it is measured.
+ */
+const LEAD_WINDOW = 0.15;
+
 /** The fraction a team's speed and acceleration move at full difficulty. Up
  *  here because `formationSettings` has to hand it to the ported formations
  *  class. See `difficulty` in the config below for what it means. */
@@ -470,6 +519,10 @@ function formationSettings() {
         catchNear: CATCH_NEAR / UNITS_TO_METRES,
         catchFar: CATCH_FAR / UNITS_TO_METRES,
         catchFarScale: CATCH_FAR_SCALE,
+        // How close to his line counts as on it, in FIELD UNITS. See
+        // `steerDeadband` in motion.js for what the ported steer does without
+        // it, and `STEER_DEADBAND` above for why this is the value.
+        steerDeadband: STEER_DEADBAND / UNITS_TO_METRES,
         /** How hard the game is leaning right now, -1 to +1, written by
          *  `play.setDifficulty` before each line-up. See `difficulty` below. */
         difficulty: 0,
@@ -967,6 +1020,12 @@ const EXESNOHS_CONFIG = {
     linemanScale: LINEMAN_SCALE,
     rushShed: RUSH_SHED,
 
+    /** How close to his line counts as on it, in FIELD UNITS. The value and the
+     *  reasoning are at `STEER_DEADBAND` above; motion.js reads it through
+     *  `formationSettings`, and it is repeated here so the suite can measure
+     *  against the same number rather than against a copy of it. */
+    steerDeadband: STEER_DEADBAND / UNITS_TO_METRES,
+
     /**
      * HOW CLOSE TWO BODIES MAY EVER GET, IN METRES, AND WHY IT IS NOT THE
      * COLLISION RADIUS.
@@ -1055,6 +1114,15 @@ const EXESNOHS_CONFIG = {
         /** ...and the fraction of his own top speed he is held to while he
          *  has. Not zero. See above. */
         speed: 0.10,
+    },
+
+    /**
+     * WHERE THE RECEIVER IS ACTUALLY GOING, WHICH IS NOT WHERE HE IS GOING
+     * THIS FRAME. See `LEAD_WINDOW` above and `markHeading` in play.js.
+     */
+    lead: {
+        /** Seconds of travel averaged into the heading a pass is led off. */
+        window: LEAD_WINDOW,
     },
 
     /**
