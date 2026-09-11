@@ -460,6 +460,35 @@ function addContactShadow(person) {
  */
 export const THROWING_SIDE = 1;
 
+/**
+ * WHICH ARM A STIFF-ARM GOES OUT ON, and why it is not simply "the one nearest
+ * the defender".
+ *
+ * The view works out which side the man being shed is on and passes it as
+ * `stiffArmSide` (see that function in view.js, whose sign was measured against
+ * real three rather than reasoned about). That is the arm that should go out,
+ * and half the time it is the arm holding the ball.
+ *
+ * NAMED `stiffSide` AND NOT `stiffArmSide`, deliberately, because view.js
+ * already exports a DIFFERENT function under that name: that one decides which
+ * side the defender is on, this one decides which arm may answer. Two functions
+ * with one name across two modules is how the call below was written as
+ * `stiffSide` while the declaration said `stiffArmSide`, which threw a
+ * ReferenceError the first time anybody actually stiff-armed.
+ *
+ * IT MAY NEVER BE THE BALL ARM. `carryHold` pins the ball to a fixed point on
+ * THROWING_SIDE rather than to whatever the hand is doing, so extending that
+ * arm would leave the ball hanging in space beside a man reaching past it. A
+ * real carrier switches the ball to his other arm; this rig cannot, so the free
+ * arm does the work instead and the tuck stays honest. The lean and the sideways
+ * travel still say which man he is getting away from.
+ */
+export function stiffSide(act = {}) {
+    const want = act.stiffArmSide === -1 ? -1 : 1;
+    const carrying = (act.carry || 'none') === 'tuck';
+    return (carrying && want === THROWING_SIDE) ? -THROWING_SIDE : want;
+}
+
 const lerp = (a, b, t) => a + (b - a) * t;
 
 /**
@@ -563,6 +592,24 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
             x = lerp(x, a.armX, act.tackle);
             z = lerp(z, a.armZ, act.tackle);
             fore = lerp(fore, a.foreX, act.tackle);
+        } else if (act.stiffArm > 0 && side === stiffSide(act)) {
+            /**
+             * THE STIFF-ARM, AND IT IS ONE ARM, WHICH IS THE WHOLE POINT.
+             *
+             * Both arms out is a BLOCK, and it is drawn six lines below this
+             * one. A carrier fending somebody off is sprinting with one arm
+             * locked out and the other still wrapped round the ball, so this
+             * branch deliberately does not match the other side: that arm falls
+             * through to the tuck and keeps the ball where it is drawn.
+             *
+             * Above the block and the carries so that a man who has earned a
+             * break actually plays it. He is a ball carrier, so without this he
+             * would simply tuck and run, which is the animation QA already has.
+             */
+            const a = anglesFor(P.stiffArm.hand, side);
+            x = lerp(x, a.armX, act.stiffArm);
+            z = lerp(z, a.armZ, act.stiffArm);
+            fore = lerp(fore, a.foreX, act.stiffArm);
         } else if (act.block > 0) {
             // Both arms out at the man in front. Held rather than swung: a
             // blocker's arms are the one part of him that is not running.

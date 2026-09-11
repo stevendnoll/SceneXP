@@ -758,6 +758,54 @@ function clearJump(figure) {
 }
 
 /**
+ * HOW FAR INTO A BREAK HE IS, 0 to 1, WITH AN ATTACK AND A RELEASE.
+ *
+ * The simulation owns the clock (`play.breakContact` writes `state.escape` and
+ * advances it), so this is only a shape over it. It snaps in over `snap`
+ * seconds, holds, and snaps back out over the same, finishing before the grace
+ * does: a man should be upright and running again before the freedom his move
+ * bought him runs out, or the move reads as a stumble he never recovered from.
+ *
+ * `snap` is a good deal shorter than `pose.blend` on purpose. A stiff-arm that
+ * eases in over a tenth of a second is a man slowly raising his hand.
+ */
+export function escapeAmount(escape, grace, snap) {
+    if (!escape || !(grace > 0)) return 0;
+    const s = Math.max(snap, 1e-4);
+    const rise = escape.at / s;
+    const fall = (grace - escape.at) / s;
+    return Math.max(0, Math.min(1, rise, fall));
+}
+
+/**
+ * WHICH WAY A JUKE LEANS, in radians on the figure's own Z.
+ *
+ * THE SIGN IS MEASURED, NOT REASONED ABOUT, because getting it backwards draws
+ * a man leaning into the defender he is supposed to be leaving and there is no
+ * way to see that from a unit test of the simulation. Checked against real
+ * three r160 with `rotation.order` YXZ:
+ *
+ *   - local +X maps to world (cos yaw, -sin yaw)
+ *   - a POSITIVE rotation.z tilts the head toward local -X
+ *
+ * `away` is the direction he broke in, in SIMULATION y, and sim y is world z.
+ * So the break direction along his own left-right axis is -away*sin(yaw), and
+ * leaning that way needs the opposite sign of rotation.z, which comes out as
+ * away*sin(yaw). A runner leans INTO his cut, so this tilts him the way he is
+ * going and away from the man he has just beaten.
+ */
+export function jukeRoll(away, facing, roll) {
+    return roll * away * Math.sin(facing);
+}
+
+/** ...and which arm a stiff-arm goes out on, as an `armSide`. The defender is
+ *  on the side he is NOT breaking toward, so it is the opposite sign. */
+export function stiffArmSide(away, facing) {
+    const at = away * Math.sin(facing);
+    return at >= 0 ? 1 : -1;
+}
+
+/**
  * WHO IS OFF THE GROUND RIGHT NOW, by position.
  *
  * THE SIMULATION HAS TO KNOW, AND THIS IS HOW IT FINDS OUT WITHOUT LEARNING
@@ -1110,6 +1158,32 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         const posting = (opts.live && standing && obj.settings.team === 0
             && /^wr\d$/.test(obj.settings.position) && carrier !== obj) ? 1 : 0;
 
+        /**
+         * BREAKING FREE, WHICH IS THE ONE POSE THE SIMULATION ASKS FOR.
+         *
+         * Everything else in this file is the view's own reading of the world.
+         * This one is not a judgement: `play.breakContact` decides that a man
+         * has had somebody hanging on him for two seconds and gives him a way
+         * out, and the figure has to show the move that actually happened, on
+         * the frame it happened. So the flag travels the same way
+         * `state.airborne` travels in the other direction, as a plain field on
+         * a plain object, and nothing here re-decides it.
+         *
+         * A CARRIER STIFF-ARMS AND A ROUTE RUNNER JUKES. They are drawn
+         * completely differently on purpose: one is an arm, the other is the
+         * whole body, and from a camera raked this far over the field a
+         * one-armed pose and a hard roll are the two things that read.
+         */
+        const esc = (obj.state && obj.state.escape) || null;
+        const E = CFG.escape;
+        // Always numbers, never null: both are multiplied into a lean below and
+        // handed to `poseFigure`, and a null that happens to coerce to zero is
+        // an accident waiting for somebody to add a comparison.
+        const stiff = esc && esc.kind === 'stiff-arm'
+            ? escapeAmount(esc, E.grace, CFG.pose.stiffArm.snap) : 0;
+        const juking = esc && esc.kind === 'juke'
+            ? escapeAmount(esc, E.grace, CFG.pose.juke.snap) : 0;
+
         poseFigure(figure, mps, figure.userData.phase, {
             carry: carryFor(obj, carrier),
             throwT: throwProgress(obj),
@@ -1120,7 +1194,20 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             reachAt,
             posting,
             down,
+            stiffArm: stiff,
+            stiffArmSide: esc ? stiffArmSide(esc.away, figure.userData.facing) : 1,
         }, delta);
+
+        // THE JUKE IS A ROLL, and it is the only thing in the game that uses
+        // this axis. `rotation.order` is YXZ, so it happens in the figure's own
+        // frame after the yaw and the pitch: he leans out of his cut rather
+        // than tipping sideways in world space. Eased back to upright rather
+        // than cleared, or a man finishing a juke snaps vertical in one frame.
+        const wantRoll = juking > 0
+            ? jukeRoll(esc.away, figure.userData.facing, CFG.pose.juke.roll) * juking
+            : 0;
+        figure.rotation.z += (wantRoll - figure.rotation.z)
+            * (1 - Math.exp(-delta / CFG.pose.juke.snap));
 
         // THE LEAN, WHICH IS THE WHOLE FIGURE, because the rig has no waist.
         // A tackler pitches forward into the hit and the man being hit goes
@@ -1148,9 +1235,15 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             // tackling.
             const blocking = engagement
                 ? CFG.pose.block.lean * engagement.amount : 0;
+            // AND A MAN STIFF-ARMING LEANS INTO IT TOO, a little less than a
+            // blocker: he is running through the contact rather than settling
+            // into it, and the arm is doing most of the talking.
+            const driving = CFG.pose.stiffArm.lean * stiff;
             const pitch = lunge > 0
-                ? CFG.pose.tackle.lean * lunge : Math.max(ready, blocking);
-            const rate = lunge > 0 ? CFG.pose.tackle.snap : CFG.pose.blend;
+                ? CFG.pose.tackle.lean * lunge
+                : Math.max(ready, blocking, driving);
+            const rate = lunge > 0 ? CFG.pose.tackle.snap
+                : (stiff > 0 ? CFG.pose.stiffArm.snap : CFG.pose.blend);
             figure.rotation.x += (pitch - figure.rotation.x)
                 * (1 - Math.exp(-delta / rate));
         }

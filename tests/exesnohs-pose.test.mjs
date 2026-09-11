@@ -1883,3 +1883,24 @@ describe('only the man it was thrown to leaves his feet', () => {
         expect(ballSpan()).toBeFalsy();
     });
 });
+
+/**
+ * WHY THE ESCAPE IS NOT COVERED FROM `syncFigures`, AND THE TEST THAT WAS
+ * WRITTEN HERE AND DELETED.
+ *
+ * `play.breakContact` writes `state.escape` and the view turns it into a pose
+ * and a lean. That path shipped a crash: `poseFigure` called a name that did not
+ * exist, and the game died the first time a carrier fought somebody off.
+ *
+ * THE OBVIOUS TEST HERE DOES NOT WORK, AND IT PASSES, WHICH IS WORSE. Driving
+ * `syncFigures` with a man mid-escape and asserting it does not throw was
+ * written, and it went green with the bug REINTRODUCED. Nothing was being drawn:
+ * `syncFigures` opens with `figureFor(position)` and `continue`s when there is no
+ * figure, and a headless run has built no roster at all, so the loop body never
+ * executes. On top of that the Three stub is a Proxy that swallows assignments,
+ * so even a figure that did exist could not be posed or measured.
+ *
+ * The real guard is one level down, in exesnohs-gameplay.test.mjs, where
+ * `poseFigure` is driven directly against a figure made of plain objects through
+ * every branch it has. That one does fail against the bug.
+ */

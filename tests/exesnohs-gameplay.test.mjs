@@ -37,9 +37,11 @@ const {
 const {
     createPlay: createPlayForDifficulty, lineUp, snap, tick, isDone,
     keepAndRun, outcome, setDifficulty, OFFENSIVE_PLAYS,
-    markHeading, throwTo, eligibleReceivers,
+    markHeading, throwTo, eligibleReceivers, breakContact,
 } = await import(join(scene, 'play.js'));
 const { markerGeometry } = await import(join(scene, 'markers.js'));
+const { escapeAmount, jukeRoll, stiffArmSide } = await import(join(scene, 'view.js'));
+const { stiffSide, THROWING_SIDE, poseFigure } = await import(join(scene, 'roster.js'));
 const { MotionClass } = await import(join(scene, 'motion.js'));
 const { solveArm, handAt } = await import(join(scene, 'arm.js'));
 
@@ -1768,6 +1770,22 @@ describe('a pass is led off where the receiver is going', () => {
     };
 
     test('throwing one frame later does not move the aim point by a body width', () => {
+        /**
+         * SEEDED, BECAUSE EVERY LINE-UP ROLLS A FRESH SET OF SPEEDS. Left to
+         * the real Math.random this measures a different set of players on
+         * every run, and the MAXIMUM of a sample is the least stable thing you
+         * can assert on: it moved between 1.0m and 1.8m run to run while the
+         * mean sat still. The mean is the honest statistic here and the seed is
+         * what makes the bound on the worst case mean anything at all.
+         */
+        const real = Math.random;
+        let seed = 20260911;
+        Math.random = () => {
+            seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+            let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+            return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        };
         const jumps = [];
         for (const slug of OFFENSIVE_PLAYS) {
             for (let f = 30; f < 44; f += 1) {
@@ -1777,6 +1795,7 @@ describe('a pass is led off where the receiver is going', () => {
                 jumps.push(Math.abs(a - b) * UNITS_TO_METRES);
             }
         }
+        Math.random = real;
         expect(jumps.length).toBeGreaterThan(50);
         const mean = jumps.reduce((s, v) => s + v, 0) / jumps.length;
         // The ported build measures 0.162m mean and 5.41m worst over a much
@@ -1843,5 +1862,465 @@ describe('a pass is led off where the receiver is going', () => {
         // He is back where he started on the axis, so the lead is nothing,
         // however fast he was moving on the frame the visitor pressed.
         expect(Math.abs(man.state.heading.y)).toBeLessThan(0.2);
+    });
+});
+
+/**
+ * NOBODY STAYS WELDED TO A DEFENDER FOR THE WHOLE PLAY. QA, 2026-09-11.
+ *
+ * WHAT THEY WERE STUCK IN IS A LATCH, NOT A COLLISION. `checkCollisions` fires
+ * on box overlap, and a non-lineman's box reaches 0.81m by 0.88m, so two of
+ * them find each other up to 1.76m apart. `play.separate` rests bodies at
+ * 1.45m, INSIDE that, so two men running alongside collide on EVERY frame and
+ * the receiver's speed is hard-set to 40% of his top speed over and over.
+ *
+ * The measured signature is that lock durations were BIMODAL: median 0.03s,
+ * 99th percentile 4.25s, longest the entire play. Physics gives a spread of
+ * durations; a latch gives two outcomes.
+ */
+describe('a man with somebody hanging on him gets out of it', () => {
+    /** Two men pinned together, ticked by hand, so the only thing under test is
+     *  the escape clock rather than seventeen plays' worth of luck. */
+    const pinned = (carrying) => {
+        const play = createPlayForDifficulty();
+        lineUp(play, 'pass2', 'cover2');
+        const man = play.game.objects.find((o) => o.settings.position === 'wr1');
+        const on = play.game.objects.find((o) => o.settings.position === 'db1');
+        man.state.hasBall = carrying;
+        return { play, man, on };
+    };
+
+    /** Hold them on top of each other and run the clock. */
+    const holdFor = (ctx, seconds) => {
+        const step = 1 / CFG.simHz;
+        let broke = 0;
+        for (let t = 0; t < seconds; t += step) {
+            ctx.on.coords.x = ctx.man.coords.x;
+            ctx.on.coords.y = ctx.man.coords.y + 20;
+            broke += breakContact(ctx.play, step);
+            if (ctx.man.state.escape && ctx.man.state.escape.at === 0) break;
+        }
+        return broke;
+    };
+
+    test('two seconds of the same man on him and he breaks free', () => {
+        const ctx = pinned(false);
+        // Not before the time is up. The threshold is the promise.
+        holdFor(ctx, CFG.escape.after * 0.8);
+        expect(ctx.man.state.escape).toBeFalsy();
+        holdFor(ctx, CFG.escape.after);
+        expect(ctx.man.state.escape).toBeTruthy();
+        expect(ctx.man.state.escape.against).toBe('db1');
+    });
+
+    /**
+     * AND IT HAS TO BE THE SAME MAN THROUGHOUT. A receiver crossing through a
+     * crowd brushes four different defenders, and counting those together would
+     * hand him a break he never earned, against nobody in particular.
+     */
+    test('contact with a different defender restarts the clock', () => {
+        const ctx = pinned(false);
+        const step = 1 / CFG.simHz;
+        const other = ctx.play.game.objects.find((o) => o.settings.position === 'db2');
+        for (let t = 0; t < CFG.escape.after * 0.9; t += step) {
+            ctx.on.coords.x = ctx.man.coords.x;
+            ctx.on.coords.y = ctx.man.coords.y + 20;
+            breakContact(ctx.play, step);
+        }
+        // Swap who is on him, just short of the threshold.
+        ctx.on.coords.x = -9e3;
+        for (let t = 0; t < CFG.escape.after * 0.9; t += step) {
+            other.coords.x = ctx.man.coords.x;
+            other.coords.y = ctx.man.coords.y + 20;
+            breakContact(ctx.play, step);
+        }
+        // Nine tenths plus nine tenths is more than one threshold and is not
+        // two seconds of anybody, so he is still held.
+        expect(ctx.man.state.escape).toBeFalsy();
+    });
+
+    test('a carrier stiff-arms and a route runner jukes', () => {
+        const run = pinned(false);
+        holdFor(run, CFG.escape.after * 1.2);
+        expect(run.man.state.escape.kind).toBe('juke');
+
+        const carry = pinned(true);
+        holdFor(carry, CFG.escape.after * 1.2);
+        expect(carry.man.state.escape.kind).toBe('stiff-arm');
+    });
+
+    /** The impulse is what actually separates them. Freedom from the damping
+     *  alone leaves two men running alongside at the same speed. */
+    test('the break moves him away from the man he broke from', () => {
+        const ctx = pinned(false);
+        holdFor(ctx, CFG.escape.after * 1.2);
+        const e = ctx.man.state.escape;
+        expect(e).toBeTruthy();
+        // He is driven away from the defender, who sat at +20 in y.
+        expect(e.away).toBe(-1);
+        expect(Math.sign(ctx.man.state.ySpeed)).toBe(-1);
+        expect(Math.abs(ctx.man.state.ySpeed))
+            .toBeGreaterThan(ctx.man.physics.maxSpeed * CFG.escape.juke * 0.9);
+    });
+
+    /**
+     * ...AND IT IS A MOVE, NOT AN EXEMPTION. He has to earn the whole threshold
+     * again, which is what makes `after` the cooldown as well: the break zeroes
+     * the contact clock. Counted as BREAKS rather than by looking at the flag,
+     * because the flag is set for `grace` seconds after each one and a test that
+     * only reads it cannot tell one long break from two quick ones.
+     */
+    test('he has to earn the whole two seconds again before the next one', () => {
+        const ctx = pinned(false);
+        holdFor(ctx, CFG.escape.after * 1.2);
+        expect(ctx.man.state.escape).toBeTruthy();
+
+        const step = 1 / CFG.simHz;
+        const pinFor = (seconds) => {
+            let broke = 0;
+            for (let t = 0; t < seconds; t += step) {
+                ctx.on.coords.x = ctx.man.coords.x;
+                ctx.on.coords.y = ctx.man.coords.y + 20;
+                broke += breakContact(ctx.play, step);
+            }
+            return broke;
+        };
+        // Held continuously, but not yet for another full threshold.
+        expect(pinFor(CFG.escape.grace + CFG.escape.after * 0.8)).toBe(0);
+        // ...and now he has.
+        expect(pinFor(CFG.escape.after * 0.4)).toBe(1);
+    });
+
+    /**
+     * THE SHED ITSELF: while he is breaking, the ported hard-set that was
+     * holding him no longer applies. This is the half that lives in motion.js,
+     * and it is asserted against the ported behaviour in the same test so that
+     * what changed is visible.
+     */
+    test('the collision stops overwriting the speed of a man breaking free', () => {
+        const build = (escaping) => {
+            const motion = new Motion(
+                { style: { gutters: { x: SIM.gutter, y: SIM.gutter } }, escapeShove: 1 },
+                { state: { measurements: { height: 400, width: 1000, lineInterval: SIM.lineInterval } } },
+                { collide() {}, catch() {}, incomplete() {} }
+            );
+            const wr = {
+                coords: { x: 0, y: 0 }, physics: { maxSpeed: 2, accel: 0.4, decel: 1.5 },
+                settings: { position: 'wr1', positionGroup: 'wr', team: 0 },
+                state: { xSpeed: 2, ySpeed: 0, hasBall: false,
+                    escape: escaping ? { at: 0, kind: 'juke', away: 1, against: 'db1' } : null },
+            };
+            const db = {
+                coords: { x: 0, y: 0 }, physics: { maxSpeed: 2, accel: 0.4, decel: 1.5 },
+                settings: { position: 'db1', positionGroup: 'db', team: 1 },
+                state: { xSpeed: 0, ySpeed: 0, hasBall: false },
+            };
+            const set = (o) => ({
+                hasBall: false, position: o.settings.position, team: o.settings.team,
+                pocket: false, x: o.coords.x, x1: -10, x2: 10, xSpeed: o.state.xSpeed,
+                y: o.coords.y, y1: -10, y2: 10, ySpeed: o.state.ySpeed,
+            });
+            motion.checkCollisionsDownfield(wr, db, set(wr), set(db));
+            return wr.state.xSpeed;
+        };
+        // Ported: clamped to 40% of his top speed, which is the latch.
+        expect(build(false)).toBeCloseTo(2 * 0.4, 6);
+        // Breaking: he keeps the speed he had.
+        expect(build(true)).toBeCloseTo(2, 6);
+    });
+});
+
+/**
+ * THE THREE THINGS THAT WERE WRONG WITH THE FIRST VERSION OF THE ESCAPE.
+ *
+ * None of them was visible in a test of the rule itself, and all three were
+ * found by measuring the simulation. They are the cases worth keeping.
+ */
+describe('the escape survives contact with the rest of the game', () => {
+    const pinTo = (play, man, on) => {
+        on.coords.x = man.coords.x;
+        on.coords.y = man.coords.y + 20;
+    };
+    const fresh = (carrying = false) => {
+        const play = createPlayForDifficulty();
+        lineUp(play, 'pass2', 'cover2');
+        const man = play.game.objects.find((o) => o.settings.position === 'wr1');
+        const on = play.game.objects.find((o) => o.settings.position === 'db1');
+        man.state.hasBall = carrying;
+        return { play, man, on };
+    };
+
+    /**
+     * A FRAME OF DAYLIGHT IS NOT LETTING GO. `separate` settles a covered pair
+     * at almost exactly the distance at which the collision boxes stop
+     * touching, so a locked pair flickers in and out of contact on ALTERNATE
+     * frames: traced, 50.0 then 50.8 units against a box reaching 50.4. Resetting
+     * on the first frame out meant no receiver ever passed 2.00 seconds against
+     * a 2.00 threshold while 1.4 real two-second locks happened every play.
+     */
+    test('a one-frame gap does not wipe out two seconds of contact', () => {
+        const ctx = fresh();
+        const step = 1 / CFG.simHz;
+        // Alternate in and out of the box, which is what a real lock does.
+        for (let t = 0; t < CFG.escape.after * 1.3; t += step) {
+            const on = Math.round(t / step) % 2 === 0;
+            if (on) pinTo(ctx.play, ctx.man, ctx.on);
+            else ctx.on.coords.y = ctx.man.coords.y + 1e4;
+            breakContact(ctx.play, step);
+            if (ctx.man.state.escape) break;
+        }
+        expect(ctx.man.state.escape).toBeTruthy();
+    });
+
+    /** ...but a real separation still does. */
+    test('letting go for longer than the forgiveness does reset it', () => {
+        const ctx = fresh();
+        const step = 1 / CFG.simHz;
+        const hold = (seconds, on) => {
+            for (let t = 0; t < seconds; t += step) {
+                if (on) pinTo(ctx.play, ctx.man, ctx.on);
+                else ctx.on.coords.y = ctx.man.coords.y + 1e4;
+                breakContact(ctx.play, step);
+            }
+        };
+        hold(CFG.escape.after * 0.9, true);
+        hold(CFG.escape.forgive * 3, false);
+        hold(CFG.escape.after * 0.9, true);
+        expect(ctx.man.state.escape).toBeFalsy();
+    });
+
+    /**
+     * A CARRIER IS BROUGHT DOWN WITHIN `settings.tackled` FRAMES OF CONTACT,
+     * which is at most an eighth of a second, so he can never be entangled for
+     * two seconds and a stiff-arm on the clock could never play. Measured
+     * against the clock it never did: 46 breaks over 340 plays, every one a juke.
+     */
+    test('a carrier stiff-arms off his tackle progress, not off the clock', () => {
+        const ctx = fresh(true);
+        const step = 1 / CFG.simHz;
+        ctx.man.settings.tackled = 8;
+        // Nowhere near two seconds, but half way to being brought down.
+        pinTo(ctx.play, ctx.man, ctx.on);
+        breakContact(ctx.play, step);
+        expect(ctx.man.state.escape).toBeFalsy();
+
+        ctx.man.state.tackle = 8 * CFG.escape.stiffAt;
+        pinTo(ctx.play, ctx.man, ctx.on);
+        breakContact(ctx.play, step);
+        expect(ctx.man.state.escape).toBeTruthy();
+        expect(ctx.man.state.escape.kind).toBe('stiff-arm');
+        // ...and it buys him something: part of the progress comes off.
+        expect(ctx.man.state.tackle).toBeLessThan(8 * CFG.escape.stiffAt);
+        // But never all of it, or he could not be tackled at all.
+        expect(ctx.man.state.tackle).toBeGreaterThan(0);
+    });
+
+    /**
+     * THE DRIVE IS HELD FOR THE WHOLE GRACE AND NEVER ACCUMULATES.
+     *
+     * Both halves were wrong at once. Struck on a single frame, the move bought
+     * nothing, because a velocity written once means nothing to a controller
+     * that re-derives velocity every frame: a pair 1.90m apart at the break were
+     * 2.00m apart when it ended. Re-asserted with a `+=`, thirty-six frames of a
+     * quarter of top speed compounded to six times his maximum and threw
+     * carriers off the field, which took fifty-point plays to ZERO.
+     */
+    test('a sustained break never makes anybody faster than he is', () => {
+        for (const carrying of [false, true]) {
+            const ctx = fresh(carrying);
+            const step = 1 / CFG.simHz;
+            ctx.man.settings.tackled = 8;
+            ctx.man.state.tackle = carrying ? 8 : 0;
+            for (let t = 0; t < CFG.escape.after * 1.3 && !ctx.man.state.escape; t += step) {
+                pinTo(ctx.play, ctx.man, ctx.on);
+                breakContact(ctx.play, step);
+            }
+            expect(ctx.man.state.escape).toBeTruthy();
+            const top = ctx.man.physics.maxSpeed;
+            // Run the whole grace out, with the route contributing nothing.
+            for (let t = 0; t < CFG.escape.grace; t += step) {
+                breakContact(ctx.play, step);
+                expect(Math.abs(ctx.man.state.ySpeed)).toBeLessThanOrEqual(top + 1e-9);
+                expect(Math.abs(ctx.man.state.xSpeed)).toBeLessThanOrEqual(top + 1e-9);
+            }
+            // ...and it ends. Nothing is left running.
+            expect(ctx.man.state.escape).toBeFalsy();
+        }
+    });
+
+    /** And it is genuinely sustained: the move is still driving him a third of
+     *  the way through, which a one-frame impulse would not be. */
+    test('the drive is still working part way through the grace', () => {
+        const ctx = fresh(false);
+        const step = 1 / CFG.simHz;
+        for (let t = 0; t < CFG.escape.after * 1.3 && !ctx.man.state.escape; t += step) {
+            pinTo(ctx.play, ctx.man, ctx.on);
+            breakContact(ctx.play, step);
+        }
+        expect(ctx.man.state.escape).toBeTruthy();
+        // Wipe his speed as his route would, then let the break re-assert it.
+        for (let t = 0; t < CFG.escape.grace / 3; t += step) {
+            ctx.man.state.ySpeed = 0;
+            breakContact(ctx.play, step);
+        }
+        expect(Math.abs(ctx.man.state.ySpeed))
+            .toBeGreaterThan(ctx.man.physics.maxSpeed * CFG.escape.juke * 0.5);
+    });
+});
+
+/**
+ * WHICH WAY THE JUKE LEANS, WHICH IS THE ONE THING NO SIMULATION TEST CAN SEE.
+ *
+ * A sign error here draws a man leaning INTO the defender he is supposed to be
+ * leaving, and every number in the game would still be right. So the property is
+ * asserted through the rig's real geometry rather than against the arithmetic
+ * that produced it: the two facts below were measured against three r160 with
+ * `rotation.order` YXZ, and the test rebuilds the head's world position from
+ * them and asks which side it ended up on.
+ *
+ *   - the figure's local +X maps to world (cos yaw, -sin yaw)
+ *   - a POSITIVE rotation.z tilts the head toward local -X
+ *
+ * `away` is the break direction in SIMULATION y, and `simToWorld` maps sim y to
+ * world z, so a correct lean puts the head on the same side of him as `away`.
+ */
+describe('a juke leans the way he is going', () => {
+    /** Where the head ends up, in world x/z, for a given yaw and roll. */
+    const headAt = (yaw, roll) => {
+        // Local up tilts toward local -X by `roll` (measured, see above).
+        const localX = -Math.sin(roll);
+        // ...and local +X is world (cos yaw, -sin yaw).
+        return { x: localX * Math.cos(yaw), z: localX * -Math.sin(yaw) };
+    };
+
+    test('the head goes to the side he broke toward, whichever way he faces', () => {
+        const roll = CFG.pose.juke.roll;
+        // Downfield for the offense, and the two sidelines, so a sign that only
+        // happens to work on one heading cannot pass.
+        for (const facing of [Math.PI / 2, -Math.PI / 2, Math.PI / 4, 2.6]) {
+            for (const away of [1, -1]) {
+                const head = headAt(facing, jukeRoll(away, facing, roll));
+                // sim +y is world +z, so `away` is the sign of world z he broke
+                // toward. Only count headings where the lean is not edge-on.
+                if (Math.abs(Math.sin(facing)) < 0.2) continue;
+                expect(Math.sign(head.z)).toBe(away);
+            }
+        }
+    });
+
+    test('a man running straight at the camera does not roll at all', () => {
+        // Facing along world +z, a cross-field break is straight toward or away
+        // from the viewer and there is no sideways lean to draw.
+        expect(jukeRoll(1, 0, CFG.pose.juke.roll)).toBeCloseTo(0, 9);
+    });
+
+    /** The stiff-arm goes out at the man, which is the opposite side. */
+    test('the stiff-arm reaches toward the defender, not away from him', () => {
+        for (const facing of [Math.PI / 2, -Math.PI / 2]) {
+            for (const away of [1, -1]) {
+                const arm = stiffArmSide(away, facing);
+                const head = headAt(facing, jukeRoll(away, facing, 0.3));
+                // The lean and the arm are on opposite sides of him.
+                expect(Math.sign(head.z)).toBe(away);
+                expect(arm).toBe(away * Math.sin(facing) >= 0 ? 1 : -1);
+            }
+        }
+    });
+
+    /** ...and it never takes the arm that is holding the ball. */
+    test('a stiff-arm never uses the carrying arm', () => {
+        for (const want of [1, -1]) {
+            const side = stiffSide({ stiffArmSide: want, carry: 'tuck' });
+            expect(side).not.toBe(THROWING_SIDE);
+        }
+        // A man not carrying may use either.
+        expect(stiffSide({ stiffArmSide: THROWING_SIDE, carry: 'none' }))
+            .toBe(THROWING_SIDE);
+    });
+
+    /** The envelope rises, holds and falls inside the grace. */
+    test('the move plays out and is over before the grace ends', () => {
+        const g = CFG.escape.grace;
+        const snap = CFG.pose.juke.snap;
+        expect(escapeAmount({ at: 0 }, g, snap)).toBe(0);
+        expect(escapeAmount({ at: snap }, g, snap)).toBeCloseTo(1, 6);
+        expect(escapeAmount({ at: g / 2 }, g, snap)).toBeCloseTo(1, 6);
+        expect(escapeAmount({ at: g }, g, snap)).toBe(0);
+        expect(escapeAmount(null, g, snap)).toBe(0);
+    });
+});
+
+/**
+ * EVERY POSE BRANCH IS ACTUALLY EXECUTED, WHICH IS THE ONLY WAY TO CATCH THIS.
+ *
+ * `poseFigure` shipped a stiff-arm branch that called `stiffSide(act)` while the
+ * declaration said `stiffArmSide`, and it reached a visitor's browser. NOTHING IN
+ * THE SUITE COULD HAVE CAUGHT IT: `&&` short-circuits, so the undefined name is
+ * only evaluated on a frame where somebody is actually stiff-arming, and no test
+ * called `poseFigure` at all. The simulation tests all passed, the pose helpers
+ * were unit tested directly, and the game crashed the first time a carrier fought
+ * somebody off.
+ *
+ * So this drives the real function through every branch with a figure made of
+ * plain objects. It is plain objects deliberately: the Three stub is a Proxy that
+ * swallows every assignment, so a rotation written onto a stubbed mesh is
+ * invisible and a test built on one cannot tell a pose from a no-op.
+ */
+describe('every pose the game can ask for actually runs', () => {
+    const arm = (side) => ({
+        userData: { armSide: side, restX: 0.1, restZ: side * 0.15,
+            forearm: { rotation: { x: 0, y: 0, z: 0 } } },
+        rotation: { x: 0, y: 0, z: 0 },
+    });
+    const figure = () => ({ userData: { arms: [arm(1), arm(-1)] } });
+
+    /** Every shape of `act` view.js can hand over. */
+    const ACTS = {
+        running: {},
+        reaching: { reach: 1, reachAt: { x: 0.2, y: 1.7, z: 0.5 } },
+        tackling: { tackle: 1 },
+        blocking: { block: 1 },
+        'throwing (mid-release)': { carry: 'throw', throwT: 0.5, snapT: 1 },
+        'under centre': { carry: 'throw', throwT: 0, snapT: 0 },
+        posting: { posting: 1, carry: 'none' },
+        tucking: { carry: 'tuck' },
+        'stiff-arming, free side': { stiffArm: 1, stiffArmSide: -1, carry: 'tuck' },
+        'stiff-arming, ball side': { stiffArm: 1, stiffArmSide: 1, carry: 'tuck' },
+        'stiff-arming, no ball': { stiffArm: 1, stiffArmSide: 1, carry: 'none' },
+        'knocked down': { down: 1 },
+    };
+
+    for (const [name, act] of Object.entries(ACTS)) {
+        test(`${name} poses without throwing`, () => {
+            const f = figure();
+            // Several frames, because the pose eases toward its target and a
+            // single frame barely leaves the rest position.
+            for (let i = 0; i < 40; i += 1) poseFigure(f, 6, i * 0.3, act, 1 / 60);
+            for (const a of f.userData.arms) {
+                expect(Number.isFinite(a.rotation.x)).toBe(true);
+                expect(Number.isFinite(a.rotation.z)).toBe(true);
+                expect(Number.isFinite(a.userData.forearm.rotation.x)).toBe(true);
+            }
+        });
+    }
+
+    /**
+     * AND THE STIFF-ARM IS ONE ARM. Both arms out is a block, which is a
+     * different pose and reads as one from the play camera.
+     */
+    test('a stiff-arm extends one arm and leaves the other running', () => {
+        const held = figure();
+        const free = figure();
+        for (let i = 0; i < 40; i += 1) {
+            poseFigure(held, 6, i * 0.3, { carry: 'tuck' }, 1 / 60);
+            poseFigure(free, 6, i * 0.3,
+                { carry: 'tuck', stiffArm: 1, stiffArmSide: -1 }, 1 / 60);
+        }
+        const at = (f, side) => f.userData.arms.find((a) => a.userData.armSide === side);
+        // The arm that did the stiff-arming has moved.
+        expect(Math.abs(at(free, -1).rotation.x - at(held, -1).rotation.x))
+            .toBeGreaterThan(0.05);
+        // ...and the one holding the ball is still holding it.
+        expect(at(free, 1).rotation.x).toBeCloseTo(at(held, 1).rotation.x, 6);
     });
 });

@@ -359,6 +359,37 @@ const STEER_DEADBAND = 0.15;
  */
 const LEAD_WINDOW = 0.15;
 
+/**
+ * HOW MUCH OF A BLOCKER'S SHOVE A MAN BREAKING FREE IGNORES. 0 IS THE PORT.
+ *
+ * WHY ANYBODY IS STUCK IN THE FIRST PLACE, AND IT IS NOT THE RESPONSE. The
+ * ported `checkCollisions` fires on box overlap, and a non-lineman's box reaches
+ * 0.81m by 0.88m, so two of them detect each other at up to 1.76m apart. But
+ * `play.separate` rests bodies at 1.45m, which is INSIDE that. Two men running
+ * alongside each other are therefore permanently colliding, and the response
+ * fires every frame for as long as they are adjacent: the receiver's ySpeed is
+ * hard-set to 40% of his top speed, over and over, for the whole play.
+ *
+ * MEASURED OVER 340 PLAYS, and the shape of it is the proof. Lock episodes are
+ * BIMODAL: the median lasts 0.03 seconds and the 99th percentile lasts 4.25,
+ * with the longest running the entire play. A physical collision would have a
+ * spread of durations. A latch has two outcomes, and this is a latch. 1.37
+ * locks per play last two seconds or longer, and a quarter of every lock on the
+ * BALL CARRIER lasts that long, which is QA's "they stay stuck together all the
+ * way up the field".
+ *
+ * SO THE ESCAPE IS A SHED, THE SAME SHAPE AS `rushShed`, pointing the other way.
+ * A blitzer fights through a blocker; this is a receiver fighting through a
+ * defender who has been hanging on him. At 1 he ignores the shove completely
+ * for the length of `escape.grace` and keeps the speed he had.
+ *
+ * IT IS DELIBERATELY NARROW, for the reason `rushShed` is. It is earned by
+ * `escape.after` seconds of UNBROKEN contact with the SAME man, it lasts a
+ * fraction of a second, and it goes on cooldown afterwards, so it is a move
+ * rather than a permanent exemption from being covered.
+ */
+const ESCAPE_SHOVE = 1;
+
 /** The fraction a team's speed and acceleration move at full difficulty. Up
  *  here because `formationSettings` has to hand it to the ported formations
  *  class. See `difficulty` in the config below for what it means. */
@@ -523,6 +554,9 @@ function formationSettings() {
         // `steerDeadband` in motion.js for what the ported steer does without
         // it, and `STEER_DEADBAND` above for why this is the value.
         steerDeadband: STEER_DEADBAND / UNITS_TO_METRES,
+        // How much of a defender's shove a man breaking free ignores, while
+        // `play.breakContact` says he is breaking free. See `ESCAPE_SHOVE`.
+        escapeShove: ESCAPE_SHOVE,
         /** How hard the game is leaning right now, -1 to +1, written by
          *  `play.setDifficulty` before each line-up. See `difficulty` below. */
         difficulty: 0,
@@ -1123,6 +1157,97 @@ const EXESNOHS_CONFIG = {
     lead: {
         /** Seconds of travel averaged into the heading a pass is led off. */
         window: LEAD_WINDOW,
+    },
+
+    /**
+     * BREAKING FREE OF A MAN WHO HAS BEEN HANGING ON YOU. See `ESCAPE_SHOVE`
+     * above for why anybody is stuck, which is a latch rather than physics, and
+     * `play.breakContact` for the mechanic.
+     *
+     * TWO MOVES, CHOSEN BY WHAT HE IS DOING, because they are not the same
+     * event. A man CARRYING the ball with a tackler on him stiff-arms: he keeps
+     * driving forward and puts a hand in the tackler's chest. A man running a
+     * ROUTE jukes: he cuts hard away and leaves the defender going the other
+     * way. Each is the move that situation actually calls for, and they read
+     * completely differently from sixty metres up, which is the point.
+     */
+    escape: {
+        /** Seconds of UNBROKEN contact with the SAME opponent before a man has
+         *  earned a way out. QA asked for two and the measured distribution
+         *  agrees: 1.37 locks a play already last this long, so it fires about
+         *  once a play rather than constantly or never. */
+        after: 2.0,
+        /** Seconds the break buys him. Long enough to get clear at the impulse
+         *  below (about 2.5m of separation, well outside the 1.76m at which the
+         *  boxes find each other again) and short enough to be a move. */
+        grace: 0.45,
+        /**
+         * THERE IS NO SEPARATE COOLDOWN, AND ONE WAS WRITTEN AND REMOVED.
+         *
+         * `after` already is the cooldown. A break resets the contact clock to
+         * zero, so doing it twice means being held for two more unbroken
+         * seconds, and a man who has just thrown somebody off is not being held
+         * at all for most of that. The extra knob was 1.5s, and 1.5 plus the
+         * 0.45 of grace is 1.95, which is LESS than the 2.0 it would have had
+         * to beat: it could never bind, on any path, and it would have sat in
+         * config looking like a safeguard while doing nothing.
+         */
+        /**
+         * SECONDS OF DAYLIGHT THAT DO NOT COUNT AS LETTING GO.
+         *
+         * WITHOUT THIS THE CLOCK NEVER RAN, and the reason is worth keeping.
+         * Contact is a box test, and `separate` settles a covered pair at very
+         * nearly the exact distance at which the boxes stop touching. Traced
+         * frame by frame, a locked wr1/db1 pair sat with 50.0 and then 50.8
+         * units between them on ALTERNATE FRAMES against a box reaching 50.4:
+         * in contact, out, in, out, for the whole play. Deleting the clock the
+         * first frame a pair came apart therefore reset it every other frame,
+         * and the highest any receiver reached was 2.00 seconds against a 2.00
+         * threshold while 1.4 genuine two-second locks were happening per play.
+         *
+         * So a momentary gap is forgiven and the clock keeps running through it.
+         * 0.15s is twelve frames at simHz, which swallows the flicker
+         * comfortably and is still far short of anything a person would call
+         * getting free.
+         */
+        forgive: 0.15,
+        /** The sideways impulse a JUKE is worth, as a fraction of his own top
+         *  speed. Applied away from the defender, once, on the frame he breaks.
+         *  It is what actually separates them: the grace alone only stops him
+         *  being slowed, it does not move him anywhere. */
+        juke: 0.9,
+        /** ...and the forward impulse a STIFF-ARM is worth. Smaller, and
+         *  forward rather than sideways, because a carrier fending somebody off
+         *  is holding his line rather than changing it. */
+        drive: 0.5,
+        /** How hard the man being shed is pushed off, as a fraction of top
+         *  speed. He is not frozen: a defender who simply stops dead reads as a
+         *  bug rather than as somebody who has been beaten. */
+        shed: 0.35,
+
+        /**
+         * AND A BALL CARRIER IS ON A COMPLETELY DIFFERENT CLOCK, BECAUSE HE HAS
+         * TO BE.
+         *
+         * A CARRIER CAN NEVER BE ENTANGLED FOR TWO SECONDS. `checkCollisions`
+         * adds one to `state.tackle` for every frame a defender overlaps the man
+         * with the ball, and `settings.tackled` is between 1 and 10, so he is
+         * DOWN within ten frames of first contact: an eighth of a second. Asking
+         * him to survive two seconds of it before he may stiff-arm is asking for
+         * an animation that can never play, and measured against the two second
+         * rule it never did: 46 breaks over 340 plays and every single one a
+         * juke.
+         *
+         * So the carrier's trigger is his own TACKLE PROGRESS rather than a
+         * clock. At 0.5 he is half way to being brought down, which is the
+         * moment the move is for, and it scales itself to a man who shrugs off
+         * ten frames and one who goes down in two.
+         */
+        stiffAt: 0.5,
+        /** ...and how much of the progress towards being tackled the stiff-arm
+         *  wipes off. NOT all of it: a carrier who could reset the count every
+         *  time would be untackleable, and it fires once per grace either way. */
+        relief: 0.6,
     },
 
     /**
@@ -1785,6 +1910,56 @@ const EXESNOHS_CONFIG = {
              * is the whole figure about its feet, the same as the tackle.
              */
             lean: 0.14,
+        },
+
+        /**
+         * THE STIFF-ARM: one hand in the tackler's chest, and NOTHING ELSE
+         * CHANGES.
+         *
+         * It is deliberately a ONE-ARMED pose, and that is the whole difference
+         * between it and the block above. A blocker puts both hands on somebody
+         * and stops running. A carrier stiff-arming is running as hard as he
+         * can with one arm out, and the other arm is still wrapped round the
+         * ball, so the tuck has to survive it. That reads as a stiff-arm from
+         * the play camera and two hands out does not: two hands out is a block.
+         *
+         * THE HAND GOES FURTHER OUT THAN A BLOCK'S AND LOWER THAN A POST. `z`
+         * 0.62 against the block's 0.46 is a straight arm rather than a bent
+         * one, which is the shape the move is named for, and `y` 1.34 puts it
+         * at the chest of a man the same height rather than at his face.
+         */
+        stiffArm: {
+            hand: { x: 0.30, y: 1.34, z: 0.62 },
+            /** He leans into it, a little less than a blocker does: he is
+             *  running through the contact rather than settling into it. */
+            lean: 0.10,
+            /** Seconds to throw the arm out. Faster than `blend`, because a
+             *  stiff-arm that eases in over a tenth of a second is a man slowly
+             *  raising his hand. */
+            snap: 0.06,
+        },
+
+        /**
+         * THE JUKE: a hard roll away from the man he is leaving.
+         *
+         * IT IS NOT AN ARM POSE AT ALL, and trying to make it one is how this
+         * would fail. A juke is the whole body changing direction, the arms
+         * keep running, and from a camera raked this far over the field the
+         * readable part is the LEAN plus the sideways travel the simulation is
+         * already giving him. The rig has no waist, so like the tackle and the
+         * block this is the whole figure about its own feet, rolled on its
+         * local Z rather than pitched on X.
+         *
+         * 0.30 radians is roughly a sprinter's angle coming out of a hard cut,
+         * and at this figure scale it carries the head about 1.1m across, which
+         * is visible next to a defender going the other way.
+         */
+        juke: {
+            roll: 0.30,
+            /** Seconds to roll into it and back out. The whole move is over
+             *  inside `escape.grace`, so he is upright again before the freedom
+             *  it bought him runs out. */
+            snap: 0.08,
         },
     },
 

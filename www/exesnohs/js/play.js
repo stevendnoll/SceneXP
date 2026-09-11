@@ -249,12 +249,250 @@ export function tick(play) {
     // circles. It reads the position AFTER the shove and the clamp, because
     // those move him too and a man being shoved is not a man who has arrived.
     settleArrived(play);
+    // AND WHOEVER HAS HAD SOMEBODY HANGING ON HIM LONG ENOUGH GETS OUT OF IT.
+    // Also after the shove, because the shove is what decides how far apart two
+    // men actually are this frame, and that is the whole question here.
+    breakContact(play, 1 / CFG.simHz);
     // ...and once everybody has finished being moved, record where each of them
     // is actually going, which is what a pass is led off. It has to be the last
     // thing in the frame for the same reason `settleArrived` is late: separate
     // and keepInbounds move people, and a heading measured before them is a
     // heading for a journey the player did not take.
     markHeading(play);
+}
+
+/**
+ * WHAT A BREAK DOES TO A MAN'S SPEED, ON EVERY FRAME OF ITS GRACE.
+ *
+ * Re-asserted rather than struck once, because his route re-derives his velocity
+ * every frame and would otherwise wipe the move out within five (see the note in
+ * `breakContact`). The envelope eases to nothing across the grace, so he finishes
+ * the move travelling on his route again rather than snapping back onto it.
+ *
+ * A JUKE IS SIDEWAYS AND A STIFF-ARM IS FORWARD, which is the difference between
+ * changing your line and holding it.
+ */
+function driveEscape(obj, escape, E) {
+    const s = obj.state;
+    const top = obj.physics.maxSpeed;
+    // 1 at the moment of the break, 0 at the end of it, smooth at both ends.
+    const envelope = Math.cos(Math.min(1, escape.at / E.grace) * (Math.PI / 2));
+    if (escape.kind === 'stiff-arm') {
+        /**
+         * FORWARD ONLY, AND NOTHING IS ADDED TO HIS LATERAL SPEED.
+         *
+         * AN EARLIER VERSION DID `s.ySpeed +=` HERE and it was a bad bug rather
+         * than a bad number. This runs on EVERY frame of the grace, so a `+=`
+         * accumulates: thirty-six frames of a quarter of top speed compounded to
+         * roughly six times his maximum, and carriers were flung off the field
+         * sideways. Measured, it took fifty-point plays from 1.8% of throws to
+         * ZERO and the mean play from 12.16 points to 8.63.
+         *
+         * A stiff-arm is a man HOLDING HIS LINE through contact, so holding his
+         * line is all it does. `Math.max` cannot slow him down either, which
+         * matters because his own route is usually asking for more than this.
+         */
+        s.xSpeed = Math.max(s.xSpeed, top * E.drive * envelope);
+    } else {
+        // A juke IS a change of line, so this one is an assignment. Clamped to
+        // his own top speed for the same reason: nothing here may make a man
+        // faster than he is.
+        const want = escape.away * top * E.juke * envelope;
+        s.ySpeed = Math.max(-top, Math.min(top, want));
+    }
+}
+
+/**
+ * A MAN WHO HAS BEEN COVERED FOR TWO SECONDS BREAKS FREE. QA, 2026-09-11.
+ *
+ * WHAT HE IS BREAKING OUT OF IS A LATCH, NOT A COLLISION. The ported
+ * `checkCollisions` fires on box overlap, and a non-lineman's box reaches 0.81m
+ * by 0.88m, so two of them find each other up to 1.76m apart. `separate` rests
+ * bodies at 1.45m, INSIDE that. Two men running alongside each other are
+ * therefore colliding on every single frame, and every frame the receiver's
+ * ySpeed is hard-set to 40% of his top speed. He cannot get away, because the
+ * thing holding him is not a push he can out-run: it is an assignment that
+ * re-fires forever.
+ *
+ * THE MEASURED SHAPE PROVES IT. Over 340 plays, lock episodes are bimodal: the
+ * median lasts 0.03 seconds and the 99th percentile 4.25, the longest running
+ * the whole play. Physics gives a spread; a latch gives two outcomes. 1.37 locks
+ * a play last two seconds or more, and 25% of every lock on the ball CARRIER
+ * does, which is the "stuck together all the way up the field" that was
+ * reported.
+ *
+ * WHAT THIS DOES NOT DO IS SHRINK ANY BOX. The 1.76m detection against the
+ * 1.45m rest distance is load-bearing: `separate`'s own note explains that the
+ * separation must stay INSIDE the collision boxes or a tackle could never fire
+ * and no play would ever end. So the geometry stays exactly as it is and the
+ * man is given a way OUT of it instead, which is also the thing that is worth
+ * watching.
+ *
+ * IT IS EARNED, BRIEF, AND THEN UNAVAILABLE. Two seconds of unbroken contact
+ * with the SAME opponent, a fraction of a second of freedom, then a cooldown.
+ * That is the same discipline `rushShed` is written with, and for the same
+ * reason: a permanent exemption from being covered is not a football game.
+ *
+ * ONLY THE OFFENCE'S SKILL PLAYERS, never the line. A lineman who could shed
+ * his man is a lineman not blocking, and `rushShed`'s own note records what
+ * happened the last time pass protection was loosened by accident.
+ */
+export function breakContact(play, dt) {
+    const E = CFG.escape;
+    const st = play.playState.state;
+    const step = dt > 0 ? dt : 1 / CFG.simHz;
+    // The same box test `motion.checkCollisions` builds, which is the thing
+    // actually doing the holding. Half-extents are the ported 5 and 6 for a
+    // non-lineman, scaled and padded exactly as motion.js scales and pads them.
+    const hx = 5 * CFG.collisionScale + CFG.collisionPad;
+    const hy = 6 * CFG.collisionScale + CFG.collisionPad;
+    let broke = 0;
+
+    for (const obj of play.game.objects) {
+        if (!obj.state || !obj.settings || obj.settings.benched) continue;
+        if (obj.settings.team !== 0) continue;
+        const skill = obj.settings.positionGroup === 'wr'
+            || obj.settings.position === 'qb';
+        if (!skill) continue;
+        const s = obj.state;
+
+        /**
+         * A BREAK IS HELD FOR ITS WHOLE LENGTH, NOT STRUCK ONCE.
+         *
+         * THE FIRST VERSION SET THE SPEED ON ONE FRAME AND IT BOUGHT ALMOST
+         * NOTHING: measured, a pair 1.90m apart at the break were 2.00m apart
+         * when the grace ended and 2.11m a second later, against a box that
+         * finds them again at 1.76m. He had not got away at all.
+         *
+         * The reason is that a velocity written once means nothing to a
+         * controller that re-derives velocity every frame. His route steers him
+         * back at his own line at `accel` per frame, and against a juke worth
+         * about 2 units that is gone in five frames. So the drive is re-asserted
+         * every frame of the grace, under an ease-out envelope, and what the
+         * route gets to do is bend it rather than erase it.
+         */
+        if (s.escape) {
+            s.escape.at += step;
+            if (s.escape.at >= E.grace) {
+                s.escape = null;
+            } else {
+                driveEscape(obj, s.escape, E);
+                // He is getting away, not being held: no clock runs.
+                s.contact = null;
+                continue;
+            }
+        }
+
+        /**
+         * A CLOCK PER OPPONENT, AND THE FIRST VERSION KEPT ONE FOR "THE NEAREST
+         * MAN" INSTEAD. That was measurably wrong and it is worth saying why,
+         * because it looked completely reasonable.
+         *
+         * Tracking only the closest defender means the clock restarts every time
+         * somebody else drifts a few centimetres nearer, and in a game where a
+         * receiver is routinely inside two defenders' boxes at once that is
+         * constant: measured, the nearest man changes six times a play. So the
+         * clock never ran: across 85 plays the highest `lockedFor` ANY receiver
+         * reached was 2.00 seconds against a 2.00 threshold, and the feature
+         * fired 14 times in 340 plays while 1.37 genuine two-second locks were
+         * happening per play. The pair was locked the whole time. The bookkeeping
+         * was watching the wrong thing.
+         *
+         * One clock per opponent is what "entangled with a defender for two
+         * seconds" actually means, and a man brushing past resets only his own.
+         */
+        const contact = s.contact || (s.contact = {});
+        const touching = new Set();
+        for (const other of play.game.objects) {
+            if (other.settings.benched || other.settings.team !== 1) continue;
+            if (Math.abs(other.coords.x - obj.coords.x) > hx * 2) continue;
+            if (Math.abs(other.coords.y - obj.coords.y) > hy * 2) continue;
+            touching.add(other.settings.position);
+        }
+
+        /**
+         * A FRAME OF DAYLIGHT IS NOT LETTING GO, and the first version thought
+         * it was. `separate` settles a covered pair at very nearly the exact
+         * distance at which the collision boxes stop touching, so a genuinely
+         * locked pair flickers across the test on ALTERNATE FRAMES: traced, a
+         * wr1/db1 pair sat at 50.0 then 50.8 units apart against a box reaching
+         * 50.4, for the whole play. Dropping the clock on the first frame out
+         * therefore reset it every other frame, and no receiver ever got past
+         * 2.00 seconds against a 2.00 threshold. See `escape.forgive`.
+         *
+         * ELAPSED TIME SINCE THE CONTACT BEGAN is what counts, not a sum of the
+         * frames he was touching. "Entangled for more than two seconds" is a
+         * statement about how long he has been stuck, and with contact flickering
+         * every other frame a sum of touching frames accrues at HALF RATE and
+         * reads two seconds off a four second lock. The entry only survives while
+         * he is genuinely held, because a real gap longer than `forgive` deletes
+         * it outright.
+         */
+        let on = null;
+        let held = 0;
+        for (const other of play.game.objects) {
+            if (other.settings.benched || other.settings.team !== 1) continue;
+            const pos = other.settings.position;
+            const near = touching.has(pos);
+            const c = contact[pos];
+            if (!near && !c) continue;
+            if (!c) { contact[pos] = { held: step, off: 0 }; continue; }
+            c.held += step;
+            if (near) c.off = 0; else c.off += step;
+            if (c.off > E.forgive) { delete contact[pos]; continue; }
+            // Whoever has been on him LONGEST is the one he is breaking from,
+            // rather than whoever happens to be closest this frame.
+            if (c.held > held) { held = c.held; on = other; }
+        }
+
+        /**
+         * A CARRIER IS ON HIS TACKLE PROGRESS, NOT ON THE CLOCK, and he has to
+         * be: `checkCollisions` brings him down within `settings.tackled` frames
+         * of contact, which is at most an eighth of a second, so two seconds of
+         * being entangled is a state he cannot reach. See `escape.stiffAt`.
+         */
+        const carrying = s.hasBall === true;
+        const limit = obj.settings.tackled || 0;
+        const grabbed = carrying && limit > 0 && s.tackle >= limit * E.stiffAt;
+
+        // NO SEPARATE COOLDOWN IS NEEDED. The clocks are dropped on the break
+        // below and held empty for the grace above, so the earliest a man can do
+        // this twice is `grace` plus a further `after` of unbroken contact. See
+        // config's `escape` block for the cooldown that was written and removed
+        // for being unable to bind.
+        if (!on || !(grabbed || held >= E.after)) continue;
+
+        /**
+         * HE IS OUT. A STIFF-ARM IF HE HAS THE BALL, A JUKE IF HE DOES NOT.
+         *
+         * The impulse is the part that actually separates them. The grace alone
+         * only stops him being slowed down, and two men running alongside at the
+         * same speed who are no longer being slowed are still two men running
+         * alongside: nothing in the ported steer would ever take him away from a
+         * defender, because his route does not know a defender exists.
+         */
+        // Away from the man he is leaving. `away` is -1 or +1 across the field.
+        const away = (obj.coords.y - on.coords.y) >= 0 ? 1 : -1;
+        s.escape = {
+            at: 0, kind: carrying ? 'stiff-arm' : 'juke',
+            away, against: on.settings.position,
+        };
+        driveEscape(obj, s.escape, E);
+
+        // FIGHTING OFF A TACKLE IS WHAT A STIFF-ARM IS FOR. Part of the progress
+        // toward being brought down comes off, never all of it: a carrier who
+        // could reset the count every time could not be tackled at all.
+        if (carrying) s.tackle = Math.max(0, s.tackle * (1 - E.relief));
+
+        // ...and the man being shed is beaten rather than frozen. He keeps a
+        // little of what he had and is pushed off, which reads as having been
+        // got past.
+        on.state.ySpeed = on.state.ySpeed * E.shed - away * on.physics.maxSpeed * E.shed;
+        on.state.xSpeed *= E.shed;
+        s.contact = null;
+        broke += 1;
+    }
+    return broke;
 }
 
 /**

@@ -850,6 +850,56 @@ export class MotionClass {
     return route && route.type === 'blitz' ? this.rushShed() : 0;
   }
 
+  /**
+   * ...AND THE SAME SHED POINTING THE OTHER WAY, FOR A MAN BREAKING FREE.
+   *
+   * `rushShed` is a blitzer fighting through a blocker. This is a receiver
+   * fighting through a DEFENDER who has been hanging on him, and it exists
+   * because the ported response has no way out of itself: a non-lineman's box
+   * reaches 1.76m between two men while `play.separate` rests them at 1.45m, so
+   * anybody running alongside anybody is colliding on every frame and the
+   * receiver's speed is hard-set to 40% of his top speed forever. Measured over
+   * 340 plays, 1.37 locks a play last two seconds or longer.
+   *
+   * WHO IS BREAKING FREE IS NOT DECIDED HERE. `play.breakContact` owns the
+   * clock, the two seconds, the cooldown and the impulse, and writes a plain
+   * `state.escape` on a plain object. This file only asks whether the flag is
+   * set, which keeps the rule about what a port may know intact: motion.js
+   * still has no idea what a juke is.
+   *
+   * Injected and defaulting to 0, which is the ported behaviour for a caller
+   * that never mentions it.
+   */
+  escapeShove() {
+    const s = this.settings && this.settings.escapeShove;
+    return typeof s === 'number' && s > 0 ? (s > 1 ? 1 : s) : 0;
+  }
+
+  /** Is this man mid-break, and from whom? A break frees him from the man he
+   *  is breaking from and from nobody else, so a receiver who beats his corner
+   *  can still be brought down by the safety arriving. */
+  // eslint-disable-next-line
+  escapingFrom(obj = {}, object = {}) {
+    const e = obj.state && obj.state.escape;
+    if (!e) return 0;
+    const from = object.settings && object.settings.position;
+    return e.against === from ? this.escapeShove() : 0;
+  }
+
+  /**
+   * WHAT A MAN'S SPEED BECOMES ON CONTACT, on whichever axis the caller is
+   * resolving. `clamped` is the 2D game's own answer, 40% of his top speed in
+   * the direction of the hit, and it is what makes a block a block. A man
+   * breaking free of THIS opponent keeps the speed he already had instead,
+   * which is the whole mechanic: he is no longer being slowed by somebody he
+   * has just beaten.
+   */
+  // eslint-disable-next-line
+  contactSpeed(obj = {}, object = {}, clamped = 0, current = 0) {
+    const free = this.escapingFrom(obj, object);
+    return free > 0 ? (current * free) + (clamped * (1 - free)) : clamped;
+  }
+
   // eslint-disable-next-line
   checkCollisionsToRightSideline(obj = {}, object = {}, set1 = {}, set2 = {}) {
     if ( (set1.x1 >= set2.x1 && set1.x1 <= set2.x2) || (set1.x2 >= set2.x1 && set1.x2 <= set2.x2) ) {
@@ -857,7 +907,9 @@ export class MotionClass {
         if ( set1.team !== set2.team ) {
           if ( ['x', 'wr'].indexOf(obj.settings.positionGroup) !== -1 ) {
             this.audio.collide();
-            obj.state.ySpeed = (obj.physics.maxSpeed * 0.4);
+            // ...AND A MAN BREAKING FREE KEEPS HIS OWN. See `contactSpeed`.
+            obj.state.ySpeed = this.contactSpeed(obj, object,
+              (obj.physics.maxSpeed * 0.4), obj.state.ySpeed);
             // A BLITZER FIGHTS THROUGH IT. See `rushShed`: at 0 this is the
             // ported shove exactly, a dead stop and a shove backwards.
             const shed = this.shedFor(object, set1.pocket);
@@ -893,7 +945,9 @@ export class MotionClass {
         if ( set1.team !== set2.team ) {
           if ( ['x', 'wr'].indexOf(obj.settings.positionGroup) !== -1 ) {
             this.audio.collide();
-            obj.state.xSpeed = ((obj.physics.maxSpeed * 0.4) * -1);
+            // ...AND A MAN BREAKING FREE KEEPS HIS OWN. See `contactSpeed`.
+            obj.state.xSpeed = this.contactSpeed(obj, object,
+              ((obj.physics.maxSpeed * 0.4) * -1), obj.state.xSpeed);
             // A BLITZER FIGHTS THROUGH IT. See `rushShed`: at 0 this is the
             // ported shove exactly, a dead stop and a shove backwards.
             const shed = this.shedFor(object, set1.pocket);
@@ -934,7 +988,9 @@ export class MotionClass {
         if ( set1.team !== set2.team ) {
           if ( ['x', 'wr'].indexOf(obj.settings.positionGroup) !== -1 ) {
             this.audio.collide();
-            obj.state.xSpeed = (obj.physics.maxSpeed * 0.4);
+            // ...AND A MAN BREAKING FREE KEEPS HIS OWN. See `contactSpeed`.
+            obj.state.xSpeed = this.contactSpeed(obj, object,
+              (obj.physics.maxSpeed * 0.4), obj.state.xSpeed);
             // A BLITZER FIGHTS THROUGH IT. See `rushShed`: at 0 this is the
             // ported shove exactly, a dead stop and a shove backwards.
             const shed = this.shedFor(object, set1.pocket);
@@ -975,7 +1031,9 @@ export class MotionClass {
         if ( set1.team !== set2.team ) {
           if ( ['x', 'wr'].indexOf(obj.settings.positionGroup) !== -1 ) {
             this.audio.collide();
-            obj.state.ySpeed = ((obj.physics.maxSpeed * 0.4) * -1);
+            // ...AND A MAN BREAKING FREE KEEPS HIS OWN. See `contactSpeed`.
+            obj.state.ySpeed = this.contactSpeed(obj, object,
+              ((obj.physics.maxSpeed * 0.4) * -1), obj.state.ySpeed);
             // A BLITZER FIGHTS THROUGH IT. See `rushShed`: at 0 this is the
             // ported shove exactly, a dead stop and a shove backwards.
             const shed = this.shedFor(object, set1.pocket);
