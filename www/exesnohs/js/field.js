@@ -122,6 +122,26 @@ export function paintMarkings(doc = document) {
     ctx.lineWidth = Math.max(2, 0.16 * k);
     ctx.strokeRect(originX, originY, fieldW, fieldH);
 
+    /**
+     * ...AND THE END LINES, WHICH THE PAINT NEVER HAD.
+     *
+     * The end zones were filled to the edge of the texture and stopped there,
+     * so the back of each one was a colour change rather than a line. That was
+     * invisible while the near end sat in the last 2% of the frame, and the
+     * portrait lift (see `camera.solve.headroom`) brought it up to 84%, where a
+     * red block simply ending reads as the world running out.
+     *
+     * Inset by half the stroke, because the canvas edge IS the end line and a
+     * centred stroke would paint half of itself off the texture.
+     */
+    const endInset = ctx.lineWidth / 2;
+    for (const x of [endInset, canvas.width - endInset]) {
+        ctx.beginPath();
+        ctx.moveTo(x, originY);
+        ctx.lineTo(x, originY + fieldH);
+        ctx.stroke();
+    }
+
     // Yard lines, one per interval. `segments` of them means `segments - 1`
     // interior lines plus the two goal lines already drawn above.
     ctx.lineWidth = Math.max(1, 0.11 * k);

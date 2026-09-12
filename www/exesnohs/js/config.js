@@ -2119,13 +2119,21 @@ const EXESNOHS_CONFIG = {
          * line. Without ground to land on, the black band would simply move
          * from the top of the screen to the bottom.
          *
-         * DARKER THAN THE FIELD, AND NOT BY A LITTLE. It is outside the
-         * floodlights: the grass here is a value that reads as ground rather
-         * than as a surface anybody plays on, so the eye still takes the lit
-         * rectangle as the subject.
+         * DARKER THAN THE FIELD, AND THE FIRST GO WAS TOO DARK TO COUNT.
+         *
+         * 0x102a1b is 22% of the turf's own value, and sampled off the mobile
+         * screen recording it rendered at (0,10,5) against turf at (0,45,20)
+         * and a night sky at (5,11,16). It was within a couple of values of the
+         * BACKDROP, so the bottom of a phone frame still read as a hole with a
+         * hard red edge above it, which is the exact thing it was added to
+         * prevent.
+         *
+         * 40% of the turf, worked out through the sRGB curve rather than by
+         * eye, lands it around (0,22,10): plainly darker than anything anybody
+         * plays on, and plainly ground rather than sky.
          */
         apron: {
-            colour: 0x102a1b,
+            colour: 0x113a1b,
             beyond: 12,             // metres of it past every edge of the paint
         },
 
