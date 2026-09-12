@@ -681,6 +681,29 @@ const EXESNOHS_CONFIG = {
              */
             minFov: 18,
             maxFov: 60,
+
+            /**
+             * HOW MUCH FRAME MAY SIT ABOVE THE TOP OF THE SCOREBOARD.
+             *
+             * QA ROUND TWENTY-SIX, ITEM 3: "on mobile in portrait the field
+             * could be moved toward the top of the screen, there is a lot of
+             * empty space above the scoreboard". Measured on a 390x846 phone
+             * the board's top corner sat 13.3% down the frame, so an eighth of
+             * the screen was empty night above the tallest thing in the scene.
+             *
+             * The search above pins only the BOTTOM edge of the frame, so on a
+             * phone, where the field's width forces a 60 degree lens that then
+             * sees 66 metres of ground down a 42 metre field, every metre of
+             * spare landed at the top. `camera.liftAim` re-aims the shot until
+             * the board's top corner sits here instead.
+             *
+             * 0.04 IS WHAT LANDSCAPE ALREADY DOES. Every wide shape puts the
+             * board at 2.8%, which is the proportion this game has been
+             * screenshotted at since the board went in, so portrait is being
+             * brought into line rather than given a new look. Anything already
+             * tighter than this is left exactly as it is.
+             */
+            headroom: 0.04,
         },
         near: 0.5,
         far: 400,
@@ -765,7 +788,7 @@ const EXESNOHS_CONFIG = {
              *
              * THE RADIUS IS CAPPED BY THE TIGHTEST SPOT ON THE FIELD, which is
              * a carrier standing on the near try line in the middle. From
-             * there the camera has 3m of room behind before the goal post and
+             * there the camera has 3m of room behind before the end line and
              * 12m to either touchline before the seats, so no circle wider
              * than sqrt(3^2 + 12^2), about 12.4m, has anywhere to be. 12.6m is
              * that limit less a whisker, and it puts a player at roughly a
@@ -860,8 +883,9 @@ const EXESNOHS_CONFIG = {
      *
      * Width is why the number stops at 2.2 rather than climbing until the
      * height looks right. Reaching a comfortable 30 pixels of height would
-     * take about 3.9, and a 6.8m player is taller than the goal post crossbar
-     * and a third the width of the field. The rest of the legibility comes
+     * take about 3.9, and a 6.8m player is twice the height of a real goal
+     * post's crossbar and a third the width of the field. The rest of the
+     * legibility comes
      * from the ground markers below, which do not foreshorten at all.
      */
     figureScale: FIGURE_SCALE,
@@ -2080,6 +2104,32 @@ const EXESNOHS_CONFIG = {
         textureWidth: 2048,
 
         /**
+         * THE GROUND THE STADIUM STANDS ON, WHICH IT DID NOT HAVE.
+         *
+         * The painted plane is exactly the field: 42m by 24m, ending on the
+         * back of each end zone. Beyond that there was nothing at all, so the
+         * world had an edge, and the play camera stands behind the near one
+         * looking straight at it. Today that edge falls in the last 7% of a
+         * phone frame and the HUD covers it, which is the only reason nobody
+         * has reported it.
+         *
+         * IT IS WHAT PAYS FOR THE LIFT. `camera.solve.headroom` brings the
+         * field up the screen by tilting the shot down, and every degree of
+         * that walks the bottom edge of the frame further back behind the end
+         * line. Without ground to land on, the black band would simply move
+         * from the top of the screen to the bottom.
+         *
+         * DARKER THAN THE FIELD, AND NOT BY A LITTLE. It is outside the
+         * floodlights: the grass here is a value that reads as ground rather
+         * than as a surface anybody plays on, so the eye still takes the lit
+         * rectangle as the subject.
+         */
+        apron: {
+            colour: 0x102a1b,
+            beyond: 12,             // metres of it past every edge of the paint
+        },
+
+        /**
          * THE LINE OF SCRIMMAGE, IN THE 2D GAME'S YELLOW.
          *
          * Every other line on this field is the same white, so from the play
@@ -2152,7 +2202,7 @@ const EXESNOHS_CONFIG = {
      *
      * IT IS THERE TO FILL A HOLE, and the hole is real: the play camera looks
      * downfield and slightly up, so the top quarter of every frame is empty
-     * black above the far goal post. The 2D game fills the same strip with a
+     * black above the far end zone. The 2D game fills the same strip with a
      * crowd, which was dropped (D8) and never replaced.
      *
      * A board rather than scenery, because it can do a job while it is there.

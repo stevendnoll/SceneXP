@@ -1119,6 +1119,70 @@ describe('the scoreboard is in shot', () => {
     });
 
     /**
+     * ...AND THERE IS NOT AN EIGHTH OF A PHONE SCREEN OF NIGHT ABOVE IT.
+     *
+     * QA ROUND TWENTY-SIX, ITEM 3: "on mobile in portrait the field could be
+     * moved toward the top of the screen, there is a lot of empty space above
+     * the scoreboard". Measured on a 390x846 phone the board's top corner sat
+     * 13.3% down the frame against 2.8% on every landscape shape, because the
+     * solve pins only the BOTTOM edge and a phone needs a 60 degree lens to fit
+     * the field's width, which then sees 66 metres of ground down a 42 metre
+     * field. All the spare landed at the top.
+     *
+     * WHERE A POINT SITS IN THE FRAME, rather than merely whether it is in it,
+     * which is what the test above asks. Both halves are needed: this one alone
+     * would be satisfied by a shot that had pushed the board off the top.
+     */
+    const frameAt = (aspect, x, y) => {
+        const shot = framingFor(aspect);
+        const cam = { x: FIELD.lineInterval - shot.back, y: shot.height };
+        const pitch = Math.atan2(cam.y, shot.aimX - cam.x);
+        const vHalf = (shot.fov * Math.PI / 180) / 2;
+        const a = Math.atan2(cam.y - y, x - cam.x);
+        // 0 at the top edge of the frame, 1 at the bottom.
+        return (Math.tan(a - pitch) / Math.tan(vHalf) + 1) / 2;
+    };
+
+    test('the frame above the scoreboard is headroom and no more', () => {
+        const B = CFG.scoreboard;
+        const x = FIELD.lineInterval * FIELD.segments + FIELD.endZone + B.beyond;
+        const room = CFG.camera.solve.headroom;
+        for (const aspect of [390 / 846, 393 / 852, 360 / 780, 820 / 1180, 0.75]) {
+            const above = frameAt(aspect, x, B.standHeight + B.height);
+            // In shot at all, and inside the headroom the config allows. A hair
+            // of tolerance because the aim is solved from the board's corner and
+            // the shot is only re-aimed when it is currently looser than this.
+            expect({ aspect, above: above > 0 && above <= room + 0.005 })
+                .toEqual({ aspect, above: true });
+        }
+    });
+
+    /** ...and the shapes that were already tight are left exactly alone, which
+     *  is what keeps this from being a change to the landscape shot. */
+    test('a landscape frame is not re-aimed at all', () => {
+        for (const aspect of [16 / 9, 4 / 3, 1196 / 826, 852 / 393]) {
+            const shot = framingFor(aspect);
+            const mid = FIELD.lineInterval * FIELD.segments / 2;
+            expect({ aspect, aim: shot.aimX }).toEqual({ aspect, aim: mid });
+        }
+    });
+
+    /**
+     * AND THE WHOLE FIELD IS STILL IN THE PICTURE. Tilting down to fill the top
+     * of the frame walks the bottom edge back behind the near end line, and the
+     * one thing this must never cost is the ground a play starts on.
+     */
+    test('both end lines are in shot on every shape', () => {
+        const len = FIELD.lineInterval * FIELD.segments;
+        for (const aspect of [390 / 846, 393 / 852, 0.75, 1, 4 / 3, 16 / 9]) {
+            const near = frameAt(aspect, -FIELD.endZone, 0);
+            const far = frameAt(aspect, len + FIELD.endZone, 0);
+            expect({ aspect, near: near > 0 && near < 1, far: far > 0 && far < 1 })
+                .toEqual({ aspect, near: true, far: true });
+        }
+    });
+
+    /**
      * THE PANELS, WHICH ARE WEIGHTED RATHER THAN EQUAL. QA asked for the clock
      * to be "roughly the same size as the POINTS area", and PLAY has to stay
      * wider than both because "10 / 10" is seven characters against two.

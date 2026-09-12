@@ -130,8 +130,74 @@ export function framingFor(aspect) {
         apparent: 0,
     };
 
-    solved.set(key, best);
-    return best;
+    const shot = liftAim(best);
+    solved.set(key, shot);
+    return shot;
+}
+
+/**
+ * NUDGE THE WHOLE PICTURE UP THE SCREEN, WHICH ONLY A PHONE NEEDS.
+ *
+ * `fov` is VERTICAL, and on an upright phone the field's WIDTH is what decides
+ * it: fitting 21m of touchline into a frame a third as wide as it is tall needs
+ * a 60 degree lens, and that lens then sees 66 metres of ground down a field
+ * that is 42 metres long. The spare has to go somewhere, and the solve above
+ * puts all of it at the top, because the only thing it pins is the BOTTOM edge.
+ *
+ * Measured on a 390x846 phone: the far end line landed 21.3% down the frame and
+ * the scoreboard's top edge 13.3%, so an eighth of the screen was empty night
+ * above the highest thing in the scene, against 6.7% of spare below the near end
+ * line. QA asked for the field to come up, and that is the same observation.
+ *
+ * THE RE-AIM IS THE WHOLE CHANGE, and that is why it is done here rather than
+ * inside the search. The camera does not move and the lens does not change, so
+ * every guarantee the solve made still holds: the half-width visible at a given
+ * distance depends on the field of view and the aspect and NOT on where the
+ * camera is pointed, so no amount of tilting can clip a touchline. Only the
+ * vertical share moves.
+ *
+ * IT IS SIZED BY THE SCOREBOARD BECAUSE THE SCOREBOARD IS THE CEILING. It is
+ * the tallest thing the play camera looks at, `headroom` is how much frame it
+ * may keep above it, and a shape that is already inside that (every landscape
+ * one is, at 2.8%) is left exactly alone. The shot is never pushed DOWN.
+ */
+function liftAim(shot) {
+    const s = CFG.camera.solve;
+    const B = CFG.scoreboard;
+    if (!(s.headroom > 0) || !B) return shot;
+
+    const camX = FIELD.lineInterval - shot.back;
+    const vHalf = rad(shot.fov) / 2;
+    const pitch = Math.atan2(shot.height, shot.aimX - camX);
+    if (!(pitch > 0)) return shot;
+
+    // A point sits `f` of the way down the frame when the angle from the aim
+    // axis to it satisfies tan(a - pitch) = (2f - 1) tan(vHalf). Solving that
+    // for the pitch that puts the board's top corner at `headroom` gives the
+    // aim we want.
+    const boardX = FIELD.lineInterval * FIELD.segments + FIELD.endZone + B.beyond;
+    const toBoard = Math.atan2(shot.height - (B.standHeight + B.height), boardX - camX);
+    let want = toBoard - Math.atan((2 * s.headroom - 1) * Math.tan(vHalf));
+
+    /**
+     * ...AND THE EDGE OF THE GROUND IS THE LIMIT, WHICH IS NOT THE END LINE.
+     *
+     * Tilting down cannot lose the near end line: it is the closest thing in
+     * shot and every degree of tilt moves it further UP the frame. What it
+     * loses is the bottom edge of the world. This camera already looks past
+     * vertical (a 63 degree pitch with a 30 degree half-angle puts the bottom
+     * ray at 93), so the ground it lands on is BEHIND the camera, and tilting
+     * walks that point backwards. Past the apron there is nothing to draw.
+     *
+     * A point at ground x sits on the bottom edge when pitch + vHalf is the
+     * angle down to it, so the cap is that angle for the apron's near edge.
+     */
+    const apron = (CFG.turf && CFG.turf.apron && CFG.turf.apron.beyond) || 0;
+    const cap = Math.atan2(shot.height, -FIELD.endZone - apron - camX) - vHalf;
+    if (want > cap) want = cap;
+    if (!(want > pitch)) return shot;
+
+    return { ...shot, aimX: camX + shot.height / Math.tan(want) };
 }
 
 // ---- Drivers ----------------------------------------------------------------

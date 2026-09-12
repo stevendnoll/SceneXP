@@ -31,7 +31,7 @@ import { takedownLength, tacklerFor, contactFraction } from './takedown.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier, markAirborne, setDifficulty,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome, decisionLeft,
-    clearEscapes,
+    clearEscapes, clockReading,
 } from './play.min.js';
 import { readGame, saveGame, clearGame } from './progress.min.js';
 import { nextStreak, streakOver, difficultyFor } from './scoring.min.js';
@@ -895,8 +895,16 @@ function stepCycle(delta) {
          *
          * Repainting is a canvas redraw and a texture upload, so it happens only
          * when the DISPLAYED second changes rather than on every frame.
+         *
+         * ...EXCEPT ON THE ONE ENDING THE CLOCK ITSELF CAUSED, WHICH IS ZERO.
+         * The whistle for time is raised inside the same simulation step that
+         * reaches zero, so `decisionLeft` is already answering for a finished
+         * play by the time it is asked and the board held the last number it
+         * had, which was one. A countdown that stops on one is a countdown
+         * nobody trusts (QA item 1). `play.expired` says the clock is what
+         * ended it, and a clock that ended a play reads zero.
          */
-        const shown = left === null ? cycle.clockShown : Math.max(0, Math.ceil(left));
+        const shown = clockReading(left, cycle.clockShown, cycle.play.expired);
         if (shown !== cycle.clockShown) {
             cycle.clockShown = shown;
             paintBoard();

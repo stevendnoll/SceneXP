@@ -31,6 +31,13 @@ import { classifyPlay } from './scoring.min.js';
 const SEPARATION = CFG.separationPasses;
 const separationUnits = () => CFG.separation / UNITS_TO_METRES;
 
+/** The ball is a member of the object list like anybody else, and four separate
+ *  places have to tell it apart from a person. Asked once, here, because the
+ *  library writes the answer in two fields and a caller that checks only one of
+ *  them is a caller that treats the ball as a player. */
+const isBall = (obj) => !!obj && !!obj.settings
+    && (obj.settings.position === 'ball' || obj.settings.type === 'ball');
+
 /** Offense, then defense. Position group drives which route method runs. */
 const ROSTER = [
     ['qb', 'qb', 0], ['wr', 'wr1', 0], ['wr', 'wr2', 0], ['wr', 'wr3', 0], ['wr', 'wr4', 0],
@@ -123,6 +130,8 @@ export function createPlay(audioObject = null) {
         game: { objects: [], throwTo: '', runForYourLife: false, ...factoryState().game },
         frame: 0,
         live: false,
+        /** Did the play clock run out on this one? See `tick`. */
+        expired: false,
     };
 }
 
@@ -181,6 +190,7 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
     play.game.runForYourLife = false;
     play.frame = 0;
     play.live = false;
+    play.expired = false;
 
     // RESET THE SIMULATION'S OWN END-OF-PLAY FLAGS TOO. They live on playState,
     // not on `game`, so clearing the game object alone leaves `anim.done` set
@@ -232,6 +242,33 @@ export function tick(play) {
         // The ball is not a rostered player and carries no `benched` flag, so
         // it still ticks, which is what makes its arc run.
         if (obj.settings && obj.settings.benched) continue;
+        /**
+         * ...AND NEITHER DOES A BALL SOMEBODY IS ALREADY HOLDING.
+         *
+         * THE 2D GAME DELETES IT. `runObjectAnimations` splices the ball out of
+         * the object list on the first frame `ball.caught` goes true, and that
+         * one line was not ported. So the ball went on flying to wherever it
+         * had been aimed and then lay there for the rest of the play, with
+         * `moveBallObject` asking `checkCatch` about it on every frame.
+         *
+         * WHICH MEANS ANYBODY COULD CATCH IT AGAIN, INCLUDING THE OTHER TEAM.
+         * `handleCatchResult` does not care that the ball already belongs to
+         * somebody: it writes `ball.team = 1` and raises the whistle. A
+         * defender crossing the spot where the pass was aimed, seconds after a
+         * receiver caught it thirty metres away, scored an interception, and
+         * because the receiver's own `hasBall` is never lowered he was still
+         * drawn carrying it while the card said the Crows had taken it away.
+         * Reported from a screenshot showing exactly that, and measured at one
+         * play in 816 and one in 1632 over two headless sweeps.
+         *
+         * Stopping it rather than deleting it, because the 3D game keeps the
+         * object: `showBall` draws the ball at the carrier when anybody has
+         * `hasBall` and falls back to this one, and the recording expects a
+         * stable roster. Stopped, it is exactly what `showBall` already
+         * documents, a ball that "stops where it was caught".
+         */
+        if (isBall(obj) && play.playState.state.ball
+            && play.playState.state.ball.caught) continue;
         if (obj.anim === 'formation') play.routes.runFormation(obj, play.game);
         else if (obj.anim === 'run-around') play.routes.runAround(obj, play.game);
     }
@@ -240,7 +277,31 @@ export function tick(play) {
     // damps speed on a collision and never resolves the overlap, so this is the
     // half that keeps bodies out of each other. Running it per player would let
     // whoever moved last be the only one who ends up where he asked.
-    separate(play, separationUnits(), SEPARATION.live);
+    //
+    /**
+     * ...AND NOT ON THE FRAME THE WHISTLE GOES, WHICH COST A TOUCHDOWN.
+     *
+     * THE SHOVE IS THE PORT'S, NOT THE GAME'S. The 2D game has no separation
+     * pass at all: it never needed one, because its players were letterforms
+     * rather than bodies 2.2 times life size. So this is the one thing in the
+     * frame that can move a man AFTER his own route has finished with him.
+     *
+     * THE LADDER IS READ OFF A COORDINATE, and the routes raise the whistle by
+     * comparing that same coordinate to a rung. `runWrFormation` and
+     * `runQbFormation` both end the play the instant the carrier is at or past
+     * `-4 + lineInterval * 4`, and `scoring.pointsForPosition` then awards 50
+     * for being at or past exactly that number. Those two agreed until a
+     * defender leaning on the carrier pushed him four centimetres back over the
+     * line between the whistle and the scoring, at which point the play ended
+     * at the goal line, no tackle, the carrier at full speed, and the card said
+     * "+30". Measured at one crossing in 149 for the quarterback and one in 103
+     * for a receiver.
+     *
+     * So the whistle is the last word on where everybody is. The touchline
+     * clamp below still runs, because a body half over the paint is a thing a
+     * visitor can see and the clamp cannot move anybody across a rung.
+     */
+    if (!isDone(play)) separate(play, separationUnits(), SEPARATION.live);
     // AND THE TOUCHLINE IS THE LAST WORD, after the shove rather than before
     // it: separation can push a man off the edge of the field, so a clamp that
     // ran first would be undone by it on the same frame.
@@ -263,7 +324,24 @@ export function tick(play) {
     // OUT OF TIME IS A WHISTLE LIKE ANY OTHER. See `decisionLeft`: a play that
     // reaches zero with nobody having thrown it or run with it is a sack, and
     // `classifyPlay` already says exactly that without being told.
-    if (outOfTime(play)) play.playState.state.anim.done = true;
+    if (outOfTime(play)) {
+        play.playState.state.anim.done = true;
+        /**
+         * AND IT IS REMEMBERED, BECAUSE THE BOARD STOPPED ON ONE.
+         *
+         * `decisionLeft` returns null for a finished play, which is right for
+         * every other ending and wrong for this one: the whistle is raised on
+         * the same simulation step that reaches zero, so by the time main.js
+         * asks, the play is already over and the answer is "nothing to say".
+         * The board keeps the last number it painted and the countdown reads
+         * 10 9 8 7 6 5 4 3 2 1 and stops, which is a play clock that never
+         * reaches zero. Reported exactly that way.
+         *
+         * A flag rather than a special case inside `decisionLeft`, because the
+         * clock genuinely has stopped: this says what it stopped ON.
+         */
+        play.expired = true;
+    }
 
     // AND THE WHISTLE DROPS EVERY POSE, on the frame it blows rather than
     // whenever somebody next asks. Both halves matter: `tackled` is a carrier
@@ -300,6 +378,27 @@ export function decisionLeft(play) {
     const spent = play.frame / CFG.simHz;
     const left = CFG.clock.decide - spent;
     return left > 0 ? left : 0;
+}
+
+/**
+ * WHAT A SCOREBOARD SHOULD READ, which is not always what the clock says.
+ *
+ * `left` is `decisionLeft`, `shown` is the number the board is already
+ * carrying, and `expired` is `play.expired`. The three cases are the three
+ * things a play clock does:
+ *
+ *   counting     round UP, so a tenth of a second left still reads one
+ *   stopped      hold the number it stopped on, the way a real board does
+ *   ran out      zero, because that is what it ran out AT
+ *
+ * PURE, AND HERE RATHER THAN IN main.js, because the third case is the one
+ * that was wrong for the life of the game and a rule that lives in a render
+ * loop cannot be asserted. See `tick` for how the whistle and the zero arrive
+ * on the same simulation step.
+ */
+export function clockReading(left, shown, expired) {
+    if (left !== null && left !== undefined) return Math.max(0, Math.ceil(left));
+    return expired ? 0 : shown;
 }
 
 /** ...and the whistle itself. Separated so the HUD and the rule cannot drift:
@@ -651,7 +750,7 @@ export function markHeading(play) {
     for (const obj of play.game.objects) {
         if (!obj.state || !obj.settings) continue;
         // The ball is not running anywhere, it is on rails.
-        if (obj.settings.position === 'ball' || obj.settings.type === 'ball') continue;
+        if (isBall(obj)) continue;
         if (obj.settings.benched) continue;
         const s = obj.state;
         if (!s.track) s.track = [];
@@ -802,8 +901,7 @@ export function settleArrived(play) {
  */
 export function separate(play, minSeparation, passes = 2) {
     if (!(minSeparation > 0)) return 0;
-    const on = play.game.objects.filter((o) => !o.settings.benched
-        && o.settings.position !== 'ball' && o.settings.type !== 'ball');
+    const on = play.game.objects.filter((o) => !o.settings.benched && !isBall(o));
     let moved = 0;
 
     /**
@@ -962,7 +1060,7 @@ export function keepInbounds(play) {
     let moved = 0;
     for (const obj of play.game.objects) {
         if (!obj.settings || obj.settings.benched) continue;
-        if (obj.settings.position === 'ball' || obj.settings.type === 'ball') continue;
+        if (isBall(obj)) continue;
         if (obj.coords.y < lo) {
             obj.coords.y = lo;
             if (obj.state) obj.state.ySpeed = 0;

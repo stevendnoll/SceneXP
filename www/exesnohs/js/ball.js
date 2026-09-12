@@ -79,6 +79,28 @@ export function lacePositions(count = 9, span = 0.60) {
     return out;
 }
 
+/** Where the two stripes sit and how wide they are, as a fraction of the half
+ *  length, so they follow the ball rather than a remembered number. */
+export const BAND_AT = 0.125;
+export const BAND_HALF = 0.026;
+
+/**
+ * A STRIPE THAT FOLLOWS THE LEATHER.
+ *
+ * Same rule as `lacePositions`: the ball's surface is a curve, so anything
+ * sitting on it has to take its radius from `radiusAt` rather than carry its
+ * own. `lift` is the hair of clearance that keeps the two surfaces from
+ * fighting over the same pixels, and it is tiny against a ball 0.28 thick.
+ */
+export function bandProfile(centre, halfWidth = BAND_HALF, lift = 0.004, steps = 6) {
+    const out = [];
+    for (let i = 0; i <= steps; i += 1) {
+        const y = centre - halfWidth + (2 * halfWidth * i) / steps;
+        out.push({ r: radiusAt(y) + lift, y });
+    }
+    return out;
+}
+
 export function ballProfile(rings = 16) {
     const out = [];
     for (let i = 0; i <= rings; i += 1) {
@@ -100,10 +122,24 @@ export function initBall(scene) {
     mesh = new THREE.Group();
     mesh.name = 'ball';
 
-    // LIGHTER THAN A REAL FOOTBALL, ON PURPOSE. The field is dark green under
-    // floodlights at night and the sky behind the arc is nearly black, so a
-    // regulation dark brown ball is invisible for the whole of its flight,
-    // which was the complaint. This is roughly a new ball under stadium light.
+    // LIGHTER THAN A REAL FOOTBALL, ON PURPOSE, AND LIGHTER AGAIN SINCE.
+    //
+    // The field is dark green under floodlights at night and the sky behind the
+    // arc is nearly black, so a regulation dark brown ball is invisible for the
+    // whole of its flight, which was the original complaint.
+    //
+    // IT CAME BACK FOR PHONES, AND THE MEASUREMENT SAYS IT IS STILL VALUE.
+    // Sampled off a real screenshot, the ball rendered at a relative luminance
+    // of 0.095 against turf at 0.019, which is 2.1:1. A graphical object that
+    // has to be followed wants 3:1, and this one is a dozen pixels across on a
+    // phone. 0xb4642c to this is worth about 4:1 against the same grass.
+    //
+    // AND IT IS THE ONLY LEVER THAT WORKS IN BOTH PLACES. Against the offense's
+    // own kit the ball measured 1.15:1, because their shirts render at 0.117
+    // and their heads at 0.116, which is the ball's colour almost exactly: in a
+    // pack, the ball IS an X player's head. Nothing short of leaving the brown
+    // family fixes that, and going lighter is the direction that also helps the
+    // half of the job that matters most, which is the flight.
     //
     // A LATHE, NOT A SCALED SPHERE, AND THE DIFFERENCE IS THE ENDS. A sphere
     // stretched along one axis is an ellipsoid, and an ellipsoid's tip is
@@ -116,7 +152,7 @@ export function initBall(scene) {
         new THREE.LatheGeometry(
             ballProfile().map((pt) => new THREE.Vector2(pt.r, pt.y)), 14
         ),
-        new THREE.MeshStandardMaterial({ color: 0xb4642c, roughness: 0.62, metalness: 0 })
+        new THREE.MeshStandardMaterial({ color: 0xd0813f, roughness: 0.62, metalness: 0 })
     );
     // The lathe spins about Y, and everything that aims this ball assumes the
     // long axis is local X, so lay it over once here rather than in aimBall.
@@ -130,10 +166,30 @@ export function initBall(scene) {
     // screen, and the ball would rotate correctly and look completely still.
     // These are the stripes near each end of a real ball, and they encircle the
     // long axis, which is what a torus about local X does.
+    //
+    // WIDER THAN THEY WERE, AND NO LONGER A RING FLOATING OVER THE LEATHER.
+    //
+    // They were a torus 0.013 across, which is 5% of the ball's length: a real
+    // ball's stripe, and under a pixel on a phone. These are 11%, the broad
+    // pair a college ball carries, exaggerated the way everything else at this
+    // scale is. They are also the brightest thing on the ball, and white
+    // renders near 0.45 against grass at 0.019, so whatever the leather is
+    // doing the stripes separate the ball from the field on their own.
+    //
+    // A LATHE OFF THE BALL'S OWN PROFILE, for exactly the reason the laces are:
+    // widening a torus grows it outward as well as sideways, and at this
+    // position the leather is only 0.108 from the axis, so a 0.020 tube would
+    // have stood 8mm proud of a ball 0.28 thick and read as a hoop hung round
+    // it. `bandProfile` takes its radius FROM the surface, so the stripe is
+    // painted on however the shape changes.
     for (const side of [-1, 1]) {
-        const band = new THREE.Mesh(new THREE.TorusGeometry(0.096, 0.013, 6, 18), white);
-        band.rotation.y = Math.PI / 2;
-        band.position.x = side * 0.125;
+        const band = new THREE.Mesh(
+            new THREE.LatheGeometry(
+                bandProfile(side * BAND_AT).map((pt) => new THREE.Vector2(pt.r, pt.y)), 14
+            ),
+            white
+        );
+        band.rotation.z = Math.PI / 2;
         mesh.add(band);
     }
 

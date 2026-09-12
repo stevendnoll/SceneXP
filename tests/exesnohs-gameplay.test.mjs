@@ -38,7 +38,7 @@ const {
     createPlay: createPlayForDifficulty, lineUp, snap, tick, isDone,
     keepAndRun, outcome, setDifficulty, OFFENSIVE_PLAYS,
     markHeading, throwTo, eligibleReceivers, breakContact, clearEscapes,
-    decisionLeft, undecided, outOfTime,
+    decisionLeft, undecided, outOfTime, clockReading, ballCarrier,
 } = await import(join(scene, 'play.js'));
 const { markerGeometry } = await import(join(scene, 'markers.js'));
 const { escapeAmount, jukeRoll, stiffArmSide } = await import(join(scene, 'view.js'));
@@ -2563,16 +2563,18 @@ describe('the play clock', () => {
     }
 
     /**
-     * EVERY SECOND IS SHOWN, AND ZERO IS NOT ONE OF THEM.
+     * EVERY SECOND IS COUNTED, AND ZERO IS NOT ONE OF THEM WHILE HE STILL HAS
+     * TIME.
      *
      * The readout is `Math.ceil`, so "1" means anything up to a full second
-     * left, and the whistle goes on the same frame the clock reaches zero. The
-     * visitor therefore sees the count run 10 down to 1 and then the clock go
-     * away as the result card opens, which is what a countdown should do: a
-     * rendered 0 would either be a frame of dead time or, worse, a number that
-     * sat there while he still had nine tenths of a second to throw.
+     * left. A 0 anywhere in this sequence would be a number sitting on screen
+     * while the visitor still had nine tenths of a second to throw.
+     *
+     * THE BOARD IS A DIFFERENT QUESTION, and the test below is the other half
+     * of this one: the count ends AT zero, on the frame the clock runs the play
+     * out. What must not happen is a zero before then.
      */
-    test('it shows every second from the full clock down to one', () => {
+    test('it counts every second from the full clock down to one', () => {
         const play = createPlayForDifficulty();
         lineUp(play, 'pass2', 'cover2');
         snap(play);
@@ -2584,6 +2586,64 @@ describe('the play clock', () => {
         }
         for (let n = 1; n <= CFG.clock.decide; n += 1) expect(shown.has(n)).toBe(true);
         expect(shown.has(0)).toBe(false);
+    });
+
+    /**
+     * THE BOARD REACHES ZERO, AND IT DID NOT. QA ROUND TWENTY-SIX, ITEM 1:
+     * "the 10 second play clock ends at 1 instead of 0".
+     *
+     * The whistle for time is raised inside the same simulation step that
+     * reaches zero, so by the time anything asks `decisionLeft` the play is
+     * already over and the honest answer is null, "nothing left to say". The
+     * board holds the last number it was given, which was one, and a countdown
+     * that stops on one is a countdown nobody believes.
+     *
+     * ASSERTED THROUGH THE RULE THE GAME ACTUALLY USES. `clockReading` is what
+     * main.js paints the board from, so this is the sequence a visitor watches
+     * rather than a restatement of the arithmetic behind it.
+     */
+    test('the board counts down to zero and stops there', () => {
+        const play = createPlayForDifficulty();
+        lineUp(play, 'pass2', 'cover2');
+        snap(play);
+        let shown = CFG.clock.decide;
+        const seen = [shown];
+        for (let f = 0; f < HZ * (CFG.clock.decide + 1) && !isDone(play); f += 1) {
+            tick(play);
+            const next = clockReading(decisionLeft(play), shown, play.expired);
+            if (next !== shown) { shown = next; seen.push(shown); }
+        }
+        expect(isDone(play)).toBe(true);
+        expect(outcome(play).result).toBe('sack');
+        // Every second, in order, ending on the zero the whistle went at.
+        const want = [];
+        for (let n = CFG.clock.decide; n >= 0; n -= 1) want.push(n);
+        expect(seen).toEqual(want);
+    });
+
+    /**
+     * ...AND ONLY THAT ENDING GETS A ZERO. A board that blanked or zeroed
+     * itself on every whistle would tell a visitor who threw on eight that he
+     * had run out of time. A real play clock stops on the number it stopped at.
+     */
+    test('a play that ended some other way freezes the board where it stopped', () => {
+        const play = createPlayForDifficulty();
+        lineUp(play, 'pass2', 'cover2');
+        snap(play);
+        let shown = CFG.clock.decide;
+        let thrown = false;
+        for (let f = 0; f < HZ * 12 && !isDone(play); f += 1) {
+            tick(play);
+            if (!thrown && f === Math.round(HZ * 2.5)) {
+                const elig = eligibleReceivers(play);
+                thrown = elig.length > 0 && throwTo(play, elig[0]);
+            }
+            shown = clockReading(decisionLeft(play), shown, play.expired);
+        }
+        expect(thrown).toBe(true);
+        expect(play.expired).toBe(false);
+        // He threw with seven and a half seconds left, so the board holds 8.
+        expect(shown).toBe(CFG.clock.decide - 2);
     });
 
     /** ...and the clock is put away on the whistle rather than freezing. */
@@ -2741,5 +2801,171 @@ describe('the play clock', () => {
         const tag = html.slice(html.indexOf('id="hud-clock"') - 200,
             html.indexOf('id="hud-clock"') + 120);
         expect(tag).toContain('aria-hidden="true"');
+    });
+});
+
+/**
+ * WHAT A CAUGHT BALL IS, AND WHAT A WHISTLE IS ALLOWED TO CHANGE.
+ *
+ * Both cases below are QA round twenty-six, reported as two separate faults
+ * ("a receiver caught it and the card said intercepted", and "the play ends
+ * with the carrier still running and no tackle"), and both are one frame of the
+ * simulation doing something to a play that was already over.
+ */
+describe('the ball stops when somebody catches it', () => {
+    const HZ = CFG.simHz;
+
+    /** Snap, throw to the first eligible receiver, and run until the ball is
+     *  caught by the offense. Returns null when this particular play produced
+     *  an incompletion or a pick, which is not the case under test. */
+    function playUntilCaught(slug, defence, throwAt = 1.2, limit = 12) {
+        const play = createPlayForDifficulty();
+        lineUp(play, slug, defence);
+        snap(play);
+        let thrown = false;
+        for (let f = 0; f < HZ * limit && !isDone(play); f += 1) {
+            if (!thrown && f >= HZ * throwAt) {
+                const elig = eligibleReceivers(play);
+                thrown = elig.length > 0 && throwTo(play, elig[0]);
+                if (!thrown) return null;
+            }
+            tick(play);
+            const st = play.playState.state;
+            if (st.ball.caught && st.ball.team === 0) return play;
+        }
+        return null;
+    }
+
+    function anyCaught() {
+        for (const slug of OFFENSIVE_PLAYS) {
+            for (const defence of ['cover2', 'man1', '']) {
+                const play = playUntilCaught(slug, defence);
+                if (play) return play;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * THE 2D GAME DELETES THE BALL. `runObjectAnimations` splices it out of the
+     * object list on the first frame `ball.caught` goes true, and that line was
+     * not ported, so the ball flew on to wherever it had been aimed and then lay
+     * there with `checkCatch` asked about it on every remaining frame of the
+     * play.
+     *
+     * MEASURED, IT STOLE ONE PLAY IN 816. A defender crossing the spot where the
+     * pass had been aimed, seconds after a receiver caught it thirty metres
+     * away, was handed the ball by `handleCatchResult`: `ball.team` went to 1,
+     * the whistle went, the card said the Crows had taken it away, and the
+     * receiver, whose own `hasBall` is never lowered, was still drawn carrying
+     * it. That is the screenshot QA sent.
+     *
+     * This puts the defender there on purpose rather than waiting for one to
+     * wander over, because a bug that needs 816 plays to show itself needs a
+     * test that does not.
+     */
+    test('the ball goes no further once it is caught', () => {
+        const play = anyCaught();
+        expect(play).toBeTruthy();
+        const st = play.playState.state;
+        const catcher = st.ball.position;
+        const ball = play.game.objects.find((o) => o.settings.position === 'ball');
+        expect(ball).toBeTruthy();
+        const at = { x: ball.coords.x, y: ball.coords.y };
+
+        for (let f = 0; f < 60 && !isDone(play); f += 1) tick(play);
+
+        // It is where it was caught, which is what `showBall` has always
+        // claimed ("the ball object stops where it was caught") and what the
+        // 2D game guarantees by deleting the object outright.
+        expect(ball.coords.x).toBeCloseTo(at.x, 6);
+        expect(ball.coords.y).toBeCloseTo(at.y, 6);
+
+        // ...so it is still the same man's ball, and only his. A second
+        // `hasBall` is what drew a receiver carrying a ball the card had
+        // already given to the Crows.
+        expect(st.ball.team).toBe(0);
+        expect(st.ball.position).toBe(catcher);
+        expect(outcome(play).result).not.toBe('interception');
+        const carrying = play.game.objects
+            .filter((o) => o.state && o.state.hasBall && !o.settings.benched);
+        expect(carrying.map((o) => o.settings.position)).toEqual([catcher]);
+    });
+});
+
+/**
+ * NOTHING SHOVES ANYBODY AFTER THE WHISTLE.
+ *
+ * `separate` is the port's own addition: the 2D game never needed one, because
+ * its players were letterforms rather than bodies 2.2 times life size. It is
+ * therefore the only thing in a frame that can move a man after his own route
+ * has finished with him, and the routes end the play by comparing that man's
+ * coordinate to a rung of the ladder.
+ */
+describe('a crossing cannot be shoved back over the line', () => {
+    const HZ = CFG.simHz;
+    const RUNG = -4 + SIM.lineInterval * 4;   // where both routes call a crossing
+
+    /**
+     * SEEDED, so the sweep is the same sweep every run. Every line-up rolls a
+     * fresh set of speeds, and a fault that shows on one crossing in 149 is
+     * exactly the kind that appears and disappears between runs otherwise.
+     */
+    function seeded(run) {
+        const real = Math.random;
+        let seed = 20260912;
+        Math.random = () => {
+            seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+            let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+            return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        };
+        try { return run(); } finally { Math.random = real; }
+    }
+
+    function sweep() {
+        const rows = [];
+        for (const slug of OFFENSIVE_PLAYS) {
+            for (const at of [0.4, 1.0, 2.0]) {
+                for (let k = 0; k < 4; k += 1) {
+                    const play = createPlayForDifficulty();
+                    lineUp(play, slug, '');
+                    snap(play);
+                    let decided = false;
+                    for (let f = 0; f < HZ * 25 && !isDone(play); f += 1) {
+                        if (!decided && f >= HZ * at) {
+                            decided = keepAndRun(play);
+                        }
+                        tick(play);
+                    }
+                    const carrier = ballCarrier(play);
+                    rows.push({
+                        slug,
+                        crossed: play.playState.state.anim.run50 === true,
+                        x: carrier ? carrier.coords.x : null,
+                        points: outcome(play).points,
+                    });
+                }
+            }
+        }
+        return rows;
+    }
+
+    /**
+     * THE PLAY THAT ENDED AT THE GOAL LINE IS WORTH THE GOAL LINE. Measured on
+     * the build QA reviewed, one crossing in 149 was scored 30: the route ended
+     * the play the instant the carrier reached the rung, and `separate` then
+     * pushed him a few centimetres back over it before anything asked what he
+     * was worth. What the visitor saw was the whistle going with the carrier at
+     * full speed, nobody tackling him, and a card reading "+30".
+     */
+    test('every carrier who reached the rung is paid for reaching it', () => {
+        const rows = seeded(sweep);
+        const crossings = rows.filter((r) => r.crossed);
+        expect(crossings.length).toBeGreaterThan(20);
+        for (const r of crossings) {
+            expect({ slug: r.slug, x: r.x >= RUNG, points: r.points })
+                .toEqual({ slug: r.slug, x: true, points: 50 });
+        }
     });
 });

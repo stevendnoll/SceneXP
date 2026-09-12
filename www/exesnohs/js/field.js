@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * field.js - The standing scene: turf, markings, sidelines, goal posts and the
+ * field.js - The standing scene: turf, markings, sidelines and the
  * empty stands shell.
  *
  * ONE CANVAS TEXTURE CARRIES EVERY MARKING. Yard lines, hash marks, sidelines
@@ -254,35 +254,32 @@ function buildTurf() {
     return mesh;
 }
 
-/** A goal post at a goal line. Simple uprights on a gooseneck, because at the
- *  play camera's distance nobody is counting the pipes. */
-function buildGoalPost(x, facing) {
-    const post = new THREE.Group();
-    const material = new THREE.MeshStandardMaterial({
-        color: 0xf2c53d, roughness: 0.5, metalness: 0.3,
-    });
-    const pipe = (h, r = 0.09) =>
-        new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 8), material);
+/**
+ * The ground the stadium stands on, outside the paint.
+ *
+ * ONE UNTEXTURED PLANE UNDER EVERYTHING, because it is dark, it is out of
+ * focus, and nothing about it is ever read. It sits a hair below the turf so
+ * the two can never fight over the same pixels, and it runs past the stands on
+ * both sides so their ends have something to rest on rather than hanging over a
+ * void. See `CFG.turf.apron` for why it is here at all.
+ */
+function buildApron() {
+    const apron = CFG.turf.apron;
+    const playLength = FIELD.lineInterval * FIELD.segments;
+    const length = playLength + FIELD.endZone * 2 + apron.beyond * 2;
+    const width = FIELD.width + FIELD.sideline * 2 + apron.beyond * 2;
 
-    const stand = pipe(3.2);
-    stand.position.y = 1.6;
-    post.add(stand);
-
-    const crossbar = pipe(5.6, 0.08);
-    crossbar.rotation.x = Math.PI / 2;
-    crossbar.position.y = 3.05;
-    post.add(crossbar);
-
-    for (const side of [-1, 1]) {
-        const upright = pipe(5.2, 0.08);
-        upright.position.set(0, 5.6, side * 2.8);
-        post.add(upright);
-    }
-
-    post.position.set(x, 0, 0);
-    post.rotation.y = facing;
-    post.name = 'goalPost';
-    return post;
+    const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(length, width),
+        new THREE.MeshStandardMaterial({
+            color: apron.colour, roughness: 1, metalness: 0,
+        })
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(playLength / 2, -0.02, 0);
+    mesh.receiveShadow = true;
+    mesh.name = 'apron';
+    return mesh;
 }
 
 /**
@@ -306,7 +303,11 @@ function buildGoalPost(x, facing) {
 function buildStands() {
     const stands = new THREE.Group();
     const playLength = FIELD.lineInterval * FIELD.segments;
-    const totalLength = playLength + FIELD.endZone * 2;
+    // AS LONG AS THE GROUND THEY STAND ON, which used to be the field exactly.
+    // A stand that stops on the end line has two cut ends, and the portrait
+    // camera now looks at the near pair (see `camera.solve.headroom`). Running
+    // them the length of the apron is also what a real stand does.
+    const totalLength = playLength + FIELD.endZone * 2 + CFG.turf.apron.beyond * 2;
     const half = FIELD.width / 2 + FIELD.sideline;
 
     const ROWS = 4;
@@ -475,7 +476,7 @@ export function fadeBand(delta) {
  *
  * It is here to fill a hole and it does a job while it is there. The hole is
  * real: the play camera looks downfield and slightly up, so the top quarter of
- * every frame is empty black above the far goal post, and the crowd that fills
+ * every frame is empty black above the far end zone, and the crowd that fills
  * the same strip in the 2D game was dropped (D8) and never replaced.
  *
  * ITS FACE IS A CANVAS TEXTURE, redrawn on the two occasions the numbers change
@@ -700,6 +701,8 @@ export function updateScoreboard({ play = 1, of = 10, score = 0, clock = '' } = 
 export function initField(scene) {
     group = new THREE.Group();
     group.name = 'field';
+    // The ground first, then the field on top of it.
+    group.add(buildApron());
     group.add(buildTurf());
     group.add(buildStands());
     group.add(buildPylons());
@@ -708,13 +711,20 @@ export function initField(scene) {
     band = buildBand();
     group.add(band);
 
-    // ON THE END LINE, AT THE BACK OF THE END ZONE, which is where a real goal
-    // post stands and where it stays out of the way. They were at 0.4 of the
-    // end zone's depth, so the near one sat 2m in front of the goal line and
-    // filled the bottom of the first screenshot from a camera 22m behind it.
-    const playLength = FIELD.lineInterval * FIELD.segments;
-    group.add(buildGoalPost(-FIELD.endZone, 0));
-    group.add(buildGoalPost(playLength + FIELD.endZone, Math.PI));
+    /**
+     * AND NO GOAL POSTS, WHICH IS A RULES DECISION RATHER THAN A LOOK.
+     *
+     * There were two, on the end line at the back of each end zone. NOTHING IN
+     * THIS GAME IS EVER KICKED: the ladder pays for carrying the ball and the
+     * only ways a play ends are a catch, a run, a sack, a pick or the whistle,
+     * so a post is a piece of equipment for a rule the game does not have.
+     *
+     * They were also the most expensive furniture in the frame. The far one
+     * stood directly in front of the scoreboard from the play camera and drew a
+     * yellow cross over the one thing up there a visitor has to read, and the
+     * near one put two yellow pipes through the bottom of every replay.
+     * Removed on QA's own call, 2026-09-12.
+     */
 
     scene.add(group);
     return group;
