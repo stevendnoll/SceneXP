@@ -158,6 +158,33 @@ export function setScore(points) {
     if (node) node.textContent = `${points}`;
 }
 
+/**
+ * THE PLAY CLOCK, in seconds remaining, or null to put it away.
+ *
+ * NULL IS NOT ZERO AND THE DIFFERENCE IS THE WHOLE POINT. Zero means out of
+ * time, which is a sack and wants the urgent treatment; null means the visitor
+ * has thrown it or tucked it and the clock has nothing left to time. Passing one
+ * for the other leaves a red nought sitting over every completed pass.
+ *
+ * ROUNDED UP, so it shows 10 for the first instant and only reads 0 when the
+ * time is genuinely gone. Counting down through a 0 that still has nine tenths
+ * of a second left in it is how a clock comes to be mistrusted.
+ */
+export function setClock(seconds) {
+    const wrap = el('hud-clock');
+    const node = el('hud-clock-value');
+    if (!wrap || !node) return;
+    if (seconds === null || seconds === undefined) {
+        wrap.hidden = true;
+        wrap.classList.remove('is-urgent');
+        return;
+    }
+    const left = Math.max(0, Math.ceil(seconds));
+    wrap.hidden = false;
+    node.textContent = `${left}`;
+    wrap.classList.toggle('is-urgent', seconds <= CFG.clock.warn);
+}
+
 /** Say something to a screen reader. Politely, so it never interrupts. */
 export function announce(text) {
     const live = el('hud-live');

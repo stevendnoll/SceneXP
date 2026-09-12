@@ -544,12 +544,48 @@ function paintScoreboard(doc = (typeof document === 'undefined' ? null : documen
 }
 
 /**
- * Put the play count and the score on the board.
+ * THE BOARD'S THREE PANELS, AS PLAIN NUMBERS.
  *
- * Called from main.js at exactly the two moments the HUD is told the same
- * thing, so the board can never be a play behind.
+ * Separated from the painting so the layout can be measured without a canvas.
+ * Headless there is no `document`, so `paintScoreboard` hands back a null
+ * context and `updateScoreboard` returns early: every question about where the
+ * panels are and how wide they end up would otherwise be unanswerable in a test,
+ * which is how the old version came to draw a five-hundred-pixel play count into
+ * a five-hundred-and-twelve-pixel half and nobody noticed.
+ *
+ * THE COLUMNS ARE WEIGHTED, NOT EQUAL. PLAY carries "10 / 10" and the other two
+ * carry two or three characters, so equal thirds would shrink the play count to
+ * fit a panel the clock leaves two thirds empty. CLOCK matches POINTS exactly,
+ * which is what QA asked for.
  */
-export function updateScoreboard({ play = 1, of = 10, score = 0 } = {}) {
+export function boardColumns(width, { play = 1, of = 10, score = 0, clock = '' } = {}) {
+    const columns = [
+        { weight: 1.5, label: 'PLAY', value: `${play} / ${of}` },
+        { weight: 1, label: 'POINTS', value: `${score}` },
+        { weight: 1, label: 'CLOCK', value: `${clock}` },
+    ];
+    const total = columns.reduce((sum, c) => sum + c.weight, 0);
+    let edge = 0;
+    for (const col of columns) {
+        col.span = (width * col.weight) / total;
+        col.centre = edge + col.span / 2;
+        edge += col.span;
+        col.edge = edge;
+    }
+    return columns;
+}
+
+/**
+ * Put the play count, the score and the play clock on the board.
+ *
+ * Called from main.js at exactly the moments the HUD is told the same thing, so
+ * the board can never be a play behind.
+ *
+ * THE CLOCK ARRIVES AS A STRING, ALREADY FORMATTED, and that is deliberate: this
+ * file paints a board and has no business deciding what a stopped clock reads or
+ * how many seconds are left. main.js owns the one and play.js owns the other.
+ */
+export function updateScoreboard({ play = 1, of = 10, score = 0, clock = '' } = {}) {
     if (!boardFace || !boardFace.ctx) return null;
     const S = CFG.scoreboard;
     const { ctx, canvas } = boardFace;
@@ -565,9 +601,26 @@ export function updateScoreboard({ play = 1, of = 10, score = 0 } = {}) {
     ctx.strokeStyle = S.rule;
     ctx.lineWidth = Math.max(2, h * 0.014);
     ctx.strokeRect(ctx.lineWidth, ctx.lineWidth, w - ctx.lineWidth * 2, h - ctx.lineWidth * 2);
+
+    /**
+     * THREE PANELS NOW, AND THEY ARE NOT EQUAL.
+     *
+     * The board was two halves with a rule down the middle. It has gained a play
+     * clock, and three equal thirds would be wrong: PLAY carries "10 / 10",
+     * seven characters, while POINTS and CLOCK carry two or three. Equal columns
+     * would shrink the play count to fit a panel the clock leaves two thirds
+     * empty.
+     *
+     * So the columns are WEIGHTED, the clock is sized to match POINTS exactly as
+     * QA asked, and the rules are drawn between whatever columns there are
+     * rather than at a hard-coded middle.
+     */
+    const COLUMNS = boardColumns(w, { play, of, score, clock });
     ctx.beginPath();
-    ctx.moveTo(w / 2, h * 0.16);
-    ctx.lineTo(w / 2, h * 0.84);
+    for (const col of COLUMNS.slice(0, -1)) {
+        ctx.moveTo(col.edge, h * 0.16);
+        ctx.lineTo(col.edge, h * 0.84);
+    }
     ctx.stroke();
 
     /**
@@ -599,7 +652,7 @@ export function updateScoreboard({ play = 1, of = 10, score = 0 } = {}) {
     ctx.textBaseline = 'middle';
     const SAFE = 0.78;               // of a half-panel, so the rule has air
 
-    const cell = (cx, label, value) => {
+    const cell = (cx, span, label, value) => {
         ctx.fillStyle = S.label;
         ctx.font = `600 ${Math.round(h * 0.115)}px Tahoma, Geneva, sans-serif`;
         // Tracked out, because a small label in caps is the one place letter
@@ -610,7 +663,7 @@ export function updateScoreboard({ play = 1, of = 10, score = 0 } = {}) {
         ctx.fillText(label, 0, 0);
         ctx.restore();
 
-        const room = (w / 2) * SAFE;
+        const room = span * SAFE;
         let size = Math.round(h * 0.42);
         ctx.font = `bold ${size}px Tahoma, Geneva, sans-serif`;
         const wide = ctx.measureText(value).width;
@@ -632,8 +685,7 @@ export function updateScoreboard({ play = 1, of = 10, score = 0 } = {}) {
         ctx.fillText(value, cx, baseline);
         ctx.shadowBlur = 0;
     };
-    cell(w * 0.25, 'PLAY', `${play} / ${of}`);
-    cell(w * 0.75, 'POINTS', `${score}`);
+    for (const col of COLUMNS) cell(col.centre, col.span, col.label, col.value);
 
     if (boardFace.texture) boardFace.texture.needsUpdate = true;
     return boardFace.canvas;

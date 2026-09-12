@@ -1174,14 +1174,30 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
          * whole body, and from a camera raked this far over the field a
          * one-armed pose and a hard roll are the two things that read.
          */
-        const esc = (obj.state && obj.state.escape) || null;
+        /**
+         * A DEAD PLAY AND A MAN ON THE FLOOR HOLD NO POSE.
+         *
+         * QA watched a tackled carrier lie there with his stiff-arm still locked
+         * out. `state.escape` is cleared by its own clock inside `breakContact`,
+         * `breakContact` runs only from `tick`, and `tick` returns immediately
+         * once the play is dead, so the flag survived the whistle: measured, 0.64
+         * players a play were still holding one. `play.clearEscapes` fixes it at
+         * the source, and this is the second latch, because the view must also
+         * be right during a REPLAY, where the objects are rebuilt from six floats
+         * a frame and nothing re-runs the simulation at all.
+         *
+         * `role` is the takedown, so `isFloored` is the man going over. He is
+         * not stiff-arming anybody on his way down.
+         */
+        const posed = opts.live && !isFloored;
+        const esc = (posed && obj.state && obj.state.escape) || null;
         const E = CFG.escape;
         // Always numbers, never null: both are multiplied into a lean below and
         // handed to `poseFigure`, and a null that happens to coerce to zero is
         // an accident waiting for somebody to add a comparison.
-        const stiff = esc && esc.kind === 'stiff-arm'
+        const stiff = esc && esc.kind !== 'shove'
             ? escapeAmount(esc, E.grace, CFG.pose.stiffArm.snap) : 0;
-        const juking = esc && esc.kind === 'juke'
+        const shoving = esc && esc.kind === 'shove'
             ? escapeAmount(esc, E.grace, CFG.pose.juke.snap) : 0;
 
         poseFigure(figure, mps, figure.userData.phase, {
@@ -1194,7 +1210,12 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             reachAt,
             posting,
             down,
-            stiffArm: stiff,
+            // A SHOVE IS AN ARM TOO. QA asked for the receiver to "push the
+            // defender back", and a push is one arm out at the man, which is
+            // the pose the stiff-arm already solves. The two differ in what
+            // they do to the LEGS: a carrier drives forward, a route runner
+            // pushes off and leans away, which is the roll below.
+            stiffArm: Math.max(stiff, shoving),
             stiffArmSide: esc ? stiffArmSide(esc.away, figure.userData.facing) : 1,
         }, delta);
 
@@ -1203,8 +1224,8 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // frame after the yaw and the pitch: he leans out of his cut rather
         // than tipping sideways in world space. Eased back to upright rather
         // than cleared, or a man finishing a juke snaps vertical in one frame.
-        const wantRoll = juking > 0
-            ? jukeRoll(esc.away, figure.userData.facing, CFG.pose.juke.roll) * juking
+        const wantRoll = shoving > 0
+            ? jukeRoll(esc.away, figure.userData.facing, CFG.pose.juke.roll) * shoving
             : 0;
         figure.rotation.z += (wantRoll - figure.rotation.z)
             * (1 - Math.exp(-delta / CFG.pose.juke.snap));

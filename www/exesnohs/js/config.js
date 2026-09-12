@@ -1160,6 +1160,65 @@ const EXESNOHS_CONFIG = {
     },
 
     /**
+     * THE PLAY CLOCK, AND IT IS A RULE THAT ALREADY EXISTED WITH NOTHING
+     * DRAWING IT.
+     *
+     * QA found that holding the ball without throwing recorded a SACK, with no
+     * defender anywhere near the quarterback. That was real, and it was an
+     * accident: `main.PLAY_TIMEOUT` is a backstop for a play that somehow never
+     * ends, it fired at twelve seconds, and `classifyPlay` returns a sack for
+     * any play that ended with nobody having thrown it or run with it. So the
+     * game already punished a slow decision by five points and never once said
+     * so.
+     *
+     * MAKING IT VISIBLE IS THE WHOLE FIX. An invisible rule that costs points
+     * is the worst version of this; the same rule on a clock the visitor can
+     * watch is a decision with a deadline, which is the one thing this game
+     * was missing between the snap and the throw.
+     *
+     * IT IS A DECISION CLOCK, NOT A PLAY CLOCK, and the distinction decides the
+     * arithmetic below. It stops the moment the ball is thrown or the
+     * quarterback tucks it and runs, because what it is timing is the VISITOR,
+     * and after that point the visitor has no further input.
+     */
+    clock: {
+        /** Seconds from the snap to decide. Real football gives a quarterback
+         *  about three; this is a visitor reading a whole field from a fixed
+         *  camera and picking from a row of buttons, so it is generous on
+         *  purpose. Making it visible already makes it feel shorter. */
+        decide: 10,
+
+        /**
+         * ...AND HOW LONG THE PLAY MAY STILL RUN AFTER HE HAS DECIDED.
+         *
+         * THE OLD BACKSTOP WOULD HAVE STARTED CUTTING GOOD PLAYS OFF. It was a
+         * flat twelve seconds measured from the SNAP, which was safe only
+         * because nothing encouraged a late decision. Measured from a decision
+         * taken at the last legal moment, the play still needs a median of 1.4
+         * seconds after a throw and 5.6 after a keeper, with the longest run
+         * taking 12.11. A flat twelve would have guillotined a quarterback in
+         * the open field and called it a run for wherever he had got to.
+         *
+         * So the backstop is now measured from the DECISION and is sized by
+         * that tail. It remains what it always was: the answer to a play that
+         * somehow never ends, not the normal way one finishes.
+         *
+         * 18 RATHER THAN 14, AND THE FIRST NUMBER WAS MARGINAL. Over 1213 late
+         * decisions the tail runs to a median of 3.7s, a p99 of 9.0 and a
+         * longest of 12.24, which made 14 look safe. It is not: a wider sweep
+         * turned up a keeper that ran 14.00 seconds after the decision, which
+         * a 14 second backstop cuts off by a whisker. A backstop that fires is
+         * a play the visitor watched get truncated, so it is sized to clear the
+         * worst case with room rather than to sit on it.
+         */
+        backstop: 18,
+
+        /** Seconds remaining at which the clock starts reading as urgent. It
+         *  is a colour AND a weight change, never colour alone. */
+        warn: 3,
+    },
+
+    /**
      * BREAKING FREE OF A MAN WHO HAS BEEN HANGING ON YOU. See `ESCAPE_SHOVE`
      * above for why anybody is stuck, which is a latch rather than physics, and
      * `play.breakContact` for the mechanic.
@@ -1172,11 +1231,22 @@ const EXESNOHS_CONFIG = {
      * completely differently from sixty metres up, which is the point.
      */
     escape: {
-        /** Seconds of UNBROKEN contact with the SAME opponent before a man has
-         *  earned a way out. QA asked for two and the measured distribution
-         *  agrees: 1.37 locks a play already last this long, so it fires about
-         *  once a play rather than constantly or never. */
-        after: 2.0,
+        /**
+         * SECONDS OF UNBROKEN CONTACT BEFORE A ROUTE RUNNER SHOVES HIM OFF.
+         *
+         * TWO SECONDS WAS TRIED AND IS TOO LONG TO EVER HAPPEN. QA asked for it
+         * and the raw lock count agreed, but the raw lock count counts PAIRS and
+         * a receiver is routinely inside two defenders at once. Measured on what
+         * one receiver and one defender actually sustain: the longest unbroken
+         * contact a non-carrying receiver reaches is a median of 0.86s, he gets
+         * to 1.0s on 38% of plays and to 2.0s on NONE of them. The move fired
+         * 0.30 times a play and QA's report was "the receivers never seem to".
+         *
+         * At one second it is available on 38% of plays instead of 0%, and
+         * because a shove resets the clock rather than ending the coverage he
+         * can do it again a second later if the defender is still on him.
+         */
+        after: 1.0,
         /** Seconds the break buys him. Long enough to get clear at the impulse
          *  below (about 2.5m of separation, well outside the 1.76m at which the
          *  boxes find each other again) and short enough to be a move. */
@@ -1211,11 +1281,18 @@ const EXESNOHS_CONFIG = {
          * getting free.
          */
         forgive: 0.15,
-        /** The sideways impulse a JUKE is worth, as a fraction of his own top
-         *  speed. Applied away from the defender, once, on the frame he breaks.
-         *  It is what actually separates them: the grace alone only stops him
-         *  being slowed, it does not move him anywhere. */
-        juke: 0.9,
+        /**
+         * WHAT A ROUTE RUNNER'S SHOVE IS WORTH TO HIM, as a fraction of his own
+         * top speed, sideways, away from the man he pushed off.
+         *
+         * SMALLER THAN THE JUKE IT REPLACES, deliberately. 0.9 was a hard cut
+         * across the field, and a receiver who changes his line that far has
+         * left his route: it is a spectacular move that costs him the play. QA
+         * asked for "a slight push that gives him a little separation", which is
+         * a different and better thing. Most of the separation now comes from
+         * the defender being STAGGERED rather than from the receiver bolting.
+         */
+        shove: 0.45,
         /** ...and the forward impulse a STIFF-ARM is worth. Smaller, and
          *  forward rather than sideways, because a carrier fending somebody off
          *  is holding his line rather than changing it. */
@@ -1224,6 +1301,24 @@ const EXESNOHS_CONFIG = {
          *  speed. He is not frozen: a defender who simply stops dead reads as a
          *  bug rather than as somebody who has been beaten. */
         shed: 0.35,
+
+        /**
+         * ...AND HOW LONG HE STAYS SLOWED, WHICH IS WHERE THE SEPARATION
+         * ACTUALLY COMES FROM.
+         *
+         * A ONE-FRAME SHOVE IS WORTH NOTHING AND THIS PROJECT HAS NOW LEARNED
+         * IT TWICE. The defender's cover route re-accelerates him at the
+         * receiver on the very next frame, at `accel` a frame, so damping his
+         * speed once is undone inside five frames and the pair is locked again
+         * before anybody could see daylight. The first version of the receiver's
+         * break had exactly this fault and bought 0.1m.
+         *
+         * So being shoved is a STATE with a clock, the same shape as the escape
+         * itself, and it is held for half a second. That is what turns a shove
+         * into separation: the receiver keeps running and the man covering him
+         * does not, which is the picture QA asked for.
+         */
+        stagger: 0.5,
 
         /**
          * AND A BALL CARRIER IS ON A COMPLETELY DIFFERENT CLOCK, BECAUSE HE HAS
@@ -2091,7 +2186,22 @@ const EXESNOHS_CONFIG = {
          * It sits behind the end line either way, so nothing about this puts it
          * in front of the field.
          */
-        width: 13,
+        /**
+         * WIDER, BECAUSE IT GAINED A THIRD READING AND HAD THE ROOM.
+         *
+         * 13m of board overlooking a 21m field looked like a board that had been
+         * squeezed, and adding a play clock to two halves would have crowded all
+         * three. WIDTH IS NOT THE CONSTRAINT HERE, which is worth stating because
+         * the height above it very much is: projected at the tightest aspect the
+         * game supports, a 9:19.5 phone in portrait, 31.2m of width is visible
+         * where the board stands, so even a full 21m board would clear the frame
+         * by nine metres. Landscape sees 57.5m.
+         *
+         * So this is an aesthetic number rather than a safe one. 18m is a board
+         * that reads as substantial and still stops three metres inside the
+         * sidelines it overlooks, which is where a real one would stop.
+         */
+        width: 18,
         height: 4.0,
         standHeight: 1.0,           // metres of post under the board
         beyond: 1.5,                // metres past the far end line

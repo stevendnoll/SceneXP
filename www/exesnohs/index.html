@@ -198,8 +198,17 @@
                     choose a defense to face or leave it to chance.</li>
                 <li><strong>Snap the ball.</strong> Take as long as you like reading
                     the formation first.</li>
+                <!-- THE CLOCK IS SPELLED OUT HERE BECAUSE THE READOUT IS
+                     `aria-hidden`. A ticking number inside a live region would
+                     talk over everything else once a frame, so the rule is
+                     stated once, up front, where it costs nobody anything. The
+                     word "ten" is checked against `clock.decide` by the suite,
+                     so the sentence cannot quietly go stale if the number
+                     changes. -->
                 <li><strong>Throw or run.</strong> Hit a receiver, or keep it
-                    yourself and see how far you get.</li>
+                    yourself and see how far you get. You have ten seconds from
+                    the snap to make up your mind, and holding on past that is
+                    a sack.</li>
             </ol>
 
             <!-- ONE LINE, AND ONLY BECAUSE THE LETTERS ARE ALREADY THERE. The
@@ -286,6 +295,21 @@
         <div class="hud-bar">
             <span class="hud-stat">Play <strong id="hud-play">1</strong> of <strong id="hud-of">10</strong></span>
             <span class="hud-stat">Score <strong id="hud-score">0</strong></span>
+            <!-- THE PLAY CLOCK. `aria-hidden` on the whole stat, and that is
+                 deliberate rather than an oversight: a value that changes every
+                 frame inside a live region would talk over everything else a
+                 screen reader is trying to say, once a frame, for ten seconds.
+                 The thing that MATTERS about this clock is what happens when it
+                 reaches zero, and that already goes out through `#hud-live` as
+                 the whistle, with the same words and the same points as any
+                 other sack. The welcome card explains the rule up front, so a
+                 visitor who cannot see it is told about it before it can cost
+                 them anything.
+
+                 It is hidden rather than shown at 10 before a snap: a clock
+                 that sits there reading ten while the playbook is open is
+                 counting nothing. -->
+            <span class="hud-stat hud-clock" id="hud-clock" aria-hidden="true" hidden>Clock <strong id="hud-clock-value">10</strong></span>
             <button id="mute-btn" class="hud-mute" type="button" aria-pressed="false">Sound on</button>
         </div>
         <div id="hud-actions" class="hud-actions"></div>

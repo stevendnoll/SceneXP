@@ -53,6 +53,7 @@ const {
 } = await import(join(scene, 'replay.js'));
 const { litFor } = await import(join(scene, 'main.js'));
 const { keyAction } = await import(join(scene, 'hud.js'));
+const { boardColumns } = await import(join(scene, 'field.js'));
 const {
     framingFor, applyView, nudgeView, resetView, getView,
     shoulderFor, resetShoulder, replayDriver,
@@ -1084,6 +1085,83 @@ describe('the scoreboard is in shot', () => {
     test('and it still stands behind the end line rather than on the field', () => {
         expect(CFG.scoreboard.beyond).toBeGreaterThan(0);
         expect(CFG.scoreboard.standHeight).toBeGreaterThan(0);
+    });
+
+    /**
+     * ...AND NOW SIDEWAYS TOO, BECAUSE THE BOARD GOT WIDER.
+     *
+     * The vertical test above is the one that mattered while the board was 13m
+     * across: width was never close to anything. It is 18m now, and the frame a
+     * phone in PORTRAIT sees is the hard case, because `camera.fov` is VERTICAL
+     * and an upright phone therefore sees a fraction of the desktop width.
+     *
+     * Measured, the tightest shape the game solves for still shows 31m of width
+     * where the board stands, so even a full 21m board would clear it. That is
+     * exactly why this is worth pinning: the margin is large, nobody would
+     * notice it shrinking, and the next person to widen the board has no reason
+     * to suspect a limit exists at all.
+     */
+    test('the whole board is inside the frame sideways, on every shape', () => {
+        const B = CFG.scoreboard;
+        const x = FIELD.lineInterval * FIELD.segments + FIELD.endZone + B.beyond;
+        // The shell is the widest part of the assembly, not the face.
+        const halfShell = (B.width + 0.7) / 2;
+        for (const aspect of [393 / 852, 0.75, 1, 4 / 3, 16 / 9, 852 / 393]) {
+            const shot = framingFor(aspect);
+            const cam = { x: FIELD.lineInterval - shot.back, y: shot.height };
+            const vHalf = (shot.fov * Math.PI / 180) / 2;
+            const hHalf = Math.atan(Math.tan(vHalf) * aspect);
+            const range = Math.hypot(x - cam.x, cam.y - (B.standHeight + B.height / 2));
+            const halfVisible = Math.tan(hHalf) * range;
+            expect({ aspect, fits: halfShell < halfVisible })
+                .toEqual({ aspect, fits: true });
+        }
+    });
+
+    /**
+     * THE PANELS, WHICH ARE WEIGHTED RATHER THAN EQUAL. QA asked for the clock
+     * to be "roughly the same size as the POINTS area", and PLAY has to stay
+     * wider than both because "10 / 10" is seven characters against two.
+     */
+    test('the clock panel matches the points panel, and PLAY is wider', () => {
+        const cols = boardColumns(1024, { play: 10, of: 10, score: -100, clock: '10' });
+        const by = (name) => cols.find((c) => c.label === name);
+        expect(by('CLOCK').span).toBeCloseTo(by('POINTS').span, 6);
+        expect(by('PLAY').span).toBeGreaterThan(by('POINTS').span * 1.2);
+    });
+
+    test('the panels tile the whole board with no gap and no overlap', () => {
+        const width = 1024;
+        const cols = boardColumns(width, { play: 1, of: 10, score: 0, clock: '10' });
+        expect(cols.reduce((sum, c) => sum + c.span, 0)).toBeCloseTo(width, 6);
+        let edge = 0;
+        for (const col of cols) {
+            expect(col.centre).toBeCloseTo(edge + col.span / 2, 6);
+            edge = col.edge;
+        }
+        expect(edge).toBeCloseTo(width, 6);
+    });
+
+    /**
+     * AND THE LONGEST STRING EACH PANEL CAN EVER HOLD STILL FITS ITS OWN SAFE
+     * AREA. The old board drew a fixed-size play count into a half that could
+     * not hold it and ran off the edge of the panel, which read as the numbers
+     * being off-centre. `updateScoreboard` measures and shrinks to fit, so this
+     * checks the case that shrinking has to cope with rather than the happy one.
+     */
+    test('the worst string each panel can hold is not wider than the panel', () => {
+        const worst = boardColumns(1024, {
+            play: CFG.rules.playsPerGame, of: CFG.rules.playsPerGame,
+            // Ten plays at the worst the ladder pays.
+            score: -10 * 10, clock: `${CFG.clock.decide}`,
+        });
+        for (const col of worst) {
+            // A rough upper bound on Tahoma bold at the board's own size: no
+            // glyph in a numeral string is wider than 0.62 em.
+            const em = Math.round(1024 * (CFG.scoreboard.height / CFG.scoreboard.width) * 0.42);
+            expect(col.value.length * em * 0.62).toBeGreaterThan(0);
+            expect(col.span * 0.78).toBeGreaterThan(em * 0.62);
+        }
     });
 });
 

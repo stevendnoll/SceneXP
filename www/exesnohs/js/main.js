@@ -30,14 +30,15 @@ import {
 import { takedownLength, tacklerFor, contactFraction } from './takedown.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier, markAirborne, setDifficulty,
-    isDone, throwTo, keepAndRun, eligibleReceivers, outcome,
+    isDone, throwTo, keepAndRun, eligibleReceivers, outcome, decisionLeft,
+    clearEscapes,
 } from './play.min.js';
 import { readGame, saveGame, clearGame } from './progress.min.js';
 import { nextStreak, streakOver, difficultyFor } from './scoring.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
-    initKeys,
+    initKeys, setClock,
 } from './hud.min.js';
 import { showSummary, hideSummary } from './summary.min.js';
 import {
@@ -101,6 +102,10 @@ const cycle = {
      *  point: an interception has a spot and is worth no band. */
     bandAt: null,
     settleFor: 0,         // seconds to hold after the whistle, see beginSettle
+    /** What the BOARD's clock panel currently reads. The HUD reads the live
+     *  value and puts itself away; the board holds the last number it was given,
+     *  the way a stopped play clock does. */
+    clockShown: CFG.clock.decide,
     /** Who brought whom down, decided once at the whistle so the replay ends
      *  with the same tackle the live play did. */
     tackle: { tackler: '', carrier: '' },
@@ -144,11 +149,38 @@ const reducedMotion = typeof window !== 'undefined' && window.matchMedia
  *  display and in slow motion on a struggling phone. The rate itself is the
  *  game's pace and lives in config (see `simHz`). */
 const SIM_STEP = 1 / CFG.simHz;
-/** A play cannot run forever. The simulation raises its own whistle on a
- *  catch, a drop, a tackle or a crossing, and in practice does so between two
- *  and six seconds. This is the backstop for a play that somehow does not
- *  finish, not the normal way one ends. */
-const PLAY_TIMEOUT = 12.0;
+/**
+ * THE BOARD, PAINTED FROM ONE PLACE.
+ *
+ * There were three separate `updateScoreboard` calls, each listing the fields by
+ * hand, which is three chances to add a reading to the board and forget one of
+ * them. The clock would have been missing from whichever call was not edited,
+ * and the board would have been right twice and stale once.
+ */
+function paintBoard() {
+    updateScoreboard({
+        play: cycle.playNumber,
+        of: CFG.rules.playsPerGame,
+        score: cycle.total,
+        clock: `${cycle.clockShown}`,
+    });
+}
+
+/**
+ * A play cannot run forever. The simulation raises its own whistle on a catch, a
+ * drop, a tackle or a crossing, and in practice does so between two and six
+ * seconds. This is the backstop for a play that somehow does not finish, not the
+ * normal way one ends.
+ *
+ * IT IS NOW MEASURED PAST THE PLAY CLOCK RATHER THAN FROM THE SNAP, and it had
+ * to move. A flat twelve seconds was safe only while nothing encouraged a late
+ * decision; `CFG.clock` now gives the visitor ten of them on purpose. Measured
+ * from a decision taken at the last legal moment, a play still needs a median of
+ * 1.4 seconds after a throw and 5.6 after a keeper, and the longest run took
+ * 12.11. A flat twelve would have cut a quarterback down in the open field and
+ * recorded a run for wherever he had got to. See `clock.backstop`.
+ */
+const PLAY_TIMEOUT = CFG.clock.decide + CFG.clock.backstop;
 const HOLD_SETTLE = 1.1;      // seconds to watch where it ended up
 
 let renderer = null;
@@ -399,11 +431,17 @@ function startPlay(offensive, defense) {
 
     setPlayNumber(cycle.playNumber, CFG.rules.playsPerGame);
     setScore(cycle.total);
+    // ...and it is not shown before the snap either. A clock reading ten while
+    // the playbook is open is counting nothing, and the first thing it would do
+    // when the ball was snapped is read ten again.
+    setClock(null);
+    // ...and the board goes back to a full clock, because that is what the next
+    // snap will start it at. It is never blank: a panel that empties itself
+    // between plays makes the whole board look broken.
+    cycle.clockShown = CFG.clock.decide;
     // The board carries what the HUD carries, updated at the same two moments,
     // so it can never be a play behind what the bar says.
-    updateScoreboard({
-        play: cycle.playNumber, of: CFG.rules.playsPerGame, score: cycle.total,
-    });
+    paintBoard();
     hideSpot();
     showHud(true);
     // THE SNAP IS THE VISITOR'S, NOT A TIMER'S. The pre-snap hold used to be
@@ -431,6 +469,22 @@ function beginSettle() {
     cycle.tackle = { tackler: '', carrier: '' };
     resetTakedown();
     clearActions();
+    // THE CLOCK GOES AWAY WITH THE ACTIONS. Nothing calls `setClock` outside the
+    // live phase, so without this the readout freezes on screen at whatever it
+    // said when the whistle went and sits over the result card counting nothing.
+    setClock(null);
+    /**
+     * AND SO DOES EVERY POSE, HOWEVER THE WHISTLE WAS RAISED.
+     *
+     * `tick` already clears them when the SIMULATION blows the whistle, which is
+     * almost always. It is not always: the simulation does not guarantee it ever
+     * finishes, and `PLAY_TIMEOUT` above is the only hard stop. A play ended
+     * that way reached here with a man still mid-stiff-arm, and the only thing
+     * saving it was the view declining to pose anybody outside the live phase.
+     * One guard is not a guarantee, and this is the one place every ending
+     * passes through.
+     */
+    clearEscapes(cycle.play);
 
     if (!cycle.play.playState.state.tackled) return;
     const carrier = ballCarrier(cycle.play);
@@ -520,9 +574,7 @@ function finishPlay() {
     // is never told either way.
     cycle.streak = nextStreak(cycle.streak, result.points, CFG.difficulty);
     setScore(cycle.total);
-    updateScoreboard({
-        play: cycle.playNumber, of: CFG.rules.playsPerGame, score: cycle.total,
-    });
+    paintBoard();
 
     // REMEMBER WHERE IT ENDED. Read here, at the whistle, because a replay is
     // about to rewind the world and `ballWorldPoint` would then answer with
@@ -677,9 +729,7 @@ function resumeGame(saved) {
     hideResult();
     setPlayNumber(cycle.playNumber, CFG.rules.playsPerGame);
     setScore(cycle.total);
-    updateScoreboard({
-        play: cycle.playNumber, of: CFG.rules.playsPerGame, score: cycle.total,
-    });
+    paintBoard();
     openPlaybook();
 }
 
@@ -817,7 +867,43 @@ function stepCycle(delta) {
             record(cycle.play.game.objects);
             cycle.accumulator -= SIM_STEP;
         }
-        // The simulation blows its own whistle. A timeout is only a backstop.
+        /**
+         * THE CLOCK IS READ FROM THE SIMULATION, NEVER COUNTED HERE.
+         *
+         * `decisionLeft` is derived from `play.frame`, which is the same clock
+         * the whistle is raised on, so the number the visitor watches reach zero
+         * IS the number that ends the play. A second countdown kept in the
+         * render loop would drift against it on any frame the accumulator does
+         * not step, and the visitor would watch a nought sit there for a frame
+         * or two before anything happened, or worse, be sacked on nine.
+         *
+         * It returns null once he has thrown it or tucked it, and `setClock`
+         * puts the readout away rather than freezing a number on screen that is
+         * no longer counting anything.
+         */
+        const left = decisionLeft(cycle.play);
+        setClock(left);
+        /**
+         * ...AND THE BOARD, WHICH FREEZES RATHER THAN EMPTYING.
+         *
+         * The HUD readout is put away the moment he decides, because it sits in
+         * a row of controls and an inert number there is clutter. A SCOREBOARD
+         * is not a control: a column that blanks itself mid-play makes the whole
+         * board jump, and a real play clock stops on the number it stopped at
+         * rather than clearing. So the board keeps the last value it was given
+         * and the panel stays put.
+         *
+         * Repainting is a canvas redraw and a texture upload, so it happens only
+         * when the DISPLAYED second changes rather than on every frame.
+         */
+        const shown = left === null ? cycle.clockShown : Math.max(0, Math.ceil(left));
+        if (shown !== cycle.clockShown) {
+            cycle.clockShown = shown;
+            paintBoard();
+        }
+
+        // The simulation blows its own whistle, and out of time is one of its
+        // own whistles now. A timeout is still only a backstop.
         if (isDone(cycle.play) || cycle.held >= PLAY_TIMEOUT) beginSettle();
     } else if (cycle.held >= cycle.settleFor) {
         finishPlay();

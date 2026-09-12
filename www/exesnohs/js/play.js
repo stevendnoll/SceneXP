@@ -259,6 +259,53 @@ export function tick(play) {
     // and keepInbounds move people, and a heading measured before them is a
     // heading for a journey the player did not take.
     markHeading(play);
+
+    // OUT OF TIME IS A WHISTLE LIKE ANY OTHER. See `decisionLeft`: a play that
+    // reaches zero with nobody having thrown it or run with it is a sack, and
+    // `classifyPlay` already says exactly that without being told.
+    if (outOfTime(play)) play.playState.state.anim.done = true;
+
+    // AND THE WHISTLE DROPS EVERY POSE, on the frame it blows rather than
+    // whenever somebody next asks. Both halves matter: `tackled` is a carrier
+    // going down mid-stiff-arm, which is the one QA watched keep his arm out,
+    // and `isDone` is every other way a play can end. See `clearEscapes` for why
+    // the escape's own clock cannot do this.
+    if (isDone(play) || play.playState.state.tackled) clearEscapes(play);
+}
+
+/**
+ * HAS THE VISITOR DECIDED YET? The clock times HIM, not the play.
+ *
+ * It stops the moment the ball is thrown or the quarterback tucks it and runs,
+ * because after that there is no further input to wait for: the rest is the
+ * play happening. That is why a twenty-metre run does not run the clock out.
+ */
+export function undecided(play) {
+    return !play.game.throwTo && !play.game.runForYourLife;
+}
+
+/**
+ * SECONDS LEFT ON THE PLAY CLOCK, or null once he has decided.
+ *
+ * Null rather than zero, deliberately: zero is a real value that means OUT OF
+ * TIME, and a HUD that cannot tell the two apart would flash a red nought over
+ * every completed pass. Null means "this clock has nothing left to say".
+ */
+export function decisionLeft(play) {
+    // A finished play has no clock. `live` is lowered by main.js on the next
+    // frame rather than by the whistle itself, so without the `isDone` test this
+    // reads a flat 0 for a frame after a sack, which is a red nought flashed
+    // over a result that has already been decided.
+    if (!play.live || isDone(play) || !undecided(play)) return null;
+    const spent = play.frame / CFG.simHz;
+    const left = CFG.clock.decide - spent;
+    return left > 0 ? left : 0;
+}
+
+/** ...and the whistle itself. Separated so the HUD and the rule cannot drift:
+ *  the number the visitor watches reach zero is the number that ends the play. */
+export function outOfTime(play) {
+    return play.live && undecided(play) && decisionLeft(play) === 0;
 }
 
 /**
@@ -277,7 +324,7 @@ function driveEscape(obj, escape, E) {
     const top = obj.physics.maxSpeed;
     // 1 at the moment of the break, 0 at the end of it, smooth at both ends.
     const envelope = Math.cos(Math.min(1, escape.at / E.grace) * (Math.PI / 2));
-    if (escape.kind === 'stiff-arm') {
+    if (escape.kind !== 'shove') {
         /**
          * FORWARD ONLY, AND NOTHING IS ADDED TO HIS LATERAL SPEED.
          *
@@ -294,10 +341,10 @@ function driveEscape(obj, escape, E) {
          */
         s.xSpeed = Math.max(s.xSpeed, top * E.drive * envelope);
     } else {
-        // A juke IS a change of line, so this one is an assignment. Clamped to
-        // his own top speed for the same reason: nothing here may make a man
+        // A SHOVE moves him off his line, so this one is an assignment. Clamped
+        // to his own top speed for the same reason: nothing here may make a man
         // faster than he is.
-        const want = escape.away * top * E.juke * envelope;
+        const want = escape.away * top * E.shove * envelope;
         s.ySpeed = Math.max(-top, Math.min(top, want));
     }
 }
@@ -436,13 +483,19 @@ export function breakContact(play, dt) {
             const near = touching.has(pos);
             const c = contact[pos];
             if (!near && !c) continue;
-            if (!c) { contact[pos] = { held: step, off: 0 }; continue; }
-            c.held += step;
-            if (near) c.off = 0; else c.off += step;
-            if (c.off > E.forgive) { delete contact[pos]; continue; }
+            // A NEW CONTACT COUNTS ON THE FRAME IT STARTS, rather than being
+            // recorded and then skipped. Skipping it left `on` unset for that
+            // frame, which is harmless for the clock (it simply arrives a frame
+            // later) and not harmless for a CARRIER, whose trigger is his tackle
+            // progress and can be satisfied the instant somebody reaches him:
+            // he had to wait a frame for a move he had already earned.
+            const seen = c || (contact[pos] = { held: 0, off: 0 });
+            seen.held += step;
+            if (near) seen.off = 0; else seen.off += step;
+            if (seen.off > E.forgive) { delete contact[pos]; continue; }
             // Whoever has been on him LONGEST is the one he is breaking from,
             // rather than whoever happens to be closest this frame.
-            if (c.held > held) { held = c.held; on = other; }
+            if (seen.held > held) { held = seen.held; on = other; }
         }
 
         /**
@@ -474,7 +527,7 @@ export function breakContact(play, dt) {
         // Away from the man he is leaving. `away` is -1 or +1 across the field.
         const away = (obj.coords.y - on.coords.y) >= 0 ? 1 : -1;
         s.escape = {
-            at: 0, kind: carrying ? 'stiff-arm' : 'juke',
+            at: 0, kind: carrying ? 'stiff-arm' : 'shove',
             away, against: on.settings.position,
         };
         driveEscape(obj, s.escape, E);
@@ -484,15 +537,84 @@ export function breakContact(play, dt) {
         // could reset the count every time could not be tackled at all.
         if (carrying) s.tackle = Math.max(0, s.tackle * (1 - E.relief));
 
-        // ...and the man being shed is beaten rather than frozen. He keeps a
-        // little of what he had and is pushed off, which reads as having been
-        // got past.
+        /**
+         * ...AND THE MAN BEING SHOVED IS STAGGERED, NOT NUDGED.
+         *
+         * This is where the separation comes from, and a single frame of it is
+         * worth nothing: his cover route re-accelerates him at the receiver on
+         * the very next frame and undoes the damping inside five. So being
+         * shoved is a STATE with its own clock, read by `holdStagger` below,
+         * and he spends `escape.stagger` seconds unable to run at the man who
+         * pushed him off.
+         *
+         * He is pushed off as well as slowed, because a defender who merely
+         * decelerates on the spot reads as a man who lost interest rather than
+         * one who has been beaten.
+         */
         on.state.ySpeed = on.state.ySpeed * E.shed - away * on.physics.maxSpeed * E.shed;
         on.state.xSpeed *= E.shed;
+        on.state.shoved = { at: 0, away };
         s.contact = null;
         broke += 1;
     }
+
+    holdStagger(play, step, E);
     return broke;
+}
+
+/**
+ * A SHOVED DEFENDER STAYS SHOVED FOR HALF A SECOND.
+ *
+ * THE SAME LESSON AS THE ESCAPE DRIVE, ON THE OTHER MAN. Damping a defender's
+ * speed on the frame he is pushed is undone by his own cover route within five
+ * frames, because that route re-derives his velocity every frame and it is
+ * pointed straight at the receiver. Measured with a one-frame shove, a pair
+ * 1.90m apart at the break were 2.00m apart when the move ended.
+ *
+ * So the damping is re-applied across `escape.stagger`, easing back to nothing,
+ * and it is applied to his SPEED rather than to his target. He still tries to
+ * cover, he just cannot get there, which is what being shoved off looks like.
+ */
+function holdStagger(play, step, E) {
+    let held = 0;
+    for (const obj of play.game.objects) {
+        const s = obj.state;
+        if (!s || !s.shoved) continue;
+        s.shoved.at += step;
+        if (s.shoved.at >= E.stagger) { s.shoved = null; continue; }
+        // 1 at the moment of the shove, easing to no damping at all by the end.
+        const bite = Math.cos(Math.min(1, s.shoved.at / E.stagger) * (Math.PI / 2));
+        const keep = 1 - (1 - E.shed) * bite;
+        s.xSpeed *= keep;
+        s.ySpeed *= keep;
+        held += 1;
+    }
+    return held;
+}
+
+/**
+ * NOBODY HOLDS A POSE AFTER THE WHISTLE. QA, 2026-09-11.
+ *
+ * `state.escape` is cleared by its own clock inside `breakContact`, and
+ * `breakContact` only runs from `tick`, and `tick` returns immediately once the
+ * play is dead. So a man who was mid-move when he was brought down keeps the
+ * flag FOREVER: measured, 0.64 players a play were still holding one when the
+ * whistle went, and what QA saw was a tackled carrier lying there with his
+ * stiff-arm still locked out.
+ *
+ * Called from the whistle rather than left to the clock, because the clock is
+ * exactly the thing that has stopped running.
+ */
+export function clearEscapes(play) {
+    let cleared = 0;
+    for (const obj of play.game.objects) {
+        if (!obj.state) continue;
+        if (obj.state.escape) cleared += 1;
+        obj.state.escape = null;
+        obj.state.shoved = null;
+        obj.state.contact = null;
+    }
+    return cleared;
 }
 
 /**

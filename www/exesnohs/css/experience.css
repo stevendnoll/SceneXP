@@ -318,8 +318,14 @@ body {
 
 .hud-bar {
     display: flex;
+    /* WRAPS, because the bar gained a third stat and a phone is 360px wide.
+       Unwrapped, "Play 1 of 10", "Score 0", "Clock 10" and the mute button
+       overflow a narrow screen and the mute button is the one pushed off, which
+       is a control rather than a readout. */
+    flex-wrap: wrap;
     justify-content: center;
-    gap: 1.4rem;
+    align-items: baseline;
+    gap: 0.35rem 1.4rem;
     color: #b9c2d2;
     font-size: 0.9rem;
     letter-spacing: 0.02em;
@@ -329,6 +335,33 @@ body {
     color: #f2f5fa;
     font-size: 1.05rem;
 }
+
+/* THE PLAY CLOCK.
+   Tabular numerals so the bar does not jiggle as the digits change: 10 to 9 is
+   a width change, and a readout that shifts its neighbours every second reads
+   as broken. */
+.hud-clock strong {
+    font-variant-numeric: tabular-nums;
+    /* Two digits plus the space they need, so dropping to one does not pull the
+       whole row leftward. */
+    min-width: 1.4ch;
+    display: inline-block;
+    text-align: right;
+}
+
+.hud-clock[hidden] {
+    display: none;
+}
+
+/* RUNNING OUT, AND NEVER BY COLOUR ALONE. The weight and the scale carry it for
+   anybody who cannot separate the two hues, and the number itself counting down
+   is the real signal in any case. */
+.hud-clock.is-urgent strong {
+    color: #ff7a7a;
+    font-weight: 800;
+    font-size: 1.25rem;
+}
+
 
 .hud-actions {
     display: flex;
