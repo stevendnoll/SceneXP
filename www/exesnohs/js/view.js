@@ -271,7 +271,15 @@ export function resetAssignments() {
     watching.clear();
 }
 
-function noteAssignments(objects) {
+/**
+ * WHAT EACH DEFENDER WAS TOLD TO DO, latched from his route at the line-up.
+ *
+ * EXPORTED SO THE FACING RULES CAN BE ASKED A QUESTION. `lookTarget` reads this
+ * map, so without it every test of the defense is a test of a defender who has
+ * been given no assignment at all, which is the one case that was never the
+ * problem.
+ */
+export function noteAssignments(objects) {
     for (const obj of objects) {
         const route = obj.settings.route;
         if (!route || !route.type) continue;
@@ -297,6 +305,21 @@ function noteAssignments(objects) {
 export function lookTarget(obj, objects, carrier, here, standing, blocking) {
     const at = (o) => (o ? simToWorld(o.coords.x, o.coords.y, 0) : null);
 
+    /**
+     * IS SOMEBODY RUNNING WITH IT? That is a different question from "does
+     * somebody have it", and the difference is the quarterback: he holds the
+     * ball from the line-up onward, so "has it" is true for most of a play
+     * that has not committed to anything yet. `carryFor` already tells the two
+     * apart for the carry pose, and a quarterback reading the field comes back
+     * 'throw' while a man running with it comes back 'tuck'.
+     *
+     * Written here rather than inside the defense's branch because it is true
+     * of both sides: after an interception it is the OFFENSE chasing.
+     */
+    const chasing = !!carrier && carrier !== obj
+        && carrier.settings.team !== obj.settings.team
+        && carryFor(carrier, carrier) === 'tuck';
+
     // A BLOCK BEATS EVERY OTHER REASON TO BE LOOKING SOMEWHERE, on both sides
     // of it. Two men with their hands on each other are looking at each other,
     // and a lineman facing the way he last happened to move while wrestling
@@ -304,6 +327,25 @@ export function lookTarget(obj, objects, carrier, here, standing, blocking) {
     if (blocking) {
         const foe = at(objects.find((o) => o.settings.position === blocking && !BENCHED(o)));
         if (foe) return foe;
+    }
+
+    /**
+     * AND A MAN RUNNING WITH THE BALL BEATS EVERY OTHER REASON TO BE LOOKING
+     * SOMEWHERE. QA ROUND TWENTY-EIGHT.
+     *
+     * Once the play has committed, every man on the other side is watching the
+     * carrier, at any distance, whatever he was told to do before the snap. It
+     * used to take an assignment to beat, and only from six metres: a corner
+     * covering B went on watching B while the ball was carried past him by
+     * somebody else, and a blitzer went on staring at a quarterback who had
+     * handed it off a second ago.
+     *
+     * The only thing that outranks it is the block above, which is right: a man
+     * with his hands on somebody is looking at the man he has hold of.
+     */
+    if (chasing) {
+        const c = at(carrier);
+        if (c) return c;
     }
 
     if (obj.settings.team !== 1) {
@@ -351,22 +393,43 @@ export function lookTarget(obj, objects, carrier, here, standing, blocking) {
         return at(carrier);
     }
 
+    /**
+     * ...AND A MAN CLOSE ENOUGH TO MAKE THE TACKLE IS ALREADY MAKING IT, even
+     * on a quarterback who is still reading and is therefore not being chased
+     * by the rule above. `tacklersOn` gives him the pose at `tackle.reach`; this
+     * keeps his eyes with it, because a defender lunging at somebody while
+     * looking at his own receiver is the pose and the facing disagreeing.
+     */
     if (carrier && carrier !== obj) {
         const c = at(carrier);
-        if (Math.hypot(c.x - here.x, c.z - here.z) < CFG.pose.tackle.reach * 2.4) return c;
+        if (c && Math.hypot(c.x - here.x, c.z - here.z) < CFG.pose.tackle.reach * 2.4) return c;
     }
 
     const job = watching.get(obj.settings.position);
-    if (!job) return null;
-    if (job.type === 'cover' && job.cover) {
-        return at(objects.find((o) => o.settings.position === job.cover && !BENCHED(o)));
+    if (job && job.type === 'cover' && job.cover) {
+        const man = at(objects.find((o) => o.settings.position === job.cover && !BENCHED(o)));
+        if (man) return man;
     }
-    if (job.type === 'blitz') {
-        return at(objects.find((o) => o.settings.position === 'qb' && !BENCHED(o)));
-    }
-    // A zone defender watches the ball, which before a throw is the
-    // quarterback. That is what standing in a zone actually looks like.
-    return carrier && carrier !== obj ? at(carrier) : null;
+
+    // Whoever has it. Before a throw that is the quarterback, and a blitzer
+    // wants the same answer as everybody else: he is running at the man with
+    // the ball, which is what his route already does.
+    if (carrier && carrier !== obj) return at(carrier);
+
+    /**
+     * ...OR THE BALL ITSELF, WHICH NOBODY WATCHED. Between the throw and the
+     * catch there is no carrier at all, so a zone defender fell through every
+     * branch here to `null` and faced the way his feet happened to be pointing,
+     * and a blitzer went on staring at a quarterback who no longer had it.
+     * Read off the ball OBJECT rather than the drawn flight so a replay, where
+     * every object is rebuilt from six floats a frame, answers the same way.
+     */
+    const ball = objects.find((o) => o.settings.position === 'ball' && !BENCHED(o));
+    if (ball) return at(ball);
+
+    // Nothing is in the air and nobody is carrying: the play has not started.
+    // He looks at the man who is about to have it.
+    return at(objects.find((o) => o.settings.position === 'qb' && !BENCHED(o)));
 }
 
 /**

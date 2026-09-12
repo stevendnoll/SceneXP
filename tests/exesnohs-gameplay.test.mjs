@@ -45,6 +45,7 @@ const { markerGeometry } = await import(join(scene, 'markers.js'));
 const {
     escapeAmount, jukeRoll, stiffArmSide,
     blockersEngaged, lookTarget, stillFor, jumpLift, ballArrived,
+    noteAssignments, resetAssignments,
 } = await import(join(scene, 'view.js'));
 const { stiffSide, THROWING_SIDE, poseFigure } = await import(join(scene, 'roster.js'));
 const { MotionClass } = await import(join(scene, 'motion.js'));
@@ -3270,5 +3271,160 @@ describe('a man who has stopped stays stopped', () => {
     test('and slowing down is not the same as arriving', () => {
         const between = (CFG.pose.standing.net + CFG.pose.standing.release) / 2;
         expect(stillFor(between, false)).toBe(false);
+    });
+});
+
+/**
+ * WHERE THE DEFENSE IS LOOKING. QA ROUND TWENTY-EIGHT.
+ *
+ * "If a defender is covering a receiver then it makes sense for him to look at
+ * the receiver, but for defenders that are not covering a specific receiver,
+ * their eyes should be on the QB or whoever has the ball... once there's a ball
+ * carrier the defenders' eyes should be looking at the ball carrier unless
+ * they're actively locking arms."
+ *
+ * Every case below is one sentence of that, asked with plain objects.
+ */
+describe('where the defense is looking', () => {
+    const world = (obj) => simToWorld(obj.coords.x, obj.coords.y, 0);
+    const near = (look, obj) => {
+        const p = world(obj);
+        return Math.hypot(look.x - p.x, look.z - p.z) < 1e-6;
+    };
+
+    /** A line-up that actually contains a man in coverage, since only some
+     *  defensive formations hand one out. */
+    function withCover() {
+        for (const defence of ['man1', 'cover1', 'cover2', 'man2', '', 'zone1']) {
+            const play = createPlayForDifficulty();
+            const objects = lineUp(play, 'pass2', defence);
+            resetAssignments();
+            noteAssignments(objects);
+            const man = objects.find((o) => o.settings.team === 1 && !o.settings.benched
+                && o.settings.route && o.settings.route.type === 'cover'
+                && o.settings.route.cover);
+            if (man) return { play, objects, man };
+        }
+        return null;
+    }
+
+    const qbOf = (objects) => objects.find((o) => o.settings.position === 'qb');
+
+    test('a defender in coverage watches his receiver while the ball is read', () => {
+        const set = withCover();
+        expect(set).toBeTruthy();
+        const { objects, man } = set;
+        const qb = qbOf(objects);
+        expect(qb.state.hasBall).toBe(true);        // he has not thrown it yet
+        const his = objects.find((o) => o.settings.position === man.settings.route.cover);
+        // Put them far enough apart that the tackle-range rule cannot answer.
+        man.coords.x = 600; man.coords.y = 300;
+        const look = lookTarget(man, objects, qb, world(man), false, '');
+        expect(look).toBeTruthy();
+        expect(near(look, his)).toBe(true);
+    });
+
+    test('and a defender with no receiver of his own watches the quarterback', () => {
+        const set = withCover();
+        const { objects } = set;
+        const qb = qbOf(objects);
+        const zone = objects.find((o) => o.settings.team === 1 && !o.settings.benched
+            && o.settings.route && o.settings.route.type !== 'cover');
+        expect(zone).toBeTruthy();
+        zone.coords.x = 600; zone.coords.y = 300;
+        const look = lookTarget(zone, objects, qb, world(zone), false, '');
+        expect(look).toBeTruthy();
+        expect(near(look, qb)).toBe(true);
+    });
+
+    /**
+     * ...AND ONCE ANYBODY IS RUNNING WITH IT, EVERY ONE OF THEM WATCHES HIM.
+     *
+     * This is the report. An assignment used to outrank the carrier unless he
+     * had come within six metres, so a corner covering B went on watching B
+     * while the ball was carried past him by somebody else.
+     */
+    test('a carrier beats a coverage assignment, at any distance', () => {
+        const set = withCover();
+        const { objects, man } = set;
+        const qb = qbOf(objects);
+        // A receiver has caught it and is running: `carryFor` calls that a tuck.
+        qb.state.hasBall = false;
+        const runner = objects.find((o) => /^wr\d$/.test(o.settings.position)
+            && !o.settings.benched && o.settings.position !== man.settings.route.cover);
+        runner.state.hasBall = true;
+        // The far corner of the field, well outside any tackle range.
+        man.coords.x = 20; man.coords.y = 20;
+        runner.coords.x = 900; runner.coords.y = 560;
+        const look = lookTarget(man, objects, runner, world(man), false, '');
+        expect(near(look, runner)).toBe(true);
+    });
+
+    test('and so does a quarterback who has tucked it and run', () => {
+        const set = withCover();
+        const { objects, man } = set;
+        const qb = qbOf(objects);
+        qb.state.run = true;                        // keep it and go
+        man.coords.x = 20; man.coords.y = 20;
+        qb.coords.x = 900; qb.coords.y = 560;
+        const look = lookTarget(man, objects, qb, world(man), false, '');
+        expect(near(look, qb)).toBe(true);
+    });
+
+    /** ...unless he has his hands on somebody, which beats everything. */
+    test('a man locked onto a blocker keeps his eyes on the blocker', () => {
+        const set = withCover();
+        const { objects, man } = set;
+        const qb = qbOf(objects);
+        qb.state.run = true;
+        const blocker = objects.find((o) => /^x\d$/.test(o.settings.position)
+            && !o.settings.benched);
+        const look = lookTarget(man, objects, qb, world(man), false,
+            blocker.settings.position);
+        expect(near(look, blocker)).toBe(true);
+    });
+
+    /**
+     * AND THE BALL IN THE AIR IS SOMETHING TO WATCH. Between the throw and the
+     * catch nobody has it, so a defender with no assignment used to fall
+     * through to null and face the way his feet happened to be pointing.
+     */
+    test('with the ball in the air he watches the ball', () => {
+        const set = withCover();
+        const { play, objects } = set;
+        const elig = eligibleReceivers(play);
+        expect(throwTo(play, elig[0])).toBe(true);
+        const live = play.game.objects;
+        resetAssignments();
+        noteAssignments(live);
+        const ball = live.find((o) => o.settings.position === 'ball');
+        expect(ball).toBeTruthy();
+        const zone = live.find((o) => o.settings.team === 1 && !o.settings.benched
+            && o.settings.route && o.settings.route.type !== 'cover');
+        zone.coords.x = 300; zone.coords.y = 100;
+        // Nobody is carrying: the quarterback let it go.
+        const carrier = live.find((o) => o.state && o.state.hasBall && !o.settings.benched);
+        expect(carrier).toBeFalsy();
+        const look = lookTarget(zone, live, null, world(zone), false, '');
+        expect(look).toBeTruthy();
+        expect(near(look, ball)).toBe(true);
+    });
+
+    /**
+     * AND IT IS TRUE OF BOTH SIDES. After an interception the men who were
+     * blocking are chasing, and a lineman who went on watching "the nearest
+     * defender" would be watching somebody other than the man with the ball.
+     */
+    test('after an interception the offense chases too', () => {
+        const set = withCover();
+        const { objects, man } = set;
+        const qb = qbOf(objects);
+        qb.state.hasBall = false;
+        man.state.hasBall = true;                   // he picked it off
+        const lineman = objects.find((o) => /^x\d$/.test(o.settings.position)
+            && !o.settings.benched);
+        man.coords.x = 700; man.coords.y = 500;
+        const look = lookTarget(lineman, objects, man, world(lineman), false, '');
+        expect(near(look, man)).toBe(true);
     });
 });
