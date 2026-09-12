@@ -1485,7 +1485,20 @@ const EXESNOHS_CONFIG = {
          * man has stopped a little AFTER he has actually stopped, never
          * before, or it poses a receiver who is still running.
          */
-        standing: { window: 0.45, net: 0.9 },
+        /**
+         * HAS HE STOPPED GETTING ANYWHERE? Net metres travelled over `window`
+         * seconds, which is a different question from how fast he is moving: a
+         * receiver at the end of his route circles a small patch at full speed.
+         *
+         * TWO THRESHOLDS, NOT ONE, and the gap between them is the fix for the
+         * twitching arms of QA round twenty-seven. `net` is where he settles
+         * and `release` is how far he then has to actually travel before he
+         * counts as going somewhere again. With a single number the answer
+         * flickers frame to frame for anybody hovering near it, and what the
+         * visitor sees is a receiver's hands snapping up and down. See
+         * `view.updateStanding`.
+         */
+        standing: { window: 0.45, net: 0.9, release: 1.5 },
         /** Seconds for a pose to blend in or out. Nothing snaps. */
         blend: 0.12,
 
@@ -1751,6 +1764,73 @@ const EXESNOHS_CONFIG = {
              * went 50% to 61%. Keyed on the throw it does not move at all.
              */
             zones: [15, 30],
+
+            /**
+             * WHERE THE TOP OF THE JUMP IS, as a fraction of the hang, and it
+             * is QA round twenty-seven item 6: "receivers sometimes jump after
+             * they have already caught the ball".
+             *
+             * THEY DO, AND IT IS NOT AN ANIMATION FAULT. Measured over 193
+             * throws that came inside a receiver's reach, the ball is inside it
+             * for a MEDIAN OF 75 MILLISECONDS: p10 is 37ms and p90 is 188ms. A
+             * jump fires when the ball comes inside that same reach and the
+             * simulation hands an airborne man his catch on the first frame it
+             * can, so in this game a leaping catch is always taken in the first
+             * tenth of the jump. It cannot be taken at the top, because by the
+             * time he gets there the ball is long gone.
+             *
+             * DELAYING THE CATCH WAS TRIED FIRST AND THE NUMBERS REFUSED IT.
+             * Holding the airborne flag back until he is genuinely up is one
+             * line, and against that dwell time a 50ms delay empties the reach
+             * box on 24% of jump balls and 100ms on 72% of them. That is not a
+             * cosmetic change, it is most of the leaping catches in the game.
+             *
+             * So the catch stays where it is and the JUMP moves under it. At
+             * 0.5 the apex is in the middle and a man catches the ball at
+             * ground level and then rises for a third of a second holding it,
+             * which is exactly what QA described. At 0.3 the rise takes 0.19s
+             * and a catch on the first frames is taken a third of the way up,
+             * with the rest of the jump carrying him to the top and back down:
+             * a man taking the ball on his way up, which is a real thing.
+             *
+             * IT CHANGES NOTHING ABOUT WHO JUMPS OR HOW OFTEN. The trigger, the
+             * clearance table above and the catch are all untouched: this is
+             * the shape of the curve between the same two ends.
+             *
+             * The honest version of this is a PREDICTIVE trigger, jumping a
+             * quarter of a second before the ball arrives so the catch lands at
+             * the apex. That moves the clearance gate onto a ball that has not
+             * got here yet, which is a retune of the measured table above and
+             * wants its own round and its own sweep.
+             */
+            peakAt: 0.3,
+
+            /**
+             * ...AND THE CATCH WAITS FOR THE BALL TO ARRIVE, WHICH COSTS
+             * NOTHING AND IS THE OTHER HALF OF ITEM 6.
+             *
+             * A FIXED DELAY WAS THE OBVIOUS FIX AND THE NUMBERS REFUSED IT:
+             * against a 75ms median dwell, holding the airborne flag for 50ms
+             * empties the reach box on 24% of jump balls and 100ms on 72%.
+             *
+             * But the ball does not have to be held for a fixed time, it has to
+             * be held until it GETS here, and that moment is free: the closest
+             * approach is by definition inside the box the catch tests, so
+             * waiting for it cannot cost a single catch. Measured over the same
+             * 193 throws, the ball takes a median of 63ms to go from entering a
+             * receiver's reach to its nearest point (p10 25ms, p90 100ms), and
+             * gets within a median of 0.62m. Against the rise above that is
+             * half the way up: he leaves his feet, takes it at head height on
+             * the way, and comes down with it.
+             *
+             * `backstop` is the safety valve, as a fraction of the lift. A ball
+             * whose drawn distance never turns over, which is an arc easing
+             * oddly or a receiver running with it, must not leave a man in the
+             * air with the catch withheld: past this height he is airborne
+             * whatever the ball is doing.
+             */
+            arriveFirst: true,
+            backstop: 0.7,
         },
 
         /**

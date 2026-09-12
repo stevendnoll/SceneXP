@@ -139,6 +139,36 @@ export function classifyPlay({ ranWithBall, threwTo, ball, carrierX, lineInterva
     };
 }
 
+/**
+ * WHAT A FINISHED PLAY SOUNDS LIKE.
+ *
+ * The 2D game's `handleFinish` is one if/else: `points === 50 ? whistle :
+ * grunt`, plus a whistle for the two turnovers. The port spelled the else out
+ * as a list of result slugs and dropped the condition that mattered, so a fifty
+ * carried across the line, which is a 'catch' with nobody left to tackle him,
+ * matched the grunt. The best thing that can happen in this game sounded like a
+ * man being hit, with the whistle going over the top of it (QA round
+ * twenty-seven, item 1).
+ *
+ * `hadTackle` is whether a takedown is being animated. The grunt belongs to the
+ * HIT, so when there is one it is played at the moment the two bodies meet
+ * rather than here; this is the case with no takedown to hang it on, which is a
+ * man who ran out of bounds or was sacked.
+ *
+ * PURE, AND HERE RATHER THAN IN main.js, because it is a rule about a result
+ * and this is the file that decides what results are.
+ */
+export function endSounds(result, hadTackle = false) {
+    const points = (result && result.points) || 0;
+    const slug = (result && result.result) || '';
+    const scored = points === 50;
+    return {
+        whistle: scored || slug === 'interception' || slug === 'sack',
+        grunt: !hadTackle && !scored
+            && (slug === 'sack' || slug === 'run' || slug === 'catch'),
+    };
+}
+
 /** A whole game, once the last play is in. */
 export function summarise(plays) {
     const total = plays.reduce((sum, p) => sum + p.points, 0);

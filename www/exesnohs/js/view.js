@@ -286,7 +286,15 @@ function noteAssignments(objects) {
  * to make the tackle he is looking at the man with the ball, whatever he was
  * told to do before the snap.
  */
-function lookTarget(obj, objects, carrier, here, standing, blocking) {
+/**
+ * WHERE THIS MAN IS LOOKING, or null for "the way he is going".
+ *
+ * EXPORTED BECAUSE IT IS PURE AND THE RULES IN IT ARE THE INTERESTING PART. It
+ * takes plain simulation objects and returns a world point, so every branch can
+ * be asked a question with numbers rather than being inferred from a rendered
+ * frame, which is the only place any of this used to be visible.
+ */
+export function lookTarget(obj, objects, carrier, here, standing, blocking) {
     const at = (o) => (o ? simToWorld(o.coords.x, o.coords.y, 0) : null);
 
     // A BLOCK BEATS EVERY OTHER REASON TO BE LOOKING SOMEWHERE, on both sides
@@ -299,6 +307,41 @@ function lookTarget(obj, objects, carrier, here, standing, blocking) {
     }
 
     if (obj.settings.team !== 1) {
+        /**
+         * A LINEMAN'S EYES ARE ON THE NEAREST DEFENDER, ALWAYS, EVEN A DISTANT
+         * ONE. QA ROUND TWENTY-SEVEN, ITEM 5: "while blocking for the QB,
+         * offensive linemen will sometimes turn and face toward the QB. This
+         * would never happen in real NFL football."
+         *
+         * They did, and the cause is that an unengaged lineman fell through
+         * every branch here and was left facing the way he was MOVING. Pass
+         * protection is a drop back toward the quarterback, so the direction he
+         * travels is the one thing he must never face: the line turned its back
+         * on the rush and looked at the man it was protecting.
+         *
+         * `blocking` above already covers a lineman with his hands on somebody.
+         * This is the other nine tenths of the job, the seconds of a play where
+         * the nearest rusher is two metres away and coming, which is exactly
+         * when a lineman is most obviously watching him.
+         *
+         * IT IS DELIBERATELY NOT CAPPED BY `turnFor`. A blocker backpedalling
+         * while facing the rusher is what pass protection LOOKS like, and the
+         * cap exists to stop a man being drawn sprinting backwards, which is a
+         * different thing: he is not sprinting, he is retreating at walking
+         * pace, and the pose is only right if he is square to the man.
+         */
+        if (/^x\d$/.test(obj.settings.position)) {
+            let near = null;
+            let best = Infinity;
+            for (const foe of objects) {
+                if (BENCHED(foe) || foe.settings.team !== 1) continue;
+                const q = at(foe);
+                const d = Math.hypot(q.x - here.x, q.z - here.z);
+                if (d < best) { best = d; near = q; }
+            }
+            if (near) return near;
+        }
+
         // A RECEIVER WHO HAS ARRIVED LOOKS BACK FOR THE BALL. QA item 3 asks
         // for exactly this, and it is also the only thing that makes standing
         // still read as waiting rather than as having given up: he faces
@@ -380,8 +423,23 @@ function tacklersOn(objects, carrier) {
  * going the other way a receiver is a tackler, and men who have just lost it
  * putting their arms up to block would read as a team that had not noticed.
  */
-export function blockersEngaged(objects, carrier) {
+export function blockersEngaged(objects, carrier, presnap = false) {
     const out = new Map();
+    /**
+     * NOBODY HAS THEIR HANDS ON ANYBODY BEFORE THE BALL IS SNAPPED. QA ROUND
+     * TWENTY-SEVEN, ITEM 4.
+     *
+     * This is a pure distance question, `reach` is 2.7m and `lock` is 2.3m, and
+     * the line-up holds bodies about 1.45m apart. So every lineman standing
+     * across from a defender came back FULLY engaged before the snap: arms out,
+     * hands on each other, both men turned to face each other and leaning in. A
+     * line waiting on the snap was drawn mid-block.
+     *
+     * The gate is the PHASE and not a distance, because the distances are
+     * right: the same pair a tenth of a second later, with the ball in the air,
+     * is a block and should look like one.
+     */
+    if (presnap) return out;
     const reach = CFG.pose.block.reach;
     const foes = objects.filter((o) => !BENCHED(o) && o.settings.team === 1);
     if (!foes.length) return out;
@@ -724,6 +782,65 @@ export function jumpClearance(span) {
     return J.zones.indexOf(band.points) === -1 ? J.clearance : J.zoneClearance;
 }
 
+/**
+ * HOW FAR OFF THE GROUND A JUMP IS AT `t`, 0 to 1 of its hang, in metres.
+ *
+ * Up and down once. A sine rather than a parabola, because the hang at the top
+ * is the part anybody actually reads.
+ *
+ * THE APEX IS NOT IN THE MIDDLE, AND THAT IS THE WHOLE OF QA ITEM 6. The ball
+ * is inside a receiver's reach for a median of 75 milliseconds (see
+ * `jump.peakAt` for the measurement), so a leaping catch in this game is always
+ * taken in the first frames of the jump. With the peak halfway, that is a man
+ * catching the ball at ground level and then rising for a third of a second
+ * holding it. Warping the clock so the rise is short and the descent long puts
+ * the catch a third of the way up instead, and the rest of the jump carries him
+ * to the top and back down with it.
+ *
+ * The two halves are mapped onto the two halves of the same sine, so the height
+ * at the apex, the height at each end and the total hang are all unchanged.
+ */
+export function jumpLift(t) {
+    const J = CFG.pose.jump;
+    if (!(t >= 0) || t >= 1) return 0;
+    const raw = typeof J.peakAt === 'number' ? J.peakAt : 0.5;
+    const peak = Math.min(0.95, Math.max(0.05, raw));
+    const u = t < peak
+        ? 0.5 * (t / peak)
+        : 0.5 + 0.5 * ((t - peak) / (1 - peak));
+    return Math.sin(Math.PI * u) * J.lift;
+}
+
+/**
+ * ...AND WHETHER THE SIMULATION MAY HAND HIM THE BALL YET.
+ *
+ * QA ROUND TWENTY-SEVEN, ITEM 6. `motion.checkCatch` gives an airborne receiver
+ * a box as wide as the jump's own range in every direction and excuses him the
+ * height gate, and the jump only fires when the ball is ALREADY inside that
+ * range. So a man reported airborne on his first frame has the ball before he
+ * has left the grass, and the rest of the hang plays out afterwards: a receiver
+ * catching a pass and then leaping.
+ *
+ * HE WAITS FOR THE BALL TO ARRIVE RATHER THAN FOR A CLOCK. A fixed delay was
+ * measured and refused (see `jump.arriveFirst`); the ball's CLOSEST APPROACH
+ * costs nothing, because the nearest point of a path that came inside the box
+ * is inside the box. `gap` is this frame's distance from the ball and `was` is
+ * last frame's, so "it has stopped getting closer" is the whole test, and
+ * `lift` carries the backstop for an arc that never turns over.
+ *
+ * PURE, AND THE LATCH IS THE CALLER'S. Once he is airborne he stays airborne
+ * for the rest of the jump: an answer re-derived every frame would drop him out
+ * of the sky the moment the ball moved away again.
+ */
+export function ballArrived(gap, was, lift) {
+    const J = CFG.pose.jump;
+    if (J.arriveFirst === false) return true;
+    const back = typeof J.backstop === 'number' ? J.backstop : 1;
+    if (lift >= J.lift * back) return true;
+    if (!(was >= 0) || !(gap >= 0)) return false;
+    return gap >= was;
+}
+
 function updateJump(figure, reach, at, live, delta) {
     const J = CFG.pose.jump;
     const u = figure.userData;
@@ -733,9 +850,7 @@ function updateJump(figure, reach, at, live, delta) {
         u.jumpAt += delta;
         const t = u.jumpAt / J.hang;
         if (t >= 1) { u.jumpAt = -1; return 0; }
-        // Up and down once. A sine rather than a parabola, because the hang at
-        // the top is the part anybody actually reads.
-        return Math.sin(Math.PI * t) * J.lift;
+        return jumpLift(t);
     }
 
     // FULLY COMMITTED, NOT MERELY INTERESTED. `reachersFor` ramps from
@@ -755,6 +870,8 @@ function updateJump(figure, reach, at, live, delta) {
 /** Nobody is in the air between plays. */
 function clearJump(figure) {
     figure.userData.jumpAt = -1;
+    figure.userData.upFor = false;
+    figure.userData.ballGap = -1;
 }
 
 /**
@@ -846,8 +963,43 @@ function updateStanding(figure, delta) {
     const at = figure.userData.at;
     ring.push(at.x, at.z);
     while (ring.length > (span + 1) * 2) ring.splice(0, 2);
-    if (ring.length <= span * 2) return false;
-    return Math.hypot(at.x - ring[0], at.z - ring[1]) < S.net;
+    if (ring.length <= span * 2) { figure.userData.still = false; return false; }
+    const net = Math.hypot(at.x - ring[0], at.z - ring[1]);
+
+    /**
+     * AND IT LATCHES, WHICH IS QA ROUND TWENTY-SEVEN, ITEM 8: "when a receiver
+     * puts his hands up for the ball his arms twitch up and down".
+     *
+     * This is a BOOLEAN READ OFF A NOISY SCALAR, which is the oldest way there
+     * is to make something flicker. A receiver at the end of his route is not
+     * still, he orbits a small patch (see the note above), so his net
+     * displacement over the window sits right on the threshold and crosses it
+     * repeatedly. Three things downstream flip with it: `posting` puts his
+     * hands up, `lookTarget` turns him back toward the ball, and `turnFor`
+     * stops capping his turn. The hands are simply the one you can see.
+     *
+     * One number cannot be both the question and its own answer, so there are
+     * two: he settles at `net` and has to travel `release` before he counts as
+     * going somewhere again. The gap is the whole fix, and it is a gap in
+     * DISTANCE rather than in time, so a man who genuinely sets off is still
+     * running within a stride.
+     */
+    const still = stillFor(net, figure.userData.still === true);
+    figure.userData.still = still;
+    return still;
+}
+
+/**
+ * HAS HE STOPPED, GIVEN HOW FAR HE HAS TRAVELLED AND WHETHER HE HAD STOPPED?
+ *
+ * The latch itself, pure, so the property can be asserted without a figure: a
+ * net displacement wandering either side of one threshold must not flip the
+ * answer. Everything else about the twitch follows from this one boolean.
+ */
+export function stillFor(net, was) {
+    const S = CFG.pose.standing;
+    const leave = typeof S.release === 'number' ? S.release : S.net;
+    return net < (was ? leave : S.net);
 }
 
 /**
@@ -870,7 +1022,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
     // The carrier is found first because the blocks depend on him: once one of
     // ours has it, the receivers are blocking for him too.
     const carrier = objects.find((o) => o.state && o.state.hasBall && !BENCHED(o));
-    const engaged = blockersEngaged(objects, carrier);
+    const engaged = blockersEngaged(objects, carrier, !!opts.presnap);
     noteAssignments(objects);
     const tacklers = tacklersOn(objects, carrier);
     const reaching = reachersFor(objects);
@@ -918,7 +1070,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // A figure arriving for a new play brings no history with it. Keeping
         // the last play's would have him judged to be standing still on the
         // strength of where he was when the last whistle went.
-        if (!held) { figure.userData.track = null; clearJump(figure); }
+        if (!held) { figure.userData.track = null; figure.userData.still = false; clearJump(figure); }
 
         // WHERE HE STARTED WALKING FROM, latched on the first frame of the
         // relocation rather than read every frame: reading it every frame would
@@ -983,7 +1135,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // would otherwise be the LAST play's, and a receiver would spend the
         // first half second of this one being judged against where he was
         // standing when the last whistle went.
-        if (opts.presnap) figure.userData.track = null;
+        if (opts.presnap) { figure.userData.track = null; figure.userData.still = false; }
         const standing = !opts.presnap && updateStanding(figure, delta);
         const mps = (standing || figure.userData.mps < CFG.pose.stillSpeed)
             ? 0 : figure.userData.mps;
@@ -1019,7 +1171,27 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             ? updateJump(figure, reaching.get(obj.settings.position) || 0,
                 { x: p.x, z: p.z }, opts.live, delta)
             : 0;
-        if (airborne > 0) inTheAir.add(obj.settings.position);
+        /**
+         * ...AND THE SIMULATION IS NOT TOLD HE IS UP UNTIL THE BALL GETS THERE.
+         *
+         * `inTheAir` feeds the ported catch box and nothing about how he is
+         * drawn: the lift is applied below whatever this says, so he leaves the
+         * ground on the first frame either way. What waits is the CATCH. See
+         * `ballArrived`, and note the latch: once he is up he stays up for the
+         * rest of the jump.
+         */
+        if (airborne > 0) {
+            const gap = flight.has
+                ? Math.hypot(flight.x - p.x, flight.z - p.z) : -1;
+            if (!figure.userData.upFor) {
+                figure.userData.upFor = ballArrived(gap, figure.userData.ballGap, airborne);
+            }
+            figure.userData.ballGap = gap;
+            if (figure.userData.upFor) inTheAir.add(obj.settings.position);
+        } else {
+            figure.userData.upFor = false;
+            figure.userData.ballGap = -1;
+        }
 
         // AND HIS FEET GO ON THE GRASS, NOT THROUGH IT. The rig stands itself
         // at y = 0.055 because its shoes hang below its own origin, and writing

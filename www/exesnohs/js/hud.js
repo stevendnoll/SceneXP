@@ -115,8 +115,19 @@ function speakerIcon(off) {
 
 export function initHud(callbacks) {
     handlers = callbacks || {};
-    wireMute();
+    const btn = el('mute-btn');
+    if (btn) wireMute(btn);
 }
+
+/**
+ * EVERY SOUND BUTTON IN THE GAME, so they can never disagree.
+ *
+ * There are two now (the HUD bar and the playbook, see `muteButton`), they
+ * control one setting, and a visitor who turns the sound off in the playbook
+ * and then sees "Sound on" in the HUD has been told the setting did not take.
+ * Repainting them all on any toggle costs two DOM writes on a press.
+ */
+const muteControls = new Set();
 
 /**
  * The mute button.
@@ -127,23 +138,48 @@ export function initHud(callbacks) {
  * a screen reader is told whether sound is on rather than having to infer it
  * from an icon it cannot see.
  */
-function wireMute() {
-    const btn = el('mute-btn');
-    if (!btn || !handlers.isMuted) return;
-    const paint = () => {
-        const off = handlers.isMuted();
+function wireMute(btn) {
+    if (!btn || !handlers.isMuted) return null;
+    muteControls.add(btn);
+    btn.addEventListener('click', () => {
+        if (handlers.onToggleMute) handlers.onToggleMute();
+        paintMute();
+    });
+    paintMute();
+    return btn;
+}
+
+/** Put every sound button in step with the setting. */
+export function paintMute() {
+    if (!handlers.isMuted) return;
+    const off = handlers.isMuted();
+    for (const btn of muteControls) {
         btn.setAttribute('aria-pressed', off ? 'true' : 'false');
         btn.textContent = '';
         btn.appendChild(speakerIcon(off));
         const label = document.createElement('span');
         label.textContent = off ? 'Sound off' : 'Sound on';
         btn.appendChild(label);
-    };
-    btn.addEventListener('click', () => {
-        if (handlers.onToggleMute) handlers.onToggleMute();
-        paint();
-    });
-    paint();
+    }
+}
+
+/**
+ * ...AND ONE FOR THE PLAYBOOK, WHICH IS QA ROUND TWENTY-SEVEN, ITEM 3.
+ *
+ * The HUD bar is the only sound control in the game and the playbook covers it,
+ * so the one screen a visitor sits on between plays, and the first screen they
+ * see after the welcome card, is the one screen where the sound cannot be
+ * turned off. Asking somebody to close the playbook, mute, and reopen it is
+ * asking them to remember that the control exists at all.
+ *
+ * Built here rather than in playbook-ui.js so the icon, the wording and the
+ * pressed state come from one place. The caller owns where it goes.
+ */
+export function muteButton(className = 'playbook-restart-btn playbook-mute') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = className;
+    return wireMute(btn);
 }
 
 export function setPlayNumber(n, of) {

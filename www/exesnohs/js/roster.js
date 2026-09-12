@@ -848,6 +848,23 @@ export function initRoster(scene, objects) {
             // swinging it opens a disc-shaped hole at the shoulder unless the
             // ball is there to fill it. The shared part's own note says so.
             shoulderRound: 0.35,
+            /**
+             * AND BIG HANDS, WHICH IS QA ROUND TWENTY-SEVEN, ITEM 2.
+             *
+             * The rig's default hand is a 0.04 sphere squashed to (0.8, 1, 0.5),
+             * so at `figureScale` it is about 14cm by 9cm: correct for a person
+             * and about two pixels from the play camera. Every pose this scene
+             * owns finishes at a hand, the catch, the block, the stiff-arm and
+             * the carry, and a pose whose end nobody can see is a pose that
+             * reads as an arm waving.
+             *
+             * `handScale` is the shared part's own knob (www/automan uses 1.4
+             * and www/interstate 1.25 for the same reason), so this is a number
+             * rather than a change to geometry twelve other rooms draw. 1.9 is
+             * a gloved hand: it is the thing the ball arrives in and the thing
+             * a lineman puts on somebody's shoulder.
+             */
+            handScale: 1.9,
         });
         addHelmet(person, kit);
         // THE LETTERS ARE BACK, ON THE SHIRT RATHER THAN INSTEAD OF IT. D22

@@ -526,4 +526,51 @@ describe('changing the play before the snap', () => {
         const cancel = deep(head).find((n) => (n.textContent || '') === 'Keep this play');
         expect(cancel).toBeFalsy();
     });
+
+    /**
+     * THE SOUND CAN BE TURNED OFF FROM THE PLAYBOOK, which is QA round
+     * twenty-seven item 3.
+     *
+     * The HUD bar holds the only mute in the game and the playbook covers it,
+     * so the screen a visitor sits on between plays, and the first one they see
+     * after the welcome card, was the one screen where the sound could not be
+     * turned off.
+     */
+    const soundButton = (root) => deep(root)
+        .find((n) => /^Sound (on|off)$/.test((n.textContent || '').trim()));
+
+    test('the playbook has a sound control of its own', async () => {
+        await boot();
+        dom.el('welcome-actions').children[0].click();
+        await flushAsync();
+        const head = dom.el('playbook').querySelector('.playbook-head');
+        expect(soundButton(head)).toBeTruthy();
+    });
+
+    /**
+     * ...AND IT IS THE SAME SETTING, SAYING THE SAME THING. Two buttons on one
+     * setting is two chances to tell a visitor it did not take: turning the
+     * sound off in the playbook and then reading "Sound on" in the HUD is a
+     * control that looks broken.
+     */
+    test('and it stays in step with the one in the HUD bar', async () => {
+        await boot();
+        dom.el('welcome-actions').children[0].click();
+        await flushAsync();
+        const head = dom.el('playbook').querySelector('.playbook-head');
+        const inBook = soundButton(head);
+        const inHud = dom.el('mute-btn');
+        expect(inBook).toBeTruthy();
+        expect(inHud.getAttribute('aria-pressed')).toBe(inBook.getAttribute('aria-pressed'));
+
+        const before = inBook.getAttribute('aria-pressed');
+        inBook.click();
+        expect(inBook.getAttribute('aria-pressed')).not.toBe(before);
+        expect(inHud.getAttribute('aria-pressed')).toBe(inBook.getAttribute('aria-pressed'));
+        expect(inHud.textContent).toContain(inBook.textContent.trim());
+
+        // ...and back, so the test leaves the setting where it found it.
+        inBook.click();
+        expect(inBook.getAttribute('aria-pressed')).toBe(before);
+    });
 });

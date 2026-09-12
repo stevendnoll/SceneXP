@@ -29,10 +29,11 @@ installThree();
 
 const {
     EXESNOHS_CONFIG: CFG, FIELD, SIM, UNITS_TO_METRES, formationSettings,
+    simToWorld,
 } = await import(join(scene, 'config.js'));
 const {
     pointsForPosition, ladderBands, bandAt,
-    nextStreak, streakOver, difficultyFor,
+    nextStreak, streakOver, difficultyFor, endSounds,
 } = await import(join(scene, 'scoring.js'));
 const {
     createPlay: createPlayForDifficulty, lineUp, snap, tick, isDone,
@@ -41,7 +42,10 @@ const {
     decisionLeft, undecided, outOfTime, clockReading, ballCarrier,
 } = await import(join(scene, 'play.js'));
 const { markerGeometry } = await import(join(scene, 'markers.js'));
-const { escapeAmount, jukeRoll, stiffArmSide } = await import(join(scene, 'view.js'));
+const {
+    escapeAmount, jukeRoll, stiffArmSide,
+    blockersEngaged, lookTarget, stillFor, jumpLift, ballArrived,
+} = await import(join(scene, 'view.js'));
 const { stiffSide, THROWING_SIDE, poseFigure } = await import(join(scene, 'roster.js'));
 const { MotionClass } = await import(join(scene, 'motion.js'));
 const { solveArm, handAt } = await import(join(scene, 'arm.js'));
@@ -2967,5 +2971,304 @@ describe('a crossing cannot be shoved back over the line', () => {
             expect({ slug: r.slug, x: r.x >= RUNG, points: r.points })
                 .toEqual({ slug: r.slug, x: true, points: 50 });
         }
+    });
+});
+
+/**
+ * QA ROUND TWENTY-SEVEN. Eight items, six of which are rules that were only
+ * ever visible in a rendered frame. Each one below is the rule itself, pulled
+ * out of the render loop so it can be asked a question with numbers.
+ */
+describe('the sounds a finished play makes', () => {
+    /**
+     * ITEM 1: "a grunt plays even when the ball carrier scores 50 without being
+     * tackled, along with the whistle".
+     *
+     * The 2D game's `handleFinish` is one if/else, `points === 50 ? whistle :
+     * grunt`. The port spelled the else out as a list of result slugs and lost
+     * the condition, and a fifty carried across the line is a 'catch' with
+     * nobody left to tackle him, so it matched.
+     */
+    test('a score is a whistle and never a grunt, however it was scored', () => {
+        for (const slug of ['catch', 'run', 'run-50']) {
+            const sounds = endSounds({ result: slug, points: 50 }, false);
+            expect({ slug, ...sounds }).toEqual({ slug, whistle: true, grunt: false });
+        }
+    });
+
+    test('a play that merely ended still grunts', () => {
+        expect(endSounds({ result: 'catch', points: 30 }, false).grunt).toBe(true);
+        expect(endSounds({ result: 'run', points: 15 }, false).grunt).toBe(true);
+        expect(endSounds({ result: 'sack', points: -5 }, false).grunt).toBe(true);
+    });
+
+    /** ...and the grunt belongs to the hit, so a tackle plays its own and this
+     *  one keeps quiet. */
+    test('a tackle grunts at the hit rather than over the card', () => {
+        expect(endSounds({ result: 'run', points: 15 }, true).grunt).toBe(false);
+    });
+
+    /** An incomplete pass sounds itself from inside routes.js, and an
+     *  interception is a whistle. Neither is a grunt. */
+    test('an incompletion and an interception do not grunt', () => {
+        expect(endSounds({ result: 'incomplete', points: 0 }, false))
+            .toEqual({ whistle: false, grunt: false });
+        expect(endSounds({ result: 'interception', points: -10 }, false))
+            .toEqual({ whistle: true, grunt: false });
+    });
+});
+
+describe('nobody blocks anybody before the snap', () => {
+    /**
+     * ITEM 4: "some figures have their arms extended or are arm-locked with an
+     * opposing player before the ball is ever snapped".
+     *
+     * `blockersEngaged` is a pure distance question: `reach` is 2.7m, `lock` is
+     * 2.3m, and `play.separate` holds bodies about 1.45m apart at the line-up.
+     * So the whole line came back fully engaged while everyone was standing
+     * waiting, which is the only time in a play when nobody is blocking.
+     */
+    /**
+     * THE QUARTERBACK IS THE CARRIER BEFORE THE SNAP, which is what made this
+     * as bad as it was: he is holding the ball at the line-up, so
+     * `blockersEngaged` counted the RECEIVERS as blockers too (they block for
+     * whoever has it), and a receiver stands closer to the man covering him
+     * than any lineman stands to anyone.
+     */
+    const lineUpAndLook = (slug, defence, presnap) => {
+        const play = createPlayForDifficulty();
+        const objects = lineUp(play, slug, defence);
+        const qb = objects.find((o) => o.settings.position === 'qb');
+        return blockersEngaged(objects, qb, presnap);
+    };
+
+    /**
+     * SWEPT RATHER THAN SAMPLED, because how close the nearest opponent lines
+     * up is a property of the pair of formations. Measured on the build QA
+     * reviewed, 82 of the 102 combinations had somebody engaged before the ball
+     * was snapped and the worst had four pairs at FULL lock: arms out, hands on
+     * each other, both men turned to face each other, leaning in.
+     */
+    const DEFENCES = ['', 'cover2', 'man1', 'blitz1', 'zone1', 'nickel1'];
+
+    test('no formation has a block in it before the snap', () => {
+        const busy = [];
+        for (const slug of OFFENSIVE_PLAYS) {
+            for (const defence of DEFENCES) {
+                const engaged = lineUpAndLook(slug, defence, true);
+                if (engaged.size) busy.push(`${slug}/${defence || 'random'}`);
+            }
+        }
+        expect(busy).toEqual([]);
+    });
+
+    /**
+     * ...AND PLENTY OF THEM DO ONCE THE PLAY IS RUNNING, which is the half that
+     * proves the gate is the phase and not a distance. If this ever comes back
+     * empty the fix above has quietly disabled blocking outright.
+     */
+    test('the same formations are full of them once it is live', () => {
+        let seen = 0;
+        for (const slug of OFFENSIVE_PLAYS) {
+            for (const defence of DEFENCES) {
+                const engaged = lineUpAndLook(slug, defence, false);
+                seen += engaged.size;
+                for (const [, how] of engaged) {
+                    expect(how.amount).toBeGreaterThan(0);
+                    expect(how.amount).toBeLessThanOrEqual(1);
+                }
+            }
+        }
+        expect(seen).toBeGreaterThan(20);
+    });
+});
+
+describe('an offensive lineman watches the rush', () => {
+    /**
+     * ITEM 5: "while blocking for the QB, offensive linemen will sometimes turn
+     * and face toward the QB. This would never happen in real NFL football."
+     *
+     * An unengaged lineman fell through every branch of `lookTarget` and was
+     * left facing the way he was MOVING, and pass protection is a drop back
+     * toward the quarterback. So the line turned its back on the rush and
+     * looked at the man it was protecting.
+     */
+    const world = (obj) => simToWorld(obj.coords.x, obj.coords.y, 0);
+
+    test('he looks at the nearest defender rather than where he is going', () => {
+        const play = createPlayForDifficulty();
+        const objects = lineUp(play, 'pass2', 'cover2');
+        const linemen = objects.filter((o) => /^x\d$/.test(o.settings.position)
+            && !o.settings.benched);
+        expect(linemen.length).toBeGreaterThan(2);
+
+        for (const man of linemen) {
+            const here = world(man);
+            // No engagement and no carrier: the case that used to return null,
+            // which means "face your own feet".
+            const look = lookTarget(man, objects, null, here, false, '');
+            expect({ pos: man.settings.position, looking: !!look })
+                .toEqual({ pos: man.settings.position, looking: true });
+
+            // ...and it is the nearest defender, not just any of them.
+            let best = Infinity;
+            for (const foe of objects) {
+                if (foe.settings.benched || foe.settings.team !== 1) continue;
+                const q = world(foe);
+                best = Math.min(best, Math.hypot(q.x - here.x, q.z - here.z));
+            }
+            const d = Math.hypot(look.x - here.x, look.z - here.z);
+            expect(d).toBeCloseTo(best, 6);
+        }
+    });
+
+    /** A DISTANT ONE STILL COUNTS. QA asked for exactly this: "even if the
+     *  defender is far away". A range gate here would put the line back to
+     *  facing its own drop on every play that does not blitz. */
+    test('and he still looks at him from the other end of the field', () => {
+        const play = createPlayForDifficulty();
+        const objects = lineUp(play, 'pass2', 'cover2');
+        const man = objects.find((o) => /^x\d$/.test(o.settings.position)
+            && !o.settings.benched);
+        const foes = objects.filter((o) => o.settings.team === 1 && !o.settings.benched);
+        // Send the whole defense to the far corner of the world.
+        for (const foe of foes) { foe.coords.x = 5000; foe.coords.y = 5000; }
+        const look = lookTarget(man, objects, null, world(man), false, '');
+        expect(look).toBeTruthy();
+    });
+});
+
+describe('a leaping catch is taken on the way up', () => {
+    /**
+     * ITEM 6: "receivers sometimes jump after they have already caught the
+     * ball".
+     *
+     * MEASURED, THE BALL IS INSIDE A RECEIVER'S REACH FOR A MEDIAN OF 75
+     * MILLISECONDS (p10 37ms, p90 188ms, over 193 throws). The jump fires when
+     * the ball comes inside that reach and the simulation hands an airborne man
+     * the catch on the first frame it can, so a leaping catch is ALWAYS taken
+     * in the first frames of the jump: there is no version of this game where
+     * he takes it at the top. With the apex halfway through the hang, that is a
+     * man catching the ball at ground level and then rising for a third of a
+     * second holding it.
+     *
+     * Delaying the catch instead was measured and refused: a 50ms delay empties
+     * the reach box on 24% of jump balls and 100ms on 72%. So the catch stays
+     * and the jump moves under it.
+     */
+    const at = (seconds) => jumpLift(seconds / CFG.pose.jump.hang);
+
+    /**
+     * THE WINDOW A CATCH ACTUALLY LANDS IN, from the two measurements: the ball
+     * reaches its closest point a median of 63ms after entering a receiver's
+     * reach, p10 25ms and p90 100ms. He has to be meaningfully up across all of
+     * that, and at the far end he should be near the top rather than past it.
+     */
+    test('he is half way up by the time the ball arrives', () => {
+        const lift = CFG.pose.jump.lift;
+        expect(at(0.025) / lift).toBeGreaterThan(0.2);     // the quickest arrival
+        expect(at(0.063) / lift).toBeGreaterThan(0.45);    // the median one
+        expect(at(0.100) / lift).toBeGreaterThan(0.7);     // the slowest
+        // ...and still on the way up at the far end of it, not already falling.
+        expect(at(0.100)).toBeLessThanOrEqual(at(0.19) + 1e-9);
+    });
+
+    test('and most of the jump is spent coming down with it', () => {
+        const J = CFG.pose.jump;
+        // Find the apex by sampling, rather than restating where it is.
+        let top = 0;
+        let when = 0;
+        for (let i = 0; i <= 1000; i += 1) {
+            const lift = jumpLift(i / 1000);
+            if (lift > top) { top = lift; when = i / 1000; }
+        }
+        expect(top).toBeCloseTo(J.lift, 4);
+        expect(when).toBeLessThan(0.4);
+        expect(when).toBeGreaterThan(0.1);
+    });
+
+    /** The ends are still the ground, and the height still runs up and back
+     *  down once: a warp that left him in the air at the whistle, or that
+     *  doubled back, would be a figure hanging over the grass. */
+    test('it leaves the ground and returns to it, once', () => {
+        expect(jumpLift(0)).toBe(0);
+        expect(jumpLift(1)).toBe(0);
+        let rises = 0;
+        let falls = 0;
+        let prev = 0;
+        for (let i = 1; i <= 200; i += 1) {
+            const lift = jumpLift(i / 200);
+            if (lift > prev + 1e-9) rises += 1;
+            if (lift < prev - 1e-9) falls += 1;
+            prev = lift;
+        }
+        expect(rises).toBeGreaterThan(5);
+        expect(falls).toBeGreaterThan(rises);       // longer coming down
+    });
+
+    /**
+     * AND THE CATCH WAITS FOR THE BALL RATHER THAN FOR A CLOCK.
+     *
+     * A fixed delay was measured and refused: against a 75ms median dwell, 50ms
+     * of it empties the reach box on 24% of jump balls and 100ms on 72%. The
+     * ball's CLOSEST APPROACH costs nothing instead, because the nearest point
+     * of a path that came inside the box is inside the box, and it is worth a
+     * median of 63ms of lead.
+     */
+    test('a ball still closing does not get caught yet', () => {
+        // Falling from 1.4m to 0.9m: still on its way in.
+        expect(ballArrived(0.9, 1.4, 0)).toBe(false);
+        expect(ballArrived(1.4, -1, 0)).toBe(false);      // nothing to compare to
+    });
+
+    test('and the frame it stops closing is the frame he has it', () => {
+        expect(ballArrived(0.65, 0.62, 0)).toBe(true);
+        expect(ballArrived(0.62, 0.62, 0)).toBe(true);
+    });
+
+    /** ...and an arc that never turns over cannot strand him in the air with
+     *  the catch withheld. */
+    test('a backstop hands it to him near the top whatever the ball does', () => {
+        const J = CFG.pose.jump;
+        expect(ballArrived(0.4, 0.9, J.lift * J.backstop)).toBe(true);
+        expect(J.backstop).toBeLessThan(1);
+    });
+});
+
+describe('a man who has stopped stays stopped', () => {
+    /**
+     * ITEM 8: "when a receiver reaches the end of his route and puts his hands
+     * up for the ball, his arms twitch up and down and it looks glitchy".
+     *
+     * A boolean read off a noisy scalar. A receiver at the end of his route
+     * orbits a small patch rather than standing still, so his net displacement
+     * sits on the threshold and crosses it repeatedly, and three things flip
+     * with it: his hands go up, he turns back toward the ball, and his turn
+     * stops being capped.
+     */
+    test('a wobble either side of the threshold does not flip the answer', () => {
+        const S = CFG.pose.standing;
+        let still = stillFor(0.2, false);           // he has arrived
+        expect(still).toBe(true);
+        // A metre of wander around a 0.9m threshold, which is exactly what the
+        // orbit at the end of a route measures.
+        for (const net of [0.85, 0.95, 0.88, 1.02, 0.91, 0.99, 0.86]) {
+            still = stillFor(net, still);
+            expect({ net, still }).toEqual({ net, still: true });
+        }
+        expect(S.release).toBeGreaterThan(S.net);
+    });
+
+    test('but a man who genuinely sets off is running again', () => {
+        let still = true;
+        still = stillFor(CFG.pose.standing.release + 0.2, still);
+        expect(still).toBe(false);
+    });
+
+    /** ...and he has to come to a proper stop to count as arrived, rather than
+     *  merely slowing to somewhere between the two. */
+    test('and slowing down is not the same as arriving', () => {
+        const between = (CFG.pose.standing.net + CFG.pose.standing.release) / 2;
+        expect(stillFor(between, false)).toBe(false);
     });
 });

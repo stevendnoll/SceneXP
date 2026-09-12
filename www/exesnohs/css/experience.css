@@ -134,10 +134,48 @@ body {
    reload, so it must be findable and must not compete with seventeen plays for
    attention: a small outline button, and the confirm step wears the warning
    colour rather than the resting one. */
+/* The two controls in the playbook's header that are about the GAME rather
+   than about the next play: the sound and starting over. */
+.playbook-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.6rem;
+}
+
 .playbook-restart {
     display: flex;
     align-items: center;
     gap: 0.4rem;
+}
+
+/* THE SOUND BUTTON BORROWS THE RESTART PILL AND ADDS THE SPEAKER. It wears the
+   same shape as its neighbour on purpose: two controls sitting together that
+   are drawn differently read as two different kinds of thing. The icon sizing
+   matches `.hud-mute` so the same button is the same size wherever it appears,
+   and `.hud-mute-icon` above already styles the glyph itself. */
+.playbook-mute {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding-left: 0.55rem;
+}
+
+/* The muted state is dimmer than the live one and still has to be readable.
+   Every property the resting rule sets is named in the hover pair below, or a
+   hovered muted button keeps this greyer ink (see the note on partial
+   overrides in the shared sheet). */
+.playbook-mute[aria-pressed="true"] {
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #8a94a6;
+}
+
+.playbook-mute:hover,
+.playbook-mute:focus-visible,
+.playbook-mute[aria-pressed="true"]:hover,
+.playbook-mute[aria-pressed="true"]:focus-visible {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #f2f5fa;
 }
 
 .playbook-restart-btn {

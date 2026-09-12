@@ -34,7 +34,7 @@ import {
     clearEscapes, clockReading,
 } from './play.min.js';
 import { readGame, saveGame, clearGame } from './progress.min.js';
-import { nextStreak, streakOver, difficultyFor } from './scoring.min.js';
+import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
@@ -550,22 +550,14 @@ function finishPlay() {
     clearActions();
 
     const result = outcome(cycle.play);
-    // The 2D game's own choices in handleFinish: a whistle for anything that
-    // stops the game, a grunt for a play that merely ended. An incomplete pass
-    // already sounded itself from inside routes.js.
-    if (result.points === 50 || result.result === 'interception' || result.result === 'sack') {
-        playSound('whistle', 120);
-    }
-    // THE GRUNT BELONGS TO THE HIT, NOT TO THE CARD. It used to play here, and
-    // `finishPlay` runs after the whole settle hold, so a play that ended in a
-    // tackle sounded its own contact a second and a bit late: the carrier was
-    // already flat on the grass. It is now scheduled from `startTakedown` at
-    // the frame the two bodies meet. This is the case with no takedown to hang
-    // it on, which is a man who ran out of bounds or over the line.
-    if (!cycle.tackle.tackler
-        && (result.result === 'sack' || result.result === 'run' || result.result === 'catch')) {
-        playSound('grunt');
-    }
+    // THE 2D GAME'S OWN CHOICES IN handleFinish, and the rule lives in
+    // scoring.js so it can be asserted rather than read off a render loop. An
+    // incomplete pass already sounded itself from inside routes.js, and a play
+    // that ended in a tackle plays its grunt at the moment the two bodies meet
+    // (see `startTakedown`) rather than a second late over the card.
+    const sounds = endSounds(result, !!cycle.tackle.tackler);
+    if (sounds.whistle) playSound('whistle', 120);
+    if (sounds.grunt) playSound('grunt');
     cycle.lastOutcome = result;
     cycle.total += result.points;
     cycle.results.push(result);
@@ -1094,12 +1086,25 @@ function animate(now) {
  *
  * IT IS NOT A RAYCAST. A player is between 2 and 21 pixels tall on a phone, so
  * hitting one with a fingertip would be a game of its own. Instead every
- * candidate is projected to screen space and the nearest one within a
- * finger-sized radius wins. That gives a forgiving target, it costs five
- * projections rather than a scene traversal, and it cannot be fooled by a
+ * candidate is projected to screen space and the nearest one wins. That costs
+ * five projections rather than a scene traversal, and it cannot be fooled by a
  * figure standing in front of another.
+ *
+ * AND THE NEAREST ONE WINS OUTRIGHT, WITH NO RADIUS AT ALL, which is QA round
+ * twenty-seven item 7 and is the 2D game's own rule: `handleCanvasTap` asks
+ * `getClosestTeamObjectToPosition` for the nearest of the quarterback and the
+ * four receivers and throws to whoever comes back.
+ *
+ * There WAS a radius here, 52 pixels, and a tap outside every one of them did
+ * nothing at all. That is the report: "I clicked pretty close to the receiver
+ * and the ball was never thrown". A radius is the right idea when a gesture has
+ * more than one meaning, and in this phase it has exactly one. The visitor is
+ * choosing between five men, the whole screen belongs to that choice, and a
+ * press that lands in a gap between two of them meant one of the two.
+ *
+ * It matches the phase before it, where tapping anywhere at all snaps the ball,
+ * so the canvas answers every press rather than swallowing some of them.
  */
-const TAP_RADIUS = 52;        // CSS pixels, a little over a fingertip
 const projected = { v: null };
 
 /**
@@ -1279,7 +1284,7 @@ function onCanvasPointer(event) {
             const at = toScreen(x, y, z);
             if (!at) continue;
             const d = Math.hypot(at.x - event.clientX, at.y - event.clientY);
-            if (d <= TAP_RADIUS && (!best || d < best.d)) best = { d, target };
+            if (!best || d < best.d) best = { d, target };
         }
     }
     if (!best) return;
@@ -1343,7 +1348,11 @@ async function init() {
     initAudio();
 
     setProgress(0.85, 'Opening the playbook…');
-    initPlaybook(onPlaybookChoice, onStartOver);
+    // THE HUD IS WIRED FIRST, AND THE ORDER IS LOAD BEARING. The playbook asks
+    // hud.js to build its sound button (QA round twenty-seven item 3), and
+    // hud.js can only build one once it has been handed `isMuted` and
+    // `onToggleMute`. Built the other way round it silently makes no button at
+    // all, which is a missing control rather than an error.
     initHud({
         onSnap, onThrow, onRun, onNext, onChangePlay,
         onReplay: startReplay,
@@ -1352,6 +1361,7 @@ async function init() {
         onToggleMute: () => toggleMuted(),
         isMuted,
     });
+    initPlaybook(onPlaybookChoice, onStartOver);
 
     setProgress(0.9, 'Almost ready…');
 

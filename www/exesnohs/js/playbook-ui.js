@@ -16,6 +16,7 @@
  */
 import { OffensivePlaybookClass } from './playbook.min.js';
 import { EXESNOHS_CONFIG as CFG } from './config.min.js';
+import { muteButton } from './hud.min.js';
 
 /**
  * ALL SEVENTEEN PLAYS, WHICH IS WHAT THE 2D GAME HAS.
@@ -460,7 +461,23 @@ export function initPlaybook(handler, startOver = null) {
     const root = document.getElementById('playbook');
     if (!root) return;
     const head = root.querySelector('.playbook-head');
-    if (head && onStartOver) head.appendChild(buildStartOver());
+    if (head) {
+        /**
+         * THE SOUND CONTROL SITS WITH START OVER, which is QA round
+         * twenty-seven item 3. Between plays this screen covers the HUD bar,
+         * so the only mute in the game is behind the one panel a visitor
+         * spends the most time looking at. hud.js builds it so both buttons
+         * say the same thing, and the pair share a row because they are the
+         * two things on this screen that are about the GAME rather than about
+         * the next play.
+         */
+        const controls = document.createElement('div');
+        controls.className = 'playbook-controls';
+        const mute = muteButton();
+        if (mute) controls.appendChild(mute);
+        if (onStartOver) controls.appendChild(buildStartOver());
+        if (mute || onStartOver) head.appendChild(controls);
+    }
 
     const body = root.querySelector('.playbook-body');
     if (!body) return;
