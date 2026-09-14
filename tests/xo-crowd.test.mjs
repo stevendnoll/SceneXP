@@ -60,8 +60,8 @@ describe('who sits where', () => {
         for (const side of [-1, 1]) {
             const all = stand(side);
             const busy = share(all, (s) => s.regular);
-            expect(busy).toBeGreaterThan(0.2);
-            // Fewer, fuller-detail fans (2026-09-14), and room left for the
+            expect(busy).toBeGreaterThan(0.15);
+            // Fewer, player-sized fans (2026-09-14), and room left for the
             // perfect game to pack the house.
             expect(busy).toBeLessThan(0.5);
             const middle = all.filter((s) => Math.abs(s.col - cols / 2) < cols / 6);
@@ -87,10 +87,24 @@ describe('who sits where', () => {
     test('the near end of each stand, which is most of what a phone held upright sees, is its home colour', () => {
         for (const side of [-1, 1]) {
             const home = St.homeTeam(side);
-            const near = stand(side).filter((s) => s.regular && s.col < K.section * 3);
-            expect(near.length).toBeGreaterThan(8);
+            const near = stand(side).filter((s) => s.regular && s.col < cols / 4);
+            expect(near.length).toBeGreaterThan(6);
             expect(share(near, (s) => s.team === home)).toBeGreaterThan(0.6);
         }
+    });
+    test('fans are the players\' size, and every column of cards at 500 has a fan holding it', () => {
+        expect(K.scale).toBe(CFG.figureScale);
+        const far = stand(1);
+        for (let riser = 0; riser < 4; riser += 1) {
+            const held = new Set();
+            for (const s of far.filter((f) => f.riser === riser)) {
+                for (let c = s.col; c < Math.min(s.col + K.fanEvery, cols); c += 1) held.add(c);
+            }
+            expect(held.size).toBe(cols);
+        }
+        // Far enough apart that two player-sized fans do not stand in each other.
+        const xs = far.filter((f) => f.riser === 0).map((f) => f.x).sort((a, b) => a - b);
+        for (let i = 1; i < xs.length - 1; i += 1) expect(xs[i] - xs[i - 1]).toBeGreaterThan(0.38 * K.scale * 1.5);
     });
 });
 
@@ -136,7 +150,7 @@ describe('how they cheer', () => {
 
     test('every fan who cheers leaves the seat, stays under the hop, and lands back on it', () => {
         for (const cheer of cheers) {
-            const { hop } = cheer.big ? K.cheer.big : K.cheer.small;
+            const hop = (cheer.big ? K.cheer.big.hop : K.cheer.small.hop) * K.scale;
             const length = St.cheerLength(cheer);
             for (const seat of seats.filter((s) => s.team === cheer.team)) {
                 let top = 0;
@@ -155,7 +169,7 @@ describe('how they cheer', () => {
 
     test('no fan pops into the air: the hop never jumps more than a small step between frames', () => {
         const cheer = { team: 0, big: true };
-        const { hop } = K.cheer.big;
+        const hop = K.cheer.big.hop * K.scale;
         // At 30 frames a second, a quarter of the hop is the most one frame may move.
         const frame = 1 / 30;
         for (const seat of stand(1).filter((s) => s.team === 0).slice(0, 40)) {

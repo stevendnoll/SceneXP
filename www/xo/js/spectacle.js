@@ -19,7 +19,7 @@
  * has in frame (see `field.updateScoreboard`).
  */
 import { XO_CONFIG as CFG, FIELD } from './config.min.js';
-import { getPylonBanks, pylonSpots, BANK_GLOW } from './field.min.js';
+import { getPylonBanks, pylonSpots, BANK_GLOW, standLayout } from './field.min.js';
 import { ballProfile } from './ball.min.js';
 import {
     planFireworks, sparksAt, planBulbs, bulbsAt, planConfetti, confettiAt,
@@ -478,8 +478,9 @@ function buildCrowd() {
             regulars: wearing.filter((i) => i < regulars).length,
         };
     }
-    const cards = instanced(new THREE.PlaneGeometry(0.72, cardHeights().half * 2),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }), far.length * 2, 'milestone-cards');
+    const cards = instanced(new THREE.PlaneGeometry(K.pitch * 0.9, cardHeights().half * 2),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
+        far.length * 2 * K.fanEvery, 'milestone-cards');
 
     const colours = (list) => list.map((h) => new THREE.Color(h));
     const shirts = { 0: colours(K.shirts[0]), 1: colours(K.shirts[1]), [NEUTRAL]: colours(K.shirts.neutral) };
@@ -533,7 +534,7 @@ function poseCrowd(t, { bouncing = false, cardsUp = false, cheer = null, cheerT 
         let hop;
         let pose;
         if (t !== null) {
-            hop = bounce ? 0.14 * Math.abs(Math.sin(Math.PI * 2 * (seat.phase + 1.6 * t))) : 0;
+            hop = bounce ? CFG.crowd.bounce * CFG.crowd.scale * Math.abs(Math.sin(Math.PI * 2 * (seat.phase + 1.6 * t))) : 0;
             pose = seat.side > 0 && holding ? 'cards' : (bounce ? 'up' : 'down');
         } else {
             hop = cheerHop(cheerT, seat, cheer);
@@ -571,22 +572,29 @@ function poseCrowd(t, { bouncing = false, cardsUp = false, cheer = null, cheerT 
     if (!cardsUp || !stuntMessages) return;
     const at = cardHeights();
     const colour = new THREE.Color();
+    const K = CFG.crowd;
+    const S = standLayout();
     let i = 0;
     for (const seat of crowd.far) {
-        for (const upper of [true, false]) {
-            const row = cardRow(seat.riser, upper);
-            const card = cardAt(t, row, seat.col, crowd.cols, stuntMessages, { calm: calmShow });
-            o.position.set(seat.x, seat.y + (upper ? at.upper : at.lower), seat.z - at.forward);
-            // A plane faces +z, and these face the field, which is -z.
-            o.rotation.set(0, Math.PI, 0);
-            o.scale.set(1, Math.max(0.001, card.turn), 1);
-            o.updateMatrix();
-            crowd.cards.setMatrixAt(i, o.matrix);
-            colour.setRGB(card.colour[0], card.colour[1], card.colour[2]);
-            crowd.cards.setColorAt(i, colour);
-            i += 1;
+        // Every column of cards this fan stands in front of, so the letters
+        // keep their pixels however wide a fan is.
+        for (let column = seat.col; column < Math.min(seat.col + at.columns, crowd.cols); column += 1) {
+            for (const upper of [true, false]) {
+                const row = cardRow(seat.riser, upper);
+                const card = cardAt(t, row, column, crowd.cols, stuntMessages, { calm: calmShow });
+                o.position.set(S.fromX + (column + 0.5) * K.pitch, seat.y + (upper ? at.upper : at.lower), seat.z - at.forward);
+                // A plane faces +z, and these face the field, which is -z.
+                o.rotation.set(0, Math.PI, 0);
+                o.scale.set(1, Math.max(0.001, card.turn), 1);
+                o.updateMatrix();
+                crowd.cards.setMatrixAt(i, o.matrix);
+                colour.setRGB(card.colour[0], card.colour[1], card.colour[2]);
+                crowd.cards.setColorAt(i, colour);
+                i += 1;
+            }
         }
     }
+    crowd.cards.count = i;
     crowd.cards.instanceMatrix.needsUpdate = true;
     if (crowd.cards.instanceColor) crowd.cards.instanceColor.needsUpdate = true;
 }

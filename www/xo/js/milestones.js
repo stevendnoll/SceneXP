@@ -22,6 +22,7 @@
 import { XO_CONFIG as CFG, FIELD } from './config.min.js';
 import { playDriver } from './camera.min.js';
 import { pylonSpots, boardSpot, standLayout } from './field.min.js';
+import { cardHeights, crowdReach } from './stunt.min.js';
 
 const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
 const smooth = (t) => { const c = clamp01(t); return c * c * (3 - 2 * c); };
@@ -586,29 +587,66 @@ export function finaleRows(count) {
     return out;
 }
 
-/** Across the field at the far stand, square on to its cards, with the teams
- *  in front and room above the stand for the fireworks. */
+/** How many players celebrate in front of the far stand at 500. */
+const FINALE_TEAM = 14;
+
+/** How tall a player is where the finale checks the line of sight, metres. */
+const PLAYER_TOP = 3.9;
+
+/**
+ * Whether a shot sees every player in the finale over the near stand's fans,
+ * arms up and bouncing, rather than through the backs of their heads.
+ */
+export function seesOverNearStand(shot) {
+    const S = standLayout();
+    const reach = crowdReach();
+    const f = shot.position;
+    return finaleRows(FINALE_TEAM).every((p) => [0, PLAYER_TOP].every((y) => {
+        for (let r = 0; r < S.rows; r += 1) {
+            const k = (-S.out(r) - f.z) / (p.z - f.z);
+            if (k > 0 && k < 1 && f.y + (y - f.y) * k <= S.top(r) + reach) return false;
+        }
+        return true;
+    }));
+}
+
+/**
+ * Across the field at the far stand, square on to its cards, with the teams
+ * in front and room above the stand for the fireworks.
+ *
+ * AND OVER THE NEAR STAND. The camera looks across it, and since the fans grew
+ * to player size a phone held upright, which backs the camera a long way out,
+ * saw the teams through a row of heads. So the shot starts at its old angle and
+ * climbs a step at a time until the fans clear. A wide screen clears at the
+ * first step and keeps exactly the shot it always had.
+ */
 export function sideShot(aspect) {
     return cached('side', aspect, () => {
         const S = standLayout();
         const c = LEN() / 2;
         const message = 17.5;
         // The top of the cards, which the fans hold up in front of their faces.
-        const cardsTop = CFG.crowd.cardsAt + 0.2;
-        return fitShot({
-            target: { x: c, y: 4, z: S.half + 3 },
-            from: { x: 0, y: 0.4, z: -1 },
-            fov: 42,
-            points: [
-                { x: c - message, y: S.top(0), z: S.out(0) }, { x: c + message, y: S.top(0), z: S.out(0) },
-                { x: c - message, y: S.top(S.rows - 1) + cardsTop, z: S.out(S.rows - 1) },
-                { x: c + message, y: S.top(S.rows - 1) + cardsTop, z: S.out(S.rows - 1) },
-                { x: c, y: 15, z: S.out(S.rows - 1) + 6 },
-                { x: c - 9, y: 0, z: -5.5 }, { x: c + 9, y: 0, z: -5.5 },
-            ],
-            aspect,
-            margin: 0.05,
-        });
+        const at = cardHeights();
+        const cardsTop = at.upper + at.half;
+        let shot = null;
+        for (const rise of [0.4, 0.5, 0.6, 0.7, 0.8, 1.0]) {
+            shot = fitShot({
+                target: { x: c, y: 4, z: S.half + 3 },
+                from: { x: 0, y: rise, z: -1 },
+                fov: 42,
+                points: [
+                    { x: c - message, y: S.top(0), z: S.out(0) }, { x: c + message, y: S.top(0), z: S.out(0) },
+                    { x: c - message, y: S.top(S.rows - 1) + cardsTop, z: S.out(S.rows - 1) },
+                    { x: c + message, y: S.top(S.rows - 1) + cardsTop, z: S.out(S.rows - 1) },
+                    { x: c, y: 15, z: S.out(S.rows - 1) + 6 },
+                    { x: c - 9, y: 0, z: -5.5 }, { x: c + 9, y: 0, z: -5.5 },
+                ],
+                aspect,
+                margin: 0.05,
+            });
+            if (seesOverNearStand(shot)) return shot;
+        }
+        return shot;
     });
 }
 

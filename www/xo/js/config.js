@@ -2569,27 +2569,31 @@ const XO_CONFIG = {
      * are fewer of them than the box-and-ball fans they replaced.
      */
     crowd: {
-        /** Metres of stand per seat. The card stunt at 500 is one card per
-         *  seat, so this is also the width of a pixel in PERFECT. */
+        /** Metres of stand per column of cards in the stunt at 500, which is
+         *  the width of a pixel in PERFECT. */
         pitch: 0.8,
-        /** A fan is the shared 1.75m figure at this scale. The players are
-         *  drawn at `figureScale` 2.2, and fans at 1 read as children beside
-         *  them in the finale; much past 1.3 and they outgrow the risers. */
-        scale: 1.3,
-        /** The share of seats taken before 500: at midfield, and at the far
+        /** Columns of cards per fan: every fan stands in front of this many,
+         *  and holds that many cards. 2 since the fans grew to player size
+         *  (QA 2026-09-14, specs/exesnohs-1.png), which is twice as wide. */
+        fanEvery: 2,
+        /** A fan is the shared 1.75m figure at the PLAYERS' scale, so the two
+         *  always match. Every length marked "per unit of scale" below is
+         *  multiplied by it, so changing `figureScale` retunes the crowd too. */
+        scale: FIGURE_SCALE,
+        /** The share of fan spots taken before 500: at midfield, and at the far
          *  ends of each stand. Raise both for a busier stand, and keep them
-         *  well under 1 or the perfect game has nobody left to bring in.
-         *  Halved on 2026-09-14 when the box fans became whole people. */
-        fill: { middle: 0.34, ends: 0.2 },
+         *  well under 1 or the perfect game has nobody left to bring in. Cut
+         *  three times on 2026-09-14 as the fans got fewer and bigger. */
+        fill: { middle: 0.3, ends: 0.14 },
         /** The far stand (+z, on the right from the play camera) is the
          *  Mongooses' home side, because its card stunt at 500 is theirs. */
         xSide: 1,
-        /** Seats per section, one section in this many held by the other
+        /** Card columns per section, one section in this many held by the other
          *  team's fans, the share of a section in its colour, and plain
          *  jackets. */
-        section: 6,
+        section: 12,
         awayEvery: 5,
-        loyal: 0.93,
+        loyal: 0.96,
         neutral: 0.07,
         /** Shades of each team colour (roster.js TEAMS), so a section is a
          *  crowd rather than a painted slab. */
@@ -2607,11 +2611,16 @@ const XO_CONFIG = {
         /** Radians either way a fan is turned off square to the field, so a
          *  stand is people rather than a parade. */
         turn: 0.35,
-        /** THE CARDS AT 500, metres above the riser: the centre of the upper
-         *  card. The lower sits half a riser under it so the rows tile, and the
-         *  upper covers the face, or a fan's head would stand in front of the
-         *  row of cards behind and break the letters. */
-        cardsAt: 2.05,
+        /** THE CARDS AT 500, above the riser: the centre of the upper card.
+         *  The lower sits half a riser under it so the rows tile, and the two
+         *  together cover a fan from chin to the top of their hair, or a head
+         *  would stand in front of the row of cards behind and break a letter. */
+        cardsAt: 1.65,                 // per unit of scale
+        /** How high a fan's hands reach with their arms up, per unit of scale.
+         *  The finale shot climbs until the near stand clears the teams. */
+        reach: 1.88,
+        /** The bounce once the number lands at 500, per unit of scale. */
+        bounce: 0.1,
         /**
          * THE CHEER AFTER A PLAY (`stunt.cheerFor`). A big one is a fifty for
          * the Mongooses' fans or a pick or sack for the Crows'; anything else
@@ -2620,8 +2629,8 @@ const XO_CONFIG = {
          * fades the jumping in and out so nobody pops onto a seat.
          */
         cheer: {
-            big: { length: 2.8, hop: 0.34 },
-            small: { length: 1.3, hop: 0.16 },
+            big: { length: 2.8, hop: 0.24 },       // hops per unit of scale
+            small: { length: 1.3, hop: 0.11 },
             rate: 2.2,
             stagger: 0.35,
             ease: 0.3,

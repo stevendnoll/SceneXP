@@ -14,13 +14,13 @@
  * per seat and never re-rolled.
  *
  * THE STANDS HAVE FOUR RISERS, AND LETTERS NEED SEVEN ROWS. So each fan on the
- * far stand holds a card as tall as the step he stands on, split into an upper
+ * far stand holds cards as tall as the step they stand on, split into an upper
  * and a lower half: four risers become eight rows of card, and a 5 by 7 pixel
  * font fits with a row to spare. At the distance the finale is shot from, eight
  * rows of rectangles stepping up a stand read as a card stunt, which is all a
  * card stunt ever is.
  *
- * ONE CARD PER FAN PER HALF, NEVER MORE. A card belongs to a seat, so a stunt
+ * `crowd.fanEvery` CARDS PER FAN PER HALF, NEVER MORE. A card belongs to a seat, so a stunt
  * that changes its message is the same cards flipping, which is what the eye
  * expects of one, rather than new cards appearing.
  */
@@ -94,13 +94,14 @@ export function homeTeam(side) {
  */
 export function awaySection(side, section) {
     const every = CFG.crowd.awayEvery;
-    const first = side > 0 ? 3 : 5;
+    const first = side > 0 ? 4 : 2;
     return section >= first && (section - first) % every === 0;
 }
 
 /**
  * Every seat in both stands, near end first. `side` is -1 or +1 (the sign of
- * z), `riser` counts up from the front row, and `col` along the stand.
+ * z), `riser` counts up from the front row, and `col` is the first column of
+ * cards the fan holds (`cols` counts card columns, `crowd.fanEvery` per fan).
  *
  * AND WHO IS IN IT, decided here once:
  *   regular  true if the seat is taken before 500
@@ -124,7 +125,7 @@ export function crowdSeats() {
     for (const side of [-1, 1]) {
         const home = homeTeam(side);
         for (let riser = 0; riser < S.rows; riser += 1) {
-            for (let col = 0; col < cols; col += 1) {
+            for (let col = 0; col < cols; col += K.fanEvery) {
                 const section = Math.floor(col / K.section);
                 const sectionTeam = awaySection(side, section) ? 1 - home : home;
                 const who = seatRoll(side, riser, col, 2);
@@ -136,7 +137,8 @@ export function crowdSeats() {
                     side,
                     riser,
                     col,
-                    x: S.fromX + (col + 0.5) * K.pitch,
+                    // Centred on the columns of cards this fan holds.
+                    x: S.fromX + (col + Math.min(K.fanEvery, cols - col) / 2) * K.pitch,
                     y: S.top(riser),
                     z: side * S.out(riser),
                     regular: seatRoll(side, riser, col, 0) < regularShare(col, cols),
@@ -200,8 +202,15 @@ export function cheerArms(t, seat, cheer, { calm = false } = {}) {
  */
 export function cardHeights() {
     const S = standLayout();
-    const upper = CFG.crowd.cardsAt;
-    return { upper, lower: upper - S.stepUp / 2, half: 0.17, forward: 0.6 };
+    const K = CFG.crowd;
+    const upper = K.cardsAt * K.scale;
+    return { upper, lower: upper - S.stepUp / 2, half: 0.17, forward: 0.46 * K.scale, columns: K.fanEvery };
+}
+
+/** How high above the riser a fan can reach at 500: arms up, mid-bounce. */
+export function crowdReach() {
+    const K = CFG.crowd;
+    return (K.reach + K.bounce) * K.scale;
 }
 
 /**
@@ -217,7 +226,8 @@ export function cheerHop(t, seat, cheer, { calm = false } = {}) {
     if (!cheer || calm || !(t >= 0)) return 0;
     if (seat.team !== cheer.team && !(cheer.big && seat.team === NEUTRAL)) return 0;
     const C = CFG.crowd.cheer;
-    const { length, hop } = cheer.big ? C.big : C.small;
+    const { length } = cheer.big ? C.big : C.small;
+    const hop = (cheer.big ? C.big.hop : C.small.hop) * CFG.crowd.scale;
     const local = t - seat.phase * C.stagger;
     if (local <= 0 || local >= length) return 0;
     const envelope = Math.min(1, local / C.ease, (length - local) / C.ease);

@@ -129,10 +129,11 @@ describe('a fan is a whole person', () => {
     });
 
     test('every hair style sits on the head, and no tag colour survives into the paint', () => {
-        const head = { low: parts.eyeHeight - 0.4, high: parts.top + 0.15 };
+        const k = CFG.crowd.scale;
+        const head = { low: parts.eyeHeight - 0.35 * k, high: parts.top + 0.12 * k };
         for (const style of Fans.HAIR) {
             const b = box(parts.hair[style]);
-            expect(b.max.y).toBeGreaterThan(parts.top - 0.02);
+            expect(b.max.y).toBeGreaterThan(parts.top - 0.02 * k);
             expect(b.max.y).toBeLessThan(head.high);
             expect(b.min.y).toBeGreaterThan(head.low);
         }
@@ -161,16 +162,20 @@ describe('the arms are where the pose says', () => {
         expect(hands.max.x).toBeGreaterThan(0.2);
     });
 
-    test('holding a card puts the hands in front of the face, and the card in front of the hands and over the eyes', () => {
+    test('holding a card puts the hands in front of the face, and the cards in front of the hands and over the whole head', () => {
+        const k = CFG.crowd.scale;
         const hands = box(parts.arms.cards.hand);
         expect(hands.min.z).toBeGreaterThan(box(parts.body.shirt).max.z);
-        expect(hands.max.y).toBeGreaterThan(parts.eyeHeight - 0.25);
-        expect(hands.min.y).toBeLessThan(parts.eyeHeight + 0.1);
+        expect(hands.max.y).toBeGreaterThan(parts.eyeHeight - 0.15 * k);
+        expect(hands.min.y).toBeLessThan(parts.eyeHeight + 0.06 * k);
         const at = St.cardHeights();
         expect(at.forward).toBeGreaterThan(hands.max.z);
-        // The upper card covers the eyes, so no face stands in front of the
+        // Chin to crown, every hair style, so no head stands in front of the
         // row of cards behind it and breaks a letter.
-        expect(Math.abs(at.upper - parts.eyeHeight)).toBeLessThan(at.half);
+        const chin = parts.eyeHeight - (parts.top - parts.eyeHeight);
+        const crown = Math.max(...Fans.HAIR.map((style) => box(parts.hair[style]).max.y));
+        expect(at.lower - at.half).toBeLessThanOrEqual(chin);
+        expect(at.upper + at.half).toBeGreaterThanOrEqual(crown);
         expect(at.upper - at.lower).toBeCloseTo(S.stepUp / 2, 6);
     });
 });
@@ -188,9 +193,16 @@ describe('the crowd is affordable', () => {
     });
 
     test('in the finale the near stand, arms up and bouncing, never stands between the camera and the teams', () => {
-        const reach = box(parts.arms.up.hand).max.y + 0.14;
+        // The shot is solved against `crowdReach`, so first: is that number
+        // really as high as a fan's hands go?
+        const bounce = CFG.crowd.bounce * CFG.crowd.scale;
+        expect(St.crowdReach()).toBeGreaterThanOrEqual(box(parts.arms.up.hand).max.y + bounce);
+        const reach = St.crowdReach();
         for (const aspect of [21 / 9, 16 / 9, 4 / 3, 1, 9 / 16, 9 / 19.5]) {
-            const f = Mi.sideShot(aspect).position;
+            const shot = Mi.sideShot(aspect);
+            expect(Mi.seesOverNearStand(shot)).toBe(true);
+            // And measured here without it, so the check cannot agree with itself.
+            const f = shot.position;
             for (const p of Mi.finaleRows(14)) {
                 for (const y of [0, 3.9]) {
                     for (let r = 0; r < S.rows; r += 1) {
