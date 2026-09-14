@@ -328,3 +328,90 @@ export function sparksAt(t, plan, positions, colours, { calm = false } = {}) {
             calm ? 0 : burnDown(tau, F.life) * 0.8);
     }
 }
+
+// ---- Bulbs on the turf (400) --------------------------------------------------
+
+/**
+ * THE NUMERALS AS A STRING OF BULBS LAID ON THE GRASS, lit in order along their
+ * strokes the way a marquee chases.
+ *
+ * The same strokes as the finale, turned to lie flat: `u` runs across the
+ * field (+z) and `v` runs DOWN it (+x), which is how the overhead camera reads
+ * them, top of the frame being downfield.
+ */
+export function planBulbs({ text = '', centre = { x: 0, z: 0 }, height = 7.2, spacing = 0.5, y = 0.12 } = {}) {
+    const points = digitPoints(text, { height, spacing });
+    const roll = seeded(text.length * 131 + points.length);
+    return {
+        bulbs: points.map((p, i) => ({
+            x: centre.x + p.v, y, z: centre.z + p.u, order: i / Math.max(1, points.length - 1),
+            phase: roll() * Math.PI * 2,
+        })),
+        count: points.length,
+    };
+}
+
+/**
+ * EVERY BULB AT TIME `t`. `light` is the window over which they come on in
+ * order, `out` the one over which they all go off together.
+ *
+ * Once lit, a CHASE runs along them: a gentle wave of brightness travelling the
+ * strokes, never below three quarters, so it reads as a marquee and never as a
+ * flash. Somebody who asked not to be moved about gets them all at once and
+ * held still.
+ */
+export function bulbsAt(t, plan, positions, colours, { light = [0, 1], out = [9, 10], calm = false, colour = [1, 0.81, 0.35] } = {}) {
+    if (!plan) return;
+    const fade = 1 - clamp01((t - out[0]) / Math.max(1e-6, out[1] - out[0]));
+    plan.bulbs.forEach((b, i) => {
+        const on = calm
+            ? (t >= light[0] ? 1 : 0)
+            : clamp01((t - (light[0] + b.order * (light[1] - light[0]))) / 0.12);
+        const chase = calm ? 1 : 0.8 + 0.2 * Math.sin(Math.PI * 2 * (b.order * 6 - 1.2 * t));
+        write(positions, colours, i, b.x, b.y, b.z, colour, on * chase * fade);
+    });
+}
+
+// ---- Confetti (500) ------------------------------------------------------------
+
+/**
+ * CONFETTI OVER THE FIELD, falling and swaying. Drawn with ordinary blending so
+ * it reads as paper rather than light, which means an unused piece cannot simply
+ * be black: it is parked far under the ground instead.
+ */
+export function planConfetti({ pieces = 500, area = { fromX: 0, toX: 35, fromZ: -12, toZ: 8 }, from = 0, seed = 5, palette = ['#ffcf5a'] } = {}) {
+    const roll = seeded(seed);
+    const colours = palette.map(hexToRgb);
+    const bits = [];
+    for (let i = 0; i < pieces; i += 1) {
+        bits.push({
+            x: area.fromX + roll() * (area.toX - area.fromX),
+            z: area.fromZ + roll() * (area.toZ - area.fromZ),
+            y: 20 + roll() * 12,
+            start: from + roll() * 1.6,
+            fall: 2.2 + roll() * 1.3,
+            sway: 0.5 + roll() * 0.7,
+            hz: 0.5 + roll() * 0.8,
+            phase: roll() * Math.PI * 2,
+            colour: colours[i % colours.length],
+        });
+    }
+    return { bits, count: bits.length };
+}
+
+export const PARKED = -1e4;
+
+export function confettiAt(t, plan, positions, colours) {
+    if (!plan) return;
+    plan.bits.forEach((b, i) => {
+        const age = t - b.start;
+        const y = b.y - b.fall * age;
+        const live = age >= 0 && y > 0.05;
+        const w = Math.sin(b.phase + Math.PI * 2 * b.hz * age) * b.sway;
+        write(positions, colours, i,
+            live ? b.x + w : 0,
+            live ? y : PARKED,
+            live ? b.z + w * 0.6 : 0,
+            b.colour, 1);
+    });
+}

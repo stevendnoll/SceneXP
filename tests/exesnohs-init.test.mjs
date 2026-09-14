@@ -611,6 +611,33 @@ describe('a milestone show', () => {
         expect(dom.el('hud-actions').children.some((b) => b.id === 'skip-show-btn')).toBe(false);
     });
 
+    /**
+     * THE THREE SHOWS THAT MOVE THE PLAYERS, run to the end through the real
+     * loop. Under the stub nothing is drawn, so this is the smoke test for every
+     * path they add: the staging, the team celebration, the blimp, the bulbs, the
+     * crowd, the cards, the confetti and the trophy, none of which a pure suite
+     * ever calls.
+     */
+    test('300, 400 and 500 each play through to the end and hand the game back once', async () => {
+        const main = await boot();
+        dom.el('welcome-actions').children[0].click();
+        await flushAsync();
+        let frame = 0;
+        for (const level of [300, 400, 500]) {
+            let carriedOn = 0;
+            main.beginMilestone(level, () => { carriedOn += 1; });
+            for (let i = 0; i < 400 && !carriedOn; i += 1) {
+                frame += 1;
+                dom.loops[0](frame * 100);
+            }
+            expect(carriedOn).toBe(1);
+            await jest.advanceTimersByTimeAsync(100);
+            expect(dom.el('hud-live').textContent).toMatch(new RegExp(`^${level} points\\.`));
+            // And the stadium carries on ticking afterwards without it.
+            for (let i = 0; i < 5; i += 1) { frame += 1; dom.loops[0](frame * 100); }
+        }
+    });
+
     test('skipping it carries on straight away, exactly once', async () => {
         const main = await boot();
         dom.el('welcome-actions').children[0].click();

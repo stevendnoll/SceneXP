@@ -806,6 +806,60 @@ export function resetRelocate() {
     relocate.at = -1;
 }
 
+/**
+ * A SHOW SENDING THE PLAYERS SOMEWHERE, which is the relocation above with the
+ * destinations chosen by milestones.js rather than by a formation.
+ *
+ * `spots` is a Map of position to world { x, z }. Every figure named in it runs
+ * from WHERE IT IS DRAWN, celebration offsets and all, to its spot, starting
+ * `delay` seconds in and taking `walk` seconds, and then stays there until the
+ * next line-up (`resetStaging`). Nothing in the simulation moves: this is the
+ * view's own answer, the same way the tackle and the party are.
+ *
+ * A walk of zero is a cut, which is what somebody who asked not to be moved
+ * about gets, timed to land on the camera's own cut.
+ */
+const staging = { at: -1, spots: null, delay: 0, walk: 0, from: new Map() };
+
+export function beginStaging(spots, { delay = 0, walk = 0 } = {}) {
+    staging.at = 0;
+    staging.spots = spots instanceof Map ? spots : new Map();
+    staging.delay = Math.max(0, delay);
+    staging.walk = Math.max(0, walk);
+    staging.from.clear();
+}
+
+export function resetStaging() {
+    staging.at = -1;
+    staging.spots = null;
+    staging.from.clear();
+}
+
+/** 0 to 1 across the walk, eased, or -1 when there is no staging. */
+export function stagingProgress() {
+    if (staging.at < 0) return -1;
+    if (!(staging.walk > 0)) return staging.at >= staging.delay ? 1 : 0;
+    const t = Math.min(1, Math.max(0, (staging.at - staging.delay) / staging.walk));
+    return t * t * (3 - 2 * t);
+}
+
+/** Where every visible figure is drawn right now, for a show to plan from. */
+export function drawnSpots(objects) {
+    const out = [];
+    for (const obj of objects || []) {
+        if (!obj || !obj.settings || obj.settings.position === 'ball' || obj.settings.benched) continue;
+        const figure = figureFor(obj.settings.position);
+        if (!figure || !figure.visible) continue;
+        out.push({
+            position: obj.settings.position,
+            team: obj.settings.team,
+            x: Number(figure.position.x) || 0,
+            z: Number(figure.position.z) || 0,
+        });
+    }
+    return out;
+}
+
 /** 0 to 1 across the walk, or -1 when nobody is walking. */
 export function relocateProgress() {
     if (relocate.at < 0) return -1;
@@ -1173,6 +1227,8 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         relocate.at += delta;
         if (relocate.at > CFG.pose.relocate.time) relocate.at = -1;
     }
+    // ...and a show's staging, which is held at its end rather than dropped.
+    if (staging.at >= 0) staging.at += delta;
     const walking = relocateProgress();
     inTheAir.clear();
     // Only the man it was thrown at goes up for it. See `intendedReceiver`.
@@ -1248,6 +1304,25 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
                 : { x: target.x, z: target.z };
         }
 
+        // A MILESTONE SHOW HAS SENT HIM SOMEWHERE, which outranks the
+        // simulation until the next line-up. See `beginStaging`.
+        const spot = staging.at >= 0 && staging.spots ? (staging.spots.get(obj.settings.position) || null) : null;
+        let stagedMoving = false;
+        if (spot && figure.visible) {
+            if (!staging.from.has(obj.settings.position)) {
+                // FROM WHERE HE IS DRAWN, offsets and all, and his measured
+                // position is moved there too, or the first frame of the walk
+                // measures a jump and swings his arms at a sprint.
+                const start = { x: figure.position.x, z: figure.position.z };
+                staging.from.set(obj.settings.position, start);
+                figure.userData.at = start;
+            }
+            const start = staging.from.get(obj.settings.position);
+            const k = stagingProgress();
+            p = { x: start.x + (spot.x - start.x) * k, z: start.z + (spot.z - start.z) * k };
+            stagedMoving = k < 1 && Math.hypot(spot.x - start.x, spot.z - start.z) > 0.05;
+        }
+
         // HOW FAST HE IS ACTUALLY GOING, MEASURED FROM WHERE HE ACTUALLY WENT.
         //
         // Reading `state.xSpeed` and `state.ySpeed` cannot work, because those
@@ -1316,7 +1391,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // displacement of the SIMULATED position, which is frozen after the
         // whistle, so it would answer "still" for every celebrant and zero the
         // speed that the stride and the arm swing are both scaled by.
-        const standing = !opts.presnap && !(cheer && cheer.running)
+        const standing = !opts.presnap && !(cheer && cheer.running) && !stagedMoving
             && updateStanding(figure, delta);
         const mps = (standing || figure.userData.mps < CFG.pose.stillSpeed)
             ? 0 : figure.userData.mps;
@@ -1434,13 +1509,16 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
          * rather than guarded at each of the four places they are read, because
          * missing one is how a pose ends up half applied.
          */
-        const engagement = cheer ? null : (engaged.get(obj.settings.position) || null);
+        // A man a show has sent somewhere is off the play the same way a
+        // celebrant is: no block, no reach, no lunge.
+        const offPlay = !!cheer || !!spot;
+        const engagement = offPlay ? null : (engaged.get(obj.settings.position) || null);
         // A MAN WITH HIS HANDS ON SOMEBODY IS NOT CATCHING A PASS. The ball
         // leaves at chest height over a line of men who are 3.85m tall, so it
         // passes inside a defensive lineman's `defenderRange` on most throws,
         // and without this the reach beat the block in both the pose and the
         // facing: two men locked together sprang apart to look up at it.
-        const reach = (engagement || cheer) ? 0 : (reaching.get(obj.settings.position) || 0);
+        const reach = (engagement || offPlay) ? 0 : (reaching.get(obj.settings.position) || 0);
 
         // A MAN GOING FOR THE BALL IS LOOKING AT THE BALL, and it beats every
         // other reason to be facing somewhere: his coverage, his block, and the
@@ -1461,6 +1539,8 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             : opts.presnap ? downfield
             : (surveying ? Math.PI / 2
                 : (look ? Math.atan2(look.x - p.x, look.z - p.z) : running));
+        // Running to a show's spot, he faces the way he is running.
+        if (stagedMoving) want = running;
 
         // ...BUT HE DOES NOT STOP RUNNING TO DO IT. See `turnFor`.
         //
@@ -1531,7 +1611,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // Multiplying the metres actually travelled is frame-rate independent
         // for free, and a player who has not moved advances no phase at all.
         figure.userData.phase += travelled * CFG.pose.stridePerMetre;
-        const lunge = cheer ? 0 : (tacklers.get(obj.settings.position) || 0);
+        const lunge = offPlay ? 0 : (tacklers.get(obj.settings.position) || 0);
 
         /**
          * GOING DOWN, WHICH IS NOW SOMETHING THAT HAPPENED RATHER THAN

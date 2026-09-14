@@ -320,8 +320,17 @@ function buildApron() {
  * rows read as black voids rather than as structure, and an empty stand should
  * look empty rather than look like a hole in the world.
  */
-function buildStands() {
-    const stands = new THREE.Group();
+/**
+ * THE STANDS, AS NUMBERS: where each riser is, so the finale can put fans on
+ * them and a card stunt in their hands without a copy of these getting out of
+ * step with the geometry.
+ *
+ *   rows       risers per side
+ *   top(r)     world y of riser r's standing surface
+ *   out(r)     world |z| of riser r's centre line
+ *   fromX/toX  the length of the stand along the field
+ */
+export function standLayout() {
     const playLength = FIELD.lineInterval * FIELD.segments;
     // AS LONG AS THE GROUND THEY STAND ON, which used to be the field exactly.
     // A stand that stops on the end line has two cut ends, and the portrait
@@ -329,11 +338,28 @@ function buildStands() {
     // them the length of the apron is also what a real stand does.
     const totalLength = playLength + FIELD.endZone * 2 + CFG.turf.apron.beyond * 2;
     const half = FIELD.width / 2 + FIELD.sideline;
-
     const ROWS = 4;
     const STEP_OUT = 1.0;      // metres further out per riser
     const STEP_UP = 0.7;       // metres higher per riser
     const STANDOFF = 1.2;      // metres from the sideline margin to row one
+    return {
+        rows: ROWS,
+        stepOut: STEP_OUT,
+        stepUp: STEP_UP,
+        standoff: STANDOFF,
+        half,
+        totalLength,
+        fromX: playLength / 2 - totalLength / 2,
+        toX: playLength / 2 + totalLength / 2,
+        top: (r) => 0.8 + r * STEP_UP,
+        out: (r) => half + STANDOFF + r * STEP_OUT,
+    };
+}
+
+function buildStands() {
+    const stands = new THREE.Group();
+    const playLength = FIELD.lineInterval * FIELD.segments;
+    const { rows: ROWS, stepOut: STEP_OUT, stepUp: STEP_UP, standoff: STANDOFF, half, totalLength } = standLayout();
 
     const deck = new THREE.MeshStandardMaterial({
         color: 0x3a4356, roughness: 0.9, metalness: 0.05,

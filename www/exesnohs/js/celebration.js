@@ -374,16 +374,51 @@ export function chooseCelebration({
  */
 function clockRanOut({ hero, mates, rivals, calm, C }) {
     const E = C.expired;
+    return teamCelebration({
+        hero, mates, rivals, calm, occasion: 'expired',
+        cap: E.cap, staggerMax: E.staggerMax, danceFloor: E.danceFloor,
+    });
+}
+
+/**
+ * A WHOLE TEAM CELEBRATING WHERE IT STANDS, which is the expired clock's party
+ * and also what the milestone shows ask for once they have put the players
+ * where they want them.
+ *
+ *   hero, mates  the men celebrating; `hero` is only where the ripple starts
+ *   rivals       the men who sag instead, or none
+ *   faceAt       a world point everybody celebrating turns to, or null to leave
+ *                them facing wherever they are
+ *   watchAt      the same for the men sagging
+ *   wait         seconds before any of it starts (the show's run to its spots)
+ *   dances       the dances to hand out in turn, for a crowd that is not all
+ *                doing the same thing; `bow` for everybody by default
+ *   cap          the budget
+ *
+ * The pose is HELD once the dance is over, which is what a show wants: arms up
+ * for as long as the stadium is watching.
+ */
+export function teamCelebration({
+    hero, mates = [], rivals = [], calm = false, occasion = 'team',
+    faceAt = null, watchAt = null, wait = 0, dances = ['bow'],
+    cap, staggerMax, danceFloor,
+} = {}) {
+    if (!hero || !hero.position) return null;
+    const C = CFG.pose.celebration;
+    const E = C.expired;
+    const ripple = staggerMax === undefined ? E.staggerMax : staggerMax;
+    const list = dances && dances.length ? dances : ['bow'];
     const team = [hero, ...mates]
         .map((m) => ({ ...m, gap: Math.hypot(m.x - hero.x, m.z - hero.z) }))
         .sort((a, b) => a.gap - b.gap);
     const parts = team.map((m, i) => part({
         who: m,
         to: { x: m.x, z: m.z },
-        delay: Math.min(i * C.stagger, E.staggerMax),
-        dance: 'bow',
-        // Nobody turns, because there is nothing to turn toward.
-        faceAt: null,
+        delay: Math.min(i * C.stagger, ripple),
+        // Somebody who asked not to be moved about gets the bow, which is the
+        // one dance with a still version.
+        dance: calm ? 'bow' : list[i % list.length],
+        faceAt,
         lead: m.position === hero.position,
         C,
     }));
@@ -392,22 +427,25 @@ function clockRanOut({ hero, mates, rivals, calm, C }) {
         .sort((a, b) => a.gap - b.gap)
         .map((r, i) => ({
             position: r.position,
-            // ...and nobody on the offense turns to watch anybody either.
-            faceAt: null,
-            delay: Math.min(i * C.stagger, E.staggerMax),
+            faceAt: watchAt,
+            delay: Math.min(i * C.stagger, ripple),
         }));
     return fit({
         mode: 'team',
         dance: 'bow',
-        occasion: 'expired',
+        occasion,
         hero: hero.position,
         carrying: false,
-        wait: 0,
+        wait: Math.max(0, wait),
         rise: false,
         parts,
         slump,
         calm,
-    }, C, { beat: C.beat, cap: E.cap, danceFloor: E.danceFloor });
+    }, C, {
+        beat: C.beat,
+        cap: (cap === undefined ? E.cap : cap),
+        danceFloor: danceFloor === undefined ? E.danceFloor : danceFloor,
+    });
 }
 
 /**
@@ -524,8 +562,8 @@ function relax(seats, lim, C) {
                 const uz = (dz / d) * push;
                 const aw = a.lead ? 0 : (b.lead ? 2 : 1);
                 const bw = b.lead ? 0 : (a.lead ? 2 : 1);
-                a.to = { x: a.to.x - ux * aw, z: a.to.z - uz * aw };
-                b.to = { x: b.to.x + ux * bw, z: b.to.z + uz * bw };
+                a.to = slide(a.to, -ux * aw, -uz * aw, lim);
+                b.to = slide(b.to, ux * bw, uz * bw, lim);
                 shoved = true;
             }
         }
@@ -533,6 +571,30 @@ function relax(seats, lim, C) {
     }
     // ...and it still has the last word, because the final pass shoved.
     fence();
+}
+
+/**
+ * A PUSH THAT A TOUCHLINE WOULD UNDO GOES ALONG THE TOUCHLINE INSTEAD.
+ *
+ * A man already on the paint's edge, pushed further out of it, gets clamped
+ * straight back by the next fence, and against a PINNED neighbour (the man
+ * being celebrated) that repeats every pass without either of them moving:
+ * measured over 1,500 real mobs, one pair finished 1.28m apart with the
+ * mob's hero standing just inside the line. So the outward part of the push is
+ * turned to run along the line, the one direction left that separates them.
+ */
+function slide(to, mx, mz, lim) {
+    let x = mx;
+    let z = mz;
+    if (Math.abs(to.z) >= lim.halfZ - 1e-6 && Math.sign(z) === Math.sign(to.z) && z !== 0) {
+        x += (Math.sign(x) || 1) * Math.abs(z);
+        z = 0;
+    }
+    if (((to.x <= lim.minX + 1e-6 && x < 0) || (to.x >= lim.maxX - 1e-6 && x > 0))) {
+        z += (Math.sign(z) || 1) * Math.abs(x);
+        x = 0;
+    }
+    return { x: to.x + x, z: to.z + z };
 }
 
 /** One man's part in it, before the whole thing is fitted to the time budget. */

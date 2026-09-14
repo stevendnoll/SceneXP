@@ -21,7 +21,7 @@
  */
 import { EXESNOHS_CONFIG as CFG, FIELD } from './config.min.js';
 import { playDriver } from './camera.min.js';
-import { pylonSpots, boardSpot } from './field.min.js';
+import { pylonSpots, boardSpot, standLayout } from './field.min.js';
 
 const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
 const smooth = (t) => { const c = clamp01(t); return c * c * (3 - 2 * c); };
@@ -76,7 +76,7 @@ export function litStars(level = 0) {
 
 /** The kind of show a level plays. */
 export function showKind(level) {
-    return { 100: 'lights', 200: 'fireworks' }[level] || '';
+    return { 100: 'lights', 200: 'fireworks', 300: 'blimp', 400: 'turf', 500: 'finale' }[level] || '';
 }
 
 export function showLength(level) {
@@ -279,6 +279,11 @@ function move(a, b, t, window, calm) {
  *   sparks    true when the fireworks are running
  *   title     0 to 1, how visible the title card is
  *   reveal    true from the moment the number lands: the whistle, the star
+ *   blimp     { x, y, z, heading, lit } while a show is flying it, or null
+ *   bulbs     true while the numerals on the turf are running
+ *   crowd     true while the finale's fans and card stunt are running
+ *   confetti  true while it is falling
+ *   trophy    { rise, spin } once the gold ball is up, or null
  *   done      true once `t` has run past the end
  */
 export function showFrame(level, t, { aspect = 1.78, calm = false } = {}) {
@@ -287,10 +292,14 @@ export function showFrame(level, t, { aspect = 1.78, calm = false } = {}) {
     const base = {
         shot: playDriver(aspect), light: 1, banks: null, cones: null,
         board: null, sparks: false, title: 0, reveal: false, done: t >= length, fog: 1,
+        blimp: null, bulbs: false, crowd: false, confetti: false, trophy: null,
     };
     let frame = { ...base, done: true };
     if (kind === 'lights') frame = { ...base, ...lightsAt(level, t, aspect, calm) };
     if (kind === 'fireworks') frame = { ...base, ...fireworksAt(t, aspect, calm) };
+    if (kind === 'blimp') frame = { ...base, ...blimpShowAt(t, aspect, calm) };
+    if (kind === 'turf') frame = { ...base, ...turfAt(t, aspect, calm) };
+    if (kind === 'finale') frame = { ...base, ...finaleAt(t, aspect, calm) };
     return { ...frame, fog: fogFor(frame.shot, aspect) };
 }
 
@@ -423,4 +432,384 @@ export function fireworksSetup(level) {
             { x: b.x + 3, y: b.top, z: 0 },
         ],
     };
+}
+
+// ---- 300, the blimp ---------------------------------------------------------------
+
+const LEN = () => FIELD.lineInterval * FIELD.segments;
+
+/** When the blimp is overhead, which is when its number lands. */
+export function blimpReveal() {
+    const B = M.blimp;
+    return (B.cross[0] + B.cross[1]) / 2;
+}
+
+/**
+ * WHERE THE BLIMP IS DURING ITS SHOW. It crosses the field on a cubic, fast at
+ * the edges and slow through the middle without ever stopping, nose along +z,
+ * so its lit side faces the camera, which looks down +x.
+ *
+ * Somebody who asked not to be moved about sees it parked overhead instead.
+ */
+export function blimpShowPosition(t, { calm = false } = {}) {
+    const B = M.blimp;
+    const s = calm ? 0 : span(t, B.cross) * 2 - 1;
+    return {
+        x: LEN() * B.along,
+        y: B.altitude,
+        z: B.reach * s * s * s + B.drift * s,
+        heading: 0,
+    };
+}
+
+/**
+ * WHERE IT IS AFTER ITS SHOW, for the rest of the game: a slow circle high over
+ * the stadium, clear of the play camera (the suite holds it to that). `elapsed`
+ * is any running clock.
+ */
+export function blimpOrbitPosition(elapsed) {
+    const O = M.blimp.orbit;
+    const a = (Math.PI * 2 * elapsed) / O.period;
+    return {
+        x: LEN() / 2 + Math.cos(a) * O.radius,
+        y: O.altitude,
+        z: Math.sin(a) * O.radius,
+        // Facing along the circle: the velocity is (-sin a, cos a).
+        heading: Math.atan2(-Math.sin(a), Math.cos(a)),
+    };
+}
+
+/** Looking up from behind the offense, with the blimp overhead and a strip of
+ *  the field along the bottom so the players waving are in it. */
+export function upShot(aspect) {
+    return cached('up', aspect, () => {
+        const B = M.blimp;
+        const at = blimpShowPosition(blimpReveal());
+        const half = B.size.long / 2 + 2;
+        const girth = B.size.girth / 2 + 1;
+        return fitShot({
+            target: { x: at.x, y: at.y * 0.62, z: 0 },
+            from: { x: -1, y: -0.08, z: 0 },
+            fov: 55,
+            points: [
+                { x: at.x, y: at.y + girth, z: -half }, { x: at.x, y: at.y + girth, z: half },
+                { x: at.x, y: at.y - girth, z: -half }, { x: at.x, y: at.y - girth, z: half },
+                { x: LEN() * 0.4, y: 0, z: -6 }, { x: LEN() * 0.4, y: 0, z: 6 },
+            ],
+            aspect,
+            margin: 0.05,
+            floor: 5,
+        });
+    });
+}
+
+function blimpShowAt(t, aspect, calm) {
+    const B = M.blimp;
+    const play = playDriver(aspect);
+    const up = upShot(aspect);
+    const shot = t < B.back[0] ? move(play, up, t, B.toUp, calm) : move(up, play, t, B.back, calm);
+    const reveal = blimpReveal();
+    return {
+        shot,
+        blimp: { ...blimpShowPosition(t, { calm }), lit: t >= reveal },
+        title: titleAt(t, reveal, B.length - 0.15),
+        reveal: t >= reveal,
+    };
+}
+
+// ---- 400, the numbers on the turf --------------------------------------------------
+
+/** The middle of the field, where the numerals are laid. */
+export function turfCentre() {
+    return { x: LEN() / 2, z: 0 };
+}
+
+/** Straight down on the middle of the field, from a little behind it so the
+ *  numerals read the right way up (downfield is the top of the frame). */
+export function overheadShot(aspect) {
+    return cached('overhead', aspect, () => {
+        const c = turfCentre();
+        const w = FIELD.width / 2;
+        return fitShot({
+            target: { x: c.x, y: 0, z: 0 },
+            from: { x: -0.32, y: 1, z: 0 },
+            fov: 45,
+            points: [
+                { x: LEN() * 0.18, y: 0, z: -w }, { x: LEN() * 0.18, y: 0, z: w },
+                { x: LEN() * 0.82, y: 0, z: -w }, { x: LEN() * 0.82, y: 0, z: w },
+                { x: c.x, y: 4, z: 0 },
+            ],
+            aspect,
+            margin: 0.04,
+        });
+    });
+}
+
+function turfAt(t, aspect, calm) {
+    const T = M.turf;
+    const play = playDriver(aspect);
+    const top = overheadShot(aspect);
+    const shot = t < T.back[0] ? move(play, top, t, T.toTop, calm) : move(top, play, t, T.back, calm);
+    const reveal = T.walk[1];
+    const light = t < T.back[0]
+        ? lerp(1, T.dimTo, smooth(span(t, T.toTop)))
+        : lerp(T.dimTo, 1, smooth(span(t, T.back)));
+    return {
+        shot,
+        light,
+        bulbs: true,
+        title: titleAt(t, reveal, T.length - 0.15),
+        reveal: t >= reveal,
+    };
+}
+
+// ---- 500, the perfect game -----------------------------------------------------------
+
+/** Where the gold ball hangs, over the two teams. */
+export function trophySpot() {
+    return { x: LEN() / 2, y: 9.5, z: -2.5 };
+}
+
+/** The two rows the teams celebrate in, in front of the far stand. */
+export function finaleRows(count) {
+    const out = [];
+    const perRow = Math.ceil(count / 2);
+    for (let i = 0; i < count; i += 1) {
+        const row = i < perRow ? 0 : 1;
+        const inRow = row === 0 ? perRow : count - perRow;
+        const k = row === 0 ? i : i - perRow;
+        out.push({
+            x: LEN() / 2 + (k - (inRow - 1) / 2) * 2.4 + row * 1.2,
+            z: row === 0 ? -5 : -1.4,
+        });
+    }
+    return out;
+}
+
+/** Across the field at the far stand, square on to its cards, with the teams
+ *  in front and room above the stand for the fireworks. */
+export function sideShot(aspect) {
+    return cached('side', aspect, () => {
+        const S = standLayout();
+        const c = LEN() / 2;
+        const message = 17.5;
+        return fitShot({
+            target: { x: c, y: 4, z: S.half + 3 },
+            from: { x: 0, y: 0.4, z: -1 },
+            fov: 42,
+            points: [
+                { x: c - message, y: S.top(0), z: S.out(0) }, { x: c + message, y: S.top(0), z: S.out(0) },
+                { x: c - message, y: S.top(S.rows - 1) + 1.2, z: S.out(S.rows - 1) },
+                { x: c + message, y: S.top(S.rows - 1) + 1.2, z: S.out(S.rows - 1) },
+                { x: c, y: 15, z: S.out(S.rows - 1) + 6 },
+                { x: c - 9, y: 0, z: -5.5 }, { x: c + 9, y: 0, z: -5.5 },
+            ],
+            aspect,
+            margin: 0.05,
+        });
+    });
+}
+
+/** Round the gold ball: `u` 0 to 1 across the sweep. */
+export function orbitShot(aspect, u) {
+    const F = M.finale;
+    const c = trophySpot();
+    const side = sideShot(aspect);
+    const a0 = Math.atan2(side.position.x - c.x, side.position.z - c.z);
+    const a = a0 + F.orbit.sweep * smooth(u);
+    return {
+        position: { x: c.x + Math.sin(a) * F.orbit.radius, y: c.y + F.orbit.height, z: c.z + Math.cos(a) * F.orbit.radius },
+        target: { ...c },
+        fov: 40,
+    };
+}
+
+function finaleAt(t, aspect, calm) {
+    const F = M.finale;
+    const play = playDriver(aspect);
+    const side = sideShot(aspect);
+    const [t0, t1] = F.trophy;
+    let shot;
+    if (t < t0) {
+        shot = move(play, side, t, F.toSide, calm);
+    } else if (t < F.back[0]) {
+        const approach = [t0, t0 + 1.0];
+        const u = span(t, [t0 + 1.0, t1]);
+        const round = calm ? orbitShot(aspect, 0) : orbitShot(aspect, u);
+        shot = t < approach[1] ? move(side, orbitShot(aspect, 0), t, approach, calm) : round;
+    } else {
+        shot = move(calm ? orbitShot(aspect, 0) : orbitShot(aspect, 1), play, t, F.back, calm);
+    }
+
+    let light = 1;
+    if (t < F.brighten[0]) light = lerp(1, F.dimTo, smooth(span(t, F.dim)));
+    else if (t < F.back[0]) light = lerp(F.dimTo, F.brightTo, smooth(span(t, F.brighten)));
+    else light = lerp(F.brightTo, 1, smooth(span(t, F.back)));
+
+    return {
+        shot,
+        light,
+        crowd: true,
+        sparks: true,
+        confetti: !calm && t >= F.confetti.from,
+        trophy: t >= t0 ? { rise: calm ? 1 : smooth((t - t0) / 0.8), spin: calm ? 0 : (t - t0) * 1.4 } : null,
+        title: titleAt(t, F.reveal, F.length - 0.15),
+        reveal: t >= F.reveal,
+    };
+}
+
+/** The finale's volley: from behind the far stand, bursting over it, and with
+ *  no numerals, because the cards are already saying the number. */
+export function finaleFireworksSetup() {
+    const S = standLayout();
+    const c = LEN() / 2;
+    const back = S.out(S.rows - 1) + 3;
+    return {
+        text: '',
+        centre: { x: c, y: 12.5, z: back + 5 },
+        origins: [-14, -5, 5, 14].map((dx) => ({ x: c + dx, y: S.top(S.rows - 1) + 2, z: back })),
+    };
+}
+
+// ---- The players in a show ---------------------------------------------------------------
+
+/** Whether a show sends the players anywhere. */
+export function showUsesTeam(level) {
+    return ['blimp', 'turf', 'finale'].includes(showKind(level));
+}
+
+/**
+ * GIVE EACH SPOT THE NEAREST MAN STILL WITHOUT ONE. Greedy rather than optimal,
+ * because the only thing the eye can object to is two men swapping places
+ * across the field, and nearest-first rarely asks for that.
+ */
+function assign(men, spots) {
+    const free = [...men];
+    const out = new Map();
+    for (const spot of spots) {
+        if (!free.length) break;
+        let best = 0;
+        let bestD = Infinity;
+        free.forEach((m, i) => {
+            const d = Math.hypot(m.x - spot.x, m.z - spot.z);
+            if (d < bestD) { bestD = d; best = i; }
+        });
+        const [man] = free.splice(best, 1);
+        out.set(man.position, { x: spot.x, z: spot.z });
+    }
+    return out;
+}
+
+/**
+ * THE MOST SPREAD OUT `count` POINTS OF A SET, no two closer than `apart`: start
+ * from the first and keep taking whichever point is furthest from everything
+ * already taken. On the numerals that puts a man on every digit before it puts
+ * a second man on any of them.
+ */
+export function spreadPoints(points, count, apart = 0) {
+    if (!points.length || count <= 0) return [];
+    const chosen = [points[0]];
+    while (chosen.length < count) {
+        let best = null;
+        let bestD = -1;
+        for (const p of points) {
+            const d = Math.min(...chosen.map((c) => Math.hypot(p.x - c.x, p.z - c.z)));
+            if (d > bestD) { bestD = d; best = p; }
+        }
+        if (!best || bestD < apart) break;
+        chosen.push(best);
+    }
+    return chosen;
+}
+
+/**
+ * WHAT A SHOW DOES WITH THE PLAYERS.
+ *
+ * `men` is every visible figure, where it is DRAWN: { position, team, x, z }.
+ * `numerals` is the 400 show's bulb positions. Returns the spots to stage them
+ * to, when the run starts and how long it takes, and the celebration to hand
+ * `celebration.teamCelebration` once they are there. A calm show runs nobody:
+ * the walk collapses to an instant on the camera's own cut.
+ */
+export function stageTeam(level, men, { calm = false, numerals = [] } = {}) {
+    const kind = showKind(level);
+    const offense = men.filter((m) => m.team === 0);
+    const defense = men.filter((m) => m.team !== 0);
+    const stay = new Map(men.map((m) => [m.position, { x: m.x, z: m.z }]));
+    const at = (list, spots) => list.map((m) => ({ ...m, ...spots.get(m.position) }));
+
+    if (kind === 'blimp') {
+        const B = M.blimp;
+        const hero = offense[0];
+        return {
+            spots: stay, delay: 0, walk: 0,
+            celebrate: hero ? {
+                hero, mates: offense.slice(1), rivals: [],
+                faceAt: { x: blimpShowPosition(blimpReveal()).x, z: 0 },
+                wait: B.wave, cap: 2.2,
+            } : null,
+        };
+    }
+
+    if (kind === 'turf') {
+        const T = M.turf;
+        const onNumbers = assign(offense, spreadPoints(numerals, offense.length, T.apart));
+        /**
+         * THE DEFENSE STANDS OFF THE NUMBERS IN TWO SHORT ROWS, one above them
+         * and one below. It was the sidelines first, and "400" is nearly as
+         * wide as the field, so a man on the sideline stood 0.74m from the end of
+         * a zero. Above and below, there is a clear three metres either way.
+         */
+        const c = turfCentre();
+        const clear = T.digitHeight / 2 + 3.2;
+        const perRow = Math.ceil(defense.length / 2);
+        const sideline = defense.map((_, i) => {
+            const row = i < perRow ? -1 : 1;
+            const n = row < 0 ? perRow : defense.length - perRow;
+            const k = row < 0 ? i : i - perRow;
+            return { x: c.x + row * clear, z: c.z + (k - (n - 1) / 2) * 3.2 };
+        });
+        const offSide = assign(defense, sideline);
+        const spots = new Map([...stay, ...onNumbers, ...offSide]);
+        const hero = offense.find((m) => onNumbers.has(m.position));
+        return {
+            spots,
+            delay: calm ? (T.toTop[0] + T.toTop[1]) / 2 : T.walk[0],
+            walk: calm ? 0 : T.walk[1] - T.walk[0],
+            celebrate: hero ? {
+                hero: { ...hero, ...onNumbers.get(hero.position) },
+                mates: at(offense.filter((m) => m !== hero && onNumbers.has(m.position)), onNumbers),
+                rivals: at(defense, offSide),
+                faceAt: { x: -60, z: 0 },
+                watchAt: turfCentre(),
+                wait: T.walk[1],
+                cap: 2.4,
+            } : null,
+        };
+    }
+
+    if (kind === 'finale') {
+        const F = M.finale;
+        const everybody = [...offense, ...defense];
+        const rows = assign(everybody, finaleRows(everybody.length));
+        const spots = new Map([...stay, ...rows]);
+        const placed = at(everybody.filter((m) => rows.has(m.position)), rows);
+        return {
+            spots,
+            delay: calm ? (F.toSide[0] + F.toSide[1]) / 2 : F.walk[0],
+            walk: calm ? 0 : F.walk[1] - F.walk[0],
+            celebrate: placed.length ? {
+                hero: placed[0], mates: placed.slice(1), rivals: [],
+                faceAt: { x: LEN() / 2, z: -80 },
+                wait: F.walk[1], cap: 4.0, dances: F.dances,
+            } : null,
+        };
+    }
+    return null;
+}
+
+/** The 400 show's bulbs, for `fireworks.planBulbs`. */
+export function turfSetup(level = 400) {
+    const T = M.turf;
+    return { text: `${level}`, centre: turfCentre(), height: T.digitHeight, spacing: T.spacing };
 }

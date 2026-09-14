@@ -2867,16 +2867,16 @@ const EXESNOHS_CONFIG = {
      */
     milestones: {
         thresholds: [100, 200, 300, 400, 500],
-        /** The ones with a show built. The rest are reached and lit on the
-         *  board but play nothing yet: stage two builds 300, 400 and 500. */
-        built: [100, 200],
+        /** The ones with a show built. A threshold missing from here is
+         *  reached and plays nothing. */
+        built: [100, 200, 300, 400, 500],
         flashGap: 0.34,
         /** What the title card says, under the number. */
         copy: {
             100: 'The lights are on',
             200: 'Now that is a show',
             300: 'Look up',
-            400: 'Your name in lights',
+            400: 'Your number in lights',
             500: 'A perfect game',
         },
         /** The whole title fades in and out over this, rather than popping. */
@@ -2944,6 +2944,98 @@ const EXESNOHS_CONFIG = {
             pool: 1400,
             size: 0.75,
             palette: ['#ffcf5a', '#fff3d0', '#ff992c', '#9bcfff'],
+        },
+
+        /**
+         * 300, THE BLIMP. It drifts across the sky over the field with "300"
+         * lit on its side, slowing as it passes overhead, while the offense puts
+         * its arms up at it. It stays for the rest of the game, circling high
+         * over the stadium, out of the play camera's frame.
+         */
+        blimp: {
+            length: 7.0,
+            toUp: [0, 1.1],
+            back: [6.2, 7.0],
+            /** The crossing, from one side of the field to the other. */
+            cross: [0.3, 6.7],
+            /** Metres either side of centre it starts and ends, and how much of
+             *  its speed it keeps through the middle (a cubic, so it slows
+             *  overhead without ever stopping). */
+            reach: 62,
+            drift: 9,
+            /** Where it crosses: a fraction down the field, and its height. */
+            along: 0.62,
+            altitude: 30,
+            /** Seconds before the offense puts its arms up. */
+            wave: 0.9,
+            /** The envelope, metres: length along its heading, and its girth. */
+            size: { long: 26, girth: 8.4 },
+            /** After the show: a slow circle high over the stadium. */
+            orbit: { radius: 95, altitude: 58, period: 70 },
+            /** Its tail light, which blinks slowly (well under three a second). */
+            blinkHz: 0.9,
+        },
+
+        /**
+         * 400, THE NUMBERS ON THE FIELD. "400" lights up in bulbs across the
+         * middle of the turf, the offense runs out to stand on it, the defense
+         * clears to the sidelines, and the camera watches from overhead.
+         */
+        turf: {
+            length: 8.2,
+            toTop: [0, 1.1],
+            back: [7.4, 8.2],
+            dimTo: 0.62,
+            /** The bulbs light along their strokes over this window... */
+            light: [0.9, 2.6],
+            /** ...and go out over this one. */
+            out: [6.9, 7.8],
+            /** The run to the spots. */
+            walk: [0.6, 3.4],
+            /** The numerals, metres tall (running down the field), and the
+             *  spacing of the bulbs along them. */
+            digitHeight: 7.2,
+            spacing: 0.5,
+            size: 0.95,
+            /** Nobody stands closer than this to anybody on the numbers. */
+            apart: 2.2,
+        },
+
+        /**
+         * 500, THE PERFECT GAME. The lights go down, the empty stands fill with
+         * fans, the far stand holds up a card stunt that reads PERFECT and then
+         * 500, both teams come out to celebrate in front of it, fireworks go up
+         * behind it, confetti comes down, and it ends circling a gold ball over
+         * the field. The fans stay for the rest of the visit's game.
+         */
+        finale: {
+            length: 13.2,
+            toSide: [0, 1.2],
+            dim: [0.2, 1.0],
+            dimTo: 0.38,
+            walk: [0.8, 3.6],
+            /** Fans pop into the stands over this window, a ripple down the
+             *  length of them. */
+            fill: [0.9, 2.4],
+            /** The card stunt: PERFECT flips in, holds, then 500 flips in. */
+            perfect: [2.4, 3.3],
+            five: [4.6, 5.5],
+            flip: 0.2,
+            reveal: 5.5,
+            brighten: [5.5, 5.9],
+            brightTo: 1.12,
+            /** A volley over the stand, with no numerals in it: the stand is
+             *  already saying the number. */
+            fireworks: { firstLaunch: 5.7, finaleLaunch: 8.1, shells: 6 },
+            confetti: { from: 6.0, pieces: 520, size: 0.42 },
+            /** The trophy rises, and the camera goes round it. */
+            trophy: [8.8, 12.4],
+            orbit: { radius: 18, height: 3.5, sweep: 1.15 },
+            back: [12.4, 13.2],
+            /** The dances the two teams share out between them, in turn. */
+            dances: ['bow', 'shimmy', 'bow', 'spin'],
+            fans: { pitch: 0.8, height: 1.15, palette: ['#ff992c', '#9bcfff', '#f2f5fa', '#ffcf5a', '#e8603c'] },
+            cards: { orange: '#ff992c', white: '#fff6e0', navy: '#141c2c', gold: '#ffcf5a' },
         },
     },
 

@@ -368,6 +368,35 @@ describe('nobody ends up standing inside anybody', () => {
     });
 });
 
+describe('a man pinned on the touchline', () => {
+    /**
+     * FOUND BY THE REAL-PLAY CASE BELOW, ONE RUN IN TWENTY. A mob's hero stood
+     * just inside the touchline and a mate's ring spot fell outside it, so the
+     * fence put the mate on the line 1.28m from the hero. Every relaxation pass
+     * then pushed the mate straight back out, away from a hero who is pinned,
+     * and every fence put him straight back. Nobody moved, and the pair finished
+     * inside the bar. Its simplest form is rebuilt here, so it no longer depends
+     * on the simulation happening to roll it, and it fails against the old
+     * relaxation at 1.27m.
+     */
+    test('is pushed along the line rather than into it', () => {
+        const hero = { position: 'wr1', x: 27.88, z: -8.63 };
+        // Straight toward the line from him, which is the shape that sticks: the
+        // push has no sideways part at all to creep free with.
+        const mate = { position: 'x1', x: 27.88, z: -9.6 };
+        // 0.5 is a mob, then any dance.
+        const seq = [0.5, 0.1];
+        const plan = chooseCelebration({
+            hero, mates: [mate], rivals: [], homeX: FIELD_LEN, toward: 1,
+            bounds: BOUNDS, roll: () => (seq.length ? seq.shift() : 0.5),
+        });
+        expect(plan.mode).toBe('mob');
+        const to = plan.parts.map((p) => p.to);
+        expect(closestPair(to)).toBeGreaterThan(C.body * 0.9);
+        for (const p of to) expect(Math.abs(p.z)).toBeLessThanOrEqual(BOUNDS.halfZ + 1e-9);
+    });
+});
+
 describe('somebody who asked not to be moved about is not moved about', () => {
     test('a calm celebration travels nowhere and never leaves the ground', () => {
         for (let seed = 1; seed <= 20; seed += 1) {

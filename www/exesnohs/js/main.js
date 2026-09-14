@@ -27,11 +27,15 @@ import {
     beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
     beginRelocate, resetRelocate, airborne,
     beginCelebration, resetCelebration, celebrationClock,
+    beginStaging, resetStaging, drawnSpots,
 } from './view.min.js';
 import {
     takedownLength, takedownRest, tacklerFor, contactFraction,
 } from './takedown.min.js';
-import { chooseCelebration, celebrationLength, occasionFor } from './celebration.min.js';
+import {
+    chooseCelebration, celebrationLength, occasionFor, teamCelebration,
+} from './celebration.min.js';
+import { planBulbs } from './fireworks.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier, markAirborne, setDifficulty,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome, decisionLeft,
@@ -45,9 +49,11 @@ import {
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle,
 } from './hud.min.js';
-import { milestoneDue, litStars, showFrame } from './milestones.min.js';
 import {
-    initSpectacle, beginShow, applyShow, setAwake, endShow,
+    milestoneDue, litStars, showFrame, showUsesTeam, stageTeam, turfSetup,
+} from './milestones.min.js';
+import {
+    initSpectacle, beginShow, applyShow, setAwake, endShow, tickAwake,
 } from './spectacle.min.js';
 import { showSummary, hideSummary } from './summary.min.js';
 import {
@@ -420,6 +426,7 @@ function changePlay(offensive, defense) {
     resetAssignments();
     resetTakedown();
     resetCelebration();
+    resetStaging();
     cycle.tackle = { tackler: '', carrier: '' };
     cycle.party = null;
     cycle.held = 0;
@@ -465,6 +472,8 @@ function startPlay(offensive, defense) {
     // defense lines up thirteen metres from where the formation put it.
     resetTakedown();
     resetCelebration();
+    // ...and wherever a milestone show last sent everybody.
+    resetStaging();
     cycle.tackle = { tackler: '', carrier: '' };
     cycle.party = null;
     cycle.phase = 'presnap';
@@ -969,12 +978,42 @@ function finishGame() {
  */
 function beginMilestone(level, then) {
     cycle.phase = 'show';
-    cycle.show = { level, t: 0, then, revealed: false, board: '' };
+    const team = showUsesTeam(level);
+    cycle.show = { level, t: 0, then, revealed: false, board: '', team };
     hideSpot();
     beginShow(level, { seed: Math.floor(Math.random() * 1e9), calm: reducedMotion });
+    if (team) stagePlayers(level);
     showHud(true);
     showSkipShow();
     stepMilestone(0);
+}
+
+/**
+ * THE PLAYERS' PART IN A SHOW: waving at the blimp, running out onto the
+ * numbers, or coming out to celebrate the perfect game.
+ *
+ * READ WHERE THEY ARE DRAWN, THEN LET THE LAST PLAY GO. The field is still
+ * showing the whistle: a party mid-celebration, a man on his back. Staging runs
+ * every figure from where it is actually drawn, so dropping the tackle and the
+ * party first would jump everybody back to where the simulation stopped them.
+ * A man who was lying down gets up on his own, because his pitch eases back to
+ * upright once nothing is holding it down.
+ */
+function stagePlayers(level) {
+    const objects = cycle.play.game.objects;
+    const men = drawnSpots(objects);
+    resetTakedown();
+    resetCelebration();
+    cycle.tackle = { tackler: '', carrier: '' };
+    cycle.party = null;
+    const numerals = level === 400 ? planBulbs(turfSetup(level)).bulbs : [];
+    const stage = stageTeam(level, men, { calm: reducedMotion, numerals });
+    if (!stage) return;
+    beginStaging(stage.spots, { delay: stage.delay, walk: stage.walk });
+    if (stage.celebrate) {
+        const plan = teamCelebration({ ...stage.celebrate, calm: reducedMotion });
+        if (plan) beginCelebration(plan);
+    }
 }
 
 /** One frame of the running show. */
@@ -1010,6 +1049,13 @@ function stepMilestone(delta) {
         paintBoard(frame.board);
     }
     setMilestoneTitle(s.level, frame.title, { calm: reducedMotion });
+
+    // The players only move in the shows that use them. The lights and the
+    // fireworks leave the field exactly as the last whistle left it.
+    if (s.team && delta > 0) {
+        syncFigures(cycle.play.game.objects, delta, {});
+        showBall(cycle.play.game.objects, delta);
+    }
 
     if (frame.done) endMilestone();
 }
@@ -1468,6 +1514,8 @@ function animate(now) {
     state.elapsed += delta;
     trackBall(delta);
     pulseTargets(state.elapsed);
+    // The stadium's own clock: after 300 the blimp is always up there.
+    tickAwake(state.elapsed);
     setDriver(driverForPhase(cycle.phase));
     applyCamera(updateCamera(delta, cameraState()));
     renderer.render(scene, camera);
