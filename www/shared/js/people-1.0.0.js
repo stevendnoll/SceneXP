@@ -139,7 +139,7 @@ export function createPerson(config) {
     // neutral default in every scene. A figure lit by floodlights at night on
     // dark ground reads its arm as three separate objects: a bright shoulder,
     // a forearm that either glares or disappears depending on which skin tone
-    // the roster happened to deal, and a hand. www/exesnohs reported it as
+    // the roster happened to deal, and a hand. www/xo reported it as
     // "the arms are very glitchy", which is what a limb looks like when a
     // third of it is invisible and the rest of it is swinging.
     //

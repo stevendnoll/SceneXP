@@ -262,7 +262,7 @@ function makeElement(tag = 'div') {
   //
   // It was a plain string field, which is the same bug the block above already
   // fixed once for its sibling and left standing here. `textContent = ''` is
-  // the ordinary way to empty a container, and www/exesnohs's HUD clears its
+  // the ordinary way to empty a container, and www/xo's HUD clears its
   // action row that way on EVERY phase change: the snap button, four throw
   // buttons and a keep button all pile into one row, so a suite reads six
   // controls where a browser shows one, and clicking "the first button" clicks
@@ -370,7 +370,7 @@ export function installDom({ innerWidth = 1280, innerHeight = 800 } = {}) {
     createElement: (tag) => makeElement(tag),
     // INLINE SVG IS BUILT, NOT PARSED, under a policy that forbids `innerHTML`
     // markup, so a scene that draws its own icon reaches for this rather than
-    // for createElement. www/exesnohs builds the sound toggle's speaker from
+    // for createElement. www/xo builds the sound toggle's speaker from
     // two paths. Without it the whole boot throws on a missing method, which
     // the suite reports as "3D init failed" and not as "the stub is thin".
     //

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="neon">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party
+         scripts/styles).
+
+         media-src IS NAMED HERE AHEAD OF THE AUDIO (TASKS M0, M6). Same-origin
+         mp3 would already be permitted, because media-src falls back to
+         default-src, but this scene is the first on the site to ship real audio
+         files and the directive is worth stating rather than inheriting.
+
+         It deliberately does NOT allow blob:. The iOS silent-switch workaround
+         in roqui, family and dad builds its keep-alive WAV as a blob: URL,
+         which this policy blocks, which is why that workaround has never
+         actually worked in any of the three. This scene loops a real
+         same-origin file instead (PLANNING section 7, D9). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <meta name="description" content="A 3D American football game where you are always on offense. Call a play, snap the ball, and pick your receiver. Ten plays make a game, and the farther you carry it the more it is worth.">
+    <meta name="theme-color" content="#080b12">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they cannot come from config.js and must stay literal absolute URLs
+         naming where this page is actually served. When serving from a new
+         domain, update the URLs here: canonical, og:url, og:image,
+         twitter:image, and the JSON-LD id below. -->
+    <link rel="canonical" href="https://www.scenexp.com/xo/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="X's and O's">
+    <meta property="og:description" content="Call a play, snap the ball, pick your receiver. Ten plays make a game, and the farther you carry it the more it is worth.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/xo/">
+    <meta property="og:locale" content="en_US">
+    <!-- JPEG, NOT WEBP. LinkedIn renders no WebP link preview at all, so the
+         whole site moved to the JPEG on 2026-09-08. A new scene started from an
+         older template is exactly how that would get quietly undone.
+
+         STILL EXACTLY ONE og:image, which is a separate rule from the format:
+         Apple's link preview renders every og:image it finds, so listing both
+         formats puts two identical cards in one message thread.
+
+         THE ASSET ITSELF LANDS AT M7, once there is a game worth capturing.
+         Until this scene is listed in the directory it is not linked from
+         anywhere, so nothing is unfurling it yet. -->
+    <meta property="og:image" content="https://www.scenexp.com/xo/assets/og-xo.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A floodlit 3D football field at night seen from high behind the offense, with the two teams lined up across the line of scrimmage.">
+
+    <!-- Twitter / X. The same single JPEG as og:image. Twitter takes exactly
+         one image and has no type property. -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="X's and O's">
+    <meta name="twitter:description" content="A 3D football game where you are always on offense. Ten plays, and the farther you carry it the more it is worth.">
+    <meta name="twitter:image" content="https://www.scenexp.com/xo/assets/og-xo.jpg?v=1">
+    <meta name="twitter:image:alt" content="A floodlit 3D football field at night seen from high behind the offense, with the two teams lined up across the line of scrimmage.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "@id": "https://www.scenexp.com/xo/#game",
+      "url": "https://www.scenexp.com/xo/",
+      "name": "X's and O's",
+      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game.",
+      "genre": ["Sports", "Strategy"],
+      "gamePlatform": "Web browser",
+      "applicationCategory": "Game",
+      "operatingSystem": "Any",
+      "inLanguage": "en-US",
+      "isAccessibleForFree": true,
+      "playMode": "SinglePlayer",
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
+      },
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+
+    <title>X's and O's</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
+    <link rel="preload" href="css/experience.min.css?v=6" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
+    <link rel="stylesheet" href="css/experience.min.css?v=6">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback
+         layout. A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- THERE IS DELIBERATELY NO SKIP LINK, and at M4 that became a settled
+         decision rather than a deferral.
+
+         A skip link exists to jump past repeated chrome to the content. This
+         page has no navigation and no repeated chrome: the canvas is not
+         focusable, and the first tab stop is already the control the visitor
+         wants, whether that is a play in the playbook, the snap button, or the
+         button on a result card. There is nothing to skip past, and a skip
+         link pointing at whichever control happens to exist right now would be
+         a tab stop that sometimes does nothing.
+
+         Every action in this game is a real button rather than a pointer event
+         on the canvas, which is unusual for a 3D scene here and is the reason
+         the whole game is keyboard playable without anything special. -->
+
+    <!-- The live page's heading. Screen-reader only: the field is the title
+         here, and a line of type across the top of it would be a caption on a
+         picture nobody asked to have captioned. -->
+    <h1 class="sr-only">X's and O's</h1>
+
+    <!-- Shown when JavaScript is disabled, and read by crawlers that do not
+         render. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>X's and O's</h1>
+            <p>This is a 3D American football game, which needs JavaScript to
+                run. You are always on offense. Before each play you choose one
+                from the playbook, and you can pick the defensive formation you
+                would like to face or leave it to chance. Then you snap the ball
+                and decide, in the moment, whether to throw to one of your
+                receivers or keep it and run.</p>
+            <p>Ten plays make a game. The farther you carry the ball the more
+                the play is worth, all the way to fifty points for crossing the
+                field, and an interception costs you ten. Fifty a play is the
+                most on offer, so 500 is a perfect game.</p>
+            <p>SceneXP is a home for 3D experiences that run right in your
+                browser. This one is simply a game.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">X'S AND O'S</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <canvas id="game-canvas"></canvas>
+
+    <!-- THE WELCOME CARD.
+         The one thing a visitor needs before the playbook makes any sense:
+         that they are always on offense, that there are ten plays, and that
+         distance is what a play is worth. The field carries the same ladder,
+         painted on the grass the way the 2D game paints "0 pts / 5 pts /
+         15 pts / 30 pts / 50 pts" along its touchline, and that is not a
+         duplication to tidy away: this card is read before a visitor has ever
+         seen the field, and the numerals are read while a play is running.
+
+         It is a plain card rather than the shared #blocker overlay, because
+         this scene has no click-to-start surface: every action is a button,
+         and adding a full-screen click target would be the one exception. -->
+    <div id="welcome" class="card-overlay" hidden>
+        <div class="card-panel welcome-panel" role="dialog" aria-modal="true"
+            aria-labelledby="welcome-title">
+            <h2 id="welcome-title" class="card-title">X's and O's</h2>
+            <p class="card-detail">Ten plays, and you are on offense for every one
+                of them. The farther you carry the ball, the more the play is worth.</p>
+
+            <ol class="welcome-steps">
+                <li><strong>Call a play.</strong> Pick one from the playbook, and
+                    choose a defense to face or leave it to chance.</li>
+                <li><strong>Snap the ball.</strong> Take as long as you like reading
+                    the formation first.</li>
+                <!-- THE CLOCK IS SPELLED OUT HERE BECAUSE THE READOUT IS
+                     `aria-hidden`. A ticking number inside a live region would
+                     talk over everything else once a frame, so the rule is
+                     stated once, up front, where it costs nobody anything. The
+                     word "ten" is checked against `clock.decide` by the suite,
+                     so the sentence cannot quietly go stale if the number
+                     changes. -->
+                <li><strong>Throw or run.</strong> Hit a receiver, or keep it
+                    yourself and see how far you get. You have ten seconds from
+                    the snap to make up your mind, and holding on past that is
+                    a sack.</li>
+            </ol>
+
+            <!-- ONE LINE, AND ONLY BECAUSE THE LETTERS ARE ALREADY THERE. The
+                 receivers wear A to D on the grass, on the playbook diagram and
+                 on the buttons, so the keys are the letters a visitor has been
+                 reading all along rather than a scheme to learn. Q is the
+                 quarterback's own letter, painted in front of him. -->
+            <p class="welcome-keys card-meta">On a keyboard: <kbd>Space</kbd>,
+                <kbd>S</kbd> or <kbd>Q</kbd> snaps the ball, <kbd>C</kbd> changes
+                the play before you do, <kbd>A</kbd> to <kbd>D</kbd> throw to
+                that receiver, and <kbd>K</kbd> keeps it. During a replay,
+                <kbd>V</kbd> or the arrow keys switch the view.</p>
+
+            <p class="welcome-ladder-title">What a play is worth</p>
+            <ul class="welcome-ladder">
+                <li><span class="ladder-pts is-good">5</span> past the first line</li>
+                <li><span class="ladder-pts is-good">15</span> past the second</li>
+                <li><span class="ladder-pts is-good">30</span> past the third</li>
+                <li><span class="ladder-pts is-good">50</span> all the way across</li>
+                <li><span class="ladder-pts is-bad">-5</span> sacked holding the ball</li>
+                <li><span class="ladder-pts is-bad">-10</span> intercepted</li>
+            </ul>
+
+            <!-- THE 2D GAME GIVES YOU A NUMBER TO BEAT, and it is worth having.
+                 "500 is a perfect score" turns ten separate plays into one
+                 game with a target, which is most of the reason somebody plays
+                 a second time. The figure is not invented: ten plays at the
+                 fifty a crossing is worth. -->
+            <p class="welcome-target">Fifty a play is the most you can get, so
+                <strong>500 is a perfect game</strong>. Good luck.</p>
+
+            <!-- Shown only when there is a game to come back to. A visitor
+                 returning to a tab they left open is told where they are before
+                 the playbook opens on play five. -->
+            <p id="welcome-resume" class="card-meta welcome-resume" hidden></p>
+
+            <div id="welcome-actions" class="card-actions"></div>
+        </div>
+    </div>
+
+    <!-- THE PLAYBOOK (M3). Its contents are built by playbook-ui.js from the
+         play table, because ten cards of identical shape are data, not markup.
+         The shell is here so the stylesheet has something stable to hang on.
+
+         IT DOES NOT USE THE SHARED MODAL CLASSES. The shared stylesheet scopes
+         its modal rules by id, so a new overlay id inherits no hiding, no
+         layout, and a near-opaque generic backdrop that would black out the
+         whole scene. Everything this needs is in experience.css under its own
+         names, including the `[hidden]` rule, which a `display: flex` would
+         otherwise override.
+
+         THE WELCOME CARD IS STILL TO COME AT M4, along with the snap button
+         the skip link will finally have somewhere to point at. -->
+    <div id="playbook" class="playbook" hidden>
+        <div class="playbook-panel" role="dialog" aria-modal="true"
+            aria-labelledby="playbook-title">
+            <!-- The heading shares its row with the restart control, which
+                 playbook-ui.js builds: it asks twice before it does anything,
+                 so it is three buttons rather than one and belongs in script
+                 with the state that decides which is showing. -->
+            <div class="playbook-head">
+                <h2 id="playbook-title" class="playbook-title">Choose your play</h2>
+            </div>
+            <div class="playbook-body"></div>
+        </div>
+    </div>
+
+    <!-- THE HUD (M4). Score, play count, and whatever the visitor can do right
+         now: snap, throw to a receiver, or keep it. hud.js rebuilds the action
+         row on every phase change, because the set of legal actions genuinely
+         changes and leaving a dead button on screen is worse than an empty row.
+
+         ITS ID IS `game-hud`, NOT `hud`, AND THAT IS LOAD BEARING.
+         `www/shared/css/styles-1.0.0.css` already owns `#hud`: it makes it a
+         full-screen fixed layer at z-index 50 with `opacity: 0`, revealed by a
+         `.visible` class the house chrome adds. An id selector beats a class
+         selector, so naming this `hud` rendered the entire bar, the score and
+         the snap button at zero opacity, anchored to the top of the screen
+         instead of the bottom, and stacked above the playbook. Everything
+         worked and nothing was visible.
+         See also the same trap in the shared README's note about `.ui-float`
+         needing `.visible`. -->
+    <div id="game-hud" class="hud" hidden>
+        <div class="hud-bar">
+            <span class="hud-stat">Play <strong id="hud-play">1</strong> of <strong id="hud-of">10</strong></span>
+            <span class="hud-stat">Score <strong id="hud-score">0</strong></span>
+            <!-- THE PLAY CLOCK. `aria-hidden` on the whole stat, and that is
+                 deliberate rather than an oversight: a value that changes every
+                 frame inside a live region would talk over everything else a
+                 screen reader is trying to say, once a frame, for ten seconds.
+                 The thing that MATTERS about this clock is what happens when it
+                 reaches zero, and that already goes out through `#hud-live` as
+                 the whistle, with the same words and the same points as any
+                 other sack. The welcome card explains the rule up front, so a
+                 visitor who cannot see it is told about it before it can cost
+                 them anything.
+
+                 It is hidden rather than shown at 10 before a snap: a clock
+                 that sits there reading ten while the playbook is open is
+                 counting nothing. -->
+            <span class="hud-stat hud-clock" id="hud-clock" aria-hidden="true" hidden>Clock <strong id="hud-clock-value">10</strong></span>
+            <button id="mute-btn" class="hud-mute" type="button" aria-pressed="false">Sound on</button>
+        </div>
+        <div id="hud-actions" class="hud-actions"></div>
+    </div>
+
+    <!-- EVERY WHISTLE IS ANNOUNCED HERE. A game whose outcome is only conveyed
+         by pixels cannot be played without sight of it. Polite, so it never
+         interrupts something the visitor is already reading. -->
+    <p id="hud-live" class="sr-only" role="status" aria-live="polite"></p>
+
+    <!-- THE TITLE OVER A MILESTONE SHOW: the number a game has reached, and a
+         line under it. It is not a dialog and takes no focus, because the show
+         is something to watch and the only control is the Skip button in the
+         HUD. aria-hidden, because the number is announced once through
+         #hud-live at the moment it lands, and a title fading in and out would
+         otherwise be read out twice. hud.js drives its opacity per frame. -->
+    <div id="milestone" class="milestone" aria-hidden="true" hidden>
+        <p class="milestone-kicker">Points</p>
+        <p id="milestone-number" class="milestone-number">100</p>
+        <p id="milestone-line" class="milestone-line"></p>
+    </div>
+
+    <!-- The result of one play.
+         IT SITS LOW AND LETS THE FIELD THROUGH, which the summary card does
+         not need to. A play finishes somewhere on the grass, and a centred card
+         over a dimmed field covered the one thing it was reporting on. The lit
+         spot marker (markers.js) rises past it from below. -->
+    <div id="result" class="card-overlay card-overlay-low" hidden>
+        <div class="card-panel" role="dialog" aria-modal="true"
+            aria-labelledby="result-headline">
+            <p id="result-points" class="result-points">+0</p>
+            <h2 id="result-headline" class="card-title">Result</h2>
+            <p id="result-detail" class="card-detail"></p>
+            <p id="result-running" class="card-meta"></p>
+            <div id="result-actions" class="card-actions"></div>
+        </div>
+    </div>
+
+    <!-- The end of a ten play game. -->
+    <div id="summary" class="card-overlay" hidden>
+        <div class="card-panel" role="dialog" aria-modal="true"
+            aria-labelledby="summary-title">
+            <h2 id="summary-title" class="card-title">Final score</h2>
+            <p id="summary-total" class="summary-total">0</p>
+            <p id="summary-verdict" class="card-detail"></p>
+            <p id="summary-line" class="card-meta"></p>
+            <p id="summary-best" class="card-meta"></p>
+            <ul id="summary-plays" class="summary-plays"></ul>
+            <div id="summary-actions" class="card-actions"></div>
+        </div>
+    </div>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>
