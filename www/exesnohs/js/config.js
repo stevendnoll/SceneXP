@@ -2119,10 +2119,75 @@ const EXESNOHS_CONFIG = {
             spin: { turns: 2 },
             /** Radians of roll either side of upright, and how quickly. */
             shimmy: { roll: 0.26, hz: 3.2 },
-            /** Radians of forward pitch on a man with his hands on his helmet.
-             *  Small: at this figure scale a tenth already carries the helmet a
-             *  third of a metre. */
-            slumpLean: 0.16,
+            /**
+             * AND WHAT LOSING LOOKS LIKE, WHICH IS NOT SIMPLY THE OPPOSITE OF
+             * WINNING.
+             *
+             * THE FIRST VERSION PUT THE OTHER TEAM'S HANDS ON THEIR HELMETS,
+             * which is the classic picture and was read by QA as a second
+             * celebration: "when the offensive players' arms go up after the
+             * interception it looks like they're celebrating". They were right,
+             * and the reason is the scale. A player is about 34 pixels tall, so
+             * hands anywhere near the head and arms raised in triumph are the
+             * SAME SILHOUETTE. Intent does not survive at that size, outline
+             * does.
+             *
+             * AND ARMS DOWN IS NOT AVAILABLE, WHICH IS THE MEASUREMENT THAT
+             * SHAPED THE REST. The obvious fix is to throw the arms down
+             * instead, and there is nowhere for them to go: a RUNNING arm
+             * already puts the hand at y 0.693, and every reachable "dejected"
+             * target sits at or above it. The men were already standing with
+             * their arms down. So the arms cannot carry this.
+             *
+             * What carries it is the PITCH, and it works because it runs the
+             * other way from everything a celebrant does. They go up, on their
+             * toes, arms overhead, and get taller. These fold forward and get
+             * shorter. Two groups on one field, one growing and one sinking, is
+             * a difference that survives 34 pixels when a hand position does
+             * not.
+             *
+             * The other two are support. The hands come back to the hips, which
+             * is at least a different outline from a hanging arm and is what a
+             * person actually does. And the head shakes, which on this rig is
+             * the WHOLE BODY, because the shared figure has no neck joint
+             * (roster.js says so in as many words). A slow side to side against
+             * the celebrants' vertical hops is a different rhythm as well as a
+             * different direction.
+             */
+            dejection: {
+                /**
+                 * Radians of forward pitch. Up from 0.16, which was nothing:
+                 * the biggest lean any standing pose in this file asks for is
+                 * the block's 0.14, so the old number did not read as a slump,
+                 * it read as a man standing up. The rig has no waist, so this
+                 * tips the whole figure about its feet and the ceiling is where
+                 * it starts to look like falling over rather than sagging.
+                 *
+                 * MEASURED AGAINST WHAT IT HAS TO BEAT. A figure's head sits
+                 * 3.30m up. At the top of a hop a celebrant's reaches 3.63m; at
+                 * 0.40 a dejected man's drops to 3.04m and moves 1.28m forward.
+                 * That is an 18% difference in height between the two groups
+                 * plus a large sideways displacement of the head, which is the
+                 * scale of difference that survives a 34 pixel figure. The
+                 * first attempt at this was 0.16 and read as nothing at all.
+                 */
+                lean: 0.40,
+                /**
+                 * Seconds to sink into it, and it is deliberately slower than
+                 * the celebration's 0.16. Arms snap up in triumph; shoulders
+                 * come down slowly. The tempo is doing as much work as the pose.
+                 */
+                sink: 0.55,
+                /**
+                 * The head shake, which is the whole body turning because
+                 * nobody on this field can turn their head. Small and slow: it
+                 * has to read as disagreement rather than as a man looking
+                 * around, and it is applied through the same `spin` term the
+                 * celebration's turn uses, so it ends on a whole number of
+                 * cycles and leaves him facing where he started.
+                 */
+                shake: { yaw: 0.17, hz: 0.75 },
+            },
             /** Seconds for any pose here to blend in, and for the dance to ramp
              *  up once a man has arrived. */
             blend: 0.16,
@@ -2164,7 +2229,20 @@ const EXESNOHS_CONFIG = {
                 point: { x: 0.44, y: 1.48, z: 0.40 },
                 off: { x: 0.30, y: 0.90, z: -0.06 },
                 low: { x: 0.60, y: 1.00, z: 0.24 },
-                slump: { x: 0.26, y: 1.70, z: -0.06 },
+                /**
+                 * HANDS ON THE HIPS, AND NOT ON THE HELMET.
+                 *
+                 * (0.26, 1.70, -0.06) was the helmet, and at 34 pixels a hand
+                 * beside the head is a hand in the air. This puts it at the
+                 * waist with the elbow 0.23m BACK from where a running arm
+                 * carries it, which is the one part of the outline that changes
+                 * at all: the hand itself can only come UP from a running arm,
+                 * never down, so the elbow is doing the work. Solved, the hand
+                 * lands at (0.34, 0.98, -0.24) and the elbow at (0.35, 1.27,
+                 * -0.23), which is arms akimbo with the elbows flared behind
+                 * him.
+                 */
+                slump: { x: 0.34, y: 0.98, z: -0.24 },
             },
         },
 

@@ -254,10 +254,16 @@ export function chooseCelebration({
      * took it off him. Without it the offense stands to attention through a
      * celebration aimed squarely at them.
      */
-    const slump = rivals.map((r) => ({
-        position: r.position,
-        faceAt: heroTo,
-    }));
+    const slump = rivals
+        // Nearest first, so it spreads outward from the man it happened to
+        // rather than eleven men folding up on the same frame.
+        .map((r) => ({ ...r, gap: Math.hypot(r.x - hero.x, r.z - hero.z) }))
+        .sort((a, b) => a.gap - b.gap)
+        .map((r, i) => ({
+            position: r.position,
+            faceAt: heroTo,
+            delay: Math.min(i * C.stagger, C.staggerMax),
+        }));
 
     return fit({ mode, dance, hero: hero.position, parts, slump, calm }, C);
 }
@@ -537,27 +543,59 @@ export function celebrationAt(t, plan) {
     }
 
     /**
-     * AND THE OTHER TEAM, WHO HAVE NOTHING TO DO BUT WATCH IT.
+     * AND THE OTHER TEAM, WHO FOLD UP WHILE EVERYBODY ELSE GOES UP.
      *
-     * Their heads go down on the same beat everybody else's arms go up, so the
-     * two readings arrive together rather than the offense reacting to a
-     * celebration that has not started yet.
+     * THIS USED TO BE A SECOND CELEBRATION AND QA SAW IT AS ONE. Hands on the
+     * helmet is the picture a person imagines and it is the wrong one to draw:
+     * at 34 pixels a hand beside the head and a hand in the air are the same
+     * outline, so a defense watching a touchdown appeared to be enjoying it.
+     * See `pose.celebration.dejection` for the measurement that settled what to
+     * do instead, which is that the ARMS CANNOT CARRY IT: a running arm already
+     * hangs lower than any reachable dejected pose, so there is nowhere for
+     * them to be thrown.
+     *
+     * The pitch carries it. A celebrant rises, hops and reaches; these tip
+     * forward and get shorter, which is a difference in the SHAPE of the figure
+     * rather than in the position of a hand. The shake is the whole body,
+     * because the shared rig has no neck joint.
      *
      * `watch` IS A POINT RATHER THAN AN ANGLE, which is the one place this
      * differs from a celebrant. A celebrant's facing can be solved here because
      * this file decided where he would be standing; a man who has not moved is
      * wherever the whistle left him, and only the caller knows that.
      */
-    const grief = smooth((now - plan.beat) / C.blend);
+    const D = C.dejection;
     for (const s of plan.slump) {
+        const since = now - (plan.beat + s.delay);
+        const grief = smooth(since / D.sink);
+        /**
+         * THE SHAKE FILLS WHATEVER IS LEFT, AND IT IS SOLVED PER MAN.
+         *
+         * Running it for a fixed stretch does not work: a man near the back of
+         * the stagger would still be swinging when the plan ended, and the pose
+         * is HELD through the settle, so he would freeze turned to one side
+         * looking away from everything. So the window is what remains of the
+         * celebration after he has finished sinking, and the cycle count is a
+         * whole number of that, which is the same rule the spin follows and for
+         * the same reason. It also means no two of them shake in unison.
+         */
+        const from = plan.beat + s.delay + D.sink;
+        const window = plan.length - from;
+        const shaking = window > 0.4 && !plan.calm;
+        const cycles = Math.max(1, Math.round(window * D.shake.hz));
+        const swing = shaking ? clamp((now - from) / window, 0, 1) : 0;
         out.set(s.position, {
             x: 0,
             z: 0,
             y: 0,
             face: null,
             watch: s.faceAt,
-            spin: 0,
-            lean: C.slumpLean * grief,
+            // Somebody who asked not to be moved about gets the posture and not
+            // the motion, exactly as a celebrant does.
+            spin: shaking
+                ? D.shake.yaw * Math.sin(Math.PI * 2 * cycles * swing) * grief
+                : 0,
+            lean: D.lean * grief,
             roll: 0,
             arms: 'slump',
             amount: grief,

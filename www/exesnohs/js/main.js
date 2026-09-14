@@ -524,7 +524,8 @@ function beginSettle() {
      * again at the card is two readings of one unchanged fact rather than a
      * chance for the two to disagree.
      */
-    const party = planCelebration(outcome(cycle.play));
+    const result = outcome(cycle.play);
+    const party = planCelebration(result);
     if (party && beginCelebration(party)) {
         cycle.party = party;
         cycle.settleFor = Math.max(HOLD_SETTLE, celebrationLength(party));
@@ -540,20 +541,47 @@ function beginSettle() {
          * later, and this says who is enjoying it.
          */
         announce(`${TEAMS[teamOfPosition(party.hero)].name} are celebrating.`);
-        return;
+    } else if (cycle.play.playState.state.tackled) {
+        const carrier = ballCarrier(cycle.play);
+        const tackler = carrier
+            ? tacklerFor(cycle.play.game.objects, carrier) : '';
+        if (carrier && tackler) {
+            cycle.tackle = { tackler, carrier: carrier.settings.position };
+            startTakedown(cycle.play.game.objects, tackler, carrier.settings.position);
+            // Long enough to land the hit and let him lie there for a beat. A
+            // card opening over a man in mid-air is worse than no animation at
+            // all.
+            cycle.settleFor = Math.max(HOLD_SETTLE, takedownLength() + 0.2);
+        }
     }
 
-    if (!cycle.play.playState.state.tackled) return;
-    const carrier = ballCarrier(cycle.play);
-    if (!carrier) return;
-    const tackler = tacklerFor(cycle.play.game.objects, carrier);
-    if (!tackler) return;
+    endTheDown(result);
+}
 
-    cycle.tackle = { tackler, carrier: carrier.settings.position };
-    startTakedown(cycle.play.game.objects, tackler, carrier.settings.position);
-    // Long enough to land the hit and let him lie there for a beat. A card
-    // opening over a man in mid-air is worse than no animation at all.
-    cycle.settleFor = Math.max(HOLD_SETTLE, takedownLength() + 0.2);
+/**
+ * THE WHISTLE SOUNDS AT THE WHISTLE, WHICH IS HERE AND NOT AT THE CARD.
+ *
+ * This lived in `finishPlay`, which runs after the ENTIRE settle hold, and it
+ * was already a little late before the celebration existed. It made it four
+ * seconds late: QA heard a fifty score, watched the whole party, and then heard
+ * the referee blow for a play that had been over since before it started.
+ *
+ * It is the same fault the grunt had and the same fix. `startTakedown` moved
+ * the grunt onto the frame the two bodies meet for exactly this reason; the
+ * whistle needed moving onto the frame the play ends, and nothing was left in
+ * `finishPlay` that belongs to a moment rather than to a card.
+ *
+ * AND A PLAY CLOCK RUNNING OUT IS NOT A HIT. `classifyPlay` calls it a sack,
+ * because nobody threw it and nobody ran with it, and `endSounds` used to hand
+ * every untackled sack a grunt: the quarterback stood untouched in the pocket
+ * while the clock hit zero and the game played the sound of a man being driven
+ * into the turf. `play.expired` is the one fact that separates the two, and the
+ * rule lives in scoring.js with the rest of them.
+ */
+function endTheDown(result) {
+    const sounds = endSounds(result, !!cycle.tackle.tackler, !!cycle.play.expired);
+    if (sounds.whistle) playSound('whistle', 120);
+    if (sounds.grunt) playSound('grunt');
 }
 
 /**
@@ -691,14 +719,10 @@ function finishPlay() {
     clearActions();
 
     const result = outcome(cycle.play);
-    // THE 2D GAME'S OWN CHOICES IN handleFinish, and the rule lives in
-    // scoring.js so it can be asserted rather than read off a render loop. An
-    // incomplete pass already sounded itself from inside routes.js, and a play
-    // that ended in a tackle plays its grunt at the moment the two bodies meet
-    // (see `startTakedown`) rather than a second late over the card.
-    const sounds = endSounds(result, !!cycle.tackle.tackler);
-    if (sounds.whistle) playSound('whistle', 120);
-    if (sounds.grunt) playSound('grunt');
+    // THE SOUNDS ARE NOT HERE ANY MORE. They belong to the whistle and this
+    // function runs anywhere from one to four seconds after it, so they are
+    // raised in `beginSettle` by `endTheDown`. What is left here is the
+    // bookkeeping, which genuinely does belong to the card.
     cycle.lastOutcome = result;
     cycle.total += result.points;
     cycle.results.push(result);

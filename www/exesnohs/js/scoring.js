@@ -155,16 +155,32 @@ export function classifyPlay({ ranWithBall, threwTo, ball, carrierX, lineInterva
  * rather than here; this is the case with no takedown to hang it on, which is a
  * man who ran out of bounds or was sacked.
  *
+ * ...AND `expired` IS THE PLAY CLOCK HAVING RUN OUT, WHICH IS A SACK WITH
+ * NOBODY IN IT.
+ *
+ * `classifyPlay` calls a play where nobody threw it and nobody ran with it a
+ * sack, which is the right verdict and the wrong sound: the commonest way to
+ * reach it is the ten second clock reaching zero with the quarterback standing
+ * untouched in the pocket. Nobody hit him. QA heard the game play the sound of
+ * a man being driven into the turf over a play in which not one body met
+ * another.
+ *
+ * A REAL SACK IS ALREADY COVERED BY `hadTackle`: a quarterback brought down
+ * holding the ball sets `state.tackled`, gets a takedown, and grunts on the
+ * frame of contact like any other tackle. So this only ever silences the
+ * grunt for a play that nothing physical ended, and the whistle is left alone,
+ * because a clock running out is exactly when a referee blows one.
+ *
  * PURE, AND HERE RATHER THAN IN main.js, because it is a rule about a result
  * and this is the file that decides what results are.
  */
-export function endSounds(result, hadTackle = false) {
+export function endSounds(result, hadTackle = false, expired = false) {
     const points = (result && result.points) || 0;
     const slug = (result && result.result) || '';
     const scored = points === 50;
     return {
         whistle: scored || slug === 'interception' || slug === 'sack',
-        grunt: !hadTackle && !scored
+        grunt: !hadTackle && !expired && !scored
             && (slug === 'sack' || slug === 'run' || slug === 'catch'),
     };
 }

@@ -32,6 +32,7 @@
  * anybody, which keeps failing whatever the layout becomes.
  */
 import { describe, test, expect } from '@jest/globals';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -49,6 +50,7 @@ const {
 const { solveArm, handAt, RIG, reach } = await import(join(scene, 'arm.js'));
 const { carryHold } = await import(join(scene, 'view.js'));
 const { poseFigure, THROWING_SIDE } = await import(join(scene, 'roster.js'));
+const { endSounds } = await import(join(scene, 'scoring.js'));
 const {
     createPlay, lineUp, snap, tick, isDone, throwTo, outcome, eligibleReceivers,
     ballCarrier,
@@ -91,7 +93,19 @@ function planFor({ roll, scored = false, calm = false, mates = 9, spread = 9 } =
     return chooseCelebration({
         hero,
         mates: team,
-        rivals: [{ position: 'qb', x: 4, z: 0 }, { position: 'wr1', x: 14, z: 6 }],
+        // A FULL OTHER TEAM, not a token two, because the stagger is capped at
+        // `staggerMax` and two men never reach the cap. The first version of
+        // this fixture had two, and a shake whose window was a fixed stretch
+        // rather than "whatever is left" passed every case here while leaving
+        // the men at the back of a real eleven frozen mid-swing.
+        rivals: [
+            { position: 'qb', x: 4, z: 0 },
+            ...Array.from({ length: 10 }, (_, i) => ({
+                position: `r${i}`,
+                x: 6 + i * 1.7,
+                z: -6 + ((i * 2.3) % 12),
+            })),
+        ],
         homeX: -FIELD.endZone + C.endZoneDepth,
         toward: -1,
         blameAt: { x: 4, z: 0 },
@@ -418,6 +432,107 @@ describe('who celebrates, and what the ball does while they do', () => {
         expect(top.y).toBeGreaterThan(tuck.y);
     });
 
+    /**
+     * THE LOSING TEAM MAY NOT LOOK LIKE IT IS CELEBRATING, WHICH IS QA ROUND
+     * TWENTY-EIGHT ITEMS 2 AND 3, REPORTED TWICE BECAUSE IT HAPPENS BOTH WAYS.
+     *
+     * The first version put their hands on their helmets, which is the picture
+     * a person imagines and is the wrong one to DRAW: at 34 pixels a hand
+     * beside the head and a hand raised in triumph are the same silhouette. QA
+     * saw the offense appear to celebrate its own interception, and then the
+     * defense appear to celebrate a touchdown against it.
+     *
+     * The gate is the property that broke rather than the pose that replaced
+     * it: nothing about a man who has just lost the ball may go UP.
+     */
+    test('nothing about the losing team goes up', () => {
+        const hand = (h) => {
+            const a = solveArm({ x: h.x, y: h.y, z: h.z }, 1);
+            return handAt(a.armX, a.armZ, a.foreX, 1);
+        };
+        const grief = hand(C.hands.slump);
+        const joy = hand(C.hands.up);
+
+        // Below the shoulder, so it can never read as a raised arm...
+        expect(grief.y).toBeLessThan(RIG.shoulderY);
+        // ...and a long way below where a celebrant's hand is.
+        expect(joy.y - grief.y).toBeGreaterThan(0.5);
+
+        // AND THE PITCH IS WHAT ACTUALLY CARRIES IT, because the arms cannot:
+        // a RUNNING arm already hangs lower than any reachable dejected pose,
+        // so there is nowhere for them to be thrown. The lean has to beat every
+        // other standing lean in the game by a clear margin or it reads as a
+        // man standing up (the first attempt was 0.16, against a block's 0.14).
+        const standing = [
+            CFG.pose.block.lean, CFG.pose.stiffArm.lean, CFG.pose.underCentre.lean,
+        ];
+        expect(C.dejection.lean).toBeGreaterThan(Math.max(...standing) * 2);
+
+        // And it is a SINK against a rise: measured at the head, the two groups
+        // have to be plainly different heights.
+        const HEAD = 1.5 * CFG.figureScale;
+        const risen = HEAD + C.hop.height;
+        const sunk = Math.cos(C.dejection.lean) * HEAD;
+        expect((risen - sunk) / HEAD).toBeGreaterThan(0.12);
+
+        // ...and it arrives slower than the celebration does, because shoulders
+        // come down more slowly than arms go up.
+        expect(C.dejection.sink).toBeGreaterThan(C.blend * 2);
+    });
+
+    /**
+     * NOBODY IS LEFT FACING THE WRONG WAY.
+     *
+     * The head shake is the whole body, because the shared rig has no neck
+     * joint, and it is applied through the same `spin` the celebration's turn
+     * uses. The pose is HELD through the settle, so a shake that stops mid
+     * swing freezes a man turned away from everything for the rest of the card.
+     * The window each man gets is what remains after he has finished sinking,
+     * which differs per man because they are staggered.
+     */
+    test('a head shake always finishes square', () => {
+        for (const plan of everyPlan()) {
+            const end = celebrationAt(plan.length, plan);
+            for (const s of plan.slump) {
+                const man = end.get(s.position);
+                expect(Math.abs(man.spin)).toBeLessThan(1e-6);
+                // ...and he is fully sunk by then rather than still on his way.
+                expect(man.lean).toBeCloseTo(C.dejection.lean, 6);
+                expect(man.amount).toBeCloseTo(1, 6);
+            }
+        }
+    });
+
+    test('the shake never runs past the end of the plan', () => {
+        for (const plan of everyPlan()) {
+            for (const s of plan.slump) {
+                // Sampled right through, the swing has to peak and come back
+                // inside the plan rather than being cut off at its edge.
+                let last = 0;
+                let turned = 0;
+                for (let t = 0; t <= plan.length; t += 0.02) {
+                    last = celebrationAt(t, plan).get(s.position).spin;
+                    turned = Math.max(turned, Math.abs(last));
+                }
+                expect(Math.abs(last)).toBeLessThan(C.dejection.shake.yaw * 0.25);
+                expect(turned).toBeLessThanOrEqual(C.dejection.shake.yaw + 1e-9);
+            }
+        }
+    });
+
+    test('a calm celebration shakes nobody', () => {
+        const plan = planFor({ calm: true, roll: rolls(9) });
+        for (let t = 0; t <= plan.length; t += 0.02) {
+            for (const s of plan.slump) {
+                expect(celebrationAt(t, plan).get(s.position).spin).toBe(0);
+            }
+        }
+        // The POSTURE still arrives, because that is not motion for its own
+        // sake, it is what happened.
+        expect(celebrationAt(plan.length, plan).get('qb').lean)
+            .toBeCloseTo(C.dejection.lean, 6);
+    });
+
     test('the other team watches rather than joining in', () => {
         const plan = planFor({ roll: rolls(3) });
         const celebrating = new Set(plan.parts.map((p) => p.position));
@@ -551,6 +666,99 @@ describe('the modes and dances come up, and only the ones that should', () => {
         // ...and a man holding it up plainly has.
         expect(Math.abs(ballArm(raising).rotation.x - ballArm(tucked).rotation.x))
             .toBeGreaterThan(0.2);
+    });
+});
+
+/**
+ * THE WHISTLE SOUNDS AT THE WHISTLE. QA ROUND TWENTY-EIGHT, ITEMS 1 AND 4.
+ *
+ * Both are the same shape: a sound that belongs to a MOMENT was being raised
+ * from a function that runs much later, or raised at all for a play in which
+ * the thing it depicts never happened.
+ */
+describe('the sounds belong to the moment the play ended', () => {
+    /**
+     * ITEM 4. A PLAY CLOCK RUNNING OUT IS A SACK WITH NOBODY IN IT.
+     *
+     * `classifyPlay` calls it a sack, correctly, because nobody threw it and
+     * nobody ran with it. `endSounds` then handed every untackled sack a grunt,
+     * so the game played the sound of a man being driven into the turf over a
+     * play in which the quarterback stood untouched in the pocket while the
+     * clock reached zero.
+     */
+    test('a play clock running out whistles and does not grunt', () => {
+        const timedOut = endSounds({ result: 'sack', points: -5 }, false, true);
+        expect(timedOut.whistle).toBe(true);
+        expect(timedOut.grunt).toBe(false);
+    });
+
+    test('...and a real sack still does both', () => {
+        // A quarterback brought down holding it: `state.tackled` is set, so a
+        // takedown runs and the grunt plays on the frame of contact instead.
+        expect(endSounds({ result: 'sack', points: -5 }, true, false).grunt).toBe(false);
+        // And one with no takedown to hang it on keeps the grunt it always had,
+        // which is the case this rule must not have broken.
+        expect(endSounds({ result: 'sack', points: -5 }, false, false).grunt).toBe(true);
+    });
+
+    test('the clock only ever silences the grunt, never the whistle', () => {
+        for (const slug of ['sack', 'run', 'catch', 'interception', 'incomplete']) {
+            for (const points of [-10, -5, 0, 15, 50]) {
+                const result = { result: slug, points };
+                const normal = endSounds(result, false, false);
+                const expired = endSounds(result, false, true);
+                expect(expired.whistle).toBe(normal.whistle);
+                expect(expired.grunt === false || normal.grunt === true).toBe(true);
+            }
+        }
+    });
+
+    /**
+     * ITEM 1, AND THIS ONE IS STRUCTURAL BECAUSE THE FAULT IS.
+     *
+     * Nothing is wrong with what `endSounds` decides. What was wrong is WHERE
+     * it was asked: `finishPlay` runs after the entire settle hold, so a fifty
+     * played the whistle once the celebration was over, four seconds after the
+     * play it was whistling. It is the same fault the grunt already had and the
+     * same fix `startTakedown` made for it.
+     *
+     * There is no behavioural seam to assert this through: `main.js` reaches
+     * the path only with a renderer, a roster and a live simulation behind it,
+     * and a headless boot builds none of those (tests/exesnohs-pose.test.mjs
+     * has the long note on why). So the gate reads the source, extracts
+     * `finishPlay`'s body by matching braces rather than by guessing at an
+     * index, and asserts the sounds are not in it. It fails against the build
+     * QA heard.
+     */
+    test('finishPlay raises no sounds, because it is not the whistle', () => {
+        const source = readFileSync(join(scene, 'main.js'), 'utf8');
+        const body = (name) => {
+            const at = source.indexOf(`function ${name}(`);
+            expect(at).toBeGreaterThan(-1);
+            let depth = 0;
+            let start = -1;
+            for (let i = at; i < source.length; i += 1) {
+                if (source[i] === '{') { if (depth === 0) start = i; depth += 1; }
+                else if (source[i] === '}') {
+                    depth -= 1;
+                    if (depth === 0) return source.slice(start, i + 1);
+                }
+            }
+            return '';
+        };
+        // Long enough that the extraction plainly worked, which is the check a
+        // brace scan needs before anything is concluded from what it found.
+        const finish = body('finishPlay');
+        expect(finish.length).toBeGreaterThan(200);
+        expect(finish).toContain('saveGame');
+        expect(finish).not.toMatch(/playSound\s*\(/);
+        expect(finish).not.toMatch(/endSounds\s*\(/);
+
+        // ...and the settle, which IS the whistle, does raise them.
+        const settle = body('beginSettle');
+        expect(settle.length).toBeGreaterThan(200);
+        expect(settle).toMatch(/endTheDown\s*\(/);
+        expect(body('endTheDown')).toMatch(/playSound\s*\(\s*'whistle'/);
     });
 });
 
