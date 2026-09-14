@@ -574,3 +574,55 @@ describe('changing the play before the snap', () => {
         expect(inBook.getAttribute('aria-pressed')).toBe(before);
     });
 });
+
+describe('a milestone show', () => {
+    /**
+     * DRIVEN THROUGH THE SEAM RATHER THAN BY PLAYING TO 100, because reaching
+     * 100 takes two fifties in a row and no suite should depend on the
+     * simulation obliging. Everything after the seam is the real path: the HUD,
+     * the frame loop, the title, the live region and the hand back.
+     */
+    test('plays with one way out, says what it was for, and hands the game back', async () => {
+        const main = await boot();
+        dom.el('welcome-actions').children[0].click();   // Take the field
+        await flushAsync();
+        let carriedOn = 0;
+        main.beginMilestone(100, () => { carriedOn += 1; });
+
+        const skip = dom.el('hud-actions').children.find((b) => b.id === 'skip-show-btn');
+        expect(skip).toBeTruthy();
+        expect(skip.focused).toBe(true);
+        expect(skip.dataset.keys).toContain('Escape');
+        expect(dom.el('hud-actions').children.length).toBe(1);
+
+        let titled = false;
+        // A tenth of a second a frame, which is the loop's own cap on a delta.
+        for (let i = 0; i < 200 && !carriedOn; i += 1) {
+            dom.loops[0](i * 100);
+            if (dom.el('milestone').hidden === false) titled = true;
+        }
+        await jest.advanceTimersByTimeAsync(100);
+        expect(carriedOn).toBe(1);
+        expect(titled).toBe(true);
+        expect(dom.el('milestone-number').textContent).toBe('100');
+        expect(dom.el('hud-live').textContent).toMatch(/^100 points\./);
+        // ...and it is all put away again.
+        expect(dom.el('milestone').hidden).toBe(true);
+        expect(dom.el('hud-actions').children.some((b) => b.id === 'skip-show-btn')).toBe(false);
+    });
+
+    test('skipping it carries on straight away, exactly once', async () => {
+        const main = await boot();
+        dom.el('welcome-actions').children[0].click();
+        await flushAsync();
+        let carriedOn = 0;
+        main.beginMilestone(200, () => { carriedOn += 1; });
+        dom.loops[0](0);
+        dom.loops[0](16.7);
+        dom.el('hud-actions').children.find((b) => b.id === 'skip-show-btn').click();
+        expect(carriedOn).toBe(1);
+        for (let i = 2; i < 30; i += 1) dom.loops[0](i * 16.7);
+        expect(carriedOn).toBe(1);
+        expect(dom.el('milestone').hidden).toBe(true);
+    });
+});

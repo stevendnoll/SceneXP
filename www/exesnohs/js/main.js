@@ -42,8 +42,13 @@ import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
-    showSkipCelebration, initKeys, setClock,
+    showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
+    hideMilestoneTitle,
 } from './hud.min.js';
+import { milestoneDue, litStars, showFrame } from './milestones.min.js';
+import {
+    initSpectacle, beginShow, applyShow, setAwake, endShow,
+} from './spectacle.min.js';
 import { showSummary, hideSummary } from './summary.min.js';
 import {
     startRecording, record, frameCount, frameAt, focusAt,
@@ -135,6 +140,17 @@ const cycle = {
      * streak that disagrees with the plays behind it.
      */
     streak: 0,
+    /**
+     * THE HIGHEST MILESTONE SHOW THIS GAME HAS PLAYED, and therefore how awake
+     * the stadium is. Like the streak it is never saved: a resumed game works
+     * it out from `results` (see `resumeGame`), so a reload cannot replay a
+     * show that has already been seen.
+     */
+    shown: 0,
+    /** The show running now: { level, t, then, revealed, board }, or null. */
+    show: null,
+    /** The shot the running show wants, handed to the camera each frame. */
+    showShot: null,
 };
 
 /** Whoever asked not to be moved about. Checked once: a visitor who changes it
@@ -173,12 +189,16 @@ const SIM_STEP = 1 / CFG.simHz;
  * them. The clock would have been missing from whichever call was not edited,
  * and the board would have been right twice and stale once.
  */
-function paintBoard() {
+function paintBoard(takeover = null) {
     updateScoreboard({
         play: cycle.playNumber,
         of: CFG.rules.playsPerGame,
         score: cycle.total,
         clock: `${cycle.clockShown}`,
+        // One star per show played, which is the part of the stadium waking up
+        // that the play camera can always see.
+        stars: litStars(cycle.shown),
+        takeover,
     });
 }
 
@@ -303,12 +323,14 @@ function driverForPhase(phase) {
     if (phase === 'welcome') return 'play';
     if (phase === 'playbook') return 'idle';
     if (phase === 'replay') return 'replay';
+    if (phase === 'show') return 'show';
     return 'play';
 }
 
 /** What the active driver needs to know. Only the replay driver needs
  *  anything, and what it needs is where the ball was on this frame. */
 function cameraState() {
+    if (cycle.phase === 'show') return { shot: cycle.showShot };
     if (cycle.phase !== 'replay') return {};
     const total = Math.max(1, frameCount());
     const f = replayFocus();
@@ -323,7 +345,8 @@ function aimPlayCamera() {
 
 function initLighting() {
     const L = CFG.lighting;
-    scene.add(new THREE.AmbientLight(L.ambient.color, L.ambient.intensity));
+    const ambient = new THREE.AmbientLight(L.ambient.color, L.ambient.intensity);
+    scene.add(ambient);
 
     // Two directionals stand in for four floodlight banks. Real lights at each
     // pylon would quadruple the shading cost to produce a difference nobody
@@ -344,6 +367,8 @@ function initLighting() {
     const fill = new THREE.DirectionalLight(L.fill.color, L.fill.intensity);
     fill.position.set(...L.fill.position);
     scene.add(fill);
+    // The milestone shows dim and raise all three, so they are handed over.
+    return { ambient, key, fill };
 }
 
 // ---- Frame loop ------------------------------------------------------------
@@ -905,16 +930,121 @@ function onSwitchView() {
 function onNext() {
     uiClick();
     hideResult();
-    if (cycle.playNumber >= CFG.rules.playsPerGame) {
-        showHud(false);
-        // THE SAVED GAME GOES WHEN THE GAME DOES. A finished ten is not
-        // something to resume into, and leaving it behind would mean a visitor
-        // who reloads is handed a game with no plays left in it.
-        clearGame();
-        showSummary(cycle.results, startGame);
+    const then = cycle.playNumber >= CFG.rules.playsPerGame ? finishGame : openPlaybook;
+    /**
+     * A MILESTONE SHOW PLAYS HERE, BETWEEN THE CARD AND WHATEVER COMES NEXT.
+     *
+     * Not at the whistle and not before the result card. QA item 7 is why: the
+     * highlights used to play before the card, and the one moment somebody
+     * needs to be told what happened was spent watching something without
+     * knowing what it was. So the card reports the play and the new total
+     * first, and the show that total has earned plays on the way out of it. On
+     * the last play that means before the summary, which is where a finale
+     * belongs anyway.
+     */
+    const due = milestoneDue(cycle.results, cycle.shown);
+    if (due) {
+        beginMilestone(due, then);
         return;
     }
-    openPlaybook();
+    then();
+}
+
+/** The ten are done. */
+function finishGame() {
+    showHud(false);
+    // THE SAVED GAME GOES WHEN THE GAME DOES. A finished ten is not
+    // something to resume into, and leaving it behind would mean a visitor
+    // who reloads is handed a game with no plays left in it.
+    clearGame();
+    showSummary(cycle.results, startGame);
+}
+
+/**
+ * START A SHOW, and remember where to go when it is over.
+ *
+ * The HUD stays up with one button in it, Skip, which takes focus, so Enter,
+ * Space and Escape all get a visitor out of it. The seed is rolled here, once,
+ * so every game's fireworks are their own.
+ */
+function beginMilestone(level, then) {
+    cycle.phase = 'show';
+    cycle.show = { level, t: 0, then, revealed: false, board: '' };
+    hideSpot();
+    beginShow(level, { seed: Math.floor(Math.random() * 1e9), calm: reducedMotion });
+    showHud(true);
+    showSkipShow();
+    stepMilestone(0);
+}
+
+/** One frame of the running show. */
+function stepMilestone(delta) {
+    const s = cycle.show;
+    if (!s) return;
+    s.t += delta;
+    // A NUMBER, ALWAYS. Every shot is cached per aspect, and anything else as a
+    // key misses the cache and re-solves the play camera's framing search
+    // several times a frame.
+    const aspect = (camera && Number(camera.aspect)) || 1.78;
+    const frame = showFrame(s.level, s.t, { aspect, calm: reducedMotion });
+    cycle.showShot = frame.shot;
+    applyShow(frame, s.t);
+
+    /**
+     * THE MOMENT THE NUMBER LANDS, ONCE. The whistle, the star on the board,
+     * the stadium staying awake from here on, and the sentence a screen reader
+     * gets instead of the title, which is aria-hidden.
+     */
+    if (frame.reveal && !s.revealed) {
+        s.revealed = true;
+        playSound('whistle');
+        wakeTo(s.level);
+        announce(`${s.level} points. ${CFG.milestones.copy[s.level] || ''}.`);
+    }
+
+    // The board is repainted only when what it says changes, because every
+    // repaint is a texture upload.
+    const board = frame.board ? `${frame.board.value}:${frame.board.glow}` : '';
+    if (board !== s.board) {
+        s.board = board;
+        paintBoard(frame.board);
+    }
+    setMilestoneTitle(s.level, frame.title, { calm: reducedMotion });
+
+    if (frame.done) endMilestone();
+}
+
+/** However the show ended, the game carries on from the same place. */
+function endMilestone() {
+    const s = cycle.show;
+    if (!s) return;
+    // A skipped show still earned what it celebrates: the star stays lit and
+    // the stadium stays awake. Only the whistle is left out.
+    wakeTo(s.level);
+    endShow();
+    hideMilestoneTitle();
+    cycle.show = null;
+    cycle.showShot = null;
+    // Back to where the show was entered from, which is the result card having
+    // been dismissed. The summary does not set a phase of its own.
+    cycle.phase = 'result';
+    paintBoard();
+    clearActions();
+    s.then();
+}
+
+/** The stadium as it stands after a show at `level`, which only ever goes up
+ *  within a game. */
+function wakeTo(level) {
+    cycle.shown = Math.max(cycle.shown, level);
+    setAwake(cycle.shown);
+    paintBoard();
+}
+
+function onSkipShow() {
+    if (cycle.phase !== 'show' || !cycle.show) return;
+    uiClick();
+    endMilestone();
 }
 
 /** A fresh ten. */
@@ -929,6 +1059,10 @@ function startGame() {
     hideSummary();
     hideResult();
     setScore(0);
+    // A new game is a dark stadium again, with nothing on the board to show.
+    cycle.shown = 0;
+    setAwake(0);
+    paintBoard();
     openPlaybook();
 }
 
@@ -953,6 +1087,12 @@ function resumeGame(saved) {
     // shape does not have to change (which would discard every game in
     // progress on the version bump).
     cycle.streak = streakOver(cycle.results, CFG.difficulty);
+    // ...AND SO IS HOW AWAKE THE STADIUM IS. Every show this game has reached
+    // counts as played, including one somebody reloaded before seeing: a show
+    // that turned up out of nowhere on the way into play five, with no card in
+    // front of it saying what it was for, is the fault QA item 7 was about.
+    cycle.shown = milestoneDue(cycle.results, 0);
+    setAwake(cycle.shown);
     hideSummary();
     hideResult();
     setPlayNumber(cycle.playNumber, CFG.rules.playsPerGame);
@@ -1032,6 +1172,13 @@ function stepCycle(delta) {
         return;
     }
     if (cycle.phase === 'result') return;
+
+    // A milestone show. Nothing on the field ticks: the players stand where the
+    // last play left them while the stadium does the moving.
+    if (cycle.phase === 'show') {
+        stepMilestone(delta);
+        return;
+    }
 
     if (cycle.phase === 'replay') {
         const done = advance(delta, CFG.simHz, CFG.camera.replay.speed);
@@ -1578,10 +1725,12 @@ async function init() {
     setProgress(0.15, 'Preparing the field…');
     initRenderer(canvas);
     initSceneGraph();
-    initLighting();
+    const lights = initLighting();
 
     setProgress(0.5, 'Painting the lines…');
     initField(scene);
+    // After the field, because the shows switch its lamp banks.
+    initSpectacle(scene, lights);
 
     setProgress(0.7, 'Calling the teams out…');
     setViewCamera(camera);
@@ -1612,6 +1761,7 @@ async function init() {
         onReplay: startReplay,
         onSkipReplay,
         onSkipCelebration,
+        onSkipShow,
         onSwitchView,
         onToggleMute: () => toggleMuted(),
         isMuted,
@@ -1691,7 +1841,9 @@ export function getState() {
     return { ...state };
 }
 
-export { init, animate, aimPlayCamera };
+/** `beginMilestone` is exposed for the suite too: reaching 100 by actually
+ *  playing needs two fifties in a row, which no test should depend on. */
+export { init, animate, aimPlayCamera, beginMilestone };
 
 if (typeof document !== 'undefined') {
     init();

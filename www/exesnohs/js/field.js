@@ -373,32 +373,75 @@ function buildStands() {
 /** Floodlight pylons at the corners. Geometry only: the light itself is a
  *  directional rig in main.js, because four real lights would cost more than
  *  the whole rest of the scene. */
-function buildPylons() {
-    const pylons = new THREE.Group();
+/**
+ * WHERE THE FOUR LAMP BANKS ARE, in world metres, near end first.
+ *
+ * Pure and exported because the lights show has to keep all four in frame, and
+ * a shot solved against a copy of these numbers is one edit away from framing
+ * four towers that have moved.
+ */
+export function pylonSpots() {
     const playLength = FIELD.lineInterval * FIELD.segments;
     // Just outside the back of the stand rather than far out in the dark, now
     // that the stand itself only reaches 5.2m past the sideline margin.
     const half = FIELD.width / 2 + FIELD.sideline + 7.5;
+    const out = [];
+    for (const x of [playLength * 0.12, playLength * 0.88]) {
+        for (const z of [-half, half]) out.push({ x, y: PYLON_HEIGHT, z });
+    }
+    return out;
+}
+
+/** The scoreboard's face, in world metres, for the same reason. */
+export function boardSpot() {
+    const S = CFG.scoreboard;
+    return {
+        x: FIELD.lineInterval * FIELD.segments + FIELD.endZone + S.beyond,
+        bottom: S.standHeight,
+        top: S.standHeight + S.height,
+        width: S.width,
+    };
+}
+
+const PYLON_HEIGHT = 26;
+/** The four lamp banks, once built, so the shows can switch them. */
+let banks = [];
+/** What a bank glows at before anything wakes the stadium up. */
+export const BANK_GLOW = 1.6;
+
+export function getPylonBanks() {
+    return banks;
+}
+
+function buildPylons() {
+    const pylons = new THREE.Group();
+    const playLength = FIELD.lineInterval * FIELD.segments;
     const mast = new THREE.MeshStandardMaterial({
         color: 0x39424f, roughness: 0.8, metalness: 0.4,
     });
-    const lamp = new THREE.MeshStandardMaterial({
-        color: 0xfff6d8, emissive: 0xfff2c8, emissiveIntensity: 1.6,
-    });
     const aim = new THREE.Vector3(playLength / 2, 0, 0);
+    banks = [];
 
-    for (const x of [playLength * 0.12, playLength * 0.88]) {
-        for (const z of [-half, half]) {
+    for (const spot of pylonSpots()) {
+        const { x, z } = spot;
+        {
             const pylon = new THREE.Group();
             const pole = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.35, 0.5, 26, 6), mast
+                new THREE.CylinderGeometry(0.35, 0.5, PYLON_HEIGHT, 6), mast
             );
-            pole.position.y = 13;
+            pole.position.y = PYLON_HEIGHT / 2;
             pylon.add(pole);
 
+            // ONE MATERIAL PER BANK, where there used to be one shared by all
+            // four. The lights show strikes them up one at a time, and a shared
+            // material can only ever switch all four together.
+            const lamp = new THREE.MeshStandardMaterial({
+                color: 0xfff6d8, emissive: 0xfff2c8, emissiveIntensity: BANK_GLOW,
+            });
             const bank = new THREE.Mesh(new THREE.BoxGeometry(5.5, 2.6, 0.5), lamp);
-            bank.position.y = 26;
+            bank.position.y = PYLON_HEIGHT;
             pylon.add(bank);
+            banks.push(bank);
 
             // POSITION THE PYLON BEFORE AIMING THE LAMP. `lookAt` resolves the
             // object's WORLD position by walking up its parents, so aiming a
@@ -597,6 +640,80 @@ export function boardColumns(width, { play = 1, of = 10, score = 0, clock = '' }
 }
 
 /**
+ * WHERE THE STARS SIT ON THE BOARD, as fractions of its face. Pure, so the one
+ * question that can go wrong (do they collide with the labels under them) is a
+ * test rather than a screenshot.
+ */
+export function starLayout(count = CFG.milestones.thresholds.length) {
+    const radius = 0.052;          // of the face's height
+    const y = 0.115;
+    const step = 0.052;            // of the face's width
+    return Array.from({ length: count }, (_, i) => ({
+        x: 0.5 + (i - (count - 1) / 2) * step,
+        y,
+        radius,
+    }));
+}
+
+function starPath(ctx, cx, cy, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i += 1) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const rr = i % 2 === 0 ? r : r * 0.45;
+        const x = cx + Math.cos(a) * rr;
+        const y = cy + Math.sin(a) * rr;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+}
+
+function paintStars(ctx, w, h, lit) {
+    const S = CFG.scoreboard;
+    starLayout().forEach((star, i) => {
+        const cx = star.x * w;
+        const cy = star.y * h;
+        const r = star.radius * h;
+        starPath(ctx, cx, cy, r);
+        if (i < lit) {
+            ctx.shadowColor = S.gold;
+            ctx.shadowBlur = Math.round(h * 0.06);
+            ctx.fillStyle = S.gold;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        } else {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+            ctx.fill();
+        }
+    });
+}
+
+function paintTakeover(ctx, w, h, { value = '', label = 'POINTS', glow = 1 } = {}) {
+    const S = CFG.scoreboard;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = S.label;
+    ctx.font = `600 ${Math.round(h * 0.1)}px Tahoma, Geneva, sans-serif`;
+    ctx.fillText(label, w / 2, h * 0.28);
+
+    let size = Math.round(h * 0.56);
+    ctx.font = `bold ${size}px Tahoma, Geneva, sans-serif`;
+    const wide = ctx.measureText(value).width;
+    if (wide > w * 0.8) {
+        size = Math.floor(size * ((w * 0.8) / wide));
+        ctx.font = `bold ${size}px Tahoma, Geneva, sans-serif`;
+    }
+    const baseline = h * 0.68;
+    ctx.shadowColor = S.gold;
+    ctx.shadowBlur = Math.round(h * (0.1 + 0.12 * glow));
+    ctx.fillStyle = S.gold;
+    ctx.fillText(value, w / 2, baseline);
+    ctx.shadowBlur = Math.round(h * 0.04);
+    ctx.fillStyle = S.ink;
+    ctx.fillText(value, w / 2, baseline);
+    ctx.shadowBlur = 0;
+}
+
+/**
  * Put the play count, the score and the play clock on the board.
  *
  * Called from main.js at exactly the moments the HUD is told the same thing, so
@@ -606,7 +723,9 @@ export function boardColumns(width, { play = 1, of = 10, score = 0, clock = '' }
  * file paints a board and has no business deciding what a stopped clock reads or
  * how many seconds are left. main.js owns the one and play.js owns the other.
  */
-export function updateScoreboard({ play = 1, of = 10, score = 0, clock = '' } = {}) {
+export function updateScoreboard({
+    play = 1, of = 10, score = 0, clock = '', stars = 0, takeover = null,
+} = {}) {
     if (!boardFace || !boardFace.ctx) return null;
     const S = CFG.scoreboard;
     const { ctx, canvas } = boardFace;
@@ -622,6 +741,30 @@ export function updateScoreboard({ play = 1, of = 10, score = 0, clock = '' } = 
     ctx.strokeStyle = S.rule;
     ctx.lineWidth = Math.max(2, h * 0.014);
     ctx.strokeRect(ctx.lineWidth, ctx.lineWidth, w - ctx.lineWidth * 2, h - ctx.lineWidth * 2);
+
+    /**
+     * THE STARS, ONE PER HUNDRED, ALONG THE TOP.
+     *
+     * Five of them, dim until a show lights one, and they stay lit for the
+     * rest of the game. They are the part of the stadium waking up that the
+     * play camera can always see: the towers and the stands are out of frame
+     * on a phone, and the board never is. Unlit ones are drawn too, faintly,
+     * so there is something to earn before anybody has earned it.
+     */
+    paintStars(ctx, w, h, stars);
+
+    /**
+     * AND DURING A SHOW, THE BOARD IS TAKEN OVER BY THE NUMBER.
+     *
+     * One reading filling the face, in gold rather than the usual amber, with
+     * its label above. It is drawn from the same lamp recipe as the panels so
+     * it reads as the board saying it rather than as something stuck on it.
+     */
+    if (takeover) {
+        paintTakeover(ctx, w, h, takeover);
+        if (boardFace.texture) boardFace.texture.needsUpdate = true;
+        return boardFace.canvas;
+    }
 
     /**
      * THREE PANELS NOW, AND THEY ARE NOT EQUAL.
@@ -758,6 +901,7 @@ export function getFieldGroup() {
 export function disposeField() {
     band = null;
     boardFace = null;
+    banks = [];
     if (!group) return;
     group.traverse((obj) => {
         if (obj.geometry) obj.geometry.dispose();

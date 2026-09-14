@@ -2737,6 +2737,7 @@ const EXESNOHS_CONFIG = {
         frame: 0x2b3342,
         ink: '#fff3d0',          // the lamps themselves, hot and nearly white
         glow: '#ffa22a',         // and what they throw onto the panel
+        gold: '#ffcf5a',         // a milestone: the stars, and a show's number
         label: '#6f7d93',
         rule: 'rgba(255, 255, 255, 0.07)',
         textureWidth: 1024,
@@ -2843,6 +2844,108 @@ const EXESNOHS_CONFIG = {
      * was right about, on a field half as long again.
      */
     simHz: 80,
+
+    /**
+     * THE SHOWS, WHICH ARE WHAT A GOOD GAME LEAVES BEHIND IT.
+     *
+     * Every hundred points plays a short skippable show between plays, the
+     * first time the running total reaches it, and each one wakes up a little
+     * more of the stadium for the rest of the game. A perfect 500 gets the
+     * finale. Played after "Next play" rather than before the result card,
+     * because the card has to say what happened first (QA item 7), and silent
+     * apart from a whistle, which is Steve's call.
+     *
+     * ONCE PER GAME, ON THE HIGH-WATER MARK. A sack can take 205 back to 195,
+     * and climbing past 200 again is not a second achievement. Worked out from
+     * `results`, like the streak, so a reloaded game cannot replay a show it
+     * already saw.
+     *
+     * ALL TIMES ARE SECONDS FROM THE START OF THE SHOW. Every burst of light in
+     * them is at least `flashGap` apart, which keeps the whole thing under three
+     * flashes a second (WCAG 2.3.1), the same ceiling High Water's lightning
+     * keeps.
+     */
+    milestones: {
+        thresholds: [100, 200, 300, 400, 500],
+        /** The ones with a show built. The rest are reached and lit on the
+         *  board but play nothing yet: stage two builds 300, 400 and 500. */
+        built: [100, 200],
+        flashGap: 0.34,
+        /** What the title card says, under the number. */
+        copy: {
+            100: 'The lights are on',
+            200: 'Now that is a show',
+            300: 'Look up',
+            400: 'Your name in lights',
+            500: 'A perfect game',
+        },
+        /** The whole title fades in and out over this, rather than popping. */
+        titleFade: 0.35,
+
+        /**
+         * 100, LIGHTS ON. The stadium loses power, the four floodlight towers
+         * come back on one at a time, and the scoreboard counts up to 100.
+         */
+        lights: {
+            length: 4.6,
+            toWide: [0, 0.9],
+            /** The power drops: every bank goes dark and the field dims. */
+            powerCut: [0.25, 0.55],
+            dimTo: 0.42,
+            /** ...and the towers come back one at a time. */
+            igniteFrom: 0.95,
+            /** A lamp flares past its resting glow as it strikes. */
+            flare: 3.2,
+            flareFor: 0.28,
+            toBoard: [2.05, 2.85],
+            count: [2.3, 2.95],
+            reveal: 3.0,
+            back: [3.9, 4.6],
+            conesOut: [3.6, 4.4],
+            /** How much brighter the banks glow once the stadium is awake. */
+            awakeBanks: 1.9,
+            /** The light cones, at full, as an additive opacity. */
+            cone: 0.16,
+        },
+
+        /**
+         * 200, FIREWORKS. The camera looks up over the scoreboard, a volley
+         * goes up from behind it, and the last shell bursts into "200".
+         */
+        fireworks: {
+            length: 6.9,
+            toSky: [0, 1.0],
+            dimTo: 0.7,
+            shells: 5,
+            firstLaunch: 0.8,
+            /** Seconds from launch to burst. */
+            rise: 0.85,
+            finaleLaunch: 2.85,
+            /** Seconds the finale takes to open out into the numerals. */
+            gather: 0.65,
+            hold: 1.05,
+            fall: 0.85,
+            back: [6.1, 6.9],
+            /** Sparks per ordinary shell. */
+            sparks: 90,
+            /** How far a shell's sparks fly, metres a second at the burst, and
+             *  how fast the air stops them (an exponential drag). */
+            speed: 11,
+            drag: 1.7,
+            gravity: 4.2,
+            life: 1.5,
+            /** The numerals, in metres tall, and the spacing of the sparks
+             *  drawn along their strokes. */
+            digitHeight: 9,
+            spacing: 0.42,
+            /** Where the finale bursts, metres past the scoreboard and up. */
+            finale: { beyond: 12, y: 17 },
+            /** The spark pool, which nothing may outgrow. */
+            pool: 1400,
+            size: 0.75,
+            palette: ['#ffcf5a', '#fff3d0', '#ff992c', '#9bcfff'],
+        },
+    },
 
     /** Ten plays make a game. Scoring runs from an intercepted -10 to 50 for
      *  taking it all the way across, per the PRD. */

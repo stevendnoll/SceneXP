@@ -1041,7 +1041,9 @@ describe('the keyboard', () => {
     });
 
     test('and no other key does anything at all', () => {
-        for (const key of ['E', 'Z', '1', 'Enter', 'Tab', 'Escape', 'ArrowLeft', '']) {
+        // Escape is not on this list any more: it presses whichever Skip is on
+        // screen (see exesnohs-milestones.test.mjs).
+        for (const key of ['E', 'Z', '1', 'Enter', 'Tab', 'ArrowLeft', '']) {
             expect(keyAction(key)).toBe('');
         }
         expect(keyAction(undefined)).toBe('');

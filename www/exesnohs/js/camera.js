@@ -550,7 +550,9 @@ export function applyView(shot, offset = view) {
 
 // ---- The director -----------------------------------------------------------
 
-const DRIVERS = { play: 'play', replay: 'replay', idle: 'idle' };
+/** ...and `show`, the milestone shows, whose every shot is solved in
+ *  milestones.js and handed over whole. */
+const DRIVERS = { play: 'play', replay: 'replay', idle: 'idle', show: 'show' };
 let current = DRIVERS.play;
 let elapsed = 0;
 let aspect = 1.78;
@@ -587,5 +589,8 @@ export function update(delta, state = {}) {
         );
     }
     if (current === DRIVERS.idle) return idleDriver(elapsed, aspect);
+    // A show brings its own shot. Without one it holds the play camera, which
+    // is where every show starts and ends.
+    if (current === DRIVERS.show && state.shot) return state.shot;
     return playDriver(aspect);
 }

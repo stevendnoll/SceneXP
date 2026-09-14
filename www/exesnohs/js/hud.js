@@ -300,6 +300,13 @@ const CHANGE_KEY = 'C';
 /** V, and it only ever means anything while a replay is running: the row it
  *  presses does not exist at any other time. */
 const VIEW_KEY = 'V';
+/** Escape, which gets out of anything that plays on its own: a replay, a
+ *  celebration, a milestone show. It presses whichever Skip is on screen. */
+const SKIP_KEY = 'Escape';
+// A NOTE ON THE MATCH BELOW, which is a SUBSTRING match on `data-keys`. It is
+// safe only because attribute matching is case sensitive and every other key is
+// a single capital: "Escape" contains no S, Q, K, C, V or A to D in capitals. A
+// new named key has to keep that true.
 
 /** Tag a button with the keys that press it, for the handler and for anything
  *  reading the page out loud. */
@@ -325,6 +332,7 @@ export function keyAction(key, { inField = false, modified = false } = {}) {
     if (SNAP_KEYS.includes(up)) return 'snap';
     if (up === KEEP_KEY) return 'keep';
     if (up === VIEW_KEY) return 'view';
+    if (up === SKIP_KEY) return 'skip';
     if (/^[A-D]$/.test(up)) return up;
     return '';
 }
@@ -356,7 +364,7 @@ export function initKeys(signal) {
         // A LETTER MEANS WHATEVER IS ON SCREEN WEARING IT. C throws to receiver
         // C during a play and changes the play before one, and those two rows
         // never coexist, so the right answer is to look rather than to decide.
-        const named = { snap: 'S', keep: KEEP_KEY, view: VIEW_KEY }[want];
+        const named = { snap: 'S', keep: KEEP_KEY, view: VIEW_KEY, skip: SKIP_KEY }[want];
         const wanted = named
             ? box.querySelector(`[data-keys*="${named}"]`)
             : (box.querySelector(`[data-letter="${want}"]`)
@@ -426,9 +434,9 @@ export function showSkipReplay() {
     swap.id = 'switch-view-btn';
     box.appendChild(swap);
 
-    const skip = button('Skip replay', 'hud-btn',
+    const skip = bindKeys(button('Skip replay', 'hud-btn',
         () => handlers.onSkipReplay && handlers.onSkipReplay(),
-        'Skip the replay and see the result');
+        'Skip the replay and see the result'), [SKIP_KEY]);
     skip.id = 'skip-replay-btn';
     box.appendChild(skip);
     skip.focus();
@@ -453,12 +461,64 @@ export function showSkipCelebration() {
     const box = actions();
     if (!box) return;
 
-    const skip = button('Skip', 'hud-btn',
+    const skip = bindKeys(button('Skip', 'hud-btn',
         () => handlers.onSkipCelebration && handlers.onSkipCelebration(),
-        'Skip the celebration and see the result');
+        'Skip the celebration and see the result'), [SKIP_KEY]);
     skip.id = 'skip-celebration-btn';
     box.appendChild(skip);
     skip.focus();
+}
+
+/**
+ * ...AND OUT OF A MILESTONE SHOW, THE SAME PROMISE A THIRD TIME.
+ *
+ * A show is a reward, and a reward somebody cannot decline is a toll. Same
+ * shape as the other two, same focus, and Escape presses it.
+ */
+export function showSkipShow() {
+    const box = actions();
+    if (!box) return;
+
+    const skip = bindKeys(button('Skip', 'hud-btn',
+        () => handlers.onSkipShow && handlers.onSkipShow(),
+        'Skip the show and carry on'), [SKIP_KEY]);
+    skip.id = 'skip-show-btn';
+    box.appendChild(skip);
+    skip.focus();
+}
+
+/**
+ * THE TITLE OVER A SHOW: the number, and a line under it.
+ *
+ * Driven every frame by an amount from 0 to 1 rather than by a class and a
+ * keyframe, because the show's own clock decides when it arrives and leaves, and
+ * a skipped show has to take it away on the same frame. It is `aria-hidden`: the
+ * number is announced once through the live region at the moment it lands, and a
+ * title fading in and out would otherwise be read twice.
+ */
+export function setMilestoneTitle(level, amount, { calm = false } = {}) {
+    const wrap = el('milestone');
+    if (!wrap) return;
+    const a = Math.max(0, Math.min(1, amount || 0));
+    if (a <= 0) {
+        wrap.hidden = true;
+        return;
+    }
+    const number = el('milestone-number');
+    if (number && number.textContent !== `${level}`) number.textContent = `${level}`;
+    const line = el('milestone-line');
+    const copy = CFG.milestones.copy[level] || '';
+    if (line && line.textContent !== copy) line.textContent = copy;
+    wrap.hidden = false;
+    wrap.style.opacity = `${a}`;
+    // A small rise into place, which is movement for its own sake and so is
+    // left out for anybody who asked not to be moved about.
+    wrap.style.transform = calm ? 'none' : `translateY(${((1 - a) * 0.6).toFixed(3)}rem)`;
+}
+
+export function hideMilestoneTitle() {
+    const wrap = el('milestone');
+    if (wrap) wrap.hidden = true;
 }
 
 /**
