@@ -17,7 +17,7 @@
  */
 import { EXESNOHS_CONFIG as CFG, FIELD, simToWorld } from './config.min.js';
 import { initField, setBandAt, fadeBand, updateScoreboard } from './field.min.js';
-import { initRoster, figureFor } from './roster.min.js';
+import { initRoster, figureFor, TEAMS } from './roster.min.js';
 import { initBall } from './ball.min.js';
 import {
     initMarkers, setPulse, initSpot, showSpot, hideSpot, markerGeometry,
@@ -26,8 +26,10 @@ import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments, noteThrow,
     beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
     beginRelocate, resetRelocate, airborne,
+    beginCelebration, resetCelebration, celebrationClock,
 } from './view.min.js';
 import { takedownLength, tacklerFor, contactFraction } from './takedown.min.js';
+import { chooseCelebration, celebrationLength } from './celebration.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier, markAirborne, setDifficulty,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome, decisionLeft,
@@ -38,7 +40,7 @@ import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
-    initKeys, setClock,
+    showSkipCelebration, initKeys, setClock,
 } from './hud.min.js';
 import { showSummary, hideSummary } from './summary.min.js';
 import {
@@ -109,6 +111,18 @@ const cycle = {
     /** Who brought whom down, decided once at the whistle so the replay ends
      *  with the same tackle the live play did. */
     tackle: { tackler: '', carrier: '' },
+    /**
+     * ...AND WHO CELEBRATED WHAT, HELD FOR EXACTLY THE SAME REASON.
+     *
+     * A pick and a fifty end with no tackle in them at all, so they end with a
+     * celebration instead (see celebration.js). The mode and the dance are
+     * ROLLED ONCE, here, because a replay has to end on the celebration the
+     * live play ended on: rolled again on playback, the visitor would press
+     * "Watch the replay" and be shown a different party from the one they had
+     * just seen, which makes the whole thing read as random decoration rather
+     * than as something that happened.
+     */
+    party: null,
     /**
      * HOW THE GAME IS GOING, as a signed run of plays. Positive is a run of
      * good ones and negative a run of bad ones, and it leans the next line-up's
@@ -378,7 +392,9 @@ function changePlay(offensive, defense) {
     resetBallFlight();
     resetAssignments();
     resetTakedown();
+    resetCelebration();
     cycle.tackle = { tackler: '', carrier: '' };
+    cycle.party = null;
     cycle.held = 0;
     cycle.accumulator = 0;
     beginRelocate();
@@ -418,9 +434,12 @@ function startPlay(offensive, defense) {
     // drop the last play's.
     resetAssignments();
     // And so does the last play's tackle, or a man who was on his back when the
-    // whistle went lines up for this one lying down.
+    // whistle went lines up for this one lying down. Same for the party, or a
+    // defense lines up thirteen metres from where the formation put it.
     resetTakedown();
+    resetCelebration();
     cycle.tackle = { tackler: '', carrier: '' };
+    cycle.party = null;
     cycle.phase = 'presnap';
     cycle.held = 0;
     cycle.accumulator = 0;
@@ -467,7 +486,9 @@ function beginSettle() {
     cycle.held = 0;
     cycle.settleFor = HOLD_SETTLE;
     cycle.tackle = { tackler: '', carrier: '' };
+    cycle.party = null;
     resetTakedown();
+    resetCelebration();
     clearActions();
     // THE CLOCK GOES AWAY WITH THE ACTIONS. Nothing calls `setClock` outside the
     // live phase, so without this the readout freezes on screen at whatever it
@@ -486,6 +507,42 @@ function beginSettle() {
      */
     clearEscapes(cycle.play);
 
+    /**
+     * AND THE TWO ENDINGS WITH NOBODY TO TACKLE GET A PARTY INSTEAD.
+     *
+     * An interception stops the play on the frame the ball is caught and a
+     * fifty stops it with the carrier over the line and nobody near him, so
+     * `state.tackled` is false for both and the whole of the rest of this
+     * function has never once run for either. The best thing and the worst
+     * thing in the game were the two endings where the field simply stopped.
+     *
+     * IT WINS OUTRIGHT over anything below. Two men cannot be celebrating and
+     * being tackled at the same time, and a takedown would be drawing the
+     * defender who just picked it diving on somebody.
+     *
+     * `outcome` is pure and reads only frozen state, so asking it here and
+     * again at the card is two readings of one unchanged fact rather than a
+     * chance for the two to disagree.
+     */
+    const party = planCelebration(outcome(cycle.play));
+    if (party && beginCelebration(party)) {
+        cycle.party = party;
+        cycle.settleFor = Math.max(HOLD_SETTLE, celebrationLength(party));
+        showSkipCelebration();
+        /**
+         * AND SAY SO, BECAUSE NONE OF IT IS AUDIBLE.
+         *
+         * A celebration is four seconds of movement and nothing else, so
+         * without this a visitor using a screen reader gets four seconds of
+         * silence and a button called "Skip" appearing under their focus with
+         * no explanation of what there is to skip. It deliberately does not
+         * repeat the headline: the result card says what happened a moment
+         * later, and this says who is enjoying it.
+         */
+        announce(`${TEAMS[teamOfPosition(party.hero)].name} are celebrating.`);
+        return;
+    }
+
     if (!cycle.play.playState.state.tackled) return;
     const carrier = ballCarrier(cycle.play);
     if (!carrier) return;
@@ -497,6 +554,90 @@ function beginSettle() {
     // Long enough to land the hit and let him lie there for a beat. A card
     // opening over a man in mid-air is worse than no animation at all.
     cycle.settleFor = Math.max(HOLD_SETTLE, takedownLength() + 0.2);
+}
+
+/**
+ * WHO IS CELEBRATING WHAT, ASSEMBLED FROM THE FIELD RATHER THAN FROM THE GAME.
+ *
+ * celebration.js is pure and knows nothing about this scene: it takes people as
+ * world points and hands back offsets. Everything that is a fact about THIS
+ * field lives here, and there are only four of them worth naming.
+ *
+ * WHICH WAY HOME IS. The offense runs at +x and the defense at -x, so a team's
+ * own end zone is decided by which side the man holding the ball is on rather
+ * than by what just happened. That matters because both teams can be the ones
+ * celebrating.
+ *
+ * WHERE THE CROWD IS, which is the camera, and the camera stands beyond the
+ * NEAR end line at negative x (see `camera.solve.nearBehind`). A man playing to
+ * it is a man turning toward the viewer, and getting this backwards would put
+ * his back to everybody for the whole celebration.
+ *
+ * WHO IS TO BLAME, on a pick, which is the quarterback who threw it. It is the
+ * one beat in the whole thing that is about the visitor rather than about the
+ * defense, and it is the reason the `point` dance exists.
+ *
+ * AND WHERE THE PAINT ENDS, so nobody is sent to celebrate in the stands.
+ */
+function planCelebration(result) {
+    const scored = !!result && result.points === 50;
+    const picked = !!result && result.result === 'interception';
+    if (!scored && !picked) return null;
+
+    const carrier = ballCarrier(cycle.play);
+    if (!carrier) return null;
+
+    const objects = cycle.play.game.objects;
+    const at = (o) => {
+        const w = simToWorld(o.coords.x, o.coords.y, 0);
+        return { position: o.settings.position, x: w.x, z: w.z };
+    };
+    // Anybody actually on the field: no bench, no ball, and nobody the roster
+    // has no figure for.
+    const playing = objects.filter((o) => !o.settings.benched
+        && o.settings.position !== 'ball' && figureFor(o.settings.position));
+
+    const side = carrier.settings.team;
+    const hero = at(carrier);
+    const C = CFG.pose.celebration;
+    const len = FIELD.lineInterval * FIELD.segments;
+    const toward = side === 0 ? 1 : -1;
+    const qb = picked
+        ? objects.find((o) => o.settings.position === 'qb' && !o.settings.benched)
+        : null;
+
+    return chooseCelebration({
+        hero,
+        mates: playing.filter((o) => o !== carrier && o.settings.team === side).map(at),
+        rivals: playing.filter((o) => o.settings.team !== side).map(at),
+        homeX: side === 0
+            ? len + FIELD.endZone - C.endZoneDepth
+            : -FIELD.endZone + C.endZoneDepth,
+        toward,
+        blameAt: qb ? at(qb) : null,
+        crowdAt: { x: -FIELD.endZone - 8, z: hero.z },
+        bounds: {
+            minX: -FIELD.endZone + 0.8,
+            maxX: len + FIELD.endZone - 0.8,
+            halfZ: FIELD.width / 2 - 0.6,
+        },
+        scored,
+        // Somebody who asked not to be moved about gets the still version: arms
+        // up and held, no run, no spin, no hop. celebration.js owns that.
+        calm: reducedMotion,
+    });
+}
+
+/** Out of the celebration and on to the card, for anybody who would rather
+ *  know what it cost than watch the other team enjoy it. */
+function onSkipCelebration() {
+    if (cycle.phase !== 'settle' || !cycle.party) return;
+    uiClick();
+    // The party stops where it is. Nothing it did needs undoing, because every
+    // offset it applied was on top of where the simulation left each man and
+    // the next frame simply draws them there.
+    resetCelebration();
+    finishPlay();
 }
 
 /** Snap it. From here the routes run themselves and the visitor has one
@@ -631,8 +772,11 @@ function startReplay() {
         resetShoulder();
     }
     // So does the tackle: it belongs to the last frame of the recording, and
-    // the playhead is going back to the first.
+    // the playhead is going back to the first. The celebration is the same
+    // ending one ending over, and without this a second look opens with eleven
+    // men already halfway to the end zone.
     resetTakedown();
+    resetCelebration();
     rewind();
     // The recording begins ON the snap, so the playhead going back to frame
     // one is the same instant the visitor's press was, and he takes the ball
@@ -817,11 +961,24 @@ function stepCycle(delta) {
             if (cycle.tackle.tackler && takedownClock() < 0) {
                 startTakedown(objs, cycle.tackle.tackler, cycle.tackle.carrier);
             }
+            /**
+             * AND IT ENDS ON THE SAME CELEBRATION TOO, FOR THE SAME REASON.
+             *
+             * The recording stops at the whistle, which is where both of these
+             * begin, so a replay that simply ran out would show a pick and then
+             * a field of men standing still: the reaction the live play had
+             * would be the one thing missing from the second look at it. The
+             * PLAN is reused rather than rolled again, so it is the same party
+             * with the same dance, which is what makes it read as a replay of
+             * something rather than as decoration.
+             */
+            if (cycle.party && celebrationClock() < 0) beginCelebration(cycle.party);
             // Hold the last frame for a beat before the card, so the replay
             // ends on a composition rather than cutting away mid-motion.
             cycle.replayHold += delta;
             const hold = CFG.camera.replay.holdEnd
-                + (cycle.tackle.tackler ? takedownLength() : 0);
+                + (cycle.tackle.tackler ? takedownLength() : 0)
+                + (cycle.party ? celebrationLength(cycle.party) : 0);
             if (cycle.replayHold >= hold) {
                 showHud(true);
                 clearActions();
@@ -1357,6 +1514,7 @@ async function init() {
         onSnap, onThrow, onRun, onNext, onChangePlay,
         onReplay: startReplay,
         onSkipReplay,
+        onSkipCelebration,
         onSwitchView,
         onToggleMute: () => toggleMuted(),
         isMuted,

@@ -32,6 +32,7 @@ import { getBall, aimBall, placeSpot, BALL_FAT } from './ball.min.js';
 import { placeMarker, hideMarker } from './markers.min.js';
 import { toRigSpace, RIG } from './arm.min.js';
 import { takedownAt } from './takedown.min.js';
+import { celebrationAt } from './celebration.min.js';
 
 /** Is this player sitting out this formation?
  *
@@ -117,6 +118,11 @@ function targetFacing(moveX, moveZ, mps) {
  */
 function carryFor(obj, carrier) {
     if (!carrier || carrier !== obj) return 'none';
+    // ...UNLESS HE IS HOLDING IT UP, which beats all three. Asked here rather
+    // than at the two call sites because `syncFigures` and `syncBall` each work
+    // the carry out for themselves, and a ball that disagrees with the arm
+    // holding it is the one fault this whole path exists to avoid.
+    if (raisingBall(obj.settings.position) > 0) return 'raise';
     if (obj.settings.position !== 'qb') return 'tuck';
     return obj.state.run ? 'tuck' : 'throw';
 }
@@ -698,6 +704,55 @@ export function takedownClock() {
 }
 
 /**
+ * THE CELEBRATION, WHICH IS THE OTHER EVENT WITH ITS OWN CLOCK.
+ *
+ * Built exactly like the tackle above, and for the same three reasons. It is
+ * STARTED by main.js at the whistle rather than inferred, because nothing in a
+ * frozen world announces itself. It is keyed by POSITION, so the same plan
+ * drives a live play and a replay rebuilt from six floats a frame. And its
+ * offsets are applied on top of where the simulation left each man, so nothing
+ * it does can disturb where the play actually finished.
+ *
+ * `party` is the per-frame answer, rebuilt once in `syncFigures` and read by
+ * every figure in the loop plus `carryFor`.
+ */
+const celebration = { at: -1, plan: null };
+let party = null;
+
+export function beginCelebration(plan) {
+    if (!plan || !plan.parts || !plan.parts.length) return false;
+    celebration.at = 0;
+    celebration.plan = plan;
+    party = null;
+    return true;
+}
+
+export function resetCelebration() {
+    celebration.at = -1;
+    celebration.plan = null;
+    party = null;
+}
+
+/** How far into it we are, in seconds, or -1 when there is not one. */
+export function celebrationClock() {
+    return celebration.at;
+}
+
+/**
+ * HOW FAR THIS MAN HAS THE BALL OVER HIS HEAD, 0 to 1.
+ *
+ * AN AMOUNT RATHER THAN A FLAG, and that is the whole of why the ball does not
+ * jump. It is the same number the ARM is being blended by, so `carryHold` can
+ * carry the ball up the same curve the hand goes up. Asked by `carryFor`, which
+ * is the one place both `syncFigures` and `syncBall` decide what a carry is.
+ */
+function raisingBall(position) {
+    if (!party) return 0;
+    const got = party.get(position);
+    return got && got.raised === true ? (got.amount || 0) : 0;
+}
+
+/**
  * WALKING TO A NEW FORMATION, WHICH IS QA'S "CHANGE PLAY".
  *
  * Re-lining up before the snap moves every figure on the field, sometimes right
@@ -1107,6 +1162,14 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         ? takedownAt(takedown.at, takedownFrom(objects), takedownTo(objects))
         : null;
 
+    // ...and the celebration's, which is the same arrangement one ending over.
+    // Solved ONCE for the whole field rather than per figure, because every
+    // answer comes out of one clock and a plan that does not change.
+    if (celebration.at >= 0) {
+        celebration.at += delta;
+        party = celebrationAt(celebration.at, celebration.plan);
+    }
+
     for (const obj of objects) {
         const figure = figureFor(obj.settings.position);
         if (!figure) continue;
@@ -1117,6 +1180,11 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             hideMarker(obj.settings.position);
             continue;
         }
+
+        // What, if anything, this man is doing about the play having just
+        // ended well for his side. Null on every frame of every live play,
+        // which is all but four seconds of the game.
+        const cheer = party ? (party.get(obj.settings.position) || null) : null;
 
         // THE DRAWN POSITION EASES TOWARD THE SIMULATED ONE, and that is what
         // turns stepped motion into movement. The simulation advances on a
@@ -1184,7 +1252,29 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         const moved = Math.hypot(stepX, stepZ);
         figure.userData.at = { x: p.x, z: p.z };
 
-        const raw = delta > 0 ? moved / delta : 0;
+        /**
+         * A CELEBRATION IS THE ONE OFFSET THAT IS REAL TRAVEL.
+         *
+         * The tackle moves two men and they are posed explicitly while it
+         * happens, so nothing downstream needs to know they covered ground. A
+         * defense breaking for the end zone is eleven men RUNNING, and the run
+         * cycle in this file is derived entirely from measured movement: the
+         * stride phase advances with distance and the arm swing scales with
+         * speed. Measured off the simulation alone, which stopped at the
+         * whistle, every one of them would glide thirteen metres with his arms
+         * at his sides.
+         *
+         * So the offset's own step is measured the same way the simulated one
+         * is, and added. It is the same lesson as `figure.userData.mps` itself:
+         * measure what is DRAWN, not what is stored.
+         */
+        const wasCheer = figure.userData.cheerAt;
+        const cheerMoved = cheer && wasCheer
+            ? Math.hypot(cheer.x - wasCheer.x, cheer.z - wasCheer.z) : 0;
+        figure.userData.cheerAt = cheer ? { x: cheer.x, z: cheer.z } : null;
+        const travelled = moved + cheerMoved;
+
+        const raw = delta > 0 ? travelled / delta : 0;
         if (figure.userData.mps === undefined) figure.userData.mps = 0;
         figure.userData.mps += (raw - figure.userData.mps)
             * (1 - Math.exp(-delta / CFG.pose.speedSmooth));
@@ -1199,7 +1289,13 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // first half second of this one being judged against where he was
         // standing when the last whistle went.
         if (opts.presnap) { figure.userData.track = null; figure.userData.still = false; }
-        const standing = !opts.presnap && updateStanding(figure, delta);
+        // A MAN RUNNING TO THE END ZONE IS NOT STANDING STILL, however little
+        // the simulation thinks he has moved. `updateStanding` measures net
+        // displacement of the SIMULATED position, which is frozen after the
+        // whistle, so it would answer "still" for every celebrant and zero the
+        // speed that the stride and the arm swing are both scaled by.
+        const standing = !opts.presnap && !(cheer && cheer.running)
+            && updateStanding(figure, delta);
         const mps = (standing || figure.userData.mps < CFG.pose.stillSpeed)
             ? 0 : figure.userData.mps;
 
@@ -1260,9 +1356,10 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // at y = 0.055 because its shoes hang below its own origin, and writing
         // a flat zero here buried every player on the field to the ankle.
         figure.position.set(
-            p.x + (role ? role.x : 0),
-            FIGURE_LIFT + (role && role.y ? role.y : 0) + airborne,
-            p.z + (role ? role.z : 0)
+            p.x + (role ? role.x : 0) + (cheer ? cheer.x : 0),
+            FIGURE_LIFT + (role && role.y ? role.y : 0) + airborne
+                + (cheer ? cheer.y : 0),
+            p.z + (role ? role.z : 0) + (cheer ? cheer.z : 0)
         );
 
         // WATCHING SOMEBODY BEATS RUNNING SOMEWHERE. A corner shadowing his
@@ -1292,13 +1389,24 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         const relocating = !!from && walking < 1;
         const downfield = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
         const surveying = carrier === obj && carryFor(obj, carrier) === 'throw';
-        const engagement = engaged.get(obj.settings.position) || null;
+        /**
+         * AND A CELEBRATION OUTRANKS EVERY LIVE-PLAY READING.
+         *
+         * `blockersEngaged`, `tacklersOn` and `reachersFor` are all distances,
+         * and distances do not change once the simulation stops, so a defender
+         * enjoying an interception went on being measured as locked in a block
+         * with his hands on somebody. Left in, the block's lean fought the
+         * celebration's and the tackler's pitch won outright. Cleared here
+         * rather than guarded at each of the four places they are read, because
+         * missing one is how a pose ends up half applied.
+         */
+        const engagement = cheer ? null : (engaged.get(obj.settings.position) || null);
         // A MAN WITH HIS HANDS ON SOMEBODY IS NOT CATCHING A PASS. The ball
         // leaves at chest height over a line of men who are 3.85m tall, so it
         // passes inside a defensive lineman's `defenderRange` on most throws,
         // and without this the reach beat the block in both the pose and the
         // facing: two men locked together sprang apart to look up at it.
-        const reach = engagement ? 0 : (reaching.get(obj.settings.position) || 0);
+        const reach = (engagement || cheer) ? 0 : (reaching.get(obj.settings.position) || 0);
 
         // A MAN GOING FOR THE BALL IS LOOKING AT THE BALL, and it beats every
         // other reason to be facing somewhere: his coverage, his block, and the
@@ -1333,7 +1441,41 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         else if (figure.userData.facing === undefined) {
             figure.userData.facing = downfield;
         }
-        if (!figure.visible) {
+        if (cheer) {
+            /**
+             * A CELEBRANT'S YAW IS TWO NUMBERS ADDED, AND THEY HAVE TO STAY
+             * APART.
+             *
+             * The base is where he is TURNED: the way he is running, or the man
+             * he has come to look at. That eases exactly like everybody else's,
+             * or a defender snaps a hundred and eighty degrees on the frame the
+             * whistle goes.
+             *
+             * The spin is a DANCE, already a timed animation with its own
+             * easing, and easing it a second time is the fault the takedown
+             * documents: at two turns in a second and a half the follower runs a
+             * radian and a sixth behind, and then goes on turning for half a
+             * second after the music stops. So it is added whole.
+             *
+             * Which means the eased base cannot live in `rotation.y` any more,
+             * because `rotation.y` now has a spin in it and next frame's ease
+             * would read the spin as part of the heading. `yaw0` is that base,
+             * seeded from wherever he was actually drawn on the first frame of
+             * the party so nothing jumps.
+             */
+            const base = cheer.face !== null && cheer.face !== undefined
+                ? cheer.face
+                : (cheer.watch
+                    ? Math.atan2(cheer.watch.x - p.x, cheer.watch.z - p.z)
+                    : figure.userData.facing);
+            figure.userData.facing = base;
+            if (!wasCheer || figure.userData.yaw0 === undefined) {
+                figure.userData.yaw0 = figure.rotation.y;
+            }
+            const turn = wrapAngle(base - figure.userData.yaw0);
+            figure.userData.yaw0 += turn * (1 - Math.exp(-delta * TURN_RESPONSE));
+            figure.rotation.y = figure.userData.yaw0 + (cheer.spin || 0);
+        } else if (!figure.visible) {
             // First placement after a line-up: arrive facing the right way
             // rather than swinging round from wherever the last play left them.
             figure.rotation.y = figure.userData.facing;
@@ -1354,8 +1496,8 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         //
         // Multiplying the metres actually travelled is frame-rate independent
         // for free, and a player who has not moved advances no phase at all.
-        figure.userData.phase += moved * CFG.pose.stridePerMetre;
-        const lunge = tacklers.get(obj.settings.position) || 0;
+        figure.userData.phase += travelled * CFG.pose.stridePerMetre;
+        const lunge = cheer ? 0 : (tacklers.get(obj.settings.position) || 0);
 
         /**
          * GOING DOWN, WHICH IS NOW SOMETHING THAT HAPPENED RATHER THAN
@@ -1452,6 +1594,11 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             // pushes off and leans away, which is the roll below.
             stiffArm: Math.max(stiff, shoving),
             stiffArmSide: esc ? stiffArmSide(esc.away, figure.userData.facing) : 1,
+            // WHAT HIS ARMS ARE SAYING ABOUT THE PLAY BEING OVER. `roster.js`
+            // reads this first of everything, because every pose below it is a
+            // judgement about a play that is no longer running.
+            celebrate: cheer && cheer.arms
+                ? { arms: cheer.arms, amount: cheer.amount } : null,
         }, delta);
 
         // THE JUKE IS A ROLL, and it is the only thing in the game that uses
@@ -1459,9 +1606,14 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // frame after the yaw and the pitch: he leans out of his cut rather
         // than tipping sideways in world space. Eased back to upright rather
         // than cleared, or a man finishing a juke snaps vertical in one frame.
-        const wantRoll = shoving > 0
-            ? jukeRoll(esc.away, figure.userData.facing, CFG.pose.juke.roll) * shoving
-            : 0;
+        // A SHIMMY IS THE SAME AXIS, which is why it is here rather than in a
+        // branch of its own: the roll is the only sideways lean this rig has,
+        // and a man swinging his shoulders and a man cutting away from a
+        // defender are asking it for the same thing.
+        const wantRoll = cheer ? (cheer.roll || 0)
+            : (shoving > 0
+                ? jukeRoll(esc.away, figure.userData.facing, CFG.pose.juke.roll) * shoving
+                : 0);
         figure.rotation.z += (wantRoll - figure.rotation.z)
             * (1 - Math.exp(-delta / CFG.pose.juke.snap));
 
@@ -1495,9 +1647,16 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             // blocker: he is running through the contact rather than settling
             // into it, and the arm is doing most of the talking.
             const driving = CFG.pose.stiffArm.lean * stiff;
-            const pitch = lunge > 0
-                ? CFG.pose.tackle.lean * lunge
-                : Math.max(ready, blocking, driving);
+            // AND A CELEBRATION IS A PITCH TOO: the jab of a man pointing at
+            // whoever threw it, and the bowed head of whoever did. It wins
+            // outright rather than joining the `max` below, because a quarterback
+            // with his hands on his helmet is leaning FORWARD over a play he has
+            // no part in, and the readings that would otherwise compete are
+            // already cleared for celebrants above.
+            const pitch = cheer ? (cheer.lean || 0)
+                : (lunge > 0
+                    ? CFG.pose.tackle.lean * lunge
+                    : Math.max(ready, blocking, driving));
             const rate = lunge > 0 ? CFG.pose.tackle.snap
                 : (stiff > 0 ? CFG.pose.stiffArm.snap : CFG.pose.blend);
             figure.rotation.x += (pitch - figure.rotation.x)
@@ -1518,8 +1677,12 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // It follows a man being tackled, because a letter left standing on the
         // spot he was hit at while he goes over backwards reads as him having
         // left his own shadow behind.
+        // ...and a man who has run thirteen metres to the end zone for the same
+        // reason: a letter left standing where the whistle went belongs to
+        // nobody.
         placeMarker(obj.settings.position,
-            p.x + (role ? role.x : 0), p.z + (role ? role.z : 0));
+            p.x + (role ? role.x : 0) + (cheer ? cheer.x : 0),
+            p.z + (role ? role.z : 0) + (cheer ? cheer.z : 0));
     }
 }
 
@@ -1805,24 +1968,41 @@ export function toWorld(figure, v, direction = false) {
  * `x` is mirrored onto the throwing side here, once, in the same way the poses
  * in roster.js mirror a hand.
  */
-export function carryHold(mode, snapped) {
+export function carryHold(mode, snapped, lift = 1) {
     const P = CFG.pose;
     const side = THROWING_SIDE;
     const put = (spot, aim) => ({
         ball: { x: side * spot.x, y: spot.y, z: spot.z },
         aim: { x: side * aim.x, y: aim.y, z: aim.z },
     });
-    if (mode !== 'throw') return put(P.tuck.ball, P.tuck.aim);
-
-    const from = P.underCentre;
-    const to = P.throwHold;
-    const t = Math.min(1, Math.max(0, snapped));
-    const mix = (a, b) => ({
+    const mix = (a, b, t) => ({
         x: a.x + (b.x - a.x) * t,
         y: a.y + (b.y - a.y) * t,
         z: a.z + (b.z - a.z) * t,
     });
-    return put(mix(from.ball, to.ball), mix(from.aim, to.aim));
+
+    /**
+     * HELD OVER HIS HEAD, which is the celebration's own carry. A fourth case
+     * rather than a special path precisely so the ball and the arm keep reading
+     * the same picture: `pose.raise` carries both the hand the arm is solved to
+     * and the point the ball sits at, a few centimetres above it.
+     *
+     * AND IT IS A BLEND, NOT A SWITCH, for the same reason the snap is. The arm
+     * takes `celebration.blend` to come up and a mode is a step change, so a
+     * hard case here would fire the ball from his ribs to over his head on one
+     * frame and leave it hanging there waiting for the hand to arrive. `lift`
+     * is the same 0 to 1 the ARM is being blended by, so the two travel
+     * together.
+     */
+    if (mode === 'raise') {
+        const t = Math.min(1, Math.max(0, lift));
+        return put(mix(P.tuck.ball, P.raise.ball, t), mix(P.tuck.aim, P.raise.aim, t));
+    }
+    if (mode !== 'throw') return put(P.tuck.ball, P.tuck.aim);
+
+    const t = Math.min(1, Math.max(0, snapped));
+    return put(mix(P.underCentre.ball, P.throwHold.ball, t),
+        mix(P.underCentre.aim, P.throwHold.aim, t));
 }
 
 export function syncBall(ballObj, carrier, delta = 1 / 60) {
@@ -1909,7 +2089,8 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             // the same answer, so the ball is always in the hand that is posed
             // to be holding it.
             const mode = carryFor(carrier, carrier);
-            const hold = carryHold(mode, snapProgress());
+            const hold = carryHold(mode, snapProgress(),
+                raisingBall(carrier.settings.position));
 
             // THE OFFSET IS THE SAME RIG SPACE THE POSES ARE WRITTEN IN, so the
             // ball's `x` runs along the throwing side and its `z` is the way he

@@ -551,6 +551,30 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
     // The pose is a target and the arm eases toward it.
     const ease = 1 - Math.exp(-delta / P.blend);
 
+    /**
+     * CELEBRATING, WHICH IS THE ONE THING THAT HAPPENS AFTER THE WHISTLE.
+     *
+     * Read once for the figure rather than per arm, because two of the three
+     * answers are about the WHOLE man: whether he is holding a ball, and
+     * therefore which arm is free to do anything at all.
+     *
+     * THE BALL ARM MAY NOT LEAVE THE TUCK WHILE IT IS HOLDING THE BALL, and
+     * that is the same rule `stiffSide` enforces a few lines up rather than a
+     * new one. `carryHold` pins the ball to a fixed point in the rig's own
+     * space rather than to the hand, so an arm thrown wide or pointed at
+     * somebody would leave the ball hanging in the air beside a man who is
+     * plainly not holding it. The one pose that DOES raise it is `raise`, which
+     * is a carry of its own with a ball position to match (see `pose.raise`).
+     */
+    const cel = act.celebrate && act.celebrate.amount > 0 ? act.celebrate : null;
+    const carry = act.carry || 'none';
+    const raising = carry === 'raise';
+    const clamped = carry === 'tuck';
+    // Which arm may do the talking in a one-armed pose: the free one, and when
+    // both are free the throwing side, so a defender with no ball still points
+    // with the arm a carrier would have to use.
+    const leadSide = clamped ? -THROWING_SIDE : THROWING_SIDE;
+
     for (const arm of arms) {
         const side = arm.userData.armSide;
         const rest = arm.userData.restX !== undefined ? arm.userData.restX : 0.1;
@@ -565,7 +589,48 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
         let z = restZ;
         let fore = -(P.runElbow.rest + effort * P.runElbow.sprint);
 
-        if (act.reach > 0 && act.reachAt) {
+        /**
+         * AND IT IS FIRST IN THE CHAIN, DELIBERATELY.
+         *
+         * Everything below this line is a judgement about a LIVE play: is he
+         * reaching for a ball, is somebody inside his block, is he about to
+         * bring a man down. None of those are still true after the whistle, and
+         * several of them go on answering yes anyway, because they are read off
+         * distances and the distances do not change once the simulation stops.
+         * A defender celebrating an interception was still, by every one of
+         * those readings, locked in a block.
+         *
+         * `celebration.js` decides who is celebrating and what with; this only
+         * puts the hand where it says.
+         */
+        const celebrating = cel && !(clamped && side === THROWING_SIDE);
+        if (celebrating) {
+            const C = P.celebration;
+            const ballArm = raising && side === THROWING_SIDE;
+            const hand = ballArm
+                ? P.raise.hand
+                : (cel.arms === 'point'
+                    ? (side === leadSide ? C.hands.point : C.hands.off)
+                    : (C.hands[cel.arms] || C.hands.up));
+            const a = anglesFor(hand, side);
+            /**
+             * THE BALL ARM COMES UP OUT OF THE TUCK, NOT OUT OF THE RUN.
+             *
+             * Everybody else blends out of the stride, because that is the pose
+             * they were actually in. The man holding the ball was NOT running
+             * with that arm: it was clamped across his ribs, and `carryHold`
+             * carries the ball up the same curve this blend follows. Started
+             * from the stride instead, the hand and the ball would set off from
+             * two different places and only meet at the top.
+             */
+            const from = ballArm ? anglesFor(P.tuck.hand, side) : null;
+            const fx = from ? from.armX : x;
+            const fz = from ? from.armZ : z;
+            const ff = from ? from.foreX : fore;
+            x = lerp(fx, a.armX, cel.amount);
+            z = lerp(fz, a.armZ, cel.amount);
+            fore = lerp(ff, a.foreX, cel.amount);
+        } else if (act.reach > 0 && act.reachAt) {
             /**
              * GOING UP FOR THE BALL, AND THE TARGET IS THE BALL ITSELF.
              *

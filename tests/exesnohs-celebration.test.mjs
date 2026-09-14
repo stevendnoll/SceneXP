@@ -1,0 +1,677 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * exesnohs-celebration.test.mjs
+ *
+ * WHAT HAPPENS AFTER THE TWO WHISTLES THAT HAVE NO TACKLE IN THEM.
+ *
+ * Every case here asserts a property that was measurably WRONG in the first
+ * build of celebration.js, and not one of them would have shown up in a
+ * screenshot, because the whole thing is four seconds of movement on figures
+ * about thirty pixels tall. They were found by driving the real simulation
+ * headlessly over four thousand pass plays and reading the numbers out, which
+ * is the only reason they were found at all:
+ *
+ *   - two of the six hand poses were UNREACHABLE, landing the hand 167mm and
+ *     139mm from where the pose asked for it, because "inside the arm's reach"
+ *     is the wrong test for a sideways target (see `hands` in config.js)
+ *   - `fit` shortened a celebration to fit the time budget and wrote the new
+ *     duration over the NAME of the dance, so the animation went on running at
+ *     the old length and would have been cut off by the result card
+ *   - two men mobbing from the same direction were sent to the same point on
+ *     the ring and stood 0.00m apart, with nothing left running to separate
+ *     them once the play is dead
+ *   - clamping to the touchline AFTER separating undid the separating, leaving
+ *     a pair 0.05m apart on the paint
+ *   - reduced motion got a shorter celebration rather than a still one, hops
+ *     and all
+ *   - a man whose destination was five centimetres away was given no time to
+ *     travel and therefore took the whole five centimetres on one frame
+ *
+ * The suite is written as properties rather than as restatements. Nothing here
+ * asserts that `ring` is 1.95; it asserts that nobody ends up standing inside
+ * anybody, which keeps failing whatever the layout becomes.
+ */
+import { describe, test, expect } from '@jest/globals';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+import { installThree } from './helpers/three-stub.mjs';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const scene = join(here, '..', 'www', 'exesnohs', 'js');
+
+installThree();
+
+const { EXESNOHS_CONFIG: CFG, FIELD, simToWorld } = await import(join(scene, 'config.js'));
+const {
+    chooseCelebration, celebrationAt, celebrationLength, weightedPick, DANCES, MODES,
+} = await import(join(scene, 'celebration.js'));
+const { solveArm, handAt, RIG, reach } = await import(join(scene, 'arm.js'));
+const { carryHold } = await import(join(scene, 'view.js'));
+const { poseFigure, THROWING_SIDE } = await import(join(scene, 'roster.js'));
+const {
+    createPlay, lineUp, snap, tick, isDone, throwTo, outcome, eligibleReceivers,
+    ballCarrier,
+} = await import(join(scene, 'play.js'));
+
+const C = CFG.pose.celebration;
+const FIELD_LEN = FIELD.lineInterval * FIELD.segments;
+const BOUNDS = {
+    minX: -FIELD.endZone + 0.8,
+    maxX: FIELD_LEN + FIELD.endZone - 0.8,
+    halfZ: FIELD.width / 2 - 0.6,
+};
+
+/** A repeatable stream, so a failure can be reproduced from its seed rather
+ *  than being a different celebration every run. */
+function rolls(seed) {
+    let s = seed;
+    return () => {
+        s = (s * 1103515245 + 12345) & 0x7fffffff;
+        return s / 0x7fffffff;
+    };
+}
+
+/** A plan over invented but plausible people, for the cases that are about the
+ *  arithmetic rather than about the game. */
+function planFor({ roll, scored = false, calm = false, mates = 9, spread = 9 } = {}) {
+    const pick = roll || rolls(7);
+    const hero = { position: 'db1', x: 16, z: 1.5 };
+    const team = [];
+    for (let i = 0; i < mates; i += 1) {
+        // Deterministic, and deliberately crowded: several of them start well
+        // inside a body width of each other.
+        const a = (i / mates) * Math.PI * 2;
+        team.push({
+            position: `m${i}`,
+            x: hero.x + Math.cos(a) * (2 + (i % 3) * spread * 0.3),
+            z: hero.z + Math.sin(a) * (1.4 + (i % 4) * spread * 0.25),
+        });
+    }
+    return chooseCelebration({
+        hero,
+        mates: team,
+        rivals: [{ position: 'qb', x: 4, z: 0 }, { position: 'wr1', x: 14, z: 6 }],
+        homeX: -FIELD.endZone + C.endZoneDepth,
+        toward: -1,
+        blameAt: { x: 4, z: 0 },
+        crowdAt: { x: -FIELD.endZone - 8, z: hero.z },
+        bounds: BOUNDS,
+        scored,
+        calm,
+        roll: pick,
+    });
+}
+
+/** One of every mode and dance, so no case below depends on a lucky roll. */
+function everyPlan(opts = {}) {
+    const out = [];
+    for (let seed = 1; seed <= 60; seed += 1) {
+        const plan = planFor({ ...opts, roll: rolls(seed * 977) });
+        if (plan) out.push(plan);
+    }
+    return out;
+}
+
+const gap = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+const closestPair = (points) => {
+    let worst = Infinity;
+    for (let i = 0; i < points.length; i += 1) {
+        for (let j = i + 1; j < points.length; j += 1) {
+            worst = Math.min(worst, gap(points[i], points[j]));
+        }
+    }
+    return worst;
+};
+
+// ---------------------------------------------------------------------------
+
+describe('every hand the celebration asks for is one the arm can reach', () => {
+    /**
+     * THE TEST THAT WAS WRITTEN FIRST AND WAS THE WRONG TEST.
+     *
+     * "Is the target inside `reach()`" passes for all six poses, and two of
+     * them were still 150mm out. `solveArm` clamps `armZ` at a right angle, and
+     * at a right angle the hand's SIDEWAYS offset comes from the upper-arm term
+     * alone rather than from the whole limb, which shrinks fast as the elbow
+     * bends. The only honest question is where the hand actually lands, so this
+     * runs the solver and then runs it backwards.
+     */
+    const poses = { ...C.hands, raise: CFG.pose.raise.hand };
+
+    for (const [name, hand] of Object.entries(poses)) {
+        test(`the ${name} pose puts the hand where it asked for it`, () => {
+            for (const side of [1, -1]) {
+                const target = { x: side * hand.x, y: hand.y, z: hand.z };
+                const a = solveArm(target, side);
+                const got = handAt(a.armX, a.armZ, a.foreX, side);
+                const miss = Math.hypot(got.x - target.x, got.y - target.y,
+                    got.z - target.z);
+                expect(miss).toBeLessThan(0.001);
+                // AND THE ELBOW IS NOT IN HIS CHEST. Every hand sits outside
+                // its own shoulder, which is what a 2-DOF shoulder needs in
+                // order to get there without carrying the upper arm across the
+                // body (see `throwHold` in config.js for the round that cost).
+                expect(Math.abs(hand.x)).toBeGreaterThan(RIG.shoulderX - 0.001);
+            }
+        });
+    }
+
+    test('nothing is asked for at a fully locked arm', () => {
+        // A target at exactly full stretch is a straight arm and a division by
+        // very nearly zero, which arm.js says in as many words.
+        for (const hand of Object.values(poses)) {
+            const d = Math.hypot(hand.x - RIG.shoulderX, hand.y - RIG.shoulderY, hand.z);
+            expect(d).toBeLessThan(reach() - 0.005);
+        }
+    });
+});
+
+describe('the plan fits the time it says it does', () => {
+    test('no celebration outlasts the agreed budget', () => {
+        for (const plan of everyPlan()) {
+            expect(celebrationLength(plan)).toBeLessThanOrEqual(C.cap + 1e-9);
+            expect(celebrationLength(plan)).toBeGreaterThan(C.beat + C.danceFloor);
+        }
+    });
+
+    /**
+     * THE ONE THAT CATCHES THE NAME COLLISION.
+     *
+     * `fit` shortens the dance so the whole thing lands inside `cap`, and it
+     * used to write those seconds over the plan's `dance`, which was the NAME
+     * of the dance. Nothing threw. The animation went on being drawn against
+     * the CONFIGURED duration while the game held the frame for the SHORTENED
+     * one, so a squeezed celebration was cut off by the result card partway
+     * through: a man frozen mid-spin, facing the wrong way, under the card.
+     *
+     * Asked as the property that matters rather than as "is dance a string":
+     * at the moment the plan says it is over, nobody is still moving.
+     */
+    test('when the plan says it is over, everybody has landed and stopped', () => {
+        for (const plan of everyPlan()) {
+            const end = celebrationAt(celebrationLength(plan), plan);
+            expect(end.size).toBeGreaterThan(0);
+            for (const [position, part] of end) {
+                expect(Math.abs(part.y)).toBeLessThan(1e-6);
+                expect(Math.abs(part.roll)).toBeLessThan(1e-6);
+                expect(part.running).toBe(false);
+                // A spin ends on a whole number of turns, so the man is facing
+                // the way the plan meant him to rather than three quarters of
+                // the way round it.
+                const turns = (part.spin || 0) / (Math.PI * 2);
+                expect(Math.abs(turns - Math.round(turns))).toBeLessThan(1e-6);
+                expect(position).toBeTruthy();
+            }
+        }
+    });
+
+    test('nobody is still travelling once the dance has started', () => {
+        for (const plan of everyPlan()) {
+            for (const part of plan.parts) {
+                const arrived = plan.beat + part.delay + part.travel;
+                const at = celebrationAt(arrived + 1e-6, plan).get(part.position);
+                expect(at.running).toBe(false);
+                // ...and he is exactly where he was sent, not most of the way.
+                expect(Math.abs(at.x - part.dx)).toBeLessThan(1e-6);
+                expect(Math.abs(at.z - part.dz)).toBeLessThan(1e-6);
+            }
+        }
+    });
+
+    /**
+     * NOBODY MOVES ON THE FRAME THE WHISTLE GOES.
+     *
+     * A destination under five centimetres away is treated as no journey, so
+     * the man is not charged `travel.min` for standing still. That left the
+     * five centimetres in the offset, and a part with no duration counts as
+     * having arrived, so those men took the whole distance on frame one.
+     * Measured, 38 of 400 plans had somebody do it.
+     */
+    test('the first frame of a celebration moves nobody', () => {
+        for (const plan of everyPlan()) {
+            for (const part of celebrationAt(0, plan).values()) {
+                expect(Math.hypot(part.x, part.z)).toBeLessThan(1e-9);
+                expect(part.y).toBeLessThan(1e-9);
+                expect(part.amount).toBeLessThan(1e-9);
+            }
+        }
+    });
+});
+
+describe('nobody ends up standing inside anybody', () => {
+    /**
+     * NOTHING SEPARATES BODIES AFTER THE WHISTLE, and that is the whole reason
+     * this has to be checked here. `play.separate` runs from `tick`, `tick`
+     * returns the moment the play is dead, and a celebration is the only time
+     * in this game that men move with nothing keeping them apart.
+     *
+     * Asserted against where they STARTED rather than against a flat number,
+     * because the simulation itself leaves pairs about 1.3m apart at the
+     * whistle (it deliberately skips its own separation pass on that frame, see
+     * `play.tick`). The celebration may not make that worse.
+     */
+    /**
+     * NINE TENTHS OF A BODY, OR AT LEAST AS FAR APART AS THEY STARTED.
+     *
+     * `relax` is a relaxation: each pass closes half of every overlap it finds,
+     * so it approaches a body width rather than reaching it. `play.separate` is
+     * the same algorithm and its own note records the same behaviour measured
+     * against the live game, 1.4m held against a 1.5m request. Demanding the
+     * whole body here would be demanding more of the celebration than the game
+     * asks of itself while the play is running.
+     *
+     * The second half of the bar is the one that cannot be argued with: a
+     * celebration may never make the crowding WORSE, whatever it inherited.
+     */
+    const roomEnough = (plan) => {
+        const before = closestPair(plan.parts.map((p) => p.from));
+        const after = closestPair(plan.parts.map((p) => p.to));
+        expect(after).toBeGreaterThan(Math.min(before, C.body * 0.9) - 0.01);
+    };
+
+    test('a celebration never leaves the field more crowded than it found it', () => {
+        for (const plan of everyPlan()) roomEnough(plan);
+    });
+
+    test('a mob rings the man rather than piling on him', () => {
+        // Nine men coming from every direction, several of them from nearly the
+        // same bearing, which is the case that put two on the same ring point.
+        for (const plan of everyPlan()) {
+            if (plan.mode !== 'mob') continue;
+            const hero = plan.parts.find((p) => p.lead);
+            const joined = plan.parts.filter((p) => !p.lead
+                && gap(p.to, hero.to) < C.ring + 0.01);
+            for (const man of joined) {
+                expect(gap(man.to, hero.to)).toBeGreaterThan(C.body * 0.5);
+            }
+            expect(closestPair(joined.map((p) => p.to)))
+                .toBeGreaterThan(joined.length > 1 ? C.body - 0.01 : 0);
+        }
+    });
+
+    test('nobody is sent off the paint', () => {
+        for (const plan of everyPlan()) {
+            for (const part of plan.parts) {
+                expect(part.to.x).toBeGreaterThanOrEqual(BOUNDS.minX - 1e-9);
+                expect(part.to.x).toBeLessThanOrEqual(BOUNDS.maxX + 1e-9);
+                expect(Math.abs(part.to.z)).toBeLessThanOrEqual(
+                    Math.max(BOUNDS.halfZ, Math.abs(part.from.z)) + 1e-9
+                );
+            }
+        }
+    });
+
+    /**
+     * AND THE TOUCHLINE IS PART OF THE SEPARATING RATHER THAN SOMETHING DONE
+     * AFTERWARDS.
+     *
+     * Clamping once at the end undid the separation: two men near the same
+     * sideline were both pulled back to the same z, so a pair that had just
+     * been pushed a body apart finished 5cm apart instead. This drives men who
+     * are ALREADY outside the paint, which is the shape that found it.
+     */
+    test('men pulled back onto the field are still pushed apart', () => {
+        const hero = { position: 'db1', x: 18, z: 0 };
+        const crowd = [];
+        for (let i = 0; i < 6; i += 1) {
+            crowd.push({ position: `m${i}`, x: 22 + i * 0.05, z: -(11 + i * 0.4) });
+        }
+        const plan = chooseCelebration({
+            hero, mates: crowd, rivals: [],
+            homeX: -FIELD.endZone + C.endZoneDepth, toward: -1,
+            bounds: BOUNDS,
+            // Every mode, because each one lands these men differently.
+            roll: rolls(31),
+        });
+        const before = closestPair([hero, ...crowd]);
+        const after = closestPair(plan.parts.map((p) => p.to));
+        // They start inside each other AND outside the touchline, which is the
+        // combination that matters: pulling them back onto the paint is what
+        // squeezes them from 0.40m down to 0.05m, and a separation that runs
+        // before the clamp rather than between the clamps never sees it.
+        expect(before).toBeLessThan(C.body);
+        for (const man of crowd) expect(Math.abs(man.z)).toBeGreaterThan(BOUNDS.halfZ);
+        /**
+         * NINE TENTHS OF A BODY, AND NOT A WHOLE ONE, AND THAT IS THE RIGHT BAR
+         * RATHER THAN A CLIMBDOWN.
+         *
+         * This is a relaxation: each pass closes half of every overlap, so it
+         * approaches the request rather than reaching it. `play.separate` is the
+         * same algorithm and its own note records the same result measured
+         * against the live game, 1.4m against a 1.5m request. Six men stacked
+         * five centimetres apart OUTSIDE the touchline is well past anything the
+         * simulation produces, and getting them from 0.05m to within a tenth of
+         * a body is the honest thing to ask of it.
+         *
+         * The bar that matters for real play is the case above, which asks that
+         * a celebration never leaves the field more crowded than it found it,
+         * and is driven by the actual simulation further down.
+         */
+        expect(after).toBeGreaterThan(C.body * 0.9);
+    });
+});
+
+describe('somebody who asked not to be moved about is not moved about', () => {
+    test('a calm celebration travels nowhere and never leaves the ground', () => {
+        for (let seed = 1; seed <= 20; seed += 1) {
+            const plan = planFor({ calm: true, roll: rolls(seed * 13) });
+            expect(plan.mode).toBe('solo');
+            for (const part of plan.parts) {
+                expect(Math.hypot(part.dx, part.dz)).toBe(0);
+                expect(part.travel).toBe(0);
+            }
+            for (let t = 0; t <= plan.length; t += 0.02) {
+                for (const at of celebrationAt(t, plan).values()) {
+                    expect(Math.abs(at.y)).toBe(0);
+                    expect(Math.abs(at.spin)).toBe(0);
+                    expect(Math.abs(at.roll)).toBe(0);
+                }
+            }
+        }
+    });
+
+    test('...but he is still told what happened', () => {
+        const plan = planFor({ calm: true, roll: rolls(5) });
+        const at = celebrationAt(plan.length, plan);
+        // Arms up, held, which is the pose doing the work the motion would
+        // otherwise have done.
+        expect(at.get('db1').arms).toBe('up');
+        expect(at.get('db1').amount).toBeCloseTo(1, 6);
+    });
+});
+
+describe('who celebrates, and what the ball does while they do', () => {
+    test('only the man holding it can hold it up, and only in one dance', () => {
+        /**
+         * THE INVARIANT `carryHold` DEPENDS ON. The ball is pinned to a fixed
+         * point in the rig's own space rather than to the hand, so an arm that
+         * leaves the tuck while still carrying leaves the ball hanging beside a
+         * man who is plainly not holding it. It is the same rule the stiff-arm
+         * follows (`stiffSide` in roster.js).
+         */
+        for (const plan of everyPlan()) {
+            for (let t = 0; t <= plan.length; t += 0.05) {
+                for (const [position, at] of celebrationAt(t, plan)) {
+                    if (!at.raised) continue;
+                    expect(position).toBe(plan.hero);
+                    expect(plan.dance).toBe('bow');
+                    expect(at.arms).toBe('up');
+                }
+            }
+        }
+    });
+
+    test('the ball rises with the arm rather than jumping to the top', () => {
+        const tuck = carryHold('tuck', 1).ball;
+        const top = carryHold('raise', 1, 1).ball;
+        // At no lift at all it is exactly where a tucked ball sits, so the
+        // first frame of a celebration does not move it.
+        expect(carryHold('raise', 1, 0).ball).toMatchObject({ y: tuck.y });
+        expect(top.y).toBeCloseTo(CFG.pose.raise.ball.y, 6);
+        let last = -Infinity;
+        for (let t = 0; t <= 1.0001; t += 0.1) {
+            const y = carryHold('raise', 1, t).ball.y;
+            expect(y).toBeGreaterThanOrEqual(last - 1e-9);
+            last = y;
+        }
+        expect(top.y).toBeGreaterThan(tuck.y);
+    });
+
+    test('the other team watches rather than joining in', () => {
+        const plan = planFor({ roll: rolls(3) });
+        const celebrating = new Set(plan.parts.map((p) => p.position));
+        const watching = new Set(plan.slump.map((s) => s.position));
+        expect(watching.size).toBeGreaterThan(0);
+        for (const position of watching) expect(celebrating.has(position)).toBe(false);
+
+        const at = celebrationAt(plan.length, plan);
+        for (const position of watching) {
+            const man = at.get(position);
+            // Hands to the helmet, head down, and standing exactly where the
+            // whistle left him.
+            expect(man.arms).toBe('slump');
+            expect(man.lean).toBeGreaterThan(0);
+            expect(Math.hypot(man.x, man.z)).toBe(0);
+            // He is given a POINT to look at rather than an angle, because only
+            // the caller knows where a man who has not moved is standing.
+            expect(man.face).toBeNull();
+            expect(man.watch).toBeTruthy();
+        }
+    });
+
+    test('a fifty is never celebrated by running to an end zone he is in', () => {
+        expect(C.scoredWeights.house).toBe(0);
+        for (let seed = 1; seed <= 80; seed += 1) {
+            const plan = planFor({ scored: true, roll: rolls(seed * 101) });
+            expect(plan.mode).not.toBe('house');
+        }
+    });
+});
+
+describe('the modes and dances come up, and only the ones that should', () => {
+    test('a weight of zero never comes up and every other one does', () => {
+        const weights = { a: 3, b: 0, c: 1 };
+        const seen = new Set();
+        for (let i = 0; i <= 200; i += 1) seen.add(weightedPick(weights, i / 200));
+        expect(seen.has('b')).toBe(false);
+        expect(seen.has('a')).toBe(true);
+        expect(seen.has('c')).toBe(true);
+        // Roughly in proportion, which is what makes the run home rare.
+        let as = 0;
+        for (let i = 0; i < 1000; i += 1) if (weightedPick(weights, i / 1000) === 'a') as += 1;
+        expect(as / 1000).toBeCloseTo(0.75, 1);
+        expect(weightedPick({ a: 0 }, 0.5)).toBe('');
+    });
+
+    test('a visitor who keeps intercepting sees more than one of each', () => {
+        const modes = new Set();
+        const dances = new Set();
+        for (const plan of everyPlan()) {
+            modes.add(plan.mode);
+            dances.add(plan.dance);
+        }
+        // The replayability this exists for: every mode and every dance is
+        // reachable, so a second interception is not the first one again.
+        expect([...modes].sort()).toEqual([...MODES].sort());
+        expect([...dances].sort()).toEqual([...DANCES].sort());
+    });
+
+    test('every dance is one poseFigure can actually run', () => {
+        /**
+         * DRIVEN AGAINST A FIGURE OF PLAIN OBJECTS, for the reason
+         * exesnohs-gameplay.test.mjs gives at length: the Three stub is a Proxy
+         * that swallows every assignment, so a pose written onto a stubbed mesh
+         * is invisible and a test built on one cannot tell a pose from a no-op.
+         *
+         * A dance whose `arms` name has no entry in `hands` would silently fall
+         * back to the bow rather than throwing, so the check is that the arms
+         * MOVED and landed somewhere finite.
+         */
+        const arm = (side) => ({
+            userData: {
+                armSide: side,
+                restX: 0.1,
+                restZ: side * 0.15,
+                forearm: { rotation: { x: 0, y: 0, z: 0 } },
+            },
+            rotation: { x: 0, y: 0, z: 0 },
+        });
+        const build = () => ({ userData: { arms: [arm(1), arm(-1)] } });
+
+        const names = new Set(['up', 'wide', 'point', 'low', 'slump']);
+        for (const arms of names) {
+            for (const carry of ['none', 'tuck', 'raise']) {
+                const f = build();
+                const still = build();
+                for (let i = 0; i < 40; i += 1) {
+                    poseFigure(f, 0, 0, { carry, celebrate: { arms, amount: 1 } }, 1 / 60);
+                    poseFigure(still, 0, 0, { carry }, 1 / 60);
+                }
+                const free = f.userData.arms.find((a) => a.userData.armSide !== THROWING_SIDE);
+                const was = still.userData.arms.find((a) => a.userData.armSide !== THROWING_SIDE);
+                for (const a of f.userData.arms) {
+                    expect(Number.isFinite(a.rotation.x)).toBe(true);
+                    expect(Number.isFinite(a.rotation.z)).toBe(true);
+                    expect(Number.isFinite(a.userData.forearm.rotation.x)).toBe(true);
+                }
+                // The free arm celebrated rather than standing there.
+                expect(Math.abs(free.rotation.x - was.rotation.x)
+                    + Math.abs(free.rotation.z - was.rotation.z)).toBeGreaterThan(0.05);
+            }
+        }
+    });
+
+    test('a carrying arm keeps the ball, and a raising one takes it with him', () => {
+        const arm = (side) => ({
+            userData: {
+                armSide: side,
+                restX: 0.1,
+                restZ: side * 0.15,
+                forearm: { rotation: { x: 0, y: 0, z: 0 } },
+            },
+            rotation: { x: 0, y: 0, z: 0 },
+        });
+        const build = () => ({ userData: { arms: [arm(1), arm(-1)] } });
+        const ballArm = (f) => f.userData.arms.find((a) => a.userData.armSide === THROWING_SIDE);
+
+        const tucked = build();
+        const celebrating = build();
+        const raising = build();
+        for (let i = 0; i < 60; i += 1) {
+            poseFigure(tucked, 0, 0, { carry: 'tuck' }, 1 / 60);
+            poseFigure(celebrating, 0, 0,
+                { carry: 'tuck', celebrate: { arms: 'wide', amount: 1 } }, 1 / 60);
+            poseFigure(raising, 0, 0,
+                { carry: 'raise', celebrate: { arms: 'up', amount: 1 } }, 1 / 60);
+        }
+        // A man dancing with the ball clamped has not moved the arm holding it.
+        expect(ballArm(celebrating).rotation.x).toBeCloseTo(ballArm(tucked).rotation.x, 6);
+        expect(ballArm(celebrating).rotation.z).toBeCloseTo(ballArm(tucked).rotation.z, 6);
+        // ...and a man holding it up plainly has.
+        expect(Math.abs(ballArm(raising).rotation.x - ballArm(tucked).rotation.x))
+            .toBeGreaterThan(0.2);
+    });
+});
+
+/**
+ * AND THE SAME QUESTIONS AGAINST THE REAL GAME, because everything above is
+ * driven by invented people standing in invented places.
+ *
+ * This runs the ported simulation until it produces the two endings that have
+ * no tackle in them, and builds the plan main.js would have built. It is the
+ * only case here that can catch a celebration that is correct in the abstract
+ * and impossible on this field.
+ */
+describe('against real interceptions and real fifties', () => {
+    const PLAYS = ['pass1', 'pass2', 'pass3', 'pass4', 'pass5', 'pass6', 'pass7', 'pass8'];
+
+    function harvest(want, limit) {
+        const play = createPlay();
+        const out = [];
+        const roll = rolls(20260914);
+        for (let i = 0; i < 2500 && out.length < limit; i += 1) {
+            lineUp(play, PLAYS[i % PLAYS.length], '');
+            snap(play);
+            let thrown = false;
+            const wait = 20 + Math.floor(roll() * 60);
+            for (let f = 0; f < 1200 && !isDone(play); f += 1) {
+                if (!thrown && f >= wait) {
+                    const able = eligibleReceivers(play);
+                    if (able.length) {
+                        throwTo(play, able[Math.floor(roll() * able.length)]);
+                        thrown = true;
+                    }
+                }
+                tick(play);
+            }
+            const result = outcome(play);
+            const scored = result.points === 50;
+            const picked = result.result === 'interception';
+            if (want === 'fifty' ? !scored : !picked) continue;
+            const carrier = ballCarrier(play);
+            if (!carrier) continue;
+
+            const at = (o) => {
+                const w = simToWorld(o.coords.x, o.coords.y, 0);
+                return { position: o.settings.position, x: w.x, z: w.z };
+            };
+            const on = play.game.objects.filter((o) => !o.settings.benched
+                && o.settings.position !== 'ball');
+            const side = carrier.settings.team;
+            const qb = play.game.objects.find(
+                (o) => o.settings.position === 'qb' && !o.settings.benched
+            );
+            const hero = at(carrier);
+            const plan = chooseCelebration({
+                hero,
+                mates: on.filter((o) => o !== carrier && o.settings.team === side).map(at),
+                rivals: on.filter((o) => o.settings.team !== side).map(at),
+                homeX: side === 0
+                    ? FIELD_LEN + FIELD.endZone - C.endZoneDepth
+                    : -FIELD.endZone + C.endZoneDepth,
+                toward: side === 0 ? 1 : -1,
+                blameAt: picked && qb ? at(qb) : null,
+                crowdAt: { x: -FIELD.endZone - 8, z: hero.z },
+                bounds: BOUNDS,
+                scored,
+                roll,
+            });
+            if (plan) out.push({ plan, side });
+        }
+        return out;
+    }
+
+    const picks = harvest('pick', 40);
+    const fifties = harvest('fifty', 40);
+
+    test('the simulation still produces both endings to celebrate', () => {
+        // If this ever goes empty the two cases below are passing vacuously,
+        // which is how a suite ends up guarding nothing at all.
+        expect(picks.length).toBeGreaterThan(20);
+        expect(fifties.length).toBeGreaterThan(20);
+    });
+
+    test('a real celebration fits the budget and leaves everybody on the grass', () => {
+        for (const { plan } of [...picks, ...fifties]) {
+            expect(plan.length).toBeLessThanOrEqual(C.cap + 1e-9);
+            for (const at of celebrationAt(plan.length, plan).values()) {
+                expect(Math.abs(at.y)).toBeLessThan(1e-6);
+                expect(at.running).toBe(false);
+            }
+            const before = closestPair(plan.parts.map((p) => p.from));
+            const after = closestPair(plan.parts.map((p) => p.to));
+            // Same bar as the invented people above, and the same reasoning.
+            expect(after).toBeGreaterThan(Math.min(before, C.body * 0.9) - 0.01);
+        }
+    });
+
+    /**
+     * A RUN HOME RUNS TOWARD THE CAMERA, WHICH IS THE WHOLE REASON THE MODE IS
+     * AFFORDABLE.
+     *
+     * The play camera stands beyond the near end line at negative x, so a
+     * defense breaking for its own end zone grows in the frame the whole way.
+     * Reversed, the mode costs the same four seconds and spends them on eleven
+     * men shrinking into the distance.
+     */
+    test('a defense running home runs at the near end line, never away from it', () => {
+        const homes = picks.filter(({ plan }) => plan.mode === 'house');
+        for (const { plan } of homes) {
+            for (const part of plan.parts) {
+                expect(part.to.x).toBeLessThanOrEqual(part.from.x + 1e-9);
+                expect(part.to.x).toBeGreaterThanOrEqual(-FIELD.endZone);
+            }
+        }
+    });
+
+    test('an interception is addressed to the man who threw it', () => {
+        for (const { plan } of picks) {
+            if (plan.mode === 'house') continue;   // that one faces the crowd
+            const hero = plan.parts.find((p) => p.lead);
+            // He ends up looking back upfield at the quarterback rather than
+            // downfield at nobody.
+            expect(hero.faceAt.x).toBeLessThan(hero.to.x);
+        }
+    });
+});

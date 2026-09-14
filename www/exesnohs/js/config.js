@@ -1968,6 +1968,230 @@ const EXESNOHS_CONFIG = {
         },
 
         /**
+         * THE CELEBRATION, WHICH IS THE OTHER THING THAT HAPPENS AFTER A
+         * WHISTLE AND HAS NOTHING TO DO WITH A TACKLE.
+         *
+         * Two endings in this game have no tackle in them at all. An
+         * interception stops the play on the frame the ball is caught, and a
+         * fifty stops it with the carrier over the line and nobody near him.
+         * Both used to end the same way: everybody stopped, the field went
+         * still, and a card opened. The best thing and the worst thing that can
+         * happen in a game of X's and O's were the two endings with no reaction
+         * to them.
+         *
+         * MEASURED BEFORE ANY OF THESE NUMBERS WERE CHOSEN, over 4,000 headless
+         * pass plays:
+         *
+         *   interception            3.6% of pass plays, median 16.3m downfield
+         *   fifty                   6.7%
+         *   run home from a pick    median 19.8m, which is 2.8s at a sprint
+         *   mates within 8m of him  median 4, and at least one on 99% of picks
+         *
+         * Those four readings are why all three of QA's suggested modes are
+         * built rather than one: the run home is short enough to watch, and
+         * there is always somebody close enough to mob him.
+         *
+         * AND THE RUN HOME IS TOWARD THE CAMERA. The play camera sits behind
+         * the defense's own end zone (see `camera.solve.nearBehind`), so a
+         * defense breaking for the house runs at the viewer and grows in the
+         * frame the whole way. That is the one mode that needs no camera move
+         * to read, which is why it is worth its extra second.
+         */
+        celebration: {
+            /** The whistle, and then the reaction. Nobody moves for this long,
+             *  because a man who sets off on the frame he catches it has not
+             *  realised anything yet. */
+            beat: 0.22,
+            /** How fast a celebrating player travels, metres a second. Faster
+             *  than a route: he is not being covered any more. */
+            sprint: 7.6,
+            /** The shortest and longest any single run may take, seconds. The
+             *  floor stops a two-metre jog reading as a teleport and the
+             *  ceiling is what keeps `cap` reachable from a pick taken deep. */
+            travel: { min: 0.30, max: 2.9 },
+            /** Seconds of dancing once he has arrived, and then of standing
+             *  there before the card opens over it. */
+            dance: 1.55,
+            settle: 0.32,
+            /**
+             * ...AND THE SHORTEST THE DANCE MAY BE SQUEEZED TO.
+             *
+             * The dance is what gives when the whole thing will not fit inside
+             * `cap` (see `celebration.fit`), because a shortened dance simply
+             * ends sooner while a shortened RUN strands eleven men in the middle
+             * of the field having set off somewhere and not arrived. This is the
+             * floor: long enough to get the arms up and land one hop.
+             */
+            danceFloor: 0.78,
+            /**
+             * AND NOTHING MAY HOLD THE SCREEN LONGER THAN THIS, whatever the
+             * arithmetic above adds up to.
+             *
+             * A celebration is the other team enjoying itself at the visitor's
+             * expense, and it sits between the whistle and being told what
+             * happened. Four seconds is the agreed budget for the biggest one
+             * (the full run home), and every celebration is skippable besides.
+             */
+            cap: 4.0,
+            /** Seconds between one team-mate setting off and the next. A whole
+             *  defense leaving on the same frame is a formation, not a
+             *  reaction. */
+            stagger: 0.085,
+            /** ...and the most the stagger may cost in total. Eleven men at 85
+             *  milliseconds each would spend most of a second just setting off,
+             *  and that second comes straight out of the dance. */
+            staggerMax: 0.40,
+            /**
+             * HOW CLOSE A MATE STOPS TO THE MAN HE IS MOBBING, in metres.
+             *
+             * NOTHING SEPARATES BODIES AFTER THE WHISTLE. `play.separate` runs
+             * from `tick` and `tick` returns immediately once the play is dead,
+             * so four men converging on one point would simply stand inside
+             * each other. They stop on a ring instead, and the radius is a body
+             * width (`separation`) with a little air on top.
+             */
+            ring: 1.95,
+            /** ...and how much room each of them takes up on that ring. One
+             *  body width, which is `separation`, because that is already the
+             *  distance at which this game says two figures are touching. */
+            body: 1.45,
+            /**
+             * HOW MANY TIMES THE DESTINATIONS ARE PUSHED APART.
+             *
+             * `celebration.relax` is a relaxation, so it converges rather than
+             * solving: each pass closes half of every overlap it finds, and the
+             * touchline is re-applied between passes because clamping men back
+             * onto the paint is what creates most of the overlaps in the first
+             * place. Measured over real plays it settles in three or four, and
+             * the extra are for the crowded cases: a pile near a sideline needs
+             * them, and the cost is a handful of comparisons once per
+             * celebration rather than once per frame.
+             */
+            relaxPasses: 14,
+            /** Nobody further away than this joins in, metres... */
+            joinWithin: 9.5,
+            /** ...and at most this many do, so the field does not empty into
+             *  one pile. */
+            joinMost: 4,
+            /**
+             * HOW FAR A RUN HOME ACTUALLY RUNS, in metres, and it is NOT always
+             * the whole way.
+             *
+             * Measured, a pick is taken a median 19.8m from the defense's own
+             * end zone, which is 2.6 seconds of sprinting. Spend all of that and
+             * `cap` leaves three quarters of a second to celebrate in, so the
+             * mode built to be the biggest one arrives as the emptiest: all
+             * journey and no arrival.
+             *
+             * Thirteen metres is the trade. It is a second and three quarters of
+             * eleven men accelerating straight at the camera, which is the whole
+             * picture the mode is for, and it leaves the dance its full length.
+             * A pick taken nearer home still finishes in the paint, because the
+             * end zone is the floor rather than the target.
+             */
+            houseRun: 13,
+            /** How far a mate closes toward the hero's own line on the way, 0 to
+             *  1. Their spacing is already right, so most of it is kept: closing
+             *  a little reads as a team running together, closing all the way
+             *  reads as a queue. */
+            houseConverge: 0.42,
+            /** How far short of the back of the end zone a run home stops, so
+             *  nobody finishes on the paint at the very edge of the frame. */
+            endZoneDepth: 1.7,
+            /**
+             * HOW OFTEN EACH MODE COMES UP. Relative weights, not percentages.
+             *
+             * The mob is the most common because it is the one that reads best
+             * at the size a player is drawn: four men converging is a change in
+             * the SHAPE of the group, and a shape survives being 34 pixels tall
+             * in a way that a single man's arms do not. The run home is rarest
+             * because it is the longest, so meeting it stays a surprise.
+             */
+            weights: { solo: 3, mob: 5, house: 2 },
+            /** A fifty has no run home in it: the man who scored is already
+             *  standing in the end zone. */
+            scoredWeights: { solo: 4, mob: 6, house: 0 },
+            /** A hop, which is the one thing this rig can do with its legs.
+             *  They are bare meshes with no pivot (see roster.js), so a bounce
+             *  of the whole figure is the entire footwork vocabulary. */
+            hop: { height: 0.33, hz: 2.4 },
+            /** A full turn, or two of them, over the dance. */
+            spin: { turns: 2 },
+            /** Radians of roll either side of upright, and how quickly. */
+            shimmy: { roll: 0.26, hz: 3.2 },
+            /** Radians of forward pitch on a man with his hands on his helmet.
+             *  Small: at this figure scale a tenth already carries the helmet a
+             *  third of a metre. */
+            slumpLean: 0.16,
+            /** Seconds for any pose here to blend in, and for the dance to ramp
+             *  up once a man has arrived. */
+            blend: 0.16,
+            /**
+             * WHERE THE HANDS GO, and every one of them is solved and checked
+             * the same way every other pose in this file is.
+             *
+             * `up` is both arms overhead in a V, `wide` is both arms straight
+             * out to the sides, `point` is one arm out and up at whoever is
+             * being pointed at with `off` on the other side, `low` is both arms
+             * out and down for the shimmy, and `slump` is a hand on each side
+             * of the helmet, which is what the offense does while it watches.
+             *
+             * EVERY ONE IS SOLVED TO WITHIN A MILLIMETRE, AND TWO OF THEM WERE
+             * NOT UNTIL THEY WERE MEASURED.
+             *
+             * "Inside the arm's reach" is the wrong test, and writing these
+             * against it put `wide` 167mm and `off` 139mm away from where they
+             * asked to be. The arm is 0.569m long, but `solveArm` clamps `armZ`
+             * at a right angle, and at a right angle the hand's SIDEWAYS offset
+             * is the upper-arm term alone rather than the whole limb. A bent
+             * elbow shrinks that term fast: `off` was written as a hand 0.23m
+             * from the shoulder, which is a heavily folded arm, and a folded
+             * arm can barely reach sideways at all.
+             *
+             * So a sideways pose has to be a STRAIGHT arm. Searched rather than
+             * reasoned about: at shoulder height the hand can get to x 0.78,
+             * falling away to 0.53 by the time it is up at 1.72 and running out
+             * entirely above 1.80. `wide` and `off` sit inside that envelope
+             * now, and every pose here solves exactly.
+             *
+             * And every x is OUTSIDE its own shoulder, so no pose carries an
+             * elbow across the chest (which is its own old lesson, in
+             * `throwHold` above).
+             */
+            hands: {
+                up: { x: 0.34, y: 1.75, z: 0.04 },
+                wide: { x: 0.750, y: 1.15, z: 0.100 },
+                point: { x: 0.44, y: 1.48, z: 0.40 },
+                off: { x: 0.30, y: 0.90, z: -0.06 },
+                low: { x: 0.60, y: 1.00, z: 0.24 },
+                slump: { x: 0.26, y: 1.70, z: -0.06 },
+            },
+        },
+
+        /**
+         * HOLDING IT UP, WHICH IS A FOURTH CARRY AND HAD TO BE ONE.
+         *
+         * `carryHold` pins the ball to a fixed point in the rig's own space
+         * rather than to whatever the hand is doing, which is the note in
+         * roster.js about why a stiff-arm may never go out on the ball arm. A
+         * celebration raises the ball arm over the head, so without a hold of
+         * its own the ball would stay tucked at the ribs of a man reaching for
+         * the sky, and the one prop in the scene would be doing the opposite of
+         * what the figure holding it was doing.
+         *
+         * Written the same way `tuck` and `throwHold` are, so `carryHold` gains
+         * a case rather than a special path, and the ball and the arm read the
+         * same picture.
+         */
+        raise: {
+            hand: { x: 0.30, y: 1.78, z: 0.06 },
+            ball: { x: 0.30, y: 1.86, z: 0.07 },
+            /** Held up on its point, which is how a ball gets shown to a
+             *  crowd. */
+            aim: { x: 0, y: 1, z: 0.12 },
+        },
+
+        /**
          * HOW FAR OFF HIS RUNNING LINE ANY FIGURE WILL TURN TO ATTEND TO
          * SOMEBODY, in radians, and it only applies WHILE HE IS RUNNING.
          *

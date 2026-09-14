@@ -435,6 +435,33 @@ export function showSkipReplay() {
 }
 
 /**
+ * ...AND ONE WAY OUT OF THE CELEBRATION, FOR THE SAME REASON.
+ *
+ * An interception or a fifty holds the field for up to four seconds while the
+ * team it went well for enjoys itself (see celebration.js). That is the point
+ * of it, and it is also the one thing in this game that happens between the
+ * whistle and the visitor being told what the whistle was FOR. A visitor who
+ * has just given the ball away and wants to know what it cost should not have
+ * to watch the party out.
+ *
+ * DELIBERATELY THE SAME SHAPE AS THE REPLAY SKIP, down to taking focus so
+ * Enter presses it: they are the same promise made twice, and a visitor who
+ * has learned one has learned the other. It needs no key of its own for that
+ * reason, and because it is the only control on screen while it is there.
+ */
+export function showSkipCelebration() {
+    const box = actions();
+    if (!box) return;
+
+    const skip = button('Skip', 'hud-btn',
+        () => handlers.onSkipCelebration && handlers.onSkipCelebration(),
+        'Skip the celebration and see the result');
+    skip.id = 'skip-celebration-btn';
+    box.appendChild(skip);
+    skip.focus();
+}
+
+/**
  * THERE IS NO LONGER A LINE UNDER THESE EXPLAINING THEM, and it is worth saying
  * why rather than leaving the gap.
  *
