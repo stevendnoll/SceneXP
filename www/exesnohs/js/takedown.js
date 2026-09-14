@@ -150,6 +150,30 @@ export function takedownAt(t, from, to) {
 }
 
 /**
+ * WHERE THE TWO OF THEM END UP, IN WORLD METRES, AND HOW LONG IT TAKES.
+ *
+ * Asked by a sack's celebration, which starts where this finishes: the sacker
+ * gets up from the spot he landed on, and his team-mates must not be sent to
+ * stand on the quarterback lying behind him. Solved from `takedownAt` at its
+ * own end rather than re-derived, so the two can never disagree about where a
+ * man is lying.
+ *
+ *   tackler   { x, z } where his feet are once he has landed
+ *   carrier   { x, z } where the carrier's feet are, driven back
+ *   length    seconds, the same number `takedownLength` gives for this gap
+ */
+export function takedownRest(from, to) {
+    const gap = Math.hypot(to.x - from.x, to.z - from.z);
+    const length = takedownLength(gap);
+    const end = takedownAt(length, from, to);
+    return {
+        tackler: { x: from.x + end.tackler.x, z: from.z + end.tackler.z },
+        carrier: { x: to.x + end.carrier.x, z: to.z + end.carrier.z },
+        length,
+    };
+}
+
+/**
  * Who is making this tackle.
  *
  * The nearest opponent, and nothing cleverer: at the whistle he is the man the

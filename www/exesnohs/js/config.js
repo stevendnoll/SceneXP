@@ -2112,6 +2112,61 @@ const EXESNOHS_CONFIG = {
             /** A fifty has no run home in it: the man who scored is already
              *  standing in the end zone. */
             scoredWeights: { solo: 4, mob: 6, house: 0 },
+            /**
+             * A SACK, WHICH THE DEFENSE CELEBRATES AFTER THE TACKLE.
+             *
+             * MEASURED FIRST, over 2,400 headless pass plays at six different
+             * holds before the throw:
+             *
+             *   held 2s          sacked on 2% of plays
+             *   held 3s          11%
+             *   held 4s          23%
+             *   held 6s          42%
+             *   never thrown     61% sacked, the other 39% run out the clock
+             *   the takedown     median 0.89s, never over 0.92s
+             *   mates within joinWithin of the sacker   median 1, none on 32%
+             *
+             * So it happens several times as often as an interception, which
+             * is the case for a shorter budget, and a third of the time there
+             * is nobody close enough to mob him, which is why `solo` carries
+             * more weight here than it does on a pick. A mob with nobody in
+             * range is a solo anyway.
+             *
+             * `cap` INCLUDES THE TACKLE. Three seconds from the whistle to the
+             * card, of which the takedown spends about 0.9, against four
+             * seconds for a pick that has no tackle in it.
+             */
+            sack: {
+                cap: 3.0,
+                /** Seconds for the sacker to get back up off the quarterback.
+                 *  It is the reverse of the dive's own pitch, spent as the
+                 *  celebration's first beat. */
+                rise: 0.45,
+                weights: { solo: 5, mob: 5, house: 0 },
+                /**
+                 * THE QUARTERBACK ON THE GRASS, as points nobody may stand
+                 * on, metres from his feet back toward his own end zone. He
+                 * is looking downfield when he is hit, and the takedown puts
+                 * him on his back, so he lies behind where he stood. A figure
+                 * is 3.3m to the top of the helmet.
+                 */
+                floor: [0, 1.1, 2.2, 3.3],
+            },
+            /**
+             * THE PLAY CLOCK RUNNING OUT, WHICH IS THE SMALL ONE BY CHOICE.
+             *
+             * Nobody on the defense made a play, the visitor simply waited, so
+             * the whole defense puts its arms up where it stands and that is
+             * all: no lead, no travel, no dance. A full party here would read
+             * as the game gloating over its own rule.
+             */
+            expired: {
+                cap: 1.8,
+                /** ...and it ripples out faster, because there is less time. */
+                staggerMax: 0.30,
+                /** Long enough for arms up and two small hops. */
+                danceFloor: 0.70,
+            },
             /** A hop, which is the one thing this rig can do with its legs.
              *  They are bare meshes with no pivot (see roster.js), so a bounce
              *  of the whole figure is the entire footwork vocabulary. */

@@ -739,6 +739,28 @@ export function celebrationClock() {
 }
 
 /**
+ * A TACKLER'S PITCH AND ARMS, WHICH A SACK'S CELEBRATION TAKES BACK OFF HIM.
+ *
+ * `lean` is the takedown's, and it holds him face down for as long as anybody
+ * asks. `cheer` is his part in the party, or null. Its `stand` runs 0 to 1 as
+ * he gets up, and both the pitch and the dive's arms unwind by it. Once he is
+ * up, a pointing sacker's jab is his like anybody else's.
+ *
+ * A PURE FUNCTION rather than three lines in `syncFigures`, because the Three
+ * stub swallows every assignment written onto a figure and a test could never
+ * see him get up.
+ */
+export function sackerRise(lean, cheer) {
+    const stand = cheer && typeof cheer.stand === 'number'
+        ? Math.min(1, Math.max(0, cheer.stand)) : 0;
+    return {
+        stand,
+        pitch: lean * (1 - stand) + (stand > 0 ? (cheer.lean || 0) : 0),
+        tackle: 1 - stand,
+    };
+}
+
+/**
  * HOW FAR THIS MAN HAS THE BALL OVER HIS HEAD, 0 to 1.
  *
  * AN AMOUNT RATHER THAN A FLAG, and that is the whole of why the ball does not
@@ -1306,6 +1328,18 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         const isTackler = !!hit && obj.settings.position === takedown.tackler;
         const isFloored = !!hit && obj.settings.position === takedown.carrier;
         const role = isTackler ? hit.tackler : (isFloored ? hit.carrier : null);
+        /**
+         * ...UNTIL A SACKER GETS BACK UP.
+         *
+         * The takedown's clock runs on after it finishes and holds him face
+         * down on the quarterback for as long as anybody asks, which is right
+         * for every tackle but one: after a sack his team celebrates, and he is
+         * the one being celebrated. `stand` is the celebration saying how far
+         * up he has got, and it unwinds the dive's pitch and the dive's arms
+         * together. Nobody else has both a tackle and a party.
+         */
+        const rise = isTackler ? sackerRise(role.lean, cheer) : null;
+        const risen = rise ? rise.stand : 0;
 
         // GOING UP FOR IT, which is the one other thing that lifts a figure off
         // the grass. Offensive receivers only: a whole secondary leaving its
@@ -1582,7 +1616,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             throwT: throwProgress(obj),
             snapT: snapped,
             block: engagement ? engagement.amount : 0,
-            tackle: isTackler ? 1 : lunge,
+            tackle: rise ? rise.tackle : lunge,
             reach,
             reachAt,
             posting,
@@ -1628,7 +1662,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // second time turns a hit into a lean, which is exactly what the last
         // version looked like. A defender merely closing still eases.
         if (role) {
-            figure.rotation.x = role.lean;
+            figure.rotation.x = rise ? rise.pitch : role.lean;
         } else {
             // AND A QUARTERBACK UNDER CENTRE IS BENT OVER THE BALL. The rig
             // has no waist, so this is the whole figure tipping about its own

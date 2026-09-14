@@ -37,6 +37,11 @@
  * an OFFSET from where he was standing at the whistle, so a caller holding a
  * REPLAY frame rebuilt from six floats gets the same answer as the live play.
  * view.js does nothing but apply it.
+ *
+ * AND THE DEFENSE'S TWO, added after. A SACK is a tackle, so it keeps its
+ * takedown and the party waits for it: the sacker gets up off the quarterback
+ * and the plan runs from there. A PLAY CLOCK RUNNING OUT is the small one, arms
+ * up where they stand, because nobody made a play (see `clockRanOut`).
  */
 import { EXESNOHS_CONFIG as CFG } from './config.min.js';
 
@@ -47,10 +52,47 @@ const smooth = (t) => {
 };
 const clamp = (v, lo, hi) => (v < lo ? lo : (v > hi ? hi : v));
 
-/** The three modes, in the order they were asked for. */
-export const MODES = ['solo', 'mob', 'house'];
+/** The three modes, in the order they were asked for, and `team`, which is the
+ *  whole defense cheering where it stands for a play clock that ran out. */
+export const MODES = ['solo', 'mob', 'house', 'team'];
+
+/**
+ * WHAT IS BEING CELEBRATED, and the two the defense gets for stopping a play
+ * rather than taking the ball.
+ *
+ *   pick     an interception, the defense, with the ball
+ *   fifty    a score, the offense, with the ball
+ *   sack     the quarterback brought down. THE TACKLE PLAYS FIRST, the sacker
+ *            gets back up, and nobody on the defense has the ball
+ *   expired  the play clock ran out. Nobody made a play, the visitor simply
+ *            waited, so this is the SMALL one: arms up where they stand, no
+ *            lead, no travel, and over quickly
+ */
+export const OCCASIONS = ['pick', 'fifty', 'sack', 'expired'];
 /** ...and the four dances the man with the ball may pull out. */
 export const DANCES = ['bow', 'spin', 'point', 'shimmy'];
+
+/**
+ * WHICH OF THE FOUR THIS WHISTLE IS, OR '' FOR NONE.
+ *
+ * `classifyPlay` calls a play where nobody threw it and nobody ran with it a
+ * sack, and that one verdict covers two very different pictures: a quarterback
+ * driven into the turf, and a quarterback standing untouched while the clock
+ * reached zero. `endSounds` already had to tell them apart for the grunt, and
+ * this is the same split for the party.
+ *
+ * A TACKLE WINS IF BOTH ARE TRUE, because on the rare frame where the clock
+ * runs out as he is hit, the hit is the thing on screen. And a "sack" that is
+ * neither is the render loop's own backstop ending a play, which nobody earned.
+ */
+export function occasionFor(result, hadTackle = false, expired = false) {
+    if (!result) return '';
+    if (result.result === 'interception') return 'pick';
+    if (result.points === 50) return 'fifty';
+    if (result.result !== 'sack') return '';
+    if (hadTackle) return 'sack';
+    return expired ? 'expired' : '';
+}
 
 /**
  * PICK ONE, BY WEIGHT, FROM A PLAIN OBJECT OF THEM.
@@ -88,6 +130,9 @@ export function weightedPick(weights, roll) {
  *   blameAt   who the hero addresses: the quarterback on a pick, or null
  *   bounds    { minX, maxX, halfZ } nobody may be sent outside
  *   scored    true for a fifty, which has no run home in it
+ *   occasion  one of OCCASIONS; left out, it is a fifty or a pick by `scored`
+ *   wait      seconds of something else first, which is the sack's tackle
+ *   floor     { x, z } points nobody may be sent onto: a man lying on the grass
  *   calm      the visitor asked not to be moved about
  *   roll      () => 0..1, injected so a test can pin every choice
  *
@@ -97,11 +142,29 @@ export function weightedPick(weights, roll) {
 export function chooseCelebration({
     hero, mates = [], rivals = [], homeX = 0, toward = -1,
     blameAt = null, crowdAt = null,
-    bounds = null, scored = false, calm = false, roll = Math.random,
+    bounds = null, scored = false, occasion = '', wait = 0, floor = [],
+    calm = false, roll = Math.random,
 } = {}) {
     if (!hero || !hero.position) return null;
     const C = CFG.pose.celebration;
     const lim = bounds || { minX: -Infinity, maxX: Infinity, halfZ: Infinity };
+    const what = occasion || (scored ? 'fifty' : 'pick');
+    if (what === 'expired') return clockRanOut({ hero, mates, rivals, calm, C });
+
+    /**
+     * A SACK IS A PICK WITHOUT THE BALL, AFTER A TACKLE.
+     *
+     * Three things change and nothing else does. The party waits for the
+     * takedown to finish, because the man being celebrated is the one lying
+     * on top of the quarterback. Its first beat is him getting back up rather
+     * than a pause, which is what `rise` below hands to the view. And it gets
+     * a shorter budget, because it happens far more often: measured headlessly,
+     * a quarterback who holds the ball four seconds is sacked on 23% of pass
+     * plays, against 3.6% for an interception.
+     */
+    const sacked = what === 'sack';
+    const budget = sacked ? C.sack : null;
+    const delayBy = Math.max(0, wait);
 
     /**
      * REDUCED MOTION IS NOT A SHORTER PARTY, IT IS A STILL ONE.
@@ -113,8 +176,9 @@ export function chooseCelebration({
      * held, and the card. The pose still says what happened, which is the part
      * that was missing before any of this existed.
      */
-    const mode = calm ? 'solo'
-        : weightedPick(scored ? C.scoredWeights : C.weights, roll());
+    const weights = sacked ? budget.weights
+        : (what === 'fifty' ? C.scoredWeights : C.weights);
+    const mode = calm ? 'solo' : weightedPick(weights, roll());
     const dance = calm ? 'bow' : DANCES[Math.floor(clamp(roll(), 0, 0.999999) * DANCES.length)];
     if (!mode) return null;
 
@@ -243,7 +307,17 @@ export function chooseCelebration({
      * else came to him, and letting him be shoved off his own mark would move
      * the one figure the shot is composed around.
      */
-    relax(seats, lim, C);
+    /**
+     * AND NOBODY IS SENT TO STAND ON THE QUARTERBACK.
+     *
+     * After a sack he is lying on his back along the grass, a body length of
+     * him, and he is not one of the seats: he is the other team and he is not
+     * going anywhere. So his body goes into the relaxation as a row of PINNED
+     * points, exactly the way the man being celebrated is pinned, and anybody
+     * whose ring spot lands on him is pushed off it.
+     */
+    const fixed = floor.map((f) => ({ to: { x: f.x, z: f.z }, lead: true, fixed: true }));
+    relax([...seats, ...fixed], lim, C);
     const parts = seats.map((s) => part({ ...s, C }));
 
     /**
@@ -265,7 +339,75 @@ export function chooseCelebration({
             delay: Math.min(i * C.stagger, C.staggerMax),
         }));
 
-    return fit({ mode, dance, hero: hero.position, parts, slump, calm }, C);
+    return fit({
+        mode,
+        dance,
+        occasion: what,
+        hero: hero.position,
+        // ONLY A PICK AND A FIFTY HAVE THE BALL IN THE HERO'S HANDS. After a
+        // sack the quarterback is still holding it, and a sacker in the bow
+        // would otherwise be drawn lifting a ball he does not have.
+        carrying: !sacked,
+        wait: delayBy,
+        // THE SACKER'S FIRST BEAT IS GETTING UP. See `celebrationAt`.
+        rise: sacked,
+        parts,
+        slump,
+        calm,
+    }, C, sacked
+        ? { beat: budget.rise, cap: budget.cap - delayBy }
+        : { beat: C.beat, cap: C.cap });
+}
+
+/**
+ * THE PLAY CLOCK RAN OUT, WHICH IS THE SMALL ONE.
+ *
+ * Nobody on the defense did anything to earn it, and the visitor's only part in
+ * it was waiting, so a full party with a man dancing at them would be the game
+ * gloating over a rule. It is kept to the one thing that says who won the down:
+ * every defender puts his arms up where he stands, rippling outward from the
+ * man nearest the quarterback, and the offense sags. No lead, no travel, no
+ * dance, and a budget under half of an interception's.
+ *
+ * `hero` is still named, because the ripple starts at him and main.js says who
+ * is celebrating, but he does exactly what everybody else on his side does.
+ */
+function clockRanOut({ hero, mates, rivals, calm, C }) {
+    const E = C.expired;
+    const team = [hero, ...mates]
+        .map((m) => ({ ...m, gap: Math.hypot(m.x - hero.x, m.z - hero.z) }))
+        .sort((a, b) => a.gap - b.gap);
+    const parts = team.map((m, i) => part({
+        who: m,
+        to: { x: m.x, z: m.z },
+        delay: Math.min(i * C.stagger, E.staggerMax),
+        dance: 'bow',
+        // Nobody turns, because there is nothing to turn toward.
+        faceAt: null,
+        lead: m.position === hero.position,
+        C,
+    }));
+    const slump = rivals
+        .map((r) => ({ ...r, gap: Math.hypot(r.x - hero.x, r.z - hero.z) }))
+        .sort((a, b) => a.gap - b.gap)
+        .map((r, i) => ({
+            position: r.position,
+            // ...and nobody on the offense turns to watch anybody either.
+            faceAt: null,
+            delay: Math.min(i * C.stagger, E.staggerMax),
+        }));
+    return fit({
+        mode: 'team',
+        dance: 'bow',
+        occasion: 'expired',
+        hero: hero.position,
+        carrying: false,
+        wait: 0,
+        rise: false,
+        parts,
+        slump,
+        calm,
+    }, C, { beat: C.beat, cap: E.cap, danceFloor: E.danceFloor });
 }
 
 /**
@@ -332,6 +474,12 @@ function relax(seats, lim, C) {
     const body = C.body;
     const fence = () => {
         for (const s of seats) {
+            // A man lying on the grass is wherever the tackle put him, and the
+            // man being celebrated is wherever he already is: a run home clamps
+            // his destination itself, and nothing else sends him anywhere. A
+            // sacker's dive can land him past the margin, and clamping him
+            // back slid him seven centimetres across the grass after he got up.
+            if (s.fixed || s.lead) continue;
             s.to = {
                 x: clamp(s.to.x, lim.minX, lim.maxX),
                 z: clamp(s.to.z, -lim.halfZ, lim.halfZ),
@@ -359,6 +507,10 @@ function relax(seats, lim, C) {
             for (let j = i + 1; j < seats.length; j += 1) {
                 const a = seats[i];
                 const b = seats[j];
+                // TWO PINNED POINTS CANNOT PUSH EACH OTHER, and counting them as
+                // a shove would keep every pass running: the sacker stands at
+                // the quarterback's feet, inside a body width of him, forever.
+                if (a.lead && b.lead) continue;
                 let dx = b.to.x - a.to.x;
                 let dz = b.to.z - a.to.z;
                 let d = Math.hypot(dx, dz);
@@ -437,20 +589,21 @@ function part({ who, to, delay, dance, faceAt, lead, C }) {
  * in the order and the spacing they were going to. Nobody is ever stopped
  * short.
  */
-function fit(plan, C) {
-    const beat = C.beat;
+function fit(plan, C, { beat = C.beat, cap = C.cap, danceFloor = C.danceFloor } = {}) {
     const arrive = plan.parts.reduce((m, p) => Math.max(m, p.delay + p.travel), 0);
-    let danceFor = plan.calm ? Math.max(C.danceFloor, C.dance * 0.6) : C.dance;
+    let danceFor = plan.calm ? Math.max(danceFloor, C.dance * 0.6) : C.dance;
     const settle = C.settle;
 
-    let over = (beat + arrive + danceFor + settle) - C.cap;
+    // `cap` here is what is left AFTER the wait, which the caller has already
+    // taken off: a sack's tackle is spent before any of this starts.
+    let over = (beat + arrive + danceFor + settle) - cap;
     if (over > 0) {
-        const give = Math.max(0, Math.min(over, danceFor - C.danceFloor));
+        const give = Math.max(0, Math.min(over, danceFor - danceFloor));
         danceFor -= give;
         over -= give;
     }
     if (over > 0 && arrive > 0) {
-        const room = Math.max(0.1, C.cap - beat - danceFor - settle);
+        const room = Math.max(0.1, cap - beat - danceFor - settle);
         const scale = room / arrive;
         for (const p of plan.parts) {
             p.delay *= scale;
@@ -475,7 +628,9 @@ function fit(plan, C) {
         beat,
         danceFor,
         settle,
-        length: beat + last + danceFor + settle,
+        // THE WAIT IS PART OF THE LENGTH, because the length is what main.js
+        // holds the frame for, and a sack's tackle is inside that hold.
+        length: (plan.wait || 0) + beat + last + danceFor + settle,
     };
 }
 
@@ -502,12 +657,26 @@ export function celebrationLength(plan) {
  *   arms      which hand pose, or '' for none
  *   amount    0 to 1, how far into that pose he is
  *   raised    true when he is holding the ball over his head
+ *   stand     the sacker only, 0 to 1: how far back up off the grass he is
  */
 export function celebrationAt(t, plan) {
     const out = new Map();
     if (!plan) return out;
     const C = CFG.pose.celebration;
-    const now = Math.max(0, t);
+    /**
+     * NOTHING AT ALL UNTIL THE WAIT IS OVER, and nothing means an EMPTY map
+     * rather than a map of zeroes.
+     *
+     * The view treats any entry as "this man is celebrating", and that clears
+     * his block, his reach and his lunge and hands his facing to the plan. A
+     * sacker given a row of zeroes during his own dive would be turned away
+     * from the man he is tackling while he is in the air.
+     */
+    const now = Math.max(0, t) - (plan.wait || 0);
+    if (now < 0) return out;
+    // Everything below is measured from the end of the wait, including how
+    // much of the plan is left, which the head shake fills.
+    const span = plan.length - (plan.wait || 0);
 
     for (const p of plan.parts) {
         const start = plan.beat + p.delay;
@@ -527,7 +696,17 @@ export function celebrationAt(t, plan) {
             ? Math.atan2(p.dx, p.dz)
             : bearing(p.to, p.faceAt);
 
+        /**
+         * AND THE SACKER GETS UP FIRST. The takedown left him face down on the
+         * quarterback and the takedown's clock keeps him there, so the view
+         * scales that lean by what is left of this. It spends the whole beat,
+         * and the dance starts once he is upright.
+         */
+        const rising = plan.rise && p.lead
+            ? { stand: smooth(now / Math.max(0.01, plan.beat)) } : null;
+
         out.set(p.position, {
+            ...rising,
             x: p.dx * going,
             z: p.dz * going,
             y: step.y,
@@ -580,7 +759,7 @@ export function celebrationAt(t, plan) {
          * the same reason. It also means no two of them shake in unison.
          */
         const from = plan.beat + s.delay + D.sink;
-        const window = plan.length - from;
+        const window = span - from;
         const shaking = window > 0.4 && !plan.calm;
         const cycles = Math.max(1, Math.round(window * D.shake.hz));
         const swing = shaking ? clamp((now - from) / window, 0, 1) : 0;
@@ -643,7 +822,9 @@ function danceAt(p, since, plan, C) {
     // over and the pose is simply held through the settle.
     const u = Math.min(since, dur) / dur;
     const amount = smooth(since / C.blend);
-    const carrying = p.lead;
+    // The man being celebrated is holding the ball on a pick or a fifty and
+    // holding nothing after a sack, where the quarterback still has it.
+    const carrying = p.lead && plan.carrying !== false;
 
     /**
      * AND SOMEBODY WHO ASKED NOT TO BE MOVED ABOUT GETS THE POSE AND NOTHING

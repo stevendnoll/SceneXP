@@ -46,9 +46,11 @@ installThree();
 const { EXESNOHS_CONFIG: CFG, FIELD, simToWorld } = await import(join(scene, 'config.js'));
 const {
     chooseCelebration, celebrationAt, celebrationLength, weightedPick, DANCES, MODES,
+    occasionFor, OCCASIONS,
 } = await import(join(scene, 'celebration.js'));
+const { takedownRest, takedownAt, tacklerFor } = await import(join(scene, 'takedown.js'));
 const { solveArm, handAt, elbowAt, RIG, reach } = await import(join(scene, 'arm.js'));
-const { carryHold } = await import(join(scene, 'view.js'));
+const { carryHold, sackerRise } = await import(join(scene, 'view.js'));
 const { poseFigure, THROWING_SIDE } = await import(join(scene, 'roster.js'));
 const { endSounds } = await import(join(scene, 'scoring.js'));
 const {
@@ -662,7 +664,11 @@ describe('the modes and dances come up, and only the ones that should', () => {
         }
         // The replayability this exists for: every mode and every dance is
         // reachable, so a second interception is not the first one again.
-        expect([...modes].sort()).toEqual([...MODES].sort());
+        // The modes a PICK can come up as, which is every weighted one. `team`
+        // belongs to a play clock running out and is checked with it.
+        const weighted = Object.keys(C.weights).filter((k) => C.weights[k] > 0);
+        expect([...modes].sort()).toEqual(weighted.sort());
+        expect(MODES).toEqual(expect.arrayContaining(weighted));
         expect([...dances].sort()).toEqual([...DANCES].sort());
     });
 
@@ -954,6 +960,262 @@ describe('against real interceptions and real fifties', () => {
             // He ends up looking back upfield at the quarterback rather than
             // downfield at nobody.
             expect(hero.faceAt.x).toBeLessThan(hero.to.x);
+        }
+    });
+});
+
+/**
+ * THE DEFENSE'S TWO: A SACK, AND A PLAY CLOCK RUNNING OUT.
+ *
+ * Both are what `classifyPlay` calls a sack, and they are opposite pictures. A
+ * sack is a tackle, so the takedown plays first and the party waits for it,
+ * which is the part most likely to go wrong without anybody seeing why: any
+ * entry the celebration hands the view during the dive takes over the diving
+ * man's facing, his block and his lunge. An expired clock has nobody in it at
+ * all and gets the small version on purpose, so its properties are all about
+ * what it does NOT do.
+ *
+ * Driven by the real simulation with a quarterback who never throws, which is
+ * how both endings are made: measured, 61% of those plays are sacked and the
+ * rest run out the clock.
+ */
+describe('the defense celebrates a sack and a play clock running out', () => {
+    const S = C.sack;
+    const E = C.expired;
+
+    /** The plan main.js builds at the whistle, for the two defensive endings. */
+    function defensivePlan(play, roll) {
+        const result = outcome(play);
+        const qb = ballCarrier(play);
+        const objs = play.game.objects;
+        const tackled = play.playState.state.tackled && qb ? tacklerFor(objs, qb) : '';
+        const occasion = occasionFor(result, !!tackled, !!play.expired);
+        if (occasion !== 'sack' && occasion !== 'expired') return null;
+        const at = (o) => {
+            const w = simToWorld(o.coords.x, o.coords.y, 0);
+            return { position: o.settings.position, x: w.x, z: w.z };
+        };
+        const on = objs.filter((o) => !o.settings.benched && o.settings.position !== 'ball');
+        const name = occasion === 'sack' ? tackled : tacklerFor(objs, qb);
+        const sacker = on.find((o) => o.settings.position === name);
+        const mates = on.filter((o) => o !== sacker && o.settings.team === sacker.settings.team).map(at);
+        const rivals = on.filter((o) => o.settings.team !== sacker.settings.team);
+        if (occasion === 'expired') {
+            return {
+                occasion,
+                qb: at(qb),
+                plan: chooseCelebration({
+                    occasion, hero: at(sacker), mates, rivals: rivals.map(at), roll,
+                }),
+            };
+        }
+        const rest = takedownRest(at(sacker), at(qb));
+        const floor = S.floor.map((d) => ({ x: rest.carrier.x - d, z: rest.carrier.z }));
+        return {
+            occasion,
+            rest,
+            floor,
+            plan: chooseCelebration({
+                occasion,
+                hero: { position: sacker.settings.position, ...rest.tackler },
+                mates,
+                rivals: rivals.filter((o) => o !== qb).map(at),
+                blameAt: rest.carrier,
+                floor,
+                bounds: BOUNDS,
+                wait: rest.length,
+                roll,
+            }),
+        };
+    }
+
+    const sacks = [];
+    const clocks = [];
+    {
+        const play = createPlay();
+        const roll = rolls(20260915);
+        const PLAYS = ['pass1', 'pass2', 'pass3', 'pass4', 'pass5', 'pass6', 'pass7', 'pass8'];
+        for (let i = 0; i < 400 && (sacks.length < 40 || clocks.length < 25); i += 1) {
+            lineUp(play, PLAYS[i % PLAYS.length], '');
+            snap(play);
+            for (let f = 0; f < 1200 && !isDone(play); f += 1) tick(play);
+            const got = defensivePlan(play, roll);
+            if (!got || !got.plan) continue;
+            if (got.occasion === 'sack' && sacks.length < 40) sacks.push(got);
+            if (got.occasion === 'expired' && clocks.length < 25) clocks.push(got);
+        }
+    }
+
+    test('the simulation still produces both endings', () => {
+        // Or every case below passes against nothing.
+        expect(sacks.length).toBeGreaterThan(20);
+        expect(clocks.length).toBeGreaterThan(10);
+    });
+
+    test('a sack and an expired clock are told apart, and nothing else is either', () => {
+        const sack = { result: 'sack', points: -5 };
+        expect(occasionFor(sack, true, false)).toBe('sack');
+        expect(occasionFor(sack, false, true)).toBe('expired');
+        // A hit on the frame the clock runs out is a hit: it is what is drawn.
+        expect(occasionFor(sack, true, true)).toBe('sack');
+        // The render loop's own backstop ending a play earned nobody anything.
+        expect(occasionFor(sack, false, false)).toBe('');
+        expect(occasionFor({ result: 'interception', points: -10 }, true, false)).toBe('pick');
+        expect(occasionFor({ result: 'catch', points: 50 })).toBe('fifty');
+        expect(occasionFor({ result: 'catch', points: 15 }, true)).toBe('');
+        expect(occasionFor({ result: 'incomplete', points: 0 }, false, true)).toBe('');
+        expect(occasionFor(null)).toBe('');
+        for (const o of ['pick', 'fifty', 'sack', 'expired']) expect(OCCASIONS).toContain(o);
+    });
+
+    /**
+     * NOBODY IS HANDED ANYTHING WHILE THE TACKLE IS STILL HAPPENING.
+     *
+     * Not "zero offsets", NOTHING: the view reads any entry at all as "this man
+     * is celebrating", which clears his lunge and hands his facing to the plan.
+     * A map of zeroes through the wait would turn the sacker round mid-dive.
+     */
+    test('the party waits for the tackle, and hands the view nothing until it ends', () => {
+        for (const { plan, rest } of sacks) {
+            expect(plan.wait).toBeCloseTo(rest.length, 9);
+            for (let t = 0; t < plan.wait; t += 0.02) {
+                expect(celebrationAt(t, plan).size).toBe(0);
+            }
+            expect(celebrationAt(plan.wait + 1e-6, plan).size).toBeGreaterThan(0);
+        }
+    });
+
+    test('a sack fits its own shorter budget, tackle included', () => {
+        for (const { plan } of sacks) {
+            expect(plan.length).toBeLessThanOrEqual(S.cap + 1e-9);
+            // ...and still has room to get up and put his arms up.
+            expect(plan.length).toBeGreaterThan(plan.wait + S.rise + C.danceFloor);
+            expect(S.cap).toBeLessThan(C.cap);
+            const end = celebrationAt(plan.length, plan);
+            for (const at of end.values()) {
+                expect(Math.abs(at.y)).toBeLessThan(1e-6);
+                expect(at.running).toBe(false);
+            }
+        }
+    });
+
+    /**
+     * HE IS UP BEFORE HE CELEBRATES. A man doing the bow face down on the grass
+     * is the picture this guards against: the takedown's pitch would still be
+     * holding him flat while his arms went up.
+     */
+    test('the sacker gets all the way up before his arms go up, and only he gets up', () => {
+        for (const { plan } of sacks) {
+            let last = -1;
+            for (let t = plan.wait; t <= plan.length; t += 0.02) {
+                const at = celebrationAt(t, plan);
+                const hero = at.get(plan.hero);
+                expect(hero.stand).toBeGreaterThanOrEqual(last - 1e-9);
+                last = hero.stand;
+                if (hero.arms) expect(hero.stand).toBeCloseTo(1, 6);
+                for (const [position, man] of at) {
+                    if (position !== plan.hero) expect(man.stand).toBeUndefined();
+                }
+            }
+            expect(last).toBeCloseTo(1, 6);
+        }
+    });
+
+    test('nobody on the defense lifts a ball the quarterback is still holding', () => {
+        for (const { plan } of [...sacks, ...clocks]) {
+            for (let t = 0; t <= plan.length; t += 0.05) {
+                for (const man of celebrationAt(t, plan).values()) {
+                    expect(man.raised).toBe(false);
+                }
+            }
+        }
+    });
+
+    test('the sacker is addressing the quarterback he put down, who is left lying there', () => {
+        for (const { plan, rest } of sacks) {
+            const hero = plan.parts.find((p) => p.lead);
+            expect(hero.faceAt).toEqual(rest.carrier);
+            // He celebrates from where he landed rather than walking off it.
+            expect(Math.hypot(hero.dx, hero.dz)).toBe(0);
+            // The quarterback is in nobody's part and nobody's slump, so the
+            // view leaves him on his back.
+            expect(celebrationAt(plan.length, plan).has('qb')).toBe(false);
+        }
+    });
+
+    /**
+     * NOBODY IS SENT TO STAND ON HIM. Same nine tenths of a body the rest of
+     * this suite uses, for the same reason, and only for men the plan MOVED:
+     * one who was standing there at the whistle and is sent nowhere is the
+     * simulation's placement, not the celebration's.
+     */
+    test('nobody is sent to stand on the quarterback lying on the grass', () => {
+        let moved = 0;
+        for (const { plan, floor } of sacks) {
+            for (const part of plan.parts) {
+                if (part.lead || (part.dx === 0 && part.dz === 0)) continue;
+                moved += 1;
+                const before = Math.min(...floor.map((f) => gap(part.from, f)));
+                const after = Math.min(...floor.map((f) => gap(part.to, f)));
+                expect(after).toBeGreaterThan(Math.min(before, C.body * 0.9) - 0.01);
+            }
+        }
+        expect(moved).toBeGreaterThan(0);
+    });
+
+    test('the sacker getting up unwinds the dive, and nothing else changes it', () => {
+        const lean = CFG.pose.takedown.tacklerLean;
+        // No party: the tackle is drawn exactly as it always was.
+        expect(sackerRise(lean, null)).toEqual({ stand: 0, pitch: lean, tackle: 1 });
+        // A party entry with no `stand` in it is nothing to do with him.
+        expect(sackerRise(lean, { lean: 0.13 }).pitch).toBe(lean);
+        // Halfway up is halfway up, and all the way up is upright, plus a jab.
+        expect(sackerRise(lean, { stand: 0.5 }).pitch).toBeCloseTo(lean / 2, 9);
+        expect(sackerRise(lean, { stand: 1, lean: 0.13 })).toEqual({ stand: 1, pitch: 0.13, tackle: 0 });
+        // And he is not left lying there by the takedown itself, which holds its
+        // pitch however long after the whistle it is asked.
+        expect(takedownAt(60, { x: 0, z: 0 }, { x: 1.8, z: 0 }).tackler.lean).toBeCloseTo(lean, 9);
+    });
+
+    /**
+     * THE SMALL ONE STAYS SMALL. Every property here is a thing it does not do,
+     * because nobody made a play: no lead dance, no travel, no turning, no run.
+     */
+    test('an expired clock is arms up where they stand, and over quickly', () => {
+        for (const { plan, qb } of clocks) {
+            expect(plan.mode).toBe('team');
+            expect(plan.length).toBeLessThanOrEqual(E.cap + 1e-9);
+            expect(E.cap).toBeLessThan(S.cap);
+            for (const part of plan.parts) {
+                expect(part.travel).toBe(0);
+                expect(Math.hypot(part.dx, part.dz)).toBe(0);
+                expect(part.dance).toBe('bow');
+            }
+            const end = celebrationAt(plan.length, plan);
+            for (const part of plan.parts) {
+                const man = end.get(part.position);
+                expect(man.arms).toBe('up');
+                expect(man.face).toBeNull();
+                expect(man.stand).toBeUndefined();
+            }
+            // The quarterback stood there untouched, so he sags with the rest.
+            expect(end.get(qb.position).arms).toBe('slump');
+            for (const s of plan.slump) expect(end.get(s.position).watch).toBeFalsy();
+        }
+    });
+
+    test('an expired clock under reduced motion does not hop', () => {
+        for (const { plan } of clocks.slice(0, 5)) {
+            const calm = chooseCelebration({
+                occasion: 'expired',
+                hero: { position: plan.hero, ...plan.parts.find((p) => p.lead).from },
+                mates: plan.parts.filter((p) => !p.lead).map((p) => ({ position: p.position, ...p.from })),
+                rivals: [],
+                calm: true,
+            });
+            for (let t = 0; t <= calm.length; t += 0.02) {
+                for (const man of celebrationAt(t, calm).values()) expect(man.y).toBe(0);
+            }
         }
     });
 });

@@ -28,8 +28,10 @@ import {
     beginRelocate, resetRelocate, airborne,
     beginCelebration, resetCelebration, celebrationClock,
 } from './view.min.js';
-import { takedownLength, tacklerFor, contactFraction } from './takedown.min.js';
-import { chooseCelebration, celebrationLength } from './celebration.min.js';
+import {
+    takedownLength, takedownRest, tacklerFor, contactFraction,
+} from './takedown.min.js';
+import { chooseCelebration, celebrationLength, occasionFor } from './celebration.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier, markAirborne, setDifficulty,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome, decisionLeft,
@@ -516,19 +518,45 @@ function beginSettle() {
      * function has never once run for either. The best thing and the worst
      * thing in the game were the two endings where the field simply stopped.
      *
-     * IT WINS OUTRIGHT over anything below. Two men cannot be celebrating and
-     * being tackled at the same time, and a takedown would be drawing the
-     * defender who just picked it diving on somebody.
+     * IT WINS OUTRIGHT over the tackle for those two. Two men cannot be
+     * celebrating and being tackled at the same time, and a takedown would be
+     * drawing the defender who just picked it diving on somebody.
+     *
+     * THE DEFENSE GETS TWO MORE, and they are different in kind. A sack is a
+     * tackle, so it keeps its takedown and celebrates AFTER it. A play clock
+     * running out has nobody in it at all, and gets the small version: arms up
+     * where they stand (see `clockRanOut` in celebration.js).
      *
      * `outcome` is pure and reads only frozen state, so asking it here and
      * again at the card is two readings of one unchanged fact rather than a
      * chance for the two to disagree.
      */
     const result = outcome(cycle.play);
-    const party = planCelebration(result);
+    // WHO WENT DOWN, decided before the party because a sack's party is built
+    // on top of it: the sacker gets up from wherever the tackle leaves him.
+    const downed = cycle.play.playState.state.tackled ? ballCarrier(cycle.play) : null;
+    const pair = downed
+        ? { tackler: tacklerFor(cycle.play.game.objects, downed), carrier: downed.settings.position }
+        : { tackler: '', carrier: '' };
+    const party = planCelebration(result, pair);
+    /**
+     * A SACK IS THE ONE ENDING THAT GETS BOTH, in that order. The celebration
+     * carries the takedown's length as its own `wait`, so the two clocks can
+     * start on the same frame here and in the replay and still play one after
+     * the other.
+     */
+    const tackleToo = !party || party.occasion === 'sack';
+    if (tackleToo && pair.tackler) {
+        cycle.tackle = pair;
+        startTakedown(cycle.play.game.objects, pair.tackler, pair.carrier);
+        // Long enough to land the hit and let him lie there for a beat. A
+        // card opening over a man in mid-air is worse than no animation at
+        // all.
+        cycle.settleFor = Math.max(HOLD_SETTLE, takedownLength() + 0.2);
+    }
     if (party && beginCelebration(party)) {
         cycle.party = party;
-        cycle.settleFor = Math.max(HOLD_SETTLE, celebrationLength(party));
+        cycle.settleFor = Math.max(cycle.settleFor, celebrationLength(party));
         showSkipCelebration();
         /**
          * AND SAY SO, BECAUSE NONE OF IT IS AUDIBLE.
@@ -541,18 +569,6 @@ function beginSettle() {
          * later, and this says who is enjoying it.
          */
         announce(`${TEAMS[teamOfPosition(party.hero)].name} are celebrating.`);
-    } else if (cycle.play.playState.state.tackled) {
-        const carrier = ballCarrier(cycle.play);
-        const tackler = carrier
-            ? tacklerFor(cycle.play.game.objects, carrier) : '';
-        if (carrier && tackler) {
-            cycle.tackle = { tackler, carrier: carrier.settings.position };
-            startTakedown(cycle.play.game.objects, tackler, carrier.settings.position);
-            // Long enough to land the hit and let him lie there for a beat. A
-            // card opening over a man in mid-air is worse than no animation at
-            // all.
-            cycle.settleFor = Math.max(HOLD_SETTLE, takedownLength() + 0.2);
-        }
     }
 
     endTheDown(result);
@@ -606,11 +622,12 @@ function endTheDown(result) {
  * defense, and it is the reason the `point` dance exists.
  *
  * AND WHERE THE PAINT ENDS, so nobody is sent to celebrate in the stands.
+ *
+ * `pair` is the tackle decided at the whistle, which a sack's party is built on.
  */
-function planCelebration(result) {
-    const scored = !!result && result.points === 50;
-    const picked = !!result && result.result === 'interception';
-    if (!scored && !picked) return null;
+function planCelebration(result, pair = { tackler: '', carrier: '' }) {
+    const occasion = occasionFor(result, !!pair.tackler, !!cycle.play.expired);
+    if (!occasion) return null;
 
     const carrier = ballCarrier(cycle.play);
     if (!carrier) return null;
@@ -624,10 +641,60 @@ function planCelebration(result) {
     // has no figure for.
     const playing = objects.filter((o) => !o.settings.benched
         && o.settings.position !== 'ball' && figureFor(o.settings.position));
+    const C = CFG.pose.celebration;
 
+    /**
+     * THE DEFENSE'S TWO, where the man with the ball is the quarterback and he
+     * is on the OTHER side from everybody celebrating.
+     */
+    if (occasion === 'sack' || occasion === 'expired') {
+        const byName = (name) => playing.find((o) => o.settings.position === name) || null;
+        const sacker = occasion === 'sack'
+            ? byName(pair.tackler)
+            : byName(tacklerFor(objects, carrier));
+        if (!sacker) return null;
+        const side = sacker.settings.team;
+        const mates = playing.filter((o) => o !== sacker && o.settings.team === side).map(at);
+        const rivals = playing.filter((o) => o.settings.team !== side);
+        if (occasion === 'expired') {
+            return chooseCelebration({
+                occasion, hero: at(sacker), mates, rivals: rivals.map(at), calm: reducedMotion,
+            });
+        }
+        /**
+         * A SACK STARTS WHERE THE TACKLE ENDS. The sacker is celebrated from
+         * the spot he lands on, the quarterback he is pointing at is where he
+         * was driven to, and the length of the tackle is the party's wait.
+         * `takedownRest` reads the same function the view draws with, so all
+         * three are the numbers on screen.
+         */
+        const rest = takedownRest(at(sacker), at(carrier));
+        // He was looking downfield, so on his back he lies toward his own end
+        // zone. His team runs at +x, which puts his head at lower x.
+        const behind = carrier.settings.team === 0 ? -1 : 1;
+        return chooseCelebration({
+            occasion,
+            hero: { position: sacker.settings.position, ...rest.tackler },
+            mates,
+            // Not the quarterback: he is on his back, and the dejection would
+            // stand him up to hang his arms.
+            rivals: rivals.filter((o) => o !== carrier).map(at),
+            blameAt: rest.carrier,
+            floor: C.sack.floor.map((d) => ({ x: rest.carrier.x + behind * d, z: rest.carrier.z })),
+            bounds: {
+                minX: -FIELD.endZone + 0.8,
+                maxX: FIELD.lineInterval * FIELD.segments + FIELD.endZone - 0.8,
+                halfZ: FIELD.width / 2 - 0.6,
+            },
+            wait: rest.length,
+            calm: reducedMotion,
+        });
+    }
+
+    const scored = occasion === 'fifty';
+    const picked = occasion === 'pick';
     const side = carrier.settings.team;
     const hero = at(carrier);
-    const C = CFG.pose.celebration;
     const len = FIELD.lineInterval * FIELD.segments;
     const toward = side === 0 ? 1 : -1;
     const qb = picked
@@ -635,6 +702,7 @@ function planCelebration(result) {
         : null;
 
     return chooseCelebration({
+        occasion,
         hero,
         mates: playing.filter((o) => o !== carrier && o.settings.team === side).map(at),
         rivals: playing.filter((o) => o.settings.team !== side).map(at),
@@ -1000,9 +1068,14 @@ function stepCycle(delta) {
             // Hold the last frame for a beat before the card, so the replay
             // ends on a composition rather than cutting away mid-motion.
             cycle.replayHold += delta;
-            const hold = CFG.camera.replay.holdEnd
-                + (cycle.tackle.tackler ? takedownLength() : 0)
-                + (cycle.party ? celebrationLength(cycle.party) : 0);
+            // THE LONGER OF THE TWO, NOT THEIR SUM. A sack has both, and its
+            // party's length already has the tackle inside it as its wait, so
+            // adding them held the card back by a whole takedown. The other
+            // endings only ever have one or the other.
+            const hold = CFG.camera.replay.holdEnd + Math.max(
+                cycle.tackle.tackler ? takedownLength() : 0,
+                cycle.party ? celebrationLength(cycle.party) : 0
+            );
             if (cycle.replayHold >= hold) {
                 showHud(true);
                 clearActions();
