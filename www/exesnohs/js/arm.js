@@ -165,6 +165,35 @@ export function solveArm(target, side = 1) {
  * halves are written from the same four numbers rather than from a Three scene
  * graph that has to be built before anything can be asked.
  */
+/**
+ * WHERE THE ELBOW ENDS UP, WHICH IS THE HALF OF A POSE NOBODY CHECKS.
+ *
+ * A pose in this project is written as a hand position, because a hand position
+ * can be pictured and argued about. What it does NOT say is where the rest of
+ * the limb went, and the limb is most of what a viewer sees: a figure is about
+ * 34 pixels tall, so the upper arm is a bigger part of the outline than the
+ * hand on the end of it.
+ *
+ * TWICE NOW A POSE HAS BEEN CORRECT AT THE HAND AND WRONG AT THE ELBOW. The
+ * quarterback's off hand was reachable and carried the elbow through his own
+ * sternum (see `throwHold` in config.js). The dejected pose put the hand at the
+ * waist, which is exactly where it was wanted, and the elbow two centimetres
+ * ABOVE the shoulder and 0.23m behind it, which reads as arms held out
+ * backwards and was reported as such.
+ *
+ * It takes the same two shoulder angles `handAt` does, because the elbow is
+ * where the upper arm ends and the forearm has nothing to do with it.
+ */
+export function elbowAt(armX, armZ, side = 1) {
+    const a = -RIG.upper;
+    const y0 = a * Math.cos(armZ);
+    return {
+        x: side * RIG.shoulderX - a * Math.sin(armZ),
+        y: RIG.shoulderY + y0 * Math.cos(armX),
+        z: y0 * Math.sin(armX),
+    };
+}
+
 export function handAt(armX, armZ, foreX, side = 1) {
     const a = -RIG.upper - RIG.lower * Math.cos(foreX);
     const b = -RIG.lower * Math.sin(foreX);

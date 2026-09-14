@@ -543,21 +543,21 @@ export function celebrationAt(t, plan) {
     }
 
     /**
-     * AND THE OTHER TEAM, WHO FOLD UP WHILE EVERYBODY ELSE GOES UP.
+     * AND THE OTHER TEAM, WHO KEEP THEIR ARMS DOWN WHILE EVERYBODY ELSE PUTS
+     * THEIRS UP.
      *
      * THIS USED TO BE A SECOND CELEBRATION AND QA SAW IT AS ONE. Hands on the
      * helmet is the picture a person imagines and it is the wrong one to draw:
      * at 34 pixels a hand beside the head and a hand in the air are the same
      * outline, so a defense watching a touchdown appeared to be enjoying it.
-     * See `pose.celebration.dejection` for the measurement that settled what to
-     * do instead, which is that the ARMS CANNOT CARRY IT: a running arm already
-     * hangs lower than any reachable dejected pose, so there is nowhere for
-     * them to be thrown.
      *
-     * The pitch carries it. A celebrant rises, hops and reaches; these tip
-     * forward and get shorter, which is a difference in the SHAPE of the figure
-     * rather than in the position of a hand. The shake is the whole body,
-     * because the shared rig has no neck joint.
+     * IT IS THE ARMS ALONE, AND IT TOOK THREE GOES TO GET THERE. A forward
+     * pitch was added when the numbers said the arms could not carry it, and it
+     * read as a man falling over rather than sagging, so `dejection.lean` is 0
+     * and the reasoning is written out where the number is. What is left is a
+     * hand held 0.10m further out than rest while everybody else's goes
+     * overhead, plus a slow shake of the WHOLE BODY, because the shared rig has
+     * no neck joint.
      *
      * `watch` IS A POINT RATHER THAN AN ANGLE, which is the one place this
      * differs from a celebrant. A celebrant's facing can be solved here because

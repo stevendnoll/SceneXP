@@ -339,6 +339,7 @@ const CATCH_FAR_SCALE = 0.42;   // what the receiver's box is multiplied by ther
  */
 const STEER_DEADBAND = 0.15;
 
+
 /**
  * ...AND HOW LONG A HEADING IS AVERAGED OVER BEFORE A PASS IS LED OFF IT.
  *
@@ -2132,46 +2133,58 @@ const EXESNOHS_CONFIG = {
              * SAME SILHOUETTE. Intent does not survive at that size, outline
              * does.
              *
-             * AND ARMS DOWN IS NOT AVAILABLE, WHICH IS THE MEASUREMENT THAT
-             * SHAPED THE REST. The obvious fix is to throw the arms down
-             * instead, and there is nowhere for them to go: a RUNNING arm
-             * already puts the hand at y 0.693, and every reachable "dejected"
-             * target sits at or above it. The men were already standing with
-             * their arms down. So the arms cannot carry this.
+             * SO IT IS THE ARMS AFTER ALL, AND THE ARITHMETIC ARGUED AGAINST
+             * THAT AND LOST.
              *
-             * What carries it is the PITCH, and it works because it runs the
-             * other way from everything a celebrant does. They go up, on their
-             * toes, arms overhead, and get taller. These fold forward and get
-             * shorter. Two groups on one field, one growing and one sinking, is
-             * a difference that survives 34 pixels when a hand position does
-             * not.
+             * The case against was measured and is worth keeping, because it is
+             * true and it is not the whole story. A RUNNING arm already puts the
+             * hand at y 0.693 and every reachable dejected target sits at or
+             * above it, so there is nowhere to throw the arms DOWN to: on the
+             * numbers, the arms cannot carry this. That reasoning produced a
+             * 0.40 radian forward pitch, on the grounds that it is the only
+             * term big enough to be seen, and QA watched it and asked for it
+             * gone.
              *
-             * The other two are support. The hands come back to the hips, which
-             * is at least a different outline from a hanging arm and is what a
-             * person actually does. And the head shakes, which on this rig is
-             * the WHOLE BODY, because the shared figure has no neck joint
-             * (roster.js says so in as many words). A slow side to side against
-             * the celebrants' vertical hops is a different rhythm as well as a
-             * different direction.
+             * WHAT THE NUMBERS MISSED IS THAT THESE MEN ARE NOT RUNNING. They
+             * are standing at a whistle, so their arms are already at rest and
+             * the question was never "how much lower can a hand get", it was
+             * "how different is this from a man standing there". A hand 0.10m
+             * further out, held, while everybody else's goes overhead, turns
+             * out to be enough. A measurement can be correct and still be the
+             * answer to the wrong question.
+             *
+             * The head shake is the support, and on this rig it is the WHOLE
+             * BODY, because the shared figure has no neck joint (roster.js says
+             * so in as many words). A slow side to side against the celebrants'
+             * vertical hops is a different rhythm as well as a different
+             * direction.
              */
             dejection: {
                 /**
-                 * Radians of forward pitch. Up from 0.16, which was nothing:
-                 * the biggest lean any standing pose in this file asks for is
-                 * the block's 0.14, so the old number did not read as a slump,
-                 * it read as a man standing up. The rig has no waist, so this
-                 * tips the whole figure about its feet and the ceiling is where
-                 * it starts to look like falling over rather than sagging.
+                 * RADIANS OF FORWARD PITCH, AND IT IS ZERO, WHICH IS QA'S CALL
+                 * AGAINST THE ARITHMETIC.
                  *
-                 * MEASURED AGAINST WHAT IT HAS TO BEAT. A figure's head sits
-                 * 3.30m up. At the top of a hop a celebrant's reaches 3.63m; at
-                 * 0.40 a dejected man's drops to 3.04m and moves 1.28m forward.
-                 * That is an 18% difference in height between the two groups
-                 * plus a large sideways displacement of the head, which is the
-                 * scale of difference that survives a 34 pixel figure. The
-                 * first attempt at this was 0.16 and read as nothing at all.
+                 * It was 0.16, which read as nothing, and then 0.40, which was
+                 * reasoned from the numbers: a figure's head sits 3.30m up, a
+                 * celebrant at the top of a hop reaches 3.63m, and 0.40 drops a
+                 * dejected man's to 3.04m and 1.28m forward. Eighteen per cent
+                 * of difference in height between the two groups, which is the
+                 * scale that survives a 34 pixel figure. On paper it is the
+                 * only term big enough to carry the reading.
+                 *
+                 * ON SCREEN IT WAS TOO MUCH, and the screen is the only place
+                 * this question can be settled. The rig has no waist, so a lean
+                 * is the whole body tipping about its feet, and at 23 degrees
+                 * that is closer to falling over than to sagging. QA asked for
+                 * it gone and for the arms alone to do the work.
+                 *
+                 * LEFT AS A NUMBER RATHER THAN DELETED, because the reasoning
+                 * above is sound and only the amount was wrong. Anything
+                 * between here and 0.40 is one edit away if the dejection ever
+                 * reads as too quiet. The term is still multiplied through, so
+                 * a value here needs nothing else switched on.
                  */
-                lean: 0.40,
+                lean: 0,
                 /**
                  * Seconds to sink into it, and it is deliberately slower than
                  * the celebration's 0.16. Arms snap up in triumph; shoulders
@@ -2230,19 +2243,29 @@ const EXESNOHS_CONFIG = {
                 off: { x: 0.30, y: 0.90, z: -0.06 },
                 low: { x: 0.60, y: 1.00, z: 0.24 },
                 /**
-                 * HANDS ON THE HIPS, AND NOT ON THE HELMET.
+                 * ARMS HANGING, AND THE ELBOW IS WHAT HAD TO BE CHECKED.
                  *
-                 * (0.26, 1.70, -0.06) was the helmet, and at 34 pixels a hand
-                 * beside the head is a hand in the air. This puts it at the
-                 * waist with the elbow 0.23m BACK from where a running arm
-                 * carries it, which is the one part of the outline that changes
-                 * at all: the hand itself can only come UP from a running arm,
-                 * never down, so the elbow is doing the work. Solved, the hand
-                 * lands at (0.34, 0.98, -0.24) and the elbow at (0.35, 1.27,
-                 * -0.23), which is arms akimbo with the elbows flared behind
-                 * him.
+                 * This has now been wrong twice, in opposite directions, and
+                 * both times because only the HAND was looked at.
+                 *
+                 * First it was the helmet at (0.26, 1.70, -0.06), which at 34
+                 * pixels is a hand in the air and read as a second celebration.
+                 * Then it was the hips at (0.34, 0.98, -0.24), chosen because
+                 * the hand sits low and the elbow swings back, which sounded
+                 * like arms akimbo. Solved, that elbow lands at (0.35, 1.27,
+                 * -0.23): 0.02m ABOVE the shoulder and 0.23m behind it, which
+                 * is a horizontal upper arm jutting backwards. QA read it
+                 * immediately as "their arms out behind them", and QA was right.
+                 * A hand position says nothing about where the limb goes.
+                 *
+                 * So this one is chosen on the ELBOW. At (0.40, 0.74, 0.02) the
+                 * upper arm hangs 0.24m DOWN, within three centimetres of where
+                 * a resting arm carries it, and the hand sits 0.10m further out
+                 * than rest: arms hanging toward the ground with a little slack
+                 * in them, which is what was asked for. The pitch is still what
+                 * carries the dejection, and now nothing fights it.
                  */
-                slump: { x: 0.34, y: 0.98, z: -0.24 },
+                slump: { x: 0.40, y: 0.74, z: 0.02 },
             },
         },
 

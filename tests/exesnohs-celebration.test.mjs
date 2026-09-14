@@ -47,7 +47,7 @@ const { EXESNOHS_CONFIG: CFG, FIELD, simToWorld } = await import(join(scene, 'co
 const {
     chooseCelebration, celebrationAt, celebrationLength, weightedPick, DANCES, MODES,
 } = await import(join(scene, 'celebration.js'));
-const { solveArm, handAt, RIG, reach } = await import(join(scene, 'arm.js'));
+const { solveArm, handAt, elbowAt, RIG, reach } = await import(join(scene, 'arm.js'));
 const { carryHold } = await import(join(scene, 'view.js'));
 const { poseFigure, THROWING_SIDE } = await import(join(scene, 'roster.js'));
 const { endSounds } = await import(join(scene, 'scoring.js'));
@@ -458,26 +458,97 @@ describe('who celebrates, and what the ball does while they do', () => {
         // ...and a long way below where a celebrant's hand is.
         expect(joy.y - grief.y).toBeGreaterThan(0.5);
 
-        // AND THE PITCH IS WHAT ACTUALLY CARRIES IT, because the arms cannot:
-        // a RUNNING arm already hangs lower than any reachable dejected pose,
-        // so there is nowhere for them to be thrown. The lean has to beat every
-        // other standing lean in the game by a clear margin or it reads as a
-        // man standing up (the first attempt was 0.16, against a block's 0.14).
-        const standing = [
-            CFG.pose.block.lean, CFG.pose.stiffArm.lean, CFG.pose.underCentre.lean,
-        ];
-        expect(C.dejection.lean).toBeGreaterThan(Math.max(...standing) * 2);
-
-        // And it is a SINK against a rise: measured at the head, the two groups
-        // have to be plainly different heights.
-        const HEAD = 1.5 * CFG.figureScale;
-        const risen = HEAD + C.hop.height;
-        const sunk = Math.cos(C.dejection.lean) * HEAD;
-        expect((risen - sunk) / HEAD).toBeGreaterThan(0.12);
-
         // ...and it arrives slower than the celebration does, because shoulders
         // come down more slowly than arms go up.
         expect(C.dejection.sink).toBeGreaterThan(C.blend * 2);
+    });
+
+    /**
+     * AND NOTHING ELSE ABOUT HIM GOES UP EITHER, WHICH IS NOW THE WHOLE OF IT.
+     *
+     * A forward pitch was tried, at 0.16 and then at 0.40, because the
+     * arithmetic said the arms could not carry this on their own: a running arm
+     * already hangs lower than any reachable dejected pose. QA watched the 0.40
+     * version and asked for it gone, because the rig has no waist and a lean is
+     * the whole body tipping about its feet, which at 23 degrees reads as
+     * falling over. `dejection.lean` is 0.
+     *
+     * So the property is no longer "he sinks", it is "he does none of the four
+     * things a celebrant does". He does not rise, he does not travel, he does
+     * not turn away, and his hands stay below his shoulders. That is the
+     * contrast, and it holds whatever the lean is set to later.
+     */
+    test('a dejected man does none of the things a celebrant does', () => {
+        for (const plan of everyPlan()) {
+            for (let t = 0; t <= plan.length; t += 0.05) {
+                const at = celebrationAt(t, plan);
+                for (const s of plan.slump) {
+                    const man = at.get(s.position);
+                    expect(man.y).toBe(0);                       // never leaves the ground
+                    expect(Math.hypot(man.x, man.z)).toBe(0);    // never travels
+                    expect(man.running).toBe(false);
+                    expect(man.raised).toBe(false);              // never holds the ball up
+                    expect(man.arms).toBe('slump');
+                }
+            }
+        }
+        // ...and a celebrant does at least one of them, or there is no contrast
+        // to have. The hop is the one every celebration has.
+        expect(C.hop.height).toBeGreaterThan(0.2);
+    });
+
+    /**
+     * AND HE STAYS UPRIGHT, WHICH IS A CEILING RATHER THAN A VALUE.
+     *
+     * Asserting `lean === 0` would be a restatement of the config and would
+     * catch nothing, because the next person to change it changes both. The
+     * real property is that the rig has NO WAIST: a lean tips the whole figure
+     * about its feet, so past a certain angle it stops reading as sagging and
+     * starts reading as falling over. QA met that at 0.40 and asked for it
+     * gone.
+     *
+     * The ceiling is the largest lean any STANDING pose in this game already
+     * asks for. A man waiting at a whistle may not be pitched further forward
+     * than a man actively driving into a block, which leaves room for a subtle
+     * version if anybody wants one and fails against both amounts that were
+     * tried and rejected.
+     */
+    test('a man watching a whistle is not leaning further than a man blocking', () => {
+        const standing = Math.max(
+            CFG.pose.block.lean, CFG.pose.stiffArm.lean, CFG.pose.underCentre.lean
+        );
+        expect(C.dejection.lean).toBeLessThanOrEqual(standing);
+    });
+
+    /**
+     * ...AND THE ELBOW IS CHECKED, NOT ONLY THE HAND, WHICH IS THE SECOND TIME
+     * THIS POSE HAS BEEN WRONG.
+     *
+     * The hands-on-hips version passed every assertion above: the hand sat at
+     * the waist, well below the shoulder, exactly where it was asked for. Its
+     * ELBOW landed 0.02m ABOVE the shoulder and 0.23m behind it, which is a
+     * horizontal upper arm jutting backwards, and QA reported it as "their arms
+     * out behind them". A hand position says nothing about where the limb went,
+     * and at 34 pixels the upper arm is the bigger part of the outline.
+     */
+    test('the dejected upper arm hangs, rather than jutting out behind him', () => {
+        const limb = (h) => {
+            const a = solveArm({ x: h.x, y: h.y, z: h.z }, 1);
+            return { hand: handAt(a.armX, a.armZ, a.foreX, 1), elbow: elbowAt(a.armX, a.armZ, 1) };
+        };
+        const grief = limb(C.hands.slump);
+        // The upper arm points DOWN, by most of its own length, which is what
+        // "hanging toward the ground" means for a limb rather than for a hand.
+        const drop = RIG.shoulderY - grief.elbow.y;
+        expect(drop).toBeGreaterThan(RIG.upper * 0.75);
+        // ...and it is not swung out behind him either.
+        expect(Math.abs(grief.elbow.z)).toBeLessThan(RIG.upper * 0.5);
+
+        // A celebrating arm is the opposite on both counts, which is the
+        // contrast the whole pose exists to make.
+        const joy = limb(C.hands.up);
+        expect(joy.elbow.y).toBeGreaterThan(grief.elbow.y);
+        expect(joy.hand.y).toBeGreaterThan(grief.hand.y + 0.5);
     });
 
     /**
@@ -497,6 +568,9 @@ describe('who celebrates, and what the ball does while they do', () => {
                 const man = end.get(s.position);
                 expect(Math.abs(man.spin)).toBeLessThan(1e-6);
                 // ...and he is fully sunk by then rather than still on his way.
+                // Whatever the lean is set to, it has fully arrived by now
+                // rather than still easing in. It is 0 today; this keeps
+                // working if it is ever turned back up.
                 expect(man.lean).toBeCloseTo(C.dejection.lean, 6);
                 expect(man.amount).toBeCloseTo(1, 6);
             }
@@ -543,10 +617,10 @@ describe('who celebrates, and what the ball does while they do', () => {
         const at = celebrationAt(plan.length, plan);
         for (const position of watching) {
             const man = at.get(position);
-            // Hands to the helmet, head down, and standing exactly where the
-            // whistle left him.
+            // Arms down and held, and standing exactly where the whistle left
+            // him. No lean any more: see the case above for why that term is 0.
             expect(man.arms).toBe('slump');
-            expect(man.lean).toBeGreaterThan(0);
+            expect(man.amount).toBeCloseTo(1, 6);
             expect(Math.hypot(man.x, man.z)).toBe(0);
             // He is given a POINT to look at rather than an angle, because only
             // the caller knows where a man who has not moved is standing.
