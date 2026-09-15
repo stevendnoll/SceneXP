@@ -1098,6 +1098,60 @@ function onSkipShow() {
     endMilestone();
 }
 
+// ---- QA: play any milestone show from the console -----------------------------
+
+/**
+ * WHETHER THE CONSOLE HOOK IS INSTALLED: on a local server, or anywhere with
+ * `?qa` in the address, so a show can be checked on a phone against production
+ * without it sitting on `window` for every visitor.
+ */
+export function qaEnabled(href = '') {
+    try {
+        const url = new URL(href);
+        return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || url.searchParams.has('qa');
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * The phases a show may be started from, and where it hands back to: between
+ * plays, never during one. Not before the snap, because a line-up the show
+ * walks everybody away from would have to be called again, and calling a play
+ * is what counts one.
+ */
+const QA_PHASES = { playbook: () => openPlaybook, result: () => presentResult };
+
+/**
+ * PLAY THE SHOW FOR `level` NOW, as if the score had just reached it.
+ *
+ * Returns a sentence for the console rather than throwing, because that is
+ * where it is read. The show wakes the stadium exactly as a real one does (the
+ * star, the blimp, the full stands), and it counts as seen, so the real one does
+ * not play again later in the same game. A new game puts everything back.
+ */
+export function qaShow(level) {
+    const built = CFG.milestones.built;
+    const wanted = Number(level);
+    if (!built.includes(wanted)) return `Choose one of ${built.join(', ')}.`;
+    const back = QA_PHASES[cycle.phase];
+    if (!back) {
+        return cycle.phase === 'welcome'
+            ? 'Take the field first, then call this while the playbook is open.'
+            : `Not during "${cycle.phase}". Try again while the playbook or a result card is open.`;
+    }
+    hidePlaybook();
+    hideResult();
+    clearActions();
+    beginMilestone(wanted, back());
+    return `Playing the ${wanted} show.`;
+}
+
+function installQaHook() {
+    if (typeof window === 'undefined' || !qaEnabled(window.location && window.location.href)) return;
+    window.xo = Object.freeze({ show: qaShow, levels: [...CFG.milestones.built] });
+}
+
 /** A fresh ten. */
 function startGame() {
     cycle.playNumber = 0;
@@ -1879,6 +1933,8 @@ async function init() {
         saved,
         takeTheField(startGame)
     );
+
+    installQaHook();
 
     state.isLoaded = true;
     state.isRunning = true;

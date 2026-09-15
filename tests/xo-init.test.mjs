@@ -653,3 +653,29 @@ describe('a milestone show', () => {
         expect(dom.el('milestone').hidden).toBe(true);
     });
 });
+
+describe('playing a milestone show from the console, for QA', () => {
+    test('the hook is there on a local server or with ?qa, and nowhere else', async () => {
+        const { qaEnabled } = await boot();
+        expect(qaEnabled('http://localhost:8000/xo/')).toBe(true);
+        expect(qaEnabled('http://127.0.0.1:8000/xo/')).toBe(true);
+        expect(qaEnabled('https://www.scenexp.com/xo/?qa')).toBe(true);
+        expect(qaEnabled('https://www.scenexp.com/xo/')).toBe(false);
+        expect(qaEnabled('https://www.scenexp.com/xo/?quality=1')).toBe(false);
+        expect(qaEnabled('not a url')).toBe(false);
+    });
+
+    test('it waits for the field, refuses a level with no show, and plays one from the playbook', async () => {
+        await boot();
+        expect(globalThis.window.xo).toBeTruthy();
+        expect(globalThis.window.xo.show(400)).toMatch(/^Take the field first/);
+
+        dom.el('welcome-actions').children[0].click();   // Take the field
+        await flushAsync();
+        expect(globalThis.window.xo.show(450)).toMatch(/^Choose one of 100, 200, 300, 400, 500/);
+        expect(globalThis.window.xo.show(400)).toBe('Playing the 400 show.');
+        expect(dom.el('hud-actions').children.some((b) => b.id === 'skip-show-btn')).toBe(true);
+        // A second one on top of it is refused rather than tangled into it.
+        expect(globalThis.window.xo.show(500)).toMatch(/^Not during "show"/);
+    });
+});
