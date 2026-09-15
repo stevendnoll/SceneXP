@@ -252,7 +252,7 @@ describe('team colors', () => {
         // One dialog at a time, as with How to play.
         expect(dom.el('playbook').hidden).toBe(true);
         expect(dom.el('colors').hidden).toBe(false);
-        expect(dom.el('colors-x-jersey').focused).toBe(true);
+        expect(dom.el('colors-panel').focused).toBe(true);
 
         dom.el('colors-x-jersey').value = '#241773';
         fire(dom.el('colors-x-jersey'), 'change');

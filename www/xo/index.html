@@ -104,7 +104,7 @@
     <title>X's and O's</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=14" as="style">
+    <link rel="preload" href="css/experience.min.css?v=15" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
@@ -113,7 +113,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=14">
+    <link rel="stylesheet" href="css/experience.min.css?v=15">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -316,8 +316,11 @@
          own. Team names never appear: a visitor knows these teams as the X's
          and the O's. -->
     <div id="colors" class="card-overlay" hidden>
-        <div class="card-panel colors-panel" role="dialog" aria-modal="true"
-            aria-labelledby="colors-title" aria-describedby="colors-intro">
+        <!-- tabindex="-1" so the card itself takes focus when it opens, without
+             joining the tab order. Focusing the first color picker instead opened
+             that picker on a phone, straight out of the tap on Team colors. -->
+        <div id="colors-panel" class="card-panel colors-panel" role="dialog" aria-modal="true"
+            aria-labelledby="colors-title" aria-describedby="colors-intro" tabindex="-1">
             <h2 id="colors-title" class="card-title">Team colors</h2>
             <p id="colors-intro" class="card-detail">Dress the X's and the O's in your team's colors and
                 your rival's, and pick a field for them to play on.</p>

@@ -26,6 +26,7 @@ const TEAMS = [[0, 'x'], [1, 'o']];
 let hooks = { apply() {}, report() {}, announce() {} };
 let wired = false;
 let session = null;
+let armedUntil = -Infinity;
 const due = { teams: false, field: false, frame: false, fieldAt: -Infinity, fieldTimer: 0 };
 
 const el = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
@@ -47,6 +48,7 @@ export function initColorsCard({ apply, report, announce } = {}) {
     };
     if (wired) return;
     wired = true;
+    if (typeof document !== 'undefined') document.addEventListener('click', swallowEarlyTap, true);
 
     for (const [team, id] of TEAMS) {
         const jersey = el(`colors-${id}-jersey`);
@@ -99,6 +101,34 @@ export function initColorsCard({ apply, report, announce } = {}) {
     }
     const done = el('colors-done');
     if (done) done.addEventListener('click', () => closeColorsCard());
+}
+
+/** Whether `node` is `root` or inside it. */
+function within(root, node) {
+    for (let n = node; n; n = n.parentElement || n.parentNode) {
+        if (n === root) return true;
+    }
+    return false;
+}
+
+/**
+ * THE CARD IS ARMED FOR A MOMENT AFTER IT OPENS.
+ *
+ * On a phone the tap on Team colors was opening the X's jersey picker too: a
+ * card that opens where a finger already is gets pressed by that finger, by the
+ * click a touch screen sends after the touch, or by a second tap from somebody
+ * who has not seen it arrive. For `colors.armFor` seconds a pointer click inside
+ * the card is swallowed, in the capture phase, ahead of the picker it would
+ * open. Nobody reads a new card and picks a color that fast, so nothing meant is
+ * lost. The keyboard is exempt: Enter and Space arrive as a click with `detail`
+ * 0, and a keyboard is never under a finger.
+ */
+function swallowEarlyTap(event) {
+    if (!session || now() >= armedUntil || !event.detail) return;
+    const card = el('colors');
+    if (!card || !within(card, event.target)) return;
+    event.preventDefault();
+    event.stopPropagation();
 }
 
 /** Keep what is chosen for next time. */
@@ -195,9 +225,14 @@ export function showColorsCard(back) {
     };
     document.addEventListener('keydown', session.onEscape);
     card.hidden = false;
+    armedUntil = now() + CFG.colors.armFor * 1000;
     hooks.report('team-colors', {});
-    const first = el('colors-x-jersey');
-    if (first) first.focus();
+    // THE CARD TAKES FOCUS, NOT ITS FIRST PICKER. Focusing a color input from
+    // inside the tap that opened the card opened the picker on a phone. The
+    // dialog is announced by its title and description, and Tab goes to the
+    // X's jersey next.
+    const panel = el('colors-panel');
+    if (panel) panel.focus();
 }
 
 /** Close it: finish any paint still waiting, keep the choice, and go back. */

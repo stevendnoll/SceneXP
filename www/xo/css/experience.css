@@ -519,6 +519,12 @@ body {
     width: min(38rem, 100%);
 }
 
+/* The card takes focus itself when it opens (see index.html), and a ring round
+   the whole card would only say that. Its controls keep their own rings. */
+.colors-panel:focus {
+    outline: none;
+}
+
 .colors-teams {
     display: grid;
     grid-template-columns: 1fr 1fr;

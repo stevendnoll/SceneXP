@@ -2963,6 +2963,10 @@ const XO_CONFIG = {
         /** Seconds between repaints of the field's texture while its picker is
          *  being dragged (colors-ui.js). Each one is a 2048-pixel upload. */
         repaintEvery: 0.1,
+        /** Seconds after the card opens during which a tap inside it is ignored:
+         *  the tap that opened it, or a second one from somebody who has not
+         *  seen it appear yet, must not open a color picker (colors-ui.js). */
+        armFor: 0.45,
         /**
          * THE PLAYERS TURNING IN THE CARD (colors-preview.js). `px` is the
          * largest size in buffer pixels, `turn` radians a second, `calmYaw` the

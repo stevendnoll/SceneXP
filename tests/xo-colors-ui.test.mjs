@@ -68,7 +68,7 @@ const pick = (id, value, type = 'input') => {
 };
 
 describe('opening and closing', () => {
-    test('opens saying what is chosen, with the first picker focused', () => {
+    test('opens saying what is chosen, with the card focused rather than a picker', () => {
         C.setColors({ teams: { 1: { jersey: '#ffb612', helmet: '#000000' } } });
         const back = jest.fn();
         UI.showColorsCard(back);
@@ -78,7 +78,10 @@ describe('opening and closing', () => {
         expect(el('colors-o-helmet').value).toBe('#000000');
         expect(el('colors-x-match').hidden).toBe(true);
         expect(el('colors-o-match').hidden).toBe(false);
-        expect(el('colors-x-jersey').focused).toBe(true);
+        // A phone opened the X's jersey picker when it was focused out of the
+        // tap on Team colors, so the card itself takes focus.
+        expect(el('colors-panel').focused).toBe(true);
+        expect(el('colors-x-jersey').focused).toBeFalsy();
         expect(reports).toEqual([['team-colors', {}]]);
         expect(UI.colorsCardOpen()).toBe(true);
     });
@@ -101,6 +104,40 @@ describe('opening and closing', () => {
         // A second Escape with the card shut does nothing.
         fire(dom.documentStub, 'keydown', { key: 'Escape' });
         expect(back).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('a card that opens under a finger', () => {
+    /** A click as the browser would send it: `detail` 1 for a pointer, 0 for a key. */
+    const click = (target, detail) => {
+        let stopped = false;
+        const event = fire(dom.documentStub, 'click', {
+            target, detail, stopPropagation() { stopped = true; },
+        });
+        return { prevented: event.defaultPrevented, stopped };
+    };
+    const inCard = () => {
+        const input = el('colors-x-jersey');
+        input.parentElement = el('colors-panel');
+        el('colors-panel').parentElement = el('colors');
+        return input;
+    };
+
+    test('ignores a tap inside it for a moment, so the tap that opened it cannot open a picker', () => {
+        UI.showColorsCard(() => {});
+        const input = inCard();
+        expect(click(input, 1)).toEqual({ prevented: true, stopped: true });
+        jest.advanceTimersByTime(460);
+        expect(click(input, 1)).toEqual({ prevented: false, stopped: false });
+    });
+
+    test('never ignores the keyboard, a tap outside it, or a tap once it is closed', () => {
+        UI.showColorsCard(() => {});
+        const input = inCard();
+        expect(click(input, 0)).toEqual({ prevented: false, stopped: false });
+        expect(click(el('somewhere-else'), 1)).toEqual({ prevented: false, stopped: false });
+        UI.closeColorsCard();
+        expect(click(input, 1)).toEqual({ prevented: false, stopped: false });
     });
 });
 
