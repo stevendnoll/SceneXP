@@ -15,6 +15,10 @@
  * factor, so when a position looks wrong there is exactly one place to look.
  */
 
+// The ladder, and nothing else. scoring.js is pure and imports nothing, so the
+// catch zones below can be cut from the same bands the grass is painted with.
+import { ladderBands } from './scoring.min.js';
+
 /** Freeze a config tree so a stray assignment fails loudly in development
  *  instead of quietly retuning the game three modules away. */
 function deepFreeze(obj) {
@@ -306,6 +310,36 @@ const JUMP_RANGE = 1.5;
  * defender's share of it rises to a full share, because a ball hanging in the
  * air that long is one a defender has time to get under.
  */
+/**
+ * ...AND A SHORT PASS SHOULD BE CAUGHT, WHICH IS WHERE THE RECEIVER STANDS.
+ *
+ * QA: on a desktop, a lot of short passes into the 5 and 15 zones fell
+ * incomplete, and a throw to a man still in the 0 zone should almost never
+ * miss. Keyed by the POINTS of the painted band under the receiver's feet at
+ * the moment of the catch, multiplying his box on top of `CATCH_SCALE` and the
+ * length falloff. A defender's box is untouched, so this buys catches and not
+ * interceptions. Measured over 2,100 throws at 60fps (all 17 plays, six release
+ * times, every receiver, random coverage), by the band he was standing in:
+ *
+ *     box in the 0 / 5 / 15 zones     0 pt    5 pt   15 pt   intercepted
+ *     1 / 1 / 1 (as it was)            56%     80%     72%     5.6%
+ *     3 / 1.5 / 1.3                    94%     87%     73%     6.5%
+ *     3 / 1.8 / 1.5                   100%     89%     73%     5.8%
+ *     3 / 2.2 / 1.8                    94%     91%     74%     6.6%
+ *     4 / 2.6 / 2.2                    94%     93%     76%     5.8%
+ *
+ * 3 / 1.8 / 1.5 takes the 0 zone to "almost always" and most of what the 5 zone
+ * has, before the box gets wide enough to be seen: at 1.8 a receiver can take
+ * a ball about a metre off his shoulder, and the catch's quarter second
+ * handover is what hides that. The turnover rate does not move.
+ *
+ * The 0 zone is mostly one throw: a pitch to the back on run2, aimed inside the
+ * quarterback's own body space where `play.separate` will not let him reach it.
+ * The 15 zone barely answers to the box, see `pose.jump.reachZones` for what
+ * does.
+ */
+const CATCH_ZONES = { 0: 3, 5: 1.8, 15: 1.5 };
+
 const CATCH_NEAR = 14;     // metres: below this a throw is unchanged
 const CATCH_FAR = 30;      // ...and at this it is as hard as it gets
 const CATCH_FAR_SCALE = 0.42;   // what the receiver's box is multiplied by there
@@ -551,6 +585,11 @@ function formationSettings() {
         catchNear: CATCH_NEAR / UNITS_TO_METRES,
         catchFar: CATCH_FAR / UNITS_TO_METRES,
         catchFarScale: CATCH_FAR_SCALE,
+        // The painted bands that widen a receiver's box, cut from the scoring
+        // ladder so they are the zones on the grass. See `CATCH_ZONES`.
+        catchZones: ladderBands(SIM.lineInterval)
+            .filter((band) => CATCH_ZONES[band.points])
+            .map((band) => ({ from: band.from, to: band.to, scale: CATCH_ZONES[band.points] })),
         // How close to his line counts as on it, in FIELD UNITS. See
         // `steerDeadband` in motion.js for what the ported steer does without
         // it, and `STEER_DEADBAND` above for why this is the value.
@@ -1765,6 +1804,30 @@ const XO_CONFIG = {
              * went 50% to 61%. Keyed on the throw it does not move at all.
              */
             zones: [15, 30],
+            /**
+             * ...AND WHERE HE GOES UP FOR A BALL HE IS ONLY REACHING FOR.
+             *
+             * QA: short passes into the 15 zone fall incomplete. With the
+             * catch box widened there (`CATCH_ZONES`) it barely moved, because
+             * what is left is a ball going over his head that he never jumped
+             * for: the hidden ceiling described at `view.jumpCommit`.
+             *
+             *     reachZones     5 pt    15 pt   30 pt   50 pt   jumps, 15 pt
+             *     none            91%     78%     73%     41%       71%
+             *     [15]            91%     88%     66%     33%       88%
+             *     [0, 5, 15]      95%     87%     70%     39%       87%
+             *
+             * By where the ball was aimed, 2,150 throws at 60fps with the zone
+             * boxes in. The 30 and 50 columns are a few hundred throws each
+             * and move inside their own noise. At 30fps [15] takes the 15 zone
+             * from 74% to 89%.
+             *
+             * Keyed on where the ball was aimed, like `zones`. The 5 zone was
+             * tried and left out: it bought 4 points of completions for a
+             * receiver leaving his feet on three throws in four, where the box
+             * alone takes it most of the way.
+             */
+            reachZones: [15],
 
             /**
              * WHERE THE TOP OF THE JUMP IS, as a fraction of the hang, and it

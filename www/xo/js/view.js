@@ -977,6 +977,26 @@ export function jumpClearance(span) {
 }
 
 /**
+ * HOW MUCH HE HAS TO WANT IT BEFORE HE LEAVES HIS FEET, 1 for fully committed.
+ *
+ * FULL COMMITMENT IS A HIDDEN CEILING ON THE JUMP. `reachersFor` measures from
+ * his CHEST and is only full inside `catching.close`, so a ball more than about
+ * half a metre over his fingertips never commits him, whatever `jump.lift`
+ * says. Across the whole field that ceiling is what keeps the jump an event and
+ * the deep ball hard: lifted everywhere, fifties went 44% to 84% complete.
+ *
+ * WHERE THE PASS WAS AIMED INTO `jump.reachZones` he goes up for any ball he is
+ * reaching for at all, and the range and the clearance still decide the rest.
+ * Keyed on the throw for the same reason `jumpClearance` is.
+ */
+export function jumpCommit(span) {
+    const J = CFG.pose.jump;
+    const aim = span === undefined ? flight.span : span;
+    if (!aim || aim.tx === undefined || !Array.isArray(J.reachZones)) return 1;
+    return J.reachZones.indexOf(bandAt(aim.tx, SIM.lineInterval).points) === -1 ? 1 : Number.MIN_VALUE;
+}
+
+/**
  * HOW FAR OFF THE GROUND A JUMP IS AT `t`, 0 to 1 of its hang, in metres.
  *
  * Up and down once. A sine rather than a parabola, because the hang at the top
@@ -1005,36 +1025,6 @@ export function jumpLift(t) {
     return Math.sin(Math.PI * u) * J.lift;
 }
 
-/**
- * ...AND WHETHER THE SIMULATION MAY HAND HIM THE BALL YET.
- *
- * QA ROUND TWENTY-SEVEN, ITEM 6. `motion.checkCatch` gives an airborne receiver
- * a box as wide as the jump's own range in every direction and excuses him the
- * height gate, and the jump only fires when the ball is ALREADY inside that
- * range. So a man reported airborne on his first frame has the ball before he
- * has left the grass, and the rest of the hang plays out afterwards: a receiver
- * catching a pass and then leaping.
- *
- * HE WAITS FOR THE BALL TO ARRIVE RATHER THAN FOR A CLOCK. A fixed delay was
- * measured and refused (see `jump.arriveFirst`); the ball's CLOSEST APPROACH
- * costs nothing, because the nearest point of a path that came inside the box
- * is inside the box. `gap` is this frame's distance from the ball and `was` is
- * last frame's, so "it has stopped getting closer" is the whole test, and
- * `lift` carries the backstop for an arc that never turns over.
- *
- * PURE, AND THE LATCH IS THE CALLER'S. Once he is airborne he stays airborne
- * for the rest of the jump: an answer re-derived every frame would drop him out
- * of the sky the moment the ball moved away again.
- */
-export function ballArrived(gap, was, lift) {
-    const J = CFG.pose.jump;
-    if (J.arriveFirst === false) return true;
-    const back = typeof J.backstop === 'number' ? J.backstop : 1;
-    if (lift >= J.lift * back) return true;
-    if (!(was >= 0) || !(gap >= 0)) return false;
-    return gap >= was;
-}
-
 function updateJump(figure, reach, at, live, delta) {
     const J = CFG.pose.jump;
     const u = figure.userData;
@@ -1049,8 +1039,9 @@ function updateJump(figure, reach, at, live, delta) {
 
     // FULLY COMMITTED, NOT MERELY INTERESTED. `reachersFor` ramps from
     // `catching.range` at 8m, which on a field with four receivers means
-    // somebody is always mildly interested in the ball.
-    if (!live || !(reach >= 1) || !flight.has) return 0;
+    // somebody is always mildly interested in the ball. Except where the pass
+    // was aimed into one of `jump.reachZones`: see `jumpCommit`.
+    if (!live || !(reach >= jumpCommit()) || !flight.has) return 0;
     if (Math.hypot(flight.x - at.x, flight.z - at.z) > J.range) return 0;
     const top = standingReach();
     // Clearly OVER HIS HEAD, and not so far over that no jump would get there.
@@ -1064,8 +1055,6 @@ function updateJump(figure, reach, at, live, delta) {
 /** Nobody is in the air between plays. */
 function clearJump(figure) {
     figure.userData.jumpAt = -1;
-    figure.userData.upFor = false;
-    figure.userData.ballGap = -1;
 }
 
 /**
@@ -1129,6 +1118,11 @@ export function stiffArmSide(away, facing) {
  * So the view reports and main.js carries it across as a plain flag on a plain
  * object, which keeps PLANNING D1 intact: play.js and motion.js still never
  * import THREE, and neither of them knows why somebody is airborne.
+ *
+ * It says who has LEFT HIS FEET, from the first frame of the jump. When the
+ * ball gets to him is the simulation's question, asked on its own clock (see
+ * `play.ballArrived`), because a frame rate is not a thing a catch should
+ * depend on.
  */
 const inTheAir = new Set();
 
@@ -1440,26 +1434,13 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
                 { x: p.x, z: p.z }, opts.live, delta)
             : 0;
         /**
-         * ...AND THE SIMULATION IS NOT TOLD HE IS UP UNTIL THE BALL GETS THERE.
+         * ...AND THE SIMULATION IS TOLD ON THE FRAME HE GOES.
          *
          * `inTheAir` feeds the ported catch box and nothing about how he is
-         * drawn: the lift is applied below whatever this says, so he leaves the
-         * ground on the first frame either way. What waits is the CATCH. See
-         * `ballArrived`, and note the latch: once he is up he stays up for the
-         * rest of the jump.
+         * drawn. What waits for the ball is the CATCH, and it waits on the
+         * simulation's clock rather than this one: see `play.ballArrived`.
          */
-        if (airborne > 0) {
-            const gap = flight.has
-                ? Math.hypot(flight.x - p.x, flight.z - p.z) : -1;
-            if (!figure.userData.upFor) {
-                figure.userData.upFor = ballArrived(gap, figure.userData.ballGap, airborne);
-            }
-            figure.userData.ballGap = gap;
-            if (figure.userData.upFor) inTheAir.add(obj.settings.position);
-        } else {
-            figure.userData.upFor = false;
-            figure.userData.ballGap = -1;
-        }
+        if (mayJump && figure.userData.jumpAt >= 0) inTheAir.add(obj.settings.position);
 
         // AND HIS FEET GO ON THE GRASS, NOT THROUGH IT. The rig stands itself
         // at y = 0.055 because its shoes hang below its own origin, and writing

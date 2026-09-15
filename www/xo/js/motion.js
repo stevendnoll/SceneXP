@@ -398,6 +398,27 @@ export class MotionClass {
     return t < 0 ? 0 : (t > 1 ? 1 : t);
   }
 
+  /**
+   * HOW MUCH MORE A RECEIVER COVERS WHERE HE IS STANDING, from the painted
+   * band under his feet.
+   *
+   * QA: short passes into the 0, 5 and 15 point zones kept falling through a
+   * receiver's hands. `settings.catchZones` is a list of `{ from, to, scale }`
+   * in field units, cut from the scoring ladder in config so the zones here are
+   * the zones on the grass. Only the man the ball was thrown at gets it: a
+   * defender keeps his own share, so this buys catches and not interceptions.
+   * Nothing listed, or nobody standing in a listed zone, is 1.
+   */
+  catchZoneScale(x) {
+    const zones = this.settings && this.settings.catchZones;
+    if (!Array.isArray(zones)) return 1;
+    for (let i = 0; i < zones.length; i += 1) {
+      const z = zones[i];
+      if (x >= z.from && x < z.to) return typeof z.scale === 'number' && z.scale > 0 ? z.scale : 1;
+    }
+    return 1;
+  }
+
   /** What the receiver's box is multiplied by at full stretch. 1 is no
    *  falloff, which is what a caller that says nothing gets. */
   catchFarScale() {
@@ -475,8 +496,8 @@ export class MotionClass {
     game.objects.forEach(object => {
       if ( ['ball', 'qb', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6'].indexOf(object.settings.position) === -1 ) {
         // A defender reaches by his own share of it. The man the ball was
-        // thrown at gets all of it.
-        const g = object.settings.team === 1 ? k * share : k;
+        // thrown at gets all of it, and more in the short zones.
+        const g = object.settings.team === 1 ? k * share : k * this.catchZoneScale(object.coords.x);
         /**
          * AND A MAN IN THE AIR IS A DIFFERENT SHAPE.
          *

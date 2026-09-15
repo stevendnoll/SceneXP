@@ -40,11 +40,12 @@ const {
     keepAndRun, outcome, setDifficulty, OFFENSIVE_PLAYS,
     markHeading, throwTo, eligibleReceivers, breakContact, clearEscapes,
     decisionLeft, undecided, outOfTime, clockReading, ballCarrier,
+    ballArrived, leapBackstop, landLeaps, markAirborne,
 } = await import(join(scene, 'play.js'));
 const { markerGeometry } = await import(join(scene, 'markers.js'));
 const {
     escapeAmount, jukeRoll, stiffArmSide,
-    blockersEngaged, lookTarget, stillFor, jumpLift, ballArrived,
+    blockersEngaged, lookTarget, stillFor, jumpLift,
     noteAssignments, resetAssignments,
 } = await import(join(scene, 'view.js'));
 const { stiffSide, THROWING_SIDE, poseFigure } = await import(join(scene, 'roster.js'));
@@ -1530,6 +1531,87 @@ describe('a short pass and a hail mary are not the same event', () => {
         const bare = new MotionClass({}, {}, silent);
         expect(bare.throwStretch(throwOf(60))).toBe(0);
         expect(bare.catchFarScale()).toBe(1);
+    });
+});
+
+describe('a short pass is caught where it is short', () => {
+    /**
+     * QA, 2026-09-15: a lot of short passes into the 5 and 15 point zones fell
+     * incomplete, and a throw to a man in the 0 zone should almost never miss.
+     * The receiver's box is widened by the band he is STANDING in, and only
+     * his: a defender beside him keeps the reach he had, so the turnover rate
+     * does not move (5.6% to 5.8% over 2,862 throws).
+     */
+    const silent = { catch() {}, collide() {}, incomplete() {} };
+    const man = (position, team, x) => ({
+        settings: { position, team, positionGroup: team ? 'db' : 'wr', benched: false, tackled: 3 },
+        coords: { x, y: 300, z: 1 },
+        physics: { accel: 0.4, maxSpeed: 2.35, decel: 0.1 },
+        state: { xSpeed: 0, ySpeed: 0 },
+    });
+    /** Is a level ball `ahead` units in front of this man caught by him? */
+    const catches = (who, ahead) => {
+        const motion = new MotionClass(formationSettings(), {}, silent);
+        motion.gameState = { state: { ball: { caught: false, position: '', team: 0 }, anim: {} } };
+        const ball = {
+            settings: { position: 'ball', team: 0, benched: false, tackled: 3 },
+            coords: { x: who.coords.x + ahead, y: 300, z: 1 },
+            physics: { accel: 0.4, maxSpeed: 7, decel: 0.1 },
+            state: { xSpeed: 0, ySpeed: 0 },
+        };
+        motion.checkCatch(ball, { objects: [ball, who], throwTo: 'wr1' });
+        return motion.gameState.state.ball.caught === true;
+    };
+    const middleOf = (points) => {
+        const b = ladderBands(SIM.lineInterval).find((band) => band.points === points);
+        if (b.from === -Infinity) return b.to - 60;
+        return b.to === Infinity ? b.from + 60 : (b.from + b.to) / 2;
+    };
+
+    test('the same ball is his in the short zones and not in the deep ones', () => {
+        // Level, 0.85m in front of him: past the 0.73m he has anywhere else.
+        const ahead = 0.85 / UNITS_TO_METRES;
+        for (const points of [0, 5, 15]) {
+            expect({ points, caught: catches(man('wr1', 0, middleOf(points)), ahead) })
+                .toEqual({ points, caught: true });
+        }
+        for (const points of [30, 50]) {
+            expect({ points, caught: catches(man('wr1', 0, middleOf(points)), ahead) })
+                .toEqual({ points, caught: false });
+        }
+    });
+
+    test('a defender standing in the same zone gets none of it', () => {
+        // Just past a defender's own reach, and inside what he would have if
+        // the zone had been handed to him too.
+        const s = formationSettings();
+        const k = s.catchScale;
+        const plain = 6 * k * s.interceptShare + 5 * k;
+        const zoned = 6 * k * s.interceptShare * CATCH_BOX(5) + 5 * k;
+        const ahead = (plain + zoned) / 2;
+        expect(catches(man('db1', 1, middleOf(5)), ahead)).toBe(false);
+        expect(catches(man('db1', 1, middleOf(5)), plain - 1)).toBe(true);
+    });
+
+    /** The zones are cut from the same bands the grass is painted with. */
+    const CATCH_BOX = (points) => new MotionClass(formationSettings(), {}, silent)
+        .catchZoneScale(middleOf(points));
+
+    test('the 0 zone is the surest and nothing past the 15 zone is widened', () => {
+        expect(CATCH_BOX(0)).toBeGreaterThanOrEqual(CATCH_BOX(5));
+        expect(CATCH_BOX(5)).toBeGreaterThanOrEqual(CATCH_BOX(15));
+        expect(CATCH_BOX(15)).toBeGreaterThan(1);
+        expect(CATCH_BOX(30)).toBe(1);
+        expect(CATCH_BOX(50)).toBe(1);
+        // Every edge of every zone is an edge of a painted band.
+        const edges = new Set(ladderBands(SIM.lineInterval).flatMap((b) => [b.from, b.to]));
+        for (const z of formationSettings().catchZones) {
+            expect(edges.has(z.from) && edges.has(z.to)).toBe(true);
+        }
+    });
+
+    test('a MotionClass told nothing widens nothing', () => {
+        expect(new MotionClass({}, {}, silent).catchZoneScale(middleOf(0))).toBe(1);
     });
 });
 
@@ -3231,8 +3313,107 @@ describe('a leaping catch is taken on the way up', () => {
      *  the catch withheld. */
     test('a backstop hands it to him near the top whatever the ball does', () => {
         const J = CFG.pose.jump;
-        expect(ballArrived(0.4, 0.9, J.lift * J.backstop)).toBe(true);
+        expect(ballArrived(0.4, 0.9, leapBackstop())).toBe(true);
+        expect(ballArrived(0.4, 0.9, leapBackstop() * 0.9)).toBe(false);
         expect(J.backstop).toBeLessThan(1);
+        // The backstop is a moment on the drawn rise: at it, the figure is at
+        // exactly the fraction of his lift the config names.
+        expect(jumpLift(leapBackstop() / J.hang)).toBeCloseTo(J.lift * J.backstop, 6);
+    });
+
+    /**
+     * AND IT IS ASKED ON THE SIMULATION'S CLOCK, NOT THE DISPLAY'S.
+     *
+     * QA, 2026-09-15: "the receiver will jump but the ball will just fall
+     * through their hands", on a desktop. The arrival test ran in view.js once
+     * per RENDERED frame and reached the catch a rendered frame later, against
+     * a ball that is inside his reach for a median 75ms. At 30fps, 15 point
+     * completions were 49% against 67% at 60, and 124 incompletions followed a
+     * jump against 32. `landLeaps` runs at the top of every `tick`, however
+     * many ticks a rendered frame holds.
+     */
+    const step = 1 / CFG.simHz;
+    const leapPlay = (ballX) => {
+        const ball = { settings: { position: 'ball' }, coords: { x: ballX, y: 300 }, state: {} };
+        const wr1 = { settings: { position: 'wr1', team: 0 }, coords: { x: 400, y: 300 }, state: {} };
+        return {
+            ball, wr1,
+            game: { objects: [wr1, ball], throwTo: 'wr1' },
+            playState: { state: { ball: { caught: false } } },
+        };
+    };
+
+    test('told once that he is up, he gets it on the step the ball stops closing', () => {
+        const play = leapPlay(520);
+        markAirborne(play, new Set(['wr1']));
+        // One rendered frame's worth of marking, then several simulation steps
+        // with nobody telling it anything more: a slow display.
+        const path = [480, 440, 415, 405, 410, 430];
+        const up = [];
+        for (const x of path) {
+            play.ball.coords.x = x;
+            landLeaps(play);
+            up.push(play.wr1.state.airborne);
+        }
+        // Closing, closing, closing, closing, then 410 is further than 405.
+        expect(up).toEqual([false, false, false, false, true, true]);
+    });
+
+    test('a ball already past him when he goes up is his on the first step', () => {
+        const play = leapPlay(390);
+        // The throw is tracked before he leaves his feet...
+        landLeaps(play);
+        play.ball.coords.x = 380;
+        landLeaps(play);
+        expect(play.wr1.state.airborne).toBeFalsy();
+        // ...so his first step in the air already has something to compare.
+        markAirborne(play, new Set(['wr1']));
+        play.ball.coords.x = 370;
+        landLeaps(play);
+        expect(play.wr1.state.airborne).toBe(true);
+    });
+
+    test('the backstop is counted in simulation steps', () => {
+        const play = leapPlay(4000);
+        markAirborne(play, new Set(['wr1']));
+        const steps = Math.ceil(leapBackstop() / step - 1e-9);
+        for (let i = 0; i < steps; i += 1) {
+            play.ball.coords.x -= 10;          // closing the whole time
+            landLeaps(play);
+            expect(play.wr1.state.airborne).toBe(false);
+        }
+        play.ball.coords.x -= 10;
+        landLeaps(play);
+        expect(play.wr1.state.airborne).toBe(true);
+    });
+
+    test('a real play answers it inside tick, with nobody asking again', () => {
+        const play = createPlayForDifficulty();
+        lineUp(play, 'pass2', 'cover1');
+        snap(play);
+        for (let f = 0; f < CFG.simHz * 1.2; f += 1) tick(play);
+        const target = eligibleReceivers(play)[0];
+        expect(throwTo(play, target)).toBe(true);
+        const wr = play.game.objects.find((o) => o.settings.position === target);
+        // Told once, the way a display that has stalled would tell it.
+        markAirborne(play, new Set([target]));
+        expect(wr.state.airborne).toBeFalsy();
+        let up = false;
+        for (let f = 0; f < 12 && !isDone(play); f += 1) {
+            tick(play);
+            up = up || wr.state.airborne === true;
+        }
+        expect(up).toBe(true);
+    });
+
+    test('back on the grass he loses the leaping box at once', () => {
+        const play = leapPlay(390);
+        markAirborne(play, new Set(['wr1']));
+        for (let i = 0; i < 40; i += 1) landLeaps(play);
+        expect(play.wr1.state.airborne).toBe(true);
+        markAirborne(play, new Set());
+        landLeaps(play);
+        expect(play.wr1.state.airborne).toBe(false);
     });
 });
 

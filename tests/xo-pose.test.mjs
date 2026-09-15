@@ -41,7 +41,7 @@ const {
     toWorld, carryHold, HEADING_DEADZONE, TURN_RESPONSE,
     syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged,
     beginRelocate, resetRelocate, relocateProgress,
-    syncBall, resetBallFlight, ballSpan, turnFor, frontOf, jumpClearance,
+    syncBall, resetBallFlight, ballSpan, turnFor, frontOf, jumpClearance, jumpCommit,
     noteThrow, airborne, intendedReceiver,
 } = await import(join(scene, 'view.js'));
 const {
@@ -1638,6 +1638,11 @@ describe('the view tells the simulation who is in the air', () => {
      * PLANNING D1 intact: play.js and motion.js still never import THREE, and
      * neither knows why anybody is airborne.
      */
+    /**
+     * WHAT CROSSES IS WHO HAS LEFT HIS FEET. Whether the ball has reached him
+     * yet is the simulation's call on its own clock (`play.landLeaps`), so the
+     * catch box is not handed over here.
+     */
     test('the flag lands on the named men and comes off everybody else', () => {
         const play = createPlay();
         lineUp(play, 'pass2', 'cover1');
@@ -1646,15 +1651,20 @@ describe('the view tells the simulation who is in the air', () => {
         expect(markAirborne(play, named)).toBe(2);
         for (const obj of play.game.objects) {
             if (!obj.state) continue;
-            expect({ p: obj.settings.position, up: obj.state.airborne })
+            expect({ p: obj.settings.position, up: obj.state.leaping })
                 .toEqual({ p: obj.settings.position, up: named.has(obj.settings.position) });
         }
 
         // And it is cleared rather than left behind, which is the failure that
         // would leave somebody permanently able to catch anything.
+        for (const obj of play.game.objects) {
+            if (obj.state && named.has(obj.settings.position)) obj.state.airborne = true;
+        }
         expect(markAirborne(play, new Set())).toBe(0);
         for (const obj of play.game.objects) {
-            if (obj.state) expect(obj.state.airborne).toBe(false);
+            if (!obj.state) continue;
+            expect(obj.state.airborne).toBe(false);
+            expect(obj.state.leaping).toBe(false);
         }
     });
 
@@ -1858,6 +1868,44 @@ describe('he goes up for it sooner in the scoring zones', () => {
     test('and with no throw on record he uses the ordinary gate', () => {
         expect(jumpClearance(null)).toBe(CFG.pose.jump.clearance);
         expect(jumpClearance({})).toBe(CFG.pose.jump.clearance);
+    });
+});
+
+describe('a short pass into the 15 zone does not sail over a man who never jumped', () => {
+    /**
+     * QA, 2026-09-15: short passes into the 15 zone fall incomplete. A jump
+     * needs him FULLY committed, which `reachersFor` measures from his chest,
+     * so a ball more than about half a metre over his fingertips never sent
+     * him up whatever `jump.lift` allowed. In the 15 zone any reach at all is
+     * enough: 78% to 88% complete there, with the 30 and 50 bands unmoved.
+     */
+    const middle = (b) => (b.to === Infinity ? b.from + 100 : (b.from + b.to) / 2);
+    const commitIn = () => {
+        const out = {};
+        for (const band of ladderBands(SIM.lineInterval)) {
+            out[band.points] = jumpCommit({ tx: middle(band), ty: 0 });
+        }
+        return out;
+    };
+
+    test('a throw into the 15 band only needs him reaching, and no other band changes', () => {
+        const gate = commitIn();
+        // Named rather than read back out of the config: THIS band, and not
+        // the deep ball round seventeen made hard.
+        expect(gate[15]).toBeGreaterThan(0);
+        expect(gate[15]).toBeLessThan(1e-6);
+        for (const points of [0, 5, 30, 50]) expect(gate[points]).toBe(1);
+    });
+
+    test('every reach zone named is a band the ladder actually pays', () => {
+        const paid = ladderBands(SIM.lineInterval).map((b) => b.points);
+        expect(CFG.pose.jump.reachZones.length).toBeGreaterThan(0);
+        for (const points of CFG.pose.jump.reachZones) expect(paid).toContain(points);
+    });
+
+    test('with no throw on record he has to be fully committed', () => {
+        expect(jumpCommit(null)).toBe(1);
+        expect(jumpCommit({})).toBe(1);
     });
 });
 
