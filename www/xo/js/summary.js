@@ -156,15 +156,34 @@ export async function shareScore(total) {
     }
 }
 
-/** Say so on the button itself, because a copy with no acknowledgement reads
- *  as a button that did nothing. */
+/**
+ * Say so on the button itself, because a copy with no acknowledgement reads
+ * as a button that did nothing.
+ *
+ * AND SAY IT OUT LOUD, WITHOUT DISABLING ANYTHING (accessibility sweep,
+ * 2026-09-14). The button used to be `disabled` for the length of the message.
+ * Disabling the focused element throws keyboard focus out of the card onto the
+ * page, so the next Tab started from the top of the document, and a screen
+ * reader was not reliably told a word had changed on a button it had already
+ * read. The message now goes to the card's own status line, which lives INSIDE
+ * the dialog because content outside an aria-modal dialog may not be spoken at
+ * all, and a second press during the message is simply ignored.
+ */
+let flashing = false;
+
 function flashShared(message) {
     const btn = el('summary-share');
-    if (!btn) return;
+    if (!btn || flashing) return;
+    flashing = true;
     const was = btn.textContent;
     btn.textContent = message;
-    btn.disabled = true;
-    window.setTimeout(() => { btn.textContent = was; btn.disabled = false; }, 1800);
+    const status = el('summary-status');
+    if (status) status.textContent = message;
+    window.setTimeout(() => {
+        btn.textContent = was;
+        if (status) status.textContent = '';
+        flashing = false;
+    }, 1800);
 }
 
 export function hideSummary() {

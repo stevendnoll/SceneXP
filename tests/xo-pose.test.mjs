@@ -1040,6 +1040,21 @@ describe('the keyboard', () => {
         expect(keyAction('R', { modified: true })).toBe('');
     });
 
+    /**
+     * SPACE PRESSES THE CONTROL IT IS ON, NOT THE SNAP (accessibility sweep,
+     * 2026-09-14). Before the snap, a visitor who tabbed to "Change play" or
+     * the sound button and pressed Space snapped the ball, because the space
+     * bar is a snap key and the handler took it from the focused button.
+     */
+    test('the space bar is left to a focused control, and only the space bar', () => {
+        expect(keyAction(' ', { onControl: true })).toBe('');
+        expect(keyAction(' ')).toBe('snap');
+        // The letters are nobody else's, so they still work with a button focused.
+        expect(keyAction('S', { onControl: true })).toBe('snap');
+        expect(keyAction('A', { onControl: true })).toBe('A');
+        expect(keyAction('Escape', { onControl: true })).toBe('skip');
+    });
+
     test('and no other key does anything at all', () => {
         // Escape is not on this list any more: it presses whichever Skip is on
         // screen (see xo-milestones.test.mjs).

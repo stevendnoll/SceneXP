@@ -414,7 +414,9 @@ function buildStartOver() {
     confirm.className = 'playbook-restart-btn is-confirm';
     confirm.textContent = 'Start over?';
     confirm.hidden = true;
-    confirm.setAttribute('aria-label', 'Confirm starting a new game');
+    // The visible words first, so voice control can say what it sees (WCAG
+    // 2.5.3). It was "Confirm starting a new game", which "Start over?" is not.
+    confirm.setAttribute('aria-label', 'Start over? Yes, start a new game');
 
     const cancel = document.createElement('button');
     cancel.type = 'button';

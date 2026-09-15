@@ -161,6 +161,34 @@ describe('a play, end to end', () => {
     });
 
     /**
+     * THE NAME A SCREEN READER HEARS BEGINS WITH THE WORDS ON THE BUTTON.
+     *
+     * WCAG 2.5.3, Label in Name, from the 2026-09-14 accessibility sweep. Seven
+     * buttons in this game were named by an aria-label written as a separate
+     * sentence ("Keep it" was "Keep the ball and run"), so a voice control user
+     * saying "click Keep it" matched nothing. Checked on both rows a visitor
+     * meets on every play, and with the text read from the button rather than
+     * a list here, so a new control is covered the day it lands.
+     */
+    test('every control in the action row is named by the words it shows', async () => {
+        const check = () => {
+            const row = dom.el('hud-actions').children;
+            expect(row.length).toBeGreaterThan(0);
+            for (const b of row) {
+                const shown = (b.textContent || '').trim();
+                const name = b.getAttribute('aria-label') ?? shown;
+                expect({ shown, startsWithIt: name.startsWith(shown) })
+                    .toEqual({ shown, startsWithIt: true });
+            }
+        };
+        await toLivePlay();
+        check();                    // Change play, Snap the ball
+        press('Snap the ball');
+        await flushAsync();
+        check();                    // Throw A to D, Keep it
+    });
+
+    /**
      * THE THROW BUTTONS HAVE TO BE TELLABLE APART, which is the whole finding
      * this batch started from: the letters existed on the buttons and nowhere a
      * visitor could see them. Each button now carries its receiver's colour as
@@ -181,7 +209,9 @@ describe('a play, end to end', () => {
             const who = CFG.receivers[btn.dataset.receiver];
             expect(who).toBeTruthy();
             expect(btn.textContent).toContain(who.letter);
-            expect(btn.getAttribute('aria-label')).toBe(`Throw to receiver ${who.letter}`);
+            // Named by its own words, so voice control can say what it sees.
+            expect(btn.getAttribute('aria-label')).toBeNull();
+            expect(btn.textContent).toBe(`Throw ${who.letter}`);
             expect(btn.style.getPropertyValue('--throw-ink')).toBe(who.ink);
             inks.add(who.ink);
         }
@@ -284,7 +314,7 @@ describe('a replay can be got out of', () => {
         const skip = dom.el('hud-actions').children
             .find((b) => b.textContent === 'Skip replay');
         expect(skip).toBeTruthy();
-        expect(skip.getAttribute('aria-label')).toBe('Skip the replay and see the result');
+        expect(skip.getAttribute('aria-label')).toBe('Skip replay and see the result');
         expect(dom.el('game-hud').hidden).toBe(false);
         expect(skip.focused).toBe(true);
 
@@ -301,7 +331,7 @@ describe('a replay can be got out of', () => {
             .find((b) => b.textContent === 'Switch view');
         expect(swap).toBeTruthy();
         expect(swap.getAttribute('aria-label'))
-            .toBe('Watch the replay from another side of the field');
+            .toBe('Switch view to see the replay from another side of the field');
         expect(swap.getAttribute('aria-keyshortcuts')).toBe('V');
         expect(swap.focused).not.toBe(true);
         // Pressing it changes the camera and leaves the replay running.

@@ -624,7 +624,10 @@ body {
 
 .summary-n {
     width: 1.4rem;
-    color: #6e788a;
+    /* 4.91:1 on the card. It was #6e788a, 4.11:1, the one text colour on the
+       page under AA (accessibility sweep, 2026-09-14). Still a step quieter than
+       the 6.2:1 grey of the row beside it, which is the hierarchy it was for. */
+    color: #7b8597;
     font-variant-numeric: tabular-nums;
 }
 

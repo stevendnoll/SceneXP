@@ -104,7 +104,7 @@
     <title>X's and O's</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=8" as="style">
+    <link rel="preload" href="css/experience.min.css?v=9" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
@@ -113,7 +113,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=8">
+    <link rel="stylesheet" href="css/experience.min.css?v=9">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -179,7 +179,15 @@
         </div>
     </div>
 
-    <canvas id="game-canvas"></canvas>
+    <!-- THE FIELD IS A PICTURE TO A SCREEN READER, and says so (accessibility
+         sweep, 2026-09-14). A canvas has no role of its own, and several screen
+         readers skip an aria-label on an element without one. Everything the
+         picture shows that a visitor needs is also said in words: the plays are
+         named buttons, the receivers are Throw A to D, and every whistle goes
+         out through #hud-live. Tapping a player is a shortcut, never the only
+         way to do anything. -->
+    <canvas id="game-canvas" role="img"
+        aria-label="A 3D football field, seen from behind your offense."></canvas>
 
     <!-- THE WELCOME CARD.
          The one thing a visitor needs before the playbook makes any sense:
@@ -195,7 +203,7 @@
          and adding a full-screen click target would be the one exception. -->
     <div id="welcome" class="card-overlay" hidden>
         <div class="card-panel welcome-panel" role="dialog" aria-modal="true"
-            aria-labelledby="welcome-title">
+            aria-labelledby="welcome-title" aria-describedby="welcome-intro">
             <!-- The 2D game's logo beside the name, so a visitor who knows
                  exesnohs.com recognizes the game before reading a word. alt=""
                  because the heading already says X's and O's, and this
@@ -206,7 +214,10 @@
                     alt="" decoding="async">
                 <span>X's and O's</span>
             </h2>
-            <p class="card-detail">Ten plays, and you are on offense for every one
+            <!-- The dialog's description, so a screen reader landing on the
+                 focused button hears what the game is before the button, rather
+                 than the title and a button with the rules unread above it. -->
+            <p id="welcome-intro" class="card-detail">Ten plays, and you are on offense for every one
                 of them. The farther you carry the ball, the more the play is worth.</p>
 
             <ol class="welcome-steps">
@@ -395,6 +406,10 @@
             <p id="summary-best" class="card-meta"></p>
             <ul id="summary-plays" class="summary-plays"></ul>
             <div id="summary-actions" class="card-actions"></div>
+            <!-- Where "Link copied" is said out loud. Inside the dialog, because
+                 content outside an aria-modal dialog may not be spoken while it
+                 is open (see flashShared in summary.js). -->
+            <p id="summary-status" class="sr-only" role="status" aria-live="polite"></p>
         </div>
     </div>
 

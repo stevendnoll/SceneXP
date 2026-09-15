@@ -28,12 +28,24 @@ const el = (id) => document.getElementById(id);
 const SVG_NS = 'http://www.w3.org/2000/svg';
 let handlers = {};
 
-function button(label, className, onClick, describedBy) {
+/**
+ * A HUD button, with an optional few words more for a screen reader.
+ *
+ * THE MORE IS APPENDED TO THE LABEL, NEVER SWAPPED FOR IT (accessibility sweep,
+ * 2026-09-14). These used to carry an aria-label written as a separate sentence,
+ * so "Keep it" was named "Keep the ball and run" and "Skip replay" was named
+ * "Skip the replay and see the result". That fails WCAG 2.5.3, Label in Name:
+ * somebody using voice control says what they can SEE, "click Keep it", and
+ * nothing on the page is called that. So the words on the button always come
+ * first and the explanation continues the phrase: `more` is written to follow
+ * the label, as in "Skip replay" + "and see the result".
+ */
+function button(label, className, onClick, more) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = className;
     b.textContent = label;
-    if (describedBy) b.setAttribute('aria-label', describedBy);
+    if (more) b.setAttribute('aria-label', `${label} ${more}`);
     b.addEventListener('click', onClick);
     return b;
 }
@@ -52,15 +64,18 @@ function button(label, className, onClick, describedBy) {
  * THE SWATCH CARRIES THE COLOUR AND THE LABEL STAYS WHITE, deliberately. Ink at
  * these hues on this dark pill runs from about 4:1 down to 3:1 depending on the
  * receiver, and a control's own text should not be the thing that has to pass.
- * A filled dot has no contrast requirement to meet, and the letter is still
- * written out in words for anyone who cannot see it at all.
+ * A filled dot has no contrast requirement to meet.
+ *
+ * ITS NAME IS ITS TEXT, "Throw A", with no aria-label over it. It was named
+ * "Throw to receiver A", which does not contain the words on the button, so a
+ * voice control user saying "click Throw A" matched nothing (WCAG 2.5.3). The
+ * dot is aria-hidden, so the name is exactly what is written.
  */
 function throwButton(position, letter, ink, onClick) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'hud-btn hud-btn-throw';
     b.style.setProperty('--throw-ink', ink);
-    b.setAttribute('aria-label', `Throw to receiver ${letter}`);
     b.dataset.receiver = position;
     // The letter IS the key, which is why the throw buttons need no hint: the
     // disc on the grass, the route on the diagram and the keystroke are one
@@ -263,7 +278,7 @@ export function showSnap() {
      */
     const change = bindKeys(button('Change play', 'hud-btn',
         () => handlers.onChangePlay && handlers.onChangePlay(),
-        'Change the play before snapping'), [CHANGE_KEY]);
+        'before the snap'), [CHANGE_KEY]);
     change.id = 'change-play-btn';
     box.appendChild(change);
 
@@ -325,9 +340,17 @@ function bindKeys(node, keys) {
  * decision is the part that can be wrong. It takes the event's own fields
  * rather than an event, so a test can ask about a modifier or a text field
  * without building a DOM.
+ *
+ * THE SPACE BAR BELONGS TO A FOCUSED CONTROL (accessibility sweep, 2026-09-14).
+ * Space is how a keyboard presses the button it is on, and it is also a snap
+ * key, so before the snap a visitor who tabbed to "Change play" or to the sound
+ * button and pressed Space snapped the ball instead. `onControl` says focus is
+ * on something Space already means something to, and then the browser gets it.
+ * The letters keep working from anywhere, because no control uses them.
  */
-export function keyAction(key, { inField = false, modified = false } = {}) {
+export function keyAction(key, { inField = false, modified = false, onControl = false } = {}) {
     if (inField || modified || !key) return '';
+    if (key === ' ' && onControl) return '';
     const up = key.length === 1 ? key.toUpperCase() : key;
     if (SNAP_KEYS.includes(up)) return 'snap';
     if (up === KEEP_KEY) return 'keep';
@@ -353,6 +376,7 @@ export function initKeys(signal) {
             inField: tag === 'input' || tag === 'textarea' || tag === 'select'
                 || target.isContentEditable === true,
             modified: event.metaKey || event.ctrlKey || event.altKey,
+            onControl: tag === 'button' || tag === 'a' || tag === 'summary',
         });
         if (!want) return;
 
@@ -391,7 +415,7 @@ export function showInPlay(receivers) {
     }
     box.appendChild(bindKeys(button('Keep it', 'hud-btn hud-btn-primary',
         () => handlers.onRun && handlers.onRun(),
-        'Keep the ball and run'), [KEEP_KEY]));
+        'and run with the ball'), [KEEP_KEY]));
     const first = box.querySelector('.hud-btn');
     if (first) first.focus();
 }
@@ -430,13 +454,13 @@ export function showSkipReplay() {
      */
     const swap = bindKeys(button('Switch view', 'hud-btn',
         () => handlers.onSwitchView && handlers.onSwitchView(),
-        'Watch the replay from another side of the field'), [VIEW_KEY]);
+        'to see the replay from another side of the field'), [VIEW_KEY]);
     swap.id = 'switch-view-btn';
     box.appendChild(swap);
 
     const skip = bindKeys(button('Skip replay', 'hud-btn',
         () => handlers.onSkipReplay && handlers.onSkipReplay(),
-        'Skip the replay and see the result'), [SKIP_KEY]);
+        'and see the result'), [SKIP_KEY]);
     skip.id = 'skip-replay-btn';
     box.appendChild(skip);
     skip.focus();
@@ -463,7 +487,7 @@ export function showSkipCelebration() {
 
     const skip = bindKeys(button('Skip', 'hud-btn',
         () => handlers.onSkipCelebration && handlers.onSkipCelebration(),
-        'Skip the celebration and see the result'), [SKIP_KEY]);
+        'the celebration and see the result'), [SKIP_KEY]);
     skip.id = 'skip-celebration-btn';
     box.appendChild(skip);
     skip.focus();
@@ -481,7 +505,7 @@ export function showSkipShow() {
 
     const skip = bindKeys(button('Skip', 'hud-btn',
         () => handlers.onSkipShow && handlers.onSkipShow(),
-        'Skip the show and carry on'), [SKIP_KEY]);
+        'the show and carry on'), [SKIP_KEY]);
     skip.id = 'skip-show-btn';
     box.appendChild(skip);
     skip.focus();
@@ -577,7 +601,7 @@ export function showWelcome(onStart, saved = null, onFresh = null) {
         box.appendChild(button('Start a new game', 'hud-btn', () => {
             card.hidden = true;
             onFresh();
-        }, 'Discard that game and start a new one'));
+        }, 'and discard the saved one'));
     }
 
     card.hidden = false;
@@ -614,7 +638,7 @@ export function showResult(outcome, playNumber, playsPerGame, runningTotal, canR
     // see the one where it went wrong should not have to have been lucky.
     if (handlers.onReplay && canReplay) {
         box.appendChild(button('Watch the replay', 'hud-btn',
-            () => handlers.onReplay(), 'Watch a replay of this play'));
+            () => handlers.onReplay(), 'of this play'));
     }
 
     const next = button(isLast ? 'See how you did' : 'Next play',
