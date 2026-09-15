@@ -406,7 +406,13 @@ describe('a replay can be got out of', () => {
         expect(dom.el('result').hidden).toBe(false);
         expect(raised).not.toBeNull();
         // Raised during THIS replay, at its whistle, not left over from the play.
-        expect(raised.start).toBeGreaterThan(rewoundAt + 0.3);
+        // STRICTLY AFTER THE REWIND, AND NO MARGIN. The play is rolled with
+        // Math.random, and a quick one reaches its whistle 14 frames (0.234s)
+        // into the replay, so the old `+ 0.3` failed about one run in three.
+        // Strict is still enough: a leftover cheer started before the rewind,
+        // and one wrongly raised on the replay's first frame starts exactly at
+        // it, because the cycle steps before the frame's delta is added.
+        expect(raised.start).toBeGreaterThan(rewoundAt);
     });
 
     /**
