@@ -24,7 +24,8 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/">
     <meta property="og:locale" content="en_US">
-    <!-- THE CARD IS FOUR SCENES, NOT THE LOGO (rebuilt 2026-09-08, ?v=3). It
+    <!-- THE CARD IS FOUR SCENES, NOT THE LOGO (rebuilt 2026-09-08, ?v=3, and
+         again 2026-09-14, ?v=4, to put X's and O's in it). It
          used to be the wordmark on a dark gradient over the line "Custom 3D
          experiences, right in your browser", which had two problems by the
          time anyone went to promote the site. That tagline is the retired
@@ -33,35 +34,43 @@
          whose one attached image in every feed showed no 3D at all.
 
          THE FOUR TILES ARE CHOSEN FOR CONTRAST, not for ranking. Mandelbrot
-         (red), Earth Defense (black and blue), Fractal Garden (green) and
-         Jamar's Karaoke Night (dark and warm) look nothing like each other at
-         thumbnail size. Seven of the fourteen scenes are blue sky over green
-         trees, so picking on quality alone gives four tiles that read as one
-         repeated picture. Each tile is a centre crop of that scene's own
-         og-*.jpg, so the card rebuilds from shipped assets.
+         (red), X's and O's (dark green turf), Fractal Garden (bright green) and
+         Earth Defense (black and blue) look nothing like each other at
+         thumbnail size. Seven of the scenes are blue sky over green trees, so
+         picking on quality alone gives four tiles that read as one repeated
+         picture. X'S AND O'S TOOK JAMAR'S TILE, and Earth Defense moved to the
+         bottom right, so the two green tiles sit on a diagonal and the grid
+         reads light and dark as a checkerboard rather than as a green row.
+
+         THE RECIPE, since nothing else writes it down. Each tile is the scene's
+         own og-*.jpg resized to 598 wide and centre cropped to 598x238, placed
+         at (0,0), (601,0), (0,241) and (601,241), which leaves 3px gutters. The
+         band from y=479 down was kept from the previous card rather than
+         redrawn, and differs from it by 0.14% RMSE after re-encoding.
 
          q90 AT 4:4:4, WHICH WAS MEASURED OVER THE TEXT BAND rather than the
          whole frame: mandelbrot's filaments dominate a global RMSE and nobody
          will notice a filament move, while ringing on the wordmark would be
          the one visible defect. The band reads 0.0054 at 90 against 0.0072 at
          86, for 198.6 KB. Chroma subsampling stays off because the wordmark is
-         the only thing here that could show it.
+         the only thing here that could show it. The 2026-09-14 rebuild is
+         212 KB at the same settings, encoded progressive.
 
          The JPEG ships and the WebP sits beside it, per the note on every
          experience page. og:image:alt describes THIS picture, so it is
          rewritten whenever the card is. -->
-    <meta property="og:image" content="https://www.scenexp.com/assets/og-image.jpg?v=3">
+    <meta property="og:image" content="https://www.scenexp.com/assets/og-image.jpg?v=4">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="Four scenes from the SceneXP collection in a grid: a glowing orange fractal spiral, the blue curve of Earth seen from orbit with a targeting reticle and incoming raiders, a row of red-fruited trees in a green garden, and a karaoke stage in a dark bar. Below them the SceneXP.com wordmark and the line, 3D worlds, games, and experiments, right in your browser.">
+    <meta property="og:image:alt" content="Four scenes from the SceneXP collection in a grid: a glowing orange fractal spiral, a 3D football field with orange and blue players in the middle of a play, a row of red-fruited trees in a green garden, and the blue curve of Earth seen from orbit with a targeting reticle and incoming raiders. Below them the SceneXP.com wordmark and the line, 3D worlds, games, and experiments, right in your browser.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="SceneXP | 3D Worlds, Games, and Experiments">
     <meta name="twitter:description" content="3D worlds, games, experiments, and simulations, every one running entirely in your browser. No app and no download.">
-    <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.jpg?v=3">
-    <meta name="twitter:image:alt" content="Four scenes from the SceneXP collection in a grid: a glowing orange fractal spiral, the blue curve of Earth seen from orbit with a targeting reticle and incoming raiders, a row of red-fruited trees in a green garden, and a karaoke stage in a dark bar. Below them the SceneXP.com wordmark and the line, 3D worlds, games, and experiments, right in your browser.">
+    <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.jpg?v=4">
+    <meta name="twitter:image:alt" content="Four scenes from the SceneXP collection in a grid: a glowing orange fractal spiral, a 3D football field with orange and blue players in the middle of a play, a row of red-fruited trees in a green garden, and the blue curve of Earth seen from orbit with a targeting reticle and incoming raiders. Below them the SceneXP.com wordmark and the line, 3D worlds, games, and experiments, right in your browser.">
 
     <!-- Structured data: site identity plus the experience directory.
          JSON-LD is a data block (not executed), so it is allowed under the CSP.

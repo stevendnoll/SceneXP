@@ -13,9 +13,9 @@
  * is chosen against that frame first and given room in landscape, not the
  * other way round.
  *
- * SHIPPED SO FAR (M0 and the field half of M1): the loading screen's stadium
- * treatment and the night backdrop. Still to come: the playbook and its
- * diagrams at M3, the HUD and result card at M4, the replay controls at M5.
+ * IN ORDER BELOW: the loading screen, the field vignette, the playbook and
+ * its diagrams, the HUD and the throw buttons, the result and summary cards,
+ * the sound button, the welcome card, and the title over a milestone show.
  */
 
 /* The page behind the canvas. The renderer paints a night sky, but the body
