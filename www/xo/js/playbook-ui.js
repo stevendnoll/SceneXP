@@ -97,8 +97,11 @@ const defenseLabel = (slug) => slug.replace(/^([a-z]+)(\d+)$/, (_m, w, n) =>
     `${w[0].toUpperCase()}${w.slice(1)} ${n}`);
 
 const book = new OffensivePlaybookClass({});
+const SVG_NS = 'http://www.w3.org/2000/svg';
 let onChoose = null;
 let onStartOver = null;
+/** Opens the rules, and is handed the function that brings the book back. */
+let onHelp = null;
 /** Told when the defense is changed, for the usage log (see telemetry.js). */
 let onDefense = null;
 let settings = { lastPlay: '', defense: '' };
@@ -460,10 +463,83 @@ function settleStartOver(root) {
     buttons.forEach((b, i) => { b.hidden = i !== 0; });
 }
 
-export function initPlaybook(handler, startOver = null, { defense = null } = {}) {
+/** A question mark in a circle, drawn the way the sound button's speaker is. */
+function helpIcon() {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'hud-mute-icon');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+
+    const ring = document.createElementNS(SVG_NS, 'circle');
+    ring.setAttribute('cx', '12');
+    ring.setAttribute('cy', '12');
+    ring.setAttribute('r', '9');
+    ring.setAttribute('fill', 'none');
+    ring.setAttribute('stroke', 'currentColor');
+    ring.setAttribute('stroke-width', '1.9');
+    svg.appendChild(ring);
+
+    const hook = document.createElementNS(SVG_NS, 'path');
+    hook.setAttribute('d', 'M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6');
+    hook.setAttribute('fill', 'none');
+    hook.setAttribute('stroke', 'currentColor');
+    hook.setAttribute('stroke-width', '1.9');
+    hook.setAttribute('stroke-linecap', 'round');
+    hook.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(hook);
+
+    const dot = document.createElementNS(SVG_NS, 'circle');
+    dot.setAttribute('cx', '12.1');
+    dot.setAttribute('cy', '17.4');
+    dot.setAttribute('r', '1.05');
+    dot.setAttribute('fill', 'currentColor');
+    svg.appendChild(dot);
+    return svg;
+}
+
+/**
+ * HOW TO PLAY, AND IT LEADS THE ROW.
+ *
+ * The welcome card was a one-time read: past "Take the field" there was no way
+ * back to the rules, the scoring ladder or the directory link without a reload.
+ * It sits with the sound and Start over because those are the controls about
+ * the GAME rather than the next play, and it goes first because it is the one
+ * a new visitor is looking for and the only one of the three that changes
+ * nothing.
+ *
+ * THE BOOK STEPS ASIDE RATHER THAN CLOSING. `hide` would take the "Keep this
+ * play" button and its Escape handler with it, and a visitor who opened the
+ * book to change a play, read the rules and came back would have lost the way
+ * out of the change. Only one aria-modal dialog may be showing at a time (the
+ * focus trap wraps the last one it finds), so it is hidden, not layered under.
+ */
+function buildHelp() {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'playbook-restart-btn playbook-help';
+    btn.appendChild(helpIcon());
+    const label = document.createElement('span');
+    label.textContent = 'How to play';
+    btn.appendChild(label);
+    btn.addEventListener('click', () => {
+        const root = document.getElementById('playbook');
+        if (!root || !onHelp) return;
+        root.hidden = true;
+        onHelp(() => {
+            root.hidden = false;
+            settleStartOver(root);
+            btn.focus();
+        });
+    });
+    return btn;
+}
+
+export function initPlaybook(handler, startOver = null, { defense = null, help = null } = {}) {
     onChoose = handler;
     onStartOver = startOver;
     onDefense = defense;
+    onHelp = help;
     load();
 
     const root = document.getElementById('playbook');
@@ -481,10 +557,11 @@ export function initPlaybook(handler, startOver = null, { defense = null } = {})
          */
         const controls = document.createElement('div');
         controls.className = 'playbook-controls';
+        if (onHelp) controls.appendChild(buildHelp());
         const mute = muteButton();
         if (mute) controls.appendChild(mute);
         if (onStartOver) controls.appendChild(buildStartOver());
-        if (mute || onStartOver) head.appendChild(controls);
+        if (onHelp || mute || onStartOver) head.appendChild(controls);
     }
 
     const body = root.querySelector('.playbook-body');
@@ -563,6 +640,8 @@ function setCancel(root, onCancel) {
     head.appendChild(btn);
 
     escapeCancel = (event) => {
+        // Hidden also covers the rules card opened from How to play, which
+        // steps the book aside and closes on the same press (hud.js `showHelp`).
         if (event.key !== 'Escape' || root.hidden) return;
         event.preventDefault();
         onCancel();

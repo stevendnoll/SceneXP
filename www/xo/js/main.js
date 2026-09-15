@@ -45,7 +45,7 @@ import { readGame, saveGame, clearGame } from './progress.min.js';
 import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
-    clearActions, showResult, hideResult, announce, showWelcome, showSkipReplay,
+    clearActions, showResult, hideResult, announce, showWelcome, showHelp, showSkipReplay,
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle,
 } from './hud.min.js';
@@ -100,6 +100,12 @@ const state = {
 const cycle = {
     play: null,
     phase: 'welcome',     // welcome -> playbook -> presnap -> live -> settle -> result
+    /**
+     * THE RULES CARD IS OPEN OVER THE PLAYBOOK ("How to play"). Not a phase:
+     * the game is exactly where it was, and the playbook comes back to it. It
+     * only stops the camera, see `animate`.
+     */
+    reading: false,
     held: 0,
     accumulator: 0,
     playNumber: 0,        // 1 to CFG.rules.playsPerGame
@@ -1720,7 +1726,12 @@ function animate(now) {
     // The stadium's own clock: after 300 the blimp is always up there.
     tickAwake(state.elapsed);
     setDriver(driverForPhase(cycle.phase));
-    applyCamera(updateCamera(delta, cameraState()));
+    // THE CAMERA HOLDS STILL UNDER THE RULES CARD, for the reason the welcome
+    // card gets the still camera: a slide behind reading matter is a moving
+    // background. It is the idle dolly's CLOCK that stops, not its driver, so
+    // the shot freezes exactly where it was and resumes from there. Swapping
+    // to the play camera would cut once on the way in and once on the way out.
+    applyCamera(updateCamera(cycle.reading ? 0 : delta, cameraState()));
     renderer.render(scene, camera);
 }
 
@@ -2032,6 +2043,17 @@ async function init() {
     });
     initPlaybook(onPlaybookChoice, onStartOver, {
         defense: (slug) => report('set-defense', { kind: slug || 'random' }),
+        // The welcome card again, from "How to play". `back` puts the book
+        // where it was, including a change of play still waiting to be kept.
+        help: (back) => {
+            report('how-to-play', { outcome: { playCount: cycle.playNumber } });
+            uiClick();
+            cycle.reading = true;
+            showHelp(() => {
+                cycle.reading = false;
+                back();
+            });
+        },
     });
 
     setProgress(0.9, 'Almost ready…');

@@ -104,7 +104,7 @@
     <title>X's and O's</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=10" as="style">
+    <link rel="preload" href="css/experience.min.css?v=11" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
@@ -113,7 +113,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=10">
+    <link rel="stylesheet" href="css/experience.min.css?v=11">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -207,7 +207,11 @@
 
          It is a plain card rather than the shared #blocker overlay, because
          this scene has no click-to-start surface: every action is a button,
-         and adding a full-screen click target would be the one exception. -->
+         and adding a full-screen click target would be the one exception.
+
+         IT COMES BACK. "How to play" in the playbook reopens this same card
+         with a single "Back to the playbook" button (hud.js `showHelp`), so the
+         rules and the directory link below are never more than a press away. -->
     <div id="welcome" class="card-overlay" hidden>
         <div class="card-panel welcome-panel" role="dialog" aria-modal="true"
             aria-labelledby="welcome-title" aria-describedby="welcome-intro">
@@ -317,10 +321,11 @@
     <div id="playbook" class="playbook" hidden>
         <div class="playbook-panel" role="dialog" aria-modal="true"
             aria-labelledby="playbook-title">
-            <!-- The heading shares its row with the restart control, which
-                 playbook-ui.js builds: it asks twice before it does anything,
-                 so it is three buttons rather than one and belongs in script
-                 with the state that decides which is showing. -->
+            <!-- The heading shares its row with How to play, the sound and
+                 the restart control, which playbook-ui.js builds: restart asks
+                 twice before it does anything, so it is three buttons rather
+                 than one and belongs in script with the state that decides
+                 which is showing. -->
             <div class="playbook-head">
                 <h2 id="playbook-title" class="playbook-title">Choose your play</h2>
             </div>
