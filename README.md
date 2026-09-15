@@ -6,7 +6,7 @@
 
 [![Four scenes from the SceneXP collection: a fractal spiral, a 3D football game, a fruit tree garden, and Earth from orbit, over the SceneXP.com wordmark and the line, 3D worlds, games, and experiments, right in your browser](www/assets/og-image.jpg)](https://www.scenexp.com/)
 
-[SceneXP.com](https://www.scenexp.com/) is a live website and a home for browser-native 3D experiences: worlds, games, experiments, stories, and simulations. Some were built to honor a person, place, or business. Others exist to show visitors what a browser can do. New experiences land regularly.
+[SceneXP.com](https://www.scenexp.com/) is a live website and a home for browser-native 3D experiences: worlds, games, experiments, stories, and simulations. New experiences land regularly.
 
 Everything runs client side. No app, no download, no account, no cookies, and no third-party scripts, trackers, or CDNs.
 

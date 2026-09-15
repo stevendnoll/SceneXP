@@ -142,8 +142,8 @@ body {
    reload, so it must be findable and must not compete with seventeen plays for
    attention: a small outline button, and the confirm step wears the warning
    colour rather than the resting one. */
-/* The two controls in the playbook's header that are about the GAME rather
-   than about the next play: the sound and starting over. */
+/* The controls in the playbook's header that are about the GAME rather than
+   about the next play: how to play, the sound and starting over. */
 .playbook-controls {
     display: flex;
     flex-wrap: wrap;
@@ -157,12 +157,14 @@ body {
     gap: 0.4rem;
 }
 
-/* THE SOUND BUTTON BORROWS THE RESTART PILL AND ADDS THE SPEAKER. It wears the
+/* THE SOUND BUTTON BORROWS THE RESTART PILL AND ADDS THE SPEAKER, and How to
+   play does the same with a question mark. It wears the
    same shape as its neighbour on purpose: two controls sitting together that
    are drawn differently read as two different kinds of thing. The icon sizing
    matches `.hud-mute` so the same button is the same size wherever it appears,
    and `.hud-mute-icon` above already styles the glyph itself. */
-.playbook-mute {
+.playbook-mute,
+.playbook-help {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;

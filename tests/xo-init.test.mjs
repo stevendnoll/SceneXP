@@ -654,6 +654,100 @@ describe('changing the play before the snap', () => {
         inBook.click();
         expect(inBook.getAttribute('aria-pressed')).toBe(before);
     });
+
+    /**
+     * THE RULES CAN BE READ AGAIN. The welcome card was seen once a page load,
+     * so a visitor who pressed "Take the field" before reading had no way back
+     * to the rules or to the directory link short of reloading the tab.
+     */
+    const helpButton = (root) => deep(root)
+        .find((n) => (n.textContent || '').trim() === 'How to play');
+    const welcomeLabels = () => dom.el('welcome-actions').children.map((b) => b.textContent);
+    const escape = () => fire(dom.documentStub, 'keydown', { key: 'Escape' });
+
+    test('How to play reopens the welcome card in place of the book, and comes back', async () => {
+        await boot();
+        dom.el('welcome-actions').children[0].click();   // Take the field
+        await flushAsync();
+        const head = dom.el('playbook').querySelector('.playbook-head');
+        const help = helpButton(head);
+        expect(help).toBeTruthy();
+        // It leads the row of game controls, ahead of the sound.
+        const row = head.children.find((n) => n.className === 'playbook-controls');
+        expect(row.children[0]).toBe(help);
+
+        help.click();
+        // One dialog at a time: the focus trap wraps whichever it finds last.
+        expect(dom.el('playbook').hidden).toBe(true);
+        expect(dom.el('welcome').hidden).toBe(false);
+        expect(welcomeLabels()).toEqual(['Back to the playbook']);
+        expect(dom.el('welcome-resume').hidden).toBe(true);
+        expect(dom.el('welcome-actions').children[0].focused).toBe(true);
+
+        dom.el('welcome-actions').children[0].click();
+        expect(dom.el('welcome').hidden).toBe(true);
+        expect(dom.el('playbook').hidden).toBe(false);
+        expect(help.focused).toBe(true);
+    });
+
+    /**
+     * ...AND THE CAMERA HOLDS STILL WHILE THEY ARE READ. Behind the playbook the
+     * idle camera slides across the field, and under a card of rules that is a
+     * moving background. It freezes where it is rather than cutting to another
+     * shot, and carries on from there.
+     */
+    test('the idle camera stops under the rules card and resumes from the same spot', async () => {
+        await boot();
+        dom.el('welcome-actions').children[0].click();   // Take the field
+        await flushAsync();
+        // THE MIN BUILD, the copy main.js imports. `update(0)` reads the shot
+        // without moving the camera's clock.
+        const camera = await import('../www/xo/js/camera.min.js');
+        let now = 0;
+        const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 100); };
+        const sway = () => camera.update(0).position.z;
+
+        frames(20);
+        expect(camera.getDriver()).toBe('idle');
+        const before = sway();
+        frames(20);
+        expect(sway()).not.toBeCloseTo(before, 3);      // it is moving
+
+        helpButton(dom.el('playbook').querySelector('.playbook-head')).click();
+        const held = sway();
+        frames(40);
+        expect(sway()).toBeCloseTo(held, 9);
+
+        dom.el('welcome-actions').children[0].click();   // Back to the playbook
+        frames(1);
+        // No jump on the way out: one frame's worth of drift, not a cut.
+        expect(Math.abs(sway() - held)).toBeLessThan(0.2);
+        frames(20);
+        expect(sway()).not.toBeCloseTo(held, 3);
+    });
+
+    test('opened during a change of play, Escape steps back one card at a time', async () => {
+        await toLivePlay();
+        await openBook();
+        const head = dom.el('playbook').querySelector('.playbook-head');
+        helpButton(head).click();
+        expect(dom.el('welcome').hidden).toBe(false);
+
+        // The first press closes the rules and nothing else: the change of play
+        // is still open, with its way out intact.
+        escape();
+        await flushAsync();
+        expect(dom.el('welcome').hidden).toBe(true);
+        expect(dom.el('playbook').hidden).toBe(false);
+        expect(actionLabels()).toEqual([]);
+        expect(deep(head).some((n) => (n.textContent || '') === 'Keep this play')).toBe(true);
+
+        // The second keeps the play, exactly as it would have without the detour.
+        escape();
+        await flushAsync();
+        expect(dom.el('playbook').hidden).toBe(true);
+        expect(actionLabels()).toEqual(['Change play', 'Snap the ball']);
+    });
 });
 
 describe('a milestone show', () => {

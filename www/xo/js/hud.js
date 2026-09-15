@@ -609,6 +609,60 @@ export function showWelcome(onStart, saved = null, onFresh = null) {
 }
 
 /**
+ * THE WELCOME CARD AGAIN, OPENED FROM "HOW TO PLAY" IN THE PLAYBOOK.
+ *
+ * It used to be seen once per page load. A visitor who pressed "Take the
+ * field" before reading had no way back to the rules, or to the directory link
+ * at the foot of the card, short of reloading the tab. The garden solved the
+ * same problem the same way: the card itself comes back rather than a second
+ * copy of its sentences that could drift from it.
+ *
+ * ONE BUTTON, BACK. The game is already under way, so neither "Take the field"
+ * nor the resume offer means anything here, and the resume line is hidden with
+ * them. Escape closes it too, because it is a second look rather than a
+ * question that has to be answered.
+ *
+ * `onClose` runs once, after the card is gone, and is where the caller puts the
+ * playbook back.
+ */
+export function showHelp(onClose) {
+    const card = el('welcome');
+    if (!card) { if (onClose) onClose(); return; }
+    const note = el('welcome-resume');
+    if (note) note.hidden = true;
+    const box = el('welcome-actions');
+    box.textContent = '';
+
+    let onEscape = null;
+    const close = () => {
+        if (card.hidden) return;
+        card.hidden = true;
+        if (onEscape) document.removeEventListener('keydown', onEscape);
+        onEscape = null;
+        if (onClose) onClose();
+    };
+
+    const back = button('Back to the playbook', 'hud-btn hud-btn-primary', close);
+    back.setAttribute('aria-keyshortcuts', 'Escape');
+    box.appendChild(back);
+
+    // ONE PRESS IS ONE STEP. The playbook's own Escape (backing out of a change
+    // of play) was registered when the book opened, so it hears this press
+    // first, while the book is still hidden, and ignores it. Order is the
+    // guard, not defaultPrevented: the key handler in `initKeys` can prevent
+    // an Escape for reasons of its own.
+    onEscape = (event) => {
+        if (event.key !== 'Escape' || card.hidden) return;
+        event.preventDefault();
+        close();
+    };
+    document.addEventListener('keydown', onEscape);
+
+    card.hidden = false;
+    back.focus();
+}
+
+/**
  * The result card.
  *
  * Opens after every whistle with what happened and what it was worth, and one
