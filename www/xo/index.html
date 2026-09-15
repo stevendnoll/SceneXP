@@ -104,7 +104,7 @@
     <title>X's and O's</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=9" as="style">
+    <link rel="preload" href="css/experience.min.css?v=10" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
@@ -113,7 +113,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=9">
+    <link rel="stylesheet" href="css/experience.min.css?v=10">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -171,6 +171,13 @@
 
     <div id="loading-screen">
         <div class="loader-content">
+            <!-- The 2D game's logo over the title, the same mark as the favicon
+                 and the welcome card, so the first thing on screen is a game a
+                 visitor from exesnohs.com already knows. alt="" because the
+                 title under it says the name. Eager and high priority: it is
+                 the loading screen, so there is no later moment to fetch it. -->
+            <img class="loader-logo xo-loader-logo" src="assets/exes-n-ohs-logo-152.jpg"
+                width="152" height="152" alt="" fetchpriority="high">
             <div class="loader-title">X'S AND O'S</div>
             <div class="loader-bar" aria-hidden="true">
                 <div class="loader-progress" id="load-progress"></div>

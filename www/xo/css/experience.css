@@ -43,6 +43,14 @@ body {
     letter-spacing: 0.22em;
 }
 
+/* The logo over the title. Its size and spacing come from the shared
+ * `.loader-logo`. Its black ground is a shade darker than this screen, which
+ * shows as a faint square edge, so the corners are rounded to make it a badge,
+ * the same treatment as the logo on the welcome card. */
+.xo-loader-logo {
+    border-radius: 24px;
+}
+
 /* ---- The turf's own light -------------------------------------------------
  *
  * A vignette over the canvas, pulling the corners down so the eye lands on the
