@@ -365,6 +365,51 @@ describe('a replay can be got out of', () => {
     });
 
     /**
+     * THE STANDS CHEER IN THE REPLAY TOO (QA, 2026-09-14). The cheer was a
+     * one-off call on the live whistle's frame, and the replay only re-ran the
+     * tackle and the celebration when its recording reached the whistle, so the
+     * second look ended in stands that sat perfectly still.
+     *
+     * TWO HALVES, and the first matters as much as the second: a replay rewinds
+     * to the snap, so a cheer still running from the live play has to be sat
+     * down, or the fans are frozen mid-hop through the whole replay.
+     *
+     * Read through `cheerState` from the MIN build, which is the copy main.js
+     * imports and so the one holding the state.
+     */
+    test('the stands sit down for the rewind and go up again at the whistle', async () => {
+        const spectacle = await import('../www/xo/js/spectacle.min.js');
+        const main = await toLivePlay();
+        press('Snap the ball');
+        await flushAsync();
+        press('Throw');
+        await flushAsync();
+        // ONE CLOCK FOR THE WHOLE TEST, for the reason the test below gives.
+        let now = 0;
+        const frame = () => { now += 16.7; dom.loops[0](now); };
+        for (let i = 0; i < 900 && dom.el('result').hidden !== false; i += 1) frame();
+        expect(dom.el('result').hidden).toBe(false);
+
+        const watch = dom.el('result-actions').children
+            .find((b) => b.textContent === 'Watch the replay');
+        expect(watch).toBeTruthy();
+        watch.click();
+        await flushAsync();
+        expect(spectacle.cheerState()).toBeNull();
+        const rewoundAt = main.getState().elapsed;
+
+        let raised = null;
+        for (let i = 0; i < 2000 && dom.el('result').hidden !== false; i += 1) {
+            frame();
+            raised = raised || spectacle.cheerState();
+        }
+        expect(dom.el('result').hidden).toBe(false);
+        expect(raised).not.toBeNull();
+        // Raised during THIS replay, at its whistle, not left over from the play.
+        expect(raised.start).toBeGreaterThan(rewoundAt + 0.3);
+    });
+
+    /**
      * QA ROUND TWENTY-THREE: A SECOND LOOK AT THE SAME PLAY KEEPS THE ANGLE.
      *
      * Somebody who switches the view and then presses "Watch the replay" again

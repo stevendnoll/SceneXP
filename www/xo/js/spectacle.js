@@ -617,7 +617,20 @@ function poseCrowd(t, { bouncing = false, cardsUp = false, cheer = null, cheerT 
  * Somebody who asked not to be moved about gets stands that keep still.
  */
 export function cheerCrowd(cheer, elapsed, { calm = false } = {}) {
+    const was = cheering;
     cheering = cheer && !calm && !inShow ? { cheer, start: elapsed } : null;
+    // A CHEER STOPPED SHORT SITS DOWN. A replay rewinds to the snap and calls
+    // this with nothing, and the fans have to be back in their seats for it:
+    // `tickCheer` only poses a crowd while somebody is cheering, so merely
+    // dropping the cheer would leave them frozen mid-hop through the replay.
+    // Same reason `beginShow` seats them. A show owns the crowd while it runs.
+    if (was && !cheering && crowd && !inShow) poseCrowd(null);
+}
+
+/** The cheer running now, and the clock it started on, or null. For the suite:
+ *  the crowd is instanced geometry, which the Three stub cannot measure. */
+export function cheerState() {
+    return cheering ? { ...cheering.cheer, start: cheering.start } : null;
 }
 
 /** Only while somebody is jumping: a crowd at rest is not reposed per frame. */

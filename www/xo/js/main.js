@@ -138,6 +138,17 @@ const cycle = {
      */
     party: null,
     /**
+     * ...AND WHICH STANDS WENT UP, FOR THE THIRD TIME FOR THE SAME REASON.
+     *
+     * The fans cheered at the live whistle and a replay used to end in silent
+     * stands, because the cheer was a one-off call on the whistle's frame and
+     * the replay only ever re-ran the tackle and the party. Kept here, it is
+     * the same cheer for the same team on the same frame of the second look.
+     * `cheered` says whether this replay has already raised it.
+     */
+    cheer: null,
+    cheered: false,
+    /**
      * HOW THE GAME IS GOING, as a signed run of plays. Positive is a run of
      * good ones and negative a run of bad ones, and it leans the next line-up's
      * speed roll (see `scoring.nextStreak` and `config.difficulty`).
@@ -430,6 +441,7 @@ function changePlay(offensive, defense) {
     resetStaging();
     cycle.tackle = { tackler: '', carrier: '' };
     cycle.party = null;
+    cycle.cheer = null;
     cycle.held = 0;
     cycle.accumulator = 0;
     beginRelocate();
@@ -477,6 +489,7 @@ function startPlay(offensive, defense) {
     resetStaging();
     cycle.tackle = { tackler: '', carrier: '' };
     cycle.party = null;
+    cycle.cheer = null;
     cycle.phase = 'presnap';
     cycle.held = 0;
     cycle.accumulator = 0;
@@ -524,6 +537,7 @@ function beginSettle() {
     cycle.settleFor = HOLD_SETTLE;
     cycle.tackle = { tackler: '', carrier: '' };
     cycle.party = null;
+    cycle.cheer = null;
     resetTakedown();
     resetCelebration();
     clearActions();
@@ -576,8 +590,8 @@ function beginSettle() {
     const party = planCelebration(result, pair);
     // THE STANDS GO UP ON THE WHISTLE, the fans of whichever team it went for,
     // and they are told the same occasion the field celebrates.
-    cheerCrowd(cheerFor(result, occasionFor(result, !!pair.tackler, !!cycle.play.expired)),
-        state.elapsed, { calm: reducedMotion });
+    cycle.cheer = cheerFor(result, occasionFor(result, !!pair.tackler, !!cycle.play.expired));
+    cheerCrowd(cycle.cheer, state.elapsed, { calm: reducedMotion });
     /**
      * A SACK IS THE ONE ENDING THAT GETS BOTH, in that order. The celebration
      * carries the takedown's length as its own `wait`, so the two clocks can
@@ -908,6 +922,10 @@ function startReplay() {
     // men already halfway to the end zone.
     resetTakedown();
     resetCelebration();
+    // The stands sit down with it, whether or not the live cheer had finished,
+    // and go up again at the same whistle below.
+    cheerCrowd(null, state.elapsed);
+    cycle.cheered = false;
     rewind();
     // The recording begins ON the snap, so the playhead going back to frame
     // one is the same instant the visitor's press was, and he takes the ball
@@ -1011,6 +1029,7 @@ function stagePlayers(level) {
     resetCelebration();
     cycle.tackle = { tackler: '', carrier: '' };
     cycle.party = null;
+    cycle.cheer = null;
     const numerals = level === 400 ? planBulbs(turfSetup(level)).bulbs : [];
     const stage = stageTeam(level, men, { calm: reducedMotion, numerals });
     if (!stage) return;
@@ -1317,6 +1336,12 @@ function stepCycle(delta) {
              * something rather than as decoration.
              */
             if (cycle.party && celebrationClock() < 0) beginCelebration(cycle.party);
+            // AND THE STANDS GO UP AGAIN, on the frame the recording reaches
+            // the whistle, which is the frame they went up in the live play.
+            if (cycle.cheer && !cycle.cheered) {
+                cycle.cheered = true;
+                cheerCrowd(cycle.cheer, state.elapsed, { calm: reducedMotion });
+            }
             // Hold the last frame for a beat before the card, so the replay
             // ends on a composition rather than cutting away mid-motion.
             cycle.replayHold += delta;
