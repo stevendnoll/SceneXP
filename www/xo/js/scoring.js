@@ -114,7 +114,7 @@ export function classifyPlay({ ranWithBall, threwTo, ball, carrierX, lineInterva
                 result: 'interception',
                 points: INTERCEPTION,
                 headline: 'Intercepted',
-                detail: 'The Crows read it and took the ball away.',
+                detail: "The O's read it and took the ball away.",
             };
         }
         const points = pointsForPosition(carrierX, lineInterval);

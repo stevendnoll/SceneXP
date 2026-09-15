@@ -18,7 +18,7 @@
 import { XO_CONFIG as CFG, FIELD, simToWorld } from './config.min.js';
 import { initField, setBandAt, fadeBand, updateScoreboard } from './field.min.js';
 import { initRoster, figureFor, TEAMS } from './roster.min.js';
-import { initBall } from './ball.min.js';
+import { initBall, getBall } from './ball.min.js';
 import {
     initMarkers, setPulse, initSpot, showSpot, hideSpot, markerGeometry,
 } from './markers.min.js';
@@ -27,7 +27,7 @@ import {
     beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
     beginRelocate, resetRelocate, airborne,
     beginCelebration, resetCelebration, celebrationClock,
-    beginStaging, resetStaging, drawnSpots,
+    beginStaging, resetStaging, drawnSpots, setScripted, resetScripted,
 } from './view.min.js';
 import {
     takedownLength, takedownRest, tacklerFor, contactFraction,
@@ -47,8 +47,9 @@ import {
     initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showHelp, showSkipReplay,
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
-    hideMilestoneTitle,
+    hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
 } from './hud.min.js';
+import { openingFrame, planOpening, castAt } from './opening.min.js';
 import {
     milestoneDue, litStars, showFrame, showUsesTeam, stageTeam, turfSetup,
 } from './milestones.min.js';
@@ -99,7 +100,7 @@ const state = {
  */
 const cycle = {
     play: null,
-    phase: 'welcome',     // welcome -> playbook -> presnap -> live -> settle -> result
+    phase: 'welcome',     // [opening] -> welcome -> playbook -> presnap -> live -> settle -> result
     /**
      * THE RULES CARD IS OPEN OVER THE PLAYBOOK ("How to play"). Not a phase:
      * the game is exactly where it was, and the playbook comes back to it. It
@@ -391,7 +392,7 @@ function driverForPhase(phase) {
     if (phase === 'welcome') return 'play';
     if (phase === 'playbook') return 'idle';
     if (phase === 'replay') return 'replay';
-    if (phase === 'show') return 'show';
+    if (phase === 'show' || phase === 'opening') return 'show';
     return 'play';
 }
 
@@ -399,6 +400,7 @@ function driverForPhase(phase) {
  *  anything, and what it needs is where the ball was on this frame. */
 function cameraState() {
     if (cycle.phase === 'show') return { shot: cycle.showShot };
+    if (cycle.phase === 'opening') return { shot: cycle.openingShot };
     if (cycle.phase !== 'replay') return {};
     const total = Math.max(1, frameCount());
     const f = replayFocus();
@@ -682,8 +684,12 @@ function beginSettle() {
          * no explanation of what there is to skip. It deliberately does not
          * repeat the headline: the result card says what happened a moment
          * later, and this says who is enjoying it.
+         *
+         * BY THE LETTER ON THE JERSEY, NEVER THE TEAM'S NAME. The names live in
+         * source code only (Steve, 2026-09-15): a visitor knows these teams as
+         * the X's and the O's.
          */
-        announce(`${TEAMS[teamOfPosition(party.hero)].name} are celebrating.`);
+        announce(`The ${TEAMS[teamOfPosition(party.hero)].glyph}'s are celebrating.`);
     }
 
     endTheDown(result);
@@ -1241,6 +1247,106 @@ function onSkipShow() {
     endMilestone();
 }
 
+// ---- The opening, before the welcome card ------------------------------------------
+
+/**
+ * START THE OPENING, and remember what comes after it.
+ *
+ * On every page load, before the welcome card (Steve, 2026-09-15), and always
+ * skippable: the HUD comes up with one button in it, Skip, which takes focus, so
+ * Enter, Space and Escape all get a visitor out. A tap on the field does NOT,
+ * because Earth Defense's playtesters tapped through its opening by accident
+ * and nobody here has to find that out again.
+ */
+function beginOpening(then) {
+    cycle.phase = 'opening';
+    const aspect = (camera && Number(camera.aspect)) || 1.78;
+    // THE CAST IS THE FORMATION ALREADY LINED UP BEHIND THE WELCOME CARD, and
+    // every path in the script ends on it. Benched men sit it out, as in play.
+    const men = cycle.play.game.objects
+        .filter((o) => o.settings.position !== 'ball' && !o.settings.benched)
+        .map((o) => {
+            const at = simToWorld(o.coords.x, o.coords.y, 0);
+            return { position: o.settings.position, team: o.settings.team, x: at.x, z: at.z };
+        });
+    const plan = planOpening(men, { aspect, calm: reducedMotion });
+    cycle.opening = { t: 0, then, spoken: false, plan, cheered: 0 };
+    // Nobody is carrying anything yet: the quarterback is running out with the
+    // rest of them. `endOpening` puts the ball back under centre.
+    const ball = getBall();
+    if (ball) ball.visible = false;
+    hideSpot();
+    report('opening', { kind: reducedMotion ? 'calm' : 'full' });
+    showHud(true);
+    showSkipOpening();
+    stepOpening(0);
+}
+
+/** One frame of the opening. */
+function stepOpening(delta) {
+    const s = cycle.opening;
+    if (!s) return;
+    s.t += delta;
+    const aspect = (camera && Number(camera.aspect)) || 1.78;
+    const frame = openingFrame(s.t, { aspect, calm: reducedMotion });
+    cycle.openingShot = frame.shot;
+    setOpeningTitle(frame.title, { calm: reducedMotion });
+
+    // THE MEN, where the script has them, drawn through the same pose path as
+    // a celebration. The figures' own clocks only move when time does.
+    setScripted(castAt(s.plan, s.t));
+    if (delta > 0) syncFigures(cycle.play.game.objects, delta, {});
+
+    // AND THE STANDS, each cheer once as its moment passes. A calm opening
+    // gets none: `cheerCrowd` already refuses a cheer to anybody who asked not
+    // to be moved about.
+    const cheers = CFG.opening.cheers;
+    while (s.cheered < cheers.length && s.t >= cheers[s.cheered].at) {
+        const c = cheers[s.cheered];
+        cheerCrowd({ team: c.team, big: c.big }, state.elapsed, { calm: reducedMotion });
+        s.cheered += 1;
+    }
+    if (frame.speak && !s.spoken) {
+        s.spoken = true;
+        announce(CFG.opening.copy.spoken);
+    }
+    if (frame.done) endOpening();
+}
+
+/**
+ * HOWEVER IT ENDED, THE WELCOME STATE IS THE SAME ONE. Watched to the end or
+ * skipped on its first frame, the card comes up over the play camera with the
+ * HUD put away, exactly as it did before there was an opening.
+ */
+function endOpening() {
+    const s = cycle.opening;
+    if (!s) return;
+    cycle.opening = null;
+    cycle.openingShot = null;
+    hideOpeningTitle();
+    // BACK TO THE FORMATION, PLACED, with a few quiet frames so the arms come
+    // down and the quarterback gets back over the ball before the card is up.
+    // Watched to the end they are already there; skipped, this is the cut.
+    resetScripted();
+    cheerCrowd(null, state.elapsed);
+    const objects = cycle.play.game.objects;
+    for (let i = 0; i < CFG.opening.settleFrames; i += 1) {
+        syncFigures(objects, 1 / 30, { presnap: true });
+    }
+    showBall(objects, 0);
+    clearActions();
+    showHud(false);
+    cycle.phase = 'welcome';
+    s.then();
+}
+
+function onSkipOpening() {
+    if (cycle.phase !== 'opening' || !cycle.opening) return;
+    report('skip-opening', { seconds: cycle.opening.t });
+    uiClick();
+    endOpening();
+}
+
 // ---- QA: play any milestone show from the console -----------------------------
 
 /**
@@ -1274,6 +1380,7 @@ const QA_PHASES = { playbook: () => openPlaybook, result: () => presentResult };
  * not play again later in the same game. A new game puts everything back.
  */
 export function qaShow(level) {
+    if (cycle.phase === 'opening') return 'Not during the opening. Skip it first.';
     const built = CFG.milestones.built;
     const wanted = Number(level);
     if (!built.includes(wanted)) return `Choose one of ${built.join(', ')}.`;
@@ -1290,9 +1397,27 @@ export function qaShow(level) {
     return `Playing the ${wanted} show.`;
 }
 
+/**
+ * PLAY THE OPENING AGAIN, from the welcome card or the playbook, and go back to
+ * wherever it was called from.
+ */
+export function qaOpening() {
+    if (cycle.phase === 'welcome' && cycle.welcome) {
+        hideWelcome();
+        beginOpening(cycle.welcome);
+        return 'Playing the opening.';
+    }
+    if (cycle.phase === 'playbook' && !cycle.reading) {
+        hidePlaybook();
+        beginOpening(openPlaybook);
+        return 'Playing the opening.';
+    }
+    return `Not during "${cycle.phase}". Try again from the welcome card or the playbook.`;
+}
+
 function installQaHook() {
     if (typeof window === 'undefined' || !qaEnabled(window.location && window.location.href)) return;
-    window.xo = Object.freeze({ show: qaShow, levels: [...CFG.milestones.built] });
+    window.xo = Object.freeze({ show: qaShow, opening: qaOpening, levels: [...CFG.milestones.built] });
 }
 
 /** A fresh ten. */
@@ -1414,6 +1539,10 @@ function startTakedown(objects, tacklerPos, carrierPos) {
  *  readable state machine rather than a pile of conditions in the frame loop. */
 function stepCycle(delta) {
     if (!cycle.play) return;
+    if (cycle.phase === 'opening') {
+        stepOpening(delta);
+        return;
+    }
     if (cycle.phase === 'playbook' || cycle.phase === 'welcome') {
         // The field simply holds its last frame behind the overlay. Nothing
         // ticks, so a visitor reading the playbook is not burning a phone
@@ -2034,6 +2163,7 @@ async function init() {
         onSkipReplay,
         onSkipCelebration,
         onSkipShow,
+        onSkipOpening,
         onSwitchView,
         onToggleMute: () => {
             toggleMuted();
@@ -2113,12 +2243,15 @@ async function init() {
         uiClick();
         go();
     };
-    showWelcome(
+    cycle.welcome = () => showWelcome(
         saved ? takeTheField('resume-game', () => resumeGame(saved))
             : takeTheField('take-field', startGame),
         saved,
         takeTheField('new-game', startGame)
     );
+    // ...AFTER THE OPENING, on every load, a resumed game included. See
+    // `beginOpening`.
+    beginOpening(cycle.welcome);
 
     // ON THE RECORD FROM HERE, before anybody has pressed anything, so the
     // count includes the visitors who read the rules and left.

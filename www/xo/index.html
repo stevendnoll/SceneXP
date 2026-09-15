@@ -104,7 +104,7 @@
     <title>X's and O's</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=11" as="style">
+    <link rel="preload" href="css/experience.min.css?v=12" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
@@ -113,7 +113,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=11">
+    <link rel="stylesheet" href="css/experience.min.css?v=12">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -383,6 +383,11 @@
          HUD. aria-hidden, because the number is announced once through
          #hud-live at the moment it lands, and a title fading in and out would
          otherwise be read out twice. hud.js drives its opacity per frame. -->
+    <!-- THE TITLE OVER THE OPENING, before the welcome card. Same arrangement as
+         the milestone title below: not a dialog, no focus, aria-hidden because
+         it is announced once through #hud-live, opacity driven by hud.js. -->
+    <p id="opening-title" class="opening-title" aria-hidden="true" hidden>Make them pay.</p>
+
     <div id="milestone" class="milestone" aria-hidden="true" hidden>
         <p class="milestone-kicker">Points</p>
         <p id="milestone-number" class="milestone-number">100</p>

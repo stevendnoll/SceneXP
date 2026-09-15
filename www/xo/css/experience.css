@@ -820,6 +820,36 @@ body {
     margin: 0;
 }
 
+/* ---- The opening title -------------------------------------------------------
+ *
+ * "Make them pay." over the last beat of the opening. Where the milestone title
+ * is an award, this is a challenge, so it is set heavy, tight and upright in the
+ * home orange rather than in gold serif. It sits in the same low band, above the
+ * HUD row, so the faces the scene has just pushed in on stay clear. Opacity and
+ * a small scale are set per frame by hud.js.
+ */
+.opening-title {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(5.8rem + env(safe-area-inset-bottom, 0px));
+    z-index: 30;
+    margin: 0;
+    padding: 0 1rem;
+    text-align: center;
+    pointer-events: none;
+    font-size: clamp(2.6rem, 11vw, 5.6rem);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    color: #fff4e6;
+    text-shadow: 0 0 1.4rem rgba(255, 153, 44, 0.75), 0 0.3rem 0.9rem rgba(0, 0, 0, 0.85);
+}
+
+.opening-title[hidden] {
+    display: none;
+}
+
 /* ---- The milestone title ----------------------------------------------------
  *
  * The number a game has reached, over the show that celebrates it. It is the one

@@ -829,6 +829,48 @@ export function beginStaging(spots, { delay = 0, walk = 0 } = {}) {
     staging.from.clear();
 }
 
+/**
+ * THE OPENING'S MEN, WHO ARE WHERE ITS SCRIPT SAYS AND NOWHERE ELSE.
+ *
+ * A Map of position to `{ x, z, team, running, pose }` from `opening.castAt`,
+ * handed over every frame. While it is set a named man is drawn at that spot,
+ * his stride and his facing are measured off the drawn movement exactly as a
+ * staged man's are, and `pose` goes through the same path a celebration entry
+ * does (facing, arms, lean, roll, hop). Nothing the play would say about him
+ * applies: no carry, no block, no reach.
+ */
+let script = null;
+const scriptPlaced = new Set();
+
+export function setScripted(cast) {
+    script = cast instanceof Map ? cast : null;
+}
+
+/**
+ * ...AND PUT THEM BACK ON THE GAME'S OWN FOOTING. Every scripted man's drawn
+ * history is dropped, so the next sync PLACES him where the simulation has him
+ * rather than easing from wherever the script left him, and he is stood upright
+ * facing the way his formation faces.
+ */
+export function resetScripted() {
+    if (script) {
+        for (const [position, man] of script) {
+            const figure = figureFor(position);
+            if (!figure) continue;
+            figure.userData.at = null;
+            figure.userData.cheerAt = null;
+            figure.userData.yaw0 = undefined;
+            figure.userData.mps = 0;
+            figure.userData.facing = man.team === 0 ? Math.PI / 2 : -Math.PI / 2;
+            figure.rotation.x = 0;
+            figure.rotation.z = 0;
+            figure.rotation.y = figure.userData.facing;
+        }
+    }
+    script = null;
+    scriptPlaced.clear();
+}
+
 export function resetStaging() {
     staging.at = -1;
     staging.spots = null;
@@ -1256,7 +1298,9 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // What, if anything, this man is doing about the play having just
         // ended well for his side. Null on every frame of every live play,
         // which is all but four seconds of the game.
-        const cheer = party ? (party.get(obj.settings.position) || null) : null;
+        const scripted = script ? (script.get(obj.settings.position) || null) : null;
+        const cheer = scripted ? scripted.pose
+            : (party ? (party.get(obj.settings.position) || null) : null);
 
         // THE DRAWN POSITION EASES TOWARD THE SIMULATED ONE, and that is what
         // turns stepped motion into movement. The simulation advances on a
@@ -1315,6 +1359,17 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             const k = stagingProgress();
             p = { x: start.x + (spot.x - start.x) * k, z: start.z + (spot.z - start.z) * k };
             stagedMoving = k < 1 && Math.hypot(spot.x - start.x, spot.z - start.z) > 0.05;
+        }
+        // THE OPENING OUTRANKS BOTH. His first scripted frame is a placement,
+        // not a step: measured as a step it would be a sprint across the field.
+        if (scripted) {
+            p = { x: scripted.x, z: scripted.z };
+            if (!scriptPlaced.has(obj.settings.position)) {
+                scriptPlaced.add(obj.settings.position);
+                figure.userData.at = { x: p.x, z: p.z };
+                figure.userData.cheerAt = null;
+            }
+            stagedMoving = !!scripted.running;
         }
 
         // HOW FAST HE IS ACTUALLY GOING, MEASURED FROM WHERE HE ACTUALLY WENT.
@@ -1478,7 +1533,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // formation and wrong for the seconds it takes to get into one.
         const relocating = !!from && walking < 1;
         const downfield = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
-        const surveying = carrier === obj && carryFor(obj, carrier) === 'throw';
+        const surveying = !scripted && carrier === obj && carryFor(obj, carrier) === 'throw';
         /**
          * AND A CELEBRATION OUTRANKS EVERY LIVE-PLAY READING.
          *
@@ -1492,7 +1547,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
          */
         // A man a show has sent somewhere is off the play the same way a
         // celebrant is: no block, no reach, no lunge.
-        const offPlay = !!cheer || !!spot;
+        const offPlay = !!cheer || !!spot || !!scripted;
         const engagement = offPlay ? null : (engaged.get(obj.settings.position) || null);
         // A MAN WITH HIS HANDS ON SOMEBODY IS NOT CATCHING A PASS. The ball
         // leaves at chest height over a line of men who are 3.85m tall, so it
@@ -1673,7 +1728,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             ? escapeAmount(esc, E.grace, CFG.pose.juke.snap) : 0;
 
         poseFigure(figure, mps, figure.userData.phase, {
-            carry: carryFor(obj, carrier),
+            carry: scripted ? 'none' : carryFor(obj, carrier),
             throwT: throwProgress(obj),
             snapT: snapped,
             block: engagement ? engagement.amount : 0,

@@ -43,10 +43,20 @@ afterEach(() => {
     delete globalThis.localStorage;
 });
 
-async function boot() {
+/**
+ * Boot the page. The opening plays first on every load, so unless a test is
+ * about the opening itself it presses Skip, which lands on the welcome card
+ * every other test starts from.
+ */
+async function boot({ watch = false } = {}) {
     const main = await import('../www/xo/js/main.js');
     await flushAsync();
     await jest.advanceTimersByTimeAsync(1200);
+    if (!watch) {
+        const skip = dom.el('hud-actions').children.find((b) => b.id === 'skip-opening-btn');
+        if (skip) skip.click();
+        await flushAsync();
+    }
     return main;
 }
 
@@ -100,6 +110,140 @@ describe('booting', () => {
         await boot();
         expect(dom.el('welcome').hidden).toBe(false);
         expect(dom.el('welcome-actions').children[0].textContent).toBe('Take the field');
+    });
+});
+
+describe('the opening', () => {
+    const skipButton = () => dom.el('hud-actions').children.find((b) => b.id === 'skip-opening-btn');
+    // The stub makes elements on demand without the page's own `hidden`
+    // attributes, so "the card is not up yet" is "the card has no buttons yet".
+    const welcomeUp = () => dom.el('welcome').hidden === false && dom.el('welcome-actions').children.length > 0;
+    let now = 0;
+    const run = (seconds) => {
+        for (let i = 0; i < Math.ceil(seconds * 10); i += 1) dom.loops[0](now += 100);
+    };
+    beforeEach(() => { now = 0; });
+
+    test('plays before the welcome card, with Skip in focus', async () => {
+        await boot({ watch: true });
+        expect(welcomeUp()).toBe(false);
+        expect(dom.el('game-hud').hidden).toBe(false);
+        const skip = skipButton();
+        expect(skip).toBeTruthy();
+        expect(skip.textContent).toBe('Skip');
+        expect(globalThis.document.activeElement).toBe(skip);
+        // Escape is bound to it the way every other Skip is.
+        expect(skip.dataset.keys).toBe('Escape');
+    });
+
+    test('the camera is flying the opening\'s own shots, not holding the play camera', async () => {
+        await boot({ watch: true });
+        const camera = await import('../www/xo/js/camera.min.js');
+        const { shotAt } = await import('../www/xo/js/opening.min.js');
+        run(1);
+        expect(camera.getDriver()).toBe('show');
+        const wide = shotAt(0, { aspect: 1280 / 800 });
+        const play = camera.playDriver(1280 / 800);
+        // A second in, it is nowhere near the play camera: it opened wide.
+        const at = camera.update(0, { shot: shotAt(1, { aspect: 1280 / 800 }) }).position;
+        expect(Math.hypot(at.x - play.position.x, at.y - play.position.y)).toBeGreaterThan(5);
+        expect(wide.fov).not.toBeCloseTo(play.fov, 3);
+    });
+
+    test('Skip lands on exactly the welcome state', async () => {
+        await boot({ watch: true });
+        run(3);
+        skipButton().click();
+        await flushAsync();
+        expect(dom.el('welcome').hidden).toBe(false);
+        expect(dom.el('welcome-actions').children[0].textContent).toBe('Take the field');
+        expect(dom.el('game-hud').hidden).toBe(true);
+        expect(dom.el('opening-title').hidden).toBe(true);
+        run(0.2);
+        const camera = await import('../www/xo/js/camera.min.js');
+        expect(camera.getDriver()).toBe('play');
+    });
+
+    test('watched to the end, the card comes up over the shot the camera already holds', async () => {
+        await boot({ watch: true });
+        const camera = await import('../www/xo/js/camera.min.js');
+        const { XO_CONFIG: CFG } = await import('../www/xo/js/config.min.js');
+        run(CFG.opening.length - 0.25);
+        expect(welcomeUp()).toBe(false);
+        run(0.5);
+        expect(welcomeUp()).toBe(true);
+        expect(dom.el('game-hud').hidden).toBe(true);
+        // The play camera, and the opening's last frame was the play camera.
+        expect(camera.getDriver()).toBe('play');
+    });
+
+    test('a tap on the field does not skip it', async () => {
+        await boot({ watch: true });
+        run(1);
+        fire(dom.el('game-canvas'), 'pointerdown', {
+            clientX: 400, clientY: 300, pointerId: 1, button: 0, preventDefault() {},
+        });
+        await flushAsync();
+        run(0.5);
+        expect(welcomeUp()).toBe(false);
+        expect(skipButton()).toBeTruthy();
+    });
+
+    test('the title arrives once, and is said once, with no team named', async () => {
+        await boot({ watch: true });
+        const { XO_CONFIG: CFG } = await import('../www/xo/js/config.min.js');
+        run(CFG.opening.title[0] + 0.6);
+        await jest.advanceTimersByTimeAsync(100);
+        expect(dom.el('opening-title').hidden).toBe(false);
+        expect(dom.el('hud-live').textContent).toBe('Make them pay.');
+        dom.el('hud-live').textContent = '';
+        run(0.5);
+        await jest.advanceTimersByTimeAsync(100);
+        expect(dom.el('hud-live').textContent).toBe('');
+    });
+
+    test('a game left unfinished still gets the opening, then the card offers it back', async () => {
+        localStorage.setItem('exes-n-ohs-game', JSON.stringify({
+            v: 1, playNumber: 3, total: 20,
+            results: [{ points: 5 }, { points: 15 }, { points: 0 }],
+        }));
+        await boot({ watch: true });
+        expect(welcomeUp()).toBe(false);
+        skipButton().click();
+        await flushAsync();
+        expect(dom.el('welcome').hidden).toBe(false);
+        expect(dom.el('welcome-actions').children[0].textContent).toBe('Back to the game');
+    });
+
+    test('the console hook plays it again from the welcome card', async () => {
+        await boot();
+        expect(dom.el('welcome').hidden).toBe(false);
+        expect(window.xo.opening()).toBe('Playing the opening.');
+        expect(dom.el('welcome').hidden).toBe(true);
+        expect(skipButton()).toBeTruthy();
+        expect(window.xo.show(100)).toMatch(/^Not during the opening/);
+        skipButton().click();
+        await flushAsync();
+        expect(dom.el('welcome').hidden).toBe(false);
+    });
+});
+
+describe('the opening for somebody who asked not to be moved about', () => {
+    test('is the shorter, held version, and still ends on the welcome card', async () => {
+        const plain = globalThis.window.matchMedia;
+        globalThis.window.matchMedia = (q) => ({
+            matches: /reduce/.test(q), media: q,
+            addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+        });
+        await boot({ watch: true });
+        const { XO_CONFIG: CFG } = await import('../www/xo/js/config.min.js');
+        let now = 0;
+        for (let i = 0; i < Math.ceil((CFG.opening.calm.length + 0.3) * 10); i += 1) {
+            dom.loops[0](now += 100);
+        }
+        expect(dom.el('welcome').hidden).toBe(false);
+        expect(CFG.opening.calm.length).toBeLessThan(CFG.opening.length);
+        globalThis.window.matchMedia = plain;
     });
 });
 

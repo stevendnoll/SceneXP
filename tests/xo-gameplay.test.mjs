@@ -33,7 +33,7 @@ const {
 } = await import(join(scene, 'config.js'));
 const {
     pointsForPosition, ladderBands, bandAt,
-    nextStreak, streakOver, difficultyFor, endSounds,
+    nextStreak, streakOver, difficultyFor, endSounds, classifyPlay,
 } = await import(join(scene, 'scoring.js'));
 const {
     createPlay: createPlayForDifficulty, lineUp, snap, tick, isDone,
@@ -48,7 +48,7 @@ const {
     blockersEngaged, lookTarget, stillFor, jumpLift,
     noteAssignments, resetAssignments,
 } = await import(join(scene, 'view.js'));
-const { stiffSide, THROWING_SIDE, poseFigure } = await import(join(scene, 'roster.js'));
+const { stiffSide, THROWING_SIDE, poseFigure, TEAMS } = await import(join(scene, 'roster.js'));
 const { MotionClass } = await import(join(scene, 'motion.js'));
 const { solveArm, handAt } = await import(join(scene, 'arm.js'));
 
@@ -88,6 +88,46 @@ describe('the scoring ladder the field paints', () => {
             expect(band).toBeTruthy();
             expect(band.points).toBe(pointsForPosition(x, SIM.lineInterval));
         }
+    });
+});
+
+/**
+ * THE TEAMS HAVE NAMES IN THE SOURCE AND LETTERS ON THE SCREEN.
+ *
+ * Steve, 2026-09-15: a visitor knows them as the X's and the O's, from the
+ * jerseys and the game's own name. The interception card and the celebration
+ * announcement both used to say the Crows or the Fighting Mongooses.
+ */
+describe('a visitor never reads or hears a team name', () => {
+    const names = () => Object.values(TEAMS).map((t) => t.name.replace(/^The /, ''));
+
+    test('no finished play describes itself with one', () => {
+        const LI = SIM.lineInterval;
+        const cases = [
+            { ranWithBall: false, threwTo: '' },
+            { threwTo: 'wr1', ball: { caught: false } },
+            { threwTo: 'wr1', ball: { caught: true, team: 1 } },
+            { threwTo: 'wr1', ball: { caught: true, team: 0 }, carrierX: 0 },
+            { threwTo: 'wr1', ball: { caught: true, team: 0 }, carrierX: LI * 4 },
+            { ranWithBall: true, carrierX: LI * 2 },
+        ];
+        const seen = new Set();
+        for (const c of cases) {
+            const out = classifyPlay({ lineInterval: LI, ...c });
+            seen.add(out.result);
+            for (const name of names()) {
+                expect(`${out.headline} ${out.detail}`).not.toContain(name);
+            }
+        }
+        expect(seen.has('interception')).toBe(true);
+    });
+
+    test('the page and the announcements do not carry one either', () => {
+        const html = readFileSync(join(here, '..', 'www', 'xo', 'index.html'), 'utf8');
+        const main = readFileSync(join(scene, 'main.js'), 'utf8');
+        for (const name of names()) expect(html).not.toContain(name);
+        // Every announcement that names a side reads the jersey letter.
+        expect(main).not.toMatch(/TEAMS\[[^\]]*\]\.name/);
     });
 });
 
@@ -2627,8 +2667,22 @@ describe('the play clock', () => {
         return play;
     };
 
+    /**
+     * A DEFENDER CAN GET THERE FIRST, and that is a different ending. Measured
+     * over 1,500 held plays, 0.1 to 0.3% end in a real sack before the clock
+     * (at 1.7 to 7.6 seconds), which failed this test about one suite run in
+     * four hundred. So a play a defender ended is checked for being exactly
+     * that, and the clock is checked on the first play that reaches it.
+     */
     test('holding the ball to zero is a sack, for the sack points', () => {
-        const play = held(CFG.clock.decide + 2);
+        let play = null;
+        for (let attempt = 0; attempt < 5 && !play; attempt += 1) {
+            const tried = held(CFG.clock.decide + 2);
+            expect(isDone(tried)).toBe(true);
+            if (tried.expired) play = tried;
+            else expect(tried.frame / HZ).toBeLessThan(CFG.clock.decide);
+        }
+        expect(play).toBeTruthy();
         expect(isDone(play)).toBe(true);
         // On the clock, not a frame either side of it.
         expect(play.frame / HZ).toBeCloseTo(CFG.clock.decide, 1);

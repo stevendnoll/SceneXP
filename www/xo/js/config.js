@@ -3035,6 +3035,169 @@ const XO_CONFIG = {
      * flashes a second (WCAG 2.3.1), the same ceiling High Water's lightning
      * keeps.
      */
+    /**
+     * THE OPENING, before the welcome card, on every page load (opening.js).
+     *
+     * Steve, 2026-09-15: skippable, cleared back to the welcome state when it
+     * ends or is skipped, "Make them pay." and no team named anywhere a visitor
+     * can see or hear it. Plan in specs/xo-opening-plan.md.
+     *
+     * `keys` are `[seconds, shot]`: between two keys the camera eases from one
+     * shot to the next, two keys naming the same shot hold it, and two keys at
+     * the same moment are a cut. The last
+     * key is `play`, which is the shot the welcome card sits over.
+     */
+    opening: {
+        length: 11.6,
+        keys: [
+            [0, 'wide'], [0.3, 'wide'], [2.1, 'huddle'], [2.3, 'huddle'],
+            // The visitors march in, and the camera pushes in on the huddle in
+            // time for the shoulder, which lands between 3.9 and 5.0 seconds
+            // depending on where the formation put the man who takes it.
+            [3.3, 'side'], [3.5, 'side'], [3.9, 'contact'], [5.4, 'contact'],
+            [6.3, 'cooler'], [7.3, 'cooler'], [8.1, 'captain'], [8.35, 'captain'],
+            // A REVERSE SHOT IS A CUT. Eased, the camera flew through the middle
+            // of both teams to get to the other side of them.
+            [8.35, 'reverse'], [9.6, 'reverse'], [11.6, 'play'],
+        ],
+        /** Seconds the title is fully up between, less `titleFade` at each end. */
+        title: [8.8, 10.6],
+        titleFade: 0.35,
+        /**
+         * THE CALM VERSION IS THREE HELD TABLEAUX JOINED BY CUTS, for anybody
+         * who asked not to be moved about: the cooler, the point, the answer.
+         */
+        calm: {
+            length: 6.4,
+            keys: [[0, 'cooler'], [2.0, 'captain'], [4.0, 'reverse'], [6.4, 'play']],
+            title: [4.0, 6.2],
+        },
+        /**
+         * EVERY SHOT BY WHAT IT HAS TO CONTAIN, around a spot `at` metres from
+         * midfield (x downfield, z toward the home stand), solved per screen
+         * shape by `milestones.fitShot`. `wide` and `play` are not here: they
+         * are the stadium shot and the play camera.
+         */
+        /** The steps a low shot climbs through until it sees over the stands. */
+        climb: [0.35, 0.5, 0.65, 0.8, 1.0, 1.3],
+        shots: {
+            // The huddle at midfield, from behind the near end.
+            huddle: { at: { x: -6.5, z: -2 }, half: { x: 7, z: 6 }, top: 4, aimY: 1.8,
+                from: { x: -1, y: 0.5, z: 0.12 }, fov: 40, margin: 0.08, floor: 2 },
+            // From over the away fans' shoulders: the visitors march in off their
+            // own sideline toward the huddle, the home stand beyond.
+            side: { at: { x: -6.5, z: -5.5 }, half: { x: 5, z: 7 }, top: 4.2, aimY: 2,
+                from: { x: 0.15, y: 0.3, z: -1 }, fov: 40, margin: 0.06, floor: 2, narrow: 0.6 },
+            // The walk-through and the shoulder.
+            contact: { at: { x: -6.5, z: -2 }, half: { x: 4.5, z: 3.8 }, top: 4, aimY: 2.2,
+                from: { x: 0.15, y: 0.3, z: -1 }, fov: 34, margin: 0.06, floor: 2, narrow: 0.7 },
+            // The cooler on the home sideline, the home fans behind it.
+            cooler: { at: { x: -3, z: 9 }, half: { x: 7.5, z: 2 }, top: 3.8, aimY: 2,
+                from: { x: 0.05, y: 0.35, z: -1 }, fov: 36, margin: 0.06, floor: 2, narrow: 0.6 },
+            // Close on the man who knocked it over, pointing down the lens.
+            captain: { at: { x: -6.5, z: 9.1 }, half: { x: 1.6, z: 1.2 }, top: 4.2, aimY: 2.6,
+                from: { x: 0.3, y: 0.35, z: -1 }, fov: 30, margin: 0.06, floor: 2 },
+            // The answer: the home team, from the cooler's side of the field.
+            reverse: { at: { x: -6.5, z: -2 }, half: { x: 6, z: 3.5 }, top: 4, aimY: 2,
+                from: { x: 0.1, y: 0.3, z: 1 }, fov: 38, margin: 0.08, floor: 2, narrow: 0.6 },
+        },
+        /**
+         * WHERE IT HAPPENS, in metres from midfield (x downfield, z toward the
+         * home stand), and how the bodies are spaced. A body is 1.45m across.
+         */
+        stage: {
+            /** On the home team's own half, a little toward the visitors' side. */
+            huddle: { x: -6.5, z: -2 },
+            ring: 3.1,
+            /** How far from the lane the visitors walk down a man steps aside. */
+            part: 2.5,
+            /** ...and the one who is about to get a shoulder does not quite. */
+            partBumped: 2.0,
+            /** Where the home team comes from: past the near end line, under the
+             *  camera, in the shape of the huddle spread by `spread` across. */
+            homeFrom: { x: -26, spread: 1.3 },
+            /** Where the front of the visitors' column starts: their own sideline. */
+            awayFrom: { z: -12.5 },
+            /** The visitors walk two abreast. */
+            column: { side: 0.8, rowGap: 1.9 },
+            /** How far past the huddle the last row stops. */
+            through: 0.9,
+            /** The home team's cooler, on the home sideline. */
+            cooler: { x: -6.5, z: 10.6 },
+            /** The captain stands this far in front of it. */
+            reach: 1.5,
+            /**
+             * The visitors' line in front of the home stand, as x from the
+             * cooler, NEAREST FIRST: a smaller team takes the front of the list.
+             * It keeps upfield of the formation's receivers, so the home team's
+             * walk back does not pass through it.
+             */
+            danceZ: 8.6,
+            dance: [2.2, -2.2, 3.9, 5.6, 7.3, 9.0, 10.7],
+            /** How far a shoulder knocks a man sideways, metres. */
+            knock: 1.0,
+            /** How far apart two bodies are kept, metres. See `opening.bake`. */
+            clearance: 1.5,
+        },
+        /**
+         * THE BODIES ARE WORKED OUT ONCE AT 60HZ, following the script with
+         * `lag` seconds of ease and pushed apart in `passes` sweeps, and the
+         * last `settle` seconds blend exactly onto the formation (opening.js
+         * `bake`).
+         */
+        bake: { hz: 60, lag: 0.06, passes: 3, settle: 0.35, contact: 0.4, fastest: 18 },
+        /** Seconds. See the beat table in specs/xo-opening-plan.md. */
+        beats: {
+            runOut: [0, 2.0],
+            runStagger: 0.15,
+            breakUp: [2.05, 2.6],
+            visitors: [2.5, 5.9],
+            partAt: [3.0, 3.6],
+            peel: [5.9, 6.9],
+            swipe: [6.85, 7.25],
+            dance: [7.0, 8.3],
+            point: [7.35, 8.35],
+            /** The home team turns on them where it stands, and answers. */
+            toLine: [8.35, 8.7],
+            menace: [8.7, 9.6],
+            lineUp: [9.6, 11.2],
+            /** The home team walks back first, the visitors after. */
+            homeBack: [9.6, 10.9],
+            awayBack: [10.1, 11.2],
+        },
+        /** The small movements, in metres and radians. */
+        moves: {
+            hop: 0.33,
+            jab: 0.13,
+            shimmy: { roll: 0.26, hz: 3.2 },
+            /** Knocked aside: how fast, how far over, and how quickly he rights. */
+            knock: { time: 0.22, roll: 0.3, lean: 0.12, decay: 0.35, out: 0.4 },
+            /** The answer. A placeholder until step 4 builds its own arms. */
+            menace: { lean: 0.14, stamp: 0.12, hz: 2.5 },
+        },
+        /** Positions tried in order for the three parts with a job. */
+        cast: {
+            captain: ['s1', 's2', 'db1'],
+            bumper: ['db1', 'db2', 'db3', 'db4'],
+        },
+        /** When each stand gets up: the home fans for their team, the away
+         *  sections for the visitors. */
+        cheers: [
+            { at: 0.3, team: 0, big: true },
+            { at: 2.7, team: 1, big: false },
+            { at: 7.1, team: 1, big: true },
+            { at: 9.0, team: 0, big: true },
+        ],
+        /** Quiet frames run when it ends, so arms are down and the quarterback
+         *  is back over the ball before the welcome card comes up. */
+        settleFrames: 12,
+        copy: {
+            title: 'Make them pay.',
+            /** The one sentence a screen reader gets, as the title arrives. */
+            spoken: 'Make them pay.',
+        },
+    },
+
     milestones: {
         thresholds: [100, 200, 300, 400, 500],
         /** The ones with a show built. A threshold missing from here is

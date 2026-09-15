@@ -512,6 +512,51 @@ export function showSkipShow() {
 }
 
 /**
+ * ...AND OUT OF THE OPENING, THE SAME PROMISE A FOURTH TIME.
+ *
+ * It plays on every page load, so for somebody on their tenth visit it is ten
+ * seconds between them and the game unless this is one key away.
+ */
+export function showSkipOpening() {
+    const box = actions();
+    if (!box) return;
+
+    const skip = bindKeys(button('Skip', 'hud-btn',
+        () => handlers.onSkipOpening && handlers.onSkipOpening(),
+        'the opening and go to the welcome card'), [SKIP_KEY]);
+    skip.id = 'skip-opening-btn';
+    box.appendChild(skip);
+    skip.focus();
+}
+
+/**
+ * THE TITLE OVER THE OPENING, driven per frame by an amount from 0 to 1 for the
+ * reason the show's is: the scene's own clock decides when it comes and goes,
+ * and a skip has to take it away on the same frame. aria-hidden, and announced
+ * once through the live region instead.
+ */
+export function setOpeningTitle(amount, { calm = false } = {}) {
+    const wrap = el('opening-title');
+    if (!wrap) return;
+    const a = Math.max(0, Math.min(1, amount || 0));
+    if (a <= 0) {
+        wrap.hidden = true;
+        return;
+    }
+    const copy = CFG.opening.copy.title;
+    if (wrap.textContent !== copy) wrap.textContent = copy;
+    wrap.hidden = false;
+    wrap.style.opacity = `${a}`;
+    // A small drop into place, left out for anybody who asked not to be moved.
+    wrap.style.transform = calm ? 'none' : `scale(${(1 + (1 - a) * 0.08).toFixed(3)})`;
+}
+
+export function hideOpeningTitle() {
+    const wrap = el('opening-title');
+    if (wrap) wrap.hidden = true;
+}
+
+/**
  * THE TITLE OVER A SHOW: the number, and a line under it.
  *
  * Driven every frame by an amount from 0 to 1 rather than by a class and a
@@ -570,6 +615,12 @@ export function hideMilestoneTitle() {
  * be dropped is the card's, and it is the one worth keeping, because somebody
  * arriving needs to know what game this is before they are shown a pitch.
  */
+/** Put the welcome card away without pressing anything on it. */
+export function hideWelcome() {
+    const card = el('welcome');
+    if (card) card.hidden = true;
+}
+
 export function showWelcome(onStart, saved = null, onFresh = null) {
     const card = el('welcome');
     if (!card) { if (onStart) onStart(); return; }
