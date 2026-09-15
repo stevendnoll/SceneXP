@@ -689,14 +689,47 @@ describe('500, the perfect game', () => {
                 const k = (wallZ - f.z) / (p.z - f.z);
                 if (k > 0 && k < 1) expect(f.y + (0 - f.y) * k).toBeGreaterThan(wallTop);
             }
-            // The cards are held up in front of the fans' faces (see
-            // `crowd.cardsAt`), so the whole card, top row to bottom.
-            const at = St.cardHeights();
+            // The board of cards lies up the slope of the stand (see
+            // `stunt.cardLayout`), so its top edge is further out than its
+            // bottom edge as well as higher: the whole board, both corners.
+            const at = St.cardLayout();
+            const back = { y: S.top(S.rows - 1) + at.centre + at.rise / 2, z: S.out(S.rows - 1) - at.forward + at.run / 2 };
+            const front = { y: S.top(0) + at.centre - at.rise / 2, z: S.out(0) - at.forward - at.run / 2 };
             for (const x of [left, right]) {
-                expect(inFrame(shot, aspect, { x, y: S.top(S.rows - 1) + at.upper + at.half, z: S.out(S.rows - 1) }, 0.97)).toBe(true);
-                expect(inFrame(shot, aspect, { x, y: S.top(0) + at.lower - at.half, z: S.out(0) }, 0.97)).toBe(true);
+                expect(inFrame(shot, aspect, { x, ...back }, 0.97)).toBe(true);
+                expect(inFrame(shot, aspect, { x, ...front }, 0.97)).toBe(true);
             }
+            // And from above the board's plane, so it is the faces of the
+            // cards that are seen and not their edges or their backs.
+            const f = shot.position;
+            expect(f.y).toBeGreaterThan(St.boardHeightAt({ y: S.top(0), z: S.out(0) }, f.z) + 1);
         }
+    });
+
+    /**
+     * QA 500-1 AND 500-2: PERFECT READ BACKWARDS. Card columns run along +x,
+     * and from the field side of the far stand +x runs right to left, so the
+     * message has to be mirrored onto the cards. Checked through the shot
+     * itself: the first letter's column lands left of the last letter's on
+     * every screen shape. (Screen x is +1 at the right edge.)
+     */
+    test('the message reads left to right from the finale camera', () => {
+        const { cols } = St.crowdSeats();
+        const message = St.pixelMessage('PERFECT', cols);
+        const first = message.left;                       // P's stem
+        const last = message.left + message.width - 1;    // T's right arm
+        const physical = (c) => St.messageColumn(c, cols);
+        expect(St.messageColumn(physical(first), cols)).toBe(first);
+        const spot = St.cardSpot({ y: S.top(2), z: S.out(2) }, true);
+        const xOf = (column) => S.fromX + (column + 0.5) * CFG.crowd.pitch;
+        for (const aspect of ASPECTS) {
+            const shot = Mi.sideShot(aspect);
+            const a = Mi.projectPoint(shot, aspect, { x: xOf(physical(first)), y: spot.y, z: spot.out });
+            const b = Mi.projectPoint(shot, aspect, { x: xOf(physical(last)), y: spot.y, z: spot.out });
+            expect(a.x).toBeLessThan(b.x);
+        }
+        // The P really is the first thing on the left: its stem is lit on every row.
+        for (let row = 0; row < 7; row += 1) expect(message.lit.has(`${row}:${first}`)).toBe(true);
     });
 
     test('the teams stand in two rows a body apart, in front of the stand', () => {
@@ -727,20 +760,39 @@ describe('500, the perfect game', () => {
         expect([...rows].sort((a, b) => a - b)).toEqual([...Array(St.CARD_ROWS).keys()]);
     });
 
+    /**
+     * QA 500-1 AND 500-2: NEITHER MESSAGE COULD BE READ. Contrast is part of
+     * it, so the two faces of each message are held apart by WCAG's measure
+     * (white on orange was 2:1), and the rows of a letter must meet with no
+     * tread showing between them, which the next test in xo-fans checks on the
+     * real board.
+     */
+    test('each message is dark on bright or bright on dark, and far past 4.5:1', () => {
+        const lum = (hex) => Fw.hexToRgb(hex)
+            .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+            .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+        const ratio = (a, b) => {
+            const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+            return (hi + 0.05) / (lo + 0.05);
+        };
+        expect(ratio(F.cards.navy, F.cards.orange)).toBeGreaterThan(4.5);
+        expect(ratio(F.cards.gold, F.cards.navy)).toBeGreaterThan(4.5);
+    });
+
     test('the cards come up, spell PERFECT, flip to 500, and never show anything half-way at rest', () => {
         const { cols } = St.crowdSeats();
         const messages = {
             perfect: St.pixelMessage('PERFECT', cols).lit,
             five: St.pixelMessage('500', cols).lit,
         };
-        const white = Fw.hexToRgb(F.cards.white);
+        const navy = Fw.hexToRgb(F.cards.navy);
         const gold = Fw.hexToRgb(F.cards.gold);
         for (let row = 0; row < St.CARD_ROWS; row += 1) {
             for (let col = 0; col < cols; col += 3) {
                 expect(St.cardAt(F.perfect[0] - 0.01, row, col, cols, messages).turn).toBe(0);
                 const mid = St.cardAt((F.perfect[1] + F.five[0]) / 2, row, col, cols, messages);
                 expect(mid.turn).toBe(1);
-                expect(mid.colour).toEqual(messages.perfect.has(`${row}:${col}`) ? white : Fw.hexToRgb(F.cards.orange));
+                expect(mid.colour).toEqual(messages.perfect.has(`${row}:${col}`) ? navy : Fw.hexToRgb(F.cards.orange));
                 const end = St.cardAt(F.five[1] + 0.01, row, col, cols, messages);
                 expect(end.turn).toBe(1);
                 expect(end.colour).toEqual(messages.five.has(`${row}:${col}`) ? gold : Fw.hexToRgb(F.cards.navy));

@@ -2611,11 +2611,13 @@ const XO_CONFIG = {
         /** Radians either way a fan is turned off square to the field, so a
          *  stand is people rather than a parade. */
         turn: 0.35,
-        /** THE CARDS AT 500, above the riser: the centre of the upper card.
-         *  The lower sits half a riser under it so the rows tile, and the two
-         *  together cover a fan from chin to the top of their hair, or a head
-         *  would stand in front of the row of cards behind and break a letter. */
-        cardsAt: 1.65,                 // per unit of scale
+        /** THE CARDS AT 500 (see `stunt.cardLayout`), per unit of scale: the
+         *  height above the riser and the distance in front of the fan of the
+         *  middle of each riser's pair of cards. They lie up the slope of the
+         *  stand, so this is where the board passes each riser, and it has to
+         *  pass over every fan's hair and hands or a head breaks a letter. */
+        cardsAt: 1.6,
+        cardsForward: 0.46,
         /** How high a fan's hands reach with their arms up, per unit of scale.
          *  The finale shot climbs until the near stand clears the teams. */
         reach: 1.88,
@@ -3124,7 +3126,8 @@ const XO_CONFIG = {
             back: [12.4, 13.2],
             /** The dances the two teams share out between them, in turn. */
             dances: ['bow', 'shimmy', 'bow', 'spin'],
-            cards: { orange: '#ff992c', white: '#fff6e0', navy: '#141c2c', gold: '#ffcf5a' },
+            /** PERFECT in navy on orange, then 500 in gold on navy. */
+            cards: { orange: '#ff992c', navy: '#141c2c', gold: '#ffcf5a' },
         },
     },
 

@@ -196,15 +196,61 @@ export function cheerArms(t, seat, cheer, { calm = false } = {}) {
 }
 
 /**
- * WHERE THE CARDS ARE HELD, in metres above the riser: the centres of the
- * upper and lower card, half a riser apart so the rows tile, and how far in
- * front of the fan they are held.
+ * HOW THE CARDS ARE HELD: ONE SLOPED BOARD, NOT ROWS STANDING UPRIGHT.
+ *
+ * They stood upright, one pair per riser, and QA round 500-1 could not read
+ * PERFECT. The finale camera is above the stand and in front of it, and a riser
+ * is 1m deep as well as 0.7m high, so from up there each riser's pair of cards
+ * showed as its own strip with a dark gap of tread between it and the next: the
+ * seven rows of a letter came out as four bands.
+ *
+ * So every card lies in the plane of the stand's own slope, a riser's rise over
+ * its run, and the rows meet edge to edge up it. Four risers become one board
+ * that tiles from any camera in front of it, which is how a real card stunt
+ * reads: a stand full of people holding cards up the rake.
+ *
+ *   centre   height above the riser of the middle of that riser's two cards
+ *   forward  how far in front of the fan that middle is
+ *   tilt     radians back from upright, the slope of the stand
+ *   rise/run one riser, up and back
+ *   half     half a card's length up the slope (two cards to a riser)
+ *   columns  columns of cards per fan
  */
-export function cardHeights() {
+export function cardLayout() {
     const S = standLayout();
     const K = CFG.crowd;
-    const upper = K.cardsAt * K.scale;
-    return { upper, lower: upper - S.stepUp / 2, half: 0.17, forward: 0.46 * K.scale, columns: K.fanEvery };
+    return {
+        centre: K.cardsAt * K.scale,
+        forward: K.cardsForward * K.scale,
+        tilt: Math.atan2(S.stepOut, S.stepUp),
+        rise: S.stepUp,
+        run: S.stepOut,
+        half: Math.hypot(S.stepUp, S.stepOut) / 4,
+        columns: K.fanEvery,
+    };
+}
+
+/**
+ * WHERE ONE CARD IS: the world height of its middle, and how far out from the
+ * middle of the field (|z|). The upper card is a quarter of a riser up the
+ * slope from the pair's middle and the lower a quarter down, so a riser's upper
+ * card ends exactly where the next riser's lower card begins.
+ */
+export function cardSpot(seat, upper) {
+    const L = cardLayout();
+    const k = upper ? 0.25 : -0.25;
+    return { y: seat.y + L.centre + k * L.rise, out: Math.abs(seat.z) - L.forward + k * L.run };
+}
+
+/**
+ * THE HEIGHT OF THE CARD BOARD over a point `out` from the middle of the field,
+ * for a stand whose riser `seat` is on. Everything of a fan below this is hidden
+ * behind the cards; the finale camera has to be above it to see their faces.
+ */
+export function boardHeightAt(seat, out) {
+    const L = cardLayout();
+    const middle = cardSpot(seat, true);
+    return middle.y + (out - middle.out) * (L.rise / L.run);
 }
 
 /** How high above the riser a fan can reach at 500: arms up, mid-bounce. */
@@ -232,6 +278,21 @@ export function cheerHop(t, seat, cheer, { calm = false } = {}) {
     if (local <= 0 || local >= length) return 0;
     const envelope = Math.min(1, local / C.ease, (length - local) / C.ease);
     return hop * envelope * Math.abs(Math.sin(Math.PI * C.rate * local));
+}
+
+/**
+ * WHICH COLUMN OF THE MESSAGE A COLUMN OF CARDS SHOWS, and it is mirrored.
+ *
+ * Card columns count along the field, +x, from the near end. The finale watches
+ * the far stand from the field, looking out along +z, and from there +x runs
+ * from right to left across the screen. So laid out along +x, PERFECT read
+ * TCEFREP (QA 500-1, 500-2). The message is laid out as it reads and each
+ * physical column shows its mirror image, which puts the first letter on the
+ * left for the only camera that ever sees it. Its own inverse, so it maps
+ * either way.
+ */
+export function messageColumn(column, cols) {
+    return cols - 1 - column;
 }
 
 /**
@@ -276,7 +337,9 @@ export function cardAt(t, row, col, cols, messages, { calm = false } = {}) {
     const sweep = (window, c) => window[0] + (c / Math.max(1, cols - 1)) * (window[1] - window[0] - flipFor);
 
     const stages = [
-        { at: F.perfect, lit: messages.perfect, on: hexToRgb(P.white), off: hexToRgb(P.orange) },
+        // Dark on bright, then bright on dark, and both far past 7:1: white on
+        // the Mongooses' orange was under 2:1 and QA could not read it.
+        { at: F.perfect, lit: messages.perfect, on: hexToRgb(P.navy), off: hexToRgb(P.orange) },
         { at: F.five, lit: messages.five, on: hexToRgb(P.gold), off: hexToRgb(P.navy) },
     ];
     let colour = null;

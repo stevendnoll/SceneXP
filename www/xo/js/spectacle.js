@@ -20,7 +20,7 @@
  */
 import { XO_CONFIG as CFG, FIELD } from './config.min.js';
 import { getPylonBanks, pylonSpots, BANK_GLOW, standLayout } from './field.min.js';
-import { ballProfile } from './ball.min.js';
+import { ballProfile, buildLaces } from './ball.min.js';
 import {
     planFireworks, sparksAt, planBulbs, bulbsAt, planConfetti, confettiAt,
 } from './fireworks.min.js';
@@ -28,8 +28,8 @@ import {
     fireworksSetup, finaleFireworksSetup, turfSetup, trophySpot, blimpOrbitPosition,
 } from './milestones.min.js';
 import {
-    crowdSeats, pixelMessage, cardRow, cardAt, fanArrival, cheerHop, cheerArms, cheerLength,
-    cardHeights, NEUTRAL,
+    crowdSeats, pixelMessage, cardRow, cardAt, messageColumn, fanArrival, cheerHop, cheerArms, cheerLength,
+    cardLayout, cardSpot, NEUTRAL,
 } from './stunt.min.js';
 import { buildFanParts, POSES, HAIR } from './fans.min.js';
 
@@ -478,8 +478,14 @@ function buildCrowd() {
             regulars: wearing.filter((i) => i < regulars).length,
         };
     }
-    const cards = instanced(new THREE.PlaneGeometry(K.pitch * 0.9, cardHeights().half * 2),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
+    /**
+     * THE CARDS ARE A SIGN, NOT A SURFACE. Unlit, so the dimmed finale lights
+     * leave them bright; out of the tone mapping and the fog, so navy stays navy
+     * and orange stays orange at 50m. With both on, orange came out a pale tan
+     * and navy a slate grey, and PERFECT was white on tan.
+     */
+    const cards = instanced(new THREE.PlaneGeometry(K.pitch * 0.9, cardLayout().half * 2 - 0.04),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, toneMapped: false, fog: false }),
         far.length * 2 * K.fanEvery, 'milestone-cards');
 
     const colours = (list) => list.map((h) => new THREE.Color(h));
@@ -570,7 +576,7 @@ function poseCrowd(t, { bouncing = false, cardsUp = false, cheer = null, cheerT 
 
     crowd.cards.visible = cardsUp;
     if (!cardsUp || !stuntMessages) return;
-    const at = cardHeights();
+    const at = cardLayout();
     const colour = new THREE.Color();
     const K = CFG.crowd;
     const S = standLayout();
@@ -581,14 +587,20 @@ function poseCrowd(t, { bouncing = false, cardsUp = false, cheer = null, cheerT 
         for (let column = seat.col; column < Math.min(seat.col + at.columns, crowd.cols); column += 1) {
             for (const upper of [true, false]) {
                 const row = cardRow(seat.riser, upper);
-                const card = cardAt(t, row, column, crowd.cols, stuntMessages, { calm: calmShow });
-                o.position.set(S.fromX + (column + 0.5) * K.pitch, seat.y + (upper ? at.upper : at.lower), seat.z - at.forward);
-                // A plane faces +z, and these face the field, which is -z.
-                o.rotation.set(0, Math.PI, 0);
+                // Mirrored, so the message reads left to right from the field.
+                const card = cardAt(t, row, messageColumn(column, crowd.cols), crowd.cols, stuntMessages, { calm: calmShow });
+                const spot = cardSpot(seat, upper);
+                o.position.set(S.fromX + (column + 0.5) * K.pitch, spot.y, spot.out);
+                // A plane faces +z. Turned to face the field (-z), then laid
+                // back up the slope of the stand about its own x axis.
+                o.rotation.set(-at.tilt, Math.PI, 0, 'YXZ');
                 o.scale.set(1, Math.max(0.001, card.turn), 1);
                 o.updateMatrix();
                 crowd.cards.setMatrixAt(i, o.matrix);
-                colour.setRGB(card.colour[0], card.colour[1], card.colour[2]);
+                // THE COLOURS ARE sRGB, AND SAID SO. Unmarked, three reads them
+                // as linear and they come out washed: the other half of why
+                // neither message could be read.
+                colour.setRGB(card.colour[0], card.colour[1], card.colour[2], THREE.SRGBColorSpace);
                 crowd.cards.setColorAt(i, colour);
                 i += 1;
             }
@@ -633,11 +645,26 @@ function buildTrophy() {
     const gold = new THREE.MeshStandardMaterial({
         color: 0xffc23a, metalness: 0.35, roughness: 0.3, emissive: 0x7a4a00, emissiveIntensity: 0.65,
     });
-    const ball = new THREE.Mesh(
-        new THREE.LatheGeometry(ballProfile().map((p) => new THREE.Vector2(p.r, p.y)), 18), gold);
-    ball.rotation.z = Math.PI / 2;
     // About 4.3m end to end, which is a third of the orbit's frame: the ball the
-    // game is played with, made into the thing it was all for.
+    // game is played with, made into the thing it was all for. Built the way
+    // ball.js builds that ball, long axis on x and laces on top, so the two are
+    // one shape at two sizes.
+    const ball = new THREE.Group();
+    // SMOOTHER THAN THE GAME BALL. That one is a dozen pixels; this one fills
+    // a third of the frame, and at the game ball's segment counts its outline
+    // showed as flat facets in QA's 500-3.
+    const leather = new THREE.Mesh(
+        new THREE.LatheGeometry(ballProfile(32).map((p) => new THREE.Vector2(p.r, p.y)), 40), gold);
+    leather.rotation.z = Math.PI / 2;
+    ball.add(leather);
+    // THE LACES, which QA asked for (500-3): the game ball's cross stitches and
+    // the seam they cross, in a pale gold that reads against the ball and still
+    // looks like part of one trophy. A little emissive, because the finale dims
+    // the lights while the ball is up.
+    const laceGold = new THREE.MeshStandardMaterial({
+        color: 0xfff1cc, metalness: 0.15, roughness: 0.45, emissive: 0x6e5a32, emissiveIntensity: 0.55,
+    });
+    ball.add(buildLaces(laceGold, { seam: true }));
     ball.scale.set(9, 9, 9);
     group.add(ball);
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({

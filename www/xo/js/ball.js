@@ -79,6 +79,52 @@ export function lacePositions(count = 9, span = 0.60) {
     return out;
 }
 
+/** The slope of the leather along the ball at `x`, so anything lying on it
+ *  can lie along it rather than flat. */
+function surfaceSlope(x) {
+    return Math.atan2(radiusAt(x + 0.02) - radiusAt(x), 0.02);
+}
+
+/**
+ * THE LACES, in the ball's own frame: long axis +x, laces on top (+y).
+ *
+ * The cross stitches are the game ball's, a short row lying along the length on
+ * one panel. `seam` adds the stitched seam they cross, which the game ball
+ * leaves off because at a dozen pixels it is a waste of triangles, and which the
+ * gold ball at 500 needs because it fills a third of the frame. The seam is
+ * built in short pieces that each take their height and angle from the leather,
+ * never as one straight bar: that bar is the one described above, which stood
+ * five centimetres proud of the ball at its ends.
+ */
+export function buildLaces(material, { seam = false, seamPieces = 12 } = {}) {
+    const laces = new THREE.Group();
+    laces.name = 'laces';
+    const seats = lacePositions();
+    for (const seat of seats) {
+        const stitch = new THREE.Mesh(
+            new THREE.BoxGeometry(0.016, 0.010, 0.060), material
+        );
+        stitch.position.set(seat.x, seat.y, 0);
+        // Lie each one along the surface rather than flat, so the row follows
+        // the curve of the panel instead of tilting off it at the ends.
+        stitch.rotation.z = surfaceSlope(seat.x);
+        laces.add(stitch);
+    }
+    if (seam) {
+        const from = seats[0].x - 0.02;
+        const to = seats[seats.length - 1].x + 0.02;
+        const step = (to - from) / seamPieces;
+        for (let i = 0; i < seamPieces; i += 1) {
+            const x = from + (i + 0.5) * step;
+            const piece = new THREE.Mesh(new THREE.BoxGeometry(step * 1.02, 0.006, 0.012), material);
+            piece.position.set(x, radiusAt(x) - 0.002, 0);
+            piece.rotation.z = surfaceSlope(x);
+            laces.add(piece);
+        }
+    }
+    return laces;
+}
+
 /** Where the two stripes sit and how wide they are, as a fraction of the half
  *  length, so they follow the ball rather than a remembered number. */
 export const BAND_AT = 0.125;
@@ -208,20 +254,7 @@ export function initBall(scene) {
     // bar was still at 0.134, so it stood almost five centimetres proud of the
     // ball and read as a rod driven through it, covering the very stitches it
     // was meant to sit under. The stitches carry the laces on their own.
-    const laces = new THREE.Group();
-    for (const seat of lacePositions()) {
-        const stitch = new THREE.Mesh(
-            new THREE.BoxGeometry(0.016, 0.010, 0.060), white
-        );
-        stitch.position.set(seat.x, seat.y, 0);
-        // Lie each one along the surface rather than flat, so the row follows
-        // the curve of the panel instead of tilting off it at the ends.
-        stitch.rotation.z = Math.atan2(
-            radiusAt(seat.x + 0.02) - radiusAt(seat.x), 0.02
-        );
-        laces.add(stitch);
-    }
-    mesh.add(laces);
+    mesh.add(buildLaces(white));
 
     // Bigger than life, on purpose: the ball is the one thing the visitor is
     // actually following and it is the smallest object on the field.

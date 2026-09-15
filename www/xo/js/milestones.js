@@ -22,7 +22,7 @@
 import { XO_CONFIG as CFG, FIELD } from './config.min.js';
 import { playDriver } from './camera.min.js';
 import { pylonSpots, boardSpot, standLayout } from './field.min.js';
-import { cardHeights, crowdReach } from './stunt.min.js';
+import { cardLayout, crowdReach } from './stunt.min.js';
 
 const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
 const smooth = (t) => { const c = clamp01(t); return c * c * (3 - 2 * c); };
@@ -625,9 +625,11 @@ export function sideShot(aspect) {
         const S = standLayout();
         const c = LEN() / 2;
         const message = 17.5;
-        // The top of the cards, which the fans hold up in front of their faces.
-        const at = cardHeights();
-        const cardsTop = at.upper + at.half;
+        // The board of cards, from the bottom edge of the front row to the top
+        // edge of the back one: it lies up the slope, so both ends move in z.
+        const at = cardLayout();
+        const bottom = { y: S.top(0) + at.centre - at.rise / 2, z: S.out(0) - at.forward - at.run / 2 };
+        const top = { y: S.top(S.rows - 1) + at.centre + at.rise / 2, z: S.out(S.rows - 1) - at.forward + at.run / 2 };
         let shot = null;
         for (const rise of [0.4, 0.5, 0.6, 0.7, 0.8, 1.0]) {
             shot = fitShot({
@@ -636,8 +638,8 @@ export function sideShot(aspect) {
                 fov: 42,
                 points: [
                     { x: c - message, y: S.top(0), z: S.out(0) }, { x: c + message, y: S.top(0), z: S.out(0) },
-                    { x: c - message, y: S.top(S.rows - 1) + cardsTop, z: S.out(S.rows - 1) },
-                    { x: c + message, y: S.top(S.rows - 1) + cardsTop, z: S.out(S.rows - 1) },
+                    { x: c - message, ...bottom }, { x: c + message, ...bottom },
+                    { x: c - message, ...top }, { x: c + message, ...top },
                     { x: c, y: 15, z: S.out(S.rows - 1) + 6 },
                     { x: c - 9, y: 0, z: -5.5 }, { x: c + 9, y: 0, z: -5.5 },
                 ],

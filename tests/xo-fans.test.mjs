@@ -162,21 +162,61 @@ describe('the arms are where the pose says', () => {
         expect(hands.max.x).toBeGreaterThan(0.2);
     });
 
-    test('holding a card puts the hands in front of the face, and the cards in front of the hands and over the whole head', () => {
+    test('holding a card puts the hands in front of the face, and the board of cards passes over every fan', () => {
         const k = CFG.crowd.scale;
         const hands = box(parts.arms.cards.hand);
         expect(hands.min.z).toBeGreaterThan(box(parts.body.shirt).max.z);
         expect(hands.max.y).toBeGreaterThan(parts.eyeHeight - 0.15 * k);
         expect(hands.min.y).toBeLessThan(parts.eyeHeight + 0.06 * k);
-        const at = St.cardHeights();
-        expect(at.forward).toBeGreaterThan(hands.max.z);
-        // Chin to crown, every hair style, so no head stands in front of the
-        // row of cards behind it and breaks a letter.
-        const chin = parts.eyeHeight - (parts.top - parts.eyeHeight);
-        const crown = Math.max(...Fans.HAIR.map((style) => box(parts.hair[style]).max.y));
-        expect(at.lower - at.half).toBeLessThanOrEqual(chin);
-        expect(at.upper + at.half).toBeGreaterThanOrEqual(crown);
-        expect(at.upper - at.lower).toBeCloseTo(S.stepUp / 2, 6);
+        // Every vertex of a fan holding cards, in every hair style, lies under
+        // the board: no hand, head or hair stands in front of a letter. The
+        // fan faces the field, which is -z for the far stand, so a vertex at
+        // local z is at |z| = seat - z.
+        const seat = { y: S.top(1), z: S.out(1) };
+        const pieces = [...Object.values(parts.body), ...Object.values(parts.hair), parts.arms.cards.sleeve, parts.arms.cards.hand];
+        for (const g of pieces) {
+            const p = g.attributes.position;
+            for (let v = 0; v < p.count; v += 1) {
+                const board = St.boardHeightAt(seat, seat.z - p.getZ(v));
+                expect(seat.y + p.getY(v)).toBeLessThan(board - 0.05);
+            }
+        }
+    });
+});
+
+describe('the card stunt is one board', () => {
+    test('each riser\'s upper card ends exactly where the next riser\'s lower card begins, up the slope', () => {
+        const at = St.cardLayout();
+        for (let r = 0; r < S.rows - 1; r += 1) {
+            const upper = St.cardSpot({ y: S.top(r), z: S.out(r) }, true);
+            const lower = St.cardSpot({ y: S.top(r + 1), z: S.out(r + 1) }, false);
+            // Centre to centre is exactly one card's length along the slope.
+            expect(Math.hypot(lower.y - upper.y, lower.out - upper.out)).toBeCloseTo(at.half * 2, 6);
+            expect((lower.y - upper.y) / (lower.out - upper.out)).toBeCloseTo(at.rise / at.run, 6);
+        }
+        // Within a riser too: the upper card is one card's length above the lower.
+        const seat = { y: S.top(2), z: S.out(2) };
+        const up = St.cardSpot(seat, true);
+        const down = St.cardSpot(seat, false);
+        expect(Math.hypot(up.y - down.y, up.out - down.out)).toBeCloseTo(at.half * 2, 6);
+    });
+});
+
+describe('the gold ball at 500 has laces', () => {
+    test('cross stitches and a seam, every piece lying on the leather', async () => {
+        const B = await import(join(root, 'www/xo/js/ball.js'));
+        const plain = B.buildLaces(new THREE.MeshBasicMaterial());
+        const seamed = B.buildLaces(new THREE.MeshBasicMaterial(), { seam: true });
+        expect(plain.children.length).toBe(B.lacePositions().length);
+        expect(seamed.children.length).toBeGreaterThan(plain.children.length);
+        const xs = plain.children.map((m) => m.position.x);
+        for (const piece of seamed.children) {
+            expect(Math.abs(piece.position.y - B.radiusAt(piece.position.x))).toBeLessThan(0.005);
+        }
+        // The seam runs the length of the stitches and a little past both ends.
+        const seamXs = seamed.children.slice(plain.children.length).map((m) => m.position.x);
+        expect(Math.min(...seamXs)).toBeLessThan(Math.min(...xs));
+        expect(Math.max(...seamXs)).toBeGreaterThan(Math.max(...xs));
     });
 });
 
