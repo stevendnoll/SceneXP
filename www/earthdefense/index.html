@@ -44,7 +44,16 @@
          cards stacked in the message box, and Earth Defense was the only page
          on the site that did it because it was the only page with two tags.
          A fallback nobody asked for is not worth a second card in a friend's
-         thread. One image, the same as the other eleven pages.
+         thread. One image, the same as the other thirteen pages.
+
+         AND SINCE 2026-09-08 THAT ONE IMAGE IS THE JPEG, not the WebP, on
+         every page of the site. LinkedIn does not render a WebP link preview
+         at all, so the card that shows nowhere is worse than the card that
+         weighs more. Note that this does NOT reopen the two-tag question
+         above: it is still exactly one og:image, just the other format. Swap
+         both image URLs back to .../og-earthdefense.webp if LinkedIn ever
+         catches up. The measurements below describe the WebP, which is still
+         built and still sits in assets/.
 
          IT IS LOSSY AT 92, AND THAT WAS MEASURED FOR THIS PICTURE rather
          than inherited. The previous card was the welcome screen and needed
@@ -59,8 +68,8 @@
          ?v=3 BECAUSE THE TAGS CHANGED UNDER THE SAME FILENAME. Social scrapers
          cache aggressively by URL, so a card that has already been fetched
          stays in circulation until something about the request moves. -->
-    <meta property="og:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=3">
-    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=3">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, orange diamonds mark the incoming Martian raiders across a deep starfield, the nearest of them labelled 23k km, and the Moon hangs at the upper right labelled 67k km.">
@@ -69,10 +78,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Earth Defense">
     <meta name="twitter:description" content="Fly in orbit above a massive Earth and hold the line against an incoming Martian fleet.">
-    <!-- The same single WebP as og:image, which is what the other eleven pages
+    <!-- The same single JPEG as og:image, which is what the other thirteen pages
          do. Twitter takes exactly one image and has no type property, so there
          was never anywhere to offer an alternative here anyway. -->
-    <meta name="twitter:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=3">
+    <meta name="twitter:image" content="https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=3">
     <meta name="twitter:image:alt" content="A ship's-eye view in low Earth orbit: Earth's blue and white limb curves across the bottom of the frame, Mars sits ahead as a small ruddy disc with the targeting reticle just below it, orange diamonds mark the incoming Martian raiders across a deep starfield, the nearest of them labelled 23k km, and the Moon hangs at the upper right labelled 67k km.">
 
     <!-- Structured data: site identity for search engines.
@@ -92,7 +101,7 @@
       "inLanguage": "en-US",
       "isAccessibleForFree": true,
       "playMode": "SinglePlayer",
-      "image": "https://www.scenexp.com/earthdefense/assets/og-earthdefense.webp?v=3",
+      "image": "https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=3",
       "author": {
         "@type": "Person",
         "name": "Steve Noll"
@@ -246,15 +255,25 @@
             <!-- The one link back to the directory, replacing the floating Home
                  button (2026-09-07): Home sat in the corner of the live game
                  and read as "reset this run", so visitors tapped it, landed on
-                 the directory, and left instead of coming back. New tab, so the
-                 briefing is still here afterwards. It sits below the hints and
+                 the directory, and left instead of coming back.
+
+                 SAME TAB (2026-09-08). It opened a new one until then, to
+                 keep the scene alive behind it. Back already does that: no
+                 scene on the site writes to history, so the directory is one
+                 press away, and a second tab holding a live WebGL context
+                 costs real memory on a phone. It also stacked up duplicate
+                 directory tabs, because the cards on the directory are
+                 same-tab links themselves. The aria-label went with the
+                 target, since it existed to warn about the new tab and
+                 otherwise only repeated the visible text.
+
+                 It sits below the hints and
                  after both buttons in the tab order, because taking the helm is
                  what this screen is asking for and leaving is not. main.js
                  syncs the href from config and shields it from the overlay's
                  click-to-start, the same way the briefing button above does it
                  inline. -->
-            <a id="explore-link" class="welcome-explore" href="/" target="_blank" rel="noopener"
-                aria-label="More 3D worlds to explore at SceneXP.com (opens in a new tab)">More 3D worlds to explore at SceneXP.com</a>
+            <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
         </div>
     </div>
 

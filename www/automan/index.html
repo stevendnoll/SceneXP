@@ -47,31 +47,18 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/automan/">
     <meta property="og:locale" content="en_US">
-    <!-- EXACTLY ONE og:image, and it names the WebP. Apple's link preview
-         renders every og:image it finds, so a JPEG listed underneath as a
-         "fallback" puts two identical cards in one message thread.
-         og-automan.jpg is built alongside it and lives in assets/: if a
-         platform (notably Facebook) will not render the WebP, swap the two
-         image URLs rather than adding a second tag.
+    <!-- JPEG, NOT WEBP, SINCE 2026-09-08. LinkedIn does not render a WebP
+         link preview at all, and a promoted link that unfurls with no image is
+         a worse outcome than a heavier file that always shows. The WebP is
+         half the size and is still built beside this one, so swap the two
+         image URLs below back to .../og-automan.webp if that ever changes.
 
-         THE CARD IS THE LOADING SCREEN, not a capture of the showroom, and
-         that is a change from the other experiences. The loader is the one
-         surface here that is pure lacquer and champagne with the mark on
-         it, which is what a link preview has to work as: it is shown at
-         about 500px in a timeline and smaller in a chat, where a room full
-         of low-poly figures is a smudge and a mark with a name under it is
-         legible. og-card.html in this folder is the page it is captured
-         from, so it can be re-shot the day the mark or the name changes.
-
-         Built with the house recipe, and the numbers are this frame's own
-         rather than the convention's: the display profile is converted to
-         sRGB BEFORE the strip (a bare strip moves this frame by 1.37%),
-         q92 sits on a smooth curve with no knee, and -sharp_yuv returns
-         12.5% of the error on the champagne mark for 1.3KB, measured on a
-         crop of the mark because a whole-frame average is drowned by the
-         gradient. 17KB WebP, 46KB JPEG at 4:4:4. -->
-    <meta property="og:image" content="https://www.scenexp.com/automan/assets/og-automan.webp?v=1">
-    <meta property="og:image:type" content="image/webp">
+         STILL EXACTLY ONE og:image. Apple's link preview renders every
+         og:image it finds, so listing both formats here would put two
+         identical cards in one message thread. See the longer note in
+         earthdefense, which is the page that shipped that bug. -->
+    <meta property="og:image" content="https://www.scenexp.com/automan/assets/og-automan.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="A dark navy card carrying John Walker's gold three-blade W above his name, John Walker, The Auto Man, set in wide-spaced capitals.">
@@ -80,7 +67,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="John Walker, The Auto Man">
     <meta name="twitter:description" content="You never have to negotiate with a car dealer again. John Walker desks the whole deal on your side of the desk.">
-    <meta name="twitter:image" content="https://www.scenexp.com/automan/assets/og-automan.webp?v=1">
+    <meta name="twitter:image" content="https://www.scenexp.com/automan/assets/og-automan.jpg?v=1">
     <meta name="twitter:image:alt" content="A dark navy card carrying John Walker's gold three-blade W above his name, John Walker, The Auto Man, set in wide-spaced capitals.">
 
     <!-- Structured data: the experience, and the business it features.

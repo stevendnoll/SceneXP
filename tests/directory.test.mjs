@@ -30,6 +30,7 @@ const CATEGORY_OF = {
     dad: 'personal', family: 'personal', roqui: 'personal', gavin: 'personal', jamar: 'personal',
     automan: 'business', interstate: 'business', seedtoseed: 'business', sunnyvalejenn: 'business',
     steve: 'worlds', mandelbrot: 'worlds', earthdefense: 'worlds', highwater: 'worlds', garden: 'worlds',
+    xo: 'worlds',
 };
 
 // THE MARKUP IS THE SOURCE OF TRUTH now that the catalog array is gone. Each
@@ -319,14 +320,39 @@ describe('the directory card image and the social image', () => {
         expect(`${slug} alt length: ${alt[1].trim().length > 30}`).toBe(`${slug} alt length: true`);
         expect(tag).toMatch(/\bwidth="1200"/);
         expect(tag).toMatch(/\bheight="630"/);
-        expect(tag).toMatch(/\bloading="lazy"/);
     });
 
-    test.each(slugs)('%s has exactly one social image, and it is the WebP', (slug) => {
-        // EXACTLY ONE og:image, NAMING THE WEBP. Apple's link preview renders
-        // every og:image it finds, so a JPEG "fallback" underneath puts two
-        // identical cards in a message thread rather than one. The .jpg twins
-        // exist on disk for scrapers that ask for them and are never named here.
+    test('the first card is eager and high priority, and it is the only one', () => {
+        // THE FIRST CARD IS THE LCP ELEMENT on any screen wide enough to show
+        // it, and `loading="lazy"` on an LCP element defers the fetch until
+        // layout has proved the image is needed, which is late by definition.
+        // The other fourteen must stay lazy: eager on all fifteen pulls
+        // roughly 780KB of card art nobody has scrolled to.
+        //
+        // This asserts the SPLIT rather than naming garden, so reordering the
+        // grid moves the requirement instead of breaking the test.
+        const eager = cards.filter((c) => /\bloading="eager"/.test(c.tag)).map((c) => c.slug);
+        expect(eager).toEqual([cards[0].slug]);
+        expect(`${cards[0].slug} fetchpriority: ${/\bfetchpriority="high"/.test(cards[0].tag)}`)
+            .toBe(`${cards[0].slug} fetchpriority: true`);
+        for (const c of cards.slice(1)) {
+            expect(`${c.slug}: ${/\bloading="lazy"/.test(c.tag)}`).toBe(`${c.slug}: true`);
+            expect(`${c.slug} fetchpriority: ${/\bfetchpriority=/.test(c.tag)}`)
+                .toBe(`${c.slug} fetchpriority: false`);
+        }
+    });
+
+    test.each(slugs)('%s has exactly one social image, and it is the JPEG', (slug) => {
+        // EXACTLY ONE og:image. Apple's link preview renders every og:image it
+        // finds, so a second one underneath as a "fallback" puts two identical
+        // cards in a message thread rather than one.
+        //
+        // AND IT NAMES THE JPEG, changed 2026-09-08 from the WebP. LinkedIn
+        // does not render a WebP link preview at all, and a promoted link that
+        // unfurls with no image is worse than a heavier file that always
+        // shows. Note the two rules are independent: this is still one tag,
+        // just the other format. The .webp twins stay on disk and are never
+        // named here.
         const page = read('www', slug, 'index.html').replace(/<!--[\s\S]*?-->/g, '');
         const og = [...page.matchAll(/<meta property="og:image"\s+content="([^"]+)"/g)].map((m) => m[1]);
         const tw = [...page.matchAll(/<meta name="twitter:image"\s+content="([^"]+)"/g)].map((m) => m[1]);
@@ -336,7 +362,7 @@ describe('the directory card image and the social image', () => {
         // directory-only picture can never quietly become the share preview.
         for (const url of [...og, ...tw]) {
             expect({ [slug]: url.replace(/\?.*$/, '') })
-                .toEqual({ [slug]: `https://www.scenexp.com/${slug}/assets/og-${slug}.webp` });
+                .toEqual({ [slug]: `https://www.scenexp.com/${slug}/assets/og-${slug}.jpg` });
         }
     });
 });

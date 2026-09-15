@@ -4,7 +4,7 @@
 
 3D worlds, games, and experiments, right in your browser. Built with [Three.js](https://threejs.org/) and nothing else but browser-native HTML, CSS, and JavaScript.
 
-[![SceneXP.com, custom 3D experiences, right in your browser](www/assets/og-image.jpg)](https://www.scenexp.com/)
+[![Four scenes from the SceneXP collection: a fractal spiral, a 3D football game, a fruit tree garden, and Earth from orbit, over the SceneXP.com wordmark and the line, 3D worlds, games, and experiments, right in your browser](www/assets/og-image.jpg)](https://www.scenexp.com/)
 
 [SceneXP.com](https://www.scenexp.com/) is a live website and a home for browser-native 3D experiences: worlds, games, experiments, stories, and simulations. Some were built to honor a person, place, or business. Others exist to show visitors what a browser can do. New experiences land regularly.
 
@@ -62,6 +62,7 @@ The 3D experiences send anonymized, fire-and-forget usage pings to a static endp
 - The Interstate Tire name, logo, and related graphics are likewise trademarks of their owner, appearing on the live site as part of a tribute experience with the owner's kind permission, and carry the same restrictions.
 - The Sunnyvale Jenn Consulting name and logo, the watercolor lotus mark and its wordmark, belong to Jenn and appear on the live site as part of a tribute experience with her kind permission. They carry the same restrictions.
 - The Auto Man name, John Walker's three-blade W mark, his printed flyer, and the photographs of him are his property, and appear on the live site as part of a tribute experience with his blessing. They carry the same restrictions, with two things particular to this one. **His W is the one trademark here that ships inside this repository**, as [`www/automan/favicon.svg`](www/automan/favicon.svg), as the social card beside it, and as inline SVG in the page itself, for the reason set out below. And the photographs and the flyer are his likeness rather than a trademark, so please treat them with the same care you would want for your own.
+- The X's and O's name, its orange X and blue O mascot artwork (`www/xo/favicon.ico` and `www/xo/assets/exes-n-ohs-logo-*.jpg`), and the game's sound effects in `www/xo/assets/audio/` belong to Continuum Commerce LLC, and are shared with the original 2D game at exesnohs.com. Unlike the tribute artwork, they do ship in this repository, because the game is our own. They are still not covered by the MIT license, so please do not reuse them in a project of your own.
 
 Most of that artwork is not included in this repository. The Interstate Tire and Seed to Seed logo files, the Interstate favicon, the social preview captures that show those logos in-scene, the photographs of the people these experiences honor, and The Auto Man scene's flyer are all listed in `.gitignore` and never ship. On a fresh clone those experiences show blank spots where the artwork belongs. Like the empty `snaps/` folders noted above, that is expected. If you fork this repository for your own site, please supply your own artwork in their place.
 

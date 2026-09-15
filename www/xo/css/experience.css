@@ -1,0 +1,886 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+/*
+ * experience.css - X's and O's specifics, loaded after the shared stylesheet.
+ *
+ * The shared chrome (loading screen, welcome overlay, floating buttons,
+ * panels, modals, and #game-canvas itself) is already themed by
+ * data-ui-theme="neon" on <html>, so this file only carries what a floodlit
+ * stadium needs on top of it and reads the same --ui-* tokens so everything
+ * stays in step.
+ *
+ * PORTRAIT IS THE HARD CASE. The S1 camera spike is about whether a visitor
+ * can read a whole route concept on a phone held upright, so every size below
+ * is chosen against that frame first and given room in landscape, not the
+ * other way round.
+ *
+ * IN ORDER BELOW: the loading screen, the field vignette, the playbook and
+ * its diagrams, the HUD and the throw buttons, the result and summary cards,
+ * the sound button, the welcome card, and the title over a milestone show.
+ */
+
+/* The page behind the canvas. The renderer paints a night sky, but the body
+ * shows for the moment before the first frame and in the overscroll on a
+ * phone, so it carries the same value rather than the shared sheet's default. */
+body {
+    background: #080b12;
+}
+
+/* ---- Loading screen -------------------------------------------------------
+ *
+ * The shared sheet supplies the layout. This gives it the floodlight: a cool
+ * wash from above centre, which is what the scene itself will look like a
+ * second later, so the load reads as the stadium lights coming up rather than
+ * as a progress bar that happens to precede a game.
+ */
+
+#loading-screen {
+    background:
+        radial-gradient(120% 80% at 50% -10%, #1b2740 0%, transparent 60%),
+        #080b12;
+}
+
+.loader-title {
+    letter-spacing: 0.22em;
+}
+
+/* The logo over the title. Its size and spacing come from the shared
+ * `.loader-logo`. Its black ground is a shade darker than this screen, which
+ * shows as a faint square edge, so the corners are rounded to make it a badge,
+ * the same treatment as the logo on the welcome card. */
+.xo-loader-logo {
+    border-radius: 24px;
+}
+
+/* ---- The turf's own light -------------------------------------------------
+ *
+ * A vignette over the canvas, pulling the corners down so the eye lands on the
+ * middle of the field. The play camera is high and wide by necessity, which
+ * leaves a lot of frame that is not the play, and this is the cheapest way to
+ * say which part matters. pointer-events: none so it never eats a tap meant
+ * for the scene.
+ */
+
+.field-vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    background: radial-gradient(115% 85% at 50% 45%, transparent 55%, rgba(4, 6, 11, 0.55) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .field-vignette {
+        transition: none;
+    }
+}
+
+/* ---- The playbook (M3) ----------------------------------------------------
+ *
+ * Its own names throughout, because the shared stylesheet scopes its modal
+ * rules by id and a new overlay id would inherit a near-opaque backdrop and no
+ * layout at all. The `[hidden]` rule below is load bearing: `display: flex` on
+ * the container beats the browser's default `[hidden] { display: none }`, so
+ * without it the overlay never closes.
+ *
+ * THE DIAGRAMS ARE DRAWN DARK, and they used to be drawn light because that is
+ * what a play diagram is: ink on paper. On this page it was not ink on paper,
+ * it was ten near-white rectangles glowing out of a night stadium, and the eye
+ * went to the brightness rather than to the plays. They are now painted for the
+ * room they are in, hues intact, by the palette map in playbook-ui.js. The
+ * ported drawing code was not touched (D7).
+ */
+
+.playbook {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(6, 9, 14, 0.82);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+}
+
+.playbook[hidden] {
+    display: none;
+}
+
+.playbook-panel {
+    width: min(72rem, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 1.25rem 1.25rem 1.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    background: #11151d;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* The heading and the restart control share a row. It wraps rather than
+   shrinking, so on a narrow phone the buttons drop under the title instead of
+   squeezing it. */
+.playbook-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin: 0 0 0.9rem;
+}
+
+.playbook-title {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: #f2f5fa;
+}
+
+/* QUIET UNTIL IT IS WANTED. Starting over ends a game that now survives a
+   reload, so it must be findable and must not compete with seventeen plays for
+   attention: a small outline button, and the confirm step wears the warning
+   colour rather than the resting one. */
+/* The two controls in the playbook's header that are about the GAME rather
+   than about the next play: the sound and starting over. */
+.playbook-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.6rem;
+}
+
+.playbook-restart {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* THE SOUND BUTTON BORROWS THE RESTART PILL AND ADDS THE SPEAKER. It wears the
+   same shape as its neighbour on purpose: two controls sitting together that
+   are drawn differently read as two different kinds of thing. The icon sizing
+   matches `.hud-mute` so the same button is the same size wherever it appears,
+   and `.hud-mute-icon` above already styles the glyph itself. */
+.playbook-mute {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding-left: 0.55rem;
+}
+
+/* The muted state is dimmer than the live one and still has to be readable.
+   Every property the resting rule sets is named in the hover pair below, or a
+   hovered muted button keeps this greyer ink (see the note on partial
+   overrides in the shared sheet). */
+.playbook-mute[aria-pressed="true"] {
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #8a94a6;
+}
+
+.playbook-mute:hover,
+.playbook-mute:focus-visible,
+.playbook-mute[aria-pressed="true"]:hover,
+.playbook-mute[aria-pressed="true"]:focus-visible {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #f2f5fa;
+}
+
+.playbook-restart-btn {
+    padding: 0.3rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: transparent;
+    color: #aab4c4;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.playbook-restart-btn:hover,
+.playbook-restart-btn:focus-visible {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #f2f5fa;
+}
+
+.playbook-restart-btn.is-confirm {
+    border-color: rgba(255, 107, 92, 0.55);
+    color: #ff8c7d;
+}
+
+/* A hover rule inherits everything it does not say, so the confirm button's
+   own colour has to be restated here or the rule above supplies it (see the
+   note in the shared sheet about partial overrides). */
+.playbook-restart-btn.is-confirm:hover,
+.playbook-restart-btn.is-confirm:focus-visible {
+    border-color: #ff8c7d;
+    color: #ffb3a8;
+}
+
+/* The line on the welcome card that says how far into a game you are. */
+.welcome-resume {
+    margin-top: 0.9rem;
+    color: #ff992c;
+    font-weight: 600;
+}
+
+.playbook-defense {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0 0 1.1rem;
+    color: #aeb6c6;
+    font-size: 0.95rem;
+}
+
+.playbook-defense select {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    background: #1a212c;
+    color: #f2f5fa;
+    font: inherit;
+}
+
+.playbook-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+    gap: 0.9rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* The whole card is the button, so there is one tab stop per play rather than
+ * a picture, a heading and a control that all have to be visited. */
+.play-choose {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: #1a212c;
+    color: #e8ecf3;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.play-choose:hover,
+.play-choose:focus-visible {
+    border-color: #ff992c;
+    transform: translateY(-2px);
+}
+
+.play-choose canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.play-name {
+    display: block;
+    padding: 0.6rem 0.8rem 0;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.play-blurb {
+    display: block;
+    padding: 0.25rem 0.8rem 0.8rem;
+    color: #a6afc0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+}
+
+/**
+ * THE LAST PLAY, REPEATED AT THE TOP OF THE BOOK.
+ *
+ * It is a SECOND card rather than a moved one, so it needs to read as a
+ * shortcut and not as the book having duplicated itself. The "Last play" badge
+ * already names it, so this is one hairline of the team's own orange down the
+ * leading edge: enough to say "this one is here on purpose", not enough to
+ * compete with the diagram it frames.
+ */
+.play-card.is-repeat .play-choose {
+    border-color: rgba(255, 153, 44, 0.45);
+    box-shadow: inset 3px 0 0 0 rgba(255, 153, 44, 0.75);
+}
+
+.play-last {
+    display: inline-block;
+    margin: 0 0.8rem 0.8rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(255, 153, 44, 0.18);
+    color: #ff992c;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .play-choose {
+        transition: none;
+    }
+    .play-choose:hover,
+    .play-choose:focus-visible {
+        transform: none;
+    }
+}
+
+/* ---- HUD and cards (M4) ---------------------------------------------------
+ *
+ * Own names again, for the same reason the playbook has them: the shared sheet
+ * scopes its modal rules by id, so nothing here can borrow them.
+ *
+ * The HUD sits at the BOTTOM. The play camera looks downfield and the action
+ * moves away from the viewer, so the bottom of the frame is the emptiest part
+ * of it and the least costly place to spend on chrome. It is also where a
+ * thumb already is on a phone.
+ */
+
+.hud {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.7rem 0.9rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top, rgba(6, 9, 14, 0.92), rgba(6, 9, 14, 0));
+    pointer-events: none;
+}
+
+.hud[hidden] {
+    display: none;
+}
+
+.hud-bar {
+    display: flex;
+    /* WRAPS, because the bar gained a third stat and a phone is 360px wide.
+       Unwrapped, "Play 1 of 10", "Score 0", "Clock 10" and the mute button
+       overflow a narrow screen and the mute button is the one pushed off, which
+       is a control rather than a readout. */
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: baseline;
+    gap: 0.35rem 1.4rem;
+    color: #b9c2d2;
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+}
+
+.hud-stat strong {
+    color: #f2f5fa;
+    font-size: 1.05rem;
+}
+
+/* THE PLAY CLOCK.
+   Tabular numerals so the bar does not jiggle as the digits change: 10 to 9 is
+   a width change, and a readout that shifts its neighbours every second reads
+   as broken. */
+.hud-clock strong {
+    font-variant-numeric: tabular-nums;
+    /* Two digits plus the space they need, so dropping to one does not pull the
+       whole row leftward. */
+    min-width: 1.4ch;
+    display: inline-block;
+    text-align: right;
+}
+
+.hud-clock[hidden] {
+    display: none;
+}
+
+/* RUNNING OUT, AND NEVER BY COLOUR ALONE. The weight and the scale carry it for
+   anybody who cannot separate the two hues, and the number itself counting down
+   is the real signal in any case. */
+.hud-clock.is-urgent strong {
+    color: #ff7a7a;
+    font-weight: 800;
+    font-size: 1.25rem;
+}
+
+
+.hud-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.6rem;    /* reserve the row so the HUD never jumps */
+}
+
+.hud-btn {
+    /* The row is pointer-events:none so the scene stays visible under it, so
+     * each button has to take its own events back. */
+    pointer-events: auto;
+    padding: 0.55rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    background: rgba(26, 33, 44, 0.94);
+    color: #e8ecf3;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.hud-btn:hover,
+.hud-btn:focus-visible {
+    border-color: #ff992c;
+    background: rgba(38, 47, 61, 0.96);
+}
+
+.hud-btn-primary {
+    border-color: #ff992c;
+    background: #ff992c;
+    color: #21140a;
+}
+
+.hud-btn-primary:hover,
+.hud-btn-primary:focus-visible {
+    background: #ffab52;
+    color: #21140a;
+}
+
+/* ---- The throw buttons ----------------------------------------------------
+ *
+ * Each one wears its receiver's colour, so "Throw C" names somebody a visitor
+ * can actually pick out on the grass. The hue arrives as --throw-ink from
+ * hud.js, out of the same config table markers.js paints the discs from.
+ *
+ * THE SWATCH CARRIES THE COLOUR AND THE LABEL STAYS WHITE. These four hues sit
+ * between about 3:1 and 4.5:1 on this pill, so a button whose own text was the
+ * tinted part would have two of the four failing AA. A filled dot has nothing
+ * to pass, the label keeps its 12:1, and the border tint is decoration on top
+ * of a border that already exists.
+ *
+ * The dot is a real element rather than a ::before, because a pseudo-element
+ * cannot be given a per-button colour without a rule per receiver.
+ */
+.hud-btn-throw {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border-color: color-mix(in srgb, var(--throw-ink, #ffffff) 55%, transparent);
+}
+
+.hud-btn-throw:hover,
+.hud-btn-throw:focus-visible {
+    /* Beats the generic .hud-btn:hover that would otherwise supply the orange,
+     * which is the trap a :hover block that only names some properties falls
+     * into: whatever it leaves out, a competing rule provides. */
+    border-color: var(--throw-ink, #ff992c);
+    background: rgba(38, 47, 61, 0.96);
+}
+
+.throw-dot {
+    width: 0.72rem;
+    height: 0.72rem;
+    flex: none;
+    border-radius: 50%;
+    background: var(--throw-ink, #ffffff);
+    box-shadow: 0 0 0 1px rgba(6, 9, 14, 0.55);
+}
+
+/* ---- The result and summary cards ---------------------------------------- */
+
+.card-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(6, 9, 14, 0.78);
+}
+
+.card-overlay[hidden] {
+    display: none;
+}
+
+/* ---- The result card sits low -----------------------------------------------
+ *
+ * A play finishes somewhere on the grass, and the grass is what the card is
+ * reporting on. Centred over a dimmed field, it landed on the ball more often
+ * than not: the middle of the screen is the middle of the field, and the middle
+ * of the field is where a play tends to end.
+ *
+ * Anchoring it to the bottom hands the upper two thirds of the frame back,
+ * which is where the play went. It also lands nearer the thumb on a phone. The
+ * backdrop lightens for the same reason, and the lit spot marker rises past the
+ * card from below so the ball is findable even when the card is over it.
+ *
+ * ONLY THE RESULT CARD. The welcome card and the summary are read rather than
+ * looked past, so they stay centred over a properly dimmed field.
+ */
+.card-overlay-low {
+    align-items: flex-end;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top,
+        rgba(6, 9, 14, 0.86) 0%,
+        rgba(6, 9, 14, 0.62) 40%,
+        rgba(6, 9, 14, 0.28) 100%);
+}
+
+.card-panel {
+    width: min(30rem, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 1.4rem 1.5rem 1.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    background: #11151d;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+    text-align: center;
+}
+
+.card-title {
+    margin: 0.2rem 0 0;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #f2f5fa;
+}
+
+.card-detail {
+    margin: 0.5rem 0 0;
+    color: #c3cbd9;
+}
+
+.card-meta {
+    margin: 0.4rem 0 0;
+    color: #8d97a8;
+    font-size: 0.9rem;
+}
+
+/**
+ * THE KEYBOARD LINE ON THE WELCOME CARD.
+ *
+ * A key cap has to read as a THING TO PRESS rather than as emphasis, and at
+ * this size the only cues that carry are a border and a monospace face. The
+ * line itself is `card-meta` grey, so the caps sit a step brighter than the
+ * sentence holding them without competing with the ladder above.
+ *
+ * It is a nicety on a phone, where there is no keyboard at all, so it must
+ * never grow the card: no padding that wraps the line and no minimum width.
+ */
+.welcome-keys kbd {
+    display: inline-block;
+    padding: 0.05em 0.4em;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #d7dde8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    line-height: 1.5;
+}
+
+.card-actions {
+    margin-top: 1.2rem;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.result-points {
+    margin: 0;
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.result-points.is-good,
+.summary-pts.is-good { color: #6fe08a; }
+.result-points.is-bad,
+.summary-pts.is-bad { color: #ff7a7a; }
+.result-points.is-neutral,
+.summary-pts.is-neutral { color: #8d97a8; }
+
+.summary-total {
+    margin: 0.3rem 0 0;
+    font-size: 3.4rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #ff992c;
+}
+
+.summary-plays {
+    margin: 1.1rem 0 0;
+    padding: 0;
+    list-style: none;
+    text-align: left;
+}
+
+.summary-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.7rem;
+    padding: 0.3rem 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.92rem;
+}
+
+.summary-n {
+    width: 1.4rem;
+    /* 4.91:1 on the card. It was #6e788a, 4.11:1, the one text colour on the
+       page under AA (accessibility sweep, 2026-09-14). Still a step quieter than
+       the 6.2:1 grey of the row beside it, which is the hierarchy it was for. */
+    color: #7b8597;
+    font-variant-numeric: tabular-nums;
+}
+
+.summary-what { flex: 1; color: #c3cbd9; }
+.summary-pts { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---- The sound toggle -----------------------------------------------------
+ *
+ * In the stat bar rather than the action row, because that row is rebuilt on
+ * every phase change and a control that disappears while you are reaching for
+ * it is worse than none.
+ *
+ * IT DID NOT READ AS A CONTROL, and the stat bar is why. "Sound off" sat
+ * between "Play 1 of 10" and "Score 0", which are statements, so a third short
+ * phrase in the same row read as a third statement. It now carries a speaker
+ * icon, sits at the same weight as the buttons below it, and lifts on hover,
+ * which are the three things that say "press me" before any word is read.
+ */
+.hud-mute {
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.65rem 0.2rem 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 999px;
+    background: rgba(26, 33, 44, 0.94);
+    color: #c6cedc;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.5;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.hud-mute-icon {
+    width: 1.05rem;
+    height: 1.05rem;
+    flex: none;
+    display: block;
+}
+
+/* The muted state reads dimmer than the live one, but it still has to be
+ * readable: #7d8698 measured 4.42:1 against the button, just under AA. */
+.hud-mute[aria-pressed="true"] {
+    color: #8a94a6;
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* NAMES EVERY PROPERTY THE RESTING RULES SET, including the ones the pressed
+ * state changes. A :hover block inherits the resting value for anything it
+ * leaves out, so omitting `color` here would let the pressed rule keep supplying
+ * its dimmed grey to a hovered button. */
+.hud-mute:hover,
+.hud-mute:focus-visible,
+.hud-mute[aria-pressed="true"]:hover,
+.hud-mute[aria-pressed="true"]:focus-visible {
+    border-color: #ff992c;
+    background: rgba(38, 47, 61, 0.96);
+    color: #f2f5fa;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hud-mute {
+        transition: none;
+    }
+}
+
+/* ---- The welcome card -----------------------------------------------------
+ *
+ * Wider than the result card because it is the only place the scoring ladder
+ * is written down. The 2D game paints those bands along the touchline, so it
+ * never had to explain them in words.
+ */
+
+.welcome-panel {
+    width: min(34rem, 100%);
+    text-align: left;
+}
+
+.welcome-panel .card-title,
+.welcome-panel .card-detail {
+    text-align: center;
+}
+
+/* The logo beside the title. The 64px file is drawn at 48 so it sits level
+ * with the heading rather than towering over it. Its black ground is darker
+ * than the panel, so the corners are rounded to make that square read as a
+ * badge on purpose rather than a picture that failed to crop. */
+.welcome-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+}
+
+.welcome-logo {
+    flex: none;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 10px;
+}
+
+.welcome-steps {
+    margin: 1.2rem 0 0;
+    padding-left: 1.3rem;
+    color: #c3cbd9;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.welcome-steps li { margin-top: 0.45rem; }
+.welcome-steps strong { color: #f2f5fa; }
+
+.welcome-ladder-title {
+    margin: 1.3rem 0 0.5rem;
+    color: #8d97a8;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.welcome-ladder {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+    gap: 0.35rem 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: #c3cbd9;
+    font-size: 0.92rem;
+}
+
+.welcome-ladder li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.ladder-pts {
+    min-width: 2.2rem;
+    font-weight: 800;
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.ladder-pts.is-good { color: #6fe08a; }
+.ladder-pts.is-bad { color: #ff7a7a; }
+
+/* The number to beat. Set apart from the ladder above it, because the ladder is
+ * reference and this is the point of the game. */
+.welcome-target {
+    margin: 1.1rem 0 0;
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    color: #c3cbd9;
+    font-size: 0.95rem;
+    text-align: center;
+}
+
+.welcome-target strong {
+    color: #ff992c;
+}
+
+/* The directory link at the foot of the welcome card. The look (small, dim,
+ * underlined, a padded tap target) comes from `.welcome-explore` in the shared
+ * sheet. Only the spacing is local: the shared margin is sized for the house
+ * #blocker overlay, and on this card it would leave a gap wider than anything
+ * else between the Start button and the link. Centred to sit under the
+ * buttons, because the panel itself is left-aligned for the rules. */
+.welcome-explore-row {
+    margin: 0.9rem 0 -0.6rem;
+    text-align: center;
+}
+
+.welcome-explore-row .welcome-explore {
+    margin: 0;
+}
+
+/* ---- The milestone title ----------------------------------------------------
+ *
+ * The number a game has reached, over the show that celebrates it. It is the one
+ * piece of this page meant to feel like an award rather than an interface, so it
+ * is set the way a marque sets a figure: a tracked small-caps kicker on a
+ * hairline, a large numeral in a light serif with gold in it, and a quiet line
+ * underneath. Device serifs only (font-src is 'self'), ending in a generic.
+ *
+ * It sits LOW, above the HUD row, because the show above it is the reward and
+ * the board and the fireworks are both framed in the middle of the screen.
+ * Opacity and a small rise are set per frame by hud.js from the show's clock,
+ * so there is no keyframe here to outrank anything.
+ */
+.milestone {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(5.8rem + env(safe-area-inset-bottom, 0px));
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 1rem;
+    text-align: center;
+    pointer-events: none;
+}
+
+.milestone[hidden] {
+    display: none;
+}
+
+.milestone p {
+    margin: 0;
+}
+
+.milestone-kicker {
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(219, 179, 106, 0.55);
+    color: #dbb36a;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+}
+
+.milestone-number {
+    font-family: "Hoefler Text", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: clamp(4.2rem, 17vw, 8.5rem);
+    font-weight: 400;
+    line-height: 1;
+    font-variant-numeric: lining-nums;
+    color: #ffcf5a;
+    background: linear-gradient(180deg, #fff6dc 0%, #ffd46a 48%, #c98a22 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 1.1rem rgba(255, 186, 72, 0.45)) drop-shadow(0 0.35rem 0.8rem rgba(0, 0, 0, 0.7));
+}
+
+.milestone-line {
+    margin-top: 0.2rem;
+    color: #f2e8cf;
+    font-size: 1.02rem;
+    letter-spacing: 0.05em;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85);
+}

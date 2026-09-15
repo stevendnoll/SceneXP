@@ -170,7 +170,8 @@ describe('the page carries the metadata a share and a crawler need', () => {
     test('the card is declared at the size every renderer expects', () => {
         expect(meta('og:image:width')).toBe('1200');
         expect(meta('og:image:height')).toBe('630');
-        expect(meta('og:image:type')).toBe('image/webp');
+        // The JPEG since 2026-09-08: LinkedIn renders no WebP link preview.
+        expect(meta('og:image:type')).toBe('image/jpeg');
     });
 
     test('every image reference on the site names the same file', () => {
@@ -179,7 +180,7 @@ describe('the page carries the metadata a share and a crawler need', () => {
         // cache-busting bump applied to two of the three is a silent
         // inconsistency nobody would see until a share looked stale.
         const image = meta('og:image');
-        expect(image).toBe(`${BASE}assets/og-highwater.webp?v=1`);
+        expect(image).toBe(`${BASE}assets/og-highwater.jpg?v=1`);
         expect(meta('twitter:image')).toBe(image);
     });
 

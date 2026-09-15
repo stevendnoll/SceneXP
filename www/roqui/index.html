@@ -31,12 +31,21 @@
     <meta property="og:site_name" content="Zumba with Roqui">
     <meta property="og:url" content="https://www.scenexp.com/roqui/">
     <meta property="og:locale" content="en_US">
-    <!-- WebP per preference. og-roqui.webp is a capture of the studio in
-         party mode (from specs/og-roqui.png, same flow as og-dad). If a
-         platform (notably Facebook) won't render the preview, swap the two
-         image URLs below to .../og-roqui.jpg (both live in assets/). -->
-    <meta property="og:image" content="https://www.scenexp.com/roqui/assets/og-roqui.webp?v=1">
-    <meta property="og:image:type" content="image/webp">
+    <!-- JPEG, NOT WEBP, SINCE 2026-09-08. LinkedIn does not render a WebP
+         link preview at all, and a promoted link that unfurls with no image is
+         a worse outcome than a heavier file that always shows. The WebP is
+         half the size and is still built beside this one, so swap the two
+         image URLs below back to .../og-roqui.webp if that ever changes.
+
+         STILL EXACTLY ONE og:image. Apple's link preview renders every
+         og:image it finds, so listing both formats here would put two
+         identical cards in one message thread. See the longer note in
+         earthdefense, which is the page that shipped that bug.
+
+         og-roqui.jpg is a capture of the studio in party mode (from
+         specs/og-roqui.png, same flow as og-dad). -->
+    <meta property="og:image" content="https://www.scenexp.com/roqui/assets/og-roqui.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="Roqui's 3D Zumba class mid-song: lights down, disco ball spinning, the class dancing in front of the mirror wall.">
@@ -45,7 +54,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Zumba with Roqui">
     <meta name="twitter:description" content="A joyful 3D Zumba class, built with love for a wonderful instructor. Step in and catch the beat.">
-    <meta name="twitter:image" content="https://www.scenexp.com/roqui/assets/og-roqui.webp?v=1">
+    <meta name="twitter:image" content="https://www.scenexp.com/roqui/assets/og-roqui.jpg?v=1">
     <meta name="twitter:image:alt" content="Roqui's 3D Zumba class mid-song: lights down, disco ball spinning, the class dancing in front of the mirror wall.">
 
     <!-- Structured data: site identity for search engines.
@@ -135,12 +144,22 @@
             <!-- The one link back to the directory, replacing the floating Home
                  button (2026-09-07): Home sat in the corner of the live scene
                  and read as "reset this view", so visitors tapped it, landed on
-                 the directory, and left instead of coming back. New tab, so
-                 this scene is still here afterwards. main.js syncs the href
-                 from config and shields it from the overlay's click-to-start,
-                 without which a tap here would just start the scene. -->
-            <a id="explore-link" class="welcome-explore" href="/" target="_blank" rel="noopener"
-                aria-label="More 3D worlds to explore at SceneXP.com (opens in a new tab)">More 3D worlds to explore at SceneXP.com</a>
+                 the directory, and left instead of coming back.
+
+                 SAME TAB (2026-09-08). It opened a new one until then, to
+                 keep the scene alive behind it. Back already does that: no
+                 scene on the site writes to history, so the directory is one
+                 press away, and a second tab holding a live WebGL context
+                 costs real memory on a phone. It also stacked up duplicate
+                 directory tabs, because the cards on the directory are
+                 same-tab links themselves. The aria-label went with the
+                 target, since it existed to warn about the new tab and
+                 otherwise only repeated the visible text.
+
+                 main.js syncs the href from config and shields it from the
+                 overlay's click-to-start, without which a tap here would just
+                 start the scene. -->
+            <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
         </div>
     </div>
 

@@ -24,18 +24,53 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/">
     <meta property="og:locale" content="en_US">
-    <meta property="og:image" content="https://www.scenexp.com/assets/og-image.webp?v=2">
-    <meta property="og:image:type" content="image/webp">
+    <!-- THE CARD IS FOUR SCENES, NOT THE LOGO (rebuilt 2026-09-08, ?v=3, and
+         again 2026-09-14, ?v=4, to put X's and O's in it). It
+         used to be the wordmark on a dark gradient over the line "Custom 3D
+         experiences, right in your browser", which had two problems by the
+         time anyone went to promote the site. That tagline is the retired
+         commissions-first positioning, so the card argued with the h1 on the
+         page it links to. And a logo shows nothing: this is a visual project
+         whose one attached image in every feed showed no 3D at all.
+
+         THE FOUR TILES ARE CHOSEN FOR CONTRAST, not for ranking. Mandelbrot
+         (red), X's and O's (dark green turf), Fractal Garden (bright green) and
+         Earth Defense (black and blue) look nothing like each other at
+         thumbnail size. Seven of the scenes are blue sky over green trees, so
+         picking on quality alone gives four tiles that read as one repeated
+         picture. X'S AND O'S TOOK JAMAR'S TILE, and Earth Defense moved to the
+         bottom right, so the two green tiles sit on a diagonal and the grid
+         reads light and dark as a checkerboard rather than as a green row.
+
+         THE RECIPE, since nothing else writes it down. Each tile is the scene's
+         own og-*.jpg resized to 598 wide and centre cropped to 598x238, placed
+         at (0,0), (601,0), (0,241) and (601,241), which leaves 3px gutters. The
+         band from y=479 down was kept from the previous card rather than
+         redrawn, and differs from it by 0.14% RMSE after re-encoding.
+
+         q90 AT 4:4:4, WHICH WAS MEASURED OVER THE TEXT BAND rather than the
+         whole frame: mandelbrot's filaments dominate a global RMSE and nobody
+         will notice a filament move, while ringing on the wordmark would be
+         the one visible defect. The band reads 0.0054 at 90 against 0.0072 at
+         86, for 198.6 KB. Chroma subsampling stays off because the wordmark is
+         the only thing here that could show it. The 2026-09-14 rebuild is
+         212 KB at the same settings, encoded progressive.
+
+         The JPEG ships and the WebP sits beside it, per the note on every
+         experience page. og:image:alt describes THIS picture, so it is
+         rewritten whenever the card is. -->
+    <meta property="og:image" content="https://www.scenexp.com/assets/og-image.jpg?v=4">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="The SceneXP logo and wordmark on a dark background with the tagline, custom 3D experiences right in your browser.">
+    <meta property="og:image:alt" content="Four scenes from the SceneXP collection in a grid: a glowing orange fractal spiral, a 3D football field with orange and blue players in the middle of a play, a row of red-fruited trees in a green garden, and the blue curve of Earth seen from orbit with a targeting reticle and incoming raiders. Below them the SceneXP.com wordmark and the line, 3D worlds, games, and experiments, right in your browser.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="SceneXP | 3D Worlds, Games, and Experiments">
     <meta name="twitter:description" content="3D worlds, games, experiments, and simulations, every one running entirely in your browser. No app and no download.">
-    <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.webp?v=2">
-    <meta name="twitter:image:alt" content="The SceneXP logo and wordmark on a dark background with the tagline, custom 3D experiences right in your browser.">
+    <meta name="twitter:image" content="https://www.scenexp.com/assets/og-image.jpg?v=4">
+    <meta name="twitter:image:alt" content="Four scenes from the SceneXP collection in a grid: a glowing orange fractal spiral, a 3D football field with orange and blue players in the middle of a play, a row of red-fruited trees in a green garden, and the blue curve of Earth seen from orbit with a targeting reticle and incoming raiders. Below them the SceneXP.com wordmark and the line, 3D worlds, games, and experiments, right in your browser.">
 
     <!-- Structured data: site identity plus the experience directory.
          JSON-LD is a data block (not executed), so it is allowed under the CSP.
@@ -76,30 +111,36 @@
             {
               "@type": "ListItem",
               "position": 1,
+              "url": "https://www.scenexp.com/xo/",
+              "name": "X's and O's"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
               "url": "https://www.scenexp.com/garden/",
               "name": "Fractal Garden"
             },
             {
               "@type": "ListItem",
-              "position": 2,
+              "position": 3,
               "url": "https://www.scenexp.com/highwater/",
               "name": "High Water"
             },
             {
               "@type": "ListItem",
-              "position": 3,
+              "position": 4,
               "url": "https://www.scenexp.com/earthdefense/",
               "name": "Earth Defense"
             },
             {
               "@type": "ListItem",
-              "position": 4,
+              "position": 5,
               "url": "https://www.scenexp.com/mandelbrot/",
               "name": "The Mandelbrot Set"
             },
             {
               "@type": "ListItem",
-              "position": 5,
+              "position": 6,
               "url": "https://www.scenexp.com/steve/",
               "name": "Steve's Home Office"
             }
@@ -289,6 +330,36 @@
                     aria-labelledby="worlds-and-games">
                     <h2 id="worlds-and-games">Worlds and games</h2>
                     <ul class="experience-grid">
+                        <li class="experience-card" data-slug="xo">
+                            <a href="/xo/">
+                                <!-- THE ONLY EAGER IMAGE ON THE PAGE, and it has to stay the
+                                     only one. This is the first card in the first group, so it
+                                     is the Largest Contentful Paint element on any screen wide
+                                     enough to show it. `loading="lazy"` on an LCP element is a
+                                     measurable own goal: the browser will not begin the fetch
+                                     until layout has proved the image is needed, which is late
+                                     by definition. `fetchpriority="high"` then lets it jump the
+                                     queue ahead of the fourteen lazy cards below.
+                                     The other fourteen stay lazy, because eager on all
+                                     fifteen would fetch 780KB of card art nobody has scrolled
+                                     to yet. If the card order ever changes, these two
+                                     attributes move to whichever card is first. They moved
+                                     here from the garden on 2026-09-14, when X's and O's
+                                     became the newest world. -->
+                                <img src="/xo/assets/og-xo.webp?v=1" width="1200" height="630" loading="eager"
+                                    fetchpriority="high" decoding="async"
+                                    alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">A football game where you call the plays</p>
+                                    <h3>X's and O's</h3>
+                                    <p>You are on offense for all ten plays. Pick a play from the
+                                        playbook, snap the ball, then throw to an open receiver or keep
+                                        it and run. The farther you carry it the more the play is worth,
+                                        and 500 is a perfect game.</p>
+                                    <span class="experience-cta">Call the first play →</span>
+                                </div>
+                            </a>
+                        </li>
                         <li class="experience-card" data-slug="garden">
                             <a href="/garden/">
                                 <img src="/garden/assets/og-garden.webp?v=3" width="1200" height="630" loading="lazy"
@@ -546,10 +617,10 @@
                 <ul class="audience-grid">
                     <li class="audience-card">
                         <h3><a href="#worlds-and-games">Worlds and games</a></h3>
-                        <p>The ones built for their own sake. Defend Earth from a Martian fleet, dive
-                            hundreds of billions of times deep into the Mandelbrot set, watch a modelled
-                            ocean shoal and break on a measured beach, or plant a garden of fractal trees
-                            and tend it through the seasons.</p>
+                        <p>The ones built for their own sake. Call the plays in a game of football, defend
+                            Earth from a Martian fleet, dive hundreds of billions of times deep into the
+                            Mandelbrot set, watch a modelled ocean shoal and break on a measured beach, or
+                            plant a garden of fractal trees and tend it through the seasons.</p>
                     </li>
                     <li class="audience-card">
                         <h3><a href="#small-business-tributes">Small business tributes</a></h3>

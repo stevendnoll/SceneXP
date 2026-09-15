@@ -2176,9 +2176,11 @@ describe('the social card', () => {
         expect(html.match(/<meta property="og:image"/g) || []).toHaveLength(1);
     });
 
-    test('the card is the WebP, at the size every renderer expects', () => {
-        expect(meta('og:image')).toBe(`${BASE}assets/og-garden.webp?v=3`);
-        expect(meta('og:image:type')).toBe('image/webp');
+    test('the card is the JPEG, at the size every renderer expects', () => {
+        // THE JPEG SINCE 2026-09-08, not the WebP: LinkedIn renders no WebP
+        // link preview at all. Still exactly one tag, per the test above.
+        expect(meta('og:image')).toBe(`${BASE}assets/og-garden.jpg?v=3`);
+        expect(meta('og:image:type')).toBe('image/jpeg');
         expect(meta('og:image:width')).toBe('1200');
         expect(meta('og:image:height')).toBe('630');
         // Both blocks name the same file, so a cache-busting bump applied to

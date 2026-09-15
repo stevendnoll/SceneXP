@@ -31,13 +31,21 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/jamar/">
     <meta property="og:locale" content="en_US">
-    <!-- WebP per preference. og-jamar.webp is a capture of the bar from the
-         visitor's viewpoint (same flow as the other experiences; capture
-         pending). If a platform (notably Facebook) won't render the
-         preview, swap the two image URLs below to .../og-jamar.jpg
-         (both will live in assets/). -->
-    <meta property="og:image" content="https://www.scenexp.com/jamar/assets/og-jamar.webp?v=1">
-    <meta property="og:image:type" content="image/webp">
+    <!-- JPEG, NOT WEBP, SINCE 2026-09-08. LinkedIn does not render a WebP
+         link preview at all, and a promoted link that unfurls with no image is
+         a worse outcome than a heavier file that always shows. The WebP is
+         half the size and is still built beside this one, so swap the two
+         image URLs below back to .../og-jamar.webp if that ever changes.
+
+         STILL EXACTLY ONE og:image. Apple's link preview renders every
+         og:image it finds, so listing both formats here would put two
+         identical cards in one message thread. See the longer note in
+         earthdefense, which is the page that shipped that bug.
+
+         og-jamar.jpg is a capture of the bar from the visitor's viewpoint
+         (same flow as the other experiences, capture pending). -->
+    <meta property="og:image" content="https://www.scenexp.com/jamar/assets/og-jamar.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="A 3D karaoke bar at night: Jamar sings on a corner stage under magenta and blue lights, a lyrics screen glows on the brick wall, and two friends raise glasses from a red vinyl booth.">
@@ -46,7 +54,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Jamar's Karaoke Night">
     <meta name="twitter:description" content="A living 3D visit to karaoke night at the corner bar, built as a birthday present. Jamar has the mic.">
-    <meta name="twitter:image" content="https://www.scenexp.com/jamar/assets/og-jamar.webp?v=1">
+    <meta name="twitter:image" content="https://www.scenexp.com/jamar/assets/og-jamar.jpg?v=1">
     <meta name="twitter:image:alt" content="A 3D karaoke bar at night: Jamar sings on a corner stage under magenta and blue lights, a lyrics screen glows on the brick wall, and two friends raise glasses from a red vinyl booth.">
 
     <!-- Structured data: site identity for search engines.

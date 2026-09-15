@@ -43,16 +43,19 @@ import { existsSync } from 'node:fs';
 
 const ROOT = new URL('../', import.meta.url);
 
-/** The nine that traded the floating button for a welcome-screen link. */
+/** The nine that traded the floating button for a welcome-screen link, plus
+ *  X's and O's, which never had the button and took the link at launch
+ *  (2026-09-14) so a visitor arriving from a shared link can find the rest. */
 const WITH_LINK = ['dad', 'earthdefense', 'family', 'garden', 'gavin', 'highwater',
-  'mandelbrot', 'roqui', 'steve'];
+  'mandelbrot', 'roqui', 'steve', 'xo'];
 /** The five stripped first, which deliberately carry no directory link. */
 const WITHOUT_LINK = ['automan', 'interstate', 'jamar', 'seedtoseed', 'sunnyvalejenn'];
 const ALL = [...WITH_LINK, ...WITHOUT_LINK].sort();
 
 /** High Water's card is not a click-to-start surface: the only way past it is
- *  its Begin button, so its link needs no shield and deliberately has none. */
-const NO_SHIELD_NEEDED = ['highwater'];
+ *  its Begin button, so its link needs no shield and deliberately has none.
+ *  X's and O's is the same: its welcome card is dismissed by a button. */
+const NO_SHIELD_NEEDED = ['highwater', 'xo'];
 
 const SLOT_PITCH = 62;   // a 50px button plus a 12px gap
 const FIRST_SLOT = 20;   // the corner
@@ -170,7 +173,7 @@ async function cluster(scene) {
 
 // ---- The tests ------------------------------------------------------------
 
-test('not one of the fourteen scenes has a Home button left', async () => {
+test('not one of the fifteen scenes has a Home button left', async () => {
   for (const scene of ALL) {
     for (const f of ['index.html', 'js/main.js', 'js/main.min.js']) {
       const text = await read(`www/${scene}/${f}`);
@@ -181,7 +184,7 @@ test('not one of the fourteen scenes has a Home button left', async () => {
   }
 });
 
-test('the nine carry the directory link, and the five deliberately do not', async () => {
+test('the ten carry the directory link, and the five deliberately do not', async () => {
   for (const scene of WITH_LINK) {
     const html = await read(`www/${scene}/index.html`);
     expect(`${scene}: ${html.includes('id="explore-link"')}`).toBe(`${scene}: true`);
@@ -192,11 +195,18 @@ test('the nine carry the directory link, and the five deliberately do not', asyn
   }
 });
 
-test('the directory link opens in a new tab and says where it goes', async () => {
-  // A NEW TAB IS THE WHOLE POINT. Home failed because following it cost the
-  // visitor the scene they were in and they did not come back; a link that
-  // leaves this tab alone cannot repeat that. `rel="noopener"` comes with
-  // target="_blank" as a matter of course.
+test('the directory link stays in this tab and says where it goes', async () => {
+  // SAME TAB (changed 2026-09-08; it opened a new one from 2026-09-07). The
+  // new tab was there to keep the scene alive behind the link, and Back
+  // already does that: nothing under www/ calls pushState, replaceState or
+  // sets location.hash, so every scene is exactly one Back press from the
+  // directory. Against that, a second tab holds a live WebGL context on a
+  // phone, and it stacked duplicate directory tabs, because the cards on the
+  // directory are same-tab links themselves.
+  //
+  // NO aria-label EITHER. It existed only to warn about the new tab, and with
+  // the warning gone it would just repeat the visible text, which is the
+  // classic way an accessible name drifts out of sync with what is on screen.
   //
   // AND IT NAMES ITSELF. The old button was an icon with an aria-label, so
   // nothing on screen said where it went, which is half of why it was read as
@@ -206,16 +216,24 @@ test('the directory link opens in a new tab and says where it goes', async () =>
     const m = /<a id="explore-link"[\s\S]{0,400}?<\/a>/.exec(html);
     expect(`${scene} has a link: ${Boolean(m)}`).toBe(`${scene} has a link: true`);
     const tag = m[0];
-    expect(`${scene} new tab: ${tag.includes('target="_blank"')}`)
-      .toBe(`${scene} new tab: true`);
-    expect(`${scene} noopener: ${/rel="[^"]*noopener/.test(tag)}`)
-      .toBe(`${scene} noopener: true`);
+    expect(`${scene} new tab: ${/target=/.test(tag)}`)
+      .toBe(`${scene} new tab: false`);
+    expect(`${scene} aria-label: ${/aria-label=/.test(tag)}`)
+      .toBe(`${scene} aria-label: false`);
     expect(`${scene} names the site: ${tag.includes('SceneXP.com')}`)
       .toBe(`${scene} names the site: true`);
-    // The accessible name has to warn about the new tab, the way the featured
-    // business buttons already do.
-    expect(`${scene} warns: ${/aria-label="[^"]*opens in a new tab/.test(tag)}`)
-      .toBe(`${scene} warns: true`);
+  }
+});
+
+test('no scene writes to history, so Back is one press to the directory', async () => {
+  // THE LOAD-BEARING FACT under the same-tab decision above. If any scene ever
+  // starts pushing history entries (a hash router for its cards, say), Back
+  // stops being one press and stops leaving the site, and the link in this
+  // tab becomes a trap rather than a way out. This test is the tripwire.
+  for (const scene of ALL) {
+    const main = await read(`www/${scene}/js/main.js`);
+    const writes = /history\.(pushState|replaceState)|location\.hash\s*=/.test(main);
+    expect(`${scene} writes history: ${writes}`).toBe(`${scene} writes history: false`);
   }
 });
 
