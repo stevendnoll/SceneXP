@@ -2670,19 +2670,23 @@ describe('the play clock', () => {
     /**
      * A DEFENDER CAN GET THERE FIRST, and that is a different ending. Measured
      * over 1,500 held plays, 0.1 to 0.3% end in a real sack before the clock
-     * (at 1.7 to 7.6 seconds), which failed this test about one suite run in
-     * four hundred. So a play a defender ended is checked for being exactly
-     * that, and the clock is checked on the first play that reaches it.
+     * (at 1.7 to 7.6 seconds), which failed these tests about one suite run in
+     * a few hundred. `run` plays one held play and returns `{ play, ...data }`;
+     * this replays until one of them is ended by the CLOCK, having checked that
+     * any other ending really was a defender, and hands that one back.
      */
-    test('holding the ball to zero is a sack, for the sack points', () => {
-        let play = null;
-        for (let attempt = 0; attempt < 5 && !play; attempt += 1) {
-            const tried = held(CFG.clock.decide + 2);
-            expect(isDone(tried)).toBe(true);
-            if (tried.expired) play = tried;
-            else expect(tried.frame / HZ).toBeLessThan(CFG.clock.decide);
+    const toTheClock = (run) => {
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+            const tried = run();
+            expect(isDone(tried.play)).toBe(true);
+            if (tried.play.expired) return tried;
+            expect(tried.play.frame / HZ).toBeLessThan(CFG.clock.decide);
         }
-        expect(play).toBeTruthy();
+        throw new Error('eight held plays in a row were all sacked before the clock');
+    };
+
+    test('holding the ball to zero is a sack, for the sack points', () => {
+        const { play } = toTheClock(() => ({ play: held(CFG.clock.decide + 2) }));
         expect(isDone(play)).toBe(true);
         // On the clock, not a frame either side of it.
         expect(play.frame / HZ).toBeCloseTo(CFG.clock.decide, 1);
@@ -2716,15 +2720,14 @@ describe('the play clock', () => {
      * out. What must not happen is a zero before then.
      */
     test('it counts every second from the full clock down to one', () => {
-        const play = createPlayForDifficulty();
-        lineUp(play, 'pass2', 'cover2');
-        snap(play);
-        const shown = new Set();
-        for (let f = 0; f < HZ * (CFG.clock.decide + 1) && !isDone(play); f += 1) {
-            tick(play);
-            const left = decisionLeft(play);
-            if (left !== null) shown.add(Math.ceil(left));
-        }
+        const { shown } = toTheClock(() => {
+            const seen = new Set();
+            const play = held(CFG.clock.decide + 1, (p) => {
+                const left = decisionLeft(p);
+                if (left !== null) seen.add(Math.ceil(left));
+            });
+            return { play, shown: seen };
+        });
         for (let n = 1; n <= CFG.clock.decide; n += 1) expect(shown.has(n)).toBe(true);
         expect(shown.has(0)).toBe(false);
     });
@@ -2744,16 +2747,15 @@ describe('the play clock', () => {
      * rather than a restatement of the arithmetic behind it.
      */
     test('the board counts down to zero and stops there', () => {
-        const play = createPlayForDifficulty();
-        lineUp(play, 'pass2', 'cover2');
-        snap(play);
-        let shown = CFG.clock.decide;
-        const seen = [shown];
-        for (let f = 0; f < HZ * (CFG.clock.decide + 1) && !isDone(play); f += 1) {
-            tick(play);
-            const next = clockReading(decisionLeft(play), shown, play.expired);
-            if (next !== shown) { shown = next; seen.push(shown); }
-        }
+        const { play, seen } = toTheClock(() => {
+            let shown = CFG.clock.decide;
+            const board = [shown];
+            const run = held(CFG.clock.decide + 1, (p) => {
+                const next = clockReading(decisionLeft(p), shown, p.expired);
+                if (next !== shown) { shown = next; board.push(shown); }
+            });
+            return { play: run, seen: board };
+        });
         expect(isDone(play)).toBe(true);
         expect(outcome(play).result).toBe('sack');
         // Every second, in order, ending on the zero the whistle went at.

@@ -22,8 +22,9 @@ const { stadiumShot } = await import(join(scene, 'milestones.min.js'));
 const { TEAMS } = await import(join(scene, 'roster.min.js'));
 const {
     openingShot, shotAt, titleAt, openingFrame, openingLength, clearsStands, midfield,
-    planOpening, castAt,
+    planOpening, castAt, propsAt, swipeSpin,
 } = await import(join(scene, 'opening.js'));
+const { projectPoint } = await import(join(scene, 'milestones.min.js'));
 const { createPlay, lineUp } = await import(join(scene, 'play.min.js'));
 const { simToWorld } = await import(join(scene, 'config.min.js'));
 
@@ -291,7 +292,7 @@ describe('the cast', () => {
 
     test('the captain is at the cooler for the swipe and turned to the lens for the point', () => {
         for (const { plan } of plans) {
-            const swipe = castAt(plan, (O.beats.swipe[0] + O.beats.swipe[1]) / 2).get(plan.captain);
+            const swipe = castAt(plan, plan.hit).get(plan.captain);
             expect(Math.hypot(swipe.x - plan.table.x, swipe.z - plan.table.z)).toBeLessThan(0.3);
             expect(swipe.pose.face).toBeCloseTo(Math.atan2(plan.cooler.x - swipe.x, plan.cooler.z - swipe.z), 3);
             const point = castAt(plan, O.beats.point[1] - 0.2).get(plan.captain);
@@ -347,5 +348,149 @@ describe('the cast', () => {
             expect([0, 1]).toContain(c.team);
             last = c.at;
         }
+    });
+});
+
+describe('the cooler', () => {
+    const P = O.props;
+    const { men, plan } = plans[0];
+    const done = plan.hit + P.tipTime + P.fallTime;
+
+    test('stands on its table until the arm reaches it, and lies on the grass beyond it after', () => {
+        const before = propsAt(plan, plan.hit - 0.01);
+        expect(before.cooler.tip).toBe(0);
+        expect(before.cooler.y).toBeCloseTo(P.table.height + P.cooler.height / 2, 6);
+        expect(before.lid).toBeNull();
+
+        const after = propsAt(plan, done + 0.5);
+        expect(after.cooler.tip).toBeCloseTo(Math.PI / 2, 6);
+        expect(after.cooler.y).toBeCloseTo(P.cooler.radius, 6);
+        const out = (after.cooler.x - plan.cooler.x) * plan.tipDir.x + (after.cooler.z - plan.cooler.z) * plan.tipDir.z;
+        expect(out).toBeGreaterThan(P.table.width / 2);
+    });
+
+    /**
+     * THE ARM HAS TO HIT IT. The rig's arms go where a pose puts them, so the
+     * swipe is a turn with both arms out, and the arm on his left points where
+     * he faces when he is turned a quarter round. At the hit it must point at
+     * the cooler, be long enough to reach it, and be travelling the way the
+     * cooler then falls.
+     */
+    test('the arm crosses the cooler at the hit, within reach, moving the way it falls', () => {
+        for (const { plan: p } of plans) {
+            const captain = castAt(p, p.hit).get(p.captain);
+            const yaw = captain.pose.face + captain.pose.spin;
+            const arm = { x: Math.cos(yaw), z: -Math.sin(yaw) };
+            const to = { x: p.cooler.x - captain.x, z: p.cooler.z - captain.z };
+            const far = Math.hypot(to.x, to.z);
+            expect((arm.x * to.x + arm.z * to.z) / far).toBeGreaterThan(0.99);
+            // The drawn hand settles 1.07m out (measured with real three in
+            // xo-opening-drawn), and it has to get past the cooler's near side.
+            expect(far - P.cooler.radius).toBeLessThan(1.0);
+            expect(captain.pose.arms).toBe('wide');
+            // Moving: the arm a moment later has swung toward the tip direction.
+            const later = castAt(p, p.hit + 0.02).get(p.captain);
+            const y2 = later.pose.face + later.pose.spin;
+            const swing = { x: Math.cos(y2) - arm.x, z: -Math.sin(y2) - arm.z };
+            expect(swing.x * p.tipDir.x + swing.z * p.tipDir.z).toBeGreaterThan(0);
+        }
+    });
+
+    test('the swipe turns him and turns him back before he points', () => {
+        expect(swipeSpin(O.beats.swipeWind[0] - 0.01)).toBe(0);
+        expect(swipeSpin(O.beats.swipeBack[1])).toBe(0);
+        expect(swipeSpin(plan.hit)).toBeCloseTo(-Math.PI / 2, 6);
+        expect(O.beats.swipeBack[1]).toBeLessThanOrEqual(O.beats.point[0]);
+    });
+
+    test('the lid comes off and lands flat on the grass', () => {
+        const flying = propsAt(plan, plan.hit + P.lid.at + 0.1).lid;
+        expect(flying.y).toBeGreaterThan(P.cooler.lid / 2);
+        const landed = propsAt(plan, done + 2).lid;
+        expect(landed.y).toBeCloseTo(P.cooler.lid / 2, 6);
+        expect(Math.cos(landed.tip)).toBeCloseTo(1, 6);
+    });
+
+    test('the water is only in the air after the hit, never under the grass, and not for long', () => {
+        const air = (t) => {
+            const drops = propsAt(plan, t).splash;
+            const up = [];
+            for (let i = 0; i < drops.length; i += 3) if (drops[i + 1] > -1) up.push(i);
+            return { drops, up };
+        };
+        expect(air(plan.hit - 0.01).up.length).toBe(0);
+        const mid = air(plan.hit + P.tipTime + 0.2);
+        expect(mid.up.length).toBeGreaterThan(10);
+        const mouth = propsAt(plan, done).cooler;
+        for (const i of mid.up) {
+            expect(mid.drops[i + 1]).toBeGreaterThanOrEqual(0.03);
+            expect(Math.hypot(mid.drops[i] - mouth.x, mid.drops[i + 2] - mouth.z)).toBeLessThan(8);
+        }
+        const last = plan.hit + P.tipTime * 0.6 + P.splash.over + P.splash.life + 0.01;
+        expect(air(last).up.length).toBe(0);
+    });
+
+    test('the puddle spreads and never shrinks, and stays out from under the visitors\' feet', () => {
+        let size = -1;
+        for (let t = plan.hit; t <= O.length; t += 0.05) {
+            const p = propsAt(plan, t).puddle;
+            expect(p.size).toBeGreaterThanOrEqual(size - 1e-9);
+            size = p.size;
+        }
+        expect(size).toBeCloseTo(1, 6);
+        const puddle = propsAt(plan, O.length).puddle;
+        const cast = castAt(plan, (O.beats.dance[0] + O.beats.dance[1]) / 2);
+        for (const position of plan.dancers) {
+            const at = cast.get(position);
+            const dx = at.x - puddle.x;
+            const dz = at.z - puddle.z;
+            const u = dx * plan.tipDir.x + dz * plan.tipDir.z;
+            const v = -dx * plan.tipDir.z + dz * plan.tipDir.x;
+            const inside = (u / (P.puddle.radius * P.puddle.stretch)) ** 2 + (v / P.puddle.radius) ** 2;
+            expect({ position, clear: inside > 1 }).toEqual({ position, clear: true });
+        }
+    });
+
+    test('nobody walks through the table', () => {
+        for (const { slug, men: cast0, plan: p } of plans) {
+            for (let t = 0; t <= O.length; t += STEP) {
+                const cast = castAt(p, t);
+                for (const man of cast0) {
+                    const at = cast.get(man.position);
+                    // Half a body clear of the edge, until the last blend onto
+                    // the formation, by which time the table is on its way out.
+                    if (t >= O.length - O.bake.settle) continue;
+                    const inX = Math.abs(at.x - p.tableAt.x) < P.table.width / 2 + 0.6;
+                    const inZ = Math.abs(at.z - p.tableAt.z) < P.table.depth / 2 + 0.6;
+                    expect({ slug, p: man.position, t: +t.toFixed(2), through: inX && inZ })
+                        .toEqual({ slug, p: man.position, t: +t.toFixed(2), through: false });
+                }
+            }
+        }
+    });
+
+    test('the camera is on it when it goes, on every screen shape', () => {
+        const at = shotAt(plan.hit, { aspect: 1.78 });
+        for (const aspect of ASPECTS) {
+            const shot = shotAt(plan.hit, { aspect });
+            for (const t of [plan.hit, done]) {
+                const c = propsAt(plan, t).cooler;
+                const p = projectPoint(shot, aspect, { x: c.x, y: c.y, z: c.z });
+                expect({ aspect, t, inFrame: Math.abs(p.x) < 1 && Math.abs(p.y) < 1 && p.depth > 0 })
+                    .toEqual({ aspect, t, inFrame: true });
+            }
+        }
+        expect(at).toBeTruthy();
+    });
+
+    test('the calm version is the aftermath, held: over, lid off, puddle out, no water in the air', () => {
+        const calm = planOpening(men, { aspect: 1.78, calm: true });
+        const a = propsAt(calm, 0);
+        const b = propsAt(calm, O.calm.length);
+        expect(a.cooler.tip).toBeCloseTo(Math.PI / 2, 6);
+        expect(a.lid).not.toBeNull();
+        expect(a.puddle.size).toBe(1);
+        expect(b.cooler).toEqual(a.cooler);
+        for (let i = 1; i < a.splash.length; i += 3) expect(a.splash[i]).toBeLessThan(-1);
     });
 });

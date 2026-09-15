@@ -3124,8 +3124,14 @@ const XO_CONFIG = {
             through: 0.9,
             /** The home team's cooler, on the home sideline. */
             cooler: { x: -6.5, z: 10.6 },
-            /** The captain stands this far in front of it. */
-            reach: 1.5,
+            /**
+             * The captain stands this far from the cooler, and it is MEASURED
+             * OFF THE DRAWN RIG, not off the pose: with both arms out (`wide`)
+             * the hand settles 1.07m from his middle at 2.81m up, a good deal
+             * short of where the pose's own numbers would put it. At 1.25m
+             * the arm goes a quarter of a metre into the cooler.
+             */
+            reach: 1.25,
             /**
              * The visitors' line in front of the home stand, as x from the
              * cooler, NEAREST FIRST: a smaller team takes the front of the list.
@@ -3145,7 +3151,7 @@ const XO_CONFIG = {
          * last `settle` seconds blend exactly onto the formation (opening.js
          * `bake`).
          */
-        bake: { hz: 60, lag: 0.06, passes: 3, settle: 0.35, contact: 0.4, fastest: 18 },
+        bake: { hz: 60, lag: 0.06, passes: 3, settle: 0.35, contact: 0.4, fastest: 18, body: 0.65 },
         /** Seconds. See the beat table in specs/xo-opening-plan.md. */
         beats: {
             runOut: [0, 2.0],
@@ -3154,7 +3160,10 @@ const XO_CONFIG = {
             visitors: [2.5, 5.9],
             partAt: [3.0, 3.6],
             peel: [5.9, 6.9],
-            swipe: [6.85, 7.25],
+            /** The swipe: a wind-up, a fast turn with the arm out, and back. */
+            swipeWind: [6.75, 6.95],
+            swipeSweep: [6.95, 7.1],
+            swipeBack: [7.1, 7.35],
             dance: [7.0, 8.3],
             point: [7.35, 8.35],
             /** The home team turns on them where it stands, and answers. */
@@ -3170,10 +3179,48 @@ const XO_CONFIG = {
             hop: 0.33,
             jab: 0.13,
             shimmy: { roll: 0.26, hz: 3.2 },
+            /**
+             * THE SWIPE IS A TURN, because the rig's arms go where a pose puts
+             * them and nothing else: both arms out (`wide`), and the whole man
+             * turned through the cooler. `wind` is radians past side-on before
+             * the sweep and `follow` radians past it after, so the arm crosses
+             * the cooler `wind / (wind + follow)` of the way through the sweep.
+             */
+            swipe: { wind: 0.6, follow: 0.7 },
             /** Knocked aside: how fast, how far over, and how quickly he rights. */
             knock: { time: 0.22, roll: 0.3, lean: 0.12, decay: 0.35, out: 0.4 },
             /** The answer. A placeholder until step 4 builds its own arms. */
             menace: { lean: 0.14, stamp: 0.12, hz: 2.5 },
+        },
+        /**
+         * THE COOLER AND ITS TABLE, in metres at figure scale (a 1m tall man is
+         * 2.2m here, so a cooler half a metre tall is 1.15m). The cooler tips
+         * off the table the way the arm was travelling, the lid flies, the water
+         * goes, and the grass under it darkens. Drawn by opening-props.js.
+         */
+        props: {
+            /**
+             * Tall enough that the swiping hand (2.81m up) crosses the cooler's
+             * body and not the air over its lid, and narrow front to back so
+             * the cooler can sit at the edge nearest the captain and his body
+             * stays clear of the table.
+             */
+            table: { width: 2.6, depth: 1.2, height: 1.85, top: 0.1, leg: 0.12 },
+            cooler: { radius: 0.46, height: 1.15, lid: 0.16 },
+            colors: { cooler: 0xff992c, lid: 0xf4f1ea, table: 0xd9d6cf, legs: 0x5d6168 },
+            /** Seconds to go over on the table, then to fall off it. */
+            tipTime: 0.24,
+            fallTime: 0.3,
+            /** How far past the table's edge it lands, metres. */
+            fallOut: 0.5,
+            gravity: 14,
+            lid: { at: 0.12, out: 3.2, up: 4.5 },
+            splash: {
+                count: 90, life: 0.75, over: 0.45,
+                speed: [2.5, 6.5], up: [1.2, 4.5], spread: 1.1,
+                size: 0.22, color: 0xdff3ff,
+            },
+            puddle: { radius: 1.5, stretch: 1.4, grow: 0.9, color: 0x0d2410, opacity: 0.5 },
         },
         /** Positions tried in order for the three parts with a job. */
         cast: {
@@ -3194,7 +3241,7 @@ const XO_CONFIG = {
         copy: {
             title: 'Make them pay.',
             /** The one sentence a screen reader gets, as the title arrives. */
-            spoken: 'Make them pay.',
+            spoken: 'The other team knocks over your water cooler. Make them pay.',
         },
     },
 

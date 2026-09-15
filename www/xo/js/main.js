@@ -49,7 +49,10 @@ import {
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
 } from './hud.min.js';
-import { openingFrame, planOpening, castAt } from './opening.min.js';
+import { openingFrame, planOpening, castAt, propsAt } from './opening.min.js';
+import {
+    initOpeningProps, applyOpeningProps, hideOpeningProps, splashBuffer,
+} from './opening-props.min.js';
 import {
     milestoneDue, litStars, showFrame, showUsesTeam, stageTeam, turfSetup,
 } from './milestones.min.js';
@@ -1276,6 +1279,7 @@ function beginOpening(then) {
     const ball = getBall();
     if (ball) ball.visible = false;
     hideSpot();
+    initOpeningProps(scene);
     report('opening', { kind: reducedMotion ? 'calm' : 'full' });
     showHud(true);
     showSkipOpening();
@@ -1296,6 +1300,8 @@ function stepOpening(delta) {
     // a celebration. The figures' own clocks only move when time does.
     setScripted(castAt(s.plan, s.t));
     if (delta > 0) syncFigures(cycle.play.game.objects, delta, {});
+    // ...and the cooler, which is the thing they came for.
+    applyOpeningProps(propsAt(s.plan, s.t, splashBuffer()));
 
     // AND THE STANDS, each cheer once as its moment passes. A calm opening
     // gets none: `cheerCrowd` already refuses a cheer to anybody who asked not
@@ -1328,6 +1334,7 @@ function endOpening() {
     // down and the quarterback gets back over the ball before the card is up.
     // Watched to the end they are already there; skipped, this is the cut.
     resetScripted();
+    hideOpeningProps();
     cheerCrowd(null, state.elapsed);
     const objects = cycle.play.game.objects;
     for (let i = 0; i < CFG.opening.settleFrames; i += 1) {

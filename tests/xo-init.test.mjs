@@ -152,9 +152,13 @@ describe('the opening', () => {
 
     test('Skip lands on exactly the welcome state', async () => {
         await boot({ watch: true });
+        const props = await import('../www/xo/js/opening-props.min.js');
         run(3);
+        expect(props.openingPropsShowing()).toBe(true);
         skipButton().click();
         await flushAsync();
+        // The cooler, its table and the puddle are cleared with it.
+        expect(props.openingPropsShowing()).toBe(false);
         expect(dom.el('welcome').hidden).toBe(false);
         expect(dom.el('welcome-actions').children[0].textContent).toBe('Take the field');
         expect(dom.el('game-hud').hidden).toBe(true);
@@ -195,7 +199,7 @@ describe('the opening', () => {
         run(CFG.opening.title[0] + 0.6);
         await jest.advanceTimersByTimeAsync(100);
         expect(dom.el('opening-title').hidden).toBe(false);
-        expect(dom.el('hud-live').textContent).toBe('Make them pay.');
+        expect(dom.el('hud-live').textContent).toBe(CFG.opening.copy.spoken);
         dom.el('hud-live').textContent = '';
         run(0.5);
         await jest.advanceTimersByTimeAsync(100);
@@ -369,9 +373,15 @@ describe('a play, end to end', () => {
         press('Throw');
         await flushAsync();
 
-        // Twelve seconds of frames at 60Hz is past PLAY_TIMEOUT whatever the
-        // simulation decides, so this cannot hang on a play that never ends.
-        for (let i = 0; i < 900 && dom.el('result').hidden !== false; i += 1) {
+        // PAST THE BACKSTOP AND THE LONGEST PARTY, whatever the simulation
+        // decides, so this cannot hang on a play that never ends. It used to
+        // stop at 900 frames under a comment saying twelve seconds was past the
+        // timeout, which stopped being true when the backstop grew to 18
+        // seconds on top of the 10 second clock: a rare long play then ran out
+        // of frames before its result card (about one run in seventy-five).
+        const { XO_CONFIG: CFG } = await import('../www/xo/js/config.min.js');
+        const budget = (CFG.clock.decide + CFG.clock.backstop + CFG.pose.celebration.cap + 2) * 60;
+        for (let i = 0; i < budget && dom.el('result').hidden !== false; i += 1) {
             dom.loops[0](i * 16.7);
         }
         expect(dom.el('result').hidden).toBe(false);

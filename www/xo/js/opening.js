@@ -320,9 +320,20 @@ export function planOpening(men = [], { aspect = 1.78, calm = false } = {}) {
     for (const man of xs) still.set(man.position, partedOf.get(man.position));
     for (const man of os) still.set(man.position, man === captain ? table : danceOf.get(man.position));
 
+    // THE SWIPE: the arm crosses the cooler part way through the sweep, and the
+    // cooler goes over the way the arm was travelling.
+    const W = O.moves.swipe;
+    const hit = B.swipeSweep[0] + (B.swipeSweep[1] - B.swipeSweep[0]) * (W.wind / (W.wind + W.follow));
+    const facing = bearing(table, cooler);
+    const tipDir = { x: Math.cos(facing), z: -Math.sin(facing) };
+    // The cooler sits at the table's near edge, so the table's middle is a
+    // little further on from the captain than the cooler is.
+    const back = O.props.table.depth / 2 - O.props.cooler.radius;
+    const tableAt = { x: cooler.x + Math.sin(facing) * back, z: cooler.z + Math.cos(facing) * back };
+
     return {
-        calm, men, paths: calm ? new Map() : paths, still, huddle, cooler, table, lane,
-        bodies: calm ? null : bake(paths, men, { bumper, bumped, contact, bumpSide }),
+        calm, men, paths: calm ? new Map() : paths, still, huddle, cooler, table, lane, hit, tipDir, tableAt,
+        bodies: calm ? null : bake(paths, men, { bumper, bumped, contact, bumpSide, tableAt }),
         contact, bumpSide,
         lens: openingShot('captain', aspect).position,
         captain: captain ? captain.position : '',
@@ -352,7 +363,11 @@ export function planOpening(men = [], { aspect = 1.78, calm = false } = {}) {
  *
  * Stored as positions per frame, so `castAt` is still a pure read at any `t`.
  */
-function bake(paths, men, { bumper = null, bumped = null, contact = -1, bumpSide = 1 } = {}) {
+function bake(paths, men, { bumper = null, bumped = null, contact = -1, bumpSide = 1, tableAt = null } = {}) {
+    const T = O.props.table;
+    const table = tableAt
+        ? { x: tableAt.x, z: tableAt.z, halfX: T.width / 2 + O.bake.body, halfZ: T.depth / 2 + O.bake.body }
+        : null;
     const S = O.stage;
     const hz = O.bake.hz;
     const frames = Math.ceil(O.length * hz) + 1;
@@ -414,6 +429,19 @@ function bake(paths, men, { bumper = null, bumped = null, contact = -1, bumpSide
                     px[i] -= nx * push; pz[i] -= nz * push;
                     px[j] += nx * push; pz[j] += nz * push;
                 }
+            }
+        }
+        // AND THE TABLE IS IN THE WAY OF ANYBODY WALKING PAST IT: a body inside
+        // it, widened by half a body, is put back out through the nearest side.
+        if (table) {
+            for (let i = 0; i < n; i += 1) {
+                const ux = px[i] - table.x;
+                const uz = pz[i] - table.z;
+                const ox2 = table.halfX - Math.abs(ux);
+                const oz2 = table.halfZ - Math.abs(uz);
+                if (ox2 <= 0 || oz2 <= 0) continue;
+                if (ox2 < oz2) px[i] += Math.sign(ux || 1) * ox2;
+                else pz[i] += Math.sign(uz || 1) * oz2;
             }
         }
         const w = t >= settleFrom ? smooth((t - settleFrom) / O.bake.settle) : 0;
@@ -579,14 +607,156 @@ function homeAt(plan, man, t, at, spotOf, D) {
     };
 }
 
+/**
+ * HOW FAR ROUND THE CAPTAIN IS TURNED FOR THE SWIPE, in radians added to his
+ * facing. With both arms out, the arm on his left points straight at whatever
+ * he faces when he is turned -90 degrees, and the sweep carries it through that
+ * from `wind` before to `follow` after, at a steady rate so the moment it
+ * crosses is exactly `plan.hit`.
+ */
+export function swipeSpin(t) {
+    const B = O.beats;
+    const W = O.moves.swipe;
+    const from = -(Math.PI / 2 + W.wind);
+    const to = -(Math.PI / 2) + W.follow;
+    if (t < B.swipeWind[0] || t >= B.swipeBack[1]) return 0;
+    if (t < B.swipeWind[1]) return from * smooth(span(t, B.swipeWind));
+    if (t < B.swipeSweep[1]) return from + (to - from) * span(t, B.swipeSweep);
+    return to * (1 - smooth(span(t, B.swipeBack)));
+}
+
+/** A number from 0 to 1 that is the same every time for the same `i` and `k`. */
+function roll(i, k) {
+    let h = (i * 374761393 + k * 668265263) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** The cooler's middle and how far over it is, `since` seconds after the hit. */
+function coolerState(plan, since) {
+    const P = O.props;
+    const c = plan.cooler;
+    const d = plan.tipDir;
+    const top = P.table.height;
+    const r = P.cooler.radius;
+    const h = P.cooler.height;
+    if (since < 0) return { x: c.x, y: top + h / 2, z: c.z, tip: 0 };
+    if (since < P.tipTime) {
+        // Over it goes, faster and faster, sliding for the edge as it tips.
+        const u = since / P.tipTime;
+        const tip = (Math.PI / 2) * u * u;
+        const slide = (P.table.width / 2) * u;
+        return {
+            x: c.x + d.x * slide,
+            y: top + (h / 2) * Math.cos(tip) + r * Math.sin(tip),
+            z: c.z + d.z * slide,
+            tip,
+        };
+    }
+    // ...and off the edge, landing on its side.
+    const v = clamp01((since - P.tipTime) / P.fallTime);
+    const out = P.table.width / 2 + P.fallOut * v;
+    return {
+        x: c.x + d.x * out,
+        y: top + r + (r - (top + r)) * v * v,
+        z: c.z + d.z * out,
+        tip: Math.PI / 2,
+    };
+}
+
+/** Where the open end of the cooler is, which is where the water comes from. */
+function mouthOf(plan, state) {
+    const along = O.props.cooler.height / 2;
+    return {
+        x: state.x + plan.tipDir.x * Math.sin(state.tip) * along,
+        y: state.y + Math.cos(state.tip) * along,
+        z: state.z + plan.tipDir.z * Math.sin(state.tip) * along,
+    };
+}
+
+/**
+ * THE COOLER, ITS LID, THE WATER AND THE PUDDLE AT `t`.
+ *
+ * `{ table, cooler, lid, splash, puddle }`, all in world metres: `cooler.tip`
+ * is radians over toward `tipDir`, `lid` is null while it is still on,
+ * `splash` fills `into` (x, y, z per drop, a drop not in the air parked far
+ * below the grass), and `puddle.size` runs 0 to 1. The calm version is the
+ * aftermath and nothing moving: over, lid off, puddle spread, no water in the
+ * air.
+ */
+export function propsAt(plan, t, into = null) {
+    const P = O.props;
+    const since = plan.calm ? Infinity : t - plan.hit;
+    const d = plan.tipDir;
+    const cooler = coolerState(plan, since);
+
+    // THE LID goes when it is part way over, and lands flat.
+    let lid = null;
+    if (since >= P.lid.at) {
+        const at = coolerState(plan, P.lid.at);
+        const from = mouthOf(plan, at);
+        const g = P.gravity;
+        const rest = P.cooler.lid / 2;
+        const air = (P.lid.up + Math.sqrt(P.lid.up * P.lid.up + 2 * g * Math.max(0, from.y - rest))) / g;
+        const tau = Math.min(since - P.lid.at, air);
+        const k = air > 0 ? tau / air : 1;
+        lid = {
+            x: from.x + d.x * P.lid.out * tau,
+            y: Math.max(rest, from.y + P.lid.up * tau - (g / 2) * tau * tau),
+            z: from.z + d.z * P.lid.out * tau,
+            tip: at.tip * (1 - k) + Math.PI * 2 * k,
+        };
+    }
+
+    // THE WATER: every drop born at the mouth over `over` seconds, thrown out
+    // the way the cooler fell, fanned sideways, and gone after `life`.
+    const S = P.splash;
+    const out = into || new Float32Array(S.count * 3);
+    const side = { x: -d.z, z: d.x };
+    const start = P.tipTime * 0.6;
+    for (let i = 0; i < S.count; i += 1) {
+        const born = start + S.over * (i / S.count);
+        const age = since - born;
+        if (!(age >= 0 && age <= S.life)) {
+            out[i * 3] = 0; out[i * 3 + 1] = -1e4; out[i * 3 + 2] = 0;
+            continue;
+        }
+        const from = mouthOf(plan, coolerState(plan, born));
+        const speed = S.speed[0] + (S.speed[1] - S.speed[0]) * roll(i, 1);
+        const fan = (roll(i, 2) - 0.5) * S.spread;
+        const up = S.up[0] + (S.up[1] - S.up[0]) * roll(i, 3);
+        out[i * 3] = from.x + (d.x + side.x * fan) * speed * age;
+        out[i * 3 + 1] = Math.max(0.03, from.y + up * age - (P.gravity / 2) * age * age);
+        out[i * 3 + 2] = from.z + (d.z + side.z * fan) * speed * age;
+    }
+
+    // THE PUDDLE, spreading out from where the mouth lands.
+    const landed = coolerState(plan, P.tipTime + P.fallTime);
+    const mouth = mouthOf(plan, landed);
+    const grow = clamp01((since - (P.tipTime + P.fallTime * 0.7)) / P.puddle.grow);
+    const puddle = {
+        x: mouth.x + d.x * P.puddle.radius * 0.6,
+        z: mouth.z + d.z * P.puddle.radius * 0.6,
+        size: 1 - (1 - grow) * (1 - grow),
+        angle: Math.atan2(d.x, d.z),
+    };
+
+    return { table: { x: plan.tableAt.x, z: plan.tableAt.z }, cooler, lid, splash: out, puddle };
+}
+
 /** The visitors, from the walk-through to the moment they walk back. */
 function awayAt(plan, man, t, at, D) {
     const B = O.beats;
     if (at.running) return {};
     if (man.position === plan.captain) {
         if (t < B.point[0]) {
-            const sw = envelope(t, B.swipe, 0.1);
-            return { face: bearing(at, plan.cooler), arms: sw > 0 ? 'wide' : '', amount: sw };
+            const sw = envelope(t, [B.swipeWind[0], B.swipeBack[1]], 0.12);
+            return {
+                face: bearing(at, plan.cooler),
+                arms: sw > 0 ? 'wide' : '',
+                amount: sw,
+                spin: swipeSpin(t),
+            };
         }
         // DOWN THE LENS, and two jabs of it.
         const on = span(t, [B.point[0] + 0.1, B.point[0] + 0.3]);
