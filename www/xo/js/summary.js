@@ -38,7 +38,7 @@ export function writeBest(total) {
  * `plays` is the list of per-play outcomes in order. `onAgain` is called when
  * the visitor wants another ten.
  */
-export function showSummary(plays, onAgain) {
+export function showSummary(plays, onAgain, { onShare = null } = {}) {
     const card = el('summary');
     if (!card) return;
 
@@ -96,7 +96,12 @@ export function showSummary(plays, onAgain) {
     share.id = 'summary-share';
     share.textContent = 'Share';
     share.setAttribute('aria-label', 'Share your score');
-    share.addEventListener('click', () => shareScore(stats.total));
+    // `onShare` hears HOW it went (native, copy, mail or cancelled), for the
+    // usage log. Told after the fact, so a log that fails costs the share
+    // nothing.
+    share.addEventListener('click', () => shareScore(stats.total)
+        .then((how) => { if (onShare) onShare(how, stats.total); })
+        .catch(() => {}));
     box.appendChild(share);
 
     const again = document.createElement('button');

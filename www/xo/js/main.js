@@ -56,14 +56,14 @@ import {
     initSpectacle, beginShow, applyShow, setAwake, endShow, tickAwake, cheerCrowd,
 } from './spectacle.min.js';
 import { cheerFor } from './stunt.min.js';
-import { showSummary, hideSummary } from './summary.min.js';
+import { showSummary, hideSummary, readBest } from './summary.min.js';
 import {
     startRecording, record, frameCount, frameAt, focusAt,
     rewind, advance, playheadFrame, isEmpty, discard,
 } from './replay.min.js';
 import {
     setDriver, setAspect, update as updateCamera, nudgeView, resetView, switchView,
-    resetShoulder,
+    resetShoulder, viewQuarter,
 } from './camera.min.js';
 import {
     initAudio, unlock as unlockAudio, play as playSound, simAudio,
@@ -72,7 +72,11 @@ import {
 import {
     initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings,
 } from './playbook-ui.min.js';
-import { installCardFocusTrap, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
+import {
+    installCardFocusTrap, installCardScrollReset, getProofOfWork,
+} from '../../shared/js/boot-1.0.0.min.js';
+import { setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { report, reportFinal, orientationOf, playRecord } from './telemetry.min.js';
 
 const state = {
     isRunning: false,
@@ -170,6 +174,46 @@ const cycle = {
     /** The shot the running show wants, handed to the camera each frame. */
     showShot: null,
 };
+
+/**
+ * THIS VISIT, AS THE USAGE LOG SEES IT (see telemetry.js).
+ *
+ * Nothing here is saved. `games` counts the games FINISHED in this visit, which
+ * is what the 2D game's `games` field became: it counted summaries it had kept
+ * in storage, and keeping another thing in storage just to count it is not
+ * worth a line in the privacy policy.
+ */
+const visit = { start: 0, ended: false, games: 0, plays: 0 };
+
+/** Which way the screen is held right now. */
+function orientation() {
+    return typeof window === 'undefined' ? ''
+        : orientationOf(window.innerWidth || 0, window.innerHeight || 0);
+}
+
+/** The play as called and as actually lined up, which most hits carry. The
+ *  defense is the one the library rolled when the visitor left it to chance. */
+function calledFields() {
+    const play = cycle.play || {};
+    return { defense: play.defense || '', offense: play.offense || '', playCount: cycle.playNumber };
+}
+
+/** How long, in simulated seconds, the ball has been out. Simulated rather than
+ *  wall clock, so a slow phone does not look like a slow decision. */
+function sinceSnap() {
+    return cycle.play ? cycle.play.frame / CFG.simHz : 0;
+}
+
+/** The visit is over. Idempotent, because both of the events that mean it can
+ *  arrive, and a visitor who switches tabs and back does not reopen it. */
+function endVisit() {
+    if (visit.ended || !visit.start) return;
+    visit.ended = true;
+    reportFinal('session-end', {
+        seconds: (Date.now() - visit.start) / 1000,
+        outcome: { games: visit.games, plays: visit.plays },
+    });
+}
 
 /** Whoever asked not to be moved about. Checked once: a visitor who changes it
  *  mid-game can reload, and re-querying every frame is a needless cost. */
@@ -414,8 +458,18 @@ function openPlaybook() {
  * up one of their ten. Same handler either way, because the playbook has no
  * business knowing which of the two it is being opened for.
  */
-function onPlaybookChoice(offensive, defense) {
-    if (cycle.phase === 'presnap') changePlay(offensive, defense);
+function onPlaybookChoice(offensive, defense, { repeat = false } = {}) {
+    const changing = cycle.phase === 'presnap';
+    report('call-play', {
+        kind: changing ? 'change' : 'next',
+        outcome: {
+            offense: offensive,
+            defense: defense || 'random',
+            repeat: repeat || undefined,
+            playCount: changing ? cycle.playNumber : cycle.playNumber + 1,
+        },
+    });
+    if (changing) changePlay(offensive, defense);
     else startPlay(offensive, defense);
 }
 
@@ -456,6 +510,7 @@ function changePlay(offensive, defense) {
 /** Open the playbook over the formation, without ending anything. */
 function onChangePlay() {
     if (cycle.phase !== 'presnap') return;
+    report('change-play', { outcome: calledFields() });
     uiClick();
     clearActions();
     showPlaybook({ canCancel: true, onCancel: onKeepPlay });
@@ -464,6 +519,7 @@ function onChangePlay() {
 /** ...and back out of it, having decided the play was fine after all. */
 function onKeepPlay() {
     if (cycle.phase !== 'presnap') return;
+    report('keep-play', { outcome: calledFields() });
     hidePlaybook();
     showSnap();
 }
@@ -781,6 +837,7 @@ function planCelebration(result, pair = { tackler: '', carrier: '' }) {
  *  know what it cost than watch the other team enjoy it. */
 function onSkipCelebration() {
     if (cycle.phase !== 'settle' || !cycle.party) return;
+    report('skip-celebration', { kind: cycle.party.occasion, outcome: { playCount: cycle.playNumber } });
     uiClick();
     // The party stops where it is. Nothing it did needs undoing, because every
     // offset it applied was on top of where the simulation left each man and
@@ -806,6 +863,8 @@ function onSnap() {
     playSound('hike');
 
     snap(cycle.play);
+    visit.plays += 1;
+    report('snap', { outcome: calledFields() });
     // AND HE BRINGS IT BACK. QA item 1: up to here he has been waiting under
     // centre with the ball out in front, and this is the cue that lifts it to
     // his ear while he looks downfield. Told rather than inferred, because the
@@ -826,11 +885,19 @@ function onThrow(position) {
         noteThrow(position);
         playSound('wind');
         clearActions();
+        report('throw', {
+            kind: position,
+            outcome: { ...calledFields(), throwTo: position },
+            seconds: sinceSnap(),
+        });
     }
 }
 
 function onRun() {
-    if (keepAndRun(cycle.play)) clearActions();
+    if (keepAndRun(cycle.play)) {
+        clearActions();
+        report('keep-run', { outcome: calledFields(), seconds: sinceSnap() });
+    }
 }
 
 /** The whistle. Score it, remember it, and show the card. */
@@ -853,6 +920,26 @@ function finishPlay() {
     cycle.streak = nextStreak(cycle.streak, result.points, CFG.difficulty);
     setScore(cycle.total);
     paintBoard();
+
+    // THE 2D GAME'S PLAY RECORD, one hit per whistle, with the score already
+    // including this play the way the 2D game sent it.
+    const called = calledFields();
+    report('play-result', {
+        kind: result.result,
+        outcome: playRecord({
+            defense: called.defense,
+            offense: called.offense,
+            orientation: orientation(),
+            points: result.points,
+            result: result.result,
+            throwTo: cycle.play.game.throwTo || '',
+            currentScore: cycle.total,
+            playCount: cycle.playNumber,
+            muted: isMuted(),
+            games: visit.games,
+            expired: !!cycle.play.expired,
+        }),
+    });
 
     // REMEMBER WHERE IT ENDED. Read here, at the whistle, because a replay is
     // about to rewind the world and `ballWorldPoint` would then answer with
@@ -885,6 +972,10 @@ function presentResult() {
  *  objects from the buffer, so a replay can never disturb what it recorded. */
 function startReplay() {
     if (isEmpty()) { presentResult(); return; }
+    report('show-replay', {
+        kind: cycle.viewPlay === cycle.playNumber ? 'again' : 'first',
+        outcome: { playCount: cycle.playNumber, result: cycle.lastOutcome ? cycle.lastOutcome.result : '' },
+    });
     uiClick();
     hideResult();
     // THE HUD STAYS UP THROUGH A REPLAY, carrying one button. It used to be
@@ -939,6 +1030,7 @@ function startReplay() {
 /** Out of a replay, whether it was asked for or started on its own. */
 function onSkipReplay() {
     if (cycle.phase !== 'replay') return;
+    report('skip-replay', { outcome: { playCount: cycle.playNumber } });
     uiClick();
     cycle.replayHold = 0;
     showHud(true);
@@ -957,12 +1049,19 @@ function onSwitchView() {
     if (!replayLive()) return;
     uiClick();
     switchView();
+    // Throttled in telemetry.js: this is the one button somebody taps in a row.
+    report('switch-view', { kind: viewQuarter() });
 }
 
 function onNext() {
+    const last = cycle.playNumber >= CFG.rules.playsPerGame;
+    report('next-play', {
+        kind: last ? 'summary' : 'playbook',
+        outcome: { playCount: cycle.playNumber, currentScore: cycle.total },
+    });
     uiClick();
     hideResult();
-    const then = cycle.playNumber >= CFG.rules.playsPerGame ? finishGame : openPlaybook;
+    const then = last ? finishGame : openPlaybook;
     /**
      * A MILESTONE SHOW PLAYS HERE, BETWEEN THE CARD AND WHATEVER COMES NEXT.
      *
@@ -989,7 +1088,24 @@ function finishGame() {
     // something to resume into, and leaving it behind would mean a visitor
     // who reloads is handed a game with no plays left in it.
     clearGame();
-    showSummary(cycle.results, startGame);
+    // The 2D game's `finalScore` hit, plus whether it beat this browser's best.
+    // Read BEFORE the summary, which is what writes a new best.
+    const best = readBest();
+    report('game-summary', {
+        kind: cycle.total > best ? 'record' : 'played',
+        outcome: {
+            finalScore: cycle.total, best, orientation: orientation(),
+            muted: isMuted(), games: visit.games,
+        },
+    });
+    visit.games += 1;
+    const total = cycle.total;
+    showSummary(cycle.results, () => {
+        report('play-again', { outcome: { finalScore: total, games: visit.games } });
+        startGame();
+    }, {
+        onShare: (how) => report('share', { kind: how, outcome: { finalScore: total } }),
+    });
 }
 
 /**
@@ -1001,6 +1117,7 @@ function finishGame() {
  */
 function beginMilestone(level, then) {
     cycle.phase = 'show';
+    report('milestone', { kind: level, outcome: { currentScore: cycle.total, playCount: cycle.playNumber } });
     const team = showUsesTeam(level);
     cycle.show = { level, t: 0, then, revealed: false, board: '', team };
     hideSpot();
@@ -1113,6 +1230,7 @@ function wakeTo(level) {
 
 function onSkipShow() {
     if (cycle.phase !== 'show' || !cycle.show) return;
+    report('skip-show', { kind: cycle.show.level });
     uiClick();
     endMilestone();
 }
@@ -1233,6 +1351,7 @@ function resumeGame(saved) {
  * a game now saved across reloads an accidental press costs something real.
  */
 function onStartOver() {
+    report('start-over', { outcome: { playCount: cycle.playNumber, currentScore: cycle.total } });
     uiClick();
     clearGame();
     startGame();
@@ -1854,6 +1973,16 @@ async function init() {
     const canvas = document.getElementById('game-canvas');
     if (!canvas) return;
 
+    // TAG EVERY PING, THEN SOLVE THE PUZZLE, the way every other scene starts.
+    // The proof-of-work hash is what ties one visitor's hits together, and it
+    // is reused from sessionStorage when a still-valid one is there, so this
+    // costs a few milliseconds on a cold visit and nothing on a warm one. It
+    // resolves rather than rejects when it cannot solve one, which degrades to
+    // an untagged ping rather than to a page that never loads.
+    setMobile(isTouch());
+    const proof = await getProofOfWork(CFG.telemetry.proofOfWork);
+    setProofHash(proof && proof.hash);
+
     setProgress(0.15, 'Preparing the field…');
     initRenderer(canvas);
     initSceneGraph();
@@ -1895,10 +2024,15 @@ async function init() {
         onSkipCelebration,
         onSkipShow,
         onSwitchView,
-        onToggleMute: () => toggleMuted(),
+        onToggleMute: () => {
+            toggleMuted();
+            report('sound', { kind: isMuted() ? 'off' : 'on' });
+        },
         isMuted,
     });
-    initPlaybook(onPlaybookChoice, onStartOver);
+    initPlaybook(onPlaybookChoice, onStartOver, {
+        defense: (slug) => report('set-defense', { kind: slug || 'random' }),
+    });
 
     setProgress(0.9, 'Almost ready…');
 
@@ -1952,12 +2086,35 @@ async function init() {
     // THE FIRST PRESS IN THE GAME, and the gesture every browser wants before
     // it will play anything at all. Wrapped so the welcome card sounds like the
     // rest of the chrome and so the library is awake by the playbook.
-    const takeTheField = (go) => () => { uiClick(); go(); };
+    const takeTheField = (action, go) => () => {
+        report(action, { outcome: { orientation: orientation(), muted: isMuted() } });
+        uiClick();
+        go();
+    };
     showWelcome(
-        takeTheField(saved ? () => resumeGame(saved) : startGame),
+        saved ? takeTheField('resume-game', () => resumeGame(saved))
+            : takeTheField('take-field', startGame),
         saved,
-        takeTheField(startGame)
+        takeTheField('new-game', startGame)
     );
+
+    // ON THE RECORD FROM HERE, before anybody has pressed anything, so the
+    // count includes the visitors who read the rules and left.
+    report('session-start', {
+        kind: isTouch() ? 'touch' : 'desktop',
+        outcome: { orientation: orientation(), resumable: !!saved, muted: isMuted() },
+    });
+    visit.start = Date.now();
+    // The visit ends when the page is hidden, which is the one signal a phone
+    // reliably sends, or on pagehide as the backup. `endVisit` runs once.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') endVisit();
+    }, { signal });
+    window.addEventListener('pagehide', endVisit, { signal });
+    // Leaving for the directory. sendBeacon, because a page on its way out
+    // cancels an image ping.
+    const explore = document.getElementById('explore-link');
+    if (explore) explore.addEventListener('click', () => reportFinal('explore-site'), { signal });
 
     installQaHook();
 

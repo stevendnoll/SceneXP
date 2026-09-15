@@ -754,3 +754,73 @@ describe('playing a milestone show from the console, for QA', () => {
         expect(globalThis.window.xo.show(500)).toMatch(/^Not during "show"/);
     });
 });
+
+describe('the usage log', () => {
+    /**
+     * WHAT ACTUALLY LEAVES THE PAGE, captured at the Image the shared part
+     * sends it through, across a real play from arrival to the whistle.
+     *
+     * Matched on the beacons rather than on `track(` in the source, because a
+     * source match passes as long as the words are in the file, whether or not
+     * anything is ever sent, and because the thing worth pinning is the SHAPE of
+     * the play record: the 2D game's fields, in one decodable `outcome`.
+     */
+    test('a play from arrival to the whistle sends the 2D game\'s play record', async () => {
+        const { DEFENSES } = await import('../www/xo/js/playbook-ui.js');
+        const sent = [];
+        globalThis.Image = class { set src(url) { sent.push(url); } };
+        try {
+            await toLivePlay();
+            press('Snap the ball');
+            await flushAsync();
+            press('Throw');
+            await flushAsync();
+            for (let i = 0; i < 900 && dom.el('result').hidden !== false; i += 1) {
+                dom.loops[0](i * 16.7);
+            }
+            expect(dom.el('result').hidden).toBe(false);
+
+            const hits = sent.map((url) => new URL(url, 'http://localhost:8000/xo/'));
+            const actions = hits.map((u) => u.searchParams.get('action'));
+            // In the order a visitor does them.
+            const order = ['session-start', 'take-field', 'call-play', 'snap', 'throw', 'play-result'];
+            expect(actions.filter((a) => order.includes(a))).toEqual(order);
+            // Every one of them to the site's own endpoint, and tagged with the
+            // scene the shared part reads off the path.
+            for (const u of hits) expect(u.pathname).toBe('/api.html');
+
+            const hit = (action) => hits.find((u) => u.searchParams.get('action') === action);
+            const detail = (action) => Object.fromEntries(
+                new URLSearchParams(hit(action).searchParams.get('outcome') || ''));
+
+            // The defense was left to chance, so the snap names the one the
+            // library ROLLED, not the word "random".
+            const snapped = detail('snap');
+            expect(DEFENSES).toContain(snapped.defense);
+            expect(snapped.playCount).toBe('1');
+
+            const thrown = hit('throw');
+            expect(thrown.searchParams.get('kind')).toMatch(/^wr[1-4]$/);
+            expect(Number(thrown.searchParams.get('seconds'))).toBeGreaterThanOrEqual(0);
+
+            const record = detail('play-result');
+            expect(Object.keys(record).slice(0, 5))
+                .toEqual(['defense', 'offense', 'orientation', 'points', 'result']);
+            expect(record.defense).toBe(snapped.defense);
+            expect(record.offense).toBe(snapped.offense);
+            expect(record.orientation).toBe('landscape');
+            expect(record.throwTo).toBe(thrown.searchParams.get('kind'));
+            expect(record.playCount).toBe('1');
+            expect(record.games).toBe('0');
+            expect(['true', 'false']).toContain(record.muted);
+            expect(record.currentScore).toBe(record.points);
+            expect(hit('play-result').searchParams.get('kind')).toBe(record.result);
+            // And nothing that fingerprints, whatever the 2D game used to send.
+            for (const key of ['width', 'height', 't']) {
+                expect({ key, sent: key in record }).toEqual({ key, sent: false });
+            }
+        } finally {
+            delete globalThis.Image;
+        }
+    });
+});

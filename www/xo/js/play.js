@@ -169,6 +169,12 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
 
     play.formations.setTeamFormation(play.game.objects, 0, offensive);
     play.formations.setTeamFormation(play.game.objects, 1, defensive);
+    // WHAT WAS ACTUALLY LINED UP, for the usage log. An empty `defensive` is the
+    // library's own signal to roll one, and the roll is only knowable here: the
+    // library keeps the last formation it set on its state, and the defense is
+    // set second.
+    play.offense = offensive;
+    play.defense = (play.formations.state && play.formations.state.formation) || defensive || '';
 
     // WHO IS BENCHED IS DECIDED HERE, ONCE, AND REMEMBERED.
     //

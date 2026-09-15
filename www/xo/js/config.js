@@ -2879,6 +2879,25 @@ const XO_CONFIG = {
     },
 
     /**
+     * USAGE TELEMETRY (see telemetry.js for what is sent and why the detail
+     * rides in `outcome`).
+     *
+     * `proofOfWork` is the same puzzle, prefix and sessionStorage key every
+     * other scene uses, so one visitor's hash is one hash across the site.
+     *
+     * `throttleMs` is per action. nginx drops a visitor past two requests a
+     * second with a burst of twenty, and these are the two controls that can be
+     * pressed faster than that, so each is reported at most once a gap.
+     */
+    telemetry: {
+        proofOfWork: { prefix: '11', storageKey: 'gallery-pow' },
+        throttleMs: {
+            'switch-view': 1000,
+            sound: 1000,
+        },
+    },
+
+    /**
      * HOW FAST THE GAME RUNS, and it is the only speed control there is.
      *
      * The ported simulation's speeds are per FRAME, not per second, so the

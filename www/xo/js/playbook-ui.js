@@ -99,6 +99,8 @@ const defenseLabel = (slug) => slug.replace(/^([a-z]+)(\d+)$/, (_m, w, n) =>
 const book = new OffensivePlaybookClass({});
 let onChoose = null;
 let onStartOver = null;
+/** Told when the defense is changed, for the usage log (see telemetry.js). */
+let onDefense = null;
 let settings = { lastPlay: '', defense: '' };
 
 // ---- Persistence -----------------------------------------------------------
@@ -253,6 +255,7 @@ function buildDefenseRow() {
     select.addEventListener('change', () => {
         settings.defense = select.value;
         save();
+        if (onDefense) onDefense(select.value);
     });
     wrap.appendChild(select);
     return wrap;
@@ -299,7 +302,7 @@ function buildCard(play, repeat = false) {
     button.appendChild(blurb);
 
     // The "Last play" tag is not built here. See `markLastPlay`.
-    button.addEventListener('click', () => choose(play.slug));
+    button.addEventListener('click', () => choose(play.slug, repeat));
     item.appendChild(button);
     return item;
 }
@@ -377,11 +380,13 @@ function drawAll() {
     }
 }
 
-function choose(slug) {
+/** `repeat` is whether it was the "your last play" card at the top of the book,
+ *  which the usage log wants to know and nothing else here does. */
+function choose(slug, repeat = false) {
     settings.lastPlay = slug;
     save();
     hide();
-    if (onChoose) onChoose(slug, settings.defense);
+    if (onChoose) onChoose(slug, settings.defense, { repeat });
 }
 
 // ---- Public surface --------------------------------------------------------
@@ -455,9 +460,10 @@ function settleStartOver(root) {
     buttons.forEach((b, i) => { b.hidden = i !== 0; });
 }
 
-export function initPlaybook(handler, startOver = null) {
+export function initPlaybook(handler, startOver = null, { defense = null } = {}) {
     onChoose = handler;
     onStartOver = startOver;
+    onDefense = defense;
     load();
 
     const root = document.getElementById('playbook');
