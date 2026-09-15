@@ -30,6 +30,7 @@ const CATEGORY_OF = {
     dad: 'personal', family: 'personal', roqui: 'personal', gavin: 'personal', jamar: 'personal',
     automan: 'business', interstate: 'business', seedtoseed: 'business', sunnyvalejenn: 'business',
     steve: 'worlds', mandelbrot: 'worlds', earthdefense: 'worlds', highwater: 'worlds', garden: 'worlds',
+    xo: 'worlds',
 };
 
 // THE MARKUP IS THE SOURCE OF TRUTH now that the catalog array is gone. Each
@@ -325,8 +326,8 @@ describe('the directory card image and the social image', () => {
         // THE FIRST CARD IS THE LCP ELEMENT on any screen wide enough to show
         // it, and `loading="lazy"` on an LCP element defers the fetch until
         // layout has proved the image is needed, which is late by definition.
-        // The other thirteen must stay lazy: eager on all fourteen pulls
-        // roughly 650KB of card art nobody has scrolled to.
+        // The other fourteen must stay lazy: eager on all fifteen pulls
+        // roughly 780KB of card art nobody has scrolled to.
         //
         // This asserts the SPLIT rather than naming garden, so reordering the
         // grid moves the requirement instead of breaking the test.

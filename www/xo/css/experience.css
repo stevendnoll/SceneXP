@@ -711,6 +711,24 @@ body {
     text-align: center;
 }
 
+/* The logo beside the title. The 64px file is drawn at 48 so it sits level
+ * with the heading rather than towering over it. Its black ground is darker
+ * than the panel, so the corners are rounded to make that square read as a
+ * badge on purpose rather than a picture that failed to crop. */
+.welcome-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+}
+
+.welcome-logo {
+    flex: none;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 10px;
+}
+
 .welcome-steps {
     margin: 1.2rem 0 0;
     padding-left: 1.3rem;
@@ -772,6 +790,21 @@ body {
 
 .welcome-target strong {
     color: #ff992c;
+}
+
+/* The directory link at the foot of the welcome card. The look (small, dim,
+ * underlined, a padded tap target) comes from `.welcome-explore` in the shared
+ * sheet. Only the spacing is local: the shared margin is sized for the house
+ * #blocker overlay, and on this card it would leave a gap wider than anything
+ * else between the Start button and the link. Centred to sit under the
+ * buttons, because the panel itself is left-aligned for the rules. */
+.welcome-explore-row {
+    margin: 0.9rem 0 -0.6rem;
+    text-align: center;
+}
+
+.welcome-explore-row .welcome-explore {
+    margin: 0;
 }
 
 /* ---- The milestone title ----------------------------------------------------

@@ -102,30 +102,36 @@
             {
               "@type": "ListItem",
               "position": 1,
+              "url": "https://www.scenexp.com/xo/",
+              "name": "X's and O's"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
               "url": "https://www.scenexp.com/garden/",
               "name": "Fractal Garden"
             },
             {
               "@type": "ListItem",
-              "position": 2,
+              "position": 3,
               "url": "https://www.scenexp.com/highwater/",
               "name": "High Water"
             },
             {
               "@type": "ListItem",
-              "position": 3,
+              "position": 4,
               "url": "https://www.scenexp.com/earthdefense/",
               "name": "Earth Defense"
             },
             {
               "@type": "ListItem",
-              "position": 4,
+              "position": 5,
               "url": "https://www.scenexp.com/mandelbrot/",
               "name": "The Mandelbrot Set"
             },
             {
               "@type": "ListItem",
-              "position": 5,
+              "position": 6,
               "url": "https://www.scenexp.com/steve/",
               "name": "Steve's Home Office"
             }
@@ -315,8 +321,8 @@
                     aria-labelledby="worlds-and-games">
                     <h2 id="worlds-and-games">Worlds and games</h2>
                     <ul class="experience-grid">
-                        <li class="experience-card" data-slug="garden">
-                            <a href="/garden/">
+                        <li class="experience-card" data-slug="xo">
+                            <a href="/xo/">
                                 <!-- THE ONLY EAGER IMAGE ON THE PAGE, and it has to stay the
                                      only one. This is the first card in the first group, so it
                                      is the Largest Contentful Paint element on any screen wide
@@ -324,13 +330,31 @@
                                      measurable own goal: the browser will not begin the fetch
                                      until layout has proved the image is needed, which is late
                                      by definition. `fetchpriority="high"` then lets it jump the
-                                     queue ahead of the thirteen lazy cards below.
-                                     The other thirteen stay lazy, because eager on all
-                                     fourteen would fetch 650KB of card art nobody has scrolled
+                                     queue ahead of the fourteen lazy cards below.
+                                     The other fourteen stay lazy, because eager on all
+                                     fifteen would fetch 780KB of card art nobody has scrolled
                                      to yet. If the card order ever changes, these two
-                                     attributes move to whichever card is first. -->
-                                <img src="/garden/assets/og-garden.webp?v=3" width="1200" height="630" loading="eager"
+                                     attributes move to whichever card is first. They moved
+                                     here from the garden on 2026-09-14, when X's and O's
+                                     became the newest world. -->
+                                <img src="/xo/assets/og-xo.webp?v=1" width="1200" height="630" loading="eager"
                                     fetchpriority="high" decoding="async"
+                                    alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">A football game where you call the plays</p>
+                                    <h3>X's and O's</h3>
+                                    <p>You are on offense for all ten plays. Pick a play from the
+                                        playbook, snap the ball, then throw to an open receiver or keep
+                                        it and run. The farther you carry it the more the play is worth,
+                                        and 500 is a perfect game.</p>
+                                    <span class="experience-cta">Call the first play →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="garden">
+                            <a href="/garden/">
+                                <img src="/garden/assets/og-garden.webp?v=3" width="1200" height="630" loading="lazy"
+                                    decoding="async"
                                     alt="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below grey rolling hills, under a blue sky with white clouds.">
                                 <div class="experience-card-body">
                                     <p class="experience-eyebrow">A garden you plant and tend yourself</p>
@@ -584,10 +608,10 @@
                 <ul class="audience-grid">
                     <li class="audience-card">
                         <h3><a href="#worlds-and-games">Worlds and games</a></h3>
-                        <p>The ones built for their own sake. Defend Earth from a Martian fleet, dive
-                            hundreds of billions of times deep into the Mandelbrot set, watch a modelled
-                            ocean shoal and break on a measured beach, or plant a garden of fractal trees
-                            and tend it through the seasons.</p>
+                        <p>The ones built for their own sake. Call the plays in a game of football, defend
+                            Earth from a Martian fleet, dive hundreds of billions of times deep into the
+                            Mandelbrot set, watch a modelled ocean shoal and break on a measured beach, or
+                            plant a garden of fractal trees and tend it through the seasons.</p>
                     </li>
                     <li class="audience-card">
                         <h3><a href="#small-business-tributes">Small business tributes</a></h3>

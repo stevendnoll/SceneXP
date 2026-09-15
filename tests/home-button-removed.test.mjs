@@ -43,16 +43,19 @@ import { existsSync } from 'node:fs';
 
 const ROOT = new URL('../', import.meta.url);
 
-/** The nine that traded the floating button for a welcome-screen link. */
+/** The nine that traded the floating button for a welcome-screen link, plus
+ *  X's and O's, which never had the button and took the link at launch
+ *  (2026-09-14) so a visitor arriving from a shared link can find the rest. */
 const WITH_LINK = ['dad', 'earthdefense', 'family', 'garden', 'gavin', 'highwater',
-  'mandelbrot', 'roqui', 'steve'];
+  'mandelbrot', 'roqui', 'steve', 'xo'];
 /** The five stripped first, which deliberately carry no directory link. */
 const WITHOUT_LINK = ['automan', 'interstate', 'jamar', 'seedtoseed', 'sunnyvalejenn'];
 const ALL = [...WITH_LINK, ...WITHOUT_LINK].sort();
 
 /** High Water's card is not a click-to-start surface: the only way past it is
- *  its Begin button, so its link needs no shield and deliberately has none. */
-const NO_SHIELD_NEEDED = ['highwater'];
+ *  its Begin button, so its link needs no shield and deliberately has none.
+ *  X's and O's is the same: its welcome card is dismissed by a button. */
+const NO_SHIELD_NEEDED = ['highwater', 'xo'];
 
 const SLOT_PITCH = 62;   // a 50px button plus a 12px gap
 const FIRST_SLOT = 20;   // the corner
@@ -170,7 +173,7 @@ async function cluster(scene) {
 
 // ---- The tests ------------------------------------------------------------
 
-test('not one of the fourteen scenes has a Home button left', async () => {
+test('not one of the fifteen scenes has a Home button left', async () => {
   for (const scene of ALL) {
     for (const f of ['index.html', 'js/main.js', 'js/main.min.js']) {
       const text = await read(`www/${scene}/${f}`);
@@ -181,7 +184,7 @@ test('not one of the fourteen scenes has a Home button left', async () => {
   }
 });
 
-test('the nine carry the directory link, and the five deliberately do not', async () => {
+test('the ten carry the directory link, and the five deliberately do not', async () => {
   for (const scene of WITH_LINK) {
     const html = await read(`www/${scene}/index.html`);
     expect(`${scene}: ${html.includes('id="explore-link"')}`).toBe(`${scene}: true`);

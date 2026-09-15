@@ -48,14 +48,17 @@
          Apple's link preview renders every og:image it finds, so listing both
          formats puts two identical cards in one message thread.
 
-         THE ASSET ITSELF LANDS AT M7, once there is a game worth capturing.
-         Until this scene is listed in the directory it is not linked from
-         anywhere, so nothing is unfurling it yet. -->
+         THE CARD IS A PLAY IN PROGRESS, NOT THE LINE-UP. Captured 2026-09-14
+         from a real game and converted out of the Mac display profile before
+         stripping (q92, 4:4:4, progressive). The .webp twin beside it is the
+         directory card on the home page and is never named here.
+         og:image:alt describes THIS picture, so it is rewritten whenever the
+         card is, and the ?v= moves with it. -->
     <meta property="og:image" content="https://www.scenexp.com/xo/assets/og-xo.jpg?v=1">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="A floodlit 3D football field at night seen from high behind the offense, with the two teams lined up across the line of scrimmage.">
+    <meta property="og:image:alt" content="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides.">
 
     <!-- Twitter / X. The same single JPEG as og:image. Twitter takes exactly
          one image and has no type property. -->
@@ -63,7 +66,7 @@
     <meta name="twitter:title" content="X's and O's">
     <meta name="twitter:description" content="A 3D football game where you are always on offense. Ten plays, and the farther you carry it the more it is worth.">
     <meta name="twitter:image" content="https://www.scenexp.com/xo/assets/og-xo.jpg?v=1">
-    <meta name="twitter:image:alt" content="A floodlit 3D football field at night seen from high behind the offense, with the two teams lined up across the line of scrimmage.">
+    <meta name="twitter:image:alt" content="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
@@ -74,6 +77,7 @@
       "@id": "https://www.scenexp.com/xo/#game",
       "url": "https://www.scenexp.com/xo/",
       "name": "X's and O's",
+      "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
       "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game.",
       "genre": ["Sports", "Strategy"],
       "gamePlatform": "Web browser",
@@ -100,13 +104,16 @@
     <title>X's and O's</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=6" as="style">
+    <link rel="preload" href="css/experience.min.css?v=8" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
-    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
+         mascots at 16, 32, 48 and 64 pixels, so both versions of the game wear
+         the same icon in a tab. -->
+    <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=6">
+    <link rel="stylesheet" href="css/experience.min.css?v=8">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -189,7 +196,16 @@
     <div id="welcome" class="card-overlay" hidden>
         <div class="card-panel welcome-panel" role="dialog" aria-modal="true"
             aria-labelledby="welcome-title">
-            <h2 id="welcome-title" class="card-title">X's and O's</h2>
+            <!-- The 2D game's logo beside the name, so a visitor who knows
+                 exesnohs.com recognizes the game before reading a word. alt=""
+                 because the heading already says X's and O's, and this
+                 heading names the dialog, so a described picture would be read
+                 as part of the title every time the card opens. -->
+            <h2 id="welcome-title" class="card-title welcome-title">
+                <img class="welcome-logo" src="assets/exes-n-ohs-logo-64.jpg" width="64" height="64"
+                    alt="" decoding="async">
+                <span>X's and O's</span>
+            </h2>
             <p class="card-detail">Ten plays, and you are on offense for every one
                 of them. The farther you carry the ball, the more the play is worth.</p>
 
@@ -246,6 +262,26 @@
             <p id="welcome-resume" class="card-meta welcome-resume" hidden></p>
 
             <div id="welcome-actions" class="card-actions"></div>
+
+            <!-- THE WAY BACK TO THE DIRECTORY, the same named link nine other
+                 scenes carry at the foot of their welcome screen (see
+                 tests/home-button-removed.test.mjs). A visitor who arrives from
+                 a shared link has no other route to the rest of the site.
+
+                 SAME TAB, and nothing is lost by following it: nothing here
+                 writes history, so Back returns to the game, and a game in
+                 progress is already saved at every whistle.
+
+                 NO overlay shield, unlike most of the nine. This card is not a
+                 click-to-start surface: the only way past it is the button
+                 above, so a tap on the link is only ever a tap on the link. It
+                 sits after the buttons so the first tab stop is still the one
+                 that starts the game, and the key handler in hud.js only ever
+                 presses buttons in the HUD row, so Enter on the link is left
+                 to the browser. -->
+            <p class="welcome-explore-row">
+                <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
+            </p>
         </div>
     </div>
 

@@ -48,7 +48,7 @@ const PERSISTENT = {
     'www/earthdefense/js/main.js': 'sound and control settings',
     'www/shared/js/gamestate-1.0.0.js': 'a best score',
     'www/xo/js/audio.js': 'whether sound is muted',
-    'www/xo/js/playbook-ui.js': 'the last play called and the chosen defence',
+    'www/xo/js/playbook-ui.js': 'the last play called and the chosen defense',
     'www/xo/js/summary.js': 'the best score in X’s and O’s',
     'www/xo/js/progress.js': 'a game of X’s and O’s that has not finished yet'
 };
