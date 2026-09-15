@@ -33,6 +33,7 @@
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
 import { XO_CONFIG as CFG } from './config.min.js';
 import { solveArm, calibrate } from './arm.min.js';
+import { jerseyOf, helmetOf, markInk } from './colors.min.js';
 
 /** The 2D game's own team colours and names. */
 export const TEAMS = {
@@ -800,10 +801,14 @@ function shareGeometryAndMaterials(root) {
     let matBefore = new Set();
 
     const geomKey = (g) => `${g.type}:${JSON.stringify(g.parameters || {})}`;
+    // A TEAM'S OWN MATERIALS ARE KEPT TO THAT TEAM, whatever color they happen
+    // to be. A visitor can dress both teams alike, and a material shared
+    // between them would recolor both when either one changed.
     const matKey = (m) => [
         m.type, m.color && m.color.getHexString(), m.roughness, m.metalness,
         m.emissive && m.emissive.getHexString(), m.emissiveIntensity,
         m.transparent, m.opacity, m.depthWrite, m.side,
+        m.userData && m.userData.kit ? `${m.userData.kit}:${m.userData.team}` : '',
     ].join('|');
 
     root.traverse((obj) => {
@@ -882,6 +887,98 @@ function measureArm(person) {
     forgetSolvedPoses();
 }
 
+/**
+ * NAME EVERY MATERIAL THAT WEARS THE TEAM'S COLORS, so `setTeamKit` can find it.
+ *
+ * Found by what the figure was BUILT with, which is always the game's own kit
+ * (`initRoster` applies the visitor's colors afterwards), so a shirt is the one
+ * material in the shirt's color at the shirt's roughness and nothing a visitor
+ * picks can make the pants look like one.
+ */
+function tagKit(person, team, kit) {
+    const shirt = new THREE.Color(kit.shirt).getHexString();
+    person.traverse((node) => {
+        const m = node.isMesh && node.material;
+        if (!m || Array.isArray(m) || !m.color) return;
+        let role = '';
+        if (node.name === 'jersey-mark') role = 'mark';
+        else if (node.name === 'helmet-shell' || node.name === 'helmet-crown' || node.name === 'helmet-flap') role = 'helmet';
+        else if (m.color.getHexString() === shirt && m.roughness === 0.7) role = 'shirt';
+        else if (m.color.getHexString() === shirt && m.roughness === 0.75) role = 'sleeve';
+        if (!role) return;
+        m.userData = { ...(m.userData || {}), kit: role, team };
+    });
+}
+
+/**
+ * DRESS A TEAM: its jersey on every shirt and sleeve, its helmet on every shell,
+ * and the X or O on the jersey in whichever of white or near-black reads on it.
+ * Every figure of the team shares these materials, so this is a handful of
+ * color writes however many players there are.
+ */
+export function setTeamKit(team, kit = {}) {
+    if (!group) return 0;
+    return dress(group, team, kit);
+}
+
+/** Put a kit's colors on every tagged material of `team` under `root`. */
+function dress(root, team, { jersey, helmet, mark } = {}) {
+    const seen = new Set();
+    root.traverse((node) => {
+        const m = node.isMesh && node.material;
+        if (!m || Array.isArray(m) || seen.has(m) || !m.userData || m.userData.team !== team) return;
+        seen.add(m);
+        if ((m.userData.kit === 'shirt' || m.userData.kit === 'sleeve') && jersey) m.color.set(jersey);
+        if (m.userData.kit === 'helmet' && helmet) m.color.set(helmet);
+        if (m.userData.kit === 'mark' && mark) {
+            m.color.set(mark);
+            m.emissive.set(mark);
+        }
+    });
+    return seen.size;
+}
+
+/**
+ * ONE PLAYER, BUILT EXACTLY AS THE ROSTER BUILDS ONE, for the Team colors card.
+ *
+ * Same rig options, same helmet, same X or O on the jersey, same tags, so the
+ * player turning in the card can never be dressed differently from the ones on
+ * the field. Its materials are its own (nothing is merged with the roster), it
+ * is left at life size, and the arm solver is not recalibrated from it.
+ */
+export function buildKitFigure(team) {
+    const kit = KITS[team] || KITS[0];
+    const person = createPerson({
+        role: 'customer',
+        shirtColor: kit.shirt,
+        sleeveColor: kit.shirt,
+        pantsColor: kit.pants,
+        skinTone: SKIN[(team * 3 + 2) % SKIN.length],
+        hairColor: 0x2b1d14,
+        shoulderRound: 0.35,
+        handScale: 1.9,
+    });
+    addHelmet(person, kit);
+    addJersey(person, TEAMS[team].glyph, false);
+    tagKit(person, team, kit);
+    addContactShadow(person);
+    person.name = `kit-${team}`;
+    dressKitFigure(person, team);
+    return person;
+}
+
+/** Dress a figure from `buildKitFigure` in its team's colors as colors.js has them now. */
+export function dressKitFigure(figure, team) {
+    return dress(figure, team, { jersey: jerseyOf(team), helmet: helmetOf(team), mark: markInk(jerseyOf(team)) });
+}
+
+/** Dress both teams in whatever colors.js holds now. */
+export function applyTeamColors() {
+    for (const team of [0, 1]) {
+        setTeamKit(team, { jersey: jerseyOf(team), helmet: helmetOf(team), mark: markInk(jerseyOf(team)) });
+    }
+}
+
 /** Build every figure. Nothing is positioned here: view.js owns placement. */
 export function initRoster(scene, objects) {
     disposeRoster();
@@ -938,6 +1035,7 @@ export function initRoster(scene, objects) {
         // the opposite trade: the person carries the scene and the letter
         // carries the name.
         addJersey(person, TEAMS[team].glyph, isLineman);
+        tagKit(person, team, kit);
         addContactShadow(person);
         // Read before anything overwrites it, and only when it is a real
         // number: under the test stub every property is a proxy.
@@ -983,6 +1081,9 @@ export function initRoster(scene, objects) {
     });
 
     lastShareStats = shareGeometryAndMaterials(group);
+    // Built in the game's own kit, so the materials could be told apart, and
+    // dressed in the visitor's colors now.
+    applyTeamColors();
 
     scene.add(group);
     return figures;

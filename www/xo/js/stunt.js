@@ -27,6 +27,7 @@
 import { XO_CONFIG as CFG } from './config.min.js';
 import { standLayout } from './field.min.js';
 import { hexToRgb } from './fireworks.min.js';
+import { jerseyOf, cardInks } from './colors.min.js';
 
 const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
 
@@ -336,10 +337,13 @@ export function cardAt(t, row, col, cols, messages, { calm = false } = {}) {
     const flipFor = F.flip;
     const sweep = (window, c) => window[0] + (c / Math.max(1, cols - 1)) * (window[1] - window[0] - flipFor);
 
+    // THE CARDS ARE IN THE X'S JERSEY COLOR, and the letters on them are
+    // whichever of the stunt's inks reads best on it (`colors.cardInks`).
+    const home = cardInks(jerseyOf(0));
     const stages = [
         // Dark on bright, then bright on dark, and both far past 7:1: white on
-        // the Mongooses' orange was under 2:1 and QA could not read it.
-        { at: F.perfect, lit: messages.perfect, on: hexToRgb(P.navy), off: hexToRgb(P.orange) },
+        // the home orange was under 2:1 and QA could not read it.
+        { at: F.perfect, lit: messages.perfect, on: hexToRgb(home.on), off: hexToRgb(home.card) },
         { at: F.five, lit: messages.five, on: hexToRgb(P.gold), off: hexToRgb(P.navy) },
     ];
     let colour = null;

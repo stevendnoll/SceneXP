@@ -50,7 +50,8 @@ const PERSISTENT = {
     'www/xo/js/audio.js': 'whether sound is muted',
     'www/xo/js/playbook-ui.js': 'the last play called and the chosen defense',
     'www/xo/js/summary.js': 'the best score in X’s and O’s',
-    'www/xo/js/progress.js': 'a game of X’s and O’s that has not finished yet'
+    'www/xo/js/progress.js': 'a game of X’s and O’s that has not finished yet',
+    'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s'
 };
 
 /** Source files only. The built .min copies are the same code twice. */

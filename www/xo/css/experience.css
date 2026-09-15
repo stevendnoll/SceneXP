@@ -509,6 +509,122 @@ body {
     display: none;
 }
 
+/* ---- The Team colors card ----------------------------------------------------
+ *
+ * Wider than the other cards because it holds two teams side by side, and the
+ * two stack on a narrow screen. Each picker sits on a row with its label, the
+ * swatch big enough to judge a color by and to hit with a thumb.
+ */
+.colors-panel {
+    width: min(38rem, 100%);
+}
+
+.colors-teams {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.9rem;
+    margin-top: 1.1rem;
+}
+
+.colors-team {
+    padding: 0.8rem 0.9rem 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.colors-preview {
+    display: block;
+    width: min(100%, 10rem);
+    aspect-ratio: 1;
+    margin: 0 auto 0.35rem;
+    border-radius: 10px;
+}
+
+.colors-team-title {
+    margin: 0 0 0.5rem;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #f2f5fa;
+}
+
+.colors-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.45rem;
+    color: #c3cbd9;
+    font-weight: 600;
+}
+
+.colors-input {
+    inline-size: 3.25rem;
+    block-size: 2.25rem;
+    padding: 0.15rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.colors-input:focus-visible,
+.colors-match:focus-visible {
+    outline: 2px solid #ff992c;
+    outline-offset: 2px;
+}
+
+.colors-match {
+    margin-top: 0.55rem;
+    padding: 0.25rem 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: transparent;
+    color: #aab4c4;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.colors-match:hover,
+.colors-match:focus-visible {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #f2f5fa;
+}
+
+.colors-match[hidden] {
+    display: none;
+}
+
+.colors-field {
+    max-width: 16rem;
+    margin: 1rem auto 0;
+}
+
+.colors-warning {
+    margin: 0.9rem 0 0;
+    padding: 0.55rem 0.75rem;
+    border-radius: 10px;
+    background: rgba(255, 209, 102, 0.1);
+    color: #ffd98a;
+    font-size: 0.92rem;
+}
+
+.colors-warning[hidden] {
+    display: none;
+}
+
+.colors-actions {
+    flex-wrap: wrap;
+}
+
+@media (max-width: 34rem) {
+    .colors-teams {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* ---- The result card sits low -----------------------------------------------
  *
  * A play finishes somewhere on the grass, and the grass is what the card is

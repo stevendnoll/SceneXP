@@ -16,11 +16,14 @@
  * to a suite.
  */
 import { XO_CONFIG as CFG, FIELD, simToWorld } from './config.min.js';
-import { initField, setBandAt, fadeBand, updateScoreboard } from './field.min.js';
-import { initRoster, figureFor, TEAMS } from './roster.min.js';
+import { initField, setBandAt, fadeBand, updateScoreboard, applyFieldColors } from './field.min.js';
+import { initRoster, figureFor, TEAMS, applyTeamColors } from './roster.min.js';
+import {
+    loadColors, saveColors, setColors, resetColors, teamColors, warningsFor,
+} from './colors.min.js';
 import { initBall, getBall } from './ball.min.js';
 import {
-    initMarkers, setPulse, initSpot, showSpot, hideSpot, markerGeometry,
+    initMarkers, setPulse, initSpot, showSpot, hideSpot, markerGeometry, applyMarkerColors,
 } from './markers.min.js';
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments, noteThrow,
@@ -50,6 +53,8 @@ import {
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
 } from './hud.min.js';
 import { openingFrame, planOpening, castAt, propsAt } from './opening.min.js';
+import { initColorsCard, showColorsCard, colorsCardOpen } from './colors-ui.min.js';
+import { drawColorsPreviews } from './colors-preview.min.js';
 import {
     initOpeningProps, applyOpeningProps, hideOpeningProps, splashBuffer,
 } from './opening-props.min.js';
@@ -57,7 +62,7 @@ import {
     milestoneDue, litStars, showFrame, showUsesTeam, stageTeam, turfSetup,
 } from './milestones.min.js';
 import {
-    initSpectacle, beginShow, applyShow, setAwake, endShow, tickAwake, cheerCrowd,
+    initSpectacle, beginShow, applyShow, setAwake, endShow, tickAwake, cheerCrowd, applyCrowdColors,
 } from './spectacle.min.js';
 import { cheerFor } from './stunt.min.js';
 import { showSummary, hideSummary, readBest } from './summary.min.js';
@@ -1422,9 +1427,50 @@ export function qaOpening() {
     return `Not during "${cycle.phase}". Try again from the welcome card or the playbook.`;
 }
 
+/**
+ * DRESS THE TEAMS AND THE FIELD FROM THE CONSOLE, until the Team colors card
+ * exists, and keep it: `xo.colors({ x: '#4b2e83', o: '#ffb612', field: '#0033a0' })`,
+ * with `xHelmet` and `oHelmet` for a helmet of its own (null to follow the jersey
+ * again), `xo.colors('reset')` for the game's own, and `xo.colors()` to read what
+ * is set. The answer includes any warning the card would show.
+ */
+export function qaColors(change) {
+    if (change === 'reset') resetColors();
+    else if (change && typeof change === 'object') {
+        const team = (jersey, helmet) => ({
+            ...(jersey !== undefined ? { jersey } : {}),
+            ...(helmet !== undefined ? { helmet } : {}),
+        });
+        setColors({
+            teams: { 0: team(change.x, change.xHelmet), 1: team(change.o, change.oHelmet) },
+            ...(change.field !== undefined ? { field: change.field } : {}),
+        });
+    }
+    if (change !== undefined) {
+        applyColors();
+        saveColors();
+    }
+    return JSON.stringify({ ...teamColors(), warnings: warningsFor().map((w) => w.text) });
+}
+
+/** Put the colors colors.js holds on everything that wears them now. The cooler,
+ *  the card stunt and the fireworks ask for themselves when they are drawn. */
+function applyColors({ teams = true, field = true } = {}) {
+    if (teams) {
+        applyTeamColors();
+        applyCrowdColors();
+    }
+    if (field) applyFieldColors();
+    // The rings follow both: a team's jersey, and whether the field is close
+    // enough to it to need a dark edge.
+    applyMarkerColors();
+}
+
 function installQaHook() {
     if (typeof window === 'undefined' || !qaEnabled(window.location && window.location.href)) return;
-    window.xo = Object.freeze({ show: qaShow, opening: qaOpening, levels: [...CFG.milestones.built] });
+    window.xo = Object.freeze({
+        show: qaShow, opening: qaOpening, colors: qaColors, levels: [...CFG.milestones.built],
+    });
 }
 
 /** A fresh ten. */
@@ -1868,6 +1914,10 @@ function animate(now) {
     // the shot freezes exactly where it was and resumes from there. Swapping
     // to the play camera would cut once on the way in and once on the way out.
     applyCamera(updateCamera(cycle.reading ? 0 : delta, cameraState()));
+    // THE PLAYERS IN THE TEAM COLORS CARD GO FIRST, because they borrow a
+    // corner of this frame's buffer and the main render below clears it.
+    // Drawn after, the frame would be shown with a player in the corner.
+    if (colorsCardOpen()) drawColorsPreviews(renderer, state.elapsed, { calm: reducedMotion });
     renderer.render(scene, camera);
 }
 
@@ -2136,6 +2186,10 @@ async function init() {
     const lights = initLighting();
 
     setProgress(0.5, 'Painting the lines…');
+    // THE VISITOR'S COLORS FIRST, before anything that wears them is built: the
+    // fans are seated with the field, the roster and the rings come next, and
+    // the opening that plays straight after must already be in them.
+    loadColors();
     initField(scene);
     // After the field, because the shows switch its lamp banks.
     initSpectacle(scene, lights);
@@ -2191,6 +2245,21 @@ async function init() {
                 back();
             });
         },
+        // THE TEAM COLORS CARD, the same arrangement: the book steps aside and
+        // the camera holds still while the visitor is choosing.
+        colors: (back) => {
+            uiClick();
+            cycle.reading = true;
+            showColorsCard(() => {
+                cycle.reading = false;
+                back();
+            });
+        },
+    });
+    initColorsCard({
+        apply: ({ teams, field }) => applyColors({ teams, field }),
+        report,
+        announce,
     });
 
     setProgress(0.9, 'Almost ready…');

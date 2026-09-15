@@ -2939,6 +2939,91 @@ const XO_CONFIG = {
          *  at each whistle by progress.js, cleared when a game ends or is
          *  started over. Named in www/privacy.html like every other key here. */
         game: 'exes-n-ohs-game',
+        /** The team and field colors a visitor chose (colors.js). Removed again
+         *  when they are all back to the game's own. */
+        colors: 'exes-n-ohs-team-colors',
+    },
+
+    /**
+     * THE ARITHMETIC THAT KEEPS A VISITOR'S COLORS READABLE (colors.js).
+     *
+     * `markSwitch` is the WCAG contrast against white below which the X or O on
+     * a jersey turns `darkMark`: the game's light blue is 1.65 and keeps its white
+     * mark, a yellow or white jersey is under 1.3 and does not. `fanShade` is the
+     * OKLab lightness step between a team's fans. `sparkLightness` is how bright
+     * a team color must be to show as a firework, which is added light.
+     */
+    colors: {
+        markSwitch: 1.6,
+        darkMark: '#15181d',
+        fanShade: 0.06,
+        sparkLightness: 0.72,
+        /** The card stunt keeps its first ink that reaches this against the cards. */
+        cardContrast: 7,
+        /** Seconds between repaints of the field's texture while its picker is
+         *  being dragged (colors-ui.js). Each one is a 2048-pixel upload. */
+        repaintEvery: 0.1,
+        /**
+         * THE PLAYERS TURNING IN THE CARD (colors-preview.js). `px` is the
+         * largest size in buffer pixels, `turn` radians a second, `calmYaw` the
+         * three-quarter view held still for reduced motion, `clear` the card
+         * behind them, `disc` the turf under their feet in metres. The camera
+         * is framed on the figure as it was built: `margin` times its height
+         * fills the frame, aimed `aim` of the way up it and raised `lookDown`
+         * of it. Measured on every vertex through a full turn, the player runs
+         * from 0.84 at the helmet to -0.80 at the shoes and the disc's front
+         * edge reaches -0.90, all inside the frame. The first numbers tried cut
+         * the shoes and the disc off at the bottom.
+         */
+        preview: {
+            px: 256, fov: 26, turn: 0.7, calmYaw: -0.55, clear: '#151920',
+            disc: 0.62, margin: 1.25, aim: 0.48, lookDown: 0.1,
+        },
+
+        /**
+         * WHEN TWO COLORS ARE TOO CLOSE TO TELL APART ON THE FIELD, in plain OKLab
+         * distance (`colors.difference`). Set against real pairs:
+         *
+         *     should warn                      should not
+         *     Cowboys / Patriots navy 0.013    orange / red                0.237
+         *     Vikings / LSU purple    0.029    Dolphins aqua / light blue  0.257
+         *     Chiefs / Bucs red       0.043    orange / light blue (ours)  0.259
+         *     Eagles / Jets green     0.058    white / silver              0.260
+         *     Ravens purple / Vikings 0.096    red / navy                  0.458
+         *     Broncos / our orange    0.146    Ravens purple / gold        0.612
+         *     Ravens purple / black   0.159
+         *     black / navy            0.207
+         *
+         * and against today's grass: Jets green 0.036, Eagles 0.094 and Packers
+         * 0.129 should warn, while black 0.241, navy 0.252, dark purple 0.256 and
+         * bright lime 0.315 should not. `warnTeams` and `warnField` sit in those
+         * gaps, and screenshots of the real field can move them.
+         *
+         * A DARK-COLOR DISCOUNT WAS TRIED AND TAKEN OUT. The thinking was that a
+         * dark jersey loses its hue first under floodlights, so the hue part of
+         * the distance should count for less. Measured, it moved no pair across
+         * either threshold: plain distance separates this table exactly as well.
+         */
+        warnTeams: 0.22,
+        warnField: 0.15,
+
+        /**
+         * THE FIELD FROM ONE COLOR (`turfFrom`). Today's green keeps every one of
+         * its tuned values. Any other color keeps white paint while it reaches
+         * `paintContrast` and turns `darkPaint` when it does not; keeps the gold
+         * scrimmage line while that reads; and keeps the dark red end zones unless
+         * they are too close to the field, trying `endZones` in order.
+         */
+        paintContrast: 3,
+        darkPaint: '#15181d',
+        scrimmageContrast: 1.8,
+        // Slate last, for a field too dark for charcoal or navy to show on.
+        endZones: ['#7a1220', '#23262b', '#14213d', '#5d636d'],
+        endZoneDifference: 0.12,
+        /** Two colors this many degrees apart round the wheel, and both at least
+         *  this colorful, are the same hue (`sameHue`). */
+        hueNear: 35,
+        hueChroma: 0.05,
     },
 
     /**
@@ -3207,7 +3292,8 @@ const XO_CONFIG = {
              */
             table: { width: 2.6, depth: 1.2, height: 1.85, top: 0.1, leg: 0.12 },
             cooler: { radius: 0.46, height: 1.15, lid: 0.16 },
-            colors: { cooler: 0xff992c, lid: 0xf4f1ea, table: 0xd9d6cf, legs: 0x5d6168 },
+            /** The cooler itself is the home team's jersey (colors.js). */
+            colors: { lid: 0xf4f1ea, table: 0xd9d6cf, legs: 0x5d6168 },
             /** Seconds to go over on the table, then to fall off it. */
             tipTime: 0.24,
             fallTime: 0.3,

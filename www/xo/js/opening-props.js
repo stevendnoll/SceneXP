@@ -13,6 +13,7 @@
  * one disc and a few dozen points, so there is nothing to download.
  */
 import { XO_CONFIG as CFG } from './config.min.js';
+import { jerseyOf } from './colors.min.js';
 
 let scene = null;
 let props = null;
@@ -51,7 +52,8 @@ function build() {
 
     // THE COOLER, in the home orange, with a white lid and a white band. Its
     // own origin is its middle, so tipping it is one rotation.
-    const coolerMat = new THREE.MeshStandardMaterial({ color: P.colors.cooler, roughness: 0.45 });
+    // The home team's cooler, in the home team's jersey color.
+    const coolerMat = new THREE.MeshStandardMaterial({ color: jerseyOf(0), roughness: 0.45 });
     const whiteMat = new THREE.MeshStandardMaterial({ color: P.colors.lid, roughness: 0.5 });
     const cooler = new THREE.Group();
     const body = new THREE.Mesh(new THREE.CylinderGeometry(C.radius, C.radius * 0.94, C.height, 20), coolerMat);
@@ -89,7 +91,7 @@ function build() {
 
     group.visible = false;
     scene.add(group);
-    props = { group, table, cooler, lid, puddle, splash, positions };
+    props = { group, table, cooler, lid, puddle, splash, positions, coolerMat };
     return props;
 }
 
@@ -100,6 +102,8 @@ export function applyOpeningProps(state) {
     const P = CFG.opening.props;
     p.group.visible = true;
     showing = true;
+    // Asked every frame, because the visitor can change it between openings.
+    p.coolerMat.color.set(jerseyOf(0));
     p.table.position.set(state.table.x, 0, state.table.z);
 
     // Tipped toward `angle` on the grass: yaw the cooler to face that way, then

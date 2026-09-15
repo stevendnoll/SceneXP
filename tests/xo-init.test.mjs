@@ -232,6 +232,73 @@ describe('the opening', () => {
     });
 });
 
+describe('team colors', () => {
+    const colorsButton = (root) => deep(root)
+        .find((n) => (n.textContent || '').trim() === 'Team colors');
+
+    test('the Team colors button sits between How to play and the sound, and the card comes back to the book', async () => {
+        await boot();
+        dom.el('welcome-actions').children[0].click();   // Take the field
+        await flushAsync();
+        const head = dom.el('playbook').querySelector('.playbook-head');
+        const row = head.children.find((n) => n.className === 'playbook-controls');
+        const colors = colorsButton(head);
+        expect(colors).toBeTruthy();
+        expect((row.children[0].textContent || '').trim()).toBe('How to play');
+        expect(row.children[1]).toBe(colors);
+        expect(row.children[2].className).toContain('playbook-mute');
+
+        colors.click();
+        // One dialog at a time, as with How to play.
+        expect(dom.el('playbook').hidden).toBe(true);
+        expect(dom.el('colors').hidden).toBe(false);
+        expect(dom.el('colors-x-jersey').focused).toBe(true);
+
+        dom.el('colors-x-jersey').value = '#241773';
+        fire(dom.el('colors-x-jersey'), 'change');
+        const C = await import('../www/xo/js/colors.min.js');
+        expect(C.jerseyOf(0)).toBe('#241773');
+
+        dom.el('colors-done').click();
+        expect(dom.el('colors').hidden).toBe(true);
+        expect(dom.el('playbook').hidden).toBe(false);
+        expect(colors.focused).toBe(true);
+        expect(JSON.parse(localStorage.getItem('exes-n-ohs-team-colors')).teams[0].jersey).toBe('#241773');
+    });
+
+    test('saved colors are in place before anything is built, so the opening wears them', async () => {
+        localStorage.setItem('exes-n-ohs-team-colors', JSON.stringify({
+            v: 1, teams: { 0: { jersey: '#4b2e83', helmet: null }, 1: { jersey: '#ffb612', helmet: '#000000' } },
+            field: '#1f5c2e',
+        }));
+        await boot({ watch: true });
+        const C = await import('../www/xo/js/colors.min.js');
+        expect(C.jerseyOf(0)).toBe('#4b2e83');
+        expect(C.helmetOf(1)).toBe('#000000');
+    });
+
+    test('the console hook dresses the teams, keeps it, and puts it all back', async () => {
+        await boot();
+        const C = await import('../www/xo/js/colors.min.js');
+        expect(JSON.parse(window.xo.colors()).teams[0].jersey).toBe('#ff992c');
+        window.xo.colors({ x: '#241773', o: '#ffb612', oHelmet: '#000000' });
+        expect(C.jerseyOf(0)).toBe('#241773');
+        expect(C.helmetOf(1)).toBe('#000000');
+        const saved = JSON.parse(localStorage.getItem('exes-n-ohs-team-colors'));
+        expect(saved.teams[1]).toEqual({ jersey: '#ffb612', helmet: '#000000' });
+        // The field too, with the warning the card will show.
+        const answer = JSON.parse(window.xo.colors({ field: '#ffb612' }));
+        expect(C.fieldColor()).toBe('#ffb612');
+        expect(answer.warnings).toEqual([
+            "The O's jerseys are close to the field color, so those players may be hard to see.",
+        ]);
+        expect(JSON.parse(localStorage.getItem('exes-n-ohs-team-colors')).field).toBe('#ffb612');
+        window.xo.colors('reset');
+        expect(C.isDefault()).toBe(true);
+        expect(localStorage.getItem('exes-n-ohs-team-colors')).toBeNull();
+    });
+});
+
 describe('the opening for somebody who asked not to be moved about', () => {
     test('is the shorter, held version, and still ends on the welcome card', async () => {
         const plain = globalThis.window.matchMedia;

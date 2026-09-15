@@ -150,6 +150,15 @@ describe('the opening, as drawn', () => {
         expect(Math.abs(long.x * plan.tipDir.x + long.z * plan.tipDir.z) / long.length()).toBeCloseTo(1, 6);
         expect(Math.abs(long.y)).toBeLessThan(1e-9);
 
+        // THE COOLER IS THE HOME TEAM'S, in the home team's jersey as it is now.
+        const colors = await import(js('colors.min.js'));
+        const body = cooler.children[0];
+        expect(`#${body.material.color.getHexString()}`).toBe(colors.jerseyOf(0));
+        colors.setColors({ teams: { 0: { jersey: '#4b2e83' } } });
+        Props.applyOpeningProps(O.propsAt(plan, plan.hit + 3));
+        expect(`#${body.material.color.getHexString()}`).toBe('#4b2e83');
+        colors.resetColors();
+
         Props.hideOpeningProps();
         expect(group.visible).toBe(false);
         expect(Props.openingPropsShowing()).toBe(false);
