@@ -234,6 +234,7 @@ export function snap(play) {
 export function tick(play) {
     if (!play.live) return;
     play.frame += 1;
+    landLeaps(play);
     for (const obj of play.game.objects) {
         // BENCHED PLAYERS DO NOT TICK.
         //
@@ -786,8 +787,12 @@ export function markHeading(play) {
  * is what QA watched.
  *
  * It arrives as a set of POSITION NAMES and lands as a plain boolean on a plain
- * object, so nothing here has to know what a mesh is and PLANNING D1 holds:
- * `motion.checkCatch` reads `state.airborne` and asks no further questions.
+ * object, so nothing here has to know what a mesh is and PLANNING D1 holds.
+ *
+ * WHAT ARRIVES IS WHO HAS LEFT HIS FEET, NOT WHO MAY CATCH YET. That is
+ * `state.leaping`. `motion.checkCatch` reads `state.airborne`, and `landLeaps`
+ * raises it on the simulation's own clock once the ball gets to him. See
+ * `ballArrived` for why that moved out of the render loop.
  */
 export function markAirborne(play, positions) {
     const up = positions || new Set();
@@ -795,10 +800,96 @@ export function markAirborne(play, positions) {
     for (const obj of play.game.objects) {
         if (!obj.state || !obj.settings) continue;
         const now = up.has(obj.settings.position);
-        obj.state.airborne = now;
+        if (now && !obj.state.leaping) obj.state.leapFor = 0;
+        obj.state.leaping = now;
+        // Back on the grass is back to the ported boxes, at once.
+        if (!now) obj.state.airborne = false;
         if (now) count += 1;
     }
     return count;
+}
+
+/**
+ * HOW LONG A LEAPING MAN WAITS FOR THE BALL AT MOST, in seconds.
+ *
+ * `jump.backstop` is written as a fraction of the lift, because that is how it
+ * reads on screen. This is the moment on the rise that he reaches it, off the
+ * same warped sine `view.jumpLift` draws: the rise is the first `peakAt` of the
+ * hang and covers the first half of the sine.
+ */
+export function leapBackstop() {
+    const J = CFG.pose.jump;
+    const back = typeof J.backstop === 'number' ? Math.min(1, Math.max(0, J.backstop)) : 1;
+    const raw = typeof J.peakAt === 'number' ? J.peakAt : 0.5;
+    const peak = Math.min(0.95, Math.max(0.05, raw));
+    return J.hang * peak * 2 * (Math.asin(back) / Math.PI);
+}
+
+/**
+ * ...AND WHETHER THE SIMULATION MAY HAND HIM THE BALL YET.
+ *
+ * QA ROUND TWENTY-SEVEN, ITEM 6. `motion.checkCatch` gives an airborne receiver
+ * a box as wide as the jump's own range in every direction and excuses him the
+ * height gate, and the jump only fires when the ball is ALREADY inside that
+ * range. So a man reported airborne on his first frame has the ball before he
+ * has left the grass: a receiver catching a pass and then leaping.
+ *
+ * HE WAITS FOR THE BALL TO ARRIVE RATHER THAN FOR A CLOCK. A fixed delay was
+ * measured and refused (see `jump.arriveFirst`); the ball's CLOSEST APPROACH
+ * costs nothing, because the nearest point of a path that came inside the box
+ * is inside the box. `gap` is this step's distance from the ball and `was` is
+ * the last step's, so "it has stopped getting closer" is the whole test, and
+ * `since` against `leapBackstop` covers an arc that never turns over.
+ *
+ * AND IT IS ASKED ON THE SIMULATION'S CLOCK, NEVER THE DISPLAY'S. It used to
+ * run in view.js once per rendered frame, and the answer reached the catch one
+ * rendered frame later again. The ball is inside a leaping man's reach for a
+ * median of 75 milliseconds, so the game's hardest catches depended on the
+ * visitor's frame rate. Measured over 2,868 throws, 15 point completions ran
+ * 49% at 30fps against 67% at 60, with 124 incompletions after a jump against
+ * 32, and a display dropping frames was exactly "he jumps and it goes through
+ * his hands". On the simulation's clock that is 79% and 80%, and 2 and 9.
+ *
+ * PURE, AND THE LATCH IS THE CALLER'S. Once he is airborne he stays airborne
+ * for the rest of the jump.
+ */
+export function ballArrived(gap, was, since) {
+    const J = CFG.pose.jump;
+    if (J.arriveFirst === false) return true;
+    if (since >= leapBackstop()) return true;
+    if (!(was >= 0) || !(gap >= 0)) return false;
+    return gap >= was;
+}
+
+/**
+ * ONE STEP OF EVERY LEAP, run at the top of `tick` so the catch below it sees
+ * the answer on the same step.
+ *
+ * The man the ball was thrown at has his distance from it kept on every step of
+ * the flight, not only once he is up, so the first step of a leap already has
+ * something to compare against and a ball that is past its nearest point is
+ * his straight away rather than one step later.
+ */
+export function landLeaps(play) {
+    const game = play.game;
+    const ball = game.objects.find(isBall);
+    const st = play.playState.state;
+    const flying = !!ball && !(st.ball && st.ball.caught);
+    const step = 1 / CFG.simHz;
+    for (const obj of game.objects) {
+        if (!obj.state || !obj.settings || isBall(obj)) continue;
+        const s = obj.state;
+        if (!s.leaping && obj.settings.position !== game.throwTo) continue;
+        const gap = flying
+            ? Math.hypot(ball.coords.x - obj.coords.x, ball.coords.y - obj.coords.y) : -1;
+        if (s.leaping) {
+            if (!s.airborne) {
+                s.airborne = ballArrived(gap, s.ballGap >= 0 ? s.ballGap : -1, s.leapFor || 0);
+            }
+            s.leapFor = (s.leapFor || 0) + step;
+        }
+        s.ballGap = gap;
+    }
 }
 
 /**

@@ -15,6 +15,10 @@
  * factor, so when a position looks wrong there is exactly one place to look.
  */
 
+// The ladder, and nothing else. scoring.js is pure and imports nothing, so the
+// catch zones below can be cut from the same bands the grass is painted with.
+import { ladderBands } from './scoring.min.js';
+
 /** Freeze a config tree so a stray assignment fails loudly in development
  *  instead of quietly retuning the game three modules away. */
 function deepFreeze(obj) {
@@ -306,6 +310,36 @@ const JUMP_RANGE = 1.5;
  * defender's share of it rises to a full share, because a ball hanging in the
  * air that long is one a defender has time to get under.
  */
+/**
+ * ...AND A SHORT PASS SHOULD BE CAUGHT, WHICH IS WHERE THE RECEIVER STANDS.
+ *
+ * QA: on a desktop, a lot of short passes into the 5 and 15 zones fell
+ * incomplete, and a throw to a man still in the 0 zone should almost never
+ * miss. Keyed by the POINTS of the painted band under the receiver's feet at
+ * the moment of the catch, multiplying his box on top of `CATCH_SCALE` and the
+ * length falloff. A defender's box is untouched, so this buys catches and not
+ * interceptions. Measured over 2,100 throws at 60fps (all 17 plays, six release
+ * times, every receiver, random coverage), by the band he was standing in:
+ *
+ *     box in the 0 / 5 / 15 zones     0 pt    5 pt   15 pt   intercepted
+ *     1 / 1 / 1 (as it was)            56%     80%     72%     5.6%
+ *     3 / 1.5 / 1.3                    94%     87%     73%     6.5%
+ *     3 / 1.8 / 1.5                   100%     89%     73%     5.8%
+ *     3 / 2.2 / 1.8                    94%     91%     74%     6.6%
+ *     4 / 2.6 / 2.2                    94%     93%     76%     5.8%
+ *
+ * 3 / 1.8 / 1.5 takes the 0 zone to "almost always" and most of what the 5 zone
+ * has, before the box gets wide enough to be seen: at 1.8 a receiver can take
+ * a ball about a metre off his shoulder, and the catch's quarter second
+ * handover is what hides that. The turnover rate does not move.
+ *
+ * The 0 zone is mostly one throw: a pitch to the back on run2, aimed inside the
+ * quarterback's own body space where `play.separate` will not let him reach it.
+ * The 15 zone barely answers to the box, see `pose.jump.reachZones` for what
+ * does.
+ */
+const CATCH_ZONES = { 0: 3, 5: 1.8, 15: 1.5 };
+
 const CATCH_NEAR = 14;     // metres: below this a throw is unchanged
 const CATCH_FAR = 30;      // ...and at this it is as hard as it gets
 const CATCH_FAR_SCALE = 0.42;   // what the receiver's box is multiplied by there
@@ -551,6 +585,11 @@ function formationSettings() {
         catchNear: CATCH_NEAR / UNITS_TO_METRES,
         catchFar: CATCH_FAR / UNITS_TO_METRES,
         catchFarScale: CATCH_FAR_SCALE,
+        // The painted bands that widen a receiver's box, cut from the scoring
+        // ladder so they are the zones on the grass. See `CATCH_ZONES`.
+        catchZones: ladderBands(SIM.lineInterval)
+            .filter((band) => CATCH_ZONES[band.points])
+            .map((band) => ({ from: band.from, to: band.to, scale: CATCH_ZONES[band.points] })),
         // How close to his line counts as on it, in FIELD UNITS. See
         // `steerDeadband` in motion.js for what the ported steer does without
         // it, and `STEER_DEADBAND` above for why this is the value.
@@ -1765,6 +1804,30 @@ const XO_CONFIG = {
              * went 50% to 61%. Keyed on the throw it does not move at all.
              */
             zones: [15, 30],
+            /**
+             * ...AND WHERE HE GOES UP FOR A BALL HE IS ONLY REACHING FOR.
+             *
+             * QA: short passes into the 15 zone fall incomplete. With the
+             * catch box widened there (`CATCH_ZONES`) it barely moved, because
+             * what is left is a ball going over his head that he never jumped
+             * for: the hidden ceiling described at `view.jumpCommit`.
+             *
+             *     reachZones     5 pt    15 pt   30 pt   50 pt   jumps, 15 pt
+             *     none            91%     78%     73%     41%       71%
+             *     [15]            91%     88%     66%     33%       88%
+             *     [0, 5, 15]      95%     87%     70%     39%       87%
+             *
+             * By where the ball was aimed, 2,150 throws at 60fps with the zone
+             * boxes in. The 30 and 50 columns are a few hundred throws each
+             * and move inside their own noise. At 30fps [15] takes the 15 zone
+             * from 74% to 89%.
+             *
+             * Keyed on where the ball was aimed, like `zones`. The 5 zone was
+             * tried and left out: it bought 4 points of completions for a
+             * receiver leaving his feet on three throws in four, where the box
+             * alone takes it most of the way.
+             */
+            reachZones: [15],
 
             /**
              * WHERE THE TOP OF THE JUMP IS, as a fraction of the hang, and it
@@ -2876,6 +2939,95 @@ const XO_CONFIG = {
          *  at each whistle by progress.js, cleared when a game ends or is
          *  started over. Named in www/privacy.html like every other key here. */
         game: 'exes-n-ohs-game',
+        /** The team and field colors a visitor chose (colors.js). Removed again
+         *  when they are all back to the game's own. */
+        colors: 'exes-n-ohs-team-colors',
+    },
+
+    /**
+     * THE ARITHMETIC THAT KEEPS A VISITOR'S COLORS READABLE (colors.js).
+     *
+     * `markSwitch` is the WCAG contrast against white below which the X or O on
+     * a jersey turns `darkMark`: the game's light blue is 1.65 and keeps its white
+     * mark, a yellow or white jersey is under 1.3 and does not. `fanShade` is the
+     * OKLab lightness step between a team's fans. `sparkLightness` is how bright
+     * a team color must be to show as a firework, which is added light.
+     */
+    colors: {
+        markSwitch: 1.6,
+        darkMark: '#15181d',
+        fanShade: 0.06,
+        sparkLightness: 0.72,
+        /** The card stunt keeps its first ink that reaches this against the cards. */
+        cardContrast: 7,
+        /** Seconds between repaints of the field's texture while its picker is
+         *  being dragged (colors-ui.js). Each one is a 2048-pixel upload. */
+        repaintEvery: 0.1,
+        /** Seconds after the card opens during which a tap inside it is ignored:
+         *  the tap that opened it, or a second one from somebody who has not
+         *  seen it appear yet, must not open a color picker (colors-ui.js). */
+        armFor: 0.45,
+        /**
+         * THE PLAYERS TURNING IN THE CARD (colors-preview.js). `px` is the
+         * largest size in buffer pixels, `turn` radians a second, `calmYaw` the
+         * three-quarter view held still for reduced motion, `clear` the card
+         * behind them, `disc` the turf under their feet in metres. The camera
+         * is framed on the figure as it was built: `margin` times its height
+         * fills the frame, aimed `aim` of the way up it and raised `lookDown`
+         * of it. Measured on every vertex through a full turn, the player runs
+         * from 0.84 at the helmet to -0.80 at the shoes and the disc's front
+         * edge reaches -0.90, all inside the frame. The first numbers tried cut
+         * the shoes and the disc off at the bottom.
+         */
+        preview: {
+            px: 256, fov: 26, turn: 0.7, calmYaw: -0.55, clear: '#151920',
+            disc: 0.62, margin: 1.25, aim: 0.48, lookDown: 0.1,
+        },
+
+        /**
+         * WHEN TWO COLORS ARE TOO CLOSE TO TELL APART ON THE FIELD, in plain OKLab
+         * distance (`colors.difference`). Set against real pairs:
+         *
+         *     should warn                      should not
+         *     Cowboys / Patriots navy 0.013    orange / red                0.237
+         *     Vikings / LSU purple    0.029    Dolphins aqua / light blue  0.257
+         *     Chiefs / Bucs red       0.043    orange / light blue (ours)  0.259
+         *     Eagles / Jets green     0.058    white / silver              0.260
+         *     Ravens purple / Vikings 0.096    red / navy                  0.458
+         *     Broncos / our orange    0.146    Ravens purple / gold        0.612
+         *     Ravens purple / black   0.159
+         *     black / navy            0.207
+         *
+         * and against today's grass: Jets green 0.036, Eagles 0.094 and Packers
+         * 0.129 should warn, while black 0.241, navy 0.252, dark purple 0.256 and
+         * bright lime 0.315 should not. `warnTeams` and `warnField` sit in those
+         * gaps, and screenshots of the real field can move them.
+         *
+         * A DARK-COLOR DISCOUNT WAS TRIED AND TAKEN OUT. The thinking was that a
+         * dark jersey loses its hue first under floodlights, so the hue part of
+         * the distance should count for less. Measured, it moved no pair across
+         * either threshold: plain distance separates this table exactly as well.
+         */
+        warnTeams: 0.22,
+        warnField: 0.15,
+
+        /**
+         * THE FIELD FROM ONE COLOR (`turfFrom`). Today's green keeps every one of
+         * its tuned values. Any other color keeps white paint while it reaches
+         * `paintContrast` and turns `darkPaint` when it does not; keeps the gold
+         * scrimmage line while that reads; and keeps the dark red end zones unless
+         * they are too close to the field, trying `endZones` in order.
+         */
+        paintContrast: 3,
+        darkPaint: '#15181d',
+        scrimmageContrast: 1.8,
+        // Slate last, for a field too dark for charcoal or navy to show on.
+        endZones: ['#7a1220', '#23262b', '#14213d', '#5d636d'],
+        endZoneDifference: 0.12,
+        /** Two colors this many degrees apart round the wheel, and both at least
+         *  this colorful, are the same hue (`sameHue`). */
+        hueNear: 35,
+        hueChroma: 0.05,
     },
 
     /**
@@ -2972,6 +3124,217 @@ const XO_CONFIG = {
      * flashes a second (WCAG 2.3.1), the same ceiling High Water's lightning
      * keeps.
      */
+    /**
+     * THE OPENING, before the welcome card, on every page load (opening.js).
+     *
+     * Steve, 2026-09-15: skippable, cleared back to the welcome state when it
+     * ends or is skipped, "Make them pay." and no team named anywhere a visitor
+     * can see or hear it. Plan in specs/xo-opening-plan.md.
+     *
+     * `keys` are `[seconds, shot]`: between two keys the camera eases from one
+     * shot to the next, two keys naming the same shot hold it, and two keys at
+     * the same moment are a cut. The last
+     * key is `play`, which is the shot the welcome card sits over.
+     */
+    opening: {
+        length: 11.6,
+        keys: [
+            [0, 'wide'], [0.3, 'wide'], [2.1, 'huddle'], [2.3, 'huddle'],
+            // The visitors march in, and the camera pushes in on the huddle in
+            // time for the shoulder, which lands between 3.9 and 5.0 seconds
+            // depending on where the formation put the man who takes it.
+            [3.3, 'side'], [3.5, 'side'], [3.9, 'contact'], [5.4, 'contact'],
+            [6.3, 'cooler'], [7.3, 'cooler'], [8.1, 'captain'], [8.35, 'captain'],
+            // A REVERSE SHOT IS A CUT. Eased, the camera flew through the middle
+            // of both teams to get to the other side of them.
+            [8.35, 'reverse'], [9.6, 'reverse'], [11.6, 'play'],
+        ],
+        /** Seconds the title is fully up between, less `titleFade` at each end. */
+        title: [8.8, 10.6],
+        titleFade: 0.35,
+        /**
+         * THE CALM VERSION IS THREE HELD TABLEAUX JOINED BY CUTS, for anybody
+         * who asked not to be moved about: the cooler, the point, the answer.
+         */
+        calm: {
+            length: 6.4,
+            keys: [[0, 'cooler'], [2.0, 'captain'], [4.0, 'reverse'], [6.4, 'play']],
+            title: [4.0, 6.2],
+        },
+        /**
+         * EVERY SHOT BY WHAT IT HAS TO CONTAIN, around a spot `at` metres from
+         * midfield (x downfield, z toward the home stand), solved per screen
+         * shape by `milestones.fitShot`. `wide` and `play` are not here: they
+         * are the stadium shot and the play camera.
+         */
+        /** The steps a low shot climbs through until it sees over the stands. */
+        climb: [0.35, 0.5, 0.65, 0.8, 1.0, 1.3],
+        shots: {
+            // The huddle at midfield, from behind the near end.
+            huddle: { at: { x: -6.5, z: -2 }, half: { x: 7, z: 6 }, top: 4, aimY: 1.8,
+                from: { x: -1, y: 0.5, z: 0.12 }, fov: 40, margin: 0.08, floor: 2 },
+            // From over the away fans' shoulders: the visitors march in off their
+            // own sideline toward the huddle, the home stand beyond.
+            side: { at: { x: -6.5, z: -5.5 }, half: { x: 5, z: 7 }, top: 4.2, aimY: 2,
+                from: { x: 0.15, y: 0.3, z: -1 }, fov: 40, margin: 0.06, floor: 2, narrow: 0.6 },
+            // The walk-through and the shoulder.
+            contact: { at: { x: -6.5, z: -2 }, half: { x: 4.5, z: 3.8 }, top: 4, aimY: 2.2,
+                from: { x: 0.15, y: 0.3, z: -1 }, fov: 34, margin: 0.06, floor: 2, narrow: 0.7 },
+            // The cooler on the home sideline, the home fans behind it.
+            cooler: { at: { x: -3, z: 9 }, half: { x: 7.5, z: 2 }, top: 3.8, aimY: 2,
+                from: { x: 0.05, y: 0.35, z: -1 }, fov: 36, margin: 0.06, floor: 2, narrow: 0.6 },
+            // Close on the man who knocked it over, pointing down the lens.
+            captain: { at: { x: -6.5, z: 9.1 }, half: { x: 1.6, z: 1.2 }, top: 4.2, aimY: 2.6,
+                from: { x: 0.3, y: 0.35, z: -1 }, fov: 30, margin: 0.06, floor: 2 },
+            // The answer: the home team, from the cooler's side of the field.
+            reverse: { at: { x: -6.5, z: -2 }, half: { x: 6, z: 3.5 }, top: 4, aimY: 2,
+                from: { x: 0.1, y: 0.3, z: 1 }, fov: 38, margin: 0.08, floor: 2, narrow: 0.6 },
+        },
+        /**
+         * WHERE IT HAPPENS, in metres from midfield (x downfield, z toward the
+         * home stand), and how the bodies are spaced. A body is 1.45m across.
+         */
+        stage: {
+            /** On the home team's own half, a little toward the visitors' side. */
+            huddle: { x: -6.5, z: -2 },
+            ring: 3.1,
+            /** How far from the lane the visitors walk down a man steps aside. */
+            part: 2.5,
+            /** ...and the one who is about to get a shoulder does not quite. */
+            partBumped: 2.0,
+            /** Where the home team comes from: past the near end line, under the
+             *  camera, in the shape of the huddle spread by `spread` across. */
+            homeFrom: { x: -26, spread: 1.3 },
+            /** Where the front of the visitors' column starts: their own sideline. */
+            awayFrom: { z: -12.5 },
+            /** The visitors walk two abreast. */
+            column: { side: 0.8, rowGap: 1.9 },
+            /** How far past the huddle the last row stops. */
+            through: 0.9,
+            /** The home team's cooler, on the home sideline. */
+            cooler: { x: -6.5, z: 10.6 },
+            /**
+             * The captain stands this far from the cooler, and it is MEASURED
+             * OFF THE DRAWN RIG, not off the pose: with both arms out (`wide`)
+             * the hand settles 1.07m from his middle at 2.81m up, a good deal
+             * short of where the pose's own numbers would put it. At 1.25m
+             * the arm goes a quarter of a metre into the cooler.
+             */
+            reach: 1.25,
+            /**
+             * The visitors' line in front of the home stand, as x from the
+             * cooler, NEAREST FIRST: a smaller team takes the front of the list.
+             * It keeps upfield of the formation's receivers, so the home team's
+             * walk back does not pass through it.
+             */
+            danceZ: 8.6,
+            dance: [2.2, -2.2, 3.9, 5.6, 7.3, 9.0, 10.7],
+            /** How far a shoulder knocks a man sideways, metres. */
+            knock: 1.0,
+            /** How far apart two bodies are kept, metres. See `opening.bake`. */
+            clearance: 1.5,
+        },
+        /**
+         * THE BODIES ARE WORKED OUT ONCE AT 60HZ, following the script with
+         * `lag` seconds of ease and pushed apart in `passes` sweeps, and the
+         * last `settle` seconds blend exactly onto the formation (opening.js
+         * `bake`).
+         */
+        bake: { hz: 60, lag: 0.06, passes: 3, settle: 0.35, contact: 0.4, fastest: 18, body: 0.65 },
+        /** Seconds. See the beat table in specs/xo-opening-plan.md. */
+        beats: {
+            runOut: [0, 2.0],
+            runStagger: 0.15,
+            breakUp: [2.05, 2.6],
+            visitors: [2.5, 5.9],
+            partAt: [3.0, 3.6],
+            peel: [5.9, 6.9],
+            /** The swipe: a wind-up, a fast turn with the arm out, and back. */
+            swipeWind: [6.75, 6.95],
+            swipeSweep: [6.95, 7.1],
+            swipeBack: [7.1, 7.35],
+            dance: [7.0, 8.3],
+            point: [7.35, 8.35],
+            /** The home team turns on them where it stands, and answers. */
+            toLine: [8.35, 8.7],
+            menace: [8.7, 9.6],
+            lineUp: [9.6, 11.2],
+            /** The home team walks back first, the visitors after. */
+            homeBack: [9.6, 10.9],
+            awayBack: [10.1, 11.2],
+        },
+        /** The small movements, in metres and radians. */
+        moves: {
+            hop: 0.33,
+            jab: 0.13,
+            shimmy: { roll: 0.26, hz: 3.2 },
+            /**
+             * THE SWIPE IS A TURN, because the rig's arms go where a pose puts
+             * them and nothing else: both arms out (`wide`), and the whole man
+             * turned through the cooler. `wind` is radians past side-on before
+             * the sweep and `follow` radians past it after, so the arm crosses
+             * the cooler `wind / (wind + follow)` of the way through the sweep.
+             */
+            swipe: { wind: 0.6, follow: 0.7 },
+            /** Knocked aside: how fast, how far over, and how quickly he rights. */
+            knock: { time: 0.22, roll: 0.3, lean: 0.12, decay: 0.35, out: 0.4 },
+            /** The answer. A placeholder until step 4 builds its own arms. */
+            menace: { lean: 0.14, stamp: 0.12, hz: 2.5 },
+        },
+        /**
+         * THE COOLER AND ITS TABLE, in metres at figure scale (a 1m tall man is
+         * 2.2m here, so a cooler half a metre tall is 1.15m). The cooler tips
+         * off the table the way the arm was travelling, the lid flies, the water
+         * goes, and the grass under it darkens. Drawn by opening-props.js.
+         */
+        props: {
+            /**
+             * Tall enough that the swiping hand (2.81m up) crosses the cooler's
+             * body and not the air over its lid, and narrow front to back so
+             * the cooler can sit at the edge nearest the captain and his body
+             * stays clear of the table.
+             */
+            table: { width: 2.6, depth: 1.2, height: 1.85, top: 0.1, leg: 0.12 },
+            cooler: { radius: 0.46, height: 1.15, lid: 0.16 },
+            /** The cooler itself is the home team's jersey (colors.js). */
+            colors: { lid: 0xf4f1ea, table: 0xd9d6cf, legs: 0x5d6168 },
+            /** Seconds to go over on the table, then to fall off it. */
+            tipTime: 0.24,
+            fallTime: 0.3,
+            /** How far past the table's edge it lands, metres. */
+            fallOut: 0.5,
+            gravity: 14,
+            lid: { at: 0.12, out: 3.2, up: 4.5 },
+            splash: {
+                count: 90, life: 0.75, over: 0.45,
+                speed: [2.5, 6.5], up: [1.2, 4.5], spread: 1.1,
+                size: 0.22, color: 0xdff3ff,
+            },
+            puddle: { radius: 1.5, stretch: 1.4, grow: 0.9, color: 0x0d2410, opacity: 0.5 },
+        },
+        /** Positions tried in order for the three parts with a job. */
+        cast: {
+            captain: ['s1', 's2', 'db1'],
+            bumper: ['db1', 'db2', 'db3', 'db4'],
+        },
+        /** When each stand gets up: the home fans for their team, the away
+         *  sections for the visitors. */
+        cheers: [
+            { at: 0.3, team: 0, big: true },
+            { at: 2.7, team: 1, big: false },
+            { at: 7.1, team: 1, big: true },
+            { at: 9.0, team: 0, big: true },
+        ],
+        /** Quiet frames run when it ends, so arms are down and the quarterback
+         *  is back over the ball before the welcome card comes up. */
+        settleFrames: 12,
+        copy: {
+            title: 'Make them pay.',
+            /** The one sentence a screen reader gets, as the title arrives. */
+            spoken: 'The other team knocks over your water cooler. Make them pay.',
+        },
+    },
+
     milestones: {
         thresholds: [100, 200, 300, 400, 500],
         /** The ones with a show built. A threshold missing from here is

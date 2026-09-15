@@ -32,6 +32,7 @@ import {
     cardLayout, cardSpot, NEUTRAL,
 } from './stunt.min.js';
 import { buildFanParts, POSES, HAIR } from './fans.min.js';
+import { jerseyOf, shadesOf, withTeamColors } from './colors.min.js';
 
 const M = CFG.milestones;
 
@@ -221,7 +222,7 @@ export function beginShow(level, { seed = 1, calm = false } = {}) {
     }
     if (level === 200) {
         buildSparks();
-        plan = planFireworks({ ...fireworksSetup(level), seed });
+        plan = planFireworks({ ...fireworksSetup(level), seed, F: teamFireworks(M.fireworks) });
     }
     if (level === 300) {
         buildBlimp();
@@ -236,7 +237,7 @@ export function beginShow(level, { seed = 1, calm = false } = {}) {
         plan = planFireworks({
             ...finaleFireworksSetup(),
             seed,
-            F: { ...M.fireworks, ...M.finale.fireworks },
+            F: teamFireworks({ ...M.fireworks, ...M.finale.fireworks }),
         });
         buildCrowd();
         buildTrophy();
@@ -247,7 +248,8 @@ export function beginShow(level, { seed = 1, calm = false } = {}) {
             area: { fromX: len / 2 - 17, toX: len / 2 + 17, fromZ: -12, toZ: 9 },
             from: F.confetti.from,
             seed: seed + 1,
-            palette: [...F.confetti.palette, M.fireworks.palette[0]],
+            // Paper in the teams' own colors, as they are now.
+            palette: withTeamColors([...F.confetti.palette, M.fireworks.palette[0]]),
         });
         buildConfetti(confettiPlan.count);
         stuntMessages = crowd ? {
@@ -255,6 +257,12 @@ export function beginShow(level, { seed = 1, calm = false } = {}) {
             five: pixelMessage('500', crowd.cols).lit,
         } : null;
     }
+}
+
+/** The fireworks config with the teams' colors in it, lifted to glow: sparks are
+ *  added light, so a navy jersey would otherwise burst as nothing. */
+function teamFireworks(F) {
+    return { ...F, palette: withTeamColors(F.palette, { spark: true }) };
 }
 
 // ---- The blimp (300) ---------------------------------------------------------
@@ -489,7 +497,8 @@ function buildCrowd() {
         far.length * 2 * K.fanEvery, 'milestone-cards');
 
     const colours = (list) => list.map((h) => new THREE.Color(h));
-    const shirts = { 0: colours(K.shirts[0]), 1: colours(K.shirts[1]), [NEUTRAL]: colours(K.shirts.neutral) };
+    // Each team's fans wear shades of its jersey as the visitor has it now.
+    const shirts = { 0: colours(shadesOf(jerseyOf(0))), 1: colours(shadesOf(jerseyOf(1))), [NEUTRAL]: colours(K.shirts.neutral) };
     const skins = colours(K.skins);
     const trousers = colours(K.pants);
     const hairColours = colours(K.hairColours);
@@ -508,6 +517,31 @@ function buildCrowd() {
 
     crowd = { order, regulars, far, cols, body, arms, hair, hairSlot, cards, all, materials: [tinted, painted] };
     return crowd;
+}
+
+/**
+ * DRESS THE FANS AGAIN in shades of the jerseys colors.js holds now: every
+ * team fan's shirt and the sleeves of all three arm poses. Neutral fans keep
+ * their own jackets. Nothing is rebuilt, only the per-fan tints.
+ */
+export function applyCrowdColors() {
+    if (!crowd) return 0;
+    const shirts = {
+        0: shadesOf(jerseyOf(0)).map((h) => new THREE.Color(h)),
+        1: shadesOf(jerseyOf(1)).map((h) => new THREE.Color(h)),
+    };
+    let changed = 0;
+    crowd.order.forEach((seat, i) => {
+        const team = shirts[seat.team];
+        if (!team) return;
+        const shirt = team[seat.shirt % team.length];
+        crowd.body.shirt.setColorAt(i, shirt);
+        for (const pose of POSES) crowd.arms[pose].sleeve.setColorAt(i, shirt);
+        changed += 1;
+    });
+    const touched = [crowd.body.shirt, ...POSES.map((pose) => crowd.arms[pose].sleeve)];
+    for (const mesh of touched) if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    return changed;
 }
 
 const HIDDEN = { current: null };

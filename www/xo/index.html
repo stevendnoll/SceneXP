@@ -22,7 +22,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="A 3D American football game where you are always on offense. Call a play, snap the ball, and pick your receiver. Ten plays make a game, and the farther you carry it the more it is worth.">
+    <meta name="description" content="A 3D football game where you are always on offense. Call a play, pick your receiver, and dress both teams and the field in your favorite team's colors.">
     <meta name="theme-color" content="#080b12">
     <meta name="author" content="Steve Noll">
 
@@ -35,7 +35,7 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="X's and O's">
-    <meta property="og:description" content="Call a play, snap the ball, pick your receiver. Ten plays make a game, and the farther you carry it the more it is worth.">
+    <meta property="og:description" content="Call a play, snap the ball, pick your receiver. Dress the X's and the O's as your favorite team and its rival, then make them pay.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/xo/">
@@ -64,7 +64,7 @@
          one image and has no type property. -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="X's and O's">
-    <meta name="twitter:description" content="A 3D football game where you are always on offense. Ten plays, and the farther you carry it the more it is worth.">
+    <meta name="twitter:description" content="A 3D football game where you are always on offense. Pick your team's colors, call a play, and the farther you carry it the more it is worth.">
     <meta name="twitter:image" content="https://www.scenexp.com/xo/assets/og-xo.jpg?v=1">
     <meta name="twitter:image:alt" content="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides.">
 
@@ -78,7 +78,7 @@
       "url": "https://www.scenexp.com/xo/",
       "name": "X's and O's",
       "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
-      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game.",
+      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival.",
       "genre": ["Sports", "Strategy"],
       "gamePlatform": "Web browser",
       "applicationCategory": "Game",
@@ -104,7 +104,7 @@
     <title>X's and O's</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=11" as="style">
+    <link rel="preload" href="css/experience.min.css?v=15" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
@@ -113,7 +113,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=11">
+    <link rel="stylesheet" href="css/experience.min.css?v=15">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -307,6 +307,71 @@
         </div>
     </div>
 
+    <!-- THE TEAM COLORS CARD (colors-ui.js), opened from the playbook's header. A
+         jersey and a helmet for each team and one field color, in the browser's
+         own color pickers, so there is no library and every visitor gets the
+         picker their device already has. Each picker has a visible label, the
+         warning is a polite live region rewritten only when what it says
+         changes, and Match jersey only appears once a helmet has a color of its
+         own. Team names never appear: a visitor knows these teams as the X's
+         and the O's. -->
+    <div id="colors" class="card-overlay" hidden>
+        <!-- tabindex="-1" so the card itself takes focus when it opens, without
+             joining the tab order. Focusing the first color picker instead opened
+             that picker on a phone, straight out of the tap on Team colors. -->
+        <div id="colors-panel" class="card-panel colors-panel" role="dialog" aria-modal="true"
+            aria-labelledby="colors-title" aria-describedby="colors-intro" tabindex="-1">
+            <h2 id="colors-title" class="card-title">Team colors</h2>
+            <p id="colors-intro" class="card-detail">Dress the X's and the O's in your team's colors and
+                your rival's, and pick a field for them to play on.</p>
+            <div class="colors-teams">
+                <section class="colors-team" aria-labelledby="colors-x-title">
+                    <h3 id="colors-x-title" class="colors-team-title">The X's</h3>
+                    <!-- A player in the colors being chosen, turning slowly on a
+                         disc of the chosen field (still for reduced motion).
+                         Hidden from screen readers: the pickers say it all. -->
+                    <canvas id="colors-x-preview" class="colors-preview" width="256" height="256"
+                        aria-hidden="true"></canvas>
+                    <div class="colors-row">
+                        <label for="colors-x-jersey">Jersey</label>
+                        <input id="colors-x-jersey" class="colors-input" type="color" value="#ff992c">
+                    </div>
+                    <div class="colors-row">
+                        <label for="colors-x-helmet">Helmet</label>
+                        <input id="colors-x-helmet" class="colors-input" type="color" value="#ff992c">
+                    </div>
+                    <button id="colors-x-match" class="colors-match" type="button"
+                        aria-label="Match jersey color on the X's helmet" hidden>Match jersey</button>
+                </section>
+                <section class="colors-team" aria-labelledby="colors-o-title">
+                    <h3 id="colors-o-title" class="colors-team-title">The O's</h3>
+                    <canvas id="colors-o-preview" class="colors-preview" width="256" height="256"
+                        aria-hidden="true"></canvas>
+                    <div class="colors-row">
+                        <label for="colors-o-jersey">Jersey</label>
+                        <input id="colors-o-jersey" class="colors-input" type="color" value="#9bcfff">
+                    </div>
+                    <div class="colors-row">
+                        <label for="colors-o-helmet">Helmet</label>
+                        <input id="colors-o-helmet" class="colors-input" type="color" value="#9bcfff">
+                    </div>
+                    <button id="colors-o-match" class="colors-match" type="button"
+                        aria-label="Match jersey color on the O's helmet" hidden>Match jersey</button>
+                </section>
+            </div>
+            <div class="colors-row colors-field">
+                <label for="colors-field">Field</label>
+                <input id="colors-field" class="colors-input" type="color" value="#1f5c2e">
+            </div>
+            <p id="colors-warning" class="colors-warning" role="status" aria-live="polite" hidden></p>
+            <div class="card-actions colors-actions">
+                <button id="colors-reset" class="hud-btn" type="button">Reset to original colors</button>
+                <button id="colors-done" class="hud-btn hud-btn-primary" type="button"
+                    aria-keyshortcuts="Escape">Done</button>
+            </div>
+        </div>
+    </div>
+
     <!-- THE PLAYBOOK (M3). Its contents are built by playbook-ui.js from the
          play table, because seventeen cards of identical shape are data, not
          markup.
@@ -383,6 +448,11 @@
          HUD. aria-hidden, because the number is announced once through
          #hud-live at the moment it lands, and a title fading in and out would
          otherwise be read out twice. hud.js drives its opacity per frame. -->
+    <!-- THE TITLE OVER THE OPENING, before the welcome card. Same arrangement as
+         the milestone title below: not a dialog, no focus, aria-hidden because
+         it is announced once through #hud-live, opacity driven by hud.js. -->
+    <p id="opening-title" class="opening-title" aria-hidden="true" hidden>Make them pay.</p>
+
     <div id="milestone" class="milestone" aria-hidden="true" hidden>
         <p class="milestone-kicker">Points</p>
         <p id="milestone-number" class="milestone-number">100</p>

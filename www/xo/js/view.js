@@ -829,6 +829,48 @@ export function beginStaging(spots, { delay = 0, walk = 0 } = {}) {
     staging.from.clear();
 }
 
+/**
+ * THE OPENING'S MEN, WHO ARE WHERE ITS SCRIPT SAYS AND NOWHERE ELSE.
+ *
+ * A Map of position to `{ x, z, team, running, pose }` from `opening.castAt`,
+ * handed over every frame. While it is set a named man is drawn at that spot,
+ * his stride and his facing are measured off the drawn movement exactly as a
+ * staged man's are, and `pose` goes through the same path a celebration entry
+ * does (facing, arms, lean, roll, hop). Nothing the play would say about him
+ * applies: no carry, no block, no reach.
+ */
+let script = null;
+const scriptPlaced = new Set();
+
+export function setScripted(cast) {
+    script = cast instanceof Map ? cast : null;
+}
+
+/**
+ * ...AND PUT THEM BACK ON THE GAME'S OWN FOOTING. Every scripted man's drawn
+ * history is dropped, so the next sync PLACES him where the simulation has him
+ * rather than easing from wherever the script left him, and he is stood upright
+ * facing the way his formation faces.
+ */
+export function resetScripted() {
+    if (script) {
+        for (const [position, man] of script) {
+            const figure = figureFor(position);
+            if (!figure) continue;
+            figure.userData.at = null;
+            figure.userData.cheerAt = null;
+            figure.userData.yaw0 = undefined;
+            figure.userData.mps = 0;
+            figure.userData.facing = man.team === 0 ? Math.PI / 2 : -Math.PI / 2;
+            figure.rotation.x = 0;
+            figure.rotation.z = 0;
+            figure.rotation.y = figure.userData.facing;
+        }
+    }
+    script = null;
+    scriptPlaced.clear();
+}
+
 export function resetStaging() {
     staging.at = -1;
     staging.spots = null;
@@ -977,6 +1019,26 @@ export function jumpClearance(span) {
 }
 
 /**
+ * HOW MUCH HE HAS TO WANT IT BEFORE HE LEAVES HIS FEET, 1 for fully committed.
+ *
+ * FULL COMMITMENT IS A HIDDEN CEILING ON THE JUMP. `reachersFor` measures from
+ * his CHEST and is only full inside `catching.close`, so a ball more than about
+ * half a metre over his fingertips never commits him, whatever `jump.lift`
+ * says. Across the whole field that ceiling is what keeps the jump an event and
+ * the deep ball hard: lifted everywhere, fifties went 44% to 84% complete.
+ *
+ * WHERE THE PASS WAS AIMED INTO `jump.reachZones` he goes up for any ball he is
+ * reaching for at all, and the range and the clearance still decide the rest.
+ * Keyed on the throw for the same reason `jumpClearance` is.
+ */
+export function jumpCommit(span) {
+    const J = CFG.pose.jump;
+    const aim = span === undefined ? flight.span : span;
+    if (!aim || aim.tx === undefined || !Array.isArray(J.reachZones)) return 1;
+    return J.reachZones.indexOf(bandAt(aim.tx, SIM.lineInterval).points) === -1 ? 1 : Number.MIN_VALUE;
+}
+
+/**
  * HOW FAR OFF THE GROUND A JUMP IS AT `t`, 0 to 1 of its hang, in metres.
  *
  * Up and down once. A sine rather than a parabola, because the hang at the top
@@ -1005,36 +1067,6 @@ export function jumpLift(t) {
     return Math.sin(Math.PI * u) * J.lift;
 }
 
-/**
- * ...AND WHETHER THE SIMULATION MAY HAND HIM THE BALL YET.
- *
- * QA ROUND TWENTY-SEVEN, ITEM 6. `motion.checkCatch` gives an airborne receiver
- * a box as wide as the jump's own range in every direction and excuses him the
- * height gate, and the jump only fires when the ball is ALREADY inside that
- * range. So a man reported airborne on his first frame has the ball before he
- * has left the grass, and the rest of the hang plays out afterwards: a receiver
- * catching a pass and then leaping.
- *
- * HE WAITS FOR THE BALL TO ARRIVE RATHER THAN FOR A CLOCK. A fixed delay was
- * measured and refused (see `jump.arriveFirst`); the ball's CLOSEST APPROACH
- * costs nothing, because the nearest point of a path that came inside the box
- * is inside the box. `gap` is this frame's distance from the ball and `was` is
- * last frame's, so "it has stopped getting closer" is the whole test, and
- * `lift` carries the backstop for an arc that never turns over.
- *
- * PURE, AND THE LATCH IS THE CALLER'S. Once he is airborne he stays airborne
- * for the rest of the jump: an answer re-derived every frame would drop him out
- * of the sky the moment the ball moved away again.
- */
-export function ballArrived(gap, was, lift) {
-    const J = CFG.pose.jump;
-    if (J.arriveFirst === false) return true;
-    const back = typeof J.backstop === 'number' ? J.backstop : 1;
-    if (lift >= J.lift * back) return true;
-    if (!(was >= 0) || !(gap >= 0)) return false;
-    return gap >= was;
-}
-
 function updateJump(figure, reach, at, live, delta) {
     const J = CFG.pose.jump;
     const u = figure.userData;
@@ -1049,8 +1081,9 @@ function updateJump(figure, reach, at, live, delta) {
 
     // FULLY COMMITTED, NOT MERELY INTERESTED. `reachersFor` ramps from
     // `catching.range` at 8m, which on a field with four receivers means
-    // somebody is always mildly interested in the ball.
-    if (!live || !(reach >= 1) || !flight.has) return 0;
+    // somebody is always mildly interested in the ball. Except where the pass
+    // was aimed into one of `jump.reachZones`: see `jumpCommit`.
+    if (!live || !(reach >= jumpCommit()) || !flight.has) return 0;
     if (Math.hypot(flight.x - at.x, flight.z - at.z) > J.range) return 0;
     const top = standingReach();
     // Clearly OVER HIS HEAD, and not so far over that no jump would get there.
@@ -1064,8 +1097,6 @@ function updateJump(figure, reach, at, live, delta) {
 /** Nobody is in the air between plays. */
 function clearJump(figure) {
     figure.userData.jumpAt = -1;
-    figure.userData.upFor = false;
-    figure.userData.ballGap = -1;
 }
 
 /**
@@ -1129,6 +1160,11 @@ export function stiffArmSide(away, facing) {
  * So the view reports and main.js carries it across as a plain flag on a plain
  * object, which keeps PLANNING D1 intact: play.js and motion.js still never
  * import THREE, and neither of them knows why somebody is airborne.
+ *
+ * It says who has LEFT HIS FEET, from the first frame of the jump. When the
+ * ball gets to him is the simulation's question, asked on its own clock (see
+ * `play.ballArrived`), because a frame rate is not a thing a catch should
+ * depend on.
  */
 const inTheAir = new Set();
 
@@ -1262,7 +1298,9 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // What, if anything, this man is doing about the play having just
         // ended well for his side. Null on every frame of every live play,
         // which is all but four seconds of the game.
-        const cheer = party ? (party.get(obj.settings.position) || null) : null;
+        const scripted = script ? (script.get(obj.settings.position) || null) : null;
+        const cheer = scripted ? scripted.pose
+            : (party ? (party.get(obj.settings.position) || null) : null);
 
         // THE DRAWN POSITION EASES TOWARD THE SIMULATED ONE, and that is what
         // turns stepped motion into movement. The simulation advances on a
@@ -1321,6 +1359,17 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             const k = stagingProgress();
             p = { x: start.x + (spot.x - start.x) * k, z: start.z + (spot.z - start.z) * k };
             stagedMoving = k < 1 && Math.hypot(spot.x - start.x, spot.z - start.z) > 0.05;
+        }
+        // THE OPENING OUTRANKS BOTH. His first scripted frame is a placement,
+        // not a step: measured as a step it would be a sprint across the field.
+        if (scripted) {
+            p = { x: scripted.x, z: scripted.z };
+            if (!scriptPlaced.has(obj.settings.position)) {
+                scriptPlaced.add(obj.settings.position);
+                figure.userData.at = { x: p.x, z: p.z };
+                figure.userData.cheerAt = null;
+            }
+            stagedMoving = !!scripted.running;
         }
 
         // HOW FAST HE IS ACTUALLY GOING, MEASURED FROM WHERE HE ACTUALLY WENT.
@@ -1440,26 +1489,13 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
                 { x: p.x, z: p.z }, opts.live, delta)
             : 0;
         /**
-         * ...AND THE SIMULATION IS NOT TOLD HE IS UP UNTIL THE BALL GETS THERE.
+         * ...AND THE SIMULATION IS TOLD ON THE FRAME HE GOES.
          *
          * `inTheAir` feeds the ported catch box and nothing about how he is
-         * drawn: the lift is applied below whatever this says, so he leaves the
-         * ground on the first frame either way. What waits is the CATCH. See
-         * `ballArrived`, and note the latch: once he is up he stays up for the
-         * rest of the jump.
+         * drawn. What waits for the ball is the CATCH, and it waits on the
+         * simulation's clock rather than this one: see `play.ballArrived`.
          */
-        if (airborne > 0) {
-            const gap = flight.has
-                ? Math.hypot(flight.x - p.x, flight.z - p.z) : -1;
-            if (!figure.userData.upFor) {
-                figure.userData.upFor = ballArrived(gap, figure.userData.ballGap, airborne);
-            }
-            figure.userData.ballGap = gap;
-            if (figure.userData.upFor) inTheAir.add(obj.settings.position);
-        } else {
-            figure.userData.upFor = false;
-            figure.userData.ballGap = -1;
-        }
+        if (mayJump && figure.userData.jumpAt >= 0) inTheAir.add(obj.settings.position);
 
         // AND HIS FEET GO ON THE GRASS, NOT THROUGH IT. The rig stands itself
         // at y = 0.055 because its shoes hang below its own origin, and writing
@@ -1497,7 +1533,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // formation and wrong for the seconds it takes to get into one.
         const relocating = !!from && walking < 1;
         const downfield = obj.settings.team === 0 ? Math.PI / 2 : -Math.PI / 2;
-        const surveying = carrier === obj && carryFor(obj, carrier) === 'throw';
+        const surveying = !scripted && carrier === obj && carryFor(obj, carrier) === 'throw';
         /**
          * AND A CELEBRATION OUTRANKS EVERY LIVE-PLAY READING.
          *
@@ -1511,7 +1547,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
          */
         // A man a show has sent somewhere is off the play the same way a
         // celebrant is: no block, no reach, no lunge.
-        const offPlay = !!cheer || !!spot;
+        const offPlay = !!cheer || !!spot || !!scripted;
         const engagement = offPlay ? null : (engaged.get(obj.settings.position) || null);
         // A MAN WITH HIS HANDS ON SOMEBODY IS NOT CATCHING A PASS. The ball
         // leaves at chest height over a line of men who are 3.85m tall, so it
@@ -1692,7 +1728,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             ? escapeAmount(esc, E.grace, CFG.pose.juke.snap) : 0;
 
         poseFigure(figure, mps, figure.userData.phase, {
-            carry: carryFor(obj, carrier),
+            carry: scripted ? 'none' : carryFor(obj, carrier),
             throwT: throwProgress(obj),
             snapT: snapped,
             block: engagement ? engagement.amount : 0,

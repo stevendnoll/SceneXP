@@ -21,6 +21,7 @@
  */
 import { XO_CONFIG as CFG, FIELD, SIM, UNITS_TO_METRES } from './config.min.js';
 import { ladderBands } from './scoring.min.js';
+import { turfFrom, fieldColor } from './colors.min.js';
 
 let group = null;
 let band = null;
@@ -81,8 +82,10 @@ function pxPerMetre(canvasWidth, worldWidth) {
  * positioned from FIELD, so changing `FIELD.width` in M1 repaints correctly
  * with no numbers to chase in here.
  */
-export function paintMarkings(doc = document) {
-    const turf = CFG.turf;
+export function paintMarkings(doc = document, colors = null) {
+    // THE COLORS ARE HANDED IN, because the visitor can choose the field's
+    // (colors.js `turfFrom`). Everything that is not a color is still config's.
+    const turf = colors ? { ...CFG.turf, ...colors } : CFG.turf;
     const playLength = FIELD.lineInterval * FIELD.segments;
     const totalLength = playLength + FIELD.endZone * 2;
     const totalWidth = FIELD.width + FIELD.sideline * 2;
@@ -171,8 +174,8 @@ export function paintMarkings(doc = document) {
         }
     }
 
-    paintLadder(ctx, k, originX, originY, fieldH);
-    paintScrimmage(ctx, k, originX, originY, fieldH);
+    paintLadder(ctx, k, originX, originY, fieldH, turf);
+    paintScrimmage(ctx, k, originX, originY, fieldH, turf);
 
     return { canvas, ctx };
 }
@@ -200,8 +203,7 @@ export function paintMarkings(doc = document) {
  * two: whichever side the play goes to, a number is near it. The middle is left
  * clear because the middle is where the football happens.
  */
-function paintLadder(ctx, k, originX, originY, fieldH) {
-    const turf = CFG.turf;
+function paintLadder(ctx, k, originX, originY, fieldH, turf = CFG.turf) {
     const rows = [
         originY + turf.ladderInset * k,
         originY + fieldH - turf.ladderInset * k,
@@ -239,11 +241,11 @@ function paintLadder(ctx, k, originX, originY, fieldH) {
  * and wider than one, because it is the only line on this field that a visitor
  * has to be able to find at a glance.
  */
-function paintScrimmage(ctx, k, originX, originY, fieldH) {
+function paintScrimmage(ctx, k, originX, originY, fieldH, turf = CFG.turf) {
     const x = originX + SCRIMMAGE_X * k;
     ctx.save();
-    ctx.strokeStyle = CFG.turf.scrimmage;
-    ctx.lineWidth = Math.max(2, CFG.turf.scrimmageWidth * k);
+    ctx.strokeStyle = turf.scrimmage;
+    ctx.lineWidth = Math.max(2, turf.scrimmageWidth * k);
     ctx.beginPath();
     ctx.moveTo(x, originY);
     ctx.lineTo(x, originY + fieldH);
@@ -257,7 +259,7 @@ function buildTurf() {
     const totalLength = playLength + FIELD.endZone * 2;
     const totalWidth = FIELD.width + FIELD.sideline * 2;
 
-    const { canvas } = paintMarkings();
+    const { canvas } = paintMarkings(document, turfFrom(fieldColor()));
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 8;
@@ -294,7 +296,7 @@ function buildApron() {
     const mesh = new THREE.Mesh(
         new THREE.PlaneGeometry(length, width),
         new THREE.MeshStandardMaterial({
-            color: apron.colour, roughness: 1, metalness: 0,
+            color: turfFrom(fieldColor()).apron, roughness: 1, metalness: 0,
         })
     );
     mesh.rotation.x = -Math.PI / 2;
@@ -302,6 +304,27 @@ function buildApron() {
     mesh.receiveShadow = true;
     mesh.name = 'apron';
     return mesh;
+}
+
+/**
+ * PAINT THE FIELD AGAIN in the color colors.js holds now: the turf canvas,
+ * markings and all, and the ground beyond it. A repaint is a 2048-pixel texture
+ * upload, so this is for a change of color and never for a frame. Returns
+ * whether anything was painted.
+ */
+export function applyFieldColors() {
+    if (!group) return false;
+    const turfMesh = group.getObjectByName('turf');
+    const apronMesh = group.getObjectByName('apron');
+    const colors = turfFrom(fieldColor());
+    if (apronMesh) apronMesh.material.color.set(colors.apron);
+    if (!turfMesh || !turfMesh.material.map || typeof document === 'undefined') return false;
+    const { canvas, ctx } = paintMarkings(document, colors);
+    if (!ctx) return false;
+    const map = turfMesh.material.map;
+    map.image = canvas;
+    map.needsUpdate = true;
+    return true;
 }
 
 /**

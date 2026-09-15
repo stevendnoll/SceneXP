@@ -46,6 +46,7 @@
  * the same way up.
  */
 import { XO_CONFIG as CFG } from './config.min.js';
+import { jerseyOf, fieldColor, difference } from './colors.min.js';
 
 /**
  * WHO GETS A LETTER AND IN WHAT COLOUR NOW LIVES IN CONFIG, because hud.js
@@ -140,7 +141,12 @@ function disc(ctx, x, y, r, ink) {
  * get a lettered tag on the near side, because a letter needs a ground to sit
  * on to be legible at twenty pixels and it needs grass nobody is standing on.
  */
-function markerTexture(ink, letter) {
+/** Whether a team ring in `ink` needs a dark edge to show on the field as it is. */
+function ringNeedsEdge(ink) {
+    return difference(ink, fieldColor()) < CFG.colors.warnField;
+}
+
+function markerTexture(ink, letter, edge = false) {
     if (typeof document === 'undefined' || !document.createElement) return null;
     const canvas = document.createElement('canvas');
     canvas.width = TEX.WIDTH;
@@ -166,6 +172,16 @@ function markerTexture(ink, letter) {
         ctx.textBaseline = 'middle';
         ctx.fillText(letter, mid, TEX.TAG_Y + 2);
     } else {
+        // A RING THE FIELD'S OWN COLOR IS NO RING, so on a field chosen close to
+        // a team's jersey it gets a dark edge either side, the way the lettered
+        // markers already have a rim.
+        if (edge) {
+            ctx.strokeStyle = 'rgba(10, 14, 10, 0.85)';
+            ctx.lineWidth = 26;
+            ctx.beginPath();
+            ctx.arc(mid, mid, 48, 0, Math.PI * 2);
+            ctx.stroke();
+        }
         ctx.strokeStyle = ink;
         ctx.lineWidth = 16;
         ctx.beginPath();
@@ -237,8 +253,8 @@ export function initMarkers(scene, objects) {
         const isQb = position === 'qb';
         const letter = receiver ? receiver.letter : (isQb ? CFG.qb.letter : '');
         const ink = receiver ? receiver.ink
-            : (isQb ? CFG.qb.ink : CFG.teamInk[team]);
-        const tex = markerTexture(ink, letter);
+            : (isQb ? CFG.qb.ink : jerseyOf(team));
+        const tex = markerTexture(ink, letter, !letter && ringNeedsEdge(ink));
         if (!tex) continue;
 
         const mesh = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({
@@ -253,6 +269,9 @@ export function initMarkers(scene, objects) {
         layFlat(mesh);
         mesh.userData.ringBias = letter ? RING_BIAS : 0;
         mesh.userData.named = !!letter;
+        // A plain ring is in its team's jersey color and follows it; a lettered
+        // one belongs to its receiver or the quarterback and does not.
+        mesh.userData.team = letter ? null : team;
         applyScale(mesh, letter ? M.namedRadius : M.plainRadius);
         mesh.position.y = M.lift;
         mesh.renderOrder = 2;
@@ -397,6 +416,28 @@ function disposeGroup(target) {
         if (o.material && !seen.has(o.material.uuid)) { seen.add(o.material.uuid); o.material.dispose(); }
     });
     if (target.parent) target.parent.remove(target);
+}
+
+/**
+ * REPAINT THE TEAM RINGS in the jerseys colors.js holds now. The receivers' and
+ * the quarterback's lettered markers keep their own inks, which is what the
+ * throw buttons are matched to.
+ */
+export function applyMarkerColors() {
+    for (const mesh of markers.values()) {
+        if (mesh.userData.team !== 0 && mesh.userData.team !== 1) continue;
+        const ink = jerseyOf(mesh.userData.team);
+        const tex = markerTexture(ink, '', ringNeedsEdge(ink));
+        if (!tex) continue;
+        const old = mesh.material.map;
+        mesh.material.map = tex;
+        mesh.material.needsUpdate = true;
+        if (old) {
+            old.dispose();
+            const at = textures.indexOf(old);
+            if (at >= 0) textures.splice(at, 1);
+        }
+    }
 }
 
 export function disposeMarkers() {

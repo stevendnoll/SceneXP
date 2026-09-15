@@ -47,24 +47,26 @@ import { muteButton } from './hud.min.js';
  * under half a metre of drift between them, and it now carries the name.
  */
 export const PLAYS = [
-    { slug: 'pass1', diagram: 1, name: 'Split Verticals',
-      blurb: 'Two receivers straight down the middle while the other two peel to opposite sidelines.' },
-    { slug: 'pass2', diagram: 2, name: 'Flood Left',
-      blurb: 'All four go deep and three of them break the same way, flooding that side.' },
     { slug: 'pass3', diagram: 3, name: 'Deep Drift',
       blurb: 'Four deep routes with three drifting left, the widest crossing the field.' },
+    { slug: 'pass8', diagram: 11, name: 'Short Cross',
+      blurb: 'Everybody works short, the widest pair drifting left.' },
+    { slug: 'screen1', diagram: 13, name: 'Screen Left',
+      blurb: 'One receiver stays short as a target while the other clears deep left.' },
+    { slug: 'pass7', diagram: 7, name: 'Stack Right',
+      blurb: 'Two short to the right, with a deep route running either side of them.' },
+    { slug: 'pass2', diagram: 2, name: 'Flood Left',
+      blurb: 'All four go deep and three of them break the same way, flooding that side.' },
     { slug: 'pass4', diagram: 4, name: 'Four Verticals',
       blurb: 'All four receivers run straight down the field. Nobody breaks.' },
+    { slug: 'run1', diagram: 8, name: 'Run Right',
+      blurb: 'Blockers work right while one receiver comes back to the left.' },
+    { slug: 'pass1', diagram: 1, name: 'Split Verticals',
+      blurb: 'Two receivers straight down the middle while the other two peel to opposite sidelines.' },
     { slug: 'pass5', diagram: 5, name: 'Deep Split',
       blurb: 'Four deep routes split either side of the field.' },
     { slug: 'pass6', diagram: 6, name: 'Three Short, One Deep',
       blurb: 'Three receivers stay underneath while one clears out deep to the left.' },
-    { slug: 'pass7', diagram: 7, name: 'Stack Right',
-      blurb: 'Two short to the right, with a deep route running either side of them.' },
-    { slug: 'pass8', diagram: 11, name: 'Short Cross',
-      blurb: 'Everybody works short, the widest pair drifting left.' },
-    { slug: 'run1', diagram: 8, name: 'Run Right',
-      blurb: 'Blockers work right while one receiver comes back to the left.' },
     { slug: 'run2', diagram: 9, name: 'Run Left',
       blurb: 'Every receiver works left, and none of them go deep.' },
     { slug: 'run3', diagram: 10, name: 'Run Middle',
@@ -73,8 +75,6 @@ export const PLAYS = [
       blurb: 'A heavy line, with the two receivers deep to opposite sidelines.' },
     { slug: 'jumbo2', diagram: 14, name: 'Jumbo Right',
       blurb: 'A heavy line, with both receivers working to the right.' },
-    { slug: 'screen1', diagram: 13, name: 'Screen Left',
-      blurb: 'One receiver stays short as a target while the other clears deep left.' },
     { slug: 'screen2', diagram: 15, name: 'Screen Short',
       blurb: 'Two receivers stay very short, with a medium route out to the right.' },
     { slug: 'slant1', diagram: 16, name: 'Twin Slants Right',
@@ -102,6 +102,8 @@ let onChoose = null;
 let onStartOver = null;
 /** Opens the rules, and is handed the function that brings the book back. */
 let onHelp = null;
+/** The Team colors card (colors-ui.js), handed a way back to the book. */
+let onColors = null;
 /** Told when the defense is changed, for the usage log (see telemetry.js). */
 let onDefense = null;
 let settings = { lastPlay: '', defense: '' };
@@ -514,6 +516,49 @@ function helpIcon() {
  * out of the change. Only one aria-modal dialog may be showing at a time (the
  * focus trap wraps the last one it finds), so it is hidden, not layered under.
  */
+/** A jersey, drawn in the same line weight as the question mark beside it. */
+function jerseyIcon() {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'hud-mute-icon');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    const shirt = document.createElementNS(SVG_NS, 'path');
+    shirt.setAttribute('d', 'M8.6 3.5 4 6.1l1.9 3.7 2.2-1V20.5h7.8V8.8l2.2 1L20 6.1l-4.6-2.6a3.4 3.4 0 0 1-6.8 0z');
+    shirt.setAttribute('fill', 'none');
+    shirt.setAttribute('stroke', 'currentColor');
+    shirt.setAttribute('stroke-width', '1.8');
+    shirt.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(shirt);
+    return svg;
+}
+
+/**
+ * TEAM COLORS, BETWEEN HOW TO PLAY AND THE SOUND. It opens the Team colors card
+ * and steps the book aside the way How to play does, for the same reason: a
+ * change of play waiting to be kept has to survive the trip.
+ */
+function buildColors() {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'playbook-restart-btn playbook-help playbook-colors';
+    btn.appendChild(jerseyIcon());
+    const label = document.createElement('span');
+    label.textContent = 'Team colors';
+    btn.appendChild(label);
+    btn.addEventListener('click', () => {
+        const root = document.getElementById('playbook');
+        if (!root || !onColors) return;
+        root.hidden = true;
+        onColors(() => {
+            root.hidden = false;
+            settleStartOver(root);
+            btn.focus();
+        });
+    });
+    return btn;
+}
+
 function buildHelp() {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -535,11 +580,12 @@ function buildHelp() {
     return btn;
 }
 
-export function initPlaybook(handler, startOver = null, { defense = null, help = null } = {}) {
+export function initPlaybook(handler, startOver = null, { defense = null, help = null, colors = null } = {}) {
     onChoose = handler;
     onStartOver = startOver;
     onDefense = defense;
     onHelp = help;
+    onColors = colors;
     load();
 
     const root = document.getElementById('playbook');
@@ -558,6 +604,7 @@ export function initPlaybook(handler, startOver = null, { defense = null, help =
         const controls = document.createElement('div');
         controls.className = 'playbook-controls';
         if (onHelp) controls.appendChild(buildHelp());
+        if (onColors) controls.appendChild(buildColors());
         const mute = muteButton();
         if (mute) controls.appendChild(mute);
         if (onStartOver) controls.appendChild(buildStartOver());
