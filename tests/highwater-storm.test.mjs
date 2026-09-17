@@ -595,12 +595,28 @@ describe('the ending', () => {
         expect(fadeAt(covered)).toBeLessThan(0.1);
     });
 
-    test('THE BEACH IS BARE BEFORE THE WALL SHOWS UP, which is the whole warning', () => {
+    test('THE BEACH IS BARE BEFORE THE WALL CAN BE SIZED, which is the warning', () => {
         // STEVE'S NOTE, 2026-08-24. A sea walking backwards down the beach is
         // the only warning a real tsunami gives, and it only works as one if it
         // happens on its own. The arc used to bottom the drawback out at 66 with
         // the front spawning at 60, so the wall was already climbing out of the
         // fog while the water was still going out and the two read as one event.
+        //
+        // AND STEVE'S NOTE OF 2026-09-17, WHICH ASKED FOR PART OF THAT BACK. On
+        // a sixty second arc the separation was too expensive: measured, the gap
+        // from the water finishing going out to the wall being worth a readable
+        // 40 px on the horizon was six to seven seconds, because the foam line
+        // takes `foamSeconds` to come up and the wall is 400 m away while it
+        // does. So `startAt` is now one second BEFORE the surge bottoms out.
+        //
+        // WHICH MEANS THE OLD FORM OF THIS TEST CANNOT BE THE ASSERTION ANY
+        // MORE, and it was never quite the right one. It asserted the ORDER of
+        // two config keys, on the reasoning that before `startAt` there is no
+        // front at all so nothing about fog or apparent size can rescue a bad
+        // ordering. True, and too strong: a front that exists is not a wall
+        // anybody can see. What the beat actually needs is for the wall to be
+        // UNREADABLE while the sand is the subject, and that is a property of
+        // the ramps rather than of the spawn instant.
         //
         // Asserted on the WATERLINE rather than on the surge, because that is
         // what a visitor sees: metres of sand where there was sea. The waterline
@@ -610,14 +626,30 @@ describe('the ending', () => {
         const bare = everySecond().find((t) => waterlineAt(t) - restZ <= -4);
         expect(bare).toBeDefined();
 
-        // And the wall is not on screen yet when that happens. `startAt` is the
-        // honest test of it: before that instant there is no front at all, so
-        // nothing about fog or apparent size can rescue a bad ordering.
-        expect(STORM.tsunami.startAt).toBeGreaterThan(bare);
-        // Enough of a gap to be a beat rather than a technicality. Measured at
-        // about 3 s from the beach going bare to the front spawning, and about
-        // 6 s to the wall being worth 40 px on screen.
-        expect(STORM.tsunami.startAt - bare).toBeGreaterThanOrEqual(2.5);
+        // THE WALL HAS BARELY STARTED WHEN THE SAND IS THE SUBJECT. `rise` is
+        // ramped over `riseSeconds` from the spawn, so this is a fraction of the
+        // far height rather than a height in metres, and it does not move when
+        // the wall is next made taller.
+        const front = frontAt(bare);
+        const ramp = front ? front.rise / STORM.tsunami.riseFar : 0;
+        expect(ramp).toBeLessThan(0.3);
+        // And it is raising nothing at all where the visitor is standing, which
+        // catches a front spawned so early it has already crossed the beach.
+        expect(frontLevelAt(camera.z, front)).toBeCloseTo(0, 9);
+
+        // THE FOAM LINE IS THE PART YOU SEE FIRST, so it gets its own bound. It
+        // ramps faster than the height on purpose: see `frontAt`.
+        const foam = front ? front.foam / STORM.tsunami.frontFoam : 0;
+        expect(foam).toBeLessThan(0.4);
+
+        // AND THE WALL IS STILL SEVERAL SECONDS OFF BEING FULL SIZE, so the beat
+        // is a beat rather than a frame. Half the ramp is the readable point.
+        const half = everySecond().find((t) => {
+            const f = frontAt(t);
+            return f && f.rise >= STORM.tsunami.riseFar * 0.5;
+        });
+        expect(half).toBeDefined();
+        expect(half).toBeGreaterThan(bare);
 
         // The stage table has to agree, since it is the readable statement of
         // the arc and it disagreed with the arc for two rounds.

@@ -1433,7 +1433,7 @@ describe('the tsunami is lit as the wall it is', () => {
         // If anything ever gives the storm a z-varying water level this fails,
         // and it should: the ordinary sea would start tilting.
         let worstWithoutFront = 0;
-        for (let t = 0; t <= 90; t += 0.5) {
+        for (let t = 0; t <= OCEAN_CONFIG.storm.seconds; t += 0.5) {
             const sea = stormStateAt(t, OCEAN_CONFIG);
             if (sea.front) continue;
             const p = buildProfile(zs, t, OCEAN_CONFIG, null, sea);
@@ -1456,9 +1456,15 @@ describe('the tsunami is lit as the wall it is', () => {
         // second implementation of the difference. A smoothstep climbing `rise`
         // over `width` has a peak derivative of 1.5 * rise / (2 * width), and
         // discrete rows can only undersample that peak, never exceed it.
+        // OVER THE FRONT'S OWN LIFE, TAKEN FROM THE CONFIG. This read 60 to 90,
+        // which was the approach on the ninety second arc and is the last second
+        // of the sixty second one, where the front has already arrived and the
+        // steep part of the step is off the near edge of the sheet. Measured, it
+        // put the peak at 0.65 against an analytic 1.59 and failed.
         let peak = 0;
         let front = null;
-        for (let t = 60; t <= 90; t += 0.5) {
+        const approach = OCEAN_CONFIG.storm.tsunami;
+        for (let t = approach.startAt; t <= OCEAN_CONFIG.storm.seconds; t += 0.5) {
             const sea = stormStateAt(t, OCEAN_CONFIG);
             const p = buildProfile(zs, t, OCEAN_CONFIG, null, sea);
             for (let r = 0; r < rows; r++) peak = Math.max(peak, Math.abs(p.liftSlope[r]));
@@ -1479,7 +1485,8 @@ describe('the tsunami is lit as the wall it is', () => {
         // the opposite sign on purpose, so this asks about the STEEPEST slope
         // rather than about all of them.
         let steepest = 0;
-        for (let t = 60; t <= 90; t += 0.5) {
+        for (let t = OCEAN_CONFIG.storm.tsunami.startAt;
+            t <= OCEAN_CONFIG.storm.seconds; t += 0.5) {
             const p = buildProfile(zs, t, OCEAN_CONFIG, null, stormStateAt(t, OCEAN_CONFIG));
             for (let r = 0; r < rows; r++) {
                 if (Math.abs(p.liftSlope[r]) > Math.abs(steepest)) steepest = p.liftSlope[r];

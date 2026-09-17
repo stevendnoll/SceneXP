@@ -78,7 +78,7 @@ describe('the whole sea builds without a browser', () => {
         // And the arc runs. Walked rather than spot checked, because a throw
         // thirty seconds in is exactly the failure this suite exists to catch
         // and a single tick would sail past it.
-        for (let t = 0; t <= 90; t += 1.5) {
+        for (let t = 0; t <= OCEAN_CONFIG.storm.seconds; t += 1.5) {
             expect(() => lightning.updateLightning(t, OCEAN_CONFIG)).not.toThrow();
         }
 

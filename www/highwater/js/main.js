@@ -20,7 +20,7 @@
  * pause", and that was true of an ambient sea that ran forever. Steve reframed
  * the scene on 2026-08-19: it now opens as an ordinary bright day, the sky closes
  * over, a storm swell builds until the sea is frightening, a tsunami arrives, and
- * the page fades to black. Ninety seconds. That is a timeline with an ending, so
+ * the page fades to black. Sixty seconds. That is a timeline with an ending, so
  * there is a clock to run, stages
  * to move between, and a finish.
  *
@@ -79,7 +79,7 @@ const state = {
     // not build an AudioContext without a gesture. The sound is gone and this
     // stays, because the reasons that survive it are better ones: the card
     // carries a content warning this scene owes anybody who opens it, and a
-    // ninety second story should not be a third over before the visitor has
+    // sixty second story should not be a third over before the visitor has
     // finished reading the page it is on.
     begun: false,
     // Seconds since the arc began, which is the clock the whole scene runs on.
@@ -258,7 +258,7 @@ function onVisibility() {
     } else if (!state.running && !state.finished) {
         // `lastTime` is cleared so the first frame back reports a delta of zero
         // rather than however long the tab was hidden. That matters more now
-        // than it used to: the arc is a ninety second story, and a visitor who
+        // than it used to: the arc is a sixty second story, and a visitor who
         // switched away for two minutes should come back to the sea they left
         // rather than to the credits.
         state.lastTime = 0;
@@ -378,7 +378,7 @@ function paintOverlay(washAmount, fade) {
  *  not build an AudioContext without a gesture, and the scene has no sound any
  *  more. It stays because the other two jobs it does are the ones that mattered:
  *  it carries the content warning, which this scene owes anybody who opens it,
- *  and it stops a ninety second story running while the visitor is still reading
+ *  and it stops a sixty second story running while the visitor is still reading
  *  the page. */
 function beginArc() {
     if (state.begun) return;
@@ -416,7 +416,7 @@ function beginArc() {
 function finish() {
     if (state.finished) return;
     state.finished = true;
-    // MADE IT TO THE END. Ninety seconds is a long time to ask for, and the
+    // MADE IT TO THE END. A minute is a long time to ask for, and the
     // difference between a scene people start and a scene people finish is the
     // difference between a good idea and a good experience. `runs` distinguishes
     // a first watch from a second, so this stays meaningful after a replay.
@@ -519,7 +519,8 @@ let stageReached = 0;
  *  is a lookup.
  *
  *  IT ALSO SURVIVES A RETIME, which a grid of seconds does not. This arc has
- *  been three minutes, then two, then ninety seconds, and every hardcoded second
+ *  been three minutes, then two, then ninety seconds, then sixty, and every
+ *  hardcoded second
  *  in the tests went stale each time. The stage names did not move once.
  *
  *  The seconds go along as a parameter anyway, so nothing is lost.
@@ -560,7 +561,7 @@ function endSession() {
     trackFinal('session-end', {
         seconds: Math.round((Date.now() - sessionStart) / 1000),
         // WHERE THEY GOT TO, which is the question this scene actually wants
-        // answered. A ninety second arc that people leave at forty is a
+        // answered. A sixty second arc that people leave at thirty is a
         // different problem from one nobody starts, and the two look identical
         // in a plain session count.
         arc: Math.round(state.arc),
@@ -612,7 +613,7 @@ async function init() {
     const sky = { uniformGlsl: SKY_UNIFORM_GLSL, glsl: SKY_GLSL, uniforms: skyUniforms() };
     initSand(scene, OCEAN_CONFIG, { mobile: state.mobile, sky });
     initWater(scene, OCEAN_CONFIG, { mobile: state.mobile, sky });
-    // THE LIGHTNING GOES IN NOW EVEN THOUGH THE FIRST STRIKE IS THIRTY SECONDS
+    // THE LIGHTNING GOES IN NOW EVEN THOUGH THE FIRST STRIKE IS TEN SECONDS
     // AWAY, because it adds a light to the scene and Three keys its compiled
     // programs on how many lights there are. Adding one at the first flash would
     // recompile the water, the sand, and the sky in the middle of the arc, on
@@ -620,7 +621,7 @@ async function init() {
     //
     // REDUCED MOTION IS READ ONCE AND PASSED IN rather than reached for inside
     // the module, matching how `mobile` is handled: the camera never moves and
-    // the visit is ninety seconds, so there is no later moment at which this
+    // the visit is sixty seconds, so there is no later moment at which this
     // answer could usefully change.
     initLightning(scene, camera, OCEAN_CONFIG, { sky, reducedMotion: prefersReducedMotion() });
     // AFTER THE WATER, because it rides the water's own profile and there is
@@ -698,8 +699,8 @@ async function init() {
  *
  *  A VISITOR IS NOT MEANT TO FIND THESE. They are harmless in the sense that
  *  they only reach the caller's own copy of the page, but `oceanSetArc` walks
- *  straight to the ending, and this scene is ninety seconds with a shape to it.
- *  Handing a stranger the last thirty seconds by way of a global is not a
+ *  straight to the ending, and this scene is sixty seconds with a shape to it.
+ *  Handing a stranger the last twenty seconds by way of a global is not a
  *  kindness. No other experience in the repository installs a window global at
  *  all, so the gate also puts this one back in line with the rest. */
 export function tuningAidsWanted() {

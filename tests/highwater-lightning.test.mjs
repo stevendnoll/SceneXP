@@ -128,6 +128,31 @@ const {
 
 const LIGHT = OCEAN_CONFIG.storm.lightning;
 
+// ---------------------------------------------------------------------------
+// LANDMARKS, TAKEN FROM THE ARC RATHER THAN WRITTEN DOWN
+//
+// The assertions below used to name seconds: quiet at 15, loudest at 70, landing
+// at 88, channels thinned by 80, the first flash somewhere between 22 and 58.
+// This arc has been three minutes, then two, then ninety seconds, and on
+// 2026-09-17 sixty, and every one of those numbers went stale at each retime
+// while the PROPERTY it was reaching for did not move at all. Seven tests in
+// this file failed on the retime and not one of them was reporting a defect.
+//
+// So each landmark is derived from the curve it belongs to. A retime moves the
+// curves and these follow.
+const ARC = OCEAN_CONFIG.storm.seconds;
+/** The last second the sky is still deliberately clear. */
+const ONSET = Math.max(...LIGHT.rate.filter((k) => k.value === 0).map((k) => k.at));
+/** Where the strike rate peaks, which the arc puts in the stretch with the sea
+ *  drawn back and nothing yet arrived. */
+const LOUDEST = LIGHT.rate.reduce((a, b) => (b.value > a.value ? b : a)).at;
+/** The top of `boltChance`, the last second it is held there, and the second it
+ *  has finished falling away to make room for the wall. */
+const CHANCE_TOP = Math.max(...LIGHT.boltChance.map((k) => k.value));
+const HOLD_END = Math.max(
+    ...LIGHT.boltChance.filter((k) => k.value === CHANCE_TOP).map((k) => k.at));
+const FALL_END = LIGHT.boltChance.find((k) => k.at > HOLD_END).at;
+
 afterEach(() => { disposeLightning(); });
 
 /** A deterministic random that is still spread over [0, 1).
@@ -278,25 +303,30 @@ describe('the flash envelope', () => {
         // accumulator that falls out for free: a rate of zero adds zero credit,
         // so the threshold is never reached however long the scene runs.
         expect(strikeRateAt(0, OCEAN_CONFIG)).toBe(0);
-        expect(strikeRateAt(15, OCEAN_CONFIG)).toBe(0);
+        expect(strikeRateAt(ONSET, OCEAN_CONFIG)).toBe(0);
         // And genuinely busy once the storm is running. Deliberately a loose
         // bound: this used to assert a rate above 0.5 at t=80, which was pinning
         // one number off the curve rather than a property, and it broke the
         // moment the curve was reshaped to give the tsunami a quieter sky.
-        expect(strikeRateAt(70, OCEAN_CONFIG)).toBeGreaterThan(0.25);
+        expect(strikeRateAt(LOUDEST, OCEAN_CONFIG)).toBeGreaterThan(0.25);
     });
 
-    test('the sky is at its loudest in the drawback, not in the tsunami', () => {
-        // THE SHAPE OF THE ARC, AND IT IS NOT THE OBVIOUS ONE. The drawback is
-        // the stretch where the sea has gone quiet and nothing has arrived yet,
-        // so it is where the scene most needs something carrying the tension.
-        // The tsunami is the opposite: it brings the largest object in the whole
-        // arc with it and it wants the frame to itself.
-        const drawback = strikeRateAt(70, OCEAN_CONFIG);
-        const landing = strikeRateAt(88, OCEAN_CONFIG);
+    test('the sky is at its loudest with the sea out, not as the wall lands', () => {
+        // THE SHAPE OF THE ARC, AND IT IS NOT THE OBVIOUS ONE. The stretch with
+        // the sea drawn back is where it has gone quiet and nothing has arrived
+        // yet, so it is where the scene most needs something carrying the
+        // tension. The landing is the opposite: it brings the largest object in
+        // the whole arc with it and it wants the frame to itself.
+        const drawback = strikeRateAt(LOUDEST, OCEAN_CONFIG);
+        const landing = strikeRateAt(ARC - 2, OCEAN_CONFIG);
         expect(drawback).toBeGreaterThan(landing);
         // But it never goes quiet, because the flashes are what light the wall.
         expect(landing).toBeGreaterThan(drawback * 0.4);
+        // AND THE PEAK REALLY IS IN THE WRONG-SEA STRETCH, which naming a second
+        // never actually checked. The surge is still well below its own mean
+        // there, which is the definition of the beat this curve is shaped for.
+        expect(curveAt(LOUDEST, OCEAN_CONFIG.storm.surge, OCEAN_CONFIG.storm))
+            .toBeLessThan(-0.5);
     });
 
     test('the channels thin right out once the wall is on its way', () => {
@@ -306,15 +336,15 @@ describe('the flash envelope', () => {
         // The FLASH rate is deliberately not cut in step: a flash lights the wall
         // rather than competing with it.
         const chance = (t) => curveAt(t, LIGHT.boltChance, OCEAN_CONFIG.storm);
-        expect(chance(60)).toBeGreaterThan(0.7);
-        expect(chance(80)).toBeLessThan(chance(60) * 0.5);
-        expect(chance(90)).toBeLessThan(chance(60) * 0.5);
+        expect(chance(HOLD_END)).toBeGreaterThan(0.7);
+        expect(chance(FALL_END)).toBeLessThan(chance(HOLD_END) * 0.5);
+        expect(chance(ARC)).toBeLessThan(chance(HOLD_END) * 0.5);
         // Not to zero, though. A storm that stops producing channels entirely
         // reads as the effect having been switched off.
-        expect(chance(90)).toBeGreaterThan(0.15);
+        expect(chance(ARC)).toBeGreaterThan(0.15);
     });
 
-    test('the last twenty seconds carry channels far less often than the peak', () => {
+    test('the sky carries channels far less often once the wall is in frame', () => {
         // The end to end version of the two above, counted rather than asserted
         // off the curves, because the rate and the chance multiply and either one
         // alone can be moved without the frame actually getting calmer.
@@ -335,23 +365,30 @@ describe('the flash envelope', () => {
             initLightning(makeScene(), null, OCEAN_CONFIG,
                 { sky: { uniforms }, random: seeded(seed) });
             const seen = new Set();
-            for (let t = 0; t < 90; t += 1 / 60) {
+            for (let t = 0; t < ARC; t += 1 / 60) {
                 updateLightning(t, OCEAN_CONFIG);
                 const live = __lightning.state().strike;
                 if (live && !seen.has(live)) {
                     seen.add(live);
                     if (!live.drawBolt) continue;
-                    if (t >= 60 && t < 70) peakBin++;
-                    if (t >= 70) lateBin++;
+                    if (t >= HOLD_END - 10 && t < HOLD_END) peakBin++;
+                    if (t >= FALL_END) lateBin++;
                 }
             }
             disposeLightning();
         }
-        // A second of tsunami must carry channels at well under three quarters
-        // the rate of a second of drawback. Against a flat boltChance the two
-        // densities come out level and this fails, which is the whole point.
+        // A second with the wall in frame must carry channels at well under
+        // three quarters the rate of a second at the peak. Against a flat
+        // boltChance the two densities come out level and this fails, which is
+        // the whole point.
+        //
+        // THE WINDOWS ARE THE PLATEAU AND THE FLOOR, TAKEN OFF THE CURVE. They
+        // were 60-70 and 70-90, which on the old arc put the transition itself
+        // inside the late window and softened the contrast for no reason.
+        const peakSeconds = 10;
+        const lateSeconds = ARC - FALL_END;
         expect(peakBin).toBeGreaterThan(0);
-        expect(lateBin / 20).toBeLessThan((peakBin / 10) * 0.75);
+        expect(lateBin / lateSeconds).toBeLessThan((peakBin / peakSeconds) * 0.75);
     });
 
     test('a threshold is always finite, positive, and averages one', () => {
@@ -380,14 +417,16 @@ describe('the flash envelope', () => {
         const uniforms = makeSkyUniforms();
         initLightning(scene, null, OCEAN_CONFIG, { sky: { uniforms }, random: seeded(2) });
         let first = null;
-        for (let t = 0; t < 90; t += 1 / 60) {
+        for (let t = 0; t < ARC; t += 1 / 60) {
             updateLightning(t, OCEAN_CONFIG);
             if (uniforms.uFlash.value > 0 && first === null) first = t;
         }
         expect(first).not.toBeNull();
         // Not before the sky has closed over, and not so late it never lands.
-        expect(first).toBeGreaterThan(22);
-        expect(first).toBeLessThan(55);
+        // Half of what is left after the onset, which on the ninety second arc
+        // was the 55 this used to read.
+        expect(first).toBeGreaterThan(ONSET);
+        expect(first).toBeLessThan(ONSET + (ARC - ONSET) * 0.5);
     });
 });
 
@@ -425,10 +464,11 @@ describe('the onset survives the rate being tuned', () => {
         expect(first.every((t) => t !== null)).toBe(true);
         expect(firstBolt.every((t) => t !== null)).toBe(true);
         // Never before the sky has closed over, which is the arc's own order.
-        expect(Math.min(...first)).toBeGreaterThan(22);
-        // And the slowest visit still has most of the arc left to run.
-        expect(Math.max(...first)).toBeLessThan(58);
-        expect(Math.max(...firstBolt)).toBeLessThan(72);
+        expect(Math.min(...first)).toBeGreaterThan(ONSET);
+        // And the slowest visit still has most of the arc left to run. The two
+        // fractions are the 58 and the 72 this used to read, against ninety.
+        expect(Math.max(...first)).toBeLessThan(ARC * 0.65);
+        expect(Math.max(...firstBolt)).toBeLessThan(ARC * 0.8);
     });
 });
 
@@ -442,9 +482,16 @@ describe('the storm closes in rather than only getting busier', () => {
             }
             return sum / 400;
         };
-        const early = meanAt(32);
-        const middle = meanAt(60);
-        const late = meanAt(88);
+        // SAMPLED AT THE `approach` CURVE'S OWN KEYS, because what this test is
+        // about is that the curve walks one way and nothing else. Naming 32, 60
+        // and 88 pinned it to an arc length instead, and at sixty seconds the
+        // last two both landed past the end of the curve and read the same
+        // value, so the middle was not greater than the late one and this
+        // failed with the distances behaving perfectly.
+        const keys = LIGHT.approach;
+        const early = meanAt(keys[0].at);
+        const middle = meanAt(keys[Math.floor(keys.length / 2)].at);
+        const late = meanAt(keys[keys.length - 1].at);
         expect(early).toBeGreaterThan(middle);
         expect(middle).toBeGreaterThan(late);
         // And never outside the stated range, whatever the spread does.
@@ -584,8 +631,14 @@ describe('a phone held upright still gets the channels', () => {
                 }
             }
         }
-        // A whole arc's worth of channels, all of them on screen.
-        expect(drawn).toBeGreaterThan(5);
+        // A whole arc's worth of channels, all of them on screen. SCALED WITH
+        // THE ARC rather than fixed at the 5 it read, because `rate` is strikes
+        // per SECOND: a shorter arc holds proportionally fewer channels at
+        // exactly the density that was tuned and approved, and this seed landed
+        // on 5 rather than above it the moment the arc went to sixty. The floor
+        // is here to keep the per-strike check above from passing on an empty
+        // sample, so it is a sample size guard and not a tuning assertion.
+        expect(drawn).toBeGreaterThan(ARC / 20);
 
         camera.aspect = LANDSCAPE;
         expect(__lightning.state().frameLimit).toBeGreaterThan(29);

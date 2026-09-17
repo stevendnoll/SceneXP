@@ -584,7 +584,8 @@ export const OCEAN_CONFIG = deepFreeze({
         // lighting and does not read this at all.
         //
         // Walked by `gloom` in `updateWater`, so the glint fades out over the
-        // same forty seconds the cloud takes to close.
+        // same time the cloud takes to close, which since the retime is about
+        // twenty five seconds rather than forty.
         roughness: 0.08,
         stormRoughness: 0.52,
         breakRatio: 1.20,
@@ -1648,18 +1649,58 @@ export const OCEAN_CONFIG = deepFreeze({
 
     // ---- The arc (storm.js) -------------------------------------------------
     //
-    // TWO MINUTES, WITH AN ENDING. Steve tried three and it dragged, which is
-    // the right way round to find that out. Every time below moved with it, and
-    // NOT PROPORTIONALLY: the opening lost the most because it is the part with
-    // least happening, and the drawback lost the least because it needs a real
-    // number of seconds on the clock to be read as wrong rather than as a lull.
+    // SIXTY SECONDS SINCE 2026-09-17, AND IT WAS NINETY. Three minutes, then
+    // two, then ninety, now sixty. Every viewing has said the same thing, which
+    // is that the parts with nothing happening in them are longer than they feel
+    // while being written.
     //
-    //     stage      3 min    2 min
-    //     ordinary    0-35     0-20    establishing, and it does not need long
-    //     turning    35-90    20-55
-    //     storm      90-130   55-85    the white-outs happen in here
-    //     drawback  130-150   85-100   15s, down from 20, and no shorter
-    //     tsunami   150-180  100-120
+    // CUT WHERE THE SCREEN HAD LEAST ON IT, AND THAT WAS MEASURED RATHER THAN
+    // GUESSED. Walking the shipped ninety through the real `buildProfile` with
+    // the vertex shader ported to the CPU says plainly where the time went: NO
+    // CREST CLEARED THE HORIZON LINE FOR THE FIRST FIFTEEN TO TWENTY NINE
+    // SECONDS, depending where the set envelope happened to be, and the break
+    // line did not start marching seaward until t=28. So the opening paid for
+    // most of this retime and the approach paid for none of it.
+    //
+    //     stage      3 min    2 min   ninety  sixty
+    //     ordinary    0-35     0-20     0-12    0-3   it does not need long
+    //     turning    35-90    20-55    12-34   3-14
+    //     storm      90-130   55-85    34-52  14-25   the white-outs are here
+    //     lull          -        -     52-59  25-32
+    //     drawback  130-150   85-100   59-67  32-37   and no shorter
+    //     tsunami   150-180  100-120   67-90  36-60
+    //
+    // WHAT THE THIRTY SECONDS COST, MEASURED OVER TEN ENTRY OFFSETS INTO THE SET
+    // ENVELOPE, because one walk of this arc is one visitor's luck:
+    //
+    //                                        ninety      sixty
+    //     first crest over the horizon       15-29 s     3-9 s
+    //     break line starts marching out       28 s        5 s
+    //     gloom at t=5                         0.13       0.48
+    //     wave arrivals in the storm          8-9        4-5
+    //     white-outs in the storm             2-3        1-2
+    //     water out to a readable wall        6-7 s      2-3 s
+    //     THE WALL, 40 px TO 400 px          13-16 s    14-16 s
+    //     hit to black                       3.1-4.5 s  3.2-4.7 s
+    //     worst Jacobian margin              0.079      0.084
+    //
+    // READ THE WALL ROW FIRST. The approach is the part of this scene that works
+    // hardest and it is UNCHANGED, because a third of the arc is a perfectly
+    // good thing to spend on the only object in it. Everything above that row
+    // moved and the payoff did not.
+    //
+    // THE ROW ABOVE IT IS THE ONE THAT COST SOMETHING. A bore covering the eye
+    // needs the sea to be already high when it arrives, so the number of
+    // white-outs is set by how long the surge plateau sits up rather than by how
+    // high it gets, and a shorter storm gets fewer of them. Two visits in ten
+    // now see one rather than two, measured. The plateau was widened back out
+    // to ten seconds to hold the other eight at two.
+    //
+    // WHY NOT THIRTY, which is the first thing Steve asked about. Priced the
+    // same way: the wall's watchable approach HALVES to 7 s, the storm keeps two
+    // to four wave arrivals out of eight, and TWO VISITS IN TEN SEE NO WAVE
+    // BREAK OVER THE CAMERA AT ALL, which is a feature of this scene rather than
+    // a detail of it. Forty five is the middle and costs 4 s of the approach.
     //
     // The scene opens as an ordinary bright day, the swell builds until the sea
     // is frightening, the sky closes over, the water starts coming over the
@@ -1671,15 +1712,20 @@ export const OCEAN_CONFIG = deepFreeze({
     // meaning something, which is exactly the effect a horror scene wants and
     // exactly the effect a busy one destroys.
     storm: {
-        seconds: 90,
+        seconds: 60,
         // Start times, not ranges, so two stages can never overlap or leave a
         // gap. The last one runs to `seconds`. Names are for the debug label
         // rather than for anything visual, since every visible quantity below
         // interpolates straight through the boundaries.
         stages: [
             { from: 0,   name: 'ordinary' },   // the sea as it has always been
-            { from: 12,  name: 'turning' },    // the swell starts to build
-            { from: 34,  name: 'storm' },      // faces near vertical, first engulfment
+            // THREE, AND IT WAS TWELVE. The opening is where this retime took
+            // most of its thirty seconds, and it could because there was nothing
+            // in it: measured, no crest cleared the horizon line and the break
+            // line had not moved. What sells the turn is the CHANGE, so the
+            // ordinary afternoon only has to be established, not dwelt on.
+            { from: 3,   name: 'turning' },    // the swell starts to build
+            { from: 14,  name: 'storm' },      // faces near vertical, first engulfment
             // THE LULL IS STEVE'S AND IT IS THE BEST NOTE OF THE THREE. The
             // drawback used to begin straight off the storm's peak, so a set was
             // always mid flight when the sea started leaving, and the visitor
@@ -1688,17 +1734,29 @@ export const OCEAN_CONFIG = deepFreeze({
             // doing something.
             //
             // A real drawback is preceded by exactly this: the sea stops. Six
-            // seconds of a flat, silent ocean after ninety seconds of building
-            // storm is the loudest thing in the arc, and it costs one keyframe.
-            { from: 52,  name: 'lull' },       // the sea stops, and that is worse
-            { from: 59,  name: 'drawback' },   // then it goes the wrong way
-            // 67 AND NOT 76, WHICH IS WHERE THE TABLE ALWAYS MEANT IT. This read
-            // 76 while `tsunami.startAt` was 60, so the wall had been climbing
+            // seconds of a flat, silent ocean after a minute of building storm
+            // is the loudest thing in the arc, and it costs one keyframe.
+            //
+            // IT KEPT ITS SIX SECONDS THROUGH THE RETIME. Everything either side
+            // of it was cut and this was not, because it is an ABSENCE and an
+            // absence needs real seconds on the clock or it reads as a gap
+            // between two things rather than as a thing.
+            // 25 AND NOT 26, WHICH IS THE SWELL'S OWN PEAK. `lullFrontAt`
+            // reads `swellAt(lull.startAt)` as the sea the rows it has not
+            // reached yet are still carrying, and the collapse from 2.76 to
+            // 0.30 takes three seconds, so starting one second into it handed
+            // the waves still in flight a 2.12 sea instead of a 2.76 one.
+            // Which is a quarter of the height gone from exactly the waves
+            // this whole mechanism exists to let finish their journey.
+            { from: 25,  name: 'lull' },       // the sea stops, and that is worse
+            { from: 32,  name: 'drawback' },   // then it goes the wrong way
+            // THE STAGE NAME LANDS WHERE THE WALL SPAWNS and it once read 76
+            // against a `tsunami.startAt` of 60, so the wall had been climbing
             // out of the fog for sixteen seconds before the arc admitted a
             // tsunami had started. The names only feed telemetry, so nothing
             // rendered wrong, but the table is the readable statement of the arc
-            // and it disagreed with the arc.
-            { from: 67,  name: 'tsunami' }
+            // and it disagreed with the arc. Keep the two together.
+            { from: 36,  name: 'tsunami' }
         ],
         // ---- The swell ------------------------------------------------------
         //
@@ -1744,24 +1802,51 @@ export const OCEAN_CONFIG = deepFreeze({
         // NOT raised, so the ordinary afternoon the scene opens on is exactly
         // the one it always opened on. Measured, no crest clears the eye at all
         // before t=12 either way.
+        // THE SEA NOW LEAVES THE CALM IN THE FIRST TWO SECONDS, which is Steve's
+        // note of 2026-09-17 and the reason the second key exists at all. It
+        // used to be 1.05 at t=12, a twentieth of the journey after an eighth of
+        // the arc, and what that looked like was measured rather than argued
+        // about: the break line did not start marching seaward until t=28 and no
+        // crest cleared the horizon line before t=15 at the luckiest offset.
+        //
+        // The cue a visitor gets in the first five seconds is now the surf line
+        // moving out and the sky closing, in that order, and the first crest
+        // stands above the horizon somewhere between t=3 and t=9.
+        //
+        // A CREST OVER THE HORIZON NEEDS A SWELL OF ABOUT 2.0 AND THAT CANNOT
+        // HAPPEN IN FIVE SECONDS. Deep water crests clear eye level at 2.0 (see
+        // the table below), so asking for the horizon to be broken inside five
+        // seconds is asking for the scene to open on a sea that is already
+        // rough, which throws away the ordinary afternoon the whole arc is a
+        // departure from. 1.72 by t=7 is as far as that goes without it.
+        //
+        // AND THE 2.05 KEY DID NOT MOVE IN VALUE, only in time. Raising it to
+        // 2.10 while the lean was still coming down cost 6% of the Jacobian
+        // margin at the tightest pair in the arc, for a 2% bigger sea nobody
+        // could see. The early keys are free because the lean is paid down with
+        // them: see `lean`.
         swell: [
             { at: 0,   value: 1.00 },
-            { at: 12,  value: 1.05 },   // barely, and only so it is already moving
-            { at: 34,  value: 2.05 },   // the horizon starts going
-            { at: 54,  value: 2.76 },   // the peak of the storm
+            { at: 2,   value: 1.18 },   // the surf line starts marching out
+            { at: 7,   value: 1.72 },
+            { at: 14,  value: 2.05 },   // the horizon starts going
+            { at: 25,  value: 2.76 },   // the peak of the storm
             // THE SEA STOPS. Down past calm, to a third of the sea the scene
             // opened with, in six seconds. Nothing else in the arc moves this
             // fast and nothing else should: every other curve here is a weather
             // system and this one is the bottom dropping out.
-            { at: 58,  value: 0.30 },
-            { at: 66,  value: 0.28 },   // and stays there while the water leaves
+            { at: 28,  value: 0.30 },
+            { at: 33,  value: 0.28 },   // and stays there while the water leaves
             // THE PEAK LANDS WITH THE FRONT, NOT AFTER IT. This used to reach
             // 2.60 at t=116, which is a second after the fade has started, so
             // the biggest sea in the whole scene happened behind the blackout.
             // Steve's words: it ends just as the waves get good.
-            { at: 76,  value: 2.00 },
-            { at: 80,  value: 2.90 },
-            { at: 90,  value: 2.90 }
+            //
+            // THESE TWO TRAVEL WITH `tsunami.arriveAt`, at 13 and 9 seconds
+            // ahead of it, which is the relationship they were written at.
+            { at: 46,  value: 2.00 },
+            { at: 50,  value: 2.90 },
+            { at: 60,  value: 2.90 }
         ],
         // Crest cusping, and it comes DOWN as the swell goes up. Not a look
         // decision: amplitude times wave number times this is what drives the
@@ -1773,11 +1858,21 @@ export const OCEAN_CONFIG = deepFreeze({
         // difference between lean 3.2 and 1.2 is a wave face of 70 degrees
         // against one of 31. So the storm trades some of its pitch for its size,
         // and it is worth it, because size is the thing being asked for.
+        //
+        // THE 2.80 KEY IS THE PRICE OF THE FASTER OPENING. The swell now reaches
+        // 1.72 by t=7, and on the old curve the lean would still have been at
+        // 3.10 there. The shipped ninety never put those two together: it got to
+        // 1.72 at t=25 with the lean already down at 2.87. Measured over ten
+        // entry offsets, the worst Jacobian margin in the whole arc is 0.084
+        // with this key and 0.074 without it, against 0.079 for the arc this
+        // replaces. Amplitude times wave number times lean is what drives the
+        // Jacobian to zero, so a faster swell has to buy a faster lean.
         lean: [
             { at: 0,   value: 3.20 },
-            { at: 34,  value: 2.60 },
-            { at: 52,  value: 1.60 },
-            { at: 90,  value: 1.20 }
+            { at: 7,   value: 2.80 },
+            { at: 14,  value: 2.60 },
+            { at: 25,  value: 1.60 },
+            { at: 60,  value: 1.20 }
         ],
         // ---- The surge ------------------------------------------------------
         //
@@ -1821,49 +1916,77 @@ export const OCEAN_CONFIG = deepFreeze({
         // rectangle. The bore is what does it: the surge alone is only halfway
         // up at that point, and half a metre of bore on top of it is enough.
         //
-        // So the level is held low while the sea comes back, which gives about
-        // twenty seconds of an enormous visible swell with the break line
+        // So the level is held low while the sea comes back, which gives most
+        // of the approach as an enormous visible swell with the break line
         // marching in, and only crosses the eye at the very end.
         surge: [
             { at: 0,   value: 0.00 },
-            { at: 34,  value: 0.15 },
+            { at: 12,  value: 0.15 },
             // A PLATEAU AND NOT A PEAK, and the difference is how many waves get
             // to hit you. Whether a bore covers the eye depends on the sea being
             // already high when it arrives, so the number of white-outs in the
             // storm is set by how long this sits up rather than by how high it
             // gets. A single peak at 74 gave exactly one hit in the whole storm,
             // because only one break happened to land on it.
-            { at: 42,  value: 0.55 },   // ankle deep at the camera, no more
-            { at: 52,  value: 0.55 },
+            //
+            // TEN SECONDS, WHICH IS WHAT IT WAS BEFORE THE RETIME, AND THE FIRST
+            // ATTEMPT AT SIXTY GAVE IT EIGHT. That cost a white-out on three
+            // entry offsets out of five, which is the plainest demonstration of
+            // the paragraph above that this file has: the plateau is not a water
+            // level, it is a number of chances for a wave to land on one.
+            //
+            // So it spans the whole storm stage, 15 to 25 against a stage of 14
+            // to 25, which is where the slack belongs. Steve's note was that the
+            // waves repeat for three or four rounds, and the answer to that is
+            // the SWELL curve coming off its peak sooner, not fewer chances of
+            // being hit while it is up there. Measured after both moves: eight
+            // entry offsets in ten get two white-outs and two get one.
+            { at: 15,  value: 0.55 },   // ankle deep at the camera, no more
+            { at: 25,  value: 0.55 },
             // Back to an ordinary water level for the lull, so the sea is flat
             // AND normal. A lull on a raised sea would still look like weather.
-            { at: 56,  value: 0.05 },
-            { at: 59,  value: 0.00 },   // the sea is flat AND at its own level
-            // THE BEACH HAS TO BE BARE BEFORE THE WALL SHOWS UP, and until
-            // 2026-08-24 it was not. The drawback used to bottom out at 66 and
-            // `tsunami.startAt` was 60, so the wall came up out of the fog while
-            // the water was still going out, and the two read as one event. The
-            // drawback is the tell. It only works if it happens ALONE.
+            { at: 29,  value: 0.05 },
+            { at: 32,  value: 0.00 },   // the sea is flat AND at its own level
+            // THE BEACH GOES BARE AND THE WALL ARRIVES ON TOP OF IT, AND ON
+            // 2026-08-24 THOSE WERE DELIBERATELY SEPARATED. The drawback used to
+            // bottom out at 66 with `tsunami.startAt` at 60, so the wall came up
+            // out of the fog while the water was still going out and the two
+            // read as one event. That was fixed by putting the bottom at 64 and
+            // the spawn at 67, which bought about four seconds of bare beach
+            // with nothing else in the frame. The drawback is the tell, and a
+            // tell only works if it happens alone.
             //
-            // Now it is done by 64 and the wall does not appear until 67, which
-            // leaves the bare beach on screen by itself for about four seconds
-            // before anything else happens. Nothing was compressed to buy that:
-            // it came out of the eight second tail at the end that nobody was
-            // watching. See `tsunami.startAt` and `fadeSeconds`.
-            { at: 64,  value: -0.90 },  // drawback, and the beach is bare
+            // STEVE ASKED FOR THE OVERLAP BACK ON 2026-09-17 and he is right for
+            // a sixty second arc, which is not the arc that decision was made
+            // in. The beat was never the three seconds between those two keys.
+            // Measured, the gap between the water finishing going out and the
+            // wall being worth a readable line on the horizon was SIX TO SEVEN
+            // SECONDS, because the foam line takes `tsunami.foamSeconds` to come
+            // up and the wall is 400 m away while it does. On a ninety second
+            // arc that is suspense. On a sixty it is a third of the second half
+            // spent looking at wet sand.
+            //
+            // So `tsunami.startAt` is now 36 and this bottoms out at 37: the
+            // wall's first glimmer arrives one second AFTER the water has
+            // finished leaving rather than five, and it is readable two to three
+            // seconds later rather than six or seven. The drawback still happens
+            // alone, and it now happens alone for about as long as it takes to
+            // understand it and no longer.
+            { at: 37,  value: -0.90 },  // drawback, and the beach is bare
             // THE RECOVERY HAS TO TRAVEL WITH THE FRONT. It used to lag it, so
             // when the front arrived carrying 1.70 m the water at the camera
             // came out below the eye: the tsunami reached the visitor and did
             // not cover them, because the sea underneath it was still drawn
             // back. The drawback ends when the thing that caused it arrives.
             //
-            // SO THESE THREE MOVE WHENEVER `tsunami.arriveAt` MOVES. They were
-            // 74 / 79 / 83 against an arrival at 85 and are now shifted by the
-            // same four seconds the arrival was.
-            { at: 78,  value: -0.85 },
-            { at: 83,  value: 0.10 },
-            { at: 87,  value: 0.30 },
-            { at: 90,  value: 0.35 }
+            // SO THESE FOUR MOVE WHENEVER `tsunami.arriveAt` MOVES, and they are
+            // held at 11, 6, 2 and 1 seconds either side of it, which is the
+            // relationship they were measured at. Against an arrival at 59 that
+            // is 48 / 53 / 57 / 60.
+            { at: 48,  value: -0.85 },
+            { at: 53,  value: 0.10 },
+            { at: 57,  value: 0.30 },
+            { at: 60,  value: 0.35 }
         ],
         // How far either side of eye level the white-out ramps, in metres. A
         // hard switch at exactly eye level would flicker every time a crest
@@ -1876,11 +1999,14 @@ export const OCEAN_CONFIG = deepFreeze({
         // thing you can now see all the way to the horizon is the thing that is
         // coming. Opening it later would mean the wall appeared and the air
         // cleared at the same moment, which reads as a trick.
+        // THE LAST KEY IS AHEAD OF `tsunami.startAt` ON PURPOSE. The air has to
+        // have finished clearing before the wall exists, or the wall appears and
+        // the view opens on the same beat and the whole thing reads as a trick.
         clarity: [
             { at: 0,  value: 0.00 },
-            { at: 52, value: 0.00 },   // the lull begins
-            { at: 60, value: 0.75 },
-            { at: 66, value: 1.00 }
+            { at: 25, value: 0.00 },   // the lull begins
+            { at: 31, value: 0.75 },
+            { at: 35, value: 1.00 }
         ],
 
         // ---- The calm sweeping in ------------------------------------------
@@ -1903,9 +2029,18 @@ export const OCEAN_CONFIG = deepFreeze({
         // out there is invisible. 200 m over ten seconds is 20 m/s, faster than
         // the waves themselves, but the 50 m blend means any given wave takes
         // two and a half seconds to give up rather than one frame.
+        //
+        // NINE SECONDS SINCE THE RETIME, NOT TEN, AND THE BLEND IS WHAT TO
+        // WATCH IF THIS EVER GOES WRONG. 200 m over nine is 22 m/s, so the
+        // blend crosses a given row in 4.5 s where it used to take 5.0, against
+        // a 6.1 s period for the 58 m component. That is still most of a wave,
+        // which is the property that matters: the melting fault this mechanism
+        // exists to fix was a wave giving up in ONE FRAME. If it ever comes
+        // back, widen `width` rather than slowing the sweep, because the sweep
+        // has to be clear of the camera before the drawback starts at 32.
         lull: {
-            startAt: 52,
-            endAt: 62,
+            startAt: 25,
+            endAt: 34,
             fromZ: -170,
             toZ: 30,
             width: 50
@@ -1980,7 +2115,7 @@ export const OCEAN_CONFIG = deepFreeze({
         // where the sun comes back out for the ending and it is a better film
         // and a worse beach: weather does not politely leave before a wave
         // arrives, and the sea being lit by a sky that has given up is the
-        // whole look of the last thirty seconds.
+        // whole look of the second half of the arc.
         // The keys are placed so the gloom LEADS the swell at every second of
         // the arc, not just at the ends, and there is a test that walks it and
         // compares how far each has travelled toward its own finish. An earlier
@@ -1998,13 +2133,26 @@ export const OCEAN_CONFIG = deepFreeze({
         // "ordinary bright day" opening actually needs: what sells the turn is
         // the CHANGE, and a change is easier to notice while you are still
         // looking at the thing it starts from.
+        // AND IT STARTS MOVING HARDER THAN IT USED TO, which is the other half
+        // of Steve's first note. He reported that the scene takes about twenty
+        // seconds to look cloudy and menacing, and the curve agreed with him to
+        // the second: this used to read 0.13 at t=5 and did not reach 0.75 until
+        // t=32. It is now 0.48 at t=5 and 0.78 by t=12, so the sky is the cue
+        // that arrives first and it arrives inside the first five seconds.
+        //
+        // THE ORDER IS PINNED BY A TEST, so these keys cannot be moved alone.
+        // The gloom has to be further through its own journey than the swell is
+        // at EVERY second, and the swell now leaves the calm much faster, so
+        // this curve had to be pulled forward by more than the arc was shortened
+        // by. Measured worst margin over the arc: 0.00 at the end, where both
+        // reach 1 together, which is where it has always been.
         gloom: [
             { at: 0,   value: 0.00 },   // the first frame, and only the first
-            { at: 4,   value: 0.12 },
-            { at: 14,  value: 0.42 },
-            { at: 32,  value: 0.75 },
-            { at: 54,  value: 0.94 },
-            { at: 74,  value: 1.00 }    // fully closed before the tsunami lands
+            { at: 2,   value: 0.20 },
+            { at: 5,   value: 0.48 },
+            { at: 12,  value: 0.78 },
+            { at: 25,  value: 0.95 },
+            { at: 42,  value: 1.00 }    // fully closed before the tsunami lands
         ],
         // ---- The lightning ---------------------------------------------------
         //
@@ -2071,27 +2219,36 @@ export const OCEAN_CONFIG = deepFreeze({
             // the same compositional call `boltChance` records: once the wall is
             // coming, a bare flash lights the face of it and helps, while a
             // channel beside it splits the frame and competes.
+            // THE VALUES ARE UNTOUCHED BY THE RETIME AND ONLY THE TIMES MOVED,
+            // which is the one thing this curve cannot get wrong. Every number
+            // here is strikes per SECOND, so a shorter arc holds fewer strikes
+            // and the same ceiling: `minGapSeconds` is enforced flash to flash
+            // in lightning.js and the 2.94 per second it guarantees is a
+            // property of that gap and not of this table. The keys are placed
+            // against the stages rather than scaled, because what this curve is
+            // for is the sky being quiet before the storm and backing off for
+            // the wall, and both of those are events rather than fractions.
             rate: [
                 { at: 0,  value: 0.00 },
-                { at: 22, value: 0.00 },   // the sky closes first, alone
-                { at: 30, value: 0.11 },   // the first distant flashes
-                // THE CLIMB STOPS AT THE MIDPOINT. Up to here the storm is still
-                // introducing itself and the rate is where it always was. After
-                // here it goes almost flat, and the storm goes on building
+                { at: 9,  value: 0.00 },   // the sky closes first, alone
+                { at: 12, value: 0.11 },   // the first distant flashes
+                // THE CLIMB STOPS AT THE STORM'S PEAK. Up to here the storm is
+                // still introducing itself and the rate is where it always was.
+                // After here it goes almost flat, and the storm goes on building
                 // through the cloud, the swell, and the light instead. A rate
                 // that keeps climbing to the end has nowhere to put the tsunami.
-                { at: 46, value: 0.24 },
+                { at: 25, value: 0.24 },
                 // THE ELECTRICAL PEAK LANDS IN THE DRAWBACK, NOT IN THE TSUNAMI,
                 // and that is still the shape here, just a far gentler one. The
-                // drawback is the twenty seconds where the sea has gone quiet
-                // and nothing is happening yet, which is exactly when the scene
+                // drawback is the stretch where the sea has gone quiet and
+                // nothing is happening yet, which is exactly when the scene
                 // needs something to carry the tension. The tsunami does not: it
                 // arrives with the largest object in the arc and it wants the
                 // frame.
-                { at: 60, value: 0.30 },
-                { at: 70, value: 0.36 },   // the loudest the sky ever gets
-                { at: 80, value: 0.33 },   // and it backs off for the wall
-                { at: 90, value: 0.30 }
+                { at: 36, value: 0.30 },
+                { at: 45, value: 0.36 },   // the loudest the sky ever gets
+                { at: 52, value: 0.33 },   // and it backs off for the wall
+                { at: 60, value: 0.30 }
             ],
             // THE CEILING. 0.34 seconds between any two flashes is 2.94 a
             // second. Anyone lowering this should check `flashesPerSecondCeiling`
@@ -2218,23 +2375,33 @@ export const OCEAN_CONFIG = deepFreeze({
             // with no channel have not gone away, they are now almost entirely
             // the ones from off the side of the view, which is the kind worth
             // having: it says the storm is wider than the window.
+            // RETIMED WITH THE ARC ON 2026-09-17, AND THE FALL IS KEYED TO THE
+            // WALL RATHER THAN SCALED. What this curve is for is getting the
+            // channels out of the way of the only object in the scene, so the
+            // hold ends when the wall becomes worth looking at and not at some
+            // fraction of the clock. Measured, the wall is worth a readable 40
+            // px at t=40, which is where 0.94 now stops. The old keys were 30 /
+            // 46 / 70 / 78 / 90 against a wall readable at 71.
             boltChance: [
-                { at: 30, value: 0.75 },
-                { at: 46, value: 0.94 },
-                { at: 70, value: 0.94 },
-                { at: 78, value: 0.36 },
-                { at: 90, value: 0.32 }
+                { at: 12, value: 0.75 },
+                { at: 25, value: 0.94 },
+                { at: 40, value: 0.94 },
+                { at: 47, value: 0.36 },
+                { at: 60, value: 0.32 }
             ],
             // HOW FAR OUT, walked from the far end of the range to the near end
             // by `approach`, so the storm closes in rather than just getting
             // busier. The spread is what stops them all landing at one distance.
             farMetres: 900,
             nearMetres: 210,
+            // Retimed with the arc on 2026-09-17, keyed on the same four moments
+            // it always was: the first distant flashes, the drawback, the wall
+            // on its way in, and the end. Was 30 / 60 / 76 / 90.
             approach: [
-                { at: 30, value: 0.12 },
-                { at: 60, value: 0.45 },
-                { at: 76, value: 0.72 },
-                { at: 90, value: 0.88 }
+                { at: 12, value: 0.12 },
+                { at: 36, value: 0.45 },
+                { at: 47, value: 0.72 },
+                { at: 60, value: 0.88 }
             ],
             approachSpread: 0.30,
             // Distance dimming. Inverse rather than inverse square, because the
@@ -2718,7 +2885,24 @@ export const OCEAN_CONFIG = deepFreeze({
             // is cheap is that the first seconds of the old approach were spent
             // at 400 m behind most of a fog, where the wall was worth 11 px:
             // they were on the clock but they were not on the screen.
-            startAt: 67,
+            //
+            // 36 SINCE THE ARC WENT TO SIXTY ON 2026-09-17, AND THE APPROACH DID
+            // NOT GET SHORTER. 36 to 59 is 23 s against the 22 it replaces, so
+            // the front travels the same 425 m at the same speed and the band
+            // above measures 14 to 16 s over ten entry offsets, which is the
+            // same as the ninety second arc gave. THIRTY SECONDS CAME OFF THIS
+            // SCENE AND NONE OF THEM CAME OFF THE WALL. That was the whole shape
+            // of the retime: the approach is the only part of the arc with the
+            // largest object in the scene in it.
+            //
+            // It also answers Steve's third note, which asked for the wall to
+            // start arriving before the water had finished leaving. The measured
+            // gap from the sea bottoming out to the wall being worth 40 px went
+            // from 6-7 s to 2-3 s, and its first glimmer now lands 1 s after the
+            // drawback rather than 5. See the note on the -0.90 surge key, which
+            // is the other half of this and records why the separation was
+            // deliberate in the first place.
+            startAt: 36,
             // HOW LONG THE WALL TAKES TO COME UP, in seconds, once it exists.
             //
             // This was a fraction of the approach until 2026-08-24 and lived in
@@ -2741,6 +2925,13 @@ export const OCEAN_CONFIG = deepFreeze({
             // 0.23 of the old fraction: every one converges by 72.
             //
             // Going much past 5 s starts eating the part that already works.
+            //
+            // UNCHANGED BY THE SIXTY SECOND RETIME, and this is the key that
+            // proves the 2026-08-24 change was worth making. The approach went
+            // from 22 s to 23, so a fraction of the approach would have drifted
+            // and a duration in seconds did not. The t=72 in the paragraph above
+            // is a time on the OLD arc, five seconds after the old spawn at 67.
+            // The equivalent now is t=41.
             riseSeconds: 4.5,
             // The white line comes up FASTER than the wall does, deliberately.
             // See the note in `frontAt`: what should appear first is something
@@ -2803,7 +2994,21 @@ export const OCEAN_CONFIG = deepFreeze({
             // The clearing no longer happens, because the white-out floor holds
             // it closed once the sea is over the eye. There is nothing under
             // there to clear TO: see `storm.washFloorFromMetres`.
-            arriveAt: 89,
+            //
+            // 59 SINCE THE ARC WENT TO SIXTY, AND IT IS `seconds` MINUS ONE FOR
+            // A REASON WORTH KNOWING BEFORE MOVING EITHER. The front decelerates
+            // as p^0.7, and it spends 92.7% of its TIME covering the distance
+            // out to the camera, so the moment it crosses the eye is pinned to
+            // this number and barely moves with the length of the approach:
+            // crossing lands at about `arriveAt` minus 1.5 whether the approach
+            // is 16 s or 23. The eye goes under about 0.7 s before that.
+            //
+            // Which means THIS key sets the ending and `startAt` sets the
+            // approach, and they are almost independent. Measured at 59 against
+            // a fade from 57: the eye is covered at 56.7 and black at 60, so the
+            // tail is 3.2 to 4.7 s depending on the tide, matching the 3.1 to
+            // 4.5 the ninety second arc gave.
+            arriveAt: 59,
             // THE FRONT CARRIES THE WATER NOW, NOT THE SURGE. The surge used to
             // ramp to 1.55 at the end and the front added its own rise on top,
             // which is two systems raising the same sea and a level of 3 m if
@@ -3062,10 +3267,16 @@ export const OCEAN_CONFIG = deepFreeze({
         // long enough to notice, which is what Steve reported on 2026-08-24 and
         // what the earlier "too long underwater" note had been circling.
         //
-        // 3 against `seconds` 90 puts the fade at 87 to 90 with the hit at about
+        // 3 against `seconds` 90 put the fade at 87 to 90 with the hit at about
         // 86.8, so the black starts as the water closes over rather than after
         // it. Those five recovered seconds are what paid for the drawback beat
         // at the other end: see `tsunami.startAt`.
+        //
+        // UNCHANGED AT SIXTY SECONDS, which is the point of it being a duration
+        // rather than a fraction. The fade now runs 57 to 60 with the eye covered
+        // at 56.7, so the relationship the paragraph above describes is exactly
+        // preserved and nothing had to be re-solved. Measured over ten entry
+        // offsets the tail is 3.2 to 4.7 s, against 3.1 to 4.5 before.
         //
         // It cannot go much below 3. `washReleaseSeconds` is 0.9 and the fade
         // has to outlast the white-out arriving or the two fight each other in
