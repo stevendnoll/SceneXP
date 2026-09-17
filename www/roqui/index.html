@@ -73,12 +73,12 @@
 
     <title>Zumba with Roqui</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=4" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=4">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -235,6 +235,10 @@
                     business, I would genuinely love to hear from you.</p>
                 <a id="complete-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
                 <button id="complete-share" class="piece-cancel complete-share" type="button">Share this</button>
+                <!-- Where "Link copied" is said out loud. INSIDE the dialog,
+                     because content outside an aria-modal dialog may not be
+                     spoken while it is open. -->
+                <p id="complete-share-status" class="sr-only" role="status" aria-live="polite"></p>
                 <button class="piece-cancel" data-close>Keep exploring</button>
             </div>
         </div>

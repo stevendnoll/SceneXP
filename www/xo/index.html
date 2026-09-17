@@ -103,8 +103,8 @@
 
     <title>X's and O's</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=15" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=4" as="style">
+    <link rel="preload" href="css/experience.min.css?v=16" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
@@ -112,8 +112,8 @@
          the same icon in a tab. -->
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=15">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=4">
+    <link rel="stylesheet" href="css/experience.min.css?v=16">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -490,6 +490,12 @@
                  content outside an aria-modal dialog may not be spoken while it
                  is open (see flashShared in summary.js). -->
             <p id="summary-status" class="sr-only" role="status" aria-live="polite"></p>
+            <!-- The recommendation and the directory link, BUILT rather than
+                 written, by shared/js/promo-1.0.0.js. Somebody who arrived
+                 straight at this game has no way of knowing there are fourteen
+                 other experiences here, and the end of a game is the one moment
+                 they have an opinion about whether they want another. -->
+            <div id="summary-promo" class="summary-promo"></div>
         </div>
     </div>
 

@@ -378,3 +378,51 @@ test('the outline runs h1, category h2, card h3 with no level skipped', () => {
     const titles = [...home.matchAll(/<h3>([^<]+)<\/h3>/g)].map((m) => m[1]);
     expect(titles).toHaveLength(slugs.length);
 });
+
+/** THE SHARED STYLESHEET'S CACHE BUSTER, ACROSS EVERY PAGE THAT LOADS IT.
+ *
+ *  `styles-1.0.0.css` is edited in place rather than versioned by filename, so
+ *  the only thing telling a returning visitor's browser to fetch it again is
+ *  the `?v=` on the link. Sixteen pages carry that link twice each (a preload
+ *  and the stylesheet), and a bump that reaches fifteen of them ships a scene
+ *  styled by a stale sheet, which is invisible to everybody who has never
+ *  visited before and therefore invisible in review.
+ *
+ *  This does not say WHICH version is right. It says there is exactly one. */
+describe('the shared stylesheet version', () => {
+    const pages = walk(join(process.cwd(), 'www'))
+        .filter((f) => f.endsWith('.html'))
+        .map((f) => [f, readFileSync(f, 'utf8')])
+        .filter(([, body]) => body.includes('styles-1.0.0.min.css'));
+
+    test('every page that loads it agrees on the version', () => {
+        expect(pages.length).toBeGreaterThan(10);
+        const versions = new Map();
+        for (const [file, body] of pages) {
+            for (const [, v] of body.matchAll(/styles-1\.0\.0\.min\.css\?v=(\d+)/g)) {
+                if (!versions.has(v)) versions.set(v, []);
+                versions.get(v).push(file.split('/www/')[1]);
+            }
+        }
+        expect([...versions.keys()]).toHaveLength(1);
+    });
+
+    test('and every reference carries one at all', () => {
+        for (const [file, body] of pages) {
+            const refs = [...body.matchAll(/styles-1\.0\.0\.min\.css(\?v=\d+)?/g)];
+            for (const [, query] of refs) {
+                expect([file.split('/www/')[1], !!query]).toEqual([file.split('/www/')[1], true]);
+            }
+        }
+    });
+});
+
+function walk(dir) {
+    const out = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) out.push(...walk(full));
+        else out.push(full);
+    }
+    return out;
+}

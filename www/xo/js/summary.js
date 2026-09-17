@@ -13,6 +13,7 @@
  */
 import { XO_CONFIG as CFG } from './config.min.js';
 import { summarise, verdictFor } from './scoring.min.js';
+import { createPromoCard, createDirectoryLink } from '../../shared/js/promo-1.0.0.min.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -111,9 +112,33 @@ export function showSummary(plays, onAgain, { onShare = null } = {}) {
     again.addEventListener('click', () => { hideSummary(); if (onAgain) onAgain(); });
     box.appendChild(again);
 
+    fillPromo();
+
     card.hidden = false;
     again.focus();
     return stats;
+}
+
+/** The recommendation under the card, built once and kept.
+ *
+ *  ONCE, because `showSummary` runs again after every game and a card rebuilt
+ *  each time would re-request the image and throw away a node nothing was wrong
+ *  with. What to recommend does not depend on how the game went.
+ *
+ *  BELOW THE BUTTONS AND BELOW THE STATUS LINE, so the reading order a screen
+ *  reader gets is the score, then the plays, then what to do about it, then
+ *  what else there is. */
+function fillPromo() {
+    const host = el('summary-promo');
+    // `children.length` and not `childElementCount`: the second is a real DOM
+    // property the suites' element stub does not have, so the guard would never
+    // fire and the card would be rebuilt after every game.
+    if (!host || (host.children && host.children.length)) return false;
+    const next = createPromoCard('xo');
+    if (next) host.appendChild(next);
+    const link = createDirectoryLink();
+    if (link) host.appendChild(link);
+    return true;
 }
 
 /**

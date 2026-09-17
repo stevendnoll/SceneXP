@@ -1586,6 +1586,30 @@ body.hull-hit::after {
 }
 
 /* ============================================================
+   The end card's two buttons, and what sits under them
+   ============================================================
+   SHARE AND FLY AGAIN IN ONE ROW, wrapping rather than shrinking: two buttons
+   fit a phone at this size, and the moment they would not, stacked beats
+   squeezed. "Fly again" keeps the primary treatment and the focus, because
+   flying again is what this card is asking for and the share is an offer.
+
+   The promo card and the directory link under them are styled by the shared
+   sheet (.promo-card and friends), so all three scenes that show one look the
+   same. Only the spacing above it belongs to this card. */
+.end-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-top: 1.1rem;
+}
+
+.end-promo {
+    margin-top: 0.4rem;
+}
+
+/* ============================================================
    The Martian's caption, which belongs to the opening and nothing else
    ============================================================
    LOW IN THE FRAME, LIKE EVERY SUBTITLE EVER. It sits above the Skip button

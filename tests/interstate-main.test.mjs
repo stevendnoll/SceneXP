@@ -477,12 +477,10 @@ test('partway nudge waits for a quiet moment; completion celebrates and shares',
   shareBtn.textContent = 'Share this';
   fire(shareBtn, 'click');
   await flushAsync();
-  expect(navigator.clipboard.writeText).toHaveBeenCalledWith('http://localhost:8000/test/');
-  expect(shareBtn.textContent).toBe('Link copied ✓');
-  expect(shareBtn.disabled).toBe(true);
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('http://localhost:8000/test/'));
+  expect(shareBtn.textContent).toBe('Link copied');
   await jest.advanceTimersByTimeAsync(1900);
   expect(shareBtn.textContent).toBe('Share this');
-  expect(shareBtn.disabled).toBe(false);
 
   // …and a mailto as the last resort.
   delete navigator.clipboard;

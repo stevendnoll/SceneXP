@@ -119,14 +119,14 @@
 
     <title>Earth Defense</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=3" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=4" as="style">
+    <link rel="preload" href="css/experience.min.css?v=4" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=3">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=4">
+    <link rel="stylesheet" href="css/experience.min.css?v=4">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -471,12 +471,12 @@
         <!-- Everything the HUD shows visually is also announced here, so the
              flight state is available to a screen reader rather than being
              locked in the pixels. -->
-        <p id="flight-status" class="visually-hidden" role="status" aria-live="polite"></p>
-        <p id="combat-status" class="visually-hidden" role="status" aria-live="polite"></p>
+        <p id="flight-status" class="sr-only" role="status" aria-live="polite"></p>
+        <p id="combat-status" class="sr-only" role="status" aria-live="polite"></p>
         <!-- The objective counters and the alert as a sentence, so the state of
              the game is available to a visitor who is not reading the pixels.
              Built in now rather than retrofitted at M8. -->
-        <p id="objective-status" class="visually-hidden" role="status" aria-live="polite"></p>
+        <p id="objective-status" class="sr-only" role="status" aria-live="polite"></p>
     </div>
 
     <!-- Touch controls. The LEFT thumb gets a throttle rather than a movement
@@ -726,7 +726,24 @@
                     </div>
                 </dl>
                 <p id="end-best" class="end-best"></p>
-                <button id="restart-btn" class="piece-enter" type="button">Fly again</button>
+                <!-- TWO BUTTONS IN ONE ROW, and "Fly again" keeps the primary
+                     treatment: sharing is worth offering and playing again is
+                     still what this card is asking for. -->
+                <div class="end-actions">
+                    <button id="end-share" class="piece-cancel" type="button">Share</button>
+                    <button id="restart-btn" class="piece-enter" type="button">Fly again</button>
+                </div>
+                <!-- WHERE THE ACKNOWLEDGEMENT GOES when a share falls through
+                     to a clipboard copy. INSIDE the dialog on purpose: content
+                     outside an aria-modal dialog may not be announced at all,
+                     so a live region parked at the bottom of the page would be
+                     silent exactly when it matters. -->
+                <p id="end-status" class="end-status sr-only" role="status" aria-live="polite"></p>
+                <!-- The recommendation and the directory link are BUILT rather
+                     than written, by shared/js/promo-1.0.0.js, so that fifteen
+                     experiences share one description of what a promo card is
+                     and the catalog lives in one file. -->
+                <div id="end-promo" class="end-promo"></div>
             </div>
         </div>
     </div>

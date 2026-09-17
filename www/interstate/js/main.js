@@ -43,6 +43,7 @@ import {
     getChecklistItems, getChecklistProgress
 } from '../../shared/js/checklist-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { installShare } from '../../shared/js/share-1.0.0.min.js';
 import {
     initAutopilot, toggleAutopilot, setAutopilotEnabled,
     isAutopilotEnabled, onAutopilotChange, updateAutopilot
@@ -403,8 +404,14 @@ function setupEventListeners() {
     // Discovery-complete celebration: close buttons + the Share action.
     if (completeModal) completeModal.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closeCompleteModal, { signal }));
-    const shareBtn = document.getElementById('complete-share');
-    if (shareBtn) shareBtn.addEventListener('click', shareSite, { signal });
+    installShare(
+        document.getElementById('complete-share'),
+        shareData,
+        {
+            status: document.getElementById('complete-share-status'),
+            onShare: (how) => track('share', { method: how }),
+            signal
+        });
 
     // Partway "reach out" nudge: close buttons.
     if (nudgeModal) nudgeModal.querySelectorAll('[data-close]').forEach(el =>
@@ -1922,44 +1929,26 @@ function applySiteLinks() {
     });
 }
 
-/** Share the site: native share sheet where available, clipboard copy otherwise,
- *  and a mailto as a last resort. Driven by the celebration's "Share this". */
-async function shareSite() {
-    const shareData = {
+/** What a visitor sends. The ladder itself (native sheet, then clipboard, then
+ *  mailto), the acknowledgement, and the not-disabling-of-the-focused-button
+ *  all live in shared/js/share-1.0.0.js now.
+ *
+ *  THIS FILE USED TO CARRY ITS OWN COPY OF ALL OF IT, along with six other
+ *  scenes, and the copies drifted. www/xo fixed a real accessibility defect in
+ *  its own during the 2026-09-14 sweep, and the fix never travelled: disabling
+ *  the focused button throws keyboard focus out of the dialog, so the visitor's
+ *  next Tab starts from the top of the document. One implementation now, held
+ *  by tests/shared-share.test.mjs.
+ *
+ *  A FUNCTION AND NOT AN OBJECT, because `installShare` asks at press time.
+ *  Nothing here changes between presses, but the scenes that share a RESULT
+ *  need it to, and one shape across all of them is worth more than the
+ *  object this could have been. */
+function shareData() {
+    return {
         title: INTERSTATE_CONFIG.site.share.title,
-        text: INTERSTATE_CONFIG.site.share.text,
-        // The directory URL the tour is actually served from ('.' resolves
-        // away an explicit index.html), so shares stay correct on any domain
-        // with no configuration.
-        url: new URL('.', window.location.href).href
+        text: INTERSTATE_CONFIG.site.share.text
     };
-    try {
-        if (navigator.share) {
-            await navigator.share(shareData);
-            track('share', { method: 'native' });
-            return;
-        }
-    } catch (e) {
-        if (e && e.name === 'AbortError') return; // visitor dismissed the share sheet
-    }
-    try {
-        await navigator.clipboard.writeText(shareData.url);
-        track('share', { method: 'copy' });
-        flashShareCopied();
-    } catch (e) {
-        window.location.href = 'mailto:?subject=' + encodeURIComponent(shareData.title) +
-            '&body=' + encodeURIComponent(shareData.text + ' ' + shareData.url);
-    }
-}
-
-/** Briefly confirm a clipboard copy on the Share button itself. */
-function flashShareCopied() {
-    const btn = document.getElementById('complete-share');
-    if (!btn) return;
-    const original = btn.textContent;
-    btn.textContent = 'Link copied ✓';
-    btn.disabled = true;
-    setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1800);
 }
 
 /* (The portfolio site's one-tap mailto upgrade is gone here: on SceneXP the

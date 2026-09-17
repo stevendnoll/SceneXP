@@ -91,6 +91,8 @@ import {
     playFire, playHit, playDestruction, playAlert, playLock, disposeAudio
 } from './audio.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { installShare } from '../../shared/js/share-1.0.0.min.js';
+import { createPromoCard, createDirectoryLink } from '../../shared/js/promo-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
 
@@ -700,10 +702,13 @@ function showEndScreen(outcome) {
             ? ''
             : (improved ? `A new best: ${formatClock(best)}` : `Your best: ${formatClock(best)}`);
     }
+    fillEndPromo();
     if (endModal) endModal.classList.remove('hidden');
     // The card has no close button on purpose, so the one control on it has to
     // receive focus: a keyboard visitor should not have to go looking for the
-    // only way forward.
+    // only way forward. STILL "Fly again" AND NOT "Share", even though Share is
+    // now first in the row: flying again is what this card is asking for, and
+    // the share is an offer.
     const restartBtn = document.getElementById('restart-btn');
     if (restartBtn && typeof restartBtn.focus === 'function') restartBtn.focus();
 
@@ -714,6 +719,48 @@ function showEndScreen(outcome) {
         saved: counters.friendlyStructures,
         destroyed: config.fleet.total - counters.hostileShips
     });
+}
+
+/** What a visitor sends, which carries the run and not just the link.
+ *
+ *  A BARE URL IS A WORSE SHARE THAN A SENTENCE. Whoever receives this has no
+ *  idea what Earth Defense is, so the text has to say what the game is as well
+ *  as how it went, the same way xo's does. The numbers are read at press time
+ *  rather than when the button was wired, because the card is reused between
+ *  runs and the counters are not.
+ *
+ *  Exported for the suite, because the wording is the part that can be wrong
+ *  and a share sheet is not needed to check it. */
+function endShareText() {
+    const config = EARTHDEFENSE_CONFIG;
+    const counters = getCounters();
+    const destroyed = config.fleet.total - counters.hostileShips;
+    const held = counters.friendlyStructures;
+    // FOUR ON EARTH AND THREE ON THE MOON, counted rather than written down as
+    // seven: `structures` is two lists and the briefing's "Seven installations"
+    // is their sum, so a site added to either has to move this too.
+    const total = config.structures.earth.length + config.structures.moon.length;
+    return `I held ${held} of ${total} installations and cleared `
+        + `${destroyed} of ${config.fleet.total} Martian raiders in Earth Defense, `
+        + 'a browser space game on SceneXP.';
+}
+
+/** The recommendation under the end card, built once and kept.
+ *
+ *  ONCE, because `showEndScreen` runs again on every restart and a card rebuilt
+ *  each time would re-request the image and throw away a node nothing was wrong
+ *  with. The recommendation does not depend on how the run went. */
+function fillEndPromo() {
+    const host = document.getElementById('end-promo');
+    // `children.length` and not `childElementCount`, which is the property a
+    // real DOM has and the suite's element stub does not: the guard would have
+    // been permanently false and the card rebuilt on every restart.
+    if (!host || (host.children && host.children.length)) return false;
+    const card = createPromoCard('earthdefense');
+    if (card) host.appendChild(card);
+    const link = createDirectoryLink();
+    if (link) host.appendChild(link);
+    return true;
 }
 
 /** RUNNING OUT OF HULLS IS NOT A LOST OBJECTIVE (PRD 6.4). The run is over
@@ -1682,6 +1729,19 @@ function setupEventListeners() {
     const restartBtn = document.getElementById('restart-btn');
     if (restartBtn) restartBtn.addEventListener('click', restartRun, { signal });
 
+    // SHARING IS THE POINT OF A RESULT. A run nobody else hears about is a run
+    // that stops mattering when the card closes, and this is the one screen
+    // where the visitor has something to say. The ladder, the acknowledgement
+    // and the not-disabling-the-focused-button are all the shared part's.
+    installShare(
+        document.getElementById('end-share'),
+        () => ({ title: 'Earth Defense', text: endShareText() }),
+        {
+            status: document.getElementById('end-status'),
+            onShare: (how) => track('share', { method: how }),
+            signal
+        });
+
     if (blocker) {
         const dismiss = (e) => {
             if (e) e.preventDefault();
@@ -2604,6 +2664,7 @@ export const __test__ = {
     updateObjectiveHud, advanceNotices, playerState, getProjection,
     startGame, handleStateChange, showEndScreen, endMessage, formatClock,
     restartRun, killPlayer, respawnPlayer, advanceRespawn, advanceEndScreen,
+    endShareText, fillEndPromo,
     showStructureLost, clearReplays, readInsetRect, drawFrame, applyViewpoint,
     queueAftershocks, advanceAftershocks, aftershocks: _aftershocks,
     startEndingShot, earthShot, wreckShot, advanceFinale,

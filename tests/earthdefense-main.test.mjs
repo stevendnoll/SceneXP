@@ -2266,6 +2266,57 @@ describe('the pause button belongs to a run', () => {
     });
 });
 
+/** THE END CARD NOW ASKS FOR TWO THINGS BESIDES ANOTHER RUN: pass this on, and
+ *  here is what else is here. A visitor who arrived straight at this game has
+ *  no way of knowing there are fourteen other experiences on SceneXP, and the
+ *  end of a run is the one moment they have an opinion about whether they want
+ *  another. The ladder itself is the shared suite's; what matters here is that
+ *  the button is wired, the text says something, and the card is built once. */
+describe('sharing and what comes next', () => {
+    test('the share text names the game and carries the run', async () => {
+        const main = await boot();
+        const CFG = await CONFIG();
+        const text = main.__test__.endShareText();
+
+        // A bare URL arriving in somebody's messages means nothing, so the
+        // sentence has to say what this is as well as how it went.
+        expect(text).toContain('Earth Defense');
+        expect(text).toContain('SceneXP');
+        expect(text).toContain(String(CFG.fleet.total));
+        // House style, on every string a visitor can send.
+        expect(text).not.toMatch(/[—;]/);
+    });
+
+    test('it reports the run that just happened, not the one it was wired on', async () => {
+        const main = await boot();
+        enterWorld();
+        const before = main.__test__.endShareText();
+        await clearTheFleet(main);
+        const after = main.__test__.endShareText();
+
+        // Twelve raiders cleared is a different sentence from none.
+        expect(after).not.toBe(before);
+    });
+
+    test('the recommendation and the directory link are built once', async () => {
+        const main = await boot();
+        const host = dom.el('end-promo');
+
+        expect(main.__test__.fillEndPromo()).toBe(true);
+        const built = host.children.length;
+        expect(built).toBe(2);
+        // A second end screen must not rebuild it: the image would be
+        // re-requested and a perfectly good node thrown away.
+        expect(main.__test__.fillEndPromo()).toBe(false);
+        expect(host.children.length).toBe(built);
+    });
+
+    test('it recommends X\'s and O\'s, which is the curated pair', async () => {
+        const { nextSlug } = await import('../www/shared/js/promo-1.0.0.min.js');
+        expect(nextSlug('earthdefense')).toBe('xo');
+    });
+});
+
 describe('how a run ends', () => {
     const FINALE = async () => await import('../www/earthdefense/js/finale.min.js');
     const washed = (name) => dom.documentStub.body.classList.contains(name);

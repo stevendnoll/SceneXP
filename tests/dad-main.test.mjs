@@ -378,16 +378,19 @@ test('completing every discovery celebrates once and the share button covers its
   await flushAsync();
   expect(shareBtn.textContent).toBe('');
 
+  // THE CLIPBOARD NOW CARRIES THE SENTENCE AS WELL AS THE LINK, and the button
+  // is NOT disabled while it says so. Both changed when this scene moved onto
+  // shared/js/share-1.0.0.js: a bare URL pasted into somebody's messages says
+  // nothing about what it is, and disabling the focused element throws keyboard
+  // focus out of the dialog. The old assertions here pinned the defect.
   // Share: the clipboard path flashes a confirmation on the button.
   delete globalThis.navigator.share;
   globalThis.navigator.clipboard = { writeText: jest.fn(async () => {}) };
   fire(shareBtn, 'click');
   await flushAsync();
-  expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalledWith('http://localhost:8000/test/');
-  expect(shareBtn.textContent).toBe('Link copied ✓');
-  expect(shareBtn.disabled).toBe(true);
+  expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('http://localhost:8000/test/'));
+  expect(shareBtn.textContent).toBe('Link copied');
   await jest.advanceTimersByTimeAsync(1900);
-  expect(shareBtn.disabled).toBe(false);
 
   // Without a share sheet or clipboard the last resort is a mailto link.
   delete globalThis.navigator.clipboard;

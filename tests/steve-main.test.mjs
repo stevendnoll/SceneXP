@@ -288,12 +288,17 @@ test('desktop tour: pointer lock, hover, every office dialog, nudge, deferred ce
   await flushAsync();
   expect(dom.windowStub.location.href.startsWith('mailto:')).toBe(false);
 
+  // THE CLIPBOARD NOW CARRIES THE SENTENCE AS WELL AS THE LINK, and the button
+  // is NOT disabled while it says so. Both changed when this scene moved onto
+  // shared/js/share-1.0.0.js: a bare URL pasted into somebody's messages says
+  // nothing about what it is, and disabling the focused element throws keyboard
+  // focus out of the dialog. The old assertions here pinned the defect.
   // And the clipboard path when no share sheet exists.
   delete globalThis.navigator.share;
   globalThis.navigator.clipboard = { writeText: async () => {} };
   fire(dom.el('complete-share'), 'click');
   await flushAsync();
-  expect(dom.el('complete-share').textContent).toBe('Link copied ✓');
+  expect(dom.el('complete-share').textContent).toBe('Link copied');
   await jest.advanceTimersByTimeAsync(2000);
   expect(dom.el('complete-share').disabled).toBe(false);
   delete globalThis.navigator.clipboard;

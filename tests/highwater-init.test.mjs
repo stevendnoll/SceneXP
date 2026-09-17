@@ -487,3 +487,93 @@ describe('the rest of the site knows the scene exists', () => {
         expect(robots).not.toMatch(/^Disallow: \/highwater/m);
     });
 });
+
+/** THE END SCREEN NOW OFFERS TWO THINGS BESIDES ANOTHER WATCH.
+ *
+ *  A SHARE, because until this round the only way to pass a scene on was to
+ *  copy the address bar. The ladder itself lives in shared/js/share-1.0.0.js
+ *  and is tested there; what matters here is that the button and its status
+ *  line exist and are wired.
+ *
+ *  AND A DIRECTORY LINK, AND DELIBERATELY NO RECOMMENDATION CARD. The two games
+ *  put a named "next on SceneXP" card under their end cards. This screen gets
+ *  one quiet link instead: it is one line, one note and a button on black, and
+ *  it is the last sixty seconds of a scene whose whole job was a mood. A
+ *  thumbnail of something else sells the next thing at the cost of this one. */
+describe('the ending screen', () => {
+    let page;
+    beforeAll(async () => { page = await readFile(PAGE, 'utf8'); });
+
+    test('carries a Share button and a status line to answer it', () => {
+        expect(page).toMatch(/<button id="share"/);
+        expect(page).toMatch(/id="share-status"[^>]*role="status"[^>]*aria-live="polite"/);
+    });
+
+    test('the status line is hidden by a class the shared sheet actually defines', () => {
+        // `.visually-hidden` is Earth Defense's own and is not in the shared
+        // stylesheet, so using it here would have rendered "Link copied" as
+        // visible text on a black screen.
+        expect(page).toMatch(/id="share-status" class="sr-only"/);
+    });
+
+    test('offers the directory and no recommendation card', () => {
+        expect(page).toContain('More 3D worlds to explore at SceneXP.com');
+        expect(page).not.toContain('promo-card');
+    });
+
+    test('both buttons sit in one row that is allowed to wrap', () => {
+        expect(page).toMatch(/class="ending-actions"/);
+    });
+
+    /** EVERY BUTTON ON THIS SCREEN WEARS THE SAME PILL, and this scene's
+     *  stylesheet keys that shape off IDS rather than a class.
+     *
+     *  Share shipped without it for exactly that reason: the new button was
+     *  added to the markup and to the rule that sets its padding, and the
+     *  shape (border, radius, colour, transparent background) lives in a
+     *  separate rule naming `#replay` and `#welcome .primary`. A new id gets
+     *  none of it, so Share rendered as a default browser button on a black
+     *  screen next to a pill, and nothing anywhere failed.
+     *
+     *  Written against the ending's buttons rather than against `#share` by
+     *  name, so the next button added here is covered on the day it lands. */
+    test('every button in the ending wears the shared pill', async () => {
+        const css = await readFile(
+            new URL('../www/highwater/css/experience.css', import.meta.url), 'utf8');
+
+        const ending = page.match(/<div id="ending"[\s\S]*?<\/div>\s*<\/div>/)
+            || page.match(/<div id="ending"[\s\S]*?<script/);
+        const ids = [...ending[0].matchAll(/<button id="([a-z-]+)"/g)].map((m) => m[1]);
+        expect(ids).toEqual(expect.arrayContaining(['replay', 'share']));
+
+        // The rules that make a button a pill: the shape, the hover and focus
+        // wash, and the focus ring. Each is found by something only it says.
+        const ruleFor = (needle) => {
+            const at = css.indexOf(needle);
+            expect(at).toBeGreaterThan(-1);
+            return css.slice(css.lastIndexOf('}', at) + 1, at);
+        };
+        const shape = ruleFor('border-radius: 2rem;');
+        const wash = ruleFor('background: rgba(232, 238, 241, 0.10);');
+        const ring = ruleFor('outline: 2px solid #9fb0b8;');
+
+        for (const id of ids) {
+            expect([id, shape.includes(`#${id}`)]).toEqual([id, true]);
+            expect([id, wash.includes(`#${id}:hover`)]).toEqual([id, true]);
+            expect([id, ring.includes(`#${id}:focus-visible`)]).toEqual([id, true]);
+        }
+    });
+
+    test('main.js wires the share through the shared part', async () => {
+        const main = await readFile(new URL('../www/highwater/js/main.js', import.meta.url), 'utf8');
+        expect(main).toContain("from '../../shared/js/share-1.0.0.min.js'");
+        expect(main).toMatch(/installShare\(/);
+        // The text sells the scene rather than a result: there is no score here
+        // and nothing to beat.
+        // The apostrophe is escaped in the source, so match around it.
+        expect(main).toContain('Sixty seconds at the water');
+        // And it stops short of the last twenty seconds, exactly as the
+        // og:description does and for the same reason.
+        expect(main).not.toMatch(/installShare\([\s\S]{0,400}tsunami/i);
+    });
+});

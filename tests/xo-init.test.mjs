@@ -21,6 +21,7 @@
 import { jest } from '@jest/globals';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
+import { readFile } from 'node:fs/promises';
 
 let dom;
 
@@ -1162,5 +1163,34 @@ describe('the usage log', () => {
         } finally {
             delete globalThis.Image;
         }
+    });
+});
+
+/** THE SUMMARY CARD NOW SAYS WHAT ELSE IS HERE.
+ *
+ *  Somebody who arrived straight at this game has no way of knowing SceneXP
+ *  hosts fourteen other experiences, and the end of a game is the one moment
+ *  they have an opinion about whether they want another. The card itself is
+ *  built by shared/js/promo-1.0.0.js and tested there; this is the wiring. */
+describe('what comes after the final score', () => {
+    test('the summary card has somewhere to put the recommendation', async () => {
+        const page = await readFile(new URL('../www/xo/index.html', import.meta.url), 'utf8');
+        expect(page).toMatch(/id="summary-promo"/);
+        // BELOW the actions and below the status line, so the reading order is
+        // the score, the plays, what to do about it, then what else there is.
+        expect(page.indexOf('summary-promo')).toBeGreaterThan(page.indexOf('summary-actions'));
+        expect(page.indexOf('summary-promo')).toBeGreaterThan(page.indexOf('summary-status'));
+    });
+
+    test('summary.js builds it through the shared part', async () => {
+        const src = await readFile(new URL('../www/xo/js/summary.js', import.meta.url), 'utf8');
+        expect(src).toContain("from '../../shared/js/promo-1.0.0.min.js'");
+        expect(src).toMatch(/createPromoCard\('xo'\)/);
+        expect(src).toMatch(/createDirectoryLink\(\)/);
+    });
+
+    test('it recommends Earth Defense, which is the curated pair', async () => {
+        const { nextSlug } = await import('../www/shared/js/promo-1.0.0.js');
+        expect(nextSlug('xo')).toBe('earthdefense');
     });
 });

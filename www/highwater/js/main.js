@@ -48,6 +48,7 @@ import { OCEAN_CONFIG } from './config.min.js';
 // experience on the site carries them.
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { installShare } from '../../shared/js/share-1.0.0.min.js';
 import {
     initWater, updateWater, consumeBreaks, breakDistance, resetWater, disposeWater,
     setProfileHz, profileRate
@@ -635,6 +636,24 @@ async function init() {
     replay = document.getElementById('replay');
     welcome = document.getElementById('welcome');
     if (replay) replay.addEventListener('click', replayArc);
+
+    // SHARING A SCENE IS NOT SHARING A SCORE, which is why the text below sells
+    // the thing rather than a result. There is nothing to be proud of here and
+    // nothing to beat: the only honest share is "look at this", so it says what
+    // the sixty seconds are and stops short of the last twenty, exactly as the
+    // og:description does and for the same reason.
+    installShare(
+        document.getElementById('share'),
+        () => ({
+            title: 'High Water',
+            text: 'Sixty seconds at the water\'s edge, beginning on an ordinary bright '
+                + 'afternoon. The weather turns while you stand there. A browser 3D scene '
+                + 'on SceneXP.'
+        }),
+        {
+            status: document.getElementById('share-status'),
+            onShare: (how) => track('share', { method: how })
+        });
 
     const beginBtn = document.getElementById('begin');
     if (beginBtn) {
