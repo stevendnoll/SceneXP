@@ -2,6 +2,25 @@
 /**
  * intro.js - The shot the game opens on, before the welcome screen.
  *
+ * FOUR BEATS AND ONE UNBROKEN MOVE, which is the shape as of 2026-09-17 and
+ * the thing to understand before reading anything else here. The squadron forms
+ * up at Mars, the camera pushes in on the Martian commander flying the apex
+ * ship, holds while they say their line, and then retreats all the way to the
+ * spawn point. The commander is martian.js, mounted on ship zero by
+ * `mountCommander` and driven off this module's own clock, so the camera stays
+ * one file's job and the face is another's.
+ *
+ * THE MONOLOGUE USED TO COME FIRST, IN FRONT OF THE FORM-UP, and Steve's
+ * screenshots killed that arrangement. The commander had a command ship of
+ * their own standing off to one side of the approach line, which made them a
+ * speck at the edge of frame that was plainly not part of the squadron, and
+ * holding the form-up at its first frame for the length of the monologue meant
+ * the visitor spent five seconds watching a scattered swarm that only became a
+ * V afterwards. Putting the beat AFTER the form-up and the commander IN the
+ * apex ship fixes all of it at once: the V is made at its proper speed, the
+ * camera pushes in on something the visitor has been looking at, and the
+ * subject of the close-up is a ship that is visibly one of the twelve coming.
+ *
  * THE OPENING FRAME USED TO ARRIVE WITHOUT ITS FIRST HALF. A visitor landed on
  * the welcome overlay already sitting 8,500 units over Earth, with a line of
  * hostile lights trailing away toward a small red disc, and nothing on the page
@@ -11,7 +30,7 @@
  * formation, and then the camera running the approach line back to Earth ahead
  * of them.
  *
- * IT ARRIVES, IT DOES NOT CUT, which is the whole reason it earns its five
+ * IT ARRIVES, IT DOES NOT CUT, which is the whole reason it earns its ten
  * seconds. The last frame of this shot IS the spawn frame. The path ends at
  * `spawnPosition(config)` looking down -Z, which is exactly where and how
  * `placeCameraAtSpawn` puts the camera, so the welcome overlay comes up over a
@@ -74,7 +93,7 @@
  * would mean a snap on the exact frame the camera is watching them. So this
  * module owns nine throwaway hulls, built through `createRaiderMesh` from
  * fleet.js's own shared geometry so a raider keeps one definition, and the real
- * fleet is hidden for five seconds. Hiding it matters more than it used to:
+ * fleet is hidden for the whole opening. Hiding it matters more than it used to:
  * they are no longer parked somewhere else in the sky, they are in the same
  * cubic kilometre. At arrival the throwaways are 200,000 units behind the
  * camera and smaller than a pixel, so disposing them is invisible.
@@ -85,19 +104,37 @@
  * squadron close up the same way, and the whole shot is a value a test can
  * assent to.
  *
- * IT CANNOT BE SKIPPED, AND REDUCED MOTION IS THE ONLY WAY PAST IT. Both were
- * true of the endings first and both arrived here for the same reason. It was
- * briefly leavable on any key or any tap, which sounds like courtesy and on a
- * touch screen is not a control a visitor chooses so much as one they trip over
- * while waiting: playtesting had people tapping straight through the shot at the
- * end of a run without ever deciding to. Five seconds is not a toll worth
- * protecting them from at that price, and the shot is the plot.
+ * IT IS SKIPPABLE THROUGH ONE FOCUSED BUTTON, AND NOT ON ANY KEY OR ANY TAP.
+ * That distinction is the entire history of this paragraph and is worth not
+ * losing.
  *
- * The preference is the real guarantee and it is untouched: a visitor who has
- * asked for reduced motion never sees this at all, and loses nothing they
- * needed, since the welcome overlay carries the objective either way. Reduced
- * EFFECTS thins it to five ships instead of nine, which is how that control
- * behaves everywhere else in this experience.
+ * The shot was leavable on any key or any tap, briefly, which sounds like
+ * courtesy and on a touch screen is not a control a visitor chooses so much as
+ * one they trip over while waiting: playtesting had people tapping straight
+ * through the shot at the END of a run without ever deciding to, and losing the
+ * one moment their whole run had been built toward. So the skip was removed
+ * outright in August, from both ends of the game.
+ *
+ * What was wrong with it was the surface, not the courtesy. www/xo hit the same
+ * problem afterwards, cited this scene while deciding, and built the shape that
+ * answers both halves: ONE BUTTON that holds the focus, so Enter, Space and
+ * Escape all get a visitor out in one press while a stray thumb anywhere on the
+ * scene gets nothing. That is what this shot has now, and it matters more here
+ * than it did when the shot was 5.2 seconds long, because the push-in and the
+ * commander's line have since taken it to nearly ten.
+ *
+ * THE ENDINGS ARE STILL UNSKIPPABLE and that is a separate decision. The
+ * argument that removed the skip was strongest there: an ending is the payoff
+ * of the run, a visitor who taps through it cannot get it back, and nobody
+ * arrives at one ten times in a row. An opening plays on every page load.
+ *
+ * REDUCED MOTION STILL SKIPS IT OUTRIGHT, and that preference rather than the
+ * button is the real accessibility guarantee. A visitor who has asked for it
+ * never sees this at all and loses nothing they needed, since the welcome
+ * overlay carries the objective either way, and now carries the Martian's line
+ * as a quote as well. Reduced EFFECTS thins the squadron to five ships instead
+ * of nine, which is how that control behaves everywhere else in this
+ * experience.
  *
  * IT IS SILENT. This plays before the visitor has clicked anything, so there is
  * no gesture, no audio context, and nothing we could ethically do about it.
@@ -108,6 +145,9 @@ import { orbitEye, smoothstep } from './replay.min.js';
 import {
     createRaiderMesh, hashUnit, fleetStartAnchor, approachDirection
 } from './fleet.min.js';
+import {
+    createMartianPod, updateMartian, resetMartian, disposeMartian
+} from './martian.min.js';
 
 const WORLD_UP = { x: 0, y: 1, z: 0 };
 
@@ -144,6 +184,12 @@ const heading = { x: 0, y: 0, z: 1 };
 const pathSide = { x: 0, y: 0, z: 0 };
 const pathUp = { x: 0, y: 0, z: 0 };
 const pathRight = { x: 0, y: 0, z: 0 };
+// Where the leader is this frame, and the eye that frames them. Solved into
+// these for the same reason as the axes above: `introPath` is sampled a few
+// thousand times by the suite.
+const pathLeader = { x: 0, y: 0, z: 0 };
+const pathFace = { x: 0, y: 0, z: 0 };
+const pathClose = { x: 0, y: 0, z: 0 };
 
 // ---- Pure core --------------------------------------------------------------
 
@@ -189,14 +235,46 @@ export function shipProgress(index, total, elapsed, formSeconds, shipTravel) {
     return smoothstep((elapsed - delay) / travel);
 }
 
+/** Where ship zero is at any moment of the shot: the apex of the V, and the
+ *  raider the Martian commander is flying.
+ *
+ *  THE PUSH-IN TRACKS THIS RATHER THAN THE ANCHOR, which is the whole reason it
+ *  is a function. The formation drifts forward for the entire shot, so the
+ *  leader is only AT the anchor on the very last frame; through the close-up it
+ *  is still hundreds of units short of it and still moving. A camera parked off
+ *  the anchor would watch the commander swim toward it.
+ *
+ *  Ship zero has no slot offset and is first to close up (`shipProgress` gives
+ *  the apex no delay), so past `formSeconds * shipTravel` its scatter is spent
+ *  and this is exact rather than approximate. The close-up never starts before
+ *  then, which `tests/earthdefense-intro` pins. */
+export function leaderAt(elapsed, spec, subject, forward, out = { x: 0, y: 0, z: 0 }) {
+    const seconds = Math.max(0.1, spec.seconds || 5);
+    const t = Math.min(Math.max(elapsed, 0), seconds);
+    // Run backwards from the arrival, exactly as `startIntro` places the
+    // formation: the leader ends on the anchor, so at `t` it is the remaining
+    // drift short of it.
+    const left = (spec.driftSpeed || 0) * (seconds - t);
+    out.x = subject.x - forward.x * left;
+    out.y = subject.y - forward.y * left;
+    out.z = subject.z - forward.z * left;
+    return out;
+}
+
 /** The camera, for any moment of the shot.
  *
- *  Two eased parameters and no branch on which beat is playing, which is what
- *  makes the joins invisible: the orbit around the formation is running for the
- *  whole shot, the pull-back to the spawn point is blended over it, and the look
- *  target crosses from the formation to straight-ahead on its own slightly
- *  earlier clock so the camera is facing where it is going rather than being
- *  dragged round after it has set off.
+ *  FOUR BEATS AND ONE MOVE. The squadron forms up, the camera pushes in on the
+ *  commander flying the apex ship, holds while they speak, and then retreats
+ *  all the way to the spawn point. No cut anywhere, and the last frame IS the
+ *  frame the visitor flies away from.
+ *
+ *  IT IS TWO SOLVED EYES AND TWO BLENDS, not four branches, which is what makes
+ *  the joins invisible. The WIDE eye orbits the anchor at `range` for the whole
+ *  shot; the CLOSE eye orbits the leader at `closeRange` for the whole shot;
+ *  `closeU` crosses from one to the other and `moveU` crosses from wherever
+ *  that has reached to the spawn point. The hold is not a beat in the code at
+ *  all, it is simply the gap between the two blends finishing and starting, so
+ *  retiming it cannot introduce a seam.
  *
  *  IT ORBITS THE FORMATION, NOT THE PLANET, which is the change that let
  *  `swing` stop being an apology. Orbiting Mars walked the squadron out of the
@@ -204,12 +282,18 @@ export function shipProgress(index, total, elapsed, formSeconds, shipTravel) {
  *  tiny for a reason that had nothing to do with how much life the shot wanted.
  *  Around the formation the subject holds still and the background slides.
  *
- *  THE LOOK TARGET IS PART ABSOLUTE AND PART RELATIVE, on purpose. It blends
- *  the anchor, a fixed point, against a point 1,000 units down -Z FROM WHEREVER
- *  THE CAMERA IS, which is a moving one. That is what makes the last frame
- *  exact rather than nearly right: at the end of the blend the camera is at the
- *  spawn point looking 1,000 units down -Z, which is `placeCameraAtSpawn` word
- *  for word, whatever the numbers above it have been retuned to.
+ *  THE CLOSE EYE STANDS OFF THE NOSE, NOT ON IT. `closeSwing` and
+ *  `closeElevation` put it a little to one side and a little above, so the shot
+ *  is a three-quarter view of somebody in a cockpit rather than a mugshot, and
+ *  so the raider's own nose is not between the camera and the face.
+ *
+ *  THE LOOK TARGET IS PART ABSOLUTE AND PART RELATIVE, on purpose. It crosses
+ *  the anchor, then the leader, then a point `SPAWN_LOOK_AHEAD` down -Z FROM
+ *  WHEREVER THE CAMERA IS, which is a moving one. That last part is what makes
+ *  the final frame exact rather than nearly right: at the end of the blend the
+ *  camera is at the spawn point looking 1,000 units down -Z, which is
+ *  `placeCameraAtSpawn` word for word, whatever the numbers above it have been
+ *  retuned to.
  *
  *  Takes its subjects as plain vectors so the whole path can be sampled against
  *  the planets in a test without a renderer, which is the only way the clearance
@@ -219,6 +303,8 @@ export function shipProgress(index, total, elapsed, formSeconds, shipTravel) {
 export function introPath(elapsed, spec, subject, forward, spawn, out = { x: 0, y: 0, z: 0, look: { x: 0, y: 0, z: 0 } }) {
     const seconds = Math.max(0.1, spec.seconds || 5);
     const form = Math.max(0, spec.formSeconds || 0);
+    const close = Math.max(0.1, spec.closeSeconds || 1);
+    const hold = Math.max(0, spec.holdSeconds || 0);
     const run = Math.max(0.1, spec.runSeconds || 1);
     const t = Math.min(Math.max(elapsed, 0), seconds);
 
@@ -233,19 +319,61 @@ export function introPath(elapsed, spec, subject, forward, spawn, out = { x: 0, 
     orbitEye(subject, pathUp, pathSide, spec.range || 4000,
         (spec.swing || 0) * smoothstep(t / seconds), spec.elevation || 0, out);
 
-    const moveU = smoothstep((t - form) / run);
-    const lookU = smoothstep((t - form + (spec.lookLead || 0)) / run);
+    // WHERE THE FACE IS, WHICH IS NOT WHERE THE SHIP IS, and this offset is the
+    // whole of a bug worth not reintroducing. `leaderAt` gives the hull's
+    // origin; the commander's dome is mounted `closeSubjectAhead` further along
+    // the nose, which is TOWARD the camera. Orbiting the origin at 240 units
+    // therefore put the eye 142 units from the dome and its nearest glass 82
+    // units away, inside the 100 unit near plane, so the canopy was sliced open
+    // with the commander visible through the hole. `closeRange` now measures
+    // from the thing being framed, which is also the only reading of it that
+    // makes the framing arithmetic in config.js true.
+    leaderAt(t, spec, subject, forward, pathLeader);
+    const ahead = spec.closeSubjectAhead || 0;
+    pathFace.x = pathLeader.x + forward.x * ahead;
+    pathFace.y = pathLeader.y + forward.y * ahead;
+    pathFace.z = pathLeader.z + forward.z * ahead;
+    orbitEye(pathFace, pathUp, pathSide, spec.closeRange || 240,
+        spec.closeSwing || 0, spec.closeElevation || 0, pathClose);
 
-    // The pull-back. A straight line from wherever the orbit has reached to the
-    // spawn point: at moveU 0 this is pure orbit and at 1 it is exactly the
-    // spawn position, so neither end of the blend has a seam in it.
+    // THE DEPARTURE IS MEASURED BACK FROM THE END, not forward from the hold,
+    // and that is the one line in here protecting the property the whole shot
+    // exists for. Timed forward as `form + close + hold`, the camera reaches
+    // the spawn point only if those three plus `run` happen to equal `seconds`:
+    // a config whose beats do not partition the shot would stop the pull-back
+    // half way and the welcome screen would come up over a frame the visitor is
+    // not about to fly from, silently. Anchored to `seconds - run` the last
+    // frame is the spawn frame whatever the other numbers say. The shipped
+    // config does add up, and `the config adds up` still asserts it, but that
+    // is now a statement of intent rather than the thing holding the seam
+    // together.
+    const leave = Math.max(0, seconds - run);
+    const closeU = smoothstep((t - form) / close);
+    const moveU = smoothstep((t - leave) / run);
+    // Both look blends lead their move slightly, so the camera finishes turning
+    // toward where it is going before it finishes getting there rather than
+    // being dragged round after it has arrived.
+    const closeLookU = smoothstep((t - form + (spec.lookLead || 0)) / close);
+    const lookU = smoothstep((t - leave + (spec.lookLead || 0)) / run);
+
+    // The push-in. At closeU 0 this is pure wide orbit and at 1 it is exactly
+    // the close eye, so neither end of the blend has a seam in it.
+    out.x += (pathClose.x - out.x) * closeU;
+    out.y += (pathClose.y - out.y) * closeU;
+    out.z += (pathClose.z - out.z) * closeU;
+
+    // ...and the departure, from wherever the push-in left the camera.
     out.x += (spawn.x - out.x) * moveU;
     out.y += (spawn.y - out.y) * moveU;
     out.z += (spawn.z - out.z) * moveU;
 
-    out.look.x = subject.x + ((out.x) - subject.x) * lookU;
-    out.look.y = subject.y + ((out.y) - subject.y) * lookU;
-    out.look.z = subject.z + ((out.z - SPAWN_LOOK_AHEAD) - subject.z) * lookU;
+    // The look target, across the same three subjects in the same order.
+    const lx = subject.x + (pathFace.x - subject.x) * closeLookU;
+    const ly = subject.y + (pathFace.y - subject.y) * closeLookU;
+    const lz = subject.z + (pathFace.z - subject.z) * closeLookU;
+    out.look.x = lx + (out.x - lx) * lookU;
+    out.look.y = ly + (out.y - ly) * lookU;
+    out.look.z = lz + ((out.z - SPAWN_LOOK_AHEAD) - lz) * lookU;
     return out;
 }
 
@@ -334,8 +462,37 @@ export function initIntro(scene, config = EARTHDEFENSE_CONFIG) {
         });
     }
     activeCount = squadron.length;
+    mountCommander(config);
 
     if (scene && typeof scene.add === 'function') { host = scene; scene.add(group); }
+    return true;
+}
+
+/** Put the Martian commander in the apex ship's nose.
+ *
+ *  PARENTED TO SHIP ZERO, which is the whole trick and is why this is four
+ *  lines rather than a module with its own update. A child of the leader's mesh
+ *  inherits its position, its heading and its LOD visibility for free, so the
+ *  commander forms up with the squadron, drifts with it and is framed by
+ *  `closeRange` off `leaderAt` without anybody having to place them.
+ *
+ *  AT THE NOSE, AND NOT ON TOP. The hull is a four-sided cone with its apex at
+ *  +Z, so a dome anywhere behind the tip has the tip in front of it, and the
+ *  camera would be looking at a face through a spike. Centred ON the apex the
+ *  dome swallows the front of the cone instead, and nothing in the ship is
+ *  between the eye and the commander. The dome's own interior shell handles the
+ *  wing, which is behind them.
+ *
+ *  A FAILURE HERE COSTS THE MONOLOGUE AND NOTHING ELSE. The shot still plays,
+ *  the caption still runs, and the apex is simply a plain raider. */
+function mountCommander(config) {
+    const leader = squadron.length ? squadron[0].mesh : null;
+    if (!leader) return false;
+    const pod = createMartianPod(config);
+    if (!pod) return false;
+    const hullLength = (config.fleet && config.fleet.hullLength) || 220;
+    pod.position.z = hullLength * 0.5;
+    leader.add(pod);
     return true;
 }
 
@@ -346,6 +503,10 @@ export function disposeIntro(scene) {
     // squadron shares fleet.js's geometry and material, which `disposeFleet`
     // owns and which the real twelve raiders are still using. Disposing them
     // from this side would leave the fleet drawing from freed buffers.
+    // BEFORE THE GROUP GOES. The pod is a child of ship zero's mesh, and
+    // everything in it is ours to free (unlike the hulls, which borrow the
+    // fleet's buffers and must not be disposed from this side).
+    disposeMartian();
     group = null;
     host = null;
     squadron = [];
@@ -405,6 +566,9 @@ export function startIntro(config = EARTHDEFENSE_CONFIG) {
     shot.elapsed = 0;
     shot.seconds = Math.max(0.1, cfg.seconds || 5);
     if (group) group.visible = true;
+    // Mouth shut and the line unsaid, so a second boot does not open on a
+    // half-open jaw or skip the announcement.
+    resetMartian();
     writeShips();
     writeEye();
     return shot.seconds;
@@ -497,6 +661,10 @@ function writeShips() {
 
 function writeEye() {
     introPath(shot.elapsed, cfg, anchor, nose, spawnAt, eye);
+    // THE COMMANDER IS ON THE SHOT'S CLOCK, NOT ITS OWN. One elapsed time
+    // drives the camera, the formation and the mouth, so a long frame, a stall
+    // and a skip can never leave the words and the lips in different places.
+    updateMartian(shot.elapsed);
 }
 
 // ---- What the caller reads --------------------------------------------------

@@ -44,7 +44,7 @@ import {
 import {
     initFlight, updateFlight, getFlightState, setTargetSpeedFraction,
     setLookSensitivity, setInvertPitch, setPerimeter, onPerimeterChange,
-    setConstrainPosition, setPaused
+    setConstrainPosition, setPaused, isTriggerHeld
 } from '../../shared/js/flight-1.0.0.min.js';
 import {
     initWorld, updateWorld, resetWorld, getBody, getOccluders, getStructures, getStructure,
@@ -73,6 +73,9 @@ import {
     initIntro, updateIntro, startIntro, endIntro, introEye,
     isIntroRunning, setIntroReduced, disposeIntro
 } from './intro.min.js';
+import {
+    setMartianReduced, martianCaption, takeMartianAnnouncement
+} from './martian.min.js';
 import { initHud, updateHud, projectToScreen, getProjection, disposeHud } from './hud.min.js';
 import {
     initReplay, updateReplay, startShipReplay, startInsetReplay, shipReplayEye,
@@ -114,6 +117,7 @@ let throttleReadout, perimeterNotice, flightStatus;
 let speedometer, speedoForward, speedoReverse, speedoDemand, speedoZero;
 let speedoGhostForward, speedoGhostReverse;
 let pauseModal, pauseBtn, pauseTitle, pauseSubtitle, cardDismiss, cardSettings, briefingMenuBtn;
+let skipIntroBtn, introCaption, introCaptionLine, introAnnounce;
 let reticle, lockBracket, combatStatus;
 let replayInset, replayCaption;
 let endModal, endTitle, endSubtitle, endTime, endSaved, endDestroyed, endBest;
@@ -193,6 +197,9 @@ const PAUSED_FRAME_SECONDS = 0.1;
 // rebuilt, because this runs sixty times a second.
 const _view = { eye: { x: 0, y: 0, z: 0 }, forward: { x: 0, y: 0, z: -1 } };
 const _targetRules = { coneRadians: 0, range: 0, allegiance: null, occluders: null };
+// Where a trigger press with nothing locked sends its tracer. Reused per frame
+// for the same reason as _view.
+const _boresight = { x: 0, y: 0, z: 0 };
 // What the raiders are told about the visitor, and the combined candidate list
 // the guns choose from. Both reused, for the same reason as _view.
 const _player = { position: { x: 0, y: 0, z: 0 }, forward: { x: 0, y: 0, z: -1 } };
@@ -236,6 +243,10 @@ async function init() {
     cardDismiss = document.getElementById('card-dismiss');
     cardSettings = document.getElementById('card-settings');
     briefingMenuBtn = document.getElementById('briefing-menu-btn');
+    skipIntroBtn = document.getElementById('skip-intro-btn');
+    introCaption = document.getElementById('intro-caption');
+    introCaptionLine = document.getElementById('intro-caption-line');
+    introAnnounce = document.getElementById('intro-announce');
     reticle = document.getElementById('reticle');
     lockBracket = document.getElementById('lock-bracket');
     combatStatus = document.getElementById('combat-status');
@@ -452,6 +463,9 @@ function startCombat() {
     // every hull in the opening squadron is built from the fleet's own shared
     // geometry, so a raider has one definition rather than two that are free to
     // drift apart. See the note in intro.js.
+    // It also mounts the Martian commander on the apex ship, which is why
+    // there is no second init here: the commander is a child of ship zero's
+    // mesh, so intro.js builds them, moves them and frees them.
     initIntro(scene, config);
     // A shell going off is a boom, which is what `playDestruction` already is.
     // Reinforcement and nothing else, like every other cue: it duplicates a
@@ -1069,13 +1083,38 @@ function updateCombat(deltaTime, s = getFlightState()) {
     const target = _respawnTimer > 0
         ? null
         : pickTarget(_view, combatCandidates(), _targetRules);
-    const shots = updateWeapons(deltaTime, target, muzzleWorldPositions(camera));
+    // THE TRIGGER ONLY MATTERS WHEN NOTHING IS LOCKED, and the branch that
+    // decides that lives in weapons.js rather than here. A wrecked ship is
+    // excluded along with its lock: `_respawnTimer` means the visitor is
+    // watching their own destruction replay, and a held trigger should not be
+    // shooting out of the wreckage.
+    const trigger = _respawnTimer <= 0 && isTriggerHeld();
+    const shots = updateWeapons(deltaTime, target, muzzleWorldPositions(camera),
+        { trigger, boresight: trigger ? boresightPoint(s) : null });
 
     setCockpitFiring(shots > 0);
     // One cue per shot, rate limited inside audio.js. The guns fire four times
     // a second, so anything richer than a dry tick becomes unbearable fast.
     if (shots > 0) playFire();
     updateLockUi(target, camera);
+}
+
+/** Where a shot at nothing is aimed: straight down the nose, `weapons.boresight`
+ *  units out.
+ *
+ *  Off the FLIGHT STATE rather than off the camera, which are the same aim and
+ *  not the same object. The flight model's forward vector is what `pickTarget`
+ *  is given two lines above, so a trigger press goes exactly where the reticle
+ *  claims the guns are looking. Reading the camera's own matrix instead would
+ *  be right on almost every frame and wrong on the ones where something else
+ *  has hold of the camera, which is every frame of the opening shot and of
+ *  every replay. */
+function boresightPoint(s, out = _boresight) {
+    const far = EARTHDEFENSE_CONFIG.weapons.boresight || 12000;
+    out.x = s.position.x + s.forward.x * far;
+    out.y = s.position.y + s.forward.y * far;
+    out.z = s.position.z + s.forward.z * far;
+    return out;
 }
 
 /** What the raiders are told about the visitor: where the ship is, and where
@@ -1278,6 +1317,10 @@ function applyReducedFx() {
     // The opening's squadron, thinned on exactly the same terms: five raiders
     // forming up instead of nine, rather than no opening at all.
     setIntroReduced(applied.reduced);
+    // And the commander keeps their face and loses their console light, which
+    // is the one genuinely optional thing in that beat. The story is not an
+    // effect, so it is not what a "reduced effects" checkbox takes away.
+    setMartianReduced(applied.reduced);
 
     const weapons = getWeaponsGroup();
     const children = (weapons && weapons.children) || [];
@@ -1607,12 +1650,30 @@ function setupEventListeners() {
     // `onPointerLockChange`.
     document.addEventListener('pointerlockchange', onPointerLockChange, { signal });
 
+    // THE WAY OUT OF THE OPENING SHOT. A click or a tap on the button, plus
+    // Enter and Space for free because the button holds the focus while it is
+    // up. Deliberately NOT a listener on the canvas or the document: this scene
+    // is where "any key, any tap" was found out, and a tap anywhere is a
+    // control a visitor trips over rather than one they choose.
+    if (skipIntroBtn) {
+        skipIntroBtn.addEventListener('click', (e) => {
+            if (e) e.preventDefault();
+            skipOpening();
+        }, { signal });
+    }
+
     // ONE KEY, ONE CARD, IN EVERY DIRECTION. Escape used to mean three things
     // depending on what happened to be open, and one of them was a settings
     // panel that no longer exists. Now it opens the card wherever a visitor is
     // and closes it wherever they opened it from.
+    //
+    // THE OPENING SHOT COMES FIRST, because during it the phase is already
+    // `briefing` and so Escape used to open the helm card OVER the cinematic.
+    // Escape is the one key a focused button does not press by itself, so it is
+    // the one the skip needs a line for.
     document.addEventListener('keydown', (event) => {
         if (event.code !== 'Escape') return;
+        if (skipOpening()) return;
         if (_cardOverBriefing) closeBriefingCard();
         else if (gamePhase() === 'paused') closePause();
         else openHelmCard();
@@ -1764,6 +1825,7 @@ function animate() {
 function applyViewpoint(flight) {
     // The opening shot outranks everything, and can only be running before a
     // run has started, so it can never be in competition with the other two.
+    // All four of its beats are one path, so there is one eye to ask for.
     const opening = introEye();
     if (opening) { applyReplayToCamera(opening); return; }
     const ending = finaleEye();
@@ -1874,10 +1936,15 @@ function advanceEndScreen(deltaTime = 0) {
  *  one visitor who has already decided they like the game.
  *
  *  REDUCED MOTION SKIPS IT, for the same reason it skips the endings. A
- *  full-frame camera move holding the page for five seconds is exactly what
+ *  full-frame camera move holding the page for several seconds is exactly what
  *  that preference is about, and nothing is lost by going straight to the
- *  welcome overlay: the overlay carries the objective either way, which is more
- *  than the shot does.
+ *  welcome overlay: the overlay carries the objective either way, and it
+ *  carries the Martian's line as a quote, which is more than the shot does.
+ *
+ *  EVERYBODY ELSE GETS A SKIP BUTTON, restored 2026-09-17 at Steve's request
+ *  after weeks of real play. `skipOpening` is the way out and the note there is
+ *  the one to read: it is one focused button rather than any key or any tap,
+ *  which is the distinction the August removal was really about.
  *
  *  THE REAL FLEET STANDS DOWN FOR THE DURATION, and this is no longer a
  *  precaution. The shot is staged ON the trailing group's start point: the
@@ -1886,6 +1953,10 @@ function advanceEndScreen(deltaTime = 0) {
  *  Martian ships through each other rather than merely in the same frame. */
 function startOpening() {
     if (prefersReducedMotion()) return false;
+    // ONE CLOCK FOR THE WHOLE OPENING, the commander's beat included. The form
+    // up, the push-in, the monologue and the departure are all `startIntro`'s,
+    // which is what stopped the form-up having to be held at its first frame
+    // while somebody talked over it.
     if (!startIntro(EARTHDEFENSE_CONFIG)) return false;
     setFleetVisible(false);
     _introPending = true;
@@ -1893,6 +1964,84 @@ function startOpening() {
     // buttons. Both belong to a visitor who is being asked to do something, and
     // during the shot there is nothing to do but watch it.
     if (blocker) blocker.classList.add('hidden');
+    showSkipIntro(true);
+    return true;
+}
+
+/** The Martian's caption, this frame.
+ *
+ *  THE TEXT IS WRITTEN ONLY WHEN IT CHANGES and the opacity every frame, which
+ *  is the same split xo's opening title uses and is not a micro-optimisation:
+ *  the element is aria-hidden, but assigning `textContent` sixty times a second
+ *  also throws away the browser's own text layout on every frame of a shot that
+ *  is already moving a camera.
+ *
+ *  THE LIVE REGION IS WRITTEN ONCE, and martian.js owns that decision rather
+ *  than this function guessing at it: `takeMartianAnnouncement` hands over the
+ *  whole sentence the first time it is asked and an empty string afterwards. */
+function writeCaption() {
+    const beat = martianCaption();
+    if (introCaption) {
+        introCaption.classList.toggle('visible', beat.amount > 0);
+    }
+    if (introCaptionLine && beat.amount > 0) {
+        if (introCaptionLine.textContent !== beat.text) introCaptionLine.textContent = beat.text;
+        introCaptionLine.style.opacity = `${beat.amount}`;
+    }
+    const spoken = takeMartianAnnouncement();
+    if (spoken && introAnnounce) introAnnounce.textContent = spoken;
+}
+
+/** Take the caption away, whatever state it was in. Called by the skip and by
+ *  the reveal, so there is one description of "the opening is over". */
+function clearCaption() {
+    if (introCaption) introCaption.classList.remove('visible');
+    if (introCaptionLine) introCaptionLine.textContent = '';
+}
+
+/** Put the Skip button up or take it away, and hand it the focus while it is
+ *  the only thing on screen worth pressing.
+ *
+ *  FOCUSED SO THAT THREE KEYS WORK FOR FREE. Enter and Space press a focused
+ *  button in every browser, so binding them here would be writing down what
+ *  the platform already does. Escape is the one that needs a handler, and it
+ *  has one in `setupEventListeners`.
+ *
+ *  Note that Space reaching the button at all depends on the flight model
+ *  being paused through the briefing, which it is (`handleStateChange` pauses
+ *  everything that is not active play): a scene with a trigger swallows Space
+ *  while flying, and that is exactly the behaviour that keeps the first shot
+ *  of a run from re-pressing whichever button the visitor came through. */
+function showSkipIntro(on) {
+    if (!skipIntroBtn) return false;
+    skipIntroBtn.classList.toggle('visible', !!on);
+    if (on && typeof skipIntroBtn.focus === 'function') skipIntroBtn.focus();
+    return !!on;
+}
+
+/** Leave the opening early.
+ *
+ *  THIS DOES NOT REVEAL THE BRIEFING, and that is the whole care in this
+ *  function rather than an omission. It ends the shot and lets `advanceIntro`
+ *  put the welcome screen up on the NEXT frame, which is what keeps the key
+ *  that skipped from also starting the run: `setupEventListeners` turns Enter
+ *  and Space over the briefing into "take the helm", and the briefing is
+ *  recognised by its blocker not being hidden. Revealing it here would
+ *  un-hide that blocker inside the same event dispatch, and the one keystroke
+ *  a visitor spent to see the welcome screen would hand them a run already
+ *  under way instead.
+ *
+ *  intro.js has carried a note about exactly this collision since the skip was
+ *  removed in August. It is live again. */
+function skipOpening() {
+    if (!_introPending || !isIntroRunning()) return false;
+    // ONE CALL ENDS ALL FOUR BEATS, because they are one shot. A visitor who
+    // presses Skip during the monologue is asking to be at the welcome screen,
+    // not to be moved along to the part of the opening they have not seen yet.
+    endIntro();
+    clearCaption();
+    showSkipIntro(false);
+    track('skip-intro');
     return true;
 }
 
@@ -1901,6 +2050,12 @@ function startOpening() {
 function revealBriefing() {
     setFleetVisible(true);
     if (blocker) blocker.classList.remove('hidden');
+    // Whether the shot was watched out or skipped, the button that offered to
+    // skip it has nothing left to offer, and the Martian has stopped talking.
+    // Called unconditionally, so this is also what clears both on the
+    // reduced-motion path that never showed either.
+    showSkipIntro(false);
+    clearCaption();
     // The way home DOES belong to the briefing, and it is now the only round
     // button in this sweep: the settings cog is gone, and its four controls live
     // inside the card behind the "Controls and settings" button on this screen.
@@ -1922,22 +2077,32 @@ function revealBriefing() {
 
 /** Advance the opening shot, and put the briefing up when it is over.
  *
- *  THE REVEAL IS A FRAME LATE, which is now a small nicety rather than the load
- *  bearing thing it was. `updateIntro` stops the shot on its last frame and this
- *  notices on the next one, so the frame that lands exactly on the spawn point
- *  is drawn before anything is put over it.
+ *  THE REVEAL IS A FRAME LATE, AND IT IS LOAD BEARING AGAIN. `updateIntro`
+ *  stops the shot on its last frame and this notices on the next one, so the
+ *  frame that lands exactly on the spawn point is drawn before anything is put
+ *  over it. That is the nicety. The load bearing part is the skip: the Enter or
+ *  Space that presses the Skip button would otherwise fall through, in the same
+ *  event dispatch, to the listener that turns Enter over the briefing into
+ *  "Take the helm", and hand a visitor who only wanted to READ the briefing a
+ *  run already in progress.
  *
- *  IT USED TO BE LOAD BEARING because the shot was skippable: the Enter that
- *  skipped it would otherwise have fallen through, in the same event dispatch,
- *  to the listener that turns Enter into "Take the helm", and handed a visitor
- *  who only wanted to READ the briefing a run already in progress. The skip is
- *  gone, so that collision cannot happen, but the ordering is kept because it
- *  was right for the other reason too: which screen appears when belongs to the
+ *  It was load bearing for that reason before August, stopped being when the
+ *  skip was removed, and is again now that Steve has asked for one back. The
+ *  ordering never changed, which is the argument for having kept it: it was
+ *  also right on its own terms, since which screen appears when belongs to the
  *  render loop, the same way `advanceEndScreen` owns the order at the other end
- *  of a run. */
+ *  of a run. `skipOpening` is deliberately written to rely on it.
+ *
+ *  ONE SHOT AND ONE CLOCK, the commander's beat included. `updateIntro` moves
+ *  the camera, the formation and the Martian's mouth off the same elapsed time,
+ *  so the caption only has to be copied out of it. */
 function advanceIntro(deltaTime) {
     if (!_introPending) return;
-    if (isIntroRunning()) { updateIntro(deltaTime); return; }
+    if (isIntroRunning()) {
+        updateIntro(deltaTime);
+        writeCaption();
+        return;
+    }
     _introPending = false;
     revealBriefing();
 }
@@ -2360,6 +2525,8 @@ function cleanup() {
     // fleet's geometry. Nothing is freed on this side, but taking the group out
     // of the scene first means there is never a frame in which meshes built on
     // released buffers are still hanging in it.
+    // This also frees the Martian commander, who is a child of the apex ship's
+    // mesh and is intro.js's to release.
     disposeIntro(scene);
     disposeFleet();
     disposeCockpit();
@@ -2432,7 +2599,7 @@ if (typeof document !== 'undefined') {
 
 export const __test__ = {
     bufToHex, hasWebGL, keepAbovePlanets, settings,
-    updateCombat, updateLockUi, labelFor, announceLock,
+    updateCombat, updateLockUi, labelFor, announceLock, boresightPoint,
     combatCandidates, resolveDamage, onDamageResolved, notePlayerHit,
     updateObjectiveHud, advanceNotices, playerState, getProjection,
     startGame, handleStateChange, showEndScreen, endMessage, formatClock,
@@ -2441,7 +2608,8 @@ export const __test__ = {
     queueAftershocks, advanceAftershocks, aftershocks: _aftershocks,
     startEndingShot, earthShot, wreckShot, advanceFinale,
     setFinaleWash, finaleWash: () => _finaleWash,
-    startOpening, revealBriefing, advanceIntro,
+    startOpening, revealBriefing, advanceIntro, skipOpening, showSkipIntro,
+    writeCaption, clearCaption,
     introPending: () => _introPending,
     openPause, closePause, beginFlight, onPointerLockChange, takePointer,
     showPauseButton,

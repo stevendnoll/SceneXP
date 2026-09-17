@@ -3,9 +3,18 @@
  * weapons.js - Automatic fire, damage bookkeeping, and shot effects
  * (shared engine part).
  *
- * There is no fire control here and no trigger to wire up. The caller hands
- * this module a target every frame and it fires while there is one, which is
- * the whole control scheme: the reticle IS the weapon.
+ * The caller hands this module a target every frame and it fires while there is
+ * one, which is the whole control scheme: the reticle IS the weapon. There is
+ * still no fire control in here, and the trigger has not changed that.
+ *
+ * WHAT THE TRIGGER DOES IS MISS. It is passed in through `updateWeapons`'s
+ * options and it adds one branch, taken only when NOTHING is locked: a tracer
+ * down the boresight that applies no damage. Locked onto something, a held
+ * trigger changes nothing at all, so automatic fire is still automatic and
+ * every number tuned against it still holds. The reason it exists is in the
+ * note above `fireBoresight` and it is worth reading before simplifying this
+ * away, because the obvious simplification (let the trigger gate all fire) is a
+ * rebalance of an entire game wearing the clothes of a tidy-up.
  *
  * HITS RESOLVE THE MOMENT THEY ARE FIRED. The tracer is scenery. At closing
  * speeds of thousands of units a second a simulated projectile is unreliable
@@ -258,7 +267,7 @@ function buildBurstPool() {
  *  Fires, resolves the damage immediately, then advances every effect. Effects
  *  keep running with no target, which is what lets a burst finish playing after
  *  the thing that caused it has gone. */
-export function updateWeapons(deltaTime, target, muzzles) {
+export function updateWeapons(deltaTime, target, muzzles, opts = {}) {
     if (!settings) return 0;
     const dt = deltaTime || 0;
 
@@ -283,13 +292,57 @@ export function updateWeapons(deltaTime, target, muzzles) {
             // punch through a target and out the other side.
             if (!isAlive(target.id)) break;
         }
+    } else if (opts.trigger && opts.boresight) {
+        // NOTHING IS LOCKED AND THE VISITOR IS ASKING ANYWAY, so the guns
+        // answer down the boresight and hit nothing. See the note above
+        // `fireBoresight` for why that is the whole point rather than a
+        // consolation.
+        const stepped = stepCadence(accumulator, dt, interval, settings.maxShotsPerFrame);
+        accumulator = stepped.accumulator;
+        for (let i = 0; i < stepped.shots; i++) {
+            fireBoresight(opts.boresight, muzzles);
+            fired++;
+        }
     } else {
         // No target: hold the accumulator primed rather than letting it run up,
         // so acquiring a lock fires immediately and losing one costs nothing.
+        //
+        // A HELD TRIGGER DOES NOT COME THROUGH HERE, and that is deliberate.
+        // Firing down the boresight spends the accumulator like any other shot,
+        // so a visitor who holds the trigger through the moment a raider enters
+        // the reticle gets one even cadence across it rather than a primed shot
+        // landing on top of the one they just took.
         accumulator = interval;
     }
 
     return fired;
+}
+
+/** One shot at nothing: a tracer down the boresight, no damage and no flash.
+ *
+ *  THE POINT OF THIS IS THAT IT MISSES. "The reticle is the weapon" is an
+ *  elegant rule and, measured against weeks of visitors, an invisible one: a
+ *  desktop player arrives holding a lifetime of games in which a button
+ *  shoots, presses one, and learns nothing because nothing on screen changes.
+ *  A shot that leaves the muzzles and hits empty space teaches the real rule in
+ *  one press, because the next press with a raider centred looks completely
+ *  different.
+ *
+ *  IT COSTS THE GAME NOTHING, which is what made this the cheap answer rather
+ *  than a rebalance. No damage is applied, so every hit point, arrival time and
+ *  difficulty number tuned against automatic fire is still the number it was.
+ *  A visitor who holds the trigger with a target centred gets exactly today's
+ *  behaviour, to the shot.
+ *
+ *  `to` is a point in world space, which the caller builds from the eye and the
+ *  nose. A point rather than a direction so this module stays free of anything
+ *  resembling a camera. */
+function fireBoresight(to, muzzles) {
+    const from = nextMuzzle(muzzles);
+    // The tracer is allowed to run its full life rather than being stopped
+    // short: there is nothing out there to stop at, and the streak sailing away
+    // is the read that the shot went wide.
+    spawnTracer(from, to, Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z));
 }
 
 function fireOneShot(target, muzzles) {

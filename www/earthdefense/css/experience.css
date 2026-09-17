@@ -61,10 +61,11 @@
 /* ============================================================
    The reticle
    ============================================================
-   The reticle IS the weapon. There is no fire button, so the ship shoots
-   whatever sits inside this, which makes it the single most important element
-   on the screen and the one thing that has to read instantly on a phone held
-   at arm's length.
+   The reticle IS the weapon. The ship shoots whatever sits inside this whether
+   or not a trigger is held, and a trigger press with nothing inside it cannot
+   hit anything, which makes this the single most important element on the
+   screen and the one thing that has to read instantly on a phone held at arm's
+   length.
 
    ITS TWO STATES DIFFER IN SHAPE, NOT ONLY IN COLOUR. Idle is an open ring
    with four ticks standing off it. Locked closes into a solid diamond with
@@ -1547,6 +1548,164 @@ body.hull-hit::after {
     text-decoration: underline;
 }
 
+/* The Martian's line on the briefing, for everybody who skipped the opening or
+   was never shown it. Quiet: it is flavour on a screen whose job is to get a
+   visitor flying, so it sits between the objective and the button without
+   competing with either. The accent colour and the italic are what mark it as
+   somebody else's voice rather than the site's. */
+/* THE BOTTOM MARGIN CLEARS A FOCUS RING, which is why it is not the 0.2rem it
+   shipped as. "Take the helm" takes focus on load and its ring is drawn at
+   `outline-offset: 3px`, so at 0.2rem the ring came within a few pixels of the
+   cite underneath this quote and the two read as one collided block. The ring
+   is painted outside the button's layout box and cannot be accounted for by
+   the button's own margin, so the space has to come from here. */
+.briefing-quote {
+    margin: 0.75rem auto 1rem;
+    padding: 0;
+    max-width: min(90vw, 30rem);
+    border: 0;
+}
+
+.briefing-quote p {
+    margin: 0;
+    font-size: 0.98rem;
+    font-style: italic;
+    line-height: 1.4;
+    color: rgb(var(--ui-accent-rgb));
+    opacity: 0.9;
+}
+
+.briefing-quote cite {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.68rem;
+    font-style: normal;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    opacity: 0.55;
+}
+
+/* ============================================================
+   The Martian's caption, which belongs to the opening and nothing else
+   ============================================================
+   LOW IN THE FRAME, LIKE EVERY SUBTITLE EVER. It sits above the Skip button
+   rather than beside it, because the two are up at the same time and the one
+   that can be pressed should be the one nearest the thumb.
+
+   IT IS NOT CENTRED ON THE FACE, deliberately. The commander is framed a
+   little above the middle of the frame and the words go under them, which is
+   the arrangement a visitor has read ten thousand times and does not have to
+   think about.
+
+   DISPLAY IS TOGGLED, OPACITY IS ANIMATED, and the two are doing different
+   jobs. `.visible` is the shot being on at all; the inline opacity that
+   main.js writes per frame is the individual caption arriving and leaving on
+   the scene's own clock, so a skip takes the words away on the same frame it
+   takes the shot away. A CSS transition on opacity would fight that write. */
+.intro-caption {
+    display: none;
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: max(96px, env(safe-area-inset-bottom, 0px) + 88px);
+    width: min(88vw, 34rem);
+    margin: 0;
+    text-align: center;
+    z-index: 109;
+    pointer-events: none;
+}
+
+.intro-caption.visible {
+    display: block;
+}
+
+/* The label is what turns silence into a transmission. Quiet, small and
+   letter-spaced, so it reads as an instrument rather than as dialogue, and it
+   never competes with the line underneath it. */
+.intro-caption-label {
+    margin: 0 0 0.35rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgb(var(--ui-accent-rgb));
+    opacity: 0.62;
+}
+
+/* THE LINE IS SHADOWED RATHER THAN BOXED. A panel behind subtitles would be a
+   grey slab across a shot whose whole subject is a face in the dark, and the
+   background it has to survive is Mars: a bright ruddy disc filling a third of
+   the frame. Two shadows, one tight and one wide, is what holds white type
+   over that without putting a rectangle on the picture. */
+.intro-caption-line {
+    margin: 0;
+    font-size: clamp(1.15rem, 3.6vw, 1.75rem);
+    line-height: 1.3;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 18px rgba(0, 0, 0, 0.75);
+}
+
+/* ============================================================
+   Skip, which belongs to the opening shot and to nothing else
+   ============================================================
+   DISPLAY-TOGGLED RATHER THAN FADED, the same way .ui-float is, because the
+   moment it has to be gone is exact: the briefing arrives on the frame after
+   the shot ends, and a button still fading out over the welcome screen is a
+   control offering to skip something that has already finished.
+
+   BOTTOM CENTRE ON PURPOSE. The top right is a slot ladder (pause sits in slot
+   one and tests/home-button-removed.test.mjs resolves the rest against the
+   markup), and the bottom corners belong to the touch throttle and the look
+   joystick. Down the middle is the one place that is empty in both
+   orientations, and it is nowhere near where a thumb rests while flying, which
+   matters for a control that must not be pressed by accident.
+
+   NOT ACCENT-FILLED AT REST. An accent tint on a resting button reads as
+   already pressed, so the fill arrives on hover and focus and the resting
+   state is the same smoked glass as every other control here. */
+.skip-intro-btn {
+    display: none;
+    position: fixed;
+    left: 50%;
+    bottom: max(28px, env(safe-area-inset-bottom, 0px) + 20px);
+    transform: translateX(-50%);
+    padding: 0.55rem 1.15rem;
+    background: rgba(20, 20, 20, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    color: #fff;
+    font: inherit;
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    z-index: 110;
+    pointer-events: auto;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.skip-intro-btn.visible {
+    display: inline-flex;
+}
+
+.skip-intro-btn:hover {
+    background: var(--ui-control-hover);
+    border-color: rgba(255, 255, 255, 0.55);
+}
+
+.skip-intro-btn:focus-visible {
+    outline: 2px solid rgb(var(--ui-accent-rgb));
+    outline-offset: 3px;
+}
+
+/* A phone gets the verb alone. The rest of the label is decoration (it is
+   aria-hidden, so the button reads as "Skip" to a screen reader either way)
+   and a wide pill across the bottom of a portrait frame crowds the shot it is
+   offering to skip. */
+@media (max-width: 480px) {
+    .skip-intro-hint {
+        display: none;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
 
     /* The scene keeps turning (it is the experience), but nothing in the
@@ -1556,6 +1715,7 @@ body.hull-hit::after {
     .throttle-thumb,
     .perimeter-notice,
     #instructions button.briefing-menu-btn,
+    .skip-intro-btn,
     .card-settings > summary::before,
     #reticle .reticle-ring,
     #reticle .reticle-ticks,
