@@ -29,7 +29,7 @@ let moCallbacks;  // MutationObserver callbacks, fired by hand after class flips
 // initial state the page has.
 const HIDDEN_AT_BOOT = [
   'settings-panel', 'nav-menu', 'checklist', 'piece-modal', 'help-modal',
-  'dialog-modal', 'whiteboard-view', 'complete-modal', 'nudge-modal',
+  'dialog-modal', 'analytics-view', 'complete-modal', 'nudge-modal',
   'light-panel',
 ];
 
@@ -258,17 +258,16 @@ test('desktop tour: pointer lock, hover, every office dialog, nudge, deferred ce
   expect(dom.el('light-panel').classList.contains('hidden')).toBe(true);
   await jest.advanceTimersByTimeAsync(700);
 
-  // Discovery 6: the whiteboard close-up completes the list while a modal is
-  // up, so the celebration defers until the overlay closes.
-  clickScene({ isProp: true, propKind: 'board' });
-  expect(dom.el('whiteboard-view').classList.contains('hidden')).toBe(false);
-  expect(dom.el('whiteboard-caption').textContent.length).toBeGreaterThan(0);
-  stepFrames(5); // whiteboardOpen skips the 3D render
+  // Discovery 6: the wall display's dashboard completes the list while a modal
+  // is up, so the celebration defers until the overlay closes.
+  clickScene({ isProp: true, propKind: 'dashboard' });
+  expect(dom.el('analytics-view').classList.contains('hidden')).toBe(false);
+  stepFrames(5); // analyticsOpen skips the 3D render
   const checklist = await import('../www/shared/js/checklist-1.0.0.min.js');
   expect(checklist.getChecklistProgress().complete).toBe(true);
   expect(dom.el('complete-modal').classList.contains('hidden')).toBe(true); // deferred
 
-  fire(dom.documentStub, 'keydown', { code: 'Escape' }); // close the whiteboard
+  fire(dom.documentStub, 'keydown', { code: 'Escape' }); // close the dashboard
   await jest.advanceTimersByTimeAsync(300);
   expect(dom.el('complete-modal').classList.contains('hidden')).toBe(false);
   expect(globalThis.sessionStorage.getItem('steve-celebrated')).toBe('1');
@@ -419,7 +418,7 @@ test('settings, nav menu, and checklist panels open, tune, and close', async () 
   expect(dom.el('settings-panel').classList.contains('hidden')).toBe(true);
 });
 
-test('mobile: tap to start, forgiving taps, whiteboard close-up, tucked joysticks', async () => {
+test('mobile: tap to start, forgiving taps, the wall dashboard, tucked joysticks', async () => {
   globalThis.navigator.maxTouchPoints = 5;
   const main = await bootSteve();
   expect(main.getState().isMobile).toBe(true);
@@ -444,12 +443,12 @@ test('mobile: tap to start, forgiving taps, whiteboard close-up, tucked joystick
   expect(main.getState().isPaused).toBe(false);
   expect(dom.el('touch-controls').classList.contains('visible')).toBe(true);
 
-  // The whiteboard close-up pans to center on phones.
-  rayHits = [hitFor({ isProp: true, propKind: 'board' })];
+  // The wall display opens the dashboard overlay on a tap too.
+  rayHits = [hitFor({ isProp: true, propKind: 'dashboard' })];
   fire(dom.el('game-canvas'), 'touchend', { changedTouches: [{ clientX: 200, clientY: 300 }] });
-  expect(dom.el('whiteboard-view').classList.contains('hidden')).toBe(false);
+  expect(dom.el('analytics-view').classList.contains('hidden')).toBe(false);
   await escapeAndSettle();
-  expect(dom.el('whiteboard-view').classList.contains('hidden')).toBe(true);
+  expect(dom.el('analytics-view').classList.contains('hidden')).toBe(true);
 
   // Opening settings tucks the joysticks away; closing brings them back.
   fire(dom.el('settings-btn'), 'click');

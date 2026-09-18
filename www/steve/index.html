@@ -10,7 +10,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="Step inside Steve's tiny home office, the room where SceneXP gets built. A walkable 3D micro-environment with a standing desk, a whiteboard with the plan, and a tuxedo cat asleep by the window.">
+    <meta name="description" content="Step inside Steve's tiny home office, the room where SceneXP gets built. A walkable 3D micro-environment with a standing desk, a wall display showing who has been visiting SceneXP, and a tuxedo cat asleep by the window.">
     <meta name="theme-color" content="#335241">
     <meta name="author" content="Steve Noll">
 
@@ -73,12 +73,12 @@
 
     <title>Steve's Home Office</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=4" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=5" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=4">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=5">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -109,8 +109,9 @@
             <p>This is a walkable 3D model of the developer's tiny home office,
                 which needs JavaScript to run. It is the room where SceneXP
                 itself gets built: a standing desk with a MacBook and a big
-                Samsung monitor, a whiteboard with the plan on it, his son's
-                little blue desk, and a tuxedo cat asleep in the window light.
+                Samsung monitor, a wall display showing who has been visiting
+                SceneXP today, his son's little blue desk, and a tuxedo cat
+                asleep in the window light.
                 Steve is in there right now, typing away on the very site you
                 are reading. If you would like a small world like this built
                 for someone you love, he would be glad to hear from you.</p>
@@ -199,7 +200,7 @@
                     <li class="help-desktop"><strong>Move:</strong> <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys.</li>
                     <li class="help-desktop"><strong>Look:</strong> move the mouse. Click the scene once to capture the cursor. Press <kbd>Esc</kbd> to release it.</li>
                     <li class="help-mobile"><strong>Move &amp; look:</strong> use the left joystick to walk and the right joystick to look around.</li>
-                    <li><strong>Look around:</strong> <span class="help-verb">click</span> the things in here. Most of them have a story, and the whiteboard keeps track of what you have found.</li>
+                    <li><strong>Look around:</strong> <span class="help-verb">click</span> the things in here. Most of them have a story, and the wall display behind Steve shows who else has been visiting.</li>
                     <li><strong>Settings:</strong> the gear icon (top-right) adjusts movement, look sensitivity, and brightness.</li>
                 </ul>
                 <button class="piece-cancel" data-close>Thanks, Steve!</button>
@@ -256,7 +257,7 @@
                 <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few discoveries in&nbsp; ★</p>
                 <h2 id="nudge-title" class="piece-title">Enjoying the visit?</h2>
                 <p class="piece-subtitle">Thanks for looking around. This is a 3D model of the real home office
-                    where SceneXP gets built, desk, whiteboard, cat and all. If you would like something like it
+                    where SceneXP gets built, desk, wall display, cat and all. If you would like something like it
                     built for someone you care about, I would love to hear from you. No rush, I am not going
                     anywhere.</p>
                 <a id="nudge-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
@@ -265,19 +266,63 @@
         </div>
     </div>
 
-    <!-- Whiteboard close-up (opens when the whiteboard on the wall is clicked).
-         The canvas is painted with the same drawing as the in-world board. -->
-    <div id="whiteboard-view" class="hidden" role="dialog" aria-modal="true" aria-label="The office whiteboard, up close">
-        <div class="whiteboard-backdrop" data-close></div>
-        <div class="whiteboard-frame">
-            <div class="whiteboard-surface">
-                <canvas id="whiteboard-canvas" class="whiteboard-canvas"></canvas>
+    <!-- Visitor-activity dashboard (opens when the wall display is clicked).
+         DOM rather than a painted canvas, so it scrolls, takes the keyboard,
+         and reads aloud. The shared part (analytics-1.0.0.js) fills the body,
+         the scene picker and the action checkboxes from the day's snapshot. -->
+    <div id="analytics-view" class="hidden" role="dialog" aria-modal="true" aria-labelledby="analytics-title">
+        <div class="analytics-backdrop" data-close></div>
+        <div class="analytics-panel">
+            <div class="analytics-header">
+                <div class="analytics-title-wrap">
+                    <h2 id="analytics-title">Visitor activity</h2>
+                    <p id="analytics-status" class="analytics-status" role="status" aria-live="polite"></p>
+                </div>
+                <div class="analytics-nav">
+                    <button id="analytics-prev" class="analytics-navbtn" type="button"
+                        aria-label="Show the day before">&lsaquo;</button>
+                    <span id="analytics-date" class="analytics-date"></span>
+                    <button id="analytics-next" class="analytics-navbtn" type="button"
+                        aria-label="Show the day after">&rsaquo;</button>
+                </div>
+                <button id="analytics-collapse-all" class="analytics-collapseall" type="button"
+                    aria-label="Collapse all sessions">Collapse all</button>
+                <button class="analytics-close" type="button"
+                    aria-label="Step back from the display" data-close>&times;</button>
             </div>
-            <div class="whiteboard-tray" aria-hidden="true"></div>
+
+            <div class="analytics-controls">
+                <label class="analytics-field" for="analytics-group">
+                    Group by
+                    <select id="analytics-group" class="analytics-select">
+                        <option value="session">Visit</option>
+                        <option value="scene">Scene</option>
+                    </select>
+                </label>
+                <label class="analytics-field" for="analytics-scene">
+                    Scene
+                    <select id="analytics-scene" class="analytics-select"></select>
+                </label>
+
+                <fieldset class="afilter">
+                    <legend class="afilter-legend">
+                        <span>Show</span>
+                        <span id="analytics-filter-summary" class="afilter-summary"></span>
+                        <button id="analytics-select-all" class="afilter-btn" type="button">All</button>
+                        <button id="analytics-clear-all" class="afilter-btn" type="button">None</button>
+                    </legend>
+                    <div id="analytics-actions"></div>
+                </fieldset>
+            </div>
+
+            <div id="analytics-body" class="analytics-body"></div>
+
+            <p class="analytics-foot">
+                Anonymous and aggregated. Throwaway labels only, with no names, no addresses,
+                and nothing that could pick one device out from another.
+                <a href="/privacy.html">How this works</a>
+            </p>
         </div>
-        <p id="whiteboard-caption" class="whiteboard-caption"></p>
-        <p class="whiteboard-hint" aria-hidden="true">Drag to pan across the board</p>
-        <button class="whiteboard-close" aria-label="Step back from the whiteboard" data-close>&times;</button>
     </div>
 
     <div id="touch-controls">

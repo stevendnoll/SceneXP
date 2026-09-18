@@ -77,10 +77,23 @@ test('the full office builds and ticks without throwing', async () => {
   expect(STEVE_CONFIG.greeterSign.enabled).toBe(false);
   expect(store.getHelpSign()).toBeFalsy();
 
-  // The whiteboard paths main.js drives: the (static-content) repaint hook
-  // and the click-to-enlarge overlay painter
-  store.updateStudioBoard(STEVE_CONFIG.checklist.items, { done: 1, total: 6, complete: false });
-  store.drawStudioBoardTo(chainable(), 800, 460);
+  // The wall display main.js drives. Both states are worth painting: the
+  // placeholder before the first poll answers, and a real day's summary.
+  expect(store.updateDashboardScreen(null)).toBe(true);
+  expect(store.getDashboardSummary()).toBe(null);
+  const summary = {
+    date: 'Fri, Sep 18, 2026', sessionCount: 15, eventCount: 438,
+    sceneCount: 11, busiestScene: "X's and O's", busiestSceneEvents: 390,
+    hasData: true, updatedAgo: '2m ago', stale: false,
+    recent: [
+      { label: 'Curious Otter a3', action: 'Called a play', scene: "X's and O's", ago: 'just now', mobile: true },
+      { label: 'Quiet Comet 5f', action: 'Planted a tree', scene: 'Fractal Garden', ago: '4m ago', mobile: false },
+    ],
+  };
+  expect(store.updateDashboardScreen(summary)).toBe(true);
+  expect(store.getDashboardSummary()).toBe(summary);
+  // A stale day takes the amber path, and a day with nobody in it still draws.
+  store.updateDashboardScreen({ ...summary, stale: true, recent: [], busiestScene: '' });
 
   // Several seconds of the office ticking: the cat breathing, Steve
   // typing, the editor cursor blinking past its period, and the fence
@@ -187,9 +200,9 @@ describe('the floor plan and config (pure)', () => {
   test('every discovery on the checklist is a wired, unique id', () => {
     const ids = CFG.checklist.items.map((item) => item.id);
     expect(new Set(ids).size).toBe(ids.length);
-    // The six discoveries: the greeter and whiteboard special paths plus
+    // The six discoveries: the greeter and wall-display special paths plus
     // the checklistId-carrying props in main.js's PROP_CONTENT
-    expect(ids).toEqual(['hello', 'desk', 'cat', 'board', 'closet', 'litter']);
+    expect(ids).toEqual(['hello', 'desk', 'cat', 'dashboard', 'closet', 'litter']);
     CFG.checklist.items.forEach((item) => {
       expect(typeof item.label).toBe('string');
       expect(typeof item.short).toBe('string');

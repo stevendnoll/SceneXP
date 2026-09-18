@@ -7,13 +7,12 @@
  * Approach: same recording-stub style as shared-pan.test.mjs. We stand up a
  * tiny stub document (createElement returning elements with classList,
  * setAttribute, appendChild, captured listeners, and a fire() helper) plus a
- * routing global.fetch that serves canned index/day/leaderboard payloads keyed
+ * routing global.fetch that serves canned index/day payloads keyed
  * by URL, then drive the real exports:
  *   - loadAnalytics() with injected overlay elements: session cards, chips,
  *     collapse defaults/toggles, status line, prev/next enablement.
  *   - the error (rejected fetch AND non-ok status) and empty-day states.
  *   - navigate() via the captured prev/next click listeners.
- *   - loadLeaderboard() rendering (medals, mobile badge, empty, failure).
  *   - startAnalyticsAutoRefresh() polling under fake timers, including the
  *     hidden-tab pause and the catch-up refresh on return.
  * Date.now is pinned so relative times and cache-bust query params are exact.
@@ -125,16 +124,20 @@ function makeDaySnap() {
     sessions: [
       {
         label: 'Visitor 1', started_at: isoAt(FIXED_NOW - 3600 * 1000), mobile: true, lang: 'en-US',
+        // A two-scene wander, which is what the scene chips and the per-event
+        // scene label exist for.
+        scenes: ['steve', 'garden'],
         events: [
-          { action: 'enter-store', at: isoAt(FIXED_NOW - 3600 * 1000) },
-          { action: 'open-piece', at: isoAt(FIXED_NOW - 3500 * 1000) },
+          { action: 'enter-store', scene: 'steve', at: isoAt(FIXED_NOW - 3600 * 1000) },
+          { action: 'open-piece', scene: 'garden', at: isoAt(FIXED_NOW - 3500 * 1000) },
         ],
       },
       {
         label: 'Visitor 2', started_at: isoAt(FIXED_NOW - 1800 * 1000), mobile: false,
+        scenes: ['xo'],
         // 9 events > LONG_SESSION_EVENTS (8) -> this card starts collapsed.
         events: Array.from({ length: 9 }, (_, i) => (
-          { action: 'click-prop', at: isoAt(FIXED_NOW - 1800 * 1000 + i * 1000) }
+          { action: 'click-prop', scene: 'xo', at: isoAt(FIXED_NOW - 1800 * 1000 + i * 1000) }
         )),
       },
     ],
@@ -153,6 +156,12 @@ async function setup(opts = {}) {
     prevBtn: makeEl('button'),
     nextBtn: makeEl('button'),
     collapseAllBtn: makeEl('button'),
+    groupSelect: makeEl('select'),
+    sceneSelect: makeEl('select'),
+    actionFilter: makeEl('div'),
+    filterSummary: makeEl('span'),
+    selectAllBtn: makeEl('button'),
+    clearAllBtn: makeEl('button'),
   };
   m.initAnalytics({ ...els, ...opts });
   return { m, els };
@@ -206,7 +215,8 @@ describe('loadAnalytics -> overlay render (happy path)', () => {
 
     const [first, second] = cards;
     expect(findOne(first, 'asession-label').textContent).toBe('Visitor 1');
-    expect(findAll(first, 'achip').map((c) => c.textContent)).toEqual(['Mobile', 'en-US']);
+    expect(findAll(first, 'achip').map((c) => c.textContent))
+      .toEqual(["Steve's Home Office", 'Fractal Garden', 'Mobile', 'en-US']);
     expect(findOne(first, 'asession-count').textContent).toBe('2 events');
     expect(findOne(first, 'asession-time').textContent).toMatch(/^started /);
 
@@ -216,7 +226,8 @@ describe('loadAnalytics -> overlay render (happy path)', () => {
     expect(findOne(rows[0], 'aevent-name').textContent).toBe('Entered the gallery');
     expect(findOne(rows[1], 'aevent-name').textContent).toBe('Opened an art piece');
 
-    expect(findAll(second, 'achip').map((c) => c.textContent)).toEqual(['Desktop']);
+    expect(findAll(second, 'achip').map((c) => c.textContent))
+      .toEqual(["X's and O's", 'Desktop']);
     expect(findOne(second, 'asession-count').textContent).toBe('9 events');
   });
 
@@ -324,7 +335,7 @@ describe('error and empty states', () => {
     const { m, els } = await setup();
     await expect(m.loadAnalytics()).resolves.toBeUndefined();
     const empty = findOne(els.body, 'analytics-empty');
-    expect(empty.textContent).toBe('Could not load analytics. Is the snapshot pipeline running?');
+    expect(empty.textContent).toBe('No activity to show just yet. Please check back in a little while.');
     expect(els.status.textContent).toBe('');
     expect(els.dateLabel.textContent).toBe('—');
     expect(els.collapseAllBtn.disabled).toBe(true);
@@ -335,7 +346,7 @@ describe('error and empty states', () => {
     const { m, els } = await setup();
     await m.loadAnalytics();
     expect(findOne(els.body, 'analytics-empty').textContent)
-      .toBe('Could not load analytics. Is the snapshot pipeline running?');
+      .toBe('No activity to show just yet. Please check back in a little while.');
   });
 
   test('a day with zero sessions renders the friendly empty message', async () => {
@@ -401,98 +412,16 @@ describe('day navigation (prev/next buttons)', () => {
     els.prevBtn.fire('click');
     await flush();
     expect(findOne(els.body, 'analytics-empty').textContent)
-      .toBe('Could not load analytics. Is the snapshot pipeline running?');
+      .toBe('No activity to show just yet. Please check back in a little while.');
     expect(els.dateLabel.textContent).toContain('2026');   // still names the day
-  });
-});
-
-// ---- Leaderboard -------------------------------------------------------------------
-
-describe('loadLeaderboard', () => {
-  const LB = {
-    generated_at: isoAt(FIXED_NOW - 60 * 1000),
-    entries: [
-      { label: 'Curious Otter a3', seconds: 142, mobile: false },
-      { label: 'Quiet Comet 5f', seconds: 158, mobile: true },
-      { label: 'Gentle Falcon 9c', seconds: 200, mobile: false },
-      { label: 'Bold Heron 2e', seconds: 260, mobile: false },
-    ],
-  };
-
-  async function setupLb(routes, opts = {}) {
-    installFetch(routes);
-    installDocument();
-    jest.resetModules();
-    const m = await import('../www/shared/js/analytics-1.0.0.js');
-    const lbBody = makeEl('div');
-    m.initAnalytics({ leaderboardBody: lbBody, ...opts });
-    return { m, lbBody };
-  }
-
-  test('renders every run with medals for the podium and a plain rank after', async () => {
-    const { m, lbBody } = await setupLb({ 'leaderboard.json': LB });
-    await m.loadLeaderboard();
-
-    const rows = findAll(lbBody, 'lb-row');
-    expect(rows).toHaveLength(4);
-    expect(findAll(lbBody, 'lb-rank').map((r) => r.textContent)).toEqual(['🥇', '🥈', '🥉', '4']);
-    expect(rows[0].classList.contains('lb-rank-1')).toBe(true);
-    expect(rows[3].className).toBe('lb-row');   // no podium class off the podium
-    expect(deepText(findOne(rows[0], 'lb-name'))).toBe('Curious Otter a3');
-    expect(findOne(rows[0], 'lb-time').textContent).toBe('2:22');
-    expect(findOne(lbBody, 'lb-updated').textContent).toBe('updated 1m ago');
-  });
-
-  test('only mobile runs get the mobile badge inside the name', async () => {
-    const { m, lbBody } = await setupLb({ 'leaderboard.json': LB });
-    await m.loadLeaderboard();
-    const rows = findAll(lbBody, 'lb-row');
-    expect(findOne(rows[1], 'lb-badge').textContent).toBe('mobile');   // Quiet Comet 5f
-    expect(findAll(rows[0], 'lb-badge')).toHaveLength(0);
-  });
-
-  test('feeds the in-world board callback the same ranked summary', async () => {
-    const onLeaderboard = jest.fn();
-    const { m } = await setupLb({ 'leaderboard.json': LB }, { onLeaderboard });
-    await m.loadLeaderboard();
-    expect(onLeaderboard).toHaveBeenCalledTimes(1);
-    const summary = onLeaderboard.mock.calls[0][0];
-    expect(summary.count).toBe(4);
-    expect(summary.entries[0]).toMatchObject({ rank: 1, label: 'Curious Otter a3', time: '2:22' });
-  });
-
-  test('an empty board invites the first record instead of showing nothing', async () => {
-    const { m, lbBody } = await setupLb({ 'leaderboard.json': { entries: [] } });
-    await m.loadLeaderboard();
-    expect(findOne(lbBody, 'lb-empty').textContent)
-      .toBe('No record times yet. Be the first to find everything!');
-  });
-
-  test('a failed fetch renders the pipeline hint and nulls the callback', async () => {
-    const onLeaderboard = jest.fn();
-    const { m, lbBody } = await setupLb({ 'leaderboard.json': 'reject' }, { onLeaderboard });
-    await m.loadLeaderboard();
-    expect(findOne(lbBody, 'lb-empty').textContent)
-      .toBe('Could not load the leaderboard. Is the snapshot pipeline running?');
-    expect(onLeaderboard).toHaveBeenLastCalledWith(null);
-  });
-
-  test('with no consumer wired up it does not fetch at all', async () => {
-    installFetch({ 'leaderboard.json': LB });
-    installDocument();
-    jest.resetModules();
-    const m = await import('../www/shared/js/analytics-1.0.0.js');
-    m.initAnalytics({});    // no leaderboardBody, no onLeaderboard
-    await m.loadLeaderboard();
-    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
 
 // ---- Auto refresh -------------------------------------------------------------------
 
 describe('startAnalyticsAutoRefresh', () => {
-  // fetch always rejects here: each loadAnalytics costs exactly one index fetch
-  // (the leaderboard arm no-ops with no consumer), which makes counting ticks easy.
+  // fetch always rejects here: each loadAnalytics costs exactly one index fetch,
+  // which makes counting ticks easy.
   async function setupPolling({ hidden = false } = {}) {
     jest.useFakeTimers();                 // the fake clock owns Date.now from here
     jest.setSystemTime(FIXED_NOW);
@@ -547,5 +476,311 @@ describe('startAnalyticsAutoRefresh', () => {
     doc.hidden = false;
     doc.fire('visibilitychange');
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---- Grouping, the scene picker, and the action filter ----------------------
+// The controls added when the dashboard grew a scene dimension. The fixture day
+// holds a two-scene wander (steve -> garden) and a nine-event xo session.
+
+describe('scene picker', () => {
+  async function ready(opts = {}) {
+    installFetch({ 'index.json': INDEX, 'sessions-20260628': makeDaySnap() });
+    const h = await setup(opts);
+    await h.m.loadAnalytics();
+    return h;
+  }
+
+  test('lists the scenes the day holds, busiest first, behind an every-scene option', async () => {
+    const { els } = await ready();
+    expect(els.sceneSelect.children.map((o) => o.textContent))
+      .toEqual(['Every scene', "X's and O's", 'Fractal Garden', "Steve's Home Office"]);
+    // Tied scenes sort by slug, so the order is stable from one poll to the next.
+    expect(els.sceneSelect.children.map((o) => o.value))
+      .toEqual(['', 'xo', 'garden', 'steve']);
+  });
+
+  test('choosing a scene narrows the sessions to it', async () => {
+    const { els } = await ready();
+    els.sceneSelect.value = 'garden';
+    els.sceneSelect.fire('change');
+    const cards = findAll(els.body, 'asession');
+    expect(cards).toHaveLength(1);
+    expect(findOne(cards[0], 'asession-label').textContent).toBe('Visitor 1');
+    // Only the garden event survives, so the count follows.
+    expect(findOne(cards[0], 'asession-count').textContent).toBe('1 event');
+  });
+
+  test('the status line names the chosen scene and the events it is hiding', async () => {
+    const { els } = await ready();
+    els.sceneSelect.value = 'garden';
+    els.sceneSelect.fire('change');
+    expect(els.status.textContent).toContain('1 of 11 events');
+    expect(els.status.textContent).toContain('Fractal Garden');
+  });
+
+  test('a scene that the newly chosen day does not hold falls back to every scene', async () => {
+    const { m, els } = await ready();
+    els.sceneSelect.value = 'garden';
+    els.sceneSelect.fire('change');
+    // Step to the older day, whose snapshot has no garden events at all.
+    installFetch({
+      'index.json': INDEX,
+      'sessions-20260627': { date: OLDER, generated_at: isoAt(FIXED_NOW), sessions: [
+        { label: 'Solo', started_at: isoAt(FIXED_NOW), scenes: ['xo'],
+          events: [{ action: 'snap', scene: 'xo', at: isoAt(FIXED_NOW) }] },
+      ] },
+      'sessions-20260628': makeDaySnap(),
+    });
+    els.prevBtn.fire('click');
+    await flush();
+    expect(els.sceneSelect.value).toBe('');
+    expect(findAll(els.body, 'asession')).toHaveLength(1);
+  });
+});
+
+describe('group by scene', () => {
+  async function ready() {
+    installFetch({ 'index.json': INDEX, 'sessions-20260628': makeDaySnap() });
+    const h = await setup();
+    await h.m.loadAnalytics();
+    h.els.groupSelect.value = 'scene';
+    h.els.groupSelect.fire('change');
+    return h;
+  }
+
+  test('renders a row per scene with its own totals, busiest first', async () => {
+    const { els } = await ready();
+    const rows = findAll(els.body, 'ascene');
+    expect(rows.map((r) => findOne(r, 'ascene-name').textContent))
+      .toEqual(["X's and O's", 'Fractal Garden', "Steve's Home Office"]);
+    expect(findAll(rows[0], 'ascene-stat').map((s) => s.textContent))
+      .toEqual(['1 session', '9 events']);
+  });
+
+  test('a scene with mobile sessions says so', async () => {
+    const { els } = await ready();
+    const steve = findAll(els.body, 'ascene')
+      .find((r) => findOne(r, 'ascene-name').textContent === "Steve's Home Office");
+    expect(findAll(steve, 'ascene-stat').map((s) => s.textContent))
+      .toEqual(['1 session', '1 event', '1 on mobile']);
+  });
+
+  test('clicking a scene row drills into that scene by session', async () => {
+    const { els } = await ready();
+    findAll(els.body, 'ascene')[1].fire('click');   // Fractal Garden
+    expect(els.groupSelect.value).toBe('session');
+    expect(els.sceneSelect.value).toBe('garden');
+    expect(findAll(els.body, 'asession')).toHaveLength(1);
+  });
+
+  test('collapse all is disabled in the scene view, where there is nothing to collapse', async () => {
+    const { els } = await ready();
+    expect(els.collapseAllBtn.disabled).toBe(true);
+  });
+
+  test('switching back to sessions restores the cards', async () => {
+    const { els } = await ready();
+    els.groupSelect.value = 'session';
+    els.groupSelect.fire('change');
+    expect(findAll(els.body, 'asession')).toHaveLength(2);
+    expect(findAll(els.body, 'ascene')).toHaveLength(0);
+  });
+});
+
+describe('action filter', () => {
+  async function ready() {
+    installFetch({ 'index.json': INDEX, 'sessions-20260628': makeDaySnap() });
+    const h = await setup();
+    await h.m.loadAnalytics();
+    return h;
+  }
+
+  const boxes = (els) => findAll(els.actionFilter, 'afilter-box');
+  const names = (els) => findAll(els.actionFilter, 'afilter-name').map((n) => n.textContent);
+
+  test('offers a checkbox per action on screen, busiest first, all ticked', async () => {
+    const { els } = await ready();
+    expect(names(els)).toEqual(['Examined a prop', 'Entered the gallery', 'Opened an art piece']);
+    expect(findAll(els.actionFilter, 'afilter-count').map((c) => c.textContent))
+      .toEqual(['9', '1', '1']);
+    expect(boxes(els).every((b) => b.checked)).toBe(true);
+    expect(els.filterSummary.textContent).toBe('3 shown');
+  });
+
+  test('unticking an action removes its events and says how many are hidden', async () => {
+    const { els } = await ready();
+    const box = boxes(els)[0];      // click-prop, all 9 of Visitor 2's events
+    box.checked = false;
+    box.fire('change');
+    // Visitor 2 had nothing else, so the card goes rather than sitting empty.
+    expect(findAll(els.body, 'asession')).toHaveLength(1);
+    expect(els.status.textContent).toContain('2 of 11 events');
+    expect(els.filterSummary.textContent).toBe('1 of 3 hidden');
+  });
+
+  test('an unticked action keeps its checkbox so it can be ticked back on', async () => {
+    const { els } = await ready();
+    boxes(els)[0].checked = false;
+    boxes(els)[0].fire('change');
+    expect(names(els)).toHaveLength(3);          // the vocabulary did not shrink
+    expect(boxes(els)[0].checked).toBe(false);
+    boxes(els)[0].checked = true;
+    boxes(els)[0].fire('change');
+    expect(findAll(els.body, 'asession')).toHaveLength(2);
+  });
+
+  test('the vocabulary follows the chosen scene', async () => {
+    const { els } = await ready();
+    els.sceneSelect.value = 'garden';
+    els.sceneSelect.fire('change');
+    expect(names(els)).toEqual(['Opened an art piece']);
+  });
+
+  test('clear all empties the day and explains why it is empty', async () => {
+    const { els } = await ready();
+    els.clearAllBtn.fire('click');
+    expect(findAll(els.body, 'asession')).toHaveLength(0);
+    expect(findOne(els.body, 'analytics-empty').textContent)
+      .toBe('Nothing matches these filters.');
+    expect(els.clearAllBtn.disabled).toBe(true);
+  });
+
+  test('select all brings everything back', async () => {
+    const { els } = await ready();
+    els.clearAllBtn.fire('click');
+    els.selectAllBtn.fire('click');
+    expect(findAll(els.body, 'asession')).toHaveLength(2);
+    expect(els.selectAllBtn.disabled).toBe(true);
+    expect(els.filterSummary.textContent).toBe('3 shown');
+  });
+
+  test('the scene view honours the filter too', async () => {
+    const { els } = await ready();
+    boxes(els)[0].checked = false;
+    boxes(els)[0].fire('change');      // hide click-prop, which is all of xo
+    els.groupSelect.value = 'scene';
+    els.groupSelect.fire('change');
+    expect(findAll(els.body, 'ascene').map((r) => findOne(r, 'ascene-name').textContent))
+      .toEqual(['Fractal Garden', "Steve's Home Office"]);
+  });
+
+  test('a day with nothing in it says so rather than blaming the filters', async () => {
+    installFetch({
+      'index.json': INDEX,
+      'sessions-20260628': { date: LATEST, generated_at: isoAt(FIXED_NOW), sessions: [] },
+    });
+    const { m, els } = await setup();
+    await m.loadAnalytics();
+    expect(findOne(els.body, 'analytics-empty').textContent)
+      .toBe('No visits recorded for this day.');
+    expect(findOne(els.actionFilter, 'afilter-empty').textContent).toBe('Nothing to filter.');
+    expect(els.filterSummary.textContent).toBe('');
+  });
+});
+
+describe('event rows', () => {
+  test('name the scene only on a visit that crossed more than one', async () => {
+    installFetch({ 'index.json': INDEX, 'sessions-20260628': makeDaySnap() });
+    const { m, els } = await setup();
+    await m.loadAnalytics();
+    const [first, second] = findAll(els.body, 'asession');
+    // Visitor 1 wandered steve -> garden, so each row names where it happened.
+    expect(findAll(first, 'aevent-scene').map((s) => s.textContent))
+      .toEqual(["Steve's Home Office", 'Fractal Garden']);
+    // Visitor 2 never left xo, where the same word on every line says nothing.
+    expect(findAll(second, 'aevent-scene')).toHaveLength(0);
+  });
+
+  test('carry the short detail an event brought with it', async () => {
+    const snap = {
+      date: LATEST, generated_at: isoAt(FIXED_NOW),
+      sessions: [{
+        label: 'Detail', started_at: isoAt(FIXED_NOW), scenes: ['xo'],
+        events: [
+          { action: 'play-result', scene: 'xo', at: isoAt(FIXED_NOW), kind: 'catch', seconds: 1.4 },
+          { action: 'snap', scene: 'xo', at: isoAt(FIXED_NOW) },
+        ],
+      }],
+    };
+    installFetch({ 'index.json': INDEX, 'sessions-20260628': snap });
+    const { m, els } = await setup();
+    await m.loadAnalytics();
+    const rows = findAll(els.body, 'aevent');
+    expect(findOne(rows[0], 'aevent-detail').textContent).toBe('catch · 1.4s');
+    expect(findAll(rows[1], 'aevent-detail')).toHaveLength(0);
+  });
+});
+
+// ---- The "+N more" overflow rules and the defensive empty states ------------
+
+describe('overflow and empty edges', () => {
+  test('a visit through more than three scenes summarizes the tail', async () => {
+    const scenes = ['xo', 'garden', 'steve', 'highwater', 'gavin'];
+    installFetch({
+      'index.json': INDEX,
+      'sessions-20260628': {
+        date: LATEST, generated_at: isoAt(FIXED_NOW),
+        sessions: [{
+          label: 'Bold Acorn 7f', started_at: isoAt(FIXED_NOW), scenes,
+          events: scenes.map((scene) => ({ action: 'session-end', scene, at: isoAt(FIXED_NOW) })),
+        }],
+      },
+    });
+    const { m, els } = await setup();
+    await m.loadAnalytics();
+    const card = findOne(els.body, 'asession');
+    expect(findAll(card, 'achip-scene').map((c) => c.textContent))
+      .toEqual(["X's and O's", 'Fractal Garden', "Steve's Home Office"]);
+    expect(findOne(card, 'achip-more').textContent).toBe('+2 more');
+  });
+
+  test('a scene with more than three actions names the top three and counts the rest', async () => {
+    installFetch({
+      'index.json': INDEX,
+      'sessions-20260628': {
+        date: LATEST, generated_at: isoAt(FIXED_NOW),
+        sessions: [{
+          label: 'Busy', started_at: isoAt(FIXED_NOW), scenes: ['xo'],
+          events: ['snap', 'snap', 'throw', 'call-play', 'next-play', 'pause']
+            .map((action) => ({ action, scene: 'xo', at: isoAt(FIXED_NOW) })),
+        }],
+      },
+    });
+    const { m, els } = await setup();
+    await m.loadAnalytics();
+    els.groupSelect.value = 'scene';
+    els.groupSelect.fire('change');
+    const row = findOne(els.body, 'ascene');
+    expect(findAll(row, 'ascene-top')[0].children.map((c) => c.textContent))
+      .toEqual(['Snap 2', 'Called a play 1', 'Moved to the next play 1', '+2 more']);
+  });
+
+  test('the scene view explains an empty body the filters caused', async () => {
+    installFetch({ 'index.json': INDEX, 'sessions-20260628': makeDaySnap() });
+    const { m, els } = await setup();
+    await m.loadAnalytics();
+    els.clearAllBtn.fire('click');
+    els.groupSelect.value = 'scene';
+    els.groupSelect.fire('change');
+    expect(findAll(els.body, 'ascene')).toHaveLength(0);
+    expect(findOne(els.body, 'analytics-empty').textContent)
+      .toBe('Nothing matches these filters.');
+  });
+
+  test('sessions that carry no events at all read as a quiet day, not a filtered one', async () => {
+    // Defensive: a malformed or mid-write snapshot should not accuse the
+    // viewer's filters of hiding something that was never there.
+    installFetch({
+      'index.json': INDEX,
+      'sessions-20260628': {
+        date: LATEST, generated_at: isoAt(FIXED_NOW),
+        sessions: [{ label: 'Empty', started_at: isoAt(FIXED_NOW), events: [] }],
+      },
+    });
+    const { m, els } = await setup();
+    await m.loadAnalytics();
+    expect(findOne(els.body, 'analytics-empty').textContent)
+      .toBe('No visits recorded for this day.');
   });
 });

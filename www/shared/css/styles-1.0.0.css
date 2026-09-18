@@ -146,8 +146,7 @@ body {
 #nudge-modal,
 #card-modal,
 #tv-view,
-#analytics-view,
-#leaderboard-view {
+#analytics-view {
     -webkit-user-select: text;
     user-select: text;
 }
@@ -3866,6 +3865,228 @@ body {
     color: #dce3ec;
 }
 
+/* ---- The route chips, and the detail an event brought with it -------------
+   A session is a visit to the SITE, so a card's first chips name the
+   experiences it passed through, in order. They are tinted apart from the
+   device and language chips because they answer a different question. */
+.achip-scene {
+    background: rgba(126, 217, 163, 0.14);
+    color: #8fd9b0;
+}
+
+.achip-more {
+    background: rgba(255, 255, 255, 0.06);
+    color: #8a94a6;
+}
+
+/* Only rendered on a visit that crossed more than one scene, where it is the
+   difference between a list and a route. */
+.aevent-scene {
+    font-size: 0.72rem;
+    color: #8fd9b0;
+    opacity: 0.85;
+}
+
+.aevent-detail {
+    font-size: 0.72rem;
+    color: #7f8a9c;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Controls: how to group, which scene, which actions -------------------
+   A second bar under the header. It scrolls away with the body rather than
+   pinning, because on a phone the panel is short and a fixed toolbar would eat
+   the half of it worth reading. */
+.analytics-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.015);
+}
+
+.analytics-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    color: #8a94a6;
+}
+
+.analytics-select {
+    height: 32px;
+    max-width: 14em;
+    padding: 0 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #e8edf4;
+    font-family: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.analytics-select:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.analytics-select:focus-visible,
+.afilter-btn:focus-visible,
+.afilter-item:focus-within {
+    outline: 2px solid rgba(159, 196, 255, 0.7);
+    outline-offset: 2px;
+}
+
+/* ---- The action filter ----------------------------------------------------
+   Built from the events on screen, so it holds a handful of boxes on a quiet
+   day and about thirty on the busiest. It collapses by default: the boxes are
+   all ticked to begin with, so the useful thing to show first is that they
+   exist, not the whole list. */
+.afilter {
+    flex: 1 1 100%;
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin: 0;
+}
+
+.afilter-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px;
+    font-size: 0.76rem;
+    color: #8a94a6;
+}
+
+.afilter-summary {
+    font-variant-numeric: tabular-nums;
+    color: #9fc4ff;
+}
+
+.afilter-btn {
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #c4ccda;
+    font-family: inherit;
+    font-size: 0.72rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.afilter-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.afilter-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* Wraps rather than scrolls: a hidden second row of checkboxes is a filter
+   nobody knows is on. Capped so a busy day cannot push the sessions off screen. */
+.afilter-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    max-height: 7.5rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 6px 4px 2px;
+}
+
+.afilter-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.76rem;
+    color: #c4ccda;
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 1px 4px;
+}
+
+.afilter-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.afilter-box {
+    accent-color: #6cb6ff;
+    cursor: pointer;
+    margin: 0;
+}
+
+.afilter-count {
+    font-size: 0.7rem;
+    color: #7f8a9c;
+    font-variant-numeric: tabular-nums;
+}
+
+.afilter-empty {
+    margin: 4px;
+    font-size: 0.76rem;
+    color: #7f8a9c;
+}
+
+/* ---- The by-scene view ----------------------------------------------------
+   One row per experience. The whole row is a button, because picking a scene
+   is the drill-down into that scene's sessions. */
+.ascene {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    width: 100%;
+    text-align: left;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.025);
+    padding: 12px 14px;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ascene:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.16);
+}
+
+.ascene:focus-visible {
+    outline: 2px solid rgba(159, 196, 255, 0.7);
+    outline-offset: 2px;
+}
+
+.ascene-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #e8edf4;
+}
+
+.ascene-stats {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    font-size: 0.78rem;
+    color: #8a94a6;
+    font-variant-numeric: tabular-nums;
+}
+
+.ascene-top {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
 .analytics-foot {
     margin: 0;
     padding: 10px 18px;
@@ -3875,211 +4096,18 @@ body {
     text-align: center;
 }
 
-/* ===========================================================================
-   "Fastest Finds" leaderboard (#leaderboard-view)
-   Click-to-expand overlay for the arcade board on the gallery's right wall.
-   Shares the analytics overlay's dark, self-contained styling, with a gold
-   speedrun-podium accent.
-   =========================================================================== */
-#leaderboard-view {
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-#leaderboard-view.hidden {
-    display: none;
-}
-
-.lb-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(8, 7, 4, 0.72);
-    backdrop-filter: blur(3px);
-}
-
-.lb-panel {
-    position: relative;
-    width: min(94vw, 560px);
-    max-height: 88vh;
-    max-height: 88dvh;
-    display: flex;
-    flex-direction: column;
-    background: linear-gradient(180deg, #1b1710 0%, #100d08 100%);
-    color: #f1ece0;
-    border: 1px solid rgba(255, 211, 77, 0.22);
-    border-radius: 14px;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
-    overflow: hidden;
-    font-family: var(--font-system, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
-}
-
-.lb-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    padding: 16px 18px;
-    border-bottom: 1px solid rgba(255, 211, 77, 0.16);
-}
-
-.lb-title-wrap {
-    flex: 1;
-    min-width: 0;
-}
-
-#leaderboard-title {
-    margin: 0;
-    font-size: 1.2rem;
-    font-weight: 800;
-    letter-spacing: 0.03em;
-    color: #ffd34d;
-}
-
-.lb-sub {
-    margin: 3px 0 0;
-    font-size: 0.78rem;
-    color: #9a8f6f;
-}
-
-.lb-close {
-    flex: 0 0 auto;
-    width: 38px;
-    height: 38px;
-    border: none;
-    border-radius: 8px;
-    background: none;
-    color: #9a8f6f;
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.lb-close:hover {
-    color: #ffd34d;
-}
-
-.lb-body {
-    flex: 1;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    padding: 12px 18px 16px;
-}
-
-.lb-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.lb-row {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.03);
-}
-
-.lb-rank {
-    flex: 0 0 auto;
-    width: 2.1em;
-    text-align: center;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    color: #8a8470;
-    font-size: 1.05rem;
-}
-
-.lb-row.lb-rank-1 {
-    background: rgba(255, 211, 77, 0.10);
-}
-
-.lb-row.lb-rank-2 {
-    background: rgba(205, 214, 227, 0.08);
-}
-
-.lb-row.lb-rank-3 {
-    background: rgba(217, 138, 75, 0.09);
-}
-
-.lb-name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 600;
-}
-
-.lb-badge {
-    margin-left: 8px;
-    padding: 1px 7px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #b8b09a;
-    font-size: 0.66rem;
-    font-weight: 600;
-    vertical-align: middle;
-}
-
-.lb-time {
-    flex: 0 0 auto;
-    font-variant-numeric: tabular-nums;
-    font-weight: 800;
-    font-size: 1.1rem;
-    color: #9fe0b0;
-    font-family: ui-monospace, Menlo, Consolas, monospace;
-}
-
-.lb-row.lb-rank-1 .lb-time {
-    color: #ffd34d;
-}
-
-.lb-row.lb-rank-2 .lb-time {
-    color: #cdd6e3;
-}
-
-.lb-row.lb-rank-3 .lb-time {
-    color: #d98a4b;
-}
-
-.lb-empty {
-    margin: 2rem 0;
-    text-align: center;
-    color: #9a8f6f;
-}
-
-.lb-updated {
-    margin: 12px 0 0;
-    text-align: right;
-    font-size: 0.72rem;
-    color: #6c6650;
-}
-
-.lb-foot {
-    margin: 0;
-    padding: 10px 18px;
-    border-top: 1px solid rgba(255, 211, 77, 0.16);
-    font-size: 0.72rem;
-    color: #8a8470;
-    text-align: center;
-}
-
-.lb-foot strong {
-    color: #cdc4a8;
-}
-
 @media (max-width: 600px) {
     .analytics-header { flex-wrap: wrap; }
     .analytics-nav { order: 3; width: 100%; justify-content: center; }
     .analytics-collapseall { order: 4; margin: 0 auto; }
+    /* Each picker takes its own full-width row, and the select grows into it,
+       rather than two truncated dropdowns sharing one. */
+    .analytics-field { flex: 1 1 100%; }
+    .analytics-select { flex: 1; max-width: none; }
+    .afilter-list { max-height: 6rem; }
+    /* The route chips are the first thing to go when a card gets tight: the
+       timeline underneath names every scene anyway on a multi-scene visit. */
+    .asession-chips { flex-wrap: wrap; }
 }
 
 /* ---- Portrait view controls (shared pan-1.0.0.js) -------------------------

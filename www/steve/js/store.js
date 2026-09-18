@@ -229,7 +229,7 @@ export function initStore() {
     createSonDeskNook();      // the son's small navy desk, chair, and ring lamp
     createNorthwestCorner();  // trash can, hooded litter box, and its mat
     createSitStandDeskWall(); // Steve's sit-stand desk, standing, west wall
-    createWhiteboardWall();   // the whiteboard on the wall behind Steve
+    createWallDashboard();    // the visitor-activity display on the wall behind Steve
     createCatBowls();         // food and water, desk-to-closet stretch
     createOfficeLighting();   // shared interior rig, sized for one small room
     createExterior();         // lawn and trees seen through the window
@@ -2481,103 +2481,175 @@ function createCatBowls() {
 }
 
 // ============================================
-// THE WHITEBOARD
+// THE WALL DASHBOARD
 // ============================================
-/** The marker scribbles on the whiteboard. One drawing routine serves both
- *  the in-world texture and the click-to-enlarge overlay (drawStudioBoardTo
- *  below), so the close-up always matches the wall. */
-function drawOfficeWhiteboard(ctx, W, H) {
-    ctx.fillStyle = '#fcfcf9';
+// The display on the east wall behind Steve, where the whiteboard used to
+// hang. It carries the day's visitor activity, repainted by the shared
+// analytics part each time it polls (see updateDashboardScreen).
+//
+// IT SHOWS A HEADLINE, NOT A TABLE. A visitor reads this from across a
+// ten-foot room, on a surface that is a few hundred pixels wide once it is
+// drawn at that distance, so the numbers here are the few worth seeing at a
+// glance. Clicking it opens the real dashboard, which is DOM and therefore
+// scrollable, keyboard reachable and legible to a screen reader.
+
+const DASH_W = 768, DASH_H = 432;     // the screen's canvas, 16:9
+const DASH_ROWS = 4;                  // recent visitors listed down the right
+
+let dashboardScreen = null;           // { ctx, texture } once the wall is built
+let dashboardSummary = null;          // the latest summary, or null before one lands
+
+/** Paint the dashboard's face. `summary` is what analytics-1.0.0.js hands the
+ *  scene, or null before the first poll answers (or when it fails), which is a
+ *  state worth drawing rather than leaving the screen blank. */
+function drawDashboardFace(ctx, W, H, summary) {
+    // The panel, matching the overlay's dark "ops monitor" palette so the
+    // enlarged view reads as the same screen rather than a different one.
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#131a28');
+    bg.addColorStop(1, '#0b1018');
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // Ghosts of erased sessions past
-    ctx.fillStyle = 'rgba(150, 152, 148, 0.08)';
-    [[0.14, 0.55, 0.3, 0.2], [0.55, 0.18, 0.32, 0.14], [0.4, 0.72, 0.22, 0.12]].forEach(([gx, gy, gw, gh]) => {
-        ctx.fillRect(W * gx, H * gy, W * gw, H * gh);
-    });
-
-    // The heading, in blue marker
-    ctx.fillStyle = '#2456a8';
-    ctx.font = `bold ${Math.round(H * 0.14)}px "Segoe UI", "Comic Sans MS", Verdana, sans-serif`;
+    // The subtitle sits after the wordmark, measured while the wordmark's own
+    // font is still set. Measuring it rather than hardcoding a gap keeps the
+    // two from colliding if the font falls back to something wider.
+    const headX = W * 0.06;
+    ctx.fillStyle = '#9fc4ff';
+    ctx.font = `600 ${Math.round(H * 0.058)}px "Segoe UI", Verdana, sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText('SceneXP', W * 0.08, H * 0.2);
-    ctx.strokeStyle = '#2456a8';
-    ctx.lineWidth = Math.max(2, H * 0.012);
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('SceneXP', headX, H * 0.13);
+    const headW = ctx.measureText('SceneXP').width;
+
+    ctx.fillStyle = '#6c7686';
+    ctx.font = `${Math.round(H * 0.042)}px "Segoe UI", Verdana, sans-serif`;
+    ctx.fillText('VISITOR ACTIVITY', headX + headW + W * 0.03, H * 0.13);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+    ctx.lineWidth = Math.max(1, H * 0.004);
     ctx.beginPath();
-    ctx.moveTo(W * 0.08, H * 0.25);
-    ctx.lineTo(W * 0.52, H * 0.24);
+    ctx.moveTo(W * 0.06, H * 0.175);
+    ctx.lineTo(W * 0.94, H * 0.175);
     ctx.stroke();
 
-    // The list, in green
-    ctx.fillStyle = '#2e7d4f';
-    ctx.font = `${Math.round(H * 0.085)}px "Segoe UI", "Comic Sans MS", Verdana, sans-serif`;
-    ['• delight visitors', '• honor the honorees', '• ship it'].forEach((line, i) => {
-        ctx.fillText(line, W * 0.1, H * (0.4 + i * 0.135));
+    if (!summary) {
+        ctx.fillStyle = '#6c7686';
+        ctx.font = `${Math.round(H * 0.05)}px "Segoe UI", Verdana, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText('Waiting for today\u2019s numbers', W / 2, H * 0.52);
+        return;
+    }
+
+    // The two figures the day is actually about, big enough to read from the
+    // doorway. Everything else on the screen is supporting detail.
+    const stat = (label, value, x) => {
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#e8edf4';
+        ctx.font = `700 ${Math.round(H * 0.16)}px "Segoe UI", Verdana, sans-serif`;
+        ctx.fillText(String(value), x, H * 0.43);
+        ctx.fillStyle = '#8a94a6';
+        ctx.font = `${Math.round(H * 0.042)}px "Segoe UI", Verdana, sans-serif`;
+        ctx.fillText(label, x, H * 0.50);
+    };
+    stat('VISITS', summary.sessionCount, W * 0.06);
+    stat('THINGS DONE', summary.eventCount, W * 0.26);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#8fd9b0';
+    ctx.font = `600 ${Math.round(H * 0.046)}px "Segoe UI", Verdana, sans-serif`;
+    if (summary.busiestScene) {
+        ctx.fillText(`Busiest: ${summary.busiestScene}`, W * 0.06, H * 0.63);
+        ctx.fillStyle = '#6c7686';
+        ctx.font = `${Math.round(H * 0.04)}px "Segoe UI", Verdana, sans-serif`;
+        ctx.fillText(`${summary.busiestSceneEvents} of ${summary.eventCount} across ${summary.sceneCount} scenes`,
+            W * 0.06, H * 0.70);
+    }
+
+    // The most recent few, which is the part that makes the room feel visited.
+    const rows = (summary.recent || []).slice(0, DASH_ROWS);
+    rows.forEach((row, i) => {
+        const y = H * 0.30 + i * H * 0.115;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#c4ccda';
+        ctx.font = `${Math.round(H * 0.04)}px "Segoe UI", Verdana, sans-serif`;
+        ctx.fillText(row.label || '', W * 0.52, y);
+        ctx.fillStyle = '#6c7686';
+        ctx.font = `${Math.round(H * 0.035)}px "Segoe UI", Verdana, sans-serif`;
+        ctx.fillText(`${row.action}${row.scene ? ` \u00b7 ${row.scene}` : ''}`, W * 0.52, y + H * 0.048);
+        ctx.textAlign = 'right';
+        ctx.fillText(row.ago || '', W * 0.94, y);
     });
+    if (!rows.length) {
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#6c7686';
+        ctx.font = `${Math.round(H * 0.04)}px "Segoe UI", Verdana, sans-serif`;
+        ctx.fillText('No visits recorded yet today.', W * 0.52, H * 0.32);
+    }
 
-    // "ship it" circled in red
-    ctx.strokeStyle = '#c0392b';
-    ctx.lineWidth = Math.max(2, H * 0.014);
-    ctx.beginPath();
-    ctx.ellipse(W * 0.245, H * 0.645, W * 0.17, H * 0.085, -0.04, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = summary.stale ? '#e8b54a' : '#4a5364';
+    ctx.font = `${Math.round(H * 0.034)}px "Segoe UI", Verdana, sans-serif`;
+    ctx.fillText(summary.stale
+        ? `${summary.date} \u00b7 not updating`
+        : `${summary.date} \u00b7 updated ${summary.updatedAgo}`, W * 0.06, H * 0.92);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#4a5364';
+    ctx.fillText('click for the full dashboard', W * 0.94, H * 0.92);
 }
 
-/** The whiteboard on the wall directly behind Steve: white surface in an
- *  aluminum frame, marker tray with markers and an eraser. Registered as
- *  the 'board' prop, so clicking it opens the shared close-up overlay. */
-function createWhiteboardWall() {
+/** The wall-mounted display: a slim dark bezel around an emissive panel, on a
+ *  low-profile mount. Wider than the whiteboard it replaced, because a wall of
+ *  numbers wants the room the board never used. Registered as the 'dashboard'
+ *  prop, so clicking it opens the overlay. */
+function createWallDashboard() {
     const { room } = LAYOUT;
     const innerE = room.maxX - room.wallT / 2;
 
-    const boardGroup = new THREE.Group();
-    boardGroup.name = 'whiteboard';
+    const group = new THREE.Group();
+    group.name = 'wallDashboard';
 
-    const canvas = makeCanvas(512, 384);
-    drawOfficeWhiteboard(canvas.getContext('2d'), 512, 384);
+    const panelW = 1.5, panelH = 0.845;          // ~16:9, a big wall display
+    const bezel = 0.022;
 
-    const surface = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.2, 0.9),
+    const shell = new THREE.Mesh(
+        new THREE.BoxGeometry(panelW + bezel * 2, panelH + bezel * 2, 0.045),
+        new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.45, metalness: 0.2 })
+    );
+    shell.castShadow = true;
+    group.add(shell);
+
+    const canvas = makeCanvas(DASH_W, DASH_H);
+    const ctx = canvas.getContext('2d');
+    const texture = new THREE.CanvasTexture(canvas);
+    drawDashboardFace(ctx, DASH_W, DASH_H, null);
+    texture.needsUpdate = true;
+    dashboardScreen = { ctx, texture };
+
+    const face = new THREE.Mesh(
+        new THREE.PlaneGeometry(panelW, panelH),
         new THREE.MeshStandardMaterial({
-            map: new THREE.CanvasTexture(canvas), roughness: 0.35, metalness: 0.05
+            map: texture, emissive: 0xffffff, emissiveMap: texture,
+            emissiveIntensity: 0.6, roughness: 0.32, metalness: 0.0
         })
     );
-    surface.position.z = 0.018;
-    boardGroup.add(surface);
+    face.position.z = 0.0235;
+    group.add(face);
 
-    // Frame: the horizontal rails span the full outer width (1.28, flush
-    // with the vertical rails' outer faces at ±0.64), and the verticals
-    // butt between them, so every corner meets square.
-    [[0, 0.46, 1.28, 0.05], [0, -0.46, 1.28, 0.05], [-0.615, 0, 0.05, 0.87], [0.615, 0, 0.05, 0.87]].forEach(([fx, fy, fw, fh]) => {
-        const strip = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, 0.035), brushedMetal);
-        strip.position.set(fx, fy, 0.005);
-        boardGroup.add(strip);
-    });
-
-    const tray = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.07), brushedMetal);
-    tray.position.set(0, -0.51, 0.035);
-    boardGroup.add(tray);
-    [[0x2456a8, -0.12], [0x2e7d4f, -0.02]].forEach(([color, mx]) => {
-        const marker = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.011, 0.011, 0.12, 8),
-            new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.0 })
-        );
-        marker.rotation.z = Math.PI / 2;
-        marker.position.set(mx, -0.495, 0.045);
-        boardGroup.add(marker);
-    });
-    const eraser = new THREE.Mesh(
-        new THREE.BoxGeometry(0.11, 0.035, 0.05),
-        new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.8, metalness: 0.0 })
+    // The mount: a plate behind the shell, hidden from the room but there when
+    // a visitor looks at the screen edge-on.
+    const mount = new THREE.Mesh(
+        new THREE.BoxGeometry(0.22, 0.22, 0.03), brushedMetal
     );
-    eraser.position.set(0.15, -0.49, 0.045);
-    boardGroup.add(eraser);
+    mount.position.z = -0.035;
+    group.add(mount);
 
-    // On the east wall, facing the room, centered behind Steve's spot
-    boardGroup.position.set(innerE - 0.03, 1.45, -0.8);
-    boardGroup.rotation.y = -Math.PI / 2;
-    registerOutdoorProp(boardGroup, 'board');
-    officeGroup.add(boardGroup);
+    // Same spot on the east wall the whiteboard held, a touch higher so the
+    // taller panel keeps its lower edge clear of the desk's sight line.
+    group.position.set(innerE - 0.03, 1.5, -0.8);
+    group.rotation.y = -Math.PI / 2;
+    registerOutdoorProp(group, 'dashboard');
+    officeGroup.add(group);
 }
 
 // ============================================
@@ -2811,15 +2883,23 @@ export function isMusicPlaying() {
     return false;
 }
 
-/** The whiteboard's content is static scribbles for now, so checklist
- *  changes repaint nothing. The interaction pass may mirror the discovery
- *  list here the way the Roqui board did. */
-export function updateStudioBoard() { /* static board content */ }
+/** Repaint the wall display with a fresh summary from the analytics part.
+ *  Safe before the wall exists and safe with null, which is the state between
+ *  the page opening and the first poll answering. Returns whether it painted,
+ *  so a caller (and a test) can tell the difference between "drawn" and
+ *  "there is no screen in this scene". */
+export function updateDashboardScreen(summary) {
+    dashboardSummary = summary || null;
+    if (!dashboardScreen) return false;
+    drawDashboardFace(dashboardScreen.ctx, DASH_W, DASH_H, dashboardSummary);
+    dashboardScreen.texture.needsUpdate = true;
+    return true;
+}
 
-/** Paint the whiteboard into the click-to-enlarge overlay: the same
- *  drawing that textures the board on the wall. */
-export function drawStudioBoardTo(ctx, w, h) {
-    drawOfficeWhiteboard(ctx, w, h);
+/** The summary currently on the wall, for the tests and for anything that needs
+ *  to know whether the screen has real numbers on it yet. */
+export function getDashboardSummary() {
+    return dashboardSummary;
 }
 
 // ============================================

@@ -4,8 +4,9 @@
  *
  * Coordinates the scene, first-person controls, and the office world:
  * Steve at his sit-stand desk building SceneXP (super meta, yes), the
- * tuxedo cat asleep on his son's little blue desk, the whiteboard with
- * the plan on it, and a small room's worth of stories behind every click.
+ * tuxedo cat asleep on his son's little blue desk, the wall display with
+ * SceneXP's visitor numbers on it, and a small room's worth of stories
+ * behind every click.
  */
 
 import { STEVE_CONFIG } from './config.min.js';
@@ -29,7 +30,7 @@ import {
     updateStudio, getDancerMeshes, getRoquiMesh,
     pauseDancerForDialog, resumeDancerFromDialog,
     pauseRoquiForDialog, resumeRoquiFromDialog,
-    updateStudioBoard, drawStudioBoardTo,
+    updateDashboardScreen,
     setStudioBrightness, updateInteriorAmbientLight
 } from './store.min.js';
 import {
@@ -37,10 +38,12 @@ import {
     getGalleryPieces, setPieceHighlight
 } from './gallery.min.js';
 import {
-    initChecklist, markChecklistItem, onChecklistChange,
-    getChecklistItems, getChecklistProgress
+    initChecklist, markChecklistItem, onChecklistChange
 } from '../../shared/js/checklist-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import {
+    initAnalytics, loadAnalytics, startAnalyticsAutoRefresh
+} from '../../shared/js/analytics-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
 import {
     initListings, buildListings, getListingColliders, SAMPLE_LISTINGS
@@ -115,16 +118,15 @@ let canvas, loadingScreen, blocker, hud, touchControls;
 let lookLabel, pieceModal, pieceModalTitle, pieceModalSubtitle, pieceModalEnter;
 let helpModal;
 let dialogModal, dialogModalTitle, dialogModalMessage;
-let whiteboardView, whiteboardCanvas, whiteboardCaption; // the whiteboard close-up
+let analyticsView;  // the visitor-activity dashboard the wall display opens
 let lightPanel, lightPanelSlider, lightPanelValue; // the light switch's floating dimmer
 let completeModal; // discovery-complete celebration
 let nudgeModal; // partway "reach out" invitation (reuses the celebration card)
 let dialogReturnBtn; // teleport shortcut inside the shared dialog modal (kept plumbed, never shown: the room is small)
 
-// Schedule-board close-up view state. The board can change while open (a
-// discovery can tick mid-view), but it's repainted on every open, which is
-// enough.
-let whiteboardOpen = false;
+// Whether the dashboard overlay is up. The render loop idles behind it, and
+// the background poll keeps refreshing underneath either way.
+let analyticsOpen = false;
 
 // Raycasting for "look at" highlight and click-to-open
 const raycaster = new THREE.Raycaster();
@@ -176,9 +178,7 @@ async function init() {
     dialogModalTitle = document.getElementById('dialog-title');
     dialogModalMessage = document.getElementById('dialog-message');
     dialogReturnBtn = document.getElementById('dialog-return-btn');
-    whiteboardView = document.getElementById('whiteboard-view');
-    whiteboardCanvas = document.getElementById('whiteboard-canvas');
-    whiteboardCaption = document.getElementById('whiteboard-caption');
+    analyticsView = document.getElementById('analytics-view');
     completeModal = document.getElementById('complete-modal');
     nudgeModal = document.getElementById('nudge-modal');
     lightPanel = document.getElementById('light-panel');
@@ -221,13 +221,11 @@ async function init() {
 
     buildRaycastTargets();
 
-    // Discovery checklist: install the studio item list, restore any session
-    // progress, and keep the schedule board mirrored to it. Items get ticked
-    // by the interaction handlers below (markChecklistItem). Seed the board
-    // once now.
+    // Discovery checklist: install the studio item list and restore any session
+    // progress. Items get ticked by the interaction handlers below
+    // (markChecklistItem).
     initChecklist(STEVE_CONFIG.checklist);
     onChecklistChange((items, progress) => {
-        updateStudioBoard(items, progress);
         // Peak-delight moment: the first time every discovery is found, celebrate
         // and gently invite the visitor to get in touch (once per session).
         if (progress.complete) maybeCelebrateCompletion();
@@ -244,7 +242,11 @@ async function init() {
             btn.classList.add('pulse');
         }
     });
-    updateStudioBoard(getChecklistItems(), getChecklistProgress());
+
+    // The wall display and its overlay. The part polls every five minutes while
+    // the tab is visible and hands the scene a compact summary for the screen;
+    // the overlay below is where the day is actually readable.
+    setupAnalytics();
 
     updateLoadingStatus('Preparing controls…', 90);
     initControls(STEVE_CONFIG);
@@ -353,9 +355,9 @@ function setupEventListeners() {
     // Teleport shortcut inside the dialog modal (plumbed but never shown here)
     if (dialogReturnBtn) dialogReturnBtn.addEventListener('click', returnToSpawn, { signal });
 
-    // Schedule-board close-up close
-    if (whiteboardView) whiteboardView.querySelectorAll('[data-close]').forEach(el =>
-        el.addEventListener('click', closeWhiteboardView, { signal }));
+    // Dashboard overlay close
+    if (analyticsView) analyticsView.querySelectorAll('[data-close]').forEach(el =>
+        el.addEventListener('click', closeAnalyticsView, { signal }));
 
     // Discovery-complete celebration: close buttons + the Share action.
     if (completeModal) completeModal.querySelectorAll('[data-close]').forEach(el =>
@@ -817,7 +819,7 @@ function buildRaycastTargets() {
     // …and any ambient NPCs (none in the office; the seam stays wired).
     getDancerMeshes().forEach(mesh => raycastTargets.push(mesh));
 
-    // Office props (the desks, the cat, the whiteboard, the closet, and the
+    // Office props (the desks, the cat, the wall display, the closet, and the
     // rest) are click-only — they show no hover tooltip, so they live in a
     // separate list the click test adds in but the hover raycast skips.
     clickTargets = raycastTargets.concat(getOutdoorPropMeshes());
@@ -1126,13 +1128,13 @@ function openDancerModal(dancerMesh) {
 // courteous host's voice with a little dry humor, free of em-dashes and
 // semicolons. Two lines apiece so a second click gives something new. Props
 // that are discoveries carry a checklistId so a click ticks the list. The
-// whiteboard is special: clicking it opens the close-up view instead (see
-// openPropModal).
+// wall display is special: clicking it opens the dashboard overlay instead
+// (see openPropModal).
 const PROP_CONTENT = {
-    board: {
-        // Opens the close-up view instead (see openPropModal), so no lines.
-        title: 'The Whiteboard',
-        checklistId: 'board',
+    dashboard: {
+        // Opens the dashboard overlay instead (see openPropModal), so no lines.
+        title: 'The Wall Display',
+        checklistId: 'dashboard',
         lines: []
     },
     cat: {
@@ -1299,12 +1301,12 @@ const PROP_CONTENT = {
 let propTick = 0; // rotates which line a prop shows, no Math.random needed
 
 /** Open the shared dialog modal for a clicked office prop (its title + a
- *  quip). Two props are special: the whiteboard opens the close-up view,
+ *  quip). Two props are special: the wall display opens the dashboard,
  *  and the light switch opens the floating dimmer panel. */
 function openPropModal(propObj) {
     if (!dialogModal) return;
     const kind = propObj && propObj.userData && propObj.userData.propKind;
-    if (kind === 'board') { openWhiteboardView(); return; }
+    if (kind === 'dashboard') { openAnalyticsView(); return; }
     if (kind === 'lightswitch') { openLightPanel(propObj); return; }
 
     const content = PROP_CONTENT[kind];
@@ -1324,62 +1326,60 @@ function openPropModal(propObj) {
     if (dismiss) dismiss.focus();
 }
 
-// ---- Schedule-board close-up view -------------------------------------------
-// Reuses the whiteboard overlay markup and styles (the whiteboard-* ids and
-// classes), painted with the schedule board: the discovery list, the pointer
-// to Roqui's schedule, and the dedication, readable at full size.
+// ---- The wall display and its dashboard -------------------------------------
+// The display on the east wall carries a headline (drawDashboardFace in
+// store.js), and clicking it opens #analytics-view: the same day in DOM, where
+// it can be scrolled, grouped by session or by scene, narrowed by scene and by
+// action, and read aloud by a screen reader. A painted 3D surface can do none
+// of that, which is why the enlarged view is not a canvas.
 
-// Caption shown beneath the enlarged board (rotates per click).
-const BOARD_CAPTIONS = [
-    "The plan, in marker: delight visitors, honor the honorees, ship it.",
-    "Every SceneXP room starts as scribbles on this board. This room included."
-];
-let boardTick = 0;
+/** Wire the shared analytics part to the overlay's controls and to the wall
+ *  display, then start its background poll. */
+function setupAnalytics() {
+    initAnalytics({
+        body: document.getElementById('analytics-body'),
+        dateLabel: document.getElementById('analytics-date'),
+        status: document.getElementById('analytics-status'),
+        prevBtn: document.getElementById('analytics-prev'),
+        nextBtn: document.getElementById('analytics-next'),
+        collapseAllBtn: document.getElementById('analytics-collapse-all'),
+        groupSelect: document.getElementById('analytics-group'),
+        sceneSelect: document.getElementById('analytics-scene'),
+        actionFilter: document.getElementById('analytics-actions'),
+        filterSummary: document.getElementById('analytics-filter-summary'),
+        selectAllBtn: document.getElementById('analytics-select-all'),
+        clearAllBtn: document.getElementById('analytics-clear-all'),
+        // The wall display always mirrors the latest day, whatever the overlay
+        // is filtered to: the screen reports the room, and the filters are the
+        // viewer's own lens on it.
+        onSummary: updateDashboardScreen
+    });
+    startAnalyticsAutoRefresh();
+}
 
-/** Open the enlarged schedule-board overlay, mirroring the in-world board
- *  (the live discovery checklist plus the notes and dedication). */
-function openWhiteboardView() {
-    if (!whiteboardView) return;
+function openAnalyticsView() {
+    if (!analyticsView) return;
     state.isModalOpen = true;
-    whiteboardOpen = true;
-    track('click-prop', { kind: 'board' });
-    markChecklistItem('board');
+    analyticsOpen = true;
+    track('click-prop', { kind: 'dashboard' });
+    markChecklistItem('dashboard');
     safeExitPointerLock();
     clearHover();
-    if (whiteboardCaption) whiteboardCaption.textContent = pickLine(BOARD_CAPTIONS, boardTick++);
-    whiteboardView.classList.remove('hidden');
+    analyticsView.classList.remove('hidden');
     hud.classList.remove('visible');
-    drawWhiteboardView();        // measure + paint now that the overlay is laid out
-    const closeBtn = whiteboardView.querySelector('.whiteboard-close');
+    // Ask for fresh numbers on open rather than showing whatever the last poll
+    // left behind, which could be nearly five minutes old.
+    loadAnalytics();
+    const closeBtn = analyticsView.querySelector('.analytics-close');
     if (closeBtn) closeBtn.focus();
 }
 
-function closeWhiteboardView() {
-    if (!whiteboardView) return;
-    whiteboardView.classList.add('hidden');
-    whiteboardOpen = false;
+function closeAnalyticsView() {
+    if (!analyticsView) return;
+    analyticsView.classList.add('hidden');
+    analyticsOpen = false;
     state.isModalOpen = false;
     resumeGameAfterModal();
-}
-
-/** Size the close-up canvas to its displayed box at device pixels and paint the
- *  schedule board once. (Marking the 'board' discovery above repaints the
- *  in-world board, so this snapshot is already current when it opens.) */
-function drawWhiteboardView() {
-    if (!whiteboardCanvas) return;
-    const rect = whiteboardCanvas.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    whiteboardCanvas.width = Math.max(2, Math.round(rect.width * dpr));
-    whiteboardCanvas.height = Math.max(2, Math.round(rect.height * dpr));
-    const ctx = whiteboardCanvas.getContext('2d');
-    if (ctx) drawStudioBoardTo(ctx, whiteboardCanvas.width, whiteboardCanvas.height);
-
-    // On phones the board is rendered wider than the screen and panned; start it
-    // centered so it's clearly draggable in both directions.
-    if (state.isMobile) {
-        const surface = whiteboardView.querySelector('.whiteboard-surface');
-        if (surface) surface.scrollLeft = Math.max(0, (surface.scrollWidth - surface.clientWidth) / 2);
-    }
 }
 
 function closeDialogModal() {
@@ -1551,7 +1551,7 @@ function shareData() {
 function closeActiveModal() {
     if (completeModal && !completeModal.classList.contains('hidden')) closeCompleteModal();
     else if (nudgeModal && !nudgeModal.classList.contains('hidden')) closeNudgeModal();
-    else if (whiteboardView && !whiteboardView.classList.contains('hidden')) closeWhiteboardView();
+    else if (analyticsView && !analyticsView.classList.contains('hidden')) closeAnalyticsView();
     else if (lightPanel && !lightPanel.classList.contains('hidden')) closeLightPanel();
     else if (helpModal && !helpModal.classList.contains('hidden')) closeHelpModal();
     else if (dialogModal && !dialogModal.classList.contains('hidden')) closeDialogModal();
@@ -1568,7 +1568,7 @@ function animate() {
     update(state.deltaTime);
     // While the schedule-board overlay is open it covers the screen, so skip
     // the (wasted) 3D render — it runs its own lightweight 2D pass.
-    if (!whiteboardOpen) render();
+    if (!analyticsOpen) render();
 }
 
 function update(deltaTime) {

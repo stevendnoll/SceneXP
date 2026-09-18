@@ -59,7 +59,7 @@ export const STEVE_CONFIG = deepFreeze({
     },
 
     // Player start: a step past the entry walkway, out of the doorway and
-    // toward the whiteboard end of the east wall, facing into the room the
+    // toward the display end of the east wall, facing into the room the
     // way a visitor a stride inside would. Yaw 0 faces negative Z (toward
     // the window wall); the slight positive yaw turns the first look toward
     // Steve at his desk.
@@ -130,7 +130,7 @@ export const STEVE_CONFIG = deepFreeze({
 
     // Session-scoped "things to discover" list. Every item maps to a
     // clickable prop (the ids match PROP_CONTENT checklistIds in main.js,
-    // plus the greeter and whiteboard special paths), so each one is
+    // plus the greeter and wall-display special paths), so each one is
     // genuinely findable. Order is roughly a visitor's natural path.
     checklist: {
         storageKey: 'steve-checklist',
@@ -138,7 +138,7 @@ export const STEVE_CONFIG = deepFreeze({
             { id: 'hello',  label: 'Say hi to Steve at his desk',        short: 'say hi to Steve' },
             { id: 'desk',   label: 'Check out the sit-stand desk',       short: 'visit the desk' },
             { id: 'cat',    label: 'Find the office manager (shh)',      short: 'find the office manager' },
-            { id: 'board',  label: 'Read the whiteboard up close',       short: 'read the whiteboard' },
+            { id: 'dashboard', label: 'See who has been visiting',       short: 'check the wall display' },
             { id: 'closet', label: 'Find the closet by the door',        short: 'find the closet' },
             { id: 'litter', label: "Spot the office manager's restroom", short: 'spot the litter box' }
         ]
