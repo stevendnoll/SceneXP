@@ -351,13 +351,27 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         throttleRate: 0.8,
         gamepadDeadzone: 0.15,
         lookJoystickRadius: 55,
-        doubleTapMs: 320
+        doubleTapMs: 320,
+        // THE GUNS ANSWER THE LEFT MOUSE BUTTON AND SPACE. Automatic fire is
+        // untouched by this and is still how the game is won: what the trigger
+        // adds is a shot down the boresight when nothing is locked, so a
+        // desktop visitor who presses the button every game has taught them to
+        // press sees lasers instead of nothing at all. See `weapons.boresight`
+        // below and the note above `fireBoresight` in weapons-1.0.0.
+        //
+        // IT ALSO TAKES SPACE OFF THE THROTTLE, which was the actual complaint.
+        // Space cut the throttle to zero, so weeks of visitors pressed it to
+        // shoot and came to a dead stop. KeyX still cuts the throttle.
+        trigger: true
     },
 
     // ---- Targeting (targeting-1.0.0) --------------------------------------
     //
-    // There is no fire button. These four numbers ARE the weapon: the ship
-    // shoots whatever satisfies all of them and stops the instant nothing does.
+    // THERE IS NO FIRE BUTTON YOU NEED. These four numbers ARE the weapon: the
+    // ship shoots whatever satisfies all of them and stops the instant nothing
+    // does. `flight.trigger` adds a button for the visitors who reach for one
+    // anyway, and it cannot hit a thing, so these four still decide every kill
+    // in the game.
     targeting: {
         // Six degrees. Wide enough that lining a raider up is a normal amount
         // of flying rather than threading a needle, narrow enough that the lock
@@ -443,7 +457,23 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         burstParticles: 24,
         burstSpeed: 900,
         burstSize: 90,
-        effectRadius: 200
+        effectRadius: 200,
+
+        // How far down the nose a trigger press with NOTHING LOCKED aims its
+        // tracer. It hits nothing whatever this is, so the number has exactly
+        // one job: make the streak retire BY AGE rather than by arriving.
+        //
+        // `spawnTracer` stops a streak dead at its travel limit, which is right
+        // for a shot that hit something and wrong for one that did not: a
+        // tracer winking out at a fixed distance with no flash reads as a hit
+        // the game forgot to draw. A tracer lives `tracerLife` at
+        // `tracerSpeed`, so it can only cover 0.35 * 30,000 = 10,500 units.
+        // Anything past that and the limit is never reached, so the shot fades
+        // out still travelling, which is what "went wide" looks like.
+        //
+        // DELIBERATELY NOT `targeting.range` (3,000), which was the tempting
+        // choice and is a quarter of the distance a tracer can fly.
+        boresight: 12000
     },
 
     // ---- Cockpit (cockpit.js) ---------------------------------------------
@@ -547,9 +577,10 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // "no shields" non-goal in 2.2. It is a playtest finding beating a
         // pre-playtest decision: at one hit point the game was too easy, and
         // the reason turned out to be structural rather than a matter of
-        // degree. There is no fire button, so the guns fire whatever sits in
-        // the six degree cone: lining a raider up and killing it were the SAME
-        // ACT, and the whole fight was an aiming exercise with no second beat.
+        // degree. The guns fire whatever sits in the six degree cone with no
+        // trigger press needed, so lining a raider up and killing it were the
+        // SAME ACT, and the whole fight was an aiming exercise with no second
+        // beat.
         //
         // WHAT THIS BUYS IS THE BREAK-OFF, which was built at M5 and has never
         // once been seen. `evade` below triggers on the visitor being close and
@@ -1090,16 +1121,28 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
     intro: {
         // Once per page load. A restart returns to the briefing and does NOT
         // replay this: the story has been told, and a second telling is a toll.
-        seconds: 5.2,
-        // How the 5.2 divides, and they partition it exactly. The form-up owns
-        // the larger share and the pull-back gets the rest.
         //
-        // THIS IS THE FIRST NUMBER TO TUNE. Steve chose five seconds against a
-        // timeline that had been drawn for eight, so the form-up is the beat
-        // that paid for the difference. If the squadron looks like it is
-        // hurrying, this is why, and `seconds` and `formSeconds` move together.
+        // FOUR BEATS THAT PARTITION IT EXACTLY, and the intro suite asserts the
+        // sum. Form up at Mars, push in on the commander flying the apex ship,
+        // hold while they speak, then retreat to the spawn point.
+        seconds: 9.7,
+        // THE FORM-UP IS UNCHANGED AT 3.1, which is deliberate. Steve chose
+        // five seconds for the original shot against a timeline drawn for
+        // eight, so this beat had already paid once and is not paying again for
+        // the monologue. If the squadron looks like it is hurrying, this is why.
         formSeconds: 3.1,
-        runSeconds: 2.1,
+        // The push-in, from `range` down to `closeRange` on the leader. Long
+        // enough to read as a camera move rather than a zoom, short enough that
+        // it is not the thing the visitor remembers.
+        closeSeconds: 1.6,
+        // The commander's beat. It sets `martian.beats`, which are measured on
+        // this same clock and must fit inside it: `hold` starts at
+        // formSeconds + closeSeconds = 4.7 and ends at 7.4.
+        holdSeconds: 2.7,
+        // And the departure. Longer than the 2.1 the original shot used,
+        // because it now starts 240 units from a raider instead of 4,600 and
+        // has the whole 200,000 to cover.
+        runSeconds: 2.3,
         // The turn leads the move, so the camera is already facing where it is
         // going rather than being dragged round after it has set off.
         lookLead: 0.35,
@@ -1146,6 +1189,49 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // squadron's depth into screen-Y, where the wedge is laid out to have
         // some anyway.
         elevation: 0.26,
+
+        // ---- The close-up on the commander ----------------------------------
+        //
+        // WHERE THE CAMERA STANDS FOR THE MONOLOGUE, off the LEADER rather than
+        // off the anchor, because the formation is still drifting forward and
+        // only reaches the anchor on the very last frame. See `leaderAt`.
+        //
+        // A CLEARANCE BUDGET AGAINST THE NEAR PLANE before it is a composition.
+        // The dome is a sphere of `martian.pod.canopyRadius` (60), so its
+        // nearest glass sits `closeRange - 60` from the eye and that has to
+        // clear `space.worldCamera.near` (100). At 240 the nearest glass is 180
+        // units out, so there is 80 units of margin for a long frame to
+        // overshoot into.
+        //
+        // WHAT IT BUYS, measured against the 35 degree half frame: the
+        // commander's head spans 2 * atan(24 / 240) = 11.4 degrees, which is 16
+        // percent of the frame height, or about 147 pixels on a 900 pixel
+        // frame. That is a face rather than a suggestion of one. Closing this
+        // raises it and spends the near plane margin; the intro suite asserts
+        // the margin rather than the framing, because the framing is Steve's
+        // call and the margin is a canopy sliced open.
+        closeRange: 240,
+        // How far along the nose the thing being framed sits, measured from the
+        // hull's origin. THE COMMANDER'S DOME, NOT THE SHIP, and that
+        // distinction is a bug this shot has already had once: `mountCommander`
+        // puts the pod at `fleet.hullLength * 0.5`, which is 110 units TOWARD
+        // the camera, so orbiting the hull's origin at 240 left the eye 142
+        // units from the dome and its nearest glass 82 units away, inside the
+        // 100 unit near plane. The canopy was sliced open and the commander was
+        // visible through the hole.
+        //
+        // It is written here rather than derived from `fleet.hullLength`
+        // because intro.js is handed `config.intro` and nothing else, and the
+        // intro suite asserts the two agree rather than trusting this note.
+        closeSubjectAhead: 110,
+        // How far round the nose the close eye stands, in radians. 16 degrees,
+        // so the shot is a three-quarter view of somebody in a cockpit rather
+        // than a mugshot taken down the barrel of their own ship.
+        closeSwing: 0.28,
+        // And how far above it. 13 degrees, which puts the console glow's
+        // source below the frame centre and looks very slightly down on
+        // somebody who is meant to be threatening, without looming.
+        closeElevation: 0.22,
         // How far the camera drifts round the formation over the shot, so the
         // opening is a held shot with a little life in it rather than a
         // photograph. SMALL, because this is the one thing here that IS
@@ -1175,7 +1261,7 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // is watching them on. So the intro owns nine throwaway hulls, built
         // through `createRaiderMesh` from fleet.js's own shared geometry so a
         // raider keeps one definition, and the real fleet is simply hidden for
-        // five seconds. At arrival the throwaways are 200,000 units behind the
+        // the whole opening. At arrival the throwaways are 200,000 units behind the
         // camera and smaller than a pixel, so disposing them is invisible.
         ships: 9,
         reducedShips: 5,
@@ -1217,9 +1303,7 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // made, and the last one lands exactly as the form-up ends.
         shipTravel: 0.55,
         // The formation is under way for the whole shot, so it never settles
-        // into a photograph. 320 units a second closes about 1,000 of the 4,600
-        // over the form-up, which is a quarter again in apparent size: plainly
-        // an approach, and nowhere near swallowing the frame.
+        // into a photograph.
         //
         // IT IS RUN BACKWARDS FROM THE ARRIVAL, not forwards from the opening.
         // The formation STARTS `driftSpeed * seconds` behind the trailing
@@ -1228,8 +1312,150 @@ export const EARTHDEFENSE_CONFIG = deepFreeze({
         // hostile markers. Raising this therefore moves the opening back toward
         // Mars rather than moving the arrival forward, which is the direction
         // `scatter.depth`'s clearance budget is measured in.
-        driftSpeed: 320
+        //
+        // WHICH IS WHY IT CAME DOWN FROM 320 WHEN THE SHOT GREW. This is
+        // multiplied by `seconds`, and `seconds` went from 5.2 to 9.7 to make
+        // room for the monologue, so leaving it at 320 would have opened the
+        // formation 3,104 units behind the anchor instead of 1,664 and spent
+        // 1,440 units of the 1,878 the deepest raider had between itself and
+        // Mars's surface. At 172 the total drift is 1,668, which is within four
+        // units of what it always was, so the clearance is untouched and the
+        // monologue cost the opening frame nothing. The intro suite measures
+        // that clearance rather than trusting this note.
+        //
+        // The price is the apparent approach rate during the form-up, which is
+        // now 533 units of the 4,600 over 3.1 seconds rather than 1,000. Still
+        // plainly an approach, and nowhere near swallowing the frame.
+        driftSpeed: 172
     },
+
+    // ---- The Martian commander (martian.js) --------------------------------
+    //
+    // THE FACE IN THE APEX SHIP, and the one line they say. The opening used to
+    // be nine hulls and nobody in them, which says a fleet is coming and says
+    // nothing about who is flying it. www/xo set the standard this answers.
+    //
+    // IT IS THE THIRD BEAT OF `intro`, NOT A SHOT OF ITS OWN, which is the
+    // restructure of 2026-09-17 and the thing to read first. The first version
+    // played the monologue BEFORE the form-up, from a command ship standing off
+    // to one side of the approach line, and Steve's screenshots showed exactly
+    // what that bought: a commander who was a speck at the edge of frame and
+    // plainly not part of the squadron, in front of a formation frozen in a
+    // scattered swarm because its clock was being held for them. Now the V is
+    // made first, at full speed, and the camera pushes in on the ship at its
+    // point. The commander rides that raider as a child of its mesh, so they
+    // form up, drift and turn with it for free.
+    //
+    // THE TIMES BELOW ARE THE WHOLE SHOT'S CLOCK, not this beat's. `intro`
+    // spends 3.1s forming up and 1.6s pushing in, so the commander's window
+    // opens at 4.7 and the departure begins at 7.4. The intro suite asserts
+    // that every beat here fits inside `intro.holdSeconds`, because a caption
+    // still on screen when the camera leaves is the Martian talking over their
+    // own fleet.
+    //
+    // IT IS SILENT, and there is no fixing it. The opening plays before the
+    // visitor has clicked anything, so there is no gesture and no audio
+    // context. The line is a caption, the live region gets it once, and the
+    // briefing carries it as a quote for everyone who skips. Framing it as an
+    // intercepted transmission is what turns that constraint into the point.
+    martian: {
+        // ---- The pod --------------------------------------------------------
+        //
+        // MOUNTED ON THE NOSE OF SHIP ZERO, centred exactly on the hull cone's
+        // apex. See `mountCommander` for why on the apex rather than behind it:
+        // a raider is a four-sided cone pointing at the camera, so a dome
+        // anywhere further back has a spike in front of it.
+        pod: {
+            // DELIBERATELY ABSURD, AND THE REASON IS ARITHMETIC. A raider is
+            // 220 units long and the world camera clips at 100 units, so the
+            // closest any shot can stand is about 160 units of standoff, and at
+            // that distance a proportionate cockpit is a handful of pixels. At
+            // 60 this dome is over half a hull length across, which is nonsense
+            // as engineering and correct as drawing: it carries a legible face
+            // and it marks the apex as the flagship from the first frame of the
+            // form-up, so the push-in has a subject the visitor has already
+            // been watching. Every figure on this site is exaggerated the same
+            // way.
+            canopyRadius: 60,
+            canopyColor: 0x9fd8e4,
+            canopyOpacity: 0.18,
+            // The dark interior behind the commander, as a fraction of the
+            // dome. NOT DECORATION: the first version had glass and no back to
+            // it, and the raider's own wing and nose drew straight through the
+            // canopy and across the commander's head.
+            interiorColor: 0x141d1a,
+
+            // ---- The commander ----------------------------------------------
+            //
+            // 24 against a 240 unit standoff is 16 percent of the frame height,
+            // about 147 pixels on a 900 pixel frame. `intro.closeRange` is the
+            // other half of that sum and the two move together.
+            headRadius: 24,
+            skinColor: 0x9db08c,
+            // BIG, BLACK, SET WIDE AND TILTED. This is the whole face: at this
+            // size there is no room for a nose, and the first version proved
+            // what happens when the parts get modelled anyway.
+            //
+            // The material is fully ROUGH and non-metallic in martian.js, which
+            // is load bearing rather than a preference: at `roughness: 0.28`
+            // the console light put a specular highlight on each eye and the
+            // two darkest features in the frame rendered as white dots.
+            eyeColor: 0x05060a,
+            // Radians. The outer corners lift, which is the difference between
+            // a wary face and a hostile one.
+            eyeTilt: 0.34,
+            // A slit that opens, not a hinged jaw. The first version hinged a
+            // box a third the width of the head and it read as a beard.
+            mouthColor: 0x120d10,
+            // Open-and-close cycles per second while a caption is up. Fast
+            // enough to read as speech under text the visitor is already
+            // reading, slow enough not to buzz.
+            mouthRate: 5.4,
+            suitColor: 0x2f3a33,
+
+            // The console, which is a light with NO VISIBLE FITTING. It used to
+            // have a bright emissive bar to be its source, which promptly
+            // became the brightest object in the frame and read as a
+            // fluorescent tube across the cockpit. A glow from below the frame
+            // needs no source: the visitor is looking into a lit cockpit and
+            // supplies the rest.
+            //
+            // FROM BELOW is the point. A face lit from below is being told
+            // something. A face lit from the front is being photographed.
+            glowColor: 0x74e0c2,
+            glowIntensity: 3.2,
+            // Kept local, so nothing else in a 200,000 unit scene is relit by a
+            // prop inside one raider's canopy.
+            glowDistance: 420
+        },
+
+        // ---- What they say --------------------------------------------------
+        //
+        // ONE BEAT, AND IT IS THE LINE. There were two, and the first ("You are
+        // one ship.") was cut on Steve's note: the briefing already says "Seven
+        // and twelve" and says it better, so the first beat was the HUD's job
+        // being done by a villain. One sentence is also what a silent scene can
+        // carry, and it is what xo's opening does.
+        //
+        // Measured on `intro`'s clock, inside `intro.holdSeconds`: the hold
+        // runs 4.7 to 7.4, so this sits comfortably within it with time either
+        // side for the camera to arrive and to leave.
+        //
+        // No em-dashes and no semicolons, per the house style, and nothing
+        // about anybody dying: this is a boast about a planet, not a threat
+        // against people.
+        beats: [
+            { at: 5.05, out: 7.15, text: 'Earth will be ours.' }
+        ],
+        // How long a caption takes to arrive and to leave, in seconds. Short
+        // enough not to eat the beat, long enough that it is not a flicker.
+        beatFade: 0.3,
+        // What the live region says, once, for a visitor being read to rather
+        // than shown. It carries the framing as well as the words, because the
+        // caption's "Intercepted transmission" label is aria-hidden.
+        spoken: 'A Martian commander, over an intercepted transmission: Earth will be ours.'
+    },
+
 
     // ---- How a run ends (finale.js) ---------------------------------------
     //

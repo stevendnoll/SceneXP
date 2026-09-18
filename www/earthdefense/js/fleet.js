@@ -546,7 +546,8 @@ export function createRaiderMesh(name = 'raider') {
  *  the moment the world is built, and the trailing four of them start 200,000
  *  units out, which is exactly where the opening shot's camera is standing. Two
  *  sets of Martian ships in one frame is not a composition, it is a bug that
- *  looks like a composition, so the real fleet sits out the five seconds.
+ *  looks like a composition, so the real fleet sits out the whole opening,
+ *  the Martian's monologue included.
  *
  *  THE GROUP, NOT THE SHIPS. Per-ship visibility is `writeMeshes`'s to own (it
  *  is how the LOD hide and death are expressed), and a flag set here would be

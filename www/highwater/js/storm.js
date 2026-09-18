@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * storm.js - The ninety second arc. The clock the whole scene now runs on.
+ * storm.js - The sixty second arc. The clock the whole scene now runs on.
  *
  * THIS FILE IS THE ONLY THING IN THE SCENE THAT KNOWS WHAT TIME IT IS. Everything
  * else takes numbers and draws them: water.js is handed a swell scale and a
@@ -11,11 +11,13 @@
  * WHAT THE ARC IS. An ordinary bright day at a beach that turns. The swell
  * builds, the break line marches out to sea, the horizon starts disappearing
  * behind the swell, waves begin coming over the camera, the sea withdraws, and a
- * tsunami arrives. Then black. It was three minutes, then two, and is now ninety
- * seconds: every viewing since has said the same thing, which is that the parts
- * with nothing happening in them are longer than they feel while writing them.
+ * tsunami arrives. Then black. It was three minutes, then two, then ninety
+ * seconds, and since 2026-09-17 it is sixty: every viewing has said the same
+ * thing, which is that the parts with nothing happening in them are longer than
+ * they feel while writing them. The measured account of the last cut, including
+ * what it cost and what thirty would have cost, is in config beside `storm`.
  *
- * THE DRAWBACK IS THE MOST IMPORTANT TWENTY SECONDS IN IT. A sea that goes the
+ * THE DRAWBACK IS THE MOST IMPORTANT BEAT IN IT. A sea that goes the
  * wrong way is more frightening than any amount of water arriving, because
  * everybody watching already knows what it means. It costs almost nothing: the
  * surge goes negative, the waterline walks down the beach, and the sand that has
@@ -444,7 +446,7 @@ export function lullFrontAt(seconds, storm = OCEAN_CONFIG.storm) {
  *
  *  THE SHAPE IS WRITTEN TWICE ON PURPOSE AND THERE IS A TEST THAT SAYS SO.
  *  water.js applies it per row while building the profile, and it cannot import
- *  this file, because water.js knowing about a ninety second story is exactly the
+ *  this file, because water.js knowing about a sixty second story is exactly the
  *  coupling that keeps being avoided here: the sea takes numbers and draws them.
  *  So the same smoothstep exists in both places and `highwater-storm.test.mjs`
  *  asserts they agree across the whole sheet. Duplicating four characters of

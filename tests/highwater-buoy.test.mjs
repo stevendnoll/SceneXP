@@ -33,7 +33,8 @@ jest.unstable_mockModule('../www/highwater/js/water.min.js', async () => (
 
 const { OCEAN_CONFIG } = await import(CONFIG_URL);
 const {
-    rowPositions, buildProfile, waveConstants, waveSurfaceAt, initWater, updateWater, disposeWater
+    rowPositions, buildProfile, waveConstants, waveSurfaceAt, initWater, updateWater,
+    disposeWater, getProfile
 } = await import(WATER_URL);
 const { swellAt, curveAt, frontAt } = await import(STORM_URL);
 const { lightOn, sinkAt, targetTilt, stepRoll, initBuoy, disposeBuoy, SHAPE } = await import(BUOY_URL);
@@ -84,36 +85,59 @@ describe('the CPU surface query agrees with the vertex shader', () => {
 
         initWater(makeScene(), OCEAN_CONFIG);
         let worst = 0;
+        let stale = 0;
         let elapsed = 0;
         // Walk far enough to cross the profile rebuild interval many times, so
         // this covers the case waveSurfaceAt is actually used in: a live profile
-        // being replaced under it six times a second.
+        // being replaced under it twenty times a second.
         for (let step = 0; step < 400; step++) {
             const dt = 1 / 60;
             elapsed += dt;
-            updateWater(dt, {
-                swell: swellAt(elapsed, OCEAN_CONFIG.storm),
-                surge: curveAt(elapsed, OCEAN_CONFIG.storm.surge, OCEAN_CONFIG.storm),
-                front: frontAt(elapsed, OCEAN_CONFIG.storm),
-                gloom: 0
-            });
-            const mine = waveSurfaceAt(B.x, B.z);
-            expect(mine).not.toBeNull();
-            const profile = buildProfile(zs, elapsed, OCEAN_CONFIG, null, {
+            const sea = {
                 swell: swellAt(elapsed, OCEAN_CONFIG.storm),
                 surge: curveAt(elapsed, OCEAN_CONFIG.storm.surge, OCEAN_CONFIG.storm),
                 front: frontAt(elapsed, OCEAN_CONFIG.storm)
-            });
-            // `wave` is the sum alone; `y` adds the vertex offset the shader
-            // applies separately. Compared against the sum, because that is the
-            // part the two implementations could drift on.
-            worst = Math.max(worst, Math.abs(mine.wave - shaderY(profile, B.x, elapsed)));
+            };
+            updateWater(dt, { ...sea, gloom: 0 });
+            const mine = waveSurfaceAt(B.x, B.z);
+            expect(mine).not.toBeNull();
+            // AGAINST THE PROFILE THE SHADER IS ACTUALLY HOLDING, which is the
+            // whole point of the comparison and for a long time was not what it
+            // did. This used to build a FRESH profile at `elapsed` and compare
+            // against that, so the number it produced was the sum of two
+            // unrelated things: whether the two formulas agree, and how stale
+            // the live profile happens to be between rebuilds. The second one
+            // swamped the first the moment the arc gave the opening a swell that
+            // moves. Measured over this window, the rebuild interval alone is
+            // worth 3.5 mm, and 1.2 mm of that is there on a sea held perfectly
+            // flat, from the set envelope and the tide. The tolerance below was
+            // one millimetre, so the test had been passing on the accident that
+            // nothing was changing in the first seven seconds of the old arc.
+            //
+            // Handed the same inputs, the two sums have nothing left to disagree
+            // about except the order of the arithmetic.
+            worst = Math.max(worst, Math.abs(mine.wave - shaderY(getProfile(), B.x, elapsed)));
             // And the drawn height is the sum plus exactly that offset.
             expect(mine.y - mine.wave).toBeCloseTo(mine.lift, 12);
+
+            // THE STALENESS IS WORTH ITS OWN NUMBER, because it is a real
+            // property of the scene rather than a measurement artefact: the sea
+            // the visitor sees is up to one rebuild behind the sea the arc
+            // believes in. It is bounded by the rate the profile is moving times
+            // `water.profileHz`, so this is the guard that would catch profileHz
+            // going back to the 6 it shipped with, which was measured as a
+            // visible stutter in the drawback.
+            const fresh = buildProfile(zs, elapsed, OCEAN_CONFIG, null, sea);
+            stale = Math.max(stale, Math.abs(mine.wave - shaderY(fresh, B.x, elapsed)));
         }
-        // A millimetre. Anything above this is the two implementations having
-        // genuinely parted company rather than floating point.
-        expect(worst).toBeLessThan(0.001);
+        // Floating point and nothing else. `wave` is a different loop over the
+        // same four components, so the two answers differ in the last bits.
+        expect(worst).toBeLessThan(1e-9);
+        // Six millimetres of rebuild lag. Swept over this window, worst case
+        // alignment, holding everything else: 6 Hz 10.6 mm, 12 Hz 4.7, 20 Hz
+        // 3.5, 30 Hz 1.2, 60 Hz 0.2. So this passes as shipped and fails at the
+        // 6 Hz the scene was built with, which is the regression worth catching.
+        expect(stale).toBeLessThan(0.006);
     });
 
     test('THE DRAWN SURFACE ACTUALLY RISES WHEN THE TSUNAMI PASSES', () => {
@@ -137,17 +161,23 @@ describe('the CPU surface query agrees with the vertex shader', () => {
         const at = OCEAN_CONFIG.storm.buoy.z;
         let calm = null;
         let lifted = null;
-        // FROM t=55 AND AT 20 Hz. The point is to exercise the live profile
-        // being rebuilt under the query, not to render the arc: walking all
-        // seventy six seconds at frame rate cost fifty seconds of test time for
-        // no extra coverage, since the profile itself only rebuilds twenty times
-        // a second.
-        // TO 84 AND NOT 76. The front was slowed on 2026-08-21 to keep the
-        // camera from sitting under water for seven seconds, so it now passes
-        // the buoy later than this test used to assume. Walked past the front's
-        // own arrival rather than to a second that happened to work.
-        let elapsed = 55;
-        while (elapsed < 84) {
+        // AT 20 Hz AND OVER THE FRONT'S OWN LIFE. The point is to exercise the
+        // live profile being rebuilt under the query, not to render the arc:
+        // walking the whole thing at frame rate cost fifty seconds of test time
+        // for no extra coverage, since the profile only rebuilds twenty times a
+        // second anyway.
+        //
+        // TAKEN FROM THE CONFIG AND NOT WRITTEN DOWN, which is the third time
+        // this window has gone stale. It was 55 to 76, then 55 to 84 when the
+        // front was slowed on 2026-08-21, and both of those stopped containing
+        // the front the day the arc was retimed: at sixty seconds the wall
+        // spawns at 36 and has arrived before 55, so the walk found no flat
+        // water ahead of it at all and `calm` came back null. A window derived
+        // from `startAt` and `arriveAt` cannot do that.
+        let elapsed = OCEAN_CONFIG.storm.tsunami.startAt;
+        const until = Math.min(OCEAN_CONFIG.storm.seconds,
+            OCEAN_CONFIG.storm.tsunami.arriveAt + 1);
+        while (elapsed < until) {
             const dt = 1 / 20;
             elapsed += dt;
             updateWater(dt, {

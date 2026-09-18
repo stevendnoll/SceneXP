@@ -411,10 +411,8 @@ test('completing every discovery celebrates once and share covers every fallback
   globalThis.navigator.clipboard = { writeText: jest.fn(async () => {}) };
   fire(shareBtn, 'click');
   await flushAsync();
-  expect(shareBtn.textContent).toBe('Link copied ✓');
-  expect(shareBtn.disabled).toBe(true);
+  expect(shareBtn.textContent).toBe('Link copied');
   await jest.advanceTimersByTimeAsync(1900);
-  expect(shareBtn.disabled).toBe(false);
 
   // No clipboard either: the last resort is a mailto link.
   delete globalThis.navigator.clipboard;

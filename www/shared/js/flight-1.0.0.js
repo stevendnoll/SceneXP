@@ -47,6 +47,13 @@
  * at a rate. A self-centring stick therefore leaves the throttle alone when
  * released, which is what a throttle should do, and no two sources ever fight
  * over the same value. Look input is a per-frame delta that simply sums.
+ *
+ * ON THE TRIGGER. This module reports whether one is held and nothing else: it
+ * owns no weapon, knows no cadence, and decides nothing about what firing
+ * means. That belongs to weapons.js and to the experience. The trigger is here
+ * rather than there because it is INPUT, and because the two things it collides
+ * with are both input this file already owns, namely Space cutting the throttle
+ * and the canvas click that buys the pointer lock.
  */
 
 const DEFAULTS = {
@@ -62,7 +69,14 @@ const DEFAULTS = {
     throttleRate: 0.8,      // throttle fraction per second for key/pad nudges
     gamepadDeadzone: 0.15,
     doubleTapMs: 320,
-    thrustThrottle: false   // false: the throttle picks a speed. true: it accelerates
+    thrustThrottle: false,  // false: the throttle picks a speed. true: it accelerates
+    // Whether this experience has a trigger at all. OFF by default, because
+    // every scene that shipped before it had none and none of them should grow
+    // one by surprise. Turning it on changes exactly two things: the left mouse
+    // button and Space become a held control this module reports through
+    // `isTriggerHeld`, and SPACE STOPS CUTTING THE THROTTLE, which is the part
+    // worth reading twice. See `THROTTLE_ZERO` below.
+    trigger: false
 };
 
 const TAU = Math.PI * 2;
@@ -102,6 +116,13 @@ const touch = {
 // of `state`, because it is a request in progress rather than something the
 // experience should be reading or drawing.
 let braking = false;
+
+// Whether the trigger is down, and which sources are holding it. TWO
+// INDEPENDENT HOLDS RATHER THAN ONE BOOLEAN, because a visitor who presses
+// Space, then clicks, then releases Space is still holding the trigger with the
+// mouse: one flag would have the second release cancel the first hold and the
+// guns would stop while a button was still down.
+const held = { mouse: false, key: false };
 
 let perimeter = null;               // { centre, radius, fade }
 let outsidePerimeter = false;
@@ -220,6 +241,11 @@ export function initFlight(options = {}) {
     touch.lookOrigin = null;
     touch.lookHold.x = touch.lookHold.y = 0;
     touch.lastTapAt = 0;
+    // A respawn and a restart both come back through here, and both can happen
+    // while a visitor is still holding the trigger down from the shot that
+    // ended the last one. Cleared, so the new ship does not open fire on its
+    // first frame without being asked.
+    releaseTrigger();
     paused = false;
     outsidePerimeter = false;
 
@@ -244,6 +270,7 @@ export function disposeFlight() {
     if (controller) controller.abort();
     controller = null;
     keys.clear();
+    releaseTrigger();
     elements = {};
     perimeterCallback = null;
     constrainPosition = null;
@@ -411,6 +438,7 @@ export function setPaused(on) {
         // next move, and a finger that lifted meanwhile is handled by `onLookEnd`.
         touch.lookHold.x = touch.lookHold.y = 0;
         keys.clear();
+        releaseTrigger();
         // A spring-loaded throttle is held input too, so it comes home with the
         // rest. Written directly rather than through the setter, because a
         // pause should not cancel a brake that was already under way.
@@ -424,6 +452,29 @@ export function setPaused(on) {
 export function isPaused() { return paused; }
 export function isPointerLocked() { return pointerLocked; }
 
+/** Whether the visitor is asking for fire this frame.
+ *
+ *  A HELD STATE READ PER FRAME, not an event the caller subscribes to, and for
+ *  the same reason the joystick's deflection is: a finger or a finger's
+ *  equivalent resting on a control emits no events at all, so anything that
+ *  reads input from inside a handler acts on the frames an event happened to
+ *  land on and on no others.
+ *
+ *  Always false when there is no trigger configured, so a caller can ask
+ *  unconditionally, and always false while paused, so the pause card cannot be
+ *  read through as continuous fire. */
+export function isTriggerHeld() {
+    if (!cfg.trigger || paused) return false;
+    return held.mouse || held.key;
+}
+
+/** Let go of the trigger, whatever is holding it. Called on a pause, on a blur,
+ *  on losing the pointer lock, and by an experience that has just ended a run. */
+export function releaseTrigger() {
+    held.mouse = false;
+    held.key = false;
+}
+
 // ---- Keyboard ---------------------------------------------------------------
 //
 // Built first, and deliberately complete: throttle, yaw, and pitch are all
@@ -436,12 +487,37 @@ const YAW_LEFT = new Set(['KeyA', 'ArrowLeft']);
 const YAW_RIGHT = new Set(['KeyD', 'ArrowRight']);
 const PITCH_UP = new Set(['KeyQ']);
 const PITCH_DOWN = new Set(['KeyE']);
+// SPACE APPEARS IN BOTH OF THESE, and `wireKeyboard` reads them in order:
+// trigger first, throttle second, so a scene with a trigger never reaches the
+// throttle cut for Space and a scene without one never reaches the trigger.
+//
+// A scene with guns has a much stronger claim on Space than a second way to do
+// what KeyX already does, and the two readings are actively harmful together:
+// Earth Defense's visitors spent weeks pressing Space to shoot and coming to a
+// dead stop instead, which reads as the game punishing them for trying to play
+// it. KeyX cuts the throttle in both modes, so nothing is lost either way.
 const THROTTLE_ZERO = new Set(['KeyX', 'Space']);
+const TRIGGER_KEYS = new Set(['Space']);
 
 function wireKeyboard(signal) {
     if (typeof document === 'undefined') return;
     document.addEventListener('keydown', (e) => {
         if (paused) return;
+        if (cfg.trigger && TRIGGER_KEYS.has(e.code)) {
+            held.key = true;
+            // PREVENTED EVEN THOUGH NOTHING HERE SCROLLS, because a browser
+            // turns Space on a focused button into a click. The welcome
+            // screen's "Take the helm" and the opening's "Skip" both take
+            // focus on purpose, so without this the first shot of the run
+            // would re-press whichever button the visitor came through.
+            e.preventDefault();
+            return;
+        }
+        // REACHED BY SPACE ONLY WHEN THERE IS NO TRIGGER, and it is the early
+        // return above that decides that rather than a second copy of the rule
+        // down here. One branch owns "Space is the trigger" and this one owns
+        // "Space cuts the throttle", in that order, so the two readings of the
+        // key cannot drift apart. KeyX arrives here in both modes.
         if (THROTTLE_ZERO.has(e.code)) {
             setTargetSpeedFraction(0);
             e.preventDefault();
@@ -452,11 +528,16 @@ function wireKeyboard(signal) {
             e.preventDefault();
         }
     }, { signal });
-    document.addEventListener('keyup', (e) => keys.delete(e.code), { signal });
+    document.addEventListener('keyup', (e) => {
+        if (cfg.trigger && TRIGGER_KEYS.has(e.code)) held.key = false;
+        keys.delete(e.code);
+    }, { signal });
     // A window blur while a key is held would otherwise leave the ship turning
-    // forever, because the keyup lands somewhere else.
+    // forever, because the keyup lands somewhere else. The trigger comes home
+    // with them, for the same reason and with more at stake: a held trigger
+    // survives a tab switch as continuous fire nobody is asking for.
     if (typeof window !== 'undefined') {
-        window.addEventListener('blur', () => keys.clear(), { signal });
+        window.addEventListener('blur', () => { keys.clear(); releaseTrigger(); }, { signal });
     }
 }
 
@@ -491,11 +572,41 @@ function wireMouse(signal) {
             if (!paused && canvas.requestPointerLock) canvas.requestPointerLock();
         }, { signal });
     }
+    // THE CLICK THAT BUYS THE HELM DOES NOT FIRE, which is why this is on
+    // `mousedown` and gated on the lock rather than being a second job for the
+    // `click` handler above. On a desktop the first click on the canvas is how
+    // a browser hands over the mouse, and a visitor who has just been told to
+    // click to take the helm has not asked for a shot. Once the pointer is
+    // locked every press is a trigger press.
+    //
+    // The KEYBOARD trigger is deliberately not gated this way: flying with the
+    // keys is a first-class way to play here and such a visitor never locks the
+    // pointer at all, so gating Space on the lock would leave them with no guns.
+    if (canvas && canvas.addEventListener) {
+        canvas.addEventListener('mousedown', (e) => {
+            if (!cfg.trigger || paused || !pointerLocked) return;
+            if (e.button !== 0) return;
+            held.mouse = true;
+        }, { signal });
+    }
+    // Released on the DOCUMENT rather than the canvas, because a press that
+    // starts on the canvas and drifts off it before letting go would otherwise
+    // never see its mouseup and would leave the guns running.
+    document.addEventListener('mouseup', (e) => {
+        if (cfg.trigger && e.button === 0) held.mouse = false;
+    }, { signal });
     document.addEventListener('pointerlockchange', () => {
         pointerLocked = document.pointerLockElement === canvas;
         // Losing the lock (tab switch, Esc, a browser gesture) must not leave a
         // half-applied delta behind to be spent on the next frame.
-        if (!pointerLocked) lookDelta.x = lookDelta.y = 0;
+        if (!pointerLocked) {
+            lookDelta.x = lookDelta.y = 0;
+            // Nor a held trigger. Escape is how a visitor reaches the pause
+            // card, and the mouseup that follows lands on the card rather than
+            // here, so the press that opened the pause would otherwise still
+            // be firing when they resumed.
+            held.mouse = false;
+        }
     }, { signal });
     document.addEventListener('mousemove', (e) => {
         if (!pointerLocked || paused) return;
@@ -708,4 +819,6 @@ function nowMs() {
 }
 
 // Exposed for unit tests only.
-export const __test__ = { findTouch, isFlightKey, applyHeldKeys, keys, syncThrottleUi };
+export const __test__ = {
+    findTouch, isFlightKey, applyHeldKeys, keys, syncThrottleUi, held
+};

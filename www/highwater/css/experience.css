@@ -105,11 +105,19 @@ body {
 
 /* ---- Buttons ----------------------------------------------------------------
  *
- * Shared shape between Begin and Watch it again, so the page has one button
- * rather than two. Generous hit areas: this scene gets watched on phones held at
- * arm's length. */
+ * Shared shape between Begin, Watch it again and Share, so the page has one
+ * button rather than three. Generous hit areas: this scene gets watched on
+ * phones held at arm's length.
+ *
+ * EVERY SELECTOR HERE IS AN ID, WHICH IS A TRAP AND IS WHY THIS NOTE EXISTS.
+ * Adding Share to the ending screen added `#share` to the markup and to the
+ * sizing rule further down, and it rendered as a default browser button on a
+ * black screen beside a pill: the shape lives up here, keyed by id, and a new
+ * id gets none of it. A new button on this page has to be added to all three
+ * rules in this block, not just to the one that sets its padding. */
 #welcome .primary,
-#replay {
+#replay,
+#share {
     font: inherit;
     color: #e8eef1;
     background: transparent;
@@ -122,13 +130,16 @@ body {
 #welcome .primary:hover,
 #welcome .primary:focus-visible,
 #replay:hover,
-#replay:focus-visible {
+#replay:focus-visible,
+#share:hover,
+#share:focus-visible {
     background: rgba(232, 238, 241, 0.10);
     border-color: #9fb0b8;
 }
 
 #welcome .primary:focus-visible,
-#replay:focus-visible {
+#replay:focus-visible,
+#share:focus-visible {
     outline: 2px solid #9fb0b8;
     outline-offset: 3px;
 }
@@ -215,10 +226,36 @@ body {
 }
 
 /* Shape and states come from the shared button block above. Only the sizing is
-   its own, because this one is the single thing on a black screen. */
-#replay {
+   its own, because these are nearly the only things on a black screen. */
+#replay,
+#share {
     margin-top: 0.5rem;
     padding: 0.7rem 1.6rem;
+}
+
+/* SIDE BY SIDE, AND WRAPPING RATHER THAN SHRINKING. Two pill buttons fit a
+   phone in one row at this size, but the moment they would not, a stacked pair
+   is better than two squeezed ones on a screen this spare. */
+.ending-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+/* The directory link is the last thing on the page and is meant to be. It gets
+   its colour from this scene rather than from the shared sheet's variables,
+   which this scene does not use. */
+#ending .promo-explore {
+    color: #9fb0b8;
+    text-decoration-color: rgba(159, 176, 184, 0.5);
+}
+
+#ending .promo-explore:hover,
+#ending .promo-explore:focus-visible {
+    color: #e8eef1;
+    text-decoration-color: currentColor;
 }
 
 /* Reduced motion gets the same scene without the transitions. The arc itself is
@@ -229,7 +266,8 @@ body {
     #welcome,
     #ending,
     #welcome .primary,
-    #replay {
+    #replay,
+    #share {
         transition: none;
     }
 }

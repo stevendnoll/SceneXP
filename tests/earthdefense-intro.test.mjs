@@ -45,9 +45,25 @@ class FakeObject {
             x: 0, y: 0, z: 0,
             set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
         };
+        // The Martian commander rides the apex ship (intro.js `mountCommander`)
+        // and is built out of scaled and rotated primitives, so the stub grew
+        // these when that landed. Without them `initIntro` throws before it has
+        // built a single raider, which is a test harness gap rather than
+        // anything a browser would do.
+        this.rotation = { x: 0, y: 0, z: 0 };
+        this.scale = {
+            x: 1, y: 1, z: 1,
+            set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+        };
     }
     add(child) { this.children.push(child); return this; }
     lookAt(x, y, z) { this.looked = { x, y, z }; return this; }
+}
+class FakeLight extends FakeObject {
+    constructor(color, intensity, distance) {
+        super();
+        this.color = color; this.intensity = intensity; this.distance = distance;
+    }
 }
 class FakeMesh extends FakeObject {
     constructor(geometry, material) { super(); this.geometry = geometry; this.material = material; }
@@ -60,6 +76,8 @@ function installThree() {
         ConeGeometry: FakeGeometry,
         BoxGeometry: FakeGeometry,
         SphereGeometry: FakeGeometry,
+        CylinderGeometry: FakeGeometry,
+        PointLight: FakeLight,
         BufferGeometry: class extends FakeGeometry {
             constructor() { super(); this.attributes = {}; this.range = null; }
             setAttribute(n, a) { this.attributes[n] = a; return this; }
@@ -77,7 +95,9 @@ function installThree() {
             dispose() { this.disposed = true; }
         },
         AdditiveBlending: 2,
-        DoubleSide: 2
+        DoubleSide: 2,
+        FrontSide: 0,
+        BackSide: 1
     };
     // fleet.js paints its running-light sprite on a canvas at init.
     globalThis.document = {
@@ -323,13 +343,84 @@ describe('the camera path clears every body', () => {
         }
     });
 
-    /** The pull-back is a retreat, not a fly-by. Mars only ever gets further
-     *  away, which is what makes the shot readable as leaving. */
-    it('never approaches Mars', () => {
+    /** THE DEPARTURE is a retreat, not a fly-by: once the camera leaves the
+     *  commander, Mars only ever gets further away, which is what makes the
+     *  last beat readable as leaving.
+     *
+     *  IT USED TO BE THE WHOLE SHOT, and that stopped being true when the
+     *  push-in landed. The camera now closes about 5,200 units on the apex ship
+     *  before it turns for home, and the apex ship is 10,000 units in front of
+     *  Mars, so approaching the planet is exactly what the third beat does. The
+     *  bound that still matters over the whole path is the clearance above, and
+     *  the measured worst case is 6,215 units of Martian sky. */
+    it('never approaches Mars once it has turned for home', () => {
+        const leave = CONFIG.intro.seconds - CONFIG.intro.runSeconds;
         const path = samplePath();
-        for (let i = 1; i < path.length; i++) {
+        const steps = path.length - 1;
+        const first = Math.ceil((leave / CONFIG.intro.seconds) * steps) + 1;
+        for (let i = first + 1; i < path.length; i++) {
             expect(len(sub(path[i], mars()))).toBeGreaterThanOrEqual(len(sub(path[i - 1], mars())) - 1e-6);
         }
+    });
+
+    /** And the push-in is the only thing that closes on the planet, which is
+     *  worth pinning rather than assuming: a camera that approached Mars during
+     *  the FORM-UP would be orbiting the wrong way round. */
+    it('holds its distance from Mars through the form-up', () => {
+        const path = samplePath();
+        const steps = path.length - 1;
+        const last = Math.floor((CONFIG.intro.formSeconds / CONFIG.intro.seconds) * steps);
+        for (let i = 1; i <= last; i++) {
+            expect(len(sub(path[i], mars()))).toBeGreaterThanOrEqual(len(sub(path[i - 1], mars())) - 1e-6);
+        }
+    });
+
+    /** THE CLOSE-UP IS MEASURED, NOT ASSUMED, and that distinction is the whole
+     *  reason this test exists rather than an arithmetic one on `closeRange`.
+     *
+     *  The first version of this assertion checked `closeRange - canopyRadius`
+     *  against the near plane and passed, while the shot it was describing
+     *  clipped: the camera orbits the LEADER, the commander's dome is mounted
+     *  110 units further along the nose TOWARD the camera, and the real standoff
+     *  was 142 units rather than 240. The nearest glass was 82 units from an eye
+     *  that clips at 100, so the canopy was sliced open with the commander
+     *  visible through the hole, and nothing crashed. This walks the actual path
+     *  and asks the actual distance. */
+    it('never brings the canopy inside the near plane', () => {
+        const near = CONFIG.space.worldCamera.near;
+        const dome = CONFIG.martian.pod.canopyRadius;
+        const forward = heading();
+        const ahead = CONFIG.intro.closeSubjectAhead;
+        // Sampled on the path's own clock, so the leader is where it is at each
+        // moment rather than where it ends up.
+        let closest = Infinity;
+        const spawn = spawnPosition(CONFIG);
+        const steps = 3000;
+        for (let i = 0; i <= steps; i++) {
+            const t = (i / steps) * CONFIG.intro.seconds;
+            const eye = intro.introPath(t, CONFIG.intro, anchor(), forward, spawn);
+            const ship = intro.leaderAt(t, CONFIG.intro, anchor(), forward, { x: 0, y: 0, z: 0 });
+            const face = {
+                x: ship.x + forward.x * ahead,
+                y: ship.y + forward.y * ahead,
+                z: ship.z + forward.z * ahead
+            };
+            closest = Math.min(closest, len(sub(eye, face)));
+        }
+        // `closeRange` means what it says, measured from the thing framed.
+        expect(closest).toBeCloseTo(CONFIG.intro.closeRange, 1);
+        // And the glass clears the near plane with room for a long frame.
+        expect(closest - dome).toBeGreaterThan(near);
+        expect(closest - dome - near).toBeGreaterThan(near * 0.4);
+    });
+
+    /** ...AND STILL CARRIES A FACE, which is the other half of the same sum:
+     *  too far off and the whole point of the beat is a few pixels of green. */
+    it('frames the commander large enough to read as a face', () => {
+        const half = (CONFIG.space.worldCamera.fov / 2) * Math.PI / 180;
+        const head = Math.atan(CONFIG.martian.pod.headRadius / CONFIG.intro.closeRange);
+        expect(head / half).toBeGreaterThan(0.12);
+        expect(head / half).toBeLessThan(0.5);
     });
 
     /** A pull-back with a whip in it is a different shot and a worse one. The
@@ -609,6 +700,98 @@ describe('the squadron is in frame and clear of Mars', () => {
 
 // ---- Determinism ------------------------------------------------------------
 
+/** THE COMMANDER RIDES THE APEX SHIP, which is the whole restructure of
+ *  2026-09-17 expressed as three assertions. They are a CHILD of ship zero's
+ *  mesh, so they form up, drift and turn with it and nobody has to place them;
+ *  and if they cannot be built, the shot loses a monologue and nothing else. */
+describe('the commander rides the lead raider', () => {
+    const pod = () => {
+        const leader = intro.__test__.squadron()[0].mesh;
+        return leader.children.find((c) => c.name === 'martian-pod');
+    };
+
+    it('is parented to ship zero rather than placed in the world', () => {
+        expect(pod()).toBeTruthy();
+        // And to ship zero ONLY: a commander in every raider is a different
+        // scene, and one in the wrong raider is a camera pointed at nobody.
+        for (const ship of intro.__test__.squadron().slice(1)) {
+            expect(ship.mesh.children.find((c) => c.name === 'martian-pod')).toBeFalsy();
+        }
+    });
+
+    it('sits on the nose, where the hull cone runs out', () => {
+        // A four-sided cone points at the camera, so a dome anywhere behind the
+        // tip has the tip in front of it and the shot is a face behind a spike.
+        expect(pod().position.z).toBeCloseTo(CONFIG.fleet.hullLength * 0.5, 6);
+    });
+
+    it('is what the close-up is framed against', () => {
+        // The one number tying the mount to the camera. Asserted here as well
+        // as in `the config adds up`, because this is where the mount happens.
+        expect(pod().position.z).toBeCloseTo(CONFIG.intro.closeSubjectAhead, 6);
+    });
+
+    /** A FAILED MOUNT COSTS THE MONOLOGUE AND NOTHING ELSE, which is a claim
+     *  the module makes in a comment and is worth proving: the squadron still
+     *  builds, the shot still runs, and the apex is simply a plain raider. */
+    it('a config with no commander in it still builds the squadron', () => {
+        intro.disposeIntro(scene);
+        const noCommander = { ...CONFIG, martian: undefined };
+        expect(intro.initIntro(scene, noCommander)).toBe(true);
+        expect(intro.__test__.squadron()).toHaveLength(CONFIG.intro.ships);
+        expect(pod()).toBeFalsy();
+        expect(intro.startIntro(noCommander)).toBeCloseTo(CONFIG.intro.seconds, 6);
+    });
+});
+
+/** WHERE THE APEX SHIP IS, which the push-in tracks instead of the anchor. */
+describe('leaderAt', () => {
+    it('lands on the anchor on the last frame, like ship zero does', () => {
+        const at = intro.leaderAt(CONFIG.intro.seconds, CONFIG.intro, anchor(), heading());
+        expect(len(sub(at, anchor()))).toBeLessThan(1e-9);
+    });
+
+    it('opens the whole drift behind it', () => {
+        const at = intro.leaderAt(0, CONFIG.intro, anchor(), heading());
+        expect(len(sub(at, anchor())))
+            .toBeCloseTo(CONFIG.intro.driftSpeed * CONFIG.intro.seconds, 6);
+    });
+
+    it('only ever moves toward the anchor, never away', () => {
+        let previous = Infinity;
+        for (let k = 0; k <= 100; k++) {
+            const at = intro.leaderAt((k / 100) * CONFIG.intro.seconds, CONFIG.intro, anchor(), heading());
+            const d = len(sub(at, anchor()));
+            expect(d).toBeLessThanOrEqual(previous + 1e-9);
+            previous = d;
+        }
+    });
+
+    it('is clamped past the end rather than sailing on past the anchor', () => {
+        const at = intro.leaderAt(CONFIG.intro.seconds + 30, CONFIG.intro, anchor(), heading());
+        expect(len(sub(at, anchor()))).toBeLessThan(1e-9);
+    });
+
+    /** IT MATCHES WHERE writeShips ACTUALLY PUTS SHIP ZERO, which is the point
+     *  of the function and the one way it could be quietly wrong: the camera
+     *  would frame a spot the commander is not at. Ship zero has no slot offset
+     *  and closes up first, so past `formSeconds * shipTravel` the two agree
+     *  exactly, and the push-in never starts before then. */
+    it('agrees with where ship zero is actually drawn', () => {
+        const spec = CONFIG.intro;
+        intro.startIntro(CONFIG);
+        const mesh = intro.__test__.squadron()[0].mesh;
+        const steps = 30;
+        for (let k = 0; k <= steps; k++) {
+            const t = spec.formSeconds + (k / steps) * (spec.seconds - spec.formSeconds);
+            intro.__test__.shot.elapsed = 0;
+            intro.updateIntro(t);
+            const want = intro.leaderAt(t, spec, anchor(), heading());
+            expect(len(sub(mesh.position, want))).toBeLessThan(1e-6);
+        }
+    });
+});
+
 describe('the shot is the same every time', () => {
     it('replays identically', () => {
         const first = shipsAt(1.4).map((s) => `${s.x.toFixed(6)},${s.y.toFixed(6)},${s.z.toFixed(6)}`);
@@ -837,13 +1020,58 @@ describe('it survives a config with holes in it', () => {
 // ---- The beats fit in the time -----------------------------------------------
 
 describe('the config adds up', () => {
-    it('spends the whole shot on its two beats', () => {
-        expect(CONFIG.intro.formSeconds + CONFIG.intro.runSeconds).toBeCloseTo(CONFIG.intro.seconds, 6);
+    /** FOUR BEATS NOW: form up, push in on the commander, hold while they
+     *  speak, and leave. `introPath` no longer DEPENDS on this adding up (the
+     *  departure is measured back from `seconds`, so the shot lands on the
+     *  spawn frame either way), which makes this an assertion of intent: beats
+     *  that do not partition the shot mean one of them is being cut short or
+     *  overlapped, which is a mistake even though it is no longer a broken
+     *  seam. */
+    it('spends the whole shot on its four beats', () => {
+        const s = CONFIG.intro;
+        expect(s.formSeconds + s.closeSeconds + s.holdSeconds + s.runSeconds)
+            .toBeCloseTo(s.seconds, 6);
     });
 
-    it('holds the frame for a handful of seconds, not a minute', () => {
+    it('holds the frame for ten seconds, not a minute', () => {
         expect(CONFIG.intro.seconds).toBeGreaterThan(2);
-        expect(CONFIG.intro.seconds).toBeLessThan(9);
+        expect(CONFIG.intro.seconds).toBeLessThan(13);
+    });
+
+    /** THE MONOLOGUE FITS INSIDE THE HOLD. A caption still on screen when the
+     *  camera leaves is the Martian talking over their own fleet, and the two
+     *  numbers live in different config blocks, so nothing else would catch
+     *  them drifting apart. */
+    it('fits every spoken beat inside the hold', () => {
+        const s = CONFIG.intro;
+        const opens = s.formSeconds + s.closeSeconds;
+        const closes = opens + s.holdSeconds;
+        for (const beat of CONFIG.martian.beats) {
+            expect(beat.at).toBeGreaterThanOrEqual(opens);
+            expect(beat.out).toBeLessThanOrEqual(closes);
+        }
+    });
+
+    /** THE TOTAL DRIFT IS WHAT MARS CLEARANCE IS SPENT ON, and it is
+     *  `driftSpeed * seconds`, so lengthening the shot without dropping the
+     *  speed walks the opening formation into the planet. It was 1,664 when the
+     *  shot was 5.2 seconds long and the deepest raider had 1,878 units of
+     *  clearance; this keeps it there. */
+    it('keeps the formation total drift where the clearance was measured', () => {
+        const drift = CONFIG.intro.driftSpeed * CONFIG.intro.seconds;
+        expect(drift).toBeGreaterThan(1500);
+        expect(drift).toBeLessThan(1800);
+    });
+
+    /** THE SUBJECT IS THE DOME, NOT THE HULL, which is one number keeping two
+     *  files honest. `mountCommander` puts the pod at `fleet.hullLength * 0.5`
+     *  along the nose and intro.js is only ever handed `config.intro`, so the
+     *  offset has to be written down twice. Written down twice and asserted
+     *  once is fine; written down twice and trusted is how the canopy got
+     *  sliced open. */
+    it('frames the dome where the commander is actually mounted', () => {
+        expect(CONFIG.intro.closeSubjectAhead)
+            .toBeCloseTo(CONFIG.fleet.hullLength * 0.5, 6);
     });
 
     it('thins to fewer ships than it draws', () => {

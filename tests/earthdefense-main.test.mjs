@@ -69,14 +69,18 @@ async function boot() {
     // state the briefing is in; the shot has its own describe block, which boots
     // through `bootIntoOpening` instead and drives it properly.
     //
-    // ENDED THROUGH THE INTRO MODULE RATHER THAN THROUGH main.js, because there
-    // is no longer any way for a VISITOR to end it early and this helper should
-    // not invent one. Stepping 325 frames to watch it out would be honest and
-    // would also add five simulated seconds to each of a hundred and thirty
-    // tests. Two steps, because that is genuinely how it finishes: the shot
-    // stops, and `advanceIntro` puts the briefing up on the NEXT frame.
-    const intro = await import('../www/earthdefense/js/intro.min.js');
-    intro.endIntro();
+    // THROUGH THE SKIP BUTTON, which is what a visitor does. This used to reach
+    // into the intro module and call `endIntro` directly, with a note saying
+    // there was no longer any way for a visitor to end the shot early and that
+    // the helper should not invent one. There is a way again (Steve asked for
+    // the skip back on 2026-09-17), so the honest route is also the shortest
+    // one, and it means every test below this helper exercises the same path a
+    // visitor takes rather than a back door.
+    //
+    // THE FRAME AFTERWARDS IS NOT OPTIONAL. `skipOpening` deliberately stops
+    // the shot without revealing the briefing, and `advanceIntro` puts the
+    // welcome screen up on the NEXT frame. Everything below wants the briefing.
+    fire(dom.el('skip-intro-btn'), 'click');
     stepFrames(1);
     return main;
 }
@@ -1498,8 +1502,9 @@ describe('raiders soak shots, and say so when they do', () => {
         const { getShips, shipsRemaining } = await import('../www/earthdefense/js/fleet.min.js');
         const ship = getShips()[0];
 
-        // The whole difficulty change in one assertion. There is no fire
-        // button, so this is a full second of held lock rather than a frame.
+        // The whole difficulty change in one assertion. Nothing a visitor can
+        // press shortens this, so it is a full second of held lock rather than
+        // a frame: the trigger cannot damage anything by itself.
         expect(CFG.fleet.hitPoints).toBeGreaterThan(CFG.weapons.damagePerShot);
         main.__test__.resolveDamage(ship.id, CFG.weapons.damagePerShot);
         expect(ship.alive).toBe(true);
@@ -1547,6 +1552,62 @@ describe('raiders soak shots, and say so when they do', () => {
     });
 });
 
+// ---- The trigger ------------------------------------------------------------
+//
+// Weeks of real play said desktop visitors press the left mouse button and the
+// space bar to shoot. Neither did anything, and Space did something worse: it
+// was the throttle cut, so trying to fire brought the ship to a dead stop.
+//
+// The guns still fire themselves. What the trigger adds is a shot down the
+// boresight when NOTHING is locked, which answers the press, teaches the
+// reticle in one go, and cannot damage a thing. The branch itself is measured
+// in the shared weapons suite; what matters here is that this experience asks
+// for a trigger and aims it correctly.
+
+describe('the trigger', () => {
+    test('this experience asks the shared flight model for one', async () => {
+        const CFG = await CONFIG();
+        expect(CFG.flight.trigger).toBe(true);
+    });
+
+    test('a trigger press is aimed down the NOSE, from the flight state', async () => {
+        const main = await boot();
+        const CFG = await CONFIG();
+        // Straight down -Z from a ship 500 units up.
+        const at = main.__test__.boresightPoint(
+            { position: { x: 0, y: 500, z: 0 }, forward: { x: 0, y: 0, z: -1 } },
+            { x: 0, y: 0, z: 0 });
+        expect(at).toEqual({ x: 0, y: 500, z: -CFG.weapons.boresight });
+    });
+
+    test('...and follows the nose when the nose moves', async () => {
+        const main = await boot();
+        const CFG = await CONFIG();
+        const at = main.__test__.boresightPoint(
+            { position: { x: 100, y: 0, z: 0 }, forward: { x: 1, y: 0, z: 0 } },
+            { x: 0, y: 0, z: 0 });
+        expect(at.x).toBeCloseTo(100 + CFG.weapons.boresight);
+        expect(at.y).toBeCloseTo(0);
+        expect(at.z).toBeCloseTo(0);
+    });
+
+    test('it reaches further than a tracer can fly, so the shot fades out mid flight', async () => {
+        // A tracer stopped dead at its travel limit reads as a hit the game
+        // forgot to draw. `boresight` has to be past `tracerSpeed * tracerLife`
+        // for a miss to look like a miss.
+        const CFG = await CONFIG();
+        const tracerReach = CFG.weapons.tracerSpeed * CFG.weapons.tracerLife;
+        expect(CFG.weapons.boresight).toBeGreaterThan(tracerReach);
+    });
+
+    test('it aims well past the range a lock is possible at', async () => {
+        // Otherwise a trigger press would visibly stop short of the raiders
+        // the same press is supposed to be shooting at.
+        const CFG = await CONFIG();
+        expect(CFG.weapons.boresight).toBeGreaterThan(CFG.targeting.range);
+    });
+});
+
 // ---- The endings ------------------------------------------------------------
 //
 // A run that finishes plays a third-person shot before the summary card, and
@@ -1557,6 +1618,19 @@ describe('raiders soak shots, and say so when they do', () => {
 
 describe('how a run opens', () => {
     const INTRO = async () => await import('../www/earthdefense/js/intro.min.js');
+
+    /** Step past the WHOLE opening, all four beats of it.
+     *
+     *  ONE SHOT AND ONE CLOCK. The squadron forms up, the camera pushes in on
+     *  the Martian commander flying the apex ship, holds while they speak, and
+     *  retreats to the spawn point, and `config.intro.seconds` is all of it.
+     *
+     *  Written as a helper rather than inline because these five tests have now
+     *  been wrong twice: once when the monologue was a separate shot in front
+     *  of the form-up and this had to be a sum, and once when it became a beat
+     *  inside it and the sum went stale. One place to be right. */
+    const playTheOpening = (config) => stepFrames(
+        Math.ceil(config.intro.seconds / 0.016) + 6);
 
     /** THE BRIEFING IS HELD BACK, which is the whole shape of this feature at
      *  this level. The welcome overlay is what a visitor acts on, and it does
@@ -1578,7 +1652,7 @@ describe('how a run opens', () => {
         const config = await CONFIG();
         const intro = await INTRO();
 
-        stepFrames(Math.ceil(config.intro.seconds / 0.016) + 4);
+        playTheOpening(config);
 
         expect(intro.isIntroRunning()).toBe(false);
         expect(main.__test__.introPending()).toBe(false);
@@ -1630,7 +1704,7 @@ describe('how a run opens', () => {
         const config = await CONFIG();
 
         fire(dom.el('game-canvas'), 'click');
-        stepFrames(Math.ceil(config.intro.seconds / 0.016) + 4);
+        playTheOpening(config);
 
         expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
         expect(dom.documentStub.pointerLockElement).toBe(null);
@@ -1653,15 +1727,90 @@ describe('how a run opens', () => {
         expect(dom.documentStub.pointerLockElement).toBe(null);
     });
 
-    /** IT CANNOT BE SKIPPED, and that is the point of this block.
+    /** IT IS SKIPPABLE THROUGH ONE BUTTON AND NOT ON ANY KEY OR ANY TAP, which
+     *  is the point of this block and is a finer distinction than it looks.
      *
-     *  It WAS leavable on any key or any tap, which sounds like courtesy and on
-     *  a touch screen is not a control a visitor chooses so much as one they
-     *  trip over while waiting. Playtesting had people tapping straight through
-     *  the shot at the end of a run without ever deciding to. Five seconds is
-     *  not a toll worth protecting them from at that price, and the shot is the
-     *  plot. */
-    test('a key does not skip it', async () => {
+     *  The shot WAS leavable on any key or any tap, which sounds like courtesy
+     *  and on a touch screen is not a control a visitor chooses so much as one
+     *  they trip over while waiting: playtesting had people tapping straight
+     *  through the shot at the END of a run without ever deciding to, and
+     *  losing the one moment their run had been built toward. So the skip was
+     *  removed outright in August.
+     *
+     *  What was wrong with it was the SURFACE. www/xo hit the same problem
+     *  afterwards, cited this scene, and built the shape that answers both
+     *  halves: one focused button, so Enter, Space and Escape all get a visitor
+     *  out in one press while a stray thumb on the scene gets nothing. Restored
+     *  here 2026-09-17 at Steve's request, and the opening is now long enough
+     *  that it had to be. The ENDINGS are still unskippable, which is a
+     *  separate decision: nobody reaches one ten times in a row. */
+    test('the Skip button is up during the shot and gone afterwards', async () => {
+        const main = await bootIntoOpening();
+        const config = await CONFIG();
+        const skip = dom.el('skip-intro-btn');
+
+        expect(skip.classList.contains('visible')).toBe(true);
+        playTheOpening(config);
+        expect(skip.classList.contains('visible')).toBe(false);
+        void main;
+    });
+
+    test('the Skip button ends the shot', async () => {
+        const main = await bootIntoOpening();
+        const intro = await INTRO();
+
+        fire(dom.el('skip-intro-btn'), 'click');
+
+        expect(intro.isIntroRunning()).toBe(false);
+        // THE BRIEFING IS STILL A FRAME AWAY, and that is the whole care in
+        // `skipOpening`. See the next test for what it buys.
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
+        stepFrames(1);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        expect(main.getState().phase).toBe('briefing');
+    });
+
+    /** THE KEY THAT SKIPS MUST NOT ALSO TAKE THE HELM. The Skip button holds
+     *  the focus, so a browser turns Enter and Space on it into a click, and
+     *  the same keystroke then reaches the document listener that turns Enter
+     *  over the briefing into "take the helm". Revealing the briefing inside
+     *  `skipOpening` would un-hide the blocker in that same dispatch and hand a
+     *  visitor who wanted to READ the welcome screen a run already under way.
+     *
+     *  Written as the real sequence rather than as a unit call: press, then let
+     *  the frame that reveals the briefing land, then assert nobody is flying. */
+    test('skipping does not start the run in the same keystroke', async () => {
+        const main = await bootIntoOpening();
+
+        // The button is focused, so this is what pressing it looks like: the
+        // click it generates, and the keydown still travelling to the document.
+        fire(dom.el('skip-intro-btn'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Enter' });
+        stepFrames(1);
+
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        expect(main.getState().phase).toBe('briefing');
+
+        // And the briefing works normally from there.
+        fire(dom.documentStub, 'keydown', { code: 'Enter' });
+        expect(main.getState().phase).toBe('playing');
+    });
+
+    test('Escape skips it rather than opening the helm card', async () => {
+        // During the shot the phase is ALREADY `briefing`, so Escape used to
+        // open the helm card over the cinematic.
+        const main = await bootIntoOpening();
+        const intro = await INTRO();
+
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+
+        expect(intro.isIntroRunning()).toBe(false);
+        expect(dom.el('pause-modal').classList.contains('hidden')).toBe(true);
+        stepFrames(1);
+        expect(main.getState().phase).toBe('briefing');
+    });
+
+    test('a stray key does not skip it', async () => {
         const main = await bootIntoOpening();
         const intro = await INTRO();
 
@@ -1673,15 +1822,36 @@ describe('how a run opens', () => {
         expect(main.getState().phase).toBe('briefing');
     });
 
-    test('a tap does not skip it', async () => {
+    test('a tap on the scene does not skip it', async () => {
+        // The August finding, still guarded. A thumb resting on glass while
+        // waiting is not a visitor asking to leave.
         const intro = await INTRO();
         await bootIntoOpening();
 
         fire(dom.documentStub, 'pointerdown', {});
+        fire(dom.el('game-canvas'), 'click');
         stepFrames(1);
 
         expect(intro.isIntroRunning()).toBe(true);
         expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
+    });
+
+    test('skipping twice is not two skips', async () => {
+        const main = await bootIntoOpening();
+
+        expect(main.__test__.skipOpening()).toBe(true);
+        expect(main.__test__.skipOpening()).toBe(false);
+    });
+
+    test('Escape still opens the helm card once the shot is over', async () => {
+        const main = await bootIntoOpening();
+        const config = await CONFIG();
+
+        playTheOpening(config);
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+
+        expect(dom.el('pause-modal').classList.contains('hidden')).toBe(false);
+        void main;
     });
 
     /** AND ENTER CANNOT START THE GAME EARLY EITHER. The listener that turns
@@ -1696,7 +1866,7 @@ describe('how a run opens', () => {
         expect(main.getState().phase).toBe('briefing');
 
         // And once the shot has run its course, it works normally.
-        stepFrames(Math.ceil(config.intro.seconds / 0.016) + 4);
+        playTheOpening(config);
         fire(dom.documentStub, 'keydown', { code: 'Enter' });
         expect(main.getState().phase).toBe('playing');
     });
@@ -2093,6 +2263,57 @@ describe('the pause button belongs to a run', () => {
 
         main.__test__.restartRun();
         expect(dom.el('pause-btn').classList.contains('visible')).toBe(true);
+    });
+});
+
+/** THE END CARD NOW ASKS FOR TWO THINGS BESIDES ANOTHER RUN: pass this on, and
+ *  here is what else is here. A visitor who arrived straight at this game has
+ *  no way of knowing there are fourteen other experiences on SceneXP, and the
+ *  end of a run is the one moment they have an opinion about whether they want
+ *  another. The ladder itself is the shared suite's; what matters here is that
+ *  the button is wired, the text says something, and the card is built once. */
+describe('sharing and what comes next', () => {
+    test('the share text names the game and carries the run', async () => {
+        const main = await boot();
+        const CFG = await CONFIG();
+        const text = main.__test__.endShareText();
+
+        // A bare URL arriving in somebody's messages means nothing, so the
+        // sentence has to say what this is as well as how it went.
+        expect(text).toContain('Earth Defense');
+        expect(text).toContain('SceneXP');
+        expect(text).toContain(String(CFG.fleet.total));
+        // House style, on every string a visitor can send.
+        expect(text).not.toMatch(/[—;]/);
+    });
+
+    test('it reports the run that just happened, not the one it was wired on', async () => {
+        const main = await boot();
+        enterWorld();
+        const before = main.__test__.endShareText();
+        await clearTheFleet(main);
+        const after = main.__test__.endShareText();
+
+        // Twelve raiders cleared is a different sentence from none.
+        expect(after).not.toBe(before);
+    });
+
+    test('the recommendation and the directory link are built once', async () => {
+        const main = await boot();
+        const host = dom.el('end-promo');
+
+        expect(main.__test__.fillEndPromo()).toBe(true);
+        const built = host.children.length;
+        expect(built).toBe(2);
+        // A second end screen must not rebuild it: the image would be
+        // re-requested and a perfectly good node thrown away.
+        expect(main.__test__.fillEndPromo()).toBe(false);
+        expect(host.children.length).toBe(built);
+    });
+
+    test('it recommends X\'s and O\'s, which is the curated pair', async () => {
+        const { nextSlug } = await import('../www/shared/js/promo-1.0.0.min.js');
+        expect(nextSlug('earthdefense')).toBe('xo');
     });
 });
 

@@ -715,6 +715,13 @@ body {
     gap: 0.5rem;
 }
 
+/* Under the actions and the status line. The card itself is the shared sheet's
+   (.promo-card and friends) so that every end screen showing one looks the
+   same, and only the gap above it belongs to this card. */
+.summary-promo {
+    margin-top: 0.4rem;
+}
+
 .result-points {
     margin: 0;
     font-size: 3rem;

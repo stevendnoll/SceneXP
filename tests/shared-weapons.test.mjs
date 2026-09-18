@@ -286,6 +286,58 @@ describe('firing', () => {
         expect(mod.updateWeapons(0.016, targetFor('b'), MUZZLES)).toBe(1);
     });
 
+    test('a held trigger with a live target changes NOTHING', () => {
+        // The load-bearing property of the whole trigger. Every hit point,
+        // arrival time and difficulty number in Earth Defense was tuned
+        // against automatic fire, and they all stay valid only because a
+        // trigger press over a lock is the same three shots it always was.
+        mod.registerDamageable('a', 9);
+        mod.registerDamageable('b', 9);
+        const plain = mod.updateWeapons(1.0, targetFor('a'), MUZZLES);
+        mod.initWeapons(CONFIG, new THREE.Group());
+        mod.registerDamageable('b', 9);
+        const held = mod.updateWeapons(1.0, targetFor('b'), MUZZLES,
+            { trigger: true, boresight: { x: 0, y: 0, z: -12000 } });
+        expect(held).toBe(plain);
+        expect(mod.getDamageable('b').hitPoints).toBe(9 - plain);
+    });
+
+    test('the trigger with NOTHING locked fires and hits nothing', () => {
+        mod.registerDamageable('outpost', 3);
+        const shots = mod.updateWeapons(1.0, null, MUZZLES,
+            { trigger: true, boresight: { x: 0, y: 0, z: -12000 } });
+        expect(shots).toBe(4);                              // capped, as ever
+        expect(mod.activeTracerCount()).toBe(4);            // the streaks are real
+        expect(mod.getDamageable('outpost').hitPoints).toBe(3);   // the damage is not
+    });
+
+    test('the trigger does nothing without a boresight to aim down', () => {
+        // The caller owns the aim, so a caller that forgot it gets no fire
+        // rather than a tracer from the muzzle to the origin of the world.
+        expect(mod.updateWeapons(1.0, null, MUZZLES, { trigger: true })).toBe(0);
+        expect(mod.activeTracerCount()).toBe(0);
+    });
+
+    test('an untriggered frame with no target is still today\'s frame', () => {
+        expect(mod.updateWeapons(1.0, null, MUZZLES, { trigger: false })).toBe(0);
+        expect(mod.activeTracerCount()).toBe(0);
+    });
+
+    test('boresight fire spends the cadence rather than priming it', () => {
+        // A visitor holding the trigger THROUGH the moment a raider enters the
+        // reticle should get one even cadence across it. Priming would land a
+        // free shot on top of the one they just took.
+        mod.registerDamageable('raider', 9);
+        const boresight = { x: 0, y: 0, z: -12000 };
+        mod.updateWeapons(0.016, null, MUZZLES, { trigger: true, boresight });
+        // 0.1s later is well short of the 0.25s interval, so the lock that
+        // arrives now has not earned a shot yet.
+        const onAcquire = mod.updateWeapons(0.1, targetFor('raider'), MUZZLES,
+            { trigger: true, boresight });
+        expect(onAcquire).toBe(0);
+        expect(mod.getDamageable('raider').hitPoints).toBe(9);
+    });
+
     test('a long frame does not punch through a target and out the other side', () => {
         mod.registerDamageable('outpost', 3);
         // Four shots' worth of time against three hit points: it fires three

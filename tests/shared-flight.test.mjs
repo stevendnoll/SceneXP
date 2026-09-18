@@ -443,6 +443,19 @@ describe('keyboard input', () => {
         expect(mod.getFlightState().throttle).toBe(0);
     });
 
+    test('...unless there is a trigger, when only X does', () => {
+        // THE POINT OF THE WHOLE OPT-IN. A scene with guns cannot have Space
+        // mean "come to a dead stop", because that is what a visitor presses
+        // to shoot. KeyX has to keep working either way, or the opt-in costs
+        // the scene its throttle cut.
+        start({ flight: { trigger: true } });
+        mod.setTargetSpeedFraction(1);
+        dom.document.fire('keydown', key('Space'));
+        expect(mod.getFlightState().throttle).toBe(1);
+        dom.document.fire('keydown', key('KeyX'));
+        expect(mod.getFlightState().throttle).toBe(0);
+    });
+
     test('a full flight is possible with no mouse at all', () => {
         // The accessibility promise, as a test: throttle, yaw, and pitch all
         // reachable from the keyboard alone.
@@ -561,6 +574,121 @@ describe('mouse input', () => {
         mod.updateFlight(0.05);
         expect(mod.getFlightState().yaw).toBeCloseTo(0);
         expect(mod.isPointerLocked()).toBe(false);
+    });
+});
+
+// ---- The trigger ------------------------------------------------------------
+
+describe('the trigger', () => {
+    const key = (code) => ({ code, preventDefault() {} });
+    const lock = () => {
+        dom.document.pointerLockElement = dom.elements.canvas;
+        dom.document.fire('pointerlockchange');
+    };
+
+    test('is not there at all unless the experience asks for one', () => {
+        start();
+        lock();
+        dom.elements.canvas.fire('mousedown', { button: 0 });
+        dom.document.fire('keydown', key('Space'));
+        expect(mod.isTriggerHeld()).toBe(false);
+    });
+
+    test('Space holds it and lets it go, with no pointer lock needed', () => {
+        // Keyboard-only flight is a first-class way to play here and such a
+        // visitor never locks the pointer, so gating this on the lock the way
+        // the mouse is gated would leave them with no guns at all.
+        start({ flight: { trigger: true } });
+        dom.document.fire('keydown', key('Space'));
+        expect(mod.isTriggerHeld()).toBe(true);
+        dom.document.fire('keyup', key('Space'));
+        expect(mod.isTriggerHeld()).toBe(false);
+    });
+
+    test('the left mouse button holds it once the pointer is locked', () => {
+        start({ flight: { trigger: true } });
+        lock();
+        dom.elements.canvas.fire('mousedown', { button: 0 });
+        expect(mod.isTriggerHeld()).toBe(true);
+        dom.document.fire('mouseup', { button: 0 });
+        expect(mod.isTriggerHeld()).toBe(false);
+    });
+
+    test('THE CLICK THAT BUYS THE HELM DOES NOT FIRE', () => {
+        // On a desktop the first click on the canvas is how the browser hands
+        // over the mouse, and the visitor was told to click to take the helm.
+        // They did not ask for a shot.
+        start({ flight: { trigger: true } });
+        dom.elements.canvas.fire('mousedown', { button: 0 });
+        expect(mod.isTriggerHeld()).toBe(false);
+        expect(dom.document.pointerLockElement).toBe(null);
+    });
+
+    test('the right button is not a trigger', () => {
+        start({ flight: { trigger: true } });
+        lock();
+        dom.elements.canvas.fire('mousedown', { button: 2 });
+        expect(mod.isTriggerHeld()).toBe(false);
+    });
+
+    test('two holds are independent, so releasing one keeps the other', () => {
+        // A visitor holding Space who then clicks, then lifts off Space, is
+        // still holding the trigger. One boolean would stop the guns here.
+        start({ flight: { trigger: true } });
+        lock();
+        dom.document.fire('keydown', key('Space'));
+        dom.elements.canvas.fire('mousedown', { button: 0 });
+        dom.document.fire('keyup', key('Space'));
+        expect(mod.isTriggerHeld()).toBe(true);
+        dom.document.fire('mouseup', { button: 0 });
+        expect(mod.isTriggerHeld()).toBe(false);
+    });
+
+    test('Space is prevented, so it cannot re-press a focused button', () => {
+        // The welcome screen's "Take the helm" and the opening's "Skip" both
+        // take focus on purpose, and a browser turns Space on a focused button
+        // into a click. Without this the first shot of a run re-presses
+        // whichever button the visitor came through.
+        start({ flight: { trigger: true } });
+        let prevented = false;
+        dom.document.fire('keydown', { code: 'Space', preventDefault() { prevented = true; } });
+        expect(prevented).toBe(true);
+    });
+
+    test('a pause lets go of it, and reports nothing held while paused', () => {
+        start({ flight: { trigger: true } });
+        dom.document.fire('keydown', key('Space'));
+        mod.setPaused(true);
+        expect(mod.isTriggerHeld()).toBe(false);
+        mod.setPaused(false);
+        expect(mod.isTriggerHeld()).toBe(false);
+    });
+
+    test('losing the pointer lock lets go of the mouse hold', () => {
+        // Escape is how a visitor reaches the pause card, and the mouseup that
+        // follows lands on the card rather than on the document, so the press
+        // that opened the pause would otherwise still be firing on resume.
+        start({ flight: { trigger: true } });
+        lock();
+        dom.elements.canvas.fire('mousedown', { button: 0 });
+        dom.document.pointerLockElement = null;
+        dom.document.fire('pointerlockchange');
+        expect(mod.isTriggerHeld()).toBe(false);
+    });
+
+    test('a window blur lets go of it', () => {
+        start({ flight: { trigger: true } });
+        dom.document.fire('keydown', key('Space'));
+        dom.window.fire('blur');
+        expect(mod.isTriggerHeld()).toBe(false);
+    });
+
+    test('a respawn does not inherit the trigger that ended the last life', () => {
+        start({ flight: { trigger: true } });
+        dom.document.fire('keydown', key('Space'));
+        expect(mod.isTriggerHeld()).toBe(true);
+        start({ flight: { trigger: true } });
+        expect(mod.isTriggerHeld()).toBe(false);
     });
 });
 

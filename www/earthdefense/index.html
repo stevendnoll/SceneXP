@@ -24,7 +24,7 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="Earth Defense">
-    <meta property="og:description" content="Fly in orbit above a massive Earth and hold the line against an incoming Martian fleet. No fire button, no tutorial, one sitting.">
+    <meta property="og:description" content="Fly in orbit above a massive Earth and hold the line against an incoming Martian fleet. No fire button needed, no tutorial, one sitting.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/earthdefense/">
@@ -119,14 +119,14 @@
 
     <title>Earth Defense</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=3" as="style">
-    <link rel="preload" href="css/experience.min.css?v=2" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=4" as="style">
+    <link rel="preload" href="css/experience.min.css?v=4" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=3">
-    <link rel="stylesheet" href="css/experience.min.css?v=2">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=4">
+    <link rel="stylesheet" href="css/experience.min.css?v=4">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -157,9 +157,13 @@
                 fly a single ship in orbit above a massive Earth. The Moon is on
                 its slow lap overhead, Mars sits far ahead as a small red disc,
                 and a Martian fleet is already on its way in. Your job is to
-                defend the installations on Earth and the Moon, and there is no
-                fire button to learn: line a raider up in the middle of your
-                view and your guns take care of the rest.</p>
+                defend the installations on Earth and the Moon, and you never
+                need a fire button: line a raider up in the middle of your
+                view and your guns take care of the rest. If you would rather
+                press something, the left mouse button and the space bar both
+                shoot.</p>
+            <p>It opens on the Martian commander flying the lead ship of the
+                fleet. &ldquo;Earth will be ours.&rdquo;</p>
             <p>SceneXP is a home for 3D experiences that run right in your
                 browser. This one is simply a game, built for the joy of flying through space.
                 There was never a deeper reason than that.</p>
@@ -214,6 +218,20 @@
                  The hint row below carries the counts rather than repeating
                  this, which is the whole reason it changed at the same time. -->
             <p class="subtitle">Stop the Martian fleet from destroying the installations on Earth and the Moon</p>
+            <!-- THE MARTIAN'S LINE, SO NOBODY LOSES IT. The opening spends five
+                 seconds on a commander saying this to the lens, and two kinds
+                 of visitor never see it: anyone who has asked for reduced
+                 motion, who skips the whole opening by design, and anyone who
+                 presses Skip. It is the only story this game tells, so it also
+                 lives here, on the one screen everybody reads.
+
+                 A BLOCKQUOTE RATHER THAN A SUBTITLE. It is somebody else
+                 talking, the site is not saying it, and the cite is what makes
+                 that clear to a screen reader as well as to the eye. -->
+            <blockquote class="briefing-quote">
+                <p>&ldquo;Earth will be ours.&rdquo;</p>
+                <cite>Intercepted Martian transmission</cite>
+            </blockquote>
             <!-- A real button, not a line of prose. It was a <p> reading
                  "Click to take the helm" until M8, which left a keyboard-only
                  visitor with nothing to focus and no way to find out that
@@ -246,7 +264,7 @@
                  clearing it is how a run ends rather than a timer or a score. -->
             <div class="welcome-hints">
                 <div class="controls-hint">
-                    <span>No fire button</span> Line a raider up in the middle of your view
+                    <span>No fire button needed</span> Line a raider up in the middle of your view
                 </div>
                 <div class="controls-hint">
                     <span>Seven and twelve</span> Seven installations to hold, and clearing all twelve raiders is how you win
@@ -386,11 +404,15 @@
             </svg>
         </div>
 
-        <!-- The reticle IS the weapon: there is no fire button, so the ship
-             shoots whatever sits inside this. Its two states differ in SHAPE
-             as well as colour (a thin ring with ticks when idle, a closed
-             diamond with corner brackets when locked), because nothing in this
-             experience may be carried by colour alone. -->
+        <!-- The reticle IS the weapon: the ship shoots whatever sits inside
+             this, with or without a trigger press, and the trigger on its own
+             cannot hit anything. Its two states differ in SHAPE as well as
+             colour (a thin ring with ticks when idle, a closed diamond with
+             corner brackets when locked), because nothing in this experience
+             may be carried by colour alone. That shape change is now also what
+             teaches the trigger: pressing it with an empty reticle sends
+             tracers into the dark, and the same press with a raider centred
+             looks completely different. -->
         <div id="reticle" class="reticle" aria-hidden="true">
             <svg viewBox="0 0 64 64" focusable="false">
                 <circle class="reticle-ring" cx="32" cy="32" r="13" />
@@ -449,12 +471,12 @@
         <!-- Everything the HUD shows visually is also announced here, so the
              flight state is available to a screen reader rather than being
              locked in the pixels. -->
-        <p id="flight-status" class="visually-hidden" role="status" aria-live="polite"></p>
-        <p id="combat-status" class="visually-hidden" role="status" aria-live="polite"></p>
+        <p id="flight-status" class="sr-only" role="status" aria-live="polite"></p>
+        <p id="combat-status" class="sr-only" role="status" aria-live="polite"></p>
         <!-- The objective counters and the alert as a sentence, so the state of
              the game is available to a visitor who is not reading the pixels.
              Built in now rather than retrofitted at M8. -->
-        <p id="objective-status" class="visually-hidden" role="status" aria-live="polite"></p>
+        <p id="objective-status" class="sr-only" role="status" aria-live="polite"></p>
     </div>
 
     <!-- Touch controls. The LEFT thumb gets a throttle rather than a movement
@@ -497,6 +519,61 @@
         </svg>
     </button>
 
+    <!-- THE WAY OUT OF THE OPENING, and it is a BUTTON rather than "any key,
+         any tap". This scene learned that distinction the hard way: the
+         cutscenes here were made unskippable in August because playtesters on
+         glass tapped straight through the end-of-run shot without ever
+         deciding to, which is a control a visitor trips over rather than one
+         they choose. A single focused button is the shape that came out of it
+         (www/xo built it first), and it gives a keyboard visitor Enter, Space
+         and Escape while a stray thumb on the scene gets nothing.
+
+         IT IS NOT A .ui-float, deliberately. `revealBriefing` makes every float
+         on the page visible at once, and this one has to be gone by then.
+
+         NOT IN THE SKIP-LINK PATH EITHER: it exists for a few seconds at the
+         very start, takes focus itself while it is up, and would otherwise be a
+         stop on every visitor's Tab order for the rest of the session. -->
+    <!-- THE LABEL IS STABLE AND THE VISIBLE TEXT IS NOT, which is the whole
+         reason for the aria-label. A phone drops " the opening" to keep the
+         pill off a narrow frame (see .skip-intro-hint), and without this the
+         accessible name would be the bare word "Skip" on a phone and "Skip the
+         opening" on a desktop: skip WHAT is exactly what a visitor who cannot
+         see the shot needs told. -->
+    <!-- THE SPACE IS A NON-BREAKING ONE BECAUSE THE BUTTON IS A FLEX
+         CONTAINER. It shipped as a plain space and rendered as "Skipthe
+         opening": a flex container makes each text run its own anonymous flex
+         item and then collapses the whitespace between them, so an ordinary
+         leading space inside the span disappears. -->
+    <button type="button" id="skip-intro-btn" class="skip-intro-btn"
+        aria-label="Skip the opening">
+        Skip<span class="skip-intro-hint">&nbsp;the opening</span>
+    </button>
+
+    <!-- WHAT THE MARTIAN SAYS, WHICH HAS TO BE READ RATHER THAN HEARD. The
+         opening plays before the visitor has clicked anything, so there is no
+         gesture, no audio context, and nothing we could ethically do about it.
+         A commander who cannot be heard is a problem; an intercepted
+         transmission that arrives as text is a choice, and the label is what
+         makes it the second one.
+
+         OUTSIDE THE HUD ON PURPOSE, both of these. #objective-status and the
+         other live regions all sit inside #hud, which is display:none until a
+         run starts, and an aria-live region inside a hidden subtree announces
+         nothing. So the opening carries its own.
+
+         THE CAPTION IS aria-hidden AND THE LIVE REGION SAYS IT INSTEAD. The
+         caption's opacity is written every frame by the scene's own clock, and
+         a live region rewritten sixty times a second is a screen reader
+         talking over itself. martian.js hands the sentence over exactly once
+         (`takeMartianAnnouncement`), and it is both lines at once, because a
+         reader interrupted mid-shot would otherwise lose the first half. -->
+    <div id="intro-caption" class="intro-caption" aria-hidden="true">
+        <p class="intro-caption-label">Intercepted transmission</p>
+        <p class="intro-caption-line" id="intro-caption-line"></p>
+    </div>
+    <p id="intro-announce" class="visually-hidden" role="status" aria-live="polite"></p>
+
     <!-- THE SETTINGS COG USED TO BE HERE, AND IT WAS A TRAP.
          Flying means the pointer is locked and the cursor is hidden, so a
          floating gear cannot be clicked at all. Escape is how a browser gives
@@ -530,9 +607,13 @@
                     <li class="help-desktop"><strong>Look:</strong> move the mouse, or steer with <kbd>A</kbd> <kbd>D</kbd> to turn and <kbd>Q</kbd> <kbd>E</kbd> to climb and dive.</li>
                     <li class="help-mobile"><strong>Throttle:</strong> the slider on the left. Hold it up to gather speed and pull it down to shed speed. Let go and it springs back to the middle, and the ship keeps the speed it has. Double tap it to come to a stop.</li>
                     <li class="help-mobile"><strong>Look:</strong> drag the joystick on the right.</li>
-                    <li><strong>Guns:</strong> there is no fire button. Line a target up in
+                    <li><strong>Guns:</strong> you never need a fire button. Line a target up in
                         the middle of your view and the guns take care of the rest. The
                         reticle closes into a diamond the moment they have something.</li>
+                    <li class="help-desktop"><strong>Firing anyway:</strong> the left mouse button
+                        or <kbd>Space</kbd>, if you would rather press something. It shoots
+                        straight ahead and hits nothing on its own, so the reticle is still
+                        what lands every shot.</li>
                     <li><strong>The objective:</strong> seven installations on Earth and the
                         Moon, and twelve Martian raiders on their way in. Hold the
                         installations and see off the raiders. Both counts are top left,
@@ -645,7 +726,24 @@
                     </div>
                 </dl>
                 <p id="end-best" class="end-best"></p>
-                <button id="restart-btn" class="piece-enter" type="button">Fly again</button>
+                <!-- TWO BUTTONS IN ONE ROW, and "Fly again" keeps the primary
+                     treatment: sharing is worth offering and playing again is
+                     still what this card is asking for. -->
+                <div class="end-actions">
+                    <button id="end-share" class="piece-cancel" type="button">Share</button>
+                    <button id="restart-btn" class="piece-enter" type="button">Fly again</button>
+                </div>
+                <!-- WHERE THE ACKNOWLEDGEMENT GOES when a share falls through
+                     to a clipboard copy. INSIDE the dialog on purpose: content
+                     outside an aria-modal dialog may not be announced at all,
+                     so a live region parked at the bottom of the page would be
+                     silent exactly when it matters. -->
+                <p id="end-status" class="end-status sr-only" role="status" aria-live="polite"></p>
+                <!-- The recommendation and the directory link are BUILT rather
+                     than written, by shared/js/promo-1.0.0.js, so that fifteen
+                     experiences share one description of what a promo card is
+                     and the catalog lives in one file. -->
+                <div id="end-promo" class="end-promo"></div>
             </div>
         </div>
     </div>

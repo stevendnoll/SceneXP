@@ -21,6 +21,7 @@
 import { jest } from '@jest/globals';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
+import { readFile } from 'node:fs/promises';
 
 let dom;
 
@@ -62,6 +63,41 @@ async function boot({ watch = false } = {}) {
 
 /** Every button currently in the action row, by its visible text. */
 const actionLabels = () => dom.el('hud-actions').children.map((b) => b.textContent);
+
+/** Drive frames until the play's result card is up, and insist that it is.
+ *
+ *  ONE HELPER BECAUSE 900 FRAMES WAS WRITTEN OUT FIVE TIMES AND FIXED ONCE.
+ *  Every loop in this file that waits for a result card used to stop at 900,
+ *  which is 15.0 s, under a comment saying that was well past the play timeout.
+ *  It was, once: the play clock is `clock.decide`, 10 s. Then `clock.backstop`
+ *  grew to 18 s and a celebration of up to `pose.celebration.cap` was added on
+ *  the end, so the real worst case is 32 s. A rare long play therefore ran out
+ *  of frames before its card, at about one run in seventy-five.
+ *
+ *  That was found and fixed in ONE of the five loops. The other four kept the
+ *  900, and one of them is how Steve saw this fail on 2026-09-17. So the budget
+ *  now lives in a single place and is derived from the config rather than
+ *  written down, and every waiter goes through it.
+ *
+ *  IT ASSERTS THE CARD RATHER THAN LEAVING THAT TO THE CALLER, which is the
+ *  other half of the same bug. The test that failed went straight from this
+ *  loop to looking for the replay button, so what it reported was an empty
+ *  button row on a line that looks like it should always hold. The real cause
+ *  was one screen earlier and the message never said so.
+ *
+ *  `frame` is passed in because the callers do not share a clock convention:
+ *  some drive `i * 16.7` from zero and some carry a running `now`, and that is
+ *  deliberate in both cases. It is handed the frame index for the first kind
+ *  and may ignore it. */
+const runToResult = async (frame) => {
+    const { XO_CONFIG: CFG } = await import('../www/xo/js/config.min.js');
+    const budget = (CFG.clock.decide + CFG.clock.backstop + CFG.pose.celebration.cap + 2) * 60;
+    for (let i = 0; i < budget && dom.el('result').hidden !== false; i += 1) frame(i);
+    expect(dom.el('result').hidden).toBe(false);
+};
+
+/** The commonest shape of it: a fresh clock counted off the frame index. */
+const runToResultFromZero = () => runToResult((i) => dom.loops[0](i * 16.7));
 
 /** Walk from the welcome card into a live play. Returns the main module. */
 async function toLivePlay() {
@@ -441,17 +477,9 @@ describe('a play, end to end', () => {
         await flushAsync();
 
         // PAST THE BACKSTOP AND THE LONGEST PARTY, whatever the simulation
-        // decides, so this cannot hang on a play that never ends. It used to
-        // stop at 900 frames under a comment saying twelve seconds was past the
-        // timeout, which stopped being true when the backstop grew to 18
-        // seconds on top of the 10 second clock: a rare long play then ran out
-        // of frames before its result card (about one run in seventy-five).
-        const { XO_CONFIG: CFG } = await import('../www/xo/js/config.min.js');
-        const budget = (CFG.clock.decide + CFG.clock.backstop + CFG.pose.celebration.cap + 2) * 60;
-        for (let i = 0; i < budget && dom.el('result').hidden !== false; i += 1) {
-            dom.loops[0](i * 16.7);
-        }
-        expect(dom.el('result').hidden).toBe(false);
+        // decides, so this cannot hang on a play that never ends. See
+        // `runToResult`, which is where that budget lives now.
+        await runToResultFromZero();
         expect(dom.el('result-headline').textContent).toBeTruthy();
         expect(dom.el('result-running').textContent).toMatch(/Score -?\d+ after 1 of 10/);
         // The card sits low and lets the field through, which is a class the
@@ -512,9 +540,7 @@ describe('a replay can be got out of', () => {
         await flushAsync();
         press('Throw');
         await flushAsync();
-        for (let i = 0; i < 900 && dom.el('result').hidden !== false; i += 1) {
-            dom.loops[0](i * 16.7);
-        }
+        await runToResultFromZero();
         // Ask for the replay from the result card.
         //
         // THE PLAY ITSELF IS RANDOMISED, so this button is the one thing here
@@ -608,8 +634,7 @@ describe('a replay can be got out of', () => {
         // ONE CLOCK FOR THE WHOLE TEST, for the reason the test below gives.
         let now = 0;
         const frame = () => { now += 16.7; dom.loops[0](now); };
-        for (let i = 0; i < 900 && dom.el('result').hidden !== false; i += 1) frame();
-        expect(dom.el('result').hidden).toBe(false);
+        await runToResult(frame);
 
         const watch = dom.el('result-actions').children
             .find((b) => b.textContent === 'Watch the replay');
@@ -652,9 +677,7 @@ describe('a replay can be got out of', () => {
         // the test would be measuring the wrong thing while passing.
         let now = 0;
         const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
-        const toResult = () => {
-            for (let i = 0; i < 900 && dom.el('result').hidden !== false; i += 1) frames(1);
-        };
+        const toResult = () => runToResult(() => frames(1));
         const watch = async () => {
             const b = dom.el('result-actions').children
                 .find((x) => x.textContent === 'Watch the replay');
@@ -674,7 +697,7 @@ describe('a replay can be got out of', () => {
         await flushAsync();
         press('Throw');
         await flushAsync();
-        toResult();
+        await toResult();
 
         await watch();
         expect(camera.viewQuarter()).toBe(0);
@@ -704,7 +727,7 @@ describe('a replay can be got out of', () => {
         await flushAsync();
         press('Throw');
         await flushAsync();
-        toResult();
+        await toResult();
 
         await watch();
         expect(camera.viewQuarter()).toBe(0);
@@ -1096,10 +1119,7 @@ describe('the usage log', () => {
             await flushAsync();
             press('Throw');
             await flushAsync();
-            for (let i = 0; i < 900 && dom.el('result').hidden !== false; i += 1) {
-                dom.loops[0](i * 16.7);
-            }
-            expect(dom.el('result').hidden).toBe(false);
+            await runToResultFromZero();
 
             const hits = sent.map((url) => new URL(url, 'http://localhost:8000/xo/'));
             const actions = hits.map((u) => u.searchParams.get('action'));
@@ -1143,5 +1163,34 @@ describe('the usage log', () => {
         } finally {
             delete globalThis.Image;
         }
+    });
+});
+
+/** THE SUMMARY CARD NOW SAYS WHAT ELSE IS HERE.
+ *
+ *  Somebody who arrived straight at this game has no way of knowing SceneXP
+ *  hosts fourteen other experiences, and the end of a game is the one moment
+ *  they have an opinion about whether they want another. The card itself is
+ *  built by shared/js/promo-1.0.0.js and tested there; this is the wiring. */
+describe('what comes after the final score', () => {
+    test('the summary card has somewhere to put the recommendation', async () => {
+        const page = await readFile(new URL('../www/xo/index.html', import.meta.url), 'utf8');
+        expect(page).toMatch(/id="summary-promo"/);
+        // BELOW the actions and below the status line, so the reading order is
+        // the score, the plays, what to do about it, then what else there is.
+        expect(page.indexOf('summary-promo')).toBeGreaterThan(page.indexOf('summary-actions'));
+        expect(page.indexOf('summary-promo')).toBeGreaterThan(page.indexOf('summary-status'));
+    });
+
+    test('summary.js builds it through the shared part', async () => {
+        const src = await readFile(new URL('../www/xo/js/summary.js', import.meta.url), 'utf8');
+        expect(src).toContain("from '../../shared/js/promo-1.0.0.min.js'");
+        expect(src).toMatch(/createPromoCard\('xo'\)/);
+        expect(src).toMatch(/createDirectoryLink\(\)/);
+    });
+
+    test('it recommends Earth Defense, which is the curated pair', async () => {
+        const { nextSlug } = await import('../www/shared/js/promo-1.0.0.js');
+        expect(nextSlug('xo')).toBe('earthdefense');
     });
 });
