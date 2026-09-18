@@ -255,7 +255,40 @@ export function filterSessions(snap, scene, hidden) {
         if (!events.length) continue;
         out.push({ ...session, events, scenes: scenesOf(events) });
     }
-    return out;
+    return numberRepeatVisits(out);
+}
+
+/**
+ * Number the sessions of anyone who appears more than once in the day.
+ *
+ * A LABEL REPEATING IS NOT A COLLISION, it is a visitor who came back. The
+ * label is derived from the proof-of-work hash, which lives in sessionStorage
+ * for up to 24 hours, so one person keeps one name all day, while the collector
+ * starts a new session after any gap over thirty minutes. Somebody who played
+ * three times before lunch is therefore three cards with one name on them,
+ * scattered among strangers, which reads as a bug rather than as a regular.
+ *
+ * Numbering runs in the order the visits happened, so "visit 1" is the first of
+ * the day whichever way the list is sorted. Counted over the sessions actually
+ * on screen, so the figures agree with what the filters left rather than
+ * describing cards the viewer cannot see.
+ */
+export function numberRepeatVisits(sessions) {
+    const totals = new Map();
+    for (const s of sessions) totals.set(s.label, (totals.get(s.label) || 0) + 1);
+
+    const order = [...sessions].sort((a, b) =>
+        String(a.started_at || '').localeCompare(String(b.started_at || '')));
+    const nth = new Map();
+    const numbered = new Map();
+    for (const s of order) {
+        const total = totals.get(s.label) || 1;
+        if (total < 2) continue;
+        const n = (nth.get(s.label) || 0) + 1;
+        nth.set(s.label, n);
+        numbered.set(s, { visit: n, visitCount: total });
+    }
+    return sessions.map(s => (numbered.has(s) ? { ...s, ...numbered.get(s) } : s));
 }
 
 /** How many of the day's events the filters are showing. Drives the status line,
@@ -407,7 +440,13 @@ function renderSessionCard(session) {
     head.appendChild(el('span', 'asession-label', session.label || 'Visitor'));
 
     const chips = el('span', 'asession-chips');
-    // The route first: which experiences this visit passed through, in order.
+    // Right beside the name, because it is the name it explains: a repeated
+    // label is one visitor coming back, not two visitors colliding.
+    if (session.visitCount > 1) {
+        chips.appendChild(el('span', 'achip achip-visit',
+            `visit ${session.visit} of ${session.visitCount}`));
+    }
+    // Then the route: which experiences this visit passed through, in order.
     scenes.slice(0, SESSION_SCENE_CHIPS).forEach(scene =>
         chips.appendChild(el('span', 'achip achip-scene', prettyScene(scene))));
     if (scenes.length > SESSION_SCENE_CHIPS) {
@@ -838,7 +877,15 @@ export function startAnalyticsAutoRefresh() {
     if (autoRefreshOn) return;
     autoRefreshOn = true;
     document.addEventListener('visibilitychange', onVisibilityChange);
-    if (!document.hidden) startInterval();
+    if (!document.hidden) {
+        // FETCH NOW, THEN FALL INTO THE CADENCE. Scheduling alone leaves the
+        // first poll up to five minutes out, and a scene whose wall screen is
+        // the thing you walked in to look at would spend that time showing a
+        // placeholder to somebody who is already standing in front of it.
+        // This is the same load-then-schedule the visibility handler does.
+        loadAnalytics();
+        startInterval();
+    }
 }
 
 // Exposed for unit tests only; production code uses the named exports above.

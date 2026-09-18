@@ -433,38 +433,47 @@ describe('startAnalyticsAutoRefresh', () => {
     return { m, doc };
   }
 
+  test('fetches immediately on start, so the wall screen is never blank', async () => {
+    // REGRESSION GUARD: scheduling without an immediate load left the in-world
+    // display reading "Waiting for today's numbers" for up to five minutes
+    // after the page opened, which is most of a visit.
+    const { m } = await setupPolling();
+    m.startAnalyticsAutoRefresh();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
   test('polls once per 5-minute slot while the tab is visible', async () => {
     const { m } = await setupPolling();
     m.startAnalyticsAutoRefresh();
-    expect(globalThis.fetch).not.toHaveBeenCalled();   // aligned to the slot, not immediate
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);  // the immediate one
 
-    jest.advanceTimersByTime(POLL_MS);                 // first aligned tick fires within one slot
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    jest.advanceTimersByTime(POLL_MS);
+    jest.advanceTimersByTime(POLL_MS);                 // then the aligned cadence
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    jest.advanceTimersByTime(POLL_MS);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
 
     m.startAnalyticsAutoRefresh();                     // second call is a no-op
     expect(globalThis.document.listeners.visibilitychange).toHaveLength(1);
     jest.advanceTimersByTime(POLL_MS);
-    expect(globalThis.fetch).toHaveBeenCalledTimes(3); // still one poller, not two
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4); // still one poller, not two
   });
 
   test('hiding the tab pauses polling, returning catches up immediately', async () => {
     const { m, doc } = await setupPolling();
-    m.startAnalyticsAutoRefresh();
+    m.startAnalyticsAutoRefresh();                     // one immediate fetch
     jest.advanceTimersByTime(POLL_MS);
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
 
     doc.hidden = true;
     doc.fire('visibilitychange');
     jest.advanceTimersByTime(3 * POLL_MS);             // nobody is looking
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
 
     doc.hidden = false;
     doc.fire('visibilitychange');
-    expect(globalThis.fetch).toHaveBeenCalledTimes(2); // immediate catch-up
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3); // immediate catch-up
     jest.advanceTimersByTime(POLL_MS);
-    expect(globalThis.fetch).toHaveBeenCalledTimes(3); // and the cadence resumes
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4); // and the cadence resumes
   });
 
   test('starting while hidden defers the first poll until the tab is shown', async () => {
@@ -782,5 +791,71 @@ describe('overflow and empty edges', () => {
     await m.loadAnalytics();
     expect(findOne(els.body, 'analytics-empty').textContent)
       .toBe('No visits recorded for this day.');
+  });
+});
+
+// ---- Repeat visits ----------------------------------------------------------
+// A label appearing twice in a day is one visitor coming back, because the
+// proof-of-work hash behind it survives the whole day while the collector
+// starts a new session after a thirty minute gap. Without a chip saying so,
+// two cards with one name on them read as a bug.
+
+describe('repeat visits', () => {
+  const REGULAR = {
+    date: LATEST, generated_at: isoAt(FIXED_NOW),
+    sessions: [
+      { label: 'Bold Cedar f8', started_at: isoAt(FIXED_NOW - 600 * 1000), mobile: false,
+        scenes: ['xo'], events: [{ action: 'snap', scene: 'xo', at: isoAt(FIXED_NOW - 600 * 1000) }] },
+      { label: 'Sleepy Maple 23', started_at: isoAt(FIXED_NOW - 1200 * 1000), mobile: false,
+        scenes: ['xo'], events: [{ action: 'snap', scene: 'xo', at: isoAt(FIXED_NOW - 1200 * 1000) }] },
+      { label: 'Bold Cedar f8', started_at: isoAt(FIXED_NOW - 9000 * 1000), mobile: false,
+        scenes: ['garden'], events: [{ action: 'water-all', scene: 'garden', at: isoAt(FIXED_NOW - 9000 * 1000) }] },
+    ],
+  };
+
+  async function ready() {
+    installFetch({ 'index.json': INDEX, 'sessions-20260628': REGULAR });
+    const h = await setup();
+    await h.m.loadAnalytics();
+    return h;
+  }
+
+  test('a returning visitor gets a numbered chip on each card', async () => {
+    const { els } = await ready();
+    const cards = findAll(els.body, 'asession');
+    expect(findOne(cards[0], 'achip-visit').textContent).toBe('visit 2 of 2');
+    expect(findOne(cards[2], 'achip-visit').textContent).toBe('visit 1 of 2');
+  });
+
+  test('a one-off visitor gets no chip at all', async () => {
+    const { els } = await ready();
+    const cards = findAll(els.body, 'asession');
+    expect(findOne(cards[1], 'asession-label').textContent).toBe('Sleepy Maple 23');
+    expect(findAll(cards[1], 'achip-visit')).toHaveLength(0);
+  });
+
+  test('the chip sits before the route chips, next to the name it explains', async () => {
+    const { els } = await ready();
+    const chips = findAll(findAll(els.body, 'asession')[0], 'achip');
+    expect(chips.map((c) => c.textContent))
+      .toEqual(['visit 2 of 2', "X's and O's", 'Desktop']);
+  });
+
+  test('the two cards keep their own collapse state despite sharing a name', async () => {
+    // sessionKey is label + started_at, so the visits do not toggle together.
+    const { els } = await ready();
+    const cards = findAll(els.body, 'asession');
+    findOne(cards[0], 'asession-head').fire('click');
+    expect(findOne(cards[0], 'asession-head').getAttribute('aria-expanded')).toBe('false');
+    expect(findOne(cards[2], 'asession-head').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  test('filtering to one of the visits stops claiming there are two', async () => {
+    const { els } = await ready();
+    els.sceneSelect.value = 'garden';
+    els.sceneSelect.fire('change');
+    const cards = findAll(els.body, 'asession');
+    expect(cards).toHaveLength(1);
+    expect(findAll(cards[0], 'achip-visit')).toHaveLength(0);
   });
 });

@@ -505,3 +505,72 @@ describe('humanizeAction', () => {
     expect(humanizeAction(undefined)).toBe('');
   });
 });
+
+describe('numberRepeatVisits', () => {
+  // One visitor back three times in a day, interleaved with two strangers.
+  // This is what the collector produces when a hash's events are split by gaps
+  // over thirty minutes, and it is NOT a label collision.
+  const REGULAR = [
+    { label: 'Bold Cedar f8', started_at: '2026-09-18T10:17:02Z', events: [{ action: 'snap', scene: 'xo' }] },
+    { label: 'Sleepy Maple 23', started_at: '2026-09-18T09:40:00Z', events: [{ action: 'snap', scene: 'xo' }] },
+    { label: 'Bold Cedar f8', started_at: '2026-09-18T09:27:02Z', events: [{ action: 'snap', scene: 'xo' }] },
+    { label: 'Bold Cedar f8', started_at: '2026-09-18T07:45:28Z', events: [{ action: 'snap', scene: 'xo' }] },
+    { label: 'Spry Acorn 09', started_at: '2026-09-18T07:00:00Z', events: [{ action: 'snap', scene: 'xo' }] },
+  ];
+
+  test('numbers a repeated label in the order the visits happened', async () => {
+    const { numberRepeatVisits } = await loadModel();
+    const out = numberRepeatVisits(REGULAR);
+    // The list is newest-first, so the first card is the LAST visit of the day.
+    expect(out[0]).toMatchObject({ label: 'Bold Cedar f8', visit: 3, visitCount: 3 });
+    expect(out[2]).toMatchObject({ label: 'Bold Cedar f8', visit: 2, visitCount: 3 });
+    expect(out[3]).toMatchObject({ label: 'Bold Cedar f8', visit: 1, visitCount: 3 });
+  });
+
+  test('a visitor who came once is left unnumbered', async () => {
+    const { numberRepeatVisits } = await loadModel();
+    const out = numberRepeatVisits(REGULAR);
+    expect(out[1].visit).toBeUndefined();
+    expect(out[1].visitCount).toBeUndefined();
+    expect(out[4].visit).toBeUndefined();
+  });
+
+  test('the input is not mutated', async () => {
+    const { numberRepeatVisits } = await loadModel();
+    numberRepeatVisits(REGULAR);
+    expect(REGULAR[0].visit).toBeUndefined();
+  });
+
+  test('the order of the list is preserved', async () => {
+    const { numberRepeatVisits } = await loadModel();
+    expect(numberRepeatVisits(REGULAR).map(s => s.started_at))
+      .toEqual(REGULAR.map(s => s.started_at));
+  });
+
+  test('counts only the visits the filters left on screen', async () => {
+    // Filtering to one of the three visits must not claim there are three,
+    // because the other two are not there to be looked at.
+    const { numberRepeatVisits } = await loadModel();
+    const out = numberRepeatVisits(REGULAR.filter(s => s.started_at < '2026-09-18T08:00:00Z'));
+    expect(out.find(s => s.label === 'Bold Cedar f8').visit).toBeUndefined();
+  });
+
+  test('tolerates an empty list and missing timestamps', async () => {
+    const { numberRepeatVisits } = await loadModel();
+    expect(numberRepeatVisits([])).toEqual([]);
+    const out = numberRepeatVisits([{ label: 'A' }, { label: 'A' }]);
+    expect(out.map(s => s.visit)).toEqual([1, 2]);
+  });
+});
+
+describe('filterSessions numbers repeat visits', () => {
+  test('a day with a returning visitor comes back numbered', async () => {
+    const { filterSessions } = await loadModel();
+    const snap = { sessions: [
+      { label: 'Bold Cedar f8', started_at: 'B', events: [{ action: 'snap', scene: 'xo' }] },
+      { label: 'Bold Cedar f8', started_at: 'A', events: [{ action: 'snap', scene: 'xo' }] },
+    ] };
+    const out = filterSessions(snap, '', new Set());
+    expect(out.map(s => `${s.visit}/${s.visitCount}`)).toEqual(['2/2', '1/2']);
+  });
+});

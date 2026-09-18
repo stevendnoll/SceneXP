@@ -3621,13 +3621,14 @@ body {
     letter-spacing: 0.02em;
 }
 
+/* Wraps rather than truncating. It gained a "204 of 438 events" clause when the
+   filters arrived, which pushed the freshness note past the ellipsis, and how
+   old the numbers are is the part worth keeping. */
 .analytics-status {
     margin: 3px 0 0;
     font-size: 0.78rem;
+    line-height: 1.35;
     color: #8a94a6;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .analytics-status.stale {
@@ -3874,9 +3875,14 @@ body {
     color: #8fd9b0;
 }
 
-.achip-more {
+.achip-more,
+.achip-visit {
     background: rgba(255, 255, 255, 0.06);
     color: #8a94a6;
+}
+
+.achip-visit {
+    font-variant-numeric: tabular-nums;
 }
 
 /* Only rendered on a visit that crossed more than one scene, where it is the
@@ -4094,6 +4100,28 @@ body {
     font-size: 0.72rem;
     color: #6c7686;
     text-align: center;
+}
+
+/* The privacy link. :visited is spelled out because the browser default turns
+   it magenta, which is the one colour on the panel that belongs to nothing. */
+.analytics-foot a,
+.analytics-foot a:visited {
+    color: #9fc4ff;
+    text-decoration: underline;
+    text-decoration-color: rgba(159, 196, 255, 0.35);
+    text-underline-offset: 2px;
+    white-space: nowrap;
+}
+
+.analytics-foot a:hover {
+    color: #c8dcff;
+    text-decoration-color: currentColor;
+}
+
+.analytics-foot a:focus-visible {
+    outline: 2px solid rgba(159, 196, 255, 0.7);
+    outline-offset: 2px;
+    border-radius: 3px;
 }
 
 @media (max-width: 600px) {
