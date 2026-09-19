@@ -859,3 +859,57 @@ describe('repeat visits', () => {
     expect(findAll(cards[0], 'achip-visit')).toHaveLength(0);
   });
 });
+
+// ---- Each day on its own clock --------------------------------------------------
+
+describe('days and their clocks', () => {
+  const OPTS = { hour: 'numeric', minute: '2-digit', second: '2-digit' };
+  const START = '2026-06-28T03:11:26Z';   // evening of Jun 27 in California
+
+  function daySnap(date, timezone) {
+    return {
+      date, generated_at: isoAt(FIXED_NOW), ...(timezone ? { timezone } : {}),
+      sessions: [{
+        label: 'Night Owl 11', started_at: START, mobile: false, scenes: ['xo'],
+        events: [{ action: 'snap', scene: 'xo', at: START }],
+      }],
+    };
+  }
+
+  test('a Pacific day lists its times on the Pacific clock, and says so', async () => {
+    installFetch({ 'index.json': INDEX, 'sessions-20260628': daySnap(LATEST, 'America/Los_Angeles') });
+    const { m, els } = await setup();
+    await m.loadAnalytics();
+    const card = findOne(els.body, 'asession');
+    const pacific = new Date(START).toLocaleTimeString(undefined, { ...OPTS, timeZone: 'America/Los_Angeles' });
+    expect(findOne(card, 'asession-time').textContent).toBe(`started ${pacific}`);
+    expect(findOne(card, 'aevent-time').textContent).toBe(pacific);
+    expect(els.status.textContent).toMatch(/shown in Pacific/);
+  });
+
+  test('stepping back to a day cut on UTC shows that day on UTC, labeled', async () => {
+    // Days frozen before the switch keep the zone they were cut in, and the
+    // page follows each file rather than assuming one zone for all of them.
+    installFetch({
+      'index.json': INDEX,
+      'sessions-20260628': daySnap(LATEST, 'America/Los_Angeles'),
+      'sessions-20260627': daySnap(OLDER, 'UTC'),
+    });
+    const { m, els } = await setup();
+    await m.loadAnalytics();
+    els.prevBtn.fire('click');
+    await flush();
+    const utc = new Date(START).toLocaleTimeString(undefined, { ...OPTS, timeZone: 'UTC' });
+    expect(findOne(findOne(els.body, 'asession'), 'asession-time').textContent).toBe(`started ${utc}`);
+    expect(els.status.textContent).toMatch(/shown in UTC/);
+  });
+
+  test('a file that does not name its zone keeps the viewer\'s clock, unlabeled', async () => {
+    installFetch({ 'index.json': INDEX, 'sessions-20260628': daySnap(LATEST, null) });
+    const { m, els } = await setup();
+    await m.loadAnalytics();
+    const local = new Date(START).toLocaleTimeString(undefined, OPTS);
+    expect(findOne(findOne(els.body, 'asession'), 'asession-time').textContent).toBe(`started ${local}`);
+    expect(els.status.textContent).not.toMatch(/shown in/);
+  });
+});

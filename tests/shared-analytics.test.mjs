@@ -574,3 +574,52 @@ describe('filterSessions numbers repeat visits', () => {
     expect(out.map(s => `${s.visit}/${s.visitCount}`)).toEqual(['2/2', '1/2']);
   });
 });
+
+// ---- Days and their clocks ---------------------------------------------------
+// Since 2026-09-19 the collector cuts days on Pacific time, and a day's clock
+// times are shown in the zone that day was cut in, so a page never claims one
+// day while listing another day's times.
+
+describe('localTime in a zone', () => {
+  const OPTS = { hour: 'numeric', minute: '2-digit', second: '2-digit' };
+  // 8:11 PM on Sep 17 in California, 3:11 AM on Sep 18 in UTC: the session Steve
+  // saw at the bottom of the "Sep 18" page before the switch.
+  const ISO = '2026-09-18T03:11:26Z';
+
+  test('shows the instant on the given zone\'s clock', async () => {
+    const { localTime } = await loadHelpers();
+    const pacific = localTime(ISO, 'America/Los_Angeles');
+    expect(pacific).toBe(new Date(ISO).toLocaleTimeString(undefined, { ...OPTS, timeZone: 'America/Los_Angeles' }));
+    // And it really is a different clock from UTC's for the same instant.
+    expect(pacific).not.toBe(localTime(ISO, 'UTC'));
+  });
+
+  test('an unknown zone falls back to the viewer\'s clock instead of failing', async () => {
+    const { localTime } = await loadHelpers();
+    expect(localTime(ISO, 'Not/AZone')).toBe(new Date(ISO).toLocaleTimeString(undefined, OPTS));
+  });
+
+  test('no zone means the viewer\'s own clock, as before', async () => {
+    const { localTime } = await loadHelpers();
+    expect(localTime(ISO, '')).toBe(new Date(ISO).toLocaleTimeString(undefined, OPTS));
+    expect(localTime('not a date', 'America/Los_Angeles')).toBe('');
+  });
+});
+
+describe('zoneLabel', () => {
+  test('names Pacific in its everyday form, the same in summer and winter', async () => {
+    jest.resetModules();
+    const { zoneLabel } = await import('../www/shared/js/analytics-1.0.0.js');
+    expect(zoneLabel('America/Los_Angeles')).toMatch(/Pacific/);
+    expect(zoneLabel('America/Los_Angeles')).not.toMatch(/Daylight|Standard/);
+  });
+
+  test('UTC is UTC, an unknown name comes back as itself, nothing is nothing', async () => {
+    jest.resetModules();
+    const { zoneLabel } = await import('../www/shared/js/analytics-1.0.0.js');
+    expect(zoneLabel('UTC')).toBe('UTC');
+    expect(zoneLabel('Not/AZone')).toBe('Not/AZone');
+    expect(zoneLabel('')).toBe('');
+    expect(zoneLabel(undefined)).toBe('');
+  });
+});

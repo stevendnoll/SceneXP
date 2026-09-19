@@ -184,17 +184,63 @@ function relTime(iso) {
     return `${Math.round(hrs / 24)}d ago`;
 }
 
-/** A localized, human-readable time-of-day in the viewer's own timezone. */
-function localTime(iso) {
+/**
+ * The timezone the day on screen was cut in, from the snapshot's own
+ * `timezone` field ('' when a file does not say, which reads as the viewer's).
+ *
+ * ---- A DAY'S TIMES ARE SHOWN IN THE ZONE THE DAY WAS CUT IN ----
+ *
+ * The collector decides which day a visit belongs to, and since 2026-09-19 it
+ * cuts days on Pacific time (it was UTC before). Showing that day's times in
+ * the VIEWER'S zone instead would let a page claim to be "Sep 18" while listing
+ * clock times from Sep 17 or Sep 19 for anyone further east, which is exactly
+ * the muddle Pacific days were brought in to end. Reading the zone per file,
+ * rather than assuming one, also keeps a day cut on UTC before the switch
+ * labeled and shown as UTC. The timestamps themselves are UTC in the file, so
+ * nothing is lost: only how they are presented follows the day.
+ */
+let dayZone = '';
+
+/** A localized, human-readable time-of-day, in `zone` when one is given (the
+ *  day's own zone, by default) or the viewer's own otherwise. An unknown zone
+ *  name falls back to the viewer's clock rather than failing to render. */
+function localTime(iso, zone = dayZone) {
     const d = new Date(iso);
-    return isNaN(d.getTime())
-        ? ''
-        : d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    if (isNaN(d.getTime())) return '';
+    const opts = { hour: 'numeric', minute: '2-digit', second: '2-digit' };
+    if (zone) {
+        try {
+            return d.toLocaleTimeString(undefined, { ...opts, timeZone: zone });
+        } catch (e) {
+            /* not a zone this browser knows: show the viewer's own clock */
+        }
+    }
+    return d.toLocaleTimeString(undefined, opts);
 }
 
-/** A localized, human-readable date for a UTC day key ('YYYY-MM-DD'). The label
- *  still names the snapshot's UTC day; we only format it nicely, pinning the
- *  formatter to UTC so the calendar date never shifts under the viewer's offset. */
+/** A zone's everyday name for the status line: 'America/Los_Angeles' reads as
+ *  "Pacific Time" (both halves of the year, which is why it is the generic
+ *  name and not "Pacific Daylight Time"). English, because the rest of the
+ *  dashboard is. Falls back to the raw name for a zone the browser cannot
+ *  name, and to nothing for no zone at all. */
+export function zoneLabel(zone) {
+    if (!zone) return '';
+    if (zone === 'UTC') return 'UTC';
+    try {
+        const part = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longGeneric' })
+            .formatToParts(new Date())
+            .find(p => p.type === 'timeZoneName');
+        if (part && part.value) return part.value;
+    } catch (e) {
+        /* unknown zone, or a browser without generic zone names */
+    }
+    return zone;
+}
+
+/** A localized, human-readable date for a day key ('YYYY-MM-DD'). The key
+ *  names the calendar day the collector cut (in the day's own zone); this only
+ *  formats it, pinning the formatter to UTC so the calendar date never shifts
+ *  under the viewer's offset. */
 function prettyDate(ymd) {
     if (!ymd) return '—';
     const [y, m, d] = ymd.split('-').map(Number);
@@ -716,6 +762,8 @@ function renderStatus() {
             } else if (latest && currentDate === latest) {
                 bits.push('refreshes every 5 min');   // only true for the live (latest) day
             }
+            // Which clock this page is on, so a time is never ambiguous.
+            if (dayZone) bits.push(`shown in ${zoneLabel(dayZone)}`);
             els.status.textContent = bits.join('  ·  ');
             if (isStale(currentSnap) && currentDate === latest) els.status.classList.add('stale');
         }
@@ -730,6 +778,7 @@ function renderStatus() {
 }
 
 function render() {
+    dayZone = (currentSnap && typeof currentSnap.timezone === 'string') ? currentSnap.timezone : '';
     syncSceneSelect();
     syncActionFilter();
     renderStatus();
