@@ -13,7 +13,12 @@
  *   [pan left]  [zoom out]  [zoom in]  [pan right]
  *
  * The pan arrows yaw the camera left and right around its fixed
- * position, clamped to ±maxAngle from the composed view. The zoom
+ * position, clamped to ±maxAngle from the composed view. `pan.wrap: true`
+ * removes that clamp: the yaw turns all the way round and carries on, for a
+ * scene whose subject SURROUNDS the eye rather than sitting in front of it
+ * (www/steve, stood in a small room whose discoveries are on all four walls).
+ * maxAngle is then ignored, and the pan arrows never dim, because a turn that
+ * has no ends has nothing to run out of. The zoom
  * buttons narrow and widen the camera FOV (binocular-style, the camera
  * never moves, so there is nothing to collide with), clamped to
  * [baseFov - maxIn, baseFov + maxOut]. The zoom pair only renders when
@@ -146,6 +151,7 @@ let _getCamera = null;
 let _lookAt = null;         // {x, y, z} composed focus point from the config
 let _panSpeed = 0.4;        // radians per second while a pan arrow is held
 let _maxAngle = 0.5;        // pan clamp, radians each way (0 disables the yaw)
+let _wrapPan = false;       // pan.wrap: the yaw turns all the way round, no clamp
 let _maxTilt = 0.3;         // swipe tilt clamp, radians up or down (0 disables)
 let _baseFov = 0;           // the composed portrait FOV (degrees), anchor for zoom
 let _zoomSpeed = 18;        // degrees of FOV per second while a zoom button is held
@@ -230,12 +236,62 @@ function stopHold(axis, dir) {
     if (axis === 'zoom' && _holdZoom === dir) _holdZoom = 0;
 }
 
+/**
+ * Whether a key press was aimed at something other than the view.
+ *
+ * ---- THE ARROW KEYS ARE SHARED, AND THE VIEW WAS TAKING ALL OF THEM ----
+ *
+ * The listener below is on the window, so it heard every arrow and every WASD
+ * press on the page and turned the camera for each one, whatever had focus. A
+ * range slider moves with the arrow keys, a <select> steps through its options
+ * with them, and a radio group walks between its choices. In www/steve the
+ * brightness slider sits in a panel with NO BACKDROP, so nudging the lighting
+ * from the keyboard visibly spun the room behind it, and stepping through the
+ * dashboard's scene picker zoomed a room nobody could see until the overlay
+ * closed on a view the visitor had never asked for.
+ *
+ * So a press is left alone when its target is a form control, is editable, or
+ * sits inside an open modal card (aria-modal="true"): in each of those the key
+ * already means something, and the view is not what the visitor is operating.
+ * Only the START of a hold is gated. Key-up still stops a hold wherever focus
+ * has since moved, so a turn begun on the scene can never be left running.
+ */
+function keyBelongsElsewhere(event) {
+    const target = event && event.target;
+    if (!target || typeof target !== 'object') return false;
+    const tag = typeof target.tagName === 'string' ? target.tagName.toUpperCase() : '';
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return true;
+    if (target.isContentEditable === true) return true;
+    return typeof target.closest === 'function' && !!target.closest('[aria-modal="true"]');
+}
+
+/**
+ * Where the yaw lands after turning by `delta` radians.
+ *
+ * ---- A CLAMP, OR A CIRCLE ----
+ *
+ * The clamp is right for a scene composed in front of the eye: past maxAngle
+ * there is only wall. A room you stand INSIDE has something worth seeing in
+ * every direction, and a clamp there is an invisible wall met mid-drag, which
+ * is the worst kind of rule (www/xo's play clock taught the site that). So
+ * with pan.wrap the yaw is folded back into [-PI, PI) instead: the same
+ * direction, one name for it, and no float creeping upward over a long visit.
+ */
+function stepYaw(delta) {
+    const raw = _angle + delta;
+    if (!_wrapPan) return Math.min(_maxAngle, Math.max(-_maxAngle, raw));
+    const turn = Math.PI * 2;
+    return ((raw + Math.PI) % turn + turn) % turn - Math.PI;
+}
+
 /** Dim whichever button has run out of travel (still pressable, reads as
  *  spent). Called when an offset actually changes, and every frame in
  *  delegate mode (the delegate's limits can move on their own). */
 function syncLimitClasses() {
-    if (_panLeftBtn) _panLeftBtn.classList.toggle('at-limit', _angle <= -_maxAngle + 1e-4);
-    if (_panRightBtn) _panRightBtn.classList.toggle('at-limit', _angle >= _maxAngle - 1e-4);
+    // A wrapping yaw has no ends, so neither arrow is ever spent.
+    const bounded = !_wrapPan;
+    if (_panLeftBtn) _panLeftBtn.classList.toggle('at-limit', bounded && _angle <= -_maxAngle + 1e-4);
+    if (_panRightBtn) _panRightBtn.classList.toggle('at-limit', bounded && _angle >= _maxAngle - 1e-4);
     if (_zoomDelegate) {
         const lim = typeof _zoomDelegate.limits === 'function'
             ? _zoomDelegate.limits() : null;
@@ -287,7 +343,7 @@ function tiltRadiansPerPixel() {
  *  what was cropped off the right. */
 function applyGesturePan(dx) {
     if (dx === 0) return;
-    const next = Math.min(_maxAngle, Math.max(-_maxAngle, _angle - dx * panRadiansPerPixel()));
+    const next = stepYaw(-dx * panRadiansPerPixel());
     if (next !== _angle) {
         _angle = next;
         syncLimitClasses();
@@ -571,7 +627,7 @@ function refreshOrientation() {
  * Build the buttons and wire the inputs. Call once from the experience's
  * setup, after the DOM exists and before the load fade-in adds .visible
  * to the .ui-float elements. Options: { getCamera, lookAt, baseFov,
- * pan: { speed, maxAngle }, zoom: { speed, maxIn, maxOut }, extraClass,
+ * pan: { speed, maxAngle, maxTilt, wrap }, zoom: { speed, maxIn, maxOut }, extraClass,
  * onFirstUse, signal }. Zoom buttons render only when both zoom and
  * baseFov are provided.
  */
@@ -591,6 +647,9 @@ export function initPortraitControls(options = {}) {
     // passed 0 before automan did.
     if (typeof pan.maxAngle === 'number' && pan.maxAngle >= 0) _maxAngle = pan.maxAngle;
     if (typeof pan.maxTilt === 'number' && pan.maxTilt >= 0) _maxTilt = pan.maxTilt;
+    // Set on every init rather than only when true, so a page that re-inits
+    // never inherits a wrap it did not ask for.
+    _wrapPan = pan.wrap === true;
     const zoom = options.zoom || null;
     _zoomDelegate = (options.zoomDelegate && typeof options.zoomDelegate.onDelta === 'function')
         ? options.zoomDelegate : null;
@@ -702,6 +761,7 @@ export function initPortraitControls(options = {}) {
     window.addEventListener('keydown', (event) => {
         const hold = keyHoldFor(event);
         if (!hold || !controlsActive() || event.repeat) return;
+        if (keyBelongsElsewhere(event)) return;
         if (hold.axis === 'zoom' && !(_zoomInBtn || _zoomOutBtn)) return;
         if (hold.axis === 'tilt' && _maxTilt <= 0) return;
         startHold(hold.axis, hold.dir);
@@ -769,7 +829,7 @@ export function initPortraitControls(options = {}) {
 export function updatePortraitControls(deltaTime) {
     if (controlsActive() && deltaTime > 0) {
         if (_holdPan !== 0) {
-            const next = Math.min(_maxAngle, Math.max(-_maxAngle, _angle + _holdPan * _panSpeed * deltaTime));
+            const next = stepYaw(_holdPan * _panSpeed * deltaTime);
             if (next !== _angle) {
                 _angle = next;
                 syncLimitClasses();
@@ -876,6 +936,8 @@ export function updatePortraitControls(deltaTime) {
 export function setPanLimit(maxAngle) {
     if (!(maxAngle >= 0) || maxAngle === _maxAngle) return;
     _maxAngle = maxAngle;
+    // Nothing to re-clamp on a yaw that wraps: it has no ends to pull inside.
+    if (_wrapPan) return;
     _angle = Math.min(_maxAngle, Math.max(-_maxAngle, _angle));
     syncLimitClasses();
 }
@@ -964,6 +1026,7 @@ export function disposePortraitControls() {
     _appliedZoom = false;
     _used = {};
     _alwaysOn = false;
+    _wrapPan = false;
     _landscapeFov = 0;
     _surface = null;
     _pointers.clear();

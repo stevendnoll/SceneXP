@@ -124,3 +124,65 @@ test('the policy keeps house style, like every other page of copy', () => {
     expect(text).not.toMatch(/—/);
     expect(text).not.toMatch(/;/);
 });
+
+/**
+ * ---- WHAT LEAVES THE DEVICE, AND WHAT THE SERVER WRITES DOWN ----
+ *
+ * Until 2026-09-18 the page listed the proof-of-work token under "What stays on
+ * your device" and closed that list with "Everything above stays on your device
+ * and is never sent to us". The token is attached to every usage ping as
+ * `hash=`: it is the key the collector groups a visit by. So the page was
+ * stating something backwards, in exactly the way the storage bullet above once
+ * did, and nothing could tell.
+ *
+ * The same pass disclosed the ordinary access log, which records IP addresses
+ * and user agents. That fact lives in the production nginx config, which is
+ * git-ignored and invisible to CI, so this suite can only hold the prose in
+ * place. Change the log format and this section needs rereading by hand.
+ */
+test('the token that travels is not listed as one that stays put', () => {
+    const html = readFileSync(join(WWW, 'privacy.html'), 'utf8');
+    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    const telemetry = readFileSync(join(WWW, 'shared/js/telemetry-1.0.0.js'), 'utf8');
+
+    // THE CODE FACT THE PAGE NOW DEPENDS ON. If the pings ever stop carrying the
+    // token, this fails first, which is the prompt to go back and restore the
+    // stronger promise rather than leave a caveat that is no longer needed.
+    expect(telemetry).toMatch(/hash:\s*_proofHash/);
+
+    // So the page says the token travels, and never claims UNQUALIFIED that
+    // everything on the list stays put. The lookbehind is what allows the
+    // corrected sentence ("Apart from that puzzle token, everything above
+    // stays...") while still catching the original.
+    expect(text).toMatch(/puzzle token that groups one visit.s pings together/i);
+    expect(text).not.toMatch(/(?<!puzzle token, )everything above stays on your device/i);
+});
+
+test('the ordinary server log is disclosed, with how long it is kept', () => {
+    const html = readFileSync(join(WWW, 'privacy.html'), 'utf8');
+    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+
+    expect(text).toMatch(/What the web server keeps/i);
+    expect(text).toMatch(/your IP address/i);
+    // A disclosure without a retention period is half of one.
+    expect(text).toMatch(/deleted automatically within a year/i);
+
+    // The sentence that invited the wrong reading: pings landing in "the web
+    // server's own logs", two sentences before "no IP addresses", read as though
+    // the server kept no IPs at all. They land in a separate log that does not.
+    expect(text).not.toMatch(/land in the web server.s own logs/i);
+    expect(text).toMatch(/separate log of their own/i);
+});
+
+test('the summaries that search and social cards show agree with the page', () => {
+    // "only anonymized usage counts" was true of the pings and false of the site
+    // once the access log is admitted to. Three copies of it, in three tags.
+    const html = readFileSync(join(WWW, 'privacy.html'), 'utf8');
+    const metas = [...html.matchAll(/<meta[^>]+(?:name|property)="(?:description|og:description|twitter:description)"[^>]*>/g)]
+        .map((m) => m[0]);
+    expect(metas).toHaveLength(3);
+    metas.forEach((tag) => {
+        expect(tag).not.toMatch(/only anonymized/i);
+        expect(tag).toMatch(/server logs/i);
+    });
+});

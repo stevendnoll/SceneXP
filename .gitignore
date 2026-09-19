@@ -3,10 +3,15 @@
 .env
 .env.*
 *.log
+# The collector's label salt and lock file. Never web-served, never committed:
+# deleting the salt reshuffles every visitor's throwaway label. ops/ already
+# covers the usual spot, this catches the default one beside the repo root.
+.snaps-private/
 CLAUDE.local.md
 coverage/
 deploy/
 node_modules/
+ops/
 snaps/
 specs/
 stage/

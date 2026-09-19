@@ -77,10 +77,23 @@ test('the full office builds and ticks without throwing', async () => {
   expect(STEVE_CONFIG.greeterSign.enabled).toBe(false);
   expect(store.getHelpSign()).toBeFalsy();
 
-  // The whiteboard paths main.js drives: the (static-content) repaint hook
-  // and the click-to-enlarge overlay painter
-  store.updateStudioBoard(STEVE_CONFIG.checklist.items, { done: 1, total: 6, complete: false });
-  store.drawStudioBoardTo(chainable(), 800, 460);
+  // The wall display main.js drives. Both states are worth painting: the
+  // placeholder before the first poll answers, and a real day's summary.
+  expect(store.updateDashboardScreen(null)).toBe(true);
+  expect(store.getDashboardSummary()).toBe(null);
+  const summary = {
+    date: 'Fri, Sep 18, 2026', sessionCount: 15, eventCount: 438,
+    sceneCount: 11, busiestScene: "X's and O's", busiestSceneEvents: 390,
+    hasData: true, updatedAgo: '2m ago', stale: false,
+    recent: [
+      { label: 'Curious Otter a3', action: 'Called a play', scene: "X's and O's", ago: 'just now', mobile: true },
+      { label: 'Quiet Comet 5f', action: 'Planted a tree', scene: 'Fractal Garden', ago: '4m ago', mobile: false },
+    ],
+  };
+  expect(store.updateDashboardScreen(summary)).toBe(true);
+  expect(store.getDashboardSummary()).toBe(summary);
+  // A stale day takes the amber path, and a day with nobody in it still draws.
+  store.updateDashboardScreen({ ...summary, stale: true, recent: [], busiestScene: '' });
 
   // Several seconds of the office ticking: the cat breathing, Steve
   // typing, the editor cursor blinking past its period, and the fence
@@ -164,32 +177,54 @@ describe('the floor plan and config (pure)', () => {
     expect(CFG.building.height).toBeCloseTo(room.height, 1);
   });
 
-  test('the walkable clamp keeps a player radius off every wall face', () => {
-    const { room } = T.LAYOUT;
-    const r = 0.4;   // CONTROLS_CONFIG.playerRadius
-    const b = CFG.worldBounds;
-    expect(b.maxX).toBeLessThanOrEqual(room.maxX - room.wallT / 2 - r);
-    expect(b.minX).toBeGreaterThanOrEqual(room.minX + room.wallT / 2 + r);
-    expect(b.maxZ).toBeLessThanOrEqual(room.maxZ - room.wallT / 2 - r);
-    expect(b.minZ).toBeGreaterThanOrEqual(room.minZ + room.wallT / 2 + r);
+  // The room stopped being walked through on 2026-09-18, and the walk clamp
+  // and spawn that these two tests used to hold went with it. What replaced
+  // them is one fixed eye. Whether Steve is actually IN its view is a question
+  // for real geometry, and tests/steve-view.test.mjs answers it through real
+  // three.js; these only hold the eye to the floor plan.
+
+  test('the eye stands inside the room, in front of the closet, not in it', () => {
+    const { room, closet } = T.LAYOUT;
+    const eye = CFG.camera.position;
+    const inner = room.wallT / 2;
+    expect(eye.x).toBeGreaterThan(room.minX + inner);
+    expect(eye.x).toBeLessThan(room.maxX - inner);
+    expect(eye.z).toBeGreaterThan(room.minZ + inner);
+    // North of the closet's front wall, which is what "in front of the closet
+    // doors" means here. South of it would be inside the closet.
+    expect(eye.z).toBeLessThan(closet.minZ - inner);
+    // And across the closet opening from east to west, not beside it
+    expect(eye.x).toBeGreaterThan(T.LAYOUT.closetOpening.minX);
+    expect(eye.x).toBeLessThan(T.LAYOUT.closetOpening.maxX);
   });
 
-  test('the spawn stands inside the clamp, in the entry end of the room', () => {
-    const b = CFG.worldBounds;
-    expect(CFG.spawn.x).toBeGreaterThan(b.minX);
-    expect(CFG.spawn.x).toBeLessThan(b.maxX);
-    expect(CFG.spawn.z).toBeGreaterThan(b.minZ);
-    expect(CFG.spawn.z).toBeLessThan(b.maxZ);
-    // South of center: the visitor arrives from the doorway side
-    expect(CFG.spawn.z).toBeGreaterThan(0);
+  test('the eye is at a standing height and aims down the room, not into the closet', () => {
+    const { position: eye, lookAt } = CFG.camera;
+    expect(eye.y).toBeGreaterThan(1.3);
+    expect(eye.y).toBeLessThan(1.9);
+    // Looking north, away from the closet doors at its back
+    expect(lookAt.z).toBeLessThan(eye.z);
+  });
+
+  test('the view turns all the way round, and a phone gets a wider lens', () => {
+    // A room with something worth finding on all four walls, so the pan
+    // wraps rather than stopping at a clamp (maxAngle would be ignored, so it
+    // is not set and cannot mislead anybody reading the config).
+    const { portrait } = CFG.camera;
+    expect(portrait.pan.wrap).toBe(true);
+    expect(portrait.pan).not.toHaveProperty('maxAngle');
+    expect(portrait.fov).toBeGreaterThan(CFG.camera.fov);
+    // The walking-era keys are gone rather than lingering, unread.
+    expect(CFG).not.toHaveProperty('spawn');
+    expect(CFG).not.toHaveProperty('worldBounds');
   });
 
   test('every discovery on the checklist is a wired, unique id', () => {
     const ids = CFG.checklist.items.map((item) => item.id);
     expect(new Set(ids).size).toBe(ids.length);
-    // The six discoveries: the greeter and whiteboard special paths plus
+    // The six discoveries: the greeter and wall-display special paths plus
     // the checklistId-carrying props in main.js's PROP_CONTENT
-    expect(ids).toEqual(['hello', 'desk', 'cat', 'board', 'closet', 'litter']);
+    expect(ids).toEqual(['hello', 'desk', 'cat', 'dashboard', 'closet', 'litter']);
     CFG.checklist.items.forEach((item) => {
       expect(typeof item.label).toBe('string');
       expect(typeof item.short).toBe('string');

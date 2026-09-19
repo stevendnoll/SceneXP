@@ -10,7 +10,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="Step inside Steve's tiny home office, the room where SceneXP gets built. A walkable 3D micro-environment with a standing desk, a whiteboard with the plan, and a tuxedo cat asleep by the window.">
+    <meta name="description" content="Step inside Steve's tiny home office, the room where SceneXP gets built. A 3D micro-environment you can look all the way around, with a standing desk, the room's own source code on the monitor, and a tuxedo cat asleep by the window.">
     <meta name="theme-color" content="#335241">
     <meta name="author" content="Steve Noll">
 
@@ -26,7 +26,7 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="Steve's Home Office">
-    <meta property="og:description" content="A walkable 3D model of the tiny home office where SceneXP gets built. Step in, look around, and say hi to Steve at his standing desk.">
+    <meta property="og:description" content="A 3D model of the tiny home office where SceneXP gets built. Step in, look all the way around, and say hi to Steve at his standing desk.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/steve/">
@@ -53,7 +53,7 @@
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Steve's Home Office">
-    <meta name="twitter:description" content="A walkable 3D model of the tiny home office where SceneXP gets built. Step in and look around.">
+    <meta name="twitter:description" content="A 3D model of the tiny home office where SceneXP gets built. Step in and look all the way around.">
     <meta name="twitter:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=1">
     <meta name="twitter:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk working on SceneXP code, a tuxedo cat sleeps on a small navy desk by the window, and a whiteboard on the green wall reads delight visitors, honor the honorees, ship it.">
 
@@ -66,19 +66,19 @@
       "@id": "https://www.scenexp.com/steve/#website",
       "url": "https://www.scenexp.com/steve/",
       "name": "Steve's Home Office",
-      "description": "A walkable 3D model of the home office in Steve's house where SceneXP gets built.",
+      "description": "A 3D model of the home office in Steve's house where SceneXP gets built, to look all the way around.",
       "inLanguage": "en-US"
     }
     </script>
 
     <title>Steve's Home Office</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=4" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=6" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=4">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=6">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -101,16 +101,37 @@
          heading found nothing at all. -->
     <h1 class="sr-only">Steve's Home Office</h1>
 
+    <!-- ===== THE THINGS IN THE ROOM, FOR ANYBODY WITHOUT A POINTER =========
+         Every story in here opens from a click or a tap on the 3D view, which
+         is a raycast from the pointer and nothing else. This is the other
+         route: one button per thing in the room, filled in by the shared
+         proplist part from the same card table the clicks read, so a row
+         always names its card. Choosing one opens exactly what clicking that
+         thing would.
+
+         OFF SCREEN, NOT INVISIBLE. It sits above the top of the frame and
+         slides down while anything in it has focus, the way the skip link
+         does, so a sighted keyboard visitor can see where they are and a
+         pointer visitor never sees it at all (which keeps the discovery hunt's
+         answers out of view). `hidden` until the welcome card is dismissed, so
+         it is never a tab stop behind that card. -->
+    <section id="prop-panel" class="prop-panel" aria-labelledby="prop-panel-heading" hidden>
+        <h2 id="prop-panel-heading" class="prop-panel-heading">Things in the room</h2>
+        <p class="prop-panel-note">Choose anything for a little of its story. Escape closes
+            whatever opens, and Tab moves on to the view controls.</p>
+        <ul id="prop-list" class="prop-list"></ul>
+    </section>
+
     <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
          a plain-text intro and links to the classic site. -->
     <noscript>
         <div class="noscript-fallback">
             <h1>Steve's Home Office</h1>
-            <p>This is a walkable 3D model of the developer's tiny home office,
+            <p>This is a 3D model of the developer's tiny home office,
                 which needs JavaScript to run. It is the room where SceneXP
                 itself gets built: a standing desk with a MacBook and a big
-                Samsung monitor, a whiteboard with the plan on it, his son's
-                little blue desk, and a tuxedo cat asleep in the window light.
+                Samsung monitor, his son's little blue desk, and a tuxedo cat
+                asleep in the window light.
                 Steve is in there right now, typing away on the very site you
                 are reading. If you would like a small world like this built
                 for someone you love, he would be glad to hear from you.</p>
@@ -139,8 +160,8 @@
             <p class="subtitle">Steve is at his desk, building SceneXP</p>
             <p class="click-prompt">Click to step inside</p>
             <div class="controls-hint">
-                <span>WASD</span> Move
-                <span>MOUSE</span> Look
+                <span>LOOK AROUND</span> Drag the room, or use the arrow keys. It turns all the way around.
+                <span>LOOK CLOSER</span> Click anything in here, or Steve himself, for a little of its story.
             </div>
             <!-- The one link back to the directory, replacing the floating Home
                  button (2026-09-07): Home sat in the corner of the live scene
@@ -164,10 +185,6 @@
         </div>
     </div>
 
-    <div id="hud">
-        <div class="crosshair" aria-hidden="true"></div>
-        <div id="look-label" class="look-label" role="status" aria-live="polite"></div>
-    </div>
 
     <!-- Confirm card shown when a piece is activated. Kept for the shared modal
          plumbing (this theme hangs no gallery pieces, so it never opens). -->
@@ -196,11 +213,11 @@
                     modeled after my real home office. Make yourself at home,
                     just mind the cat. She had a long night.</p>
                 <ul class="help-list">
-                    <li class="help-desktop"><strong>Move:</strong> <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or the arrow keys.</li>
-                    <li class="help-desktop"><strong>Look:</strong> move the mouse. Click the scene once to capture the cursor. Press <kbd>Esc</kbd> to release it.</li>
-                    <li class="help-mobile"><strong>Move &amp; look:</strong> use the left joystick to walk and the right joystick to look around.</li>
-                    <li><strong>Look around:</strong> <span class="help-verb">click</span> the things in here. Most of them have a story, and the whiteboard keeps track of what you have found.</li>
-                    <li><strong>Settings:</strong> the gear icon (top-right) adjusts movement, look sensitivity, and brightness.</li>
+                    <li class="help-desktop"><strong>Look around:</strong> drag the room, or hold the arrow keys or <kbd>A</kbd> and <kbd>D</kbd>. It turns all the way around. Scroll to zoom.</li>
+                    <li class="help-mobile"><strong>Look around:</strong> drag the room with a finger, and pinch to zoom. It turns all the way around.</li>
+                    <li><strong>Look closer:</strong> <span class="help-verb">click</span> the things in here. Most of them have a story.</li>
+                    <li class="help-desktop"><strong>No mouse?</strong> Press <kbd>Tab</kbd> for a list of everything in the room.</li>
+                    <li><strong>Settings:</strong> the gear icon (top-right) sets the brightness.</li>
                 </ul>
                 <button class="piece-cancel" data-close>Thanks, Steve!</button>
             </div>
@@ -216,7 +233,6 @@
                 <h2 id="dialog-title" class="piece-title">In the Office</h2>
                 <p id="dialog-message" class="piece-subtitle"></p>
                 <button class="piece-enter dialog-primary" type="button" data-close>Keep exploring</button>
-                <button id="dialog-return-btn" class="piece-cancel dialog-return hidden" type="button">Back to the door</button>
             </div>
         </div>
     </div>
@@ -256,7 +272,7 @@
                 <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few discoveries in&nbsp; ★</p>
                 <h2 id="nudge-title" class="piece-title">Enjoying the visit?</h2>
                 <p class="piece-subtitle">Thanks for looking around. This is a 3D model of the real home office
-                    where SceneXP gets built, desk, whiteboard, cat and all. If you would like something like it
+                    where SceneXP gets built, desk, monitor, cat and all. If you would like something like it
                     built for someone you care about, I would love to hear from you. No rush, I am not going
                     anywhere.</p>
                 <a id="nudge-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
@@ -265,33 +281,63 @@
         </div>
     </div>
 
-    <!-- Whiteboard close-up (opens when the whiteboard on the wall is clicked).
-         The canvas is painted with the same drawing as the in-world board. -->
-    <div id="whiteboard-view" class="hidden" role="dialog" aria-modal="true" aria-label="The office whiteboard, up close">
-        <div class="whiteboard-backdrop" data-close></div>
-        <div class="whiteboard-frame">
-            <div class="whiteboard-surface">
-                <canvas id="whiteboard-canvas" class="whiteboard-canvas"></canvas>
+    <!-- Visitor-activity dashboard (opens when the wall display is clicked).
+         DOM rather than a painted canvas, so it scrolls, takes the keyboard,
+         and reads aloud. The shared part (analytics-1.0.0.js) fills the body,
+         the scene picker and the action checkboxes from the day's snapshot. -->
+    <div id="analytics-view" class="hidden" role="dialog" aria-modal="true" aria-labelledby="analytics-title">
+        <div class="analytics-backdrop" data-close></div>
+        <div class="analytics-panel">
+            <div class="analytics-header">
+                <div class="analytics-title-wrap">
+                    <h2 id="analytics-title">Visitor activity</h2>
+                    <p id="analytics-status" class="analytics-status" role="status" aria-live="polite"></p>
+                </div>
+                <div class="analytics-nav">
+                    <button id="analytics-prev" class="analytics-navbtn" type="button"
+                        aria-label="Show the day before">&lsaquo;</button>
+                    <span id="analytics-date" class="analytics-date"></span>
+                    <button id="analytics-next" class="analytics-navbtn" type="button"
+                        aria-label="Show the day after">&rsaquo;</button>
+                </div>
+                <button id="analytics-collapse-all" class="analytics-collapseall" type="button"
+                    aria-label="Collapse all sessions">Collapse all</button>
+                <button class="analytics-close" type="button"
+                    aria-label="Step back from the display" data-close>&times;</button>
             </div>
-            <div class="whiteboard-tray" aria-hidden="true"></div>
-        </div>
-        <p id="whiteboard-caption" class="whiteboard-caption"></p>
-        <p class="whiteboard-hint" aria-hidden="true">Drag to pan across the board</p>
-        <button class="whiteboard-close" aria-label="Step back from the whiteboard" data-close>&times;</button>
-    </div>
 
-    <div id="touch-controls">
-        <div id="joystick-zone">
-            <div class="joystick-base-fixed">
-                <div class="joystick-thumb-fixed"></div>
+            <div class="analytics-controls">
+                <label class="analytics-field" for="analytics-group">
+                    Group by
+                    <select id="analytics-group" class="analytics-select">
+                        <option value="session">Visit</option>
+                        <option value="scene">Scene</option>
+                    </select>
+                </label>
+                <label class="analytics-field" for="analytics-scene">
+                    Scene
+                    <select id="analytics-scene" class="analytics-select"></select>
+                </label>
+
+                <fieldset class="afilter">
+                    <legend class="afilter-legend">
+                        <span>Show</span>
+                        <span id="analytics-filter-summary" class="afilter-summary"></span>
+                        <button id="analytics-select-all" class="afilter-btn" type="button">All</button>
+                        <button id="analytics-clear-all" class="afilter-btn" type="button">None</button>
+                    </legend>
+                    <div id="analytics-actions"></div>
+                </fieldset>
             </div>
+
+            <div id="analytics-body" class="analytics-body"></div>
+
+            <p class="analytics-foot">
+                Anonymous and aggregated. Throwaway labels only, with no names, no addresses,
+                and nothing that could pick one device out from another.
+                <a href="/privacy.html">How this works</a>
+            </p>
         </div>
-        <div id="look-joystick-zone">
-            <div class="joystick-base-fixed">
-                <div class="joystick-thumb-fixed"></div>
-            </div>
-        </div>
-        <div id="tap-zone"></div>
     </div>
 
     <!-- Floating controls -->
@@ -302,8 +348,8 @@
          screen above and the floats beside it each moved up a slot (the
          shared sheet's ladder was re-based, so no rule is needed here). -->
     <!-- (No autopilot tour here: the office is one small room, best
-         explored on foot.) -->
-    <button id="settings-btn" class="ui-float settings-btn" title="Movement settings" aria-label="Movement settings"
+         seen from where you stand.) -->
+    <button id="settings-btn" class="ui-float settings-btn" title="Settings" aria-label="Settings"
         aria-controls="settings-panel" aria-expanded="false">
         <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
@@ -317,16 +363,6 @@
             <button id="settings-close" class="settings-close" aria-label="Close">&times;</button>
         </div>
         <div class="settings-body">
-            <label class="settings-label">
-                Walk Speed
-                <input type="range" id="walk-speed-slider" min="2" max="14" step="0.5" value="6.5">
-                <span class="settings-value" id="walk-speed-value">6.5</span>
-            </label>
-            <label class="settings-label">
-                Look Sensitivity
-                <input type="range" id="look-speed-slider" min="0.5" max="4" step="0.1" value="1.0">
-                <span class="settings-value" id="look-speed-value">1.0</span>
-            </label>
             <label class="settings-label">
                 Ambient Brightness
                 <input type="range" id="settings-light-slider" min="0" max="1.5" step="0.05" value="1">
@@ -352,7 +388,7 @@
         </div>
     </div>
 
-    <canvas id="game-canvas" role="img" aria-label="A walkable 3D model of Steve's home office"></canvas>
+    <canvas id="game-canvas" role="img" aria-label="A 3D view of Steve's home office from beside the closet door: Steve works at his sit-stand desk, seen in profile, and a tuxedo cat sleeps on a small blue desk by the window"></canvas>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

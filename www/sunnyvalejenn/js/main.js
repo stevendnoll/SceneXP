@@ -14,10 +14,16 @@
  * tilt, and pinch on touch), and one raycast per tap to see what the
  * visitor pointed at, answered in the host's voice by the dialog card.
  *
+ * Every story also has a route that needs no pointer: an off-screen list
+ * of the room's things (the shared proplist part) that slides into view as
+ * soon as anything in it has focus. Until 2026-09-18 the only way to open a
+ * card was a raycast from a click or a tap, so a keyboard or screen-reader
+ * visitor could reach the welcome card, look around, and leave without one.
+ *
  * Future contributors: this file (with www/jamar/js/main.js and
  * www/gavin/js/main.js) is the template for "living diorama"
  * experiences. If your scene wants walking and clicking instead, start
- * from www/steve/js/main.js, which wires the shared controls.
+ * from www/interstate/js/main.js, which wires the shared controls.
  */
 
 import { SVJ_CONFIG } from './config.min.js';
@@ -32,6 +38,7 @@ import {
 } from './store.min.js';
 import { getOutdoorPropMeshes } from '../../shared/js/world-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { installPropList, propListItems } from '../../shared/js/proplist-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
 
@@ -44,6 +51,7 @@ const state = {
 
 // DOM references (resolved in init)
 let canvas, loadingScreen, blocker;
+let propPanel;   // the off-screen list of the room's things (keyboard route)
 let dialogModal, dialogTitle, dialogMessage, dialogCta;
 let dialogOpen = false;   // one dialog at a time; taps pause while it's up
 
@@ -114,6 +122,7 @@ async function init() {
     dialogMessage = document.getElementById('dialog-message');
     dialogCta = document.getElementById('dialog-cta');
     nudgeModal = document.getElementById('nudge-modal');
+    propPanel = document.getElementById('prop-panel');
 
     if (!canvas) return;
 
@@ -320,6 +329,37 @@ function setupEventListeners() {
         signal
     });
 
+    setupPropList(signal);
+}
+
+// ---- The room's things, without a pointer ----------------------------------
+
+/** Fill the off-screen list with every registered prop that has a card, in
+ *  the card table's order and under the card's own title. A card written for
+ *  something never registered in the room gets no row, because a row that
+ *  opens nothing is worse than no row. */
+function setupPropList(signal) {
+    const list = document.getElementById('prop-list');
+    if (!list) return;
+    const kinds = getOutdoorPropMeshes()
+        .map(g => g && g.userData && g.userData.propKind)
+        .filter(Boolean);
+    installPropList({
+        list,
+        items: propListItems(PROP_CONTENT, kinds),
+        onChoose: chooseFromList,
+        signal
+    });
+}
+
+/** A row was chosen: open exactly the card a click on that thing would. */
+function chooseFromList(kind) {
+    if (!state.isLoaded || dialogOpen || nudgeOpen) return;
+    // Not while the welcome card is up. The panel is `hidden` until then, so
+    // nothing should reach this, but a card opening over the welcome card
+    // would be a worse failure than a row that does nothing.
+    if (blocker && !blocker.classList.contains('hidden')) return;
+    openPropDialog(kind);
 }
 
 // ---- Scene taps: the storytelling props ------------------------------------
@@ -635,6 +675,9 @@ function closeNudgeModal() {
 function beginVisiting() {
     if (!state.isLoaded || !blocker || blocker.classList.contains('hidden')) return;
     blocker.classList.add('hidden');
+    // The list of the room's things becomes a tab stop only now: while the
+    // welcome card was up it would have been one behind it.
+    if (propPanel) propPanel.hidden = false;
     track('begin-visiting');
 }
 

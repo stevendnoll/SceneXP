@@ -17,7 +17,7 @@
  *
  * Future contributors: this file (with www/gavin/js/main.js) is the
  * template for "living diorama" experiences. If your scene wants walking
- * and clicking instead, start from www/steve/js/main.js, which wires the
+ * and clicking instead, start from www/interstate/js/main.js, which wires the
  * shared controls.
  */
 
