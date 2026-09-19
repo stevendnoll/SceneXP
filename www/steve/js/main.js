@@ -2,30 +2,55 @@
 /**
  * main.js - Application entry point for the home office experience.
  *
- * Coordinates the scene, first-person controls, and the office world:
- * Steve at his sit-stand desk building SceneXP (super meta, yes), the
- * tuxedo cat asleep on his son's little blue desk, the wall display with
- * SceneXP's visitor numbers on it, and a small room's worth of stories
- * behind every click.
+ * Coordinates the scene, the view controls, and the office world: Steve at
+ * his sit-stand desk building SceneXP (super meta, yes), the tuxedo cat
+ * asleep on his son's little blue desk, the wall display with SceneXP's
+ * visitor numbers on it, and a small room's worth of stories behind every
+ * click.
+ *
+ * ---- IT STANDS STILL NOW, AND LOOKS AROUND ----
+ *
+ * Until 2026-09-18 this room was walked through: WASD and pointer lock on a
+ * desktop, a pair of joysticks on a phone, collision against every piece of
+ * furniture. In a room this small that was mostly bumping into things, and
+ * the scene's job had become showing one wall screen. So the eye is fixed in
+ * front of the closet doors (view.js has where, and the measurements that
+ * chose it), and the visitor looks around with the shared pan part the way
+ * the diorama scenes do: drag, the arrow buttons, or the keys to turn, pinch
+ * or scroll to zoom.
+ *
+ * The one thing it does that no diorama does is TURN ALL THE WAY ROUND. Those
+ * scenes compose their subject in front of the eye and stop the turn at a
+ * clamp. This room has something worth finding on all four walls, so the pan
+ * part's `wrap` option lets the view circle freely instead.
+ *
+ * ---- EVERY STORY HAS A ROUTE THAT NEEDS NO POINTER ----
+ *
+ * A click on the canvas is a raycast, and a raycast needs a pointer. So the
+ * room also carries an off-screen list of everything in it (the shared
+ * proplist part), which slides into view the moment anything in it has
+ * focus. The wall display is one of its rows, so the dashboard is reachable
+ * without a pointer too, without a button on screen drawing every visitor's
+ * eye to it: it is Steve's own view of the site, and it is meant to be found
+ * rather than advertised.
+ *
+ * Future contributors: for a scene you walk through, start from
+ * www/interstate/js/main.js, which wires the shared controls. This file is
+ * now the example of a fixed eye inside a room that surrounds it.
  */
 
 import { STEVE_CONFIG } from './config.min.js';
+import { composeView } from './view.min.js';
 import { getProofOfWork, bufToHex, installCardFocusTrap, shieldOverlayControl, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
-import { checkCollision } from '../../shared/js/collision-1.0.0.min.js';
+import { initPortraitControls, updatePortraitControls, gestureClaimedTap } from '../../shared/js/pan-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getScene, getRenderer,
     updateDayNightCycle, removeTestObjects, isTouchDevice
 } from '../../shared/js/scene-1.0.0.min.js';
 import {
-    initControls, updateControls, setCollisionCallback,
-    getPlayerPosition, copyPlayerPositionTo, setTapCallback,
-    setMoveSpeed, setMouseSensitivity, setLookJoystickSensitivity, CONTROLS_CONFIG,
-    setPlayerPosition, setPlayerRotation
-} from '../../shared/js/controls-1.0.0.min.js';
-import {
-    initStore, getStoreCollisionBoxes, STORE_CONFIG,
+    initStore,
     updateBackgroundAnimations,
-    updateCheckoutSign, getHelpSign, findClearSpawn,
+    updateCheckoutSign, getHelpSign,
     getOutdoorPropMeshes,
     updateStudio, getDancerMeshes, getRoquiMesh,
     pauseDancerForDialog, resumeDancerFromDialog,
@@ -33,10 +58,7 @@ import {
     updateDashboardScreen,
     setStudioBrightness, updateInteriorAmbientLight
 } from './store.min.js';
-import {
-    initGallery, getGalleryGroup, resolveGalleryPiece,
-    getGalleryPieces, setPieceHighlight
-} from './gallery.min.js';
+import { initGallery, getGalleryGroup, resolveGalleryPiece } from './gallery.min.js';
 import {
     initChecklist, markChecklistItem, onChecklistChange
 } from '../../shared/js/checklist-1.0.0.min.js';
@@ -45,15 +67,16 @@ import {
     initAnalytics, loadAnalytics, startAnalyticsAutoRefresh
 } from '../../shared/js/analytics-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
-import {
-    initListings, buildListings, getListingColliders, SAMPLE_LISTINGS
-} from './listings.min.js';
+import { installPropList, propListItems } from '../../shared/js/proplist-1.0.0.min.js';
+import { initListings, buildListings, SAMPLE_LISTINGS } from './listings.min.js';
 
 // ---- Application state ----------------------------------------------------
 
 const state = {
     isRunning: false,
     isLoaded: false,
+    // True while the welcome card is up. The room is alive behind it; this
+    // only gates the taps and the list until the visitor steps in.
     isPaused: true,
     _modalOpen: false,
     lastTime: 0,
@@ -79,9 +102,10 @@ Object.defineProperty(state, 'isModalOpen', {
 // Background UI that should be removed from the tab order and the accessibility
 // tree while a modal dialog is open, so keyboard/AT focus stays trapped inside
 // the dialog (the genuine focus-trap; `inert` also blocks pointer events, which
-// is fine because the modal's own backdrop covers the scene).
+// is fine because the modal's own backdrop covers the scene). The list of the
+// room's things and the view controls join the chrome here: both are tab stops.
 const MODAL_BG_SELECTOR =
-    '.skip-link, #blocker, #hud, #touch-controls, #settings-btn, #settings-panel, #game-canvas';
+    '.skip-link, #blocker, #prop-panel, .pan-controls, #settings-btn, #settings-panel, #game-canvas';
 let modalReturnFocus = null;
 
 function setBackgroundInert(on) {
@@ -95,6 +119,7 @@ function onModalOpened() {
     // Close the discovery checklist so it doesn't float over the modal backdrop.
     closeChecklistPanel();
     modalReturnFocus = document.activeElement;
+    armCard();
     // Defer one microtask so the specific dialog has been un-hidden first.
     queueMicrotask(() => {
         if (!state.isModalOpen) return;
@@ -104,8 +129,9 @@ function onModalOpened() {
 
 function onModalClosed() {
     setBackgroundInert(false);
-    // Restore focus to wherever it was when the dialog opened (usually the body
-    // or canvas after a 3D click, so no stray focus ring on desktop play).
+    // Restore focus to wherever it was when the dialog opened: the row in the
+    // list of the room's things when that is how it was opened, and the body
+    // after a tap on the room.
     const el = modalReturnFocus;
     modalReturnFocus = null;
     if (el && document.contains(el) && !el.hasAttribute('inert')) {
@@ -113,39 +139,58 @@ function onModalClosed() {
     }
 }
 
+// A CARD OPENS UNDER THE FINGER. Taps are read on touchend now, and a touch
+// spawns a compatibility mouse click a few milliseconds later, by which time
+// the card is already underneath it: a tap on Steve could land on the button
+// his card puts in the same spot. Two belts, the same pair www/automan and
+// www/sunnyvalejenn wear: the touchend below cancels that click, and for
+// CARD_ARM_MS after any card opens a pointer click inside it is swallowed in
+// the capture phase. Keyboard activation is exempt (Enter and Space arrive as
+// a click with `detail` 0, and nobody tabbing was handed a card under a finger).
+const CARD_ARM_MS = 450;
+const CARD_SELECTOR = '#dialog-modal, #help-modal, #piece-modal, #nudge-modal, #complete-modal, #analytics-view, #light-panel';
+let cardArmedAt = 0;
+
+function armCard() {
+    cardArmedAt = Date.now();
+}
+
+function swallowGhostTap(event) {
+    if (!cardArmedAt || Date.now() - cardArmedAt > CARD_ARM_MS) return;
+    if (!event.detail) return;              // keyboard, not a pointer
+    const target = event.target;
+    if (!target || typeof target.closest !== 'function') return;
+    if (!target.closest(CARD_SELECTOR)) return;
+    cardArmedAt = 0;                        // one swallow per opening
+    event.preventDefault();
+    event.stopPropagation();
+    track('ghost-tap');
+}
+
 // DOM references (resolved in init)
-let canvas, loadingScreen, blocker, hud, touchControls;
-let lookLabel, pieceModal, pieceModalTitle, pieceModalSubtitle, pieceModalEnter;
+let canvas, loadingScreen, blocker;
+let pieceModal, pieceModalTitle, pieceModalSubtitle, pieceModalEnter;
 let helpModal;
 let dialogModal, dialogModalTitle, dialogModalMessage;
 let analyticsView;  // the visitor-activity dashboard the wall display opens
+let propPanel;      // the off-screen list of the room's things (keyboard route)
 let lightPanel, lightPanelSlider, lightPanelValue; // the light switch's floating dimmer
 let completeModal; // discovery-complete celebration
 let nudgeModal; // partway "reach out" invitation (reuses the celebration card)
-let dialogReturnBtn; // teleport shortcut inside the shared dialog modal (kept plumbed, never shown: the room is small)
 
 // Whether the dashboard overlay is up. The render loop idles behind it, and
 // the background poll keeps refreshing underneath either way.
 let analyticsOpen = false;
 
-// Raycasting for "look at" highlight and click-to-open
+// Raycasting for tap-to-open
 const raycaster = new THREE.Raycaster();
 raycaster.far = 16;
 const pointer = new THREE.Vector2();
 const _tolPointer = new THREE.Vector2(); // offset sample point for forgiving taps
-const TAP_TOLERANCE_PX = 26;             // hit radius for touch taps / windowed clicks
-let raycastTargets = [];      // hover + click targets (Steve, mainly)
-let clickTargets = [];        // raycastTargets plus the click-only office props
+const TAP_TOLERANCE_PX = 26;             // hit radius for touch taps and clicks
+let clickTargets = [];        // Steve, any NPCs, the gallery group, and every office prop
 
-// Currently looked-at / highlighted target
-let hoveredPiece = null;
-let hoveredHost = false;
-let hoveredDancer = null;
-let _hoverAccum = 0; // throttle accumulator for hover raycasts
 let _elapsed = 0;    // running time for sign bob/billboard animation
-
-// Reusable per-frame objects (avoid GC churn)
-const _playerPos = new THREE.Vector3();
 
 let cleanupController = null;
 
@@ -156,9 +201,6 @@ let cleanupController = null;
 // STEVE_CONFIG.proofOfWork (the legacy 'gallery-pow' storage key is kept so
 // visitors' cached proofs survive).
 
-// The solved proof's hash, kept so the in-world CTAs can stamp a one-tap email
-// with the same "Ref <6 hex>" the contact page uses (cross-checks the access log).
-
 async function init() {
     state.isMobile = isTouchDevice();
     setMobile(state.isMobile); // tag every telemetry ping with mobile vs not
@@ -166,9 +208,6 @@ async function init() {
     canvas = document.getElementById('game-canvas');
     loadingScreen = document.getElementById('loading-screen');
     blocker = document.getElementById('blocker');
-    hud = document.getElementById('hud');
-    touchControls = document.getElementById('touch-controls');
-    lookLabel = document.getElementById('look-label');
     pieceModal = document.getElementById('piece-modal');
     pieceModalTitle = document.getElementById('piece-title');
     pieceModalSubtitle = document.getElementById('piece-subtitle');
@@ -177,8 +216,8 @@ async function init() {
     dialogModal = document.getElementById('dialog-modal');
     dialogModalTitle = document.getElementById('dialog-title');
     dialogModalMessage = document.getElementById('dialog-message');
-    dialogReturnBtn = document.getElementById('dialog-return-btn');
     analyticsView = document.getElementById('analytics-view');
+    propPanel = document.getElementById('prop-panel');
     completeModal = document.getElementById('complete-modal');
     nudgeModal = document.getElementById('nudge-modal');
     lightPanel = document.getElementById('light-panel');
@@ -203,6 +242,7 @@ async function init() {
 
     updateLoadingStatus('Initializing renderer…', 25);
     initScene(canvas, STEVE_CONFIG);
+    placeCamera();
 
     updateLoadingStatus('Framing up the office…', 55);
     initStore();
@@ -248,12 +288,8 @@ async function init() {
     // the overlay below is where the day is actually readable.
     setupAnalytics();
 
-    updateLoadingStatus('Preparing controls…', 90);
-    initControls(STEVE_CONFIG);
-    if (state.isMobile) setTapCallback(handleTapInteraction);
-    setupCollision();
+    updateLoadingStatus('Preparing the view…', 90);
     setupEventListeners();
-    if (state.isMobile) touchControls.classList.add('visible');
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {
@@ -270,6 +306,21 @@ async function init() {
     state.isRunning = true;
     state.lastTime = performance.now();
     getRenderer().setAnimationLoop(animate);
+}
+
+/** Park the camera at the room's one composed viewpoint (view.js). Runs on
+ *  every resize, so turning a phone reframes live. The pan part's turn is an
+ *  offset from the composed aim, so it rides on top of this and survives it. */
+function placeCamera() {
+    const camera = getCamera();
+    if (!camera || !STEVE_CONFIG.camera) return;
+    const aspect = window.innerWidth / window.innerHeight;
+    const view = composeView(STEVE_CONFIG.camera, aspect);
+    camera.fov = view.fov;
+    camera.aspect = aspect;
+    camera.updateProjectionMatrix();
+    camera.position.set(view.position.x, view.position.y, view.position.z);
+    camera.lookAt(view.lookAt.x, view.lookAt.y, view.lookAt.z);
 }
 
 function updateLoadingStatus(message, progress) {
@@ -296,7 +347,12 @@ function setupEventListeners() {
     installCardScrollReset({ signal });
 
     window.addEventListener('pagehide', cleanup);
-    window.addEventListener('resize', handleResize, { signal });
+    // Shared resize first (renderer size + pixel ratio), then re-derive the
+    // fixed viewpoint for the new aspect (the portrait lens widens).
+    window.addEventListener('resize', () => {
+        handleResize();
+        placeCamera();
+    }, { signal });
 
     // iOS Safari ignores `user-scalable=no` (Apple re-enabled zoom in iOS 10 for
     // accessibility), so the only way to keep the immersive 3D view from being
@@ -316,14 +372,25 @@ function setupEventListeners() {
     });
     window.addEventListener('pagehide', endSession);
 
+    // The welcome card: any click, tap, or Enter/Space lets the visitor in.
+    // The room is already alive behind it, so dismissing is all it does.
     if (state.isMobile) {
         document.body.classList.add('is-touch-device');
         const clickPrompt = document.querySelector('.click-prompt');
         if (clickPrompt) clickPrompt.textContent = 'Tap to step inside';
-        blocker.addEventListener('click', startGameMobile, { signal });
-        blocker.addEventListener('touchend', (e) => { e.preventDefault(); startGameMobile(); }, { signal });
-    } else {
-        blocker.addEventListener('click', requestPointerLock, { signal });
+    }
+    if (blocker) {
+        const dismiss = (e) => {
+            if (e) e.preventDefault();
+            beginVisiting();
+        };
+        blocker.addEventListener('click', dismiss, { signal });
+        blocker.addEventListener('touchend', dismiss, { signal });
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Enter' || event.code === 'Space') {
+                if (!blocker.classList.contains('hidden')) beginVisiting();
+            }
+        }, { signal });
     }
 
     // THE DIRECTORY LINK SITS ON TOP OF ALL OF THAT. The whole overlay is the
@@ -332,16 +399,26 @@ function setupEventListeners() {
     // the start events short of it so the anchor can follow its own href.
     shieldOverlayControl(document.getElementById('explore-link'), { signal });
 
-    document.addEventListener('pointerlockchange', onPointerLockChange, { signal });
-    document.addEventListener('pointerlockerror', () => {}, { signal });
-
-    canvas.addEventListener('click', onCanvasClick, { signal });
-    canvas.addEventListener('touchend', onCanvasTap, { signal });
-    const tapZone = document.getElementById('tap-zone');
-    if (tapZone) tapZone.addEventListener('click', onTapZoneClick, { signal });
+    // A click or tap on the room. A tap that merely ends a drag or a pinch
+    // (the pan part's gestures, on this same canvas) belongs to the gesture,
+    // not to a prop.
+    canvas.addEventListener('click', (event) => {
+        if (gestureClaimedTap()) return;
+        checkSceneTap(event.clientX, event.clientY);
+    }, { signal });
+    canvas.addEventListener('touchend', (event) => {
+        // Cancel the compatibility mouse click this touch would spawn: the first
+        // of the two belts described above swallowGhostTap. It also stops the tap
+        // raycasting twice, through the click handler above and this one.
+        if (event.cancelable) event.preventDefault();
+        if (gestureClaimedTap()) return;
+        const touch = event.changedTouches[0];
+        if (touch) checkSceneTap(touch.clientX, touch.clientY);
+    }, { passive: false, signal });
+    document.addEventListener('click', swallowGhostTap, { capture: true, signal });
 
     // Piece modal close
-    pieceModal.querySelectorAll('[data-close]').forEach(el =>
+    if (pieceModal) pieceModal.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closePieceModal, { signal }));
 
     // Hola modal close
@@ -351,9 +428,6 @@ function setupEventListeners() {
     // Dancer/prop dialog modal close
     if (dialogModal) dialogModal.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closeDialogModal, { signal }));
-
-    // Teleport shortcut inside the dialog modal (plumbed but never shown here)
-    if (dialogReturnBtn) dialogReturnBtn.addEventListener('click', returnToSpawn, { signal });
 
     // Dashboard overlay close
     if (analyticsView) analyticsView.querySelectorAll('[data-close]').forEach(el =>
@@ -384,7 +458,7 @@ function setupEventListeners() {
         lightPanelSlider.addEventListener('change', (e) => applyBrightness(parseFloat(e.target.value)), { signal });
     }
 
-    // Escape: close modal / panels, else exit pointer lock
+    // Escape: close whichever panel or card is up
     document.addEventListener('keydown', (event) => {
         if (event.code !== 'Escape') return;
         const settingsPanel = document.getElementById('settings-panel');
@@ -396,16 +470,79 @@ function setupEventListeners() {
             if (menuBtn) { menuBtn.setAttribute('aria-expanded', 'false'); menuBtn.focus(); }
             return;
         }
-        if (state.isModalOpen) { closeActiveModal(); }
-        else if (!state.isPaused) { safeExitPointerLock(); }
+        if (state.isModalOpen) closeActiveModal();
     }, { signal });
 
     // (No autopilot tour in this experience: the office is one small room,
-    // best explored on foot. The shared part is simply not imported.)
+    // best seen from where you stand. The shared part is simply not imported.)
 
+    // The view controls: the shared pan part, running at every screen size like
+    // the other rooms with pan and zoom (alwaysOn, and the 'always-on' CSS
+    // variant that shows its row, which are ONE setting in two places), with
+    // the one difference that the turn WRAPS rather than stopping at a clamp,
+    // because this room surrounds the eye. See config.js.
+    const cam = STEVE_CONFIG.camera;
+    initPortraitControls({
+        getCamera,
+        lookAt: cam.lookAt,
+        baseFov: cam.portrait.fov,
+        landscapeFov: cam.fov,
+        pan: cam.portrait.pan,
+        zoom: cam.portrait.zoom,
+        alwaysOn: true,
+        extraClass: 'always-on',
+        surface: canvas,
+        onFirstUse: (kind) => track(`portrait-${kind}`),
+        signal
+    });
+
+    setupPropList(signal);
     setupSettingsPanel(signal);
     setupNavMenu(signal);
     setupChecklistPanel(signal);
+}
+
+/** Dismiss the welcome card and settle in for the visit. */
+function beginVisiting() {
+    if (!state.isLoaded || !blocker || blocker.classList.contains('hidden')) return;
+    blocker.classList.add('hidden');
+    state.isPaused = false;
+    // The list of the room's things becomes a tab stop only now: while the
+    // welcome card was up it would have been one behind it.
+    if (propPanel) propPanel.hidden = false;
+    track('begin-visiting');
+    surfaceNudgeOnReturn(); // welcome screen just closed: show a nudge left pending
+}
+
+// ---- The room's things, without a pointer ----------------------------------
+
+// The row that stands for Steve himself. Not a propKind (he is the host, with
+// his own card), so it cannot collide with one.
+const HOST_ROW = 'steve';
+
+/** Fill the off-screen list with everything in the room worth a story: Steve
+ *  first, then every registered prop that has a card, in the card table's
+ *  order and under the card's own title, then the light switch, which opens
+ *  the dimmer rather than a card. */
+function setupPropList(signal) {
+    const list = document.getElementById('prop-list');
+    if (!list) return;
+    const kinds = getOutdoorPropMeshes()
+        .map(g => g && g.userData && g.userData.propKind)
+        .filter(Boolean);
+    const items = propListItems(PROP_CONTENT, kinds, {
+        before: getRoquiMesh() ? [{ id: HOST_ROW, label: 'Steve' }] : [],
+        after: kinds.includes('lightswitch') ? [{ id: 'lightswitch', label: 'The Light Switch' }] : []
+    });
+    installPropList({ list, items, onChoose: chooseFromList, signal });
+}
+
+/** A row was chosen: open exactly what a click on that thing would. */
+function chooseFromList(id) {
+    if (state.isPaused || state.isModalOpen) return;
+    if (id === HOST_ROW) { openHelpModal(); return; }
+    const prop = getOutdoorPropMeshes().find(g => g && g.userData && g.userData.propKind === id);
+    if (prop) openPropModal(prop);
 }
 
 // ---- Discovery checklist panel --------------------------------------------
@@ -449,9 +586,10 @@ function setupChecklistPanel(signal) {
 }
 
 // ---- Settings persistence -------------------------------------------------
-// Movement, look, and brightness preferences are remembered for the browser
-// session (sessionStorage) and reapplied on the next load, so a visitor's
-// tweaks survive reloads within a visit.
+// The brightness preference is remembered for the browser session
+// (sessionStorage) and reapplied on the next load, so a visitor's tweak
+// survives reloads within a visit. (Walk speed and look sensitivity lived
+// here too, until the room stopped being walked through.)
 const SETTINGS_STORAGE_KEY = 'steve-settings';
 
 function loadStoredSettings() {
@@ -485,10 +623,6 @@ function setupSettingsPanel(signal) {
     const settingsBtn = document.getElementById('settings-btn');
     const settingsPanel = document.getElementById('settings-panel');
     const settingsClose = document.getElementById('settings-close');
-    const walkSlider = document.getElementById('walk-speed-slider');
-    const lookSlider = document.getElementById('look-speed-slider');
-    const walkValue = document.getElementById('walk-speed-value');
-    const lookValue = document.getElementById('look-speed-value');
     const lightSlider = document.getElementById('settings-light-slider');
     const lightValue = document.getElementById('settings-light-value');
     if (!settingsBtn || !settingsPanel) return;
@@ -514,64 +648,22 @@ function setupSettingsPanel(signal) {
     };
 
     // Drive every side effect off the panel's visibility, however it changes
-    // (gear toggle, close button, Escape, menu opening, pointer lock): keep
-    // aria-expanded in sync, manage the outside-click-to-close listener, and on
-    // touch devices tuck away the joysticks and the full-screen tap zone while
-    // the panel is up so they can't steal taps/drags from the sliders.
+    // (gear toggle, close button, Escape, menu opening): keep aria-expanded in
+    // sync and manage the outside-click-to-close listener.
     const onSettingsVisibilityChanged = () => {
         const open = !settingsPanel.classList.contains('hidden');
         settingsBtn.setAttribute('aria-expanded', String(open));
-        if (open) {
-            document.addEventListener('pointerdown', onSettingsOutsidePointer, true);
-            if (state.isMobile && touchControls) touchControls.classList.remove('visible');
-        } else {
-            document.removeEventListener('pointerdown', onSettingsOutsidePointer, true);
-            // Bring the joysticks back only when mobile play is actually underway.
-            if (state.isMobile && !state.isPaused && touchControls) touchControls.classList.add('visible');
-        }
+        if (open) document.addEventListener('pointerdown', onSettingsOutsidePointer, true);
+        else document.removeEventListener('pointerdown', onSettingsOutsidePointer, true);
     };
     new MutationObserver(onSettingsVisibilityChanged).observe(settingsPanel, { attributes: true, attributeFilter: ['class'] });
     onSettingsVisibilityChanged();
 
-    // Touchscreen devices use the on-screen joysticks, which feel best with a
-    // gentler walk speed and look sensitivity than mouse + keyboard. A value
-    // remembered from earlier this session takes precedence over the default.
-    const stored = loadStoredSettings();
-    const defaultWalk = state.isMobile ? 5 : CONTROLS_CONFIG.moveSpeed;
-    const defaultLook = state.isMobile ? 0.9 : 1.0;
-    const walk = readNumericSetting(stored, 'walk', 2, 14, defaultWalk);      // matches slider min/max
-    const look = readNumericSetting(stored, 'look', 0.5, 4, defaultLook);     // matches slider min/max
-
-    // input updates live; persistence waits for the commit ('change') so a drag
-    // isn't dozens of synchronous sessionStorage writes per second.
-    if (walkSlider) {
-        setMoveSpeed(walk);
-        walkSlider.value = walk;
-        walkValue.textContent = walk;
-        walkSlider.addEventListener('input', (e) => {
-            const val = parseFloat(e.target.value);
-            setMoveSpeed(val);
-            walkValue.textContent = val;
-        }, { signal });
-        walkSlider.addEventListener('change', (e) => saveSetting('walk', parseFloat(e.target.value)), { signal });
-    }
-    if (lookSlider) {
-        setMouseSensitivity(0.002 * look);
-        setLookJoystickSensitivity(1.2 * look);
-        lookSlider.value = String(look);
-        lookValue.textContent = look.toFixed(1);
-        lookSlider.addEventListener('input', (e) => {
-            const val = parseFloat(e.target.value);
-            lookValue.textContent = val.toFixed(1);
-            setMouseSensitivity(0.002 * val);
-            setLookJoystickSensitivity(1.2 * val);
-        }, { signal });
-        lookSlider.addEventListener('change', (e) => saveSetting('look', parseFloat(e.target.value)), { signal });
-    }
-
     // Ambient Brightness: this slider and the light switch's floating
     // dimmer are the same control in two places. applyBrightness keeps
-    // them (and the room) in sync.
+    // them (and the room) in sync. A value remembered from earlier this
+    // session takes precedence over the default.
+    const stored = loadStoredSettings();
     settingsLightSlider = lightSlider;
     settingsLightValue = lightValue;
     if (lightSlider) {
@@ -614,15 +706,9 @@ function openLightPanel(switchObj) {
     if (!lightPanel) return;
     state.isModalOpen = true;
     track('open-light-switch');
-    safeExitPointerLock();
-    clearHover();
     if (switchObj) _lightSwitchTarget = switchObj;
     lightPanel.classList.remove('hidden');
     positionLightPanelOverSwitch();
-    hud.classList.remove('visible');
-    // No backdrop, so on touch devices tuck the joysticks away
-    // (resumeGameAfterModal restores them).
-    if (state.isMobile && touchControls) touchControls.classList.remove('visible');
     if (lightPanelSlider) lightPanelSlider.focus();
     // No backdrop, so close on any press outside the panel. Added now, after
     // the opening click's pointerdown has already fired, so that click can't
@@ -636,13 +722,23 @@ function onLightPanelOutsidePointer(event) {
 
 /** Center the panel over the switch by projecting its world position to
  *  screen space, clamped so the whole panel stays on-screen. Falls back to
- *  the CSS position when the camera or switch is unavailable. */
+ *  the CSS position when the camera or switch is unavailable, and when the
+ *  switch is BEHIND the eye: from a fixed spot that turns all the way round,
+ *  a visitor choosing it from the list may well be facing away from it, and
+ *  a point behind the camera projects to the mirror image of where it is. */
 function positionLightPanelOverSwitch() {
     const camera = getCamera();
     if (!lightPanel || !_lightSwitchTarget || !camera) return;
     const p = new THREE.Vector3();
     _lightSwitchTarget.getWorldPosition(p);
     p.project(camera);
+    if (!(p.z < 1)) {
+        lightPanel.style.left = '';
+        lightPanel.style.top = '';
+        lightPanel.style.bottom = '';
+        lightPanel.style.transform = '';
+        return;
+    }
     const w = window.innerWidth, h = window.innerHeight;
     let x = (p.x * 0.5 + 0.5) * w;
     let y = (-p.y * 0.5 + 0.5) * h;
@@ -679,7 +775,6 @@ function setupNavMenu(signal) {
         menuBtn.setAttribute('aria-expanded', 'true');
         const settingsPanel = document.getElementById('settings-panel');
         if (settingsPanel) settingsPanel.classList.add('hidden');
-        if (!state.isPaused) safeExitPointerLock();
         if (focusFirst) {
             const first = navMenu.querySelector('a, button');
             if (first) first.focus();
@@ -730,52 +825,9 @@ function setupNavMenu(signal) {
     }, { signal });
 }
 
-// ---- Pointer lock / start / resume ---------------------------------------
-
-function requestPointerLock() {
-    if (!state.isLoaded) return;
-    tryLockPointer();
-}
-
-// Request pointer lock safely. Browsers that haven't adopted the promise-based
-// API (e.g. Firefox) return undefined rather than a Promise, so guard before
-// calling .catch(); lock failures there surface via the pointerlockerror event.
-function tryLockPointer(onError) {
-    const result = canvas.requestPointerLock();
-    if (result && typeof result.catch === 'function') {
-        result.catch(onError || (() => {}));
-    }
-}
-
-function safeExitPointerLock() {
-    if (document.pointerLockElement) document.exitPointerLock();
-}
-
-function onPointerLockChange() {
-    const settingsPanel = document.getElementById('settings-panel');
-    if (document.pointerLockElement === canvas) {
-        state.isPaused = false;
-        blocker.classList.add('hidden');
-        hud.classList.add('visible');
-        if (settingsPanel) settingsPanel.classList.add('hidden');
-        surfaceNudgeOnReturn(); // welcome screen just closed: show a nudge left pending
-    } else {
-        state.isPaused = true;
-        if (!state.isModalOpen) blocker.classList.remove('hidden');
-        hud.classList.remove('visible');
-        clearHover();
-    }
-}
-
-function startGameMobile() {
-    if (!state.isLoaded || !state.isPaused) return;
-    state.isPaused = false;
-    blocker.classList.add('hidden');
-    hud.classList.add('visible');
-    touchControls.classList.add('visible');
-    surfaceNudgeOnReturn(); // welcome screen just closed: show a nudge left pending
-}
-
+/** After a card closes: surface a celebration or nudge that waited its turn.
+ *  (This used to re-take the pointer lock as well, before the room stopped
+ *  being walked through.) */
 function resumeGameAfterModal() {
     setTimeout(() => {
         // A completion that landed while another modal was open waits its turn,
@@ -787,42 +839,28 @@ function resumeGameAfterModal() {
         }
         // A partway nudge that waited out a modal surfaces here too. Celebration
         // wins if both are pending (it retires the nudge), so they never stack.
-        if (nudgeIsPending() && !state.isModalOpen && openNudgeModal()) return;
-        if (state.isModalOpen) return;
-        if (state.isMobile) {
-            state.isPaused = false;
-            hud.classList.add('visible');
-            touchControls.classList.add('visible');
-        } else {
-            tryLockPointer(() => {
-                state.isPaused = true;
-                blocker.classList.remove('hidden');
-                hud.classList.remove('visible');
-            });
-        }
+        if (nudgeIsPending() && !state.isModalOpen) openNudgeModal();
     }, 200);
 }
 
 // ---- Studio interaction ----------------------------------------------------
 
 function buildRaycastTargets() {
-    raycastTargets = [];
+    const targets = [];
     const galleryGroup = getGalleryGroup();
-    if (galleryGroup) raycastTargets.push(galleryGroup);
+    if (galleryGroup) targets.push(galleryGroup);
     // Steve himself (getRoquiMesh is the shared host seam's legacy name)…
     const host = getRoquiMesh();
-    if (host) raycastTargets.push(host);
+    if (host) targets.push(host);
     // …his floating greeter sign, when the config enables one (off here:
     // the host needs no tag in a room this small, so getHelpSign is null)…
     const helpSign = getHelpSign();
-    if (helpSign) raycastTargets.push(helpSign);
-    // …and any ambient NPCs (none in the office; the seam stays wired).
-    getDancerMeshes().forEach(mesh => raycastTargets.push(mesh));
-
-    // Office props (the desks, the cat, the wall display, the closet, and the
-    // rest) are click-only — they show no hover tooltip, so they live in a
-    // separate list the click test adds in but the hover raycast skips.
-    clickTargets = raycastTargets.concat(getOutdoorPropMeshes());
+    if (helpSign) targets.push(helpSign);
+    // …any ambient NPCs (none in the office; the seam stays wired)…
+    getDancerMeshes().forEach(mesh => targets.push(mesh));
+    // …and the office props: the desks, the cat, the wall display, the
+    // closet, and the rest.
+    clickTargets = targets.concat(getOutdoorPropMeshes());
 }
 
 /** True if the object (or any ancestor) is Steve, or a floating greeter
@@ -856,44 +894,25 @@ function getPropRoot(obj) {
     return null;
 }
 
-function onCanvasClick(event) {
-    if (state.isPaused || state.isModalOpen) return;
-    if (document.pointerLockElement) {
-        pointer.set(0, 0); // crosshair center
-    } else {
-        pointer.set((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
-    }
+/** A click or tap on the room, in client pixels. */
+function checkSceneTap(clientX, clientY) {
+    if (!state.isLoaded || state.isPaused || state.isModalOpen) return;
+    pointer.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
     checkPieceClick();
 }
 
-function onTapZoneClick(event) {
-    if (state.isPaused || state.isModalOpen) return;
-    pointer.set((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
-    checkPieceClick();
-}
-
-function onCanvasTap(event) {
-    if (state.isModalOpen) return;
-    const touch = event.changedTouches[0];
-    pointer.set((touch.clientX / window.innerWidth) * 2 - 1, -(touch.clientY / window.innerHeight) * 2 + 1);
-    checkPieceClick();
-}
-
-function handleTapInteraction(screenX, screenY) {
-    if (state.isPaused || state.isModalOpen) return;
-    pointer.set((screenX / window.innerWidth) * 2 - 1, -(screenY / window.innerHeight) * 2 + 1);
-    checkPieceClick();
-}
-
-/** Nearest intersection under `pointer`. A direct hit (or the pointer-locked
- *  crosshair) is exact; otherwise — a finger tap or windowed-cursor click — a
+/** Nearest intersection under `pointer`. A direct hit is exact; otherwise a
  *  couple of rings of sample rays around the point are tried so small targets
- *  (like the iPhone) are far easier to hit. Returns the intersection or null. */
+ *  (the mouse, the router) are far easier to hit with a fingertip.
+ *
+ *  The rings only run when NOTHING is directly under the pointer, so they can
+ *  never hand a tap to a small prop hiding behind whatever was actually
+ *  touched (the fault www/sunnyvalejenn's first-refusal search needed a depth
+ *  check to fix). Returns the intersection or null. */
 function pickNearestHit(targets, camera) {
     raycaster.setFromCamera(pointer, camera);
     let best = raycaster.intersectObjects(targets, true)[0] || null;
-    // Exact hit, or the precise pointer-locked crosshair: don't widen.
-    if (best || document.pointerLockElement) return best;
+    if (best) return best;
     const rx = (TAP_TOLERANCE_PX * 2) / window.innerWidth;
     const ry = (TAP_TOLERANCE_PX * 2) / window.innerHeight;
     for (const rf of [0.5, 1]) {
@@ -912,11 +931,8 @@ function checkPieceClick() {
     const camera = getCamera();
     if (!camera) return;
 
-    // The click test also includes the click-only studio props (the hover test
-    // does not). Nearest hit wins, so a dancer in front still takes priority
-    // over a prop behind them. pickNearestHit adds a forgiving tap radius for
-    // touch / windowed clicks (crosshair stays exact). The whole world is one
-    // room now, so no sky objects and no indoor gate apply.
+    // Nearest hit wins, so Steve in front of his desk takes priority over the
+    // desk behind him. pickNearestHit adds a forgiving tap radius.
     const hit = pickNearestHit(clickTargets, camera);
     if (!hit) return;
     const obj = hit.object;
@@ -930,84 +946,10 @@ function checkPieceClick() {
     if (piece) openPieceModal(piece);
 }
 
-/** Per-frame: highlight whatever the player is looking at (screen center). */
-function updateHover() {
-    if (state.isPaused || state.isModalOpen) { clearHover(); return; }
-    const camera = getCamera();
-    if (!camera) return;
-    pointer.set(0, 0);
-    raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(raycastTargets, true);
-    const hitObj = hits.length ? hits[0].object : null;
-
-    // Roqui takes priority when centered in the crosshair.
-    if (hitObj && isHostObject(hitObj)) {
-        if (!hoveredHost) {
-            clearHover();
-            hoveredHost = true;
-            if (lookLabel) {
-                lookLabel.textContent = `Say hi to Steve? (${state.isMobile ? 'tap' : 'click'} to chat)`;
-                lookLabel.classList.add('visible');
-            }
-            if (hud) hud.classList.add('targeting');
-        }
-        return;
-    }
-    if (hoveredHost) clearHover();
-
-    // A dancer in the crosshair.
-    const dancer = hitObj ? getDancerRoot(hitObj) : null;
-    if (dancer) {
-        if (hoveredDancer !== dancer) {
-            clearHover();
-            hoveredDancer = dancer;
-            if (lookLabel) {
-                const verb = state.isMobile ? 'tap' : 'click';
-                lookLabel.textContent = `${verb} to say hi between songs`;
-                lookLabel.classList.add('visible');
-            }
-            if (hud) hud.classList.add('targeting');
-        }
-        return;
-    }
-    if (hoveredDancer) clearHover();
-
-    // Clickable props (the mirror, the speakers, the disco ball) are
-    // intentionally NOT hover-highlighted — clicking still pops a line, but we
-    // don't want a tooltip drawing the eye to every corner of the studio.
-
-    const data = hitObj ? resolveGalleryPiece(hitObj) : null;
-
-    if (data && data.galleryId !== (hoveredPiece && hoveredPiece.section.id)) {
-        clearHover();
-        hoveredPiece = getGalleryPieces().find(p => p.section.id === data.galleryId) || null;
-        if (hoveredPiece) {
-            setPieceHighlight(hoveredPiece, true);
-            if (lookLabel) {
-                lookLabel.textContent = `${data.galleryTitle} (${state.isMobile ? 'tap' : 'click'} to open)`;
-                lookLabel.classList.add('visible');
-            }
-            hud.classList.add('targeting');
-        }
-    } else if (!data && hoveredPiece) {
-        clearHover();
-    }
-}
-
-function clearHover() {
-    if (hoveredPiece) setPieceHighlight(hoveredPiece, false);
-    hoveredPiece = null;
-    hoveredHost = false;
-    hoveredDancer = null;
-    if (lookLabel) lookLabel.classList.remove('visible');
-    if (hud) hud.classList.remove('targeting');
-}
-
 function openPieceModal(data) {
+    if (!pieceModal) return;
     state.isModalOpen = true;
     track('open-piece', { id: data.galleryId, title: data.galleryTitle });
-    safeExitPointerLock();
-    clearHover();
     if (pieceModalTitle) pieceModalTitle.textContent = data.galleryTitle;
     if (pieceModalSubtitle) pieceModalSubtitle.textContent = data.gallerySubtitle || '';
     if (pieceModalEnter) {
@@ -1015,11 +957,11 @@ function openPieceModal(data) {
         pieceModalEnter.textContent = `Enter ${data.galleryTitle} →`;
     }
     pieceModal.classList.remove('hidden');
-    hud.classList.remove('visible');
     if (pieceModalEnter) pieceModalEnter.focus();
 }
 
 function closePieceModal() {
+    if (!pieceModal) return;
     pieceModal.classList.add('hidden');
     state.isModalOpen = false;
     resumeGameAfterModal();
@@ -1030,8 +972,6 @@ function openHelpModal() {
     state.isModalOpen = true;
     track('open-hello');
     markChecklistItem('hello');
-    safeExitPointerLock();
-    clearHover();
     // Steve pauses his typing and turns around to chat; the cat sleeps on.
     pauseRoquiForDialog();
     // Tailor the control tips to the input device.
@@ -1039,7 +979,6 @@ function openHelpModal() {
     helpModal.querySelectorAll('.help-mobile').forEach(el => { el.hidden = !state.isMobile; });
     helpModal.querySelectorAll('.help-verb').forEach(el => { el.textContent = state.isMobile ? 'tap' : 'click'; });
     helpModal.classList.remove('hidden');
-    hud.classList.remove('visible');
     const dismiss = helpModal.querySelector('.piece-cancel');
     if (dismiss) dismiss.focus();
 }
@@ -1086,22 +1025,6 @@ function pickRandomLine(list) {
 // it resumes the right behavior ('dancer' | 'prop'; only dancers un-pause).
 let dialogKind = null;
 
-/** Show/hide the teleport shortcut. The studio is one small room, so it is
- *  never shown here, but the plumbing stays for the next experience that
- *  copies this one. */
-function setDialogReturnVisible(show) {
-    if (dialogReturnBtn) dialogReturnBtn.classList.toggle('hidden', !show);
-}
-
-/** Teleport the player back to their start spot at the back of the class and
- *  close the dialog. Unused in this small room; kept wired for the seam. */
-function returnToSpawn() {
-    const spot = findClearSpawn(STEVE_CONFIG.spawn.x, STEVE_CONFIG.spawn.z, CONTROLS_CONFIG.playerRadius);
-    setPlayerPosition(spot.x, CONTROLS_CONFIG.eyeHeight, spot.z);
-    setPlayerRotation(STEVE_CONFIG.rotation.yaw, 0);
-    closeDialogModal();
-}
-
 /** Open the shared dialog modal for a dancer in the class. */
 function openDancerModal(dancerMesh) {
     if (!dialogModal) return;
@@ -1109,17 +1032,13 @@ function openDancerModal(dancerMesh) {
     dialogKind = 'dancer';
     track('greet-dancer');
     markChecklistItem('dancer');
-    safeExitPointerLock();
-    clearHover();
     // The clicked dancer steps out and turns to chat; the class dances on.
     pauseDancerForDialog(dancerMesh);
 
     if (dialogModalTitle) dialogModalTitle.textContent = 'Between Tasks';
     // Random each click so re-clicking the same dancer gives a fresh line.
     if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(DANCER_LINES);
-    setDialogReturnVisible(false);
     dialogModal.classList.remove('hidden');
-    hud.classList.remove('visible');
     const dismiss = dialogModal.querySelector('.piece-cancel');
     if (dismiss) dismiss.focus();
 }
@@ -1129,7 +1048,8 @@ function openDancerModal(dancerMesh) {
 // semicolons. Two lines apiece so a second click gives something new. Props
 // that are discoveries carry a checklistId so a click ticks the list. The
 // wall display is special: clicking it opens the dashboard overlay instead
-// (see openPropModal).
+// (see openPropModal). The titles double as the rows of the list of the
+// room's things (setupPropList), so a row always names its card.
 const PROP_CONTENT = {
     dashboard: {
         // Opens the dashboard overlay instead (see openPropModal), so no lines.
@@ -1315,13 +1235,9 @@ function openPropModal(propObj) {
     dialogKind = 'prop';
     track('click-prop', { kind });
     if (content.checklistId) markChecklistItem(content.checklistId);
-    safeExitPointerLock();
-    clearHover();
     if (dialogModalTitle) dialogModalTitle.textContent = content.title;
     if (dialogModalMessage) dialogModalMessage.textContent = content.lines[propTick++ % content.lines.length];
-    setDialogReturnVisible(false);
     dialogModal.classList.remove('hidden');
-    hud.classList.remove('visible');
     const dismiss = dialogModal.querySelector('.piece-cancel');
     if (dismiss) dismiss.focus();
 }
@@ -1357,16 +1273,21 @@ function setupAnalytics() {
     startAnalyticsAutoRefresh();
 }
 
+/** Open the dashboard: from a click on the wall display, or from its row in
+ *  the list of the room's things. Either one is finding the display, so either
+ *  ticks "Notice the big screen behind Steve".
+ *
+ *  (It had a button in the corner as well, briefly, on 2026-09-18. Steve took
+ *  it out the same day: the dashboard is mostly his, and a button in the
+ *  chrome would have pointed every visitor at it. The list keeps it reachable
+ *  without a pointer while staying out of sight of anyone using one.) */
 function openAnalyticsView() {
     if (!analyticsView) return;
     state.isModalOpen = true;
     analyticsOpen = true;
     track('click-prop', { kind: 'dashboard' });
     markChecklistItem('dashboard');
-    safeExitPointerLock();
-    clearHover();
     analyticsView.classList.remove('hidden');
-    hud.classList.remove('visible');
     // Ask for fresh numbers on open rather than showing whatever the last poll
     // left behind, which could be nearly five minutes old.
     loadAnalytics();
@@ -1440,10 +1361,7 @@ function openNudgeModal() {
     markNudgeDone();
     state.isModalOpen = true;
     track('contact-nudge');
-    safeExitPointerLock();
-    clearHover();
     nudgeModal.classList.remove('hidden');
-    hud.classList.remove('visible');
     const enter = nudgeModal.querySelector('.piece-enter');
     if (enter) enter.focus();
     return true;
@@ -1489,10 +1407,7 @@ function maybeCelebrateCompletion() {
 function openCompleteModal() {
     if (!completeModal) return;
     state.isModalOpen = true;
-    safeExitPointerLock();
-    clearHover();
     completeModal.classList.remove('hidden');
-    hud.classList.remove('visible');
     const enter = completeModal.querySelector('.piece-enter');
     if (enter) enter.focus();
 }
@@ -1566,51 +1481,32 @@ function animate() {
     state.deltaTime = Math.min((now - state.lastTime) / 1000, 0.1);
     state.lastTime = now;
     update(state.deltaTime);
-    // While the schedule-board overlay is open it covers the screen, so skip
-    // the (wasted) 3D render — it runs its own lightweight 2D pass.
+    // While the dashboard overlay is open it covers the screen, so skip the
+    // (wasted) 3D render behind it.
     if (!analyticsOpen) render();
 }
 
 function update(deltaTime) {
-    updateControls(deltaTime, state.isPaused);
-
-    copyPlayerPositionTo(_playerPos);
+    const camera = getCamera();
     // Order matters: the day/night pass moves the sun and rewrites the scene
     // lights' intensities every frame, and the interior rig then rebalances
     // against them (nightBoost after dark). Interior after day/night, always.
     updateDayNightCycle(deltaTime);
     updateInteriorAmbientLight();
-    // The class, the mirror twins, the disco ball, the speakers, the music,
-    // and the party lighting
-    updateStudio(_playerPos, deltaTime);
+    // Steve, the cat, the fence birds and the editor cursor. Steve turns to
+    // face whoever is talking to him, and the one who is talking to him is
+    // always standing where the camera is.
+    updateStudio(camera.position, deltaTime);
     updateBackgroundAnimations(deltaTime);
 
     // Bob + billboard the floating greeter sign toward the camera. A no-op
     // when the config leaves the sign off (as it does here); the call stays
     // so flipping greeterSign.enabled back on needs no main.js change.
     _elapsed += deltaTime;
-    updateCheckoutSign(_elapsed, getCamera().position);
+    updateCheckoutSign(_elapsed, camera.position);
 
-    // Hover detection doesn't need to run every frame — ~10 Hz feels instant
-    // and avoids a per-frame raycast (and its array allocation).
-    _hoverAccum += deltaTime;
-    if (_hoverAccum >= 0.1) {
-        _hoverAccum = 0;
-        updateHover();
-    }
-}
-
-// ---- Collision ------------------------------------------------------------
-
-function setupCollision() {
-    // Studio fixtures (the walls, the mirror, Roqui and each dancer's spot,
-    // the speakers, the tables, the bench, the plants), plus the (currently
-    // empty) listing colliders so the stub seam keeps its shape.
-    const boxes = [
-        ...getStoreCollisionBoxes(),
-        ...getListingColliders().map(box => ({ box, type: 'podium' })),
-    ];
-    setCollisionCallback((oldPos, newPos, radius) => checkCollision(oldPos, newPos, radius, boxes));
+    // The view controls last, so the frame renders with this frame's aim.
+    updatePortraitControls(deltaTime);
 }
 
 // ---- Cleanup / state ------------------------------------------------------
@@ -1686,4 +1582,4 @@ if (typeof document !== 'undefined') {
 }
 
 // Exposed for unit tests only; production code uses the named export above.
-export const __test__ = { bufToHex, readNumericSetting, pickLine };
+export const __test__ = { bufToHex, readNumericSetting, pickLine, PROP_CONTENT, HOST_ROW };

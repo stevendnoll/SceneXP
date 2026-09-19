@@ -4,19 +4,29 @@
  *
  * Follows the gavin-main pattern: install THREE then the DOM stand-ins, import
  * main.js so it auto-boots the way a real page load does, and drive the wiring
- * by hand -- pointer lock, hover raycasts, every office dialog, the light
- * switch's floating dimmer panel, the discovery checklist through to the nudge
- * and the (deferred) completion celebration, the settings and nav panels, and
- * the lifecycle events. There is no autopilot here: the office is one small
- * room, and main.js deliberately does not import the shared tour part.
+ * by hand -- the welcome card, taps and clicks on the room, every office
+ * dialog, the light switch's floating dimmer panel, the dashboard by both of
+ * its routes, the list of the room's things, the discovery checklist through
+ * to the nudge and the (deferred) completion celebration, the settings and nav
+ * panels, and the lifecycle events.
+ *
+ * THE ROOM STOPPED BEING WALKED THROUGH ON 2026-09-18. This suite used to drive
+ * pointer lock, a hover crosshair and a pair of joysticks. The eye is fixed now
+ * and the visitor looks around with the shared pan part, so a click is read at
+ * the pointer rather than at a crosshair, and the welcome card simply lets the
+ * visitor in. Whether Steve is actually IN the fixed view is a question for real
+ * geometry: tests/steve-view.test.mjs answers it through real three.js, along
+ * with the full list of the room's things, which needs real prop registrations
+ * that the stub here swallows.
  *
  * Local additions on top of the shared stubs (helpers stay untouched):
  * - a steerable THREE.Raycaster whose intersectObjects returns whatever the
  *   test staged in rayHits, so clicks can land on Steve, the cat, or a prop
- * - a pointer-lock contract on the canvas/document stubs
  * - a MutationObserver recorder (main.js watches panel class changes)
  */
 import { jest } from '@jest/globals';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 
@@ -68,23 +78,13 @@ beforeEach(() => {
     disconnect() {}
   };
 
-  // Pointer-lock contract: request marks the canvas locked and fires the
-  // change event, exit clears it. document.contains lets the modal-close
-  // focus restore run its happy path.
-  const canvas = dom.el('game-canvas');
-  dom.documentStub.pointerLockElement = null;
+  // document.contains lets the modal-close focus restore run its happy path.
   dom.documentStub.contains = () => true;
-  dom.documentStub.exitPointerLock = () => {
-    dom.documentStub.pointerLockElement = null;
-    fire(dom.documentStub, 'pointerlockchange');
-  };
-  canvas.requestPointerLock = () => {
-    dom.documentStub.pointerLockElement = canvas;
-    fire(dom.documentStub, 'pointerlockchange');
-    return Promise.resolve();
-  };
 
   HIDDEN_AT_BOOT.forEach((id) => dom.el(id).classList.add('hidden'));
+  // The list of the room's things carries the `hidden` ATTRIBUTE in the
+  // markup (it is a tab stop to keep out of reach, not a card to toggle).
+  dom.el('prop-panel').hidden = true;
 });
 
 afterEach(() => {
@@ -108,15 +108,26 @@ function stepFrames(n) {
   }
 }
 
-/** Stage rayHits and click the canvas (crosshair pick while pointer-locked). */
+/** Dismiss the welcome card the way a desktop visitor does. */
+function enterRoom() {
+  fire(dom.el('blocker'), 'click');
+}
+
+/** Stage rayHits and click the room at a point. */
 function clickScene(userData, extra) {
   rayHits = userData ? [hitFor(userData, extra)] : [];
   fire(dom.el('game-canvas'), 'click', { clientX: 640, clientY: 400 });
 }
 
+/** Stage rayHits and tap the room with a finger. */
+function tapScene(userData) {
+  rayHits = userData ? [hitFor(userData)] : [];
+  fire(dom.el('game-canvas'), 'touchend', { changedTouches: [{ clientX: 200, clientY: 300 }] });
+}
+
 /** Escape out of the open dialog, then let the resume timers run. Any nudge
  *  or celebration that surfaces from the resume gets escaped too, so the
- *  driver always lands back in locked-and-playing state. */
+ *  driver always lands back in the room with nothing open. */
 async function escapeAndSettle() {
   fire(dom.documentStub, 'keydown', { code: 'Escape' });
   for (let i = 0; i < 4; i++) {
@@ -128,6 +139,13 @@ async function escapeAndSettle() {
   }
 }
 
+const isOpen = (id) => !dom.el(id).classList.contains('hidden');
+
+async function checklistDone(id) {
+  const checklist = await import('../www/shared/js/checklist-1.0.0.min.js');
+  return checklist.getChecklistItems().find((it) => it.id === id).done;
+}
+
 test('auto-boots through the loading screen into the running state', async () => {
   const main = await bootSteve();
 
@@ -135,7 +153,7 @@ test('auto-boots through the loading screen into the running state', async () =>
   expect(state.isRunning).toBe(true);
   expect(state.isLoaded).toBe(true);
   expect(state.isMobile).toBe(false);
-  expect(state.isPaused).toBe(true); // welcome blocker still up
+  expect(state.isPaused).toBe(true); // welcome card still up
 
   expect(dom.el('load-progress').style.width).toBe('100%');
   expect(dom.el('loading-screen').classList.contains('hidden')).toBe(true);
@@ -144,6 +162,11 @@ test('auto-boots through the loading screen into the running state', async () =>
   // replaced the Home button, and needs no label from config: unlike an
   // icon-only button, it says SceneXP.com in its own text.
   expect(dom.el('explore-link').href).toBe('/');
+
+  // The view controls were built, at every screen size.
+  const row = dom.documentStub.querySelector('.pan-controls');
+  expect(row).toBeTruthy();
+  expect(row.classList.contains('always-on')).toBe(true);
 
   expect(dom.loops.length).toBeGreaterThanOrEqual(1);
   stepFrames(120);
@@ -155,7 +178,7 @@ test('survives resize, gestures, visibility loss, and page hide', async () => {
 
   dom.windowStub.innerWidth = 390;
   dom.windowStub.innerHeight = 844;
-  fire(dom.windowStub, 'resize');
+  fire(dom.windowStub, 'resize');   // placeCamera re-derives the portrait lens
   const g = fire(dom.documentStub, 'gesturestart');
   expect(g.defaultPrevented).toBe(true);
   stepFrames(30);
@@ -170,56 +193,59 @@ test('survives resize, gestures, visibility loss, and page hide', async () => {
   expect(dom.replaced).toHaveLength(0);
 });
 
-test('desktop tour: pointer lock, hover, every office dialog, nudge, deferred celebration', async () => {
+test('the welcome card lets the visitor in on a click, and the room waits until then', async () => {
   const main = await bootSteve();
 
-  // Click the welcome blocker: pointer lock engages and play begins.
-  fire(dom.el('blocker'), 'click');
+  // Before the card is dismissed, the room does not answer taps, and the list
+  // of its things is not yet a tab stop hiding behind the card.
+  clickScene({ isShopkeeper: true });
+  expect(isOpen('help-modal')).toBe(false);
+  expect(dom.el('prop-panel').hidden).toBe(true);
+
+  enterRoom();
   expect(main.getState().isPaused).toBe(false);
   expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
-  expect(dom.el('hud').classList.contains('visible')).toBe(true);
+  expect(dom.el('prop-panel').hidden).toBe(false);
 
-  // Hover: Steve in the crosshair, then a clear crosshair.
-  rayHits = [hitFor({ isShopkeeper: true })];
-  stepFrames(10);
-  expect(dom.el('look-label').classList.contains('visible')).toBe(true);
-  expect(dom.el('look-label').textContent).toContain('Steve');
-  expect(dom.el('hud').classList.contains('targeting')).toBe(true);
-  // The dancer-hover seam stays wired even with no ambient NPCs built.
-  rayHits = [hitFor({ isDancer: true })];
-  stepFrames(10);
-  expect(dom.el('look-label').textContent).toContain('say hi');
-  // A gallery-piece hit resolves but matches no built piece (no wall art in
-  // this theme), so no highlight lands.
-  rayHits = [hitFor({ isGalleryPiece: true, galleryId: 'g1', galleryTitle: 'X' })];
-  stepFrames(10);
-  expect(dom.el('look-label').classList.contains('visible')).toBe(false);
-  rayHits = [];
-  stepFrames(10);
-  expect(dom.el('look-label').classList.contains('visible')).toBe(false);
+  // A second dismissal is a quiet no-op.
+  enterRoom();
+  expect(main.getState().isPaused).toBe(false);
+});
+
+test('Enter or Space lets a keyboard visitor in too', async () => {
+  const main = await bootSteve();
+  fire(dom.documentStub, 'keydown', { code: 'Tab' });     // not a dismissal
+  expect(main.getState().isPaused).toBe(true);
+  fire(dom.documentStub, 'keydown', { code: 'Enter' });
+  expect(main.getState().isPaused).toBe(false);
+  expect(dom.el('prop-panel').hidden).toBe(false);
+});
+
+test('a tour by click: every office dialog, the nudge, the deferred celebration', async () => {
+  const main = await bootSteve();
+  enterRoom();
 
   // Discovery 1: say hi to Steve.
   clickScene({ isShopkeeper: true });
-  expect(dom.el('help-modal').classList.contains('hidden')).toBe(false);
+  expect(isOpen('help-modal')).toBe(true);
   expect(dom.el('checklist-btn').classList.contains('pulse')).toBe(true);
   await escapeAndSettle();
-  expect(dom.el('help-modal').classList.contains('hidden')).toBe(true);
-  expect(main.getState().isPaused).toBe(false); // resume re-locked the pointer
+  expect(isOpen('help-modal')).toBe(false);
+  expect(main.getState().isPaused).toBe(false); // still in the room
 
   // The dancer seam stays wired even with no ambient NPCs: the shared dialog
-  // opens with the office title, and its teleport shortcut returns to spawn.
+  // opens with the office title, and Escape closes it.
   clickScene({ isDancer: true });
-  expect(dom.el('dialog-modal').classList.contains('hidden')).toBe(false);
+  expect(isOpen('dialog-modal')).toBe(true);
   expect(dom.el('dialog-title').textContent).toBe('Between Tasks');
-  fire(dom.el('dialog-return-btn'), 'click'); // returnToSpawn closes the dialog
-  expect(dom.el('dialog-modal').classList.contains('hidden')).toBe(true);
-  await jest.advanceTimersByTimeAsync(700);
+  await escapeAndSettle();
+  expect(isOpen('dialog-modal')).toBe(false);
 
   // Discoveries 2-5: the desk, the cat, the closet, the litter box. Crossing
   // four discoveries queues the partway nudge, which escapeAndSettle closes.
   for (const kind of ['standDesk', 'cat', 'closet', 'litter']) {
     clickScene({ isProp: true, propKind: kind });
-    expect(dom.el('dialog-modal').classList.contains('hidden')).toBe(false);
+    expect(isOpen('dialog-modal')).toBe(true);
     await escapeAndSettle();
   }
   expect(globalThis.sessionStorage.getItem('steve-nudged')).toBe('1');
@@ -233,13 +259,15 @@ test('desktop tour: pointer lock, hover, every office dialog, nudge, deferred ce
   expect(dom.el('dialog-message').textContent).not.toBe(firstLine);
   await escapeAndSettle();
 
-  // An unknown prop kind opens nothing.
+  // An unknown prop kind opens nothing, and neither does a click on nothing.
   clickScene({ isProp: true, propKind: 'not-a-real-prop' });
-  expect(dom.el('dialog-modal').classList.contains('hidden')).toBe(true);
+  expect(isOpen('dialog-modal')).toBe(false);
+  clickScene(null);
+  expect(main.getState()._modalOpen).toBe(false);
 
   // The light switch opens the floating dimmer panel instead of a dialog.
   clickScene({ isProp: true, propKind: 'lightswitch' }, { getWorldPosition: (v) => v });
-  expect(dom.el('light-panel').classList.contains('hidden')).toBe(false);
+  expect(isOpen('light-panel')).toBe(true);
   expect(dom.el('light-slider').focused).toBe(true);
   const dimmer = dom.el('light-slider');
   dimmer.value = '0.3';
@@ -248,28 +276,28 @@ test('desktop tour: pointer lock, hover, every office dialog, nudge, deferred ce
   expect(dom.el('light-value').textContent).toBe('30%');
   expect(dom.el('settings-light-value').textContent).toBe('30%'); // both controls stay in sync
   fire(dom.documentStub, 'keydown', { code: 'Escape' }); // closeActiveModal's dimmer branch
-  expect(dom.el('light-panel').classList.contains('hidden')).toBe(true);
+  expect(isOpen('light-panel')).toBe(false);
   await jest.advanceTimersByTimeAsync(700);
 
   // Reopen the dimmer, then a press outside the floating panel closes it.
   clickScene({ isProp: true, propKind: 'lightswitch' }, { getWorldPosition: (v) => v });
-  expect(dom.el('light-panel').classList.contains('hidden')).toBe(false);
+  expect(isOpen('light-panel')).toBe(true);
   fire(dom.documentStub, 'pointerdown', { target: dom.el('game-canvas') });
-  expect(dom.el('light-panel').classList.contains('hidden')).toBe(true);
+  expect(isOpen('light-panel')).toBe(false);
   await jest.advanceTimersByTimeAsync(700);
 
   // Discovery 6: the wall display's dashboard completes the list while a modal
   // is up, so the celebration defers until the overlay closes.
   clickScene({ isProp: true, propKind: 'dashboard' });
-  expect(dom.el('analytics-view').classList.contains('hidden')).toBe(false);
+  expect(isOpen('analytics-view')).toBe(true);
   stepFrames(5); // analyticsOpen skips the 3D render
   const checklist = await import('../www/shared/js/checklist-1.0.0.min.js');
   expect(checklist.getChecklistProgress().complete).toBe(true);
-  expect(dom.el('complete-modal').classList.contains('hidden')).toBe(true); // deferred
+  expect(isOpen('complete-modal')).toBe(false); // deferred
 
   fire(dom.documentStub, 'keydown', { code: 'Escape' }); // close the dashboard
   await jest.advanceTimersByTimeAsync(300);
-  expect(dom.el('complete-modal').classList.contains('hidden')).toBe(false);
+  expect(isOpen('complete-modal')).toBe(true);
   expect(globalThis.sessionStorage.getItem('steve-celebrated')).toBe('1');
 
   // Share: the native share sheet, then a dismissed sheet (AbortError).
@@ -287,12 +315,9 @@ test('desktop tour: pointer lock, hover, every office dialog, nudge, deferred ce
   await flushAsync();
   expect(dom.windowStub.location.href.startsWith('mailto:')).toBe(false);
 
-  // THE CLIPBOARD NOW CARRIES THE SENTENCE AS WELL AS THE LINK, and the button
-  // is NOT disabled while it says so. Both changed when this scene moved onto
-  // shared/js/share-1.0.0.js: a bare URL pasted into somebody's messages says
-  // nothing about what it is, and disabling the focused element throws keyboard
-  // focus out of the dialog. The old assertions here pinned the defect.
-  // And the clipboard path when no share sheet exists.
+  // THE CLIPBOARD CARRIES THE SENTENCE AS WELL AS THE LINK, and the button is
+  // NOT disabled while it says so: disabling the focused element throws
+  // keyboard focus out of the dialog. (shared/js/share-1.0.0.js)
   delete globalThis.navigator.share;
   globalThis.navigator.clipboard = { writeText: async () => {} };
   fire(dom.el('complete-share'), 'click');
@@ -303,50 +328,70 @@ test('desktop tour: pointer lock, hover, every office dialog, nudge, deferred ce
   delete globalThis.navigator.clipboard;
 
   await escapeAndSettle(); // close the celebration
-  expect(dom.el('complete-modal').classList.contains('hidden')).toBe(true);
+  expect(isOpen('complete-modal')).toBe(false);
 
-  // Escape during play with nothing open exits pointer lock to the welcome.
+  // Escape with nothing open leaves the visitor in the room. (It used to drop
+  // the pointer lock and put the welcome card back up.)
   fire(dom.documentStub, 'keydown', { code: 'Escape' });
-  expect(main.getState().isPaused).toBe(true);
-  expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+  expect(main.getState().isPaused).toBe(false);
+  expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
   expect(dom.replaced).toHaveLength(0);
 });
 
 test('a gallery piece click opens the piece modal with its link wired', async () => {
   const main = await bootSteve();
-  fire(dom.el('blocker'), 'click');
+  enterRoom();
 
   clickScene({
     isGalleryPiece: true, galleryId: 'g1', galleryTitle: 'Test Wing',
     gallerySubtitle: 'A quick test', galleryUrl: '/wing/',
   });
-  expect(dom.el('piece-modal').classList.contains('hidden')).toBe(false);
+  expect(isOpen('piece-modal')).toBe(true);
   expect(dom.el('piece-title').textContent).toBe('Test Wing');
   expect(dom.el('piece-subtitle').textContent).toBe('A quick test');
   expect(dom.el('piece-enter').getAttribute('href')).toBe('/wing/');
   expect(dom.el('piece-enter').textContent).toContain('Test Wing');
   await escapeAndSettle();
-  expect(dom.el('piece-modal').classList.contains('hidden')).toBe(true);
+  expect(isOpen('piece-modal')).toBe(false);
   expect(main.getState().isPaused).toBe(false);
-
-  // A miss (no staged hits under the crosshair) opens nothing.
-  clickScene(null);
-  expect(main.getState()._modalOpen).toBe(false);
-
-  // A nudge left pending from a prior page surfaces shortly after the
-  // welcome screen closes again.
-  fire(dom.documentStub, 'keydown', { code: 'Escape' }); // unlock to the welcome
-  expect(main.getState().isPaused).toBe(true);
-  globalThis.sessionStorage.setItem('gallery-nudge-pending', '1');
-  fire(dom.el('blocker'), 'click'); // lock back in
-  await jest.advanceTimersByTimeAsync(500);
-  expect(dom.el('nudge-modal').classList.contains('hidden')).toBe(false);
-  expect(globalThis.sessionStorage.getItem('steve-nudged')).toBe('1');
-  await escapeAndSettle();
-  expect(dom.el('nudge-modal').classList.contains('hidden')).toBe(true);
 });
 
-test('settings, nav menu, and checklist panels open, tune, and close', async () => {
+test('a nudge left pending by a previous page surfaces once the welcome card closes', async () => {
+  await bootSteve();
+  globalThis.sessionStorage.setItem('gallery-nudge-pending', '1');
+  enterRoom();
+  await jest.advanceTimersByTimeAsync(500);
+  expect(isOpen('nudge-modal')).toBe(true);
+  expect(globalThis.sessionStorage.getItem('steve-nudged')).toBe('1');
+  await escapeAndSettle();
+  expect(isOpen('nudge-modal')).toBe(false);
+});
+
+test('the list of the room\'s things opens what a click would, and only once the room is entered', async () => {
+  const main = await bootSteve();
+  const rows = () => dom.el('prop-list').children.map((li) => li.children[0]);
+
+  // Steve leads the list, under his own name, as a real button.
+  expect(rows()[0].textContent).toBe('Steve');
+  expect(rows()[0].tagName).toBe('BUTTON');
+
+  // Choosing a row before the room is entered does nothing.
+  fire(rows()[0], 'click');
+  expect(isOpen('help-modal')).toBe(false);
+
+  enterRoom();
+  fire(rows()[0], 'click');
+  expect(isOpen('help-modal')).toBe(true);
+  expect(await checklistDone('hello')).toBe(true);
+
+  // A row chosen while a card is open is ignored rather than stacking a card.
+  fire(rows()[0], 'click');
+  expect(main.getState()._modalOpen).toBe(true);
+  await escapeAndSettle();
+  expect(isOpen('help-modal')).toBe(false);
+});
+
+test('settings (brightness only now), nav menu, and checklist panels open, tune, and close', async () => {
   await bootSteve();
   const fireAllMO = () => moCallbacks.forEach((cb) => cb([]));
 
@@ -357,17 +402,7 @@ test('settings, nav menu, and checklist panels open, tune, and close', async () 
   fireAllMO();
   expect(dom.el('settings-btn').getAttribute('aria-expanded')).toBe('true');
 
-  // Sliders: live input plus a committed change persisted to sessionStorage.
-  const walk = dom.el('walk-speed-slider');
-  walk.value = '8';
-  fire(walk, 'input');
-  fire(walk, 'change');
-  expect(String(dom.el('walk-speed-value').textContent)).toBe('8');
-  const look = dom.el('look-speed-slider');
-  look.value = '2';
-  fire(look, 'input');
-  fire(look, 'change');
-  expect(dom.el('look-speed-value').textContent).toBe('2.0');
+  // Brightness: live input plus a committed change persisted to sessionStorage.
   const light = dom.el('settings-light-slider');
   light.value = '0.5';
   fire(light, 'input');
@@ -375,9 +410,19 @@ test('settings, nav menu, and checklist panels open, tune, and close', async () 
   expect(dom.el('settings-light-value').textContent).toBe('50%');
   expect(dom.el('light-value').textContent).toBe('50%'); // dimmer panel mirrors it
   const stored = JSON.parse(globalThis.sessionStorage.getItem('steve-settings'));
-  expect(stored).toMatchObject({ walk: 8, look: 2, brightness: 0.5 });
+  expect(stored).toMatchObject({ brightness: 0.5 });
+  // The walking-era settings are gone rather than silently still saved.
+  expect(stored).not.toHaveProperty('walk');
+  expect(stored).not.toHaveProperty('look');
+
+  // The close button hides it and hands focus back to the gear.
+  fire(dom.el('settings-close'), 'click');
+  expect(panel.classList.contains('hidden')).toBe(true);
+  expect(dom.el('settings-btn').focused).toBe(true);
 
   // A press outside the open panel closes it (capture-phase listener).
+  fire(dom.el('settings-btn'), 'click');
+  fireAllMO();
   fire(dom.documentStub, 'pointerdown', { target: dom.el('game-canvas') });
   expect(panel.classList.contains('hidden')).toBe(true);
   fireAllMO();
@@ -418,45 +463,67 @@ test('settings, nav menu, and checklist panels open, tune, and close', async () 
   expect(dom.el('settings-panel').classList.contains('hidden')).toBe(true);
 });
 
-test('mobile: tap to start, forgiving taps, the wall dashboard, tucked joysticks', async () => {
+test('a brightness remembered earlier this visit is put back on load', async () => {
+  globalThis.sessionStorage.setItem('steve-settings', JSON.stringify({ brightness: 0.7 }));
+  await bootSteve();
+  expect(dom.el('settings-light-value').textContent).toBe('70%');
+});
+
+test('mobile: tap to start, forgiving taps, the wall dashboard', async () => {
   globalThis.navigator.maxTouchPoints = 5;
   const main = await bootSteve();
   expect(main.getState().isMobile).toBe(true);
-  expect(dom.el('touch-controls').classList.contains('visible')).toBe(true);
   expect(dom.documentStub.querySelector('.click-prompt').textContent).toBe('Tap to step inside');
-  expect(String(dom.el('walk-speed-slider').value)).toBe('5'); // gentler joystick default
 
   fire(dom.el('blocker'), 'touchend');
   expect(main.getState().isPaused).toBe(false);
-  expect(dom.el('hud').classList.contains('visible')).toBe(true);
 
   // A miss: the tolerance sampling walks its rings and finds nothing.
-  rayHits = [];
-  fire(dom.el('game-canvas'), 'touchend', { changedTouches: [{ clientX: 200, clientY: 300 }] });
+  tapScene(null);
   expect(main.getState()._modalOpen).toBe(false);
 
-  // Tap Steve: his greeting opens, phrased for touch.
-  rayHits = [hitFor({ isShopkeeper: true })];
-  fire(dom.el('game-canvas'), 'touchend', { changedTouches: [{ clientX: 200, clientY: 300 }] });
-  expect(dom.el('help-modal').classList.contains('hidden')).toBe(false);
+  // Tap Steve: his greeting opens. (Its "tap" wording is set on children the
+  // stub never builds, so it is not observable here.)
+  tapScene({ isShopkeeper: true });
+  expect(isOpen('help-modal')).toBe(true);
   await escapeAndSettle();
   expect(main.getState().isPaused).toBe(false);
-  expect(dom.el('touch-controls').classList.contains('visible')).toBe(true);
 
   // The wall display opens the dashboard overlay on a tap too.
-  rayHits = [hitFor({ isProp: true, propKind: 'dashboard' })];
-  fire(dom.el('game-canvas'), 'touchend', { changedTouches: [{ clientX: 200, clientY: 300 }] });
-  expect(dom.el('analytics-view').classList.contains('hidden')).toBe(false);
+  tapScene({ isProp: true, propKind: 'dashboard' });
+  expect(isOpen('analytics-view')).toBe(true);
   await escapeAndSettle();
-  expect(dom.el('analytics-view').classList.contains('hidden')).toBe(true);
+  expect(isOpen('analytics-view')).toBe(false);
+});
 
-  // Opening settings tucks the joysticks away; closing brings them back.
-  fire(dom.el('settings-btn'), 'click');
-  moCallbacks.forEach((cb) => cb([]));
-  expect(dom.el('touch-controls').classList.contains('visible')).toBe(false);
-  fire(dom.documentStub, 'pointerdown', { target: dom.el('game-canvas') });
-  moCallbacks.forEach((cb) => cb([]));
-  expect(dom.el('touch-controls').classList.contains('visible')).toBe(true);
+test('a touch cancels the compatibility click it would spawn', async () => {
+  // The first of the two belts that keep a card from opening under a finger
+  // AND acting on the same tap. (The second, the capture-phase swallow, is
+  // shared with www/automan and www/sunnyvalejenn.)
+  await bootSteve();
+  enterRoom();
+  rayHits = [];
+  const ev = fire(dom.el('game-canvas'), 'touchend', {
+    cancelable: true, changedTouches: [{ clientX: 10, clientY: 10 }],
+  });
+  expect(ev.defaultPrevented).toBe(true);
+});
+
+test('asks the shared pan part for a view that wraps, at every screen size', () => {
+  // The room surrounds the eye, so the turn goes all the way round instead of
+  // stopping at a clamp. And `alwaysOn` plus the `always-on` class are ONE
+  // setting in two places: the flag makes the inputs live at every aspect and
+  // the class is what the shared CSS keys the row's visibility off, so one
+  // without the other is a scene that answers the keyboard and shows no
+  // buttons (the state www/gavin was once found in).
+  const src = readFileSync(join(process.cwd(), 'www', 'steve', 'js', 'main.js'), 'utf8');
+  const call = src.match(/initPortraitControls\(\{[\s\S]*?\n {4}\}\)/);
+  expect(call).not.toBeNull();
+  expect(call[0]).toMatch(/alwaysOn:\s*true/);
+  expect(call[0]).toMatch(/extraClass:\s*'always-on'/);
+  expect(call[0]).toMatch(/landscapeFov:/);
+  expect(call[0]).toMatch(/surface:\s*canvas/);
+  expect(call[0]).toMatch(/pan:\s*cam\.portrait\.pan/);
 });
 
 test('falls back to the 2D site when WebGL is unavailable', async () => {
@@ -471,10 +538,10 @@ test('__test__ seams: readNumericSetting, pickLine, bufToHex', async () => {
   const main = await import('../www/steve/js/main.js');
   await flushAsync();
   const { readNumericSetting, pickLine, bufToHex } = main.__test__;
-  expect(readNumericSetting({ walk: 8 }, 'walk', 2, 14, 5)).toBe(8);
-  expect(readNumericSetting({ walk: 99 }, 'walk', 2, 14, 5)).toBe(5);   // out of range
-  expect(readNumericSetting({ walk: 'x' }, 'walk', 2, 14, 5)).toBe(5);  // wrong type
-  expect(readNumericSetting({}, 'walk', 2, 14, 5)).toBe(5);             // absent
+  expect(readNumericSetting({ brightness: 0.8 }, 'brightness', 0, 1.5, 1)).toBe(0.8);
+  expect(readNumericSetting({ brightness: 9 }, 'brightness', 0, 1.5, 1)).toBe(1);    // out of range
+  expect(readNumericSetting({ brightness: 'x' }, 'brightness', 0, 1.5, 1)).toBe(1);  // wrong type
+  expect(readNumericSetting({}, 'brightness', 0, 1.5, 1)).toBe(1);                  // absent
   expect(pickLine(['a', 'b', 'c'], 4)).toBe('b');
   expect(pickLine([], 1)).toBe('');
   expect(pickLine(null, 0)).toBe('');

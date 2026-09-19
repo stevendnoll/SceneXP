@@ -43,7 +43,7 @@
  * Future contributors: this file (with www/jamar/js/main.js and
  * www/gavin/js/main.js) is the template for "living diorama"
  * experiences. If your scene wants walking and clicking instead, start
- * from www/steve/js/main.js, which wires the shared controls.
+ * from www/interstate/js/main.js, which wires the shared controls.
  */
 
 import { AUTOMAN_CONFIG } from './config.min.js';

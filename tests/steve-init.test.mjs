@@ -177,24 +177,46 @@ describe('the floor plan and config (pure)', () => {
     expect(CFG.building.height).toBeCloseTo(room.height, 1);
   });
 
-  test('the walkable clamp keeps a player radius off every wall face', () => {
-    const { room } = T.LAYOUT;
-    const r = 0.4;   // CONTROLS_CONFIG.playerRadius
-    const b = CFG.worldBounds;
-    expect(b.maxX).toBeLessThanOrEqual(room.maxX - room.wallT / 2 - r);
-    expect(b.minX).toBeGreaterThanOrEqual(room.minX + room.wallT / 2 + r);
-    expect(b.maxZ).toBeLessThanOrEqual(room.maxZ - room.wallT / 2 - r);
-    expect(b.minZ).toBeGreaterThanOrEqual(room.minZ + room.wallT / 2 + r);
+  // The room stopped being walked through on 2026-09-18, and the walk clamp
+  // and spawn that these two tests used to hold went with it. What replaced
+  // them is one fixed eye. Whether Steve is actually IN its view is a question
+  // for real geometry, and tests/steve-view.test.mjs answers it through real
+  // three.js; these only hold the eye to the floor plan.
+
+  test('the eye stands inside the room, in front of the closet, not in it', () => {
+    const { room, closet } = T.LAYOUT;
+    const eye = CFG.camera.position;
+    const inner = room.wallT / 2;
+    expect(eye.x).toBeGreaterThan(room.minX + inner);
+    expect(eye.x).toBeLessThan(room.maxX - inner);
+    expect(eye.z).toBeGreaterThan(room.minZ + inner);
+    // North of the closet's front wall, which is what "in front of the closet
+    // doors" means here. South of it would be inside the closet.
+    expect(eye.z).toBeLessThan(closet.minZ - inner);
+    // And across the closet opening from east to west, not beside it
+    expect(eye.x).toBeGreaterThan(T.LAYOUT.closetOpening.minX);
+    expect(eye.x).toBeLessThan(T.LAYOUT.closetOpening.maxX);
   });
 
-  test('the spawn stands inside the clamp, in the entry end of the room', () => {
-    const b = CFG.worldBounds;
-    expect(CFG.spawn.x).toBeGreaterThan(b.minX);
-    expect(CFG.spawn.x).toBeLessThan(b.maxX);
-    expect(CFG.spawn.z).toBeGreaterThan(b.minZ);
-    expect(CFG.spawn.z).toBeLessThan(b.maxZ);
-    // South of center: the visitor arrives from the doorway side
-    expect(CFG.spawn.z).toBeGreaterThan(0);
+  test('the eye is at a standing height and aims down the room, not into the closet', () => {
+    const { position: eye, lookAt } = CFG.camera;
+    expect(eye.y).toBeGreaterThan(1.3);
+    expect(eye.y).toBeLessThan(1.9);
+    // Looking north, away from the closet doors at its back
+    expect(lookAt.z).toBeLessThan(eye.z);
+  });
+
+  test('the view turns all the way round, and a phone gets a wider lens', () => {
+    // A room with something worth finding on all four walls, so the pan
+    // wraps rather than stopping at a clamp (maxAngle would be ignored, so it
+    // is not set and cannot mislead anybody reading the config).
+    const { portrait } = CFG.camera;
+    expect(portrait.pan.wrap).toBe(true);
+    expect(portrait.pan).not.toHaveProperty('maxAngle');
+    expect(portrait.fov).toBeGreaterThan(CFG.camera.fov);
+    // The walking-era keys are gone rather than lingering, unread.
+    expect(CFG).not.toHaveProperty('spawn');
+    expect(CFG).not.toHaveProperty('worldBounds');
   });
 
   test('every discovery on the checklist is a wired, unique id', () => {

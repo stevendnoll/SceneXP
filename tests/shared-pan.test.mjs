@@ -1343,3 +1343,174 @@ describe('the keys follow the buttons that exist', () => {
     expect(m.getTiltAngle()).toBeGreaterThan(0);
   });
 });
+
+// ---- pan.wrap: a room you stand inside --------------------------------------
+// www/steve's discoveries sit on all four walls of a small room, so the eye
+// turns all the way round rather than stopping at a clamp. A clamp there is an
+// invisible wall met mid-drag.
+
+describe('pan.wrap', () => {
+  const WRAP = { speed: 0.4, maxAngle: 0.6, wrap: true };
+
+  test('a held arrow turns past the clamp and folds into [-PI, PI)', async () => {
+    const { m, buttons } = await setup({ pan: WRAP });
+    press(buttons['Pan right']);
+    m.updatePortraitControls(10);                 // 4 rad: well past both maxAngle and PI
+    expect(m.getPanAngle()).toBeCloseTo(4 - Math.PI * 2, 10);
+    expect(m.getPanAngle()).toBeGreaterThanOrEqual(-Math.PI);
+    expect(m.getPanAngle()).toBeLessThan(Math.PI);
+  });
+
+  test('neither arrow ever dims, because a turn with no ends has nothing to spend', async () => {
+    const { m, buttons } = await setup({ pan: WRAP });
+    press(buttons['Pan right']);
+    m.updatePortraitControls(10);
+    release(buttons['Pan right']);
+    press(buttons['Pan left']);
+    m.updatePortraitControls(30);
+    expect(buttons['Pan right'].classList.contains('at-limit')).toBe(false);
+    expect(buttons['Pan left'].classList.contains('at-limit')).toBe(false);
+  });
+
+  test('maxAngle is ignored while wrapping, even a tiny one', async () => {
+    const { m, buttons } = await setup({ pan: { ...WRAP, maxAngle: 0.1 } });
+    press(buttons['Pan left']);
+    m.updatePortraitControls(2);                  // 0.8 rad, eight times the "limit"
+    expect(m.getPanAngle()).toBeCloseTo(-0.8, 10);
+  });
+
+  test('a drag wraps on the same terms', async () => {
+    const surface = makeSurface();
+    const { m, buttons } = await setup({ pan: WRAP, surface });
+    touch(surface, 'pointerdown', 1, 390, 400);
+    touch(surface, 'pointermove', 1, 380, 400);
+    touch(surface, 'pointermove', 1, -6000, 400);   // far past a half turn
+    const a = m.getPanAngle();
+    expect(a).toBeGreaterThanOrEqual(-Math.PI);
+    expect(a).toBeLessThan(Math.PI);
+    // And it did NOT stop at the clamp the non-wrapping scenes use.
+    expect(Math.abs(a - PAN.maxAngle)).toBeGreaterThan(1e-3);
+    expect(buttons['Pan right'].classList.contains('at-limit')).toBe(false);
+  });
+
+  test('turning all the way round brings the aim back to the composed view', async () => {
+    // Two half turns rather than one full one: a single step of exactly 2*PI
+    // from zero lands on zero and never moves the camera at all, which would
+    // pass without proving anything about coming back.
+    const { m, camera, buttons } = await setup({ pan: WRAP });
+    press(buttons['Pan right']);
+    m.updatePortraitControls(Math.PI / WRAP.speed);
+    expect(lastLookAt(camera).z).toBeCloseTo(-LOOK_AT.z, 6);   // facing away
+    m.updatePortraitControls(Math.PI / WRAP.speed);
+    expect(m.getPanAngle()).toBeCloseTo(0, 10);
+    const aim = lastLookAt(camera);
+    expect(aim.x).toBeCloseTo(LOOK_AT.x, 6);
+    expect(aim.z).toBeCloseTo(LOOK_AT.z, 6);
+  });
+
+  test('a half turn faces directly away from the composed view', async () => {
+    const { m, camera, buttons } = await setup({ pan: WRAP });
+    press(buttons['Pan right']);
+    m.updatePortraitControls(Math.PI / WRAP.speed);
+    const aim = lastLookAt(camera);
+    // The composed aim is 10 m down -Z from a camera at the origin.
+    expect(aim.z).toBeCloseTo(-LOOK_AT.z, 6);
+    expect(aim.x).toBeCloseTo(0, 6);
+  });
+
+  test('setPanLimit does not re-clamp a wrapping yaw', async () => {
+    const { m, buttons } = await setup({ pan: WRAP });
+    press(buttons['Pan right']);
+    m.updatePortraitControls(5);                  // 2 rad
+    m.setPanLimit(0.2);
+    expect(m.getPanAngle()).toBeCloseTo(2, 10);
+    expect(buttons['Pan right'].classList.contains('at-limit')).toBe(false);
+  });
+
+  test('a later init without wrap is clamped again, and dispose forgets it', async () => {
+    // Module state outlives an init, so the flag has to be set every time
+    // rather than only when true.
+    const { m, buttons } = await setup({ pan: WRAP });
+    m.disposePortraitControls();
+    m.initPortraitControls({
+      getCamera: () => makeCamera(), lookAt: LOOK_AT, baseFov: BASE_FOV, pan: PAN,
+    });
+    const container = globalThis.document.body.children[globalThis.document.body.children.length - 1];
+    const right = container.children.find((b) => b.attrs['aria-label'] === 'Pan right');
+    press(right);
+    m.updatePortraitControls(10);
+    expect(m.getPanAngle()).toBeCloseTo(PAN.maxAngle, 10);
+    expect(buttons).toBeTruthy();
+  });
+});
+
+// ---- Keys aimed at something else -------------------------------------------
+// The window listener heard every arrow and WASD press and turned the camera
+// for each, whatever had focus. In www/steve that spun the room while the
+// visitor nudged a brightness slider in a panel with no backdrop.
+
+describe('keys that belong to something else', () => {
+  const at = (tagName, extra = {}) => ({ tagName, closest: () => null, ...extra });
+  const insideModal = (tagName) => ({
+    tagName,
+    closest: (sel) => (sel === '[aria-modal="true"]' ? { role: 'dialog' } : null),
+  });
+
+  test('an arrow on a range slider adjusts the slider, not the view', async () => {
+    // alwaysOn in a landscape window, which is the case that bit www/steve.
+    // Without alwaysOn a landscape window leaves the controls inactive, and
+    // this would pass whether or not the guard existed.
+    const { m, buttons } = await setup({ alwaysOn: true }, { width: 1200, height: 800 });
+    globalThis.window.fire('keydown', { code: 'ArrowRight', target: at('BODY') });
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'ArrowRight' });
+    expect(m.getPanAngle()).not.toBe(0);                 // the controls ARE live here
+    m.resetPortraitAim();
+    globalThis.window.fire('keydown', { code: 'ArrowRight', target: at('INPUT') });
+    m.updatePortraitControls(1);
+    expect(m.getPanAngle()).toBe(0);
+    expect(buttons['Pan right'].classList.contains('held')).toBe(false);
+  });
+
+  test('stepping through a <select> or typing in a field leaves the view alone', async () => {
+    const { m } = await setup({ alwaysOn: true }, { width: 1200, height: 800 });
+    for (const target of [at('SELECT'), at('TEXTAREA'), at('div', { isContentEditable: true })]) {
+      globalThis.window.fire('keydown', { code: 'KeyD', target });
+      m.updatePortraitControls(1);
+    }
+    expect(m.getPanAngle()).toBe(0);
+  });
+
+  test('keys pressed inside an open modal card do not move the room behind it', async () => {
+    const { m } = await setup();
+    globalThis.window.fire('keydown', { code: 'KeyA', target: insideModal('BUTTON') });
+    m.updatePortraitControls(1);
+    expect(m.getPanAngle()).toBe(0);
+  });
+
+  test('the same key on the page itself still turns the view', async () => {
+    const { m } = await setup();
+    globalThis.window.fire('keydown', { code: 'KeyA', target: at('BODY') });
+    m.updatePortraitControls(1);
+    expect(m.getPanAngle()).toBeCloseTo(-PAN.speed, 10);
+  });
+
+  test('a lowercase tag name is recognised too', async () => {
+    const { m } = await setup();
+    globalThis.window.fire('keydown', { code: 'KeyA', target: at('input') });
+    m.updatePortraitControls(1);
+    expect(m.getPanAngle()).toBe(0);
+  });
+
+  test('key-up still stops a hold that began on the scene, wherever focus went', async () => {
+    // Only the START is gated. A hold begun on the page, then released after
+    // focus moved into a field, must not be left running.
+    const { m, buttons } = await setup();
+    globalThis.window.fire('keydown', { code: 'KeyA', target: at('BODY') });
+    m.updatePortraitControls(1);
+    globalThis.window.fire('keyup', { code: 'KeyA', target: at('INPUT') });
+    expect(buttons['Pan left'].classList.contains('held')).toBe(false);
+    m.updatePortraitControls(1);
+    expect(m.getPanAngle()).toBeCloseTo(-PAN.speed, 10);   // did not keep turning
+  });
+});

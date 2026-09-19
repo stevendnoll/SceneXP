@@ -2338,6 +2338,125 @@ body {
     outline-offset: 2px;
 }
 
+/* ===========================================================================
+   The things in the room (.prop-panel), the keyboard's way to every story
+   card. Filled by shared/js/proplist-1.0.0.js.
+
+   ---- OFF SCREEN, NOT INVISIBLE, AND THE DIFFERENCE IS THE WHOLE RULE ----
+
+   Every card in a room scene opened from a click or a tap on the canvas, and
+   nothing else, so a visitor with no pointer or with a screen reader could
+   read the welcome card, look around, and leave without a single story. This
+   is their route: one button per thing in the room.
+
+   It sits above the top of the frame and slides down whenever anything inside
+   it has focus, which is exactly what .skip-link above already does. The
+   alternative was a clipped, permanently invisible region, and that is a trap
+   rather than a feature: focus lands somewhere a sighted keyboard visitor
+   cannot see. Being off screen also keeps it out of the frame entirely for a
+   pointer visitor, so a scene gains a whole route in without a pixel of chrome
+   (and a discovery hunt keeps its secrets from anyone clicking around).
+
+   `hidden` is set in the markup and cleared by the scene once the welcome card
+   is dismissed, because a panel that is only off screen is still a tab stop.
+
+   Z-INDEX ABOVE THE CARDS (200): it slides from the top edge, and a panel that
+   vanished behind the card it had just opened would leave the visitor with no
+   visible focus at the moment they need it most. Same reasoning as the
+   garden's tend panel, which this generalizes.
+   =========================================================================== */
+.prop-panel[hidden] {
+    display: none;
+}
+
+.prop-panel {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(-120%);
+    z-index: 300;
+    width: min(94vw, 40rem);
+    max-height: 72vh;
+    max-height: 72dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1rem 1.25rem 1.25rem;
+    background: rgba(18, 22, 30, 0.97);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.55);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    transition: transform 0.2s ease;
+}
+
+.prop-panel:focus-within {
+    transform: translateX(-50%) translateY(0);
+}
+
+/* It slides, and a visitor who asked for less movement gets it put in place
+   rather than travelling. It still arrives and still leaves. */
+@media (prefers-reduced-motion: reduce) {
+    .prop-panel {
+        transition: none;
+    }
+}
+
+.prop-panel-heading {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+    letter-spacing: 0.3px;
+}
+
+.prop-panel-note {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.78);
+}
+
+/* A GRID, because these rows are short names rather than the garden's
+   sentences, and a room of twenty-odd things in one long column is a lot of
+   Tab presses to scan by eye. Still in reading order, row by row. */
+.prop-list {
+    list-style: none;
+    margin: 0.85rem 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: 0.4rem;
+}
+
+/* The text is the button's accessible name as well as its label, so it wraps
+   rather than truncating: an ellipsis would hide what a screen reader is
+   about to read out. */
+.prop-row {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    background: rgba(20, 20, 20, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 8px;
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    font-size: 0.85rem;
+    line-height: 1.35;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.prop-row:hover {
+    background: rgba(var(--ui-accent-rgb), 0.22);
+    border-color: rgba(var(--ui-accent-rgb), 0.6);
+}
+
+.prop-row:focus-visible {
+    outline: 3px solid var(--ui-accent);
+    outline-offset: 2px;
+}
+
 /* Accessibility hint on the start screen */
 .discover-hint {
     margin: 1.25rem auto 0;

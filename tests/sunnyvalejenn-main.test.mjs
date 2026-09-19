@@ -251,3 +251,87 @@ test('falls back to the 2D site when WebGL is unavailable', async () => {
   await jest.advanceTimersByTimeAsync(3000);
   expect(dom.replaced).toEqual(['/']);
 });
+
+// ---- Every story has a route without a pointer ------------------------------
+// Until 2026-09-18 a card opened only from a raycast off a click or a tap, so a
+// keyboard or screen-reader visitor could reach the welcome card, look around,
+// and leave without hearing a single story. The list of the room's things
+// (shared proplist part) is their route.
+//
+// The shared THREE stub swallows every property write, including the
+// `userData.propKind` that registerOutdoorProp stamps on each prop, so under
+// it the list would build from no kinds at all and pass while proving nothing.
+// This wrapper gives groups and meshes a REAL userData object, so the room's
+// registrations stick and the list is built from what store.js registered.
+
+function keepUserData() {
+  const base = globalThis.THREE;
+  globalThis.THREE = new Proxy({}, {
+    get(_t, prop) {
+      const Ctor = base[prop];
+      if (prop !== 'Group' && prop !== 'Mesh') return Ctor;
+      return function (...args) {
+        const inner = new Ctor(...args);
+        const userData = {};
+        return new Proxy(inner, {
+          get(t, p) { return p === 'userData' ? userData : t[p]; },
+          set() { return true; },
+        });
+      };
+    },
+  });
+}
+
+describe('the list of the room\'s things', () => {
+  async function bootWithList() {
+    keepUserData();
+    dom.el('prop-panel').hidden = true;   // as the markup ships it
+    const main = await bootJenn();
+    const rows = () => dom.el('prop-list').children.map((li) => li.children[0]);
+    return { main, rows };
+  }
+
+  test('has a row for every thing in the office, each named after its card', async () => {
+    const { rows } = await bootWithList();
+    const labels = rows().map((b) => b.textContent);
+    // Jenn first, because she leads the card table, then the rest in order.
+    expect(labels[0]).toBe('Jenn');
+    expect(labels).toContain('The Desk');
+    expect(labels).toContain('The Green Committee');   // both plants, one card
+    // store.js registers fifteen kinds of thing and every one has a card.
+    expect(labels).toHaveLength(15);
+    expect(new Set(labels).size).toBe(15);
+    rows().forEach((b) => expect(b.tagName).toBe('BUTTON'));
+  });
+
+  test('waits for the welcome card, then opens exactly what a tap would', async () => {
+    const { rows } = await bootWithList();
+    const modal = dom.el('dialog-modal');
+    const desk = rows().find((b) => b.textContent === 'The Desk');
+
+    // While the welcome card is up the list is not a tab stop, and a row
+    // that was somehow reached still opens nothing over the card.
+    expect(dom.el('prop-panel').hidden).toBe(true);
+    fire(desk, 'click');
+    expect(modal.classList.contains('hidden')).toBe(true);
+
+    fire(dom.documentStub, 'keydown', { code: 'Enter' });   // step inside
+    expect(dom.el('prop-panel').hidden).toBe(false);
+
+    fire(desk, 'click');
+    expect(modal.classList.contains('hidden')).toBe(false);
+    expect(dom.el('dialog-title').textContent).toBe('The Desk');
+
+    // A row chosen while a card is up does not replace it.
+    fire(rows()[0], 'click');
+    expect(dom.el('dialog-title').textContent).toBe('The Desk');
+
+    fire(dom.documentStub, 'keydown', { code: 'Escape' });
+    expect(modal.classList.contains('hidden')).toBe(true);
+
+    // Jenn's row gives her card, link and all, the same as tapping her.
+    fire(rows()[0], 'click');
+    expect(dom.el('dialog-title').textContent).toBe('Jenn');
+    expect(dom.el('dialog-cta').classList.contains('hidden')).toBe(false);
+  });
+});

@@ -49,10 +49,16 @@ have in mind.
   and the scene moves instead of the visitor. A row of floating buttons
   offers gentle pan and zoom, with matching swipe and pinch gestures on
   touch screens, and tapping props opens short lines of story. This is the
-  simplest model to build and a great fit for small subjects. It provides a fixed
-  viewpoint with pan, tilt, and a dolly zoom, but tapping the ground plants
-  a tree rather than opening a line of dialog, which is worth reading if your
-  scene wants the visitor to change it.
+  simplest model to build and a great fit for small subjects. `www/steve` is
+  the variant for a subject that SURROUNDS the eye: the camera stands inside
+  a small room and the view turns all the way around (the pan part's `wrap`
+  option) rather than stopping at a clamp. However the scene is composed, give
+  every tappable prop a route that needs no pointer as well, with the shared
+  proplist part, the way `www/steve` and `www/sunnyvalejenn` do. Fractal
+  Garden (`www/garden`) extends the model, keeping the fixed viewpoint with
+  pan, tilt, and a dolly zoom, but tapping the ground plants a tree rather
+  than opening a line of dialog, which is worth reading if your scene wants
+  the visitor to change it.
 - **Hands-off rides.** The scene drives itself and the visitor mostly
   watches, with play and pause, speed, and direction controls for light
   steering. The Mandelbrot dive (`www/mandelbrot`) is the reference: its

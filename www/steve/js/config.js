@@ -5,7 +5,8 @@
  * One plain object holding every per-experience knob the shared 3D engine
  * parts (www/shared/js) accept. main.js imports this and passes slices into
  * the shared init functions: initScene(canvas, STEVE_CONFIG),
- * initControls(STEVE_CONFIG), initChecklist(STEVE_CONFIG.checklist), ...
+ * initPortraitControls(... STEVE_CONFIG.camera ...),
+ * initChecklist(STEVE_CONFIG.checklist), ...
  *
  * These are final literal values: nothing mutates this object at runtime
  * (deepFreeze below enforces that).
@@ -22,6 +23,12 @@
  * because exact scale read as cramped and low through the first-person
  * camera and left no floor for the furniture; proportions stay true. It is
  * still comfortably the smallest environment on the site.
+ *
+ * It was walked through until 2026-09-18, with WASD and a pair of on-screen
+ * joysticks. In a room this size that was mostly bumping into furniture, and
+ * the scene's job had become showing one wall screen, so it now stands still
+ * and lets the visitor look around instead (see `camera` below, and view.js
+ * for where the eye stands and why).
  */
 
 function deepFreeze(obj) {
@@ -58,19 +65,42 @@ export const STEVE_CONFIG = deepFreeze({
         nightBoost: 1.2
     },
 
-    // Player start: a step past the entry walkway, out of the doorway and
-    // toward the display end of the east wall, facing into the room the
-    // way a visitor a stride inside would. Yaw 0 faces negative Z (toward
-    // the window wall); the slight positive yaw turns the first look toward
-    // Steve at his desk.
-    spawn: { x: 1.55, z: 1.25 },
-    rotation: { yaw: 0.3, pitch: 0 },
-
-    // Walkable clamp: held off every wall's inner face by a bit more than
-    // the 0.4 player radius, so the clamp (not wall collision) is what a
-    // visitor rides against. The closet cut-out is handled by its collision
-    // box in store.js (a clamp rectangle cannot describe an L-shaped room).
-    worldBounds: { minX: -1.85, maxX: 1.85, minZ: -2.57, maxZ: 2.57 },
+    // The one viewpoint. The eye stands in front of the closet doors and looks
+    // north across the room at Steve's left side as he works, so his profile
+    // is the first thing a visitor sees, whatever the screen. view.js has the
+    // measurements that chose this spot over the middle of the room, and
+    // tests/steve-view.test.mjs holds them against the real room.
+    //
+    // three.js FOV is vertical. Below an aspect of 1 the lens widens to
+    // portrait.fov and the camera stays put (it has the closet at its back).
+    //
+    // The view controls are the shared pan part, running at every screen size
+    // like the other rooms with pan and zoom: drag, the arrow buttons, or A and
+    // D to turn, W and S to look up and down, pinch or scroll to zoom. The one
+    // difference is `wrap`. Every other scene composes its subject IN FRONT of
+    // the eye and stops the turn at maxAngle. This room SURROUNDS the eye, with
+    // something worth finding on all four walls, so the turn goes all the way
+    // round and never meets an invisible wall (maxAngle is then ignored, so it
+    // is not set). speed is radians per second while a button or key is held:
+    // a full turn in about ten seconds.
+    camera: {
+        position: { x: -0.8, y: 1.6, z: 1.05 },
+        lookAt: { x: -1.09, y: 1.0, z: -0.88 },
+        fov: 58,
+        portrait: {
+            fov: 70,
+            pan: {
+                speed: 0.6,
+                maxTilt: 0.35,
+                wrap: true
+            },
+            zoom: {
+                speed: 18,
+                maxIn: 24,
+                maxOut: 10
+            }
+        }
+    },
 
     // Sky and time. The full day/night cycle runs: Steve keeps side-project
     // hours, so the office is honestly lit at every one of them. The shared
@@ -138,7 +168,7 @@ export const STEVE_CONFIG = deepFreeze({
             { id: 'hello',  label: 'Say hi to Steve at his desk',        short: 'say hi to Steve' },
             { id: 'desk',   label: 'Check out the sit-stand desk',       short: 'visit the desk' },
             { id: 'cat',    label: 'Find the office manager (shh)',      short: 'find the office manager' },
-            { id: 'dashboard', label: 'See who has been visiting',       short: 'check the wall display' },
+            { id: 'dashboard', label: 'Notice the big screen behind Steve', short: 'notice the big screen' },
             { id: 'closet', label: 'Find the closet by the door',        short: 'find the closet' },
             { id: 'litter', label: "Spot the office manager's restroom", short: 'spot the litter box' }
         ]
