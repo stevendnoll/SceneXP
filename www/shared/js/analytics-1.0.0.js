@@ -759,9 +759,16 @@ function renderStatus() {
             }
             if (currentDate && latest && currentDate !== latest) {
                 bits.push('viewing a past day');
-            } else if (latest && currentDate === latest) {
-                bits.push('refreshes every 5 min');   // only true for the live (latest) day
             }
+            // NO REFRESH PROMISE HERE. The line used to add "refreshes every
+            // 5 min" on the live day, which described this page's own poll
+            // rather than the data under it: the snapshots are written by a
+            // collector on the server, and until that job is scheduled the day
+            // on screen is as fresh as the last time somebody ran it by hand.
+            // "updated <n> ago" above is the honest version of the same fact,
+            // and it stays true whatever the collector is doing. If a cadence
+            // is ever promised again, promise the COLLECTOR's, and only when
+            // something in the data says what it is.
             // Which clock this page is on, so a time is never ambiguous.
             if (dayZone) bits.push(`shown in ${zoneLabel(dayZone)}`);
             els.status.textContent = bits.join('  ·  ');

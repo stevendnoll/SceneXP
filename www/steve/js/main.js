@@ -1295,7 +1295,18 @@ const PROP_CONTENT = {
         checklistId: 'closet',
         lines: [
             "Two accordion doors, and behind them the family's entire archive of cables that might be useful someday.",
-            "Every tiny office needs a closet that absorbs whatever the room cannot. This one absorbs plenty."
+            // THE SECOND SENTENCE IS THE ONLY POINTER TO THE EASTER EGG. The
+            // glow behind the doors is found by turning the view all the way
+            // round, which most visitors never do unprompted, and a secret
+            // nobody can find is just unused geometry.
+            "Every tiny office needs a closet that absorbs whatever the room cannot. Look through the crack between the doors, though. Something back there is still running."
+        ]
+    },
+    oldPc: {
+        title: 'The Old Family Computer',
+        lines: [
+            "A beige tower and a CRT, still going in the back of the closet. Nobody remembers what it was working on.",
+            "It has been at it since about 2004. Steve maintains that it is nearly finished."
         ]
     },
     litter: {

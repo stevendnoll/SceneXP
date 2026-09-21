@@ -60,6 +60,8 @@ let composeView;
 let steve;          // Steve's meshes
 let dashboard;      // the wall display's meshes
 let macbook;        // the MacBook Air on its stand
+let officeRoom;     // the built scene, for looking things up by name
+let LAYOUT;         // the floor plan the room was built from
 let occluders;      // everything in the room that can stand in the way
 let registeredKinds;
 let PROP_CONTENT;
@@ -125,6 +127,8 @@ beforeAll(async () => {
   steve = meshesOf(store.getRoquiMesh());
   dashboard = meshesOf(room.getObjectByName('wallDashboard'));
   macbook = room.getObjectByName('macbookAir');
+  officeRoom = room;
+  LAYOUT = store.__test__.LAYOUT;
   occluders = [];
   room.traverse((o) => { if (o.isMesh && o.visible !== false) occluders.push(o); });
   registeredKinds = world.getOutdoorPropMeshes().map((g) => g.userData.propKind);
@@ -293,6 +297,83 @@ describe('the MacBook on its stand', () => {
     const screen = macbook.getObjectByName('macScreen');
     expect(screen).toBeTruthy();
     expect(seen([screen], cameraFor(16 / 9))).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
+describe('the old computer in the closet', () => {
+  // AN EASTER EGG IS TWO PROMISES AT ONCE: it can be found, and it is not
+  // simply on show. Both are about a 2 cm seam between two closed doors, so
+  // both are measured by casting the eye's own rays at the doors and asking
+  // what gets through. `seen()` cannot answer this one: the screen is a plane
+  // with four corner vertices and all four are behind a door, which reads as
+  // "invisible" while the middle of it is in plain sight.
+  const eyePoint = () => new THREE.Vector3(
+    CFG.camera.position.x, CFG.camera.position.y, CFG.camera.position.z);
+
+  /** Cast the eye at a grid over the closet doorway and report what the rays
+   *  that get past the doors land on. */
+  function throughTheDoors() {
+    const { closet, closetOpening: co } = LAYOUT;
+    const pc = officeRoom.getObjectByName('closetComputer');
+    const mine = new Set();
+    pc.traverse((c) => { if (c.isMesh) mine.add(c); });
+    const eye = eyePoint();
+    const ray = new THREE.Raycaster();
+    ray.far = 12;
+    let aimed = 0, past = 0, onPc = 0, onScreen = 0;
+    for (let x = co.minX; x <= co.maxX; x += 0.002) {
+      for (const y of [0.95, 1.05, 1.15, 1.25]) {
+        aimed += 1;
+        const dir = new THREE.Vector3(x, y, closet.minZ).sub(eye).normalize();
+        ray.set(eye, dir);
+        const hit = ray.intersectObjects(occluders, false)[0];
+        if (!hit || hit.point.z < closet.minZ + 0.05) continue;   // stopped at the doors
+        past += 1;
+        if (mine.has(hit.object)) {
+          onPc += 1;
+          if (hit.object.name === 'closetTerminal') onScreen += 1;
+        }
+      }
+    }
+    return { aimed, past, onPc, onScreen };
+  }
+
+  test('is what the seam between the doors looks onto', () => {
+    const { past, onPc, onScreen } = throughTheDoors();
+    expect(past).toBeGreaterThan(0);
+    // Most of what can be seen through the seam is the machine, not the back
+    // of an empty closet: the sight line through a 2 cm aperture is not square
+    // to the doors (the eye does not stand in front of them), so a prop
+    // centered in the closet would be missed entirely.
+    expect(onPc / past).toBeGreaterThan(0.4);
+    // And the glowing screen is part of it, which is the whole hook.
+    expect(onScreen).toBeGreaterThan(0);
+  });
+
+  test('stays hidden: the doors are shut, and the seam is a sliver', () => {
+    const { aimed, past } = throughTheDoors();
+    expect(past / aimed).toBeLessThan(0.05);
+  });
+
+  test('its light is emissive, so the closet costs the room no lamp', () => {
+    // A point light in a closed closet would be paid for by every material in
+    // the room, on every frame, on every phone. The screen glows on its own.
+    const screen = officeRoom.getObjectByName('closetTerminal');
+    expect(screen.material.emissiveIntensity).toBeGreaterThan(0.5);
+    // The room already carries ten lights (a rig plus four corner fills), and
+    // every one of them is in the shader for every material. None of them is
+    // inside the closet, and this is the tripwire for a future "just one small
+    // point light in there" that would cost the whole room.
+    const { closet } = LAYOUT;
+    const inCloset = [];
+    officeRoom.traverse((o) => {
+      if (!o.isLight) return;
+      const p = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld);
+      if (p.x > closet.minX && p.x < closet.maxX
+        && p.z > closet.minZ && p.z < closet.maxZ
+        && p.y > 0 && p.y < LAYOUT.room.height) inCloset.push(o.name || o.type);
+    });
+    expect(inCloset).toEqual([]);
   });
 });
 

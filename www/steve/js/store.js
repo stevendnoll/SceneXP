@@ -230,6 +230,7 @@ export function initStore() {
     createNorthwestCorner();  // trash can, hooded litter box, and its mat
     createSitStandDeskWall(); // Steve's sit-stand desk, standing, west wall
     createWallDashboard();    // the visitor-activity display on the wall behind Steve
+    createClosetComputer();   // the old machine still running behind the doors
     createCatBowls();         // food and water, desk-to-closet stretch
     createOfficeLighting();   // shared interior rig, sized for one small room
     createExterior();         // lawn and trees seen through the window
@@ -668,6 +669,125 @@ function createClosetDoors() {
 
     registerOutdoorProp(doorsGroup, 'closet');
     officeGroup.add(doorsGroup);
+}
+
+// ---- The thing in the closet ------------------------------------------------
+//
+// AN EASTER EGG FOR ANYBODY WHO TURNS AROUND. The eye faces north, away from
+// the closet, so this is only ever found by a visitor who takes the view all
+// the way round. What they get for it is a green glow in the dark through the
+// 2 cm seam between the accordion doors: an old beige tower with a CRT on it,
+// still on, still working on something.
+//
+// PLACED ON THE SIGHT LINE, NOT IN THE MIDDLE OF THE CLOSET. The seam is a 2 cm
+// aperture 62 cm from the eye, so what is visible through it is a narrow fan:
+// about 6 cm of the closet's back, and only along the line the eye draws
+// through the seam (which is not square to the doors, because the eye does not
+// stand in front of them). Everything below is measured against that line
+// rather than centered in the closet, and tests/steve-view.test.mjs raycasts
+// the real doors to hold it there.
+//
+// THE GLOW IS EMISSIVE, NOT A LIGHT. A point light in here would cost every
+// material in the room a lamp it can never see, which is a poor trade for a
+// prop behind a closed door on a phone. An emissive screen glows for free.
+
+/** The terminal on the old CRT: a black screen, a few lines of green, and a
+ *  block cursor sitting at a prompt that has been waiting a long time. */
+function createTerminalTexture() {
+    const W = 160, H = 120;
+    const canvas = makeCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#061007';
+    ctx.fillRect(0, 0, W, H);
+
+    // Lines of output, shortening as a build log does, then the prompt
+    ctx.fillStyle = '#5bea79';
+    const lines = [96, 78, 110, 64, 88, 52, 70];
+    lines.forEach((w, i) => ctx.fillRect(10, 12 + i * 12, w, 4));
+    ctx.fillRect(10, 12 + lines.length * 12, 8, 4);      // the prompt
+    ctx.fillRect(22, 9 + lines.length * 12, 7, 9);       // the block cursor
+
+    // CRT scanlines, which is most of what makes a green rectangle read as a
+    // tube rather than as a sticker.
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+/** The old family computer, still running in the back of the closet: a beige
+ *  tower with a CRT on top, screen toward the doors. Origin on the floor at
+ *  the tower's center, facing -Z (the doors are to the -Z side). */
+function createClosetComputer() {
+    const pc = new THREE.Group();
+    pc.name = 'closetComputer';
+
+    // Beige that has been beige for twenty years.
+    const beige = new THREE.MeshStandardMaterial({ color: 0xc3b896, roughness: 0.8, metalness: 0.0 });
+    const darkPlastic = new THREE.MeshStandardMaterial({ color: 0x2a2724, roughness: 0.85, metalness: 0.0 });
+
+    const TOWER_W = 0.2, TOWER_H = 0.44, TOWER_D = 0.42;
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(TOWER_W, TOWER_H, TOWER_D), beige);
+    tower.position.y = TOWER_H / 2;
+    pc.add(tower);
+
+    // The front face: a drive bay, a floppy slot, and the two little lights
+    // that are the only reason any of this is visible through a seam.
+    const bay = new THREE.Mesh(new THREE.BoxGeometry(TOWER_W * 0.72, 0.03, 0.004), darkPlastic);
+    bay.position.set(0, TOWER_H - 0.07, -TOWER_D / 2 - 0.002);
+    pc.add(bay);
+    const floppy = new THREE.Mesh(new THREE.BoxGeometry(TOWER_W * 0.6, 0.012, 0.004), darkPlastic);
+    floppy.position.set(0, TOWER_H - 0.13, -TOWER_D / 2 - 0.002);
+    pc.add(floppy);
+    const powerLed = new THREE.Mesh(
+        new THREE.CircleGeometry(0.006, 8),
+        new THREE.MeshStandardMaterial({ color: 0x1b6b2a, emissive: 0x4fe06a, emissiveIntensity: 1.2 })
+    );
+    powerLed.position.set(-0.04, 0.12, -TOWER_D / 2 - 0.003);
+    powerLed.rotation.y = Math.PI;
+    pc.add(powerLed);
+    const activityLed = new THREE.Mesh(
+        new THREE.CircleGeometry(0.005, 8),
+        new THREE.MeshStandardMaterial({ color: 0x6b4a1b, emissive: 0xe0a24f, emissiveIntensity: 1.2 })
+    );
+    activityLed.position.set(-0.02, 0.12, -TOWER_D / 2 - 0.003);
+    activityLed.rotation.y = Math.PI;
+    pc.add(activityLed);
+    closetActivityLed = activityLed;
+
+    // The CRT on top: a deep box with a slight taper, a dark bezel, and the
+    // tube itself.
+    const CRT_W = 0.34, CRT_H = 0.3, CRT_D = 0.33;
+    const crtY = TOWER_H + CRT_H / 2;
+    const crt = new THREE.Mesh(new THREE.BoxGeometry(CRT_W, CRT_H, CRT_D), beige);
+    crt.position.y = crtY;
+    pc.add(crt);
+    const bezel = new THREE.Mesh(new THREE.BoxGeometry(CRT_W * 0.88, CRT_H * 0.8, 0.012), darkPlastic);
+    bezel.position.set(0, crtY + 0.008, -CRT_D / 2 - 0.004);
+    pc.add(bezel);
+
+    const terminal = createTerminalTexture();
+    const tube = new THREE.Mesh(
+        new THREE.PlaneGeometry(CRT_W * 0.74, CRT_H * 0.62),
+        new THREE.MeshStandardMaterial({
+            map: terminal, emissive: 0xffffff, emissiveMap: terminal,
+            emissiveIntensity: 1.15, roughness: 0.3, metalness: 0.0
+        })
+    );
+    tube.name = 'closetTerminal';
+    tube.position.set(0, crtY + 0.008, -CRT_D / 2 - 0.011);
+    tube.rotation.y = Math.PI;        // facing the doors
+    pc.add(tube);
+
+    // ON THE SIGHT LINE THROUGH THE SEAM. The seam sits at x = -0.714 and the
+    // eye at x = -0.8, z = 1.05, so the line through it drifts east as it goes
+    // back: x = -0.8 + 0.139 * (z - 1.05). At the screen's depth that is -0.60.
+    pc.position.set(-0.6, 0, 2.62);
+    registerOutdoorProp(pc, 'oldPc');
+    officeGroup.add(pc);
 }
 
 // ============================================
@@ -1329,6 +1449,8 @@ function createPowerOutlet() {
 let monitorScreen = null;   // { canvas, ctx, texture }: redrawn for the cursor blink
 let _cursorTime = 0;
 let _cursorOn = true;
+let closetActivityLed = null;   // the old tower's blinking drive light
+let _closetBlink = 0;
 
 // The editor's visible lines: recognizably this file. [text, color] pairs
 // in a familiar dark-theme palette.
@@ -2926,6 +3048,17 @@ export function updateStudio(playerPosition, deltaTime) {
 
     // Birds visit the fence outside the window
     updateFenceBirds(deltaTime);
+
+    // The old machine in the closet is doing something. One material's
+    // brightness on a slow, uneven beat, with no texture work behind it: a
+    // steady light reads as a sticker, and a blinking one is why anybody
+    // looks twice at a 2 cm seam. (Reduced motion leaves it lit and steady,
+    // by the early return above.)
+    if (closetActivityLed) {
+        _closetBlink += deltaTime;
+        const on = (_closetBlink % 1.7) < 0.22 || (_closetBlink % 1.7) > 1.55;
+        closetActivityLed.material.emissiveIntensity = on ? 1.4 : 0.12;
+    }
 
     // The editor's cursor blinks on the big monitor. (Under reduced motion
     // the early return above leaves it lit and steady.)
