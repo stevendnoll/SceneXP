@@ -1517,6 +1517,41 @@ function drawCodeEditor(ctx, W, H, cursorOn) {
     ctx.fillText('main*   utf-8   js   Ln 12', W * 0.02, H * 0.982);
 }
 
+/**
+ * Paint the editor into any context, at any size, in the state the monitor on
+ * the wall is in right now (including which half of the cursor blink it is on).
+ *
+ * THE SAME ROUTINE, THE SECOND SURFACE. main.js opens an enlarged monitor over
+ * the room and repaints it through here, so the close-up cannot drift from the
+ * screen it enlarges: one drawing, one set of lines, two canvases. Every
+ * measurement in drawCodeEditor is a fraction of W and H, so this is crisp at
+ * a 1600 px overlay and at the 512 px texture alike, which is the whole reason
+ * the texture was written that way.
+ */
+let _overlayCursor = null;   // the blink state the enlarged view last painted
+
+export function drawMonitorTo(ctx, W, H, force) {
+    if (!ctx || !W || !H) return false;
+    // ONLY WHEN SOMETHING CHANGED. The caller repaints on every animation
+    // frame, and the only thing that moves on this screen is a cursor blinking
+    // twice a second, so painting 60 times a second would redraw an identical
+    // image 58 of them. Under reduced motion the blink stops entirely and this
+    // paints exactly once. `force` is for the moments the picture has to be
+    // laid down whatever the cursor is doing: opening the view, and resizing
+    // the canvas out from under it.
+    if (!force && _overlayCursor === _cursorOn) return false;
+    _overlayCursor = _cursorOn;
+    drawCodeEditor(ctx, W, H, _cursorOn);
+    return true;
+}
+
+/** The lines the monitor is showing, for anybody who cannot see a canvas. The
+ *  enlarged view puts these in the page as text, so a screen reader reads the
+ *  room's own source rather than "canvas". */
+export function getEditorLines() {
+    return EDITOR_LINES.map(([text]) => text);
+}
+
 /** The MacBook's screen: scenexp.com in a little browser window, matching
  *  the real site's dark theme (site.css: bg #0e0f14, raised #171922,
  *  violet #8b71ff to cyan #22d3ee accents). Traffic lights, address bar,

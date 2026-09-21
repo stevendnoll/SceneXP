@@ -39,8 +39,8 @@ let moCallbacks;  // MutationObserver callbacks, fired by hand after class flips
 // initial state the page has.
 const HIDDEN_AT_BOOT = [
   'settings-panel', 'nav-menu', 'checklist', 'piece-modal', 'help-modal',
-  'dialog-modal', 'analytics-view', 'complete-modal', 'nudge-modal',
-  'light-panel',
+  'dialog-modal', 'analytics-view', 'monitor-view', 'complete-modal',
+  'nudge-modal', 'light-panel',
 ];
 
 /** A raycast intersection whose object carries the given userData flags. */
@@ -392,12 +392,14 @@ test('a tour by click: every office dialog, the nudge, the deferred celebration'
   }
   expect(globalThis.sessionStorage.getItem('steve-nudged')).toBe('1');
 
-  // A prop with no checklist entry rotates its two lines across clicks.
-  clickScene({ isProp: true, propKind: 'monitor' });
+  // A prop with no checklist entry rotates its two lines across clicks. (The
+  // monitor used to be the one driven here. It opens its own enlarged view
+  // now, so this asks the trash can, which is still a plain story card.)
+  clickScene({ isProp: true, propKind: 'trash' });
   const firstLine = dom.el('dialog-message').textContent;
-  expect(dom.el('dialog-title').textContent).toBe('The Samsung Monitor');
+  expect(dom.el('dialog-title').textContent).toBe('The Trash Can');
   await escapeAndSettle();
-  clickScene({ isProp: true, propKind: 'monitor' });
+  clickScene({ isProp: true, propKind: 'trash' });
   expect(dom.el('dialog-message').textContent).not.toBe(firstLine);
   await escapeAndSettle();
 
@@ -497,7 +499,7 @@ test('four things opened earns the invitation, and it leads to the portfolio', a
     await jest.advanceTimersByTimeAsync(300);
   };
 
-  for (const kind of ['monitor', 'mouse', 'router']) {
+  for (const kind of ['keyboard', 'mouse', 'router']) {
     clickScene({ isProp: true, propKind: kind });
     expect(isOpen('dialog-modal')).toBe(true);
     await closeCard();
@@ -543,6 +545,46 @@ test('four things opened earns the invitation, and it leads to the portfolio', a
     expect(isOpen('nudge-modal')).toBe(false);
   }
   expect(main.getState().isPaused).toBe(false);
+});
+
+test('the monitor opens up close, painted by the same routine as the wall', async () => {
+  // THE PAGE SELLS "the room's own source code on the monitor" and at the
+  // composed distance it is an unreadable smudge two centimetres tall. This is
+  // the click that makes it legible, so what it holds is: the monitor opens
+  // this instead of a story card, the canvas is sized for real pixels before
+  // anything is painted into it, the lines are in the page as TEXT for anybody
+  // who cannot see a canvas, and the whole thing closes like every other card.
+  const main = await bootSteve();
+  enterRoom();
+
+  clickScene({ isProp: true, propKind: 'monitor' });
+  expect(isOpen('monitor-view')).toBe(true);
+  expect(isOpen('dialog-modal')).toBe(false);      // not the story card
+  expect(main.getState()._modalOpen).toBe(true);
+
+  // Sized to the laid-out screen at device pixels rather than left at the
+  // element's default 300x150, which is what makes the close-up crisp.
+  expect(dom.el('monitor-canvas').width).toBeGreaterThan(300);
+  expect(dom.el('monitor-canvas').height).toBeGreaterThan(150);
+
+  // The caption carries what the prop's story card used to say...
+  expect(dom.el('monitor-caption').textContent).toMatch(/\S/);
+  // ...and the code is really in the page, from the same array the painter
+  // draws, so a screen reader reads the room's source instead of "canvas".
+  const store = await import('../www/steve/js/store.min.js');
+  const lines = store.getEditorLines();
+  expect(lines.length).toBeGreaterThan(4);
+  expect(dom.el('monitor-source').textContent).toBe(lines.join('\n'));
+  expect(dom.el('monitor-source').textContent).toContain('the room you are standing in');
+
+  // Escape closes it, and the room answers taps again.
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  await jest.advanceTimersByTimeAsync(300);
+  expect(isOpen('monitor-view')).toBe(false);
+  expect(main.getState()._modalOpen).toBe(false);
+  clickScene({ isProp: true, propKind: 'trash' });
+  expect(isOpen('dialog-modal')).toBe(true);
+  await escapeAndSettle();
 });
 
 test('a gallery piece click opens the piece modal with its link wired', async () => {

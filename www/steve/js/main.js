@@ -56,6 +56,7 @@ import {
     pauseDancerForDialog, resumeDancerFromDialog,
     pauseRoquiForDialog, resumeRoquiFromDialog,
     updateDashboardScreen,
+    drawMonitorTo, getEditorLines,
     setStudioBrightness, updateInteriorAmbientLight
 } from './store.min.js';
 import { initGallery, getGalleryGroup, resolveGalleryPiece } from './gallery.min.js';
@@ -150,7 +151,7 @@ function onModalClosed() {
 // the capture phase. Keyboard activation is exempt (Enter and Space arrive as
 // a click with `detail` 0, and nobody tabbing was handed a card under a finger).
 const CARD_ARM_MS = 450;
-const CARD_SELECTOR = '#dialog-modal, #help-modal, #piece-modal, #nudge-modal, #complete-modal, #analytics-view, #light-panel';
+const CARD_SELECTOR = '#dialog-modal, #help-modal, #piece-modal, #nudge-modal, #complete-modal, #analytics-view, #monitor-view, #light-panel';
 let cardArmedAt = 0;
 
 function armCard() {
@@ -175,6 +176,7 @@ let pieceModal, pieceModalTitle, pieceModalSubtitle, pieceModalEnter;
 let helpModal;
 let dialogModal, dialogModalTitle, dialogModalMessage;
 let analyticsView;  // the visitor-activity dashboard the wall display opens
+let monitorView, monitorCanvas, monitorCaption, monitorSource;  // the desk monitor, up close
 let propPanel;      // the off-screen list of the room's things (keyboard route)
 let lightPanel, lightPanelSlider, lightPanelValue; // the light switch's floating dimmer
 let completeModal; // discovery-complete celebration
@@ -227,6 +229,10 @@ async function init() {
     dialogModalTitle = document.getElementById('dialog-title');
     dialogModalMessage = document.getElementById('dialog-message');
     analyticsView = document.getElementById('analytics-view');
+    monitorView = document.getElementById('monitor-view');
+    monitorCanvas = document.getElementById('monitor-canvas');
+    monitorCaption = document.getElementById('monitor-caption');
+    monitorSource = document.getElementById('monitor-source');
     propPanel = document.getElementById('prop-panel');
     completeModal = document.getElementById('complete-modal');
     nudgeModal = document.getElementById('nudge-modal');
@@ -366,6 +372,14 @@ function setupEventListeners() {
     window.addEventListener('resize', () => {
         handleResize();
         placeCamera();
+        // The enlarged monitor is sized in device pixels for the box it was
+        // laid out in, so a resize under it leaves a stretched copy of the old
+        // picture until it is reopened.
+        if (monitorOpen) {
+            sizeMonitorCanvas();
+            const ctx = monitorCanvas && monitorCanvas.getContext && monitorCanvas.getContext('2d');
+            if (ctx) drawMonitorTo(ctx, monitorCanvas.width, monitorCanvas.height, true);
+        }
     }, { signal });
 
     // iOS Safari ignores `user-scalable=no` (Apple re-enabled zoom in iOS 10 for
@@ -446,6 +460,10 @@ function setupEventListeners() {
     // Dashboard overlay close
     if (analyticsView) analyticsView.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closeAnalyticsView, { signal }));
+
+    // Enlarged monitor close (backdrop and the round button both carry data-close)
+    if (monitorView) monitorView.querySelectorAll('[data-close]').forEach(el =>
+        el.addEventListener('click', closeMonitorView, { signal }));
 
     // Discovery-complete celebration: close buttons + the Share action.
     if (completeModal) completeModal.querySelectorAll('[data-close]').forEach(el =>
@@ -1410,11 +1428,12 @@ const PROP_CONTENT = {
         ]
     },
     monitor: {
+        // Opens the enlarged monitor instead (see openPropModal), so no lines:
+        // its two quips are MONITOR_CAPTIONS, printed under that screen. The
+        // title stays, because it is this prop's row in the list of the room's
+        // things and a row has to name its card.
         title: 'The Samsung Monitor',
-        lines: [
-            "Big, beige, and silver, and full of code. The wide screen holds a whole room's blueprint at once.",
-            "Steve stares into this thing for hours and somehow rooms come out of it. Fair trade."
-        ]
+        lines: []
     },
     keyboard: {
         title: 'The Keyboard',
@@ -1463,14 +1482,15 @@ function openPropModal(propObj) {
     if (!dialogModal) return;
     const kind = propObj && propObj.userData && propObj.userData.propKind;
     const content = PROP_CONTENT[kind];
-    // Everything a tap can actually OPEN counts toward the invitation, the two
-    // that open something other than a story card included. A prop with no card
-    // (or a kind that does not exist) opens nothing, so it counts for nothing.
-    if (kind === 'dashboard' || kind === 'lightswitch' || (content && content.lines.length)) {
-        noteStoryOpened();
-    }
+    // Everything a tap can actually OPEN counts toward the invitation, the
+    // three that open something other than a story card included. A prop with
+    // no card (or a kind that does not exist) opens nothing, so it counts for
+    // nothing.
+    const opensItsOwnView = kind === 'dashboard' || kind === 'lightswitch' || kind === 'monitor';
+    if (opensItsOwnView || (content && content.lines.length)) noteStoryOpened();
     if (kind === 'dashboard') { openAnalyticsView(); return; }
     if (kind === 'lightswitch') { openLightPanel(propObj); return; }
+    if (kind === 'monitor') { openMonitorView(); return; }
 
     if (!content || !content.lines.length) return;
     state.isModalOpen = true;
@@ -1541,6 +1561,87 @@ function closeAnalyticsView() {
     if (!analyticsView) return;
     analyticsView.classList.add('hidden');
     analyticsOpen = false;
+    state.isModalOpen = false;
+    resumeGameAfterModal();
+}
+
+// ---- The monitor, up close --------------------------------------------------
+// The Samsung on the desk is painted with a slice of this room's own source,
+// and at the composed distance it is a smudge: the page's own description sells
+// "the room's own source code on the monitor" and no visitor could read a word
+// of it. Clicking the monitor opens it at full size instead of a story card,
+// the way the Interstate shop's back-office screen does, and the card's quips
+// come along as the caption underneath so nothing is lost.
+//
+// ONE PAINTER, TWO SURFACES. store.js owns the drawing and exports
+// drawMonitorTo, so this is the wall's screen at a larger size and in the same
+// state, blinking cursor included. A second drawing here would be a second
+// thing to keep in step.
+
+// The captions under the enlarged screen, rotating per opening, which is what
+// the prop's story card used to say.
+const MONITOR_CAPTIONS = [
+    "Big, beige, and silver, and full of code. The wide screen holds a whole room's blueprint at once.",
+    "Steve stares into this thing for hours and somehow rooms come out of it. Fair trade.",
+    "That is this room's own source, more or less. The part that draws the cat is further down."
+];
+let monitorOpen = false;
+let monitorRaf = 0;
+let monitorTick = 0;
+
+/** Size the canvas to its laid-out screen at device pixels, so the painter
+ *  draws crisply rather than being scaled up from a smaller buffer. */
+function sizeMonitorCanvas() {
+    if (!monitorCanvas || !monitorCanvas.getBoundingClientRect) return;
+    const rect = monitorCanvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    monitorCanvas.width = Math.max(2, Math.round((rect.width || 760) * dpr));
+    monitorCanvas.height = Math.max(2, Math.round((rect.height || 475) * dpr));
+}
+
+/** Repaint while the overlay is up. The cursor blink is advanced by
+ *  updateStudio on the main loop, which keeps running behind this, so there is
+ *  nothing to drive here but the painting itself. */
+function startMonitorRender() {
+    const ctx = monitorCanvas && monitorCanvas.getContext && monitorCanvas.getContext('2d');
+    if (!ctx) return;
+    let first = true;
+    const loop = () => {
+        if (!monitorOpen) return;
+        drawMonitorTo(ctx, monitorCanvas.width, monitorCanvas.height, first);
+        first = false;
+        monitorRaf = requestAnimationFrame(loop);
+    };
+    loop();
+}
+
+function stopMonitorRender() {
+    if (monitorRaf) cancelAnimationFrame(monitorRaf);
+    monitorRaf = 0;
+}
+
+function openMonitorView() {
+    if (!monitorView) return;
+    state.isModalOpen = true;
+    monitorOpen = true;
+    track('click-prop', { kind: 'monitor' });
+    if (monitorCaption) monitorCaption.textContent = pickLine(MONITOR_CAPTIONS, monitorTick++);
+    // The same lines as text, for anybody who cannot see a canvas. A painted
+    // surface cannot be selected, zoomed by the browser or read aloud, which is
+    // why the dashboard is DOM as well.
+    if (monitorSource) monitorSource.textContent = getEditorLines().join('\n');
+    monitorView.classList.remove('hidden');
+    sizeMonitorCanvas();     // measure now that the overlay has been laid out
+    startMonitorRender();
+    const closeBtn = monitorView.querySelector('.monitor-close');
+    if (closeBtn) closeBtn.focus();
+}
+
+function closeMonitorView() {
+    if (!monitorView) return;
+    monitorView.classList.add('hidden');
+    stopMonitorRender();
+    monitorOpen = false;
     state.isModalOpen = false;
     resumeGameAfterModal();
 }
@@ -1753,6 +1854,7 @@ function closeActiveModal() {
     if (completeModal && !completeModal.classList.contains('hidden')) closeCompleteModal();
     else if (nudgeModal && !nudgeModal.classList.contains('hidden')) closeNudgeModal();
     else if (analyticsView && !analyticsView.classList.contains('hidden')) closeAnalyticsView();
+    else if (monitorView && !monitorView.classList.contains('hidden')) closeMonitorView();
     else if (lightPanel && !lightPanel.classList.contains('hidden')) closeLightPanel();
     else if (helpModal && !helpModal.classList.contains('hidden')) closeHelpModal();
     else if (dialogModal && !dialogModal.classList.contains('hidden')) closeDialogModal();
@@ -1767,9 +1869,9 @@ function animate() {
     state.deltaTime = Math.min((now - state.lastTime) / 1000, 0.1);
     state.lastTime = now;
     update(state.deltaTime);
-    // While the dashboard overlay is open it covers the screen, so skip the
+    // While a full-screen overlay is up it covers the room, so skip the
     // (wasted) 3D render behind it.
-    if (!analyticsOpen) render();
+    if (!analyticsOpen && !monitorOpen) render();
 }
 
 function update(deltaTime) {
@@ -1802,10 +1904,11 @@ function cleanup() {
     const renderer = getRenderer();
     if (renderer) renderer.setAnimationLoop(null);
     if (cleanupController) cleanupController.abort();
-    // The two timers that outlive their listeners: an AbortSignal cancels
-    // events, not setTimeout.
+    // The things that outlive their listeners: an AbortSignal cancels events,
+    // not setTimeout and not a requested frame.
     stopRoomHint();
     hideRoomToast();
+    stopMonitorRender();
 }
 
 // Dwell-time tracking: report a one-time session-end (with elapsed seconds) when

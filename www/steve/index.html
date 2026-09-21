@@ -42,20 +42,28 @@
          identical cards in one message thread. See the longer note in
          earthdefense, which is the page that shipped that bug.
 
-         og-steve.jpg is a capture of the office from the doorway (from the
-         specs/og-steve.png capture, same flow as the other experiences). -->
-    <meta property="og:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=1">
+         RESHOT 2026-09-21, after the room got its fixed eye, its wall
+         display and its whiteboard back: the card before this one was a July
+         capture of a room that no longer existed, down to a board quoting
+         copy that is not on it any more. The pair is built from the Mac
+         screenshot with the house recipe (convert to sRGB, THEN strip, then
+         jpeg at q92 4:4:4 and webp at q92 -sharp_yuv, measured against the
+         corrected master). On this frame the profile conversion is worth
+         2.92% RMSE, which is the difference between the greens somebody
+         chose and ones nobody did. Both URLs carry ?v=2 so the scrapers
+         that cached the old card fetch the new one. -->
+    <meta property="og:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=2">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk working on SceneXP code, a tuxedo cat sleeps on a small navy desk by the window, and a whiteboard on the green wall reads delight visitors, honor the honorees, ship it.">
+    <meta property="og:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk with a laptop showing the SceneXP site and a monitor full of code, a whiteboard on the green wall behind him sketches a plan, build, test, ship, learn loop, and a tuxedo cat sleeps on a small navy desk by the window.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Steve's Home Office">
     <meta name="twitter:description" content="A 3D model of the tiny home office where SceneXP gets built. Step in and look all the way around.">
-    <meta name="twitter:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=1">
-    <meta name="twitter:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk working on SceneXP code, a tuxedo cat sleeps on a small navy desk by the window, and a whiteboard on the green wall reads delight visitors, honor the honorees, ship it.">
+    <meta name="twitter:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=2">
+    <meta name="twitter:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk with a laptop showing the SceneXP site and a monitor full of code, a whiteboard on the green wall behind him sketches a plan, build, test, ship, learn loop, and a tuxedo cat sleeps on a small navy desk by the window.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
@@ -260,6 +268,47 @@
                 <button class="piece-cancel" data-close>Thanks, Steve!</button>
             </div>
         </div>
+    </div>
+
+    <!-- ===== THE MONITOR, UP CLOSE ==========================================
+         The Samsung on the desk is painted with a slice of this room's own
+         source (EDITOR_LINES in store.js), and at the composed distance it is
+         an unreadable smudge two centimetres tall. This is where it becomes
+         legible, which is the scene's whole premise landing in one click: the
+         room you are standing in, in the code that draws it.
+
+         THE SAME PAINTER FILLS BOTH SURFACES. store.js exports drawMonitorTo,
+         so the canvas below is the wall's screen at a larger size and in the
+         same state, cursor blink included. A separate drawing here would be a
+         second thing to keep in step, and it would drift.
+
+         THE MARKUP AND EVERY CLASS ON IT ARE THE SHARED ONES the Interstate
+         shop's back-office monitor uses, styled by #monitor-view and the
+         .monitor-* rules in the shared sheet. Nothing here needs CSS of its
+         own.
+
+         AND THE LINES ARE IN THE PAGE AS TEXT, not only as pixels. A canvas
+         cannot be selected, zoomed by the browser, or read aloud, which is the
+         same reason the visitor-activity view below is DOM rather than a
+         painted surface. main.js fills this from the same array the painter
+         uses. -->
+    <div id="monitor-view" class="hidden" role="dialog" aria-modal="true"
+        aria-label="The monitor on Steve's desk, up close">
+        <div class="monitor-backdrop" data-close></div>
+        <div class="monitor-frame">
+            <div class="monitor-bezel">
+                <div class="monitor-screen">
+                    <canvas id="monitor-canvas" class="monitor-canvas" role="img"
+                        aria-label="A code editor showing this room's own source"></canvas>
+                    <div class="monitor-glass" aria-hidden="true"></div>
+                </div>
+            </div>
+            <div class="monitor-neck" aria-hidden="true"></div>
+            <div class="monitor-base" aria-hidden="true"></div>
+        </div>
+        <pre id="monitor-source" class="sr-only"></pre>
+        <p id="monitor-caption" class="monitor-caption"></p>
+        <button class="monitor-close" aria-label="Step back from the monitor" data-close>&times;</button>
     </div>
 
     <!-- Dialog shown when an office prop is activated. -->
@@ -470,7 +519,7 @@
          takes the room away or asks to be dismissed. -->
     <div id="office-toast" class="office-toast" role="status" aria-live="polite"></div>
 
-    <canvas id="game-canvas" role="img" aria-label="A 3D view of Steve's home office from beside the closet door: Steve works at his sit-stand desk, seen in profile, and a tuxedo cat sleeps on a small blue desk by the window"></canvas>
+    <canvas id="game-canvas" role="img" aria-label="A 3D view of Steve's home office from beside the closet door: Steve works at his sit-stand desk, seen in profile, a whiteboard on the wall behind him sketches a plan, build, test, ship, learn loop, and a tuxedo cat sleeps on a small blue desk by the window"></canvas>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>
