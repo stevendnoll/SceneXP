@@ -2834,25 +2834,26 @@ function findHairGroup(person) {
         child.isGroup && !child.userData.isArm && Math.abs(child.position.y) < 1e-6) || null;
 }
 
-/** Give a tagged arm a working elbow: wrap the forearm and hand (the
- *  parts below the elbow sphere at half arm length) into a pivot group
- *  at the joint. The sphere itself stays with the upper arm as the joint
- *  ball. Returns the pivot.
+/** The elbow pivot of a tagged arm: the group the shared rig hangs its
+ *  forearm, hand and elbow ball from, at half arm length. Returns it.
  *
  *  This is what makes John's point read as a point rather than as
- *  sleepwalking: the shared rig's arm is one rigid group hinged at the
- *  shoulder, which cannot put a fingertip on a specific spot on a desk. */
+ *  sleepwalking: without a bend the arm is one rigid stick hinged at the
+ *  shoulder, which cannot put a fingertip on a specific spot on a desk.
+ *
+ *  THIS USED TO BUILD THE PIVOT ITSELF, by moving every part of the arm
+ *  below y -0.28 into a new group at y -0.275. The shared rig grew its
+ *  own forearm group at exactly that joint (people-1.0.0.js), with its
+ *  children re-based to it by exactly that amount, so the surgery found
+ *  nothing left to move and quietly handed back an EMPTY group. Every
+ *  angle in the pose arithmetic below still got written, to a pivot with
+ *  nothing under it: John and the dealer went rigid, both their hands
+ *  sank through the desk, and the tap and the typing bob moved a group
+ *  with no geometry in it. Nothing threw, and nothing in tests noticed.
+ *  The arithmetic is unchanged because the joint and the offsets under
+ *  it are identical: only the question of who builds the group moved. */
 function addElbow(arm) {
-    const pivot = new THREE.Group();
-    pivot.position.set(0, -0.275, 0);
-    const movers = arm.children.filter((part) => part.position.y < -0.28);
-    movers.forEach((part) => {
-        arm.remove(part);
-        part.position.y += 0.275;
-        pivot.add(part);
-    });
-    arm.add(pivot);
-    return pivot;
+    return arm.userData.forearm;
 }
 
 /** Yaw that aims a figure standing at `from` toward the point `to`, so a

@@ -1702,6 +1702,8 @@ function createOwner() {
     // gardener's big capable hands and boots: the shared builder's hand (the
     // 0.04-radius sphere in each arm group) and shoe (the only box with the
     // 0.18 foot length) are found by their geometry and scaled up in place.
+    // The hand hangs off the arm's FOREARM group now that the shared rig has
+    // one, so both tags count as "inside an arm" here.
     owner.traverse((child) => {
         if (child.userData && child.userData.isPupil) {
             child.material.color.setHex(0x3f6fae);
@@ -1710,7 +1712,8 @@ function createOwner() {
         if (!child.isMesh || !child.geometry) return;
         const params = child.geometry.parameters || {};
         if (child.geometry.type === 'SphereGeometry' && params.radius === 0.04 &&
-            child.parent && child.parent.userData && child.parent.userData.isArm) {
+            child.parent && child.parent.userData &&
+            (child.parent.userData.isArm || child.parent.userData.isForearm)) {
             child.scale.multiplyScalar(1.75);
         } else if (child.geometry.type === 'BoxGeometry' && params.depth === 0.18) {
             child.scale.set(1.6, 1.25, 1.5);

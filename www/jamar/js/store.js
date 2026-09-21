@@ -1086,6 +1086,8 @@ function createBoothFriends() {
     mike.scale.setScalar(1.08);
     // Big capable hands, sturdy boots, and the darker crown, the same way
     // the Seed to Seed host gets his: found by geometry and adjusted.
+    // The hand hangs off the arm's FOREARM group now that the shared rig
+    // has one, so both tags count as "inside an arm" here.
     mike.traverse((child) => {
         if (child.userData && child.userData.isPupil) {
             child.material.color.setHex(MIKE_LOOK.eyeColor);
@@ -1094,7 +1096,8 @@ function createBoothFriends() {
         if (!child.isMesh || !child.geometry) return;
         const params = child.geometry.parameters || {};
         if (child.geometry.type === 'SphereGeometry' && params.radius === 0.04 &&
-            child.parent && child.parent.userData && child.parent.userData.isArm) {
+            child.parent && child.parent.userData &&
+            (child.parent.userData.isArm || child.parent.userData.isForearm)) {
             child.scale.multiplyScalar(1.55);
         } else if (child.geometry.type === 'BoxGeometry' && params.depth === 0.18) {
             child.scale.set(1.5, 1.2, 1.4);
@@ -1128,6 +1131,47 @@ function createBoothFriends() {
 // ============================================
 // JAMAR, THE MAN OF THE HOUR
 // ============================================
+/** Fold one arm up and put a microphone in the hand, just below and in
+ *  front of the mouth. Returns the mic group.
+ *
+ *  The elbow is the shared rig's own forearm group, at y -0.275: the
+ *  upper arm hangs forward and in, the forearm folds up toward the face,
+ *  and the mic parents to that pivot so every gesture carries it.
+ *
+ *  THIS USED TO WRAP THE PIVOT ITSELF, gathering the arm's meshes below
+ *  y -0.4 into a new group at the joint. The rig grew its own forearm
+ *  group there (people-1.0.0.js), so the gather found nothing and built
+ *  an EMPTY pivot: the forearm and hand stayed straight down the upper
+ *  arm, and only the MIC, added afterwards, went on to be folded up
+ *  toward his mouth. Jamar sang for twelve days with both arms hanging
+ *  at the floor and a microphone floating in front of his face.
+ *
+ *  Kept as its own function so the thing that broke can be measured:
+ *  it is the hand-to-mic distance, and nothing else says it. */
+function poseMicArm(micArm) {
+    micArm.rotation.x = -0.6;
+    micArm.rotation.z = -0.2;
+    const elbowPivot = micArm.userData.forearm;
+    elbowPivot.rotation.x = -2.2;    // fold the forearm up toward the face
+    elbowPivot.rotation.z = -0.45;   // and across, toward the centerline of his mouth
+
+    const mic = new THREE.Group();
+    mic.name = 'microphone';
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.17, 8), matteBlack);
+    mic.add(handle);
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.036, 10, 8),
+        new THREE.MeshStandardMaterial({ color: 0x555a60, roughness: 0.45, metalness: 0.6 })
+    );
+    head.position.y = 0.1;
+    head.name = 'micHead';
+    mic.add(head);
+    mic.position.set(0, -0.295, 0.03);   // in the hand, at the end of the folded forearm
+    mic.rotation.x = 2.35;   // head tipped up and back toward his mouth
+    elbowPivot.add(mic);
+    return mic;
+}
+
 function createJamar() {
     const J = LAYOUT.jamar;
 
@@ -1175,13 +1219,7 @@ function createJamar() {
     // The beard (same fitted build Mike wears, in Jamar's color)
     jamar.add(createBeard(JAMAR_LOOK.beardColor));
 
-    // The mic arm holds the microphone just below and in front of his
-    // mouth. The shared rig has no elbow joint, so this arm gets one: the
-    // forearm and hand wrap into a pivot group centered on the elbow
-    // sphere (y -0.275), the same trick poseSeated uses for knees. Upper
-    // arm hangs forward and in, forearm folds up toward the face, and the
-    // mic parents to the pivot so every gesture carries it. The free arm
-    // rests at his side.
+    // One arm holds the mic (see poseMicArm); the free arm rests at his side.
     let micArm = null, freeArm = null;
     jamar.children.forEach((group) => {
         if (group.isGroup && group.userData.isArm) {
@@ -1189,33 +1227,7 @@ function createJamar() {
             else freeArm = group;
         }
     });
-    if (micArm) {
-        micArm.rotation.x = -0.6;
-        micArm.rotation.z = -0.2;
-        const elbowPivot = new THREE.Group();
-        elbowPivot.position.y = -0.275;
-        micArm.children.slice().forEach((part) => {
-            if (part.isMesh && part.position.y < -0.4) {
-                part.position.y += 0.275;
-                elbowPivot.add(part);
-            }
-        });
-        elbowPivot.rotation.x = -2.2;    // fold the forearm up toward the face
-        elbowPivot.rotation.z = -0.45;   // and across, toward the centerline of his mouth
-        micArm.add(elbowPivot);
-        const mic = new THREE.Group();
-        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.17, 8), matteBlack);
-        mic.add(handle);
-        const head = new THREE.Mesh(
-            new THREE.SphereGeometry(0.036, 10, 8),
-            new THREE.MeshStandardMaterial({ color: 0x555a60, roughness: 0.45, metalness: 0.6 })
-        );
-        head.position.y = 0.1;
-        mic.add(head);
-        mic.position.set(0, -0.295, 0.03);   // in the hand, at the end of the folded forearm
-        mic.rotation.x = 2.35;   // head tipped up and back toward his mouth
-        elbowPivot.add(mic);
-    }
+    if (micArm) poseMicArm(micArm);
     if (freeArm) {
         freeArm.rotation.x = -0.25;
         freeArm.rotation.z = 0.12;
@@ -2065,4 +2077,4 @@ export function getBarGroup() {
 }
 
 // Exposed for unit tests only; production code uses the named exports above.
-export const __test__ = { LAYOUT, PALETTE, seatHeightY };
+export const __test__ = { LAYOUT, PALETTE, seatHeightY, poseMicArm, giveGlass };

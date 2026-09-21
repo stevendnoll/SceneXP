@@ -955,21 +955,21 @@ const JENN_TYPE_POSE = { shoulder: -0.5, elbow: -1.05, rz: 0.24 };
 const JENN_WAVE_POSE = { shoulder: -1.55, elbow: -0.75, rz: 0.25 };
 const JENN_REST_POSE = { shoulder: -0.3, elbow: -0.9, rz: 0.1 };
 
-/** Give a tagged arm a working elbow: wrap the forearm and hand (the
- *  parts below the elbow sphere at half arm length) into a pivot group
- *  at the joint. The sphere itself stays with the upper arm as the
- *  joint ball. Returns the pivot. */
+/** The elbow pivot of a tagged arm: the group the shared rig hangs its
+ *  forearm, hand and elbow ball from, at half arm length. Returns it.
+ *
+ *  THIS USED TO BUILD THE PIVOT ITSELF, by moving every part of the arm
+ *  below y -0.28 into a new group at y -0.275. The shared rig grew its
+ *  own forearm group at exactly that joint (people-1.0.0.js), with its
+ *  children re-based to it by exactly that amount, so the surgery found
+ *  nothing left to move and quietly handed back an EMPTY group. Every
+ *  angle below still got written, to a pivot with nothing under it, and
+ *  Jenn spent a fortnight typing with two straight arms hanging through
+ *  the desk and waving without bending. The arithmetic in the poses is
+ *  unchanged because the joint and the offsets under it are identical:
+ *  only the question of who builds the group has moved. */
 function addElbow(arm) {
-    const pivot = new THREE.Group();
-    pivot.position.set(0, -0.275, 0);
-    const movers = arm.children.filter((part) => part.position.y < -0.28);
-    movers.forEach((part) => {
-        arm.remove(part);
-        part.position.y += 0.275;
-        pivot.add(part);
-    });
-    arm.add(pivot);
-    return pivot;
+    return arm.userData.forearm;
 }
 
 function createJenn() {
@@ -1886,10 +1886,16 @@ export function updateOffice(deltaTime) {
             g.rotation.y += (jennRig.baseYaw + Math.sin(_t * 0.4) * 0.05 - g.rotation.y) * ease;
             g.rotation.z = Math.sin(_t * 0.8) * 0.012;
             jennRig.arms.forEach(({ arm, elbow, side, phase }) => {
-                const bob = Math.sin(_t * 7 + phase) * 0.05;
+                // THE TYPING POSE IS THE LOWEST HER HANDS EVER GET. The
+                // bob only ever FOLDS the forearm further, which lifts,
+                // because the pose already rests them a centimeter over
+                // the keys: a full sine would dip the other half of every
+                // cycle and run her fingers through the keyboard. Same
+                // rectified lift the showroom's dealer types with.
+                const bob = Math.max(0, Math.sin(_t * 7 + phase)) * 0.05;
                 arm.rotation.x += (JENN_TYPE_POSE.shoulder - arm.rotation.x) * ease;
                 arm.rotation.z += (-side * JENN_TYPE_POSE.rz - arm.rotation.z) * ease;
-                elbow.rotation.x += (JENN_TYPE_POSE.elbow + bob - elbow.rotation.x) * ease;
+                elbow.rotation.x += (JENN_TYPE_POSE.elbow - bob - elbow.rotation.x) * ease;
                 elbow.rotation.z *= (1 - ease);   // unwind any leftover wave
             });
         } else {
@@ -1937,4 +1943,7 @@ export function getOfficeGroup() {
 }
 
 // Exposed for unit tests only; production code uses the named exports above.
-export const __test__ = { LAYOUT, PALETTE, seatHeightY };
+export const __test__ = {
+    LAYOUT, PALETTE, seatHeightY, poseSeated, addElbow,
+    JENN_TYPE_POSE, JENN_WAVE_POSE, JENN_REST_POSE
+};
