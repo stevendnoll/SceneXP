@@ -229,7 +229,8 @@ export function initStore() {
     createSonDeskNook();      // the son's small navy desk, chair, and ring lamp
     createNorthwestCorner();  // trash can, hooded litter box, and its mat
     createSitStandDeskWall(); // Steve's sit-stand desk, standing, west wall
-    createWallDashboard();    // the visitor-activity display on the wall behind Steve
+    createWallDashboard();    // the visitor-activity display on the east wall
+    createWhiteboardWall();   // the three rules, on the north wall behind Steve
     createClosetComputer();   // the old machine still running behind the doors
     createCatBowls();         // food and water, desk-to-closet stretch
     createOfficeLighting();   // shared interior rig, sized for one small room
@@ -2905,6 +2906,281 @@ function createWallDashboard() {
 }
 
 // ============================================
+// THE WHITEBOARD
+// ============================================
+// It hung on the east wall until 2026-09-18, when the visitor-activity display
+// took that spot, and the room lost the one surface that said out loud what
+// every scene on this site is for. It is back on the north wall, the bare one
+// behind Steve, unchanged apart from where it hangs and one thing noted below.
+//
+// CLICKING IT OPENS A STORY CARD, not the close-up overlay it used to open.
+// That overlay repainted the board into a full-screen view, and the room has a
+// full-screen view now: the dashboard. Two would be one too many.
+
+/**
+ * WHERE THE BOXES ARE, in the drawing's own canvas space, and the reason it is
+ * up here in module scope rather than inside the function that draws it: the
+ * view suite asks this object where the diagram's two columns are and then
+ * raycasts those exact rectangles through the room. Written out inside
+ * drawOfficeWhiteboard, the test would have to repeat the numbers, and a box
+ * moved into the band Steve covers would pass a test still measuring the
+ * rectangle it used to occupy.
+ */
+const BOARD_LAYOUT = {
+    canvas: { w: 512, h: 384 },
+    box: { w: 112, h: 44 },
+    cols: { left: 24, right: 512 - 24 - 112 },
+    rows: { left: [54, 140, 226], right: [96, 196] }
+};
+
+/**
+ * The diagram on the whiteboard: the loop every software project runs on,
+ * boxed and arrowed in marker. Drawn at 512 x 384, the board's own aspect.
+ *
+ * LAID OUT IN TWO COLUMNS, AND THAT IS THE WHOLE DESIGN. The board hangs
+ * centered in the wall's bare run, and Steve stands in front of the middle of
+ * it: measured through the drawn room, the middle 30% of this canvas (x 180 to
+ * 330) is behind him from the fixed eye at every aspect, and another 10 either
+ * side is partly behind him. So every box lives in an outer third, where the
+ * eye has a clear line to it, and only the connectors cross the middle. A line
+ * passing behind somebody standing at a whiteboard reads as a line passing
+ * behind somebody standing at a whiteboard. A word does not.
+ */
+function drawOfficeWhiteboard(ctx, W, H) {
+    const BLUE = '#2456a8', GREEN = '#2e7d4f', RED = '#c0392b';
+    const scale = W / BOARD_LAYOUT.canvas.w;   // the layout is written at 512 x 384
+    const s = (n) => n * scale;
+
+    ctx.fillStyle = '#fcfcf9';
+    ctx.fillRect(0, 0, W, H);
+
+    // Ghosts of erased sessions past, kept from the board this replaces.
+    ctx.fillStyle = 'rgba(150, 152, 148, 0.08)';
+    [[0.14, 0.55, 0.3, 0.2], [0.55, 0.18, 0.32, 0.14], [0.4, 0.72, 0.22, 0.12]].forEach(([gx, gy, gw, gh]) => {
+        ctx.fillRect(W * gx, H * gy, W * gw, H * gh);
+    });
+
+    const { box: { w: BOX_W, h: BOX_H }, cols, rows } = BOARD_LAYOUT;
+    const LEFT_X = cols.left, RIGHT_X = cols.right;
+    const lead = (x) => x + BOX_W / 2;   // a box's vertical centre line
+
+    /** A marker box with its label. */
+    const box = (x, y, label) => {
+        ctx.strokeStyle = BLUE;
+        ctx.lineWidth = s(3);
+        ctx.beginPath();
+        ctx.roundRect(s(x), s(y), s(BOX_W), s(BOX_H), s(7));
+        ctx.stroke();
+        ctx.fillStyle = BLUE;
+        ctx.font = `bold ${Math.round(s(23))}px "Segoe UI", "Comic Sans MS", Verdana, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, s(x + BOX_W / 2), s(y + BOX_H / 2 + 1));
+    };
+
+    /** A marker stroke through the given points, with a head on the last one. */
+    const arrow = (points, color, dashed) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = s(dashed ? 2.5 : 3);
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        if (dashed) ctx.setLineDash([s(9), s(7)]);
+        ctx.beginPath();
+        points.forEach(([px, py], i) => (i ? ctx.lineTo(s(px), s(py)) : ctx.moveTo(s(px), s(py))));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // The head, aimed along the last segment
+        const [ax, ay] = points[points.length - 2];
+        const [bx, by] = points[points.length - 1];
+        const a = Math.atan2(by - ay, bx - ax);
+        const head = 11;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(s(bx), s(by));
+        ctx.lineTo(s(bx - head * Math.cos(a - 0.42)), s(by - head * Math.sin(a - 0.42)));
+        ctx.lineTo(s(bx - head * Math.cos(a + 0.42)), s(by - head * Math.sin(a + 0.42)));
+        ctx.closePath();
+        ctx.fill();
+    };
+
+    // The left column: plan, build, test, top to bottom.
+    const LY = rows.left;
+    box(LEFT_X, LY[0], 'PLAN');
+    box(LEFT_X, LY[1], 'BUILD');
+    box(LEFT_X, LY[2], 'TEST');
+    arrow([[lead(LEFT_X), LY[0] + BOX_H], [lead(LEFT_X), LY[1] - 4]], GREEN);
+    arrow([[lead(LEFT_X), LY[1] + BOX_H], [lead(LEFT_X), LY[2] - 4]], GREEN);
+
+    // The right column: ship, then learn.
+    const RY = rows.right;
+    box(RIGHT_X, RY[0], 'SHIP');
+    box(RIGHT_X, RY[1], 'LEARN');
+    arrow([[lead(RIGHT_X), RY[0] + BOX_H], [lead(RIGHT_X), RY[1] - 4]], GREEN);
+
+    // Test to ship, the one crossing that carries the flow. Its elbow sits in
+    // the middle band, which is the part nobody can see anyway.
+    arrow([[LEFT_X + BOX_W, LY[2] + BOX_H / 2], [256, LY[2] + BOX_H / 2],
+        [256, RY[0] + BOX_H / 2], [RIGHT_X - 5, RY[0] + BOX_H / 2]], GREEN);
+
+    // And round again: learn back to plan, through the second corridor.
+    //
+    // IT USED TO RUN ROUND THE OUTSIDE, down to y 334 and up the left at x 14,
+    // and that is very probably what Steve was seeing as "a dashed black line
+    // going around the edge of the board". It was: at this board's size a
+    // texture pixel is about 2.3 mm, so that line sat 33 mm in from the face's
+    // edge, which is a handful of screen pixels inside the frame, and it was
+    // drawn dashed in a dark red that reads as near black at two pixels wide.
+    // A diagram whose own strokes hug the frame will be read as a rendering
+    // fault, and it was. Nothing on the board comes near an edge now: the
+    // return runs up the corridor at x 296, which is inside the band Steve
+    // stands in front of, and arrives at PLAN across the top.
+    arrow([[RIGHT_X - 5, RY[1] + BOX_H / 2], [296, RY[1] + BOX_H / 2],
+        [296, LY[0] + BOX_H / 2], [LEFT_X + BOX_W + 5, LY[0] + BOX_H / 2]], RED, true);
+
+    // SHIP circled in red, the way "ship it" was circled on the board this
+    // replaces. It is still the hard one.
+    ctx.strokeStyle = RED;
+    ctx.lineWidth = s(3);
+    ctx.beginPath();
+    ctx.ellipse(s(RIGHT_X + BOX_W / 2), s(RY[0] + BOX_H / 2), s(BOX_W * 0.62), s(BOX_H * 0.78), -0.05, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.textBaseline = 'alphabetic';
+}
+
+/** The whiteboard: white surface in an aluminum frame, marker tray with
+ *  markers and an eraser, on the north wall behind Steve. */
+function createWhiteboardWall() {
+    const { room, window: win } = LAYOUT;
+    const innerN = room.minZ + room.wallT / 2;
+    const innerW = room.minX + room.wallT / 2;
+
+    const boardGroup = new THREE.Group();
+    boardGroup.name = 'whiteboard';
+
+    const canvas = makeCanvas(BOARD_LAYOUT.canvas.w, BOARD_LAYOUT.canvas.h);
+    drawOfficeWhiteboard(canvas.getContext('2d'), BOARD_LAYOUT.canvas.w, BOARD_LAYOUT.canvas.h);
+    const boardTexture = new THREE.CanvasTexture(canvas);
+    // TAGGED sRGB, which the east-wall original was not. Left linear, the
+    // marker colours come out pale (that blue lands nearer #6699d4 than
+    // #2456a8) and the list reads as a ghost of itself from across the room.
+    // The board is meant to be legible at four metres, so the ink is decoded.
+    boardTexture.colorSpace = THREE.SRGBColorSpace;
+
+    const surface = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.2, 0.9),
+        new THREE.MeshStandardMaterial({ map: boardTexture, roughness: 0.35, metalness: 0.05 })
+    );
+    surface.name = 'whiteboardFace';
+    surface.position.z = 0.018;
+    boardGroup.add(surface);
+
+    // ---- The frame, and the two faults it has had ------------------------
+    //
+    // The horizontal rails span the full outer width (1.28, flush with the
+    // vertical rails' outer faces at ±0.64), and the verticals butt between
+    // them, so every corner meets square.
+    //
+    // 1. THE RAILS STAND ENTIRELY IN FRONT OF THE FACE. The board this was
+    //    restored from used rails 35 mm deep set at z 0.005, running -0.0125
+    //    to 0.0225, with the face at 0.018: the face plane passed THROUGH
+    //    every rail, and along the line where it crossed each rail's inner
+    //    wall the two surfaces met at the same depth. That is the jagged seam
+    //    that crawls while the view pans, and no amount of separation or near
+    //    plane fixes it, because the surfaces really are in the same place.
+    //
+    // 2. AND THEY BARELY STAND PROUD OF IT, 7 mm rather than the 15 the first
+    //    fix left. What is visible at the opening's edge is the rail's INNER
+    //    WALL, a face perpendicular to the board, and its width on screen is
+    //    the lip's depth times the sine of the angle the eye sits off the
+    //    board's normal, which is 3 degrees. At 15 mm that sliver is half a
+    //    millimetre, which at this distance is part of a pixel: it lands on
+    //    some pixels and misses others, so it reads as a dashed line rather
+    //    than an edge, and it crawls when anything moves. Shallower is
+    //    narrower, and the material below is the other half of the answer.
+    // 3. AND THE RAILS HAVE NO SIDE WALLS AT ALL. They are four flat pieces
+    //    now rather than four boxes, so the frame has nothing perpendicular to
+    //    the board and there is no inner wall to catch the eye at the opening.
+    //    That removes the last surface that could show as a line where white
+    //    meets silver, whatever the lighting does. The thickness it gives up
+    //    is thickness nobody can see: this eye sits 3 degrees off the board's
+    //    normal and cannot move, so a 6 mm lip was already under a tenth of a
+    //    pixel of edge. The tray below keeps its solid shape, being a thing
+    //    the visitor sees in profile.
+    //
+    // ALUMINIUM THAT CANNOT GO BLACK, either. The shared brushedMetal is
+    // metalness 0.7, and nothing in this room supplies an environment map, so
+    // a metal face that catches no direct light has almost nothing to reflect
+    // and renders near black. At metalness 0.2 the ambient and hemisphere
+    // terms carry it, which is 3.1x the diffuse response of the shared metal.
+    const frameMetal = new THREE.MeshStandardMaterial({
+        color: 0xc6cbd1, roughness: 0.5, metalness: 0.2
+    });
+    [[0, 0.46, 1.28, 0.05], [0, -0.46, 1.28, 0.05], [-0.615, 0, 0.05, 0.87], [0.615, 0, 0.05, 0.87]].forEach(([fx, fy, fw, fh]) => {
+        const strip = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh), frameMetal);
+        strip.name = 'whiteboardFrame';
+        strip.position.set(fx, fy, surface.position.z + 0.004);
+        boardGroup.add(strip);
+    });
+
+    // The tray takes the frame's aluminium too, so the board's hardware is one
+    // material and its channel does not go black the way the rails did.
+    const tray = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.07), frameMetal);
+    tray.position.set(0, -0.51, 0.035);
+    boardGroup.add(tray);
+    // Two markers, end to end with a gap. They used to overlap by 2 cm at the
+    // same height and depth, which is two cylinders of the same radius sharing
+    // an axis: their curved surfaces were coincident along the overlap, in
+    // blue and green. Nobody could see it behind Steve, and it was still two
+    // surfaces fighting for the same pixels.
+    [[0x2456a8, -0.13], [0x2e7d4f, 0.01]].forEach(([color, mx]) => {
+        const marker = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.011, 0.011, 0.12, 8),
+            new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.0 })
+        );
+        marker.rotation.z = Math.PI / 2;
+        marker.position.set(mx, -0.495, 0.045);
+        boardGroup.add(marker);
+    });
+    // A shade slimmer front to back (35 mm, was 50) and forward on the tray,
+    // so it rests IN FRONT of the bottom rail rather than halfway into it. At
+    // z 0.045 it reached back to 0.02, which clipped 2 mm into the old rail
+    // and would clip 5 into this one: the same crawling seam as above, in dark
+    // grey against silver. It still sits in the tray, which is a block resting
+    // in a channel and not two surfaces fighting over the same pixels.
+    const eraser = new THREE.Mesh(
+        new THREE.BoxGeometry(0.11, 0.035, 0.035),
+        new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.8, metalness: 0.0 })
+    );
+    eraser.position.set(0.15, -0.49, 0.0525);
+    boardGroup.add(eraser);
+
+    // ---- CENTERED IN THE WALL'S BARE RUN --------------------------------
+    //
+    // Corner to window: the west wall's inner face at x -2.31 to the window's
+    // west edge at 0.48, so the board hangs at -0.92. Derived rather than
+    // typed, so it stays centered if the window or the room ever moves.
+    //
+    // STEVE STANDS IN FRONT OF THE MIDDLE OF IT, and that is a fact about this
+    // room rather than a problem with the placement: measured through the
+    // drawn room, the middle 30% of the board is behind him from the fixed eye
+    // at every aspect. What answers it is the DIAGRAM rather than the hanging.
+    // drawOfficeWhiteboard puts every box in an outer third and lets only the
+    // connectors cross the middle, so nothing anybody needs to read is behind
+    // him. tests/steve-view.test.mjs holds the placement and the clear columns.
+    // AND HUNG ON THE WINDOW'S CENTRE LINE. The two openings in this wall are
+    // the window and the board, so they are levelled with each other: the
+    // window's glass runs from the sill at 1.07 to its head at 2.51, and the
+    // board takes the middle of that, 1.79. Derived from the same numbers the
+    // window is cut from, so the pair cannot drift apart.
+    const bareFrom = innerW;
+    const bareTo = win.x - win.width / 2;
+    boardGroup.position.set((bareFrom + bareTo) / 2, (win.sillY + win.topY) / 2, innerN + 0.013);
+    registerOutdoorProp(boardGroup, 'board');
+    officeGroup.add(boardGroup);
+}
+
+// ============================================
 // STEVE
 // ============================================
 // The host himself, standing at the sit-stand desk working on SceneXP.
@@ -3203,4 +3479,4 @@ export function getStoreGroup() {
 }
 
 // Exposed for unit tests only; production code uses the named exports above.
-export const __test__ = { FT, PLAN_SCALE, PFT, VERT_SCALE, VFT, LAYOUT, PALETTE };
+export const __test__ = { FT, PLAN_SCALE, PFT, VERT_SCALE, VFT, LAYOUT, PALETTE, BOARD_LAYOUT };

@@ -1303,6 +1303,13 @@ const PROP_CONTENT = {
             "Every tiny office needs a closet that absorbs whatever the room cannot. Look through the crack between the doors, though. Something back there is still running."
         ]
     },
+    board: {
+        title: 'The Whiteboard',
+        lines: [
+            "The loop every project runs on, in marker: plan, build, test, ship, learn, and round again. Ship is circled in red because ship is the hard one.",
+            "It has been erased and redrawn more times than five boxes suggest. The ghosts of the old diagrams are still faintly there."
+        ]
+    },
     oldPc: {
         title: 'The Old Family Computer',
         lines: [
