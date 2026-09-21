@@ -246,12 +246,18 @@ describe('loadAnalytics -> overlay render (happy path)', () => {
     expect(timelines[0].id).not.toBe(timelines[1].id);
   });
 
-  test('status line summarizes counts, freshness, and the 5-min refresh promise', async () => {
+  test('status line summarizes counts and freshness, and promises no cadence', async () => {
+    // IT USED TO SAY "refreshes every 5 min" on the live day, and that was
+    // this page's own poll rather than a promise about the data. The
+    // snapshots are written by a collector on the server, so until that job
+    // runs on a schedule the sentence was advertising something that was not
+    // happening. "updated 1m ago" says the same thing and cannot be wrong.
     installFetch({ 'index.json': INDEX, 'sessions-20260628': makeDaySnap() });
     const { m, els } = await setup();
     await m.loadAnalytics();
     expect(els.status.textContent)
-      .toBe('2 sessions  ·  11 events  ·  updated 1m ago  ·  refreshes every 5 min');
+      .toBe('2 sessions  ·  11 events  ·  updated 1m ago');
+    expect(els.status.textContent).not.toContain('refresh');
     expect(els.status.classList.contains('stale')).toBe(false);
     expect(els.dateLabel.textContent).toContain('2026');
     expect(els.dateLabel.textContent).not.toBe(LATEST);   // formatted, not the raw key
@@ -374,7 +380,7 @@ describe('day navigation (prev/next buttons)', () => {
     await flush();
     expect(dayFetchCount('sessions-20260627')).toBe(1);
     expect(els.status.textContent).toContain('viewing a past day');
-    expect(els.status.textContent).not.toContain('refreshes every 5 min');
+    expect(els.status.textContent).not.toContain('refresh');
     expect(els.prevBtn.disabled).toBe(true);    // nothing older
     expect(els.nextBtn.disabled).toBe(false);   // latest is newer
 
@@ -396,12 +402,14 @@ describe('day navigation (prev/next buttons)', () => {
     await flush();
     expect(dayFetchCount('sessions-20260628')).toBe(latestFetches);  // reused latestSnap
     expect(findAll(els.body, 'asession')).toHaveLength(2);
-    expect(els.status.textContent).toContain('refreshes every 5 min');
+    // Back on the live day, which the status line now says by NOT calling it a
+    // past one (the refresh promise that used to mark it is gone).
+    expect(els.status.textContent).not.toContain('viewing a past day');
 
     // Another next at the newest day is a no-op.
     els.nextBtn.fire('click');
     await flush();
-    expect(els.status.textContent).toContain('refreshes every 5 min');
+    expect(els.status.textContent).not.toContain('viewing a past day');
   });
 
   test('a failing fetch for the stepped-to day shows the error state for that day', async () => {

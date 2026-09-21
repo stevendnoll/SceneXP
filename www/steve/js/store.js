@@ -229,7 +229,9 @@ export function initStore() {
     createSonDeskNook();      // the son's small navy desk, chair, and ring lamp
     createNorthwestCorner();  // trash can, hooded litter box, and its mat
     createSitStandDeskWall(); // Steve's sit-stand desk, standing, west wall
-    createWallDashboard();    // the visitor-activity display on the wall behind Steve
+    createWallDashboard();    // the visitor-activity display on the east wall
+    createWhiteboardWall();   // the three rules, on the north wall behind Steve
+    createClosetComputer();   // the old machine still running behind the doors
     createCatBowls();         // food and water, desk-to-closet stretch
     createOfficeLighting();   // shared interior rig, sized for one small room
     createExterior();         // lawn and trees seen through the window
@@ -668,6 +670,125 @@ function createClosetDoors() {
 
     registerOutdoorProp(doorsGroup, 'closet');
     officeGroup.add(doorsGroup);
+}
+
+// ---- The thing in the closet ------------------------------------------------
+//
+// AN EASTER EGG FOR ANYBODY WHO TURNS AROUND. The eye faces north, away from
+// the closet, so this is only ever found by a visitor who takes the view all
+// the way round. What they get for it is a green glow in the dark through the
+// 2 cm seam between the accordion doors: an old beige tower with a CRT on it,
+// still on, still working on something.
+//
+// PLACED ON THE SIGHT LINE, NOT IN THE MIDDLE OF THE CLOSET. The seam is a 2 cm
+// aperture 62 cm from the eye, so what is visible through it is a narrow fan:
+// about 6 cm of the closet's back, and only along the line the eye draws
+// through the seam (which is not square to the doors, because the eye does not
+// stand in front of them). Everything below is measured against that line
+// rather than centered in the closet, and tests/steve-view.test.mjs raycasts
+// the real doors to hold it there.
+//
+// THE GLOW IS EMISSIVE, NOT A LIGHT. A point light in here would cost every
+// material in the room a lamp it can never see, which is a poor trade for a
+// prop behind a closed door on a phone. An emissive screen glows for free.
+
+/** The terminal on the old CRT: a black screen, a few lines of green, and a
+ *  block cursor sitting at a prompt that has been waiting a long time. */
+function createTerminalTexture() {
+    const W = 160, H = 120;
+    const canvas = makeCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#061007';
+    ctx.fillRect(0, 0, W, H);
+
+    // Lines of output, shortening as a build log does, then the prompt
+    ctx.fillStyle = '#5bea79';
+    const lines = [96, 78, 110, 64, 88, 52, 70];
+    lines.forEach((w, i) => ctx.fillRect(10, 12 + i * 12, w, 4));
+    ctx.fillRect(10, 12 + lines.length * 12, 8, 4);      // the prompt
+    ctx.fillRect(22, 9 + lines.length * 12, 7, 9);       // the block cursor
+
+    // CRT scanlines, which is most of what makes a green rectangle read as a
+    // tube rather than as a sticker.
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+/** The old family computer, still running in the back of the closet: a beige
+ *  tower with a CRT on top, screen toward the doors. Origin on the floor at
+ *  the tower's center, facing -Z (the doors are to the -Z side). */
+function createClosetComputer() {
+    const pc = new THREE.Group();
+    pc.name = 'closetComputer';
+
+    // Beige that has been beige for twenty years.
+    const beige = new THREE.MeshStandardMaterial({ color: 0xc3b896, roughness: 0.8, metalness: 0.0 });
+    const darkPlastic = new THREE.MeshStandardMaterial({ color: 0x2a2724, roughness: 0.85, metalness: 0.0 });
+
+    const TOWER_W = 0.2, TOWER_H = 0.44, TOWER_D = 0.42;
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(TOWER_W, TOWER_H, TOWER_D), beige);
+    tower.position.y = TOWER_H / 2;
+    pc.add(tower);
+
+    // The front face: a drive bay, a floppy slot, and the two little lights
+    // that are the only reason any of this is visible through a seam.
+    const bay = new THREE.Mesh(new THREE.BoxGeometry(TOWER_W * 0.72, 0.03, 0.004), darkPlastic);
+    bay.position.set(0, TOWER_H - 0.07, -TOWER_D / 2 - 0.002);
+    pc.add(bay);
+    const floppy = new THREE.Mesh(new THREE.BoxGeometry(TOWER_W * 0.6, 0.012, 0.004), darkPlastic);
+    floppy.position.set(0, TOWER_H - 0.13, -TOWER_D / 2 - 0.002);
+    pc.add(floppy);
+    const powerLed = new THREE.Mesh(
+        new THREE.CircleGeometry(0.006, 8),
+        new THREE.MeshStandardMaterial({ color: 0x1b6b2a, emissive: 0x4fe06a, emissiveIntensity: 1.2 })
+    );
+    powerLed.position.set(-0.04, 0.12, -TOWER_D / 2 - 0.003);
+    powerLed.rotation.y = Math.PI;
+    pc.add(powerLed);
+    const activityLed = new THREE.Mesh(
+        new THREE.CircleGeometry(0.005, 8),
+        new THREE.MeshStandardMaterial({ color: 0x6b4a1b, emissive: 0xe0a24f, emissiveIntensity: 1.2 })
+    );
+    activityLed.position.set(-0.02, 0.12, -TOWER_D / 2 - 0.003);
+    activityLed.rotation.y = Math.PI;
+    pc.add(activityLed);
+    closetActivityLed = activityLed;
+
+    // The CRT on top: a deep box with a slight taper, a dark bezel, and the
+    // tube itself.
+    const CRT_W = 0.34, CRT_H = 0.3, CRT_D = 0.33;
+    const crtY = TOWER_H + CRT_H / 2;
+    const crt = new THREE.Mesh(new THREE.BoxGeometry(CRT_W, CRT_H, CRT_D), beige);
+    crt.position.y = crtY;
+    pc.add(crt);
+    const bezel = new THREE.Mesh(new THREE.BoxGeometry(CRT_W * 0.88, CRT_H * 0.8, 0.012), darkPlastic);
+    bezel.position.set(0, crtY + 0.008, -CRT_D / 2 - 0.004);
+    pc.add(bezel);
+
+    const terminal = createTerminalTexture();
+    const tube = new THREE.Mesh(
+        new THREE.PlaneGeometry(CRT_W * 0.74, CRT_H * 0.62),
+        new THREE.MeshStandardMaterial({
+            map: terminal, emissive: 0xffffff, emissiveMap: terminal,
+            emissiveIntensity: 1.15, roughness: 0.3, metalness: 0.0
+        })
+    );
+    tube.name = 'closetTerminal';
+    tube.position.set(0, crtY + 0.008, -CRT_D / 2 - 0.011);
+    tube.rotation.y = Math.PI;        // facing the doors
+    pc.add(tube);
+
+    // ON THE SIGHT LINE THROUGH THE SEAM. The seam sits at x = -0.714 and the
+    // eye at x = -0.8, z = 1.05, so the line through it drifts east as it goes
+    // back: x = -0.8 + 0.139 * (z - 1.05). At the screen's depth that is -0.60.
+    pc.position.set(-0.6, 0, 2.62);
+    registerOutdoorProp(pc, 'oldPc');
+    officeGroup.add(pc);
 }
 
 // ============================================
@@ -1329,6 +1450,8 @@ function createPowerOutlet() {
 let monitorScreen = null;   // { canvas, ctx, texture }: redrawn for the cursor blink
 let _cursorTime = 0;
 let _cursorOn = true;
+let closetActivityLed = null;   // the old tower's blinking drive light
+let _closetBlink = 0;
 
 // The editor's visible lines: recognizably this file. [text, color] pairs
 // in a familiar dark-theme palette.
@@ -1394,6 +1517,41 @@ function drawCodeEditor(ctx, W, H, cursorOn) {
     ctx.fillText('main*   utf-8   js   Ln 12', W * 0.02, H * 0.982);
 }
 
+/**
+ * Paint the editor into any context, at any size, in the state the monitor on
+ * the wall is in right now (including which half of the cursor blink it is on).
+ *
+ * THE SAME ROUTINE, THE SECOND SURFACE. main.js opens an enlarged monitor over
+ * the room and repaints it through here, so the close-up cannot drift from the
+ * screen it enlarges: one drawing, one set of lines, two canvases. Every
+ * measurement in drawCodeEditor is a fraction of W and H, so this is crisp at
+ * a 1600 px overlay and at the 512 px texture alike, which is the whole reason
+ * the texture was written that way.
+ */
+let _overlayCursor = null;   // the blink state the enlarged view last painted
+
+export function drawMonitorTo(ctx, W, H, force) {
+    if (!ctx || !W || !H) return false;
+    // ONLY WHEN SOMETHING CHANGED. The caller repaints on every animation
+    // frame, and the only thing that moves on this screen is a cursor blinking
+    // twice a second, so painting 60 times a second would redraw an identical
+    // image 58 of them. Under reduced motion the blink stops entirely and this
+    // paints exactly once. `force` is for the moments the picture has to be
+    // laid down whatever the cursor is doing: opening the view, and resizing
+    // the canvas out from under it.
+    if (!force && _overlayCursor === _cursorOn) return false;
+    _overlayCursor = _cursorOn;
+    drawCodeEditor(ctx, W, H, _cursorOn);
+    return true;
+}
+
+/** The lines the monitor is showing, for anybody who cannot see a canvas. The
+ *  enlarged view puts these in the page as text, so a screen reader reads the
+ *  room's own source rather than "canvas". */
+export function getEditorLines() {
+    return EDITOR_LINES.map(([text]) => text);
+}
+
 /** The MacBook's screen: scenexp.com in a little browser window, matching
  *  the real site's dark theme (site.css: bg #0e0f14, raised #171922,
  *  violet #8b71ff to cyan #22d3ee accents). Traffic lights, address bar,
@@ -1456,6 +1614,72 @@ function createMacScreenTexture() {
     return new THREE.CanvasTexture(canvas);
 }
 
+/** The MacBook's deck, drawn rather than modeled: the black keyboard well up
+ *  by the hinge and the trackpad below it, on an aluminum ground that matches
+ *  the body so the plate's edge disappears into the case. One pixel per
+ *  millimetre of deck, so the numbers below read as real sizes. */
+function createMacDeckTexture() {
+    const W = 304, H = 212;               // the deck, in millimetres
+    const canvas = makeCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#c9cbce';
+    ctx.fillRect(0, 0, W, H);
+
+    // The keyboard well. The plane this lands on is laid down with its top
+    // edge toward the hinge, so y = 0 here is the back of the laptop.
+    const wellX = 18, wellY = 9, wellW = W - 36, wellH = 98;
+    ctx.fillStyle = '#26282c';
+    ctx.beginPath();
+    ctx.roundRect(wellX, wellY, wellW, wellH, 5);
+    ctx.fill();
+
+    // Keys: a short function row, then four full rows, the last with a
+    // spacebar through the middle of it.
+    const cols = 14;
+    const keyW = wellW / cols;
+    const fnH = 11, rowH = (wellH - fnH - 8) / 4;
+    const key = (x, y, w, h) => {
+        ctx.fillStyle = '#15161a';
+        ctx.beginPath();
+        ctx.roundRect(x + 1.2, y + 1.2, w - 2.4, h - 2.4, 1.8);
+        ctx.fill();
+    };
+    for (let c = 0; c < cols; c++) key(wellX + c * keyW, wellY + 4, keyW, fnH);
+    for (let r = 0; r < 4; r++) {
+        const y = wellY + 4 + fnH + r * rowH;
+        if (r === 3) {
+            // command, option, spacebar, option, command
+            key(wellX, y, keyW * 2, rowH);
+            key(wellX + keyW * 2, y, keyW * 1.5, rowH);
+            key(wellX + keyW * 3.5, y, keyW * 7, rowH);
+            key(wellX + keyW * 10.5, y, keyW * 1.5, rowH);
+            key(wellX + keyW * 12, y, keyW * 2, rowH);
+        } else {
+            for (let c = 0; c < cols; c++) key(wellX + c * keyW, y, keyW, rowH);
+        }
+    }
+
+    // The trackpad: the same aluminum, a shade cooler, with a hairline seam.
+    // Centred, and sized off the real one (about 124 by 76 of these).
+    const padW = 124, padH = 76;
+    ctx.fillStyle = '#c2c5c9';
+    ctx.strokeStyle = '#a7abb0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect((W - padW) / 2, 120, padW, padH, 7);
+    ctx.fill();
+    ctx.stroke();
+
+    // TAGGED sRGB, UNLIKE THE SCREENS ABOVE, and on purpose: this texture
+    // butts up against the case, which is a material colour and therefore
+    // decoded. Left untagged, the same #c9cbce drawn here comes out brighter
+    // than the aluminum around it and the deck reads as a lid on a box.
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
 /** The MacBook Air, open on a small aluminum laptop stand: foot, riser,
  *  tilted plate, and the laptop with keyboard and a soft glowing screen.
  *  Faces +Z before placement. */
@@ -1465,33 +1689,95 @@ function createMacBookOnStand() {
 
     const aluminum = new THREE.MeshStandardMaterial({ color: 0xd6d8da, roughness: 0.35, metalness: 0.7 });
 
+    // ---- The stand: foot, riser, and the plate the laptop rests on ----
+    const PLATE_TILT = 0.22;              // the plate's rake, back edge high
+    const PLATE_T = 0.01;
     const foot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.018, 0.22), aluminum);
     foot.position.y = 0.009;
     group.add(foot);
     const riser = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.04), aluminum);
     riser.position.set(0, 0.05, -0.07);
     group.add(riser);
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.01, 0.24), aluminum);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.3, PLATE_T, 0.24), aluminum);
     plate.position.y = 0.1;
-    plate.rotation.x = 0.22;
+    plate.rotation.x = PLATE_TILT;
     group.add(plate);
 
-    const macBody = new THREE.MeshStandardMaterial({ color: 0xc9cbce, roughness: 0.4, metalness: 0.6 });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.304, 0.011, 0.212), macBody);
-    base.position.set(0, 0.112, 0.005);
-    base.rotation.x = 0.22;
-    group.add(base);
-    const keys = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.27, 0.11),
-        new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.7, metalness: 0.1 })
+    // ---- The laptop, built flat and tipped onto the plate as ONE piece ----
+    //
+    // THE HINGE USED TO BE TWO SETS OF NUMBERS AND THEY DRIFTED. The deck and
+    // the lid were each placed in the stand's frame, with their own position
+    // and their own tilt, which left the lid's bottom edge 4 cm below the deck
+    // and 1 cm in front of its back edge: the screen grew out of the middle of
+    // the keyboard, and its bottom corner came through the deck to the plate
+    // (specs/screenshots, 2026-09-21). Nothing in the code said the two were
+    // joined, so nothing kept them joined.
+    //
+    // Here the laptop is a group of its own, built flat with its deck on
+    // y = 0, and the lid hangs off a hinge pinned to the deck's back edge.
+    // Tipping the laptop onto the plate moves both together, so the joint
+    // survives any rake on the stand and any opening angle on the lid.
+    const DECK_W = 0.304, DECK_D = 0.212, DECK_T = 0.011;
+    const LID_H = 0.2, LID_T = 0.006;
+    const HINGE_R = DECK_T / 2;           // the barrel is the deck's own thickness
+    // The lid's angle from the deck: 90 degrees would stand it straight up,
+    // and this reclines it another 29 for the room's eye, which looks slightly
+    // down on the desk. It is the same angle the lid was drawn at before.
+    const LID_OPEN = -0.5;
+
+    const laptop = new THREE.Group();
+    laptop.name = 'macLaptop';
+    // Sitting on the plate's top face: the plate's centre, lifted along the
+    // plate's own normal rather than straight up.
+    laptop.position.set(
+        0,
+        plate.position.y + (PLATE_T / 2) * Math.cos(PLATE_TILT),
+        (PLATE_T / 2) * Math.sin(PLATE_TILT)
     );
-    keys.position.set(0, 0.121, 0.025);
-    keys.rotation.x = -Math.PI / 2 + 0.22;
-    group.add(keys);
-    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.304, 0.2, 0.006), macBody);
-    lid.position.set(0, 0.19, -0.115);
-    lid.rotation.x = -0.28;
-    group.add(lid);
+    laptop.rotation.x = PLATE_TILT;
+    group.add(laptop);
+
+    const macBody = new THREE.MeshStandardMaterial({ color: 0xc9cbce, roughness: 0.4, metalness: 0.6 });
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(DECK_W, DECK_T, DECK_D), macBody);
+    deck.name = 'macDeck';
+    deck.position.y = DECK_T / 2;
+    laptop.add(deck);
+
+    const deckTexture = createMacDeckTexture();
+    const deckFace = new THREE.Mesh(
+        new THREE.PlaneGeometry(DECK_W - 0.004, DECK_D - 0.004),
+        new THREE.MeshStandardMaterial({ map: deckTexture, roughness: 0.55, metalness: 0.25 })
+    );
+    deckFace.rotation.x = -Math.PI / 2;   // face up, texture's top edge to the hinge
+    deckFace.position.y = DECK_T + 0.0004;
+    laptop.add(deckFace);
+
+    // The hinge itself: the axis the lid turns on, seated in the deck's back
+    // edge at half the deck's thickness, so the lid comes up through the top
+    // face a couple of millimetres in front of the back, the way a seated lid
+    // does. Everything the lid is made of hangs off this, which is what makes
+    // "where the lid meets the deck" one number instead of two.
+    const hinge = new THREE.Group();
+    hinge.name = 'macHinge';
+    hinge.position.set(0, DECK_T / 2, -DECK_D / 2 + HINGE_R);
+    hinge.rotation.x = LID_OPEN;
+    laptop.add(hinge);
+
+    // The barrel fills the joint. At the angle below it is tucked inside the
+    // case and barely shows; it earns its ten sides at any wider one, where
+    // the lid's foot swings clear of the deck and would otherwise leave a slot.
+    const barrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(HINGE_R, HINGE_R, DECK_W - 0.012, 10),
+        new THREE.MeshStandardMaterial({ color: 0x8d9094, roughness: 0.5, metalness: 0.6 })
+    );
+    barrel.rotation.z = Math.PI / 2;      // lying across the back of the case
+    hinge.add(barrel);
+
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(DECK_W, LID_H, LID_T), macBody);
+    lid.name = 'macLid';
+    lid.position.y = LID_H / 2;           // standing on the hinge
+    hinge.add(lid);
+
     const macScreenTexture = createMacScreenTexture();
     const screen = new THREE.Mesh(
         new THREE.PlaneGeometry(0.288, 0.185),
@@ -1500,9 +1786,11 @@ function createMacBookOnStand() {
             emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.0
         })
     );
-    screen.position.set(0, 0.19, -0.111);
-    screen.rotation.x = -0.28;
-    group.add(screen);
+    screen.name = 'macScreen';
+    // Just proud of the lid's front face, with a slightly deeper chin than
+    // brow, the way the real one wears its bezel.
+    screen.position.set(0, LID_H / 2 + 0.002, LID_T / 2 + 0.0004);
+    hinge.add(screen);
 
     return group;
 }
@@ -2653,6 +2941,281 @@ function createWallDashboard() {
 }
 
 // ============================================
+// THE WHITEBOARD
+// ============================================
+// It hung on the east wall until 2026-09-18, when the visitor-activity display
+// took that spot, and the room lost the one surface that said out loud what
+// every scene on this site is for. It is back on the north wall, the bare one
+// behind Steve, unchanged apart from where it hangs and one thing noted below.
+//
+// CLICKING IT OPENS A STORY CARD, not the close-up overlay it used to open.
+// That overlay repainted the board into a full-screen view, and the room has a
+// full-screen view now: the dashboard. Two would be one too many.
+
+/**
+ * WHERE THE BOXES ARE, in the drawing's own canvas space, and the reason it is
+ * up here in module scope rather than inside the function that draws it: the
+ * view suite asks this object where the diagram's two columns are and then
+ * raycasts those exact rectangles through the room. Written out inside
+ * drawOfficeWhiteboard, the test would have to repeat the numbers, and a box
+ * moved into the band Steve covers would pass a test still measuring the
+ * rectangle it used to occupy.
+ */
+const BOARD_LAYOUT = {
+    canvas: { w: 512, h: 384 },
+    box: { w: 112, h: 44 },
+    cols: { left: 24, right: 512 - 24 - 112 },
+    rows: { left: [54, 140, 226], right: [96, 196] }
+};
+
+/**
+ * The diagram on the whiteboard: the loop every software project runs on,
+ * boxed and arrowed in marker. Drawn at 512 x 384, the board's own aspect.
+ *
+ * LAID OUT IN TWO COLUMNS, AND THAT IS THE WHOLE DESIGN. The board hangs
+ * centered in the wall's bare run, and Steve stands in front of the middle of
+ * it: measured through the drawn room, the middle 30% of this canvas (x 180 to
+ * 330) is behind him from the fixed eye at every aspect, and another 10 either
+ * side is partly behind him. So every box lives in an outer third, where the
+ * eye has a clear line to it, and only the connectors cross the middle. A line
+ * passing behind somebody standing at a whiteboard reads as a line passing
+ * behind somebody standing at a whiteboard. A word does not.
+ */
+function drawOfficeWhiteboard(ctx, W, H) {
+    const BLUE = '#2456a8', GREEN = '#2e7d4f', RED = '#c0392b';
+    const scale = W / BOARD_LAYOUT.canvas.w;   // the layout is written at 512 x 384
+    const s = (n) => n * scale;
+
+    ctx.fillStyle = '#fcfcf9';
+    ctx.fillRect(0, 0, W, H);
+
+    // Ghosts of erased sessions past, kept from the board this replaces.
+    ctx.fillStyle = 'rgba(150, 152, 148, 0.08)';
+    [[0.14, 0.55, 0.3, 0.2], [0.55, 0.18, 0.32, 0.14], [0.4, 0.72, 0.22, 0.12]].forEach(([gx, gy, gw, gh]) => {
+        ctx.fillRect(W * gx, H * gy, W * gw, H * gh);
+    });
+
+    const { box: { w: BOX_W, h: BOX_H }, cols, rows } = BOARD_LAYOUT;
+    const LEFT_X = cols.left, RIGHT_X = cols.right;
+    const lead = (x) => x + BOX_W / 2;   // a box's vertical centre line
+
+    /** A marker box with its label. */
+    const box = (x, y, label) => {
+        ctx.strokeStyle = BLUE;
+        ctx.lineWidth = s(3);
+        ctx.beginPath();
+        ctx.roundRect(s(x), s(y), s(BOX_W), s(BOX_H), s(7));
+        ctx.stroke();
+        ctx.fillStyle = BLUE;
+        ctx.font = `bold ${Math.round(s(23))}px "Segoe UI", "Comic Sans MS", Verdana, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, s(x + BOX_W / 2), s(y + BOX_H / 2 + 1));
+    };
+
+    /** A marker stroke through the given points, with a head on the last one. */
+    const arrow = (points, color, dashed) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = s(dashed ? 2.5 : 3);
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        if (dashed) ctx.setLineDash([s(9), s(7)]);
+        ctx.beginPath();
+        points.forEach(([px, py], i) => (i ? ctx.lineTo(s(px), s(py)) : ctx.moveTo(s(px), s(py))));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // The head, aimed along the last segment
+        const [ax, ay] = points[points.length - 2];
+        const [bx, by] = points[points.length - 1];
+        const a = Math.atan2(by - ay, bx - ax);
+        const head = 11;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(s(bx), s(by));
+        ctx.lineTo(s(bx - head * Math.cos(a - 0.42)), s(by - head * Math.sin(a - 0.42)));
+        ctx.lineTo(s(bx - head * Math.cos(a + 0.42)), s(by - head * Math.sin(a + 0.42)));
+        ctx.closePath();
+        ctx.fill();
+    };
+
+    // The left column: plan, build, test, top to bottom.
+    const LY = rows.left;
+    box(LEFT_X, LY[0], 'PLAN');
+    box(LEFT_X, LY[1], 'BUILD');
+    box(LEFT_X, LY[2], 'TEST');
+    arrow([[lead(LEFT_X), LY[0] + BOX_H], [lead(LEFT_X), LY[1] - 4]], GREEN);
+    arrow([[lead(LEFT_X), LY[1] + BOX_H], [lead(LEFT_X), LY[2] - 4]], GREEN);
+
+    // The right column: ship, then learn.
+    const RY = rows.right;
+    box(RIGHT_X, RY[0], 'SHIP');
+    box(RIGHT_X, RY[1], 'LEARN');
+    arrow([[lead(RIGHT_X), RY[0] + BOX_H], [lead(RIGHT_X), RY[1] - 4]], GREEN);
+
+    // Test to ship, the one crossing that carries the flow. Its elbow sits in
+    // the middle band, which is the part nobody can see anyway.
+    arrow([[LEFT_X + BOX_W, LY[2] + BOX_H / 2], [256, LY[2] + BOX_H / 2],
+        [256, RY[0] + BOX_H / 2], [RIGHT_X - 5, RY[0] + BOX_H / 2]], GREEN);
+
+    // And round again: learn back to plan, through the second corridor.
+    //
+    // IT USED TO RUN ROUND THE OUTSIDE, down to y 334 and up the left at x 14,
+    // and that is very probably what Steve was seeing as "a dashed black line
+    // going around the edge of the board". It was: at this board's size a
+    // texture pixel is about 2.3 mm, so that line sat 33 mm in from the face's
+    // edge, which is a handful of screen pixels inside the frame, and it was
+    // drawn dashed in a dark red that reads as near black at two pixels wide.
+    // A diagram whose own strokes hug the frame will be read as a rendering
+    // fault, and it was. Nothing on the board comes near an edge now: the
+    // return runs up the corridor at x 296, which is inside the band Steve
+    // stands in front of, and arrives at PLAN across the top.
+    arrow([[RIGHT_X - 5, RY[1] + BOX_H / 2], [296, RY[1] + BOX_H / 2],
+        [296, LY[0] + BOX_H / 2], [LEFT_X + BOX_W + 5, LY[0] + BOX_H / 2]], RED, true);
+
+    // SHIP circled in red, the way "ship it" was circled on the board this
+    // replaces. It is still the hard one.
+    ctx.strokeStyle = RED;
+    ctx.lineWidth = s(3);
+    ctx.beginPath();
+    ctx.ellipse(s(RIGHT_X + BOX_W / 2), s(RY[0] + BOX_H / 2), s(BOX_W * 0.62), s(BOX_H * 0.78), -0.05, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.textBaseline = 'alphabetic';
+}
+
+/** The whiteboard: white surface in an aluminum frame, marker tray with
+ *  markers and an eraser, on the north wall behind Steve. */
+function createWhiteboardWall() {
+    const { room, window: win } = LAYOUT;
+    const innerN = room.minZ + room.wallT / 2;
+    const innerW = room.minX + room.wallT / 2;
+
+    const boardGroup = new THREE.Group();
+    boardGroup.name = 'whiteboard';
+
+    const canvas = makeCanvas(BOARD_LAYOUT.canvas.w, BOARD_LAYOUT.canvas.h);
+    drawOfficeWhiteboard(canvas.getContext('2d'), BOARD_LAYOUT.canvas.w, BOARD_LAYOUT.canvas.h);
+    const boardTexture = new THREE.CanvasTexture(canvas);
+    // TAGGED sRGB, which the east-wall original was not. Left linear, the
+    // marker colours come out pale (that blue lands nearer #6699d4 than
+    // #2456a8) and the list reads as a ghost of itself from across the room.
+    // The board is meant to be legible at four metres, so the ink is decoded.
+    boardTexture.colorSpace = THREE.SRGBColorSpace;
+
+    const surface = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.2, 0.9),
+        new THREE.MeshStandardMaterial({ map: boardTexture, roughness: 0.35, metalness: 0.05 })
+    );
+    surface.name = 'whiteboardFace';
+    surface.position.z = 0.018;
+    boardGroup.add(surface);
+
+    // ---- The frame, and the two faults it has had ------------------------
+    //
+    // The horizontal rails span the full outer width (1.28, flush with the
+    // vertical rails' outer faces at ±0.64), and the verticals butt between
+    // them, so every corner meets square.
+    //
+    // 1. THE RAILS STAND ENTIRELY IN FRONT OF THE FACE. The board this was
+    //    restored from used rails 35 mm deep set at z 0.005, running -0.0125
+    //    to 0.0225, with the face at 0.018: the face plane passed THROUGH
+    //    every rail, and along the line where it crossed each rail's inner
+    //    wall the two surfaces met at the same depth. That is the jagged seam
+    //    that crawls while the view pans, and no amount of separation or near
+    //    plane fixes it, because the surfaces really are in the same place.
+    //
+    // 2. AND THEY BARELY STAND PROUD OF IT, 7 mm rather than the 15 the first
+    //    fix left. What is visible at the opening's edge is the rail's INNER
+    //    WALL, a face perpendicular to the board, and its width on screen is
+    //    the lip's depth times the sine of the angle the eye sits off the
+    //    board's normal, which is 3 degrees. At 15 mm that sliver is half a
+    //    millimetre, which at this distance is part of a pixel: it lands on
+    //    some pixels and misses others, so it reads as a dashed line rather
+    //    than an edge, and it crawls when anything moves. Shallower is
+    //    narrower, and the material below is the other half of the answer.
+    // 3. AND THE RAILS HAVE NO SIDE WALLS AT ALL. They are four flat pieces
+    //    now rather than four boxes, so the frame has nothing perpendicular to
+    //    the board and there is no inner wall to catch the eye at the opening.
+    //    That removes the last surface that could show as a line where white
+    //    meets silver, whatever the lighting does. The thickness it gives up
+    //    is thickness nobody can see: this eye sits 3 degrees off the board's
+    //    normal and cannot move, so a 6 mm lip was already under a tenth of a
+    //    pixel of edge. The tray below keeps its solid shape, being a thing
+    //    the visitor sees in profile.
+    //
+    // ALUMINIUM THAT CANNOT GO BLACK, either. The shared brushedMetal is
+    // metalness 0.7, and nothing in this room supplies an environment map, so
+    // a metal face that catches no direct light has almost nothing to reflect
+    // and renders near black. At metalness 0.2 the ambient and hemisphere
+    // terms carry it, which is 3.1x the diffuse response of the shared metal.
+    const frameMetal = new THREE.MeshStandardMaterial({
+        color: 0xc6cbd1, roughness: 0.5, metalness: 0.2
+    });
+    [[0, 0.46, 1.28, 0.05], [0, -0.46, 1.28, 0.05], [-0.615, 0, 0.05, 0.87], [0.615, 0, 0.05, 0.87]].forEach(([fx, fy, fw, fh]) => {
+        const strip = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh), frameMetal);
+        strip.name = 'whiteboardFrame';
+        strip.position.set(fx, fy, surface.position.z + 0.004);
+        boardGroup.add(strip);
+    });
+
+    // The tray takes the frame's aluminium too, so the board's hardware is one
+    // material and its channel does not go black the way the rails did.
+    const tray = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.07), frameMetal);
+    tray.position.set(0, -0.51, 0.035);
+    boardGroup.add(tray);
+    // Two markers, end to end with a gap. They used to overlap by 2 cm at the
+    // same height and depth, which is two cylinders of the same radius sharing
+    // an axis: their curved surfaces were coincident along the overlap, in
+    // blue and green. Nobody could see it behind Steve, and it was still two
+    // surfaces fighting for the same pixels.
+    [[0x2456a8, -0.13], [0x2e7d4f, 0.01]].forEach(([color, mx]) => {
+        const marker = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.011, 0.011, 0.12, 8),
+            new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.0 })
+        );
+        marker.rotation.z = Math.PI / 2;
+        marker.position.set(mx, -0.495, 0.045);
+        boardGroup.add(marker);
+    });
+    // A shade slimmer front to back (35 mm, was 50) and forward on the tray,
+    // so it rests IN FRONT of the bottom rail rather than halfway into it. At
+    // z 0.045 it reached back to 0.02, which clipped 2 mm into the old rail
+    // and would clip 5 into this one: the same crawling seam as above, in dark
+    // grey against silver. It still sits in the tray, which is a block resting
+    // in a channel and not two surfaces fighting over the same pixels.
+    const eraser = new THREE.Mesh(
+        new THREE.BoxGeometry(0.11, 0.035, 0.035),
+        new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.8, metalness: 0.0 })
+    );
+    eraser.position.set(0.15, -0.49, 0.0525);
+    boardGroup.add(eraser);
+
+    // ---- CENTERED IN THE WALL'S BARE RUN --------------------------------
+    //
+    // Corner to window: the west wall's inner face at x -2.31 to the window's
+    // west edge at 0.48, so the board hangs at -0.92. Derived rather than
+    // typed, so it stays centered if the window or the room ever moves.
+    //
+    // STEVE STANDS IN FRONT OF THE MIDDLE OF IT, and that is a fact about this
+    // room rather than a problem with the placement: measured through the
+    // drawn room, the middle 30% of the board is behind him from the fixed eye
+    // at every aspect. What answers it is the DIAGRAM rather than the hanging.
+    // drawOfficeWhiteboard puts every box in an outer third and lets only the
+    // connectors cross the middle, so nothing anybody needs to read is behind
+    // him. tests/steve-view.test.mjs holds the placement and the clear columns.
+    // AND HUNG ON THE WINDOW'S CENTRE LINE. The two openings in this wall are
+    // the window and the board, so they are levelled with each other: the
+    // window's glass runs from the sill at 1.07 to its head at 2.51, and the
+    // board takes the middle of that, 1.79. Derived from the same numbers the
+    // window is cut from, so the pair cannot drift apart.
+    const bareFrom = innerW;
+    const bareTo = win.x - win.width / 2;
+    boardGroup.position.set((bareFrom + bareTo) / 2, (win.sillY + win.topY) / 2, innerN + 0.013);
+    registerOutdoorProp(boardGroup, 'board');
+    officeGroup.add(boardGroup);
+}
+
+// ============================================
 // STEVE
 // ============================================
 // The host himself, standing at the sit-stand desk working on SceneXP.
@@ -2797,6 +3360,17 @@ export function updateStudio(playerPosition, deltaTime) {
     // Birds visit the fence outside the window
     updateFenceBirds(deltaTime);
 
+    // The old machine in the closet is doing something. One material's
+    // brightness on a slow, uneven beat, with no texture work behind it: a
+    // steady light reads as a sticker, and a blinking one is why anybody
+    // looks twice at a 2 cm seam. (Reduced motion leaves it lit and steady,
+    // by the early return above.)
+    if (closetActivityLed) {
+        _closetBlink += deltaTime;
+        const on = (_closetBlink % 1.7) < 0.22 || (_closetBlink % 1.7) > 1.55;
+        closetActivityLed.material.emissiveIntensity = on ? 1.4 : 0.12;
+    }
+
     // The editor's cursor blinks on the big monitor. (Under reduced motion
     // the early return above leaves it lit and steady.)
     if (monitorScreen) {
@@ -2940,4 +3514,4 @@ export function getStoreGroup() {
 }
 
 // Exposed for unit tests only; production code uses the named exports above.
-export const __test__ = { FT, PLAN_SCALE, PFT, VERT_SCALE, VFT, LAYOUT, PALETTE };
+export const __test__ = { FT, PLAN_SCALE, PFT, VERT_SCALE, VFT, LAYOUT, PALETTE, BOARD_LAYOUT };

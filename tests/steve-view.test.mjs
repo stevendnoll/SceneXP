@@ -59,6 +59,10 @@ let CFG;
 let composeView;
 let steve;          // Steve's meshes
 let dashboard;      // the wall display's meshes
+let macbook;        // the MacBook Air on its stand
+let officeRoom;     // the built scene, for looking things up by name
+let LAYOUT;         // the floor plan the room was built from
+let BOARD_LAYOUT;   // where the whiteboard's diagram puts its boxes
 let occluders;      // everything in the room that can stand in the way
 let registeredKinds;
 let PROP_CONTENT;
@@ -123,6 +127,10 @@ beforeAll(async () => {
   const meshesOf = (o) => { const out = []; o.traverse((c) => { if (c.isMesh) out.push(c); }); return out; };
   steve = meshesOf(store.getRoquiMesh());
   dashboard = meshesOf(room.getObjectByName('wallDashboard'));
+  macbook = room.getObjectByName('macbookAir');
+  officeRoom = room;
+  LAYOUT = store.__test__.LAYOUT;
+  BOARD_LAYOUT = store.__test__.BOARD_LAYOUT;
   occluders = [];
   room.traverse((o) => { if (o.isMesh && o.visible !== false) occluders.push(o); });
   registeredKinds = world.getOutdoorPropMeshes().map((g) => g.userData.propKind);
@@ -242,6 +250,257 @@ describe('the wall display', () => {
     });
 });
 
+describe('the MacBook on its stand', () => {
+  // WHY THIS IS MEASURED AND NOT LOOKED AT. The laptop's deck and lid were
+  // each placed in the stand's frame with their own tilt, and the two sets of
+  // numbers drifted: the lid's foot ended up 43 mm from the back edge it is
+  // supposed to hang off, which put the screen through the middle of the
+  // keyboard with daylight behind it. Every number involved looked reasonable
+  // on its own, and the fault is a relationship between them. A screenshot
+  // caught it in the end (specs/screenshots, 2026-09-21); this catches it on
+  // the way in, at any rake of the stand and any opening angle of the lid.
+  const partsOfMac = () => {
+    const deck = macbook.getObjectByName('macDeck');
+    const lid = macbook.getObjectByName('macLid');
+    macbook.updateMatrixWorld(true);
+    return { deck, lid, d: deck.geometry.parameters, l: lid.geometry.parameters };
+  };
+
+  test('is in the room at all, with a deck and a lid to measure', () => {
+    expect(macbook).toBeTruthy();
+    const { deck, lid } = partsOfMac();
+    expect(deck).toBeTruthy();
+    expect(lid).toBeTruthy();
+  });
+
+  test('the lid hangs off the deck\'s back edge, inside the hinge', () => {
+    const { deck, lid, d, l } = partsOfMac();
+    // The middle of the lid's bottom edge, and the middle of the deck's back
+    // face, both in the room's coordinates.
+    const foot = new THREE.Vector3(0, -l.height / 2, 0).applyMatrix4(lid.matrixWorld);
+    const backEdge = new THREE.Vector3(0, 0, -d.depth / 2).applyMatrix4(deck.matrixWorld);
+    // Half the deck's thickness is the hinge barrel's radius, so the foot is
+    // inside the barrel. It was 43 mm out before.
+    expect(foot.distanceTo(backEdge)).toBeLessThan(d.height);
+  });
+
+  test('no part of the lid comes through the deck to the stand', () => {
+    const { deck, lid, d } = partsOfMac();
+    const deckTop = new THREE.Vector3(0, d.height / 2, -d.depth / 2).applyMatrix4(deck.matrixWorld);
+    const lidBox = new THREE.Box3().setFromObject(lid);
+    // The lid's lowest corner may tuck into the hinge barrel, and no further.
+    expect(lidBox.min.y).toBeGreaterThan(deckTop.y - d.height);
+  });
+
+  test('the screen is readable from where the visitor stands', () => {
+    // The whole point of the prop: the room is where SceneXP gets built, and
+    // the laptop shows the site. Raising the lid onto its hinge moved the
+    // screen 4 cm up and 1 cm back, so this holds the view it left with.
+    const screen = macbook.getObjectByName('macScreen');
+    expect(screen).toBeTruthy();
+    expect(seen([screen], cameraFor(16 / 9))).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
+describe('the whiteboard on the north wall', () => {
+  // A GRID, NOT THE GEOMETRY'S VERTICES. The board's face is one plane with
+  // four corner vertices, and `seen()` above samples exactly those, so it
+  // would score a board whose middle is behind Steve as fully visible. This
+  // walks the face itself, and can be asked about the written part alone.
+  //
+  // u runs -0.5 (west edge of the board) to +0.5 and v -0.5 (bottom) to +0.5,
+  // which is the drawing's own canvas: u = x / 512 - 0.5, v = 0.5 - y / 384.
+  // The diagram's boxes live in the outer thirds, and only its connectors
+  // cross the middle.
+  function faceSeen(cam, u0 = -0.5, u1 = 0.5, v0 = -0.48, v1 = 0.48) {
+    const face = officeRoom.getObjectByName('whiteboardFace');
+    const { width, height } = face.geometry.parameters;
+    const ray = new THREE.Raycaster();
+    let total = 0, visible = 0;
+    for (let u = u0 + 0.01; u <= u1; u += 0.02) {
+      for (let v = v0; v <= v1; v += 0.03) {
+        const p = new THREE.Vector3(u * width, v * height, 0).applyMatrix4(face.matrixWorld);
+        total += 1;
+        const ndc = p.clone().project(cam);
+        if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) continue;
+        const dir = p.clone().sub(cam.position);
+        const dist = dir.length();
+        ray.set(cam.position, dir.normalize());
+        ray.far = dist + 0.02;
+        const hit = ray.intersectObjects(occluders, false)[0];
+        if (!hit || hit.object === face || hit.distance >= dist - 0.03) visible += 1;
+      }
+    }
+    return total ? visible / total : 0;
+  }
+
+  test('hangs centered in the wall\'s bare run, corner to window', () => {
+    const box = new THREE.Box3().setFromObject(officeRoom.getObjectByName('whiteboard'));
+    const win = LAYOUT.window;
+    const innerW = LAYOUT.room.minX + LAYOUT.room.wallT / 2;
+    const bareTo = win.x - win.width / 2;
+    expect((box.min.x + box.max.x) / 2).toBeCloseTo((innerW + bareTo) / 2, 2);
+    expect(box.min.x).toBeGreaterThan(innerW);
+    expect(box.max.x).toBeLessThan(bareTo);
+    // And levelled with the window: the wall's two openings share a centre
+    // line, which is the sill and the head of the glass, halved. Measured on
+    // the WRITING SURFACE, not the whole group, whose marker tray hangs a few
+    // centimetres below the frame and would pull the average down with it.
+    const surface = new THREE.Box3().setFromObject(officeRoom.getObjectByName('whiteboardFace'));
+    expect((surface.min.y + surface.max.y) / 2).toBeCloseTo((win.sillY + win.topY) / 2, 2);
+    expect(box.max.y).toBeLessThan(LAYOUT.room.height - 0.5);
+  });
+
+  test('nothing on it passes through anything else on it', () => {
+    // THE SEAM THAT CRAWLS. Two surfaces that genuinely INTERSECT share a
+    // depth along the line where they cross, and the renderer picks a winner
+    // per pixel, so the line flickers and crawls as the camera moves. It looks
+    // like a precision problem and is not one: no near plane, no polygon
+    // offset and no extra separation will settle it, because the surfaces
+    // really are in the same place. Only geometry fixes it.
+    //
+    // The board arrived with the face plane sitting inside the frame's depth
+    // (rails -0.0125 to 0.0225, face at 0.018), so every rail was cut by the
+    // face along its inner edge, which is exactly where white meets silver.
+    // This holds the arrangement that replaced it: the frame, the tray's
+    // eraser and its markers all stand clear in FRONT of the face.
+    const board = officeRoom.getObjectByName('whiteboard');
+    const face = officeRoom.getObjectByName('whiteboardFace');
+    const faceZ = face.position.z;
+    const { width, height } = face.geometry.parameters;
+    // Anything standing over the face's own rectangle, in the board's frame.
+    // (The tray and what sits in it hang below the face and never cross it,
+    // which is why they are not on this list.)
+    const overlapping = board.children.filter((c) => {
+      if (!c.isMesh || c === face) return false;
+      const box = new THREE.Box3().setFromObject(c);
+      const local = new THREE.Box3().copy(box).applyMatrix4(
+        new THREE.Matrix4().copy(board.matrixWorld).invert());
+      return local.min.x < width / 2 && local.max.x > -width / 2
+        && local.min.y < height / 2 && local.max.y > -height / 2;
+    });
+    expect(overlapping).toHaveLength(4);              // the four frame pieces
+    for (const part of overlapping) {
+      // From the geometry's own box, so this reads a flat piece (back = its
+      // own plane) and a solid one (back = half its depth behind it) alike.
+      part.geometry.computeBoundingBox();
+      const back = part.position.z + part.geometry.boundingBox.min.z;
+      expect(`${part.name} back at ${back.toFixed(4)}`)
+        .toBe(`${part.name} back at ${Math.max(back, faceZ + 0.0005).toFixed(4)}`);
+    }
+  });
+
+  test.each(ASPECTS)('every box on it stands clear of Steve at %s', (_name, aspect) => {
+    // THE DIAGRAM IS LAID OUT AROUND THE MAN STANDING IN FRONT OF IT. Centered
+    // on this wall, the middle third of the board is behind him from the fixed
+    // eye, so the boxes live in the outer thirds and only the connectors cross.
+    //
+    // The rectangles measured here are READ FROM THE LAYOUT the drawing uses,
+    // not copied from it, so a box moved toward the middle moves what this
+    // looks at and fails here rather than passing on an empty patch of board.
+    const { canvas, box, cols, rows } = BOARD_LAYOUT;
+    const u = (x) => x / canvas.w - 0.5;
+    const v = (y) => 0.5 - y / canvas.h;
+    const column = (x, ys) => [
+      u(x), u(x + box.w), v(ys[ys.length - 1] + box.h), v(ys[0])
+    ];
+    const cam = cameraFor(aspect);
+    expect(faceSeen(cam, ...column(cols.left, rows.left))).toBeGreaterThanOrEqual(0.99);
+    expect(faceSeen(cam, ...column(cols.right, rows.right))).toBeGreaterThanOrEqual(0.99);
+  });
+
+  test('and the middle of its lower half really is the part he covers', () => {
+    // The other half of the same fact, so the claim above is not folklore.
+    //
+    // THE SHAPE OF HIS SHADOW CHANGED WHEN THE BOARD WENT UP to the window's
+    // centre line: his head tops out at 1.72, which the eye throws onto this
+    // wall at 1.85, and the board now reaches 2.28. So the middle of the upper
+    // third is clear (the middle band measures 0.42 over the whole height, up
+    // from 0.11 when the board hung lower), while the middle of the lower half
+    // is gone completely. That lower middle is where the diagram's connectors
+    // cross, and it is the one piece of this that would break silently if the
+    // eye, the window or Steve ever moved.
+    expect(faceSeen(cameraFor(16 / 9), -0.14, 0.14, -0.48, 0)).toBeLessThan(0.05);
+  });
+});
+
+describe('the old computer in the closet', () => {
+  // AN EASTER EGG IS TWO PROMISES AT ONCE: it can be found, and it is not
+  // simply on show. Both are about a 2 cm seam between two closed doors, so
+  // both are measured by casting the eye's own rays at the doors and asking
+  // what gets through. `seen()` cannot answer this one: the screen is a plane
+  // with four corner vertices and all four are behind a door, which reads as
+  // "invisible" while the middle of it is in plain sight.
+  const eyePoint = () => new THREE.Vector3(
+    CFG.camera.position.x, CFG.camera.position.y, CFG.camera.position.z);
+
+  /** Cast the eye at a grid over the closet doorway and report what the rays
+   *  that get past the doors land on. */
+  function throughTheDoors() {
+    const { closet, closetOpening: co } = LAYOUT;
+    const pc = officeRoom.getObjectByName('closetComputer');
+    const mine = new Set();
+    pc.traverse((c) => { if (c.isMesh) mine.add(c); });
+    const eye = eyePoint();
+    const ray = new THREE.Raycaster();
+    ray.far = 12;
+    let aimed = 0, past = 0, onPc = 0, onScreen = 0;
+    for (let x = co.minX; x <= co.maxX; x += 0.002) {
+      for (const y of [0.95, 1.05, 1.15, 1.25]) {
+        aimed += 1;
+        const dir = new THREE.Vector3(x, y, closet.minZ).sub(eye).normalize();
+        ray.set(eye, dir);
+        const hit = ray.intersectObjects(occluders, false)[0];
+        if (!hit || hit.point.z < closet.minZ + 0.05) continue;   // stopped at the doors
+        past += 1;
+        if (mine.has(hit.object)) {
+          onPc += 1;
+          if (hit.object.name === 'closetTerminal') onScreen += 1;
+        }
+      }
+    }
+    return { aimed, past, onPc, onScreen };
+  }
+
+  test('is what the seam between the doors looks onto', () => {
+    const { past, onPc, onScreen } = throughTheDoors();
+    expect(past).toBeGreaterThan(0);
+    // Most of what can be seen through the seam is the machine, not the back
+    // of an empty closet: the sight line through a 2 cm aperture is not square
+    // to the doors (the eye does not stand in front of them), so a prop
+    // centered in the closet would be missed entirely.
+    expect(onPc / past).toBeGreaterThan(0.4);
+    // And the glowing screen is part of it, which is the whole hook.
+    expect(onScreen).toBeGreaterThan(0);
+  });
+
+  test('stays hidden: the doors are shut, and the seam is a sliver', () => {
+    const { aimed, past } = throughTheDoors();
+    expect(past / aimed).toBeLessThan(0.05);
+  });
+
+  test('its light is emissive, so the closet costs the room no lamp', () => {
+    // A point light in a closed closet would be paid for by every material in
+    // the room, on every frame, on every phone. The screen glows on its own.
+    const screen = officeRoom.getObjectByName('closetTerminal');
+    expect(screen.material.emissiveIntensity).toBeGreaterThan(0.5);
+    // The room already carries ten lights (a rig plus four corner fills), and
+    // every one of them is in the shader for every material. None of them is
+    // inside the closet, and this is the tripwire for a future "just one small
+    // point light in there" that would cost the whole room.
+    const { closet } = LAYOUT;
+    const inCloset = [];
+    officeRoom.traverse((o) => {
+      if (!o.isLight) return;
+      const p = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld);
+      if (p.x > closet.minX && p.x < closet.maxX
+        && p.z > closet.minZ && p.z < closet.maxZ
+        && p.y > 0 && p.y < LAYOUT.room.height) inCloset.push(o.name || o.type);
+    });
+    expect(inCloset).toEqual([]);
+  });
+});
+
 describe('the list of the room\'s things', () => {
   const rows = () => propListItems(PROP_CONTENT, registeredKinds, {
     before: [{ id: HOST_ROW, label: 'Steve' }],
@@ -282,3 +541,4 @@ describe('the list of the room\'s things', () => {
     for (const row of r.slice(1, -1)) expect(row.label).toBe(PROP_CONTENT[row.id].title);
   });
 });
+

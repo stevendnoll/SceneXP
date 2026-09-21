@@ -110,6 +110,23 @@ test('the full office builds and ticks without throwing', async () => {
   store.pauseDancerForDialog(null);
   store.resumeDancerFromDialog();
 
+  // The enlarged monitor's painter: the same routine the wall's texture uses,
+  // pointed at another context. It repaints only when the cursor blink has
+  // actually moved, because the overlay asks it on every animation frame and
+  // the picture changes twice a second. `force` lays it down regardless, which
+  // is what opening the view and resizing its canvas need.
+  expect(store.drawMonitorTo(null, 100, 100)).toBe(false);      // no context
+  expect(store.drawMonitorTo(chainable(), 0, 0)).toBe(false);   // not laid out yet
+  const ctx = chainable();
+  expect(store.drawMonitorTo(ctx, 1520, 950, true)).toBe(true);
+  expect(store.drawMonitorTo(ctx, 1520, 950)).toBe(false);      // nothing moved
+  expect(store.drawMonitorTo(ctx, 1520, 950, true)).toBe(true); // forced anyway
+  // And the lines it paints are in the page as text for anybody who cannot see
+  // a canvas, from this one array rather than a second copy of the same code.
+  const lines = store.getEditorLines();
+  expect(lines.length).toBeGreaterThan(4);
+  expect(lines.join('\n')).toContain('the room you are standing in');
+
   // The brightness dial, and the music stubs (no sound rig in the office)
   store.setStudioBrightness(0.8);
   expect(store.toggleStudioMusic()).toBe(false);

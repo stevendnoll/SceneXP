@@ -42,20 +42,28 @@
          identical cards in one message thread. See the longer note in
          earthdefense, which is the page that shipped that bug.
 
-         og-steve.jpg is a capture of the office from the doorway (from the
-         specs/og-steve.png capture, same flow as the other experiences). -->
-    <meta property="og:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=1">
+         RESHOT 2026-09-21, after the room got its fixed eye, its wall
+         display and its whiteboard back: the card before this one was a July
+         capture of a room that no longer existed, down to a board quoting
+         copy that is not on it any more. The pair is built from the Mac
+         screenshot with the house recipe (convert to sRGB, THEN strip, then
+         jpeg at q92 4:4:4 and webp at q92 -sharp_yuv, measured against the
+         corrected master). On this frame the profile conversion is worth
+         2.92% RMSE, which is the difference between the greens somebody
+         chose and ones nobody did. Both URLs carry ?v=2 so the scrapers
+         that cached the old card fetch the new one. -->
+    <meta property="og:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=2">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk working on SceneXP code, a tuxedo cat sleeps on a small navy desk by the window, and a whiteboard on the green wall reads delight visitors, honor the honorees, ship it.">
+    <meta property="og:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk with a laptop showing the SceneXP site and a monitor full of code, a whiteboard on the green wall behind him sketches a plan, build, test, ship, learn loop, and a tuxedo cat sleeps on a small navy desk by the window.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Steve's Home Office">
     <meta name="twitter:description" content="A 3D model of the tiny home office where SceneXP gets built. Step in and look all the way around.">
-    <meta name="twitter:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=1">
-    <meta name="twitter:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk working on SceneXP code, a tuxedo cat sleeps on a small navy desk by the window, and a whiteboard on the green wall reads delight visitors, honor the honorees, ship it.">
+    <meta name="twitter:image" content="https://www.scenexp.com/steve/assets/og-steve.jpg?v=2">
+    <meta name="twitter:image:alt" content="Steve's 3D home office: he stands at a black sit-stand desk with a laptop showing the SceneXP site and a monitor full of code, a whiteboard on the green wall behind him sketches a plan, build, test, ship, learn loop, and a tuxedo cat sleeps on a small navy desk by the window.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
@@ -67,18 +75,28 @@
       "url": "https://www.scenexp.com/steve/",
       "name": "Steve's Home Office",
       "description": "A 3D model of the home office in Steve's house where SceneXP gets built, to look all the way around.",
-      "inLanguage": "en-US"
+      "inLanguage": "en-US",
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll",
+        "url": "https://devsteve.com/",
+        "sameAs": ["https://devsteve.com/"]
+      }
     }
     </script>
 
     <title>Steve's Home Office</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=6" as="style">
+    <link rel="preload" href="css/experience.min.css?v=1" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=6">
+    <!-- The room's own sheet, loaded second so it can place what the shared
+         one styles. Bump the ?v= on BOTH lines whenever it changes. -->
+    <link rel="stylesheet" href="css/experience.min.css?v=1">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -154,11 +172,19 @@
         </div>
     </div>
 
-    <div id="blocker">
+    <!-- The welcome card, and the only thing that tells a visitor what this
+         room is. It can be opened again from the How-this-works button in the
+         corner, so `tabindex="-1"` is here to catch focus when it comes back:
+         without it the card returns to the screen while focus stays on a
+         button that just vanished, and a screen reader says nothing at all. -->
+    <div id="blocker" tabindex="-1">
         <div id="instructions">
             <p class="title">WELCOME</p>
             <p class="subtitle">Steve is at his desk, building SceneXP</p>
-            <p class="click-prompt">Click to step inside</p>
+            <!-- Two verbs and a destination, all set from main.js: "Click" or
+                 "Tap" for the device, and "step inside" or "come back" for
+                 whether the visitor has been in the room already. -->
+            <p class="click-prompt" id="begin-prompt">Click to step inside</p>
             <div class="controls-hint">
                 <span>LOOK AROUND</span> Drag the room, or use the arrow keys. It turns all the way around.
                 <span>LOOK CLOSER</span> Click anything in here, or Steve himself, for a little of its story.
@@ -219,9 +245,70 @@
                     <li class="help-desktop"><strong>No mouse?</strong> Press <kbd>Tab</kbd> for a list of everything in the room.</li>
                     <li><strong>Settings:</strong> the gear icon (top-right) sets the brightness.</li>
                 </ul>
+                <!-- The other half of the work, and it comes AFTER the tips
+                     rather than before them. A visitor who clicked Steve is
+                     usually asking how the room works, so the instructions
+                     keep the top of the card and the invitation sits with the
+                     link that acts on it. SceneXP is what this desk makes for
+                     fun; the portfolio is what it makes for a living. -->
+                <p class="piece-subtitle">Worlds like this one are the playful half of what I do.
+                    The rest of it, the software and the sites I build for people, lives over at devSteve.com.</p>
+                <!-- A NEW TAB, unlike the directory link on the welcome card,
+                     and for the opposite reason: that one stays here because
+                     Back is one press from the scene on the same site, and
+                     this one leaves the site altogether. Same arrangement the
+                     tribute scenes use for a featured business's own website,
+                     down to the rel pair. main.js syncs the href from
+                     STEVE_CONFIG.site.portfolio; the href here is the
+                     equivalent fallback, and the link is never the card's
+                     focus, so a card that opened under a finger cannot follow
+                     it. -->
+                <a id="help-site" class="piece-enter" href="https://devsteve.com/"
+                    target="_blank" rel="noopener noreferrer">See more of my work at devSteve.com &rarr;</a>
                 <button class="piece-cancel" data-close>Thanks, Steve!</button>
             </div>
         </div>
+    </div>
+
+    <!-- ===== THE MONITOR, UP CLOSE ==========================================
+         The Samsung on the desk is painted with a slice of this room's own
+         source (EDITOR_LINES in store.js), and at the composed distance it is
+         an unreadable smudge two centimetres tall. This is where it becomes
+         legible, which is the scene's whole premise landing in one click: the
+         room you are standing in, in the code that draws it.
+
+         THE SAME PAINTER FILLS BOTH SURFACES. store.js exports drawMonitorTo,
+         so the canvas below is the wall's screen at a larger size and in the
+         same state, cursor blink included. A separate drawing here would be a
+         second thing to keep in step, and it would drift.
+
+         THE MARKUP AND EVERY CLASS ON IT ARE THE SHARED ONES the Interstate
+         shop's back-office monitor uses, styled by #monitor-view and the
+         .monitor-* rules in the shared sheet. Nothing here needs CSS of its
+         own.
+
+         AND THE LINES ARE IN THE PAGE AS TEXT, not only as pixels. A canvas
+         cannot be selected, zoomed by the browser, or read aloud, which is the
+         same reason the visitor-activity view below is DOM rather than a
+         painted surface. main.js fills this from the same array the painter
+         uses. -->
+    <div id="monitor-view" class="hidden" role="dialog" aria-modal="true"
+        aria-label="The monitor on Steve's desk, up close">
+        <div class="monitor-backdrop" data-close></div>
+        <div class="monitor-frame">
+            <div class="monitor-bezel">
+                <div class="monitor-screen">
+                    <canvas id="monitor-canvas" class="monitor-canvas" role="img"
+                        aria-label="A code editor showing this room's own source"></canvas>
+                    <div class="monitor-glass" aria-hidden="true"></div>
+                </div>
+            </div>
+            <div class="monitor-neck" aria-hidden="true"></div>
+            <div class="monitor-base" aria-hidden="true"></div>
+        </div>
+        <pre id="monitor-source" class="sr-only"></pre>
+        <p id="monitor-caption" class="monitor-caption"></p>
+        <button class="monitor-close" aria-label="Step back from the monitor" data-close>&times;</button>
     </div>
 
     <!-- Dialog shown when an office prop is activated. -->
@@ -261,21 +348,37 @@
         </div>
     </div>
 
-    <!-- Partway "reach out" invitation. Reuses the completion celebration's card
-         styling, but fires once the visitor is a few discoveries in (not at the
-         end), catching engaged visitors who may never find every corner. -->
+    <!-- The every-few-taps invitation. Reuses the completion celebration's card
+         styling, and fires once the visitor has opened four things in the room
+         rather than at the end, catching engaged visitors who may never find
+         every corner.
+
+         IT COUNTS TAPS, NOT DISCOVERIES (changed 2026-09-21). It used to wait
+         for four of the six checklist discoveries, so a visitor who spent ten
+         happy minutes on the monitor, the mouse, the router and the trash can
+         never met it: those are stories too, and they are not on the list.
+
+         WHERE IT LEADS is the portfolio rather than the contact page. The
+         completion card at the end of the hunt is the one that asks for a
+         message. This one simply offers more of the work, which is a smaller
+         thing to ask of somebody four taps into a visit. -->
     <div id="nudge-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="nudge-title">
         <div class="modal-backdrop" data-close></div>
-        <div class="modal-container piece-card complete-card">
+        <!-- tabindex="-1" so the CARD can take focus when it opens. The
+             primary action here leaves the site, and a focused outbound link
+             turns a stray Enter into a navigation and hands the tap that
+             surfaced this card an already-focused target. -->
+        <div class="modal-container piece-card complete-card" tabindex="-1">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
             <div class="piece-card-content">
-                <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few discoveries in&nbsp; ★</p>
+                <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few stops into the visit&nbsp; ★</p>
                 <h2 id="nudge-title" class="piece-title">Enjoying the visit?</h2>
                 <p class="piece-subtitle">Thanks for looking around. This is a 3D model of the real home office
-                    where SceneXP gets built, desk, monitor, cat and all. If you would like something like it
-                    built for someone you care about, I would love to hear from you. No rush, I am not going
-                    anywhere.</p>
-                <a id="nudge-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
+                    where SceneXP gets built, desk, monitor, cat and all. Rooms like this one are the playful
+                    half of what I do. If you are curious about the rest of it, my portfolio is one tab
+                    away.</p>
+                <a id="nudge-site" class="piece-enter" href="https://devsteve.com/"
+                    target="_blank" rel="noopener noreferrer">See more of my work at devSteve.com &rarr;</a>
                 <button class="piece-cancel" data-close>Keep exploring</button>
             </div>
         </div>
@@ -357,6 +460,28 @@
         </svg>
     </button>
 
+    <!-- HOW THIS WORKS, AND IT IS THE WELCOME CARD ITSELF (the same answer the
+         garden gives). Everything this room says about itself is on a card that
+         could be dismissed in one click and never reached again, which left a
+         visitor who clicked through it standing in an office with no idea that
+         anything in it could be clicked. A second copy of those sentences would
+         be two texts to keep in step, and the copy nobody edits is the one a
+         lost visitor reads, so this puts the original back up.
+
+         It is hidden while that card is up (main.js), because a button that
+         summons what is already on the screen is a control that does nothing.
+         Slot two in the corner, beside the gear: css/experience.css. -->
+    <button id="help-btn" class="ui-float menu-btn help-btn" type="button"
+        title="How this works"
+        aria-label="How this works">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" />
+            <path d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" stroke-linecap="round"
+                stroke-linejoin="round" fill="none" />
+            <circle cx="12.1" cy="17.4" r="1.05" stroke="none" fill="currentColor" />
+        </svg>
+    </button>
+
     <div id="settings-panel" class="settings-panel hidden">
         <div class="settings-header">
             <span>Settings</span>
@@ -388,7 +513,13 @@
         </div>
     </div>
 
-    <canvas id="game-canvas" role="img" aria-label="A 3D view of Steve's home office from beside the closet door: Steve works at his sit-stand desk, seen in profile, and a tuxedo cat sleeps on a small blue desk by the window"></canvas>
+    <!-- The room's own voice: one short line over the scene, used to offer the
+         room to a visitor who has not opened anything yet (main.js). A status
+         region rather than a dialog, so it announces itself politely and never
+         takes the room away or asks to be dismissed. -->
+    <div id="office-toast" class="office-toast" role="status" aria-live="polite"></div>
+
+    <canvas id="game-canvas" role="img" aria-label="A 3D view of Steve's home office from beside the closet door: Steve works at his sit-stand desk, seen in profile, a whiteboard on the wall behind him sketches a plan, build, test, ship, learn loop, and a tuxedo cat sleeps on a small blue desk by the window"></canvas>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

@@ -39,8 +39,8 @@ let moCallbacks;  // MutationObserver callbacks, fired by hand after class flips
 // initial state the page has.
 const HIDDEN_AT_BOOT = [
   'settings-panel', 'nav-menu', 'checklist', 'piece-modal', 'help-modal',
-  'dialog-modal', 'analytics-view', 'complete-modal', 'nudge-modal',
-  'light-panel',
+  'dialog-modal', 'analytics-view', 'monitor-view', 'complete-modal',
+  'nudge-modal', 'light-panel',
 ];
 
 /** A raycast intersection whose object carries the given userData flags. */
@@ -221,6 +221,146 @@ test('Enter or Space lets a keyboard visitor in too', async () => {
   expect(dom.el('prop-panel').hidden).toBe(false);
 });
 
+test('How this works puts the welcome card back, and stands down while it is up', async () => {
+  // THE ROOM'S ONLY EXPLANATION OF ITSELF is on the welcome card, and until
+  // now one click dismissed it for good: a visitor who clicked through it was
+  // left in an office with no hint that anything in it could be opened. The
+  // button in the corner brings the same card back (the garden's answer, and
+  // for the same reason: a second copy of those sentences would be two texts
+  // to keep in step). What is easy to get wrong is everything AROUND the card,
+  // so that is what this holds.
+  const main = await bootSteve();
+  const help = dom.el('help-btn');
+  const gear = dom.el('settings-btn');
+  const blocker = dom.el('blocker');
+
+  // On arrival: the card is up, so nothing in the corner is offered. The
+  // button that summons the card would do nothing, and the gear is chrome over
+  // the only sentences the room gets to introduce itself with. `.ui-float` is
+  // display:none without `.visible`, which takes each one off the screen and
+  // out of the tab order in one act. The skip link goes with them, because it
+  // points at the gear.
+  expect(help.classList.contains('visible')).toBe(false);
+  expect(gear.classList.contains('visible')).toBe(false);
+  expect(dom.documentStub.querySelector('.skip-link').hidden).toBe(true);
+  expect(dom.el('begin-prompt').textContent).toBe('Click to step inside');
+
+  enterRoom();
+  expect(help.classList.contains('visible')).toBe(true);
+  expect(gear.classList.contains('visible')).toBe(true);
+  expect(dom.documentStub.querySelector('.skip-link').hidden).toBe(false);
+
+  // A settings panel left open behind the card would float over it with the
+  // gear that opened it gone from under it, so opening the card closes it.
+  fire(gear, 'click');
+  expect(isOpen('settings-panel')).toBe(true);
+
+  fire(help, 'click');
+  expect(isOpen('settings-panel')).toBe(false);
+  expect(blocker.classList.contains('hidden')).toBe(false);
+  expect(help.classList.contains('visible')).toBe(false);
+  expect(gear.classList.contains('visible')).toBe(false);
+  // The room waits behind it exactly as it does on arrival: taps are held,
+  // and the list of the room's things is not a tab stop behind the card.
+  expect(main.getState().isPaused).toBe(true);
+  expect(dom.el('prop-panel').hidden).toBe(true);
+  // The card knows the visitor has been in already...
+  expect(dom.el('begin-prompt').textContent).toBe('Click to come back to the office');
+  // ...and it has focus, so a screen reader reads the card rather than the
+  // button that just vanished from under the cursor.
+  expect(blocker.focused).toBe(true);
+
+  // Escape closes it, the way it closes every other panel in the room.
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  expect(blocker.classList.contains('hidden')).toBe(true);
+  expect(main.getState().isPaused).toBe(false);
+  expect(dom.el('prop-panel').hidden).toBe(false);
+  expect(help.classList.contains('visible')).toBe(true);
+  // And focus lands back on the button that opened it.
+  expect(help.focused).toBe(true);
+
+  // A second press opens it again, and the room answers taps once it is
+  // dismissed a third time: nothing here is one-shot.
+  fire(help, 'click');
+  expect(blocker.classList.contains('hidden')).toBe(false);
+  enterRoom();
+  expect(main.getState().isPaused).toBe(false);
+  clickScene({ isShopkeeper: true });
+  expect(isOpen('help-modal')).toBe(true);
+});
+
+test('the room offers itself to a visitor who has not touched anything', async () => {
+  // EVERY STORY IN THE OFFICE OPENS FROM A CLICK ON A 3D SURFACE, and once the
+  // welcome card is gone nothing on screen says so. This is the only thing in
+  // the scene that teaches that, so the parts worth holding are: it waits, it
+  // asks again in different words, it never lands on top of something the
+  // visitor is already reading, and it stops for good the moment the room is
+  // opened.
+  const main = await bootSteve();
+  const toast = dom.el('office-toast');
+
+  // Nothing while the welcome card is up, however long it stands there.
+  await jest.advanceTimersByTimeAsync(30000);
+  expect(toast.classList.contains('visible')).toBe(false);
+
+  enterRoom();
+  await jest.advanceTimersByTimeAsync(6000);
+  expect(toast.classList.contains('visible')).toBe(false);   // still waiting
+  await jest.advanceTimersByTimeAsync(1500);
+  expect(toast.classList.contains('visible')).toBe(true);
+  expect(toast.textContent).toContain('Click the desk, the cat, or Steve himself');
+
+  // It goes on its own, and the next one is different: a line repeated
+  // verbatim reads as a stuck screen rather than as a hint.
+  await jest.advanceTimersByTimeAsync(6000);
+  expect(toast.classList.contains('visible')).toBe(false);
+  await jest.advanceTimersByTimeAsync(13000);
+  expect(toast.classList.contains('visible')).toBe(true);
+  expect(toast.textContent).toContain('even the litter box');
+
+  // Opening anything ends it, and clears whatever is on screen with it.
+  clickScene({ isShopkeeper: true });
+  expect(isOpen('help-modal')).toBe(true);
+  expect(toast.classList.contains('visible')).toBe(false);
+  const said = toast.textContent;
+  await escapeAndSettle();
+  await jest.advanceTimersByTimeAsync(60000);
+  expect(toast.classList.contains('visible')).toBe(false);
+  expect(toast.textContent).toBe(said);   // the third line was never spent
+  expect(main.getState().isPaused).toBe(false);
+});
+
+test('a hint says Tap on a phone, and waits out a panel rather than queueing', async () => {
+  globalThis.navigator.maxTouchPoints = 5;
+  await bootSteve();
+  const toast = dom.el('office-toast');
+  fire(dom.el('blocker'), 'touchend');
+
+  await jest.advanceTimersByTimeAsync(7500);
+  expect(toast.textContent).toContain('Tap the desk');   // a finger, not a mouse
+
+  // Settings open when the next line comes due. It would land on the panel on
+  // a narrow screen, and on a busy visitor at any width, so the round is SPENT
+  // rather than queued: nobody gets followed around by a hint they dodged.
+  fire(dom.el('settings-btn'), 'click');
+  expect(isOpen('settings-panel')).toBe(true);
+  const said = toast.textContent;
+  await jest.advanceTimersByTimeAsync(22500);
+  expect(toast.classList.contains('visible')).toBe(false);
+  expect(toast.textContent).toBe(said);
+
+  // And the last line still comes, once the panel is out of the way.
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  expect(isOpen('settings-panel')).toBe(false);
+  await jest.advanceTimersByTimeAsync(18000);
+  expect(toast.classList.contains('visible')).toBe(true);
+  expect(toast.textContent).toContain('The big screen behind Steve');
+
+  // Three and no more. The room has said its piece.
+  await jest.advanceTimersByTimeAsync(120000);
+  expect(toast.classList.contains('visible')).toBe(false);
+});
+
 test('a tour by click: every office dialog, the nudge, the deferred celebration', async () => {
   const main = await bootSteve();
   enterRoom();
@@ -241,8 +381,10 @@ test('a tour by click: every office dialog, the nudge, the deferred celebration'
   await escapeAndSettle();
   expect(isOpen('dialog-modal')).toBe(false);
 
-  // Discoveries 2-5: the desk, the cat, the closet, the litter box. Crossing
-  // four discoveries queues the partway nudge, which escapeAndSettle closes.
+  // Discoveries 2-5: the desk, the cat, the closet, the litter box. Opening a
+  // fourth thing queues the invitation, which escapeAndSettle closes. (Steve's
+  // greeting above was the first of the four; the dancer seam is not a thing
+  // in the room and does not count. The next test holds the counting itself.)
   for (const kind of ['standDesk', 'cat', 'closet', 'litter']) {
     clickScene({ isProp: true, propKind: kind });
     expect(isOpen('dialog-modal')).toBe(true);
@@ -250,12 +392,14 @@ test('a tour by click: every office dialog, the nudge, the deferred celebration'
   }
   expect(globalThis.sessionStorage.getItem('steve-nudged')).toBe('1');
 
-  // A prop with no checklist entry rotates its two lines across clicks.
-  clickScene({ isProp: true, propKind: 'monitor' });
+  // A prop with no checklist entry rotates its two lines across clicks. (The
+  // monitor used to be the one driven here. It opens its own enlarged view
+  // now, so this asks the trash can, which is still a plain story card.)
+  clickScene({ isProp: true, propKind: 'trash' });
   const firstLine = dom.el('dialog-message').textContent;
-  expect(dom.el('dialog-title').textContent).toBe('The Samsung Monitor');
+  expect(dom.el('dialog-title').textContent).toBe('The Trash Can');
   await escapeAndSettle();
-  clickScene({ isProp: true, propKind: 'monitor' });
+  clickScene({ isProp: true, propKind: 'trash' });
   expect(dom.el('dialog-message').textContent).not.toBe(firstLine);
   await escapeAndSettle();
 
@@ -336,6 +480,111 @@ test('a tour by click: every office dialog, the nudge, the deferred celebration'
   expect(main.getState().isPaused).toBe(false);
   expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
   expect(dom.replaced).toHaveLength(0);
+});
+
+test('four things opened earns the invitation, and it leads to the portfolio', async () => {
+  // THE TRIGGER USED TO BE THE CHECKLIST, and that is the fault this holds:
+  // four of the six discoveries had to be found, so a visitor who opened the
+  // monitor, the mouse, the router and the trash can had read four stories,
+  // enjoyed the room, and was never offered anything. Not one of the four
+  // below is on the checklist, so under the old rule this test never sees the
+  // card at all.
+  const main = await bootSteve();
+  enterRoom();
+
+  /** Escape the open card and let resumeGameAfterModal have its beat, WITHOUT
+   *  closing whatever it surfaces (which is the thing being measured). */
+  const closeCard = async () => {
+    fire(dom.documentStub, 'keydown', { code: 'Escape' });
+    await jest.advanceTimersByTimeAsync(300);
+  };
+
+  for (const kind of ['keyboard', 'mouse', 'router']) {
+    clickScene({ isProp: true, propKind: kind });
+    expect(isOpen('dialog-modal')).toBe(true);
+    await closeCard();
+  }
+  expect(isOpen('nudge-modal')).toBe(false);          // three is not four
+  expect(globalThis.sessionStorage.getItem('steve-nudged')).toBeNull();
+
+  // The fourth. It is queued while that card is up and surfaces as it closes,
+  // so the two never stack.
+  clickScene({ isProp: true, propKind: 'trash' });
+  expect(isOpen('nudge-modal')).toBe(false);
+  await closeCard();
+  expect(isOpen('nudge-modal')).toBe(true);
+
+  // It leads to the portfolio, from config, and not to the contact page: the
+  // completion card at the end of the hunt is the one that asks for a message.
+  const { STEVE_CONFIG } = await import('../www/steve/js/config.js');
+  expect(dom.el('nudge-site').href).toBe(STEVE_CONFIG.site.portfolio.url);
+  expect(dom.el('complete-contact').href).toBe('/contact.html');
+
+  // The CARD takes focus, not the outbound link (asserted against the source:
+  // the stub hands querySelector a fresh element, so watching `focused` here
+  // could never fail).
+  const src = readFileSync(join(process.cwd(), 'www', 'steve', 'js', 'main.js'), 'utf8');
+  const opener = src.match(/function openNudgeModal\(\)[\s\S]*?\n\}/);
+  expect(opener[0]).toContain(".querySelector('.modal-container')");
+  expect(opener[0]).not.toContain(".querySelector('.piece-enter')");
+  const html = readFileSync(join(process.cwd(), 'www', 'steve', 'index.html'), 'utf8');
+  const tag = /<a id="nudge-site"[\s\S]{0,300}?<\/a>/.exec(html);
+  expect(tag[0]).toContain('target="_blank"');
+  expect(tag[0]).toContain('rel="noopener noreferrer"');
+
+  // ONCE PER SESSION. Four more stories do not earn a second one: this room
+  // has twenty-odd things to open and a celebration waiting at the end of the
+  // hunt, so the invitation asks once and then leaves the visitor alone.
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  await jest.advanceTimersByTimeAsync(300);
+  expect(isOpen('nudge-modal')).toBe(false);
+  expect(globalThis.sessionStorage.getItem('steve-nudged')).toBe('1');
+  for (const kind of ['cabinet', 'sonDesk', 'sonChair', 'deskChair']) {
+    clickScene({ isProp: true, propKind: kind });
+    await closeCard();
+    expect(isOpen('nudge-modal')).toBe(false);
+  }
+  expect(main.getState().isPaused).toBe(false);
+});
+
+test('the monitor opens up close, painted by the same routine as the wall', async () => {
+  // THE PAGE SELLS "the room's own source code on the monitor" and at the
+  // composed distance it is an unreadable smudge two centimetres tall. This is
+  // the click that makes it legible, so what it holds is: the monitor opens
+  // this instead of a story card, the canvas is sized for real pixels before
+  // anything is painted into it, the lines are in the page as TEXT for anybody
+  // who cannot see a canvas, and the whole thing closes like every other card.
+  const main = await bootSteve();
+  enterRoom();
+
+  clickScene({ isProp: true, propKind: 'monitor' });
+  expect(isOpen('monitor-view')).toBe(true);
+  expect(isOpen('dialog-modal')).toBe(false);      // not the story card
+  expect(main.getState()._modalOpen).toBe(true);
+
+  // Sized to the laid-out screen at device pixels rather than left at the
+  // element's default 300x150, which is what makes the close-up crisp.
+  expect(dom.el('monitor-canvas').width).toBeGreaterThan(300);
+  expect(dom.el('monitor-canvas').height).toBeGreaterThan(150);
+
+  // The caption carries what the prop's story card used to say...
+  expect(dom.el('monitor-caption').textContent).toMatch(/\S/);
+  // ...and the code is really in the page, from the same array the painter
+  // draws, so a screen reader reads the room's source instead of "canvas".
+  const store = await import('../www/steve/js/store.min.js');
+  const lines = store.getEditorLines();
+  expect(lines.length).toBeGreaterThan(4);
+  expect(dom.el('monitor-source').textContent).toBe(lines.join('\n'));
+  expect(dom.el('monitor-source').textContent).toContain('the room you are standing in');
+
+  // Escape closes it, and the room answers taps again.
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  await jest.advanceTimersByTimeAsync(300);
+  expect(isOpen('monitor-view')).toBe(false);
+  expect(main.getState()._modalOpen).toBe(false);
+  clickScene({ isProp: true, propKind: 'trash' });
+  expect(isOpen('dialog-modal')).toBe(true);
+  await escapeAndSettle();
 });
 
 test('a gallery piece click opens the piece modal with its link wired', async () => {
@@ -473,7 +722,7 @@ test('mobile: tap to start, forgiving taps, the wall dashboard', async () => {
   globalThis.navigator.maxTouchPoints = 5;
   const main = await bootSteve();
   expect(main.getState().isMobile).toBe(true);
-  expect(dom.documentStub.querySelector('.click-prompt').textContent).toBe('Tap to step inside');
+  expect(dom.el('begin-prompt').textContent).toBe('Tap to step inside');
 
   fire(dom.el('blocker'), 'touchend');
   expect(main.getState().isPaused).toBe(false);
@@ -524,6 +773,48 @@ test('asks the shared pan part for a view that wraps, at every screen size', () 
   expect(call[0]).toMatch(/landscapeFov:/);
   expect(call[0]).toMatch(/surface:\s*canvas/);
   expect(call[0]).toMatch(/pan:\s*cam\.portrait\.pan/);
+});
+
+test("Steve's greeting leads on to his portfolio, safely and not under a finger", async () => {
+  // THE ONE OUTBOUND LINK IN THE ROOM. Everything else here is root-relative
+  // (the directory, the contact pages), so this is the only place where the
+  // rules for leaving the site apply, and all three halves of it are easy to
+  // get wrong in ways nothing else would notice.
+  await bootSteve();
+  enterRoom();
+  clickScene({ isShopkeeper: true });
+  expect(isOpen('help-modal')).toBe(true);
+
+  // 1. The href comes from config rather than from the markup alone, so the
+  //    URL has one home. (The markup carries the same href as a fallback.)
+  const { STEVE_CONFIG } = await import('../www/steve/js/config.js');
+  expect(dom.el('help-site').href).toBe(STEVE_CONFIG.site.portfolio.url);
+
+  // 2. The card does NOT focus it. A card can open under a finger on touch,
+  //    and the compatibility click that follows lands on whatever is focused,
+  //    so an outbound link there means a tap on Steve leaves the site (the
+  //    fault www/automan met and wrote down). The dismiss button keeps the
+  //    focus, as it did before this link existed. Asserted against the SOURCE:
+  //    the DOM stub answers querySelector with a fresh stub rather than the
+  //    real link, so a test that watched `focused` here could never fail.
+  const src = readFileSync(join(process.cwd(), 'www', 'steve', 'js', 'main.js'), 'utf8');
+  const opener = src.match(/function openHelpModal\(\)[\s\S]*?\n\}/);
+  expect(opener).not.toBeNull();
+  expect(opener[0]).toContain(".querySelector('.piece-cancel')");
+  expect(opener[0]).not.toContain('help-site');
+
+  // 3. A new tab, with the rel pair that stops the opened page reaching back
+  //    through window.opener. Read from the markup, because that is where a
+  //    future edit would drop them.
+  const html = readFileSync(join(process.cwd(), 'www', 'steve', 'index.html'), 'utf8');
+  const tag = /<a id="help-site"[\s\S]{0,300}?<\/a>/.exec(html);
+  expect(tag).not.toBeNull();
+  expect(tag[0]).toContain('target="_blank"');
+  expect(tag[0]).toContain('rel="noopener noreferrer"');
+  // And it says where it goes, in its own text: an icon or a bare "here"
+  // tells a screen reader nothing, and this link opens a tab the visitor did
+  // not ask for.
+  expect(tag[0]).toContain(STEVE_CONFIG.site.portfolio.label);
 });
 
 test('falls back to the 2D site when WebGL is unavailable', async () => {

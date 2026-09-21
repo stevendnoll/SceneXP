@@ -151,6 +151,17 @@ export const STEVE_CONFIG = deepFreeze({
         // touch"). Root-relative on purpose.
         builder: {
             contactPath: '/contact.html'
+        },
+
+        // THE ONE LINK IN THIS ROOM THAT LEAVES THE SITE. Every other
+        // destination here is root-relative, because this experience honors
+        // the builder and the builder's marketing pages are on the serving
+        // domain. The portfolio is his own site, off this domain, so it is an
+        // absolute URL and it opens in a tab of its own, the way the featured
+        // business links in the tribute scenes do.
+        portfolio: {
+            url: 'https://devsteve.com/',
+            label: 'devSteve.com'
         }
     },
 

@@ -56,6 +56,7 @@ import {
     pauseDancerForDialog, resumeDancerFromDialog,
     pauseRoquiForDialog, resumeRoquiFromDialog,
     updateDashboardScreen,
+    drawMonitorTo, getEditorLines,
     setStudioBrightness, updateInteriorAmbientLight
 } from './store.min.js';
 import { initGallery, getGalleryGroup, resolveGalleryPiece } from './gallery.min.js';
@@ -105,7 +106,7 @@ Object.defineProperty(state, 'isModalOpen', {
 // is fine because the modal's own backdrop covers the scene). The list of the
 // room's things and the view controls join the chrome here: both are tab stops.
 const MODAL_BG_SELECTOR =
-    '.skip-link, #blocker, #prop-panel, .pan-controls, #settings-btn, #settings-panel, #game-canvas';
+    '.skip-link, #blocker, #prop-panel, .pan-controls, #settings-btn, #help-btn, #settings-panel, #game-canvas';
 let modalReturnFocus = null;
 
 function setBackgroundInert(on) {
@@ -118,6 +119,8 @@ function setBackgroundInert(on) {
 function onModalOpened() {
     // Close the discovery checklist so it doesn't float over the modal backdrop.
     closeChecklistPanel();
+    // The room has been touched, so it stops offering itself.
+    noteRoomTouched();
     modalReturnFocus = document.activeElement;
     armCard();
     // Defer one microtask so the specific dialog has been un-hidden first.
@@ -148,7 +151,7 @@ function onModalClosed() {
 // the capture phase. Keyboard activation is exempt (Enter and Space arrive as
 // a click with `detail` 0, and nobody tabbing was handed a card under a finger).
 const CARD_ARM_MS = 450;
-const CARD_SELECTOR = '#dialog-modal, #help-modal, #piece-modal, #nudge-modal, #complete-modal, #analytics-view, #light-panel';
+const CARD_SELECTOR = '#dialog-modal, #help-modal, #piece-modal, #nudge-modal, #complete-modal, #analytics-view, #monitor-view, #light-panel';
 let cardArmedAt = 0;
 
 function armCard() {
@@ -168,11 +171,12 @@ function swallowGhostTap(event) {
 }
 
 // DOM references (resolved in init)
-let canvas, loadingScreen, blocker;
+let canvas, loadingScreen, blocker, helpBtn;
 let pieceModal, pieceModalTitle, pieceModalSubtitle, pieceModalEnter;
 let helpModal;
 let dialogModal, dialogModalTitle, dialogModalMessage;
 let analyticsView;  // the visitor-activity dashboard the wall display opens
+let monitorView, monitorCanvas, monitorCaption, monitorSource;  // the desk monitor, up close
 let propPanel;      // the off-screen list of the room's things (keyboard route)
 let lightPanel, lightPanelSlider, lightPanelValue; // the light switch's floating dimmer
 let completeModal; // discovery-complete celebration
@@ -181,6 +185,13 @@ let nudgeModal; // partway "reach out" invitation (reuses the celebration card)
 // Whether the dashboard overlay is up. The render loop idles behind it, and
 // the background poll keeps refreshing underneath either way.
 let analyticsOpen = false;
+
+// The welcome card can be dismissed more than once now (the How-this-works
+// button puts it back), so these two hold what "more than once" changes:
+// the arrival is still counted once, and focus goes back to whatever summoned
+// the card rather than to the top of the page.
+let visitBegun = false;
+let welcomeReturn = null;
 
 // Raycasting for tap-to-open
 const raycaster = new THREE.Raycaster();
@@ -208,6 +219,7 @@ async function init() {
     canvas = document.getElementById('game-canvas');
     loadingScreen = document.getElementById('loading-screen');
     blocker = document.getElementById('blocker');
+    helpBtn = document.getElementById('help-btn');
     pieceModal = document.getElementById('piece-modal');
     pieceModalTitle = document.getElementById('piece-title');
     pieceModalSubtitle = document.getElementById('piece-subtitle');
@@ -217,12 +229,17 @@ async function init() {
     dialogModalTitle = document.getElementById('dialog-title');
     dialogModalMessage = document.getElementById('dialog-message');
     analyticsView = document.getElementById('analytics-view');
+    monitorView = document.getElementById('monitor-view');
+    monitorCanvas = document.getElementById('monitor-canvas');
+    monitorCaption = document.getElementById('monitor-caption');
+    monitorSource = document.getElementById('monitor-source');
     propPanel = document.getElementById('prop-panel');
     completeModal = document.getElementById('complete-modal');
     nudgeModal = document.getElementById('nudge-modal');
     lightPanel = document.getElementById('light-panel');
     lightPanelSlider = document.getElementById('light-slider');
     lightPanelValue = document.getElementById('light-value');
+    roomToast = document.getElementById('office-toast');
 
     if (!canvas) return;
 
@@ -269,9 +286,9 @@ async function init() {
         // Peak-delight moment: the first time every discovery is found, celebrate
         // and gently invite the visitor to get in touch (once per session).
         if (progress.complete) maybeCelebrateCompletion();
-        // Before that, a single low-key nudge partway through catches engaged
-        // visitors who may never find all eight (once per session).
-        else maybeNudgeContact(progress);
+        // (The partway invitation used to hang off this too, at four
+        // discoveries. It counts opened things now instead: see
+        // noteStoryOpened, and the note above NUDGE_AFTER for why.)
         // When something ticks while the panel is closed, pulse the button so the
         // visitor knows there's new progress to peek at.
         const panel = document.getElementById('checklist');
@@ -296,6 +313,9 @@ async function init() {
         loadingScreen.classList.add('hidden');
         state.isLoaded = true;
         document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
+        // ...except whatever belongs to the room rather than to the welcome
+        // card the visitor is looking at.
+        syncWelcomeChrome();
     }, 400);
 
     // Mark the start of this visit. Records the input mode so the log can tell
@@ -352,6 +372,14 @@ function setupEventListeners() {
     window.addEventListener('resize', () => {
         handleResize();
         placeCamera();
+        // The enlarged monitor is sized in device pixels for the box it was
+        // laid out in, so a resize under it leaves a stretched copy of the old
+        // picture until it is reopened.
+        if (monitorOpen) {
+            sizeMonitorCanvas();
+            const ctx = monitorCanvas && monitorCanvas.getContext && monitorCanvas.getContext('2d');
+            if (ctx) drawMonitorTo(ctx, monitorCanvas.width, monitorCanvas.height, true);
+        }
     }, { signal });
 
     // iOS Safari ignores `user-scalable=no` (Apple re-enabled zoom in iOS 10 for
@@ -374,11 +402,8 @@ function setupEventListeners() {
 
     // The welcome card: any click, tap, or Enter/Space lets the visitor in.
     // The room is already alive behind it, so dismissing is all it does.
-    if (state.isMobile) {
-        document.body.classList.add('is-touch-device');
-        const clickPrompt = document.querySelector('.click-prompt');
-        if (clickPrompt) clickPrompt.textContent = 'Tap to step inside';
-    }
+    if (state.isMobile) document.body.classList.add('is-touch-device');
+    setWelcomePrompt(false);
     if (blocker) {
         const dismiss = (e) => {
             if (e) e.preventDefault();
@@ -398,6 +423,9 @@ function setupEventListeners() {
     // which would swallow the synthetic click and leave the link inert. Stop
     // the start events short of it so the anchor can follow its own href.
     shieldOverlayControl(document.getElementById('explore-link'), { signal });
+
+    // How this works: the welcome card, put back up.
+    if (helpBtn) helpBtn.addEventListener('click', openWelcome, { signal });
 
     // A click or tap on the room. A tap that merely ends a drag or a pinch
     // (the pan part's gestures, on this same canvas) belongs to the gesture,
@@ -432,6 +460,10 @@ function setupEventListeners() {
     // Dashboard overlay close
     if (analyticsView) analyticsView.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closeAnalyticsView, { signal }));
+
+    // Enlarged monitor close (backdrop and the round button both carry data-close)
+    if (monitorView) monitorView.querySelectorAll('[data-close]').forEach(el =>
+        el.addEventListener('click', closeMonitorView, { signal }));
 
     // Discovery-complete celebration: close buttons + the Share action.
     if (completeModal) completeModal.querySelectorAll('[data-close]').forEach(el =>
@@ -470,7 +502,13 @@ function setupEventListeners() {
             if (menuBtn) { menuBtn.setAttribute('aria-expanded', 'false'); menuBtn.focus(); }
             return;
         }
-        if (state.isModalOpen) closeActiveModal();
+        if (state.isModalOpen) { closeActiveModal(); return; }
+        // The welcome card is on this list at all because it is a panel a
+        // visitor can now OPEN from the corner, and Escape is what closes a
+        // panel. LAST, though: the gear floats above the card, so settings can
+        // be opened while it is up, and Escape belongs to the thing the
+        // visitor opened most recently.
+        if (blocker && !blocker.classList.contains('hidden')) beginVisiting();
     }, { signal });
 
     // (No autopilot tour in this experience: the office is one small room,
@@ -510,8 +548,205 @@ function beginVisiting() {
     // The list of the room's things becomes a tab stop only now: while the
     // welcome card was up it would have been one behind it.
     if (propPanel) propPanel.hidden = false;
-    track('begin-visiting');
+    syncWelcomeChrome();
+    // ONCE PER VISIT, NOT ONCE PER DISMISSAL, now that the card can be put
+    // back up from the corner. A visitor who reads it twice arrived once.
+    if (!visitBegun) {
+        visitBegun = true;
+        track('begin-visiting');
+    }
+    // Back to the button that summoned the card, for anybody who got here by
+    // keyboard. It was hidden while the card was up, so it is focusable again
+    // only after syncWelcomeChrome above.
+    if (welcomeReturn && typeof welcomeReturn.focus === 'function') {
+        try { welcomeReturn.focus({ preventScroll: true }); } catch (e) { /* gone */ }
+    }
+    welcomeReturn = null;
     surfaceNudgeOnReturn(); // welcome screen just closed: show a nudge left pending
+    // And the room starts waiting to be touched.
+    hintAtTheRoom();
+}
+
+/**
+ * Put the welcome card back up.
+ *
+ * IT IS THE SAME CARD, not a second copy of its sentences. Everything the room
+ * says about itself is on it, and a separate help panel would be two texts to
+ * keep in step, with the copy nobody edits the one a lost visitor reads. The
+ * room simply waits behind it again, exactly as it does on arrival.
+ */
+function openWelcome() {
+    if (!state.isLoaded || !blocker || !blocker.classList.contains('hidden')) return;
+    setWelcomePrompt(true);
+    blocker.classList.remove('hidden');
+    // Reading starts at the top, whatever the visitor had scrolled to on a
+    // short screen last time the card was up.
+    blocker.scrollTop = 0;
+    state.isPaused = true;
+    // Out of the tab order while the card covers it, the same as on arrival.
+    if (propPanel) propPanel.hidden = true;
+    // The settings panel would otherwise be left floating over the card with
+    // the gear that opened it gone from under it. Adding the class is the way
+    // every other close works here: the panel's observer keeps aria-expanded
+    // and the outside-click listener in step from that one change.
+    const settingsPanel = document.getElementById('settings-panel');
+    if (settingsPanel) settingsPanel.classList.add('hidden');
+    syncWelcomeChrome();
+    // The room's own hints wait their turn rather than landing on the card.
+    stopRoomHint();
+    welcomeReturn = helpBtn;
+    if (blocker.focus) blocker.focus({ preventScroll: true });
+    track('help-opened');
+}
+
+/**
+ * Nothing in the corner while the welcome card is up.
+ *
+ * `.menu-btn` and `.settings-btn` are z-index 110 and the card is 100, so both
+ * float ON TOP of it and are tab stops in front of it. How-this-works was the
+ * plain case, a live control summoning what is already on the screen. The gear
+ * is the quieter one: a visitor's first sight of the room was a welcome card
+ * with a settings button over it, which is chrome competing with the only
+ * sentences the room gets to say for itself.
+ *
+ * The skip link goes with them, because its target is the gear. A skip link
+ * whose destination is not on the screen moves focus nowhere, and it is the
+ * FIRST thing a keyboard visitor reaches: better to have nothing to skip to
+ * than an offer that does nothing. It comes back with the gear.
+ *
+ * `.ui-float` is display:none until `.visible` says otherwise, so the class is
+ * what takes each button off the screen AND out of the tab order in one act.
+ * The skip link is positioned rather than floated, so it takes the `hidden`
+ * attribute, which nothing in the sheet overrides for it.
+ */
+function syncWelcomeChrome() {
+    const reading = !blocker || !blocker.classList.contains('hidden');
+    const offered = state.isLoaded && !reading;
+    if (helpBtn) helpBtn.classList.toggle('visible', offered);
+    const gear = document.getElementById('settings-btn');
+    if (gear) gear.classList.toggle('visible', offered);
+    const skip = document.querySelector('.skip-link');
+    if (skip) skip.hidden = !offered;
+}
+
+/**
+ * The one line on the welcome card that names a control.
+ *
+ * TWO VERBS AND A DESTINATION. "Step inside" is wrong for somebody who has
+ * been in the room already and pressed the button in the corner to read this
+ * again, and "click" is wrong on a phone, which is where most visitors meet
+ * it. Both live here so neither can be changed without the other.
+ */
+function setWelcomePrompt(returning) {
+    const prompt = document.getElementById('begin-prompt');
+    if (!prompt) return;
+    const verb = state.isMobile ? 'Tap' : 'Click';
+    prompt.textContent = returning
+        ? `${verb} to come back to the office`
+        : `${verb} to step inside`;
+}
+
+// ---- A room that offers itself ---------------------------------------------
+//
+// EVERY STORY IN HERE OPENS FROM A CLICK ON A 3D SURFACE, and once the welcome
+// card is gone nothing on the screen says so. A visitor who came for the room
+// rather than for the card can stand in a finished office, turn all the way
+// around, and leave without learning that any of it answers. The checklist
+// that would have hinted at it has no panel in this scene, so this is the only
+// thing that teaches the room.
+//
+// THE SHAPE COMES FROM www/garden's planting nudge, including why it is not a
+// single shot: one line, once, is missed by anybody who was still looking at
+// the window when it arrived. So it asks again at a widening gap, in different
+// words each time (a sentence repeated verbatim reads as a stuck screen), and
+// gives up after three. It stops for good the moment anything in the room is
+// opened, which is the whole point of it.
+//
+// A TOAST RATHER THAN A CARD, deliberately. The visitor is being invited to
+// look at the room, so the invitation must not take the room away, and it is
+// the only kind of prompt that reaches a touch visitor, who has no cursor to
+// be told anything with.
+const ROOM_HINT_DELAYS_MS = [7000, 18000, 22000];   // after the card, then apart
+const ROOM_HINT_MS = 5200;                           // how long each line stays
+
+let roomToast = null;      // the toast element (resolved in init)
+let roomToastTimer = 0;
+let roomHintTimer = 0;
+let roomHintRound = 0;     // the next line to offer
+let roomTouched = false;   // something in the room has been opened
+
+/** The lines, in order, worded for the device holding them. */
+function roomHintLines() {
+    const verb = state.isMobile ? 'Tap' : 'Click';
+    return [
+        `Everything in this room has a story. ${verb} the desk, the cat, or Steve himself.`,
+        `The cat, the closet, even the litter box. They all have something to say.`,
+        `The big screen behind Steve shows who has been visiting SceneXP today.`
+    ];
+}
+
+/** Say one thing, briefly, over the room. */
+function showRoomToast(message, ms) {
+    if (!roomToast) return;
+    roomToast.textContent = message;
+    roomToast.classList.add('visible');
+    if (roomToastTimer) clearTimeout(roomToastTimer);
+    roomToastTimer = setTimeout(() => {
+        roomToastTimer = 0;
+        roomToast.classList.remove('visible');
+    }, ms || ROOM_HINT_MS);
+}
+
+function hideRoomToast() {
+    if (roomToastTimer) { clearTimeout(roomToastTimer); roomToastTimer = 0; }
+    if (roomToast) roomToast.classList.remove('visible');
+}
+
+/** Is the visitor already reading or adjusting something? A line arriving on
+ *  top of the welcome card, a story card, the settings panel or the dimmer is
+ *  a line nobody reads, and on a narrow screen it would land on the panel
+ *  itself. The round is spent either way, so the offer is never repeated
+ *  endlessly at somebody who simply had a panel open. */
+function somethingElseIsUp() {
+    if (state.isModalOpen) return true;
+    if (!blocker || !blocker.classList.contains('hidden')) return true;
+    return ['settings-panel', 'light-panel', 'nav-menu'].some((id) => {
+        const el = document.getElementById(id);
+        return el && !el.classList.contains('hidden');
+    });
+}
+
+/** Wait, then offer the room. Re-arms itself for the next line. */
+function hintAtTheRoom() {
+    stopRoomHint();
+    if (roomTouched || roomHintRound >= ROOM_HINT_DELAYS_MS.length) return;
+    const round = roomHintRound;
+    roomHintTimer = setTimeout(() => {
+        roomHintTimer = 0;
+        roomHintRound = round + 1;
+        if (!roomTouched && !somethingElseIsUp()) {
+            showRoomToast(roomHintLines()[round], ROOM_HINT_MS);
+            // Which round it took, so the log can say whether the first line
+            // is doing its job or whether visitors need all three.
+            track('room-hint', { kind: String(round + 1) });
+        }
+        hintAtTheRoom();
+    }, ROOM_HINT_DELAYS_MS[round]);
+}
+
+/** Hold the clock (the welcome card is up, or the page is going away). */
+function stopRoomHint() {
+    if (roomHintTimer) { clearTimeout(roomHintTimer); roomHintTimer = 0; }
+}
+
+/** Something in the room was opened, so it needs no more offering. Called from
+ *  onModalOpened, which is the one gate every story card, the dashboard, and
+ *  the light switch's dimmer all pass through, by click and from the list
+ *  alike. */
+function noteRoomTouched() {
+    roomTouched = true;
+    stopRoomHint();
+    hideRoomToast();
 }
 
 // ---- The room's things, without a pointer ----------------------------------
@@ -970,6 +1205,7 @@ function closePieceModal() {
 function openHelpModal() {
     if (!helpModal) return;
     state.isModalOpen = true;
+    noteStoryOpened();   // the host is one of the things in the room
     track('open-hello');
     markChecklistItem('hello');
     // Steve pauses his typing and turns around to chat; the cat sleeps on.
@@ -1078,7 +1314,25 @@ const PROP_CONTENT = {
         checklistId: 'closet',
         lines: [
             "Two accordion doors, and behind them the family's entire archive of cables that might be useful someday.",
-            "Every tiny office needs a closet that absorbs whatever the room cannot. This one absorbs plenty."
+            // THE SECOND SENTENCE IS THE ONLY POINTER TO THE EASTER EGG. The
+            // glow behind the doors is found by turning the view all the way
+            // round, which most visitors never do unprompted, and a secret
+            // nobody can find is just unused geometry.
+            "Every tiny office needs a closet that absorbs whatever the room cannot. Look through the crack between the doors, though. Something back there is still running."
+        ]
+    },
+    board: {
+        title: 'The Whiteboard',
+        lines: [
+            "The loop every project runs on, in marker: plan, build, test, ship, learn, and round again. Ship is circled in red because ship is the hard one.",
+            "It has been erased and redrawn more times than five boxes suggest. The ghosts of the old diagrams are still faintly there."
+        ]
+    },
+    oldPc: {
+        title: 'The Old Family Computer',
+        lines: [
+            "A beige tower and a CRT, still going in the back of the closet. Nobody remembers what it was working on.",
+            "It has been at it since about 2004. Steve maintains that it is nearly finished."
         ]
     },
     litter: {
@@ -1174,11 +1428,12 @@ const PROP_CONTENT = {
         ]
     },
     monitor: {
+        // Opens the enlarged monitor instead (see openPropModal), so no lines:
+        // its two quips are MONITOR_CAPTIONS, printed under that screen. The
+        // title stays, because it is this prop's row in the list of the room's
+        // things and a row has to name its card.
         title: 'The Samsung Monitor',
-        lines: [
-            "Big, beige, and silver, and full of code. The wide screen holds a whole room's blueprint at once.",
-            "Steve stares into this thing for hours and somehow rooms come out of it. Fair trade."
-        ]
+        lines: []
     },
     keyboard: {
         title: 'The Keyboard',
@@ -1226,10 +1481,17 @@ let propTick = 0; // rotates which line a prop shows, no Math.random needed
 function openPropModal(propObj) {
     if (!dialogModal) return;
     const kind = propObj && propObj.userData && propObj.userData.propKind;
+    const content = PROP_CONTENT[kind];
+    // Everything a tap can actually OPEN counts toward the invitation, the
+    // three that open something other than a story card included. A prop with
+    // no card (or a kind that does not exist) opens nothing, so it counts for
+    // nothing.
+    const opensItsOwnView = kind === 'dashboard' || kind === 'lightswitch' || kind === 'monitor';
+    if (opensItsOwnView || (content && content.lines.length)) noteStoryOpened();
     if (kind === 'dashboard') { openAnalyticsView(); return; }
     if (kind === 'lightswitch') { openLightPanel(propObj); return; }
+    if (kind === 'monitor') { openMonitorView(); return; }
 
-    const content = PROP_CONTENT[kind];
     if (!content || !content.lines.length) return;
     state.isModalOpen = true;
     dialogKind = 'prop';
@@ -1303,6 +1565,87 @@ function closeAnalyticsView() {
     resumeGameAfterModal();
 }
 
+// ---- The monitor, up close --------------------------------------------------
+// The Samsung on the desk is painted with a slice of this room's own source,
+// and at the composed distance it is a smudge: the page's own description sells
+// "the room's own source code on the monitor" and no visitor could read a word
+// of it. Clicking the monitor opens it at full size instead of a story card,
+// the way the Interstate shop's back-office screen does, and the card's quips
+// come along as the caption underneath so nothing is lost.
+//
+// ONE PAINTER, TWO SURFACES. store.js owns the drawing and exports
+// drawMonitorTo, so this is the wall's screen at a larger size and in the same
+// state, blinking cursor included. A second drawing here would be a second
+// thing to keep in step.
+
+// The captions under the enlarged screen, rotating per opening, which is what
+// the prop's story card used to say.
+const MONITOR_CAPTIONS = [
+    "Big, beige, and silver, and full of code. The wide screen holds a whole room's blueprint at once.",
+    "Steve stares into this thing for hours and somehow rooms come out of it. Fair trade.",
+    "That is this room's own source, more or less. The part that draws the cat is further down."
+];
+let monitorOpen = false;
+let monitorRaf = 0;
+let monitorTick = 0;
+
+/** Size the canvas to its laid-out screen at device pixels, so the painter
+ *  draws crisply rather than being scaled up from a smaller buffer. */
+function sizeMonitorCanvas() {
+    if (!monitorCanvas || !monitorCanvas.getBoundingClientRect) return;
+    const rect = monitorCanvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    monitorCanvas.width = Math.max(2, Math.round((rect.width || 760) * dpr));
+    monitorCanvas.height = Math.max(2, Math.round((rect.height || 475) * dpr));
+}
+
+/** Repaint while the overlay is up. The cursor blink is advanced by
+ *  updateStudio on the main loop, which keeps running behind this, so there is
+ *  nothing to drive here but the painting itself. */
+function startMonitorRender() {
+    const ctx = monitorCanvas && monitorCanvas.getContext && monitorCanvas.getContext('2d');
+    if (!ctx) return;
+    let first = true;
+    const loop = () => {
+        if (!monitorOpen) return;
+        drawMonitorTo(ctx, monitorCanvas.width, monitorCanvas.height, first);
+        first = false;
+        monitorRaf = requestAnimationFrame(loop);
+    };
+    loop();
+}
+
+function stopMonitorRender() {
+    if (monitorRaf) cancelAnimationFrame(monitorRaf);
+    monitorRaf = 0;
+}
+
+function openMonitorView() {
+    if (!monitorView) return;
+    state.isModalOpen = true;
+    monitorOpen = true;
+    track('click-prop', { kind: 'monitor' });
+    if (monitorCaption) monitorCaption.textContent = pickLine(MONITOR_CAPTIONS, monitorTick++);
+    // The same lines as text, for anybody who cannot see a canvas. A painted
+    // surface cannot be selected, zoomed by the browser or read aloud, which is
+    // why the dashboard is DOM as well.
+    if (monitorSource) monitorSource.textContent = getEditorLines().join('\n');
+    monitorView.classList.remove('hidden');
+    sizeMonitorCanvas();     // measure now that the overlay has been laid out
+    startMonitorRender();
+    const closeBtn = monitorView.querySelector('.monitor-close');
+    if (closeBtn) closeBtn.focus();
+}
+
+function closeMonitorView() {
+    if (!monitorView) return;
+    monitorView.classList.add('hidden');
+    stopMonitorRender();
+    monitorOpen = false;
+    state.isModalOpen = false;
+    resumeGameAfterModal();
+}
+
 function closeDialogModal() {
     if (!dialogModal) return;
     dialogModal.classList.add('hidden');
@@ -1313,16 +1656,35 @@ function closeDialogModal() {
     resumeGameAfterModal();
 }
 
-// ---- Partway "reach out" nudge ---------------------------------------------
-// Catches engaged visitors who may never find all eight discoveries: once they
-// are a few in, reuse the completion celebration's card styling for a single,
-// warm, low-pressure invitation to reach out. Shown at most once per session,
-// and (like the celebration) it waits out any open modal rather than stacking.
+// ---- The every-few-taps invitation ------------------------------------------
+// Catches engaged visitors who may never finish the discovery hunt: once they
+// have opened a few things, reuse the completion celebration's card styling for
+// a single, warm, low-pressure card pointing at the portfolio. Shown at most
+// once per session, and (like the celebration) it waits out any open modal
+// rather than stacking.
+//
+// FOUR THINGS OPENED, NOT FOUR DISCOVERIES (changed 2026-09-21, matching the
+// shape www/sunnyvalejenn uses). The count used to come from the checklist, so
+// it only ever moved for the six things on it. A visitor who opened the
+// monitor, the mouse, the router and the trash can had read four stories,
+// enjoyed the room, and never met the invitation. Everything a tap can open
+// counts now: a prop's story, Steve's greeting, the wall display and the light
+// switch, whether it was reached by pointer or from the keyboard list.
+//
+// ONCE PER SESSION, NOT EVERY FOURTH. www/sunnyvalejenn re-offers its card on
+// every fourth story, and that scene has a dozen props, no checklist and no
+// celebration at the end. This room has twenty-odd things to open and a
+// completion card already waiting at the finish, so a second unprompted card
+// every four taps would be the third time it asks. www/automan went further
+// still and retired its unprompted invitation entirely (its D43), leaving the
+// contact card on request only.
 
 const NUDGE_SHOWN_KEY = 'steve-nudged';            // session flag: shown (or superseded)
 const NUDGE_PENDING_KEY = 'gallery-nudge-pending';  // session flag: decided, not yet shown
-const NUDGE_AFTER = 4;                               // surface once this many discoveries are in
+const NUDGE_AFTER = 4;                               // things opened before the offer
 const NUDGE_RETURN_DELAY_MS = 400;                   // settle time after the welcome screen closes
+
+let storiesOpened = 0;   // things in the room this visitor has opened
 
 function nudgeAlreadyShown() {
     try { return !!sessionStorage.getItem(NUDGE_SHOWN_KEY); } catch (e) { return false; }
@@ -1339,16 +1701,23 @@ function markNudgeDone() {
     } catch (e) { /* ignore */ }
 }
 
-function maybeNudgeContact(progress) {
-    if (!nudgeModal || progress.complete || progress.done < NUDGE_AFTER) return;
+/** One more thing in the room has been opened. Called from the two functions a
+ *  tap (or a row of the keyboard list) arrives at: a prop's card and Steve's
+ *  greeting. */
+function noteStoryOpened() {
+    storiesOpened += 1;
+    maybeNudgeContact();
+}
+
+function maybeNudgeContact() {
+    if (!nudgeModal || storiesOpened < NUDGE_AFTER) return;
     if (nudgeAlreadyShown() || nudgeIsPending()) return;
     // Record the intent in sessionStorage (so it survives the visitor following a
-    // piece's link out to a 2D page) but do not show yet. The discovery that
-    // crosses the threshold is itself triggered by an interaction whose own window
-    // opens a beat *after* this fires, so we always defer: the window's close
-    // (-> resumeGameAfterModal) surfaces it in the same session, and
-    // surfaceNudgeOnReturn() handles the case where the visitor navigated away
-    // before that window ever closed.
+    // link out to a 2D page) but do not show yet. The thing that crosses the
+    // threshold is the card being opened right now, so we always defer rather
+    // than stack on top of it: that card's close (-> resumeGameAfterModal)
+    // surfaces the invitation in the same session, and surfaceNudgeOnReturn()
+    // handles the case where the visitor navigated away before it ever closed.
     try { sessionStorage.setItem(NUDGE_PENDING_KEY, '1'); } catch (e) { /* ignore */ }
 }
 
@@ -1362,8 +1731,14 @@ function openNudgeModal() {
     state.isModalOpen = true;
     track('contact-nudge');
     nudgeModal.classList.remove('hidden');
-    const enter = nudgeModal.querySelector('.piece-enter');
-    if (enter) enter.focus();
+    // FOCUS THE CARD, NOT THE LINK. The primary action leaves the site now, so
+    // landing on it would make a stray Enter a navigation and would read the
+    // action to a screen reader before the sentence it belongs to. The
+    // container carries tabindex="-1" so it can take focus without joining the
+    // tab order (the same arrangement www/sunnyvalejenn and www/automan use).
+    const lead = nudgeModal.querySelector('.modal-container')
+        || nudgeModal.querySelector('[data-close]');
+    if (lead && lead.focus) lead.focus();
     return true;
 }
 
@@ -1434,10 +1809,22 @@ function applySiteLinks() {
     // carries an equivalent href for the no-JS path.
     const explore = document.getElementById('explore-link');
     if (explore) explore.href = site.home.path;
-    ['complete-contact', 'nudge-contact'].forEach((id) => {
-        const link = document.getElementById(id);
-        if (link) link.href = site.builder.contactPath;
-    });
+    // The completion card at the end of the discovery hunt is the one that
+    // asks for a message. (The partway invitation used to be on this list too,
+    // and now leads to the portfolio instead.)
+    const complete = document.getElementById('complete-contact');
+    if (complete) complete.href = site.builder.contactPath;
+    // Steve's own portfolio: his greeting card, and the every-few-taps
+    // invitation. The only outbound links in the room, and the only ones whose
+    // text has to be kept in step with the href by hand, because each names the
+    // domain out loud. That is what lets a visitor (and a screen reader) know
+    // where the new tab is going.
+    if (site.portfolio) {
+        ['help-site', 'nudge-site'].forEach((id) => {
+            const link = document.getElementById(id);
+            if (link) link.href = site.portfolio.url;
+        });
+    }
 }
 
 /** What a visitor sends. The ladder itself (native sheet, then clipboard, then
@@ -1467,6 +1854,7 @@ function closeActiveModal() {
     if (completeModal && !completeModal.classList.contains('hidden')) closeCompleteModal();
     else if (nudgeModal && !nudgeModal.classList.contains('hidden')) closeNudgeModal();
     else if (analyticsView && !analyticsView.classList.contains('hidden')) closeAnalyticsView();
+    else if (monitorView && !monitorView.classList.contains('hidden')) closeMonitorView();
     else if (lightPanel && !lightPanel.classList.contains('hidden')) closeLightPanel();
     else if (helpModal && !helpModal.classList.contains('hidden')) closeHelpModal();
     else if (dialogModal && !dialogModal.classList.contains('hidden')) closeDialogModal();
@@ -1481,9 +1869,9 @@ function animate() {
     state.deltaTime = Math.min((now - state.lastTime) / 1000, 0.1);
     state.lastTime = now;
     update(state.deltaTime);
-    // While the dashboard overlay is open it covers the screen, so skip the
+    // While a full-screen overlay is up it covers the room, so skip the
     // (wasted) 3D render behind it.
-    if (!analyticsOpen) render();
+    if (!analyticsOpen && !monitorOpen) render();
 }
 
 function update(deltaTime) {
@@ -1516,6 +1904,11 @@ function cleanup() {
     const renderer = getRenderer();
     if (renderer) renderer.setAnimationLoop(null);
     if (cleanupController) cleanupController.abort();
+    // The things that outlive their listeners: an AbortSignal cancels events,
+    // not setTimeout and not a requested frame.
+    stopRoomHint();
+    hideRoomToast();
+    stopMonitorRender();
 }
 
 // Dwell-time tracking: report a one-time session-end (with elapsed seconds) when
