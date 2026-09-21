@@ -280,9 +280,9 @@ async function init() {
         // Peak-delight moment: the first time every discovery is found, celebrate
         // and gently invite the visitor to get in touch (once per session).
         if (progress.complete) maybeCelebrateCompletion();
-        // Before that, a single low-key nudge partway through catches engaged
-        // visitors who may never find all eight (once per session).
-        else maybeNudgeContact(progress);
+        // (The partway invitation used to hang off this too, at four
+        // discoveries. It counts opened things now instead: see
+        // noteStoryOpened, and the note above NUDGE_AFTER for why.)
         // When something ticks while the panel is closed, pulse the button so the
         // visitor knows there's new progress to peek at.
         const panel = document.getElementById('checklist');
@@ -1187,6 +1187,7 @@ function closePieceModal() {
 function openHelpModal() {
     if (!helpModal) return;
     state.isModalOpen = true;
+    noteStoryOpened();   // the host is one of the things in the room
     track('open-hello');
     markChecklistItem('hello');
     // Steve pauses his typing and turns around to chat; the cat sleeps on.
@@ -1454,10 +1455,16 @@ let propTick = 0; // rotates which line a prop shows, no Math.random needed
 function openPropModal(propObj) {
     if (!dialogModal) return;
     const kind = propObj && propObj.userData && propObj.userData.propKind;
+    const content = PROP_CONTENT[kind];
+    // Everything a tap can actually OPEN counts toward the invitation, the two
+    // that open something other than a story card included. A prop with no card
+    // (or a kind that does not exist) opens nothing, so it counts for nothing.
+    if (kind === 'dashboard' || kind === 'lightswitch' || (content && content.lines.length)) {
+        noteStoryOpened();
+    }
     if (kind === 'dashboard') { openAnalyticsView(); return; }
     if (kind === 'lightswitch') { openLightPanel(propObj); return; }
 
-    const content = PROP_CONTENT[kind];
     if (!content || !content.lines.length) return;
     state.isModalOpen = true;
     dialogKind = 'prop';
@@ -1541,16 +1548,35 @@ function closeDialogModal() {
     resumeGameAfterModal();
 }
 
-// ---- Partway "reach out" nudge ---------------------------------------------
-// Catches engaged visitors who may never find all eight discoveries: once they
-// are a few in, reuse the completion celebration's card styling for a single,
-// warm, low-pressure invitation to reach out. Shown at most once per session,
-// and (like the celebration) it waits out any open modal rather than stacking.
+// ---- The every-few-taps invitation ------------------------------------------
+// Catches engaged visitors who may never finish the discovery hunt: once they
+// have opened a few things, reuse the completion celebration's card styling for
+// a single, warm, low-pressure card pointing at the portfolio. Shown at most
+// once per session, and (like the celebration) it waits out any open modal
+// rather than stacking.
+//
+// FOUR THINGS OPENED, NOT FOUR DISCOVERIES (changed 2026-09-21, matching the
+// shape www/sunnyvalejenn uses). The count used to come from the checklist, so
+// it only ever moved for the six things on it. A visitor who opened the
+// monitor, the mouse, the router and the trash can had read four stories,
+// enjoyed the room, and never met the invitation. Everything a tap can open
+// counts now: a prop's story, Steve's greeting, the wall display and the light
+// switch, whether it was reached by pointer or from the keyboard list.
+//
+// ONCE PER SESSION, NOT EVERY FOURTH. www/sunnyvalejenn re-offers its card on
+// every fourth story, and that scene has a dozen props, no checklist and no
+// celebration at the end. This room has twenty-odd things to open and a
+// completion card already waiting at the finish, so a second unprompted card
+// every four taps would be the third time it asks. www/automan went further
+// still and retired its unprompted invitation entirely (its D43), leaving the
+// contact card on request only.
 
 const NUDGE_SHOWN_KEY = 'steve-nudged';            // session flag: shown (or superseded)
 const NUDGE_PENDING_KEY = 'gallery-nudge-pending';  // session flag: decided, not yet shown
-const NUDGE_AFTER = 4;                               // surface once this many discoveries are in
+const NUDGE_AFTER = 4;                               // things opened before the offer
 const NUDGE_RETURN_DELAY_MS = 400;                   // settle time after the welcome screen closes
+
+let storiesOpened = 0;   // things in the room this visitor has opened
 
 function nudgeAlreadyShown() {
     try { return !!sessionStorage.getItem(NUDGE_SHOWN_KEY); } catch (e) { return false; }
@@ -1567,16 +1593,23 @@ function markNudgeDone() {
     } catch (e) { /* ignore */ }
 }
 
-function maybeNudgeContact(progress) {
-    if (!nudgeModal || progress.complete || progress.done < NUDGE_AFTER) return;
+/** One more thing in the room has been opened. Called from the two functions a
+ *  tap (or a row of the keyboard list) arrives at: a prop's card and Steve's
+ *  greeting. */
+function noteStoryOpened() {
+    storiesOpened += 1;
+    maybeNudgeContact();
+}
+
+function maybeNudgeContact() {
+    if (!nudgeModal || storiesOpened < NUDGE_AFTER) return;
     if (nudgeAlreadyShown() || nudgeIsPending()) return;
     // Record the intent in sessionStorage (so it survives the visitor following a
-    // piece's link out to a 2D page) but do not show yet. The discovery that
-    // crosses the threshold is itself triggered by an interaction whose own window
-    // opens a beat *after* this fires, so we always defer: the window's close
-    // (-> resumeGameAfterModal) surfaces it in the same session, and
-    // surfaceNudgeOnReturn() handles the case where the visitor navigated away
-    // before that window ever closed.
+    // link out to a 2D page) but do not show yet. The thing that crosses the
+    // threshold is the card being opened right now, so we always defer rather
+    // than stack on top of it: that card's close (-> resumeGameAfterModal)
+    // surfaces the invitation in the same session, and surfaceNudgeOnReturn()
+    // handles the case where the visitor navigated away before it ever closed.
     try { sessionStorage.setItem(NUDGE_PENDING_KEY, '1'); } catch (e) { /* ignore */ }
 }
 
@@ -1590,8 +1623,14 @@ function openNudgeModal() {
     state.isModalOpen = true;
     track('contact-nudge');
     nudgeModal.classList.remove('hidden');
-    const enter = nudgeModal.querySelector('.piece-enter');
-    if (enter) enter.focus();
+    // FOCUS THE CARD, NOT THE LINK. The primary action leaves the site now, so
+    // landing on it would make a stray Enter a navigation and would read the
+    // action to a screen reader before the sentence it belongs to. The
+    // container carries tabindex="-1" so it can take focus without joining the
+    // tab order (the same arrangement www/sunnyvalejenn and www/automan use).
+    const lead = nudgeModal.querySelector('.modal-container')
+        || nudgeModal.querySelector('[data-close]');
+    if (lead && lead.focus) lead.focus();
     return true;
 }
 
@@ -1662,10 +1701,22 @@ function applySiteLinks() {
     // carries an equivalent href for the no-JS path.
     const explore = document.getElementById('explore-link');
     if (explore) explore.href = site.home.path;
-    ['complete-contact', 'nudge-contact'].forEach((id) => {
-        const link = document.getElementById(id);
-        if (link) link.href = site.builder.contactPath;
-    });
+    // The completion card at the end of the discovery hunt is the one that
+    // asks for a message. (The partway invitation used to be on this list too,
+    // and now leads to the portfolio instead.)
+    const complete = document.getElementById('complete-contact');
+    if (complete) complete.href = site.builder.contactPath;
+    // Steve's own portfolio: his greeting card, and the every-few-taps
+    // invitation. The only outbound links in the room, and the only ones whose
+    // text has to be kept in step with the href by hand, because each names the
+    // domain out loud. That is what lets a visitor (and a screen reader) know
+    // where the new tab is going.
+    if (site.portfolio) {
+        ['help-site', 'nudge-site'].forEach((id) => {
+            const link = document.getElementById(id);
+            if (link) link.href = site.portfolio.url;
+        });
+    }
 }
 
 /** What a visitor sends. The ladder itself (native sheet, then clipboard, then

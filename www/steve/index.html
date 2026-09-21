@@ -67,7 +67,13 @@
       "url": "https://www.scenexp.com/steve/",
       "name": "Steve's Home Office",
       "description": "A 3D model of the home office in Steve's house where SceneXP gets built, to look all the way around.",
-      "inLanguage": "en-US"
+      "inLanguage": "en-US",
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll",
+        "url": "https://devsteve.com/",
+        "sameAs": ["https://devsteve.com/"]
+      }
     }
     </script>
 
@@ -231,6 +237,26 @@
                     <li class="help-desktop"><strong>No mouse?</strong> Press <kbd>Tab</kbd> for a list of everything in the room.</li>
                     <li><strong>Settings:</strong> the gear icon (top-right) sets the brightness.</li>
                 </ul>
+                <!-- The other half of the work, and it comes AFTER the tips
+                     rather than before them. A visitor who clicked Steve is
+                     usually asking how the room works, so the instructions
+                     keep the top of the card and the invitation sits with the
+                     link that acts on it. SceneXP is what this desk makes for
+                     fun; the portfolio is what it makes for a living. -->
+                <p class="piece-subtitle">Worlds like this one are the playful half of what I do.
+                    The rest of it, the software and the sites I build for people, lives over at devSteve.com.</p>
+                <!-- A NEW TAB, unlike the directory link on the welcome card,
+                     and for the opposite reason: that one stays here because
+                     Back is one press from the scene on the same site, and
+                     this one leaves the site altogether. Same arrangement the
+                     tribute scenes use for a featured business's own website,
+                     down to the rel pair. main.js syncs the href from
+                     STEVE_CONFIG.site.portfolio; the href here is the
+                     equivalent fallback, and the link is never the card's
+                     focus, so a card that opened under a finger cannot follow
+                     it. -->
+                <a id="help-site" class="piece-enter" href="https://devsteve.com/"
+                    target="_blank" rel="noopener noreferrer">See more of my work at devSteve.com &rarr;</a>
                 <button class="piece-cancel" data-close>Thanks, Steve!</button>
             </div>
         </div>
@@ -273,21 +299,37 @@
         </div>
     </div>
 
-    <!-- Partway "reach out" invitation. Reuses the completion celebration's card
-         styling, but fires once the visitor is a few discoveries in (not at the
-         end), catching engaged visitors who may never find every corner. -->
+    <!-- The every-few-taps invitation. Reuses the completion celebration's card
+         styling, and fires once the visitor has opened four things in the room
+         rather than at the end, catching engaged visitors who may never find
+         every corner.
+
+         IT COUNTS TAPS, NOT DISCOVERIES (changed 2026-09-21). It used to wait
+         for four of the six checklist discoveries, so a visitor who spent ten
+         happy minutes on the monitor, the mouse, the router and the trash can
+         never met it: those are stories too, and they are not on the list.
+
+         WHERE IT LEADS is the portfolio rather than the contact page. The
+         completion card at the end of the hunt is the one that asks for a
+         message. This one simply offers more of the work, which is a smaller
+         thing to ask of somebody four taps into a visit. -->
     <div id="nudge-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="nudge-title">
         <div class="modal-backdrop" data-close></div>
-        <div class="modal-container piece-card complete-card">
+        <!-- tabindex="-1" so the CARD can take focus when it opens. The
+             primary action here leaves the site, and a focused outbound link
+             turns a stray Enter into a navigation and hands the tap that
+             surfaced this card an already-focused target. -->
+        <div class="modal-container piece-card complete-card" tabindex="-1">
             <button class="modal-close" aria-label="Close" data-close>&times;</button>
             <div class="piece-card-content">
-                <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few discoveries in&nbsp; ★</p>
+                <p class="complete-kicker" aria-hidden="true">★ &nbsp;A few stops into the visit&nbsp; ★</p>
                 <h2 id="nudge-title" class="piece-title">Enjoying the visit?</h2>
                 <p class="piece-subtitle">Thanks for looking around. This is a 3D model of the real home office
-                    where SceneXP gets built, desk, monitor, cat and all. If you would like something like it
-                    built for someone you care about, I would love to hear from you. No rush, I am not going
-                    anywhere.</p>
-                <a id="nudge-contact" class="piece-enter" href="/contact.html">Get in touch →</a>
+                    where SceneXP gets built, desk, monitor, cat and all. Rooms like this one are the playful
+                    half of what I do. If you are curious about the rest of it, my portfolio is one tab
+                    away.</p>
+                <a id="nudge-site" class="piece-enter" href="https://devsteve.com/"
+                    target="_blank" rel="noopener noreferrer">See more of my work at devSteve.com &rarr;</a>
                 <button class="piece-cancel" data-close>Keep exploring</button>
             </div>
         </div>

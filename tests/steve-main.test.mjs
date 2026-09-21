@@ -381,8 +381,10 @@ test('a tour by click: every office dialog, the nudge, the deferred celebration'
   await escapeAndSettle();
   expect(isOpen('dialog-modal')).toBe(false);
 
-  // Discoveries 2-5: the desk, the cat, the closet, the litter box. Crossing
-  // four discoveries queues the partway nudge, which escapeAndSettle closes.
+  // Discoveries 2-5: the desk, the cat, the closet, the litter box. Opening a
+  // fourth thing queues the invitation, which escapeAndSettle closes. (Steve's
+  // greeting above was the first of the four; the dancer seam is not a thing
+  // in the room and does not count. The next test holds the counting itself.)
   for (const kind of ['standDesk', 'cat', 'closet', 'litter']) {
     clickScene({ isProp: true, propKind: kind });
     expect(isOpen('dialog-modal')).toBe(true);
@@ -476,6 +478,71 @@ test('a tour by click: every office dialog, the nudge, the deferred celebration'
   expect(main.getState().isPaused).toBe(false);
   expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
   expect(dom.replaced).toHaveLength(0);
+});
+
+test('four things opened earns the invitation, and it leads to the portfolio', async () => {
+  // THE TRIGGER USED TO BE THE CHECKLIST, and that is the fault this holds:
+  // four of the six discoveries had to be found, so a visitor who opened the
+  // monitor, the mouse, the router and the trash can had read four stories,
+  // enjoyed the room, and was never offered anything. Not one of the four
+  // below is on the checklist, so under the old rule this test never sees the
+  // card at all.
+  const main = await bootSteve();
+  enterRoom();
+
+  /** Escape the open card and let resumeGameAfterModal have its beat, WITHOUT
+   *  closing whatever it surfaces (which is the thing being measured). */
+  const closeCard = async () => {
+    fire(dom.documentStub, 'keydown', { code: 'Escape' });
+    await jest.advanceTimersByTimeAsync(300);
+  };
+
+  for (const kind of ['monitor', 'mouse', 'router']) {
+    clickScene({ isProp: true, propKind: kind });
+    expect(isOpen('dialog-modal')).toBe(true);
+    await closeCard();
+  }
+  expect(isOpen('nudge-modal')).toBe(false);          // three is not four
+  expect(globalThis.sessionStorage.getItem('steve-nudged')).toBeNull();
+
+  // The fourth. It is queued while that card is up and surfaces as it closes,
+  // so the two never stack.
+  clickScene({ isProp: true, propKind: 'trash' });
+  expect(isOpen('nudge-modal')).toBe(false);
+  await closeCard();
+  expect(isOpen('nudge-modal')).toBe(true);
+
+  // It leads to the portfolio, from config, and not to the contact page: the
+  // completion card at the end of the hunt is the one that asks for a message.
+  const { STEVE_CONFIG } = await import('../www/steve/js/config.js');
+  expect(dom.el('nudge-site').href).toBe(STEVE_CONFIG.site.portfolio.url);
+  expect(dom.el('complete-contact').href).toBe('/contact.html');
+
+  // The CARD takes focus, not the outbound link (asserted against the source:
+  // the stub hands querySelector a fresh element, so watching `focused` here
+  // could never fail).
+  const src = readFileSync(join(process.cwd(), 'www', 'steve', 'js', 'main.js'), 'utf8');
+  const opener = src.match(/function openNudgeModal\(\)[\s\S]*?\n\}/);
+  expect(opener[0]).toContain(".querySelector('.modal-container')");
+  expect(opener[0]).not.toContain(".querySelector('.piece-enter')");
+  const html = readFileSync(join(process.cwd(), 'www', 'steve', 'index.html'), 'utf8');
+  const tag = /<a id="nudge-site"[\s\S]{0,300}?<\/a>/.exec(html);
+  expect(tag[0]).toContain('target="_blank"');
+  expect(tag[0]).toContain('rel="noopener noreferrer"');
+
+  // ONCE PER SESSION. Four more stories do not earn a second one: this room
+  // has twenty-odd things to open and a celebration waiting at the end of the
+  // hunt, so the invitation asks once and then leaves the visitor alone.
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  await jest.advanceTimersByTimeAsync(300);
+  expect(isOpen('nudge-modal')).toBe(false);
+  expect(globalThis.sessionStorage.getItem('steve-nudged')).toBe('1');
+  for (const kind of ['cabinet', 'sonDesk', 'sonChair', 'deskChair']) {
+    clickScene({ isProp: true, propKind: kind });
+    await closeCard();
+    expect(isOpen('nudge-modal')).toBe(false);
+  }
+  expect(main.getState().isPaused).toBe(false);
 });
 
 test('a gallery piece click opens the piece modal with its link wired', async () => {
@@ -664,6 +731,48 @@ test('asks the shared pan part for a view that wraps, at every screen size', () 
   expect(call[0]).toMatch(/landscapeFov:/);
   expect(call[0]).toMatch(/surface:\s*canvas/);
   expect(call[0]).toMatch(/pan:\s*cam\.portrait\.pan/);
+});
+
+test("Steve's greeting leads on to his portfolio, safely and not under a finger", async () => {
+  // THE ONE OUTBOUND LINK IN THE ROOM. Everything else here is root-relative
+  // (the directory, the contact pages), so this is the only place where the
+  // rules for leaving the site apply, and all three halves of it are easy to
+  // get wrong in ways nothing else would notice.
+  await bootSteve();
+  enterRoom();
+  clickScene({ isShopkeeper: true });
+  expect(isOpen('help-modal')).toBe(true);
+
+  // 1. The href comes from config rather than from the markup alone, so the
+  //    URL has one home. (The markup carries the same href as a fallback.)
+  const { STEVE_CONFIG } = await import('../www/steve/js/config.js');
+  expect(dom.el('help-site').href).toBe(STEVE_CONFIG.site.portfolio.url);
+
+  // 2. The card does NOT focus it. A card can open under a finger on touch,
+  //    and the compatibility click that follows lands on whatever is focused,
+  //    so an outbound link there means a tap on Steve leaves the site (the
+  //    fault www/automan met and wrote down). The dismiss button keeps the
+  //    focus, as it did before this link existed. Asserted against the SOURCE:
+  //    the DOM stub answers querySelector with a fresh stub rather than the
+  //    real link, so a test that watched `focused` here could never fail.
+  const src = readFileSync(join(process.cwd(), 'www', 'steve', 'js', 'main.js'), 'utf8');
+  const opener = src.match(/function openHelpModal\(\)[\s\S]*?\n\}/);
+  expect(opener).not.toBeNull();
+  expect(opener[0]).toContain(".querySelector('.piece-cancel')");
+  expect(opener[0]).not.toContain('help-site');
+
+  // 3. A new tab, with the rel pair that stops the opened page reaching back
+  //    through window.opener. Read from the markup, because that is where a
+  //    future edit would drop them.
+  const html = readFileSync(join(process.cwd(), 'www', 'steve', 'index.html'), 'utf8');
+  const tag = /<a id="help-site"[\s\S]{0,300}?<\/a>/.exec(html);
+  expect(tag).not.toBeNull();
+  expect(tag[0]).toContain('target="_blank"');
+  expect(tag[0]).toContain('rel="noopener noreferrer"');
+  // And it says where it goes, in its own text: an icon or a bare "here"
+  // tells a screen reader nothing, and this link opens a tab the visitor did
+  // not ask for.
+  expect(tag[0]).toContain(STEVE_CONFIG.site.portfolio.label);
 });
 
 test('falls back to the 2D site when WebGL is unavailable', async () => {
