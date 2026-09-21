@@ -422,6 +422,12 @@
         </div>
     </div>
 
+    <!-- The room's own voice: one short line over the scene, used to offer the
+         room to a visitor who has not opened anything yet (main.js). A status
+         region rather than a dialog, so it announces itself politely and never
+         takes the room away or asks to be dismissed. -->
+    <div id="office-toast" class="office-toast" role="status" aria-live="polite"></div>
+
     <canvas id="game-canvas" role="img" aria-label="A 3D view of Steve's home office from beside the closet door: Steve works at his sit-stand desk, seen in profile, and a tuxedo cat sleeps on a small blue desk by the window"></canvas>
 
     <script src="../lib/three.min.js"></script>

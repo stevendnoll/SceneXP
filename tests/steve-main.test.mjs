@@ -231,20 +231,35 @@ test('How this works puts the welcome card back, and stands down while it is up'
   // so that is what this holds.
   const main = await bootSteve();
   const help = dom.el('help-btn');
+  const gear = dom.el('settings-btn');
   const blocker = dom.el('blocker');
 
-  // On arrival: the card is up, so the button that summons it is not offered.
-  // `.ui-float` is display:none without `.visible`, which takes it off the
-  // screen and out of the tab order in one act.
+  // On arrival: the card is up, so nothing in the corner is offered. The
+  // button that summons the card would do nothing, and the gear is chrome over
+  // the only sentences the room gets to introduce itself with. `.ui-float` is
+  // display:none without `.visible`, which takes each one off the screen and
+  // out of the tab order in one act. The skip link goes with them, because it
+  // points at the gear.
   expect(help.classList.contains('visible')).toBe(false);
+  expect(gear.classList.contains('visible')).toBe(false);
+  expect(dom.documentStub.querySelector('.skip-link').hidden).toBe(true);
   expect(dom.el('begin-prompt').textContent).toBe('Click to step inside');
 
   enterRoom();
   expect(help.classList.contains('visible')).toBe(true);
+  expect(gear.classList.contains('visible')).toBe(true);
+  expect(dom.documentStub.querySelector('.skip-link').hidden).toBe(false);
+
+  // A settings panel left open behind the card would float over it with the
+  // gear that opened it gone from under it, so opening the card closes it.
+  fire(gear, 'click');
+  expect(isOpen('settings-panel')).toBe(true);
 
   fire(help, 'click');
+  expect(isOpen('settings-panel')).toBe(false);
   expect(blocker.classList.contains('hidden')).toBe(false);
   expect(help.classList.contains('visible')).toBe(false);
+  expect(gear.classList.contains('visible')).toBe(false);
   // The room waits behind it exactly as it does on arrival: taps are held,
   // and the list of the room's things is not a tab stop behind the card.
   expect(main.getState().isPaused).toBe(true);
@@ -272,6 +287,78 @@ test('How this works puts the welcome card back, and stands down while it is up'
   expect(main.getState().isPaused).toBe(false);
   clickScene({ isShopkeeper: true });
   expect(isOpen('help-modal')).toBe(true);
+});
+
+test('the room offers itself to a visitor who has not touched anything', async () => {
+  // EVERY STORY IN THE OFFICE OPENS FROM A CLICK ON A 3D SURFACE, and once the
+  // welcome card is gone nothing on screen says so. This is the only thing in
+  // the scene that teaches that, so the parts worth holding are: it waits, it
+  // asks again in different words, it never lands on top of something the
+  // visitor is already reading, and it stops for good the moment the room is
+  // opened.
+  const main = await bootSteve();
+  const toast = dom.el('office-toast');
+
+  // Nothing while the welcome card is up, however long it stands there.
+  await jest.advanceTimersByTimeAsync(30000);
+  expect(toast.classList.contains('visible')).toBe(false);
+
+  enterRoom();
+  await jest.advanceTimersByTimeAsync(6000);
+  expect(toast.classList.contains('visible')).toBe(false);   // still waiting
+  await jest.advanceTimersByTimeAsync(1500);
+  expect(toast.classList.contains('visible')).toBe(true);
+  expect(toast.textContent).toContain('Click the desk, the cat, or Steve himself');
+
+  // It goes on its own, and the next one is different: a line repeated
+  // verbatim reads as a stuck screen rather than as a hint.
+  await jest.advanceTimersByTimeAsync(6000);
+  expect(toast.classList.contains('visible')).toBe(false);
+  await jest.advanceTimersByTimeAsync(13000);
+  expect(toast.classList.contains('visible')).toBe(true);
+  expect(toast.textContent).toContain('even the litter box');
+
+  // Opening anything ends it, and clears whatever is on screen with it.
+  clickScene({ isShopkeeper: true });
+  expect(isOpen('help-modal')).toBe(true);
+  expect(toast.classList.contains('visible')).toBe(false);
+  const said = toast.textContent;
+  await escapeAndSettle();
+  await jest.advanceTimersByTimeAsync(60000);
+  expect(toast.classList.contains('visible')).toBe(false);
+  expect(toast.textContent).toBe(said);   // the third line was never spent
+  expect(main.getState().isPaused).toBe(false);
+});
+
+test('a hint says Tap on a phone, and waits out a panel rather than queueing', async () => {
+  globalThis.navigator.maxTouchPoints = 5;
+  await bootSteve();
+  const toast = dom.el('office-toast');
+  fire(dom.el('blocker'), 'touchend');
+
+  await jest.advanceTimersByTimeAsync(7500);
+  expect(toast.textContent).toContain('Tap the desk');   // a finger, not a mouse
+
+  // Settings open when the next line comes due. It would land on the panel on
+  // a narrow screen, and on a busy visitor at any width, so the round is SPENT
+  // rather than queued: nobody gets followed around by a hint they dodged.
+  fire(dom.el('settings-btn'), 'click');
+  expect(isOpen('settings-panel')).toBe(true);
+  const said = toast.textContent;
+  await jest.advanceTimersByTimeAsync(22500);
+  expect(toast.classList.contains('visible')).toBe(false);
+  expect(toast.textContent).toBe(said);
+
+  // And the last line still comes, once the panel is out of the way.
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  expect(isOpen('settings-panel')).toBe(false);
+  await jest.advanceTimersByTimeAsync(18000);
+  expect(toast.classList.contains('visible')).toBe(true);
+  expect(toast.textContent).toContain('The big screen behind Steve');
+
+  // Three and no more. The room has said its piece.
+  await jest.advanceTimersByTimeAsync(120000);
+  expect(toast.classList.contains('visible')).toBe(false);
 });
 
 test('a tour by click: every office dialog, the nudge, the deferred celebration', async () => {

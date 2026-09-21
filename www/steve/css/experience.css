@@ -3,8 +3,8 @@
  * experience.css - Steve's Home Office.
  *
  * Loaded AFTER ../shared/css/styles-1.0.0.css, which is the order the cascade
- * needs: everything here either places or overrides something the shared sheet
- * already styles.
+ * needs: the button below re-places something the shared sheet has already
+ * placed, and a single class cannot beat an equal one that comes later.
  *
  * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block.
  * The page runs a strict same-origin CSP with style-src 'self', which blocks
@@ -43,4 +43,63 @@
  */
 .help-btn {
     right: 82px;
+}
+
+/* ---- The room's hint --------------------------------------------------------
+ *
+ * One line over the scene, offering the room to a visitor who has not opened
+ * anything yet. Top centre, because the corner is the button cluster and the
+ * foot of the frame belongs to the pan and zoom row.
+ *
+ * IT CANNOT BE TOUCHED, and that is the whole manner of it: `pointer-events:
+ * none` so a tap aimed at the thing it is talking about goes to the thing and
+ * not to the hint. It carries no close button for the same reason. It fades
+ * out on its own after a few seconds.
+ *
+ * ABOVE THE FLOATS (110) AND BELOW THE CARDS (200), which is the one number
+ * here worth checking against the shared sheet: at 200 it would tie with the
+ * story cards and win on document order, leaving a hint painted over the card
+ * it had just talked somebody into opening. The list of the room's things is
+ * 300 and covers it too, which is right, since that list slides down into the
+ * same strip of screen.
+ */
+.office-toast {
+    position: fixed;
+    top: calc(18px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(90vw, 32rem);
+    padding: 0.5rem 1.15rem;
+    background: rgba(16, 26, 20, 0.88);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.5);
+    border-radius: 12px;
+    color: var(--ui-title, #fff);
+    font-family: var(--font-system);
+    font-size: 0.9rem;
+    text-align: center;
+    z-index: 150;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.office-toast.visible {
+    opacity: 1;
+}
+
+/* Reduced motion asks for less movement, not for less information: the line
+   still arrives and still goes, it simply stops fading while it does. */
+@media (prefers-reduced-motion: reduce) {
+    .office-toast {
+        transition: none;
+    }
+}
+
+/* The button cluster clears it on a narrow screen: the two floats are 50px
+   tall from 20px down, so a line at 18px would run under them. */
+@media (max-width: 40rem) {
+    .office-toast {
+        top: calc(82px + env(safe-area-inset-top, 0px));
+        max-width: min(92vw, 26rem);
+    }
 }

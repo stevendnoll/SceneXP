@@ -118,6 +118,8 @@ function setBackgroundInert(on) {
 function onModalOpened() {
     // Close the discovery checklist so it doesn't float over the modal backdrop.
     closeChecklistPanel();
+    // The room has been touched, so it stops offering itself.
+    noteRoomTouched();
     modalReturnFocus = document.activeElement;
     armCard();
     // Defer one microtask so the specific dialog has been un-hidden first.
@@ -231,6 +233,7 @@ async function init() {
     lightPanel = document.getElementById('light-panel');
     lightPanelSlider = document.getElementById('light-slider');
     lightPanelValue = document.getElementById('light-value');
+    roomToast = document.getElementById('office-toast');
 
     if (!canvas) return;
 
@@ -304,8 +307,9 @@ async function init() {
         loadingScreen.classList.add('hidden');
         state.isLoaded = true;
         document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
-        // ...except the one that offers the card the visitor is looking at.
-        syncHelpButton();
+        // ...except whatever belongs to the room rather than to the welcome
+        // card the visitor is looking at.
+        syncWelcomeChrome();
     }, 400);
 
     // Mark the start of this visit. Records the input mode so the log can tell
@@ -526,7 +530,7 @@ function beginVisiting() {
     // The list of the room's things becomes a tab stop only now: while the
     // welcome card was up it would have been one behind it.
     if (propPanel) propPanel.hidden = false;
-    syncHelpButton();
+    syncWelcomeChrome();
     // ONCE PER VISIT, NOT ONCE PER DISMISSAL, now that the card can be put
     // back up from the corner. A visitor who reads it twice arrived once.
     if (!visitBegun) {
@@ -535,12 +539,14 @@ function beginVisiting() {
     }
     // Back to the button that summoned the card, for anybody who got here by
     // keyboard. It was hidden while the card was up, so it is focusable again
-    // only after syncHelpButton above.
+    // only after syncWelcomeChrome above.
     if (welcomeReturn && typeof welcomeReturn.focus === 'function') {
         try { welcomeReturn.focus({ preventScroll: true }); } catch (e) { /* gone */ }
     }
     welcomeReturn = null;
     surfaceNudgeOnReturn(); // welcome screen just closed: show a nudge left pending
+    // And the room starts waiting to be touched.
+    hintAtTheRoom();
 }
 
 /**
@@ -561,20 +567,48 @@ function openWelcome() {
     state.isPaused = true;
     // Out of the tab order while the card covers it, the same as on arrival.
     if (propPanel) propPanel.hidden = true;
-    syncHelpButton();
+    // The settings panel would otherwise be left floating over the card with
+    // the gear that opened it gone from under it. Adding the class is the way
+    // every other close works here: the panel's observer keeps aria-expanded
+    // and the outside-click listener in step from that one change.
+    const settingsPanel = document.getElementById('settings-panel');
+    if (settingsPanel) settingsPanel.classList.add('hidden');
+    syncWelcomeChrome();
+    // The room's own hints wait their turn rather than landing on the card.
+    stopRoomHint();
     welcomeReturn = helpBtn;
     if (blocker.focus) blocker.focus({ preventScroll: true });
     track('help-opened');
 }
 
-/** The How-this-works button is offered only when the card it summons is
- *  down. A live control that does nothing is worse than no control. */
-function syncHelpButton() {
-    if (!helpBtn) return;
+/**
+ * Nothing in the corner while the welcome card is up.
+ *
+ * `.menu-btn` and `.settings-btn` are z-index 110 and the card is 100, so both
+ * float ON TOP of it and are tab stops in front of it. How-this-works was the
+ * plain case, a live control summoning what is already on the screen. The gear
+ * is the quieter one: a visitor's first sight of the room was a welcome card
+ * with a settings button over it, which is chrome competing with the only
+ * sentences the room gets to say for itself.
+ *
+ * The skip link goes with them, because its target is the gear. A skip link
+ * whose destination is not on the screen moves focus nowhere, and it is the
+ * FIRST thing a keyboard visitor reaches: better to have nothing to skip to
+ * than an offer that does nothing. It comes back with the gear.
+ *
+ * `.ui-float` is display:none until `.visible` says otherwise, so the class is
+ * what takes each button off the screen AND out of the tab order in one act.
+ * The skip link is positioned rather than floated, so it takes the `hidden`
+ * attribute, which nothing in the sheet overrides for it.
+ */
+function syncWelcomeChrome() {
     const reading = !blocker || !blocker.classList.contains('hidden');
-    // `.ui-float` is display:none until `.visible` says otherwise, so this is
-    // what takes the button off the screen AND out of the tab order.
-    helpBtn.classList.toggle('visible', state.isLoaded && !reading);
+    const offered = state.isLoaded && !reading;
+    if (helpBtn) helpBtn.classList.toggle('visible', offered);
+    const gear = document.getElementById('settings-btn');
+    if (gear) gear.classList.toggle('visible', offered);
+    const skip = document.querySelector('.skip-link');
+    if (skip) skip.hidden = !offered;
 }
 
 /**
@@ -592,6 +626,109 @@ function setWelcomePrompt(returning) {
     prompt.textContent = returning
         ? `${verb} to come back to the office`
         : `${verb} to step inside`;
+}
+
+// ---- A room that offers itself ---------------------------------------------
+//
+// EVERY STORY IN HERE OPENS FROM A CLICK ON A 3D SURFACE, and once the welcome
+// card is gone nothing on the screen says so. A visitor who came for the room
+// rather than for the card can stand in a finished office, turn all the way
+// around, and leave without learning that any of it answers. The checklist
+// that would have hinted at it has no panel in this scene, so this is the only
+// thing that teaches the room.
+//
+// THE SHAPE COMES FROM www/garden's planting nudge, including why it is not a
+// single shot: one line, once, is missed by anybody who was still looking at
+// the window when it arrived. So it asks again at a widening gap, in different
+// words each time (a sentence repeated verbatim reads as a stuck screen), and
+// gives up after three. It stops for good the moment anything in the room is
+// opened, which is the whole point of it.
+//
+// A TOAST RATHER THAN A CARD, deliberately. The visitor is being invited to
+// look at the room, so the invitation must not take the room away, and it is
+// the only kind of prompt that reaches a touch visitor, who has no cursor to
+// be told anything with.
+const ROOM_HINT_DELAYS_MS = [7000, 18000, 22000];   // after the card, then apart
+const ROOM_HINT_MS = 5200;                           // how long each line stays
+
+let roomToast = null;      // the toast element (resolved in init)
+let roomToastTimer = 0;
+let roomHintTimer = 0;
+let roomHintRound = 0;     // the next line to offer
+let roomTouched = false;   // something in the room has been opened
+
+/** The lines, in order, worded for the device holding them. */
+function roomHintLines() {
+    const verb = state.isMobile ? 'Tap' : 'Click';
+    return [
+        `Everything in this room has a story. ${verb} the desk, the cat, or Steve himself.`,
+        `The cat, the closet, even the litter box. They all have something to say.`,
+        `The big screen behind Steve shows who has been visiting SceneXP today.`
+    ];
+}
+
+/** Say one thing, briefly, over the room. */
+function showRoomToast(message, ms) {
+    if (!roomToast) return;
+    roomToast.textContent = message;
+    roomToast.classList.add('visible');
+    if (roomToastTimer) clearTimeout(roomToastTimer);
+    roomToastTimer = setTimeout(() => {
+        roomToastTimer = 0;
+        roomToast.classList.remove('visible');
+    }, ms || ROOM_HINT_MS);
+}
+
+function hideRoomToast() {
+    if (roomToastTimer) { clearTimeout(roomToastTimer); roomToastTimer = 0; }
+    if (roomToast) roomToast.classList.remove('visible');
+}
+
+/** Is the visitor already reading or adjusting something? A line arriving on
+ *  top of the welcome card, a story card, the settings panel or the dimmer is
+ *  a line nobody reads, and on a narrow screen it would land on the panel
+ *  itself. The round is spent either way, so the offer is never repeated
+ *  endlessly at somebody who simply had a panel open. */
+function somethingElseIsUp() {
+    if (state.isModalOpen) return true;
+    if (!blocker || !blocker.classList.contains('hidden')) return true;
+    return ['settings-panel', 'light-panel', 'nav-menu'].some((id) => {
+        const el = document.getElementById(id);
+        return el && !el.classList.contains('hidden');
+    });
+}
+
+/** Wait, then offer the room. Re-arms itself for the next line. */
+function hintAtTheRoom() {
+    stopRoomHint();
+    if (roomTouched || roomHintRound >= ROOM_HINT_DELAYS_MS.length) return;
+    const round = roomHintRound;
+    roomHintTimer = setTimeout(() => {
+        roomHintTimer = 0;
+        roomHintRound = round + 1;
+        if (!roomTouched && !somethingElseIsUp()) {
+            showRoomToast(roomHintLines()[round], ROOM_HINT_MS);
+            // Which round it took, so the log can say whether the first line
+            // is doing its job or whether visitors need all three.
+            track('room-hint', { kind: String(round + 1) });
+        }
+        hintAtTheRoom();
+    }, ROOM_HINT_DELAYS_MS[round]);
+}
+
+/** Hold the clock (the welcome card is up, or the page is going away). */
+function stopRoomHint() {
+    if (roomHintTimer) { clearTimeout(roomHintTimer); roomHintTimer = 0; }
+}
+
+/** Something in the room was opened, so it needs no more offering. Called from
+ *  onModalOpened, which is the one gate every story card, the dashboard, and
+ *  the light switch's dimmer all pass through, by click and from the list
+ *  alike. */
+function noteRoomTouched() {
+    roomTouched = true;
+    stopRoomHint();
+    hideRoomToast();
 }
 
 // ---- The room's things, without a pointer ----------------------------------
@@ -1596,6 +1733,10 @@ function cleanup() {
     const renderer = getRenderer();
     if (renderer) renderer.setAnimationLoop(null);
     if (cleanupController) cleanupController.abort();
+    // The two timers that outlive their listeners: an AbortSignal cancels
+    // events, not setTimeout.
+    stopRoomHint();
+    hideRoomToast();
 }
 
 // Dwell-time tracking: report a one-time session-end (with elapsed seconds) when
