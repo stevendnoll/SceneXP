@@ -105,7 +105,7 @@ Object.defineProperty(state, 'isModalOpen', {
 // is fine because the modal's own backdrop covers the scene). The list of the
 // room's things and the view controls join the chrome here: both are tab stops.
 const MODAL_BG_SELECTOR =
-    '.skip-link, #blocker, #prop-panel, .pan-controls, #settings-btn, #settings-panel, #game-canvas';
+    '.skip-link, #blocker, #prop-panel, .pan-controls, #settings-btn, #help-btn, #settings-panel, #game-canvas';
 let modalReturnFocus = null;
 
 function setBackgroundInert(on) {
@@ -168,7 +168,7 @@ function swallowGhostTap(event) {
 }
 
 // DOM references (resolved in init)
-let canvas, loadingScreen, blocker;
+let canvas, loadingScreen, blocker, helpBtn;
 let pieceModal, pieceModalTitle, pieceModalSubtitle, pieceModalEnter;
 let helpModal;
 let dialogModal, dialogModalTitle, dialogModalMessage;
@@ -181,6 +181,13 @@ let nudgeModal; // partway "reach out" invitation (reuses the celebration card)
 // Whether the dashboard overlay is up. The render loop idles behind it, and
 // the background poll keeps refreshing underneath either way.
 let analyticsOpen = false;
+
+// The welcome card can be dismissed more than once now (the How-this-works
+// button puts it back), so these two hold what "more than once" changes:
+// the arrival is still counted once, and focus goes back to whatever summoned
+// the card rather than to the top of the page.
+let visitBegun = false;
+let welcomeReturn = null;
 
 // Raycasting for tap-to-open
 const raycaster = new THREE.Raycaster();
@@ -208,6 +215,7 @@ async function init() {
     canvas = document.getElementById('game-canvas');
     loadingScreen = document.getElementById('loading-screen');
     blocker = document.getElementById('blocker');
+    helpBtn = document.getElementById('help-btn');
     pieceModal = document.getElementById('piece-modal');
     pieceModalTitle = document.getElementById('piece-title');
     pieceModalSubtitle = document.getElementById('piece-subtitle');
@@ -296,6 +304,8 @@ async function init() {
         loadingScreen.classList.add('hidden');
         state.isLoaded = true;
         document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
+        // ...except the one that offers the card the visitor is looking at.
+        syncHelpButton();
     }, 400);
 
     // Mark the start of this visit. Records the input mode so the log can tell
@@ -374,11 +384,8 @@ function setupEventListeners() {
 
     // The welcome card: any click, tap, or Enter/Space lets the visitor in.
     // The room is already alive behind it, so dismissing is all it does.
-    if (state.isMobile) {
-        document.body.classList.add('is-touch-device');
-        const clickPrompt = document.querySelector('.click-prompt');
-        if (clickPrompt) clickPrompt.textContent = 'Tap to step inside';
-    }
+    if (state.isMobile) document.body.classList.add('is-touch-device');
+    setWelcomePrompt(false);
     if (blocker) {
         const dismiss = (e) => {
             if (e) e.preventDefault();
@@ -398,6 +405,9 @@ function setupEventListeners() {
     // which would swallow the synthetic click and leave the link inert. Stop
     // the start events short of it so the anchor can follow its own href.
     shieldOverlayControl(document.getElementById('explore-link'), { signal });
+
+    // How this works: the welcome card, put back up.
+    if (helpBtn) helpBtn.addEventListener('click', openWelcome, { signal });
 
     // A click or tap on the room. A tap that merely ends a drag or a pinch
     // (the pan part's gestures, on this same canvas) belongs to the gesture,
@@ -470,7 +480,13 @@ function setupEventListeners() {
             if (menuBtn) { menuBtn.setAttribute('aria-expanded', 'false'); menuBtn.focus(); }
             return;
         }
-        if (state.isModalOpen) closeActiveModal();
+        if (state.isModalOpen) { closeActiveModal(); return; }
+        // The welcome card is on this list at all because it is a panel a
+        // visitor can now OPEN from the corner, and Escape is what closes a
+        // panel. LAST, though: the gear floats above the card, so settings can
+        // be opened while it is up, and Escape belongs to the thing the
+        // visitor opened most recently.
+        if (blocker && !blocker.classList.contains('hidden')) beginVisiting();
     }, { signal });
 
     // (No autopilot tour in this experience: the office is one small room,
@@ -510,8 +526,72 @@ function beginVisiting() {
     // The list of the room's things becomes a tab stop only now: while the
     // welcome card was up it would have been one behind it.
     if (propPanel) propPanel.hidden = false;
-    track('begin-visiting');
+    syncHelpButton();
+    // ONCE PER VISIT, NOT ONCE PER DISMISSAL, now that the card can be put
+    // back up from the corner. A visitor who reads it twice arrived once.
+    if (!visitBegun) {
+        visitBegun = true;
+        track('begin-visiting');
+    }
+    // Back to the button that summoned the card, for anybody who got here by
+    // keyboard. It was hidden while the card was up, so it is focusable again
+    // only after syncHelpButton above.
+    if (welcomeReturn && typeof welcomeReturn.focus === 'function') {
+        try { welcomeReturn.focus({ preventScroll: true }); } catch (e) { /* gone */ }
+    }
+    welcomeReturn = null;
     surfaceNudgeOnReturn(); // welcome screen just closed: show a nudge left pending
+}
+
+/**
+ * Put the welcome card back up.
+ *
+ * IT IS THE SAME CARD, not a second copy of its sentences. Everything the room
+ * says about itself is on it, and a separate help panel would be two texts to
+ * keep in step, with the copy nobody edits the one a lost visitor reads. The
+ * room simply waits behind it again, exactly as it does on arrival.
+ */
+function openWelcome() {
+    if (!state.isLoaded || !blocker || !blocker.classList.contains('hidden')) return;
+    setWelcomePrompt(true);
+    blocker.classList.remove('hidden');
+    // Reading starts at the top, whatever the visitor had scrolled to on a
+    // short screen last time the card was up.
+    blocker.scrollTop = 0;
+    state.isPaused = true;
+    // Out of the tab order while the card covers it, the same as on arrival.
+    if (propPanel) propPanel.hidden = true;
+    syncHelpButton();
+    welcomeReturn = helpBtn;
+    if (blocker.focus) blocker.focus({ preventScroll: true });
+    track('help-opened');
+}
+
+/** The How-this-works button is offered only when the card it summons is
+ *  down. A live control that does nothing is worse than no control. */
+function syncHelpButton() {
+    if (!helpBtn) return;
+    const reading = !blocker || !blocker.classList.contains('hidden');
+    // `.ui-float` is display:none until `.visible` says otherwise, so this is
+    // what takes the button off the screen AND out of the tab order.
+    helpBtn.classList.toggle('visible', state.isLoaded && !reading);
+}
+
+/**
+ * The one line on the welcome card that names a control.
+ *
+ * TWO VERBS AND A DESTINATION. "Step inside" is wrong for somebody who has
+ * been in the room already and pressed the button in the corner to read this
+ * again, and "click" is wrong on a phone, which is where most visitors meet
+ * it. Both live here so neither can be changed without the other.
+ */
+function setWelcomePrompt(returning) {
+    const prompt = document.getElementById('begin-prompt');
+    if (!prompt) return;
+    const verb = state.isMobile ? 'Tap' : 'Click';
+    prompt.textContent = returning
+        ? `${verb} to come back to the office`
+        : `${verb} to step inside`;
 }
 
 // ---- The room's things, without a pointer ----------------------------------

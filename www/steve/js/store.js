@@ -1456,6 +1456,72 @@ function createMacScreenTexture() {
     return new THREE.CanvasTexture(canvas);
 }
 
+/** The MacBook's deck, drawn rather than modeled: the black keyboard well up
+ *  by the hinge and the trackpad below it, on an aluminum ground that matches
+ *  the body so the plate's edge disappears into the case. One pixel per
+ *  millimetre of deck, so the numbers below read as real sizes. */
+function createMacDeckTexture() {
+    const W = 304, H = 212;               // the deck, in millimetres
+    const canvas = makeCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#c9cbce';
+    ctx.fillRect(0, 0, W, H);
+
+    // The keyboard well. The plane this lands on is laid down with its top
+    // edge toward the hinge, so y = 0 here is the back of the laptop.
+    const wellX = 18, wellY = 9, wellW = W - 36, wellH = 98;
+    ctx.fillStyle = '#26282c';
+    ctx.beginPath();
+    ctx.roundRect(wellX, wellY, wellW, wellH, 5);
+    ctx.fill();
+
+    // Keys: a short function row, then four full rows, the last with a
+    // spacebar through the middle of it.
+    const cols = 14;
+    const keyW = wellW / cols;
+    const fnH = 11, rowH = (wellH - fnH - 8) / 4;
+    const key = (x, y, w, h) => {
+        ctx.fillStyle = '#15161a';
+        ctx.beginPath();
+        ctx.roundRect(x + 1.2, y + 1.2, w - 2.4, h - 2.4, 1.8);
+        ctx.fill();
+    };
+    for (let c = 0; c < cols; c++) key(wellX + c * keyW, wellY + 4, keyW, fnH);
+    for (let r = 0; r < 4; r++) {
+        const y = wellY + 4 + fnH + r * rowH;
+        if (r === 3) {
+            // command, option, spacebar, option, command
+            key(wellX, y, keyW * 2, rowH);
+            key(wellX + keyW * 2, y, keyW * 1.5, rowH);
+            key(wellX + keyW * 3.5, y, keyW * 7, rowH);
+            key(wellX + keyW * 10.5, y, keyW * 1.5, rowH);
+            key(wellX + keyW * 12, y, keyW * 2, rowH);
+        } else {
+            for (let c = 0; c < cols; c++) key(wellX + c * keyW, y, keyW, rowH);
+        }
+    }
+
+    // The trackpad: the same aluminum, a shade cooler, with a hairline seam.
+    // Centred, and sized off the real one (about 124 by 76 of these).
+    const padW = 124, padH = 76;
+    ctx.fillStyle = '#c2c5c9';
+    ctx.strokeStyle = '#a7abb0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect((W - padW) / 2, 120, padW, padH, 7);
+    ctx.fill();
+    ctx.stroke();
+
+    // TAGGED sRGB, UNLIKE THE SCREENS ABOVE, and on purpose: this texture
+    // butts up against the case, which is a material colour and therefore
+    // decoded. Left untagged, the same #c9cbce drawn here comes out brighter
+    // than the aluminum around it and the deck reads as a lid on a box.
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
 /** The MacBook Air, open on a small aluminum laptop stand: foot, riser,
  *  tilted plate, and the laptop with keyboard and a soft glowing screen.
  *  Faces +Z before placement. */
@@ -1465,33 +1531,95 @@ function createMacBookOnStand() {
 
     const aluminum = new THREE.MeshStandardMaterial({ color: 0xd6d8da, roughness: 0.35, metalness: 0.7 });
 
+    // ---- The stand: foot, riser, and the plate the laptop rests on ----
+    const PLATE_TILT = 0.22;              // the plate's rake, back edge high
+    const PLATE_T = 0.01;
     const foot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.018, 0.22), aluminum);
     foot.position.y = 0.009;
     group.add(foot);
     const riser = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.04), aluminum);
     riser.position.set(0, 0.05, -0.07);
     group.add(riser);
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.01, 0.24), aluminum);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.3, PLATE_T, 0.24), aluminum);
     plate.position.y = 0.1;
-    plate.rotation.x = 0.22;
+    plate.rotation.x = PLATE_TILT;
     group.add(plate);
 
-    const macBody = new THREE.MeshStandardMaterial({ color: 0xc9cbce, roughness: 0.4, metalness: 0.6 });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.304, 0.011, 0.212), macBody);
-    base.position.set(0, 0.112, 0.005);
-    base.rotation.x = 0.22;
-    group.add(base);
-    const keys = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.27, 0.11),
-        new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.7, metalness: 0.1 })
+    // ---- The laptop, built flat and tipped onto the plate as ONE piece ----
+    //
+    // THE HINGE USED TO BE TWO SETS OF NUMBERS AND THEY DRIFTED. The deck and
+    // the lid were each placed in the stand's frame, with their own position
+    // and their own tilt, which left the lid's bottom edge 4 cm below the deck
+    // and 1 cm in front of its back edge: the screen grew out of the middle of
+    // the keyboard, and its bottom corner came through the deck to the plate
+    // (specs/screenshots, 2026-09-21). Nothing in the code said the two were
+    // joined, so nothing kept them joined.
+    //
+    // Here the laptop is a group of its own, built flat with its deck on
+    // y = 0, and the lid hangs off a hinge pinned to the deck's back edge.
+    // Tipping the laptop onto the plate moves both together, so the joint
+    // survives any rake on the stand and any opening angle on the lid.
+    const DECK_W = 0.304, DECK_D = 0.212, DECK_T = 0.011;
+    const LID_H = 0.2, LID_T = 0.006;
+    const HINGE_R = DECK_T / 2;           // the barrel is the deck's own thickness
+    // The lid's angle from the deck: 90 degrees would stand it straight up,
+    // and this reclines it another 29 for the room's eye, which looks slightly
+    // down on the desk. It is the same angle the lid was drawn at before.
+    const LID_OPEN = -0.5;
+
+    const laptop = new THREE.Group();
+    laptop.name = 'macLaptop';
+    // Sitting on the plate's top face: the plate's centre, lifted along the
+    // plate's own normal rather than straight up.
+    laptop.position.set(
+        0,
+        plate.position.y + (PLATE_T / 2) * Math.cos(PLATE_TILT),
+        (PLATE_T / 2) * Math.sin(PLATE_TILT)
     );
-    keys.position.set(0, 0.121, 0.025);
-    keys.rotation.x = -Math.PI / 2 + 0.22;
-    group.add(keys);
-    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.304, 0.2, 0.006), macBody);
-    lid.position.set(0, 0.19, -0.115);
-    lid.rotation.x = -0.28;
-    group.add(lid);
+    laptop.rotation.x = PLATE_TILT;
+    group.add(laptop);
+
+    const macBody = new THREE.MeshStandardMaterial({ color: 0xc9cbce, roughness: 0.4, metalness: 0.6 });
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(DECK_W, DECK_T, DECK_D), macBody);
+    deck.name = 'macDeck';
+    deck.position.y = DECK_T / 2;
+    laptop.add(deck);
+
+    const deckTexture = createMacDeckTexture();
+    const deckFace = new THREE.Mesh(
+        new THREE.PlaneGeometry(DECK_W - 0.004, DECK_D - 0.004),
+        new THREE.MeshStandardMaterial({ map: deckTexture, roughness: 0.55, metalness: 0.25 })
+    );
+    deckFace.rotation.x = -Math.PI / 2;   // face up, texture's top edge to the hinge
+    deckFace.position.y = DECK_T + 0.0004;
+    laptop.add(deckFace);
+
+    // The hinge itself: the axis the lid turns on, seated in the deck's back
+    // edge at half the deck's thickness, so the lid comes up through the top
+    // face a couple of millimetres in front of the back, the way a seated lid
+    // does. Everything the lid is made of hangs off this, which is what makes
+    // "where the lid meets the deck" one number instead of two.
+    const hinge = new THREE.Group();
+    hinge.name = 'macHinge';
+    hinge.position.set(0, DECK_T / 2, -DECK_D / 2 + HINGE_R);
+    hinge.rotation.x = LID_OPEN;
+    laptop.add(hinge);
+
+    // The barrel fills the joint. At the angle below it is tucked inside the
+    // case and barely shows; it earns its ten sides at any wider one, where
+    // the lid's foot swings clear of the deck and would otherwise leave a slot.
+    const barrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(HINGE_R, HINGE_R, DECK_W - 0.012, 10),
+        new THREE.MeshStandardMaterial({ color: 0x8d9094, roughness: 0.5, metalness: 0.6 })
+    );
+    barrel.rotation.z = Math.PI / 2;      // lying across the back of the case
+    hinge.add(barrel);
+
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(DECK_W, LID_H, LID_T), macBody);
+    lid.name = 'macLid';
+    lid.position.y = LID_H / 2;           // standing on the hinge
+    hinge.add(lid);
+
     const macScreenTexture = createMacScreenTexture();
     const screen = new THREE.Mesh(
         new THREE.PlaneGeometry(0.288, 0.185),
@@ -1500,9 +1628,11 @@ function createMacBookOnStand() {
             emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.0
         })
     );
-    screen.position.set(0, 0.19, -0.111);
-    screen.rotation.x = -0.28;
-    group.add(screen);
+    screen.name = 'macScreen';
+    // Just proud of the lid's front face, with a slightly deeper chin than
+    // brow, the way the real one wears its bezel.
+    screen.position.set(0, LID_H / 2 + 0.002, LID_T / 2 + 0.0004);
+    hinge.add(screen);
 
     return group;
 }

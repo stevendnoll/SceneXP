@@ -74,11 +74,15 @@
     <title>Steve's Home Office</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=6" as="style">
+    <link rel="preload" href="css/experience.min.css?v=1" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=6">
+    <!-- The room's own sheet, loaded second so it can place what the shared
+         one styles. Bump the ?v= on BOTH lines whenever it changes. -->
+    <link rel="stylesheet" href="css/experience.min.css?v=1">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -154,11 +158,19 @@
         </div>
     </div>
 
-    <div id="blocker">
+    <!-- The welcome card, and the only thing that tells a visitor what this
+         room is. It can be opened again from the How-this-works button in the
+         corner, so `tabindex="-1"` is here to catch focus when it comes back:
+         without it the card returns to the screen while focus stays on a
+         button that just vanished, and a screen reader says nothing at all. -->
+    <div id="blocker" tabindex="-1">
         <div id="instructions">
             <p class="title">WELCOME</p>
             <p class="subtitle">Steve is at his desk, building SceneXP</p>
-            <p class="click-prompt">Click to step inside</p>
+            <!-- Two verbs and a destination, all set from main.js: "Click" or
+                 "Tap" for the device, and "step inside" or "come back" for
+                 whether the visitor has been in the room already. -->
+            <p class="click-prompt" id="begin-prompt">Click to step inside</p>
             <div class="controls-hint">
                 <span>LOOK AROUND</span> Drag the room, or use the arrow keys. It turns all the way around.
                 <span>LOOK CLOSER</span> Click anything in here, or Steve himself, for a little of its story.
@@ -354,6 +366,28 @@
         <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+        </svg>
+    </button>
+
+    <!-- HOW THIS WORKS, AND IT IS THE WELCOME CARD ITSELF (the same answer the
+         garden gives). Everything this room says about itself is on a card that
+         could be dismissed in one click and never reached again, which left a
+         visitor who clicked through it standing in an office with no idea that
+         anything in it could be clicked. A second copy of those sentences would
+         be two texts to keep in step, and the copy nobody edits is the one a
+         lost visitor reads, so this puts the original back up.
+
+         It is hidden while that card is up (main.js), because a button that
+         summons what is already on the screen is a control that does nothing.
+         Slot two in the corner, beside the gear: css/experience.css. -->
+    <button id="help-btn" class="ui-float menu-btn help-btn" type="button"
+        title="How this works"
+        aria-label="How this works">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" />
+            <path d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" stroke-linecap="round"
+                stroke-linejoin="round" fill="none" />
+            <circle cx="12.1" cy="17.4" r="1.05" stroke="none" fill="currentColor" />
         </svg>
     </button>
 

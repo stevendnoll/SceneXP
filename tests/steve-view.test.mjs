@@ -59,6 +59,7 @@ let CFG;
 let composeView;
 let steve;          // Steve's meshes
 let dashboard;      // the wall display's meshes
+let macbook;        // the MacBook Air on its stand
 let occluders;      // everything in the room that can stand in the way
 let registeredKinds;
 let PROP_CONTENT;
@@ -123,6 +124,7 @@ beforeAll(async () => {
   const meshesOf = (o) => { const out = []; o.traverse((c) => { if (c.isMesh) out.push(c); }); return out; };
   steve = meshesOf(store.getRoquiMesh());
   dashboard = meshesOf(room.getObjectByName('wallDashboard'));
+  macbook = room.getObjectByName('macbookAir');
   occluders = [];
   room.traverse((o) => { if (o.isMesh && o.visible !== false) occluders.push(o); });
   registeredKinds = world.getOutdoorPropMeshes().map((g) => g.userData.propKind);
@@ -242,6 +244,58 @@ describe('the wall display', () => {
     });
 });
 
+describe('the MacBook on its stand', () => {
+  // WHY THIS IS MEASURED AND NOT LOOKED AT. The laptop's deck and lid were
+  // each placed in the stand's frame with their own tilt, and the two sets of
+  // numbers drifted: the lid's foot ended up 43 mm from the back edge it is
+  // supposed to hang off, which put the screen through the middle of the
+  // keyboard with daylight behind it. Every number involved looked reasonable
+  // on its own, and the fault is a relationship between them. A screenshot
+  // caught it in the end (specs/screenshots, 2026-09-21); this catches it on
+  // the way in, at any rake of the stand and any opening angle of the lid.
+  const partsOfMac = () => {
+    const deck = macbook.getObjectByName('macDeck');
+    const lid = macbook.getObjectByName('macLid');
+    macbook.updateMatrixWorld(true);
+    return { deck, lid, d: deck.geometry.parameters, l: lid.geometry.parameters };
+  };
+
+  test('is in the room at all, with a deck and a lid to measure', () => {
+    expect(macbook).toBeTruthy();
+    const { deck, lid } = partsOfMac();
+    expect(deck).toBeTruthy();
+    expect(lid).toBeTruthy();
+  });
+
+  test('the lid hangs off the deck\'s back edge, inside the hinge', () => {
+    const { deck, lid, d, l } = partsOfMac();
+    // The middle of the lid's bottom edge, and the middle of the deck's back
+    // face, both in the room's coordinates.
+    const foot = new THREE.Vector3(0, -l.height / 2, 0).applyMatrix4(lid.matrixWorld);
+    const backEdge = new THREE.Vector3(0, 0, -d.depth / 2).applyMatrix4(deck.matrixWorld);
+    // Half the deck's thickness is the hinge barrel's radius, so the foot is
+    // inside the barrel. It was 43 mm out before.
+    expect(foot.distanceTo(backEdge)).toBeLessThan(d.height);
+  });
+
+  test('no part of the lid comes through the deck to the stand', () => {
+    const { deck, lid, d } = partsOfMac();
+    const deckTop = new THREE.Vector3(0, d.height / 2, -d.depth / 2).applyMatrix4(deck.matrixWorld);
+    const lidBox = new THREE.Box3().setFromObject(lid);
+    // The lid's lowest corner may tuck into the hinge barrel, and no further.
+    expect(lidBox.min.y).toBeGreaterThan(deckTop.y - d.height);
+  });
+
+  test('the screen is readable from where the visitor stands', () => {
+    // The whole point of the prop: the room is where SceneXP gets built, and
+    // the laptop shows the site. Raising the lid onto its hinge moved the
+    // screen 4 cm up and 1 cm back, so this holds the view it left with.
+    const screen = macbook.getObjectByName('macScreen');
+    expect(screen).toBeTruthy();
+    expect(seen([screen], cameraFor(16 / 9))).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
 describe('the list of the room\'s things', () => {
   const rows = () => propListItems(PROP_CONTENT, registeredKinds, {
     before: [{ id: HOST_ROW, label: 'Steve' }],
@@ -282,3 +336,4 @@ describe('the list of the room\'s things', () => {
     for (const row of r.slice(1, -1)) expect(row.label).toBe(PROP_CONTENT[row.id].title);
   });
 });
+

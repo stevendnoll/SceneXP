@@ -221,6 +221,59 @@ test('Enter or Space lets a keyboard visitor in too', async () => {
   expect(dom.el('prop-panel').hidden).toBe(false);
 });
 
+test('How this works puts the welcome card back, and stands down while it is up', async () => {
+  // THE ROOM'S ONLY EXPLANATION OF ITSELF is on the welcome card, and until
+  // now one click dismissed it for good: a visitor who clicked through it was
+  // left in an office with no hint that anything in it could be opened. The
+  // button in the corner brings the same card back (the garden's answer, and
+  // for the same reason: a second copy of those sentences would be two texts
+  // to keep in step). What is easy to get wrong is everything AROUND the card,
+  // so that is what this holds.
+  const main = await bootSteve();
+  const help = dom.el('help-btn');
+  const blocker = dom.el('blocker');
+
+  // On arrival: the card is up, so the button that summons it is not offered.
+  // `.ui-float` is display:none without `.visible`, which takes it off the
+  // screen and out of the tab order in one act.
+  expect(help.classList.contains('visible')).toBe(false);
+  expect(dom.el('begin-prompt').textContent).toBe('Click to step inside');
+
+  enterRoom();
+  expect(help.classList.contains('visible')).toBe(true);
+
+  fire(help, 'click');
+  expect(blocker.classList.contains('hidden')).toBe(false);
+  expect(help.classList.contains('visible')).toBe(false);
+  // The room waits behind it exactly as it does on arrival: taps are held,
+  // and the list of the room's things is not a tab stop behind the card.
+  expect(main.getState().isPaused).toBe(true);
+  expect(dom.el('prop-panel').hidden).toBe(true);
+  // The card knows the visitor has been in already...
+  expect(dom.el('begin-prompt').textContent).toBe('Click to come back to the office');
+  // ...and it has focus, so a screen reader reads the card rather than the
+  // button that just vanished from under the cursor.
+  expect(blocker.focused).toBe(true);
+
+  // Escape closes it, the way it closes every other panel in the room.
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  expect(blocker.classList.contains('hidden')).toBe(true);
+  expect(main.getState().isPaused).toBe(false);
+  expect(dom.el('prop-panel').hidden).toBe(false);
+  expect(help.classList.contains('visible')).toBe(true);
+  // And focus lands back on the button that opened it.
+  expect(help.focused).toBe(true);
+
+  // A second press opens it again, and the room answers taps once it is
+  // dismissed a third time: nothing here is one-shot.
+  fire(help, 'click');
+  expect(blocker.classList.contains('hidden')).toBe(false);
+  enterRoom();
+  expect(main.getState().isPaused).toBe(false);
+  clickScene({ isShopkeeper: true });
+  expect(isOpen('help-modal')).toBe(true);
+});
+
 test('a tour by click: every office dialog, the nudge, the deferred celebration', async () => {
   const main = await bootSteve();
   enterRoom();
@@ -473,7 +526,7 @@ test('mobile: tap to start, forgiving taps, the wall dashboard', async () => {
   globalThis.navigator.maxTouchPoints = 5;
   const main = await bootSteve();
   expect(main.getState().isMobile).toBe(true);
-  expect(dom.documentStub.querySelector('.click-prompt').textContent).toBe('Tap to step inside');
+  expect(dom.el('begin-prompt').textContent).toBe('Tap to step inside');
 
   fire(dom.el('blocker'), 'touchend');
   expect(main.getState().isPaused).toBe(false);

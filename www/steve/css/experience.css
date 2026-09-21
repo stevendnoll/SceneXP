@@ -1,0 +1,46 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed.
+ *
+ * experience.css - Steve's Home Office.
+ *
+ * Loaded AFTER ../shared/css/styles-1.0.0.css, which is the order the cascade
+ * needs: everything here either places or overrides something the shared sheet
+ * already styles.
+ *
+ * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block.
+ * The page runs a strict same-origin CSP with style-src 'self', which blocks
+ * inline styles outright, and the failure is silent apart from a console
+ * message: the page simply renders unstyled.
+ *
+ * BUMP THE ?v= QUERY ON BOTH LINES IN index.html when this file changes. A
+ * stale stylesheet over fresh markup does not look like a caching problem, it
+ * looks like a broken layout.
+ *
+ * WHY THE ROOM HAS A SHEET OF ITS OWN AT ALL, when everything else this page
+ * needs is in the shared sheet, the visitor-activity dashboard included (it is
+ * id-scoped there, #analytics-view). It is blast radius rather than bytes: the
+ * shared sheet is loaded by all thirty pages on the site, so one button in one
+ * room would mean re-issuing that file to every visitor of every page, and
+ * bumping the ?v= on thirty of them to say so. A sheet of this room's own puts
+ * the change where the change is, and gives the next scene-only rule somewhere
+ * obvious to go. The cost is one more request on this page, which the eight
+ * other experiences with an experience.css already pay.
+ */
+
+/* ---- How this works ---------------------------------------------------------
+ *
+ * Slot two in the top-right cluster: the shared sheet pins every float to the
+ * corner, and each one past the first steps left by a button plus a gap (62px:
+ * 50 wide and 12 between). The settings gear holds the corner itself, which it
+ * took when the floating Home button was retired on 2026-09-07.
+ *
+ * The neutral circle, the hover, and the icon sizing all come from `.menu-btn`
+ * in the shared sheet, which is the same look the gear beside it wears. This
+ * is only the slot, and it is written on the same `.help-btn` class the garden
+ * places its own How-this-works button with, so the two rooms' corners can be
+ * read side by side. tests/home-button-removed.test.mjs resolves these against
+ * the markup and fails on a hole in the ladder or on two buttons sharing a
+ * slot, reading the .min build, so a change here has to be built to count.
+ */
+.help-btn {
+    right: 82px;
+}
