@@ -655,11 +655,18 @@ export function frontOf(target) {
  */
 const takedown = { at: -1, tackler: '', carrier: '', from: null, to: null };
 
-export function beginTakedown(tacklerPos, carrierPos) {
+/**
+ * `at` STARTS THE CLOCK PART WAY IN, which is for one caller: a visitor who
+ * leaves a replay early. The card is about to open and nothing will step this
+ * clock again, so the hit has to be handed over already landed rather than left
+ * at nought with two men standing up behind the result. `takedownAt` holds its
+ * end pose for any time past the end, so the number to pass is the length.
+ */
+export function beginTakedown(tacklerPos, carrierPos, at = 0) {
     if (!tacklerPos || !carrierPos) return false;
     if (takedown.tackler === tacklerPos && takedown.carrier === carrierPos
         && takedown.at >= 0) return false;
-    takedown.at = 0;
+    takedown.at = at > 0 ? at : 0;
     takedown.tackler = tacklerPos;
     takedown.carrier = carrierPos;
     // Where each of them was standing when it started. Held, so the dive runs
@@ -719,11 +726,14 @@ export function takedownClock() {
 const celebration = { at: -1, plan: null };
 let party = null;
 
-export function beginCelebration(plan) {
+/** `at` starts it part way in, for the same one caller `beginTakedown` has.
+ *  The per-frame answer is solved here as well as in `syncFigures`, because a
+ *  party handed over at its end is one nothing is going to step again. */
+export function beginCelebration(plan, at = 0) {
     if (!plan || !plan.parts || !plan.parts.length) return false;
-    celebration.at = 0;
+    celebration.at = at > 0 ? at : 0;
     celebration.plan = plan;
-    party = null;
+    party = celebration.at > 0 ? celebrationAt(celebration.at, plan) : null;
     return true;
 }
 

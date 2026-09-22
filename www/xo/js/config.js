@@ -425,6 +425,43 @@ const LEAD_WINDOW = 0.15;
  */
 const ESCAPE_SHOVE = 1;
 
+/**
+ * ...AND HOW MUCH OF HIS SPEED THE MAN WITH THE PLAY IN HIS HANDS KEEPS WHEN HE
+ * RUNS INTO HIS OWN SIDE.
+ *
+ * THE SAME GEOMETRY, ONE TEAM OVER. The paragraphs above are about a defender
+ * hanging on a receiver; this is the same box reaching 1.76m while `separation`
+ * rests bodies at 1.45m, applied to two TEAM-MATES. The 2D game damps a man who
+ * runs into his own side, by a fifth when they play the same position and by
+ * four fifths when they do not, and on a canvas where a player was a letterform
+ * that almost never happened. Here a receiver is inside another receiver's box
+ * on 21.2% of frames, measured over 713,041 of them, and while he is there he
+ * averages 47.7% of his own top speed against 96.6% when he is clear.
+ *
+ * WHAT IT COSTS IS THE THING A VISITOR WATCHES. QA: "a receiver stops running
+ * his route while the ball is in the air". Traced, the worst case is a man
+ * jammed between two team-mates for 49 frames, creeping at 0.016m a frame while
+ * the pass flies eleven metres to the spot he was projected to reach. He never
+ * arrives and the ball falls to the turf.
+ *
+ * 1 IS "HIS OWN SIDE DOES NOT SLOW HIM DOWN", and it applies to exactly one man
+ * on the field for exactly as long as a ball is in the air to him. Everybody
+ * else keeps the ported jostle, so nothing about blocking, the pass rush or a
+ * crowd of bodies changes. `play.separate` cannot fix this instead: the
+ * separation distance is deliberately INSIDE the boxes, or no tackle could ever
+ * fire (see the note there).
+ *
+ * WHAT IT IS WORTH, over 1,632 plays on matched seeds: incompletions 11.2% of
+ * plays down to 7.2%, interceptions 0.9% to 0.6%, and mean points a play 12.32
+ * to 12.95. Widening it to the CARRIER as well fixes the same complaint for him
+ * and takes points to 15.73, which is a bigger change to the game than the
+ * fault is. See `onTheBall` in motion.js for that and the two other limits.
+ *
+ * SET IT TO 0 TO GET THE 2D GAME BACK EXACTLY, which is what motion.js defaults
+ * to for any caller that does not mention it.
+ */
+const MATE_GIVE = 1;
+
 /** The fraction a team's speed and acceleration move at full difficulty. Up
  *  here because `formationSettings` has to hand it to the ported formations
  *  class. See `difficulty` in the config below for what it means. */
@@ -597,6 +634,9 @@ function formationSettings() {
         // How much of a defender's shove a man breaking free ignores, while
         // `play.breakContact` says he is breaking free. See `ESCAPE_SHOVE`.
         escapeShove: ESCAPE_SHOVE,
+        // ...and how much of his own speed the man with the play in his hands
+        // keeps when he runs into a TEAM-MATE. See `MATE_GIVE`.
+        mateGive: MATE_GIVE,
         /** How hard the game is leaning right now, -1 to +1, written by
          *  `play.setDifficulty` before each line-up. See `difficulty` below. */
         difficulty: 0,
@@ -1280,6 +1320,48 @@ const XO_CONFIG = {
         /** Seconds remaining at which the clock starts reading as urgent. It
          *  is a colour AND a weight change, never colour alone. */
         warn: 3,
+    },
+
+    /**
+     * HOW LONG IT TAKES TO BRING A MAN DOWN.
+     *
+     * THE PORTED NUMBER IS A COUNT OF FRAMES AND OUR FRAMES ARE NOT ITS FRAMES.
+     * `generateTeamFormationObject` rolls `settings.tackled` between 1 and 10,
+     * `motion.checkCollisions` counts contact frames up against it, and every
+     * pair is visited twice, so a carrier with one defender on him gains two a
+     * frame. At `simHz` 80 that is a man on the grass a twelfth of a second
+     * after first contact, and a twelfth of a second is not a tackle. See
+     * `play.tackleThreshold` for the measured table and for the one in eight who
+     * rolls a 1 and goes down on the very first frame a box touches him, which
+     * is what QA reported as "the play ended and nobody tackled him".
+     */
+    tackle: {
+        /**
+         * SECONDS ONE UNIT OF THE ROLL IS WORTH, with one man hanging on.
+         *
+         * STEVE'S CALL, 2026-09-22, off this table. Every row is `mateGive`
+         * plus the hold, measured over 1,632 plays on matched seeds:
+         *
+         *     hold   pts/play   play    on his feet   whistled before
+         *                       length  after contact  he moved 0.5m
+         *     0.00     12.95    1.70s      0.113s          37.8%
+         *     0.03     19.91    2.38s      0.512s           9.5%
+         *     0.06     24.05    3.10s      0.900s           3.6%
+         *     0.10     29.84    4.22s      1.525s           2.6%
+         *
+         * 0.03 is the smallest value at which a catch stops being the whistle.
+         * It is not free: a ten play game scores nearer 200 than 123, so the
+         * milestone shows arrive sooner and the difficulty lean has more to
+         * lean on. That is the trade, taken deliberately.
+         *
+         * It also revives the stiff-arm. `escape.stiffAt` triggers on a
+         * fraction of this same threshold, and while a carrier went down inside
+         * an eighth of a second the move could never play (see the note on
+         * `escape.after`: it was measured firing on none of 46 breaks).
+         *
+         * 0 IS THE ROLL EXACTLY, which is the 2D game.
+         */
+        hold: 0.03,
     },
 
     /**

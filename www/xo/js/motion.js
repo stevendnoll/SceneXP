@@ -705,13 +705,17 @@ export class MotionClass {
         rx1 = 5;
         break;
     }
+    // IS THIS PASS PROTECTION? Carried on the pair rather than passed as a
+    // fifth argument to four ported functions. See `shedFor`.
+    const pocket = !game.runForYourLife && !game.throwTo;
     const set1 = {
       hasBall: obj.state.hasBall,
       position: obj.settings.position,
       team: obj.settings.team,
-      // IS THIS PASS PROTECTION? Carried on the pair rather than passed as a
-      // fifth argument to four ported functions. See `shedFor`.
-      pocket: !game.runForYourLife && !game.throwTo,
+      pocket,
+      // ...AND IS THIS THE MAN THE PLAY IS IN THE HANDS OF? Same arrangement
+      // and the same reason. See `mateGive`.
+      onBall: this.onTheBall(obj, game, pocket),
       x: obj.coords.x,
       x1: (obj.coords.x - (rx1 * k + pad)),
       x2: (obj.coords.x + (rx1 * k + pad)),
@@ -896,6 +900,107 @@ export class MotionClass {
     return typeof s === 'number' && s > 0 ? (s > 1 ? 1 : s) : 0;
   }
 
+  /**
+   * HOW MUCH OF HIS OWN SPEED THE MAN THE PLAY IS IN THE HANDS OF KEEPS WHEN HE
+   * RUNS INTO HIS OWN SIDE, and this is the other half of the same oversight
+   * `collisionScale` exists for.
+   *
+   * THE SAME-TEAM RULE BELOW IS THE 2D GAME'S, AND IT WAS WRITTEN FOR
+   * LETTERFORMS. Two team-mates whose boxes overlap each damp the other's
+   * speed, by a fifth when they play the same position and by four fifths when
+   * they do not. On a canvas where a player was twenty units of text that
+   * almost never happened. At `figureScale` the box reaches 1.76m across the
+   * field while `play.separate` rests two bodies at 1.45m, so two receivers
+   * running anywhere near each other are inside one another EVERY FRAME, and a
+   * fifth of his speed per frame against an accel of 0.4 is a man walking.
+   *
+   * MEASURED over 713,041 receiver-frames: a receiver is inside another
+   * receiver's box on 21.2% of them, and while he is there he averages 47.7% of
+   * his own top speed against 96.6% when he is clear. The worst case is the one
+   * QA reported: the man a pass is in the air to, jammed between two team-mates,
+   * creeping at 0.016m a frame for 49 frames while the ball flies eleven metres
+   * to the spot he was projected to reach. He never arrives, and on screen he
+   * has simply stopped running his route.
+   *
+   * IT IS SCOPED TO ONE MAN, WHICH IS THE WHOLE DESIGN. Only the player the
+   * visitor is watching the ball with is exempt: whoever is carrying it, and
+   * whoever it is in the air to. Everybody else keeps the ported jostle exactly,
+   * so blocking, the pass rush and the way a crowd of bodies behaves are all
+   * untouched. `play.separate` cannot do this job instead, because the
+   * separation distance is deliberately INSIDE the boxes (see the note there:
+   * hold bodies further apart than the boxes reach and no tackle can ever fire).
+   *
+   * Injected and defaulting to 0, like `collisionScale`, `rushShed` and
+   * `escapeShove` before it, which is the 2D game's own behaviour.
+   */
+  mateGive() {
+    const g = this.settings && this.settings.mateGive;
+    return typeof g === 'number' && g > 0 ? (g > 1 ? 1 : g) : 0;
+  }
+
+  /** ...and 0 for everybody else. `onBall` is carried on the pair by
+   *  `checkCollisions`, the way `pocket` is, so the four ported responders do
+   *  not each have to be handed the game. */
+  // eslint-disable-next-line
+  giveFor(onBall = false) {
+    return onBall ? this.mateGive() : 0;
+  }
+
+  /**
+   * Does a team-mate's jostle apply to this man at all?
+   *
+   * A FULL GIVE LETS HIM OUT OF THE WHOLE RESPONSE, NOT PART OF IT, and that is
+   * not tidiness. The response is a damping AND a two-way steer, and the steer
+   * is the half that actually clamps him: `decel` is 1.5 against a top speed of
+   * 2.35, so `decelDownfield` empties the axis and the `accelUpfield` after it
+   * hands back exactly `accel`, whatever multiplier ran first. Measured,
+   * softening only the damping moved stalled flights from 17.9% to 17.1%, which
+   * is nothing, because both of his axes were still being reset to 0.4 a frame.
+   */
+  // eslint-disable-next-line
+  mateJostles(onBall = false) {
+    return this.giveFor(onBall) < 1;
+  }
+
+  /** What a team-mate's jostle leaves him with. `damped` is the 2D game's own
+   *  answer for this pair, a fifth for the same position group and four fifths
+   *  for any other, and a give of 1 hands him all of his speed back. */
+  // eslint-disable-next-line
+  mateSpeed(obj = {}, object = {}, onBall = false) {
+    const damped = obj.settings.positionGroup !== object.settings.positionGroup
+      ? 0.8 : 0.2;
+    const give = this.giveFor(onBall);
+    return damped + (1 - damped) * give;
+  }
+
+  /**
+   * IS THIS THE MAN A PASS IS IN THE AIR TO? Told, never inferred: it is the
+   * button the visitor pressed, carried on `game.throwTo` (see
+   * `an-answer-re-derived-every-frame` and `play.throwTo`).
+   *
+   * THE SCOPE IS ONE MAN AND ONE MOMENT, AND BOTH LIMITS WERE MEASURED against
+   * the alternatives over 1,632 plays on matched seeds.
+   *
+   * NOT THE CARRIER. Widening it to whoever is holding the ball fixes the same
+   * complaint for him, and it is a bigger change to the game than the fault is:
+   * mean points a play go 12.95 to 15.73 and fifty-point plays 165 to 240. The
+   * report is about the man running under a throw, so that is who this frees.
+   *
+   * NOT IN THE POCKET EITHER. `pocket` is "the quarterback still has it and has
+   * neither thrown it nor taken off", and a version that reached him stopped
+   * his own line jostling him on every drop-back, which moves where the throw
+   * is made from and therefore every play after it (fifties 159 to 64).
+   *
+   * IT ENDS ON THE CATCH, because from there he is the carrier and the ported
+   * rules about carrying take over.
+   */
+  // eslint-disable-next-line
+  onTheBall(obj = {}, game = {}, pocket = false) {
+    if (pocket || !game.throwTo) return false;
+    const ball = this.gameState.state.ball;
+    return !(ball && ball.caught) && obj.settings.position === game.throwTo;
+  }
+
   /** Is this man mid-break, and from whom? A break frees him from the man he
    *  is breaking from and from nobody else, so a receiver who beats his corner
    *  can still be brought down by the safety arriving. */
@@ -941,12 +1046,13 @@ export class MotionClass {
           }
           this.decelUpfield(obj);
           this.accelDownfield(obj);
-        } else {
-          if ( obj.settings.positionGroup !== object.settings.positionGroup ) {
-            obj.state.ySpeed = (obj.state.ySpeed * 0.8);
-          } else {
-            obj.state.ySpeed = (obj.state.ySpeed * 0.2);
-          }
+        } else if ( this.mateJostles(set1.onBall) ) {
+          // Same team, AND THE PLAY IS NOT IN HIS HANDS. See `mateGive`: at 0
+          // this is the 2D game's own jostle, a fifth of his speed for a
+          // team-mate in the same position group and four fifths for anybody
+          // else, and the steer below is the half that really holds him.
+          obj.state.ySpeed = (obj.state.ySpeed
+            * this.mateSpeed(obj, object, set1.onBall));
           if ( set1.x <= set2.x ) {
             this.decelDownfield(obj);
             this.accelUpfield(obj);
@@ -984,12 +1090,13 @@ export class MotionClass {
             this.decelToLeftSideline(obj);
             this.accelToRightSideline(obj);
           }
-        } else {
-          if ( obj.settings.positionGroup !== object.settings.positionGroup ) {
-            obj.state.xSpeed = (obj.state.xSpeed * 0.8);
-          } else {
-            obj.state.xSpeed = (obj.state.xSpeed * 0.2);
-          }
+        } else if ( this.mateJostles(set1.onBall) ) {
+          // Same team, AND THE PLAY IS NOT IN HIS HANDS. See `mateGive`: at 0
+          // this is the 2D game's own jostle, a fifth of his speed for a
+          // team-mate in the same position group and four fifths for anybody
+          // else, and the steer below is the half that really holds him.
+          obj.state.xSpeed = (obj.state.xSpeed
+            * this.mateSpeed(obj, object, set1.onBall));
           if ( set1.y <= set2.y ) {
             this.decelToRightSideline(obj);
             this.accelToLeftSideline(obj);
@@ -1027,12 +1134,13 @@ export class MotionClass {
             this.decelToLeftSideline(obj);
             this.accelToRightSideline(obj);
           }
-        } else {
-          if ( obj.settings.positionGroup !== object.settings.positionGroup ) {
-            obj.state.xSpeed = (obj.state.xSpeed * 0.8);
-          } else {
-            obj.state.xSpeed = (obj.state.xSpeed * 0.2);
-          }
+        } else if ( this.mateJostles(set1.onBall) ) {
+          // Same team, AND THE PLAY IS NOT IN HIS HANDS. See `mateGive`: at 0
+          // this is the 2D game's own jostle, a fifth of his speed for a
+          // team-mate in the same position group and four fifths for anybody
+          // else, and the steer below is the half that really holds him.
+          obj.state.xSpeed = (obj.state.xSpeed
+            * this.mateSpeed(obj, object, set1.onBall));
           if ( set1.y <= set2.y ) {
             this.decelToRightSideline(obj);
             this.accelToLeftSideline(obj);
@@ -1065,12 +1173,13 @@ export class MotionClass {
           }
           this.decelUpfield(obj);
           this.accelDownfield(obj);
-        } else {
-          if ( obj.settings.positionGroup !== object.settings.positionGroup ) {
-            obj.state.ySpeed = (obj.state.ySpeed * 0.8);
-          } else {
-            obj.state.ySpeed = (obj.state.ySpeed * 0.2);
-          }
+        } else if ( this.mateJostles(set1.onBall) ) {
+          // Same team, AND THE PLAY IS NOT IN HIS HANDS. See `mateGive`: at 0
+          // this is the 2D game's own jostle, a fifth of his speed for a
+          // team-mate in the same position group and four fifths for anybody
+          // else, and the steer below is the half that really holds him.
+          obj.state.ySpeed = (obj.state.ySpeed
+            * this.mateSpeed(obj, object, set1.onBall));
           if ( set1.x <= set2.x ) {
             this.decelDownfield(obj);
             this.accelUpfield(obj);
