@@ -3243,6 +3243,17 @@ const XO_CONFIG = {
             // The visitors march in, and the camera pushes in on the huddle in
             // time for the shoulder, which lands between 3.9 and 5.0 seconds
             // depending on where the formation put the man who takes it.
+            //
+            // THESE DID NOT MOVE WHEN THE VISITORS DID, and that is the whole
+            // reason `column.pace` exists. Lining them up on the sideline
+            // shortened their walk, which brought the shoulder 0.14s forward,
+            // onto the wrong side of the cut. Moving the cut to meet it
+            // compressed the push from 0.4s to 0.25s and turned it into a whip
+            // that this suite's "never faster than 5% of how far it is looking"
+            // case caught at t=3.6; moving the whole shot earlier just pushed
+            // the whip up the schedule to t=2.7. There is no slack here. So the
+            // march keeps its PACE instead and steps off when the distance
+            // needs it to, and the camera schedule is left exactly alone.
             [3.3, 'side'], [3.5, 'side'], [3.9, 'contact'], [5.4, 'contact'],
             [6.3, 'cooler'], [7.3, 'cooler'], [8.1, 'captain'], [8.35, 'captain'],
             // A REVERSE SHOT IS A CUT. Eased, the camera flew through the middle
@@ -3305,10 +3316,43 @@ const XO_CONFIG = {
             /** Where the home team comes from: past the near end line, under the
              *  camera, in the shape of the huddle spread by `spread` across. */
             homeFrom: { x: -26, spread: 1.3 },
-            /** Where the front of the visitors' column starts: their own sideline. */
-            awayFrom: { z: -12.5 },
-            /** The visitors walk two abreast. */
-            column: { side: 0.8, rowGap: 1.9 },
+            /**
+             * WHERE THE VISITORS WAIT, AND IT USED TO BE IN THE CROWD.
+             *
+             * This was `awayFrom: { z: -12.5 }`, described as "their own
+             * sideline", and it was the head of a column already stacked four
+             * rows deep at `column.rowGap` each. Four rows is 5.7m and the
+             * sideline margin is `FIELD.sideline`, 1.55m, so row one stood in
+             * the gap in front of the stand and rows two, three and four stood
+             * INSIDE it, one riser apart, for the first two seconds of every
+             * game. QA sent a screenshot of it. A block that deep does not fit
+             * beside a football field, which is why a real team lines up ALONG
+             * the touchline instead.
+             *
+             * `out` is metres beyond the touchline, so the line moves with the
+             * field rather than sitting on a number that happened to fit once.
+             * At 0.8 a body 1.45m across stands clear of the paint at one end
+             * and clear of the front riser at the other, which `standLayout`
+             * puts a further `standoff` out again. `gap` is how far apart they
+             * stand along it: `column.rowGap`, so the line reads at the same
+             * spacing the column marches at. See `planOpening` for why the rows
+             * are spaced in TIME from here rather than in space.
+             */
+            line: { out: 0.8, gap: 1.9 },
+            /**
+             * The visitors walk two abreast, at `pace` metres a second.
+             *
+             * THE PACE IS THE TUNED THING, NOT THE STARTING LINE. The column
+             * used to be placed and then given a beat to cross, so its speed
+             * was whatever those two numbers implied: 20.2m over 3.4s, 5.9 m/s.
+             * Moving them onto the sideline shortened the walk, and at a fixed
+             * beat that slowed them down and brought the shoulder forward onto
+             * the wrong side of a camera cut. The camera schedule has no slack
+             * in it (see `keys`), so the pace is now the constant and the
+             * step-off is solved from the distance: they still arrive on the
+             * beat they always did, still moving at the speed they always did.
+             */
+            column: { side: 0.8, rowGap: 1.9, pace: 5.9 },
             /** How far past the huddle the last row stops. */
             through: 0.9,
             /** The home team's cooler, on the home sideline. */

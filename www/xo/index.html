@@ -104,7 +104,7 @@
     <title>X's and O's</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=6" as="style">
-    <link rel="preload" href="css/experience.min.css?v=16" as="style">
+    <link rel="preload" href="css/experience.min.css?v=17" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
@@ -113,7 +113,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=6">
-    <link rel="stylesheet" href="css/experience.min.css?v=16">
+    <link rel="stylesheet" href="css/experience.min.css?v=17">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -414,7 +414,11 @@
          See also the same trap in the shared README's note about `.ui-float`
          needing `.visible`. -->
     <div id="game-hud" class="hud" hidden>
-        <div class="hud-bar">
+        <!-- THE READOUT HALF OF THE HUD, which the opening puts away: a play
+             count and a score are answers to questions the game has not asked
+             yet, and the only thing on screen during the intro should be the
+             way out of it. See `showHudBar`. -->
+        <div id="hud-bar" class="hud-bar">
             <span class="hud-stat">Play <strong id="hud-play">1</strong> of <strong id="hud-of">10</strong></span>
             <span class="hud-stat">Score <strong id="hud-score">0</strong></span>
             <!-- THE PLAY CLOCK. `aria-hidden` on the whole stat, and that is

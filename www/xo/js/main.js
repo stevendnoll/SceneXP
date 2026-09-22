@@ -47,7 +47,7 @@ import {
 import { readGame, saveGame, clearGame } from './progress.min.js';
 import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.js';
 import {
-    initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
+    initHud, setPlayNumber, setScore, showHud, showHudBar, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showHelp, showSkipReplay,
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
@@ -1356,6 +1356,10 @@ function beginOpening(then) {
     initOpeningProps(scene);
     report('opening', { kind: reducedMotion ? 'calm' : 'full' });
     showHud(true);
+    // ONLY THE WAY OUT IS ON SCREEN. The bar reports a play count, a score and
+    // a mute button over an intro that has not started a game yet (QA,
+    // 2026-09-22). `endOpening` puts it back.
+    showHudBar(false);
     showSkipOpening();
     stepOpening(0);
 }
@@ -1416,6 +1420,7 @@ function endOpening() {
     }
     showBall(objects, 0);
     clearActions();
+    showHudBar(true);
     showHud(false);
     cycle.phase = 'welcome';
     s.then();

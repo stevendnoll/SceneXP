@@ -221,19 +221,82 @@ export function planOpening(men = [], { aspect = 1.78, calm = false } = {}) {
     }
     const bumpSide = bumped ? Math.sign(partedOf.get(bumped.position).x - lane) || 1 : 1;
 
-    // THE COLUMN, two abreast, the bumper in the front row on the bumped man's
-    // side so his is the first shoulder to arrive. It stops once its last row is
-    // clear of the huddle.
+    /**
+     * THE COLUMN, two abreast, the bumper in the front row on the bumped man's
+     * side so his is the first shoulder to arrive. It stops once its last row is
+     * clear of the huddle.
+     *
+     * THEY WAIT IN A LINE ALONG THE SIDELINE AND MARCH OUT TWO AT A TIME, and
+     * before that they stood in the crowd. QA sent a screenshot of it: the
+     * column used to be PRE-FORMED off the field at `awayFrom.z`, four rows
+     * deep at `rowGap` each, and four rows is 5.7m against a sideline margin
+     * 1.55m wide. Row one stood in the gap in front of the stand and rows two,
+     * three and four stood INSIDE IT, one riser apart, so three quarters of the
+     * visiting team spent the first two seconds of the game standing through
+     * the bleachers. A block that deep simply does not fit beside a football
+     * field, which is why a real team lines up ALONG the touchline instead.
+     *
+     * SO THE ROWS ARE SPACED IN TIME RATHER THAN IN SPACE. Everybody walks at
+     * one pace, and a pair that reaches the lane `rowGap / pace` after the pair
+     * in front of it IS the pair in front of it, one row back: the column
+     * assembles itself out of the line, which is what marching out two at a
+     * time looks like. They all arrive on the same beat they always did, so the
+     * march, the peel and everything after them are untouched.
+     *
+     * THEY CLOSE TO THE LANE FIRST AND THEN FOLLOW, which is the second half of
+     * it and the half that was missing. Sent straight from his place in the line
+     * to his place in the formation, each man walks his own DIAGONAL, so six
+     * diagonals converge and the column does not exist until it is most of the
+     * way across the field. QA: "the six O's don't get into formation until
+     * they're almost to the cooler." So the walk is an L instead: the middle
+     * pair is already in the lane and marches straight out, and each pair beside
+     * them walks along the line to the lane and falls in behind. The column is
+     * a column from the touchline on.
+     *
+     * AND EVERYBODY STEPS OFF TOGETHER, WHICH IS NOT A COMPROMISE BUT THE SAME
+     * ARITHMETIC. A man closing `row * line.gap` along the line at the pace
+     * takes `row * line.gap / pace` to do it, and he is due in the lane at
+     * `row * rowGap / pace`. Those are the same number, because the line is laid
+     * out at the gap the column marches at. So the line collapses inward on one
+     * beat and arrives in pairs, in order, already spaced: the outside pair is
+     * still walking in while the middle pair is away.
+     *
+     * AND THE PACE IS THE CONSTANT, NOT THE STARTING LINE, which took a round
+     * to see. Keeping the old beat over a shorter walk slows the column down,
+     * and the shoulder it is carrying then lands 0.14s earlier, on the wrong
+     * side of the cut to the `contact` shot. The camera schedule turns out to
+     * have no slack at all: moving the cut to meet the hit compresses the push
+     * into a whip, and moving the whole shot earlier just moves the whip up the
+     * schedule. So the column walks at `column.pace` and steps off when the
+     * distance needs it to, which puts the shoulder back where the camera is.
+     *
+     * ...AND THE LINE IS ORDERED FROM THE INSIDE OUT, each man already on the
+     * side he will march on, so the pair nearest the lane is the pair that
+     * leads and nobody crosses anybody to reach his file.
+     */
     const column = [bumper, ...os.filter((man) => man !== bumper)].filter(Boolean);
     const rows = Math.ceil(column.length / 2);
-    const leadStart = m.z + S.awayFrom.z;
+    // On the margin outside the touchline: far enough out to be off the paint,
+    // near enough in that a body 1.45m across still clears the front riser.
+    const lineZ = -(FIELD.width / 2 + S.line.out);
     const leadEnd = huddle.z + S.ring + S.through + (rows - 1) * S.column.rowGap;
+    const pace = Math.max(1e-6, S.column.pace);
+    // The head of the column steps off late enough to arrive on the beat at the
+    // pace, and never before the beat itself: the visitors' entrance cannot
+    // start while the camera is still on the huddle.
+    const leadOff = Math.max(B.visitors[0], B.visitors[1] - (leadEnd - lineZ) / pace);
+    const stepOff = S.column.rowGap / pace;
     const columnOf = new Map();
     column.forEach((man, i) => {
         const row = Math.floor(i / 2);
         const side = (i % 2 === 0 ? 1 : -1) * bumpSide;
         columnOf.set(man.position, {
-            from: { x: lane + side * S.column.side, z: leadStart - row * S.column.rowGap },
+            // When the line steps off, and when THIS man is in his file at the
+            // head of the lane. For the middle pair they are the same moment:
+            // they are already standing in it.
+            off: leadOff,
+            files: leadOff + row * stepOff,
+            from: { x: lane + side * (S.column.side + row * S.line.gap), z: lineZ },
             to: { x: lane + side * S.column.side, z: leadEnd - row * S.column.rowGap },
         });
     });
@@ -243,8 +306,10 @@ export function planOpening(men = [], { aspect = 1.78, calm = false } = {}) {
     if (bumper && bumped) {
         const c = columnOf.get(bumper.position);
         const level = partedOf.get(bumped.position).z;
-        const path = [[B.visitors[0], c.from.x, c.from.z], [B.visitors[1], c.to.x, c.to.z]];
-        for (let t = B.visitors[0]; t <= B.visitors[1]; t += 1 / 120) {
+        // From the moment he is in his file, which for the bumper is the head
+        // of the column and so the start of the march either way.
+        const path = [[c.files, c.to.x, c.from.z], [B.visitors[1], c.to.x, c.to.z]];
+        for (let t = c.files; t <= B.visitors[1]; t += 1 / 120) {
             if (along(path, t).z >= level) { contact = t; break; }
         }
     }
@@ -300,7 +365,15 @@ export function planOpening(men = [], { aspect = 1.78, calm = false } = {}) {
         const c = columnOf.get(man.position);
         const end = man === captain ? table : danceOf.get(man.position);
         paths.set(man.position, [
-            [B.visitors[0], c.from.x, c.from.z],
+            // Standing in the line on the sideline, and holding there until it
+            // steps off. Two keys at one spot, because `along` reads a segment
+            // that covers no ground as a man who is not running.
+            [0, c.from.x, c.from.z],
+            [c.off, c.from.x, c.from.z],
+            // ...along the line into his file, which is no walk at all for the
+            // pair already standing in it...
+            [c.files, c.to.x, c.from.z],
+            // ...and then straight up the lane behind the pair in front.
             [B.visitors[1], c.to.x, c.to.z],
             [B.peel[1] - (man === captain ? 0.2 : 0), end.x, end.z],
         ]);

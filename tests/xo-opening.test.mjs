@@ -16,7 +16,8 @@ const scene = join(here, '..', 'www', 'xo', 'js');
 
 installThree();
 
-const { XO_CONFIG: CFG } = await import(join(scene, 'config.min.js'));
+const { XO_CONFIG: CFG, FIELD } = await import(join(scene, 'config.min.js'));
+const { standLayout } = await import(join(scene, 'field.min.js'));
 const { playDriver } = await import(join(scene, 'camera.min.js'));
 const { stadiumShot } = await import(join(scene, 'milestones.min.js'));
 const { TEAMS } = await import(join(scene, 'roster.min.js'));
@@ -193,6 +194,166 @@ const plans = LINEUPS.map(([slug, defense]) => {
     return { slug, defense, men, plan: planOpening(men, { aspect: 1.78 }) };
 });
 const STEP = 1 / 60;
+
+/**
+ * QA, 2026-09-22, with a screenshot: "the O's players are standing through the
+ * bleachers before they march onto the field."
+ *
+ * They were. The column was PRE-FORMED off the field, four rows deep at
+ * `column.rowGap` each, and four rows is 5.7m against a sideline margin
+ * (`FIELD.sideline`) 1.55m wide. Row one stood in the gap in front of the
+ * stand and the rest stood inside it, a riser apart. A block that deep does not
+ * fit beside a football field, which is why they line up ALONG the touchline
+ * now and the rows are spaced in time instead.
+ */
+describe('the visitors wait on the sideline, not in the crowd', () => {
+    const outerEdge = FIELD.width / 2 + FIELD.sideline;
+    const visitors = (men) => men.filter((man) => man.team === 1).map((man) => man.position);
+
+    /** THE ONE THAT MATTERS, and it is a property of the whole opening rather
+     *  than of its first frame: at no point does anybody stand off the grass. */
+    test('no visitor is ever further out than the paint', () => {
+        for (const { slug, men, plan } of plans) {
+            let worst = 0;
+            let who = '';
+            for (let t = 0; t <= O.length; t += 1 / 30) {
+                const cast = castAt(plan, t);
+                for (const p of visitors(men)) {
+                    const at = cast.get(p);
+                    if (at && Math.abs(at.z) > worst) { worst = Math.abs(at.z); who = p; }
+                }
+            }
+            expect({ slug, who: worst > outerEdge ? who : '', out: worst <= outerEdge })
+                .toEqual({ slug, who: '', out: true });
+        }
+    });
+
+    /** ...AND THE FRONT RISER IS FURTHER OUT AGAIN, so the line is not merely
+     *  legal, it is clear of the stand a visitor can see them standing in. */
+    test('and the stand begins further out than any of them stands', () => {
+        const front = standLayout().out(0);
+        expect(front).toBeGreaterThan(outerEdge);
+        for (const { men, plan } of plans) {
+            const at = castAt(plan, 0);
+            for (const p of visitors(men)) expect(Math.abs(at.get(p).z)).toBeLessThan(front);
+        }
+    });
+
+    test('they start in a line: one row, spread along the touchline', () => {
+        for (const { slug, men, plan } of plans) {
+            const at = castAt(plan, 0);
+            const spots = visitors(men).map((p) => at.get(p));
+            expect(spots.length).toBeGreaterThan(3);
+            // One z between all of them, which is what makes it a line.
+            const zs = new Set(spots.map((s) => s.z.toFixed(4)));
+            expect({ slug, rows: zs.size }).toEqual({ slug, rows: 1 });
+            // ...and spread along the field, at least a body apart.
+            const xs = spots.map((s) => s.x).sort((a, b) => a - b);
+            for (let i = 1; i < xs.length; i += 1) {
+                expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(CFG.separation);
+            }
+        }
+    });
+
+    /**
+     * AND THEY FALL INTO THE TWO FILES TWO AT A TIME.
+     *
+     * Counted by where the men ARE rather than by reading the plan's own
+     * numbers back, because a test that restates the schedule cannot tell you
+     * the schedule produced the picture. `files` is the moment a man's x
+     * settles on one of the two tracks the column marches in.
+     */
+    const lane = () => midfield().x + O.stage.huddle.x;
+    const inFile = (at) => Math.abs(Math.abs(at.x - lane()) - O.stage.column.side) < 0.25;
+    const filesAt = (plan, crowd) => {
+        const out = new Map();
+        for (let t = O.beats.visitors[0]; t <= O.beats.visitors[1]; t += 1 / 120) {
+            const cast = castAt(plan, t);
+            for (const p of crowd) if (!out.has(p) && inFile(cast.get(p))) out.set(p, t);
+        }
+        return out;
+    };
+
+    test('they reach the two files in pairs', () => {
+        for (const { slug, men, plan } of plans) {
+            const crowd = visitors(men);
+            const when = filesAt(plan, crowd);
+            expect({ slug, all: when.size }).toEqual({ slug, all: crowd.length });
+            // Group the arrivals: every distinct moment is two men, never one.
+            const groups = new Map();
+            for (const t of when.values()) {
+                const key = t.toFixed(1);
+                groups.set(key, (groups.get(key) || 0) + 1);
+            }
+            expect({ slug, sizes: [...groups.values()] })
+                .toEqual({ slug, sizes: [...groups.values()].map(() => 2) });
+        }
+    });
+
+    /**
+     * ...AND THE COLUMN IS A COLUMN BEFORE IT IS ON THE FIELD.
+     *
+     * THIS IS THE ONE QA ASKED FOR SECOND. Sent straight from his place in the
+     * line to his place in the formation, each man walks his own DIAGONAL: six
+     * diagonals converge and the column does not exist until it is most of the
+     * way across. "The six O's don't get into formation until they're almost to
+     * the cooler." The walk is an L now, so the shape is made at the touchline
+     * and marched, which is what it is for.
+     */
+    test('and it is formed by the time its leader is on the field', () => {
+        for (const { slug, men, plan } of plans) {
+            const crowd = visitors(men);
+            const formed = Math.max(...filesAt(plan, crowd).values());
+            const cast = castAt(plan, formed);
+            const leader = Math.max(...crowd.map((p) => cast.get(p).z));
+            // Barely over the touchline, and nowhere near the cooler the
+            // diagonals used to converge at.
+            const cooler = midfield().z + O.stage.cooler.z;
+            expect({ slug, onField: leader < 0, shortOfCooler: leader < cooler - 10 })
+                .toEqual({ slug, onField: true, shortOfCooler: true });
+        }
+    });
+
+    /** ...AND THE WHOLE LINE IS ON SCREEN WHEN THE CURTAIN GOES UP, on every
+     *  shape of screen. A staging nobody can see is a staging nobody fixed:
+     *  the opening shot is the wide one and this is what it opens on. */
+    test('the line is in frame on the opening shot', () => {
+        for (const aspect of ASPECTS) {
+            const shot = shotAt(0, { aspect });
+            for (const { slug, men, plan } of plans) {
+                const at = castAt(plan, 0);
+                for (const p of visitors(men)) {
+                    const a = at.get(p);
+                    const q = projectPoint(shot, aspect, { x: a.x, y: 1.2, z: a.z });
+                    expect({ slug, aspect, p, seen: Math.abs(q.x) < 1 && Math.abs(q.y) < 1 && q.depth > 0 })
+                        .toEqual({ slug, aspect, p, seen: true });
+                }
+            }
+        }
+    });
+
+    /**
+     * AND THE SHOULDER STILL LANDS WHILE THE CAMERA IS ON IT.
+     *
+     * This is the coupling the change nearly broke and the reason `column.pace`
+     * exists. The column's walk got shorter when it moved to the sideline, and
+     * at a fixed beat a shorter walk is a slower one, which brought the
+     * shoulder 0.14s forward onto the wrong side of the cut to `contact`. The
+     * camera schedule has no slack to absorb it: moving the cut to meet the hit
+     * compresses the push into a whip that the case above catches. So the pace
+     * is held and the step-off is solved from the distance, and this is the
+     * property that says so.
+     */
+    test('the shoulder lands while the contact shot is up', () => {
+        const keys = O.keys;
+        const cut = keys.findIndex(([, name]) => name === 'contact');
+        const holds = [keys[cut][0], keys[cut + 1][0]];
+        for (const { slug, plan } of plans) {
+            expect({ slug, inShot: plan.contact >= holds[0] && plan.contact <= holds[1] })
+                .toEqual({ slug, inShot: true });
+        }
+    });
+});
 
 describe('the cast', () => {
     test('everybody in the formation is in it, and ends exactly on his spot', () => {

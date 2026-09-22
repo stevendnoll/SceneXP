@@ -172,6 +172,32 @@ describe('the opening', () => {
         expect(skip.dataset.keys).toBe('Escape');
     });
 
+    /**
+     * QA, 2026-09-22: "only the Skip button should be visible while the intro
+     * animation is running."
+     *
+     * The HUD is two things stacked: a bar that REPORTS and a row that ACTS.
+     * Through the opening the row carries one button and the bar was answering
+     * questions the game has not asked yet, so a visitor watching the intro was
+     * told they were on play 1 of 10 with a score of 0 and offered a mute
+     * button over the top of it.
+     */
+    test('only the Skip button is on screen, and the readout is put away', async () => {
+        await boot({ watch: true });
+        expect(dom.el('game-hud').hidden).toBe(false);
+        expect(dom.el('hud-bar').hidden).toBe(true);
+        expect(dom.el('hud-actions').children.map((b) => b.textContent)).toEqual(['Skip']);
+    });
+
+    /** ...and it comes straight back, however the opening ended, or the game
+     *  itself would be played without a score on it. */
+    test('and the readout is back for the game', async () => {
+        await boot({ watch: true });
+        skipButton().click();
+        await flushAsync();
+        expect(dom.el('hud-bar').hidden).toBe(false);
+    });
+
     test('the camera is flying the opening\'s own shots, not holding the play camera', async () => {
         await boot({ watch: true });
         const camera = await import('../www/xo/js/camera.min.js');

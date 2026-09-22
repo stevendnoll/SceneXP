@@ -379,6 +379,15 @@ body {
     letter-spacing: 0.02em;
 }
 
+/* AND `display: flex` ABOVE BEATS THE BROWSER'S OWN `[hidden]`, which is the
+   same trap the playbook's note at the top of this file is about and the reason
+   `.hud` and `.hud-clock` each carry one of these. The opening hides the whole
+   bar, so without this rule the intro keeps a play count, a score and a mute
+   button over it. */
+.hud-bar[hidden] {
+    display: none;
+}
+
 .hud-stat strong {
     color: #f2f5fa;
     font-size: 1.05rem;
