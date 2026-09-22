@@ -905,6 +905,99 @@ describe('a block takes two', () => {
     });
 
     /**
+     * ...AND "ONE OF OURS IS CARRYING IT" USED TO INCLUDE THE QUARTERBACK IN
+     * THE POCKET, WHICH IS QA'S 2026-09-22 REPORT.
+     *
+     * He is carrying it from the snap, so every receiver on the field was drawn
+     * blocking for the whole of his route. Measured over 1,665,624
+     * receiver-frames, a receiver was drawn blocking on 61.6% of them and 48.8%
+     * of ALL of them were a block thrown while the ball was still in the
+     * quarterback's hands: 79.2% of every block a receiver was ever in.
+     *
+     * IT SHOWS BECAUSE THE ARMS ARE THE STRIDE. The shared rig's legs are bare
+     * meshes with no pivot, so a receiver holding a block is a receiver who has
+     * visibly stopped running. QA: "it kind of looks like the players are just
+     * floating down the field."
+     */
+    const quarterback = (running = false) => ({
+        settings: { position: 'qb', team: 0, benched: false, positionGroup: 'qb' },
+        coords: { x: -300, y: 0, z: 1 },
+        state: { xSpeed: 0, ySpeed: 0, hasBall: true, run: running },
+    });
+
+    test('a receiver runs his route while the quarterback still has it', () => {
+        const near = 1.0 / UNITS_TO_METRES;
+        const field = () => [man('wr1', 0, 0, 0), man('db1', 1, near, 0), quarterback()];
+        expect(blockersEngaged(field(), quarterback()).has('wr1')).toBe(false);
+        // ...and the line is blocking the whole time, which is its one job.
+        const line = [man('x1', 0, 0, 0), man('db1', 1, near, 0), quarterback()];
+        expect(blockersEngaged(line, quarterback()).has('x1')).toBe(true);
+    });
+
+    test('...and blocks the moment he tucks it and runs', () => {
+        const near = 1.0 / UNITS_TO_METRES;
+        const field = [man('wr1', 0, 0, 0), man('db1', 1, near, 0), quarterback(true)];
+        expect(blockersEngaged(field, quarterback(true)).get('wr1'))
+            .toMatchObject({ against: 'db1' });
+    });
+
+    /**
+     * QA, SAME ROUND: "if the receiver gets past a defender then they should
+     * resume their usual running motion. The receivers should only put their
+     * arms up if the defender is in front of them."
+     *
+     * Measured, 36.8% of the blocks a receiver was drawn in were against a man
+     * already BEHIND him, which is a receiver who beat his cover and then ran
+     * the rest of the route holding an imaginary man off his back.
+     */
+    test('a receiver who has got past his man goes back to running', () => {
+        const near = 1.0 / UNITS_TO_METRES;
+        const lead = CFG.pose.block.lead / UNITS_TO_METRES;
+        const at = (x) => blockersEngaged(
+            [man('wr1', 0, 0, 0), man('db1', 1, x, 0), carrying('wr2')],
+            carrying('wr2')
+        );
+        // In front of him, and a full block.
+        expect(at(near).get('wr1').amount).toBeCloseTo(
+            at(near).get('db1').amount, 10);
+        expect(at(lead).get('wr1').amount).toBeGreaterThan(0.99);
+        // Level with him, and nothing at all.
+        expect(at(0).has('wr1')).toBe(false);
+        // Beaten, and still nothing however close he is.
+        expect(at(-near).has('wr1')).toBe(false);
+    });
+
+    /** IT IS A RAMP AND NOT A TEST, because a boolean read off a distance that
+     *  wanders across zero is the oldest way there is to make something
+     *  flicker. Half way across the lead is half a block. */
+    test('and it eases across the line rather than snapping', () => {
+        const half = (CFG.pose.block.lead / 2) / UNITS_TO_METRES;
+        const pair = blockersEngaged(
+            [man('wr1', 0, 0, 0), man('db1', 1, half, 0), carrying('wr2')],
+            carrying('wr2')
+        );
+        expect(pair.get('wr1').amount).toBeGreaterThan(0.1);
+        expect(pair.get('wr1').amount).toBeLessThan(0.9);
+    });
+
+    /**
+     * AND THE LINE IS LEFT ALONE, DELIBERATELY. A lineman has one job, so being
+     * engaged is his resting state and nothing about him has to read as
+     * running. A receiver has two, and the block is the pose that says which of
+     * them he is doing. Measured, 31.9% of the line's blocks are against a man
+     * behind them as well; that is a lineman doing his job badly, not a lineman
+     * drawn wrong.
+     */
+    test('a lineman still holds a man who has slipped past him', () => {
+        const near = 1.0 / UNITS_TO_METRES;
+        const pair = blockersEngaged(
+            [man('x1', 0, 0, 0), man('db1', 1, -near, 0), quarterback()],
+            quarterback()
+        );
+        expect(pair.get('x1')).toMatchObject({ against: 'db1' });
+    });
+
+    /**
      * NOT AFTER AN INTERCEPTION. With the ball going the other way a receiver
      * is a tackler, and men who have just lost it putting their arms up to
      * block would read as a team that had not noticed.

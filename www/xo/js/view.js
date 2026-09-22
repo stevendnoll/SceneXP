@@ -491,7 +491,70 @@ function tacklersOn(objects, carrier) {
  * NOT AFTER AN INTERCEPTION. The carrier has to be one of ours: with the ball
  * going the other way a receiver is a tackler, and men who have just lost it
  * putting their arms up to block would read as a team that had not noticed.
+ *
+ * ...AND "ONCE SOMEBODY IS CARRYING IT" MEANT THE QUARTERBACK TOO, WHICH IS THE
+ * WHOLE OF QA'S 2026-09-22 REPORT. He is carrying it from the snap, so `ours`
+ * was true for the entire pocket and every receiver on the field was drawn
+ * blocking while he ran his route. Measured over 1,665,624 receiver-frames: a
+ * receiver is drawn blocking on 61.6% of them, and 48.8% of ALL of them are a
+ * block thrown while the ball is still in the quarterback's hands, which is
+ * 79.2% of every block a receiver is ever drawn in.
+ *
+ * THE ARMS ARE THE ONLY THING THAT SAYS HE IS RUNNING. Nothing in this game
+ * animates the legs (see `poseFigure` for why, which is a missing tag on the
+ * shared rig rather than a missing joint), so the arm swing IS the stride, and
+ * a receiver holding a block is a receiver who has stopped running as far as
+ * anybody watching is concerned. QA: "it kind of looks like the players are
+ * just floating down the field".
+ *
+ * So the pocket is the line: while the quarterback has it, a receiver is
+ * running a route, which is what `runWrFormation` has him doing. It is read
+ * from the CARRIER rather than from the game, because a replay rebuilds its
+ * objects from six floats a frame and this has to answer the same on both.
  */
+/**
+ * IS THIS MAN STILL IN FRONT OF HIM, 0 TO 1, AND THEREFORE SOMEBODY TO HOLD OFF?
+ *
+ * QA, 2026-09-22: "if the receiver gets past a defender then they should resume
+ * their usual running motion. The receivers should only put their arms up if the
+ * defender is in front of them." Measured, 36.8% of the blocks a receiver is
+ * drawn in are against a man who is already BEHIND him, which is a receiver who
+ * beat his cover and then ran the rest of the route holding an imaginary man off
+ * his back.
+ *
+ * DOWNFIELD, NOT HIS HEADING, and that is the interesting choice. "Past him" in
+ * football means toward the end zone you are attacking, it costs nothing to
+ * compute, it reads identically on a live frame and on a rebuilt one, and it
+ * cannot be fooled by the ported steer's wobble. A heading would also have been
+ * WRONG for the other half of the roster: a lineman pass-blocking travels
+ * BACKWARDS with the drop-back while the rusher he is holding comes forwards,
+ * so every block on the line would read as a man behind him.
+ *
+ * THE LINE IS EXEMPT ANYWAY, AND FOR A REASON RATHER THAN A CAVEAT. A lineman
+ * has one job, so being engaged is his resting state and nothing about him has
+ * to read as running. A receiver has two, and this is the pose that says which
+ * of them he is doing. (Measured, 31.9% of the line's blocks are also against a
+ * man behind them; left alone deliberately, because a lineman still grabbing at
+ * somebody who slipped past him is a lineman doing his job badly, not a lineman
+ * drawn wrong.)
+ *
+ * A RAMP RATHER THAN A TEST, because a boolean read off a distance that wanders
+ * across zero is the oldest way there is to make something flicker (the same
+ * lesson as `stillFor`). `block.lead` is half a stride, so a man drifting across
+ * the line eases rather than snaps, and `poseFigure`'s own blend is under that
+ * again.
+ */
+export function aheadOf(blocker, foe) {
+    if (!blocker || !foe) return 0;
+    const lead = CFG.pose.block.lead;
+    // Team 0 attacks along +x in simulation units and `simToWorld` only scales
+    // that axis, so the sign carries straight through.
+    const way = blocker.settings.team === 0 ? 1 : -1;
+    const ahead = (foe.coords.x - blocker.coords.x) * UNITS_TO_METRES * way;
+    if (!(lead > 0)) return ahead > 0 ? 1 : 0;
+    return Math.min(1, Math.max(0, ahead / lead));
+}
+
 export function blockersEngaged(objects, carrier, presnap = false) {
     const out = new Map();
     /**
@@ -514,8 +577,13 @@ export function blockersEngaged(objects, carrier, presnap = false) {
     if (!foes.length) return out;
 
     const ours = !!carrier && carrier.settings.team === 0;
+    // THE POCKET IS THE LINE. `state.run` is the quarterback having tucked it,
+    // and the recording stores it for exactly this kind of question.
+    const pocket = ours && carrier.settings.position === 'qb'
+        && carrier.state.run !== true;
+    const receiver = (obj) => /^wr\d$/.test(obj.settings.position);
     const blocks = (obj) => /^x\d$/.test(obj.settings.position)
-        || (ours && obj !== carrier && /^wr\d$/.test(obj.settings.position));
+        || (ours && !pocket && obj !== carrier && receiver(obj));
 
     const hold = (position, amount, against) => {
         const had = out.get(position);
@@ -538,8 +606,11 @@ export function blockersEngaged(objects, carrier, presnap = false) {
         // an engaged pair stood at 28% of a block with their hands short of
         // each other. See the note in config.
         const span = Math.max(0.01, reach - CFG.pose.block.lock);
-        const amount = nearest >= reach ? 0
+        const reached = nearest >= reach ? 0
             : Math.min(1, (reach - nearest) / span);
+        // ...AND A MAN YOU HAVE ALREADY BEATEN IS NOT A MAN YOU ARE HOLDING
+        // OFF. Receivers only: see `aheadOf` for why the line is exempt.
+        const amount = reached * (receiver(obj) ? aheadOf(obj, partner) : 1);
         if (amount <= 0 || !partner) continue;
         hold(obj.settings.position, amount, partner.settings.position);
         hold(partner.settings.position, amount, obj.settings.position);

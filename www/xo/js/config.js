@@ -2614,6 +2614,24 @@ const XO_CONFIG = {
              */
             reach: 2.7,          // metres: nothing beyond this
             lock: 2.3,           // ...and fully into it by here
+            /**
+             * HOW FAR IN FRONT OF A RECEIVER A MAN HAS TO BE BEFORE HE IS
+             * SOMEBODY TO HOLD OFF, in metres downfield.
+             *
+             * QA, 2026-09-22: "the receivers should only put their arms up if
+             * the defender is in front of them", and a receiver who beats his
+             * cover should go back to running. Measured, 36.8% of the blocks a
+             * receiver was drawn in were against a man already BEHIND him.
+             *
+             * IT IS A RAMP AND NOT A TEST, because a boolean read off a
+             * distance that wanders across zero flickers, which is the same
+             * lesson `stillFor` exists for. Half a stride is wide enough that a
+             * man drifting across the line eases across it and narrow enough
+             * that "past him" still means past him. See `aheadOf` in view.js
+             * for why this is downfield rather than along his own heading, and
+             * why the line does not use it.
+             */
+            lead: 0.5,
             hand: { x: 0.26, y: 1.26, z: 0.46 },
             /**
              * AND THEY LEAN INTO IT, WHICH IS WHAT CLOSES THE LAST GAP.

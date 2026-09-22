@@ -429,10 +429,23 @@ function addContactShadow(person) {
 /**
  * WHERE THE ARMS GO, AND IT IS THE WHOLE BODY LANGUAGE THIS RIG HAS.
  *
- * The shared rig groups each arm at the shoulder and tags it, so the arms are
- * the one limb that can be animated: the legs are bare meshes with no pivot.
- * That makes six poses the entire vocabulary, and it is enough, because each of
- * them answers a question a viewer is actually asking.
+ * The shared rig groups each arm at the shoulder and TAGS it (`isArm`), so the
+ * arms are the one limb this file can find. That makes six poses the entire
+ * vocabulary, and it is enough, because each of them answers a question a
+ * viewer is actually asking.
+ *
+ * THE LEGS ARE NOT ANIMATED, AND THE REASON IS A MISSING TAG RATHER THAN A
+ * MISSING JOINT. This note used to say they were "bare meshes with no pivot",
+ * which is wrong and was worth checking rather than repeating: built against
+ * real three, `createPerson` hangs each leg off its own `THREE.Group` at hip
+ * height with the thigh, knee, shin and shoe as children, exactly the way it
+ * hangs an arm off the shoulder. What it does not do is tag them, so nothing
+ * here can pick them out of `person.children` without a position filter, and a
+ * position filter on a shared part is the fault `rig-surgery-fails-silently`
+ * is about. Tagging them in `people-1.0.0` would be additive and would make a
+ * hip swing possible; until then the arm swing carries the whole stride, which
+ * is why a held pose reads as a man who has stopped running (QA, 2026-09-22:
+ * "it kind of looks like the players are just floating down the field").
  *
  *   running      is he moving, and how fast
  *   throwHold    is the quarterback looking downfield or has he tucked it
