@@ -2431,7 +2431,13 @@ describe('every pose the game can ask for actually runs', () => {
             forearm: { rotation: { x: 0, y: 0, z: 0 } } },
         rotation: { x: 0, y: 0, z: 0 },
     });
-    const figure = () => ({ userData: { arms: [arm(1), arm(-1)] } });
+    const leg = (side) => ({
+        userData: { legSide: side, restX: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+    });
+    const figure = () => ({
+        userData: { arms: [arm(1), arm(-1)], legs: [leg(1), leg(-1)] },
+    });
 
     /** Every shape of `act` view.js can hand over. */
     const ACTS = {
@@ -2459,6 +2465,9 @@ describe('every pose the game can ask for actually runs', () => {
                 expect(Number.isFinite(a.rotation.x)).toBe(true);
                 expect(Number.isFinite(a.rotation.z)).toBe(true);
                 expect(Number.isFinite(a.userData.forearm.rotation.x)).toBe(true);
+            }
+            for (const l of f.userData.legs) {
+                expect(Number.isFinite(l.rotation.x)).toBe(true);
             }
         });
     }
@@ -3948,5 +3957,111 @@ describe('a tackle can be handed over already landed', () => {
         expect(beginCelebration(plan, 2.5)).toBe(true);
         expect(celebrationClock()).toBeCloseTo(2.5, 6);
         resetCelebration();
+    });
+});
+
+/**
+ * QA, 2026-09-22: "since the receivers' legs don't move, it kind of looks like
+ * the players are just floating down the field. The arm swinging motion is what
+ * makes it look like the players are really running."
+ *
+ * Both halves were true, and the second is why the first mattered so much: the
+ * arms were carrying the whole stride on their own, so a man in any HELD pose
+ * had nothing left saying he was moving at all. The hip pivot was in the shared
+ * rig the whole time and simply had no tag to find it by, which is why this
+ * file's own note used to claim the legs were "bare meshes with no pivot".
+ *
+ * PLAIN OBJECTS, for the reason the block above is: the Three stub is a Proxy
+ * that swallows every assignment, so a rotation written onto a stubbed group is
+ * invisible and a test built on one cannot tell a stride from a no-op.
+ */
+describe('the legs carry the stride', () => {
+    const arm = (side) => ({
+        userData: { armSide: side, restX: 0.1, restZ: side * 0.15,
+            forearm: { rotation: { x: 0, y: 0, z: 0 } } },
+        rotation: { x: 0, y: 0, z: 0 },
+    });
+    const leg = (side) => ({
+        userData: { legSide: side, restX: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+    });
+    const figure = () => ({
+        userData: { arms: [arm(1), arm(-1)], legs: [leg(1), leg(-1)] },
+    });
+    /** Hold one phase until the easing has arrived, which is what a held pose
+     *  does on screen: the target is what matters, not the approach. */
+    const settle = (f, speed, phase, act = {}) => {
+        for (let i = 0; i < 300; i += 1) poseFigure(f, speed, phase, act, 1 / 60);
+        return f;
+    };
+    const limb = (f, kind, side) =>
+        f.userData[kind].find((l) => l.userData[kind === 'arms' ? 'armSide' : 'legSide'] === side);
+
+    test('a hip swings when a man runs, and reaches its cap at full effort', () => {
+        const f = settle(figure(), CFG.pose.fullEffort, Math.PI / 2);
+        for (const side of [1, -1]) {
+            expect(Math.abs(limb(f, 'legs', side).rotation.x))
+                .toBeCloseTo(CFG.pose.legSwing, 4);
+        }
+    });
+
+    /** THE ONE THAT MAKES IT READ AS WALKING: a person's right arm goes forward
+     *  with his LEFT leg. Same side, opposite sign, off one shared phase. */
+    test('and it is in antiphase with the arm on the same side', () => {
+        const f = settle(figure(), CFG.pose.fullEffort, Math.PI / 2);
+        for (const side of [1, -1]) {
+            const armX = limb(f, 'arms', side).rotation.x - limb(f, 'arms', side).userData.restX;
+            const legX = limb(f, 'legs', side).rotation.x - limb(f, 'legs', side).userData.restX;
+            expect({ side, opposed: Math.sign(armX) === -Math.sign(legX) })
+                .toEqual({ side, opposed: true });
+            expect({ side, moving: Math.abs(legX) > 0.01 }).toEqual({ side, moving: true });
+        }
+    });
+
+    test('it scales with how fast he is going', () => {
+        const at = (speed) => Math.abs(
+            settle(figure(), speed, Math.PI / 2).userData.legs[0].rotation.x);
+        const jog = at(CFG.pose.fullEffort / 3);
+        expect(jog).toBeGreaterThan(0.01);
+        expect(jog).toBeLessThan(at(CFG.pose.fullEffort) * 0.5);
+    });
+
+    test('a man standing still does not stride', () => {
+        for (const l of settle(figure(), 0, Math.PI / 2).userData.legs) {
+            expect(l.rotation.x).toBeCloseTo(l.userData.restX, 4);
+        }
+    });
+
+    /** ...AND NEITHER DOES A MAN ON HIS BACK. `upright` already stops the arms;
+     *  legs still striding under a horizontal body is the one thing that would
+     *  make a knockdown funny rather than final. */
+    test('and neither does a man who has been knocked down', () => {
+        for (const l of settle(figure(), 9, Math.PI / 2, { down: 1 }).userData.legs) {
+            expect(l.rotation.x).toBeCloseTo(l.userData.restX, 4);
+        }
+    });
+
+    /**
+     * THE WHOLE POINT, STATED AS A PROPERTY. Every pose that pins the arms used
+     * to pin the man: a receiver holding a block, a carrier stiff-arming, a man
+     * reaching for a ball. His legs keep running now, so the held pose is
+     * something he is doing WHILE running rather than instead of it.
+     */
+    test('a man in a held pose is still running', () => {
+        for (const act of [{ block: 1 }, { tackle: 1 }, { stiffArm: 1, stiffArmSide: -1 },
+            { reach: 1, reachAt: { x: 0.2, y: 1.7, z: 0.5 } }, { posting: 1 }]) {
+            const f = settle(figure(), CFG.pose.fullEffort, Math.PI / 2, act);
+            const swung = f.userData.legs
+                .every((l) => Math.abs(l.rotation.x - l.userData.restX) > 0.1);
+            expect({ act: Object.keys(act)[0], swung }).toEqual({ act: Object.keys(act)[0], swung: true });
+        }
+    });
+
+    /** A rig with no tagged legs is the rig every other scene still has, and it
+     *  must pose exactly as it always did rather than throw. */
+    test('a figure whose rig has no legs poses anyway', () => {
+        const bare = { userData: { arms: [arm(1), arm(-1)] } };
+        expect(() => settle(bare, 6, 1)).not.toThrow();
+        expect(Number.isFinite(bare.userData.arms[0].rotation.x)).toBe(true);
     });
 });

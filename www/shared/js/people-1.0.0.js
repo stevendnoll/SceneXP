@@ -584,6 +584,15 @@ export function createPerson(config) {
             0
         );
 
+        // Tag leg for a walking or running stride, the way the arms are tagged
+        // for a pose. The pivot was always here: the thigh, knee, shin and shoe
+        // all hang off this group at negative y, so `rotation.x` swings the
+        // whole leg from the hip. What was missing was any way to FIND it, and
+        // a scene that went looking by position would be doing the lookup that
+        // `person-rig-seams.test.mjs` exists to warn about.
+        legGroup.userData.isLeg = true;
+        legGroup.userData.legSide = side;
+
         person.add(legGroup);
     });
 

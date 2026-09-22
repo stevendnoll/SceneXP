@@ -1559,6 +1559,29 @@ const XO_CONFIG = {
         /** Cap on the stride swing, radians at the shoulder. */
         armSwing: 0.55,
         /**
+         * ...AND AT THE HIP, WHICH THE GAME DID NOT HAVE UNTIL NOW.
+         *
+         * QA, 2026-09-22: "the legs don't move, so it kind of looks like the
+         * players are just floating down the field. The arm swinging motion is
+         * what makes it look like the players are really running." Both halves
+         * true, and the second is why the first mattered: with no stride under
+         * him, a man in any HELD pose had nothing left saying he was moving.
+         *
+         * roster.js used to say the legs were "bare meshes with no pivot". They
+         * are not: `createPerson` hangs each leg off its own group at hip
+         * height, exactly the way it hangs an arm off a shoulder. What was
+         * missing was a TAG to find it by, which people-1.0.0 now carries.
+         *
+         * A HIP SWINGS LESS THAN A SHOULDER, and it has to here for a reason
+         * the arms do not share: there is no knee in this rig, so a leg swung
+         * about the hip lifts its foot by `legLength * (1 - cos)`. At 0.5 that
+         * is 9cm before `figureScale`, which reads as the flight phase of a run
+         * and is why it is not pushed further. Past about 0.7 both feet hang
+         * clear of the grass long enough to read as hovering, which is the
+         * thing this was meant to fix.
+         */
+        legSwing: 0.5,
+        /**
          * STRIDE ADVANCES WITH DISTANCE COVERED, IN RADIANS PER METRE, and the
          * old version only claimed to. It read the simulation's `xSpeed` and
          * `ySpeed` fields and advanced ONCE PER RENDERED FRAME, which is wrong

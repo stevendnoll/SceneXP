@@ -554,7 +554,12 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
     // make a knockdown funny rather than final.
     const upright = 1 - Math.min(1, (act.down || 0) * 1.6);
     const effort = Math.min(speed / P.fullEffort, 1) * upright;
-    const swing = Math.sin(phase) * effort * P.armSwing;
+    // THE GAIT, BEFORE EITHER LIMB PUTS ITS OWN CAP ON IT. One phase and one
+    // effort drive the shoulders and the hips, so the two can never fall out of
+    // step, and `armSwing` and `legSwing` stay readable as what they are:
+    // radians at the joint.
+    const gait = Math.sin(phase) * effort;
+    const swing = gait * P.armSwing;
 
     // NOTHING SNAPS, AND THAT IS MOST OF WHAT "GLITCHY" MEANT. Every input here
     // is a per-frame judgement about a world that is still moving: whether a
@@ -786,6 +791,48 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
             forearm.rotation.x = snap
                 ? fore : forearm.rotation.x + (fore - forearm.rotation.x) * ease;
         }
+    }
+
+    strideLegs(figure, gait, ease);
+}
+
+/**
+ * THE LEGS, WHICH HAD NEVER MOVED, AND THE ARMS HAD BEEN DOING THEIR JOB.
+ *
+ * QA, 2026-09-22: "since the receivers' legs don't move, it kind of looks like
+ * the players are just floating down the field. The arm swinging motion is what
+ * makes it look like the players are really running." Both halves were true,
+ * and the second half is why the first one mattered so much: with no stride
+ * under him, a man in any HELD pose (a block, a catch, a tackle) had nothing
+ * left saying he was moving at all.
+ *
+ * ONE `gait` DRIVES BOTH LIMBS. It carries the phase, the effort and `upright`
+ * already, so a man at a walk swings a little, a man at a sprint swings fully,
+ * and a man on his back does not swing at all. Deriving it twice would be two
+ * things to keep in step.
+ *
+ * ANTIPHASE WITH THE ARM ON THE SAME SIDE, which is the whole of what makes a
+ * walk read as a walk: a person's right arm goes forward with his LEFT leg. The
+ * arms use `side < 0 ? swing : -swing`, so the legs take the opposite sign.
+ *
+ * NO KNEE, AND NO BOB. The rig has one pivot per leg, at the hip, so this is a
+ * hip swing and nothing more. It does not need to be more: swinging about the
+ * hip puts a foot at its LOWEST at the middle of its swing, so the two feet
+ * alternately plant and lift on their own, which is a stride. A foot never
+ * passes through the grass either, because zero is the bottom of that arc.
+ *
+ * `legSwing` is a fraction of the arm's, because a hip that swings as far as a
+ * shoulder is a man doing the splits at every step.
+ */
+export function strideLegs(figure, gait, ease) {
+    const legs = figure.userData.legs;
+    if (!legs || !legs.length) return;
+    const amount = gait * CFG.pose.legSwing;
+    for (const leg of legs) {
+        const side = leg.userData.legSide;
+        const rest = leg.userData.restX !== undefined ? leg.userData.restX : 0;
+        const want = rest + (side < 0 ? -amount : amount);
+        leg.rotation.x += (want - leg.rotation.x) * ease;
     }
 }
 
@@ -1081,6 +1128,14 @@ export function initRoster(scene, objects) {
             arm.userData.restX = arm.rotation.x;
             arm.userData.restZ = arm.rotation.z;
         }
+        // AND THE LEGS, THE SAME WAY, WHICH IS NEW. The hip pivot was always
+        // there and nothing had ever asked for it, so `people-1.0.0` did not
+        // tag it: this file's own note used to say the legs were "bare meshes
+        // with no pivot", which was wrong and cost the game its stride. Found
+        // by the tag rather than by position, because a lookup by position into
+        // a shared rig is the fault `person-rig-seams.test.mjs` exists for.
+        person.userData.legs = person.children.filter((c) => c.userData && c.userData.isLeg);
+        for (const leg of person.userData.legs) leg.userData.restX = leg.rotation.x;
         // AND THE ARM'S MEASUREMENTS GO THE SAME WAY, for the same reason.
         // arm.js has to know where the shoulder is and how long the two
         // segments are to put a hand anywhere, and reading them off a figure
