@@ -431,3 +431,71 @@ describe('www/jamar: the microphone is in his hand', () => {
         expect(worldOf(glass).distanceTo(worldOf(handOf(arm)))).toBeLessThan(0.08);
     });
 });
+
+/**
+ * THE LEGS, WHICH www/xo SWINGS AND NOBODY HAD EVER ASKED THE RIG FOR.
+ *
+ * The hip pivot was always here: `createPerson` hangs each leg off its own
+ * group with the thigh, knee, shin and shoe as children at negative y, exactly
+ * the way it hangs an arm off a shoulder. What it did not have was a TAG, so
+ * roster.js's own note said the legs were "bare meshes with no pivot" and the
+ * game ran for six weeks with the arm swing carrying the whole stride. QA:
+ * "it kind of looks like the players are just floating down the field."
+ *
+ * The tag is what makes the lookup safe. A scene that went hunting for these
+ * groups BY POSITION would be doing precisely the thing the top of this file
+ * exists to warn about, and would find nothing the day the rig re-bases a hip.
+ */
+describe('the legs swing from the hip', () => {
+    const legsOf = (person) => person.children.filter((c) => c.isGroup && c.userData.isLeg);
+
+    /** The shoe inside a leg: the part furthest DOWN it, found by walking the
+     *  drawn figure rather than by name. */
+    const shoeOf = (leg) => {
+        let low = null;
+        for (const c of leg.children) if (!low || c.position.y < low.position.y) low = c;
+        return low;
+    };
+
+    test('there are two of them, tagged, one a side', () => {
+        const legs = legsOf(createPerson({}));
+        expect(legs.length).toBe(2);
+        expect(legs.map((l) => l.userData.legSide).sort()).toEqual([-1, 1]);
+    });
+
+    /** A PIVOT WITH NOTHING UNDER IT IS THE FAILURE THIS FILE IS ABOUT, and an
+     *  empty group rotates perfectly happily. The leg has to be IN it. */
+    test('the whole leg hangs off the pivot, not beside it', () => {
+        for (const leg of legsOf(createPerson({}))) {
+            expect(leg.children.length).toBeGreaterThanOrEqual(3);
+            // Everything under it hangs DOWN from the hip.
+            for (const part of leg.children) expect(part.position.y).toBeLessThan(0);
+        }
+    });
+
+    test('and rotating it actually moves the foot', () => {
+        const person = createPerson({});
+        const leg = legsOf(person)[0];
+        const shoe = shoeOf(leg);
+        person.updateMatrixWorld(true);
+        const rest = worldOf(shoe);
+        leg.rotation.x = -0.5;                  // a stride forward
+        person.updateMatrixWorld(true);
+        const swung = worldOf(shoe);
+        // It travelled, and it travelled FORWARD: the rig faces +z.
+        expect(swung.distanceTo(rest)).toBeGreaterThan(0.2);
+        expect(swung.z).toBeGreaterThan(rest.z);
+        // ...and a swing lifts the foot rather than driving it through the
+        // grass, which is what lets a knee-less leg stride at all.
+        expect(swung.y).toBeGreaterThan(rest.y);
+    });
+
+    /** The hip is where a hip is: at the top of the legs, under the torso. */
+    test('the pivot is at hip height', () => {
+        const person = createPerson({});
+        for (const leg of legsOf(person)) {
+            expect(leg.position.y).toBeGreaterThan(0.5);
+            expect(leg.position.y).toBeLessThan(1.0);
+        }
+    });
+});

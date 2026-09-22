@@ -40,13 +40,16 @@ const {
     keepAndRun, outcome, setDifficulty, OFFENSIVE_PLAYS,
     markHeading, throwTo, eligibleReceivers, breakContact, clearEscapes,
     decisionLeft, undecided, outOfTime, clockReading, ballCarrier,
-    ballArrived, leapBackstop, landLeaps, markAirborne,
+    ballArrived, leapBackstop, landLeaps, markAirborne, tackleThreshold,
 } = await import(join(scene, 'play.js'));
 const { markerGeometry } = await import(join(scene, 'markers.js'));
+const { takedownAt, takedownLength } = await import(join(scene, 'takedown.js'));
 const {
     escapeAmount, jukeRoll, stiffArmSide,
     blockersEngaged, lookTarget, stillFor, jumpLift,
     noteAssignments, resetAssignments,
+    beginTakedown, resetTakedown, takedownClock,
+    beginCelebration, resetCelebration, celebrationClock,
 } = await import(join(scene, 'view.js'));
 const { stiffSide, THROWING_SIDE, poseFigure, TEAMS } = await import(join(scene, 'roster.js'));
 const { MotionClass } = await import(join(scene, 'motion.js'));
@@ -2428,7 +2431,13 @@ describe('every pose the game can ask for actually runs', () => {
             forearm: { rotation: { x: 0, y: 0, z: 0 } } },
         rotation: { x: 0, y: 0, z: 0 },
     });
-    const figure = () => ({ userData: { arms: [arm(1), arm(-1)] } });
+    const leg = (side) => ({
+        userData: { legSide: side, restX: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+    });
+    const figure = () => ({
+        userData: { arms: [arm(1), arm(-1)], legs: [leg(1), leg(-1)] },
+    });
 
     /** Every shape of `act` view.js can hand over. */
     const ACTS = {
@@ -2456,6 +2465,9 @@ describe('every pose the game can ask for actually runs', () => {
                 expect(Number.isFinite(a.rotation.x)).toBe(true);
                 expect(Number.isFinite(a.rotation.z)).toBe(true);
                 expect(Number.isFinite(a.userData.forearm.rotation.x)).toBe(true);
+            }
+            for (const l of f.userData.legs) {
+                expect(Number.isFinite(l.rotation.x)).toBe(true);
             }
         });
     }
@@ -3663,5 +3675,393 @@ describe('where the defense is looking', () => {
         man.coords.x = 700; man.coords.y = 500;
         const look = lookTarget(lineman, objects, man, world(lineman), false, '');
         expect(near(look, man)).toBe(true);
+    });
+});
+
+/**
+ * QA, 2026-09-22: "sometimes a receiver stops running his route while the ball
+ * is in the air", reported as intermittent and impossible to reproduce on
+ * purpose.
+ *
+ * IT IS HIS OWN TEAM HOLDING HIM. The 2D game damps a man who runs into a
+ * team-mate, by a fifth of his speed when they play the same position and by
+ * four fifths when they do not, and then steers him off the line between them.
+ * On a canvas where a player was a twenty-unit letterform two of them almost
+ * never overlapped. At `figureScale` the box reaches 1.76m across the field and
+ * `play.separate` rests two bodies at 1.45m, INSIDE it, so two receivers running
+ * anywhere near each other collide on every single frame.
+ *
+ * Measured over 713,041 receiver-frames, a receiver is inside another
+ * receiver's box on 21.2% of them and averages 47.7% of his own top speed while
+ * he is there against 96.6% when he is clear. The worst case traced was the man
+ * a pass was in the air to, jammed between two team-mates for 49 frames at
+ * 0.016m a frame while the ball flew eleven metres to the spot he had been
+ * projected to reach.
+ */
+describe('the man a pass is in the air to is not held up by his own side', () => {
+    const fresh = (mateGive) => new Motion(
+        { style: { gutters: { x: SIM.gutter, y: SIM.gutter } }, mateGive },
+        {
+            state: {
+                ball: { caught: false, position: 'qb', team: 0 },
+                measurements: { height: 400, width: 1000, lineInterval: SIM.lineInterval },
+            },
+        },
+        { collide() {}, catch() {}, incomplete() {} }
+    );
+
+    const receiver = (position) => ({
+        coords: { x: 0, y: 0 },
+        physics: { maxSpeed: 2.35, accel: 0.4, decel: 1.5 },
+        settings: { position, positionGroup: 'wr', team: 0 },
+        state: { xSpeed: 2.35, ySpeed: 1.2, hasBall: false, tackle: 0 },
+    });
+
+    /** The pair `checkCollisions` builds, with the boxes overlapping. */
+    const pair = (motion, man, mate, game) => {
+        const pocket = !game.runForYourLife && !game.throwTo;
+        const set = (o, onBall) => ({
+            hasBall: o.state.hasBall, position: o.settings.position,
+            team: o.settings.team, pocket, onBall,
+            x: o.coords.x, x1: -10, x2: 10, xSpeed: o.state.xSpeed,
+            y: o.coords.y, y1: -10, y2: 10, ySpeed: o.state.ySpeed,
+        });
+        return [set(man, motion.onTheBall(man, game, pocket)), set(mate, false)];
+    };
+
+    /** One frame of running into a team-mate, as `checkCollisions` runs it. */
+    const jostle = (mateGive, game, position = 'wr2') => {
+        const motion = fresh(mateGive);
+        const man = receiver(position);
+        const mate = receiver('wr1');
+        const [set1, set2] = pair(motion, man, mate, game);
+        motion.checkCollisionsDownfield(man, mate, set1, set2);
+        motion.checkCollisionsToRightSideline(man, mate, set1, set2);
+        return { x: man.state.xSpeed, y: man.state.ySpeed };
+    };
+
+    const inTheAir = { throwTo: 'wr2', runForYourLife: false, objects: [] };
+
+    /**
+     * THE FAULT, STATED AS A FACT, so this suite cannot pass against the old
+     * code. At a give of 0 motion.js runs the 2D game's own jostle and one
+     * frame of it takes a man at full speed down to a fifth.
+     */
+    test('the ported jostle empties a receiver who touches a team-mate', () => {
+        const was = jostle(0, inTheAir);
+        expect(Math.abs(was.x)).toBeLessThan(2.35 * 0.25);
+        // ...AND THE STEER UNDER IT IS THE HALF THAT REALLY HOLDS HIM. `decel`
+        // is 1.5 against a top speed of 2.35, so the pair below the multiplier
+        // empties the other axis outright and hands back one step of accel. He
+        // is left crossing the field at a tenth of what he was doing, whatever
+        // the multiplier did, which is why a full give has to skip the whole
+        // response rather than soften part of it.
+        expect(Math.abs(was.y)).toBeLessThan(1.2 * 0.1);
+    });
+
+    test('and the man it is in the air to keeps his speed instead', () => {
+        const now = jostle(1, inTheAir);
+        expect(now.x).toBeCloseTo(2.35, 6);
+        expect(now.y).toBeCloseTo(1.2, 6);
+    });
+
+    /**
+     * AND NOBODY ELSE ON THE FIELD IS EXEMPT, which is the whole design. The
+     * scope is one man and one moment, so blocking, the pass rush and the way a
+     * crowd of bodies behaves are all left exactly as the port had them.
+     */
+    test('a receiver who is not the target is jostled exactly as before', () => {
+        const other = jostle(1, inTheAir, 'wr3');
+        expect(Math.abs(other.x)).toBeLessThan(2.35 * 0.25);
+    });
+
+    test('it ends on the catch, because from there he is the carrier', () => {
+        const motion = fresh(1);
+        const man = receiver('wr2');
+        motion.gameState.state.ball.caught = true;
+        expect(motion.onTheBall(man, inTheAir, false)).toBe(false);
+    });
+
+    /**
+     * ...AND IT NEVER REACHES THE POCKET. A version that did stopped the
+     * quarterback's own line jostling him on every drop-back, which moves where
+     * the throw is made from and therefore every play after it: measured over
+     * 1,632 plays it took fifty-point plays from 159 to 64.
+     */
+    test('and never the quarterback in the pocket', () => {
+        const motion = fresh(1);
+        const qb = receiver('qb');
+        qb.state.hasBall = true;
+        const pocket = { throwTo: '', runForYourLife: false, objects: [] };
+        expect(motion.onTheBall(qb, pocket, true)).toBe(false);
+    });
+
+    /** A caller that says nothing about it gets the 2D game, which is the
+     *  promise every other injected setting in motion.js makes. */
+    test('a motion built without the setting is the port, unchanged', () => {
+        const bare = new Motion({ style: { gutters: { x: 5, y: 5 } } }, {}, {});
+        expect(bare.mateGive()).toBe(0);
+        expect(bare.mateJostles(true)).toBe(true);
+    });
+});
+
+/**
+ * QA, 2026-09-22: "sometimes a receiver will catch the ball and the play will
+ * just end there as a catch, but the receiver is never tackled."
+ *
+ * `settings.tackled` is a COUNT OF FRAMES rolled between 1 and 10, and it came
+ * across from a canvas game untouched while `simHz` went 45, 60 and then 80.
+ * Every pair is also visited twice, once from each man's own `moveObject`, so a
+ * carrier with one defender on him gains two a frame. One in eight players rolls
+ * a 1, and measured over 1,260 completed passes that man is whistled down a
+ * fortieth of a second after a box first touches him, having carried the ball a
+ * metre and a half, with the nearest defender still 1.84m away.
+ */
+describe('nobody is brought down by one frame of contact', () => {
+    /**
+     * THE ROLL BECOMES A TIME AND KEEPS ITS ORDER. A 1 is still the easiest man
+     * in the game to bring down and a 10 still the hardest; what changes is
+     * what a unit of it is worth, which a canvas game never had to say.
+     */
+    test('the roll is converted to seconds and its order survives', () => {
+        const hold = CFG.tackle.hold;
+        expect(hold).toBeGreaterThan(0);
+        let last = 0;
+        for (const roll of [1, 3, 5, 8, 10]) {
+            const counts = tackleThreshold(roll);
+            // Two counts a frame is one defender hanging on, which is the
+            // conversion: see the note in play.js about the double visit.
+            expect(counts / (2 * CFG.simHz)).toBeCloseTo(roll * hold, 2);
+            expect(counts).toBeGreaterThan(last);
+            last = counts;
+        }
+    });
+
+    /** ...and nobody comes out of it easier to bring down than the port made
+     *  him, which is the half of it the report was actually about. */
+    test('and every roll takes longer than it used to', () => {
+        for (const roll of [1, 3, 5, 8, 10]) {
+            expect(tackleThreshold(roll)).toBeGreaterThan(roll);
+        }
+    });
+
+    /** THE PROPERTY, NOT THE ARITHMETIC: one frame of one defender's contact
+     *  must not be enough, whatever anybody rolls. The ported value of 1 fails
+     *  this, which is what makes it worth asserting. */
+    test('one frame of contact puts nobody down', () => {
+        const motion = new Motion(
+            { style: { gutters: { x: SIM.gutter, y: SIM.gutter } } },
+            {
+                state: {
+                    tackled: false, ball: { caught: true, position: 'wr1', team: 0 },
+                    measurements: { height: 400, width: 1000, lineInterval: SIM.lineInterval },
+                },
+            },
+            { collide() {}, catch() {}, incomplete() {} }
+        );
+        const carrier = {
+            coords: { x: 0, y: 0 },
+            physics: { maxSpeed: 2.35, accel: 0.4, decel: 1.5 },
+            settings: {
+                position: 'wr1', positionGroup: 'wr', team: 0,
+                tackled: tackleThreshold(1),
+            },
+            state: { xSpeed: 2, ySpeed: 0, hasBall: true, tackle: 0 },
+        };
+        const tackler = {
+            coords: { x: 0, y: 0 },
+            physics: { maxSpeed: 2.35, accel: 0.4, decel: 1.5 },
+            settings: { position: 'db1', positionGroup: 'db', team: 1 },
+            state: { xSpeed: 0, ySpeed: 0, hasBall: false, tackle: 0 },
+        };
+        const game = { objects: [carrier, tackler], throwTo: 'wr1', runForYourLife: false };
+        motion.checkCollisions(carrier, game);
+        expect(carrier.state.tackle).toBeGreaterThan(0);   // contact was seen
+        expect(motion.gameState.state.tackled).toBe(false);
+
+        // ...AND THE PORTED VALUE, FOR COMPARISON, PUTS HIM DOWN ON IT. A test
+        // that only proves the new number works cannot tell you the old one was
+        // broken, so the fault is stated here as a fact.
+        motion.gameState.state.tackled = false;
+        carrier.settings.tackled = 1;
+        carrier.state.tackle = 0;
+        motion.checkCollisions(carrier, game);
+        expect(motion.gameState.state.tackled).toBe(true);
+    });
+
+    /** ...and the roll itself survives the line-up, because the threshold is
+     *  what the physics reads and the roll is the only way anything afterwards
+     *  can tell what the floor did. */
+    test('the line-up applies it and keeps the roll beside it', () => {
+        const play = createPlayForDifficulty();
+        for (const obj of lineUp(play, 'pass2', 'cover2')) {
+            expect(obj.settings.tackleRoll).toBeGreaterThan(0);
+            expect(obj.settings.tackled).toBe(tackleThreshold(obj.settings.tackleRoll));
+            expect(obj.settings.tackled).toBeGreaterThan(obj.settings.tackleRoll);
+        }
+    });
+});
+
+/**
+ * QA, 2026-09-22, from a screenshot: a completed pass, the result card open, and
+ * two men standing up in the middle of the field with nobody tackled.
+ *
+ * `startReplay` drops the tackle and the party so a second look can begin at the
+ * snap, and the replay puts them back when the playhead RUNS OUT. A visitor who
+ * presses Skip never reaches that line: the card sets the phase to `result`,
+ * `stepCycle` returns on it and `syncFigures` is never called again, so the card
+ * opens over whatever half-second of the play the playhead happened to be on.
+ *
+ * The seam is here: both clocks can be handed over already run, which is what
+ * main.js's `landReplay` does with the last recorded frame.
+ */
+describe('a tackle can be handed over already landed', () => {
+    test('the takedown clock starts where it is told to', () => {
+        resetTakedown();
+        expect(takedownClock()).toBe(-1);
+        expect(beginTakedown('db1', 'wr1', 1.25)).toBe(true);
+        expect(takedownClock()).toBeCloseTo(1.25, 6);
+        resetTakedown();
+    });
+
+    /** And a caller that says nothing still gets a tackle that has not
+     *  happened yet, which is every other caller. */
+    test('and starts at nought when it is not', () => {
+        resetTakedown();
+        beginTakedown('db1', 'wr1');
+        expect(takedownClock()).toBe(0);
+        resetTakedown();
+    });
+
+    /** THE POINT OF IT: a takedown handed over at its own length has the
+     *  carrier all the way over, which is the picture a whistle leaves. */
+    test('and at its own length the carrier is flat on his back', () => {
+        const end = takedownAt(takedownLength(), { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 });
+        expect(Math.abs(end.carrier.lean))
+            .toBeCloseTo(Math.abs(CFG.pose.takedown.carrierLean), 6);
+        expect(end.contact).toBe(1);
+    });
+
+    test('the celebration clock does the same', () => {
+        resetCelebration();
+        expect(celebrationClock()).toBe(-1);
+        const plan = {
+            occasion: 'fifty', wait: 0, beat: 0.2, danceFor: 1, settle: 0.3,
+            length: 1.5, rise: false, calm: false, carrying: true, slump: [],
+            parts: [{
+                position: 'wr1', lead: true, dance: 'bow', dx: 0, dz: 0,
+                from: { x: 0, z: 0 }, to: { x: 0, z: 0 }, faceAt: null,
+                delay: 0, travel: 0,
+            }],
+        };
+        expect(beginCelebration(plan, 2.5)).toBe(true);
+        expect(celebrationClock()).toBeCloseTo(2.5, 6);
+        resetCelebration();
+    });
+});
+
+/**
+ * QA, 2026-09-22: "since the receivers' legs don't move, it kind of looks like
+ * the players are just floating down the field. The arm swinging motion is what
+ * makes it look like the players are really running."
+ *
+ * Both halves were true, and the second is why the first mattered so much: the
+ * arms were carrying the whole stride on their own, so a man in any HELD pose
+ * had nothing left saying he was moving at all. The hip pivot was in the shared
+ * rig the whole time and simply had no tag to find it by, which is why this
+ * file's own note used to claim the legs were "bare meshes with no pivot".
+ *
+ * PLAIN OBJECTS, for the reason the block above is: the Three stub is a Proxy
+ * that swallows every assignment, so a rotation written onto a stubbed group is
+ * invisible and a test built on one cannot tell a stride from a no-op.
+ */
+describe('the legs carry the stride', () => {
+    const arm = (side) => ({
+        userData: { armSide: side, restX: 0.1, restZ: side * 0.15,
+            forearm: { rotation: { x: 0, y: 0, z: 0 } } },
+        rotation: { x: 0, y: 0, z: 0 },
+    });
+    const leg = (side) => ({
+        userData: { legSide: side, restX: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+    });
+    const figure = () => ({
+        userData: { arms: [arm(1), arm(-1)], legs: [leg(1), leg(-1)] },
+    });
+    /** Hold one phase until the easing has arrived, which is what a held pose
+     *  does on screen: the target is what matters, not the approach. */
+    const settle = (f, speed, phase, act = {}) => {
+        for (let i = 0; i < 300; i += 1) poseFigure(f, speed, phase, act, 1 / 60);
+        return f;
+    };
+    const limb = (f, kind, side) =>
+        f.userData[kind].find((l) => l.userData[kind === 'arms' ? 'armSide' : 'legSide'] === side);
+
+    test('a hip swings when a man runs, and reaches its cap at full effort', () => {
+        const f = settle(figure(), CFG.pose.fullEffort, Math.PI / 2);
+        for (const side of [1, -1]) {
+            expect(Math.abs(limb(f, 'legs', side).rotation.x))
+                .toBeCloseTo(CFG.pose.legSwing, 4);
+        }
+    });
+
+    /** THE ONE THAT MAKES IT READ AS WALKING: a person's right arm goes forward
+     *  with his LEFT leg. Same side, opposite sign, off one shared phase. */
+    test('and it is in antiphase with the arm on the same side', () => {
+        const f = settle(figure(), CFG.pose.fullEffort, Math.PI / 2);
+        for (const side of [1, -1]) {
+            const armX = limb(f, 'arms', side).rotation.x - limb(f, 'arms', side).userData.restX;
+            const legX = limb(f, 'legs', side).rotation.x - limb(f, 'legs', side).userData.restX;
+            expect({ side, opposed: Math.sign(armX) === -Math.sign(legX) })
+                .toEqual({ side, opposed: true });
+            expect({ side, moving: Math.abs(legX) > 0.01 }).toEqual({ side, moving: true });
+        }
+    });
+
+    test('it scales with how fast he is going', () => {
+        const at = (speed) => Math.abs(
+            settle(figure(), speed, Math.PI / 2).userData.legs[0].rotation.x);
+        const jog = at(CFG.pose.fullEffort / 3);
+        expect(jog).toBeGreaterThan(0.01);
+        expect(jog).toBeLessThan(at(CFG.pose.fullEffort) * 0.5);
+    });
+
+    test('a man standing still does not stride', () => {
+        for (const l of settle(figure(), 0, Math.PI / 2).userData.legs) {
+            expect(l.rotation.x).toBeCloseTo(l.userData.restX, 4);
+        }
+    });
+
+    /** ...AND NEITHER DOES A MAN ON HIS BACK. `upright` already stops the arms;
+     *  legs still striding under a horizontal body is the one thing that would
+     *  make a knockdown funny rather than final. */
+    test('and neither does a man who has been knocked down', () => {
+        for (const l of settle(figure(), 9, Math.PI / 2, { down: 1 }).userData.legs) {
+            expect(l.rotation.x).toBeCloseTo(l.userData.restX, 4);
+        }
+    });
+
+    /**
+     * THE WHOLE POINT, STATED AS A PROPERTY. Every pose that pins the arms used
+     * to pin the man: a receiver holding a block, a carrier stiff-arming, a man
+     * reaching for a ball. His legs keep running now, so the held pose is
+     * something he is doing WHILE running rather than instead of it.
+     */
+    test('a man in a held pose is still running', () => {
+        for (const act of [{ block: 1 }, { tackle: 1 }, { stiffArm: 1, stiffArmSide: -1 },
+            { reach: 1, reachAt: { x: 0.2, y: 1.7, z: 0.5 } }, { posting: 1 }]) {
+            const f = settle(figure(), CFG.pose.fullEffort, Math.PI / 2, act);
+            const swung = f.userData.legs
+                .every((l) => Math.abs(l.rotation.x - l.userData.restX) > 0.1);
+            expect({ act: Object.keys(act)[0], swung }).toEqual({ act: Object.keys(act)[0], swung: true });
+        }
+    });
+
+    /** A rig with no tagged legs is the rig every other scene still has, and it
+     *  must pose exactly as it always did rather than throw. */
+    test('a figure whose rig has no legs poses anyway', () => {
+        const bare = { userData: { arms: [arm(1), arm(-1)] } };
+        expect(() => settle(bare, 6, 1)).not.toThrow();
+        expect(Number.isFinite(bare.userData.arms[0].rotation.x)).toBe(true);
     });
 });

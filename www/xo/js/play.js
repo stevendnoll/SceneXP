@@ -136,6 +136,54 @@ export function createPlay(audioObject = null) {
 }
 
 /**
+ * NOBODY IS BROUGHT DOWN BY ONE FRAME OF CONTACT.
+ *
+ * `generateTeamFormationObject` rolls `settings.tackled` between 1 and 10 and
+ * `motion.checkCollisions` counts `state.tackle` up against it, one per
+ * overlapping opponent per pass. THAT NUMBER IS A COUNT OF FRAMES, and it came
+ * across from a canvas game untouched while `simHz` went 45, 60 and then 80 (see
+ * config). Every PAIR is also visited twice, once from each man's own
+ * `moveObject`, so a carrier with one defender on him gains two a frame.
+ *
+ * MEASURED over 1,260 completed passes that ended in a tackle, the time a
+ * carrier stays on his feet after the first frame of contact, by his roll:
+ *
+ *     roll  share   on his feet   carried
+ *       1   12.1%      0.025s      1.74m
+ *       5   48.3%      0.100s      3.73m
+ *       8   27.0%      0.138s      3.52m
+ *      10   12.5%      0.200s      4.69m
+ *
+ * The 1 is the outlier and it is the one QA reported. The boxes reach 1.76m, so
+ * one in eight receivers is whistled down a fortieth of a second after a
+ * defender's box first touches him, having carried the ball a metre and a half,
+ * with nobody within two metres of him. The visitor sees the catch and the
+ * whistle as one event and no tackle in between.
+ *
+ * THE ROLL IS KEPT AND SO IS ITS ORDER. All this does is say what a unit of it
+ * is worth in SECONDS, which is the thing a canvas game never had to state
+ * because its clock was its own. A 1 is still the easiest man in the game to
+ * bring down and a 10 still the hardest.
+ *
+ * TWO COUNTS A FRAME IS THE CONVERSION, because that is what the double visit
+ * makes it, so a unit of the roll is `tackle.hold` seconds of ONE man hanging
+ * on. A second tackler still halves it, which is right.
+ *
+ * Applied at the line-up so the ported physics and `breakContact` read one
+ * number and cannot disagree about it: the stiff-arm's trigger is a fraction of
+ * this same `settings.tackled`. It also means the stiff-arm can finally play,
+ * which it could not while a carrier went down inside an eighth of a second.
+ *
+ * At `tackle.hold` of 0 it is the roll exactly, which is the 2D game.
+ */
+export function tackleThreshold(rolled) {
+    const hold = CFG.tackle && CFG.tackle.hold;
+    const n = Number.isFinite(rolled) ? rolled : 0;
+    if (!(hold > 0) || !(n > 0)) return n;
+    return Math.max(1, Math.round(n * hold * CFG.simHz * 2));
+}
+
+/**
  * HOW HARD THE GAME IS LEANING, FROM -1 TO +1.
  *
  * Set before a line-up, because the lean is applied where every player's random
@@ -191,6 +239,12 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
     for (const obj of play.game.objects) {
         obj.settings.benched = obj.coords.y <= -9000 || obj.coords.x <= -9000
             || (obj.coords.x === -100 && obj.coords.y === -50);
+        // ...AND SO IS HOW MUCH CONTACT PUTS HIM DOWN. The factory's roll is
+        // kept beside the threshold it produced, because the threshold is what
+        // the physics reads and the roll is the only way anything afterwards
+        // can tell what the floor did. See `tackleThreshold`.
+        obj.settings.tackleRoll = obj.settings.tackled;
+        obj.settings.tackled = tackleThreshold(obj.settings.tackled);
     }
     play.game.throwTo = '';
     play.game.runForYourLife = false;

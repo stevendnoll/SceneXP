@@ -252,6 +252,29 @@ export function showHud(visible) {
     if (hud) hud.hidden = !visible;
 }
 
+/**
+ * THE READOUT HALF OF IT, SEPARATELY, AND THE OPENING PUTS IT AWAY.
+ *
+ * The HUD is two things stacked: a bar that REPORTS (the play count, the score,
+ * the clock, the mute button) and a row of buttons that ACT. Through the
+ * opening the second one carries a single button, Skip, and the first one is
+ * answering questions the game has not asked yet. QA, 2026-09-22: only the Skip
+ * button should be visible while the intro is running.
+ *
+ * `hidden` rather than a class, so it leaves the accessibility tree with the
+ * pixels: "Play 1 of 10, Score 0" is not something a screen reader should be
+ * offered over an intro either. The opening's own line goes out through
+ * `#hud-live` as it always did.
+ *
+ * `.hud-bar` is a flex container, and `display: flex` beats the browser's own
+ * `[hidden] { display: none }`, so the stylesheet carries the rule that makes
+ * this work. See the note beside `.hud-bar[hidden]`.
+ */
+export function showHudBar(visible) {
+    const bar = el('hud-bar');
+    if (bar) bar.hidden = !visible;
+}
+
 function actions() {
     const node = el('hud-actions');
     if (node) node.textContent = '';

@@ -47,7 +47,7 @@ import {
 import { readGame, saveGame, clearGame } from './progress.min.js';
 import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.js';
 import {
-    initHud, setPlayNumber, setScore, showHud, showSnap, showInPlay,
+    initHud, setPlayNumber, setScore, showHud, showHudBar, showSnap, showInPlay,
     clearActions, showResult, hideResult, announce, showWelcome, showHelp, showSkipReplay,
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
@@ -660,10 +660,6 @@ function beginSettle() {
         ? { tackler: tacklerFor(cycle.play.game.objects, downed), carrier: downed.settings.position }
         : { tackler: '', carrier: '' };
     const party = planCelebration(result, pair);
-    // THE STANDS GO UP ON THE WHISTLE, the fans of whichever team it went for,
-    // and they are told the same occasion the field celebrates.
-    cycle.cheer = cheerFor(result, occasionFor(result, !!pair.tackler, !!cycle.play.expired));
-    cheerCrowd(cycle.cheer, state.elapsed, { calm: reducedMotion });
     /**
      * A SACK IS THE ONE ENDING THAT GETS BOTH, in that order. The celebration
      * carries the takedown's length as its own `wait`, so the two clocks can
@@ -679,6 +675,19 @@ function beginSettle() {
         // all.
         cycle.settleFor = Math.max(HOLD_SETTLE, takedownLength() + 0.2);
     }
+    /**
+     * THE STANDS GO UP ON THE WHISTLE, the fans of whichever team it went for,
+     * and they are told the same occasion the field celebrates.
+     *
+     * AFTER THE TACKLE, NOT BEFORE IT, AND THAT ORDER IS DELIBERATE. `cheerFor`
+     * and `cheerCrowd` cannot change who went down or whether there is a party;
+     * they only read what is already decided. Standing them ahead of the
+     * takedown put the one piece of the whistle a visitor is actually watching
+     * behind two hundred fans, with nothing between them but the assumption
+     * that the crowd never throws. Nothing decorative comes before the tackle.
+     */
+    cycle.cheer = cheerFor(result, occasionFor(result, !!pair.tackler, !!cycle.play.expired));
+    cheerCrowd(cycle.cheer, state.elapsed, { calm: reducedMotion });
     if (party && beginCelebration(party)) {
         cycle.party = party;
         cycle.settleFor = Math.max(cycle.settleFor, celebrationLength(party));
@@ -860,9 +869,24 @@ function onSkipCelebration() {
     report('skip-celebration', { kind: cycle.party.occasion, outcome: { playCount: cycle.playNumber } });
     uiClick();
     // The party stops where it is. Nothing it did needs undoing, because every
-    // offset it applied was on top of where the simulation left each man and
-    // the next frame simply draws them there.
+    // offset it applied was on top of where the simulation left each man.
     resetCelebration();
+    /**
+     * ...BUT SOMEBODY HAS TO DRAW THEM THERE, AND NOBODY WAS GOING TO.
+     *
+     * The sentence above used to finish "and the next frame simply draws them
+     * there". There is no next frame: `finishPlay` opens the card, `stepCycle`
+     * returns on the `result` phase and `syncFigures` is never called again, so
+     * clearing the party left every celebrant frozen in whatever half of a
+     * dance the skip landed on. Same fault as a skipped replay, one ending
+     * over. See `landReplay`.
+     *
+     * The tackle is deliberately left alone: a man on the grass is where the
+     * play actually ended, and a sack's party waits for the whole takedown
+     * anyway, so by here it is already at its end.
+     */
+    syncFigures(cycle.play.game.objects, 0, { live: false });
+    showBall(cycle.play.game.objects, 0);
     finishPlay();
 }
 
@@ -973,7 +997,50 @@ function finishPlay() {
     // result card is open has finished it just as much as one who clicks on.
     saveGame(cycle);
 
+    landTackle();
     presentResult();
+}
+
+/**
+ * A CARD NEVER OPENS OVER A TACKLE THAT DID NOT HAPPEN.
+ *
+ * QA, 2026-09-22, with a screenshot: a completed pass, "+15 Caught and brought
+ * down", and the receiver standing in the middle of the field holding the ball
+ * with the nearest defender several metres away and nobody on the grass.
+ *
+ * EVERY WAY A FIFTEEN POINT CATCH CAN END WAS WALKED AND THEY ALL RAISE
+ * `state.tackled`: the carrier's own route, the quarterback's, and the
+ * out-of-bounds branch. The two that do not are the fifty and the two turnovers,
+ * which have a party instead, and the render loop's own backstop, which measured
+ * over 4,284 plays never once fired (longest play 22.95s against a 28s
+ * backstop). So the whistle was a tackle and the takedown did not play.
+ *
+ * WHAT COULD LOSE IT IS EVERYTHING BETWEEN THE FLAG AND THE ANIMATION. The
+ * result, the carrier, the tackler, the party and the crowd are all read first,
+ * and any one of them throwing takes `startTakedown` with it while `beginSettle`
+ * has already set the phase and the hold, so the card opens on time over a field
+ * nobody knocked down. Three's animation loop asks for its next frame before
+ * calling ours, so a throw costs one frame and leaves no other trace.
+ *
+ * Rather than guess which one, this states the rule the whole sequence exists to
+ * produce and checks it at the last possible moment, which is also the cheapest:
+ * the pair is re-derived from the same two pure functions, and the hit is handed
+ * over ALREADY LANDED, because the card is about to freeze the field (see
+ * `landReplay`). If the takedown did play, `takedownClock` is running and this
+ * does nothing at all.
+ */
+function landTackle() {
+    if (!cycle.play || !cycle.play.playState.state.tackled) return;
+    if (takedownClock() >= 0) return;
+    const downed = ballCarrier(cycle.play);
+    if (!downed) return;
+    const tackler = tacklerFor(cycle.play.game.objects, downed);
+    if (!tackler) return;
+    cycle.tackle = { tackler, carrier: downed.settings.position };
+    startTakedown(cycle.play.game.objects, tackler, cycle.tackle.carrier,
+        takedownLength());
+    syncFigures(cycle.play.game.objects, 0, { live: false });
+    showBall(cycle.play.game.objects, 0);
 }
 
 function presentResult() {
@@ -1055,6 +1122,8 @@ function onSkipReplay() {
     cycle.replayHold = 0;
     showHud(true);
     clearActions();
+    // The card is about to freeze the field, so put the play at its end first.
+    landReplay();
     presentResult();
 }
 
@@ -1287,6 +1356,10 @@ function beginOpening(then) {
     initOpeningProps(scene);
     report('opening', { kind: reducedMotion ? 'calm' : 'full' });
     showHud(true);
+    // ONLY THE WAY OUT IS ON SCREEN. The bar reports a play count, a score and
+    // a mute button over an intro that has not started a game yet (QA,
+    // 2026-09-22). `endOpening` puts it back.
+    showHudBar(false);
     showSkipOpening();
     stepOpening(0);
 }
@@ -1347,6 +1420,7 @@ function endOpening() {
     }
     showBall(objects, 0);
     clearActions();
+    showHudBar(true);
     showHud(false);
     cycle.phase = 'welcome';
     s.then();
@@ -1575,17 +1649,60 @@ function uiClick() {
  * ONE FUNCTION FOR BOTH CALLERS, because the live whistle and the end of a
  * replay start the same tackle and had no reason to disagree about it.
  */
-function startTakedown(objects, tacklerPos, carrierPos) {
-    if (!beginTakedown(tacklerPos, carrierPos)) return false;
+function startTakedown(objects, tacklerPos, carrierPos, from = 0) {
+    if (!beginTakedown(tacklerPos, carrierPos, from)) return false;
     const at = (position) => {
         const o = objects.find((x) => x.settings.position === position);
         return o ? simToWorld(o.coords.x, o.coords.y, 0) : null;
     };
-    const from = at(tacklerPos);
-    const to = at(carrierPos);
-    const gap = from && to ? Math.hypot(to.x - from.x, to.z - from.z) : 0;
-    playSound('grunt', contactFraction(gap) * CFG.pose.takedown.dive * 1000);
+    const one = at(tacklerPos);
+    const two = at(carrierPos);
+    const gap = one && two ? Math.hypot(two.x - one.x, two.z - one.z) : 0;
+    // NOT WHEN IT IS HANDED OVER ALREADY LANDED. `from` above the moment of
+    // contact means this tackle has notionally already happened, which is a
+    // skipped replay catching up, and a grunt for a hit nobody watched is a
+    // noise from nowhere.
+    const hit = contactFraction(gap) * CFG.pose.takedown.dive;
+    if (from < hit) playSound('grunt', (hit - from) * 1000);
     return true;
+}
+
+/**
+ * LEAVE A REPLAY ON THE PICTURE IT WAS GOING TO END ON.
+ *
+ * SKIPPING ONE USED TO FREEZE THE FIELD MID-PLAY. `startReplay` drops the
+ * tackle and the party so the second look can begin at the snap, and the replay
+ * branch above puts them back when the playhead RUNS OUT. A visitor who presses
+ * Skip never reaches that line: `presentResult` sets the phase to `result`,
+ * `stepCycle` returns on it, and `syncFigures` is never called again. So the
+ * result card opened over whatever half-second of the play the playhead happened
+ * to be on, with two men standing up and nobody tackled, which is exactly what a
+ * whistle is not. Reported from a screenshot of a completed pass.
+ *
+ * So the skip lands the play itself rather than only the card: the playhead goes
+ * to the last recorded frame, which is the whistle, and the tackle and the party
+ * are handed over AT THEIR END rather than at their start, because nothing is
+ * going to step their clocks. One `syncFigures` with no time in it draws that
+ * frame, and it is the same picture the live whistle leaves behind its own card.
+ */
+function landReplay() {
+    // Run the playhead out. The recording stops at the whistle, so its last
+    // frame is where the play actually finished.
+    advance(frameCount(), CFG.simHz, 1);
+    const objs = frameAt(playheadFrame(), teamOfPosition);
+    if (cycle.tackle.tackler) {
+        startTakedown(objs, cycle.tackle.tackler, cycle.tackle.carrier,
+            takedownLength());
+    }
+    if (cycle.party) beginCelebration(cycle.party, celebrationLength(cycle.party));
+    // The stands were sat down by `startReplay` and the whistle is the frame
+    // they went up on, so they go up here too rather than staying silent.
+    if (cycle.cheer && !cycle.cheered) {
+        cycle.cheered = true;
+        cheerCrowd(cycle.cheer, state.elapsed, { calm: reducedMotion });
+    }
+    syncFigures(objs, 0, { live: false });
+    showBall(objs, 0);
 }
 
 /** Advance the play cycle. Kept apart from rendering so the whole thing is one

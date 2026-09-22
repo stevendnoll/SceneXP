@@ -47,18 +47,18 @@ import { muteButton } from './hud.min.js';
  * under half a metre of drift between them, and it now carries the name.
  */
 export const PLAYS = [
-    { slug: 'pass3', diagram: 3, name: 'Deep Drift',
-      blurb: 'Four deep routes with three drifting left, the widest crossing the field.' },
+    { slug: 'pass7', diagram: 7, name: 'Stack Right',
+      blurb: 'Two short to the right, with a deep route running either side of them.' },
     { slug: 'pass8', diagram: 11, name: 'Short Cross',
       blurb: 'Everybody works short, the widest pair drifting left.' },
     { slug: 'screen1', diagram: 13, name: 'Screen Left',
       blurb: 'One receiver stays short as a target while the other clears deep left.' },
-    { slug: 'pass7', diagram: 7, name: 'Stack Right',
-      blurb: 'Two short to the right, with a deep route running either side of them.' },
     { slug: 'pass2', diagram: 2, name: 'Flood Left',
       blurb: 'All four go deep and three of them break the same way, flooding that side.' },
     { slug: 'pass4', diagram: 4, name: 'Four Verticals',
       blurb: 'All four receivers run straight down the field. Nobody breaks.' },
+    { slug: 'pass3', diagram: 3, name: 'Deep Drift',
+      blurb: 'Four deep routes with three drifting left, the widest crossing the field.' },
     { slug: 'run1', diagram: 8, name: 'Run Right',
       blurb: 'Blockers work right while one receiver comes back to the left.' },
     { slug: 'pass1', diagram: 1, name: 'Split Verticals',
