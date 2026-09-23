@@ -145,3 +145,72 @@ describe('installPropList', () => {
     expect(m.installPropList()).toBe(0);
   });
 });
+
+describe('showPropRows', () => {
+  const NIGHT = [
+    { id: 'bee', label: 'The Bee' },
+    { id: 'bat', label: 'The Bat' },
+    { id: 'snail', label: 'The Snail' },
+    { id: 'fence', label: 'The Fence' },
+  ];
+
+  function built() {
+    const list = makeEl('ul');
+    m.installPropList({ list, items: NIGHT, onChoose: () => {} });
+    rowsOf(list).forEach((b) => { b.focus = () => { globalThis.document.activeElement = b; }; });
+    return list;
+  }
+  const shownIds = (list) => list.children.filter((li) => !li.hidden)
+    .map((li) => li.children[0].getAttribute('data-prop'));
+
+  test('hides the rows whose thing is gone and shows them again when it returns', () => {
+    const list = built();
+    const out = new Set(['bee', 'fence']);
+    expect(m.showPropRows(list, (id) => out.has(id))).toBe(2);
+    expect(shownIds(list)).toEqual(['bee', 'fence']);
+    out.clear(); out.add('bat'); out.add('snail'); out.add('fence');
+    expect(m.showPropRows(list, (id) => out.has(id))).toBe(3);
+    expect(shownIds(list)).toEqual(['bat', 'snail', 'fence']);
+  });
+
+  test('hides rather than rebuilds, so the rows are the same buttons', () => {
+    const list = built();
+    const before = rowsOf(list);
+    m.showPropRows(list, (id) => id !== 'bat');
+    expect(rowsOf(list)).toEqual(before);
+    expect(list.children).toHaveLength(4);
+  });
+
+  test('a focused row that goes hands focus to the next row still shown', () => {
+    const list = built();
+    const [bee, bat, , fence] = rowsOf(list);
+    bat.focus();
+    m.showPropRows(list, (id) => id === 'bee' || id === 'fence');
+    expect(globalThis.document.activeElement).toBe(fence);
+    // And to the one before when nothing after it is left.
+    m.showPropRows(list, () => true);
+    fence.focus();
+    m.showPropRows(list, (id) => id === 'bee');
+    expect(globalThis.document.activeElement).toBe(bee);
+  });
+
+  test('focus elsewhere is left alone', () => {
+    const list = built();
+    const [bee] = rowsOf(list);
+    bee.focus();
+    m.showPropRows(list, (id) => id !== 'bat');
+    expect(globalThis.document.activeElement).toBe(bee);
+  });
+
+  test('the last row going leaves focus where the browser puts it, without throwing', () => {
+    const list = built();
+    rowsOf(list)[0].focus();
+    expect(m.showPropRows(list, () => false)).toBe(0);
+    expect(shownIds(list)).toEqual([]);
+  });
+
+  test('no list or no test shows nothing and does not throw', () => {
+    expect(m.showPropRows(null, () => true)).toBe(0);
+    expect(m.showPropRows(built())).toBe(0);
+  });
+});

@@ -8,7 +8,7 @@
          restyled. A crawler that trusts a stale date has no reason to come back
          for the new card. Asserted in tests/directory.test.mjs: this date can
          never be older than the newest experience below. -->
-    <lastmod>2026-09-18</lastmod>
+    <lastmod>2026-09-23</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/contact.html</loc>
@@ -24,7 +24,7 @@
   </url>
   <url>
     <loc>https://www.scenexp.com/terms.html</loc>
-    <lastmod>2026-09-14</lastmod>
+    <lastmod>2026-09-23</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/sunnyvalejenn/</loc>
@@ -32,15 +32,15 @@
   </url>
   <url>
     <loc>https://www.scenexp.com/dad/</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-09-23</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/family/</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-09-23</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/roqui/</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-09-23</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/seedtoseed/</loc>
@@ -56,15 +56,15 @@
   </url>
   <url>
     <loc>https://www.scenexp.com/gavin/</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-09-23</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/jamar/</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-09-23</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/mandelbrot/</loc>
-    <lastmod>2026-07-29</lastmod>
+    <lastmod>2026-09-23</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/earthdefense/</loc>

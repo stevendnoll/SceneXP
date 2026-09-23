@@ -694,6 +694,127 @@ describe('action filter', () => {
     expect(findOne(els.actionFilter, 'afilter-empty').textContent).toBe('Nothing to filter.');
     expect(els.filterSummary.textContent).toBe('');
   });
+
+  describe('a rebuild leaves the viewer where they were', () => {
+    // Every tick re-renders and rebuilds the list. It used to come back
+    // scrolled to the top with nothing focused, so unticking a row near the
+    // bottom threw the list back up and dropped a keyboard viewer's focus
+    // onto the page body. Both are carried across the rebuild now.
+    async function readyWithFocus() {
+      installFetch({ 'index.json': INDEX, 'sessions-20260628': makeDaySnap() });
+      const h = await setup();
+      const doc = globalThis.document;
+      const make = doc.createElement;
+      doc.createElement = (tag) => {
+        const e = make(tag);
+        e.focus = (opts) => { doc.activeElement = e; e.focusOpts = opts; };
+        return e;
+      };
+      await h.m.loadAnalytics();
+      return h;
+    }
+    const listOf = (els) => findOne(els.actionFilter, 'afilter-list');
+
+    test('the scroll position survives unticking a box', async () => {
+      const { els } = await ready();
+      const before = listOf(els);
+      before.scrollTop = 40;
+      boxes(els)[2].checked = false;
+      boxes(els)[2].fire('change');
+      expect(listOf(els)).not.toBe(before);        // it really was rebuilt
+      expect(listOf(els).scrollTop).toBe(40);
+    });
+
+    test('focus returns to the box for the same action, without a scroll jump', async () => {
+      const { els } = await readyWithFocus();
+      const old = boxes(els)[1];
+      old.focus();
+      old.checked = false;
+      old.fire('change');
+      const now = globalThis.document.activeElement;
+      expect(now).not.toBe(old);
+      expect(now).toBe(boxes(els)[1]);
+      expect(now.getAttribute('data-action')).toBe(old.getAttribute('data-action'));
+      expect(now.checked).toBe(false);
+      expect(now.focusOpts).toEqual({ preventScroll: true });
+    });
+
+    test('focus elsewhere on the page is not pulled into the list', async () => {
+      const { els } = await readyWithFocus();
+      const other = els.groupSelect;
+      globalThis.document.activeElement = other;
+      els.clearAllBtn.fire('click');
+      expect(globalThis.document.activeElement).toBe(other);
+    });
+
+    test('an action gone from the new list leaves focus alone rather than guessing', async () => {
+      const { els } = await readyWithFocus();
+      const old = boxes(els)[0];                   // click-prop, only in xo
+      old.focus();
+      els.sceneSelect.value = 'garden';
+      els.sceneSelect.fire('change');
+      expect(names(els)).toEqual(['Opened an art piece']);
+      expect(globalThis.document.activeElement).toBe(old);
+    });
+  });
+
+  describe('the fade at the cap', () => {
+    // The list is capped and used to cut its last visible row in half, which
+    // read as a rendering fault. It fades instead, and ONLY while rows sit
+    // below the cap. The stub has no layout, so the test hands the list its
+    // measurements and plays the part of the browser's ResizeObserver.
+    let observers;
+    beforeEach(() => {
+      observers = [];
+      globalThis.ResizeObserver = class {
+        constructor(cb) { this.cb = cb; this.observed = []; this.disconnected = false; observers.push(this); }
+        observe(el) { this.observed.push(el); }
+        disconnect() { this.disconnected = true; }
+      };
+    });
+    afterEach(() => { delete globalThis.ResizeObserver; });
+
+    const listOf = (els) => findOne(els.actionFilter, 'afilter-list');
+    const measure = (list, top, client, scroll) => {
+      list.scrollTop = top; list.clientHeight = client; list.scrollHeight = scroll;
+    };
+
+    test('fades while rows are below, and lifts at the end of the list', async () => {
+      const { els } = await ready();
+      const list = listOf(els);
+      // Built with no layout yet (the display is closed while it polls): no fade.
+      expect(list.classList.contains('has-more')).toBe(false);
+
+      // Laid out taller than its cap: the observer measures again and fades it.
+      measure(list, 0, 120, 200);
+      observers[observers.length - 1].cb();
+      expect(list.classList.contains('has-more')).toBe(true);
+
+      // Scrolled to the end: nothing more below, so the fade lifts.
+      measure(list, 80, 120, 200);
+      list.fire('scroll');
+      expect(list.classList.contains('has-more')).toBe(false);
+    });
+
+    test('a list that fits is never faded', async () => {
+      const { els } = await ready();
+      const list = listOf(els);
+      measure(list, 0, 60, 60);
+      list.fire('scroll');
+      expect(list.classList.contains('has-more')).toBe(false);
+    });
+
+    test('a rebuilt list is watched in place of the old one', async () => {
+      const { els } = await ready();
+      const first = observers[observers.length - 1];
+      boxes(els)[0].checked = false;
+      boxes(els)[0].fire('change');      // every change rebuilds the list
+      const second = observers[observers.length - 1];
+      expect(second).not.toBe(first);
+      expect(first.disconnected).toBe(true);
+      expect(second.observed).toEqual([listOf(els)]);
+    });
+  });
 });
 
 describe('event rows', () => {

@@ -5,9 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         media-src allows blob: for the silent keep-alive loop in store.js,
+         which moves iOS audio off the ring/silent switch. Without it the
+         element is blocked and the river goes quiet on a muted iPhone. -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
     <meta name="description" content="Take a quiet walk on a 3D stretch of Maryland's NCR Trail, built in loving memory of a dad who rode it every weekend. Meet the riders, find the river, and listen for the little waterfall.">
@@ -72,12 +75,12 @@
 
     <title>A Ride on the NCR Trail</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=6" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=6">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->

@@ -21,6 +21,12 @@
  * on resurfacing, and whenever a story dialog opens. The depth chip
  * reports the magnification with a size comparison along the way.
  *
+ * Choosing a destination also has a route that needs no pointer: an
+ * off-screen list (the shared proplist part) with one row per ring and one
+ * for the help card, which slides into view as soon as anything in it has
+ * focus. Until 2026-09-22 the rings answered only a tap, so a keyboard
+ * visitor could fly the default dive but never choose where.
+ *
  * Unlike the patio and bar dioramas, this scene never calls
  * updateDayNightCycle: there is no day in deep space. The store clears
  * the shared sky at init and owns the lighting from then on.
@@ -42,6 +48,7 @@ import {
 } from './store.min.js';
 import { getOutdoorPropMeshes } from '../../shared/js/world-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { installPropList, propListItems, showPropRows } from '../../shared/js/proplist-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
 
@@ -56,6 +63,9 @@ const state = {
 let canvas, loadingScreen, blocker, depthChip;
 let dialogModal, dialogTitle, dialogMessage;
 let dialogOpen = false;   // one dialog at a time; taps pause while it's up
+let propPanel, propList;  // the off-screen list of places to dive (keyboard route)
+let propRowsAccum = 0;    // seconds since the rows last checked the rings
+const PROP_ROWS_EVERY = 0.25;
 
 let cleanupController = null;
 
@@ -107,6 +117,7 @@ async function init() {
     dialogModal = document.getElementById('dialog-modal');
     dialogTitle = document.getElementById('dialog-title');
     dialogMessage = document.getElementById('dialog-message');
+    propPanel = document.getElementById('prop-panel');
 
     if (!canvas) return;
 
@@ -299,6 +310,8 @@ function setupEventListeners() {
     // .pan-controls shell classes, so the load fade-in, positioning,
     // and button look all come along for free.
     initAutozoomControls(signal);
+
+    setupPropList(signal);
 }
 
 // ---- Autozoom --------------------------------------------------------------
@@ -559,19 +572,92 @@ function checkSceneTap(clientX, clientY) {
     const prop = getPropRoot(hit.object);
     if (!prop) return;
     if (prop.userData.propKind === 'touchpoint') {
-        const label = selectDiveTarget(prop.userData.targetIndex);
-        if (label) track('dive-target', { label });
-        // Choosing a destination IS the intention to go: the dive
-        // begins on its own (inward, at the current speed), with the
-        // play button left for pausing and the return trip. Tapping
-        // the already-selected ring launches too, so the very first
-        // tap a visitor tries always does something.
-        auto.dir = 1;
-        setPlaying(true);
-        syncAutozoomButtons();
+        launchToward(prop.userData.targetIndex);
         return;
     }
     openPropDialog(prop.userData.propKind);
+}
+
+/** Aim the dive at a ring's target and set off. Choosing a destination IS
+ *  the intention to go: the dive begins on its own (inward, at the current
+ *  speed), with the play button left for pausing and the return trip.
+ *  Choosing the already-selected ring launches too, so the very first tap
+ *  a visitor tries always does something. */
+function launchToward(index) {
+    const label = selectDiveTarget(index);
+    if (label) track('dive-target', { label });
+    auto.dir = 1;
+    setPlaying(true);
+    syncAutozoomButtons();
+}
+
+// ---- Places to dive, without a pointer -------------------------------------
+
+/** Fill the off-screen list: the help card first (the set's own card, so
+ *  it carries the same title), then one row per ring, built from the same
+ *  target list the rings are. The divefloor card is not a prop, so it gets
+ *  no row. */
+function setupPropList(signal) {
+    propList = document.getElementById('prop-list');
+    if (!propList) return;
+    const kinds = getOutdoorPropMeshes()
+        .map(g => g && g.userData && g.userData.propKind)
+        .filter(Boolean);
+    const rings = getTouchpointGroups().map((holder, i) => {
+        const t = MANDELBROT_CONFIG.fractal.targets[i];
+        // "Dive to the North Dendrite", not "Dive to The North Dendrite".
+        return t && { id: `ring-${i}`, label: `Dive to ${t.label.replace(/^The /, 'the ')}` };
+    }).filter(Boolean);
+    installPropList({
+        list: propList,
+        items: propListItems(PROP_CONTENT, kinds, { after: rings }),
+        onChoose: chooseFromList,
+        signal
+    });
+    syncPropRows();
+}
+
+/** The ring a row names, or null for a row that opens a card. */
+function ringIndexOf(id) {
+    const m = /^ring-(\d+)$/.exec(id || '');
+    return m ? Number(m[1]) : null;
+}
+
+/** True while a tap could reach this row's thing: the rings sleep the
+ *  moment the dive leaves the surface, and a hidden ring answers no tap. */
+function rowIsShown(id) {
+    const ring = ringIndexOf(id);
+    if (ring !== null) {
+        const holder = getTouchpointGroups()[ring];
+        return Boolean(holder) && chainVisible(holder);
+    }
+    return getOutdoorPropMeshes().some(g =>
+        g && g.userData && g.userData.propKind === id && chainVisible(g));
+}
+
+function syncPropRows() {
+    if (propList) showPropRows(propList, rowIsShown);
+}
+
+/** A row was chosen: do exactly what tapping that thing would. */
+function chooseFromList(id) {
+    if (!state.isLoaded || dialogOpen) return;
+    // Not while the welcome card is up. The panel is `hidden` until then, so
+    // nothing should reach this, but a card opening over the welcome card
+    // would be a worse failure than a row that does nothing.
+    if (blocker && !blocker.classList.contains('hidden')) return;
+    if (!rowIsShown(id)) return;
+    const ring = ringIndexOf(id);
+    if (ring === null) {
+        openPropDialog(id);
+        return;
+    }
+    launchToward(ring);
+    // FOCUS GOES TO PAUSE. The rings, and so every ring row, sleep a frame
+    // from now, which would drop focus from the row just chosen. The pause
+    // button is the next thing anybody watching a dive wants, and leaving
+    // the panel lets it slide away so the dive has the whole frame.
+    if (autoPlayBtn) autoPlayBtn.focus();
 }
 
 // ---- The cosmos's stories --------------------------------------------------
@@ -636,6 +722,9 @@ function closePropDialog() {
 function beginWatching() {
     if (!state.isLoaded || !blocker || blocker.classList.contains('hidden')) return;
     blocker.classList.add('hidden');
+    // The list of places to dive becomes a tab stop only now: while the
+    // welcome card was up it would have been one behind it.
+    if (propPanel) propPanel.hidden = false;
     track('begin-watching');
 }
 
@@ -666,6 +755,12 @@ function animate() {
     updateAutozoom(deltaTime);
     updateCosmos(deltaTime);
     updateDepthChip(deltaTime);
+    // The rings sleep and wake inside updateCosmos, and their rows follow.
+    propRowsAccum += deltaTime;
+    if (propRowsAccum >= PROP_ROWS_EVERY) {
+        propRowsAccum = 0;
+        syncPropRows();
+    }
 
     render();
 }

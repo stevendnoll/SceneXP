@@ -15,6 +15,13 @@
  * The scene is deliberately silent: the bar-sounds ambience was removed
  * (Steve's call, the murmur did not suit a karaoke night).
  *
+ * Every story also has a route that needs no pointer: an off-screen list
+ * of the bar's things (the shared proplist part) that slides into view as
+ * soon as anything in it has focus. Until 2026-09-22 the only way to open a
+ * card, the lyrics screen, or the jukebox was a raycast from a click or a
+ * tap, so a keyboard or screen-reader visitor could reach the welcome card,
+ * look around, and leave without one.
+ *
  * Future contributors: this file (with www/gavin/js/main.js) is the
  * template for "living diorama" experiences. If your scene wants walking
  * and clicking instead, start from www/interstate/js/main.js, which wires the
@@ -31,6 +38,7 @@ import {
 import { initStore, updateBar, drawTvTo, setNowPlaying } from './store.min.js';
 import { getOutdoorPropMeshes } from '../../shared/js/world-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { installPropList, propListItems } from '../../shared/js/proplist-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
 
@@ -50,6 +58,7 @@ let tvViewOpen = false;
 let tvRaf = 0;
 let jukeboxModal, jukeboxSongs;    // the jukebox song picker
 let jukeboxOpen = false;
+let propPanel;   // the off-screen list of the bar's things (keyboard route)
 
 let cleanupController = null;
 
@@ -76,6 +85,7 @@ async function init() {
     tvCaption = document.getElementById('tv-caption');
     jukeboxModal = document.getElementById('jukebox-modal');
     jukeboxSongs = document.getElementById('jukebox-songs');
+    propPanel = document.getElementById('prop-panel');
 
     if (!canvas) return;
 
@@ -276,6 +286,39 @@ function setupEventListeners() {
         signal
     });
 
+    setupPropList(signal);
+}
+
+// ---- The bar's things, without a pointer -----------------------------------
+
+/** Fill the off-screen list with every registered prop that has a card, in
+ *  the card table's order and under the card's own title. The jukebox has
+ *  no card (it opens the song picker), so it joins at the end under the
+ *  picker's own heading, and only if the bar actually built one. */
+function setupPropList(signal) {
+    const list = document.getElementById('prop-list');
+    if (!list) return;
+    const kinds = getOutdoorPropMeshes()
+        .map(g => g && g.userData && g.userData.propKind)
+        .filter(Boolean);
+    const after = kinds.includes('jukebox') ? [{ id: 'jukebox', label: 'The Jukebox' }] : [];
+    installPropList({
+        list,
+        items: propListItems(PROP_CONTENT, kinds, { after }),
+        onChoose: chooseFromList,
+        signal
+    });
+}
+
+/** A row was chosen: open exactly what a click on that thing would, the
+ *  lyrics screen and the jukebox included. */
+function chooseFromList(kind) {
+    if (!state.isLoaded || dialogOpen || tvViewOpen || jukeboxOpen) return;
+    // Not while the welcome card is up. The panel is `hidden` until then, so
+    // nothing should reach this, but a card opening over the welcome card
+    // would be a worse failure than a row that does nothing.
+    if (blocker && !blocker.classList.contains('hidden')) return;
+    openPropDialog(kind);
 }
 
 // ---- Scene taps: the storytelling props ------------------------------------
@@ -733,6 +776,9 @@ function closeJukebox() {
 function beginWatching() {
     if (!state.isLoaded || !blocker || blocker.classList.contains('hidden')) return;
     blocker.classList.add('hidden');
+    // The list of the bar's things becomes a tab stop only now: while the
+    // welcome card was up it would have been one behind it.
+    if (propPanel) propPanel.hidden = false;
     track('begin-watching');
 }
 

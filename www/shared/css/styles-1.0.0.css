@@ -4067,9 +4067,8 @@ body {
 
 /* ---- The action filter ----------------------------------------------------
    Built from the events on screen, so it holds a handful of boxes on a quiet
-   day and about thirty on the busiest. It collapses by default: the boxes are
-   all ticked to begin with, so the useful thing to show first is that they
-   exist, not the whole list. */
+   day and about thirty on the busiest. Always open, with the list capped
+   below (.afilter-list) so a busy day cannot push the sessions off screen. */
 .afilter {
     flex: 1 1 100%;
     min-width: 0;
@@ -4116,8 +4115,10 @@ body {
     cursor: default;
 }
 
-/* Wraps rather than scrolls: a hidden second row of checkboxes is a filter
-   nobody knows is on. Capped so a busy day cannot push the sessions off screen. */
+/* Wraps into rows rather than running off sideways: a checkbox hidden past
+   the right edge is a filter nobody knows is on. Capped so a busy day cannot
+   push the sessions off screen, and scrolls past the cap. The scroll padding
+   keeps a row reached by Tab clear of the fade below. */
 .afilter-list {
     display: flex;
     flex-wrap: wrap;
@@ -4126,6 +4127,15 @@ body {
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 6px 4px 2px;
+    scroll-padding-bottom: 1.25rem;
+}
+
+/* Only while rows sit below the cap (analytics-1.0.0.js marks it). The cap
+   used to cut the last visible row in half, which read as a rendering fault.
+   A fade reads as more to scroll to, and it lifts at the end of the list. */
+.afilter-list.has-more {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.25rem), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 1.25rem), transparent);
 }
 
 .afilter-item {

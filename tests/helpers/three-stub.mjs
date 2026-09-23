@@ -44,6 +44,44 @@ export function installThree() {
   });
 }
 
+// Wrap the installed THREE so every Group and Mesh keeps a REAL `userData`
+// object, a REAL `visible` flag (true until something sets it), and a REAL
+// `parent` once another kept object add()s it. The plain stub swallows all
+// three, so the `propKind` that registerOutdoorProp stamps on a prop is lost,
+// and so is a creature hiding itself for the night, or a ring hidden by the
+// group it sits in. Scene suites that build the keyboard's list of props need
+// all three, or the list builds from nothing and the test passes while
+// proving nothing.
+// Call it AFTER any other THREE override: it passes everything else through.
+const KEPT = Symbol('kept');
+export function keepPropRecords() {
+  const base = globalThis.THREE;
+  globalThis.THREE = new Proxy({}, {
+    get(_t, prop) {
+      const Ctor = base[prop];
+      if (prop !== 'Group' && prop !== 'Mesh') return Ctor;
+      return function (...args) {
+        const inner = new Ctor(...args);
+        const own = { userData: {}, visible: true, parent: undefined };
+        const self = new Proxy(inner, {
+          get(t, p) {
+            if (p === KEPT) return own;
+            if (p === 'add') {
+              return (...kids) => {
+                kids.forEach((k) => { if (k && k[KEPT]) k[KEPT].parent = self; });
+                return self;
+              };
+            }
+            return p in own ? own[p] : t[p];
+          },
+          set(_t2, p, v) { if (p === 'visible') own.visible = v; return true; },
+        });
+        return self;
+      };
+    },
+  });
+}
+
 // A throwaway canvas whose 2D context no-ops everything — enough for the
 // procedural texture/sprite drawing in miniature.js.
 export function installCanvas() {

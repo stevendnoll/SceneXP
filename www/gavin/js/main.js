@@ -13,6 +13,12 @@
  * one raycast per tap to see if the visitor spotted one of the two
  * hiding mantises.
  *
+ * Every story also has a route that needs no pointer: an off-screen list
+ * of the garden's things (the shared proplist part) that slides into view
+ * as soon as anything in it has focus, showing only the creatures that are
+ * out at this hour. Until 2026-09-22 the only way to open a card was a
+ * raycast from a click or a tap.
+ *
  * Future contributors: this file is the template for "living diorama"
  * experiences. If your scene wants walking and clicking instead, start
  * from www/interstate/js/main.js, which wires the shared controls.
@@ -31,6 +37,7 @@ import {
 import { getOutdoorPropMeshes } from '../../shared/js/world-1.0.0.min.js';
 import { updateBackgroundAnimations } from '../../shared/js/scenery-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { installPropList, propListItems, showPropRows } from '../../shared/js/proplist-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
 
@@ -45,6 +52,9 @@ const state = {
 let canvas, loadingScreen, blocker, mantisChip;
 let dialogModal, dialogTitle, dialogMessage;
 let dialogOpen = false;   // one dialog at a time; taps pause while it's up
+let propPanel, propList;  // the off-screen list of the garden's things (keyboard route)
+let propRowsAccum = 0;    // seconds since the rows last checked who is out
+const PROP_ROWS_EVERY = 0.5;
 
 let cleanupController = null;
 
@@ -74,6 +84,7 @@ async function init() {
     dialogModal = document.getElementById('dialog-modal');
     dialogTitle = document.getElementById('dialog-title');
     dialogMessage = document.getElementById('dialog-message');
+    propPanel = document.getElementById('prop-panel');
 
     if (!canvas) return;
 
@@ -280,6 +291,61 @@ function setupEventListeners() {
         onFirstUse: (kind) => track(`portrait-${kind}`),
         signal
     });
+
+    setupPropList(signal);
+}
+
+// ---- The garden's things, without a pointer --------------------------------
+//
+// THE MANTISES ARE NOT ON THE LIST, on purpose. Mantis Watch is a game of
+// spotting them, and a row naming each one would be the answer key. Every
+// story in the garden is here, which is the loop a keyboard visitor was
+// missing.
+
+/** Fill the off-screen list with every registered prop that has a card,
+ *  under the card's own title, then show only the ones out right now. */
+function setupPropList(signal) {
+    propList = document.getElementById('prop-list');
+    if (!propList) return;
+    const kinds = getOutdoorPropMeshes()
+        .map(g => g && g.userData && g.userData.propKind)
+        .filter(Boolean);
+    // Gavin leads his own list, the way Jenn leads hers. Naming his key first
+    // puts it first, and the spread that follows keeps it there (a key that
+    // is already present keeps its place when it is written again).
+    const cards = { gavin: PROP_CONTENT.gavin, ...PROP_CONTENT };
+    installPropList({
+        list: propList,
+        items: propListItems(cards, kinds),
+        onChoose: chooseFromList,
+        signal
+    });
+    syncPropRows();
+}
+
+/** True while at least one of this kind is out in the garden. The day and
+ *  night crews swap by visibility, the same test a tap has to pass. */
+function propIsOut(kind) {
+    return getOutdoorPropMeshes().some(g =>
+        g && g.userData && g.userData.propKind === kind && chainVisible(g));
+}
+
+/** Offer only what a tap could reach right now. */
+function syncPropRows() {
+    if (propList) showPropRows(propList, propIsOut);
+}
+
+/** A row was chosen: open exactly the card a click on that thing would. */
+function chooseFromList(kind) {
+    if (!state.isLoaded || dialogOpen) return;
+    // Not while the welcome card is up. The panel is `hidden` until then, so
+    // nothing should reach this, but a card opening over the welcome card
+    // would be a worse failure than a row that does nothing.
+    if (blocker && !blocker.classList.contains('hidden')) return;
+    // Rows follow the crews twice a second, so a row chosen in the moment a
+    // bat turns in can outlive it by a frame or two.
+    if (!propIsOut(kind)) return;
+    openPropDialog(kind);
 }
 
 // ---- Scene taps: Mantis Watch and the storytelling props -------------------
@@ -565,6 +631,9 @@ function updateMantisChip() {
 function beginWatching() {
     if (!state.isLoaded || !blocker || blocker.classList.contains('hidden')) return;
     blocker.classList.add('hidden');
+    // The list of the garden's things becomes a tab stop only now: while the
+    // welcome card was up it would have been one behind it.
+    if (propPanel) propPanel.hidden = false;
     track('begin-watching');
 }
 
@@ -596,6 +665,14 @@ function animate() {
     // light the sky decided on.
     updateDayNightCycle(deltaTime);
     updateGarden(deltaTime);
+    // The crews swap at dusk and dawn inside updateGarden, and the list
+    // follows a moment later. Twice a second is plenty for a change that
+    // happens twice every eight minutes.
+    propRowsAccum += deltaTime;
+    if (propRowsAccum >= PROP_ROWS_EVERY) {
+        propRowsAccum = 0;
+        syncPropRows();
+    }
     updateBackgroundAnimations(deltaTime);
     updatePortraitControls(deltaTime);
 

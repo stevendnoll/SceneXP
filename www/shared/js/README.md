@@ -72,13 +72,21 @@ stylesheets forever. So the shared stylesheet is edited in place, and the
 pages retire their cached copy with a query instead:
 
 ```html
-<link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=1" as="style">
-<link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=1">
+<link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+<link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
 ```
 
 That is the same `?v=<n>` convention the 2D pages already use for
-`/css/site.min.css` and `/js/nav.min.js`. Three things to get right:
+`/css/site.min.css` and `/js/nav.min.js`. The number above is the one every
+page carries today, so a new experience can copy the two lines as they stand.
+`tests/shared-css-version.test.mjs` fails if any page drifts from the rest, or
+if this snippet falls behind them. Four things to get right:
 
+- Bump EVERY page at once, and this snippet with them. The shared sheet is one
+  file, so a page left on the old number keeps serving a cached copy of it
+  after everyone else has moved on. Search for the filename, not the old
+  number: a page that carries no query at all is the one a find-and-replace on
+  `v=6` misses.
 - Bump the number on BOTH the preload and the stylesheet line. A preload only
   satisfies the real request when the URLs match exactly, so a mismatch costs
   every visitor a second download and logs an unused-preload warning.
