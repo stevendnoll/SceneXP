@@ -181,5 +181,112 @@ export const TORNADO_CONFIG = Object.freeze({
         debris: [0.17, 0.14, 0.11]
     },
 
-    visibility: 12000            // haze e-folding distance, metres
+    visibility: 12000,           // haze e-folding distance, metres
+
+    // ---- The props (added 2026-09-23, on the approved M1 look) ------------
+    //
+    // A LANDSCAPE SCREEN SEES ABOUT 34 DEGREES EITHER SIDE OF CENTER AND A
+    // PORTRAIT PHONE ABOUT 10 (the fov is vertical), so everything below is
+    // placed by its bearing, atan(x / -z), as much as by its distance. The
+    // farm sits where a phone still sees the house and the barn, and nothing
+    // may stand over the funnel's ground contact. THE LEFT OF THE FUNNEL IS
+    // KEPT CLEAR: as it ropes out, the tornado's foot sweeps from about -1 to
+    // -17 degrees, so anything standing there would be crossed. The props
+    // test caught the house there at 38.5 s. tests/tornado-props.test.mjs
+    // holds all of it. At 1.6 m eye height anything flat beyond about 60 m is a
+    // sliver, which is why the pond is close.
+
+    // Light for the lit props (the fractal trees, the flowers, the farm). The
+    // sky, the storm and the funnel light themselves and ignore these.
+    lights: {
+        sun: { color: 0xffdcb4, intensity: 2.6 },
+        sky: { color: 0x9aa6b5, ground: 0x7a6040, intensity: 1.0 }
+    },
+
+    // The tornado's wind, as the trees, the flowers, the pond and the
+    // windmill feel it (wind.js). An inflow toward the tornado that builds
+    // with the storm, and a vortex that is strong only close in. Magnitudes
+    // are on the garden's scale, where a storm is 0.72.
+    wind: {
+        ambient: { x: 0.08, z: 0.02 },   // a breath of evening air, always
+        // Stronger than the garden's storm (0.72): all of the props are more
+        // than 1.3 km from the funnel, where the vortex term is small, so the
+        // inflow carries the drama.
+        inflow: 1.1,                     // at lifecycle.inflow 1
+        vortex: 2.4,                     // at the tornado's edge, full strength
+        vortexRadius: 450,               // metres; it falls off as 1 / (1 + (d/r)^2)
+        inward: 0.5,                     // the vortex's pull toward the funnel
+        swirl: 0.9,                      // and its spin around it
+        max: 2.4,
+        // How far the trees bend steadily with the wind, on top of the swing
+        // (fractaltree's view.lean). 0 is the garden's behavior.
+        treeLean: 1.3
+    },
+
+    farm: {
+        house: { x: 22, z: -430, width: 12, depth: 8, eave: 5.5, ridge: 8.5,
+            wall: 0xe9e4d8, roof: 0x3b3d42, trim: 0x2a2b2e },
+        barn: { x: 48, z: -470, width: 14, depth: 24, eave: 5, knee: 9, ridge: 12,
+            wall: 0x9b2d20, roof: 0x45474c, trim: 0xefe9dc },
+        silo: { x: 72, z: -486, radius: 3.2, height: 16, color: 0x9aa5ad, cap: 0x7d868d },
+        // Far out on the left, past where the roped-out foot trails (about
+        // -17 degrees). Everything else stands right of the funnel.
+        windmill: { x: -215, z: -420, height: 14, rotor: 3.2, blades: 12,
+            color: 0xb8bcc0, spin: 2.4 }   // radians per second per unit of wind
+    },
+
+    fence: {
+        z: -95,
+        from: -420,
+        to: 420,
+        spacing: 5,
+        postHeight: 1.3,
+        wires: [0.45, 0.8, 1.15],
+        post: 0x6d5f4f,
+        wire: 0x3f3f3f
+    },
+
+    pond: {
+        x: -18, z: -34,
+        radiusX: 26, radiusZ: 12,
+        body: [0.12, 0.14, 0.13],
+        shore: [0.33, 0.29, 0.21],
+        rippleScale: 0.9,
+        ripple: 0.05,          // calm
+        rippleWind: 0.10       // added per unit of wind
+    },
+
+    // Fractal trees from the shared part, by species id. `height` scales
+    // the species' own height. The near trees frame the pond and the right of
+    // the picture. THE WINDBREAK STANDS RIGHT OF THE FARM, behind the barn and
+    // the silo, and not to its left, where the roped-out tornado's ground
+    // contact trails (to about -17 degrees): the rope-out is the best shot in
+    // the scene and a row of trees would have cut off its foot.
+    trees: [
+        { species: 'bur-oak', x: 30, z: -70, seed: 11, height: 1.0 },
+        { species: 'quaking-aspen', x: -26, z: -58, seed: 23, height: 0.9 },
+        { species: 'quaking-aspen', x: -33, z: -63, seed: 29, height: 1.0 },
+        { species: 'bur-oak', x: 105, z: -458, seed: 41, height: 1.0 },
+        { species: 'scots-pine', x: 118, z: -464, seed: 43, height: 1.1 },
+        { species: 'quaking-aspen', x: 131, z: -457, seed: 47, height: 1.05 },
+        { species: 'sugar-maple', x: 144, z: -462, seed: 53, height: 1.0 },
+        { species: 'scots-pine', x: 157, z: -459, seed: 59, height: 1.1 },
+        { species: 'quaking-aspen', x: 170, z: -465, seed: 61, height: 0.95 },
+        { species: 'bur-oak', x: 183, z: -460, seed: 67, height: 1.0 }
+    ],
+
+    // Wildflowers from the shared part, in the foreground.
+    meadow: {
+        count: 900,
+        mobileCount: 450,
+        near: 6,               // no closer than this, metres ahead
+        far: 30,
+        halfAngleDegrees: 36,  // just wider than a landscape frame
+        size: { min: 0.26, max: 0.46 },
+        seed: 0x7A11,
+        // Prairie flowers: purple coneflower, black-eyed Susan, white
+        // yarrow, blue flax, Indian blanket.
+        palette: [0xb05fa8, 0xf2b92a, 0xf1efe6, 0x6f86d6, 0xd8552b],
+        sway: { amount: 0.22, rate: 2.1 }
+    }
 });

@@ -30,6 +30,11 @@ import { createPlayer, isLocalHost } from '../../shared/js/player-1.0.0.min.js';
 import { funnelStateAt, funnelUniforms, applyFunnelState } from './funnel.min.js';
 import { initShells, setShellCount, updateShells } from './shells.min.js';
 import { initWorld, updateWorld } from './world.min.js';
+import { TREE_DEFAULTS } from '../../shared/js/fractaltree-1.0.0.min.js';
+import { windAt } from './wind.min.js';
+import { initFarm, updateFarm } from './farm.min.js';
+import { initPond, updatePond } from './pond.min.js';
+import { initFlora, updateFlora } from './flora.min.js';
 
 let renderer = null;
 let scene = null;
@@ -38,6 +43,9 @@ let player = null;
 let shared = null;
 let mobile = false;
 let shellCount = CONFIG.shells.layers.length;
+// 1, or the damped sway the shared trees use under reduced motion. The
+// movement is the content, so it is damped rather than removed.
+let motion = 1;
 // The animation clock. See the header.
 let anim = 0;
 
@@ -86,6 +94,28 @@ function onResize() {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
 }
 
+/**
+ * Light for the props, and the haze three's fog gives them.
+ *
+ * THE SKY, THE STORM AND THE FUNNEL IGNORE BOTH: they are custom shaders
+ * that light and haze themselves. The lights are for what came from the
+ * shared parts library and the farm, which are lit materials. The fog is
+ * matched to the funnel's own haze, 1 - exp(-d / visibility), which for any
+ * distance on this prairie is close to d / visibility, a linear fog from 0
+ * to the visibility. Its color is a SCREEN value, since three applies fog
+ * after the output encode, so it is set raw with no color space.
+ */
+function buildLighting() {
+    const L = CONFIG.lights;
+    const sun = new THREE.DirectionalLight(L.sun.color, L.sun.intensity);
+    sun.position.set(CONFIG.sun.x, CONFIG.sun.y, CONFIG.sun.z).multiplyScalar(1000);
+    scene.add(sun);
+    scene.add(new THREE.HemisphereLight(L.sky.color, L.sky.ground, L.sky.intensity));
+    const haze = CONFIG.colors.haze;
+    scene.fog = new THREE.Fog(0x000000, 0, CONFIG.visibility);
+    scene.fog.color.setRGB(haze[0], haze[1], haze[2]);
+}
+
 /** One frame of the storm at story second `arc`. */
 export function drawFrame(delta, arc) {
     anim += Math.max(0, Math.min(delta, 0.25));
@@ -93,6 +123,10 @@ export function drawFrame(delta, arc) {
     applyFunnelState(shared, state);
     updateWorld(state, true, CONFIG);
     updateShells(state, shellCount);
+    const W = CONFIG.farm.windmill;
+    updateFarm(windAt(W.x, W.z, state, CONFIG), delta * motion, CONFIG);
+    updatePond(windAt(CONFIG.pond.x, CONFIG.pond.z, state, CONFIG), anim, CONFIG);
+    updateFlora(state, anim, motion, CONFIG);
     renderer.render(scene, camera);
 }
 
@@ -122,6 +156,12 @@ async function init() {
     initShells(scene, shared, CONFIG);
     if (mobile) shellCount = CONFIG.shells.mobileCount;
     setShellCount(shellCount);
+    // The props, on the approved look: lit, hazed, and bending in the wind.
+    buildLighting();
+    initFarm(scene, CONFIG);
+    initPond(scene, CONFIG);
+    initFlora(scene, CONFIG, { mobile });
+    if (prefersReducedMotion()) motion = TREE_DEFAULTS.tree.reducedMotion;
 
     player = createPlayer({
         ...CONFIG.controls,
@@ -168,6 +208,8 @@ function installTuningAids() {
     window.tornadoSetArc = (seconds) => player.jumpTo(Math.max(0, Number(seconds) || 0));
     window.tornadoArc = () => player.state().arc;
     window.tornadoState = () => funnelStateAt(player.state().arc, anim, CONFIG);
+    // The wind at any ground point right now, for tuning the props.
+    window.tornadoWind = (x, z) => windAt(x, z, funnelStateAt(player.state().arc, anim, CONFIG), CONFIG);
 }
 
 if (typeof document !== 'undefined') {

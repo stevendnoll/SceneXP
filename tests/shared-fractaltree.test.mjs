@@ -149,6 +149,25 @@ describe('one wind moves the whole tree', () => {
         expect(tree.barkUniforms.uTime.value).toBe(3.5);
     });
 
+    test('A STEADY LEAN is opt-in: 0 unless a view asks, and shared by the whole tree', () => {
+        // Added for Tornado Alley, whose inflow is a steady pull rather than the
+        // garden's coming and going. The garden never sets it, so its trees
+        // only swing, exactly as before the promotion.
+        const resolved = TS.resolveSpecies(TS.SPECIES.find((s) => s.fruit).id);
+        const tree = FT.createTree(resolved, 8);
+        expect(tree.barkUniforms.uLean.value).toBe(0);
+        expect(tree.leafUniforms.uLean).toBe(tree.barkUniforms.uLean);
+        expect(tree.fruitUniforms.uLean).toBe(tree.barkUniforms.uLean);
+        FT.updateTree(tree, VIEW, resolved);
+        expect(tree.barkUniforms.uLean.value).toBe(0);
+        FT.updateTree(tree, { ...VIEW, lean: 1.3 }, resolved);
+        expect(tree.barkUniforms.uLean.value).toBe(1.3);
+        // The same term in all three shaders, so the canopy stays on the branch.
+        for (const m of [tree.barkMaterial, tree.leafMaterial, tree.fruitMaterial]) {
+            expect(compile(m).vertexShader).toMatch(/0\.38 \+ uLean\)/);
+        }
+    });
+
     test('reduced motion damps it, and an absent flag means full motion', () => {
         const resolved = TS.resolveSpecies('sugar-maple');
         const tree = FT.createTree(resolved, 1);

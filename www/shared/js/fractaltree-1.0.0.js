@@ -487,6 +487,7 @@ uniform float uTime;
 uniform float uPhase;
 uniform float uSwayScale;
 uniform float uMotion;
+uniform float uLean;
 attribute vec3 aOrigin;
 attribute vec3 aRadial;
 attribute float aRadius;
@@ -512,8 +513,12 @@ const BARK_BODY = `
     // Read as one tree thrashing while the rest barely stirred, which is not
     // what one wind looks like. Multiplying by uScale as well means a sapling
     // sways like a sapling rather than like the tree it will become.
+    // uLean is a STEADY bend along the wind, added to the swing: 0 in the
+    // garden, where wind comes and goes, and more in a scene whose wind is
+    // a steady inflow (Tornado Alley). The leaves and the fruit carry the
+    // same term, so the canopy stays on the leaning branch.
     transformed += barkGust
-        * (sin(barkWP) * 0.62 + sin(barkWP * 1.73 + 1.3) * 0.38)
+        * (sin(barkWP) * 0.62 + sin(barkWP * 1.73 + 1.3) * 0.38 + uLean)
         * aSway * uSwayScale * uScale * uMotion;
 
     vBarkNormal = aRadial;
@@ -534,6 +539,7 @@ uniform float uFlutterRate;
 uniform float uFlutterAlong;
 uniform float uFlutterCross;
 uniform float uMotion;
+uniform float uLean;
 attribute float aBirth;
 attribute float aDrop;
 attribute float aTint;
@@ -617,7 +623,7 @@ const LEAF_BODY = `
     // standing still.
     float leafBWP = uTime * 1.35 + uPhase + (instanceMatrix[3].y * uScale) * 0.42;
     leafWorld += vec3(uWind.x, 0.0, uWind.z)
-        * (sin(leafBWP) * 0.62 + sin(leafBWP * 1.73 + 1.3) * 0.38)
+        * (sin(leafBWP) * 0.62 + sin(leafBWP * 1.73 + 1.3) * 0.38 + uLean)
         * aLeafSway * uSwayScale * uScale * uMotion;
     transformed += (leafRotT * leafWorld) / leafISC;
     #else
@@ -646,6 +652,7 @@ uniform float uPhase;
 uniform float uScale;
 uniform float uSwayScale;
 uniform float uMotion;
+uniform float uLean;
 attribute float aBirth;
 attribute float aDrop;
 attribute float aCrop;
@@ -723,7 +730,7 @@ const FRUIT_BODY = `
     // blossom sliding through its own canopy.
     float frBWP = uTime * 1.35 + uPhase + (instanceMatrix[3].y * uScale) * 0.42;
     frWorld += vec3(uWind.x, 0.0, uWind.z)
-        * (sin(frBWP) * 0.62 + sin(frBWP * 1.73 + 1.3) * 0.38)
+        * (sin(frBWP) * 0.62 + sin(frBWP * 1.73 + 1.3) * 0.38 + uLean)
         * aFruitSway * uSwayScale * uScale * uMotion;
     transformed += (frRotT * frWorld) / frISC;
     #else
@@ -1184,7 +1191,10 @@ export function createTree(resolved, seed, options = {}) {
         // number of metres. See the note in BARK_BODY.
         uSwayScale: { value: resolved.matureHeight * T.swayPerMetre },
         // 1 normally, damped by reduced motion. Never 0: see config.tree.
-        uMotion: { value: 1 }
+        uMotion: { value: 1 },
+        // A steady bend with the wind, on top of the swing. 0, the garden's
+        // behavior, unless a view asks for one. See BARK_BODY.
+        uLean: { value: 0 }
     };
 
     const barkGeo = bakeGeometry(skeleton, settings);
@@ -1214,6 +1224,7 @@ export function createTree(resolved, seed, options = {}) {
         uWind: barkUniforms.uWind,
         uSwayScale: barkUniforms.uSwayScale,
         uMotion: barkUniforms.uMotion,
+        uLean: barkUniforms.uLean,
         uFlutterRate: { value: T.leafFlutter.rate },
         uFlutterAlong: { value: T.leafFlutter.along },
         uFlutterCross: { value: T.leafFlutter.cross },
@@ -1323,6 +1334,7 @@ export function createTree(resolved, seed, options = {}) {
             uScale: barkUniforms.uScale,
             uSwayScale: barkUniforms.uSwayScale,
             uMotion: barkUniforms.uMotion,
+        uLean: barkUniforms.uLean,
             uBloom: { value: 0 },
             uFruitSize: { value: 0 },
             uRipe: { value: 0 },
@@ -1603,6 +1615,7 @@ export function updateTree(tree, view, resolved) {
     // Shared with the leaf material, so a damped tree cannot have undamped
     // leaves. Absent means full motion, never none.
     b.uMotion.value = view.motion === undefined ? 1 : view.motion;
+    b.uLean.value = view.lean || 0;
 
     l.uLeafScale.value = view.leaf;
     l.uDrop.value = view.drop;
