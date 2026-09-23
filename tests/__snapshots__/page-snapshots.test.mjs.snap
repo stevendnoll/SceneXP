@@ -3287,7 +3287,7 @@ html [data-ui-theme="ember" lang="en"]
     meta [content="width=device-width, initial-scale=1.0" name="viewport"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
-    meta [content="Float in a softly lit starfield beside the Mandelbrot set, rendered in 3D with a pure black interior and a neon orange burning edge. Then press play and let the auto zoom fly you down a 3D tunnel of glowing fractal terrain, hundreds of billions of times deep, into the seam where the set's two great circles meet." name="description"]
+    meta [content="Float in a softly lit starfield beside the Mandelbrot set, rendered in 3D with a pure black interior and a neon orange burning edge. Then step in and let the auto zoom fly you down a 3D tunnel of glowing fractal terrain, hundreds of billions of times deep, into the seam where the set's two great circles meet." name="description"]
     meta [content="#0b0e20" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/mandelbrot/" rel="canonical"]
@@ -3320,11 +3320,11 @@ html [data-ui-theme="ember" lang="en"]
     title
       "The Mandelbrot Set"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=1" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=2" rel="preload"]
     link [as="script" href="../lib/three.min.js" rel="preload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=1" rel="stylesheet"]
+    link [href="css/experience.min.css?v=2" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -3335,7 +3335,7 @@ html [data-ui-theme="ember" lang="en"]
         h1
           "The Mandelbrot Set"
         p
-          "This is a 3D visit to the Mandelbrot set, floating in deep space, and it needs JavaScript to run. In the scene you drift in a softly lit starfield while the most famous fractal in mathematics hangs in the middle of your view. Its interior is pure black, its infinitely detailed boundary glows neon orange, and faint nebulae keep the space around it from ever going fully dark. Press play and the auto zoom flies you into the boundary's spirals, as deep as a computer's numbers can go, at whatever speed and direction you choose. The shape honors Benoit Mandelbrot, who first plotted it in 1980. If you would like a small world like this built for someone you admire, the developer would be glad to hear from you."
+          "This is a 3D visit to the Mandelbrot set, floating in deep space, and it needs JavaScript to run. In the scene you drift in a softly lit starfield while the most famous fractal in mathematics hangs in the middle of your view. Its interior is pure black, its infinitely detailed boundary glows neon orange, and faint nebulae keep the space around it from ever going fully dark. Step in and the auto zoom flies you into the boundary's spirals, as deep as a computer's numbers can go, and one of eleven glowing rings can send the next dive somewhere else. The shape honors Benoit Mandelbrot, who first plotted it in 1980. If you would like a small world like this built for someone you admire, the developer would be glad to hear from you."
         nav [aria-label="Site sections"]
           ul
             li
@@ -3363,10 +3363,10 @@ html [data-ui-theme="ember" lang="en"]
         div.controls-hint
           span
             "DIVE"
-          "Tap a glowing ring and fall into the burning edge. The detail never ends."
+          "The flight begins as you step in, down into the burning edge. The detail never ends."
           span
             "STEER"
-          "Pause, flip the direction, change the speed, or reset with the buttons below."
+          "Pause or reset with the buttons below. After a reset, tap a glowing ring to dive somewhere new. Escape brings you back here."
         a#explore-link.welcome-explore [href="/"]
           "More 3D worlds to explore at SceneXP.com"
     div#depth-chip.depth-chip

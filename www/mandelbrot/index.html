@@ -10,7 +10,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="Float in a softly lit starfield beside the Mandelbrot set, rendered in 3D with a pure black interior and a neon orange burning edge. Then press play and let the auto zoom fly you down a 3D tunnel of glowing fractal terrain, hundreds of billions of times deep, into the seam where the set's two great circles meet.">
+    <meta name="description" content="Float in a softly lit starfield beside the Mandelbrot set, rendered in 3D with a pure black interior and a neon orange burning edge. Then step in and let the auto zoom fly you down a 3D tunnel of glowing fractal terrain, hundreds of billions of times deep, into the seam where the set's two great circles meet.">
     <meta name="theme-color" content="#0b0e20">
     <meta name="author" content="Steve Noll">
 
@@ -76,13 +76,13 @@
     <title>The Mandelbrot Set</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=1" as="style">
+    <link rel="preload" href="css/experience.min.css?v=2" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=1">
+    <link rel="stylesheet" href="css/experience.min.css?v=2">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -118,10 +118,10 @@
                 mathematics hangs in the middle of your view. Its interior is
                 pure black, its infinitely detailed boundary glows neon
                 orange, and faint nebulae keep the space around it
-                from ever going fully dark. Press play and the auto zoom
+                from ever going fully dark. Step in and the auto zoom
                 flies you into the boundary's spirals, as deep as a
-                computer's numbers can go, at whatever speed and direction
-                you choose. The shape
+                computer's numbers can go, and one of eleven glowing rings
+                can send the next dive somewhere else. The shape
                 honors Benoit Mandelbrot, who first plotted it in 1980. If
                 you would like a small world like this built for someone you
                 admire, the developer would be glad to hear from you.</p>
@@ -146,15 +146,18 @@
 
     <!-- The welcome overlay. This experience is watched, not walked: the
          overlay sets the scene, notes the view controls, and steps aside
-         on the first click, tap, or keypress. -->
+         on a click, a tap, Enter, Space, or Escape. The first time it
+         does, the dive starts by itself (2026-09-23). Escape brings it back
+         over a paused dive, and stepping back in resumes the flight if it
+         was flying. -->
     <div id="blocker">
         <div id="instructions">
             <p class="title">WELCOME</p>
             <p class="subtitle">You are floating in deep space beside the most famous shape in mathematics</p>
             <p class="click-prompt">Click to drift closer</p>
             <div class="controls-hint">
-                <span>DIVE</span> Tap a glowing ring and fall into the burning edge. The detail never ends.
-                <span>STEER</span> Pause, flip the direction, change the speed, or reset with the buttons below.
+                <span>DIVE</span> The flight begins as you step in, down into the burning edge. The detail never ends.
+                <span>STEER</span> Pause or reset with the buttons below. After a reset, tap a glowing ring to dive somewhere new. Escape brings you back here.
             </div>
             <!-- The one link back to the directory, replacing the floating Home
                  button (2026-09-07): Home sat in the corner of the live scene
@@ -182,8 +185,9 @@
          the markup: visitors read it as "reset this view", tapped it, and
          left from the directory rather than coming back. The way to the
          directory is now a named link at the foot of the welcome overlay
-         above. The AUTOZOOM row and the pan and zoom row are still built by
-         main.js and the shared pan part at runtime. -->
+         above. The AUTOZOOM row (play/pause and reset since 2026-09-23) is
+         built by main.js at runtime, and shown only while the welcome
+         overlay is out of the way. -->
 
     <!-- The depth chip: magnification readout during the infinite dive,
          updated by main.js, with a size comparison for company. Sits just

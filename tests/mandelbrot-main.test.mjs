@@ -160,7 +160,7 @@ afterEach(() => {
 
 /** Import main.js (it auto-boots), walk init through its PoW await, the
  *  paint-yield rAF, and the loading reveal, then hand back the animate
- *  loop and the four autozoom buttons the module built. */
+ *  loop and the two autozoom buttons the module built. */
 async function bootMandelbrot() {
   const main = await import('../www/mandelbrot/js/main.js');
   let released = 0;
@@ -178,8 +178,8 @@ async function bootMandelbrot() {
   const animate = dom.loops[dom.loops.length - 1];
   const row = dom.documentStub.body.children.find(
     (c) => typeof c.className === 'string' && c.className.includes('autozoom-controls'));
-  const [dirBtn, playBtn, speedBtn, resetBtn] = row ? row.children : [];
-  return { main, animate, row, dirBtn, playBtn, speedBtn, resetBtn };
+  const [playBtn, resetBtn] = row ? row.children : [];
+  return { main, animate, row, playBtn, resetBtn };
 }
 
 /** Step the render loop: advance the fake clock, run a frame, feed the pool. */
@@ -193,13 +193,13 @@ function step(animate, frames, ms = 100) {
 
 // ---- The full ride -------------------------------------------------------------
 
-test('boots, and the autozoom flies the dive to the precision floor and home again', async () => {
+test('boots, starts the dive on the way in, and flies it to the precision floor and home again', async () => {
   globalThis.Worker = FakeWorker;
   globalThis.ImageData = class ImageData {
     constructor(data, width, height) { this.data = data; this.width = width; this.height = height; }
   };
 
-  const { main, animate, row, dirBtn, playBtn, speedBtn, resetBtn } = await bootMandelbrot();
+  const { main, animate, row, playBtn, resetBtn } = await bootMandelbrot();
   const store = await import('../www/mandelbrot/js/store.min.js');
 
   // Booted clean: running, loaded, desktop, loading screen retired.
@@ -215,28 +215,51 @@ test('boots, and the autozoom flies the dive to the precision floor and home aga
   // it says SceneXP.com in its own text.
   expect(dom.el('explore-link').href).toBe('/');
 
-  // The autozoom row: [direction] [play] [speed] [reset], defaults shown.
+  // The autozoom row: [play] [reset] since the direction and speed buttons
+  // were retired (2026-09-23). It waits for the welcome screen: loading
+  // finishing does not show it, because it would sit under the card.
   expect(row.attributes['aria-label']).toBe('Auto zoom controls');
-  expect(row.children).toHaveLength(4);
-  expect(speedBtn.textContent).toBe('1×');
+  expect(row.children).toHaveLength(2);
+  expect(resetBtn.attributes['aria-label']).toBe('Reset to the starting view');
+  expect(row.classList.contains('visible')).toBe(false);
   expect(playBtn.attributes['aria-pressed']).toBe('false');
 
   // The pool was hired with the classic worker script.
   expect(FakeWorker.instances.length).toBeGreaterThanOrEqual(2);
   expect(FakeWorker.instances[0].url).toContain('fractal-worker');
 
-  // Enter dismisses the welcome overlay; a second key is a quiet no-op.
+  // Enter dismisses the welcome overlay, brings the row up, and starts the
+  // dive by itself, the way a first press of play would. A second key is a
+  // quiet no-op and the flight carries on.
+  const blocker = dom.el('blocker');
   fire(dom.documentStub, 'keydown', { code: 'Enter' });
-  expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
+  expect(blocker.classList.contains('hidden')).toBe(true);
+  expect(row.classList.contains('visible')).toBe(true);
+  expect(playBtn.attributes['aria-pressed']).toBe('true');
   fire(dom.documentStub, 'keydown', { code: 'Space' });
+  expect(playBtn.attributes['aria-pressed']).toBe('true');
+  step(animate, 5);
 
-  // Speed cycles 1x -> 2x; the direction toggle flips out and back in.
-  fire(speedBtn, 'click');
-  expect(speedBtn.textContent).toBe('2×');
-  fire(dirBtn, 'click');
-  expect(dirBtn.attributes['aria-label']).toContain('surfacing out');
-  fire(dirBtn, 'click');
-  expect(dirBtn.attributes['aria-label']).toContain('diving in');
+  // Escape pauses the flight and brings the welcome screen back, and the row
+  // and the list of places to dive go with the scene. Escape again steps
+  // back in, and a flight that was flying flies on.
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  expect(blocker.classList.contains('hidden')).toBe(false);
+  expect(row.classList.contains('visible')).toBe(false);
+  expect(dom.el('prop-panel').hidden).toBe(true);
+  expect(playBtn.attributes['aria-pressed']).toBe('false');
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  expect(blocker.classList.contains('hidden')).toBe(true);
+  expect(row.classList.contains('visible')).toBe(true);
+  expect(dom.el('prop-panel').hidden).toBe(false);
+  expect(playBtn.attributes['aria-pressed']).toBe('true');
+
+  // A dive the visitor had paused stays paused through the round trip.
+  fire(playBtn, 'click');
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  fire(blocker, 'click');
+  expect(blocker.classList.contains('hidden')).toBe(true);
+  expect(playBtn.attributes['aria-pressed']).toBe('false');
 
   // Play, and let the flight run. The pumped worker pool keeps the
   // content gate fed, so the dive genuinely reaches the floor.
@@ -263,9 +286,11 @@ test('boots, and the autozoom flies the dive to the precision floor and home aga
   expect(dom.el('dialog-message').textContent).toContain('floating hundreds of billions');
   expect(playBtn.attributes['aria-pressed']).toBe('false');
 
-  // Escape closes the story.
+  // Escape closes the story, and only the story: the welcome screen stays
+  // away, because the key was answered by what it was closest to.
   fire(dom.documentStub, 'keydown', { code: 'Escape' });
   expect(dom.el('dialog-modal').classList.contains('hidden')).toBe(true);
+  expect(blocker.classList.contains('hidden')).toBe(true);
 
   // The reset button snaps home: magnification 1, chip hidden again.
   fire(resetBtn, 'click');
@@ -283,12 +308,6 @@ test('boots, and the autozoom flies the dive to the precision floor and home aga
   fire(playBtn, 'click');
   step(animate, 60);
   expect(store.getDiveState().z).toBe(0);
-
-  // Surfacing from the surface pauses itself on the first frame.
-  fire(dirBtn, 'click');
-  fire(playBtn, 'click');
-  step(animate, 3);
-  expect(playBtn.attributes['aria-pressed']).toBe('false');
 
   // Tab still visible: no session end yet. Then hidden, then pagehide
   // twice: endSession is idempotent and cleanup stops the loop.
@@ -439,6 +458,10 @@ test('the list of places to dive launches a ring and follows the rings away', as
   expect(playBtn.attributes['aria-pressed']).toBe('false');
   fire(dom.documentStub, 'keydown', { code: 'Enter' });
   expect(dom.el('prop-panel').hidden).toBe(false);
+  // Stepping in starts the default dive. No frame has run yet, so the dive
+  // is still at the surface with every ring in place, and the help card
+  // below pauses it there.
+  expect(playBtn.attributes['aria-pressed']).toBe('true');
 
   // The help row opens the same card a tap on the set does.
   fire(row('How to Explore'), 'click');

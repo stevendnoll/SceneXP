@@ -336,14 +336,13 @@ describe('the composition and config (pure)', () => {
     expect(f.relief.height).toBeGreaterThan(0);
     expect(f.relief.grid).toBeGreaterThan(f.relief.gridMobile);
 
+    // One speed since 2026-09-23, when the speed and direction buttons were
+    // retired. The selectable list went with them, so it must not linger in
+    // config as a knob nothing reads.
     const a = CFG.autozoom;
-    expect(a.speeds.length).toBeGreaterThanOrEqual(2);
-    a.speeds.forEach((sp, i) => {
-      expect(sp).toBeGreaterThan(0);
-      if (i) expect(sp).toBeGreaterThan(a.speeds[i - 1]);
-    });
-    expect(a.defaultIndex).toBeGreaterThanOrEqual(0);
-    expect(a.defaultIndex).toBeLessThan(a.speeds.length);
+    expect(a.speed).toBeGreaterThan(0);
+    expect(a.speeds).toBeUndefined();
+    expect(a.defaultIndex).toBeUndefined();
   });
 
   test('the color cycle: classic orange at rest, gentle steps, never green or blue', () => {
