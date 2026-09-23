@@ -533,9 +533,16 @@ export function addBreaks(events, sea = null) {
  *
  *  The wetness goes to zero rather than to whatever it was, because a beach that
  *  opened already soaked would be telling the visitor about a wave that has not
- *  happened yet. See `resetWater` for why the clock has to go with it. */
-export function resetSand() {
-    elapsed = 0;
+ *  happened yet. See `resetWater` for why the clock has to go with it.
+ *
+ *  `at` is for the scrubber, and matches `resetWater(at)` so the two sheets
+ *  agree about the tide. The bores in flight go too, and that is the other
+ *  half of the point: each one carries the swell of the moment it broke, so
+ *  after a seek from the calm into the storm the beach would otherwise go on
+ *  taking calm-sized water for several seconds, and a seek the other way could
+ *  put a storm bore over the camera on a quiet afternoon. */
+export function resetSand(at = 0) {
+    elapsed = Number.isFinite(at) ? Math.max(0, at) : 0;
     sinceProfile = 0;
     swashes = [];
     if (wet) {

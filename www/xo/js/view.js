@@ -33,6 +33,11 @@ import { placeMarker, hideMarker } from './markers.min.js';
 import { toRigSpace, RIG } from './arm.min.js';
 import { takedownAt } from './takedown.min.js';
 import { celebrationAt } from './celebration.min.js';
+import { jumpLift, spanOf, arcHeightAt } from './jump.min.js';
+
+// Moved to jump.js on 2026-09-23, when the simulation started needing it too.
+// Still exported from here for everything that already reads it from here.
+export { jumpLift };
 
 /** Is this player sitting out this formation?
  *
@@ -1001,7 +1006,7 @@ export function relocateProgress() {
  * That is a man standing with his hands straight up, which is the line a ball
  * has to be above before leaving the ground is worth anything.
  */
-function standingReach() {
+export function standingReach() {
     return (RIG.shoulderY + RIG.upper + RIG.lower) * CFG.figureScale + FIGURE_LIFT;
 }
 
@@ -1137,16 +1142,7 @@ export function jumpCommit(span) {
  * The two halves are mapped onto the two halves of the same sine, so the height
  * at the apex, the height at each end and the total hang are all unchanged.
  */
-export function jumpLift(t) {
-    const J = CFG.pose.jump;
-    if (!(t >= 0) || t >= 1) return 0;
-    const raw = typeof J.peakAt === 'number' ? J.peakAt : 0.5;
-    const peak = Math.min(0.95, Math.max(0.05, raw));
-    const u = t < peak
-        ? 0.5 * (t / peak)
-        : 0.5 + 0.5 * ((t - peak) / (1 - peak));
-    return Math.sin(Math.PI * u) * J.lift;
-}
+// (`jumpLift` itself lives in jump.js now, and is re-exported at the top.)
 
 function updateJump(figure, reach, at, live, delta) {
     const J = CFG.pose.jump;
@@ -1178,6 +1174,63 @@ function updateJump(figure, reach, at, live, delta) {
 /** Nobody is in the air between plays. */
 function clearJump(figure) {
     figure.userData.jumpAt = -1;
+    figure.userData.leapMark = undefined;
+    figure.userData.leapStill = 0;
+}
+
+/**
+ * WHOSE JUMP IS IT: THE VISITOR'S OR HIS OWN. Set by main.js at every snap and
+ * at the start of every replay, from the "Auto jump" switch as it stood when
+ * that play was snapped, so a replay draws the jump the play actually had.
+ */
+let visitorJumps = false;
+
+export function setVisitorJumps(on) {
+    visitorJumps = !!on;
+    return visitorJumps;
+}
+
+/** A clock that has not moved for this long has STOPPED (a whistle, or a
+ *  replay holding its last frame) rather than merely not stepped yet: the
+ *  simulation steps at 80Hz and slow motion stretches that to about 50ms. */
+const LEAP_STOPPED = 0.15;
+
+/**
+ * THE VISITOR'S JUMP, DRAWN. Returns the metres this figure is off the ground.
+ *
+ * THE SIMULATION OWNS THE CLOCK. `play.requestLeap` starts it, `landLeaps`
+ * advances it, and the catch is judged against it, so the height drawn here is
+ * read straight off `state.leapFor` rather than kept separately: the man on
+ * screen is exactly as high as the man the catch was asked about. A replay
+ * rebuilds the same field from the recording, so it draws the same jump.
+ *
+ * ...UNTIL THE CLOCK STOPS. The simulation stops ticking at the whistle and a
+ * replay holds its last frame, and a man caught mid-leap by either would hang
+ * there. Once the clock has sat still for `LEAP_STOPPED` the view finishes the
+ * jump on its own time, and he comes down.
+ */
+function visitorLift(figure, s, delta) {
+    const u = figure.userData;
+    if (u.jumpAt === undefined) u.jumpAt = -1;
+    const up = !!s && s.leaping === true && s.leapFor >= 0;
+    if (!up) {
+        u.leapMark = undefined;
+        u.leapStill = 0;
+        // Landed as far as the simulation is concerned; finish the frame or
+        // two of descent it did not step.
+        if (u.jumpAt >= 0) u.jumpAt += delta;
+    } else if (s.leapFor !== u.leapMark) {
+        u.leapMark = s.leapFor;
+        u.leapStill = 0;
+        u.jumpAt = s.leapFor;
+    } else {
+        u.leapStill = (u.leapStill || 0) + delta;
+        if (u.leapStill > LEAP_STOPPED && u.jumpAt >= 0) u.jumpAt += delta;
+    }
+    if (!(u.jumpAt >= 0)) return 0;
+    const t = u.jumpAt / CFG.pose.jump.hang;
+    if (t >= 1) { u.jumpAt = -1; return 0; }
+    return jumpLift(t);
 }
 
 /**
@@ -1562,13 +1615,17 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
          * Measured before the latch above, 20 clocks a hundred plays were left
          * frozen like that.
          */
+        // THE VISITOR'S JUMP IS ANY RECEIVER'S, because a tap sends up
+        // whoever is nearest the finger. The simulation only ever starts one
+        // for a receiver, so nobody else ever has a clock to read.
         const mayJump = obj.settings.team === 0
-            && obj.settings.position === intended && !role;
+            && (visitorJumps || obj.settings.position === intended) && !role;
         if (!mayJump) clearJump(figure);
-        const airborne = mayJump
-            ? updateJump(figure, reaching.get(obj.settings.position) || 0,
-                { x: p.x, z: p.z }, opts.live, delta)
-            : 0;
+        const airborne = !mayJump ? 0
+            : (visitorJumps
+                ? visitorLift(figure, obj.state, delta)
+                : updateJump(figure, reaching.get(obj.settings.position) || 0,
+                    { x: p.x, z: p.z }, opts.live, delta));
         /**
          * ...AND THE SIMULATION IS TOLD ON THE FRAME HE GOES.
          *
@@ -1576,7 +1633,9 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
          * drawn. What waits for the ball is the CATCH, and it waits on the
          * simulation's clock rather than this one: see `play.ballArrived`.
          */
-        if (mayJump && figure.userData.jumpAt >= 0) inTheAir.add(obj.settings.position);
+        if (!visitorJumps && mayJump && figure.userData.jumpAt >= 0) {
+            inTheAir.add(obj.settings.position);
+        }
 
         // AND HIS FEET GO ON THE GRASS, NOT THROUGH IT. The rig stands itself
         // at y = 0.055 because its shoes hang below its own origin, and writing
@@ -1644,9 +1703,16 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // visitor can see is the only one worth turning toward.
         const going = (!opts.presnap && !surveying && reach > 0 && flight.has)
             ? { x: flight.x, z: flight.z } : null;
+        // IN THE AIR, HE WATCHES THE BALL, ALL THE WAY ROUND IF HE HAS TO
+        // (Steve, 2026-09-23). His feet are off the grass, so there is no run
+        // for the turn to fight: `turnFor` below caps a man who is running, and
+        // this one is not, so it does not apply. His path does not change at
+        // all, only which way he is drawn facing.
+        const leapWatch = visitorJumps && airborne > 0 && flight.has && !surveying;
         const look = (opts.presnap || surveying)
             ? null
-            : going || lookTarget(obj, objects, carrier, p, standing,
+            : (leapWatch ? { x: flight.x, z: flight.z } : null)
+                || going || lookTarget(obj, objects, carrier, p, standing,
                 engagement ? engagement.against : '');
         // A MAN GOING NOWHERE KEEPS THE HEADING HE HAD. Passing a zeroed `mps`
         // here is what stops the spin: the deadzone was never crossed by a slow
@@ -1667,7 +1733,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // is doing a median 3.7 metres a second and a tenth of them are at a
         // full sprint. Squared up without the cap, those are drawn sprinting
         // backwards.
-        if (going || engagement) want = turnFor(want, running);
+        if ((going || engagement) && !leapWatch) want = turnFor(want, running);
         if (want !== null) figure.userData.facing = want;
         else if (figure.userData.facing === undefined) {
             figure.userData.facing = downfield;
@@ -1753,7 +1819,11 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // to know where the figure is standing and which way it is facing.
         // Taken AFTER the yaw above has been eased, so the target follows him
         // round as he turns, and held in front of his shoulders by `frontOf`.
-        const reachAt = reach > 0
+        // A MAN IN THE AIR HAS BOTH HANDS UP FOR IT, however far off it still
+        // is: a visitor's jump can come early, and a leap with the arms at his
+        // sides reads as a hop rather than as going up for a ball.
+        const armsUp = leapWatch ? Math.max(reach, 1) : reach;
+        const reachAt = armsUp > 0
             ? frontOf(toRigSpace({ x: flight.x, y: flight.y, z: flight.z },
                 figure.position, figure.rotation.y, CFG.figureScale))
             : null;
@@ -1814,7 +1884,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             snapT: snapped,
             block: engagement ? engagement.amount : 0,
             tackle: rise ? rise.tackle : lunge,
-            reach,
+            reach: armsUp,
             reachAt,
             posting,
             down,
@@ -2098,9 +2168,7 @@ function arcHeight(ballObj, delta) {
     const c = ballObj.coords;
     const span = flightSpan(c);
     if (span) {
-        const gone = Math.hypot(c.x - span.sx, c.y - span.sy);
-        const p = Math.min(1, Math.max(0, gone / span.total));
-        want = B.release + 4 * p * (1 - p) * B.apex * span.reach;
+        want = arcHeightAt(span, c.x, c.y);
     } else {
         // No span means a replay frame whose recording predates the throw being
         // seen, so fall back to the index. Correct shape, flat top.
@@ -2126,25 +2194,20 @@ function arcHeight(ballObj, delta) {
  */
 function flightSpan(c) {
     if (flight.span) return flight.span;
-    if (!(c.startX !== undefined && c.targetX !== undefined)) return null;
-    const total = Math.hypot(c.targetX - c.startX, c.targetY - c.startY);
-    if (!(total > 0)) return null;
-    flight.span = {
-        sx: c.startX,
-        sy: c.startY,
-        // WHERE IT WAS AIMED, kept for the same reason the rest of this is: the
-        // recorder stores none of it, so without the cache a replay has no idea
-        // who the ball was thrown at (see `intendedReceiver`).
-        tx: c.targetX,
-        ty: c.targetY,
-        total,
-        // HOW HIGH THIS PARTICULAR THROW GOES. Measured, the library's passes
-        // run from 1.5m to 13.5m with a median of 7.2m, and its own ramp keeps
-        // the shortest six of ninety-nine flat on the deck. Scaling the apex by
-        // length keeps that: a flick is a bullet and only a genuinely deep ball
-        // reaches the top of the arc.
-        reach: Math.min(1, (total * UNITS_TO_METRES) / CFG.ball.fullArcAt),
-    };
+    // BUILT BY jump.js SINCE 2026-09-23, because the visitor's jump is judged
+    // against this same arc in the simulation, and two copies of the arc is
+    // one edit away from a ball drawn at one height and caught at another.
+    // It carries WHERE IT WAS AIMED (`tx`, `ty`), kept for the same reason the
+    // rest of this is: the recorder stores none of it, so without the cache a
+    // replay has no idea who the ball was thrown at (see `intendedReceiver`).
+    // And HOW HIGH THIS PARTICULAR THROW GOES (`reach`). Measured, the
+    // library's passes run from 1.5m to 13.5m with a median of 7.2m, and its
+    // own ramp keeps the shortest six of ninety-nine flat on the deck. Scaling
+    // the apex by length keeps that: a flick is a bullet and only a genuinely
+    // deep ball reaches the top of the arc.
+    const span = spanOf(c);
+    if (!span) return null;
+    flight.span = span;
     return flight.span;
 }
 

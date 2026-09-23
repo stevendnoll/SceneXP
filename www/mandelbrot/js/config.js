@@ -63,14 +63,17 @@ export const MANDELBROT_CONFIG = deepFreeze({
         }
     },
 
-    // The autozoom control (main.js builds the row): the dive flies
-    // itself toward fractal.dive. speeds are the selectable rates in
-    // doublings of magnification per second, cycled by the speed
-    // button; defaultIndex picks the starting rate. Direction starts
-    // inward, play starts paused: the visitor presses play to fall.
+    // The autozoom (main.js builds the row): the dive flies itself toward
+    // fractal.dive at `speed` doublings of magnification per second, and
+    // it starts the moment the visitor steps past the welcome screen.
+    //
+    // ONE SPEED AND ONE DIRECTION SINCE 2026-09-23. There were speed and
+    // direction buttons (0.5x, 1x, 2x, and a surface-out toggle), and
+    // Steve's QA took both out: the row is now play/pause and reset. 1 was
+    // the old default, so the ride a visitor gets is the one most people
+    // already had. Reset is the way back up.
     autozoom: {
-        speeds: [0.5, 1, 2],
-        defaultIndex: 1
+        speed: 1
     },
 
     // No day/night cycle in deep space: the store replaces the shared sky

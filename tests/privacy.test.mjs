@@ -51,7 +51,8 @@ const PERSISTENT = {
     'www/xo/js/playbook-ui.js': 'the last play called and the chosen defense',
     'www/xo/js/summary.js': 'the best score in X’s and O’s',
     'www/xo/js/progress.js': 'a game of X’s and O’s that has not finished yet',
-    'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s'
+    'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s',
+    'www/xo/js/jump.js': 'whether Auto jump is on in X’s and O’s'
 };
 
 /** Source files only. The built .min copies are the same code twice. */
@@ -98,6 +99,8 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // the two experiences whose stores a visitor would actually care about.
     expect(text).toMatch(/Fractal Garden saves your garden/i);
     expect(text).toMatch(/Earth Defense saves your best score/i);
+    // The Auto jump switch in X's and O's (2026-09-23), the newest store.
+    expect(text).toMatch(/whether you turned on Auto jump/i);
 
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.

@@ -331,6 +331,10 @@ export function showSnap() {
  */
 const SNAP_KEYS = [' ', 'S', 'Q'];
 const KEEP_KEY = 'K';
+/** J, and the space bar with it, while the ball is in the air (2026-09-23).
+ *  Space is a snap key too, and the two never share a screen: the snap is
+ *  offered before the play and the jump only once the ball is thrown. */
+const JUMP_KEY = 'J';
 /** C, and it only ever means anything before the snap. During a play the same
  *  key throws to receiver C, and the two can never both be on screen: the
  *  lookup below asks what is actually there rather than what the key "is". */
@@ -343,8 +347,8 @@ const VIEW_KEY = 'V';
 const SKIP_KEY = 'Escape';
 // A NOTE ON THE MATCH BELOW, which is a SUBSTRING match on `data-keys`. It is
 // safe only because attribute matching is case sensitive and every other key is
-// a single capital: "Escape" contains no S, Q, K, C, V or A to D in capitals. A
-// new named key has to keep that true.
+// a single capital: "Escape" contains no S, Q, K, C, V, J or A to D in capitals.
+// A new named key has to keep that true.
 
 /** Tag a button with the keys that press it, for the handler and for anything
  *  reading the page out loud. */
@@ -377,6 +381,7 @@ export function keyAction(key, { inField = false, modified = false, onControl = 
     const up = key.length === 1 ? key.toUpperCase() : key;
     if (SNAP_KEYS.includes(up)) return 'snap';
     if (up === KEEP_KEY) return 'keep';
+    if (up === JUMP_KEY) return 'jump';
     if (up === VIEW_KEY) return 'view';
     if (up === SKIP_KEY) return 'skip';
     if (/^[A-D]$/.test(up)) return up;
@@ -411,11 +416,18 @@ export function initKeys(signal) {
         // A LETTER MEANS WHATEVER IS ON SCREEN WEARING IT. C throws to receiver
         // C during a play and changes the play before one, and those two rows
         // never coexist, so the right answer is to look rather than to decide.
-        const named = { snap: 'S', keep: KEEP_KEY, view: VIEW_KEY, skip: SKIP_KEY }[want];
-        const wanted = named
-            ? box.querySelector(`[data-keys*="${named}"]`)
-            : (box.querySelector(`[data-letter="${want}"]`)
-                || box.querySelector(`[data-keys*="${want}"]`));
+        const named = {
+            snap: 'S', keep: KEEP_KEY, view: VIEW_KEY, skip: SKIP_KEY, jump: JUMP_KEY,
+        }[want];
+        // THE SPACE BAR PRESSES WHATEVER ON SCREEN WEARS IT, which is the snap
+        // before a play and the jump during one. It is looked for by the space
+        // itself rather than through the snap's letter, or it would find no
+        // snap in the air and do nothing.
+        const wanted = (event.key === ' ' && box.querySelector('[data-keys*=" "]'))
+            || (named
+                ? box.querySelector(`[data-keys*="${named}"]`)
+                : (box.querySelector(`[data-letter="${want}"]`)
+                    || box.querySelector(`[data-keys*="${want}"]`)));
         if (!wanted) return;
 
         // The space bar scrolls a page and Enter is the browser's own way of
@@ -443,7 +455,39 @@ export function showInPlay(receivers) {
     if (first) first.focus();
 }
 
-/** In flight, or after the whistle: nothing to press. */
+/**
+ * THE BALL IS IN THE AIR: ONE BUTTON, AND IT SENDS THE RECEIVER UP.
+ *
+ * Added 2026-09-23, when the jump became the visitor's. It jumps the man the
+ * ball was thrown to (a tap on the field can jump anybody, see main.js), and it
+ * answers J and the space bar. It takes focus like every other row, so Enter
+ * works too, and it LIGHTS UP when the ball is nearly there (`setJumpCue`):
+ * a cue to act on, not a promise that now is perfect.
+ *
+ * ITS NAME STARTS WITH ITS TEXT, "Jump for the ball", so a voice control user
+ * saying "click Jump" finds it (WCAG 2.5.3).
+ */
+export function showInFlight() {
+    const box = actions();
+    if (!box) return;
+    const b = bindKeys(button('Jump', 'hud-btn hud-btn-jump',
+        () => handlers.onJump && handlers.onJump(), 'for the ball'), [JUMP_KEY, ' ']);
+    box.appendChild(b);
+    b.focus();
+}
+
+/** Light the Jump button, or put it out. Only touches the class when it
+ *  changes, because this is asked every frame the ball is up. */
+export function setJumpCue(lit) {
+    const box = el('hud-actions');
+    const b = box && box.querySelector('.hud-btn-jump');
+    if (!b) return false;
+    const on = !!lit;
+    if (b.classList.contains('is-lit') !== on) b.classList.toggle('is-lit', on);
+    return true;
+}
+
+/** In flight with nothing to press, or after the whistle. */
 export function clearActions() {
     actions();
 }

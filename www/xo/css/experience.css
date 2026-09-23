@@ -164,7 +164,8 @@ body {
    matches `.hud-mute` so the same button is the same size wherever it appears,
    and `.hud-mute-icon` above already styles the glyph itself. */
 .playbook-mute,
-.playbook-help {
+.playbook-help,
+.playbook-autojump {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -186,6 +187,23 @@ body {
 .playbook-mute[aria-pressed="true"]:focus-visible {
     border-color: rgba(255, 255, 255, 0.4);
     color: #f2f5fa;
+}
+
+/* AUTO JUMP (2026-09-23), a switch that says its state in words: "Auto jump
+   off" and "Auto jump on". Off is the game as intended and wears the ordinary
+   outline; on gets the orange border so a visitor who turned it on can see at
+   a glance that the receivers are jumping by themselves. Every property the
+   on rule sets is named again under hover, for the partial-override reason
+   noted above. */
+.playbook-autojump[aria-pressed="true"] {
+    border-color: #ff992c;
+    color: #ffd2a3;
+}
+
+.playbook-autojump[aria-pressed="true"]:hover,
+.playbook-autojump[aria-pressed="true"]:focus-visible {
+    border-color: #ffab52;
+    color: #fff1e0;
 }
 
 .playbook-restart-btn {
@@ -459,6 +477,32 @@ body {
 .hud-btn-primary:focus-visible {
     background: #ffab52;
     color: #21140a;
+}
+
+/* ---- The Jump button (2026-09-23) -----------------------------------------
+ *
+ * Shown while the ball is in the air. At rest it is the ordinary dark pill,
+ * wider than the others so a thumb finds it without looking. When the ball is
+ * nearly there it LIGHTS UP in the game's orange, which is the cue to press.
+ *
+ * A FILL IS A STATE, and here the state is "now". The unlit button is not
+ * tinted at all, so the lit one cannot be mistaken for a button that is
+ * already pressed: it only ever fills in the half second it matters.
+ */
+.hud-btn-jump {
+    min-width: 8.5rem;
+    padding: 0.7rem 1.6rem;
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+}
+
+.hud-btn-jump.is-lit,
+.hud-btn-jump.is-lit:hover,
+.hud-btn-jump.is-lit:focus-visible {
+    border-color: #ff992c;
+    background: #ff992c;
+    color: #21140a;
+    box-shadow: 0 0 0 4px rgba(255, 153, 44, 0.28);
 }
 
 /* ---- The throw buttons ----------------------------------------------------

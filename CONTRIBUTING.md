@@ -55,11 +55,13 @@ have in mind.
   than opening a line of dialog, which is worth reading if your scene wants
   the visitor to change it.
 - **Hands-off rides.** The scene drives itself and the visitor mostly
-  watches, with play and pause, speed, and direction controls for light
-  steering. The Mandelbrot dive (`www/mandelbrot`) is the reference: its
-  auto zoom flies the camera while the visitor picks destinations and
-  adjusts the ride. `www/highwater` is the strictest version of this, with
-  no controls at all beyond starting and replaying.
+  watches, with play, pause, and a reset for light steering. The
+  Mandelbrot dive (`www/mandelbrot`) is the reference: its auto zoom
+  starts flying the camera the moment the visitor steps in, and a reset
+  brings them back to the surface to pick another destination.
+  `www/highwater` is the strictest version of this: a pause button (or
+  Escape) and a timeline scrubber, both of which fade out
+  whenever the pointer is still.
 - **Piloted flight.** The visitor drives a vehicle through open space rather
   than walking or watching, so the world moves around a camera that never
   stops. `www/earthdefense` is the reference: keyboard and mouse on desktop,

@@ -2,8 +2,9 @@
  *
  * experience.css - High Water.
  *
- * Enough to get the canvas filling the viewport, plus the three things that sit
- * over it: the welcome card, the white-out, and the ending.
+ * Enough to get the canvas filling the viewport, plus the things that sit over
+ * it: the welcome card (which doubles as the pause card), the white-out, the
+ * ending, and since 2026-09-23 the player controls.
  *
  * THE SHARED SHEET LOADS FIRST AND THIS ONE SECOND, which is the order the
  * cascade needs. `shared/css/styles-1.0.0.css` sets a universal reset and a dark
@@ -103,6 +104,33 @@ body {
     color: #8ea3ac;
 }
 
+/* THE PAUSE CARD IS THIS CARD. The line above the title says where the story
+   was held, so the card reads as a pause rather than as the page starting over.
+   Small and spaced out, like a chapter mark, so the title stays the title. */
+#welcome .paused-at {
+    margin: 0 0 0.35rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #9fb0b8;
+}
+
+/* Resume and Restart side by side, wrapping rather than squeezing, the same as
+   the ending's pair. */
+.pause-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.pause-actions[hidden],
+#welcome .paused-at[hidden],
+#welcome .primary[hidden] {
+    display: none;
+}
+
 /* ---- Buttons ----------------------------------------------------------------
  *
  * Shared shape between Begin, Watch it again and Share, so the page has one
@@ -117,7 +145,8 @@ body {
  * rules in this block, not just to the one that sets its padding. */
 #welcome .primary,
 #replay,
-#share {
+#share,
+#restart {
     font: inherit;
     color: #e8eef1;
     background: transparent;
@@ -132,14 +161,17 @@ body {
 #replay:hover,
 #replay:focus-visible,
 #share:hover,
-#share:focus-visible {
+#share:focus-visible,
+#restart:hover,
+#restart:focus-visible {
     background: rgba(232, 238, 241, 0.10);
     border-color: #9fb0b8;
 }
 
 #welcome .primary:focus-visible,
 #replay:focus-visible,
-#share:focus-visible {
+#share:focus-visible,
+#restart:focus-visible {
     outline: 2px solid #9fb0b8;
     outline-offset: 3px;
 }
@@ -233,6 +265,13 @@ body {
     padding: 0.7rem 1.6rem;
 }
 
+/* Restart is the quieter of the pause card's two, so it takes the ending's
+   size beside Resume's larger pill. */
+#restart {
+    padding: 0.7rem 1.6rem;
+    font-size: 1rem;
+}
+
 /* SIDE BY SIDE, AND WRAPPING RATHER THAN SHRINKING. Two pill buttons fit a
    phone in one row at this size, but the moment they would not, a stacked pair
    is better than two squeezed ones on a screen this spare. */
@@ -258,6 +297,163 @@ body {
     text-decoration-color: currentColor;
 }
 
+/* ---- The player controls ---------------------------------------------------
+ *
+ * A pause button in the corner and a scrubber along the bottom, added
+ * 2026-09-23. A full-screen layer that catches nothing itself, so only the two
+ * controls take a click and the rest falls through to the scene. Above the
+ * white-out and the fade, below the cards, and never on screen with either
+ * card, which main.js sees to by hiding the layer.
+ *
+ * THEY FADE OUT WHEN THE POINTER IS STILL. `.is-idle` also stops them taking
+ * pointer events, so the first tap on a phone brings them back instead of
+ * pressing an invisible pause button. They stay in the tab order while faded,
+ * and focus brings them straight back. */
+#controls {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 400ms ease;
+}
+
+#controls[hidden],
+.hw-capture #controls {
+    display: none;
+}
+
+#controls > * {
+    pointer-events: auto;
+}
+
+#controls.is-idle {
+    opacity: 0;
+}
+
+#controls.is-idle > * {
+    pointer-events: none;
+}
+
+/* The cursor goes with the controls over a playing scene, as it does over a
+   video. Only over the canvas, so it can never vanish over a card. */
+.hw-idle #scene {
+    cursor: none;
+}
+
+/* The house circle in the house corner. `.menu-btn` supplies the look and the
+   position, and `.ui-float.visible` normally supplies `display`, which this
+   button does not use (see the markup), so it is set here. The notch on a
+   phone held sideways is kept clear of it. */
+#pause-btn {
+    display: flex;
+    top: max(20px, env(safe-area-inset-top));
+    right: max(20px, env(safe-area-inset-right));
+}
+
+#pause-btn:focus-visible {
+    outline: 2px solid #e8eef1;
+    outline-offset: 3px;
+}
+
+/* THE SCRUBBER SITS ON A PILL, NOT STRAIGHT ON THE SKY. A bare translucent
+   track disappears against part of this scene whichever way it is tinted: the
+   sky runs from pale silver through storm gray to black. The pill keeps the
+   light track and thumb at better than 3 to 1 against whatever is behind them.
+   No backdrop blur: it would re-blur a moving WebGL frame every frame, and
+   this scene has been fill-rate bound on phones before. */
+#scrubber {
+    position: fixed;
+    left: 50%;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    width: min(34rem, calc(100% - 32px));
+    padding: 0.35rem 1.1rem;
+    border-radius: 2rem;
+    background: rgba(6, 20, 27, 0.5);
+    border: 1px solid rgba(232, 238, 241, 0.18);
+    box-sizing: border-box;
+}
+
+#scrub {
+    --progress: 0%;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    /* The drag is the scrubber's, not a page gesture's. */
+    touch-action: none;
+}
+
+#scrub:focus-visible {
+    outline: 2px solid #e8eef1;
+    outline-offset: 4px;
+    border-radius: 1rem;
+}
+
+/* The played part of the track filled, the rest faint. WebKit has no progress
+   pseudo-element, so the fill is a hard-stop gradient at the `--progress` that
+   main.js writes. Firefox draws its own with ::-moz-range-progress. */
+#scrub::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right,
+            #e8eef1 0, #e8eef1 var(--progress),
+            rgba(232, 238, 241, 0.32) var(--progress), rgba(232, 238, 241, 0.32) 100%);
+}
+
+#scrub::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border: none;
+    border-radius: 50%;
+    background: #e8eef1;
+    box-shadow: 0 0 0 1px rgba(6, 20, 27, 0.55);
+}
+
+#scrub::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(232, 238, 241, 0.32);
+}
+
+#scrub::-moz-range-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: #e8eef1;
+}
+
+#scrub::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 50%;
+    background: #e8eef1;
+    box-shadow: 0 0 0 1px rgba(6, 20, 27, 0.55);
+}
+
+/* A bigger thumb for a fingertip. */
+@media (pointer: coarse) {
+    #scrub::-webkit-slider-thumb {
+        width: 22px;
+        height: 22px;
+        margin-top: -9px;
+    }
+
+    #scrub::-moz-range-thumb {
+        width: 22px;
+        height: 22px;
+    }
+}
+
 /* Reduced motion gets the same scene without the transitions. The arc itself is
    the thing that would need a real answer here, and that belongs with the
    welcome screen rather than with a stylesheet. */
@@ -265,9 +461,11 @@ body {
 
     #welcome,
     #ending,
+    #controls,
     #welcome .primary,
     #replay,
-    #share {
+    #share,
+    #restart {
         transition: none;
     }
 }

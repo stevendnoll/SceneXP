@@ -6,20 +6,30 @@
  * build the scene, park the camera at its one composed viewpoint, and
  * let the cosmos do the moving. There are no movement controls and no
  * collision. The interactions that do exist are featherweight: the
- * welcome overlay (dismissed with a click, tap, or key), the floating
- * welcome screen, the AUTOZOOM row, and one raycast per tap.
+ * welcome overlay (dismissed with a click, tap, or key, and brought back
+ * with Escape), the AUTOZOOM row, and one raycast per tap.
  *
- * The autozoom is the headline act: the dive flies itself. This file
- * builds a three-button cluster at the bottom center (reusing the
- * shared .pan-controls shell, though the shared pan part itself is
- * retired here): a direction toggle (dive in / surface out), a
- * play/pause toggle, and a speed button cycling the configured rates.
- * Each frame the conductor feeds store.js's INFINITE DIVE at the
- * chosen rate, toward one fixed boundary point (config fractal.dive,
- * the seam where the set's two great circles meet). The flight pauses
- * itself at the double-precision floor (which earns its own dialog),
- * on resurfacing, and whenever a story dialog opens. The depth chip
- * reports the magnification with a size comparison along the way.
+ * The autozoom is the headline act: the dive flies itself, and since
+ * 2026-09-23 it starts the moment the visitor steps past the welcome
+ * screen. This file builds a two-button cluster at the bottom center
+ * (reusing the shared .pan-controls shell, though the shared pan part
+ * itself is retired here): play/pause and reset. There were direction
+ * and speed buttons too, and Steve's QA took them out. Each frame the
+ * conductor feeds store.js's INFINITE DIVE at the configured rate,
+ * toward one fixed boundary point (config fractal.dive, the seam where
+ * the set's two great circles meet). The flight pauses itself at the
+ * double-precision floor (which earns its own dialog), whenever a story
+ * dialog opens, and when Escape brings the welcome screen back. The
+ * depth chip reports the magnification with a size comparison along the
+ * way.
+ *
+ * THE RINGS ARE A SECOND-VISIT DISCOVERY NOW. The glowing rings that
+ * choose a destination live only at the surface, and the dive leaves the
+ * surface the moment the welcome screen goes, so a first visit rides the
+ * default dive. Reset brings the visitor back up to where the rings are,
+ * and the welcome screen and the help card both say so. Steve chose that
+ * over holding the surface for a few seconds first (2026-09-23), since a
+ * pause with nothing moving is what the automatic start was for.
  *
  * Choosing a destination also has a route that needs no pointer: an
  * off-screen list (the shared proplist part) with one row per ring and one
@@ -76,22 +86,24 @@ let chipAccum = 0;            // chip refresh throttle (4x per second)
 let chipShown = false;
 
 // ---- Autozoom state --------------------------------------------------------
-// The dive flies itself: direction (+1 dives in, -1 surfaces out), a
-// play/pause flag, and an index into the configured speed cycle.
+// The dive flies itself, always inward and at one speed: all that is left
+// to hold is whether it is flying.
 const auto = {
-    on: false,
-    dir: 1,
-    speedIndex: MANDELBROT_CONFIG.autozoom.defaultIndex
+    on: false
 };
 let autoPlayBtn = null;
-let autoDirBtn = null;
-let autoSpeedBtn = null;
+let autoRow = null;
+
+// The welcome screen, which Escape can bring back. `welcomed` is whether the
+// visitor has ever stepped past it (the first time starts the dive), and
+// `resumeOnReturn` is whether the dive was flying when Escape paused it, so
+// stepping back in carries on only a flight that was actually under way.
+let welcomed = false;
+let resumeOnReturn = false;
 
 const ICONS = {
     play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5l10 6.5-10 6.5z"/></svg>',
     pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5v13M15 5.5v13"/></svg>',
-    dirIn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
-    dirOut: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>',
     reset: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 4.5v5.5h5.5"/><path d="M4.8 15a8 8 0 1 0 1.9-8.3L2.5 10"/></svg>'
 };
 
@@ -152,7 +164,10 @@ async function init() {
     setTimeout(() => {
         loadingScreen.classList.add('hidden');
         state.isLoaded = true;
-        document.querySelectorAll('.ui-float').forEach(el => el.classList.add('visible'));
+        // THE ROW WAITS FOR THE WELCOME SCREEN (2026-09-23). It used to be
+        // revealed here, under the welcome card, where four buttons showed
+        // through the dimmed backdrop before the visitor had been let in.
+        // beginWatching shows it now, and Escape takes it away again.
     }, 400);
 
     // Mark the start of this visit. Records the input mode so the log can tell
@@ -272,7 +287,7 @@ function setupEventListeners() {
 
         document.addEventListener('keydown', (event) => {
             if (event.code === 'Enter' || event.code === 'Space') {
-                if (!blocker.classList.contains('hidden')) beginWatching();
+                if (welcomeShown()) beginWatching();
             }
         }, { signal });
     }
@@ -298,17 +313,31 @@ function setupEventListeners() {
         if (touch) checkSceneTap(touch.clientX, touch.clientY);
     }, { passive: false, signal });
 
-    // The dialog's close buttons and backdrop, plus Escape
+    // The dialog's close buttons and backdrop
     if (dialogModal) dialogModal.querySelectorAll('[data-close]').forEach(el =>
         el.addEventListener('click', closePropDialog, { signal }));
+
+    // ESCAPE, IN ORDER OF WHAT IT IS CLOSEST TO. An open story card closes
+    // and nothing else happens, as it always has. Otherwise it toggles the
+    // welcome screen: out in the scene it pauses the dive and brings the
+    // card back (Steve, 2026-09-23), and on the card it steps back in. The
+    // list of places to dive answers its own Escape and stops the key there,
+    // so putting that list away never also pauses anything.
     document.addEventListener('keydown', (event) => {
-        if (event.code === 'Escape' && dialogOpen) closePropDialog();
+        if (event.code !== 'Escape') return;
+        if (dialogOpen) {
+            closePropDialog();
+            return;
+        }
+        if (!state.isLoaded) return;
+        if (welcomeShown()) beginWatching();
+        else returnToWelcome();
     }, { signal });
 
-    // The autozoom cluster: [direction] [play/pause] [speed], bottom
-    // center at every aspect. The container reuses the shared
-    // .pan-controls shell classes, so the load fade-in, positioning,
-    // and button look all come along for free.
+    // The autozoom cluster: [play/pause] [reset], bottom center at every
+    // aspect. The container reuses the shared .pan-controls shell classes,
+    // so the fade-in, positioning, and button look all come along for
+    // free, and a row of two centers itself exactly as a row of four did.
     initAutozoomControls(signal);
 
     setupPropList(signal);
@@ -328,29 +357,25 @@ function makeAutoButton(label, html, onPress, signal) {
     return btn;
 }
 
-/** Build the row and wire the three toggles. */
+/** Build the row and wire its two buttons. */
 function initAutozoomControls(signal) {
     const container = document.createElement('div');
     container.className = 'ui-float pan-controls always-on autozoom-controls';
     container.setAttribute('role', 'group');
     container.setAttribute('aria-label', 'Auto zoom controls');
 
-    autoDirBtn = makeAutoButton('Zoom direction', ICONS.dirIn, toggleDirection, signal);
     autoPlayBtn = makeAutoButton('Start the auto zoom', ICONS.play, togglePlaying, signal);
-    autoSpeedBtn = makeAutoButton('Zoom speed', '', cycleSpeed, signal);
-    autoSpeedBtn.classList.add('autozoom-speed');
     const resetBtn = makeAutoButton(
         'Reset to the starting view', ICONS.reset, resetScene, signal);
 
-    container.appendChild(autoDirBtn);
     container.appendChild(autoPlayBtn);
-    container.appendChild(autoSpeedBtn);
     container.appendChild(resetBtn);
     document.body.appendChild(container);
+    autoRow = container;
     syncAutozoomButtons();
 }
 
-/** Reflect the autozoom state onto the buttons (icons, labels, colors). */
+/** Reflect the autozoom state onto the play button (icon, label, color). */
 function syncAutozoomButtons() {
     if (!autoPlayBtn) return;
     autoPlayBtn.innerHTML = auto.on ? ICONS.pause : ICONS.play;
@@ -359,19 +384,6 @@ function syncAutozoomButtons() {
     autoPlayBtn.setAttribute('aria-label', playLabel);
     autoPlayBtn.setAttribute('aria-pressed', auto.on ? 'true' : 'false');
     autoPlayBtn.classList.toggle('engaged', auto.on);
-
-    autoDirBtn.innerHTML = auto.dir > 0 ? ICONS.dirIn : ICONS.dirOut;
-    const dirLabel = auto.dir > 0
-        ? 'Zoom direction: diving in. Tap to surface instead.'
-        : 'Zoom direction: surfacing out. Tap to dive instead.';
-    autoDirBtn.title = dirLabel;
-    autoDirBtn.setAttribute('aria-label', dirLabel);
-
-    const speed = MANDELBROT_CONFIG.autozoom.speeds[auto.speedIndex];
-    autoSpeedBtn.textContent = `${speed}×`;
-    const speedLabel = `Zoom speed ${speed}x. Tap to change.`;
-    autoSpeedBtn.title = speedLabel;
-    autoSpeedBtn.setAttribute('aria-label', speedLabel);
 }
 
 function setPlaying(on) {
@@ -389,25 +401,14 @@ function togglePlaying() {
     setPlaying(!auto.on);
 }
 
-function toggleDirection() {
-    auto.dir = -auto.dir;
-    track('autozoom-direction');
-    syncAutozoomButtons();
-}
-
-function cycleSpeed() {
-    auto.speedIndex = (auto.speedIndex + 1) % MANDELBROT_CONFIG.autozoom.speeds.length;
-    track('autozoom-speed');
-    syncAutozoomButtons();
-}
-
 /** The reset button: back to the initial-load view in one tap. The
- *  flight pauses, the direction re-arms inward (ready for a fresh
- *  dive), and the dive snaps to magnification 1; the chosen touchpoint
- *  is kept, since the reset is about depth, not destination. */
+ *  flight pauses and the dive snaps to magnification 1, which is where
+ *  the glowing rings are, so this is also how a visitor gets to choose a
+ *  new destination. The chosen touchpoint is kept, since the reset is
+ *  about depth, not destination. It is the only way back up since the
+ *  direction button went (2026-09-23). */
 function resetScene() {
     setPlaying(false);
-    auto.dir = 1;
     resetDive();
     track('dive-reset');
     syncAutozoomButtons();
@@ -428,10 +429,8 @@ function updateAutozoom(deltaTime) {
         if (s.z > 0 && s.z < 0.5) diveBy(-0.8 * deltaTime);
         return;
     }
-    diveBy(auto.dir * MANDELBROT_CONFIG.autozoom.speeds[auto.speedIndex] * deltaTime);
-    const s = getDiveState();
-    if (auto.dir > 0 && s.atFloor) setPlaying(false);
-    if (auto.dir < 0 && s.z <= 0.02 && !s.diving) setPlaying(false);
+    diveBy(MANDELBROT_CONFIG.autozoom.speed * deltaTime);
+    if (getDiveState().atFloor) setPlaying(false);
 }
 
 // ---- The depth chip --------------------------------------------------------
@@ -471,7 +470,9 @@ function updateDepthChip(deltaTime) {
     chipAccum = 0;
 
     const s = getDiveState();
-    if (s.z < 0.05) {
+    // Out of the way while the welcome screen is back: the chip sits above
+    // the card's backdrop, and a readout over a pause screen is clutter.
+    if (s.z < 0.05 || welcomeShown()) {
         if (chipShown) {
             depthChip.classList.remove('visible');
             chipShown = false;
@@ -586,7 +587,6 @@ function checkSceneTap(clientX, clientY) {
 function launchToward(index) {
     const label = selectDiveTarget(index);
     if (label) track('dive-target', { label });
-    auto.dir = 1;
     setPlaying(true);
     syncAutozoomButtons();
 }
@@ -645,7 +645,7 @@ function chooseFromList(id) {
     // Not while the welcome card is up. The panel is `hidden` until then, so
     // nothing should reach this, but a card opening over the welcome card
     // would be a worse failure than a row that does nothing.
-    if (blocker && !blocker.classList.contains('hidden')) return;
+    if (welcomeShown()) return;
     if (!rowIsShown(id)) return;
     const ring = ringIndexOf(id);
     if (ring === null) {
@@ -671,8 +671,8 @@ const PROP_CONTENT = {
     mandelbrot: {
         title: 'How to Explore',
         lines: [
-            'Tap one of the glowing rings and the dive begins there on its own, flying deeper and deeper into the burning edge. The detail never runs out.',
-            'The buttons below steer the flight. The plus and minus set the direction, in toward the edge or back out to the surface. Play pauses and resumes, the number changes the speed, and the circular arrow returns you to the very start.'
+            'The dive flies itself, deeper and deeper into the burning edge, and the detail never runs out. Press the circular arrow to return to the surface, then tap one of the glowing rings and the dive begins there instead.',
+            'The buttons below steer the flight. Play pauses and resumes, and the circular arrow returns you to the very start, where the glowing rings wait to be chosen. Escape pauses the dive and brings back the welcome screen.'
         ]
     },
     // Not a clickable prop: shown once by updateDepthChip when the dive
@@ -680,8 +680,8 @@ const PROP_CONTENT = {
     divefloor: {
         title: 'The Bottom That Is Not There',
         lines: [
-            'You are floating hundreds of billions of times deeper than where you began. This is where a computer\'s numbers run out of digits, not where the set runs out of edge. Below this floor the boundary carries on exactly as it has, forever.',
-            'Benoit Mandelbrot saw the first rough printout of this shape in 1980 and asked for more detail. Every zoom since has ended the same way, with someone asking for more detail.'
+            'You are floating hundreds of billions of times deeper than where you began. This is where a computer\'s numbers run out of digits, not where the set runs out of edge. Below this floor the boundary carries on exactly as it has, forever. The circular arrow below brings you back to the surface.',
+            'Benoit Mandelbrot saw the first rough printout of this shape in 1980 and asked for more detail. Every zoom since has ended the same way, with someone asking for more detail. The circular arrow below brings you back to the surface whenever you are ready.'
         ]
     }
 };
@@ -718,14 +718,57 @@ function closePropDialog() {
     }
 }
 
-/** Dismiss the welcome overlay and settle in to float. */
+/** True while the welcome overlay is on screen. */
+function welcomeShown() {
+    return Boolean(blocker) && !blocker.classList.contains('hidden');
+}
+
+/** Show or hide the autozoom row. It follows the welcome screen rather
+ *  than the page load: nothing to press until the visitor is in. */
+function setRowVisible(on) {
+    if (autoRow) autoRow.classList.toggle('visible', on);
+}
+
+/** Dismiss the welcome overlay and step into the scene.
+ *
+ *  THE FIRST TIME, THE DIVE STARTS BY ITSELF (Steve, 2026-09-23), toward
+ *  the default destination, exactly as a first press of play would. It
+ *  used to wait for play, and the welcome screen stepped aside onto a
+ *  still picture with four buttons under it. After an Escape, the dive
+ *  resumes only if it was flying when Escape paused it. */
 function beginWatching() {
-    if (!state.isLoaded || !blocker || blocker.classList.contains('hidden')) return;
+    if (!state.isLoaded || !welcomeShown()) return;
     blocker.classList.add('hidden');
     // The list of places to dive becomes a tab stop only now: while the
     // welcome card was up it would have been one behind it.
     if (propPanel) propPanel.hidden = false;
-    track('begin-watching');
+    setRowVisible(true);
+    if (!welcomed) {
+        welcomed = true;
+        track('begin-watching');
+        setPlaying(true);
+    } else {
+        track('resume', { flying: resumeOnReturn ? 1 : 0 });
+        if (resumeOnReturn) setPlaying(true);
+    }
+    resumeOnReturn = false;
+}
+
+/** Escape out in the scene: pause the dive and bring the welcome screen back.
+ *
+ *  The row and the list of places to dive go with the scene, so nothing
+ *  behind the card is a tab stop, and focus leaves whatever button had it
+ *  rather than staying on one that is no longer on screen. */
+function returnToWelcome() {
+    if (!state.isLoaded || !blocker || welcomeShown()) return;
+    resumeOnReturn = auto.on;
+    setPlaying(false);
+    track('pause', { how: 'escape' });
+    blocker.classList.remove('hidden');
+    if (propPanel) propPanel.hidden = true;
+    setRowVisible(false);
+    const el = document.activeElement;
+    if (el && el !== document.body && typeof el.blur === 'function') el.blur();
 }
 
 /** Wire the outward-facing links from MANDELBROT_CONFIG.site. There is no

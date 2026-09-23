@@ -1722,17 +1722,27 @@ export function waveSurfaceAt(x, z) {
  *  wave breaks over the visitor at all. A visitor pressing "watch it again" and
  *  getting a visibly weaker storm is the worst possible answer.
  *
- *  So a replay is a replay. It also makes the line on the ending card true. */
-export function resetWater() {
-    elapsed = 0;
-    sinceProfile = 0;
+ *  So a replay is a replay. It also makes the line on the ending card true.
+ *
+ *  `at` IS FOR THE SCRUBBER (2026-09-23), and it is the same fault from the
+ *  other side. A seek moves the story clock, and if this clock stayed where it
+ *  was, a visitor who scrubbed to the storm would watch it at whatever tide the
+ *  sea had wandered to, which is the weaker storm all over again. So a seek puts
+ *  this clock where a replay would have it at that second. The waves jump to a
+ *  new phase with it, which is fine: a seek is a cut. The profile built here is
+ *  calm, and `sinceProfile` is left due so the very next `updateWater` rebuilds
+ *  it with the storm that second actually has. */
+export function resetWater(at = 0) {
+    const start = Number.isFinite(at) ? Math.max(0, at) : 0;
+    elapsed = start;
+    sinceProfile = Infinity;
     breaks = [];
     if (cycles) cycles.fill(null);
     if (profile && rowZ) {
-        buildProfile(rowZ, 0, settings, profile);
+        buildProfile(rowZ, start, settings, profile);
         refreshAttributes();
     }
-    if (uniforms) uniforms.uTime.value = 0;
+    if (uniforms) uniforms.uTime.value = start;
 }
 
 /** Notice when a crest reaches the break line, so the sound and the sight agree.
