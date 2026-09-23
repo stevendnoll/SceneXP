@@ -1,0 +1,34 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed.
+ *
+ * experience.css - Tornado Alley.
+ *
+ * Almost nothing, on purpose. The cards, the controls, the fade and the ending
+ * all come from the shared player's sheet (shared/css/player-1.0.0.css), and
+ * this file only fills the viewport and tints the player to the storm.
+ *
+ * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block:
+ * the page's CSP (style-src 'self') blocks inline styles outright. */
+
+/* A storm-gray page behind a slow first frame, and the player's scrim tinted
+   toward the storm's slate rather than High Water's sea teal. */
+:root {
+    --player-scrim-top: rgba(18, 20, 26, 0.60);
+    --player-scrim-bottom: rgba(18, 20, 26, 0.80);
+    --player-pill: rgba(18, 20, 26, 0.5);
+    --player-thumb-edge: rgba(18, 20, 26, 0.55);
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #3a4049;
+}
+
+#scene {
+    display: block;
+    width: 100%;
+    height: 100%;
+}

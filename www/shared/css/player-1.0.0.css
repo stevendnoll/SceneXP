@@ -1,0 +1,371 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed.
+ *
+ * player-1.0.0.css - the look of the shared timed-story player
+ * (shared/js/player-1.0.0.js): the welcome card that doubles as the pause card,
+ * the pause button and scrubber, the fade to black, and the ending card.
+ *
+ * LOADED ONLY BY SCENES THAT USE THE PLAYER, after styles-1.0.0.css and
+ * before the scene's own experience.css. It is its own file rather than a
+ * section of the shared stylesheet so that adding it cost no ?v= bump on the
+ * sixteen pages that do not use it.
+ *
+ * EXTRACTED FROM www/highwater/css/experience.css ON 2026-09-23, where Steve
+ * QA'd it the same day. High Water still carries its own copy until it moves
+ * onto the shared part.
+ *
+ * A SCENE RE-TINTS IT WITH TOKENS, never by overriding rules. Set any of the
+ * --player-* properties below on :root in the scene's experience.css.
+ *
+ * BUTTONS ARE KEYED BY CLASS, NOT ID. High Water's copy styled each button by
+ * id, and a new button got none of the shape (its Share button rendered as a
+ * default browser button on black). Here every button on a card wears
+ * .player-btn, and .player-btn-primary marks the one to press. */
+
+:root {
+    --player-ink: #e8eef1;
+    --player-soft: #cfdde3;
+    --player-muted: #b9ccd4;
+    --player-dim: #9fb0b8;
+    --player-faint: #8ea3ac;
+    --player-rule: #6f8b96;
+    --player-line: #5c6d75;
+    --player-line-strong: #93aeb9;
+    --player-scrim-top: rgba(6, 20, 27, 0.62);
+    --player-scrim-bottom: rgba(6, 20, 27, 0.78);
+    --player-pill: rgba(6, 20, 27, 0.5);
+    --player-pill-edge: rgba(232, 238, 241, 0.18);
+    --player-track: rgba(232, 238, 241, 0.32);
+    --player-thumb-edge: rgba(6, 20, 27, 0.55);
+    --player-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ---- The welcome card, which is also the pause card -------------------------- */
+
+#player-card {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: linear-gradient(180deg, var(--player-scrim-top) 0%, var(--player-scrim-bottom) 100%);
+    opacity: 1;
+    transition: opacity 650ms ease;
+    font: 400 1rem/1.65 var(--player-font);
+    color: var(--player-ink);
+    overflow-y: auto;
+}
+
+#player-card[hidden] {
+    display: none;
+}
+
+#player-card .card {
+    max-width: 34rem;
+    margin: auto;
+    text-align: center;
+}
+
+#player-card h1 {
+    margin: 0 0 0.75rem;
+    font-size: clamp(1.9rem, 6vw, 3rem);
+    font-weight: 300;
+    letter-spacing: 0.02em;
+}
+
+#player-card .lede {
+    margin: 0 0 1.25rem;
+    font-size: clamp(1rem, 2.6vw, 1.15rem);
+    color: var(--player-soft);
+}
+
+/* The paragraph that cannot be skimmed past: set apart with a rule down the
+   side rather than a warning box, which suits the tone better. */
+#player-card .warning {
+    margin: 0 auto 1.75rem;
+    max-width: 30rem;
+    padding: 0.85rem 1.1rem;
+    text-align: left;
+    border-left: 2px solid var(--player-rule);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 0 0.35rem 0.35rem 0;
+    color: var(--player-muted);
+    font-size: 0.95rem;
+}
+
+#player-card .note {
+    margin: 1.1rem 0 0;
+    font-size: 0.85rem;
+    color: var(--player-faint);
+}
+
+/* The pause card's chapter mark: where the story was held. */
+#player-card .paused-at {
+    margin: 0 0 0.35rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--player-dim);
+}
+
+.player-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.player-actions[hidden],
+#player-card .paused-at[hidden],
+.player-btn[hidden] {
+    display: none;
+}
+
+/* ---- Buttons ------------------------------------------------------------------ */
+
+.player-btn {
+    padding: 0.7rem 1.6rem;
+    font: inherit;
+    font-size: 1rem;
+    color: var(--player-ink);
+    background: transparent;
+    border: 1px solid var(--player-line);
+    border-radius: 2rem;
+    cursor: pointer;
+    transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.player-btn:hover,
+.player-btn:focus-visible {
+    background: rgba(232, 238, 241, 0.10);
+    border-color: var(--player-dim);
+}
+
+.player-btn:focus-visible {
+    outline: 2px solid var(--player-dim);
+    outline-offset: 3px;
+}
+
+.player-btn-primary {
+    padding: 0.8rem 2.6rem;
+    font-size: 1.05rem;
+    border-color: var(--player-line-strong);
+    background: rgba(232, 238, 241, 0.08);
+}
+
+/* ---- The fade to black ----------------------------------------------------------
+ * Driven by writing style.opacity, which is CSSOM and not an inline style
+ * attribute, so the strict CSP has nothing to say about it. */
+
+#player-blackout {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    background: #000;
+}
+
+/* ---- The ending ------------------------------------------------------------------ */
+
+#player-ending {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 2rem;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 900ms ease;
+    font: 400 1rem/1.6 var(--player-font);
+    color: var(--player-ink);
+}
+
+#player-ending[hidden] {
+    display: none;
+}
+
+#player-ending .ending-line {
+    margin: 0;
+    font-size: clamp(1.4rem, 4.5vw, 2.1rem);
+    font-weight: 300;
+    letter-spacing: 0.01em;
+}
+
+#player-ending .ending-note {
+    margin: 0;
+    max-width: 30rem;
+    color: var(--player-dim);
+}
+
+#player-ending .player-actions {
+    margin-top: 0.5rem;
+}
+
+#player-ending .promo-explore {
+    color: var(--player-dim);
+    text-decoration-color: rgba(159, 176, 184, 0.5);
+}
+
+#player-ending .promo-explore:hover,
+#player-ending .promo-explore:focus-visible {
+    color: var(--player-ink);
+    text-decoration-color: currentColor;
+}
+
+/* ---- The controls ------------------------------------------------------------------
+ * A full-screen layer that catches nothing itself, so only the two controls
+ * take a click. `.is-idle` fades them and stops them taking pointer events, so
+ * the first tap on a phone brings them back instead of pressing an invisible
+ * button. They stay in the tab order while faded, and focus brings them back. */
+
+#player-controls {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 400ms ease;
+}
+
+#player-controls[hidden] {
+    display: none;
+}
+
+#player-controls > * {
+    pointer-events: auto;
+}
+
+#player-controls.is-idle {
+    opacity: 0;
+}
+
+#player-controls.is-idle > * {
+    pointer-events: none;
+}
+
+/* The cursor goes with the controls over a playing scene. Only over the
+   canvas, so it can never vanish over a card. */
+.player-idle #scene {
+    cursor: none;
+}
+
+/* The house .menu-btn circle in the house corner. `.ui-float.visible`
+   normally supplies `display`, which this button does not use, because it
+   follows the story rather than the page. */
+#player-pause {
+    display: flex;
+    top: max(20px, env(safe-area-inset-top));
+    right: max(20px, env(safe-area-inset-right));
+}
+
+#player-pause:focus-visible {
+    outline: 2px solid var(--player-ink);
+    outline-offset: 3px;
+}
+
+/* ON A PILL, NOT STRAIGHT ON THE SKY, so the track keeps its contrast over
+   any sky. No backdrop blur: it would re-blur a moving WebGL frame every
+   frame, and a timed story is fill-rate bound on phones. */
+#player-scrubber {
+    position: fixed;
+    left: 50%;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    width: min(34rem, calc(100% - 32px));
+    padding: 0.35rem 1.1rem;
+    border-radius: 2rem;
+    background: var(--player-pill);
+    border: 1px solid var(--player-pill-edge);
+    box-sizing: border-box;
+}
+
+#player-scrub {
+    --progress: 0%;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    touch-action: none;
+}
+
+#player-scrub:focus-visible {
+    outline: 2px solid var(--player-ink);
+    outline-offset: 4px;
+    border-radius: 1rem;
+}
+
+/* WebKit has no progress pseudo-element, so the fill is a hard-stop gradient
+   at the --progress the player writes. Firefox draws its own. */
+#player-scrub::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right,
+            var(--player-ink) 0, var(--player-ink) var(--progress),
+            var(--player-track) var(--progress), var(--player-track) 100%);
+}
+
+#player-scrub::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border: none;
+    border-radius: 50%;
+    background: var(--player-ink);
+    box-shadow: 0 0 0 1px var(--player-thumb-edge);
+}
+
+#player-scrub::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--player-track);
+}
+
+#player-scrub::-moz-range-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--player-ink);
+}
+
+#player-scrub::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 50%;
+    background: var(--player-ink);
+    box-shadow: 0 0 0 1px var(--player-thumb-edge);
+}
+
+@media (pointer: coarse) {
+    #player-scrub::-webkit-slider-thumb {
+        width: 22px;
+        height: 22px;
+        margin-top: -9px;
+    }
+
+    #player-scrub::-moz-range-thumb {
+        width: 22px;
+        height: 22px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #player-card,
+    #player-ending,
+    #player-controls,
+    .player-btn {
+        transition: none;
+    }
+}

@@ -1,0 +1,9 @@
+<!-- A SILHOUETTE, BECAUSE THE ONLY SIZE THAT MATTERS IS 16 PIXELS (the lesson
+     of High Water's first icon). A dark storm base, a pale funnel narrowing to
+     the ground, and a gold strip of prairie. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Tornado Alley">
+  <rect width="32" height="32" rx="7" fill="#3a4049"/>
+  <rect y="24" width="32" height="8" fill="#c99a45"/>
+  <path d="M4 7h24v3H4z" fill="#23282f"/>
+  <path d="M7.5 10h17c-2.2 3.8-5.2 6.4-6.2 9.2-.5 1.5-.9 3.2-1.1 4.8h-1.6c.1-1.9-.1-3.6-.8-5.2C13.4 16.5 10 13.9 7.5 10z" fill="#d7d9dc"/>
+</svg>
