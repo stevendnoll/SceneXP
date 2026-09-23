@@ -106,29 +106,6 @@
          heading found nothing at all. -->
     <h1 class="sr-only">Gavin's Bug Patrol</h1>
 
-    <!-- ===== THE THINGS IN THE GARDEN, FOR ANYBODY WITHOUT A POINTER =======
-         Every story in this garden opened from a click or a tap on the 3D
-         view, which is a raycast from the pointer and nothing else, so a
-         keyboard or screen-reader visitor could read the welcome card and
-         leave without one. This is their route: one button per thing in the
-         garden, filled in by the shared proplist part from the same card
-         table the clicks read. Choosing one opens exactly what clicking that
-         thing would. The garden runs a full day every eight minutes, and the
-         rows follow it: the bees, ants, and ladybugs by day, the bat, the
-         snail, and the slug by night. A tap cannot reach a creature that is
-         not out, so neither can a row.
-
-         OFF SCREEN, NOT INVISIBLE. It sits above the top of the frame and
-         slides down while anything in it has focus, the way a skip link does.
-         `hidden` until the welcome card is dismissed, so it is never a tab
-         stop behind that card. -->
-    <section id="prop-panel" class="prop-panel" aria-labelledby="prop-panel-heading" hidden>
-        <h2 id="prop-panel-heading" class="prop-panel-heading">Things in the garden</h2>
-        <p class="prop-panel-note">Choose anything for a little of its story. Escape closes
-            whatever opens, and Tab moves on to the view controls.</p>
-        <ul id="prop-list" class="prop-list"></ul>
-    </section>
-
     <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
          a plain-text intro and links to the classic site. -->
     <noscript>
@@ -224,6 +201,38 @@
     </div>
 
     <canvas id="game-canvas" role="img" aria-label="A living 3D close-up of a Confederate Jasmine plant: ladybugs, praying mantises, ants, a spider, and bees move through the leaves while Gavin and two friends peer in from the far side"></canvas>
+
+    <!-- ===== THE THINGS IN THE GARDEN, FOR ANYBODY WITHOUT A POINTER =======
+         Every story in this garden opened from a click or a tap on the 3D
+         view, which is a raycast from the pointer and nothing else, so a
+         keyboard or screen-reader visitor could read the welcome card and
+         leave without one. This is their route: one button per thing in the
+         garden, filled in by the shared proplist part from the same card
+         table the clicks read. Choosing one opens exactly what clicking that
+         thing would. The garden runs a full day every eight minutes, and the
+         rows follow it: the bees, ants, and ladybugs by day, the bat, the
+         snail, and the slug by night. A tap cannot reach a creature that is
+         not out, so neither can a row.
+
+         OFF SCREEN, NOT INVISIBLE. It sits above the top of the frame and
+         slides down while anything in it has focus, the way a skip link does.
+         `hidden` until the welcome card is dismissed, so it is never a tab
+         stop behind that card.
+
+         LAST IN THE MARKUP, AFTER THE 3D VIEW, ON PURPOSE. A click sets where
+         the browser's next Tab starts, and the click that dismisses the
+         welcome card, or a click on the 3D view, lands below anything written
+         above them. When this list sat up by the heading, the first Tab after
+         either click went straight past it to the view controls. Here it is
+         the next stop after both, and still ahead of the controls the page
+         adds to its end. -->
+    <section id="prop-panel" class="prop-panel" aria-labelledby="prop-panel-heading" hidden>
+        <h2 id="prop-panel-heading" class="prop-panel-heading">Things in the garden</h2>
+        <p class="prop-panel-note">Choose anything for a little of its story. The arrow keys
+            move through the list, Escape closes whatever opens, and Tab or
+            Escape puts this list away.</p>
+        <ul id="prop-list" class="prop-list"></ul>
+    </section>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>
