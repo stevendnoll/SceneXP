@@ -2973,3 +2973,14 @@ export const GARDEN_CONFIG = deepFreeze({
         }
     }
 });
+
+/**
+ * THE GARDEN'S TREES ARE THE SHARED FRACTAL TREE (shared/js/fractaltree-1.0.0.js,
+ * promoted from this scene on 2026-09-23), grown with this scene's own tuning.
+ * The shared part takes its settings as `{ tree, fruit }`, and these are the
+ * two blocks above, so every note beside those numbers still governs them.
+ */
+export const GARDEN_TREE_SETTINGS = Object.freeze({
+    tree: GARDEN_CONFIG.tree,
+    fruit: GARDEN_CONFIG.garden.fruit
+});

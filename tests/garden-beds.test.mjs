@@ -14,7 +14,7 @@ import {
 } from '../www/garden/js/beds.js';
 import { cellCenter, cellInPlot, heightAt } from '../www/garden/js/terrain.js';
 import { plantingGrowth, currentHeight, createRecord } from '../www/garden/js/garden.js';
-import { SPECIES, speciesById } from '../www/garden/js/species.js';
+import { SPECIES, speciesById } from '../www/shared/js/treespecies-1.0.0.js';
 
 const B = GARDEN_CONFIG.garden.bed;
 const CAM = GARDEN_CONFIG.camera;

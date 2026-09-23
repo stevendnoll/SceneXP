@@ -31,7 +31,7 @@
  */
 
 import { GARDEN_CONFIG } from './config.min.js';
-import { makeRandom } from './species.min.js';
+import { makeRandom } from '../../shared/js/treespecies-1.0.0.min.js';
 import { clamp01 } from './clock.min.js';
 import {
     SKY_GLSL, skyStateAt, applyGloom, lightingAt, directionAt,

@@ -39,12 +39,12 @@
  * blossom is over.
  */
 
-import { GARDEN_CONFIG } from './config.min.js';
+import { GARDEN_CONFIG, GARDEN_TREE_SETTINGS } from './config.min.js';
 import {
     hourAt, inThirstWindow, phenologyAt, fruitStageAt, seasonAt, clamp01, smoothstep
 } from './clock.min.js';
-import { resolveSpecies, clampCustom, speciesById, newSeed, DEFAULT_CUSTOM } from './species.min.js';
-import { createTree, updateTree, disposeTree } from './tree.min.js';
+import { resolveSpecies, clampCustom, speciesById, newSeed, DEFAULT_CUSTOM } from '../../shared/js/treespecies-1.0.0.min.js';
+import { createTree, updateTree, disposeTree } from '../../shared/js/fractaltree-1.0.0.min.js';
 import {
     heightAt, cellCenter, cellKey, cellInPlot, snapToGrid, nearestFreeCell
 } from './terrain.min.js';
@@ -456,7 +456,7 @@ export function capacity(config = GARDEN_CONFIG) {
 /** Build the meshes for a record and stand it on the ground. */
 function materialise(record) {
     const resolved = resolveSpecies(record.species, record.custom);
-    const built = createTree(resolved, record.seed, optionsRef);
+    const built = createTree(resolved, record.seed, { ...optionsRef, settings: GARDEN_TREE_SETTINGS });
     const { x, z } = cellCenter(record.gx, record.gz);
     built.group.position.set(x, heightAt(x, z), z);
     if (sceneRef) sceneRef.add(built.group);

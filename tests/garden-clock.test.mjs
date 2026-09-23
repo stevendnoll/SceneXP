@@ -15,7 +15,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
-import { speciesById } from '../www/garden/js/species.js';
+import { speciesById } from '../www/shared/js/treespecies-1.0.0.js';
 import {
     hourAt, yearAt, wrapHour, yearPhaseAt, startSeconds,
     seasonAt, seasonPhaseAt, inThirstWindow,

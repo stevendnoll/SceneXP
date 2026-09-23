@@ -57,8 +57,8 @@ beforeAll(async () => {
     ({ initWildlife, updateWildlife, disposeWildlife, fireflyGlowSize, REFERENCE_FRAME_PX } =
         await import('../www/garden/js/wildlife.js'));
     ({ initVista, disposeVista } = await import('../www/garden/js/vista.js'));
-    ({ createTree, disposeTree } = await import('../www/garden/js/tree.js'));
-    ({ resolveSpecies } = await import('../www/garden/js/species.js'));
+    ({ createTree, disposeTree } = await import('../www/shared/js/fractaltree-1.0.0.js'));
+    ({ resolveSpecies } = await import('../www/shared/js/treespecies-1.0.0.js'));
     ({ updateVista } = await import('../www/garden/js/vista.js'));
     ({ snowCoverageAt } = await import('../www/garden/js/clock.js'));
     ({ pondHalfWidth, pondWaterLevel, outerReliefAt } = await import('../www/garden/js/terrain.js'));
@@ -800,7 +800,8 @@ test('nothing in the fractal wood is secretly an evergreen', () => {
  * repainting the mask cannot quietly move what these tests are about.
  */
 function leafClumpAlpha() {
-    const src = readFileSync(join(process.cwd(), 'www', 'garden', 'js', 'tree.js'), 'utf8');
+    // The garden's trees are the shared fractal tree since 2026-09-23.
+    const src = readFileSync(join(process.cwd(), 'www', 'shared', 'js', 'fractaltree-1.0.0.js'), 'utf8');
     const fn = src.slice(src.indexOf('export function leafClusterTexture'));
     const m = fn.slice(0, fn.indexOf('\n}')).match(/rgba\(255,255,255,\$\{([\d.]+) \+ random\(\) \* ([\d.]+)\}\)/);
     expect(m).not.toBeNull();

@@ -1,6 +1,12 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * species.js - The tree species, the shape sliders, and the seeded generator.
+ * treespecies-1.0.0.js - The tree species, the shape sliders, and the seeded
+ * generator, shared by every scene that grows fractal trees.
+ *
+ * PROMOTED FROM www/garden/js/species.js ON 2026-09-23, unchanged apart from
+ * this header, so that Tornado Alley's trees are the garden's trees and there
+ * is one copy of them. The garden imports it from here now. The notes below
+ * are the garden's, and "the garden" in them means the scene that grew them.
  *
  * Pure throughout. No THREE, no DOM.
  *

@@ -19,8 +19,8 @@
  *   returning visitor tomorrow is a different birch.
  */
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
-import { SPECIES, DEFAULT_CUSTOM, resolveSpecies, makeRandom, clampCustom, sliderWords, tintColor, speciesById } from '../www/garden/js/species.js';
-import { buildSkeleton, buildLeaves, buildFruit, sidesForDepth, FRUIT_SHAPES, fruitClusterSpan } from '../www/garden/js/tree.js';
+import { SPECIES, DEFAULT_CUSTOM, resolveSpecies, makeRandom, clampCustom, sliderWords, tintColor, speciesById } from '../www/shared/js/treespecies-1.0.0.js';
+import { buildSkeleton, buildLeaves, buildFruit, sidesForDepth, FRUIT_SHAPES, fruitClusterSpan } from '../www/shared/js/fractaltree-1.0.0.js';
 import { fruitStageAt, phenologyAt } from '../www/garden/js/clock.js';
 
 const SEED = 20260825;
