@@ -21,7 +21,7 @@
  * imports, so getDiveState() assertions read the live dive.
  */
 import { jest } from '@jest/globals';
-import { installThree } from './helpers/three-stub.mjs';
+import { installThree, keepPropRecords } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 
 jest.setTimeout(90000);
@@ -403,6 +403,65 @@ test('taps launch touchpoints, the set explains itself, and ghost clicks are ded
   dom.documentStub.visibilityState = 'hidden';
   fire(dom.documentStub, 'visibilitychange');
   fire(dom.windowStub, 'pagehide');
+});
+
+// ---- Places to dive, without a pointer --------------------------------------------
+// Until 2026-09-22 a destination could be chosen only by tapping a ring, so a
+// keyboard visitor could fly the default dive and never choose where. The list
+// (shared proplist part) is their route, and its ring rows live only while the
+// rings do: at the surface. keepPropRecords lets the registrations, the rings'
+// visibility, and the group they sit in all survive the stub.
+
+test('the list of places to dive launches a ring and follows the rings away', async () => {
+  globalThis.Worker = FakeWorker;
+  globalThis.ImageData = class ImageData {
+    constructor(data, width, height) { this.data = data; this.width = width; this.height = height; }
+  };
+  keepPropRecords();
+  dom.el('prop-panel').hidden = true;   // as the markup ships it
+  dom.el('dialog-modal').classList.add('hidden');
+  const { animate, playBtn } = await bootMandelbrot();
+  const items = () => dom.el('prop-list').children;
+  const labels = () => items().map((li) => li.children[0].textContent);
+  const shown = () => items().filter((li) => !li.hidden).map((li) => li.children[0].textContent);
+  const row = (label) => items().map((li) => li.children[0]).find((b) => b.textContent === label);
+
+  // The help card leads, then one row per ring, named from the same target
+  // list the rings are built from. The floor card is not a prop: no row.
+  expect(labels()[0]).toBe('How to Explore');
+  expect(labels()).toHaveLength(12);
+  expect(labels()).toContain('Dive to Seahorse Valley');
+  expect(labels()).toContain('Dive to the North Dendrite');
+  expect(labels()).not.toContain('The Bottom That Is Not There');
+
+  // Nothing answers behind the welcome card.
+  fire(row('Dive to the North Dendrite'), 'click');
+  expect(playBtn.attributes['aria-pressed']).toBe('false');
+  fire(dom.documentStub, 'keydown', { code: 'Enter' });
+  expect(dom.el('prop-panel').hidden).toBe(false);
+
+  // The help row opens the same card a tap on the set does.
+  fire(row('How to Explore'), 'click');
+  expect(dom.el('dialog-title').textContent).toBe('How to Explore');
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+
+  // At the surface every ring is on offer.
+  step(animate, 3);
+  expect(shown()).toHaveLength(12);
+
+  // A ring row launches the dive toward it and hands focus to pause, since
+  // the row it was on is about to go.
+  fire(row('Dive to the North Dendrite'), 'click');
+  expect(playBtn.attributes['aria-pressed']).toBe('true');
+  expect(dom.documentStub.activeElement).toBe(playBtn);
+
+  // Off the surface the rings sleep, and their rows with them.
+  step(animate, 20);
+  expect(shown()).toEqual(['How to Explore']);
+  // A ring row somehow still reached does nothing mid-dive.
+  fire(playBtn, 'click');   // pause
+  fire(row('Dive to Seahorse Valley'), 'click');
+  expect(playBtn.attributes['aria-pressed']).toBe('false');
 });
 
 // ---- The 2D fallback -------------------------------------------------------------

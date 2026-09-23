@@ -79,12 +79,12 @@
 
     <title>Sunnyvale Jenn Consulting</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=6" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=6">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -106,27 +106,6 @@
          is inside <noscript>, so without this one anybody navigating by
          heading found nothing at all. -->
     <h1 class="sr-only">Sunnyvale Jenn Consulting</h1>
-
-    <!-- ===== THE THINGS IN THE ROOM, FOR ANYBODY WITHOUT A POINTER =========
-         Every story in this office opened from a click or a tap on the 3D view,
-         which is a raycast from the pointer and nothing else, so a visitor with
-         a keyboard or a screen reader could read the welcome card, look around,
-         and leave without hearing one. This is their route: one button per
-         thing in the room, filled in by the shared proplist part from the same
-         card table the clicks read, so a row always names its card. Choosing
-         one opens exactly what clicking that thing would.
-
-         OFF SCREEN, NOT INVISIBLE. It sits above the top of the frame and
-         slides down while anything in it has focus, the way the skip link
-         does, so a sighted keyboard visitor can see where they are and a
-         pointer visitor never sees it. `hidden` until the welcome card is
-         dismissed, so it is never a tab stop behind that card. -->
-    <section id="prop-panel" class="prop-panel" aria-labelledby="prop-panel-heading" hidden>
-        <h2 id="prop-panel-heading" class="prop-panel-heading">Things in the room</h2>
-        <p class="prop-panel-note">Choose anything for a little of its story. Escape closes
-            whatever opens, and Tab moves on to the view controls.</p>
-        <ul id="prop-list" class="prop-list"></ul>
-    </section>
 
     <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers):
          a plain-text intro and links to Jenn's site and the classic site. -->
@@ -245,6 +224,36 @@
     </div>
 
     <canvas id="game-canvas" role="img" aria-label="A living 3D home office: Jenn works at a light oak desk facing the doorway, pausing now and then to wave hello, while sunlight pours through the window behind her and birds come and go on the cedar fence outside"></canvas>
+
+    <!-- ===== THE THINGS IN THE ROOM, FOR ANYBODY WITHOUT A POINTER =========
+         Every story in this office opened from a click or a tap on the 3D view,
+         which is a raycast from the pointer and nothing else, so a visitor with
+         a keyboard or a screen reader could read the welcome card, look around,
+         and leave without hearing one. This is their route: one button per
+         thing in the room, filled in by the shared proplist part from the same
+         card table the clicks read, so a row always names its card. Choosing
+         one opens exactly what clicking that thing would.
+
+         OFF SCREEN, NOT INVISIBLE. It sits above the top of the frame and
+         slides down while anything in it has focus, the way the skip link
+         does, so a sighted keyboard visitor can see where they are and a
+         pointer visitor never sees it. `hidden` until the welcome card is
+         dismissed, so it is never a tab stop behind that card.
+
+         LAST IN THE MARKUP, AFTER THE 3D VIEW, ON PURPOSE. A click sets where
+         the browser's next Tab starts, and the click that dismisses the
+         welcome card, or a click on the 3D view, lands below anything written
+         above them. When this list sat up by the heading, the first Tab after
+         either click went straight past it to the view controls. Here it is
+         the next stop after both, and still ahead of the controls the page
+         adds to its end. -->
+    <section id="prop-panel" class="prop-panel" aria-labelledby="prop-panel-heading" hidden>
+        <h2 id="prop-panel-heading" class="prop-panel-heading">Things in the room</h2>
+        <p class="prop-panel-note">Choose anything for a little of its story. The arrow keys
+            move through the list, Escape closes whatever opens, and Tab or
+            Escape puts this list away.</p>
+        <ul id="prop-list" class="prop-list"></ul>
+    </section>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

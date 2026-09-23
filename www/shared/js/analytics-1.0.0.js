@@ -659,10 +659,17 @@ function syncSceneSelect() {
 function syncActionFilter() {
     if (!els || !els.actionFilter) return;
     const vocab = actionVocabulary(currentSnap, sceneFilter);
+    // THE REBUILD MUST NOT MOVE THE VIEWER. Every tick of a box re-renders, and
+    // a new list starts scrolled to the top with nothing focused, so unticking
+    // a row near the bottom threw the list back to the top and dropped a
+    // keyboard viewer's focus onto the page body. Note both before the old
+    // list goes, and put them back on the new one.
+    const keep = filterPlace();
     els.actionFilter.textContent = '';
 
     if (!vocab.length) {
         els.actionFilter.appendChild(el('p', 'afilter-empty', 'Nothing to filter.'));
+        filterList = null;
         if (els.filterSummary) els.filterSummary.textContent = '';
         return;
     }
@@ -681,6 +688,7 @@ function syncActionFilter() {
         box.type = 'checkbox';
         box.className = 'afilter-box';
         box.id = id;
+        box.setAttribute('data-action', action);
         box.checked = !hiddenActions.has(action);
         box.addEventListener('change', () => {
             if (box.checked) hiddenActions.delete(action);
@@ -693,6 +701,9 @@ function syncActionFilter() {
         list.appendChild(row);
     });
     els.actionFilter.appendChild(list);
+    filterList = list;
+    restoreFilterPlace(list, keep);
+    watchMoreBelow(list);
 
     if (els.filterSummary) {
         const hidden = vocab.filter(v => hiddenActions.has(v.action)).length;
@@ -702,6 +713,57 @@ function syncActionFilter() {
     }
     if (els.selectAllBtn) els.selectAllBtn.disabled = !vocab.some(v => hiddenActions.has(v.action));
     if (els.clearAllBtn) els.clearAllBtn.disabled = vocab.every(v => hiddenActions.has(v.action));
+}
+
+let filterList = null;   // the checkbox list on screen, until the next rebuild
+
+/** Where the viewer is in the list: how far it is scrolled, and which
+ *  action's box has focus (by action, since the box itself is rebuilt). */
+function filterPlace() {
+    const place = { scrollTop: 0, action: null };
+    if (!filterList) return place;
+    place.scrollTop = filterList.scrollTop || 0;
+    const active = document.activeElement;
+    if (active && active.className === 'afilter-box'
+        && typeof active.getAttribute === 'function') {
+        place.action = active.getAttribute('data-action');
+    }
+    return place;
+}
+
+/** Put the viewer back where they were. An action that left the vocabulary
+ *  (a new day, another scene) has no box to return to, and focus stays put. */
+function restoreFilterPlace(list, place) {
+    if (place.scrollTop) list.scrollTop = place.scrollTop;
+    if (!place.action) return;
+    const box = Array.from(list.children)
+        .map(row => row.children && row.children[0])
+        .find(b => b && b.getAttribute('data-action') === place.action);
+    if (box && typeof box.focus === 'function') box.focus({ preventScroll: true });
+}
+
+/** Fade the list's bottom edge while rows sit below its cap, and only then.
+ *  A row cut in half at the edge read as a rendering fault, where a fade reads
+ *  as "there is more", and it lifts once the viewer has scrolled to the end. */
+function markMoreBelow(list) {
+    const more = list.scrollTop + list.clientHeight < list.scrollHeight - 1;
+    if (more) list.classList.add('has-more');
+    else list.classList.remove('has-more');
+}
+
+let filterObserver = null;
+
+function watchMoreBelow(list) {
+    list.addEventListener('scroll', () => markMoreBelow(list), { passive: true });
+    // The list is often built while the display is closed (the poll runs
+    // regardless), when it has no height to measure. The observer measures
+    // again the moment it is laid out, and whenever a new width re-wraps it.
+    if (filterObserver) filterObserver.disconnect();
+    if (typeof ResizeObserver === 'function') {
+        filterObserver = new ResizeObserver(() => markMoreBelow(list));
+        filterObserver.observe(list);
+    }
+    markMoreBelow(list);
 }
 
 /** Push the current view state onto the controls (used when code, rather than

@@ -75,13 +75,13 @@
 
     <title>The Mandelbrot Set</title>
 
-    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=6" as="style">
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="css/experience.min.css?v=1" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=6">
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
     <link rel="stylesheet" href="css/experience.min.css?v=1">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
@@ -205,6 +205,35 @@
     </div>
 
     <canvas id="game-canvas" role="img" aria-label="A 3D view of deep space: the Mandelbrot set floats ahead, a pure black fractal outlined in glowing neon orange, with stars and faint nebulae all around"></canvas>
+
+    <!-- ===== PLACES TO DIVE, FOR ANYBODY WITHOUT A POINTER =================
+         Choosing where to dive meant tapping one of the glowing rings on the
+         set, and the help card opened from a tap on the set itself. Both are
+         a raycast from the pointer and nothing else, so a keyboard or
+         screen-reader visitor could press play but never choose a
+         destination. This is their route: one button per ring, built from
+         the same target list the rings are, plus the help card, filled in by
+         the shared proplist part. The rings exist only at the surface, and
+         so do their rows.
+
+         OFF SCREEN, NOT INVISIBLE. It sits above the top of the frame and
+         slides down while anything in it has focus, the way a skip link does.
+         `hidden` until the welcome card is dismissed, so it is never a tab
+         stop behind that card.
+
+         LAST IN THE MARKUP, AFTER THE 3D VIEW, ON PURPOSE. A click sets where
+         the browser's next Tab starts, and the click that dismisses the
+         welcome card, or a click on the 3D view, lands below anything written
+         above them. When this list sat up by the heading, the first Tab after
+         either click went straight past it to the view controls. Here it is
+         the next stop after both, and still ahead of the controls the page
+         adds to its end. -->
+    <section id="prop-panel" class="prop-panel" aria-labelledby="prop-panel-heading" hidden>
+        <h2 id="prop-panel-heading" class="prop-panel-heading">Places to dive</h2>
+        <p class="prop-panel-note">Choose a place and the dive begins there. The arrow keys
+            move through the list, and Tab or Escape puts it away.</p>
+        <ul id="prop-list" class="prop-list"></ul>
+    </section>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

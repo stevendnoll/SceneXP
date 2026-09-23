@@ -15,7 +15,7 @@
  *   focus-restore path in each close function runs instead of throwing.
  */
 import { jest } from '@jest/globals';
-import { installThree } from './helpers/three-stub.mjs';
+import { installThree, keepPropRecords } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 
 let dom;
@@ -275,4 +275,61 @@ test('falls back to the 2D site when WebGL is unavailable', async () => {
   await flushAsync();
   await jest.advanceTimersByTimeAsync(3000);
   expect(dom.replaced).toEqual(['/']);
+});
+
+// ---- Every story has a route without a pointer ------------------------------
+// Until 2026-09-22 every card in the bar, the lyrics screen close-up, and the
+// jukebox opened only from a raycast off a click or a tap. The list of the
+// bar's things (shared proplist part) is the keyboard's route to all three.
+// keepPropRecords lets store.js's registrations stick under the stub, so the
+// rows are built from what the bar really registered.
+
+describe("the list of the bar's things", () => {
+  async function bootWithList() {
+    keepPropRecords();
+    dom.el('prop-panel').hidden = true;   // as the markup ships it
+    await bootJamar();
+    const rows = () => dom.el('prop-list').children.map((li) => li.children[0]);
+    const row = (label) => rows().find((b) => b.textContent === label);
+    return { rows, row };
+  }
+
+  test('has a row for every card in the bar, plus the jukebox', async () => {
+    const { rows } = await bootWithList();
+    const labels = rows().map((b) => b.textContent);
+    expect(labels[0]).toBe('Jamar');
+    expect(labels).toContain('The Lyrics Screen');
+    // The jukebox has no card of its own, so it joins last under the
+    // picker's heading. Twenty two cards plus the jukebox.
+    expect(labels[labels.length - 1]).toBe('The Jukebox');
+    expect(labels).toHaveLength(23);
+    expect(new Set(labels).size).toBe(23);
+  });
+
+  test('waits for the welcome card, then opens exactly what a tap would', async () => {
+    const { row } = await bootWithList();
+    const modal = dom.el('dialog-modal');
+
+    fire(row('The Corner Stage'), 'click');
+    expect(modal.classList.contains('hidden')).toBe(true);
+    expect(dom.el('prop-panel').hidden).toBe(true);
+
+    fire(dom.documentStub, 'keydown', { code: 'Enter' });
+    expect(dom.el('prop-panel').hidden).toBe(false);
+
+    fire(row('The Corner Stage'), 'click');
+    expect(modal.classList.contains('hidden')).toBe(false);
+    expect(dom.el('dialog-title').textContent).toBe('The Corner Stage');
+    // A row chosen while a card is up does not open a second thing over it.
+    fire(row('The Jukebox'), 'click');
+    expect(dom.el('jukebox-modal').classList.contains('hidden')).toBe(true);
+    fire(dom.documentStub, 'keydown', { code: 'Escape' });
+
+    fire(row('The Lyrics Screen'), 'click');
+    expect(dom.el('tv-view').classList.contains('hidden')).toBe(false);
+    fire(dom.documentStub, 'keydown', { code: 'Escape' });
+
+    fire(row('The Jukebox'), 'click');
+    expect(dom.el('jukebox-modal').classList.contains('hidden')).toBe(false);
+  });
 });
