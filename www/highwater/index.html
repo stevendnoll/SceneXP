@@ -106,7 +106,7 @@
     <title>High Water</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=3" as="style">
+    <link rel="preload" href="css/experience.min.css?v=4" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -117,7 +117,7 @@
          Every rule in the cards below carries its own margin, colour and font,
          so the reset has nothing of theirs to take away. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=3">
+    <link rel="stylesheet" href="css/experience.min.css?v=4">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -167,15 +167,17 @@
     <canvas id="scene" aria-label="A view out to sea from the water's edge, with waves breaking toward you"
         role="img"></canvas>
 
-    <!-- THERE ARE NO FLOATING CONTROLS (2026-09-07). The Home button was the
-         only one, and it came out with the rest of the site's Home chrome:
-         visitors read it as "reset this view", tapped it, and left from the
-         directory rather than coming back. Worse here than anywhere, because
-         a sixty-second arc that gets interrupted has nothing to return to.
-         The way to the directory is now a named link on the welcome card
-         below. There is still no settings cog and no autopilot, because there
-         is nothing to adjust and nowhere to be driven: the scene runs itself
-         and the only control it has ever needed is the one that starts it. -->
+    <!-- NO HOME BUTTON (2026-09-07). It came out with the rest of the site's
+         Home chrome: visitors read it as "reset this view", tapped it, and
+         left from the directory rather than coming back. The way to the
+         directory is a named link on the welcome card below.
+
+         THE PLAYER CONTROLS ARE FURTHER DOWN, after the overlays, and they are
+         the one change of mind on this page. The scene shipped with nothing to
+         press after Begin, and Steve's real-world QA on 2026-09-23 asked for a
+         pause and a way back to a missed moment. There is still no settings
+         cog and no autopilot, because there is nothing to adjust and nowhere
+         to be driven. -->
 
     <!-- The welcome card. It tells the visitor what they are about to watch and
          holds the arc at zero until they are ready. The sea is already running
@@ -183,6 +185,12 @@
          over a still frame. -->
     <div id="welcome">
         <div class="card">
+            <!-- THE SAME CARD IS THE PAUSE CARD (2026-09-23). Steve asked for the
+                 pause screen to say what this one says, and one copy of the
+                 content warning cannot drift from a second. main.js swaps Begin
+                 for Resume and Restart, and fills in this line with where the
+                 story was held, so a visitor can tell a pause from a reset. -->
+            <p id="paused-at" class="paused-at" hidden>Paused</p>
             <h1>High Water</h1>
             <p class="lede">
                 Sixty seconds at the water's edge, beginning on an ordinary bright afternoon.
@@ -194,6 +202,10 @@
                 It plays without sound, so you are welcome to watch it anywhere.
             </p>
             <button id="begin" type="button" class="primary">Begin</button>
+            <div id="pause-actions" class="pause-actions" hidden>
+                <button id="resume" type="button" class="primary" aria-describedby="paused-at">Resume</button>
+                <button id="restart" type="button">Restart</button>
+            </div>
             <p class="note">You can watch it again as many times as you wish.</p>
             <!-- The one link back to the directory, replacing the floating Home
                  button (2026-09-07): Home sat in the corner and read as "reset
@@ -228,6 +240,32 @@
          carries all of it. -->
     <div id="wash" aria-hidden="true"></div>
     <div id="blackout" aria-hidden="true"></div>
+
+    <!-- The player controls: a pause button in the corner and a scrubber
+         along the bottom. Hidden until Begin, hidden again by a pause and by
+         the ending, and faded out whenever the pointer has been still for a
+         few seconds, so the storm keeps the whole frame while it is being
+         watched. Any pointer move, tap or key brings them back.
+
+         NOT `.ui-float`. That class is shown once at boot and never again,
+         and these follow the story rather than the page. The pause button
+         borrows the house `.menu-btn` circle and sits in its corner slot.
+
+         The scrubber is a native range input, so the keyboard and a screen
+         reader get it for free. main.js takes the arrow keys to move five
+         seconds a press, and writes aria-valuetext in words. -->
+    <div id="controls" hidden>
+        <button id="pause-btn" type="button" class="menu-btn" aria-label="Pause" title="Pause (Esc)">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 5.5v13M15 5.5v13" />
+            </svg>
+        </button>
+        <div id="scrubber">
+            <label for="scrub" class="sr-only">Position in the story</label>
+            <input id="scrub" type="range" min="0" max="60" step="0.1" value="0"
+                aria-valuetext="0 seconds of 60">
+        </div>
+    </div>
 
     <!-- The ending. Hidden until the fade completes, then it is the only thing
          on the page. role="status" so it is announced when it appears rather

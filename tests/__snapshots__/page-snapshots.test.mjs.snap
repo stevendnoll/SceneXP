@@ -2222,11 +2222,11 @@ html [data-ui-theme="surf" lang="en"]
     title
       "High Water"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=3" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
     link [as="script" href="../lib/three.min.js" rel="preload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=3" rel="stylesheet"]
+    link [href="css/experience.min.css?v=4" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -2251,6 +2251,8 @@ html [data-ui-theme="surf" lang="en"]
     canvas#scene [aria-label="A view out to sea from the water's edge, with waves breaking toward you" role="img"]
     div#welcome
       div.card
+        p#paused-at.paused-at [hidden]
+          "Paused"
         h1
           "High Water"
         p.lede
@@ -2259,12 +2261,25 @@ html [data-ui-theme="surf" lang="en"]
           "It does not stay one, and you may find it unsettling. The weather turns, the surf keeps rising, and the sea comes over you at the end. There is lightning, so the screen flashes from time to time. It plays without sound, so you are welcome to watch it anywhere."
         button#begin.primary [type="button"]
           "Begin"
+        div#pause-actions.pause-actions [hidden]
+          button#resume.primary [aria-describedby="paused-at" type="button"]
+            "Resume"
+          button#restart [type="button"]
+            "Restart"
         p.note
           "You can watch it again as many times as you wish."
         a#explore-link.welcome-explore [href="/"]
           "More 3D worlds to explore at SceneXP.com"
     div#wash [aria-hidden="true"]
     div#blackout [aria-hidden="true"]
+    div#controls [hidden]
+      button#pause-btn.menu-btn [aria-label="Pause" title="Pause (Esc)" type="button"]
+        svg [aria-hidden="true" viewbox="0 0 24 24"]
+          path [d="M9 5.5v13M15 5.5v13"]
+      div#scrubber
+        label.sr-only [for="scrub"]
+          "Position in the story"
+        input#scrub [aria-valuetext="0 seconds of 60" max="60" min="0" step="0.1" type="range" value="0"]
     div#ending [aria-live="polite" hidden role="status"]
       p.ending-line
         "The sea has taken the beach."

@@ -58,8 +58,9 @@ have in mind.
   watches, with play and pause, speed, and direction controls for light
   steering. The Mandelbrot dive (`www/mandelbrot`) is the reference: its
   auto zoom flies the camera while the visitor picks destinations and
-  adjusts the ride. `www/highwater` is the strictest version of this, with
-  no controls at all beyond starting and replaying.
+  adjusts the ride. `www/highwater` is the strictest version of this: a
+  pause button (or Escape) and a timeline scrubber, both of which fade out
+  whenever the pointer is still.
 - **Piloted flight.** The visitor drives a vehicle through open space rather
   than walking or watching, so the world moves around a camera that never
   stops. `www/earthdefense` is the reference: keyboard and mouse on desktop,

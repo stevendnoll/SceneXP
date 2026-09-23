@@ -3358,5 +3358,38 @@ export const OCEAN_CONFIG = deepFreeze({
         // bouncing off the ends and biasing toward them. The window is 0.18, so
         // 0.06 is the practical ceiling.
         minReplayStep: 0.05
+    },
+
+    // THE PLAYER CONTROLS, added 2026-09-23 after Steve's real-world QA: a
+    // pause button, Escape, and a scrubber along the bottom. The scene was
+    // built with no controls after Begin, and these keep as much of that as
+    // they can by getting out of the way. See controls.js.
+    controls: {
+        // How long the pointer has to sit still before the pause button and
+        // the scrubber fade out. Three seconds is the video-player convention,
+        // long enough to reach for a control and short enough that the storm
+        // gets the whole frame back.
+        idleSeconds: 3,
+        // The arrow keys on the scrubber. Five seconds is what most video
+        // players use, and it is a twelfth of the story here, which is
+        // coarse enough to feel like a jump and fine enough to find a moment.
+        stepSeconds: 5,
+        // Page Up and Page Down, a quarter of the arc.
+        pageSeconds: 15,
+        // A seek never lands closer to the end than this, so dragging to the
+        // far right plays the last instant of the fade rather than cutting
+        // straight to the ending card while the pointer is still down.
+        endGuardSeconds: 0.25,
+        // THE PHOTOSENSITIVITY GUARD. The lightning runs on the arc clock, and
+        // a drag moves that clock many times faster than real time, so a scrub
+        // through the storm could otherwise fire strikes faster than the three
+        // per second the welcome card is written against. The flash is held
+        // for the whole drag and for this long after any seek, which is well
+        // past `storm.lightning.minGapSeconds` (0.34), so no two flashes can
+        // ever land closer together than they would on an untouched watch.
+        lightningHoldSeconds: 1,
+        // A seek is reported once it has settled, so ten arrow presses or one
+        // long drag leave one `seek` event rather than a stream of them.
+        seekReportSeconds: 0.8
     }
 });
