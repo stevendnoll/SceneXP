@@ -287,6 +287,28 @@ behavior. The floor for experience code is sized for exactly that kind of
 simple, honest test, and `tests/garden-init.test.mjs` is a good model to copy
 from.
 
+Every page under `www/` also has a snapshot of what it says: its head (title,
+meta and social tags, canonical link, Content Security Policy, structured
+data) and an outline of its markup and visible copy, with comments and
+whitespace left out. Any change to a page's markup or copy fails the suite
+until it is accepted on purpose. Read the diff first, then accept it in the
+same commit as the change:
+
+```bash
+npm test -- -u tests/page-snapshots.test.mjs
+```
+
+A new page's snapshot is written the first time you run the suite locally.
+Please commit it, because CI treats a missing snapshot as a failure.
+
+A snapshot says that a page changed, and `tests/page-rules.test.mjs` says
+whether it is wrong. It holds every page to the site's conventions: the full
+set of sharing tags with exactly one `og:image`, a same-origin Content
+Security Policy with nothing inline, alt text, named buttons, one `h1`,
+unique ids, a no-JavaScript fallback on every 3D scene, and house style in
+all visitor-facing copy (no em-dashes or semicolons, American spelling). A
+failure names the page and the line.
+
 Every JS and CSS file under `www/` is minified automatically by convention
 (`build.mjs` gives each one a `.min` sibling), so new files need no build
 wiring at all.
@@ -325,7 +347,9 @@ source of truth either way.
 5. **Build and test.** Run `npm run build` (your new files are minified
    automatically) and `npm test`. Please include an init test for your
    world, following the `tests/<experience>-init.test.mjs` pattern (see the
-   Tests section above).
+   Tests section above), and commit the page snapshot the suite writes for
+   your `index.html`. Adding your card in the next step changes the
+   directory's snapshot too, so run the snapshot update once more after it.
 6. **Add your world to the directory.** The directory is grouped into
    categories, so start by choosing the one your world belongs to:
    `worlds` (Worlds and games) for anything built for its own sake,
