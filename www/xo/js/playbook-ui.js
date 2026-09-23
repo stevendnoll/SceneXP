@@ -17,6 +17,7 @@
 import { OffensivePlaybookClass } from './playbook.min.js';
 import { XO_CONFIG as CFG } from './config.min.js';
 import { muteButton } from './hud.min.js';
+import { autoJump, setAutoJump } from './jump.min.js';
 
 /**
  * ALL SEVENTEEN PLAYS, WHICH IS WHAT THE 2D GAME HAS.
@@ -580,7 +581,36 @@ function buildHelp() {
     return btn;
 }
 
-export function initPlaybook(handler, startOver = null, { defense = null, help = null, colors = null } = {}) {
+/**
+ * AUTO JUMP (2026-09-23), BESIDE THE SOUND. Since that day the visitor times
+ * the receiver's jump, and this is the way back to the receivers jumping by
+ * themselves, for anybody who cannot make a timed press or would rather just
+ * watch. Off by default. It lives here because this is the screen a visitor
+ * sits on between plays, and it takes effect from the next snap.
+ *
+ * Worded like the sound button beside it, "Auto jump off" and "Auto jump on",
+ * with `aria-pressed` saying the same thing to a screen reader.
+ */
+function buildAutoJump(onChange) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'playbook-restart-btn playbook-autojump';
+    const paint = () => {
+        const on = autoJump();
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.textContent = on ? 'Auto jump on' : 'Auto jump off';
+    };
+    btn.addEventListener('click', () => {
+        const on = setAutoJump(!autoJump());
+        paint();
+        if (onChange) onChange(on);
+    });
+    paint();
+    return btn;
+}
+
+export function initPlaybook(handler, startOver = null,
+    { defense = null, help = null, colors = null, autoJumpChanged = null } = {}) {
     onChoose = handler;
     onStartOver = startOver;
     onDefense = defense;
@@ -607,6 +637,7 @@ export function initPlaybook(handler, startOver = null, { defense = null, help =
         if (onColors) controls.appendChild(buildColors());
         const mute = muteButton();
         if (mute) controls.appendChild(mute);
+        controls.appendChild(buildAutoJump(autoJumpChanged));
         if (onStartOver) controls.appendChild(buildStartOver());
         if (onHelp || mute || onStartOver) head.appendChild(controls);
     }

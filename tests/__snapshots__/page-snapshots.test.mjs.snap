@@ -3522,7 +3522,7 @@ html [lang="en"]
             li
               strong
                 "Your game of X's and O's."
-              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the colors you chose for the teams and the field, and whether you turned the sound on or off, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot."
+              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the colors you chose for the teams and the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot."
             li
               strong
                 "You can remove any of it whenever you like."
@@ -4899,11 +4899,11 @@ html [data-ui-theme="neon" lang="en"]
     title
       "X's and O's"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=17" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=18" rel="preload"]
     link [as="script" href="../lib/three.min.js" rel="preload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=17" rel="stylesheet"]
+    link [href="css/experience.min.css?v=18" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -4958,6 +4958,10 @@ html [data-ui-theme="neon" lang="en"]
             strong
               "Throw or run."
             "Hit a receiver, or keep it yourself and see how far you get. You have ten seconds from the snap to make up your mind, and holding on past that is a sack."
+          li
+            strong
+              "Jump for it."
+            "While the ball is in the air, press Jump or tap your receiver to send him up for it. The button lights up as the ball arrives. Jump too early or too late and the pass can sail past him or be picked off. If you would rather just watch, turn on Auto jump in the playbook."
         p.welcome-keys.card-meta
           "On a keyboard:"
           kbd
@@ -4980,7 +4984,13 @@ html [data-ui-theme="neon" lang="en"]
           "throw to that receiver, and"
           kbd
             "K"
-          "keeps it. During a replay,"
+          "keeps it. With the ball in the air,"
+          kbd
+            "J"
+          "or"
+          kbd
+            "Space"
+          "jumps. During a replay,"
           kbd
             "V"
           "or the arrow keys switch the view."

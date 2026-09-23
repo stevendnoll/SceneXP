@@ -104,7 +104,7 @@
     <title>X's and O's</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=17" as="style">
+    <link rel="preload" href="css/experience.min.css?v=18" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
@@ -113,7 +113,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=17">
+    <link rel="stylesheet" href="css/experience.min.css?v=18">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -247,6 +247,17 @@
                     yourself and see how far you get. You have ten seconds from
                     the snap to make up your mind, and holding on past that is
                     a sack.</li>
+                <!-- THE JUMP IS THE VISITOR'S SINCE 2026-09-23. It used to
+                     happen by itself, so the rules had nothing to say about
+                     it. Now a mistimed press loses the pass, which is a rule a
+                     visitor is owed before it costs them anything, and so is
+                     the way to switch it off. -->
+                <li><strong>Jump for it.</strong> While the ball is in the air,
+                    press Jump or tap your receiver to send him up for it. The
+                    button lights up as the ball arrives. Jump too early or too
+                    late and the pass can sail past him or be picked off. If you
+                    would rather just watch, turn on Auto jump in the
+                    playbook.</li>
             </ol>
 
             <!-- ONE LINE, AND ONLY BECAUSE THE LETTERS ARE ALREADY THERE. The
@@ -257,7 +268,8 @@
             <p class="welcome-keys card-meta">On a keyboard: <kbd>Space</kbd>,
                 <kbd>S</kbd> or <kbd>Q</kbd> snaps the ball, <kbd>C</kbd> changes
                 the play before you do, <kbd>A</kbd> to <kbd>D</kbd> throw to
-                that receiver, and <kbd>K</kbd> keeps it. During a replay,
+                that receiver, and <kbd>K</kbd> keeps it. With the ball in the
+                air, <kbd>J</kbd> or <kbd>Space</kbd> jumps. During a replay,
                 <kbd>V</kbd> or the arrow keys switch the view.</p>
 
             <p class="welcome-ladder-title">What a play is worth</p>

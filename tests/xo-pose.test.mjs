@@ -1104,7 +1104,10 @@ describe('the keyboard', () => {
      * mistake, and it would show up as a button somebody could never press.
      */
     test('every binding is its own key', () => {
-        const keys = ['A', 'B', 'C', 'D', ' ', 'S', 'Q', 'K', 'V'];
+        // J joined 2026-09-23 with the visitor's jump. Space is not listed
+        // twice: the snap and the jump share it and are never on screen
+        // together, which is the row's business rather than this table's.
+        const keys = ['A', 'B', 'C', 'D', ' ', 'S', 'Q', 'K', 'V', 'J'];
         const seen = new Map();
         for (const key of keys) {
             const act = keyAction(key);
@@ -1113,9 +1116,9 @@ describe('the keyboard', () => {
             expect(had === undefined || had === act).toBe(true);
             seen.set(key, act);
         }
-        // Snap has three keys and the rest have one each, so nine keys reach
-        // seven actions.
-        expect(new Set(seen.values()).size).toBe(7);
+        // Snap has three keys and the rest have one each, so ten keys reach
+        // eight actions.
+        expect(new Set(seen.values()).size).toBe(8);
     });
 
     test('and every letter that means something on screen has a control', () => {

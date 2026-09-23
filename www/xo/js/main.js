@@ -15,7 +15,7 @@
  * absorbs every assignment written onto a mesh, so anything drawn is invisible
  * to a suite.
  */
-import { XO_CONFIG as CFG, FIELD, simToWorld } from './config.min.js';
+import { XO_CONFIG as CFG, FIELD, simToWorld, UNITS_TO_METRES } from './config.min.js';
 import { initField, setBandAt, fadeBand, updateScoreboard, applyFieldColors } from './field.min.js';
 import { initRoster, figureFor, TEAMS, applyTeamColors } from './roster.min.js';
 import {
@@ -27,6 +27,7 @@ import {
 } from './markers.min.js';
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments, noteThrow,
+    setVisitorJumps, standingReach,
     beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
     beginRelocate, resetRelocate, airborne,
     beginCelebration, resetCelebration, celebrationClock,
@@ -42,8 +43,9 @@ import { planBulbs } from './fireworks.min.js';
 import {
     createPlay, lineUp, snap, tick, ballCarrier, markAirborne, setDifficulty,
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome, decisionLeft,
-    clearEscapes, clockReading,
+    clearEscapes, clockReading, requestLeap, ballInFlight, setStandingReach,
 } from './play.min.js';
+import { autoJump, cueLit } from './jump.min.js';
 import { readGame, saveGame, clearGame } from './progress.min.js';
 import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.js';
 import {
@@ -51,6 +53,7 @@ import {
     clearActions, showResult, hideResult, announce, showWelcome, showHelp, showSkipReplay,
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
+    showInFlight, setJumpCue,
 } from './hud.min.js';
 import { openingFrame, planOpening, castAt, propsAt } from './opening.min.js';
 import { initColorsCard, showColorsCard, colorsCardOpen } from './colors-ui.min.js';
@@ -68,7 +71,7 @@ import { cheerFor } from './stunt.min.js';
 import { showSummary, hideSummary, readBest } from './summary.min.js';
 import {
     startRecording, record, frameCount, frameAt, focusAt,
-    rewind, advance, playheadFrame, isEmpty, discard,
+    rewind, advance, playheadFrame, isEmpty, discard, noteLeap,
 } from './replay.min.js';
 import {
     setDriver, setAspect, update as updateCamera, nudgeView, resetView, switchView,
@@ -258,6 +261,9 @@ const reducedMotion = typeof window !== 'undefined' && window.matchMedia
  *  display and in slow motion on a struggling phone. The rate itself is the
  *  game's pace and lives in config (see `simHz`). */
 const SIM_STEP = 1 / CFG.simHz;
+/** A leaping receiver's reach in field units, the same box `motion.checkCatch`
+ *  gives him (`airborneReach`), for the Jump button's cue. */
+const JUMP_REACH = CFG.pose.jump.range / UNITS_TO_METRES;
 /**
  * THE BOARD, PAINTED FROM ONE PLACE.
  *
@@ -916,6 +922,17 @@ function onSnap() {
     beginSnapMotion();
     cycle.phase = 'live';
     cycle.held = 0;
+    /**
+     * WHOSE JUMP THIS PLAY IS, fixed at the snap. The visitor's, unless Auto
+     * jump is on (2026-09-23). Read here rather than live so a switch flipped
+     * mid-play cannot change the rules under a ball already in the air, and
+     * so the replay of this play draws the jump it actually had: nothing
+     * changes `setVisitorJumps` again until the next snap.
+     */
+    cycle.visitorJumps = !autoJump();
+    cycle.jumpRow = false;
+    cycle.play.manualJump = cycle.visitorJumps;
+    setVisitorJumps(cycle.visitorJumps);
     startRecording(cycle.play.game.objects);
     showInPlay(eligibleReceivers(cycle.play));
 }
@@ -928,13 +945,68 @@ function onThrow(position) {
         // the time puts the wrong man in the air (QA round twenty-four).
         noteThrow(position);
         playSound('wind');
-        clearActions();
+        // THE BALL IS UP, AND SO IS THE ONE THING LEFT TO DO. With the jump
+        // the visitor's, the row becomes the Jump button until the ball comes
+        // down or he has gone up for it.
+        if (cycle.visitorJumps) {
+            showInFlight();
+            cycle.jumpRow = true;
+        } else {
+            clearActions();
+        }
         report('throw', {
             kind: position,
             outcome: { ...calledFields(), throwTo: position },
             seconds: sinceSnap(),
         });
     }
+}
+
+/**
+ * SEND A RECEIVER UP FOR IT. `position` is whoever a tap landed on; the Jump
+ * button, J and the space bar name nobody, and mean the man it was thrown to.
+ *
+ * `requestLeap` refuses a second jump by the same man, a ball already caught
+ * and anybody but a receiver, so a press that cannot do anything does nothing.
+ * The jump is logged for the replay as it happens, because the recorder stores
+ * where everybody was, not why anybody left the ground.
+ */
+function onJump(position) {
+    const game = cycle.play && cycle.play.game;
+    const who = position || (game && game.throwTo);
+    if (!who || !requestLeap(cycle.play, who)) return false;
+    noteLeap(who, SIM_STEP);
+    const target = who === game.throwTo;
+    report('jump', {
+        kind: target ? 'target' : 'other',
+        outcome: { ...calledFields(), jumped: who },
+        seconds: sinceSnap(),
+    });
+    // His one jump is spent, so the button that jumps him has nothing left to
+    // do. A tap can still send somebody else up.
+    if (target && cycle.jumpRow) {
+        clearActions();
+        cycle.jumpRow = false;
+    }
+    return true;
+}
+
+/**
+ * THE JUMP BUTTON, WHILE THE BALL IS UP. It lights up as the ball nears the man
+ * it was thrown to (`jump.cueLit`), and it goes away the moment there is no
+ * ball in the air to jump for: caught, picked off, or on the grass.
+ */
+function tendJumpRow() {
+    if (!cycle.jumpRow) return;
+    if (!ballInFlight(cycle.play)) {
+        clearActions();
+        cycle.jumpRow = false;
+        return;
+    }
+    const game = cycle.play.game;
+    const ball = game.objects.find((o) => o.settings && o.settings.position === 'ball');
+    const target = game.objects.find((o) => o.settings && o.settings.position === game.throwTo);
+    setJumpCue(cueLit(ball, target, JUMP_REACH));
 }
 
 function onRun() {
@@ -1807,13 +1879,18 @@ function stepCycle(delta) {
         // that lasts 0.62 seconds is not a thing anybody can see, and it is the
         // only order that can work: the view cannot know where the ball is
         // drawn until it has drawn it.
-        markAirborne(cycle.play, airborne());
+        //
+        // ONLY WHEN THE JUMP IS HIS OWN. A visitor's jump is started by
+        // `requestLeap` and landed by the simulation, and handing it the
+        // view's set here would overwrite it with nobody.
+        if (!cycle.visitorJumps) markAirborne(cycle.play, airborne());
         cycle.accumulator = Math.min(cycle.accumulator + delta, 0.25);
         while (cycle.accumulator >= SIM_STEP) {
             tick(cycle.play);
             record(cycle.play.game.objects);
             cycle.accumulator -= SIM_STEP;
         }
+        tendJumpRow();
         /**
          * THE CLOCK IS READ FROM THE SIMULATION, NEVER COUNTED HERE.
          *
@@ -2122,6 +2199,20 @@ function tapTargets() {
             { position: 'qb', act: onRun },
         ];
     }
+    // THE BALL IS IN THE AIR: A TAP SENDS UP WHOEVER IS NEAREST THE FINGER
+    // (2026-09-23). Any receiver who has not jumped yet, because the one the
+    // visitor meant is the one under the finger. Only the man it was thrown to
+    // breathes, though: four pulsing markers under a ball in flight is a busy
+    // field, and he is the one worth looking at.
+    if (cycle.phase === 'live' && cycle.visitorJumps && ballInFlight(cycle.play)) {
+        const game = cycle.play.game;
+        return eligibleReceivers(cycle.play)
+            .filter((pos) => {
+                const o = game.objects.find((x) => x.settings && x.settings.position === pos);
+                return o && o.state && !o.state.leapt;
+            })
+            .map((pos) => ({ position: pos, act: () => onJump(pos), pulse: pos === game.throwTo }));
+    }
     return [];
 }
 
@@ -2267,7 +2358,7 @@ function onCanvasPointer(event) {
  * the brighter resting opacity so the affordance is not lost entirely.
  */
 function pulseTargets(elapsed) {
-    const live = new Set(tapTargets().map((t) => t.position));
+    const live = new Set(tapTargets().filter((t) => t.pulse !== false).map((t) => t.position));
     setPulse(live, reducedMotion ? 1 : 0.72 + Math.sin(elapsed * 3.4) * 0.28);
 }
 
@@ -2335,8 +2426,13 @@ async function init() {
     // hud.js can only build one once it has been handed `isMuted` and
     // `onToggleMute`. Built the other way round it silently makes no button at
     // all, which is a missing control rather than an error.
+    // HOW TALL THE RECEIVERS ARE, told to the simulation once. The visitor's
+    // jump is judged against his hands, and only the view knows how the
+    // figures are built (see `play.setStandingReach`).
+    setStandingReach(standingReach());
     initHud({
         onSnap, onThrow, onRun, onNext, onChangePlay,
+        onJump: () => onJump(),
         onReplay: startReplay,
         onSkipReplay,
         onSkipCelebration,
@@ -2351,6 +2447,8 @@ async function init() {
     });
     initPlaybook(onPlaybookChoice, onStartOver, {
         defense: (slug) => report('set-defense', { kind: slug || 'random' }),
+        // Worth knowing how many visitors turn the timed jump off.
+        autoJumpChanged: (on) => report('auto-jump', { kind: on ? 'on' : 'off' }),
         // The welcome card again, from "How to play". `back` puts the book
         // where it was, including a change of play still waiting to be kept.
         help: (back) => {

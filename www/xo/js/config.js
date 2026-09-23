@@ -2000,6 +2000,43 @@ const XO_CONFIG = {
              */
             arriveFirst: true,
             backstop: 0.7,
+
+            /**
+             * THE VISITOR'S JUMP, 2026-09-23, and the default since that day.
+             *
+             * Everything above describes the AUTOMATIC jump, which the view
+             * fires on its own once the ball is already over a receiver's
+             * hands. Steve's call: the ball in the air was the most passive
+             * stretch of every pass, and the catch is the moment the play turns
+             * on, so the visitor now sends the receiver up. Mistimed, the pass
+             * sails past or is picked off. "Auto jump" in the playbook brings
+             * the old behaviour back, untouched, for anybody who cannot make a
+             * timed press. See jump.js.
+             *
+             * SEEN BY THE SIMULATION, ON ITS OWN CLOCK. A hand-timed jump lives
+             * in play.js: the press starts the clock, `landLeaps` advances it
+             * every step, and the catch asks whether his hands are up to the
+             * ball at that step. The automatic jump needed the view to vouch for
+             * the height; this one works it out from the same closed-form arc
+             * view.js draws, so neither a frame rate nor a second opinion comes
+             * into it.
+             *
+             * HAIL MARYS GET EASIER AND THAT IS DECIDED (Steve, 2026-09-23). A
+             * well-timed jump is allowed to win a deep ball. The variance on a
+             * long pass is the blitz, which gets longer to arrive while the
+             * quarterback waits for a deep route to open.
+             */
+            manual: {
+                /** Metres the ball may be above his fingertips, at the height
+                 *  the jump has him at that instant, and still be his. A hand
+                 *  reaches a little past a fingertip measured standing. */
+                slack: 0.25,
+                /** Seconds of warning. The Jump button lights up when the
+                 *  ball is this close to reaching him, which is about the
+                 *  rise of the jump plus a human reaction: a cue to act on
+                 *  rather than a promise. */
+                cueLead: 0.45,
+            },
         },
 
         /**
@@ -3065,6 +3102,10 @@ const XO_CONFIG = {
         /** The team and field colors a visitor chose (colors.js). Removed again
          *  when they are all back to the game's own. */
         colors: 'exes-n-ohs-team-colors',
+        /** Whether the visitor turned Auto jump on (jump.js). Only written
+         *  once they have touched the switch, and named in www/privacy.html
+         *  like every other key here. */
+        jump: 'exes-n-ohs-jump-settings',
     },
 
     /**

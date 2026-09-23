@@ -64,6 +64,12 @@ let slots = [];          // position name per slot, in a fixed order
 let buffer = null;       // Float32Array
 let ticks = 0;           // frames recorded
 let playhead = 0;        // frames played back
+// THE VISITOR'S JUMPS (2026-09-23), as { position, tick, step }: who went up,
+// on which recorded frame, and how long a frame is. Not in the slot table,
+// because a jump is an event rather than a state: one entry a play, where a
+// seventh float would cost every slot on every tick. `frameAt` works out how
+// far into it he is, so scrubbing and slow motion are free here too.
+let leaps = [];
 
 /**
  * Begin recording.
@@ -78,7 +84,30 @@ export function startRecording(objects) {
     buffer = new Float32Array(slots.length * STRIDE * CHUNK_TICKS);
     ticks = 0;
     playhead = 0;
+    leaps = [];
     return slots.slice();
+}
+
+/**
+ * Note that `position` has just left his feet at the visitor's say-so. Called
+ * when the jump is pressed, so it lands on the frame the next `record` writes,
+ * which is the first frame the simulation has him in the air. `step` is the
+ * simulation's seconds per frame.
+ */
+export function noteLeap(position, step) {
+    if (!buffer || !position || !(step > 0)) return false;
+    leaps.push({ position, tick: ticks, step });
+    return true;
+}
+
+/** How far into a jump this position is on frame `f`, in seconds, or -1. The
+ *  latest jump at or before the frame, so a scrub backwards finds nothing. */
+function leapFor(position, f) {
+    let found = -1;
+    for (const leap of leaps) {
+        if (leap.position === position && leap.tick <= f) found = (f - leap.tick) * leap.step;
+    }
+    return found;
 }
 
 function ensureRoom() {
@@ -138,6 +167,7 @@ export function frameAt(index, teamOf) {
     for (let s = 0; s < slots.length; s += 1) {
         const i = base + s * STRIDE;
         const position = slots[s];
+        const leap = leaps.length ? leapFor(position, f) : -1;
         out.push({
             settings: {
                 position,
@@ -150,6 +180,10 @@ export function frameAt(index, teamOf) {
                 ySpeed: buffer[i + 4],
                 hasBall: buffer[i + 5] === CARRYING || buffer[i + 5] === CARRYING_RUN,
                 run: buffer[i + 5] === CARRYING_RUN,
+                // The view reads the same two fields off a replayed man that it
+                // reads off a live one, so the jump is drawn by one code path.
+                leaping: leap >= 0,
+                leapFor: leap,
             },
         });
     }
@@ -209,4 +243,5 @@ export function discard() {
     slots = [];
     ticks = 0;
     playhead = 0;
+    leaps = [];
 }

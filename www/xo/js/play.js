@@ -24,6 +24,7 @@ import { ObjectAnimationsClass } from './routes.min.js';
 import { MotionClass } from './motion.min.js';
 import { ExesAndOhsStateClass } from './playstate.min.js';
 import { classifyPlay } from './scoring.min.js';
+import { ballHeight, leapCatches, inTheAir } from './jump.min.js';
 
 /** How many resolution passes, and how far apart bodies are held. The distance
  *  is config's, in metres, and the simulation works in field units, so this is
@@ -930,6 +931,10 @@ export function landLeaps(play) {
     const st = play.playState.state;
     const flying = !!ball && !(st.ball && st.ball.caught);
     const step = 1 / CFG.simHz;
+    if (play.manualJump) {
+        landManualLeaps(play, ball, flying, step);
+        return;
+    }
     for (const obj of game.objects) {
         if (!obj.state || !obj.settings || isBall(obj)) continue;
         const s = obj.state;
@@ -943,6 +948,84 @@ export function landLeaps(play) {
             s.leapFor = (s.leapFor || 0) + step;
         }
         s.ballGap = gap;
+    }
+}
+
+// ---- The visitor's jump ------------------------------------------------------
+//
+// 2026-09-23. With `play.manualJump` set (main.js sets it at the snap unless
+// Auto jump is on) nobody jumps by himself: `requestLeap` is the only way into
+// the air, and `landManualLeaps` replaces the view's say-so with the ball's
+// real drawn height against his hands. See jump.js and `pose.jump.manual`.
+
+/** How high a receiver's fingertips are when he is standing, in metres. The
+ *  view knows how the figures are built and says so once, at boot, because the
+ *  simulation must not import the rig. Null means nobody said, and a leaping
+ *  man is then excused the height as the automatic jump always was. */
+let standingReach = null;
+
+export function setStandingReach(metres) {
+    standingReach = typeof metres === 'number' && metres > 0 ? metres : null;
+    return standingReach;
+}
+
+/** Whether the ball is in the air with somebody to jump for it. */
+export function ballInFlight(play) {
+    const game = play && play.game;
+    if (!game || !play.live || !game.throwTo) return false;
+    const ball = game.objects.find(isBall);
+    const st = play.playState.state;
+    return !!ball && !(st.ball && st.ball.caught);
+}
+
+/**
+ * SEND A RECEIVER UP, because the visitor asked. True if he went.
+ *
+ * Any receiver, not only the one it was thrown to, because a tap lands on
+ * whoever is nearest the finger and he should be the one who goes. Only the
+ * man it was thrown to can catch it, which is the ported rule in
+ * `motion.checkCatch`, so going up for somebody else's ball is only ever a
+ * jump.
+ *
+ * ONCE A PLAY EACH. A man who could jump again the moment he landed could be
+ * kept bouncing by holding the key down, and a receiver in the air half the
+ * time catches half the high balls without anybody timing anything. One jump
+ * makes the press a decision.
+ *
+ * He keeps running exactly as he was: nothing here touches his speed or his
+ * route, and nothing in the simulation reads `leaping` except the catch.
+ */
+export function requestLeap(play, position) {
+    if (!play || !play.manualJump || !ballInFlight(play)) return false;
+    if (eligibleReceivers(play).indexOf(position) === -1) return false;
+    const obj = play.routes.getObjectByPosition(play.game.objects, position);
+    if (!obj || !obj.state || obj.state.leapt || obj.state.hasBall) return false;
+    obj.state.leapt = true;
+    obj.state.leaping = true;
+    obj.state.leapFor = 0;
+    obj.state.airborne = false;
+    return true;
+}
+
+/**
+ * ONE STEP OF EVERY VISITOR'S JUMP. His clock advances, he lands when the hang
+ * is over, and in between he counts as airborne for the catch only while his
+ * hands are up to the ball at this step (`jump.leapCatches`). Not latched:
+ * the question is asked again every step, because the answer changes as he
+ * rises and falls.
+ */
+function landManualLeaps(play, ball, flying, step) {
+    const ballY = flying && ball ? ballHeight(ball) : -Infinity;
+    for (const obj of play.game.objects) {
+        const s = obj.state;
+        if (!s || !s.leaping || isBall(obj)) continue;
+        if (!inTheAir(s.leapFor)) {
+            s.leaping = false;
+            s.airborne = false;
+            continue;
+        }
+        s.airborne = flying && leapCatches(standingReach, s.leapFor, ballY);
+        s.leapFor += step;
     }
 }
 
