@@ -2,7 +2,7 @@
 /**
  * main.js - Tornado Alley.
  *
- * Sixty seconds on the open prairie: a calm evening, a storm organizing on the
+ * Thirty seconds on the open prairie: a calm evening, a storm organizing on the
  * horizon, a tornado forming, crossing the fields and roping out, and the sky
  * clearing. A timed story, the second after High Water, and the first built
  * on the shared player (shared/js/player-1.0.0.js), which owns the welcome
@@ -179,13 +179,13 @@ async function init() {
     }).install();
 
     // A share sells the scene, not a result: there is nothing here to beat,
-    // so it says what the sixty seconds are and stops short of the ending,
+    // so it says what the thirty seconds are and stops short of the ending,
     // exactly as the og:description does.
     installShare(
         document.getElementById('share'),
         () => ({
             title: 'Tornado Alley',
-            text: 'Sixty seconds on the open prairie, beginning on a calm summer evening, '
+            text: 'Thirty seconds on the open prairie, beginning on a calm summer evening, '
                 + 'as a storm builds on the horizon. A browser 3D scene on SceneXP.'
         }),
         {

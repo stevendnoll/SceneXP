@@ -4845,12 +4845,12 @@ html [data-ui-theme="surf" lang="en"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
     meta [content="noindex, nofollow" name="robots"]
-    meta [content="Sixty seconds on the open prairie in 3D, beginning on a calm summer evening. A storm builds on the horizon, a tornado forms and crosses the fields, and then the sky clears. Plays without sound in any modern browser." name="description"]
+    meta [content="Thirty seconds on the open prairie in 3D, beginning on a calm summer evening. A storm builds on the horizon, a tornado forms and crosses the fields, and then the sky clears. Plays without sound in any modern browser." name="description"]
     meta [content="#3a4049" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/tornado/" rel="canonical"]
     meta [content="Tornado Alley" property="og:title"]
-    meta [content="Sixty seconds on the open prairie, beginning on a calm summer evening, as a storm builds on the horizon." property="og:description"]
+    meta [content="Thirty seconds on the open prairie, beginning on a calm summer evening, as a storm builds on the horizon." property="og:description"]
     meta [content="website" property="og:type"]
     meta [content="SceneXP" property="og:site_name"]
     meta [content="https://www.scenexp.com/tornado/" property="og:url"]
@@ -4862,7 +4862,7 @@ html [data-ui-theme="surf" lang="en"]
     meta [content="A tornado seen across a golden prairie under a dark, slowly turning storm base, with a bright band of sky along the horizon." property="og:image:alt"]
     meta [content="summary_large_image" name="twitter:card"]
     meta [content="Tornado Alley" name="twitter:title"]
-    meta [content="Sixty seconds on the open prairie, beginning on a calm summer evening, as a storm builds on the horizon." name="twitter:description"]
+    meta [content="Thirty seconds on the open prairie, beginning on a calm summer evening, as a storm builds on the horizon." name="twitter:description"]
     meta [content="https://www.scenexp.com/tornado/assets/og-tornado.jpg?v=1" name="twitter:image"]
     meta [content="A tornado seen across a golden prairie under a dark, slowly turning storm base, with a bright band of sky along the horizon." name="twitter:image:alt"]
     script [type="application/ld+json"]
@@ -4872,7 +4872,7 @@ html [data-ui-theme="surf" lang="en"]
         "@id": "https://www.scenexp.com/tornado/#website",
         "url": "https://www.scenexp.com/tornado/",
         "name": "Tornado Alley",
-        "description": "A passive 3D scene on the open prairie. Sixty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end under a clearing sky.",
+        "description": "A passive 3D scene on the open prairie. Thirty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end under a clearing sky.",
         "inLanguage": "en-US"
       }
     title
@@ -4893,7 +4893,7 @@ html [data-ui-theme="surf" lang="en"]
         h1
           "Tornado Alley"
         p
-          "This is a passive 3D scene on the open prairie, and it needs JavaScript to draw. It runs for sixty seconds and begins on a calm summer evening, with golden light on the wheat and a storm standing on the horizon. Then the storm organizes. Its base lowers and begins to turn, a funnel reaches down to meet the dust rising off the fields, and a tornado crosses the pasture before it thins into a rope and lets go."
+          "This is a passive 3D scene on the open prairie, and it needs JavaScript to draw. It runs for thirty seconds and begins on a calm summer evening, with golden light on the wheat and a storm standing on the horizon. Then the storm organizes. Its base lowers and begins to turn, a funnel reaches down to meet the dust rising off the fields, and a tornado crosses the pasture before it thins into a rope and lets go."
         p
           "Nobody is in its path. There is lightning, so the screen flashes from time to time. It plays without sound, so you are welcome to watch it anywhere, and you can watch it again as many times as you wish."
         p
@@ -4914,7 +4914,7 @@ html [data-ui-theme="surf" lang="en"]
         h1
           "Tornado Alley"
         p.lede
-          "Sixty seconds on the open prairie, beginning on a calm summer evening."
+          "Thirty seconds on the open prairie, beginning on a calm summer evening."
         p.warning
           "A storm builds on the horizon, and a tornado forms, crosses the fields, and moves on. Nobody is in its path. There is lightning, so the screen flashes from time to time. It plays without sound, so you are welcome to watch it anywhere."
         button#player-begin.player-btn.player-btn-primary [type="button"]
@@ -4936,7 +4936,7 @@ html [data-ui-theme="surf" lang="en"]
       div#player-scrubber
         label.sr-only [for="player-scrub"]
           "Position in the story"
-        input#player-scrub [aria-valuetext="0 seconds of 60" max="60" min="0" step="0.1" type="range" value="0"]
+        input#player-scrub [aria-valuetext="0 seconds of 30" max="30" min="0" step="0.1" type="range" value="0"]
     div#player-ending [aria-live="polite" hidden role="status"]
       p.ending-line
         "The storm has moved on. The cow is fine."

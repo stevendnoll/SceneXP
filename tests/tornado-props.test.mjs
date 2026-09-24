@@ -67,6 +67,12 @@ const halfWidth = (aspect) => deg(Math.atan(Math.tan((C.camera.fovDegrees / 2) *
 const LANDSCAPE = () => halfWidth(16 / 9);
 const PORTRAIT = () => halfWidth(0.46);
 const quarter = () => Array.from({ length: C.story.seconds * 4 + 1 }, (_, i) => i / 4);
+/** The first moment the tornado is a full, mature cone, found from the life
+ *  cycle so a retime cannot leave these tests looking at the wrong second. */
+const mature = () => quarter().find((t) => {
+    const s = F.funnelStateAt(t, t, C);
+    return s.extent === 1 && s.width === 1 && s.rope === 0;
+});
 
 /** Every building, as the span of bearings it covers. */
 function buildings() {
@@ -160,7 +166,7 @@ describe('the trees are composed against the frame', () => {
             expect([entry.x, pond.inPond(entry.x, entry.z, 2, C)]).toEqual([entry.x, false]);
             expect(TS.speciesById(entry.species)).not.toBeNull();
         }
-        for (const t of [26, 32, 38]) {
+        for (const t of quarter().filter((q) => F.funnelStateAt(q, q, C).extent === 1 && q % 2 === 0)) {
             const contact = groundContact(t);
             for (const entry of C.trees) {
                 expect([t, entry.x, overlaps(canopy(entry), contact)]).toEqual([t, entry.x, false]);
@@ -193,7 +199,7 @@ describe('the wind', () => {
     });
 
     test('in the storm the air pulls toward the tornado, stronger than a garden storm', () => {
-        const s = at(30);
+        const s = at(mature());
         const g = F.spineAt(0, s);
         for (const [x, z] of [[30, -70], [-200, -450], [400, -1200]]) {
             const w = wind.windAt(x, z, s, C);
@@ -204,7 +210,7 @@ describe('the wind', () => {
     });
 
     test('closer to the funnel it is stronger and it swirls, and it never exceeds the cap', () => {
-        const s = at(30);
+        const s = at(mature());
         const g = F.spineAt(0, s);
         const far = wind.windAt(g.x, g.z + 1500, s, C);
         const near = wind.windAt(g.x, g.z + C.wind.vortexRadius, s, C);
@@ -283,7 +289,7 @@ describe('everything builds and bends through the whole minute', () => {
             expect(Number.isFinite(water.material.uniforms.uRipple.value)).toBe(true);
         }
         // Reduced motion damps the meadow's wind rather than stopping it.
-        const storm = F.funnelStateAt(30, 30, C);
+        const storm = F.funnelStateAt(mature(), mature(), C);
         flora.updateFlora(storm, 30, 0.35, C);
         const lean = scene.children.find((o) => o.name.startsWith('tree-'));
         expect(lean).toBeTruthy();

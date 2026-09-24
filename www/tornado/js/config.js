@@ -2,7 +2,7 @@
 /**
  * config.js - every number in Tornado Alley.
  *
- * A TIMED STORY, the second after High Water: sixty seconds on the open
+ * A TIMED STORY, the second after High Water: thirty seconds on the open
  * prairie, from a calm evening through a tornado's whole life to a clearing
  * sky. The plan is specs/twister/PRD.md (git-ignored, Steve's copy).
  *
@@ -31,30 +31,37 @@ export const TORNADO_CONFIG = Object.freeze({
     proofOfWork: { prefix: '11', storageKey: 'gallery-pow' },
 
     // The story, read by the shared player (shared/js/player-1.0.0.js).
+    // THIRTY SECONDS, SINCE QA ON 2026-09-23 ("the scene feels too long").
+    // It was sixty. The retime cut the waiting rather than speeding the
+    // whole minute up evenly: the tornado is down by 5.5 s, the cow circles
+    // for seven seconds rather than twenty, the rope-out lost two seconds,
+    // and the beats themselves (touchdown, the rope, the landing) kept the
+    // time they need.
     story: {
-        seconds: 60,
+        seconds: 30,
         fadeSeconds: 3,
         // Reported as reached-<name> the first time a watch gets there.
         // The PRD's arc; the cow and the rainbow arrive in M5 and M6.
         stages: [
             { at: 0, name: 'ordinary' },
-            { at: 2, name: 'organizing' },
-            { at: 4, name: 'wall-cloud' },
-            { at: 9, name: 'touchdown' },
-            { at: 13, name: 'mature' },
-            { at: 20, name: 'pickup' },
-            { at: 40, name: 'rope-out' },
-            { at: 48, name: 'dissipating' },
-            { at: 50, name: 'payoff' },
-            { at: 54, name: 'rainbow' }
+            { at: 1, name: 'organizing' },
+            { at: 2, name: 'wall-cloud' },
+            { at: 4.5, name: 'touchdown' },
+            { at: 7, name: 'mature' },
+            { at: 8, name: 'pickup' },
+            { at: 15, name: 'rope-out' },
+            { at: 21, name: 'dissipating' },
+            { at: 23, name: 'payoff' },
+            { at: 25, name: 'rainbow' }
         ]
     },
 
     // The player's timings. High Water's, which Steve QA'd on 2026-09-23.
     controls: {
         idleSeconds: 3,
-        stepSeconds: 5,
-        pageSeconds: 15,
+        // A tenth of the story an arrow press, a quarter a page.
+        stepSeconds: 3,
+        pageSeconds: 8,
         endGuardSeconds: 0.25,
         flashHoldSeconds: 1,
         seekReportSeconds: 0.8
@@ -93,19 +100,19 @@ export const TORNADO_CONFIG = Object.freeze({
     // The life cycle as keyframes [seconds, value], smoothstepped between.
     lifecycle: {
         // FORMS EARLY, ON PURPOSE (QA 2026-09-23: "it takes too long to
-        // appear"). The wall cloud is down by 5 s, the funnel reaches down
-        // from 5 s and touches down by 11, and it is a mature cone by 16.
-        // The end of the arc did not move: rope-out from 37, gone by 53.
-        wall: [[0.5, 0], [5, 1], [44, 1], [54, 0.25]],
+        // appear"). The wall cloud is down by 2.5 s, the funnel reaches down
+        // from 2 s and touches down by 5.5, and it is a mature cone by 8.
+        // Rope-out from 14.5 to 20, and gone by 24.
+        wall: [[0.3, 0], [2.5, 1], [20, 1], [26, 0.25]],
         // How far down from the wall cloud the condensation funnel reaches.
-        // Gone by 53, so the payoff at 50 plays under a clearing sky.
-        extent: [[5, 0], [7, 0.12], [11, 1], [46, 1], [53, 0]],
+        // Gone by 24, so the payoff plays under a clearing sky.
+        extent: [[2, 0], [3, 0.12], [5.5, 1], [20.5, 1], [24, 0]],
         // The ground dust whirl comes BEFORE the funnel connects.
-        dust: [[6, 0], [9, 0.35], [13, 1], [40, 0.9], [46, 0.35], [51, 0]],
-        width: [[7, 0.3], [11, 0.6], [16, 1], [38, 1], [45, 0.2], [52, 0.17]],
-        rope: [[37, 0], [45, 1]],
-        breakup: [[46, 0], [53, 1]],
-        inflow: [[1, 0], [7, 1], [42, 1], [50, 0]]
+        dust: [[2.5, 0], [4, 0.35], [6.5, 1], [17, 0.9], [20.5, 0.35], [23.5, 0]],
+        width: [[3, 0.3], [5.5, 0.6], [8, 1], [15, 1], [20, 0.2], [24, 0.17]],
+        rope: [[14.5, 0], [20, 1]],
+        breakup: [[20.5, 0], [24, 1]],
+        inflow: [[0.5, 0], [3.5, 1], [19, 1], [24, 0]]
     },
 
     funnel: {
@@ -310,17 +317,18 @@ export const TORNADO_CONFIG = Object.freeze({
     // lands with the others. Every pose is a function of the story second, so a seek
     // finds the cow exactly where an untouched watch has it.
     //
-    // CARTOON PHYSICS, ON PURPOSE. It crosses about 1.8 km in nine seconds,
+    // CARTOON PHYSICS, ON PURPOSE. It crosses about 1.8 km in eight seconds,
     // far faster than anything real. At that range it reads as a speck
     // sailing over, and the joke is the slow, gentle descent at the end.
     cow: {
-        pickupAt: 20,             // rises out of the dust, once the tornado is mature
-        flingAt: 40,              // leaves the debris as the tornado ropes out
-        landAt: 52,               // four feet on the ground
-        lookAt: 53,               // turns its head to the camera
+        pickupAt: 8,              // rises out of the dust, once the tornado is mature
+        flingAt: 16,              // leaves the debris as the tornado ropes out
+        landAt: 24,               // four feet on the ground
+        lookAt: 24.8,             // turns its head to the camera
         orbit: {
             radiusScale: 1.15,    // times the dust cloud's radius
             height: 260,          // metres, once it is up
+            rise: 3,              // seconds to get there
             rate: 0.9             // radians per second round the funnel
         },
         // ONE FLIGHT FROM THE DEBRIS TO THE GROUND, a cubic curve through
@@ -337,9 +345,9 @@ export const TORNADO_CONFIG = Object.freeze({
         brake: 1.8,
         // Counted back from landAt, in seconds: when it rights itself, and
         // when its legs come in under it.
-        uprightFrom: 4.5,
-        uprightBy: 2,
-        legsFrom: 2,
+        uprightFrom: 3.2,
+        uprightBy: 1.5,
+        legsFrom: 1.5,
         legsBy: 0.2,
         // In the middle of the herd, inside a portrait phone's frame, turned a
         // little toward the camera so its head can come round to look.
@@ -360,6 +368,6 @@ export const TORNADO_CONFIG = Object.freeze({
             { x: 41, z: -184, yaw: -1.1 },
             { x: 50, z: -216, yaw: 1.3 }
         ],
-        lookUpAt: 52.3            // the pasture cows look up, a beat apart
+        lookUpAt: 24.3            // the pasture cows look up, a beat apart
     }
 });

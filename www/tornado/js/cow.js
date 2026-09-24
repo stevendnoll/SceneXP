@@ -49,7 +49,7 @@ export function orbitPosition(time, config = TORNADO_CONFIG) {
     const g = spineAt(0, s);
     const r = s.dustRadius * K.orbit.radiusScale;
     const a = K.orbit.rate * (time - K.pickupAt);
-    const rise = smooth((time - K.pickupAt) / 6);
+    const rise = smooth((time - K.pickupAt) / K.orbit.rise);
     return { x: g.x + Math.cos(a) * r, y: 2 + K.orbit.height * rise, z: g.z + Math.sin(a) * r };
 }
 

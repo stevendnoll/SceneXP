@@ -108,8 +108,11 @@ describe('the flight', () => {
         for (const t of samples()) {
             const p = cow.cowPoseAt(t, C);
             expect([t, onScreen(p).pixels >= K().minPixels - 1e-6]).toEqual([t, true]);
-            // True size through the whole of the final descent.
-            if (t >= K().landAt - 4) expect([t, p.scale]).toEqual([t, 1]);
+            // True size for the last 40% of the flight: said as a share of the
+            // flight rather than in seconds, so it holds at any pace (the
+            // story went from sixty seconds to thirty on 2026-09-23).
+            const nearing = K().landAt - 0.4 * (K().landAt - K().flingAt);
+            if (t >= nearing) expect([t, p.scale]).toEqual([t, 1]);
         }
     });
 

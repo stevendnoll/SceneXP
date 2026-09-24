@@ -79,7 +79,8 @@ describe('main.js hands the picture to the shared player', () => {
         expect(typeof main.init).toBe('function');
 
         // The player found its markup: the scrubber was set to the story.
-        expect(dom.el('player-scrub').max).toBe('60');
+        const { TORNADO_CONFIG } = await import('../www/tornado/js/config.js');
+        expect(dom.el('player-scrub').max).toBe(String(TORNADO_CONFIG.story.seconds));
         // A frame draws without throwing, behind the card and then after it.
         expect(dom.loops.length).toBeGreaterThan(0);
         dom.loops[dom.loops.length - 1](1000);
@@ -88,8 +89,9 @@ describe('main.js hands the picture to the shared player', () => {
         dom.loops[dom.loops.length - 1](1100);
 
         expect(typeof window.tornadoSetArc).toBe('function');
-        window.tornadoSetArc(32);
-        expect(window.tornadoArc()).toBe(32);
+        // Well into the mature tornado at the thirty-second pace.
+        window.tornadoSetArc(12);
+        expect(window.tornadoArc()).toBe(12);
         expect(window.tornadoState().extent).toBe(1);
     });
 });

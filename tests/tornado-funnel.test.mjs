@@ -42,6 +42,15 @@ afterAll(() => uninstallAll());
 
 const SECONDS = C.story.seconds;
 const everySecond = Array.from({ length: SECONDS * 4 + 1 }, (_, i) => i / 4);
+// Moments found from the life cycle rather than written down, so a retime
+// (sixty seconds became thirty on 2026-09-23) cannot leave a test looking at
+// the wrong part of the story.
+const stateAt = (t) => F.funnelStateAt(t, t, C);
+const MATURE = everySecond.find((t) => {
+    const s = stateAt(t);
+    return s.extent === 1 && s.width === 1 && s.rope === 0;
+});
+const ROPED = everySecond.find((t) => stateAt(t).rope === 1 && stateAt(t).extent > 0);
 
 describe('keyframes', () => {
     const keys = [[10, 0], [20, 1]];
@@ -60,7 +69,7 @@ describe('keyframes', () => {
 
 describe('the funnel reaches the ground', () => {
     test('A FULLY DOWN FUNNEL HAS WIDTH AT THE GROUND, not a point', () => {
-        const s = F.funnelStateAt(30, 30, C);
+        const s = stateAt(MATURE);
         expect(s.extent).toBe(1);
         // The cone's own ground radius, all of it, not a taper's sliver.
         expect(F.radiusAt(0, s)).toBeCloseTo(s.trunk * s.cone, 6);
@@ -82,7 +91,7 @@ describe('the funnel reaches the ground', () => {
     });
 
     test('with no funnel there is no radius anywhere', () => {
-        const s = F.funnelStateAt(5, 5, C);
+        const s = stateAt(0);
         expect(s.extent).toBe(0);
         for (let u = 0; u <= 1; u += 0.05) expect(F.radiusAt(u, s)).toBe(0);
     });
@@ -106,9 +115,11 @@ describe('the life cycle', () => {
         expect(firstDust).toBeLessThan(touchdown);
     });
 
-    test('it ropes out: thinner and leaning further at 45 than at 30', () => {
-        expect(at(45).trunk).toBeLessThan(at(30).trunk * 0.5);
-        expect(at(45).lean).toBeGreaterThan(at(30).lean * 5);
+    test('it ropes out: thinner and leaning further than when mature', () => {
+        expect(MATURE).toBeDefined();
+        expect(ROPED).toBeGreaterThan(MATURE);
+        expect(at(ROPED).trunk).toBeLessThan(at(MATURE).trunk * 0.5);
+        expect(at(ROPED).lean).toBeGreaterThan(at(MATURE).lean * 5);
     });
 
     test('the funnel is gone before the rainbow and stays gone', () => {
@@ -132,7 +143,7 @@ describe('the life cycle', () => {
     });
 
     test('the spine stands on the ground and hangs from the wall cloud', () => {
-        const s = at(32);
+        const s = at(MATURE);
         expect(F.spineAt(0, s).y).toBe(0);
         expect(F.spineAt(1, s).y).toBeCloseTo(s.top, 10);
         // And the box holds the spine.
@@ -204,7 +215,7 @@ describe('debris', () => {
 describe('the shader uniforms follow the state', () => {
     test('applyFunnelState writes the state into the shared uniforms', () => {
         const u = F.funnelUniforms(C);
-        const s = F.funnelStateAt(32, 12, C);
+        const s = F.funnelStateAt(MATURE, 12, C);
         // The THREE stub absorbs vector writes, so read back the scalars,
         // which are the ones the life cycle moves.
         F.applyFunnelState(u, s);
