@@ -285,8 +285,10 @@ test('every skip link points at an id that exists on its own page', async () => 
       // Legitimate only when the page has no float to skip TO on arrival.
       // garden is the subtle one: it HAS two, and hides both while the
       // welcome card is up, which is exactly when a skip link is used.
+      // mandelbrot joined it on 2026-09-24 with its help button, which is
+      // hidden the same way for the same reason.
       const slots = await cluster(scene);
-      const hidden = scene === 'garden';
+      const hidden = ['garden', 'mandelbrot'].includes(scene);
       expect(`${scene} has no skip link and nothing to skip to: ${slots.length === 0 || hidden}`)
         .toBe(`${scene} has no skip link and nothing to skip to: true`);
       continue;

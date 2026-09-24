@@ -261,6 +261,41 @@ test('boots, starts the dive on the way in, and flies it to the precision floor 
   expect(blocker.classList.contains('hidden')).toBe(true);
   expect(playBtn.attributes['aria-pressed']).toBe('false');
 
+  // THE HELP BUTTON IS ESCAPE WITHOUT A KEYBOARD (2026-09-24). It is shown
+  // with the scene and hidden with the welcome screen. A press pauses the
+  // dive and brings the screen back, and since the button vanishes under the
+  // press, focus goes to the screen. Stepping back in resumes the flight and
+  // hands focus back to the button.
+  const help = dom.el('help-btn');
+  expect(help.classList.contains('visible')).toBe(true);
+  fire(playBtn, 'click');
+  expect(playBtn.attributes['aria-pressed']).toBe('true');
+  help.focus();
+  fire(help, 'click');
+  expect(blocker.classList.contains('hidden')).toBe(false);
+  expect(help.classList.contains('visible')).toBe(false);
+  expect(row.classList.contains('visible')).toBe(false);
+  expect(dom.el('prop-panel').hidden).toBe(true);
+  expect(playBtn.attributes['aria-pressed']).toBe('false');
+  expect(document.activeElement).toBe(blocker);
+  // The Enter that pressed the button, still held down, does not repeat
+  // straight back through the screen it just opened.
+  fire(dom.documentStub, 'keydown', { code: 'Enter', repeat: true });
+  expect(blocker.classList.contains('hidden')).toBe(false);
+  fire(dom.documentStub, 'keydown', { code: 'Enter' });
+  expect(blocker.classList.contains('hidden')).toBe(true);
+  expect(help.classList.contains('visible')).toBe(true);
+  expect(playBtn.attributes['aria-pressed']).toBe('true');
+  expect(document.activeElement).toBe(help);
+  // Escape from the scene hands focus back the same way.
+  playBtn.focus();
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  expect(document.activeElement).toBe(blocker);
+  fire(dom.documentStub, 'keydown', { code: 'Escape' });
+  expect(document.activeElement).toBe(playBtn);
+  fire(playBtn, 'click');
+  expect(playBtn.attributes['aria-pressed']).toBe('false');
+
   // Play, and let the flight run. The pumped worker pool keeps the
   // content gate fed, so the dive genuinely reaches the floor.
   fire(playBtn, 'click');

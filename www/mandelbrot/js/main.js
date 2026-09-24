@@ -7,7 +7,7 @@
  * let the cosmos do the moving. There are no movement controls and no
  * collision. The interactions that do exist are featherweight: the
  * welcome overlay (dismissed with a click, tap, or key, and brought back
- * with Escape), the AUTOZOOM row, and one raycast per tap.
+ * with Escape or the help button), the AUTOZOOM row, and one raycast per tap.
  *
  * The autozoom is the headline act: the dive flies itself, and since
  * 2026-09-23 it starts the moment the visitor steps past the welcome
@@ -19,7 +19,8 @@
  * toward one fixed boundary point (config fractal.dive, the seam where
  * the set's two great circles meet). The flight pauses itself at the
  * double-precision floor (which earns its own dialog), whenever a story
- * dialog opens, and when Escape brings the welcome screen back. The
+ * dialog opens, and when Escape or the help button brings the welcome
+ * screen back. The
  * depth chip reports the magnification with a size comparison along the
  * way.
  *
@@ -70,7 +71,7 @@ const state = {
 };
 
 // DOM references (resolved in init)
-let canvas, loadingScreen, blocker, depthChip;
+let canvas, loadingScreen, blocker, depthChip, helpBtn;
 let dialogModal, dialogTitle, dialogMessage;
 let dialogOpen = false;   // one dialog at a time; taps pause while it's up
 let propPanel, propList;  // the off-screen list of places to dive (keyboard route)
@@ -98,8 +99,11 @@ let autoRow = null;
 // visitor has ever stepped past it (the first time starts the dive), and
 // `resumeOnReturn` is whether the dive was flying when Escape paused it, so
 // stepping back in carries on only a flight that was actually under way.
+// `welcomeReturn` is what had focus when the screen came back, so stepping
+// back in hands it back rather than leaving a keyboard visitor on nothing.
 let welcomed = false;
 let resumeOnReturn = false;
+let welcomeReturn = null;
 
 const ICONS = {
     play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5l10 6.5-10 6.5z"/></svg>',
@@ -126,6 +130,7 @@ async function init() {
     loadingScreen = document.getElementById('loading-screen');
     blocker = document.getElementById('blocker');
     depthChip = document.getElementById('depth-chip');
+    helpBtn = document.getElementById('help-btn');
     dialogModal = document.getElementById('dialog-modal');
     dialogTitle = document.getElementById('dialog-title');
     dialogMessage = document.getElementById('dialog-message');
@@ -285,7 +290,11 @@ function setupEventListeners() {
         // Stop the start events short of it so the anchor follows its href.
         shieldOverlayControl(document.getElementById('explore-link'), { signal });
 
+        // NOT ON A HELD KEY. Enter on the help button brings the screen back
+        // on its keydown, so a key still held down would repeat straight
+        // through it and step back in before the visitor had seen it.
         document.addEventListener('keydown', (event) => {
+            if (event.repeat) return;
             if (event.code === 'Enter' || event.code === 'Space') {
                 if (welcomeShown()) beginWatching();
             }
@@ -331,8 +340,15 @@ function setupEventListeners() {
         }
         if (!state.isLoaded) return;
         if (welcomeShown()) beginWatching();
-        else returnToWelcome();
+        else returnToWelcome('escape');
     }, { signal });
+
+    // THE HELP BUTTON IS ESCAPE FOR EVERYBODY WITHOUT A KEYBOARD (Steve,
+    // 2026-09-24). On a phone there was no way back to the welcome screen
+    // once the dive began, and it is the one place the whole scene is
+    // explained. It pauses the dive and brings the screen back, and stepping
+    // back in resumes a flight that was flying, exactly as Escape does.
+    if (helpBtn) helpBtn.addEventListener('click', () => returnToWelcome('help'), { signal });
 
     // The autozoom cluster: [play/pause] [reset], bottom center at every
     // aspect. The container reuses the shared .pan-controls shell classes,
@@ -667,12 +683,14 @@ function chooseFromList(id) {
 const PROP_CONTENT = {
     // Tapping the set itself opens the HELP menu: the set is the first
     // thing a curious visitor taps, so it explains the whole scene. The
-    // two lines alternate per tap, together covering every control.
+    // two lines alternate per tap, together covering every control. (The ?
+    // button in the corner opens the welcome screen, not this card: that is
+    // the screen that sets the scene, and Steve asked for it.)
     mandelbrot: {
         title: 'How to Explore',
         lines: [
             'The dive flies itself, deeper and deeper into the burning edge, and the detail never runs out. Press the circular arrow to return to the surface, then tap one of the glowing rings and the dive begins there instead.',
-            'The buttons below steer the flight. Play pauses and resumes, and the circular arrow returns you to the very start, where the glowing rings wait to be chosen. Escape pauses the dive and brings back the welcome screen.'
+            'The buttons below steer the flight. Play pauses and resumes, and the circular arrow returns you to the very start, where the glowing rings wait to be chosen. The question mark in the corner, or Escape, pauses the dive and brings back the welcome screen.'
         ]
     },
     // Not a clickable prop: shown once by updateDepthChip when the dive
@@ -723,10 +741,12 @@ function welcomeShown() {
     return Boolean(blocker) && !blocker.classList.contains('hidden');
 }
 
-/** Show or hide the autozoom row. It follows the welcome screen rather
- *  than the page load: nothing to press until the visitor is in. */
-function setRowVisible(on) {
+/** Show or hide the autozoom row and the help button. They follow the
+ *  welcome screen rather than the page load: nothing to press until the
+ *  visitor is in, and no help button over the help it would open. */
+function setChromeVisible(on) {
     if (autoRow) autoRow.classList.toggle('visible', on);
+    if (helpBtn) helpBtn.classList.toggle('visible', on);
 }
 
 /** Dismiss the welcome overlay and step into the scene.
@@ -742,7 +762,8 @@ function beginWatching() {
     // The list of places to dive becomes a tab stop only now: while the
     // welcome card was up it would have been one behind it.
     if (propPanel) propPanel.hidden = false;
-    setRowVisible(true);
+    setChromeVisible(true);
+    handFocusBack();
     if (!welcomed) {
         welcomed = true;
         track('begin-watching');
@@ -754,21 +775,44 @@ function beginWatching() {
     resumeOnReturn = false;
 }
 
-/** Escape out in the scene: pause the dive and bring the welcome screen back.
+/** Escape or the help button out in the scene: pause the dive and bring the
+ *  welcome screen back. `how` ('escape' or 'help') goes on the pause event.
  *
- *  The row and the list of places to dive go with the scene, so nothing
- *  behind the card is a tab stop, and focus leaves whatever button had it
- *  rather than staying on one that is no longer on screen. */
-function returnToWelcome() {
+ *  The row, the help button and the list of places to dive go with the
+ *  scene, so nothing behind the card is a tab stop.
+ *
+ *  A BUTTON THAT HIDES ITSELF MUST HAND FOCUS ON. The help button vanishes
+ *  under the visitor's press, so focus goes to the welcome screen (the way the
+ *  garden's ? button does), where a screen reader reads it and Enter, Space
+ *  or Escape steps back in. What had focus is remembered and handed back on
+ *  the way out. It used to be dropped instead, which left a keyboard visitor
+ *  on nothing once they stepped back in. */
+function returnToWelcome(how) {
     if (!state.isLoaded || !blocker || welcomeShown()) return;
     resumeOnReturn = auto.on;
     setPlaying(false);
-    track('pause', { how: 'escape' });
+    track('pause', { how });
+    const el = document.activeElement;
+    welcomeReturn = el && el !== document.body && el !== blocker ? el : null;
     blocker.classList.remove('hidden');
     if (propPanel) propPanel.hidden = true;
-    setRowVisible(false);
-    const el = document.activeElement;
-    if (el && el !== document.body && typeof el.blur === 'function') el.blur();
+    setChromeVisible(false);
+    try {
+        blocker.focus({ preventScroll: true });
+    } catch (e) { /* not focusable */ }
+    if (document.activeElement !== blocker && el && typeof el.blur === 'function') el.blur();
+}
+
+/** Stepping back in: focus goes back where it was before the welcome screen
+ *  came up. If that is gone (a ring row whose ring went to sleep), it is
+ *  dropped rather than left on the welcome screen that has just hidden. */
+function handFocusBack() {
+    const el = welcomeReturn;
+    welcomeReturn = null;
+    if (el && document.contains(el)) {
+        try { el.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
+    }
+    if (document.activeElement === blocker && typeof blocker.blur === 'function') blocker.blur();
 }
 
 /** Wire the outward-facing links from MANDELBROT_CONFIG.site. There is no

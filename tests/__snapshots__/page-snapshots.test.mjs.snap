@@ -3373,7 +3373,7 @@ html [data-ui-theme="ember" lang="en"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
           "Loading…"
-    div#blocker
+    div#blocker [tabindex="-1"]
       div#instructions
         p.title
           "WELCOME"
@@ -3387,7 +3387,7 @@ html [data-ui-theme="ember" lang="en"]
           "The flight begins as you step in, down into the burning edge. The detail never ends."
           span
             "STEER"
-          "Pause or reset with the buttons below. After a reset, tap a glowing ring to dive somewhere new. Escape brings you back here."
+          "Pause or reset with the buttons below. After a reset, tap a glowing ring to dive somewhere new. The question mark in the corner, or Escape, brings you back here."
         a#explore-link.welcome-explore [href="/"]
           "More 3D worlds to explore at SceneXP.com"
     div#depth-chip.depth-chip
@@ -3409,6 +3409,11 @@ html [data-ui-theme="ember" lang="en"]
       p.prop-panel-note
         "Choose a place and the dive begins there. The arrow keys move through the list, and Tab or Escape puts it away."
       ul#prop-list.prop-list
+    button#help-btn.ui-float.menu-btn.help-btn [aria-label="Help" title="Help (Esc)" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        circle [cx="12" cy="12" fill="none" r="9"]
+        path [d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"]
+        circle [cx="12.1" cy="17.4" fill="currentColor" r="1.05" stroke="none"]
     script [src="../lib/three.min.js"]
     script [src="js/main.min.js" type="module"]"
 `;
