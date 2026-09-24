@@ -285,6 +285,14 @@ export const TORNADO_CONFIG = Object.freeze({
         { species: 'bur-oak', x: 30, z: -70, seed: 11, height: 1.0 },
         { species: 'quaking-aspen', x: -26, z: -58, seed: 23, height: 0.9 },
         { species: 'quaking-aspen', x: -33, z: -63, seed: 29, height: 1.0 },
+        // THE FARMYARD OAK, the one tree every screen sees (QA 2026-09-23: on a
+        // small phone in portrait none of the others were in frame). It stands
+        // just left of the farmhouse, in the one gap near the middle that is
+        // free: right of the funnel's foot (which ends about 0.15 degrees
+        // right of center while it is down), left of the house (from 2.1), and
+        // far enough out that it hides nothing. About 1.2 degrees right of
+        // center, 12.6 m tall, so a little taller than the house on screen.
+        { species: 'bur-oak', x: 8.8, z: -440, seed: 71, height: 1.4 },
         { species: 'bur-oak', x: 105, z: -458, seed: 41, height: 1.0 },
         { species: 'scots-pine', x: 118, z: -464, seed: 43, height: 1.1 },
         { species: 'quaking-aspen', x: 131, z: -457, seed: 47, height: 1.05 },

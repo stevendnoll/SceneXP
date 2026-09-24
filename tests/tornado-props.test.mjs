@@ -174,6 +174,24 @@ describe('the trees are composed against the frame', () => {
         }
     });
 
+    test('EVERY SCREEN SEES A FRACTAL TREE, even a small phone in portrait', () => {
+        // QA 2026-09-23: none of the first ten were inside a portrait frame.
+        const seen = C.trees.filter((entry) => {
+            const c = canopy(entry);
+            return c.from > -PORTRAIT() && c.to < PORTRAIT();
+        });
+        expect(seen.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('no tree stands over a building, on any screen', () => {
+        for (const entry of C.trees) {
+            for (const b of buildings()) {
+                expect([entry.species, entry.x, b.name, overlaps(canopy(entry), b)])
+                    .toEqual([entry.species, entry.x, b.name, false]);
+            }
+        }
+    });
+
     test('the wildflowers stand in front of the camera, out of the water', () => {
         const all = flora.meadowPlacements(C, false);
         expect(all.length).toBe(C.meadow.count);
