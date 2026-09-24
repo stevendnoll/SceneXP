@@ -106,7 +106,11 @@ export function tumbleweedPoseAt(i, t, config = TORNADO_CONFIG) {
         x: p.x,
         y: r + lift,
         z: p.z,
-        spin: -s / r,
+        // Counter-clockwise, as a ball rolling right to left turns (its top
+        // runs ahead the way it goes), and a sprite's rotation is
+        // counter-clockwise when positive. It was negative, and QA
+        // (2026-09-23) saw them turn as if rolling the other way.
+        spin: s / r,
         size: 2 * r,
         distance: d,
         opacity

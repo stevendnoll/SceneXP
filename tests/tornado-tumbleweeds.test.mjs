@@ -98,6 +98,31 @@ describe('the tumbleweeds', () => {
         });
     });
 
+    test('TURN THE WAY THEY ROLL: counter-clockwise while they move right to left on screen', () => {
+        // A sprite turns counter-clockwise for a positive rotation. A ball
+        // moving left turns counter-clockwise, so wherever one moves left on
+        // screen its spin has to be rising, and at the rate it rolls.
+        T().list.forEach((entry, i) => {
+            let left = 0;
+            let last = null;
+            for (let t = entry.startAt + FRAME; t <= C.story.seconds; t += FRAME) {
+                const p = Tw.tumbleweedPoseAt(i, t, C);
+                if (last && p.visible) {
+                    const moved = bearingOf(p.x, p.z) - bearingOf(last.x, last.z);
+                    const turned = p.spin - last.spin;
+                    if (moved < -1e-6) {
+                        left += 1;
+                        expect([i, t, turned > 0]).toEqual([i, t, true]);
+                    }
+                    if (moved > 1e-6) expect([i, t, turned < 0]).toEqual([i, t, true]);
+                }
+                last = p;
+            }
+            // It does cross the screen, so the check above ran.
+            expect(left).toBeGreaterThan(60);
+        });
+    });
+
     test('slow as the inflow dies, not all at once', () => {
         const speeds = [];
         for (let t = 18; t <= 25; t += 0.25) speeds.push(Tw.rollSpeed(t, C));
