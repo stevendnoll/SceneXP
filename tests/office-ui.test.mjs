@@ -1106,7 +1106,7 @@ describe('places', () => {
         expect(el('bar-places').getAttribute('aria-expanded')).toBe('true');
         const items = el('places-menu').children;
         expect(items.map((b) => b.children[0] ? b.dataset.place : b.dataset.place)).toEqual(
-            ['desk', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'departures', 'printer']);
+            ['window', 'desk', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'departures', 'printer']);
         expect(dom.documentStub.activeElement).toBe(items[0]);
         expect(el('places-menu').style.left).toMatch(/px$/);
         items.find((b) => b.dataset.place === 'calendar').click();
@@ -1133,6 +1133,16 @@ describe('places', () => {
         el('bar-places').click();
         el('bar-places').click();
         expect(el('places-menu').hidden).toBe(true);
+    });
+
+    test('the window is a place of its own, from the list and the 9 key', () => {
+        place('window');
+        expect(t.ui.station).toBe('window');
+        key('1');
+        expect(t.ui.station).toBe('desk');
+        key('9');
+        expect(t.ui.station).toBe('window');
+        expect(t.world()).toBeTruthy();
     });
 
     test('going to the desk closes whatever is open', () => {

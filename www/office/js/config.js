@@ -173,7 +173,13 @@ export const CONFIG = deepFreeze({
          *  the screen, clear of the sheet docked beneath it. */
         rolodex: { eye: [1.32, 1.32, -1.0], aim: [1.5, 0.66, -1.8], fov: 44, retreat: 0.35 },
         whiteboard: { eye: [-0.95, 1.5, 1.25], aim: [-2.97, 1.5, 1.25], fov: 46, retreat: 1.4 },
-        departures: { eye: [0.3, 1.45, 0.25], aim: [0.3, 2.25, 2.5], fov: 46, retreat: 0.8 }
+        departures: { eye: [0.3, 1.45, 0.25], aim: [0.3, 2.25, 2.5], fov: 46, retreat: 0.8 },
+        /** At the back window, just right of the desk (the desk hides the
+         *  view down through the rest of it), looking west and down the
+         *  canyon of towers to slivers of the bay and the mountains beyond:
+         *  the view the office is named for. Framed by a census of what each
+         *  pixel sees (tests/office-view.test.mjs). */
+        window: { eye: [2.45, 1.6, -1.9], aim: [1.4, -2.9, -14], fov: 62, maxFov: 66, holdWidth: true }
     },
 
     view: {

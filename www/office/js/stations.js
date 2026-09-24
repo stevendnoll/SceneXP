@@ -16,9 +16,15 @@
  * camera, and tests can check a glide without three.
  */
 
-/** A station's vertical fov for a screen of this aspect. */
-export function fovFor(baseFov, aspect, refAspect, maxFov) {
-    if (!(aspect > 0) || aspect >= refAspect) return baseFov;
+/**
+ * A station's vertical fov for a screen of this aspect. A narrower screen
+ * than the reference widens it, so the station keeps its width. With
+ * `holdWidth`, a WIDER screen narrows it too, so an ultra-wide screen sees
+ * the same width rather than far out to the sides (the window: at 21:9 its
+ * sides were the room's walls, 41% of the frame, measured 2026-09-24).
+ */
+export function fovFor(baseFov, aspect, refAspect, maxFov, holdWidth = false) {
+    if (!(aspect > 0) || (aspect >= refAspect && !holdWidth) || aspect === refAspect) return baseFov;
     const half = (baseFov * Math.PI) / 360;
     const widened = (360 / Math.PI) * Math.atan(Math.tan(half) * (refAspect / aspect));
     return Math.min(maxFov, widened);
@@ -45,7 +51,9 @@ export function poseFor(key, aspect, config) {
     return {
         eye,
         aim: [...s.aim],
-        fov: fovFor(s.fov, aspect, config.view.refAspect, config.view.maxFov)
+        // A station may cap its own widening: the window is a view, and on a
+        // phone a narrower view of the bay beats a wide view of the room.
+        fov: fovFor(s.fov, aspect, config.view.refAspect, s.maxFov || config.view.maxFov, Boolean(s.holdWidth))
     };
 }
 

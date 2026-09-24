@@ -13,7 +13,7 @@
  */
 
 import { count } from './copy.min.js';
-import { css } from './daylight.min.js';
+import { FACADE_TILE } from './city.min.js';
 
 /** The monitor's lines, from derive.stats. */
 export function screenLines(s) {
@@ -51,54 +51,6 @@ export function drawScreen(ctx, W, H, lines) {
         ctx.font = `${i === 0 ? 700 : 500} ${Math.round(H * (i === 0 ? 0.11 : 0.075))}px system-ui, sans-serif`;
         ctx.fillText(line, W * 0.07, H * (0.3 + i * 0.15), W * 0.86);
     });
-}
-
-/**
- * Paint the view: a sky over a hazy skyline, colored for the time of day
- * (daylight.js `lighting`), with windows lit across the city as the light
- * goes. Seeded, so the city is the same city on every visit and the same
- * windows light up every evening.
- */
-export function drawSkyline(ctx, W, H, look = {}) {
-    const top = look.skyTop != null ? css(look.skyTop) : '#7fb2dd';
-    const bottom = look.skyBottom != null ? css(look.skyBottom) : '#e3ecef';
-    const lit = look.cityLights || 0;
-    const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, top);
-    sky.addColorStop(1, bottom);
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, H);
-
-    let seed = 17;
-    const random = () => {
-        seed = (seed * 16807) % 2147483647;
-        return seed / 2147483647;
-    };
-    const layers = [
-        [look.cityFar != null ? css(look.cityFar) : '#a7b8c9', 0.72, 0.28],
-        [look.cityNear != null ? css(look.cityNear) : '#8497ab', 0.8, 0.22]
-    ];
-    for (const [shade, base, tall] of layers) {
-        let x = 0;
-        while (x < W) {
-            const w = W * (0.02 + random() * 0.05);
-            const h = H * (0.05 + random() * tall);
-            const y = H * base - h;
-            ctx.fillStyle = shade;
-            ctx.fillRect(x, y, w + 1, H - y);
-            // Windows: a grid of small squares, a seeded few of them lit.
-            const step = Math.max(3, W * 0.006);
-            for (let wy = y + step; wy < H * base - step; wy += step * 1.8) {
-                for (let wx = x + step * 0.6; wx < x + w - step; wx += step * 1.6) {
-                    if (random() < lit * 0.55) {
-                        ctx.fillStyle = 'rgba(255, 214, 140, 0.9)';
-                        ctx.fillRect(wx, wy, step * 0.7, step * 0.8);
-                    }
-                }
-            }
-            x += w;
-        }
-    }
 }
 
 /** Paint the wall calendar's month, with a dot for every event and a ring for
@@ -423,4 +375,113 @@ export function drawWhiteboard(ctx, W, H, { title, funnel, chart, numbers, goal,
         ctx.font = hand(H * 0.035, 500);
         ctx.fillText(n.label, x, H * (layout.numbers.y0 + 0.13));
     });
+}
+
+// ---- The city's glass and streets (M6.5 stage 2) -------------------------------
+
+/** A seeded random source, so every visit paints the same facades. */
+function paintRandom(seed) {
+    let s = seed % 2147483647;
+    if (s <= 0) s += 2147483646;
+    return () => {
+        s = (s * 16807) % 2147483647;
+        return (s - 1) / 2147483646;
+    };
+}
+
+/**
+ * The three curtain walls, each a tile of `cols` panels by `rows` floors that
+ * repeats up and along every tower (world.js gives the towers their UVs in
+ * real meters, so a panel is a panel on every tower). Three maps per style,
+ * painted from ONE layout so they always line up:
+ *   color  the glass (light, so each tower's own tint shows) with a little
+ *          variation from panel to panel, the mullions and the spandrels;
+ *   rm     roughness in green and metalness in blue, three's channels: the
+ *          glass smooth and metallic, the frames and the spandrels matte;
+ *   lit    black with the offices that are lit at night, warm or cool.
+ */
+export const FACADE = FACADE_TILE;
+
+export const FACADE_STYLES = ['grid', 'bands', 'fins'];
+
+function facadeLayout(style) {
+    // Fractions of a panel (w) and of a floor (h) for the frame parts.
+    if (style === 'bands') return { mullion: 0.02, spandrel: 0.34, fin: 0 };
+    if (style === 'fins') return { mullion: 0.1, spandrel: 0.05, fin: 1 };
+    return { mullion: 0.04, spandrel: 0.18, fin: 0 };
+}
+
+export function drawFacade(ctx, W, H, style, map, seed = 1) {
+    const random = paintRandom(seed);
+    const { cols, rows } = FACADE;
+    const pw = W / cols;
+    const ph = H / rows;
+    const f = facadeLayout(style);
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const x = c * pw;
+            const y = r * ph;
+            const shade = 0.9 + random() * 0.2;
+            const lit = random() < 0.38;
+            const warm = random() < 0.7;
+            // The glass.
+            if (map === 'color') {
+                const g = Math.round(200 * shade);
+                ctx.fillStyle = `rgb(${g}, ${Math.round(g * 1.03)}, ${Math.round(g * 1.08)})`;
+            } else if (map === 'rm') {
+                ctx.fillStyle = 'rgb(0, 18, 245)';
+            } else {
+                ctx.fillStyle = lit ? (warm ? `rgb(255, ${Math.round(200 + random() * 30)}, 140)` : 'rgb(200, 225, 255)') : 'rgb(0, 0, 0)';
+            }
+            ctx.fillRect(x, y, pw, ph);
+            // The spandrel: the band at the floor line.
+            ctx.fillStyle = map === 'color' ? 'rgb(70, 78, 88)' : map === 'rm' ? 'rgb(0, 160, 80)' : 'rgb(0, 0, 0)';
+            ctx.fillRect(x, y + ph * (1 - f.spandrel), pw, ph * f.spandrel);
+            // The mullions: thin at each panel's edge, or a deep fin.
+            const mw = Math.max(1, pw * f.mullion);
+            ctx.fillStyle = map === 'color' ? (f.fin ? 'rgb(150, 156, 162)' : 'rgb(52, 58, 66)') : map === 'rm' ? 'rgb(0, 120, 160)' : 'rgb(0, 0, 0)';
+            ctx.fillRect(x, y, mw, ph);
+        }
+    }
+}
+
+/**
+ * The streets: one city block with half a street round it, repeated across
+ * the land (world.js sets the repeat so the block sits under its towers).
+ * `lit` paints the street lights' glow for night instead.
+ */
+export function drawStreets(ctx, W, H, { block, street }, lit = false) {
+    const pitch = block + street;
+    const s = (street / 2 / pitch) * W;
+    ctx.fillStyle = lit ? 'rgb(0, 0, 0)' : 'rgb(96, 102, 104)';
+    ctx.fillRect(0, 0, W, H);
+    if (lit) {
+        // Warm light along every street, brightest at its middle.
+        ctx.fillStyle = 'rgb(255, 180, 90)';
+        ctx.fillRect(0, s * 0.3, W, s * 0.5);
+        ctx.fillRect(0, H - s * 0.8, W, s * 0.5);
+        ctx.fillRect(s * 0.3, 0, s * 0.5, H);
+        ctx.fillRect(W - s * 0.8, 0, s * 0.5, H);
+        return;
+    }
+    // Asphalt round the edges, a sidewalk inside it, the block within.
+    ctx.fillStyle = 'rgb(46, 49, 53)';
+    ctx.fillRect(0, 0, W, s);
+    ctx.fillRect(0, H - s, W, s);
+    ctx.fillRect(0, 0, s, H);
+    ctx.fillRect(W - s, 0, s, H);
+    ctx.fillStyle = 'rgb(150, 150, 146)';
+    ctx.strokeStyle = 'rgb(150, 150, 146)';
+    ctx.lineWidth = Math.max(1, W * 0.012);
+    ctx.strokeRect(s, s, W - 2 * s, H - 2 * s);
+    // A few trees along the sidewalks.
+    ctx.fillStyle = 'rgb(62, 92, 58)';
+    for (let i = 1; i < 6; i++) {
+        const t = (i / 6) * (W - 2 * s) + s;
+        for (const [x, y] of [[t, s * 1.4], [t, H - s * 1.4], [s * 1.4, t], [W - s * 1.4, t]]) {
+            ctx.beginPath();
+            ctx.arc(x, y, W * 0.012, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
 }

@@ -84,7 +84,8 @@ export const STATION_LABELS = {
     board: 'Corkboard',
     rolodex: 'Rolodex',
     whiteboard: 'Whiteboard',
-    departures: 'Departures board'
+    departures: 'Departures board',
+    window: 'The window'
 };
 
 /** "Interview, round 2" or "Phone screen". */

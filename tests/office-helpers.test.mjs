@@ -205,6 +205,31 @@ describe('the station camera', () => {
         expect(poseFor('desk', 0.45, CONFIG).eye).toEqual(CONFIG.stations.desk.eye);
     });
 
+    test('a station may cap its own widening on a phone', () => {
+        const phone = 390 / 844;
+        expect(poseFor('window', phone, CONFIG).fov).toBe(CONFIG.stations.window.maxFov);
+        expect(poseFor('desk', phone, CONFIG).fov).toBeGreaterThan(CONFIG.stations.window.maxFov);
+        expect(poseFor('window', 16 / 10, CONFIG).fov).toBe(CONFIG.stations.window.fov);
+    });
+
+    test('a station that holds its width narrows on a wide screen, where the others keep theirs', () => {
+        expect(poseFor('window', 21 / 9, CONFIG).fov).toBeLessThan(CONFIG.stations.window.fov);
+        expect(poseFor('desk', 21 / 9, CONFIG).fov).toBe(CONFIG.stations.desk.fov);
+        const half = (fov, aspect) => Math.atan(Math.tan((fov * Math.PI) / 360) * aspect);
+        expect(half(poseFor('window', 21 / 9, CONFIG).fov, 21 / 9)).toBeCloseTo(half(CONFIG.stations.window.fov, CONFIG.view.refAspect), 9);
+        expect(fovFor(50, 21 / 9, 16 / 10, 80, true)).toBeLessThan(50);
+        expect(fovFor(50, 16 / 10, 16 / 10, 80, true)).toBe(50);
+    });
+
+    test('a retreat without a narrow aspect configured, or with the eye on its aim, still lands', () => {
+        const view = { ...CONFIG.view, narrowAspect: undefined };
+        const stations = { ...CONFIG.stations, odd: { eye: [1, 1, 1], aim: [1, 1, 1], fov: 50, retreat: 0.5 } };
+        const config = { ...CONFIG, view, stations };
+        const phone = poseFor('cabinet', 0.45, config);
+        expect(phone.eye).toEqual(poseFor('cabinet', 0.45, CONFIG).eye);
+        expect(poseFor('odd', 0.45, config).eye).toEqual([1, 1, 1]);
+    });
+
     test('a glide eases from one pose to the next and lands exactly', () => {
         expect(smoothstep(-1)).toBe(0);
         expect(smoothstep(0.5)).toBe(0.5);

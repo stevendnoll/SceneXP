@@ -436,8 +436,6 @@ describe('files and paint', () => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         expect(() => paint.drawScreen(ctx, 512, 320, ['3 applications', 'Nothing due today'])).not.toThrow();
-        expect(() => paint.drawSkyline(ctx, 1024, 512)).not.toThrow();
-        expect(() => paint.drawSkyline(ctx, 64, 32)).not.toThrow();
     });
 });
 
@@ -546,7 +544,6 @@ describe('the M2 painters', () => {
         expect(() => paint.drawCalendar(ctx, 512, 700, { grid, marks, todayKey: '2026-09-24' })).not.toThrow();
         const list = notes.stickyNotes({ overdue: [{ id: 'a', text: 'Call Priya about the panel and the portfolio review next week' }], today: [] });
         expect(() => paint.drawNoteAtlas(ctx, 768, 512, list, notes.ATLAS, notes.noteWords, notes.noteColor)).not.toThrow();
-        expect(() => paint.drawSkyline(ctx, 256, 128, { skyTop: 0x0b1530, skyBottom: 0x2a2f4a, cityLights: 1, cityNear: 0x1c2333, cityFar: 0x252c40 })).not.toThrow();
     });
 
     test('the board header and a card face paint, shrinking a long column name to fit', () => {
@@ -772,5 +769,56 @@ describe('M6 panels and painters', () => {
             title: 'The search so far', funnel: wb.funnelBars(model), chart: wb.weekChart(model),
             numbers: wb.bigNumbers(model), goal: model.goal, layout: wb.LAYOUT
         })).not.toThrow();
+    });
+});
+
+// ---- M6.5 stage 2: the facade and street painters ----------------------------------
+
+describe('the city painters', () => {
+    /** A canvas context that remembers every rectangle it was asked to fill. */
+    function recorder() {
+        const fills = [];
+        const ctx = {
+            fillStyle: '',
+            fillRect(x, y, w, h) { fills.push({ style: ctx.fillStyle, x, y, w, h }); },
+            strokeRect() {}, beginPath() {}, arc() {}, fill() {}
+        };
+        return { ctx, fills };
+    }
+
+    test('the three maps of a facade share one layout, so they line up exactly', () => {
+        for (const style of paint.FACADE_STYLES) {
+            const rects = ['color', 'rm', 'lit'].map((map) => {
+                const r = recorder();
+                paint.drawFacade(r.ctx, 512, 512, style, map, 3);
+                return r.fills.map(({ x, y, w, h }) => [x, y, w, h].join());
+            });
+            expect(rects[1]).toEqual(rects[0]);
+            expect(rects[2]).toEqual(rects[0]);
+            expect(rects[0].length).toBe(paint.FACADE.cols * paint.FACADE.rows * 3);
+        }
+    });
+
+    test('some offices are lit at night and most are not, the same ones every visit', () => {
+        const litPanels = (seed) => {
+            const r = recorder();
+            paint.drawFacade(r.ctx, 512, 512, 'grid', 'lit', seed);
+            return r.fills.filter((f, i) => i % 3 === 0 && f.style !== 'rgb(0, 0, 0)').length;
+        };
+        const n = litPanels(5);
+        expect(n).toBeGreaterThan(0);
+        expect(n).toBeLessThan(paint.FACADE.cols * paint.FACADE.rows);
+        expect(litPanels(5)).toBe(n);
+    });
+
+    test('the street tile has its streets at the edges, and a glow for night', () => {
+        const day = recorder();
+        paint.drawStreets(day.ctx, 256, 256, { block: 90, street: 22 });
+        expect(day.fills[0]).toMatchObject({ x: 0, y: 0, w: 256, h: 256 });
+        const edge = day.fills[1];
+        expect(edge.h).toBeCloseTo((11 / 112) * 256, 9);
+        const night = recorder();
+        paint.drawStreets(night.ctx, 256, 256, { block: 90, street: 22 }, true);
+        expect(night.fills.filter((f) => f.style === 'rgb(255, 180, 90)')).toHaveLength(4);
     });
 });

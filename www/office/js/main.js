@@ -43,10 +43,12 @@ import { stockSamples } from './samples.min.js';
 import { applicationsCsv } from './csv.min.js';
 import { poseFor, createGlide } from './stations.min.js';
 import { buildRoom, setLamp, pickOf, setNotes, ensureCapacity } from './room.min.js';
+import { buildWorld } from './world.min.js';
 import {
-    screenLines, drawScreen, drawSkyline, drawCalendar, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
-    drawLetterAtlas, drawFlapBoard, drawWhiteboard
+    screenLines, drawScreen, drawCalendar, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
+    drawLetterAtlas, drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, FACADE_STYLES
 } from './paint.min.js';
+import { CITY } from './city.min.js';
 import { drawerPlan, liftedLine, TAB_COLORS } from './cabinet.min.js';
 import { createFiling } from './filing.min.js';
 import { boardPlan, boardSummary, boardColumns, columnAt, CARD_ATLAS } from './board.min.js';
@@ -152,7 +154,7 @@ let drag = null;
 
 /** The lights the time of day sets, and the canvases it repaints. */
 const lights = { hemi: null, sun: null, fill: null };
-const painted = { skyline: null, calendar: null, notes: null, drawers: [] };
+const painted = { calendar: null, notes: null, drawers: [] };
 
 const history = createHistory();
 
@@ -160,6 +162,8 @@ let renderer = null;
 let scene = null;
 let camera = null;
 let room = null;
+/** Everything outside the windows: its own scene and camera (world.js). */
+let world = null;
 let glide = null;
 let screenCanvas = null;
 let screenTexture = null;
@@ -291,6 +295,9 @@ function buildRenderer() {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: !state.mobile, powerPreference: 'high-performance' });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // Two scenes a frame, the world outside and then the room, so the
+    // renderer clears once by hand rather than before each (animate).
+    renderer.autoClear = false;
     renderer.setPixelRatio(pixelRatioCeiling());
     renderer.setSize(window.innerWidth, window.innerHeight, false);
 }
@@ -308,9 +315,36 @@ function paintedTexture(width, height, paint) {
     return { canvas: c, texture };
 }
 
+/**
+ * The city's painted maps: for each facade style its color, its roughness
+ * and metalness, and its lit offices; and the streets by day and by night.
+ * Seen mostly at a glancing angle, so each is filtered as sharply as the
+ * device allows.
+ */
+function worldTextures() {
+    const sharp = (t) => {
+        if (t && renderer && renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
+            t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+        }
+        return t;
+    };
+    const facades = {};
+    FACADE_STYLES.forEach((style, i) => {
+        const one = (map) => sharp(paintedTexture(512, 512, (ctx, W, H) => drawFacade(ctx, W, H, style, map, 11 + i)).texture);
+        facades[style] = { color: one('color'), rm: one('rm'), lit: one('lit') };
+        // The roughness and metalness map holds numbers, not colors.
+        if (facades[style].rm) facades[style].rm.colorSpace = THREE.NoColorSpace;
+    });
+    const streets = sharp(paintedTexture(256, 256, (ctx, W, H) => drawStreets(ctx, W, H, CITY)).texture);
+    const streetsLit = sharp(paintedTexture(256, 256, (ctx, W, H) => drawStreets(ctx, W, H, CITY, true)).texture);
+    return { facades, streets, streetsLit };
+}
+
 function buildScene() {
+    // No background: the room is drawn over the world outside, which shows
+    // wherever the room has nothing, that is, through the windows.
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x2a211a);
+    world = buildWorld(CONFIG, { aspect: aspect(), textures: worldTextures() });
 
     // Daylight through the two window walls, and the room's own fill.
     // Daylight through the two window walls, and the room's own fill. Their
@@ -324,7 +358,6 @@ function buildScene() {
     lights.fill.position.set(-3, 3, 4);
     scene.add(lights.fill);
 
-    painted.skyline = paintedTexture(1024, 512, drawSkyline);
     painted.calendar = paintedTexture(512, 700, (ctx, W, H) => {
         ctx.fillStyle = '#f8f5ee';
         ctx.fillRect(0, 0, W, H);
@@ -339,7 +372,6 @@ function buildScene() {
     screenCanvas = screen.canvas;
     screenTexture = screen.texture;
     room = buildRoom(CONFIG, {
-        skyline: painted.skyline.texture,
         screen: screenTexture,
         calendar: painted.calendar.texture,
         notes: painted.notes.texture,
@@ -372,6 +404,10 @@ function applyPose(pose) {
     camera.updateProjectionMatrix();
     camera.lookAt(pose.aim[0], pose.aim[1], pose.aim[2]);
     state.pose = pose;
+    if (world) {
+        camera.updateMatrixWorld();
+        world.follow(camera);
+    }
 }
 
 function handleResize() {
@@ -452,14 +488,9 @@ function applyDaylight(t, force = false) {
         lights.sun.color.setHex(look.sunColor);
         lights.fill.intensity = look.fill;
     }
-    if (room) {
-        room.outside.near.color.setHex(look.cityNear);
-        room.outside.far.color.setHex(look.cityFar);
-    }
-    const { canvas: c, texture } = painted.skyline || {};
-    if (c) {
-        drawSkyline(c.getContext('2d'), c.width, c.height, look);
-        texture.needsUpdate = true;
+    if (world) {
+        world.setLight(look);
+        world.updateEnvironment(renderer, look);
     }
     requestRender();
     return light;
@@ -1106,6 +1137,7 @@ function submitContactForm(event) {
 /** Every place in the office, in the order the list shows them, with the
  *  key that goes there from anywhere in the room. */
 export const PLACES = [
+    { place: 'window', label: 'The window', key: '9' },
     { place: 'desk', label: 'Desk', key: '1' },
     { place: 'computer', label: 'Computer', key: '2' },
     { place: 'calendar', label: 'Calendar', key: '3' },
@@ -1181,6 +1213,7 @@ function goToPlace(place) {
     closeAll({ restoreFocus: false });
     const open = {
         desk: () => goTo('desk'),
+        window: () => goTo('window'),
         computer: () => openComputer(),
         calendar: () => openCalendar(),
         cabinet: () => openCabinet(),
@@ -2095,6 +2128,7 @@ function setupEventListeners() {
         else if (key === 'p') { event.preventDefault(); openPrinter(); }
         else if (key === 't') { event.preventDefault(); openToday(); }
         else if (key === '1') { event.preventDefault(); goTo('desk'); }
+        else if (key === '9') { event.preventDefault(); goTo('window'); track('place', { place: 'window' }); }
     }, { signal });
 
     // A hidden tab saves and stops drawing, and the clock is read again on
@@ -2180,6 +2214,22 @@ function animate() {
     if (!state.dirty) return;
     state.dirty = false;
     state.frames++;
+    draw();
+}
+
+/**
+ * One frame: the world outside first, lit and colored as it is and drawn
+ * without tone mapping, then the depth cleared and the room drawn over it
+ * with the usual ACES pass (world.js explains both).
+ */
+function draw() {
+    renderer.clear();
+    if (world) {
+        renderer.toneMapping = THREE.NoToneMapping;
+        renderer.render(world.scene, world.camera);
+        renderer.clearDepth();
+    }
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.render(scene, camera);
 }
 
@@ -2330,5 +2380,6 @@ export const __test__ = {
     room: () => room,
     store: () => store,
     camera: () => camera,
-    scene: () => scene
+    scene: () => scene,
+    world: () => world
 };

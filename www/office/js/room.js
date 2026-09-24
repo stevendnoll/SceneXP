@@ -3,29 +3,30 @@
  * room.js - The office itself, as geometry.
  *
  * A CORNER OFFICE, as the name promises. The back wall and the right wall are
- * both mostly window, meeting at the back right corner, with a city outside.
- * The desk stands against the back wall just left of the corner.
+ * both mostly window, meeting at the back right corner. The windows are
+ * openings: the city beyond them is world.js's own scene, drawn first. The
+ * desk stands against the back wall just left of the corner.
  *
  * THE THINGS YOU CAN TOUCH carry `userData.pick`, a key main.js turns into an
  * action: the monitor opens the computer, the in-tray starts a new
  * application, the out-tray opens backups and exports, the wastebasket opens
  * itself, the lamp switches, an open folder on the desk reopens its card, the
  * wall calendar opens the calendar, the sticky notes open today's list, the
- * filing cabinet opens itself, a folder in it opens on the desk, and the
- * corkboard opens itself, where its cards can be dragged between columns, and
- * the Rolodex opens the people, the whiteboard opens its numbers (and its goal
- * line the weekly goal), the departures board opens the week, and the
- * printer prints a prep sheet.
- * `pickOf` walks up from whatever a ray hit to the nearest of these.
+ * filing cabinet opens itself and a folder in it opens on the desk, the
+ * corkboard opens itself (its cards drag between columns), the Rolodex opens
+ * the people, the whiteboard opens its numbers (and its goal line the weekly
+ * goal), the departures board opens the week, and the printer prints a prep
+ * sheet. `pickOf` walks up from whatever a ray hit to the nearest of these.
  *
- * NO CANVAS IN HERE. The monitor's face, the city beyond the glass, the
- * wall calendar and the sticky notes take optional textures
- * (`textures.screen`, `.skyline`, `.calendar`, `.notes`) that main.js
- * paints, so this file builds the same room under real three in node:vm,
- * where there is no canvas, and a test can measure what the eye sees.
+ * NO CANVAS IN HERE. The monitor's face, the wall calendar, the sticky notes
+ * and the rest take optional textures (`textures.screen`, `.calendar`,
+ * `.notes` and so on) that main.js paints, so this file builds the same room
+ * under real three in node:vm, where there is no canvas, and a test can
+ * measure what the eye sees.
  *
  * Builds and returns `{ group, picks, lamp, folder, screen, calendar,
- * cabinet, board, rolodex, departures, whiteboard, notes, outside }`. It adds nothing to a scene itself and reads no clock.
+ * cabinet, board, rolodex, departures, whiteboard, notes }`. It adds nothing
+ * to a scene itself and reads no clock.
  */
 
 /* global THREE */
@@ -48,10 +49,7 @@ const COLORS = {
     mug: 0xc8553d,
     plant: 0x2f6b3a,
     pot: 0xb86b45,
-    sky: 0xa9cbe6,
-    city: 0x5b6b7d,
-    cityFar: 0x8499ad,
-    chair: 0x26282c
+        chair: 0x26282c
 };
 
 function mat(color, opts = {}) {
@@ -185,37 +183,6 @@ function buildShell(group, config) {
     for (const z of [w.right.z0, (w.right.z0 + w.right.z1) / 2, w.right.z1]) {
         group.add(slab(hw - 0.03, w.sill, z - f / 2, hw + 0.02, w.head, z + f / 2, trim));
     }
-}
-
-/** The city beyond the glass: a painted backdrop on two sides and a few
- *  blocks between it and the windows, so the view has depth as the camera
- *  glides. */
-function buildCity(group, config, skyline) {
-    const { width, depth } = config.room;
-    const hw = width / 2;
-    const hd = depth / 2;
-    const skyMat = new THREE.MeshBasicMaterial(skyline ? { map: skyline } : { color: COLORS.sky });
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(40, 18), skyMat);
-    back.position.set(4, 4, -hd - 16);
-    group.add(back);
-    const side = new THREE.Mesh(new THREE.PlaneGeometry(40, 18), skyMat);
-    side.rotation.y = -Math.PI / 2;
-    side.position.set(hw + 16, 4, -4);
-    group.add(side);
-
-    // Blocks: [x, z, width, depth, height], in two layers of haze. Basic
-    // materials, so the time of day sets their color outright (daylight.js)
-    // rather than the room's lights, which are indoor lights.
-    const near = new THREE.MeshBasicMaterial({ color: COLORS.city });
-    const far = new THREE.MeshBasicMaterial({ color: COLORS.cityFar });
-    const blocks = [
-        [-1, -hd - 7, 3, 3, 9, far], [3, -hd - 9, 4, 3, 14, far], [8, -hd - 8, 3, 3, 11, far],
-        [1.5, -hd - 4, 2, 2, 5, near], [5.5, -hd - 5, 2.5, 2, 7, near],
-        [hw + 6, -6, 3, 4, 12, far], [hw + 8, 1, 3, 3, 9, far],
-        [hw + 4, -2, 2, 2.5, 6, near]
-    ];
-    for (const [x, z, bw, bd, bh, m] of blocks) group.add(box(bw, bh, bd, m, x, bh / 2 - 3, z));
-    return { sky: skyMat, near, far };
 }
 
 /**
@@ -772,7 +739,7 @@ function buildFloorThings(group, config, picks) {
 
 /**
  * Build the office. `textures` may carry `screen` (the monitor's face),
- * `skyline` (the city beyond the glass), `calendar`, `notes`,
+ * `calendar`, `notes`,
  * `drawerLabels` (one per drawer), `boardHeader`, `boardCards`, `rolodex`,
  * `departures` and `whiteboard`, all optional. `rolodexRing` is the Rolodex's card layout
  * (`{ quad(i), uvs(i), count }`, from rolodex.js), and without it there is
@@ -783,7 +750,6 @@ export function buildRoom(config, textures = {}) {
     group.name = 'room';
     const picks = {};
     buildShell(group, config);
-    const outside = buildCity(group, config, textures.skyline || null);
     const desk = buildDesk(group, config, picks);
     buildFloorThings(group, config, picks);
     const calendar = buildCalendar(group, config, textures.calendar || null, picks);
@@ -810,7 +776,6 @@ export function buildRoom(config, textures = {}) {
         departures,
         whiteboard,
         notes,
-        outside,
         lamp: { light: desk.light, bulb: desk.bulb, group: desk.lampGroup }
     };
 }

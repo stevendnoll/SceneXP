@@ -143,16 +143,16 @@ describe.each(Object.entries(ASPECTS))('from the desk, on a %s screen', (_name, 
         expect(firstPick(cam, center)).toBe(key);
     });
 
-    test('the window shows the city, not a wall', () => {
+    test('the window is an opening: nothing of the room stands in it', () => {
         const cam = cameraAt('desk', aspect);
         const w = windowsOf(CONFIG);
-        // The middle of the LEFT pane: dead center is the mullion.
+        // The middle of the LEFT pane: dead center is the mullion. The city
+        // beyond is world.js's own scene, so a ray through the glass meets
+        // nothing of the room's at all.
         const through = new THREE.Vector3(w.back.x0 + (w.back.x1 - w.back.x0) / 4, (w.sill + w.head) / 2, -CONFIG.room.depth / 2);
         const ray = new THREE.Raycaster();
         ray.set(cam.position, through.clone().sub(cam.position).normalize());
-        const [first] = ray.intersectObject(room.group, true);
-        // Past the glass line: the city, never the wall the window is in.
-        expect(first.point.z).toBeLessThan(-CONFIG.room.depth / 2 - 0.2);
+        expect(ray.intersectObject(room.group, true)).toEqual([]);
     });
 });
 
