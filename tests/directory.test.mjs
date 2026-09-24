@@ -98,8 +98,9 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // list, taking the `noindex` off its page, and adding its card, sitemap line
 // and llms.txt line, which the tests above then insist on. (Added 2026-09-23
 // for Tornado Alley, M1, and emptied when it was released the same day. The
-// list stays, empty, for the next scene built in the open.)
-const UNRELEASED = [];
+// list stays, empty, for the next scene built in the open.) Corner Office
+// joined it at M0 on 2026-09-24, and leaves at its M7 release.
+const UNRELEASED = ['office'];
 
 const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
     .filter((d) => d.isDirectory() && !IGNORED_DIRS.includes(d.name))

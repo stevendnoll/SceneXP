@@ -1,0 +1,604 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * Corner Office's DOM modules imported from SOURCE: cards, forms, grid,
+ * panels, files and paint.
+ *
+ * main.js reaches these through their .min builds, which the coverage report
+ * does not count against the source (see the ".min imports hide coverage"
+ * note), so the flows in office-ui.test.mjs run them without crediting them.
+ * These tests hold the rules that live inside each module: the arming guard,
+ * the toast's hold, the stacking order, the safe link, the phone labels.
+ */
+import { jest } from '@jest/globals';
+import { installThree } from './helpers/three-stub.mjs';
+import { installDom, fire } from './helpers/dom-stub.mjs';
+import { CONFIG } from '../www/office/js/config.js';
+import {
+    emptyDoc, addApplication, addEvent, addTask, deleteRecord, setTaskDone, addContact, linkContact
+} from '../www/office/js/store.js';
+import { queryApplications, facetCounts } from '../www/office/js/query.js';
+import { weekly } from '../www/office/js/derive.js';
+
+const NOW = new Date(2026, 8, 24, 10, 0);
+
+let dom;
+let cards;
+let forms;
+let grid;
+let panels;
+let files;
+let paint;
+
+beforeEach(async () => {
+    jest.resetModules();
+    jest.useFakeTimers();
+    installThree();
+    dom = installDom();
+    cards = await import('../www/office/js/cards.js');
+    forms = await import('../www/office/js/forms.js');
+    grid = await import('../www/office/js/grid.js');
+    panels = await import('../www/office/js/panels.js');
+    files = await import('../www/office/js/files.js');
+    paint = await import('../www/office/js/paint.js');
+});
+
+afterEach(() => {
+    dom.uninstall();
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+});
+
+const el = (id) => dom.el(id);
+
+// ---- cards.js -----------------------------------------------------------------
+
+describe('cards', () => {
+    beforeEach(() => cards.initCards({ signal: new AbortController().signal }));
+
+    test('h builds text, never markup', () => {
+        const node = cards.h('p', { className: 'x', dataset: { id: '7' }, attrs: { 'aria-label': 'L' }, text: '<b>hi</b>' });
+        expect(node.textContent).toBe('<b>hi</b>');
+        expect(node.dataset.id).toBe('7');
+        expect(node.getAttribute('aria-label')).toBe('L');
+        const withKids = cards.h('div', {}, ['a', 3, null, false, '', cards.h('span')]);
+        expect(withKids.children).toHaveLength(3);
+    });
+
+    test('opening an earlier card closes the later ones, keeping the stack in page order', () => {
+        cards.openCard('folder');
+        cards.openCard('event-form');
+        expect(cards.__test__.openIds()).toEqual(['folder', 'event-form']);
+        // The computer comes before both in the markup, so opening it closes
+        // them rather than stacking beneath.
+        cards.openCard('computer');
+        expect(cards.__test__.openIds()).toEqual(['computer']);
+        expect(el('event-form').hidden).toBe(true);
+        expect(el('folder').hidden).toBe(true);
+        expect(cards.topCard()).toBe('computer');
+    });
+
+    test('focus goes back where it came from, and an onClose hook runs once', () => {
+        const opener = cards.h('button');
+        opener.focus();
+        const hook = jest.fn();
+        cards.openCard('wastebasket', { onClose: hook });
+        expect(dom.documentStub.activeElement).toBe(el('wastebasket-panel'));
+        cards.closeTop();
+        expect(hook).toHaveBeenCalledTimes(1);
+        expect(dom.documentStub.activeElement).toBe(opener);
+        expect(cards.closeTop()).toBeNull();
+    });
+
+    test('reopening a card over itself runs its old hook', () => {
+        const first = jest.fn();
+        cards.openCard('folder', { onClose: first });
+        cards.openCard('folder');
+        expect(first).toHaveBeenCalledTimes(1);
+        expect(cards.isOpen('folder')).toBe(true);
+    });
+
+    test('a tap-opened card swallows pointer clicks for a beat, but never a key press', () => {
+        cards.openCard('outtray', { armed: true });
+        const panel = el('outtray-panel');
+        const tap = fire(panel, 'click', { detail: 1 });
+        expect(tap.defaultPrevented).toBe(true);
+        const keyPress = fire(panel, 'click', { detail: 0 });
+        expect(keyPress.defaultPrevented).toBe(false);
+        jest.advanceTimersByTime(cards.__test__.ARM_MS + 10);
+        expect(fire(panel, 'click', { detail: 1 }).defaultPrevented).toBe(false);
+    });
+
+    test('a click on the backdrop closes the card, and closeAll empties the stack', () => {
+        cards.openCard('settings');
+        fire(el('settings'), 'click', { target: el('settings') });
+        expect(cards.anyOpen()).toBe(false);
+        cards.openCard('folder');
+        cards.openCard('task-form');
+        cards.closeAll();
+        expect(cards.anyOpen()).toBe(false);
+    });
+
+    test('the toast stays while held, offers undo once, and goes', () => {
+        const undo = jest.fn();
+        cards.toast('Saved', { undo, seconds: 1 });
+        expect(el('office-toast').hidden).toBe(false);
+        expect(el('toast-undo').hidden).toBe(false);
+        fire(el('office-toast'), 'focusin');
+        jest.advanceTimersByTime(3000);
+        expect(el('office-toast').hidden).toBe(false);
+        fire(el('office-toast'), 'focusout');
+        jest.advanceTimersByTime(1100);
+        expect(el('office-toast').hidden).toBe(true);
+        cards.toast('Again', { undo });
+        el('toast-undo').click();
+        el('toast-undo').click();
+        expect(undo).toHaveBeenCalledTimes(1);
+        cards.toast('No undo');
+        expect(el('toast-undo').hidden).toBe(true);
+    });
+
+    test('the confirm card runs its action only on confirm', () => {
+        const yes = jest.fn();
+        cards.confirmCard({ title: 'Sure?', detail: 'Really', onConfirm: yes, danger: true });
+        expect(el('confirm-title').textContent).toBe('Sure?');
+        const [cancel, confirm] = el('confirm-actions').children;
+        expect(confirm.className).toMatch(/danger/);
+        cancel.click();
+        expect(yes).not.toHaveBeenCalled();
+        cards.confirmCard({ title: 'Sure?', onConfirm: yes });
+        el('confirm-actions').children[1].click();
+        expect(yes).toHaveBeenCalledTimes(1);
+        expect(cards.isOpen('confirm')).toBe(false);
+    });
+
+    test('announce refills the live region a beat later, so a repeat is heard', () => {
+        cards.announce('Hello');
+        expect(el('office-live').textContent).toBe('');
+        jest.advanceTimersByTime(40);
+        expect(el('office-live').textContent).toBe('Hello');
+        cards.resetCards();
+        expect(cards.anyOpen()).toBe(false);
+    });
+});
+
+// ---- forms.js -----------------------------------------------------------------
+
+describe('forms', () => {
+    beforeEach(() => forms.initForms(CONFIG));
+
+    test('the selects are filled from the labels', () => {
+        expect(el('af-status').children.map((o) => o.textContent)).toContain('Not selected');
+        expect(el('ef-type').children).toHaveLength(CONFIG.eventTypes.length);
+    });
+
+    test('a new application opens as quick add, an edit with its details showing', () => {
+        forms.fillApplicationForm(null, { followUpDays: 1 });
+        expect(el('af-more').open).toBe(false);
+        expect(el('af-follow-row').hidden).toBe(false);
+        expect(el('af-follow-text').textContent).toBe('Remind me to follow up in 1 day');
+        expect(el('af-applied').value).toBe('');
+        forms.fillApplicationForm({ company: 'Acme', role: 'Designer', status: 'offer', notes: 'N' }, { followUpDays: 7 });
+        expect(el('application-form-title').textContent).toBe('Edit application');
+        expect(el('af-more').open).toBe(true);
+        expect(el('af-status-row').hidden).toBe(true);
+        expect(el('af-follow-row').hidden).toBe(true);
+        const read = forms.readApplicationForm();
+        expect(read.fields).toMatchObject({ company: 'Acme', role: 'Designer', notes: 'N' });
+    });
+
+    test('validation says what to fix', () => {
+        expect(forms.validateApplication({ company: '', role: '' })).toMatch(/company or a role/);
+        expect(forms.validateApplication({ company: 'A', appliedOn: '2026-02-30', salaryMin: '', salaryMax: '' })).toMatch(/real date/);
+        expect(forms.validateApplication({ company: 'A', appliedOn: '', salaryMin: '-5', salaryMax: '' })).toMatch(/number/);
+        expect(forms.validateApplication({ company: 'A', appliedOn: '', salaryMin: '5', salaryMax: '6' })).toBe('');
+        expect(forms.validateEvent({ at: '2026-09-24T10:00', round: '0', durationMinutes: '' })).toMatch(/round/);
+        expect(forms.validateEvent({ at: '2026-09-24T10:00', round: '', durationMinutes: 'x' })).toMatch(/minutes/);
+        expect(forms.validateEvent({ at: '2026-09-24T10:00', round: '2', durationMinutes: '45' })).toBe('');
+        expect(forms.validateTask({ text: '', due: '' })).toMatch(/describe/);
+        expect(forms.validateTask({ text: 'x', due: 'soon' })).toMatch(/real date/);
+        expect(forms.validateTask({ text: 'x', due: '' })).toBe('');
+    });
+
+    test('the posting helper never overwrites what the visitor typed', () => {
+        forms.fillApplicationForm(null, { followUpDays: 7 });
+        el('af-url').value = 'https://mine.example';
+        el('af-posting').value = '$90k-$100k https://theirs.example';
+        const offer = forms.updateFound();
+        expect(offer).toEqual({ salary: { min: 90000, max: 100000, period: 'year' } });
+        expect(el('af-found-text').textContent).toBe('Found in the posting: a salary of $90,000 to $100,000 a year.');
+        forms.useFound();
+        expect(el('af-url').value).toBe('https://mine.example');
+        expect(el('af-salary-max').value).toBe('100000');
+    });
+
+    test('event, follow-up and settings forms round-trip', () => {
+        forms.fillEventForm(null, { defaultAt: '2026-09-24T10:30', applicationName: 'Acme' });
+        expect(forms.readEventForm()).toMatchObject({ type: 'interview', at: '2026-09-24T10:30', outcome: 'pending', durationMinutes: '45' });
+        forms.fillEventForm({ type: 'call', at: '2026-09-25T09:00', title: 'Hi', outcome: 'none' }, {});
+        expect(el('event-form-title').textContent).toBe('Edit event');
+        forms.fillTaskForm(null, { defaultDue: '2026-09-25', applicationName: '' });
+        expect(forms.readTaskForm()).toEqual({ text: '', due: '2026-09-25' });
+        forms.fillTaskForm({ text: 'Call', due: null }, {});
+        expect(el('task-form-title').textContent).toBe('Edit follow-up');
+        forms.fillSettingsForm(CONFIG.settings, CONFIG);
+        expect(el('set-goal').max).toBe('100');
+        el('set-ghost').value = '';
+        expect(forms.readSettingsForm()).toEqual({ weeklyGoal: 5, followUpDays: 7 });
+        forms.showError('af-error', 'Oops');
+        expect(el('af-error').hidden).toBe(false);
+    });
+});
+
+// ---- grid.js ------------------------------------------------------------------
+
+describe('grid', () => {
+    function office() {
+        let doc = emptyDoc(CONFIG, NOW);
+        doc = addApplication(doc, { company: 'Acme', role: 'Designer', salaryMin: 55, salaryMax: 70, salaryPeriod: 'hour', posting: 'kubernetes' }, CONFIG, NOW, { id: 'a' }).doc;
+        doc = addApplication(doc, { company: 'Birch', role: 'Lead', workMode: 'remote', salaryMin: 120000, salaryMax: 140000 }, CONFIG, NOW, { id: 'b', sample: true }).doc;
+        doc = addEvent(doc, { applicationId: 'b', type: 'interview', at: '2026-09-26T14:00' }, CONFIG, NOW).doc;
+        return doc;
+    }
+
+    function draw(doc, query = {}, on = {}) {
+        const handlers = {
+            open: jest.fn(), sort: jest.fn(), toggleStatus: jest.fn(), toggleWorkMode: jest.fn(),
+            toggleUpcoming: jest.fn(), origin: jest.fn(), clearFilters: jest.fn(), create: jest.fn(), stock: jest.fn(), ...on
+        };
+        const result = queryApplications(doc, query, CONFIG, NOW);
+        grid.renderGrid({ result, facets: facetCounts(doc, CONFIG, NOW), week: weekly(doc, NOW), goal: 5, config: CONFIG, now: NOW, on: handlers });
+        return handlers;
+    }
+
+    test('cell words', () => {
+        expect(grid.activityText(null, NOW)).toBe('');
+        expect(grid.activityText(new Date(2026, 8, 30), NOW)).toBe('Coming up');
+        expect(grid.activityText(new Date(2026, 8, 24, 8), NOW)).toBe('Today');
+        expect(grid.activityText(new Date(2026, 8, 23), NOW)).toBe('Yesterday');
+        expect(grid.activityText(new Date(2026, 8, 20), NOW)).toBe('4 days ago');
+        expect(grid.activityText(new Date(2026, 7, 2), NOW)).toBe('Aug 2');
+        expect(grid.compactSalary({ salaryMin: 120000, salaryMax: 140000, salaryCurrency: 'USD' })).toBe('$120k to $140k');
+        expect(grid.compactSalary({ salaryMin: 55, salaryMax: 70, salaryPeriod: 'hour', salaryCurrency: 'USD' })).toBe('$55 to $70 an hour');
+        expect(grid.compactSalary({ salaryMin: null, salaryMax: 90000, salaryCurrency: 'EUR' })).toBe('EUR 90k');
+        expect(grid.compactSalary({ salaryMin: null, salaryMax: null })).toBe('');
+        expect(grid.nextText(null)).toBe('');
+        expect(grid.nextText({ type: 'interview', at: '2026-09-26T14:00' })).toMatch(/^Interview, Sep 26, 2:00\sPM$/);
+        expect(grid.countText(0, 0)).toBe('No applications yet.');
+        expect(grid.countText(1, 1)).toBe('Showing all 1 application.');
+    });
+
+    test('rows carry their column names for the phone layout, and a sample says so', () => {
+        draw(office(), { sortKey: 'company' });
+        const [first, second] = el('grid-body').children;
+        expect(first.children.map((td) => td.dataset.label)).toEqual(grid.COLUMNS.map((c) => c.label));
+        expect(first.children[0].children[0].textContent).toBe('Acme');
+        expect(second.children[0].children[1].textContent).toBe('Sample');
+        expect(second.children[4].textContent).toMatch(/^Interview, Sep 26/);
+        expect(el('grid-h-company').getAttribute('aria-sort')).toBe('ascending');
+        expect(el('grid-h-salary').getAttribute('aria-sort')).toBe('none');
+    });
+
+    test('chips appear only for what is there, and each calls its handler', () => {
+        const on = draw(office());
+        const labels = el('grid-filters').children.map((c) => c.textContent);
+        expect(labels).toEqual(['Applied1', 'Interviewing1', 'Remote1', 'Something coming up1', 'Samples1', 'Mine1']);
+        el('grid-filters').children.forEach((c) => c.click());
+        expect(on.toggleStatus).toHaveBeenCalledWith('applied');
+        expect(on.toggleWorkMode).toHaveBeenCalledWith('remote');
+        expect(on.toggleUpcoming).toHaveBeenCalled();
+        expect(on.origin).toHaveBeenCalledWith('mine');
+    });
+
+    test('an empty office offers the first application and the samples', () => {
+        const on = draw(emptyDoc(CONFIG, NOW));
+        expect(el('grid-empty').hidden).toBe(false);
+        const [add, stock] = el('grid-empty-actions').children;
+        add.click();
+        stock.click();
+        expect(on.create).toHaveBeenCalled();
+        expect(on.stock).toHaveBeenCalled();
+        draw(emptyDoc(CONFIG, NOW), {}, { stock: null });
+        expect(el('grid-empty-actions').children).toHaveLength(1);
+    });
+
+    test('the headers, the select, the arrow and the rows are wired once', () => {
+        const onSortKey = jest.fn();
+        const onReverse = jest.fn();
+        grid.initGrid(CONFIG, { signal: new AbortController().signal, onSortKey, onReverse });
+        expect(el('grid-sort').children).toHaveLength(Object.keys(CONFIG.sortKeys).length);
+        el('grid-sort').value = 'salary';
+        fire(el('grid-sort'), 'change');
+        expect(onSortKey).toHaveBeenCalledWith('salary');
+        el('grid-dir').click();
+        expect(onReverse).toHaveBeenCalled();
+        const on = draw(office());
+        el('grid-sort-applied').click();
+        expect(on.sort).toHaveBeenCalledWith('applied');
+        const [a, b] = el('grid-body').children.map((tr) => tr.children[0].children[0]);
+        a.focus();
+        fire(el('grid-body'), 'keydown', { key: 'ArrowDown', target: a });
+        expect(dom.documentStub.activeElement).toBe(b);
+        fire(el('grid-body'), 'keydown', { key: 'ArrowDown', target: b });
+        expect(dom.documentStub.activeElement).toBe(b);
+        fire(el('grid-body'), 'keydown', { key: 'ArrowUp', target: b });
+        expect(dom.documentStub.activeElement).toBe(a);
+        fire(el('grid-body'), 'keydown', { key: 'x', target: a });
+        fire(el('grid-body'), 'keydown', { key: 'ArrowUp', target: el('grid-body') });
+    });
+
+    test('a redraw keeps focus on the same row', () => {
+        const doc = office();
+        draw(doc, { sortKey: 'company' });
+        el('grid-body').children[1].children[0].children[0].focus();
+        draw(doc, { sortKey: 'company', sortDir: 'desc' });
+        expect(dom.documentStub.activeElement.dataset.gridId).toBe('b');
+    });
+});
+
+// ---- panels.js ----------------------------------------------------------------
+
+describe('panels', () => {
+    function folderDoc(url) {
+        let doc = emptyDoc(CONFIG, NOW);
+        doc = addApplication(doc, { company: 'Acme', role: 'Designer', url, notes: 'Notes', posting: 'Posting', appliedOn: '2026-08-01' }, CONFIG, new Date(2026, 7, 1), { id: 'a' }).doc;
+        doc = addContact(doc, { name: 'Pat', title: 'Recruiter' }, CONFIG, NOW, { id: 'p' }).doc;
+        doc = linkContact(doc, 'a', 'p', true, CONFIG, new Date(2026, 7, 1)).doc;
+        doc = addEvent(doc, { applicationId: 'a', type: 'interview', at: '2026-08-05T10:00', outcome: 'passed', notes: 'Good' }, CONFIG, new Date(2026, 7, 1), { id: 'e' }).doc;
+        doc = addTask(doc, { applicationId: 'a', text: 'Thank them', due: '2026-08-06' }, CONFIG, NOW, { id: 't' }).doc;
+        doc = setTaskDone(doc, 't', true, CONFIG, new Date(2026, 7, 6)).doc;
+        return doc;
+    }
+
+    function drawFolder(doc, status = 'applied') {
+        const on = Object.fromEntries(['setStatus', 'edit', 'remove', 'logEvent', 'editEvent', 'removeEvent', 'addTask', 'editTask', 'toggleTask', 'removeTask'].map((k) => [k, jest.fn()]));
+        panels.renderFolder({ doc, app: doc.applications[0], status, config: CONFIG, now: NOW, on });
+        return on;
+    }
+
+    const texts = (node) => (node.textContent !== undefined && !node.children?.length
+        ? [node.textContent] : (node.children || []).flatMap(texts));
+
+    test('a folder shows the record, its people, events and follow-ups, and a link only when safe', () => {
+        drawFolder(folderDoc('https://acme.example/job'));
+        const words = texts(el('folder-body')).join(' | ');
+        expect(el('folder-title').textContent).toBe('Acme, Designer');
+        expect(words).toContain('Pat, Recruiter');
+        expect(words).toContain('Interview, round 1');
+        expect(words).toContain('Moved forward');
+        expect(words).toContain('Thank them');
+        expect(words).toContain('Done');
+        expect(words).toContain('Open the posting');
+        drawFolder(folderDoc('javascript:alert(1)'));
+        expect(texts(el('folder-body')).join(' ')).not.toContain('Open the posting');
+    });
+
+    test('a quiet application gets a kind nudge with the days counted', () => {
+        drawFolder(folderDoc(''), 'ghosted');
+        expect(texts(el('folder-body')).join(' ')).toMatch(/no word in \d+ days\. A friendly follow-up might help\./);
+    });
+
+    test('an empty folder says what goes where, and every button calls back', () => {
+        const doc = addApplication(emptyDoc(CONFIG, NOW), { company: 'Solo' }, CONFIG, NOW, { id: 'solo' }).doc;
+        const on = drawFolder(doc);
+        const words = texts(el('folder-body')).join(' ');
+        expect(words).toContain('Nothing logged yet');
+        expect(words).toContain('No follow-ups');
+        el('folder-actions').children.forEach((b) => b.click());
+        expect(on.edit).toHaveBeenCalled();
+        expect(on.remove).toHaveBeenCalled();
+        expect(panels.eventName({ type: 'screen', round: 2 })).toBe('Phone screen');
+    });
+
+    test('the wastebasket lists what went in, with the day it went', () => {
+        let doc = folderDoc('');
+        doc = deleteRecord(doc, 'applications', 'a', CONFIG, NOW).doc;
+        const restore = jest.fn();
+        const items = panels.renderWastebasket({ doc, on: { restore } });
+        expect(items).toHaveLength(1);
+        const row = el('wastebasket-list').children[0];
+        expect(texts(row).join(' ')).toContain('Application, thrown away Sep 24, 2026');
+        row.children[1].children[0].click();
+        expect(restore).toHaveBeenCalledWith('applications', 'a');
+        expect(el('wastebasket-empty').disabled).toBe(false);
+    });
+
+    test('the samples buttons', () => {
+        expect(panels.renderSamplesButtons(emptyDoc(CONFIG, NOW))).toBe(false);
+        expect(el('settings-stock').hidden).toBe(false);
+        const stocked = addApplication(emptyDoc(CONFIG, NOW), { company: 'S' }, CONFIG, NOW, { sample: true }).doc;
+        expect(panels.renderSamplesButtons(stocked)).toBe(true);
+        expect(el('settings-clear-samples').hidden).toBe(false);
+    });
+});
+
+// ---- files.js and paint.js ----------------------------------------------------
+
+describe('files and paint', () => {
+    test('a download is a temporary link to a blob, revoked after', async () => {
+        const blobs = [];
+        jest.spyOn(URL, 'createObjectURL').mockImplementation((b) => { blobs.push(b); return 'blob:x'; });
+        const revoke = jest.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        expect(files.download('a.json', '{"a":1}')).toBe(true);
+        expect(await blobs[0].text()).toBe('{"a":1}');
+        expect(blobs[0].type).toBe('application/json');
+        jest.advanceTimersByTime(1100);
+        expect(revoke).toHaveBeenCalledWith('blob:x');
+    });
+
+    test('reading a chosen file', async () => {
+        expect(await files.readText(null)).toBeNull();
+        expect(await files.readText({ text: async () => 'hi' })).toBe('hi');
+        expect(await files.readText({ text: async () => { throw new Error('no'); } })).toBeNull();
+        expect(await files.readText({})).toBeNull();
+    });
+
+    test('the painters draw on any size of canvas', () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        expect(() => paint.drawScreen(ctx, 512, 320, ['3 applications', 'Nothing due today'])).not.toThrow();
+        expect(() => paint.drawSkyline(ctx, 1024, 512)).not.toThrow();
+        expect(() => paint.drawSkyline(ctx, 64, 32)).not.toThrow();
+    });
+});
+
+// ---- M2: the calendar and today's list, from source ------------------------------
+
+describe('calendar and today panels', () => {
+    let calendar;
+    beforeEach(async () => {
+        calendar = await import('../www/office/js/calendar.js');
+    });
+
+    function office() {
+        let doc = emptyDoc(CONFIG, NOW);
+        doc = addApplication(doc, { company: 'Acme', role: 'Designer' }, CONFIG, NOW, { id: 'a' }).doc;
+        doc = addEvent(doc, { applicationId: 'a', type: 'interview', at: '2026-09-26T14:00', title: 'Panel' }, CONFIG, NOW, { id: 'soon' }).doc;
+        doc = addEvent(doc, { applicationId: 'a', type: 'call', at: '2026-09-22T09:00' }, CONFIG, NOW, { id: 'past' }).doc;
+        doc = addTask(doc, { applicationId: 'a', text: 'Thank them', due: '2026-09-26' }, CONFIG, NOW, { id: 't' }).doc;
+        doc = addTask(doc, { text: 'Update portfolio', due: '2026-09-20' }, CONFIG, NOW, { id: 'solo' }).doc;
+        return doc;
+    }
+
+    const on = () => ({ selectDay: jest.fn(), openFolder: jest.fn(), toggleTask: jest.fn(), exportEvent: jest.fn() });
+    const words = (node) => (node.children && node.children.length
+        ? node.children.flatMap(words) : [node.textContent || '']);
+
+    test('the month is day buttons, one tab stop, marked and labeled', () => {
+        const doc = office();
+        const grid = calendar.monthGrid(2026, 8);
+        const handlers = on();
+        panels.renderCalendar({ doc, grid, marks: calendar.monthAgenda(doc, grid), selectedKey: '2026-09-26', todayKey: '2026-09-24', now: NOW, on: handlers });
+        const buttons = el('cal-body').children.flatMap((tr) => tr.children.map((td) => td.children[0]));
+        expect(buttons).toHaveLength(35);
+        expect(buttons.filter((b) => b.tabIndex === 0).map((b) => b.dataset.day)).toEqual(['2026-09-26']);
+        const chosen = buttons.find((b) => b.dataset.day === '2026-09-26');
+        expect(chosen.className).toContain('is-selected');
+        expect(chosen.getAttribute('aria-label')).toBe('Saturday, September 26, 1 event and 1 follow-up');
+        expect(chosen.children.map((c) => c.className)).toEqual(['cal-num', 'cal-dot', 'cal-ring']);
+        expect(buttons.find((b) => b.dataset.day === '2026-09-24').className).toContain('is-today');
+        expect(buttons[0].className).toContain('is-out');
+        buttons[3].click();
+        expect(handlers.selectDay).toHaveBeenCalledWith(buttons[3].dataset.day);
+
+        // The chosen day's list: the event with its buttons, then the follow-up.
+        const rows = el('cal-day-list').children;
+        expect(el('cal-day-title').textContent).toBe('Saturday, September 26');
+        expect(words(rows[0])).toEqual(expect.arrayContaining(['Interview, round 1: Acme, Designer', 'Panel', 'Add to my calendar', 'Open the folder']));
+        rows[0].children[1].children[0].click();
+        expect(handlers.exportEvent).toHaveBeenCalledWith('soon');
+        rows[0].children[1].children[1].click();
+        expect(handlers.openFolder).toHaveBeenCalledWith('a');
+        const box = rows[1].children[0].children[0];
+        box.checked = true;
+        fire(box, 'change');
+        expect(handlers.toggleTask).toHaveBeenCalledWith('t', true);
+    });
+
+    test('a past event offers no calendar file, and a redraw keeps focus on the chosen day', () => {
+        const doc = office();
+        const grid = calendar.monthGrid(2026, 8);
+        const marks = calendar.monthAgenda(doc, grid);
+        const draw = (key) => panels.renderCalendar({ doc, grid, marks, selectedKey: key, todayKey: '2026-09-24', now: NOW, on: on() });
+        draw('2026-09-22');
+        expect(words(el('cal-day-list').children[0])).not.toContain('Add to my calendar');
+        const first = el('cal-body').children[3].children[1].children[0];
+        first.focus();
+        draw('2026-09-23');
+        expect(dom.documentStub.activeElement.dataset.day).toBe('2026-09-23');
+    });
+
+    test('today’s list groups overdue, today and the week, and says when the desk is clear', () => {
+        const doc = office();
+        const handlers = on();
+        const n = panels.renderToday({
+            doc,
+            due: { overdue: [doc.tasks[1]], today: [doc.tasks[0]] },
+            coming: [doc.events[0]],
+            now: NOW,
+            on: handlers
+        });
+        expect(n).toBe(3);
+        const heads = el('today-list').children.filter((li) => li.className === 'today-heading').map((li) => li.children[0].textContent);
+        expect(heads).toEqual(['Overdue', 'Today', 'Coming up this week']);
+        // A follow-up with no application offers no folder.
+        expect(el('today-list').children[1].children).toHaveLength(1);
+        expect(words(el('today-list').children[1])).toEqual(expect.arrayContaining(['Update portfolio', 'Due Sep 20, 2026']));
+        expect(panels.renderToday({ doc, due: { overdue: [], today: [] }, coming: [], now: NOW, on: handlers })).toBe(0);
+        expect(el('today-note').textContent).toBe('Nothing is due today. Enjoy the clear desk.');
+    });
+
+    test('the folder offers the calendar only for what is still ahead', () => {
+        const doc = office();
+        const handlers = Object.fromEntries(['setStatus', 'edit', 'remove', 'logEvent', 'editEvent', 'removeEvent', 'exportEvent', 'addTask', 'editTask', 'toggleTask', 'removeTask'].map((k) => [k, jest.fn()]));
+        panels.renderFolder({ doc, app: doc.applications[0], status: 'interviewing', config: CONFIG, now: NOW, on: handlers });
+        const all = words(el('folder-body'));
+        expect(all.filter((w) => w === 'Add to my calendar')).toHaveLength(1);
+    });
+});
+
+describe('the M2 painters', () => {
+    test('the calendar and the notes paint without a hitch', async () => {
+        const calendar = await import('../www/office/js/calendar.js');
+        const notes = await import('../www/office/js/notes.js');
+        const ctx = document.createElement('canvas').getContext('2d');
+        const grid = calendar.monthGrid(2026, 8);
+        const marks = new Map([['2026-09-24', { events: [1], tasks: [1] }]]);
+        expect(() => paint.drawCalendar(ctx, 512, 700, { grid, marks, todayKey: '2026-09-24' })).not.toThrow();
+        const list = notes.stickyNotes({ overdue: [{ id: 'a', text: 'Call Priya about the panel and the portfolio review next week' }], today: [] });
+        expect(() => paint.drawNoteAtlas(ctx, 768, 512, list, notes.ATLAS, notes.noteWords, notes.noteColor)).not.toThrow();
+        expect(() => paint.drawSkyline(ctx, 256, 128, { skyTop: 0x0b1530, skyBottom: 0x2a2f4a, cityLights: 1, cityNear: 0x1c2333, cityFar: 0x252c40 })).not.toThrow();
+    });
+
+    test('the board header and a card face paint, shrinking a long column name to fit', () => {
+        const fonts = [];
+        const ctx = new Proxy({
+            measureText: (text) => ({ width: text.length * Number(/(\d+)px/.exec(ctx.font)[1]) * 0.6 }),
+            fillText() {}, fillRect() {}, arc() {}, beginPath() {}, fill() {}
+        }, {
+            set(target, prop, value) {
+                if (prop === 'font') fonts.push(value);
+                target[prop] = value;
+                return true;
+            }
+        });
+        paint.drawBoardHeader(ctx, 1024, 52, ['Saved for later', 'Applied', 'Screening', 'Interviewing', 'Offer', 'Accepted', 'Not selected', 'Withdrawn']);
+        const first = Number(/(\d+)px/.exec(fonts[0])[1]);
+        expect(fonts.some((f) => Number(/(\d+)px/.exec(f)[1]) < first)).toBe(true);
+        fonts.length = 0;
+        paint.drawCardFace(ctx, 0, 0, 256, 160, { title: 'Quillfeather Labs', subtitle: 'Staff Engineer', note: 'Gone quiet', band: '#7b6fd6' });
+        paint.drawCardFace(ctx, 256, 0, 256, 160, { title: 'Solo' });
+        expect(fonts.length).toBeGreaterThanOrEqual(5);
+    });
+
+    test('a drawer label shrinks its type until it fits', () => {
+        const sizes = [];
+        const ctx = new Proxy({
+            measureText: (text) => ({ width: text.length * Number(/(\d+)px/.exec(ctx.font)[1]) * 0.6 }),
+            fillText() {}, strokeRect() {}, fillRect() {}
+        }, {
+            set(target, prop, value) {
+                if (prop === 'font') sizes.push(Number(/(\d+)px/.exec(value)[1]));
+                target[prop] = value;
+                return true;
+            }
+        });
+        paint.drawLabelCard(ctx, 256, 64, 'Saved and applied');
+        expect(sizes[0]).toBe(32);
+        expect(sizes.at(-1)).toBeLessThan(32);
+        expect('Saved and applied'.length * sizes.at(-1) * 0.6).toBeLessThanOrEqual(256 * 0.9);
+        sizes.length = 0;
+        paint.drawLabelCard(ctx, 256, 64, 'A to F');
+        expect(sizes).toEqual([32]);
+    });
+
+    test('wrapping keeps whole words and ends a long text with an ellipsis', () => {
+        // A measure where every character is 10 wide.
+        const ctx = { measureText: (s) => ({ width: s.length * 10 }) };
+        expect(paint.wrap(ctx, 'Call Priya back', 100, 3)).toEqual(['Call Priya', 'back']);
+        const long = paint.wrap(ctx, 'one two three four five six seven eight nine ten', 100, 2);
+        expect(long).toHaveLength(2);
+        expect(long[1].endsWith('…')).toBe(true);
+        expect(paint.wrap(ctx, 'Supercalifragilistic', 50, 2)).toEqual(['Supercalifragilistic']);
+        expect(paint.wrap({}, 'no measure here', 1000, 2)).toEqual(['no measure here']);
+    });
+});

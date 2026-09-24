@@ -1,0 +1,915 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * Corner Office's M1 flows, driven through the booted page the way a visitor
+ * drives them: quick add, undo, the computer's grid, the folder, events and
+ * follow-ups, the wastebasket, the out-tray, settings, samples, the keyboard,
+ * and the room's taps.
+ *
+ * A HEADLESS BOOT IS NOT A WORKING PAGE, and the DOM stub makes up any id it
+ * is asked for. So the last block reads index.html and holds every id the
+ * scripts ask for to one the page really has, and the cards' stacking list to
+ * the markup's order. Pixels are Steve's screenshot round.
+ */
+import { jest } from '@jest/globals';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { installThree } from './helpers/three-stub.mjs';
+import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
+import { CONFIG } from '../www/office/js/config.js';
+import { emptyDoc, addApplication, serialize } from '../www/office/js/store.js';
+import { formatDate, addDays } from '../www/office/js/dates.js';
+
+let dom;
+let main;
+let t;
+let downloads;
+
+beforeEach(async () => {
+    jest.resetModules();
+    jest.useFakeTimers();
+    installThree();
+    dom = installDom();
+    downloads = [];
+    jest.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+        downloads.push(blob);
+        return `blob:office/${downloads.length}`;
+    });
+    jest.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    main = await import('../www/office/js/main.js');
+    await flushAsync();
+    await jest.advanceTimersByTimeAsync(CONFIG.loadingReveal + 100);
+    t = main.__test__;
+    // Out of the welcome, into the office.
+    fire(dom.documentStub, 'keydown', { key: 'Escape' });
+});
+
+afterEach(() => {
+    jest.restoreAllMocks();
+    dom.uninstall();
+    jest.useRealTimers();
+});
+
+const el = (id) => dom.el(id);
+const doc = () => main.getDoc();
+const live = () => doc().applications.filter((a) => !a.deletedAt);
+
+function said() {
+    jest.advanceTimersByTime(50);
+    return el('office-live').textContent;
+}
+
+function key(k, extra = {}) {
+    return fire(dom.documentStub, 'keydown', { key: k, target: dom.documentStub.body, ...extra });
+}
+
+function submit(formId) {
+    return fire(el(formId), 'submit');
+}
+
+function quickAdd(company, role, { follow = true } = {}) {
+    key('n');
+    el('af-company').value = company;
+    el('af-role').value = role;
+    el('af-follow').checked = follow;
+    submit('af-form');
+}
+
+const rowNames = () => el('grid-body').children.map((tr) => tr.children[0].children[0].textContent);
+
+// ---- Quick add and undo -----------------------------------------------------
+
+describe('quick add', () => {
+    test('N, two boxes and Enter add an application with a follow-up, in one undo step', () => {
+        key('n');
+        expect(el('application-form').hidden).toBe(false);
+        expect(el('af-more').open).toBe(false);
+        expect(el('af-follow-text').textContent).toBe('Remind me to follow up in 7 days');
+        el('af-company').value = 'Acme';
+        el('af-role').value = 'Designer';
+        submit('af-form');
+
+        expect(el('application-form').hidden).toBe(true);
+        expect(live().map((a) => a.company)).toEqual(['Acme']);
+        expect(doc().tasks).toEqual([expect.objectContaining({
+            text: 'Follow up with Acme', auto: true, due: formatDate(addDays(new Date(), 7))
+        })]);
+        expect(said()).toBe('Added Acme, Designer, with a follow-up reminder in 7 days.');
+        expect(el('office-toast').hidden).toBe(false);
+        expect(el('toast-undo').hidden).toBe(false);
+        expect(t.history.size).toBe(1);
+        expect(el('bar-undo').disabled).toBe(false);
+
+        el('toast-undo').click();
+        expect(live()).toEqual([]);
+        expect(doc().tasks).toEqual([]);
+        expect(el('office-toast').hidden).toBe(true);
+        expect(el('bar-undo').disabled).toBe(true);
+        expect(said()).toBe('Undone. Added Acme, Designer');
+    });
+
+    test('the follow-up can be declined, and saved-for-later never gets one', () => {
+        quickAdd('Acme', 'Designer', { follow: false });
+        expect(doc().tasks).toEqual([]);
+        key('n');
+        el('af-company').value = 'Later Co';
+        el('af-status').value = 'saved';
+        submit('af-form');
+        expect(doc().tasks).toEqual([]);
+        expect(live().find((a) => a.company === 'Later Co').appliedOn).toBeNull();
+    });
+
+    test('an empty form says what is missing and saves nothing', () => {
+        key('n');
+        submit('af-form');
+        expect(el('af-error').textContent).toBe('Please enter a company or a role.');
+        expect(el('af-error').hidden).toBe(false);
+        expect(el('application-form').hidden).toBe(false);
+        expect(live()).toEqual([]);
+        el('af-company').value = 'Acme';
+        el('af-salary-min').value = 'lots';
+        submit('af-form');
+        expect(el('af-error').textContent).toMatch(/salary as a number/);
+    });
+
+    test('a pasted posting offers its link and salary, and fills only empty boxes', () => {
+        key('n');
+        el('af-posting').value = 'Great team. $120k to $140k. Apply: https://jobs.example/42';
+        fire(el('af-posting'), 'input');
+        expect(el('af-found').hidden).toBe(false);
+        expect(el('af-found-text').textContent)
+            .toBe('Found in the posting: a link and a salary of $120,000 to $140,000 a year.');
+        el('af-use-found').click();
+        expect(el('af-url').value).toBe('https://jobs.example/42');
+        expect(el('af-salary-min').value).toBe('120000');
+        expect(el('af-found').hidden).toBe(true);
+    });
+
+    test('Ctrl or Command and Z undoes, but not inside a text box', () => {
+        quickAdd('Acme', 'Designer');
+        key('z', { ctrlKey: true, target: { tagName: 'INPUT' } });
+        expect(live()).toHaveLength(1);
+        key('z', { metaKey: true });
+        expect(live()).toHaveLength(0);
+        key('z', { ctrlKey: true });
+        expect(said()).toBe('There is nothing to undo.');
+    });
+
+    test('the in-tray and the toolbar both open the same form', () => {
+        t.actOn('intray');
+        expect(el('application-form').hidden).toBe(false);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        el('bar-new').click();
+        expect(el('application-form').hidden).toBe(false);
+    });
+});
+
+// ---- The computer -------------------------------------------------------------
+
+describe('the computer', () => {
+    beforeEach(() => {
+        t.stockOffice();
+        t.openComputer();
+    });
+
+    test('shows every sample, and says how many', () => {
+        expect(el('computer').hidden).toBe(false);
+        expect(rowNames()).toHaveLength(16);
+        expect(el('grid-count').textContent).toBe('Showing all 16 applications.');
+        expect(said()).toMatch(/^Stocked the office with 16 sample applications/);
+    });
+
+    test('search narrows as the visitor types, and says where a buried match was found', () => {
+        el('grid-search').value = 'warehouse robots';
+        fire(el('grid-search'), 'input');
+        expect(rowNames()).toEqual(['Tidewater Robotics']);
+        el('grid-search').value = 'learning budget';
+        fire(el('grid-search'), 'input');
+        expect(rowNames()).toEqual(['Quillfeather Labs']);
+        const roleCell = el('grid-body').children[0].children[1];
+        expect(roleCell.children.at(-1).textContent).toBe('Found in your notes');
+        expect(el('grid-count').textContent).toBe('Showing 1 of 16 applications.');
+        expect(el('grid-clear').hidden).toBe(false);
+    });
+
+    test('nothing matching offers a way back', () => {
+        el('grid-search').value = 'zeppelin';
+        fire(el('grid-search'), 'input');
+        expect(el('grid-empty').hidden).toBe(false);
+        expect(el('grid-table').hidden).toBe(true);
+        expect(el('grid-empty-text').textContent).toBe('Nothing matches that search.');
+        el('grid-empty-actions').children[0].click();
+        expect(rowNames()).toHaveLength(16);
+        expect(el('grid-search').value).toBe('');
+    });
+
+    test('a status chip filters, shows its count, and toggles off again', () => {
+        const chips = () => el('grid-filters').children;
+        const quiet = chips().find((c) => c.textContent.startsWith('Gone quiet'));
+        expect(quiet.textContent).toBe('Gone quiet2');
+        quiet.click();
+        expect(rowNames().sort()).toEqual(['Glasswing Energy', 'Mossgate Studio']);
+        const pressed = chips().find((c) => c.textContent.startsWith('Gone quiet'));
+        expect(pressed.getAttribute('aria-pressed')).toBe('true');
+        pressed.click();
+        expect(rowNames()).toHaveLength(16);
+    });
+
+    test('a header sorts, a second press reverses, and the choice is kept without an undo step', () => {
+        const steps = t.history.size;
+        el('grid-sort-company').click();
+        expect(rowNames()[0]).toBe('Brambleway Coffee');
+        expect(el('grid-h-company').getAttribute('aria-sort')).toBe('ascending');
+        el('grid-sort-company').click();
+        expect(rowNames()[0]).toBe('Tinderbox Studio');
+        expect(el('grid-h-company').getAttribute('aria-sort')).toBe('descending');
+        expect(doc().settings).toMatchObject({ sortKey: 'company', sortDir: 'desc' });
+        expect(t.history.size).toBe(steps);
+    });
+
+    test('the weekly goal is changed right in the summary', () => {
+        el('grid-goal').value = '8';
+        fire(el('grid-goal'), 'change');
+        expect(doc().settings.weeklyGoal).toBe(8);
+        expect(el('hud-week').textContent).toMatch(/of 8 this week$/);
+        expect(said()).toBe('Set the weekly goal to 8');
+        el('grid-goal').value = '0';
+        fire(el('grid-goal'), 'change');
+        expect(doc().settings.weeklyGoal).toBe(8);
+    });
+
+    test('closing the computer glides back to the desk', () => {
+        expect(t.ui.station).toBe('computer');
+        el('computer-close').click();
+        expect(t.ui.station).toBe('desk');
+        expect(t.glide()).not.toBeNull();
+        for (let i = 0; i < 20; i++) { jest.advanceTimersByTime(100); dom.loops.at(-1)(); }
+        expect(t.glide()).toBeNull();
+    });
+});
+
+// ---- The folder -----------------------------------------------------------------
+
+describe('the folder', () => {
+    let id;
+    beforeEach(() => {
+        quickAdd('Acme', 'Designer');
+        id = live()[0].id;
+        t.openComputer();
+        el('grid-body').children[0].children[0].children[0].click();
+    });
+
+    test('opens from its row, and lies open on the desk', () => {
+        expect(el('folder').hidden).toBe(false);
+        expect(el('folder-title').textContent).toBe('Acme, Designer');
+        expect(t.ui.folderOnDesk).toBe(true);
+        el('folder-close').click();
+        expect(t.ui.folderOnDesk).toBe(false);
+    });
+
+    test('the status changes right there', () => {
+        const select = el('folder-body').children[0].children[1];
+        select.value = 'screening';
+        fire(select, 'change');
+        expect(live()[0].status).toBe('screening');
+        expect(said()).toBe('Moved Acme, Designer to Screening');
+    });
+
+    test('logging an interview moves the application along, and says so', () => {
+        t.openEventForm(id, null);
+        expect(el('ef-type').value).toBe('interview');
+        expect(el('ef-at').value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:(00|30)$/);
+        el('ef-title').value = 'Portfolio review';
+        submit('ef-form');
+        expect(doc().events).toEqual([expect.objectContaining({ type: 'interview', round: 1, title: 'Portfolio review' })]);
+        expect(live()[0].status).toBe('interviewing');
+        expect(said()).toBe('Logged the interview for Acme, Designer. Moved to Interviewing.');
+    });
+
+    test('an event needs a time', () => {
+        t.openEventForm(id, null);
+        el('ef-at').value = '';
+        submit('ef-form');
+        expect(el('ef-error').textContent).toBe('Please choose a date and time.');
+        expect(doc().events).toEqual([]);
+    });
+
+    test('a follow-up is added, ticked off, and thrown away', () => {
+        t.openTaskForm(id, null);
+        el('tf-text').value = 'Send the case study';
+        submit('tf-form');
+        const task = doc().tasks.find((x) => x.text === 'Send the case study');
+        expect(task.due).toBe(formatDate(addDays(new Date(), 1)));
+        t.openFolder(id);
+        t.throwAway('tasks', task.id);
+        expect(doc().tasks.find((x) => x.id === task.id).deletedAt).toBeTruthy();
+        expect(said()).toBe('Threw away the follow-up. It is in the wastebasket.');
+    });
+
+    test('throwing the application away closes the folder, and the wastebasket gives it back', () => {
+        el('folder-actions').children[1].click();
+        expect(live()).toEqual([]);
+        expect(el('folder').hidden).toBe(true);
+        t.openWastebasket();
+        const items = el('wastebasket-list').children;
+        expect(items).toHaveLength(1);
+        expect(items[0].children[0].children[0].textContent).toBe('Acme, Designer');
+        items[0].children[1].children[0].click();
+        expect(live()).toHaveLength(1);
+        // Its follow-up came back with it.
+        expect(doc().tasks[0].deletedAt).toBeNull();
+        expect(el('wastebasket-note').textContent).toBe('The wastebasket is empty.');
+        expect(el('wastebasket-empty').disabled).toBe(true);
+    });
+
+    test('emptying the wastebasket asks first, and can still be undone', () => {
+        t.throwAway('applications', id);
+        t.openWastebasket();
+        el('wastebasket-empty').click();
+        expect(el('confirm').hidden).toBe(false);
+        expect(el('confirm-detail').textContent).toMatch(/^1 item will be removed for good/);
+        el('confirm-actions').children[1].click();
+        expect(doc().applications).toEqual([]);
+        t.undo();
+        expect(doc().applications).toHaveLength(1);
+    });
+});
+
+// ---- The out-tray and settings ----------------------------------------------------
+
+describe('the out-tray', () => {
+    test('a backup is the whole document, as a file', async () => {
+        quickAdd('Acme', 'Designer');
+        el('bar-outtray').click();
+        el('outtray-backup').click();
+        expect(downloads).toHaveLength(1);
+        const text = await downloads[0].text();
+        expect(JSON.parse(text)).toEqual(doc());
+        expect(el('outtray-note').textContent).toBe('Your backup is on its way to your downloads.');
+    });
+
+    test('the spreadsheet follows what the grid shows, guarded against formulas', async () => {
+        quickAdd('=cmd', 'Hacker');
+        quickAdd('Acme', 'Designer');
+        t.openComputer();
+        el('grid-search').value = 'acme';
+        fire(el('grid-search'), 'input');
+        t.exportCsv();
+        const text = await downloads[0].text();
+        expect(text).toContain('Acme,Designer');
+        expect(text).not.toContain('cmd');
+    });
+
+    test('a restore asks first, replaces the office, and can be undone', () => {
+        quickAdd('Mine', 'Engineer');
+        const backup = addApplication(emptyDoc(CONFIG, new Date()), { company: 'From backup' }, CONFIG, new Date()).doc;
+        t.restoreFromText(serialize(backup));
+        expect(el('confirm-detail').textContent).toMatch(/^It holds 1 application\./);
+        el('confirm-actions').children[1].click();
+        expect(live().map((a) => a.company)).toEqual(['From backup']);
+        expect(JSON.parse(localStorage.getItem(CONFIG.storage.key)).applications[0].company).toBe('From backup');
+        t.undo();
+        expect(live().map((a) => a.company)).toEqual(['Mine']);
+    });
+
+    test('a file that is not a backup is refused politely', () => {
+        t.openOuttray();
+        t.restoreFromText('hello');
+        expect(el('outtray-note').textContent).toBe('That file is not a backup the office can read.');
+        t.restoreFromText('{"schema":99,"applications":[]}');
+        expect(el('outtray-note').textContent).toMatch(/newer version/);
+        t.restoreFromText(null);
+        expect(el('confirm').hidden).toBe(true);
+    });
+});
+
+describe('settings', () => {
+    test('saves within bounds', () => {
+        el('bar-settings').click();
+        expect(el('set-goal').value).toBe('5');
+        el('set-goal').value = '12';
+        el('set-followup').value = '500';
+        submit('settings-form');
+        expect(doc().settings).toMatchObject({ weeklyGoal: 12, followUpDays: 60 });
+        expect(el('settings').hidden).toBe(true);
+    });
+
+    test('offers the right samples button, and clearing samples keeps the visitor’s own', () => {
+        quickAdd('Mine', 'Engineer');
+        el('bar-settings').click();
+        expect(el('settings-stock').hidden).toBe(false);
+        expect(el('settings-clear-samples').hidden).toBe(true);
+        el('settings-stock').click();
+        expect(live()).toHaveLength(17);
+        el('bar-settings').click();
+        expect(el('settings-clear-samples').hidden).toBe(false);
+        el('settings-clear-samples').click();
+        expect(live().map((a) => a.company)).toEqual(['Mine']);
+    });
+
+    test('clearing the whole office asks first, keeps the settings, and can be undone', () => {
+        quickAdd('Mine', 'Engineer');
+        t.clearEverything();
+        el('confirm-actions').children[1].click();
+        expect(doc().applications).toEqual([]);
+        expect(doc().settings.weeklyGoal).toBe(5);
+        t.undo();
+        expect(live()).toHaveLength(1);
+    });
+});
+
+// ---- The room and the keyboard ---------------------------------------------------
+
+describe('the room and the keyboard', () => {
+    test('each tappable thing opens its card, armed against the tap', () => {
+        for (const [pick, card] of [['computer', 'computer'], ['outtray', 'outtray'], ['wastebasket', 'wastebasket']]) {
+            expect(t.actOn(pick)).toBe(true);
+            expect(el(card).hidden).toBe(false);
+            fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        }
+        expect(t.actOn('nothing')).toBe(false);
+    });
+
+    test('the lamp switches and says so', () => {
+        t.actOn('lamp');
+        expect(t.ui.lampOn).toBe(false);
+        expect(said()).toBe('The lamp is off.');
+    });
+
+    test('a tap reaches nothing while a card is open', () => {
+        t.openComputer();
+        expect(t.handleSceneTap(10, 10)).toBeNull();
+    });
+
+    test('slash opens the computer on its search box, and 1 goes back to the desk', () => {
+        key('/');
+        expect(el('computer').hidden).toBe(false);
+        expect(dom.documentStub.activeElement).toBe(el('grid-search'));
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('2');
+        expect(t.ui.station).toBe('computer');
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('1');
+        expect(t.ui.station).toBe('desk');
+    });
+
+    test('a shortcut typed into a box is just a letter', () => {
+        key('n', { target: { tagName: 'INPUT' } });
+        expect(el('application-form').hidden).toBe(true);
+    });
+
+    test('over the computer, N adds and slash searches, and nothing else is a shortcut', () => {
+        t.openComputer();
+        key('c');
+        key('1');
+        expect(t.ui.station).toBe('computer');
+        key('/');
+        expect(dom.documentStub.activeElement).toBe(el('grid-search'));
+        key('n');
+        expect(el('application-form').hidden).toBe(false);
+    });
+
+    test('over any other card, N is not a shortcut', () => {
+        t.openWastebasket();
+        key('n');
+        expect(el('application-form').hidden).toBe(true);
+    });
+
+    test('a folder that is gone does not open empty', () => {
+        expect(t.openFolder('nope')).toBe(false);
+        expect(el('folder').hidden).toBe(true);
+        expect(said()).toBe('That application is no longer here.');
+    });
+
+    test('Escape closes only the top card', () => {
+        t.openComputer();
+        key('n');
+        expect(el('application-form').hidden).toBe(false);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        expect(el('application-form').hidden).toBe(true);
+        expect(el('computer').hidden).toBe(false);
+    });
+
+    test('the week and what is due show at the top left', () => {
+        quickAdd('Acme', 'Designer');
+        expect(el('hud-week').textContent).toBe('1 of 5 this week');
+        expect(el('hud-due').hidden).toBe(true);
+        t.stockOffice();
+        expect(el('hud-due').hidden).toBe(false);
+        expect(el('hud-due').textContent).toMatch(/^\d+ follow-ups? today$/);
+    });
+});
+
+// ---- The page and the scripts agree -----------------------------------------------
+
+describe('the markup and the scripts agree', () => {
+    const html = readFileSync(join(process.cwd(), 'www/office/index.html'), 'utf8');
+    const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+    const dir = join(process.cwd(), 'www/office/js');
+    const sources = readdirSync(dir).filter((f) => f.endsWith('.js') && !f.endsWith('.min.js'))
+        .map((f) => [f, readFileSync(join(dir, f), 'utf8')]);
+
+    test('every id a script looks up is on the page', () => {
+        // The DOM stub invents any element it is asked for, so a typo in an id
+        // passes every other test in the suite. The page cannot invent one.
+        const made = new Set(['folder-status', 'folder-events-title', 'folder-tasks-title']);
+        const missing = [];
+        for (const [file, src] of sources) {
+            for (const m of src.matchAll(/(?:\bel|byId|wire|getElementById)\(\s*'([a-z0-9-]+)'/g)) {
+                if (!ids.has(m[1]) && !made.has(m[1])) missing.push(`${file}: ${m[1]}`);
+            }
+            for (const m of src.matchAll(/^\s+\w+: '((?:af|ef|set)-[a-z-]+)'/gm)) {
+                if (!ids.has(m[1])) missing.push(`${file}: ${m[1]}`);
+            }
+        }
+        expect(missing).toEqual([]);
+    });
+
+    test('the cards stack in the order they appear on the page', async () => {
+        const { CARD_ORDER } = await import('../www/office/js/cards.js');
+        const onPage = [...html.matchAll(/<div id="([a-z-]+)" class="card-overlay/g)].map((m) => m[1]);
+        expect(onPage).toEqual(CARD_ORDER);
+    });
+
+    test('every card panel is a modal dialog the shared focus trap will hold', () => {
+        const panels = [...html.matchAll(/<div id="([a-z-]+)-panel"[^>]*>/g)];
+        expect(panels.length).toBeGreaterThan(8);
+        for (const [tag] of panels) {
+            expect(tag).toMatch(/role="dialog"/);
+            expect(tag).toMatch(/aria-modal="true"/);
+            expect(tag).toMatch(/tabindex="-1"/);
+        }
+    });
+});
+
+// ---- M2: today, the calendar, calendar files, the light ---------------------------
+
+describe('today', () => {
+    beforeEach(() => t.stockOffice());
+
+    test('the due chip opens today’s list, overdue first, and ticking one off takes its note down', () => {
+        expect(el('hud-due').hidden).toBe(false);
+        const notesBefore = t.ui.notesShown;
+        expect(notesBefore).toBeGreaterThanOrEqual(2);
+        el('hud-due').click();
+        expect(el('today').hidden).toBe(false);
+        const rows = el('today-list').children;
+        expect(rows[0].children[0].textContent).toBe('Overdue');
+        expect(el('today-note').textContent).toMatch(/takes its note off the monitor/);
+        const box = rows[1].children[0].children[0];
+        box.checked = true;
+        fire(box, 'change');
+        expect(t.ui.notesShown).toBe(notesBefore - 1);
+        expect(said()).toMatch(/^Ticked off /);
+    });
+
+    test('the notes on the monitor and the T key open the same list', () => {
+        t.actOn('notes');
+        expect(el('today').hidden).toBe(false);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('t');
+        expect(el('today').hidden).toBe(false);
+    });
+
+    test('everything coming up goes into one calendar file, with a reminder on each', async () => {
+        el('bar-outtray').click();
+        el('outtray-ics').click();
+        expect(downloads).toHaveLength(1);
+        expect(downloads[0].type).toBe('text/calendar');
+        const text = await downloads[0].text();
+        const n = text.split('BEGIN:VEVENT').length - 1;
+        expect(n).toBeGreaterThanOrEqual(5);
+        expect(text.split('BEGIN:VALARM').length - 1).toBe(n);
+        expect(el('outtray-note').textContent).toMatch(new RegExp(`holds ${n} items, each with a reminder`));
+    });
+});
+
+describe('the calendar', () => {
+    test('opens on today at its station, from the toolbar, the wall and the 3 key', () => {
+        el('bar-calendar').click();
+        expect(el('calendar').hidden).toBe(false);
+        expect(t.ui.station).toBe('calendar');
+        const now = new Date();
+        expect(t.ui.calDay).toBe(formatDate(now));
+        expect(el('calendar-title').textContent).toBe(new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(now));
+        el('calendar-close').click();
+        expect(t.ui.station).toBe('desk');
+        t.actOn('calendar');
+        expect(el('calendar').hidden).toBe(false);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('3');
+        expect(el('calendar').hidden).toBe(false);
+    });
+
+    test('a day shows what falls on it, and the arrows move the chosen day, turning the page', () => {
+        t.stockOffice();
+        t.openCalendar();
+        const soon = formatDate(addDays(new Date(), 2));
+        t.selectDay(soon);
+        const list = el('cal-day-list').children;
+        expect(list[0].children[0].children[0].textContent).toBe('Interview, round 2: Brightkettle, Senior Product Designer');
+        // The chosen day is the month's one tab stop, and pressed.
+        const chosen = el('cal-body').children.flatMap((tr) => tr.children.map((td) => td.children[0]))
+            .find((b) => b.dataset.day === soon);
+        expect(chosen.tabIndex).toBe(0);
+        expect(chosen.getAttribute('aria-pressed')).toBe('true');
+        expect(chosen.getAttribute('aria-label')).toMatch(/1 event/);
+
+        const start = new Date(2026, 8, 28);
+        t.selectDay('2026-09-28');
+        const press = (k) => fire(el('cal-body'), 'keydown', { key: k, target: { dataset: { day: t.ui.calDay } } });
+        press('ArrowRight');
+        expect(t.ui.calDay).toBe('2026-09-29');
+        press('ArrowDown');
+        expect(t.ui.calDay).toBe('2026-10-06');
+        expect(el('calendar-title').textContent).toBe('October 2026');
+        press('Home');
+        expect(t.ui.calDay).toBe('2026-10-05');
+        press('End');
+        expect(t.ui.calDay).toBe('2026-10-11');
+        press('ArrowUp');
+        press('ArrowLeft');
+        expect(t.ui.calDay).toBe('2026-10-03');
+        press('Enter');
+        expect(t.ui.calDay).toBe('2026-10-03');
+        expect(start).toBeInstanceOf(Date);
+    });
+
+    test('the month buttons turn the page and say so, keeping the day where they can', () => {
+        t.openCalendar();
+        t.selectDay('2026-01-31');
+        el('cal-next').click();
+        expect(t.ui.calDay).toBe('2026-02-28');
+        expect(said()).toBe('February 2026');
+        el('cal-prev').click();
+        expect(el('calendar-title').textContent).toBe('January 2026');
+        el('cal-this').click();
+        expect(t.ui.calDay).toBe(formatDate(new Date()));
+    });
+
+    test('an empty day says so', () => {
+        t.openCalendar();
+        t.selectDay('2031-03-03');
+        expect(el('cal-day-list').children[0].textContent).toBe('Nothing on this day.');
+    });
+
+    test('with nothing coming up, the calendar file is not made, and the visitor is told why', () => {
+        t.openCalendar();
+        el('cal-export').click();
+        expect(downloads).toHaveLength(0);
+        expect(said()).toBe('Nothing is coming up yet, so there is nothing to add to your calendar.');
+    });
+
+    test('a single upcoming event goes to the calendar from its folder', async () => {
+        quickAdd('Acme', 'Designer');
+        const id = live()[0].id;
+        t.openEventForm(id, null);
+        el('ef-at').value = `${formatDate(addDays(new Date(), 3))}T15:00`;
+        submit('ef-form');
+        t.openFolder(id);
+        expect(t.exportEvent(doc().events[0].id)).toBe(true);
+        const text = await downloads[0].text();
+        expect(text.split('BEGIN:VEVENT')).toHaveLength(2);
+        expect(said()).toMatch(/^Your calendar file for the interview on \w{3} \d+, \d{4}, \d+:00\sPM is on its way to your downloads\. Opening it adds it to your calendar, with a reminder half an hour before\.$/);
+        expect(t.exportEvent('nope')).toBe(false);
+    });
+});
+
+describe('the light', () => {
+    test('follows a pinned hour for screenshots, and goes back to the clock', () => {
+        expect(window.cornerOffice.hour(22)).toBe('night');
+        expect(t.ui.phase).toBe('night');
+        expect(window.cornerOffice.hour(12)).toBe('day');
+        expect(window.cornerOffice.hour(-5)).toBe('night');
+        expect(typeof window.cornerOffice.hour(null)).toBe('string');
+        expect(t.ui.hourPin).toBeNull();
+    });
+});
+
+// ---- M3: the filing cabinet -------------------------------------------------------
+
+describe('the filing cabinet', () => {
+    beforeEach(() => t.stockOffice());
+
+    const drawerLabels = () => t.fileCabinet().plan.map((d) => d.label);
+
+    test('opens at its station with the drawers sliding out, from the toolbar, the room and the 4 key', () => {
+        el('bar-cabinet').click();
+        expect(el('cabinet').hidden).toBe(false);
+        expect(t.ui.station).toBe('cabinet');
+        for (let i = 0; i < 20; i++) { jest.advanceTimersByTime(100); dom.loops.at(-1)(); }
+        expect(t.filing().open).toBe(1);
+        expect(el('cabinet-lifted').textContent).toMatch(/^Filed by last activity\. Search or choose a filter/);
+        el('cabinet-close').click();
+        expect(t.ui.station).toBe('desk');
+        for (let i = 0; i < 20; i++) { jest.advanceTimersByTime(100); dom.loops.at(-1)(); }
+        expect(t.filing().open).toBe(0);
+        t.actOn('cabinet');
+        expect(el('cabinet').hidden).toBe(false);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('4');
+        expect(el('cabinet').hidden).toBe(false);
+    });
+
+    test('holds every folder, filed in the grid’s order', () => {
+        const filed = t.fileCabinet();
+        expect(t.filing().count).toBe(16);
+        expect(filed.plan.flatMap((d) => d.ids)).toEqual(t.currentRows().rows.map((r) => r.app.id));
+    });
+
+    test('a search lifts the folders it finds, says which, and the computer agrees', () => {
+        t.openCabinet();
+        el('cabinet-search').value = 'quill';
+        fire(el('cabinet-search'), 'input');
+        expect(el('cabinet-lifted').textContent).toBe('1 folder lifted: Quillfeather Labs, Staff Engineer.');
+        const quill = live().find((a) => a.company === 'Quillfeather Labs');
+        expect(t.filing().folder(quill.id).liftTo).toBe(1);
+        const other = live().find((a) => a.company === 'Brightkettle');
+        expect(t.filing().folder(other.id).dim).toBe(true);
+        // The lifted folder is a button too.
+        el('cabinet-list').children[0].children[0].click();
+        expect(el('folder').hidden).toBe(false);
+        expect(el('folder-title').textContent).toBe('Quillfeather Labs, Staff Engineer');
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        t.openComputer();
+        expect(rowNames()).toEqual(['Quillfeather Labs']);
+        expect(el('grid-search').value).toBe('quill');
+    });
+
+    test('a filter chip in the cabinet lifts its folders too', () => {
+        t.openCabinet();
+        const quiet = el('cabinet-filters').children.find((c) => c.textContent.startsWith('Gone quiet'));
+        quiet.click();
+        expect(el('cabinet-lifted').textContent).toMatch(/^2 folders lifted: /);
+        expect(el('cabinet-list').children).toHaveLength(2);
+    });
+
+    test('more than eight found sends the rest to the computer', () => {
+        t.openCabinet();
+        el('cabinet-search').value = 'e';
+        fire(el('cabinet-search'), 'input');
+        const items = el('cabinet-list').children;
+        expect(items).toHaveLength(9);
+        items[8].children[0].click();
+        expect(el('cabinet').hidden).toBe(true);
+        expect(el('computer').hidden).toBe(false);
+    });
+
+    test('changing the filing order relabels the drawers and refiles the folders, without an undo step', () => {
+        t.openCabinet();
+        const steps = t.history.size;
+        el('cabinet-sort').value = 'company';
+        fire(el('cabinet-sort'), 'change');
+        expect(said()).toBe('Refiled by company.');
+        expect(drawerLabels()[0]).toMatch(/^B to /);
+        expect(t.ui.cabinetMoving).toBe(true);
+        expect(doc().settings.sortKey).toBe('company');
+        expect(t.history.size).toBe(steps);
+        for (let i = 0; i < 30; i++) { jest.advanceTimersByTime(100); dom.loops.at(-1)(); }
+        expect(t.ui.cabinetMoving).toBe(false);
+        el('cabinet-sort').value = 'status';
+        fire(el('cabinet-sort'), 'change');
+        expect(drawerLabels()).toEqual(['Saved and applied', 'In progress', 'Offers', 'Closed']);
+    });
+
+    test('tapping a folder in the cabinet opens it on the desk, and a tap on nothing does nothing', () => {
+        t.openCabinet();
+        const id = t.filing().idAt(0);
+        expect(t.actOn('cabinet-folder', { instanceId: 0 })).toBe(true);
+        expect(el('folder').hidden).toBe(false);
+        expect(t.ui.folderId).toBe(id);
+        expect(t.actOn('cabinet-folder', { instanceId: 999 })).toBe(false);
+    });
+
+    test('a new application gets a folder, and throwing one away takes it out', () => {
+        quickAdd('Zephyr Works', 'Engineer');
+        expect(t.filing().count).toBe(17);
+        t.throwAway('applications', live().find((a) => a.company === 'Zephyr Works').id);
+        expect(t.filing().count).toBe(16);
+    });
+});
+
+// ---- M4: the corkboard -----------------------------------------------------------
+
+describe('the corkboard', () => {
+    let boardMod;
+    beforeEach(async () => {
+        boardMod = await import('../www/office/js/board.js');
+        t.stockOffice();
+    });
+
+    const B = CONFIG.room.board;
+    const zOf = (status) => boardMod.columnZ(CONFIG.statuses.indexOf(status), B, CONFIG.statuses.length);
+    const byName = (name) => live().find((a) => a.company === name);
+    const frames = (n = 20) => { for (let i = 0; i < n; i++) { jest.advanceTimersByTime(100); dom.loops.at(-1)(); } };
+
+    test('opens at its station from the toolbar, the room and the 5 key, and says what it holds', () => {
+        el('bar-board').click();
+        expect(el('board').hidden).toBe(false);
+        expect(t.ui.station).toBe('board');
+        expect(el('board-summary').textContent).toMatch(/^On the board: Saved for later 1, Applied \d+, Screening 2, Interviewing 2, Offer 1, Not selected 2, Withdrawn 1\.$/);
+        expect(t.pinboard().count).toBe(16);
+        el('board-close').click();
+        expect(t.ui.station).toBe('desk');
+        t.actOn('board');
+        expect(el('board').hidden).toBe(false);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('5');
+        expect(el('board').hidden).toBe(false);
+    });
+
+    test('the keyboard move: choose a card, choose a column, Move', () => {
+        t.openBoard();
+        const app = byName('Harborlight Analytics');
+        el('board-card').value = app.id;
+        fire(el('board-card'), 'change');
+        expect(el('board-to').value).toBe('applied');
+        el('board-to').value = 'screening';
+        submit('board-form');
+        expect(byName('Harborlight Analytics').status).toBe('screening');
+        expect(said()).toBe('Moved Harborlight Analytics, Data Visualization Engineer to Screening');
+        expect(t.ui.boardMoving).toBe(true);
+        frames();
+        expect(t.pinboard().card(app.id).at.z).toBeCloseTo(zOf('screening'), 9);
+        // The same column again is not a move.
+        submit('board-form');
+        expect(said()).toBe('Harborlight Analytics, Data Visualization Engineer is already in Screening.');
+    });
+
+    test('a card dragged to another column changes status, and can be undone', () => {
+        t.openBoard();
+        const app = byName('Saltmarsh Transit');
+        t.beginPointerDrag(app.id, { pointerId: 1, clientX: 100, clientY: 100 });
+        // A wobble under six pixels is still a tap in waiting.
+        t.boardPointerMove({ pointerId: 1, clientX: 103, clientY: 101 });
+        expect(t.pinboard().dragging).toBeNull();
+        t.pinboard().beginDrag(app.id);
+        t.pinboard().dragTo(B.y, zOf('interviewing'));
+        expect(t.dropCard(app.id, zOf('interviewing'))).toBe('interviewing');
+        expect(byName('Saltmarsh Transit').status).toBe('interviewing');
+        t.undo();
+        expect(byName('Saltmarsh Transit').status).toBe('applied');
+    });
+
+    test('a card dropped back on its own column stays, and says so', () => {
+        t.openBoard();
+        const app = byName('Saltmarsh Transit');
+        t.pinboard().beginDrag(app.id);
+        expect(t.dropCard(app.id, zOf('applied'))).toBeNull();
+        expect(said()).toBe('Saltmarsh Transit, Web Developer stays in Applied.');
+        expect(t.history.size).toBe(1);
+    });
+
+    test('a tap on a card, without moving, opens its folder', () => {
+        t.openBoard();
+        const app = byName('Kestrel Freight');
+        t.beginPointerDrag(app.id, { pointerId: 7, clientX: 50, clientY: 50 });
+        t.boardPointerUp({ pointerId: 7, clientX: 51, clientY: 50 });
+        expect(el('folder').hidden).toBe(false);
+        expect(el('folder-title').textContent).toBe('Kestrel Freight, Senior UI Engineer');
+    });
+
+    test('a drag that moves goes through the pointer, and another finger is ignored', () => {
+        t.openBoard();
+        const app = byName('Orchard Street Media');
+        t.beginPointerDrag(app.id, { pointerId: 3, clientX: 10, clientY: 10 });
+        t.boardPointerMove({ pointerId: 9, clientX: 300, clientY: 10 });
+        expect(t.pinboard().dragging).toBeNull();
+        t.boardPointerMove({ pointerId: 3, clientX: 300, clientY: 10 });
+        expect(t.pinboard().dragging).toBe(app.id);
+        t.boardPointerUp({ pointerId: 9 });
+        expect(t.pinboard().dragging).toBe(app.id);
+        // Wherever it was let go, the drop decides by that point's column.
+        t.boardPointerUp({ pointerId: 3 });
+        expect(t.pinboard().dragging).toBeNull();
+    });
+
+    test('a cancelled drag settles the card back', () => {
+        t.openBoard();
+        const app = byName('Orchard Street Media');
+        t.beginPointerDrag(app.id, { pointerId: 4, clientX: 10, clientY: 10 });
+        t.boardPointerMove({ pointerId: 4, clientX: 200, clientY: 10 });
+        t.boardPointerCancel({ pointerId: 4 });
+        expect(t.pinboard().dragging).toBeNull();
+        expect(byName('Orchard Street Media').status).toBe('applied');
+        t.boardPointerCancel({ pointerId: 4 });
+    });
+
+    test('a status changed anywhere else carries the card across the board too', () => {
+        const app = byName('Copperleaf Health');
+        t.openFolder(app.id);
+        const select = el('folder-body').children[0].children[1];
+        select.value = 'offer';
+        fire(select, 'change');
+        expect(t.ui.boardMoving).toBe(true);
+        frames();
+        expect(t.pinboard().card(app.id).at.z).toBeCloseTo(zOf('offer'), 9);
+    });
+
+    test('taps on the room are the board’s own while its sheet is up', () => {
+        t.openBoard();
+        expect(t.handleSceneTap(10, 10)).toBeNull();
+        t.boardPointerDown({ pointerId: 1, clientX: 10, clientY: 10 });
+        expect(t.pinboard().dragging).toBeNull();
+    });
+});

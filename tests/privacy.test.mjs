@@ -46,6 +46,7 @@ const PERSISTENT = {
     'www/js/theme.js': 'the light or dark theme choice',
     'www/garden/js/main.js': 'the visitor’s saved garden',
     'www/earthdefense/js/main.js': 'sound and control settings',
+    'www/office/js/store.js': 'the visitor’s job search in Corner Office',
     'www/shared/js/gamestate-1.0.0.js': 'a best score',
     'www/xo/js/audio.js': 'whether sound is muted',
     'www/xo/js/playbook-ui.js': 'the last play called and the chosen defense',
