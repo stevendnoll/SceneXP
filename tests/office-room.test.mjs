@@ -25,6 +25,7 @@ let setLamp;
 let poseFor;
 let setNotes;
 let notesMod;
+let rolodexMod;
 let room;
 
 beforeAll(async () => {
@@ -35,7 +36,14 @@ beforeAll(async () => {
     ({ buildRoom, pickOf, windowsOf, setLamp, setNotes } = await import('../www/office/js/room.js'));
     notesMod = await import('../www/office/js/notes.js');
     ({ poseFor } = await import('../www/office/js/stations.js'));
-    room = buildRoom(CONFIG);
+    rolodexMod = await import('../www/office/js/rolodex.js');
+    room = buildRoom(CONFIG, {
+        rolodexRing: {
+            quad: (i) => rolodexMod.ringQuad(i, CONFIG.room.rolodex.card),
+            uvs: (i) => rolodexMod.ringUvs(i),
+            count: rolodexMod.LETTERS.length
+        }
+    });
     room.group.updateMatrixWorld(true);
 });
 
@@ -43,7 +51,7 @@ afterAll(() => {
     delete globalThis.THREE;
 });
 
-const TAPPABLE = ['computer', 'intray', 'outtray', 'wastebasket', 'lamp', 'calendar'];
+const TAPPABLE = ['computer', 'intray', 'outtray', 'wastebasket', 'lamp', 'calendar', 'rolodex', 'printer'];
 const ASPECTS = { 'wide 21:9': 21 / 9, 'laptop 16:10': 16 / 10, 'phone upright': 390 / 844, 'tall phone': 9 / 19.5 };
 
 function cameraAt(station, aspect) {
@@ -96,7 +104,7 @@ describe('what is in the room', () => {
 
     test('what stands on the desk rests on its top, and the wastebasket on the floor', () => {
         const top = CONFIG.room.desk.height;
-        for (const key of ['computer', 'intray', 'outtray', 'lamp', 'folder']) {
+        for (const key of ['computer', 'intray', 'outtray', 'lamp', 'folder', 'rolodex']) {
             room.picks.folder.visible = true;
             expect(boxOf(room.picks[key]).min.y).toBeCloseTo(top, 2);
         }
@@ -106,7 +114,7 @@ describe('what is in the room', () => {
 
     test('everything on the desk fits on the desk', () => {
         const d = CONFIG.room.desk;
-        for (const key of ['computer', 'intray', 'outtray', 'lamp']) {
+        for (const key of ['computer', 'intray', 'outtray', 'lamp', 'rolodex']) {
             const b = boxOf(room.picks[key]);
             expect(b.min.x).toBeGreaterThanOrEqual(d.x - d.width / 2 - 1e-6);
             expect(b.max.x).toBeLessThanOrEqual(d.x + d.width / 2 + 1e-6);
@@ -383,5 +391,124 @@ describe('the corkboard', () => {
             const p = ray.intersectPlane(plane, new THREE.Vector3());
             expect(boardMod.columnAt(p.z, B, 8)).toBe(c);
         }
+    });
+});
+
+describe('the Rolodex', () => {
+    test('stands clear of everything else on the desk', () => {
+        const r = boxOf(room.picks.rolodex);
+        for (const key of ['computer', 'intray', 'outtray', 'lamp']) expect(r.intersectsBox(boxOf(room.picks[key]))).toBe(false);
+        const mug = room.group.children.find((o) => o.geometry && o.geometry.type === 'CylinderGeometry' && o.position.y < 1 && o.position.y > 0.75);
+        expect(mug).toBeTruthy();
+        expect(r.intersectsBox(boxOf(mug))).toBe(false);
+    });
+
+    test.each(Object.entries(ASPECTS))('at its station on a %s screen, it sits in the top half, above the docked sheet', (_name, aspect) => {
+        const cam = cameraAt('rolodex', aspect);
+        const b = boxOf(room.picks.rolodex);
+        const corners = [];
+        for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) corners.push(new THREE.Vector3(x, y, z));
+        for (const c of corners) {
+            const ndc = c.project(cam);
+            expect(Math.abs(ndc.x)).toBeLessThan(1);
+            expect(ndc.y).toBeLessThan(1);
+            expect(ndc.y).toBeGreaterThan(-0.15);
+        }
+    });
+
+    test('a turn brings the chosen card round to face the room', () => {
+        const r = CONFIG.room.rolodex;
+        for (const letter of ['A', 'M', '#']) {
+            const i = rolodexMod.letterIndex(letter);
+            room.rolodex.ring.rotation.x = rolodexMod.spinTo(i, r.facing);
+            room.group.updateMatrixWorld(true);
+            const q = rolodexMod.ringQuad(i, r.card);
+            const outer = new THREE.Vector3(0, (q[2][1] + q[3][1]) / 2, (q[2][2] + q[3][2]) / 2);
+            const axle = new THREE.Vector3();
+            room.rolodex.ring.localToWorld(outer);
+            room.rolodex.ring.getWorldPosition(axle);
+            const d = outer.sub(axle);
+            // Up and toward the room, at the facing angle from straight up.
+            expect(Math.atan2(d.z, d.y)).toBeCloseTo(r.facing, 6);
+        }
+        room.rolodex.ring.rotation.x = 0;
+    });
+});
+
+describe('the front wall, the departures board, the whiteboard and the printer', () => {
+    const inView = (cam, object) => {
+        const b = boxOf(object);
+        for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+            const ndc = new THREE.Vector3(x, y, z).project(cam);
+            expect(Math.abs(ndc.x)).toBeLessThan(1);
+            expect(Math.abs(ndc.y)).toBeLessThan(1);
+        }
+    };
+
+    test('nothing new stands in anything else', () => {
+        const things = ['printer', 'whiteboard', 'board', 'cabinet', 'departures', 'wastebasket'].map((k) => [k, boxOf(room.picks[k])]);
+        const plant = room.group.children.find((o) => o.name === 'plant');
+        things.push(['plant', boxOf(plant)]);
+        things.push(['desk', boxOf(room.group.children.find((o) => o.name === 'desk'))]);
+        for (let i = 0; i < things.length; i++) {
+            for (let j = i + 1; j < things.length; j++) {
+                expect(`${things[i][0]} and ${things[j][0]}: ${things[i][1].intersectsBox(things[j][1])}`)
+                    .toBe(`${things[i][0]} and ${things[j][0]}: false`);
+            }
+        }
+    });
+
+    test('the door is a real doorway in the front wall, with a door in it', () => {
+        const d = CONFIG.room.door;
+        const ray = new THREE.Raycaster();
+        ray.set(new THREE.Vector3(d.x, 1, 0), new THREE.Vector3(0, 0, 1));
+        const [hit] = ray.intersectObject(room.group, true);
+        // The door itself, a little proud of the wall line, not the wall.
+        expect(hit.point.z).toBeGreaterThan(CONFIG.room.depth / 2 + 0.01);
+        expect(hit.point.z).toBeLessThan(CONFIG.room.depth / 2 + 0.03);
+    });
+
+    test.each(Object.entries(ASPECTS))('at its station on a %s screen, the whole departures board is in view and readable side up', (_name, aspect) => {
+        const cam = cameraAt('departures', aspect);
+        inView(cam, room.departures);
+        // Its first column is on the screen's left.
+        const b = CONFIG.room.departures;
+        const left = new THREE.Vector3(b.x - b.width / 2, b.y, CONFIG.room.depth / 2 - 0.06).project(cam);
+        const leftOfFace = new THREE.Vector3(0, 0, 0);
+        room.departures.localToWorld(leftOfFace.set(-b.width / 2, 0, 0));
+        expect(leftOfFace.clone().project(cam).x).toBeLessThan(0);
+        expect(left).toBeTruthy();
+    });
+
+    test.each(Object.entries(ASPECTS))('at its station on a %s screen, the whole whiteboard is in view', (_name, aspect) => {
+        inView(cameraAt('whiteboard', aspect), room.whiteboard);
+    });
+
+    test('a tap on the drawn goal line is recognized from the ray’s uv', async () => {
+        const wb = await import('../www/office/js/whiteboard.js');
+        const { emptyDoc } = await import('../www/office/js/store.js');
+        const model = wb.boardModel(emptyDoc(CONFIG, new Date(2026, 8, 24)), CONFIG, new Date(2026, 8, 24));
+        const chart = wb.weekChart(model);
+        const w = CONFIG.room.whiteboard;
+        const cam = cameraAt('whiteboard', 16 / 10);
+        const tap = (fx, fy) => {
+            const p = new THREE.Vector3((fx - 0.5) * w.width, (0.5 - fy) * w.height, 0);
+            room.whiteboard.localToWorld(p);
+            const ray = new THREE.Raycaster();
+            ray.set(cam.position, p.clone().sub(cam.position).normalize());
+            const [hit] = ray.intersectObject(room.group, true);
+            expect(pickOf(hit.object)).toBe('whiteboard');
+            return wb.onGoalLine(hit.uv, model);
+        };
+        expect(tap((chart.x0 + chart.x1) / 2, chart.goalY)).toBe(true);
+        expect(tap((chart.x0 + chart.x1) / 2, chart.goalY + 0.15)).toBe(false);
+        expect(tap(0.2, 0.5)).toBe(false);
+        // The board's right runs to the screen's right: u grows with it.
+        const u = (fx) => {
+            const p = new THREE.Vector3((fx - 0.5) * w.width, 0, 0);
+            room.whiteboard.localToWorld(p);
+            return p.clone().project(cam).x;
+        };
+        expect(u(0.9)).toBeGreaterThan(u(0.1));
     });
 });

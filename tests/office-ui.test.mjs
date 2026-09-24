@@ -76,6 +76,13 @@ function quickAdd(company, role, { follow = true } = {}) {
 
 const rowNames = () => el('grid-body').children.map((tr) => tr.children[0].children[0].textContent);
 
+/** Choose a place from the toolbar's Places list, the way a visitor does. */
+function place(name) {
+    el('bar-places').click();
+    const item = el('places-menu').children.find((b) => b.dataset.place === name);
+    item.click();
+}
+
 // ---- Quick add and undo -----------------------------------------------------
 
 describe('quick add', () => {
@@ -306,7 +313,7 @@ describe('the folder', () => {
     });
 
     test('throwing the application away closes the folder, and the wastebasket gives it back', () => {
-        el('folder-actions').children[1].click();
+        el('folder-actions').children.find((b) => b.textContent === 'Throw away').click();
         expect(live()).toEqual([]);
         expect(el('folder').hidden).toBe(true);
         t.openWastebasket();
@@ -530,6 +537,17 @@ describe('the markup and the scripts agree', () => {
         expect(onPage).toEqual(CARD_ORDER);
     });
 
+    test('the toolbar wraps, at every width, rather than hiding buttons past the edge', () => {
+        // Found by Steve, 2026-09-24: a one-row toolbar that scrolled sideways
+        // cut the last buttons off a phone's screen with nothing to say so.
+        const css = readFileSync(join(process.cwd(), 'www/office/css/experience.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+        const bar = [...css.matchAll(/\.office-bar\s*\{([^}]*)\}/g)].map((m) => m[1]).join('\n');
+        expect(bar).toMatch(/flex-wrap:\s*wrap/);
+        expect(bar).not.toMatch(/flex-wrap:\s*nowrap/);
+        expect(bar).not.toMatch(/overflow-x:\s*(auto|scroll)/);
+        expect(bar).toMatch(/max-width:\s*calc\(100vw - 32px\)/);
+    });
+
     test('every card panel is a modal dialog the shared focus trap will hold', () => {
         const panels = [...html.matchAll(/<div id="([a-z-]+)-panel"[^>]*>/g)];
         expect(panels.length).toBeGreaterThan(8);
@@ -585,7 +603,7 @@ describe('today', () => {
 
 describe('the calendar', () => {
     test('opens on today at its station, from the toolbar, the wall and the 3 key', () => {
-        el('bar-calendar').click();
+        place('calendar');
         expect(el('calendar').hidden).toBe(false);
         expect(t.ui.station).toBe('calendar');
         const now = new Date();
@@ -693,7 +711,7 @@ describe('the filing cabinet', () => {
     const drawerLabels = () => t.fileCabinet().plan.map((d) => d.label);
 
     test('opens at its station with the drawers sliding out, from the toolbar, the room and the 4 key', () => {
-        el('bar-cabinet').click();
+        place('cabinet');
         expect(el('cabinet').hidden).toBe(false);
         expect(t.ui.station).toBe('cabinet');
         for (let i = 0; i < 20; i++) { jest.advanceTimersByTime(100); dom.loops.at(-1)(); }
@@ -804,7 +822,7 @@ describe('the corkboard', () => {
     const frames = (n = 20) => { for (let i = 0; i < n; i++) { jest.advanceTimersByTime(100); dom.loops.at(-1)(); } };
 
     test('opens at its station from the toolbar, the room and the 5 key, and says what it holds', () => {
-        el('bar-board').click();
+        place('board');
         expect(el('board').hidden).toBe(false);
         expect(t.ui.station).toBe('board');
         expect(el('board-summary').textContent).toMatch(/^On the board: Saved for later 1, Applied \d+, Screening 2, Interviewing 2, Offer 1, Not selected 2, Withdrawn 1\.$/);
@@ -911,5 +929,328 @@ describe('the corkboard', () => {
         expect(t.handleSceneTap(10, 10)).toBeNull();
         t.boardPointerDown({ pointerId: 1, clientX: 10, clientY: 10 });
         expect(t.pinboard().dragging).toBeNull();
+    });
+});
+
+// ---- M5: the Rolodex ---------------------------------------------------------------
+
+describe('the Rolodex', () => {
+    beforeEach(() => t.stockOffice());
+
+    const person = (name) => doc().contacts.find((c) => c.name === name);
+    const byName = (name) => live().find((a) => a.company === name);
+    const listNames = () => el('rolodex-list').children.map((li) => li.children[0].children[0].textContent);
+    const texts = (node) => (node.children && node.children.length ? node.children.flatMap(texts) : [node.textContent || '']);
+
+    test('opens at its station from the toolbar, the desk and the 6 key, and lists everyone', () => {
+        place('rolodex');
+        expect(el('rolodex').hidden).toBe(false);
+        expect(t.ui.station).toBe('rolodex');
+        expect(el('rolodex-count').textContent).toBe('5 people in the Rolodex.');
+        expect(listNames()).toEqual(['Dana Whitcombe', 'Jordan Reyes', 'Lena Fischer', 'Marcus Oyelaran', 'Priya Anand']);
+        el('rolodex-close').click();
+        expect(t.ui.station).toBe('desk');
+        t.actOn('rolodex');
+        expect(el('rolodex').hidden).toBe(false);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('6');
+        expect(el('rolodex').hidden).toBe(false);
+    });
+
+    test('typing narrows the list and turns the wheel to the first letter found', () => {
+        t.openRolodex();
+        el('rolodex-search').value = 'fisch';
+        fire(el('rolodex-search'), 'input');
+        expect(listNames()).toEqual(['Lena Fischer']);
+        expect(el('rolodex-count').textContent).toBe('1 of 5 people match.');
+        expect(t.ui.ring.t).toBe(0);
+        for (let i = 0; i < 10; i++) { jest.advanceTimersByTime(100); dom.loops.at(-1)(); }
+        expect(t.ui.ring.t).toBe(1);
+        expect(t.ui.ring.angle).toBe(t.ui.ring.to);
+        // Searching by company finds the people there too.
+        el('rolodex-search').value = 'tidewater';
+        fire(el('rolodex-search'), 'input');
+        expect(listNames()).toEqual(['Marcus Oyelaran']);
+        // The same letter again is no new turn.
+        expect(t.spinRolodexTo('M')).toBe(false);
+    });
+
+    test('a person’s card: how to reach them, safely linked, and everything they are part of', () => {
+        t.openRolodex();
+        t.openContact(person('Priya Anand').id);
+        expect(el('contact').hidden).toBe(false);
+        expect(el('contact-title').textContent).toBe('Priya Anand');
+        const words = texts(el('contact-body'));
+        expect(words).toEqual(expect.arrayContaining(['Senior Recruiter at Brightkettle', 'priya@brightkettle.example', 'Brightkettle, Senior Product Designer', 'Met at']));
+        const find = (node, tag) => (node.tagName === tag ? [node] : (node.children || []).flatMap((c) => find(c, tag)));
+        const mail = find(el('contact-body'), 'A')[0];
+        expect(mail.href).toBe('mailto:priya@brightkettle.example');
+        expect(t.openContact('nobody')).toBe(false);
+    });
+
+    test('show their applications: the computer, filtered to the person, with a chip to let them go', () => {
+        t.openContact(person('Lena Fischer').id);
+        el('contact-actions').children[0].click();
+        expect(el('computer').hidden).toBe(false);
+        expect(rowNames()).toEqual(['Quillfeather Labs']);
+        const chip = el('grid-filters').children[0];
+        expect(chip.textContent).toBe('With Lena Fischer1');
+        expect(said()).toBe('Showing the applications Lena Fischer is part of.');
+        chip.click();
+        expect(rowNames()).toHaveLength(16);
+    });
+
+    test('the grid names who is linked, in its People column', () => {
+        t.openComputer();
+        const row = el('grid-body').children.find((tr) => tr.children[0].children[0].textContent === 'Brightkettle');
+        expect(row.children[2].textContent).toBe('Priya Anand');
+        expect(row.children[2].dataset.label).toBe('People');
+    });
+
+    test('a new person from the Rolodex, and one added from a folder is linked to it', () => {
+        t.openRolodex();
+        el('rolodex-new').click();
+        expect(el('contact-form').hidden).toBe(false);
+        el('cf-name').value = 'Sam Rivera';
+        el('cf-title').value = 'Hiring Manager';
+        submit('cf-form');
+        expect(person('Sam Rivera')).toBeTruthy();
+        expect(said()).toBe('Added Sam Rivera to the Rolodex.');
+
+        const app = byName('Saltmarsh Transit');
+        t.openFolder(app.id);
+        t.openContactForm(null, { linkTo: app.id });
+        expect(el('contact-form-about').textContent).toBe('They will be linked to Saltmarsh Transit, Web Developer.');
+        expect(el('cf-company').value).toBe('Saltmarsh Transit');
+        el('cf-name').value = 'Ada Brook';
+        submit('cf-form');
+        expect(byName('Saltmarsh Transit').contactIds).toContain(person('Ada Brook').id);
+        // One undo takes the person and the link back together.
+        t.undo();
+        expect(person('Ada Brook')).toBeUndefined();
+    });
+
+    test('the contact form says what to fix', () => {
+        t.openContactForm(null);
+        submit('cf-form');
+        expect(el('cf-error').textContent).toBe('Please enter a name.');
+        el('cf-name').value = 'Pat';
+        el('cf-email').value = 'pat@';
+        submit('cf-form');
+        expect(el('cf-error').textContent).toBe('That email address looks incomplete.');
+        el('cf-email').value = '';
+        el('cf-linkedin').value = 'javascript:alert(1)';
+        submit('cf-form');
+        expect(el('cf-error').textContent).toBe('Please check the LinkedIn link.');
+        expect(person('Pat')).toBeUndefined();
+    });
+
+    test('link someone already in the Rolodex from a folder, and unlink them again', () => {
+        const app = byName('Orchard Street Media');
+        const dana = person('Dana Whitcombe');
+        t.openFolder(app.id);
+        expect(t.setLink(app.id, dana.id, true).changed).toBe(true);
+        expect(byName('Orchard Street Media').contactIds).toEqual([dana.id]);
+        expect(said()).toBe('Linked Dana Whitcombe to Orchard Street Media, Creative Technologist');
+        t.setLink(app.id, dana.id, false);
+        expect(byName('Orchard Street Media').contactIds).toEqual([]);
+        expect(t.setLink('nope', dana.id, true)).toBeNull();
+    });
+
+    test('an edit keeps the person’s links', () => {
+        const lena = person('Lena Fischer');
+        t.openContact(lena.id);
+        t.openContactForm(lena.id);
+        expect(el('cf-name').value).toBe('Lena Fischer');
+        el('cf-title').value = 'Director of Engineering';
+        submit('cf-form');
+        expect(person('Lena Fischer').title).toBe('Director of Engineering');
+        expect(byName('Quillfeather Labs').contactIds).toContain(lena.id);
+    });
+
+    test('a person thrown away comes back from the wastebasket with every link', () => {
+        const priya = person('Priya Anand');
+        t.openContact(priya.id);
+        el('contact-actions').children.at(-1).click();
+        expect(el('contact').hidden).toBe(true);
+        t.openComputer();
+        const row = el('grid-body').children.find((tr) => tr.children[0].children[0].textContent === 'Brightkettle');
+        expect(row.children[2].textContent).toBe('');
+        t.restore('contacts', priya.id);
+        expect(byName('Brightkettle').contactIds).toContain(priya.id);
+    });
+
+    test('an event records who was there, from the application’s people', () => {
+        const app = byName('Brightkettle');
+        t.openEventForm(app.id, null);
+        expect(el('ef-with-row').hidden).toBe(false);
+        const box = el('ef-with').children[0].children[0];
+        expect(el('ef-with').children[0].textContent).toBe('Priya Anand');
+        box.checked = true;
+        el('ef-at').value = `${formatDate(addDays(new Date(), 4))}T11:00`;
+        submit('ef-form');
+        const ev = doc().events.find((e) => e.applicationId === app.id && e.at.endsWith('T11:00'));
+        expect(ev.withContactIds).toEqual([person('Priya Anand').id]);
+        // An application with nobody linked does not ask.
+        t.openEventForm(byName('Saltmarsh Transit').id, null);
+        expect(el('ef-with-row').hidden).toBe(true);
+    });
+});
+
+// ---- M6: places, the whiteboard, the departures board, the printer ----------------
+
+describe('places', () => {
+    test('the list opens beside its button, goes where it says, and closes', () => {
+        el('bar-places').click();
+        expect(el('places-menu').hidden).toBe(false);
+        expect(el('bar-places').getAttribute('aria-expanded')).toBe('true');
+        const items = el('places-menu').children;
+        expect(items.map((b) => b.children[0] ? b.dataset.place : b.dataset.place)).toEqual(
+            ['desk', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'departures', 'printer']);
+        expect(dom.documentStub.activeElement).toBe(items[0]);
+        expect(el('places-menu').style.left).toMatch(/px$/);
+        items.find((b) => b.dataset.place === 'calendar').click();
+        expect(el('places-menu').hidden).toBe(true);
+        expect(el('calendar').hidden).toBe(false);
+    });
+
+    test('arrow keys move through it, Escape puts it away and hands focus back', () => {
+        el('bar-places').click();
+        const items = el('places-menu').children;
+        fire(el('places-menu'), 'keydown', { key: 'ArrowDown', target: items[0] });
+        expect(dom.documentStub.activeElement).toBe(items[1]);
+        fire(el('places-menu'), 'keydown', { key: 'ArrowUp', target: items[0] });
+        expect(dom.documentStub.activeElement).toBe(items.at(-1));
+        fire(el('places-menu'), 'keydown', { key: 'Escape', target: items[0] });
+        expect(el('places-menu').hidden).toBe(true);
+        expect(dom.documentStub.activeElement).toBe(el('bar-places'));
+    });
+
+    test('a press outside puts it away, and a second press on its button too', () => {
+        el('bar-places').click();
+        fire(dom.documentStub, 'pointerdown', { target: dom.documentStub.body });
+        expect(el('places-menu').hidden).toBe(true);
+        el('bar-places').click();
+        el('bar-places').click();
+        expect(el('places-menu').hidden).toBe(true);
+    });
+
+    test('going to the desk closes whatever is open', () => {
+        t.openComputer();
+        expect(t.goToPlace('desk')).toBe(true);
+        expect(el('computer').hidden).toBe(true);
+        expect(t.ui.station).toBe('desk');
+        expect(t.goToPlace('nowhere')).toBe(false);
+    });
+});
+
+describe('the whiteboard', () => {
+    beforeEach(() => t.stockOffice());
+
+    test('opens at its station from Places, the room and the 7 key, and says its numbers in words', () => {
+        place('whiteboard');
+        expect(el('whiteboard').hidden).toBe(false);
+        expect(t.ui.station).toBe('whiteboard');
+        const lines = el('wb-summary').children.map((li) => li.textContent);
+        expect(lines[0]).toMatch(/^This week: \d+ applications? sent, against a goal of 5\.$/);
+        expect(lines.join(' ')).toMatch(/How far they got: Applied 15, Screening \d+, Interviewing \d+, Offer 1\./);
+        expect(el('wb-funnel').children).toHaveLength(5);
+        expect(el('wb-weeks').children).toHaveLength(8);
+        expect(el('wb-weeks').children.at(-1).children[0].textContent).toMatch(/\(this week\)$/);
+        el('whiteboard-close').click();
+        t.actOn('whiteboard');
+        expect(el('whiteboard').hidden).toBe(false);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('7');
+        expect(el('whiteboard').hidden).toBe(false);
+    });
+
+    test('a tap on the goal line goes straight to the weekly goal', async () => {
+        const wb = await import('../www/office/js/whiteboard.js');
+        const chart = wb.weekChart(t.ui.whiteboardModel);
+        t.actOn('whiteboard', { uv: { x: (chart.x0 + chart.x1) / 2, y: 1 - chart.goalY } });
+        expect(el('whiteboard').hidden).toBe(false);
+        expect(dom.documentStub.activeElement).toBe(el('wb-goal'));
+        expect(said()).toBe('Your weekly goal is 5. You can change it here.');
+        el('wb-goal').value = '7';
+        fire(el('wb-goal'), 'change');
+        expect(doc().settings.weeklyGoal).toBe(7);
+        expect(el('wb-summary').children[0].textContent).toMatch(/against a goal of 7\.$/);
+    });
+});
+
+describe('the departures board', () => {
+    test('opens at its station from Places and the 8 key, the flaps clattering from blank to the week', () => {
+        t.stockOffice();
+        place('departures');
+        expect(el('departures').hidden).toBe(false);
+        expect(t.ui.station).toBe('departures');
+        expect(t.ui.flaps.rows.every((r) => r.trim() === '')).toBe(true);
+        for (let i = 0; i < 80; i++) { jest.advanceTimersByTime(50); dom.loops.at(-1)(); }
+        expect(t.ui.flaps.rows).toBe(t.ui.flaps.target);
+        expect(t.ui.flaps.rows[0]).toMatch(/^TMRW\s+\d+:\d\d[AP]\s+SCREEN\s+TIDEWATER RO$/);
+        const rows = el('dep-body').children;
+        expect(rows.length).toBeGreaterThanOrEqual(3);
+        expect(rows[0].children.map((td) => td.textContent)).toEqual([expect.stringMatching(/^Tomorrow, /), 'Phone screen', 'Tidewater Robotics']);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('8');
+        expect(el('departures').hidden).toBe(false);
+    });
+
+    test('an empty week says so, on the board and in words', () => {
+        t.openDepartures();
+        expect(el('dep-empty').hidden).toBe(false);
+        expect(el('dep-table').hidden).toBe(true);
+        expect(t.ui.flaps.target[1].trim()).toBe('NO DEPARTURES THIS WEEK');
+    });
+
+    test('while nobody is looking, the board is simply set, ready for the next visit', () => {
+        t.stockOffice();
+        expect(t.ui.flaps.rows).toBe(t.ui.flaps.target);
+    });
+});
+
+describe('the printer', () => {
+    beforeEach(() => {
+        t.stockOffice();
+        window.print = jest.fn();
+    });
+
+    test('offers the soonest interview first, and prints its prep sheet', () => {
+        place('printer');
+        expect(el('printer').hidden).toBe(false);
+        const first = el('printer-app').children[0];
+        expect(first.textContent).toMatch(/^Tidewater Robotics, Frontend Engineer, next up /);
+        el('printer-print').click();
+        expect(window.print).toHaveBeenCalledTimes(1);
+        const sheet = el('print-sheet');
+        expect(sheet.children[0].children[0].textContent).toBe('Tidewater Robotics');
+        const headings = sheet.children.filter((c) => c.className === 'print-section').map((c) => c.children[0].textContent);
+        expect(headings).toEqual(expect.arrayContaining(['Coming up', 'People', 'Still to do', 'Questions to ask']));
+        expect(said()).toBe('The prep sheet for Tidewater Robotics, Frontend Engineer is ready to print.');
+    });
+
+    test('from an open folder, the printer offers that application, and the folder prints it directly', () => {
+        const app = live().find((a) => a.company === 'Quillfeather Labs');
+        t.openFolder(app.id);
+        el('folder-actions').children.find((b) => b.textContent === 'Print a prep sheet').click();
+        expect(window.print).toHaveBeenCalledTimes(1);
+        expect(el('print-sheet').children[0].children[0].textContent).toBe('Quillfeather Labs');
+        t.openPrinter();
+        expect(el('printer-app').value).toBe(app.id);
+    });
+
+    test('the out-tray, the printer on the floor and the P key all reach it', () => {
+        el('bar-outtray').click();
+        el('outtray-print').click();
+        expect(el('printer').hidden).toBe(false);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        t.actOn('printer');
+        expect(el('printer').hidden).toBe(false);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('p');
+        expect(el('printer').hidden).toBe(false);
+        expect(t.printPrep('nope')).toBeNull();
+        expect(said()).toBe('That application is no longer here.');
     });
 });

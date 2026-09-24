@@ -12,7 +12,10 @@
  * itself, the lamp switches, an open folder on the desk reopens its card, the
  * wall calendar opens the calendar, the sticky notes open today's list, the
  * filing cabinet opens itself, a folder in it opens on the desk, and the
- * corkboard opens itself, where its cards can be dragged between columns.
+ * corkboard opens itself, where its cards can be dragged between columns, and
+ * the Rolodex opens the people, the whiteboard opens its numbers (and its goal
+ * line the weekly goal), the departures board opens the week, and the
+ * printer prints a prep sheet.
  * `pickOf` walks up from whatever a ray hit to the nearest of these.
  *
  * NO CANVAS IN HERE. The monitor's face, the city beyond the glass, the
@@ -22,7 +25,7 @@
  * where there is no canvas, and a test can measure what the eye sees.
  *
  * Builds and returns `{ group, picks, lamp, folder, screen, calendar,
- * cabinet, board, notes, outside }`. It adds nothing to a scene itself and reads no clock.
+ * cabinet, board, rolodex, departures, whiteboard, notes, outside }`. It adds nothing to a scene itself and reads no clock.
  */
 
 /* global THREE */
@@ -91,6 +94,10 @@ function addHitBox(group, pad = 0.03) {
         new THREE.MeshBasicMaterial({ visible: false })
     );
     // Grown upward only, so it never sinks into what the thing stands on.
+    // The box was measured in the world, so its center is brought back into
+    // the group's own frame: a group placed away from the origin (the
+    // Rolodex) would otherwise get its hit box twice as far away.
+    group.worldToLocal(center);
     proxy.position.set(center.x, center.y + pad / 2, center.z);
     proxy.name = `${group.userData.pick}-hit`;
     group.add(proxy);
@@ -152,6 +159,19 @@ function buildShell(group, config) {
     group.add(slab(hw - 0.1, w.sill, -hd, hw + T, w.head, w.right.z0, wall));
     // Left wall, solid.
     group.add(slab(-hw - T, 0, -hd, -hw, height, hd, wall));
+    // Front wall, with the door in it.
+    const door = config.room.door;
+    const d0 = door.x - door.width / 2;
+    const d1 = door.x + door.width / 2;
+    group.add(slab(-hw, 0, hd, d0, height, hd + T, wall));
+    group.add(slab(d1, 0, hd, hw, height, hd + T, wall));
+    group.add(slab(d0, door.height, hd, d1, height, hd + T, wall));
+    const doorWood = mat(0x6b4a33, { roughness: 0.6 });
+    group.add(slab(d0 + 0.01, 0, hd + 0.02, d1 - 0.01, door.height - 0.01, hd + 0.06, doorWood));
+    group.add(slab(d0 - 0.05, 0, hd - 0.02, d0, door.height + 0.05, hd + 0.02, trim));
+    group.add(slab(d1, 0, hd - 0.02, d1 + 0.05, door.height + 0.05, hd + 0.02, trim));
+    group.add(slab(d0 - 0.05, door.height, hd - 0.02, d1 + 0.05, door.height + 0.05, hd + 0.02, trim));
+    group.add(box(0.12, 0.025, 0.04, mat(COLORS.metal, { metalness: 0.6, roughness: 0.3 }), d1 - 0.12, 1.02, hd + 0.005));
 
     // Window frames: sills, heads and mullions.
     const f = 0.05;
@@ -412,6 +432,141 @@ export function setBoardQuads(cards, quads, config) {
 }
 
 /**
+ * The Rolodex: a base, two side wheels on an axle, a knob, and a ring of
+ * lettered cards (textures.rolodex, one cell per letter) that turns about
+ * the axle. The ring is one merged mesh, and turning it is turning its
+ * group, so a spin costs nothing but a rotation.
+ */
+function buildRolodex(group, config, texture, picks, quad, uvs, count) {
+    const r = config.room.rolodex;
+    const top = config.room.desk.height;
+    const rolodex = tag(new THREE.Group(), 'rolodex');
+    rolodex.position.set(r.x, top, r.z);
+    const dark = mat(0x2d2a28, { roughness: 0.5, metalness: 0.2 });
+    rolodex.add(box(r.width, 0.03, 0.15, dark, 0, 0.015, 0));
+    for (const side of [-1, 1]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(r.wheel, r.wheel, 0.012, 28), dark);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(side * (r.width / 2 - 0.006), r.axle, 0);
+        rolodex.add(wheel);
+    }
+    const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, r.width + 0.03, 10), mat(COLORS.metal, { metalness: 0.6, roughness: 0.3 }));
+    axle.rotation.z = Math.PI / 2;
+    axle.position.set(0, r.axle, 0);
+    rolodex.add(axle);
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.025, 16), mat(0xc8553d, { roughness: 0.4 }));
+    knob.rotation.z = Math.PI / 2;
+    knob.position.set(r.width / 2 + 0.025, r.axle, 0);
+    rolodex.add(knob);
+
+    const ring = new THREE.Group();
+    ring.name = 'rolodex-ring';
+    ring.position.set(0, r.axle, 0);
+    const positions = [];
+    const uv = [];
+    const index = [];
+    for (let i = 0; i < count; i++) {
+        const q = quad(i);
+        const t = uvs(i);
+        for (let k = 0; k < 4; k++) {
+            positions.push(...q[k]);
+            uv.push(...t[k]);
+        }
+        const base = i * 4;
+        index.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geometry.setIndex(index);
+    geometry.computeVertexNormals();
+    const cards = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+        map: texture || null, color: texture ? 0xffffff : 0xf6f1e6, roughness: 0.9, side: THREE.DoubleSide
+    }));
+    cards.name = 'rolodex-cards';
+    ring.add(cards);
+    rolodex.add(ring);
+    addHitBox(rolodex, 0.02);
+    group.add(rolodex);
+    picks.rolodex = rolodex;
+    return { group: rolodex, ring, cards };
+}
+
+/**
+ * The departures board over the door: a dark frame holding one plane, whose
+ * face is the split-flap board painted by main.js (textures.departures).
+ * The plane faces into the room, its right toward -x, which is the screen's
+ * right for a camera looking at the front wall.
+ */
+function buildDepartures(group, config, texture, picks) {
+    const b = config.room.departures;
+    const front = config.room.depth / 2;
+    const board = tag(new THREE.Group(), 'departures');
+    board.add(slab(b.x - b.width / 2 - 0.04, b.y - b.height / 2 - 0.04, front - 0.05, b.x + b.width / 2 + 0.04, b.y + b.height / 2 + 0.04, front, mat(0x2b2d31, { roughness: 0.5, metalness: 0.3 })));
+    const face = new THREE.Mesh(
+        new THREE.PlaneGeometry(b.width, b.height),
+        new THREE.MeshBasicMaterial(texture ? { map: texture, toneMapped: false } : { color: 0x16181c })
+    );
+    face.rotation.y = Math.PI;
+    face.position.set(b.x, b.y, front - 0.052);
+    board.add(face);
+    group.add(board);
+    picks.departures = board;
+    return face;
+}
+
+/**
+ * The whiteboard on the left wall: a white panel in a thin frame with a
+ * marker tray, its face painted by main.js (textures.whiteboard). It faces
+ * +x, so its right runs to -z, the screen's right from the room. A raycast's
+ * uv on it is how a tap on the goal line is recognized (whiteboard.js).
+ */
+function buildWhiteboard(group, config, texture, picks) {
+    const w = config.room.whiteboard;
+    const wallX = -config.room.width / 2;
+    const board = tag(new THREE.Group(), 'whiteboard');
+    const frame = mat(0xb8bcc2, { roughness: 0.35, metalness: 0.6 });
+    const z0 = w.z - w.width / 2;
+    const z1 = w.z + w.width / 2;
+    const y0 = w.y - w.height / 2;
+    const y1 = w.y + w.height / 2;
+    board.add(slab(wallX, y0 - 0.03, z0 - 0.03, w.x - 0.004, y1 + 0.03, z1 + 0.03, frame));
+    const face = new THREE.Mesh(
+        new THREE.PlaneGeometry(w.width, w.height),
+        new THREE.MeshBasicMaterial(texture ? { map: texture, toneMapped: false } : { color: 0xf7f7f4 })
+    );
+    face.rotation.y = Math.PI / 2;
+    face.position.set(w.x, w.y, w.z);
+    board.add(face);
+    board.add(slab(wallX, y0 - 0.06, z0 + 0.2, w.x + 0.05, y0 - 0.035, z1 - 0.2, frame));
+    board.add(box(0.02, 0.02, 0.13, mat(0x2b5fa8, { roughness: 0.4 }), w.x + 0.03, y0 - 0.025, w.z - 0.1));
+    board.add(box(0.02, 0.02, 0.13, mat(0xc8392b, { roughness: 0.4 }), w.x + 0.03, y0 - 0.025, w.z + 0.08));
+    group.add(board);
+    picks.whiteboard = board;
+    return face;
+}
+
+/** The printer, on a small stand under the right-hand window, with a page
+ *  in its tray and a green light that says it is ready. */
+function buildPrinter(group, config, picks) {
+    const p = config.room.printer;
+    const printer = tag(new THREE.Group(), 'printer');
+    printer.position.set(p.x, 0, p.z);
+    const standMat = mat(0x3f454d, { roughness: 0.6, metalness: 0.3 });
+    printer.add(box(0.5, p.stand, 0.44, standMat, 0, p.stand / 2, 0));
+    const body = mat(0xe6e4df, { roughness: 0.5 });
+    printer.add(box(0.44, 0.17, 0.36, body, 0, p.stand + 0.085, 0));
+    printer.add(box(0.44, 0.03, 0.3, mat(0x2b2d31, { roughness: 0.5 }), 0, p.stand + 0.185, 0.02));
+    printer.add(box(0.3, 0.012, 0.14, body, -0.02, p.stand + 0.03, 0.24));
+    printer.add(box(0.22, 0.004, 0.12, mat(COLORS.paper), -0.02, p.stand + 0.04, 0.24));
+    printer.add(box(0.02, 0.012, 0.012, new THREE.MeshBasicMaterial({ color: 0x5dd37a }), 0.17, p.stand + 0.14, 0.181));
+    addHitBox(printer, 0.03);
+    group.add(printer);
+    picks.printer = printer;
+    return printer;
+}
+
+/**
  * The sticky notes: ONE mesh whose geometry holds a quad per note, each
  * mapped to its own cell of one atlas (notes.js). `setNotes` rebuilds the
  * geometry when the number of notes changes.
@@ -540,9 +695,9 @@ function buildDesk(group, config, picks) {
     group.add(lampGroup);
     picks.lamp = lampGroup;
 
-    // A mug, for company.
+    // A mug, for company, between the monitor and the lamp.
     const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.036, 0.1, 16), mat(COLORS.mug, { roughness: 0.35 }));
-    mug.position.set(x1 - 0.38, top + 0.05, z1 - 0.16);
+    mug.position.set(x1 - 0.37, top + 0.05, d.z + 0.07);
     group.add(mug);
 
     // The open folder, lying on the desk while its card is open. Two covers
@@ -583,7 +738,8 @@ function buildFloorThings(group, config, picks) {
     group.add(basket);
     picks.wastebasket = basket;
 
-    // The chair, pulled out to the left of the desk as if just left.
+    // The chair, pushed back from the desk's right end as if just left. It
+    // stood at the left end until M6, where it hid the printer from the desk.
     const chair = new THREE.Group();
     chair.name = 'chair';
     const cm = mat(COLORS.chair, { roughness: 0.7 });
@@ -592,16 +748,17 @@ function buildFloorThings(group, config, picks) {
     chair.add(box(0.05, 0.42, 0.05, mat(COLORS.metal), 0, 0.22, 0));
     chair.add(box(0.5, 0.03, 0.08, mat(COLORS.metal), 0, 0.02, 0));
     chair.add(box(0.08, 0.03, 0.5, mat(COLORS.metal), 0, 0.02, 0));
-    chair.position.set(d.x - d.width / 2 - 0.45, 0, d.z + 0.55);
-    chair.rotation.y = 0.9;
+    chair.position.set(d.x + d.width / 2 + 0.25, 0, d.z + 0.95);
+    chair.rotation.y = -0.7;
     group.add(chair);
 
-    // A plant in the front left corner, clear of the corkboard.
+    // A plant in the front right corner, where it has the window's light and
+    // is clear of the corkboard and the whiteboard.
     const plant = new THREE.Group();
     plant.name = 'plant';
     const hw = config.room.width / 2;
-    const px = -hw + 0.35;
-    const pz = 0.75;
+    const px = hw - 0.4;
+    const pz = config.room.depth / 2 - 0.45;
     plant.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.38, 20), mat(COLORS.pot)));
     plant.children[0].position.set(px, 0.19, pz);
     const leaves = mat(COLORS.plant, { flatShading: true });
@@ -616,8 +773,10 @@ function buildFloorThings(group, config, picks) {
 /**
  * Build the office. `textures` may carry `screen` (the monitor's face),
  * `skyline` (the city beyond the glass), `calendar`, `notes`,
- * `drawerLabels` (one per drawer), `boardHeader` and `boardCards`, all
- * optional.
+ * `drawerLabels` (one per drawer), `boardHeader`, `boardCards`, `rolodex`,
+ * `departures` and `whiteboard`, all optional. `rolodexRing` is the Rolodex's card layout
+ * (`{ quad(i), uvs(i), count }`, from rolodex.js), and without it there is
+ * no Rolodex.
  */
 export function buildRoom(config, textures = {}) {
     const group = new THREE.Group();
@@ -630,6 +789,11 @@ export function buildRoom(config, textures = {}) {
     const calendar = buildCalendar(group, config, textures.calendar || null, picks);
     const cabinet = buildCabinet(group, config, textures.drawerLabels || null, picks);
     const board = buildBoard(group, config, textures, picks);
+    const departures = buildDepartures(group, config, textures.departures || null, picks);
+    const whiteboard = buildWhiteboard(group, config, textures.whiteboard || null, picks);
+    buildPrinter(group, config, picks);
+    const ringOf = textures.rolodexRing || null;
+    const rolodex = ringOf ? buildRolodex(group, config, textures.rolodex || null, picks, ringOf.quad, ringOf.uvs, ringOf.count) : null;
     const notes = buildNotes(group, config, textures.notes || null, picks);
     if (textures.screen) {
         desk.screen.material = new THREE.MeshBasicMaterial({ map: textures.screen, toneMapped: false });
@@ -642,6 +806,9 @@ export function buildRoom(config, textures = {}) {
         calendar,
         cabinet,
         board,
+        rolodex,
+        departures,
+        whiteboard,
         notes,
         outside,
         lamp: { light: desk.light, bulb: desk.bulb, group: desk.lampGroup }

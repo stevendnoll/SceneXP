@@ -273,7 +273,7 @@ describe('grid', () => {
         expect(first.children.map((td) => td.dataset.label)).toEqual(grid.COLUMNS.map((c) => c.label));
         expect(first.children[0].children[0].textContent).toBe('Acme');
         expect(second.children[0].children[1].textContent).toBe('Sample');
-        expect(second.children[4].textContent).toMatch(/^Interview, Sep 26/);
+        expect(second.children[5].textContent).toMatch(/^Interview, Sep 26/);
         expect(el('grid-h-company').getAttribute('aria-sort')).toBe('ascending');
         expect(el('grid-h-salary').getAttribute('aria-sort')).toBe('none');
     });
@@ -362,7 +362,7 @@ describe('panels', () => {
         drawFolder(folderDoc('https://acme.example/job'));
         const words = texts(el('folder-body')).join(' | ');
         expect(el('folder-title').textContent).toBe('Acme, Designer');
-        expect(words).toContain('Pat, Recruiter');
+        expect(words).toContain('People | Add a person | Pat | Recruiter | Open | Unlink');
         expect(words).toContain('Interview, round 1');
         expect(words).toContain('Moved forward');
         expect(words).toContain('Thank them');
@@ -600,5 +600,177 @@ describe('the M2 painters', () => {
         expect(long[1].endsWith('…')).toBe(true);
         expect(paint.wrap(ctx, 'Supercalifragilistic', 50, 2)).toEqual(['Supercalifragilistic']);
         expect(paint.wrap({}, 'no measure here', 1000, 2)).toEqual(['no measure here']);
+    });
+});
+
+// ---- M5: people, from source ------------------------------------------------------
+
+describe('people panels and forms', () => {
+    function office() {
+        let doc = emptyDoc(CONFIG, NOW);
+        doc = addApplication(doc, { company: 'Acme', role: 'Designer' }, CONFIG, NOW, { id: 'a' }).doc;
+        doc = addApplication(doc, { company: 'Birch', role: 'Lead' }, CONFIG, NOW, { id: 'b' }).doc;
+        doc = addContact(doc, { name: 'Pat Lee', title: 'Recruiter', company: 'Acme', email: 'pat@acme.example', phone: '(555) 010-0199', linkedIn: 'https://linkedin.example/in/pat', notes: 'Met at a meetup' }, CONFIG, NOW, { id: 'p' }).doc;
+        doc = addContact(doc, { name: 'Sam', email: 'not an email', phone: '12' }, CONFIG, NOW, { id: 's' }).doc;
+        doc = linkContact(doc, 'a', 'p', true, CONFIG, NOW).doc;
+        doc = addEvent(doc, { applicationId: 'b', type: 'screen', at: '2026-09-28T10:00', withContactIds: ['p'] }, CONFIG, NOW, { id: 'ev' }).doc;
+        return doc;
+    }
+    const find = (node, pred) => (pred(node) ? [node] : (node.children || []).flatMap((c) => find(c, pred)));
+    const words = (node) => (node.children && node.children.length ? node.children.flatMap(words) : [node.textContent || '']);
+
+    test('a contact card links a real email, a dialable phone and a safe profile, and nothing else', () => {
+        const on = Object.fromEntries(['openFolder', 'unlink', 'link', 'showApplications', 'edit', 'remove'].map((k) => [k, jest.fn()]));
+        const doc = office();
+        panels.renderContact({ doc, contact: doc.contacts[0], on });
+        const links = find(el('contact-body'), (n) => n.tagName === 'A').map((a) => a.href);
+        expect(links).toEqual(['mailto:pat@acme.example', 'tel:5550100199', 'https://linkedin.example/in/pat']);
+        const all = words(el('contact-body'));
+        expect(all).toEqual(expect.arrayContaining(['Recruiter at Acme', 'Acme, Designer', 'Birch, Lead', 'Interviewing. Met at an event'.replace('Interviewing', 'Screening'), 'Met at', 'Met at a meetup']));
+        // Direct links can be undone here, links through an event cannot.
+        const unlinks = find(el('contact-body'), (n) => n.tagName === 'BUTTON' && n.textContent === 'Unlink');
+        expect(unlinks).toHaveLength(1);
+        unlinks[0].click();
+        expect(on.unlink).toHaveBeenCalledWith('a');
+        // Birch is his only through an event, so it can still be linked directly.
+        const offered = find(el('contact-body'), (n) => n.id === 'contact-link-app')[0];
+        expect(offered.children.map((o) => o.textContent)).toEqual(['Birch, Lead']);
+        el('contact-actions').children.forEach((b) => b.click());
+        expect(on.showApplications).toHaveBeenCalled();
+        expect(on.edit).toHaveBeenCalled();
+        expect(on.remove).toHaveBeenCalled();
+
+        panels.renderContact({ doc, contact: doc.contacts[1], on });
+        expect(find(el('contact-body'), (n) => n.tagName === 'A')).toHaveLength(0);
+        expect(words(el('contact-body'))).toContain('Not linked to any application yet.');
+        const pick = find(el('contact-body'), (n) => n.id === 'contact-link-app')[0];
+        expect(pick.children.map((o) => o.textContent)).toEqual(['Acme, Designer', 'Birch, Lead']);
+        pick.value = 'b';
+        find(el('contact-body'), (n) => n.tagName === 'BUTTON' && n.textContent === 'Link')[0].click();
+        expect(on.link).toHaveBeenCalledWith('b');
+        // With no applications at all, "show their applications" is not offered.
+        expect(el('contact-actions').children.map((b) => b.textContent)).toEqual(['Edit', 'Throw away']);
+    });
+
+    test('the Rolodex list says how many match, and each person is a button', () => {
+        const open = jest.fn();
+        const doc = office();
+        expect(panels.renderRolodexList({ people: doc.contacts, total: 2, text: '', on: { open } })).toBe(2);
+        expect(el('rolodex-count').textContent).toBe('2 people in the Rolodex.');
+        const first = el('rolodex-list').children[0].children[0];
+        expect(words(first)).toEqual(['Pat Lee', 'Recruiter at Acme']);
+        first.click();
+        expect(open).toHaveBeenCalledWith('p');
+        panels.renderRolodexList({ people: [doc.contacts[0]], total: 1, text: 'pat', on: { open } });
+        expect(el('rolodex-count').textContent).toBe('1 of 1 person match.');
+        panels.renderRolodexList({ people: [], total: 0, text: '', on: { open } });
+        expect(el('rolodex-count').textContent).toBe('The Rolodex is empty. New contact adds the first card.');
+    });
+
+    test('the folder’s People: open, unlink, add, and link someone already there', () => {
+        const doc = office();
+        const on = Object.fromEntries(['setStatus', 'edit', 'remove', 'logEvent', 'editEvent', 'removeEvent', 'exportEvent', 'addTask', 'editTask', 'toggleTask', 'removeTask', 'openContact', 'unlinkContact', 'linkContact', 'addPerson'].map((k) => [k, jest.fn()]));
+        panels.renderFolder({ doc, app: doc.applications[0], status: 'applied', config: CONFIG, now: NOW, on });
+        const buttons = find(el('folder-body'), (n) => n.tagName === 'BUTTON');
+        const press = (label) => buttons.find((b) => b.textContent === label).click();
+        press('Open');
+        press('Unlink');
+        press('Add a person');
+        press('Link');
+        expect(on.openContact).toHaveBeenCalledWith('p');
+        expect(on.unlinkContact).toHaveBeenCalledWith('p');
+        expect(on.addPerson).toHaveBeenCalled();
+        expect(on.linkContact).toHaveBeenCalledWith('s');
+        panels.renderFolder({ doc, app: doc.applications[1], status: 'applied', config: CONFIG, now: NOW, on });
+        expect(words(el('folder-body'))).toContain('Nobody linked yet. Recruiters, interviewers and referrals go here.');
+    });
+
+    test('the event form asks who was there, and the contact form round-trips', () => {
+        forms.initForms(CONFIG);
+        forms.fillEventWith([{ id: 'p', name: 'Pat Lee' }, { id: 's', name: 'Sam' }], ['s']);
+        expect(el('ef-with-row').hidden).toBe(false);
+        expect(forms.readEventForm().withContactIds).toEqual(['s']);
+        forms.fillEventWith([]);
+        expect(el('ef-with-row').hidden).toBe(true);
+        expect(forms.readEventForm().withContactIds).toEqual([]);
+
+        forms.fillContactForm(null, { about: 'Linked to Acme', company: 'Acme' });
+        expect(el('contact-form-title').textContent).toBe('New contact');
+        expect(el('cf-company').value).toBe('Acme');
+        forms.fillContactForm({ name: 'Pat', title: 'Recruiter', company: 'Acme', email: '', phone: '', linkedIn: '', notes: '' });
+        expect(el('contact-form-title').textContent).toBe('Edit contact');
+        expect(forms.readContactForm()).toMatchObject({ name: 'Pat', title: 'Recruiter' });
+        expect(forms.validateContact({ name: 'Pat', email: 'pat@acme.example', linkedIn: 'linkedin.example/in/pat' })).toBe('');
+    });
+
+    test('the lettered cards paint', async () => {
+        const rolodex = await import('../www/office/js/rolodex.js');
+        const ctx = document.createElement('canvas').getContext('2d');
+        expect(() => paint.drawLetterAtlas(ctx, 1152, 288, rolodex.LETTERS, rolodex.LETTER_ATLAS)).not.toThrow();
+    });
+});
+
+// ---- M6: the whiteboard, the departures and the prep sheet, from source ------------
+
+describe('M6 panels and painters', () => {
+    test('the whiteboard sheet: sentences, the goal, and both tables', () => {
+        const model = {
+            goal: 5,
+            funnel: [{ label: 'Applied', count: 3 }, { label: 'Screening', count: 1 }],
+            weeks: [{ label: 'Sep 14', count: 1, current: false }, { label: 'Sep 21', count: 2, current: true }]
+        };
+        panels.renderWhiteboardSheet(model, ['Line one.', 'Line two.']);
+        expect(el('wb-summary').children.map((li) => li.textContent)).toEqual(['Line one.', 'Line two.']);
+        expect(el('wb-goal').value).toBe('5');
+        expect(el('wb-funnel').children[0].children.map((c) => c.textContent)).toEqual(['Applied', '3']);
+        expect(el('wb-weeks').children[1].children[0].textContent).toBe('Sep 21 (this week)');
+        // While the visitor is typing a goal, a redraw leaves it alone.
+        el('wb-goal').focus();
+        el('wb-goal').value = '9';
+        panels.renderWhiteboardSheet(model, []);
+        expect(el('wb-goal').value).toBe('9');
+    });
+
+    test('the departures sheet, full and empty', () => {
+        expect(panels.renderDepartures([{ when: 'Today, 2:00 PM', what: 'Interview', with: 'Acme' }])).toBe(1);
+        expect(el('dep-table').hidden).toBe(false);
+        expect(el('dep-body').children[0].children.map((td) => td.textContent)).toEqual(['Today, 2:00 PM', 'Interview', 'Acme']);
+        expect(panels.renderDepartures([])).toBe(0);
+        expect(el('dep-empty').hidden).toBe(false);
+        expect(el('dep-table').hidden).toBe(true);
+    });
+
+    test('the prep sheet is laid out as text, sections only where there is something to say', () => {
+        const words = (node) => (node.children && node.children.length ? node.children.flatMap(words) : [node.textContent || '']);
+        panels.renderPrintSheet({
+            company: 'Acme', role: 'Designer', facts: [['Status', 'Interviewing']],
+            upcoming: [{ what: 'Interview, round 2', when: 'Sep 29', title: 'Panel', with: ['Pat Lee'], outcome: '' }],
+            people: [{ name: 'Pat Lee', line: 'Recruiter', email: 'pat@acme.example', phone: '' }],
+            past: [{ what: 'Phone screen', when: 'Sep 15', title: '', with: [], outcome: 'Moved forward' }],
+            tasks: [{ text: 'Case study', due: 'Sep 28, 2026' }, { text: 'Undated', due: '' }],
+            notes: 'Ask about the team', posting: 'We build things', printed: 'Printed today.'
+        }, 3);
+        const sheet = el('print-sheet');
+        const sections = sheet.children.filter((c) => c.className === 'print-section');
+        expect(sections.map((s) => s.children[0].textContent)).toEqual(
+            ['Coming up', 'People', 'So far', 'Still to do', 'Your notes', 'Questions to ask', 'The posting']);
+        expect(sections[5].children).toHaveLength(1 + 3);
+        const all = words(sheet).join(' ');
+        expect(all).toContain('Case study (due Sep 28, 2026)');
+        expect(all).toContain('. pat@acme.example');
+        panels.renderPrintSheet({ company: '', role: 'Solo', facts: [], upcoming: [], people: [], past: [], tasks: [], notes: '', posting: '', printed: 'x' });
+        expect(sheet.children.filter((c) => c.className === 'print-section').map((s) => s.children[0].textContent)).toEqual(['Questions to ask']);
+    });
+
+    test('the flap board and the whiteboard paint', async () => {
+        const wb = await import('../www/office/js/whiteboard.js');
+        const ctx = document.createElement('canvas').getContext('2d');
+        expect(() => paint.drawFlapBoard(ctx, 1024, 280, ['TODAY 2:00P INTERVIEW  ACME        '], { clock: 'THU 10:00 AM', columns: [11, 10, 12] })).not.toThrow();
+        expect(() => paint.drawFlapBoard(ctx, 1024, 280, [])).not.toThrow();
+        const model = wb.boardModel(emptyDoc(CONFIG, NOW), CONFIG, NOW);
+        expect(() => paint.drawWhiteboard(ctx, 1024, 568, {
+            title: 'The search so far', funnel: wb.funnelBars(model), chart: wb.weekChart(model),
+            numbers: wb.bigNumbers(model), goal: model.goal, layout: wb.LAYOUT
+        })).not.toThrow();
     });
 });

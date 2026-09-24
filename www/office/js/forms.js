@@ -21,6 +21,10 @@ import { STATUS_LABELS, WORK_MODE_LABELS, EVENT_LABELS, OUTCOME_LABELS, salaryTe
 import { readPosting } from './posting.min.js';
 import { isDateString, isDateTimeString } from './dates.min.js';
 import { h, clear } from './cards.min.js';
+import { safeUrl } from './store.min.js';
+
+/** The "Who was there" boxes of the event form, as last built. */
+let withBoxes = [];
 
 const PERIOD_LABELS = { year: 'A year', hour: 'An hour' };
 
@@ -199,9 +203,30 @@ export function fillEventForm(ev, { defaultAt, applicationName }) {
     showError('ef-error', '');
 }
 
+/**
+ * Build the event form's "Who was there" boxes from the application's
+ * people, ticking `selected`. The whole question hides when the application
+ * has nobody linked yet.
+ */
+export function fillEventWith(people, selected = []) {
+    const row = byId('ef-with-row');
+    const list = byId('ef-with');
+    withBoxes = [];
+    if (list) clear(list);
+    if (row) row.hidden = people.length === 0;
+    people.forEach((person, i) => {
+        const id = `ef-with-${i}`;
+        const box = h('input', { type: 'checkbox', id, value: person.id });
+        box.checked = selected.includes(person.id);
+        withBoxes.push(box);
+        if (list) list.appendChild(h('label', { htmlFor: id }, [box, person.name]));
+    });
+}
+
 export function readEventForm() {
     const fields = {};
     for (const [field, id] of Object.entries(EF)) fields[field] = value(id);
+    fields.withContactIds = withBoxes.filter((b) => b.checked).map((b) => b.value);
     return fields;
 }
 
@@ -262,4 +287,40 @@ export function readSettingsForm() {
         if (v !== '') out[field] = Number(v);
     }
     return out;
+}
+
+// ---- Contacts ---------------------------------------------------------------
+
+export const CF = {
+    name: 'cf-name',
+    title: 'cf-title',
+    company: 'cf-company',
+    email: 'cf-email',
+    phone: 'cf-phone',
+    linkedIn: 'cf-linkedin',
+    notes: 'cf-notes'
+};
+
+/** Fill the contact form for a new person (`contact` null) or an edit.
+ *  `about` says what a new one will be linked to, if anything. */
+export function fillContactForm(contact, { about = '', company = '' } = {}) {
+    for (const [field, id] of Object.entries(CF)) setValue(id, contact ? contact[field] : field === 'company' ? company : '');
+    const title = byId('contact-form-title');
+    if (title) title.textContent = contact ? 'Edit contact' : 'New contact';
+    const note = byId('contact-form-about');
+    if (note) note.textContent = about;
+    showError('cf-error', '');
+}
+
+export function readContactForm() {
+    const fields = {};
+    for (const [field, id] of Object.entries(CF)) fields[field] = value(id);
+    return fields;
+}
+
+export function validateContact(fields) {
+    if (!fields.name) return 'Please enter a name.';
+    if (fields.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email)) return 'That email address looks incomplete.';
+    if (fields.linkedIn && !safeUrl(fields.linkedIn)) return 'Please check the LinkedIn link.';
+    return '';
 }

@@ -61,6 +61,9 @@ export function normalizeQuery(raw, config, settings = config.settings) {
         appliedTo: day(src.appliedTo),
         upcoming: src.upcoming === true,
         origin: ['all', 'sample', 'mine'].includes(src.origin) ? src.origin : 'all',
+        /** Only the applications a person is part of, directly or through
+         *  an event (the Rolodex's "show their applications"). */
+        contactId: typeof src.contactId === 'string' && src.contactId ? src.contactId.slice(0, 64) : null,
         sortKey,
         sortDir
     };
@@ -153,6 +156,7 @@ function compareRows(a, b, key, dir, config) {
  *   lastActivity  a Date or null
  *   next          the next event on its calendar, or null
  *   matches       the fields the search words were found in
+ *   people        the names of the live contacts linked to it
  * `total` is every live application and `shown` is how many rows came back,
  * which is what "Showing 4 of 31" is made from.
  */
@@ -170,6 +174,8 @@ export function queryApplications(doc, rawQuery, config, now, index = buildIndex
         if (q.appliedFrom && !(app.appliedOn && app.appliedOn >= q.appliedFrom)) continue;
         if (q.appliedTo && !(app.appliedOn && app.appliedOn <= q.appliedTo)) continue;
         const events = index.events(app.id);
+        if (q.contactId && !app.contactIds.includes(q.contactId)
+            && !events.some((ev) => ev.withContactIds.includes(q.contactId))) continue;
         const next = nextEvent(events, now);
         if (q.upcoming && !next) continue;
         const status = effectiveStatus(app, index, doc.settings, config, now);
@@ -181,7 +187,8 @@ export function queryApplications(doc, rawQuery, config, now, index = buildIndex
             status,
             lastActivity: lastActivityOn(app, events, index.tasks(app.id)),
             next,
-            matches
+            matches,
+            people: app.contactIds.map((id) => index.contactsById.get(id)).filter(Boolean).map((c) => c.name)
         });
     }
     rows.sort((a, b) => compareRows(a, b, q.sortKey, q.sortDir, config));

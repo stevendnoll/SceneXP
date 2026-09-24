@@ -133,7 +133,24 @@ export const CONFIG = deepFreeze({
          *  strip the column names are painted on, `card` an index card's
          *  width and height, all exaggerated from life so a card reads
          *  across the room. */
-        board: { x: -2.97, z: -1.05, y: 1.55, width: 2.4, height: 1.1, header: 0.12, card: [0.25, 0.155] }
+        board: { x: -2.97, z: -1.05, y: 1.55, width: 2.4, height: 1.1, header: 0.12, card: [0.25, 0.155] },
+        /** The Rolodex, at the desk's front right corner. `x` and `z` are
+         *  its middle on the desk top, `axle` the axle's height above the
+         *  desk, and `card` a lettered card's width and its inner and outer
+         *  edges from the axle. `facing` is the angle, from straight up
+         *  toward the room, at which the chosen card stands. */
+        rolodex: {
+            x: 1.5, z: -1.8, width: 0.22, axle: 0.12, wheel: 0.09,
+            card: { width: 0.16, inner: 0.025, outer: 0.085 }, facing: 1.0
+        },
+        /** The door in the front wall, and the departures board over it.
+         *  `x` is each one's middle, `y` the board's. */
+        door: { x: 0.3, width: 0.92, height: 2.05 },
+        departures: { x: 0.3, y: 2.4, width: 1.9, height: 0.5 },
+        /** The whiteboard, on the left wall's front half. */
+        whiteboard: { x: -2.97, z: 1.25, y: 1.5, width: 1.8, height: 1.0 },
+        /** The printer, on a stand under the right-hand window. */
+        printer: { x: -0.4, z: -2.2, stand: 0.6 }
     },
 
     /** The camera's near and far planes. */
@@ -151,7 +168,12 @@ export const CONFIG = deepFreeze({
         computer: { eye: [0.95, 1.2, -1.2], aim: [0.95, 1.05, -2.3], fov: 42 },
         calendar: { eye: [-0.22, 1.5, -1.2], aim: [-0.32, 1.52, -2.5], fov: 44 },
         cabinet: { eye: [-1.85, 1.72, -0.55], aim: [-1.85, 0.42, -2.12], fov: 50, retreat: 1.1 },
-        board: { eye: [-0.95, 1.52, -1.05], aim: [-2.97, 1.52, -1.05], fov: 46, retreat: 1.6 }
+        board: { eye: [-0.95, 1.52, -1.05], aim: [-2.97, 1.52, -1.05], fov: 46, retreat: 1.6 },
+        /** Aimed a little below the Rolodex, so it sits in the top half of
+         *  the screen, clear of the sheet docked beneath it. */
+        rolodex: { eye: [1.32, 1.32, -1.0], aim: [1.5, 0.66, -1.8], fov: 44, retreat: 0.35 },
+        whiteboard: { eye: [-0.95, 1.5, 1.25], aim: [-2.97, 1.5, 1.25], fov: 46, retreat: 1.4 },
+        departures: { eye: [0.3, 1.45, 0.25], aim: [0.3, 2.25, 2.5], fov: 46, retreat: 0.8 }
     },
 
     view: {
@@ -166,7 +188,11 @@ export const CONFIG = deepFreeze({
         refileSeconds: 0.8,
         liftSeconds: 0.35,
         /** How long a card takes to cross the corkboard. */
-        carrySeconds: 0.7
+        carrySeconds: 0.7,
+        /** How long the Rolodex takes to turn to a letter. */
+        spinSeconds: 0.6,
+        /** How long one flap of the departures board takes to turn. */
+        flapSeconds: 0.035
     },
 
     /** How far ahead the calendar file reaches, in days. */

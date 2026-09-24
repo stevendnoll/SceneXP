@@ -53,7 +53,7 @@ describe('normalizeQuery', () => {
         }, CONFIG);
         expect(q).toEqual({
             text: 'x', statuses: ['applied', 'ghosted'], workModes: ['remote'], appliedFrom: null,
-            appliedTo: '2026-09-30', upcoming: false, origin: 'all', sortKey: 'activity', sortDir: 'desc'
+            appliedTo: '2026-09-30', upcoming: false, origin: 'all', contactId: null, sortKey: 'activity', sortDir: 'desc'
         });
     });
 

@@ -279,3 +279,148 @@ export function drawCardFace(ctx, x, y, w, h, card) {
         ctx.fillText(card.note, x + w * 0.06, y + h * 0.78);
     }
 }
+
+/** Paint the Rolodex's lettered cards: one cell per letter, the letter on a
+ *  tab at the top of the cell, which is the card's outer edge. */
+export function drawLetterAtlas(ctx, W, H, letters, { cols, rows }) {
+    const cw = W / cols;
+    const ch = H / rows;
+    ctx.clearRect(0, 0, W, H);
+    letters.forEach((letter, i) => {
+        const x = (i % cols) * cw;
+        const y = Math.floor(i / cols) * ch;
+        ctx.fillStyle = '#f6f1e6';
+        ctx.fillRect(x, y, cw, ch);
+        ctx.fillStyle = 'rgba(111, 168, 220, 0.3)';
+        for (let ly = y + ch * 0.45; ly < y + ch * 0.95; ly += ch * 0.15) ctx.fillRect(x + cw * 0.08, ly, cw * 0.84, 1);
+        ctx.fillStyle = i % 2 ? '#2f5d73' : '#c8553d';
+        ctx.fillRect(x + cw * 0.34, y, cw * 0.32, ch * 0.3);
+        ctx.fillStyle = '#fbf8f1';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `700 ${Math.round(ch * 0.24)}px system-ui, sans-serif`;
+        ctx.fillText(letter, x + cw / 2, y + ch * 0.16);
+    });
+    ctx.textAlign = 'left';
+}
+
+/**
+ * Paint the departures board: a dark panel, DEPARTURES and the clock across
+ * the top, the column heads, and a tile for every flap, split across its
+ * middle the way a real flap is.
+ */
+export function drawFlapBoard(ctx, W, H, rows, { clock = '', heads = ['WHEN', 'WHAT', 'WITH'], columns = null } = {}) {
+    ctx.fillStyle = '#16181c';
+    ctx.fillRect(0, 0, W, H);
+    const width = rows[0] ? rows[0].length : 35;
+    const headerH = H * 0.2;
+    ctx.fillStyle = '#f2c14e';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.font = `700 ${Math.round(headerH * 0.5)}px ui-monospace, Menlo, Consolas, monospace`;
+    ctx.fillText('DEPARTURES', W * 0.02, headerH * 0.55);
+    ctx.textAlign = 'right';
+    ctx.fillText(clock, W * 0.98, headerH * 0.55);
+    const cellW = (W * 0.96) / width;
+    const headH = H * 0.08;
+    const rowsTop = headerH + headH;
+    const cellH = (H - rowsTop - H * 0.03) / rows.length;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#9aa3ad';
+    ctx.font = `600 ${Math.round(headH * 0.7)}px ui-monospace, Menlo, Consolas, monospace`;
+    if (columns) {
+        let at = 0;
+        heads.forEach((head, i) => {
+            ctx.fillText(head, W * 0.02 + cellW * at, headerH + headH / 2);
+            at += columns[i] + 1;
+        });
+    }
+    ctx.textAlign = 'center';
+    ctx.font = `700 ${Math.round(cellH * 0.62)}px ui-monospace, Menlo, Consolas, monospace`;
+    rows.forEach((row, r) => {
+        for (let i = 0; i < row.length; i++) {
+            const x = W * 0.02 + cellW * i;
+            const y = rowsTop + cellH * r;
+            ctx.fillStyle = '#23262b';
+            ctx.fillRect(x + 1, y + 2, cellW - 2, cellH - 4);
+            if (row[i] !== ' ') {
+                ctx.fillStyle = '#f4f1e8';
+                ctx.fillText(row[i], x + cellW / 2, y + cellH / 2 + 1);
+            }
+            ctx.fillStyle = '#0c0d0f';
+            ctx.fillRect(x + 1, y + cellH / 2, cellW - 2, 1.5);
+        }
+    });
+    ctx.textAlign = 'left';
+}
+
+/**
+ * Paint the whiteboard in marker: the funnel, the weeks against the goal
+ * line, and the two big numbers, where whiteboard.js LAYOUT says. The pieces
+ * come in already measured (funnelBars, weekChart, bigNumbers), so the
+ * drawing and the tap targets can never disagree.
+ */
+export function drawWhiteboard(ctx, W, H, { title, funnel, chart, numbers, goal, layout }) {
+    const INK = '#23262b';
+    const BLUE = '#2b5fa8';
+    const RED = '#c8392b';
+    const hand = (size, weight = 600) => `${weight} ${Math.round(size)}px "Marker Felt", "Chalkboard SE", "Comic Neue", "Comic Sans MS", cursive`;
+    ctx.fillStyle = '#f7f7f4';
+    ctx.fillRect(0, 0, W, H);
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = INK;
+    ctx.font = hand(H * 0.07, 700);
+    ctx.fillText(title, W * layout.title.x, H * layout.title.y);
+
+    // The funnel: a label, a bar, its count.
+    ctx.font = hand(H * 0.045);
+    ctx.fillStyle = INK;
+    ctx.fillText('How far they got', W * layout.funnel.x0, H * (layout.funnel.y0 - 0.04));
+    for (const bar of funnel) {
+        ctx.fillStyle = INK;
+        ctx.font = hand(H * 0.04, 500);
+        ctx.fillText(bar.label, W * layout.funnel.x0, H * (bar.y + bar.h / 2));
+        ctx.fillStyle = BLUE;
+        ctx.fillRect(W * bar.x, H * bar.y, W * bar.w, H * bar.h);
+        ctx.fillStyle = INK;
+        ctx.fillText(String(bar.count), W * (bar.x + bar.w) + W * 0.01, H * (bar.y + bar.h / 2));
+    }
+
+    // The weeks, against the goal.
+    ctx.font = hand(H * 0.045);
+    ctx.fillText('Sent each week', W * layout.weeks.x0, H * (layout.weeks.y0 - 0.06));
+    ctx.fillStyle = INK;
+    ctx.fillRect(W * chart.x0, H * chart.baseline, W * (chart.x1 - chart.x0), 2);
+    for (const bar of chart.bars) {
+        ctx.fillStyle = BLUE;
+        if (bar.h > 0) ctx.fillRect(W * bar.x, H * bar.y, W * bar.w, H * bar.h);
+        ctx.fillStyle = INK;
+        ctx.textAlign = 'center';
+        ctx.font = hand(H * 0.032, bar.current ? 700 : 400);
+        ctx.fillText(bar.current ? 'now' : bar.label.split(' ')[1], W * (bar.x + bar.w / 2), H * (chart.baseline + 0.035));
+        if (bar.count) ctx.fillText(String(bar.count), W * (bar.x + bar.w / 2), H * (bar.y - 0.025));
+    }
+    ctx.textAlign = 'left';
+    ctx.strokeStyle = RED;
+    ctx.lineWidth = Math.max(2, H * 0.006);
+    if (ctx.setLineDash) ctx.setLineDash([W * 0.012, W * 0.008]);
+    ctx.beginPath();
+    ctx.moveTo(W * chart.x0, H * chart.goalY);
+    ctx.lineTo(W * chart.x1, H * chart.goalY);
+    ctx.stroke();
+    if (ctx.setLineDash) ctx.setLineDash([]);
+    ctx.fillStyle = RED;
+    ctx.font = hand(H * 0.036, 700);
+    ctx.fillText(`goal ${goal}`, W * (chart.x1 + 0.005), H * chart.goalY);
+
+    // The two big numbers.
+    numbers.forEach((n, i) => {
+        const x = W * (layout.numbers.x0 + i * ((layout.numbers.x1 - layout.numbers.x0) / 2));
+        ctx.fillStyle = INK;
+        ctx.font = hand(H * 0.08, 700);
+        ctx.fillText(n.value, x, H * (layout.numbers.y0 + 0.05));
+        ctx.font = hand(H * 0.035, 500);
+        ctx.fillText(n.label, x, H * (layout.numbers.y0 + 0.13));
+    });
+}

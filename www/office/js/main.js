@@ -28,13 +28,14 @@
 import { CONFIG } from './config.min.js';
 import {
     createStore, emptyDoc, touchVisit, storageUse, addApplication, updateApplication, setStatus, addEvent,
-    updateEvent, addTask, updateTask, setTaskDone, deleteRecord, restoreRecord, emptyWastebasket,
+    updateEvent, addTask, updateTask, setTaskDone, deleteRecord, restoreRecord, emptyWastebasket, addContact,
+    updateContact, linkContact, findContact,
     clearSamples, hasSamples, setSettings, findApplication, findEvent, findTask, labelOf, serialize,
     backupFilename, parseBackup, wastebasket
 } from './store.min.js';
 import { createHistory } from './log.min.js';
 import { stats, buildIndex, effectiveStatus, followUpFor, dueTasks, upcomingEvents } from './derive.min.js';
-import { queryApplications, facetCounts, normalizeQuery } from './query.min.js';
+import { queryApplications, facetCounts, normalizeQuery, searchContacts } from './query.min.js';
 import { welcomeLine, pageTitle, storageNote, count } from './copy.min.js';
 import { STATUS_LABELS, EVENT_LABELS, SORT_LABELS, applicationName, eventName } from './labels.min.js';
 import { formatDate, formatDateTime, ceilToMinutes, addDays, displayDateTime } from './dates.min.js';
@@ -43,27 +44,38 @@ import { applicationsCsv } from './csv.min.js';
 import { poseFor, createGlide } from './stations.min.js';
 import { buildRoom, setLamp, pickOf, setNotes, ensureCapacity } from './room.min.js';
 import {
-    screenLines, drawScreen, drawSkyline, drawCalendar, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace
+    screenLines, drawScreen, drawSkyline, drawCalendar, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
+    drawLetterAtlas, drawFlapBoard, drawWhiteboard
 } from './paint.min.js';
 import { drawerPlan, liftedLine, TAB_COLORS } from './cabinet.min.js';
 import { createFiling } from './filing.min.js';
 import { boardPlan, boardSummary, boardColumns, columnAt, CARD_ATLAS } from './board.min.js';
+import {
+    LETTERS, LETTER_ATLAS, letterOf, letterIndex, spinTo, nearestTurn, ringQuad, ringUvs, peopleOf
+} from './rolodex.min.js';
 import { createPinboard } from './pinboard.min.js';
+import { departureRows, blankRows, stepFlaps, readableRow, FLAP_COLUMNS } from './splitflap.min.js';
+import { boardModel, funnelBars, weekChart, bigNumbers, summaryLines, onGoalLine, LAYOUT } from './whiteboard.min.js';
+import { prepSheet, printChoices, QUESTION_LINES } from './prep.min.js';
 import { monthGrid, monthAgenda, shiftMonth } from './calendar.min.js';
 import { icsFile, upcomingItems, icsFilename } from './ics.min.js';
 import { lightAt, lighting, css } from './daylight.min.js';
 import { stickyNotes, notesKey, noteWords, noteColor, quadCorners, cellUvs, NOTE_SLOTS, ATLAS } from './notes.min.js';
 import { download, readText } from './files.min.js';
 import {
-    initCards, openCard, closeCard, isOpen, anyOpen, topCard, announce, toast, hideToast, h, button, clear, confirmCard
+    initCards, openCard, closeCard, closeAll, isOpen, anyOpen, topCard, announce, toast, hideToast, h, button, clear,
+    confirmCard
 } from './cards.min.js';
 import {
     initForms, fillApplicationForm, readApplicationForm, validateApplication, showError, updateFound, useFound,
     fillEventForm, readEventForm, validateEvent, fillTaskForm, readTaskForm, validateTask, fillSettingsForm,
-    readSettingsForm
+    readSettingsForm, fillEventWith, fillContactForm, readContactForm, validateContact
 } from './forms.min.js';
 import { initGrid, renderGrid, renderChips, isFiltered } from './grid.min.js';
-import { renderFolder, renderWastebasket, renderSamplesButtons, renderCalendar, renderToday } from './panels.min.js';
+import {
+    renderFolder, renderWastebasket, renderSamplesButtons, renderCalendar, renderToday, renderContact, renderRolodexList,
+    renderWhiteboardSheet, renderDepartures, renderPrintSheet
+} from './panels.min.js';
 import { installCardFocusTrap, installCardScrollReset, getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
@@ -116,7 +128,20 @@ const ui = {
     cabinetMoving: false,
     drawerKey: null,
     /** The cabinet's plan and lifted folders, as last filed. */
-    filed: { plan: [], lifted: [] }
+    filed: { plan: [], lifted: [] },
+    /** The person whose card is open, the one being edited, and the
+     *  application a new person will be linked to. */
+    contactId: null,
+    editingContactId: null,
+    contactLinkApp: null,
+    /** The Rolodex's turn, and where it is turning to. */
+    ring: { angle: 0, from: 0, to: 0, t: 1 },
+    /** The departures board: what its flaps show, what they are turning
+     *  to, and the time left before the next turn. */
+    flaps: { rows: null, target: null, due: 0, clock: '' },
+    /** What the whiteboard was last painted from. */
+    whiteboardKey: null,
+    whiteboardModel: null
 };
 
 let filing = null;
@@ -307,6 +332,9 @@ function buildScene() {
     painted.notes = paintedTexture(ATLAS.cols * 256, ATLAS.rows * 256, () => {});
     painted.drawers = Array.from({ length: CONFIG.room.cabinet.drawers }, () => paintedTexture(256, 64, () => {}));
     painted.boardHeader = paintedTexture(1024, 52, (ctx, W, H) => drawBoardHeader(ctx, W, H, boardColumns(CONFIG).map((c) => c.label)));
+    painted.rolodex = paintedTexture(LETTER_ATLAS.cols * 128, LETTER_ATLAS.rows * 96, (ctx, W, H) => drawLetterAtlas(ctx, W, H, LETTERS, LETTER_ATLAS));
+    painted.departures = paintedTexture(1024, 280, () => {});
+    painted.whiteboard = paintedTexture(1024, 568, () => {});
     const screen = paintedTexture(512, 320, (ctx, W, H) => drawScreen(ctx, W, H, []));
     screenCanvas = screen.canvas;
     screenTexture = screen.texture;
@@ -316,7 +344,11 @@ function buildScene() {
         calendar: painted.calendar.texture,
         notes: painted.notes.texture,
         drawerLabels: painted.drawers.map((p) => p.texture),
-        boardHeader: painted.boardHeader.texture
+        boardHeader: painted.boardHeader.texture,
+        rolodex: painted.rolodex.texture,
+        departures: painted.departures.texture,
+        whiteboard: painted.whiteboard.texture,
+        rolodexRing: { quad: (i) => ringQuad(i, CONFIG.room.rolodex.card), uvs: (i) => ringUvs(i), count: LETTERS.length }
     });
     filing = createFiling(room.cabinet, CONFIG, { reducedMotion: state.reducedMotion });
     pinboard = createPinboard(room.board, CONFIG, {
@@ -558,10 +590,17 @@ function refresh() {
     applyDaylight(t);
     fileCabinet(t);
     pinBoard(t);
+    paintWhiteboard(t);
+    setDepartures(t);
 
     if (isOpen('computer')) drawComputer(t);
     if (isOpen('cabinet')) drawCabinetSheet(t);
     if (isOpen('board')) drawBoardSheet(t);
+    if (isOpen('rolodex')) drawRolodexSheet();
+    if (isOpen('whiteboard')) drawWhiteboardSheet();
+    if (isOpen('departures')) drawDeparturesSheet(t);
+    if (isOpen('printer')) fillPrinterChoices(t);
+    if (isOpen('contact')) drawContact();
     if (isOpen('calendar')) drawCalendarCard(t);
     if (isOpen('today')) drawToday(t);
     if (isOpen('folder')) drawFolder(t);
@@ -599,8 +638,22 @@ const gridHandlers = {
         announce('Showing every application.');
     },
     create: () => openApplicationForm(null),
-    stock: () => stockOffice()
+    stock: () => stockOffice(),
+    clearContact: () => {
+        ui.query = { ...ui.query, contactId: null };
+        queryChanged();
+        announce('Showing every application again.');
+    }
 };
+
+/** The chips need the chosen person's name and how many they are part of. */
+function personFacets(t, index) {
+    const q = normalizeQuery(ui.query, CONFIG, state.doc.settings);
+    if (!q.contactId) return {};
+    const c = findContact(state.doc, q.contactId);
+    const count = queryApplications(state.doc, { contactId: q.contactId }, CONFIG, t, index).shown;
+    return { contactName: c ? c.name : '', contactCount: count };
+}
 
 function toggleIn(field, value) {
     const list = ui.query[field] || [];
@@ -634,7 +687,7 @@ function drawComputer(t = now()) {
     const result = queryApplications(state.doc, ui.query, CONFIG, t, index);
     renderGrid({
         result,
-        facets: facetCounts(state.doc, CONFIG, t, index),
+        facets: { ...facetCounts(state.doc, CONFIG, t, index), ...personFacets(t, index) },
         week: stats(state.doc, CONFIG, t).weekly,
         goal: state.doc.settings.weeklyGoal,
         config: CONFIG,
@@ -700,7 +753,10 @@ function drawCabinetSheet(t = now()) {
     if (search && document.activeElement !== search && search.value !== q.text) search.value = q.text;
     const sort = el('cabinet-sort');
     if (sort && sort.value !== q.sortKey) sort.value = q.sortKey;
-    renderChips('cabinet-filters', q, { ...facetCounts(state.doc, CONFIG, t), total: ui.filed.total || 0 }, CONFIG, gridHandlers);
+    const index = buildIndex(state.doc);
+    renderChips('cabinet-filters', q, {
+        ...facetCounts(state.doc, CONFIG, t, index), ...personFacets(t, index), total: ui.filed.total || 0
+    }, CONFIG, gridHandlers);
     const line = el('cabinet-lifted');
     const list = el('cabinet-list');
     const { lifted, searching, total } = ui.filed;
@@ -904,6 +960,385 @@ function boardPointerCancel(event) {
     }
 }
 
+// ---- The Rolodex and its people ------------------------------------------------
+
+/** Turn the wheel to a letter, the short way round. */
+function spinRolodexTo(letter) {
+    const r = CONFIG.room.rolodex;
+    const target = nearestTurn(ui.ring.angle, spinTo(letterIndex(letter), r.facing));
+    // Already there, or already on the way there: carry on.
+    if (Math.abs(target - ui.ring.to) < 1e-9) return false;
+    ui.ring = { angle: ui.ring.angle, from: ui.ring.angle, to: target, t: state.reducedMotion ? 1 : 0 };
+    if (state.reducedMotion) setRing(target);
+    requestRender();
+    return true;
+}
+
+function setRing(angle) {
+    ui.ring.angle = angle;
+    if (room && room.rolodex) room.rolodex.ring.rotation.x = angle;
+}
+
+function stepRing(delta) {
+    const ring = ui.ring;
+    ring.t = Math.min(1, ring.t + Math.max(0, delta) / CONFIG.view.spinSeconds);
+    const k = ring.t * ring.t * (3 - 2 * ring.t);
+    setRing(ring.t >= 1 ? ring.to : ring.from + (ring.to - ring.from) * k);
+}
+
+/** The Rolodex's list, from its search box. With `spin`, the wheel turns to
+ *  the first person found. */
+function drawRolodexSheet({ spin = false } = {}) {
+    const search = el('rolodex-search');
+    const text = search ? search.value : '';
+    const people = searchContacts(state.doc, text);
+    const total = state.doc.contacts.filter((c) => !c.deletedAt).length;
+    renderRolodexList({ people, total, text, on: { open: (id) => openContact(id) } });
+    if (spin && people.length) spinRolodexTo(letterOf(people[0].name));
+    return people;
+}
+
+function openRolodex({ armed = false } = {}) {
+    const search = el('rolodex-search');
+    if (search) search.value = '';
+    drawRolodexSheet();
+    openCard('rolodex', { armed, onClose: () => goTo('desk') });
+    goTo('rolodex');
+    track('open-rolodex');
+}
+
+function drawContact() {
+    const contact = findContact(state.doc, ui.contactId);
+    if (!contact || contact.deletedAt) {
+        closeCard('contact');
+        return null;
+    }
+    renderContact({
+        doc: state.doc,
+        contact,
+        on: {
+            openFolder: (id) => openFolder(id),
+            unlink: (appId) => setLink(appId, contact.id, false),
+            link: (appId) => setLink(appId, contact.id, true),
+            showApplications: () => showContactApplications(contact.id),
+            edit: () => openContactForm(contact.id),
+            remove: () => throwAway('contacts', contact.id)
+        }
+    });
+    return contact;
+}
+
+function openContact(id, { armed = false } = {}) {
+    const contact = findContact(state.doc, id);
+    if (!contact || contact.deletedAt) {
+        announce('That contact is no longer here.');
+        return false;
+    }
+    ui.contactId = id;
+    drawContact();
+    openCard('contact', { armed, onClose: () => { ui.contactId = null; } });
+    spinRolodexTo(letterOf(contact.name));
+    return true;
+}
+
+/** Link a person to an application, or let them go. */
+function setLink(appId, contactId, linked) {
+    const app = findApplication(state.doc, appId);
+    const c = findContact(state.doc, contactId);
+    if (!app || !c) return null;
+    return change((doc) => linkContact(doc, appId, contactId, linked, CONFIG, now()),
+        linked ? `Linked ${c.name} to ${applicationName(app)}` : `Unlinked ${c.name} from ${applicationName(app)}`);
+}
+
+/** The computer, showing only what a person is part of. */
+function showContactApplications(contactId) {
+    const c = findContact(state.doc, contactId);
+    ui.query = { ...ui.query, contactId };
+    closeCard('contact');
+    if (isOpen('rolodex')) closeCard('rolodex');
+    openComputer();
+    announce(`Showing the applications ${c ? c.name : 'they'} ${c ? 'is' : 'are'} part of.`);
+}
+
+function openContactForm(id = null, { linkTo = null } = {}) {
+    ui.editingContactId = id;
+    ui.contactLinkApp = linkTo;
+    const contact = id ? findContact(state.doc, id) : null;
+    const app = linkTo ? findApplication(state.doc, linkTo) : null;
+    fillContactForm(contact, {
+        about: app ? `They will be linked to ${applicationName(app)}.` : '',
+        company: app ? app.company : ''
+    });
+    openCard('contact-form', { focus: el('cf-name') });
+}
+
+function submitContactForm(event) {
+    if (event && event.preventDefault) event.preventDefault();
+    const fields = readContactForm();
+    const problem = validateContact(fields);
+    if (problem) {
+        showError('cf-error', problem);
+        return null;
+    }
+    const t = now();
+    const linkTo = ui.contactLinkApp;
+    const app = linkTo ? findApplication(state.doc, linkTo) : null;
+    const result = ui.editingContactId
+        ? change((doc) => updateContact(doc, ui.editingContactId, fields, CONFIG, t), `Saved ${fields.name}`)
+        : change((doc) => {
+            const added = addContact(doc, fields, CONFIG, t);
+            if (added.error || !app) return added;
+            const linked = linkContact(added.doc, app.id, added.record.id, true, CONFIG, t);
+            return { doc: linked.doc, record: added.record, error: linked.error };
+        }, `Added ${fields.name}`, app ? `Added ${fields.name} to the Rolodex, linked to ${applicationName(app)}.` : `Added ${fields.name} to the Rolodex.`);
+    if (result.error) {
+        showError('cf-error', result.error);
+        return result;
+    }
+    closeCard('contact-form');
+    spinRolodexTo(letterOf(fields.name));
+    track(ui.editingContactId ? 'edit-contact' : 'add-contact');
+    return result;
+}
+
+// ---- Places --------------------------------------------------------------------
+
+/** Every place in the office, in the order the list shows them, with the
+ *  key that goes there from anywhere in the room. */
+export const PLACES = [
+    { place: 'desk', label: 'Desk', key: '1' },
+    { place: 'computer', label: 'Computer', key: '2' },
+    { place: 'calendar', label: 'Calendar', key: '3' },
+    { place: 'cabinet', label: 'Filing cabinet', key: '4' },
+    { place: 'board', label: 'Corkboard', key: '5' },
+    { place: 'rolodex', label: 'Rolodex', key: '6' },
+    { place: 'whiteboard', label: 'Whiteboard', key: '7' },
+    { place: 'departures', label: 'Departures board', key: '8' },
+    { place: 'printer', label: 'Printer', key: 'P' }
+];
+
+let placeButtons = [];
+
+/** Build the Places list once, from PLACES. */
+function buildPlaces(signal) {
+    const menu = el('places-menu');
+    if (!menu) return;
+    clear(menu);
+    menu.hidden = true;
+    placeButtons = PLACES.map(({ place, label, key }) => {
+        const item = h('button', { type: 'button', className: 'places-item', dataset: { place } }, [label, h('kbd', { text: key })]);
+        item.addEventListener('click', () => goToPlace(place), { signal });
+        menu.appendChild(item);
+        return item;
+    });
+}
+
+function placeItems() {
+    return placeButtons;
+}
+
+/** Open or close the Places list above its button. Opening moves focus to
+ *  its first place, closing hands it back to the button. */
+function togglePlaces(open = null, { restoreFocus = true } = {}) {
+    const menu = el('places-menu');
+    const toggle = el('bar-places');
+    if (!menu || !toggle) return false;
+    const show = open == null ? menu.hidden : open;
+    menu.hidden = !show;
+    toggle.setAttribute('aria-expanded', show ? 'true' : 'false');
+    if (show) {
+        // Beside its button, just above the toolbar, and never off screen.
+        const r = toggle.getBoundingClientRect();
+        const width = 224;
+        menu.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, r.left))}px`;
+        menu.style.bottom = `${Math.max(8, window.innerHeight - r.top + 8)}px`;
+        const first = placeItems()[0];
+        if (first && first.focus) first.focus();
+    } else if (restoreFocus && toggle.focus) {
+        toggle.focus();
+    }
+    return show;
+}
+
+/** Up and Down move through the places, Escape puts the list away. */
+function placesKeys(event) {
+    const items = placeItems();
+    const at = items.indexOf(event.target);
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        if (event.stopPropagation) event.stopPropagation();
+        togglePlaces(false);
+    } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && at >= 0) {
+        event.preventDefault();
+        const next = items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
+        if (next && next.focus) next.focus();
+    }
+}
+
+/** Go to a place: close whatever is open and open that place. */
+function goToPlace(place) {
+    togglePlaces(false, { restoreFocus: false });
+    closeAll({ restoreFocus: false });
+    const open = {
+        desk: () => goTo('desk'),
+        computer: () => openComputer(),
+        calendar: () => openCalendar(),
+        cabinet: () => openCabinet(),
+        board: () => openBoard(),
+        rolodex: () => openRolodex(),
+        whiteboard: () => openWhiteboard(),
+        departures: () => openDepartures(),
+        printer: () => openPrinter()
+    }[place];
+    if (!open) return false;
+    open();
+    track('place', { place });
+    return true;
+}
+
+// ---- The whiteboard -----------------------------------------------------------
+
+/** Repaint the whiteboard when its numbers change. */
+function paintWhiteboard(t = now()) {
+    const model = boardModel(state.doc, CONFIG, t);
+    ui.whiteboardModel = model;
+    const key = JSON.stringify(model);
+    if (key === ui.whiteboardKey) return model;
+    ui.whiteboardKey = key;
+    const { canvas: c, texture } = painted.whiteboard || {};
+    if (c) {
+        drawWhiteboard(c.getContext('2d'), c.width, c.height, {
+            title: 'The search so far',
+            funnel: funnelBars(model),
+            chart: weekChart(model),
+            numbers: bigNumbers(model),
+            goal: model.goal,
+            layout: LAYOUT
+        });
+        texture.needsUpdate = true;
+    }
+    requestRender();
+    return model;
+}
+
+function drawWhiteboardSheet() {
+    const model = ui.whiteboardModel || paintWhiteboard();
+    renderWhiteboardSheet(model, summaryLines(model));
+    return model;
+}
+
+function openWhiteboard({ armed = false, goal = false } = {}) {
+    paintWhiteboard();
+    drawWhiteboardSheet();
+    openCard('whiteboard', { armed: armed && !goal, focus: goal ? el('wb-goal') : null, onClose: () => goTo('desk') });
+    goTo('whiteboard');
+    if (goal) announce(`Your weekly goal is ${state.doc.settings.weeklyGoal}. You can change it here.`);
+    track('open-whiteboard');
+}
+
+// ---- The departures board ------------------------------------------------------
+
+/** The week's events, and the company each is with. */
+function departureData(t) {
+    const events = upcomingEvents(state.doc, t, 7);
+    const names = new Map(state.doc.applications.map((a) => [a.id, a.company || a.role]));
+    return { events, names };
+}
+
+function flapClock(t) {
+    return t.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }).toUpperCase();
+}
+
+/**
+ * Set what the board should say. While the board is being looked at, its
+ * flaps turn to the new rows; otherwise they are simply set, ready for the
+ * next visit.
+ */
+function setDepartures(t = now()) {
+    const { events, names } = departureData(t);
+    const target = departureRows(events, names, t);
+    const clock = flapClock(t);
+    const same = ui.flaps.target && ui.flaps.target.join('|') === target.join('|');
+    if (same && clock === ui.flaps.clock) return false;
+    ui.flaps.clock = clock;
+    if (!same) {
+        ui.flaps.target = target;
+        if (!isOpen('departures') || state.reducedMotion || !ui.flaps.rows) ui.flaps.rows = target;
+    }
+    paintFlaps();
+    return !same;
+}
+
+function paintFlaps() {
+    const { canvas: c, texture } = painted.departures || {};
+    if (!c || !ui.flaps.rows) return;
+    drawFlapBoard(c.getContext('2d'), c.width, c.height, ui.flaps.rows, {
+        clock: ui.flaps.clock,
+        columns: [FLAP_COLUMNS.when, FLAP_COLUMNS.what, FLAP_COLUMNS.with]
+    });
+    texture.needsUpdate = true;
+    requestRender();
+}
+
+function drawDeparturesSheet(t = now()) {
+    const { events, names } = departureData(t);
+    return renderDepartures(events.slice(0, 5).map((ev) => readableRow(ev, names, t)));
+}
+
+/** Go to the board. The flaps clatter from blank to the week, unless the
+ *  visitor asked for less motion. */
+function openDepartures({ armed = false } = {}) {
+    const t = now();
+    setDepartures(t);
+    if (!state.reducedMotion) {
+        ui.flaps.rows = blankRows();
+        ui.flaps.due = CONFIG.view.glideSeconds;
+    }
+    paintFlaps();
+    drawDeparturesSheet(t);
+    openCard('departures', { armed, onClose: () => goTo('desk') });
+    goTo('departures');
+    track('open-departures');
+}
+
+// ---- The printer --------------------------------------------------------------
+
+function fillPrinterChoices(t = now(), chosen = null) {
+    const select = el('printer-app');
+    if (!select) return [];
+    const keep = chosen || select.value;
+    clear(select);
+    const choices = printChoices(state.doc, t);
+    for (const { app, next } of choices) {
+        const label = next ? `${applicationName(app)}, next up ${displayDateTime(next)}` : applicationName(app);
+        select.appendChild(h('option', { value: app.id, text: label }));
+    }
+    select.value = choices.some((c) => c.app.id === keep) ? keep : choices[0] ? choices[0].app.id : '';
+    const print = el('printer-print');
+    if (print) print.disabled = choices.length === 0;
+    return choices;
+}
+
+function openPrinter({ armed = false, appId = null } = {}) {
+    fillPrinterChoices(now(), appId || ui.folderId || ui.lastFolderId);
+    openCard('printer', { armed });
+    track('open-printer');
+}
+
+/** Lay out the prep sheet and open the browser's print dialog. */
+function printPrep(appId) {
+    const sheet = prepSheet(state.doc, appId, CONFIG, now());
+    if (!sheet) {
+        announce('That application is no longer here.');
+        return null;
+    }
+    renderPrintSheet(sheet, QUESTION_LINES);
+    announce(`The prep sheet for ${sheet.title} is ready to print.`);
+    if (typeof window.print === 'function') window.print();
+    track('print-prep');
+    return sheet;
+}
+
 // ---- The calendar and today's list ------------------------------------------
 
 const listHandlers = {
@@ -1042,7 +1477,12 @@ function drawFolder(t = now()) {
             addTask: () => openTaskForm(app.id, null),
             editTask: (id) => openTaskForm(app.id, id),
             toggleTask: (id, done) => toggleTaskDone(id, done),
-            removeTask: (id) => throwAway('tasks', id)
+            removeTask: (id) => throwAway('tasks', id),
+            openContact: (id) => openContact(id),
+            unlinkContact: (id) => setLink(app.id, id, false),
+            linkContact: (id) => setLink(app.id, id, true),
+            addPerson: () => openContactForm(null, { linkTo: app.id }),
+            print: () => printPrep(app.id)
         }
     });
 }
@@ -1133,10 +1573,12 @@ function openEventForm(appId, eventId) {
     ui.eventAppId = appId;
     ui.editingEventId = eventId;
     const ev = eventId ? findEvent(state.doc, eventId) : null;
+    const app = findApplication(state.doc, appId);
     fillEventForm(ev, {
         defaultAt: formatDateTime(ceilToMinutes(now())),
-        applicationName: applicationName(findApplication(state.doc, appId))
+        applicationName: applicationName(app)
     });
+    fillEventWith(app ? peopleOf(state.doc, app) : [], ev ? ev.withContactIds : []);
     openCard('event-form', { focus: el('ef-type') });
 }
 
@@ -1327,8 +1769,8 @@ function saveSettings(event) {
     return result;
 }
 
-function saveGoal() {
-    const input = el('grid-goal');
+function saveGoal(inputId = 'grid-goal') {
+    const input = el(inputId);
     const goal = Number(input && input.value);
     if (!(goal >= 1)) {
         if (input) input.value = String(state.doc.settings.weeklyGoal);
@@ -1404,10 +1846,21 @@ function showWelcome() {
 // ---- The room ---------------------------------------------------------------
 
 /** What a pick key does. Each has a toolbar button too. */
-function actOn(key, { armed = true, instanceId = -1 } = {}) {
+function actOn(key, { armed = true, instanceId = -1, uv = null } = {}) {
     switch (key) {
+    case 'whiteboard':
+        if (ui.whiteboardModel && onGoalLine(uv, ui.whiteboardModel)) {
+            openWhiteboard({ armed, goal: true });
+            track('tap-goal-line');
+            return true;
+        }
+        openWhiteboard({ armed });
+        break;
+    case 'departures': openDepartures({ armed }); break;
+    case 'printer': openPrinter({ armed }); break;
     case 'cabinet': openCabinet({ armed }); break;
     case 'board': openBoard({ armed }); break;
+    case 'rolodex': openRolodex({ armed }); break;
     case 'cabinet-folder': {
         const id = filing ? filing.idAt(instanceId) : null;
         if (!id) return false;
@@ -1451,7 +1904,7 @@ function pickAt(clientX, clientY) {
         for (let o = hit.object; o; o = o.parent) if (o.visible === false) { shown = false; break; }
         if (!shown) continue;
         const key = pickOf(hit.object);
-        return key ? { key, instanceId: hit.instanceId, faceIndex: hit.faceIndex } : null;
+        return key ? { key, instanceId: hit.instanceId, faceIndex: hit.faceIndex, uv: hit.uv } : null;
     }
     return null;
 }
@@ -1465,7 +1918,7 @@ function handleSceneTap(clientX, clientY) {
     const hit = pickAt(clientX, clientY);
     if (!hit) return null;
     if (top === 'cabinet' && hit.key !== 'cabinet-folder') return null;
-    actOn(hit.key, { instanceId: hit.instanceId });
+    actOn(hit.key, { instanceId: hit.instanceId, uv: hit.uv });
     return hit.key;
 }
 
@@ -1496,9 +1949,31 @@ function setupEventListeners() {
     };
     wire('bar-new', 'click', () => openApplicationForm(null));
     wire('bar-computer', 'click', () => openComputer());
-    wire('bar-calendar', 'click', () => openCalendar());
-    wire('bar-cabinet', 'click', () => openCabinet());
-    wire('bar-board', 'click', () => openBoard());
+    wire('bar-places', 'click', () => togglePlaces());
+    wire('places-menu', 'keydown', placesKeys);
+    buildPlaces(signal);
+    // A press anywhere outside the menu and its button puts it away.
+    document.addEventListener('pointerdown', (event) => {
+        const menu = el('places-menu');
+        const toggle = el('bar-places');
+        if (!menu || menu.hidden) return;
+        const inside = (node) => node && typeof node.contains === 'function' && node.contains(event.target);
+        if (!inside(menu) && !inside(toggle)) togglePlaces(false, { restoreFocus: false });
+    }, { signal, capture: true });
+    wire('wb-goal', 'change', () => saveGoal('wb-goal'));
+    wire('dep-export', 'click', exportUpcoming);
+    wire('printer-print', 'click', () => printPrep(el('printer-app').value));
+    wire('outtray-print', 'click', () => { closeCard('outtray'); openPrinter(); });
+    wire('rolodex-search', 'input', () => {
+        drawRolodexSheet({ spin: true });
+        if (!ui.searchedPeople) {
+            ui.searchedPeople = true;
+            track('search-people');
+        }
+    });
+    wire('rolodex-new', 'click', () => openContactForm(null));
+    wire('cf-form', 'submit', submitContactForm);
+    wire('cf-cancel', 'click', () => closeCard('contact-form'));
     wire('board-form', 'submit', moveFromSheet);
     wire('board-card', 'change', () => drawBoardSheet());
     wire('cabinet-search', 'input', () => {
@@ -1552,7 +2027,7 @@ function setupEventListeners() {
             track('search');
         }
     });
-    wire('grid-goal', 'change', saveGoal);
+    wire('grid-goal', 'change', () => saveGoal('grid-goal'));
     wire('af-form', 'submit', submitApplicationForm);
     wire('af-cancel', 'click', () => closeCard('application-form'));
     wire('af-posting', 'input', updateFound);
@@ -1614,6 +2089,10 @@ function setupEventListeners() {
         else if (key === '3') { event.preventDefault(); openCalendar(); }
         else if (key === '4') { event.preventDefault(); openCabinet(); }
         else if (key === '5') { event.preventDefault(); openBoard(); }
+        else if (key === '6') { event.preventDefault(); openRolodex(); }
+        else if (key === '7') { event.preventDefault(); openWhiteboard(); }
+        else if (key === '8') { event.preventDefault(); openDepartures(); }
+        else if (key === 'p') { event.preventDefault(); openPrinter(); }
         else if (key === 't') { event.preventDefault(); openToday(); }
         else if (key === '1') { event.preventDefault(); goTo('desk'); }
     }, { signal });
@@ -1681,6 +2160,20 @@ function animate() {
     }
     if (ui.boardMoving && pinboard) {
         ui.boardMoving = pinboard.update(delta);
+        state.dirty = true;
+    }
+    if (ui.ring.t < 1) {
+        stepRing(delta);
+        state.dirty = true;
+    }
+    if (ui.flaps.target && ui.flaps.rows !== ui.flaps.target) {
+        ui.flaps.due -= delta;
+        while (ui.flaps.due <= 0 && ui.flaps.rows !== ui.flaps.target) {
+            const next = stepFlaps(ui.flaps.rows, ui.flaps.target);
+            ui.flaps.rows = next.done ? ui.flaps.target : next.rows;
+            ui.flaps.due += CONFIG.view.flapSeconds;
+        }
+        paintFlaps();
         state.dirty = true;
     }
 
@@ -1775,6 +2268,22 @@ export const __test__ = {
     fileCabinet,
     openBoard,
     pinBoard,
+    openRolodex,
+    drawRolodexSheet,
+    togglePlaces,
+    goToPlace,
+    openWhiteboard,
+    paintWhiteboard,
+    openDepartures,
+    setDepartures,
+    openPrinter,
+    printPrep,
+    spinRolodexTo,
+    openContact,
+    openContactForm,
+    submitContactForm,
+    setLink,
+    showContactApplications,
     drawBoardSheet,
     dropCard,
     boardPointerDown,

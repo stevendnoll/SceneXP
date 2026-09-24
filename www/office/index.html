@@ -146,7 +146,7 @@
          through #office-live. A tap on the room is a shortcut, never the only
          way to do anything. -->
     <canvas id="game-canvas" role="img"
-        aria-label="A corner office with windows onto the city. A wooden desk holds a computer with sticky notes on it, a lamp, and two letter trays, with a wastebasket beside it, a calendar on the wall, a low filing cabinet full of folders, and a corkboard of index cards."></canvas>
+        aria-label="A corner office with windows onto the city. A wooden desk holds a computer with sticky notes on it, a lamp, and two letter trays, with a wastebasket beside it, a calendar on the wall, a low filing cabinet full of folders, a corkboard of index cards, a Rolodex, a whiteboard of numbers, a printer, and a departures board over the door."></canvas>
 
     <!-- Every change, said aloud. Polite, so it waits its turn. -->
     <p id="office-live" class="sr-only" role="status" aria-live="polite"></p>
@@ -168,14 +168,18 @@
     <nav id="office-bar" class="ui-float office-bar" aria-label="The office">
         <button id="bar-new" class="office-btn office-btn-primary" type="button" title="New application (N)">New application</button>
         <button id="bar-computer" class="office-btn" type="button" title="Open the computer (C)">Computer</button>
-        <button id="bar-calendar" class="office-btn" type="button" title="Open the calendar (3)">Calendar</button>
-        <button id="bar-cabinet" class="office-btn" type="button" title="Open the filing cabinet (4)">Cabinet</button>
-        <button id="bar-board" class="office-btn" type="button" title="Open the corkboard (5)">Corkboard</button>
+        <button id="bar-places" class="office-btn" type="button" aria-expanded="false" aria-controls="places-menu">Places</button>
         <button id="bar-outtray" class="office-btn" type="button" title="Backups and exports">Out-tray</button>
         <button id="bar-wastebasket" class="office-btn" type="button">Wastebasket</button>
         <button id="bar-settings" class="office-btn" type="button">Settings</button>
         <button id="bar-undo" class="office-btn" type="button" title="Undo (Ctrl or Command and Z)" disabled>Undo</button>
     </nav>
+
+    <!-- PLACES: every station in the office, with its key. A plain list of
+         buttons (a disclosure, not an application menu) that main.js builds
+         from its PLACES table and opens above the toolbar, beside its
+         button. -->
+    <div id="places-menu" class="places-menu" role="group" aria-label="Places in the office" hidden></div>
 
     <!-- THE UNDO TOAST. Not a live region itself: its words also go through
          #office-live, so they are heard once. -->
@@ -252,6 +256,7 @@
                         <tr>
                             <th id="grid-h-company" scope="col" aria-sort="none"><button id="grid-sort-company" class="grid-sort" type="button">Company</button></th>
                             <th id="grid-h-role" scope="col">Role</th>
+                            <th id="grid-h-people" scope="col">People</th>
                             <th id="grid-h-status" scope="col" aria-sort="none"><button id="grid-sort-status" class="grid-sort" type="button">Status</button></th>
                             <th id="grid-h-applied" scope="col" aria-sort="none"><button id="grid-sort-applied" class="grid-sort" type="button">Applied</button></th>
                             <th id="grid-h-next" scope="col">Next up</th>
@@ -356,6 +361,79 @@
         </div>
     </div>
 
+    <!-- THE ROLODEX. A sheet docked at the foot of the screen, so the wheel
+         stays in view and turns to the letter of whoever is being looked
+         for. The people themselves are this list, as text. -->
+    <div id="rolodex" class="card-overlay sheet-overlay" hidden>
+        <div id="rolodex-panel" class="card-panel sheet-panel" role="dialog" aria-modal="true"
+            aria-labelledby="rolodex-title" aria-describedby="rolodex-count" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="rolodex-title" class="card-title">The Rolodex</h2>
+                <button id="rolodex-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
+            </div>
+            <div class="grid-tools">
+                <label for="rolodex-search" class="sr-only">Search the people</label>
+                <input id="rolodex-search" class="office-input grid-search" type="search"
+                    placeholder="Type a name, a company or a title" autocomplete="off" spellcheck="false">
+                <button id="rolodex-new" class="office-btn office-btn-primary office-btn-small" type="button">New contact</button>
+            </div>
+            <p id="rolodex-count" class="card-meta" role="status" aria-live="polite"></p>
+            <ul id="rolodex-list" class="rolodex-list"></ul>
+        </div>
+    </div>
+
+    <!-- THE WHITEBOARD. A sheet docked under the board: its numbers in
+         sentences and tables (a canvas cannot be read aloud), and the weekly
+         goal, which a tap on the board's goal line comes here to change. -->
+    <div id="whiteboard" class="card-overlay sheet-overlay" hidden>
+        <div id="whiteboard-panel" class="card-panel sheet-panel" role="dialog" aria-modal="true"
+            aria-labelledby="whiteboard-title" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="whiteboard-title" class="card-title">The whiteboard</h2>
+                <button id="whiteboard-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
+            </div>
+            <ul id="wb-summary" class="wb-summary"></ul>
+            <p class="grid-week">
+                <label for="wb-goal">Weekly goal</label>
+                <input id="wb-goal" class="office-input grid-goal" type="number" min="1" max="100" inputmode="numeric">
+            </p>
+            <details class="wb-tables">
+                <summary>The numbers as tables</summary>
+                <table class="wb-table">
+                    <caption>How far they got</caption>
+                    <thead><tr><th scope="col">Stage</th><th scope="col">Applications</th></tr></thead>
+                    <tbody id="wb-funnel"></tbody>
+                </table>
+                <table class="wb-table">
+                    <caption>Sent each week</caption>
+                    <thead><tr><th scope="col">Week of</th><th scope="col">Sent</th></tr></thead>
+                    <tbody id="wb-weeks"></tbody>
+                </table>
+            </details>
+        </div>
+    </div>
+
+    <!-- THE DEPARTURES BOARD, over the door: the week's interviews and
+         calls, as text. -->
+    <div id="departures" class="card-overlay sheet-overlay" hidden>
+        <div id="departures-panel" class="card-panel sheet-panel" role="dialog" aria-modal="true"
+            aria-labelledby="departures-title" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="departures-title" class="card-title">Departures</h2>
+                <button id="departures-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
+            </div>
+            <table id="dep-table" class="wb-table dep-table">
+                <caption class="sr-only">This week's interviews and calls</caption>
+                <thead><tr><th scope="col">When</th><th scope="col">What</th><th scope="col">With</th></tr></thead>
+                <tbody id="dep-body"></tbody>
+            </table>
+            <p id="dep-empty" class="card-meta" hidden>Nothing is scheduled this week. The board will fill as interviews are booked.</p>
+            <div class="card-actions">
+                <button id="dep-export" class="office-btn" type="button">Add everything coming up to my calendar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- TODAY: what the sticky notes on the monitor say, as a list. -->
     <div id="today" class="card-overlay" hidden>
         <div id="today-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
@@ -386,6 +464,19 @@
         </div>
     </div>
 
+    <!-- A PERSON, from the Rolodex. Drawn by panels.js renderContact. -->
+    <div id="contact" class="card-overlay" hidden>
+        <div id="contact-panel" class="card-panel folder-panel" role="dialog" aria-modal="true"
+            aria-labelledby="contact-title" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="contact-title" class="card-title"></h2>
+                <button id="contact-close" class="office-btn office-btn-small" type="button">Close</button>
+            </div>
+            <div id="contact-body" class="folder-body"></div>
+            <div id="contact-actions" class="card-actions"></div>
+        </div>
+    </div>
+
     <!-- THE WASTEBASKET. -->
     <div id="wastebasket" class="card-overlay" hidden>
         <div id="wastebasket-panel" class="card-panel" role="dialog" aria-modal="true"
@@ -412,12 +503,32 @@
                 <button id="outtray-backup" class="office-btn office-btn-primary" type="button">Save a backup</button>
                 <button id="outtray-csv" class="office-btn" type="button">Export applications for a spreadsheet</button>
                 <button id="outtray-ics" class="office-btn" type="button">Add everything coming up to my calendar</button>
+                <button id="outtray-print" class="office-btn" type="button">Print a prep sheet</button>
                 <label for="outtray-restore" class="office-btn office-file">Restore from a backup</label>
                 <input id="outtray-restore" class="sr-only" type="file" accept="application/json,.json">
             </div>
             <p id="outtray-note" class="card-meta" role="status"></p>
             <div class="card-actions">
                 <button id="outtray-close" class="office-btn" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE PRINTER: a one-page prep sheet for an application. -->
+    <div id="printer" class="card-overlay" hidden>
+        <div id="printer-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="printer-title" aria-describedby="printer-intro" tabindex="-1">
+            <h2 id="printer-title" class="card-title">The printer</h2>
+            <p id="printer-intro" class="card-detail">A one-page prep sheet for an interview: the company, the people you
+                will meet, what has happened so far, your notes, and room for your questions. Your browser's print
+                dialog can also save it as a PDF.</p>
+            <div class="form-row">
+                <label for="printer-app">Which application</label>
+                <select id="printer-app" class="office-select"></select>
+            </div>
+            <div class="card-actions">
+                <button id="printer-close" class="office-btn" type="button">Close</button>
+                <button id="printer-print" class="office-btn office-btn-primary" type="button">Print</button>
             </div>
         </div>
     </div>
@@ -568,6 +679,10 @@
                         <input id="ef-round" class="office-input" type="number" min="1" inputmode="numeric">
                     </div>
                 </div>
+                <fieldset id="ef-with-row" class="form-row form-with" hidden>
+                    <legend>Who was there</legend>
+                    <div id="ef-with" class="form-with-list"></div>
+                </fieldset>
                 <div class="form-row">
                     <label for="ef-outcome">How it went</label>
                     <select id="ef-outcome" class="office-select"></select>
@@ -609,6 +724,55 @@
         </div>
     </div>
 
+    <!-- THE CONTACT FORM. Opened from the Rolodex, a folder's People, or a
+         contact's own card. -->
+    <div id="contact-form" class="card-overlay" hidden>
+        <div id="contact-form-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="contact-form-title" aria-describedby="contact-form-about" tabindex="-1">
+            <h2 id="contact-form-title" class="card-title">New contact</h2>
+            <p id="contact-form-about" class="card-meta"></p>
+            <form id="cf-form" class="office-form" novalidate>
+                <div class="form-row">
+                    <label for="cf-name">Name</label>
+                    <input id="cf-name" class="office-input" type="text" autocomplete="off">
+                </div>
+                <div class="form-row form-pair">
+                    <div>
+                        <label for="cf-title">Title</label>
+                        <input id="cf-title" class="office-input" type="text" placeholder="Recruiter" autocomplete="off">
+                    </div>
+                    <div>
+                        <label for="cf-company">Company</label>
+                        <input id="cf-company" class="office-input" type="text" autocomplete="off">
+                    </div>
+                </div>
+                <div class="form-row form-pair">
+                    <div>
+                        <label for="cf-email">Email</label>
+                        <input id="cf-email" class="office-input" type="email" inputmode="email" autocomplete="off">
+                    </div>
+                    <div>
+                        <label for="cf-phone">Phone</label>
+                        <input id="cf-phone" class="office-input" type="tel" inputmode="tel" autocomplete="off">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label for="cf-linkedin">LinkedIn</label>
+                    <input id="cf-linkedin" class="office-input" type="url" inputmode="url" autocomplete="off">
+                </div>
+                <div class="form-row">
+                    <label for="cf-notes">Notes</label>
+                    <textarea id="cf-notes" class="office-input" rows="3" placeholder="How you met, what you talked about"></textarea>
+                </div>
+                <p id="cf-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="cf-cancel" class="office-btn" type="button">Cancel</button>
+                    <button id="cf-save" class="office-btn office-btn-primary" type="submit">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- THE CONFIRMATION CARD, last, so it stacks over everything. -->
     <div id="confirm" class="card-overlay" hidden>
         <div id="confirm-panel" class="card-panel" role="dialog" aria-modal="true"
@@ -618,6 +782,10 @@
             <div id="confirm-actions" class="card-actions"></div>
         </div>
     </div>
+
+    <!-- THE PREP SHEET, filled by panels.js renderPrintSheet and shown only
+         on paper: a print stylesheet hides everything else. -->
+    <section id="print-sheet" class="print-sheet" aria-hidden="true"></section>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

@@ -287,19 +287,26 @@ textarea.office-input {
     width: max-content;
     max-width: calc(100vw - 32px);
     padding: 0.45rem;
-    border-radius: 999px;
+    /* A pill on one row, and still a tidy shape when it wraps to two. */
+    border-radius: 24px;
     background: rgba(24, 18, 13, 0.78);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
+/* A narrow screen WRAPS the toolbar onto more rows, centered, so every
+   button is always on screen. (A single row that scrolled sideways was
+   tried in M5 and taken out: it hid the buttons past the edge, and nothing
+   said they were there.) */
 @media (max-width: 620px) {
     .office-bar {
+        gap: 0.35rem;
+        padding: 0.4rem;
         border-radius: 18px;
     }
 
     .office-bar .office-btn {
-        padding: 0.5rem 0.8rem;
-        font-size: 0.9rem;
+        padding: 0.45rem 0.7rem;
+        font-size: 0.88rem;
     }
 }
 
@@ -321,6 +328,15 @@ textarea.office-input {
     color: #2a1c0a;
     font-weight: 600;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* On a phone the toolbar may wrap to several rows, so the toast moves to
+   the top of the screen, under the week, where it can never cover it. */
+@media (max-width: 620px) {
+    .office-toast {
+        top: calc(max(16px, env(safe-area-inset-top)) + 44px);
+        bottom: auto;
+    }
 }
 
 .office-toast[hidden] {
@@ -1266,5 +1282,279 @@ button.hud-chip:focus-visible {
 
     .board-move .office-btn {
         grid-column: 1 / -1;
+    }
+}
+
+/* ---- The Rolodex and its people ------------------------------------------- */
+
+.rolodex-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    list-style: none;
+    max-height: 26vh;
+    overflow-y: auto;
+}
+
+.rolodex-person {
+    width: 100%;
+    text-align: left;
+}
+
+.rolodex-person .person-line {
+    display: block;
+    color: #bcab94;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.form-with {
+    border: 0;
+    padding: 0;
+}
+
+.form-with legend {
+    margin-bottom: 0.3rem;
+    color: var(--ui-subtitle);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.form-with-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+}
+
+.form-with-list label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.form-with[hidden] {
+    display: none;
+}
+
+.folder-link-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+
+.folder-link-row .office-select {
+    width: auto;
+    flex: 1 1 12rem;
+}
+
+.grid-chip-person.is-on::before {
+    content: "✕";
+}
+
+/* ---- Places --------------------------------------------------------------- */
+
+/* Opens above the toolbar, beside its button (main.js places it). */
+.places-menu {
+    position: fixed;
+    z-index: 140;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 13rem;
+    padding: 0.4rem;
+    border-radius: 14px;
+    background: rgba(24, 18, 13, 0.96);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
+.places-menu[hidden] {
+    display: none;
+}
+
+.places-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: #f1e8dc;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.places-item:hover,
+.places-item:focus-visible {
+    border-color: var(--ui-accent);
+    background: rgba(64, 49, 36, 0.96);
+}
+
+.places-item:focus-visible {
+    outline: 2px solid var(--ui-accent-strong);
+    outline-offset: 1px;
+}
+
+.places-item kbd {
+    min-width: 1.5rem;
+    padding: 0.05rem 0.35rem;
+    border: 1px solid rgba(255, 244, 230, 0.25);
+    border-radius: 6px;
+    color: #bcab94;
+    font: 600 0.78rem ui-monospace, Menlo, Consolas, monospace;
+    text-align: center;
+}
+
+.office-bar .office-btn[aria-expanded="true"] {
+    border-color: var(--ui-accent);
+}
+
+/* ---- The whiteboard and departures sheets ---------------------------------- */
+
+.wb-summary {
+    margin: 0.5rem 0 0;
+    padding-left: 1.1rem;
+    color: var(--ui-subtitle);
+    line-height: 1.5;
+}
+
+.wb-tables {
+    margin-top: 0.6rem;
+}
+
+.wb-tables summary {
+    cursor: pointer;
+    color: var(--ui-accent-strong);
+    font-weight: 600;
+}
+
+.wb-table {
+    width: 100%;
+    margin-top: 0.6rem;
+    border-collapse: collapse;
+    color: #f1e8dc;
+    font-size: 0.9rem;
+}
+
+.wb-table caption {
+    margin-bottom: 0.3rem;
+    color: var(--ui-subtitle);
+    font-weight: 600;
+    text-align: left;
+}
+
+.wb-table th,
+.wb-table td {
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid rgba(255, 244, 230, 0.1);
+    text-align: left;
+}
+
+.wb-table td:last-child {
+    font-variant-numeric: tabular-nums;
+}
+
+.dep-table[hidden] {
+    display: none;
+}
+
+/* ---- The prep sheet, on paper only ----------------------------------------- */
+
+.print-sheet {
+    display: none;
+}
+
+@media print {
+    @page {
+        margin: 16mm;
+    }
+
+    html,
+    body {
+        width: auto;
+        height: auto;
+        overflow: visible;
+        background: #fff;
+        color: #111;
+    }
+
+    body > *:not(.print-sheet) {
+        display: none !important;
+    }
+
+    .print-sheet {
+        display: block;
+        font: 10.5pt/1.45 Georgia, "Times New Roman", serif;
+    }
+
+    .print-head h1 {
+        margin: 0;
+        font-size: 20pt;
+    }
+
+    .print-role {
+        margin: 0.2em 0 0;
+        font-size: 13pt;
+    }
+
+    .print-facts {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.2em 1.2em;
+        margin: 1em 0;
+    }
+
+    .print-facts dt {
+        font-weight: 700;
+    }
+
+    .print-facts dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .print-section {
+        break-inside: avoid;
+        margin-top: 1em;
+    }
+
+    .print-section h2 {
+        margin: 0 0 0.3em;
+        padding-bottom: 0.15em;
+        border-bottom: 1px solid #999;
+        font-size: 11.5pt;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .print-section ul {
+        margin: 0;
+        padding-left: 1.2em;
+    }
+
+    .print-pre {
+        white-space: pre-wrap;
+    }
+
+    .print-small {
+        font-size: 9pt;
+    }
+
+    .print-line {
+        height: 2.1em;
+        border-bottom: 1px solid #bbb;
+    }
+
+    .print-foot {
+        margin-top: 1.5em;
+        color: #666;
+        font-size: 8.5pt;
     }
 }

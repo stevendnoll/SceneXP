@@ -18,11 +18,13 @@
 import { h, button, clear } from './cards.min.js';
 import { STATUS_LABELS, WORK_MODE_LABELS, EVENT_LABELS, SORT_LABELS, matchNote } from './labels.min.js';
 import { displayDate, parseLocal, daysBetween } from './dates.min.js';
+import { peopleText } from './rolodex.min.js';
 
 /** The columns: header text, the sort key a header button sets (or none). */
 export const COLUMNS = [
     { key: 'company', label: 'Company', sort: 'company' },
     { key: 'role', label: 'Role', sort: null },
+    { key: 'people', label: 'People', sort: null },
     { key: 'status', label: 'Status', sort: 'status' },
     { key: 'applied', label: 'Applied', sort: 'applied' },
     { key: 'next', label: 'Next up', sort: null },
@@ -83,7 +85,8 @@ export function countText(shown, total) {
 /** Whether a query narrows anything, so the Clear button knows to show. */
 export function isFiltered(q) {
     return Boolean(q.text.trim()) || q.statuses.length > 0 || q.workModes.length > 0
-        || q.upcoming || q.origin !== 'all' || Boolean(q.appliedFrom) || Boolean(q.appliedTo);
+        || q.upcoming || q.origin !== 'all' || Boolean(q.appliedFrom) || Boolean(q.appliedTo)
+        || Boolean(q.contactId);
 }
 
 // ---- Drawing ----------------------------------------------------------------
@@ -102,6 +105,11 @@ export function renderChips(boxId, q, facets, config, on) {
     const box = byId(boxId);
     if (!box) return;
     clear(box);
+    // A person chosen in the Rolodex shows as a chip of its own, pressed, and
+    // pressing it lets them go.
+    if (q.contactId && on.clearContact) {
+        box.appendChild(chip(`With ${facets.contactName || 'one person'}`, facets.contactCount ?? '', true, () => on.clearContact(), ' grid-chip-person'));
+    }
     for (const s of [...config.statuses, 'ghosted']) {
         const n = facets.byStatus[s];
         const pressed = q.statuses.includes(s);
@@ -166,6 +174,7 @@ function drawRows(rows, now, on) {
         const tr = h('tr', { className: `grid-row status-${row.status}` }, [
             cell('company', [open, app.sample ? h('span', { className: 'grid-sample', text: 'Sample' }) : null]),
             cell('role', [app.company ? app.role : '', note ? h('span', { className: 'grid-match', text: note }) : null]),
+            cell('people', peopleText(row.people || [])),
             cell('status', h('span', { className: `status-badge status-${row.status}`, text: STATUS_LABELS[row.status] })),
             cell('applied', app.appliedOn ? displayDate(app.appliedOn) : ''),
             cell('next', nextText(row.next)),

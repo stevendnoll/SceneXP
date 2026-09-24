@@ -1,7 +1,7 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * panels.js - The folder on the desk, the wall calendar, today's list, the
- * wastebasket, and the settings card.
+ * Rolodex and its people, the wastebasket, and the settings card.
  *
  * Each draws one card from the document and a set of handlers, and never
  * changes anything itself: every button calls back into main.js, which runs
@@ -22,6 +22,7 @@ import { displayDate, displayDateTime, daysBetween, formatDate } from './dates.m
 import { eventsFor, tasksFor, contactsFor, wastebasket, hasSamples } from './store.min.js';
 import { lastActivityOn, isUpcoming } from './derive.min.js';
 import { dayLabel, longDay } from './calendar.min.js';
+import { contactLine, linksOf } from './rolodex.min.js';
 
 function byId(id) {
     return document.getElementById(id);
@@ -41,7 +42,8 @@ function fact(label, value) {
 /**
  * Draw an application's folder. `status` is the one to show (`ghosted`
  * included). `on` holds: setStatus, edit, remove, logEvent, editEvent,
- * removeEvent, exportEvent, addTask, editTask, toggleTask, removeTask.
+ * removeEvent, exportEvent, addTask, editTask, toggleTask, removeTask,
+ * openContact, unlinkContact, linkContact, addPerson.
  */
 export function renderFolder({ doc, app, status, config, now, on }) {
     const title = byId('folder-title');
@@ -72,7 +74,6 @@ export function renderFolder({ doc, app, status, config, now, on }) {
     const link = app.url
         ? h('a', { href: app.url, className: 'folder-link', attrs: { target: '_blank', rel: 'noopener noreferrer' } }, 'Open the posting')
         : null;
-    const people = contactsFor(doc, app).map((c) => (c.title ? `${c.name}, ${c.title}` : c.name)).join('. ');
     const facts = [
         fact('Applied', app.appliedOn ? displayDate(app.appliedOn) : ''),
         fact('Closed', app.closedOn ? displayDate(app.closedOn) : ''),
@@ -80,7 +81,6 @@ export function renderFolder({ doc, app, status, config, now, on }) {
         fact('Location', app.location),
         fact('Salary', salaryText(app)),
         fact('Found through', app.source),
-        fact('People', people),
         fact('Link', link)
     ].filter(Boolean);
     if (facts.length) body.appendChild(h('dl', { className: 'folder-facts' }, facts));
@@ -91,6 +91,43 @@ export function renderFolder({ doc, app, status, config, now, on }) {
             h('p', { text: app.posting })
         ]));
     }
+
+    // People: who is linked here, and a way to link somebody else.
+    const people = contactsFor(doc, app);
+    const peopleList = h('ul', { className: 'folder-list' });
+    for (const c of people) {
+        peopleList.appendChild(h('li', { className: 'folder-item' }, [
+            h('div', { className: 'folder-item-main' }, [
+                h('strong', { text: c.name }),
+                contactLine(c) ? h('span', { className: 'folder-item-when', text: contactLine(c) }) : null
+            ]),
+            h('div', { className: 'folder-item-actions' }, [
+                button('Open', 'office-btn office-btn-small', () => on.openContact(c.id), { 'aria-label': `Open ${c.name}` }),
+                button('Unlink', 'office-btn office-btn-small', () => on.unlinkContact(c.id),
+                    { 'aria-label': `Unlink ${c.name} from this application` })
+            ])
+        ]));
+    }
+    const others = doc.contacts.filter((c) => !c.deletedAt && !app.contactIds.includes(c.id))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    const linkRow = others.length ? (() => {
+        const pick = h('select', { id: 'folder-link-person', className: 'office-select' });
+        for (const c of others) pick.appendChild(h('option', { value: c.id, text: contactLine(c) ? `${c.name}, ${contactLine(c)}` : c.name }));
+        pick.value = others[0].id;
+        return h('div', { className: 'folder-link-row' }, [
+            h('label', { htmlFor: 'folder-link-person', className: 'sr-only', text: 'Someone already in the Rolodex' }),
+            pick,
+            button('Link', 'office-btn office-btn-small', () => on.linkContact(pick.value), { 'aria-label': 'Link the chosen person to this application' })
+        ]);
+    })() : null;
+    body.appendChild(h('section', { className: 'folder-section', attrs: { 'aria-labelledby': 'folder-people-title' } }, [
+        h('div', { className: 'folder-section-head' }, [
+            h('h3', { id: 'folder-people-title', text: 'People' }),
+            button('Add a person', 'office-btn office-btn-small', on.addPerson)
+        ]),
+        people.length ? peopleList : h('p', { className: 'folder-empty', text: 'Nobody linked yet. Recruiters, interviewers and referrals go here.' }),
+        linkRow
+    ]));
 
     // Events.
     const events = eventsFor(doc, app.id);
@@ -155,6 +192,7 @@ export function renderFolder({ doc, app, status, config, now, on }) {
     const actions = byId('folder-actions');
     if (actions) {
         clear(actions);
+        if (on.print) actions.appendChild(button('Print a prep sheet', 'office-btn', on.print));
         actions.appendChild(button('Edit details', 'office-btn', on.edit));
         actions.appendChild(button('Throw away', 'office-btn office-btn-danger', on.remove));
     }
@@ -347,4 +385,217 @@ export function renderToday({ doc, due, coming, now, on }) {
             : 'Nothing is due today. Enjoy the clear desk.';
     }
     return rows;
+}
+
+// ---- The Rolodex -------------------------------------------------------------
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** A mailto link for a real-looking address, or the words as they are. */
+function emailLink(email) {
+    if (!EMAIL.test(email)) return email;
+    return h('a', { href: `mailto:${email}`, className: 'folder-link' }, email);
+}
+
+/** A tel link when there are enough digits to dial, or the words. */
+function phoneLink(phone) {
+    const digits = phone.replace(/[^\d+]/g, '');
+    if (digits.replace(/\D/g, '').length < 7) return phone;
+    return h('a', { href: `tel:${digits}`, className: 'folder-link' }, phone);
+}
+
+/**
+ * Draw a person's card: who they are, how to reach them, and every
+ * application and event they are part of. `on` holds openFolder, unlink
+ * (appId), link (appId), showApplications, edit and remove.
+ */
+export function renderContact({ doc, contact, on }) {
+    const title = byId('contact-title');
+    if (title) title.textContent = contact.name;
+    const body = byId('contact-body');
+    if (!body) return;
+    clear(body);
+    if (contactLine(contact)) body.appendChild(h('p', { className: 'card-detail', text: contactLine(contact) }));
+    if (contact.sample) body.appendChild(h('span', { className: 'grid-sample', text: 'Sample' }));
+    const facts = [
+        fact('Email', contact.email ? emailLink(contact.email) : ''),
+        fact('Phone', contact.phone ? phoneLink(contact.phone) : ''),
+        fact('LinkedIn', contact.linkedIn
+            ? h('a', { href: contact.linkedIn, className: 'folder-link', attrs: { target: '_blank', rel: 'noopener noreferrer' } }, 'Open the profile')
+            : '')
+    ].filter(Boolean);
+    if (facts.length) body.appendChild(h('dl', { className: 'folder-facts' }, facts));
+    if (contact.notes) body.appendChild(h('p', { className: 'folder-notes', text: contact.notes }));
+
+    const links = linksOf(doc, contact.id);
+    const apps = h('ul', { className: 'folder-list' });
+    for (const app of links.applications) {
+        const direct = app.contactIds.includes(contact.id);
+        apps.appendChild(h('li', { className: 'folder-item' }, [
+            h('div', { className: 'folder-item-main' }, [
+                h('strong', { text: applicationName(app) }),
+                h('span', { className: 'folder-item-when', text: direct ? STATUS_LABELS[app.status] : `${STATUS_LABELS[app.status]}. Met at an event` })
+            ]),
+            h('div', { className: 'folder-item-actions' }, [
+                button('Open the folder', 'office-btn office-btn-small', () => on.openFolder(app.id),
+                    { 'aria-label': `Open the folder for ${applicationName(app)}` }),
+                direct ? button('Unlink', 'office-btn office-btn-small', () => on.unlink(app.id),
+                    { 'aria-label': `Unlink ${contact.name} from ${applicationName(app)}` }) : null
+            ])
+        ]));
+    }
+    body.appendChild(h('section', { className: 'folder-section', attrs: { 'aria-labelledby': 'contact-apps-title' } }, [
+        h('div', { className: 'folder-section-head' }, [h('h3', { id: 'contact-apps-title', text: 'Applications' })]),
+        links.applications.length ? apps : h('p', { className: 'folder-empty', text: 'Not linked to any application yet.' })
+    ]));
+    const unlinked = doc.applications.filter((a) => !a.deletedAt && !a.contactIds.includes(contact.id))
+        .sort((a, b) => applicationName(a).localeCompare(applicationName(b)));
+    if (unlinked.length) {
+        const pick = h('select', { id: 'contact-link-app', className: 'office-select' });
+        for (const a of unlinked) pick.appendChild(h('option', { value: a.id, text: applicationName(a) }));
+        pick.value = unlinked[0].id;
+        body.appendChild(h('div', { className: 'folder-link-row' }, [
+            h('label', { htmlFor: 'contact-link-app', className: 'sr-only', text: 'An application to link them to' }),
+            pick,
+            button('Link', 'office-btn office-btn-small', () => on.link(pick.value), { 'aria-label': `Link ${contact.name} to the chosen application` })
+        ]));
+    }
+
+    if (links.events.length) {
+        const list = h('ul', { className: 'folder-list' });
+        for (const ev of links.events) {
+            const app = doc.applications.find((a) => a.id === ev.applicationId);
+            list.appendChild(h('li', { className: 'folder-item' }, h('div', { className: 'folder-item-main' }, [
+                h('strong', { text: `${eventName(ev)}: ${applicationName(app)}` }),
+                h('span', { className: 'folder-item-when', text: displayDateTime(ev.at) })
+            ])));
+        }
+        body.appendChild(h('section', { className: 'folder-section', attrs: { 'aria-labelledby': 'contact-events-title' } }, [
+            h('div', { className: 'folder-section-head' }, [h('h3', { id: 'contact-events-title', text: 'Met at' })]),
+            list
+        ]));
+    }
+
+    const actions = byId('contact-actions');
+    if (actions) {
+        clear(actions);
+        if (links.applications.length) actions.appendChild(button('Show their applications in the computer', 'office-btn', on.showApplications));
+        actions.appendChild(button('Edit', 'office-btn', on.edit));
+        actions.appendChild(button('Throw away', 'office-btn office-btn-danger', on.remove));
+    }
+}
+
+/**
+ * Draw the Rolodex's list: the people a search found, each a button with
+ * their title and company. `on.open(id)` opens one. Returns how many.
+ */
+export function renderRolodexList({ people, total, text, on }) {
+    const list = byId('rolodex-list');
+    const countEl = byId('rolodex-count');
+    if (countEl) {
+        countEl.textContent = !total ? 'The Rolodex is empty. New contact adds the first card.'
+            : text.trim() ? `${people.length} of ${total} ${total === 1 ? 'person' : 'people'} match.`
+                : `${total} ${total === 1 ? 'person' : 'people'} in the Rolodex.`;
+    }
+    if (!list) return people.length;
+    clear(list);
+    for (const c of people) {
+        list.appendChild(h('li', {}, h('button', {
+            type: 'button',
+            className: 'office-btn rolodex-person',
+            onClick: () => on.open(c.id)
+        }, [c.name, contactLine(c) ? h('span', { className: 'person-line', text: contactLine(c) }) : null])));
+    }
+    return people.length;
+}
+
+// ---- The whiteboard and the departures board ------------------------------------
+
+/** The whiteboard's sheet: its numbers in sentences, and as two tables. */
+export function renderWhiteboardSheet(model, lines) {
+    const summary = byId('wb-summary');
+    if (summary) {
+        clear(summary);
+        for (const line of lines) summary.appendChild(h('li', { text: line }));
+    }
+    const goal = byId('wb-goal');
+    if (goal && typeof document !== 'undefined' && document.activeElement !== goal) goal.value = String(model.goal);
+    const funnelBody = byId('wb-funnel');
+    if (funnelBody) {
+        clear(funnelBody);
+        for (const s of model.funnel) funnelBody.appendChild(h('tr', {}, [h('th', { attrs: { scope: 'row' }, text: s.label }), h('td', { text: String(s.count) })]));
+    }
+    const weeksBody = byId('wb-weeks');
+    if (weeksBody) {
+        clear(weeksBody);
+        for (const w of model.weeks) {
+            weeksBody.appendChild(h('tr', {}, [
+                h('th', { attrs: { scope: 'row' }, text: w.current ? `${w.label} (this week)` : w.label }),
+                h('td', { text: String(w.count) })
+            ]));
+        }
+    }
+}
+
+/** The departures sheet: the same rows as the board, as a person reads
+ *  them. Returns how many. */
+export function renderDepartures(rows) {
+    const body = byId('dep-body');
+    const empty = byId('dep-empty');
+    const table = byId('dep-table');
+    if (empty) empty.hidden = rows.length > 0;
+    if (table) table.hidden = rows.length === 0;
+    if (!body) return rows.length;
+    clear(body);
+    for (const r of rows) body.appendChild(h('tr', {}, [h('td', { text: r.when }), h('td', { text: r.what }), h('td', { text: r.with })]));
+    return rows.length;
+}
+
+// ---- The prep sheet ------------------------------------------------------------
+
+function sheetSection(title, children) {
+    return h('section', { className: 'print-section' }, [h('h2', { text: title }), ...children]);
+}
+
+function eventLines(list) {
+    return h('ul', {}, list.map((ev) => h('li', {}, [
+        h('strong', { text: `${ev.what}, ${ev.when}` }),
+        ev.title ? ` ${ev.title}.` : '',
+        ev.with.length ? ` With ${ev.with.join(', ')}.` : '',
+        ev.outcome ? ` ${ev.outcome}.` : ''
+    ])));
+}
+
+/**
+ * Lay out a prep sheet (prep.js) in the page's print-only section, as text:
+ * the browser's print dialog prints it and nothing else.
+ */
+export function renderPrintSheet(sheet, questionLines = 6) {
+    const root = byId('print-sheet');
+    if (!root) return null;
+    clear(root);
+    root.appendChild(h('header', { className: 'print-head' }, [
+        h('h1', { text: sheet.company || sheet.role }),
+        sheet.company && sheet.role ? h('p', { className: 'print-role', text: sheet.role }) : null
+    ]));
+    if (sheet.facts.length) {
+        root.appendChild(h('dl', { className: 'print-facts' }, sheet.facts.flatMap(([k, v]) => [h('dt', { text: k }), h('dd', { text: v })])));
+    }
+    if (sheet.upcoming.length) root.appendChild(sheetSection('Coming up', [eventLines(sheet.upcoming)]));
+    if (sheet.people.length) {
+        root.appendChild(sheetSection('People', [h('ul', {}, sheet.people.map((p) => h('li', {}, [
+            h('strong', { text: p.name }),
+            p.line ? `, ${p.line}` : '',
+            [p.email, p.phone].filter(Boolean).length ? `. ${[p.email, p.phone].filter(Boolean).join(', ')}` : ''
+        ])))]));
+    }
+    if (sheet.past.length) root.appendChild(sheetSection('So far', [eventLines(sheet.past)]));
+    if (sheet.tasks.length) {
+        root.appendChild(sheetSection('Still to do', [h('ul', {}, sheet.tasks.map((t) => h('li', { text: t.due ? `${t.text} (due ${t.due})` : t.text })))]));
+    }
+    if (sheet.notes) root.appendChild(sheetSection('Your notes', [h('p', { className: 'print-pre', text: sheet.notes })]));
+    root.appendChild(sheetSection('Questions to ask', Array.from({ length: questionLines }, () => h('div', { className: 'print-line' }))));
+    if (sheet.posting) root.appendChild(sheetSection('The posting', [h('p', { className: 'print-pre print-small', text: sheet.posting })]));
+    root.appendChild(h('p', { className: 'print-foot', text: sheet.printed }));
+    return root;
 }

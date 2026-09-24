@@ -81,7 +81,10 @@ export const STATION_LABELS = {
     computer: 'Computer',
     calendar: 'Calendar',
     cabinet: 'Filing cabinet',
-    board: 'Corkboard'
+    board: 'Corkboard',
+    rolodex: 'Rolodex',
+    whiteboard: 'Whiteboard',
+    departures: 'Departures board'
 };
 
 /** "Interview, round 2" or "Phone screen". */

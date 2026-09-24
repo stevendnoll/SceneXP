@@ -3518,7 +3518,7 @@ html [data-ui-theme="ember" lang="en"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
           "Loading…"
-    canvas#game-canvas [aria-label="A corner office with windows onto the city. A wooden desk holds a computer with sticky notes on it, a lamp, and two letter trays, with a wastebasket beside it, a calendar on the wall, a low filing cabinet full of folders, and a corkboard of index cards." role="img"]
+    canvas#game-canvas [aria-label="A corner office with windows onto the city. A wooden desk holds a computer with sticky notes on it, a lamp, and two letter trays, with a wastebasket beside it, a calendar on the wall, a low filing cabinet full of folders, a corkboard of index cards, a Rolodex, a whiteboard of numbers, a printer, and a departures board over the door." role="img"]
     p#office-live.sr-only [aria-live="polite" role="status"]
     div#office-hud.ui-float.office-hud [aria-label="Your week" role="group"]
       span#hud-week.hud-chip
@@ -3529,12 +3529,8 @@ html [data-ui-theme="ember" lang="en"]
         "New application"
       button#bar-computer.office-btn [title="Open the computer (C)" type="button"]
         "Computer"
-      button#bar-calendar.office-btn [title="Open the calendar (3)" type="button"]
-        "Calendar"
-      button#bar-cabinet.office-btn [title="Open the filing cabinet (4)" type="button"]
-        "Cabinet"
-      button#bar-board.office-btn [title="Open the corkboard (5)" type="button"]
-        "Corkboard"
+      button#bar-places.office-btn [aria-controls="places-menu" aria-expanded="false" type="button"]
+        "Places"
       button#bar-outtray.office-btn [title="Backups and exports" type="button"]
         "Out-tray"
       button#bar-wastebasket.office-btn [type="button"]
@@ -3543,6 +3539,7 @@ html [data-ui-theme="ember" lang="en"]
         "Settings"
       button#bar-undo.office-btn [disabled title="Undo (Ctrl or Command and Z)" type="button"]
         "Undo"
+    div#places-menu.places-menu [aria-label="Places in the office" hidden role="group"]
     div#office-toast.office-toast [hidden]
       span#toast-text
       button#toast-undo.office-btn.office-btn-small [hidden type="button"]
@@ -3599,6 +3596,8 @@ html [data-ui-theme="ember" lang="en"]
                     "Company"
                 th#grid-h-role [scope="col"]
                   "Role"
+                th#grid-h-people [scope="col"]
+                  "People"
                 th#grid-h-status [aria-sort="none" scope="col"]
                   button#grid-sort-status.grid-sort [type="button"]
                     "Status"
@@ -3697,6 +3696,80 @@ html [data-ui-theme="ember" lang="en"]
           select#board-to.office-select
           button#board-move.office-btn.office-btn-primary.office-btn-small [type="submit"]
             "Move"
+    div#rolodex.card-overlay.sheet-overlay [hidden]
+      div#rolodex-panel.card-panel.sheet-panel [aria-describedby="rolodex-count" aria-labelledby="rolodex-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#rolodex-title.card-title
+            "The Rolodex"
+          button#rolodex-close.office-btn.office-btn-small [type="button"]
+            "Back to the desk"
+        div.grid-tools
+          label.sr-only [for="rolodex-search"]
+            "Search the people"
+          input#rolodex-search.office-input.grid-search [autocomplete="off" placeholder="Type a name, a company or a title" spellcheck="false" type="search"]
+          button#rolodex-new.office-btn.office-btn-primary.office-btn-small [type="button"]
+            "New contact"
+        p#rolodex-count.card-meta [aria-live="polite" role="status"]
+        ul#rolodex-list.rolodex-list
+    div#whiteboard.card-overlay.sheet-overlay [hidden]
+      div#whiteboard-panel.card-panel.sheet-panel [aria-labelledby="whiteboard-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#whiteboard-title.card-title
+            "The whiteboard"
+          button#whiteboard-close.office-btn.office-btn-small [type="button"]
+            "Back to the desk"
+        ul#wb-summary.wb-summary
+        p.grid-week
+          label [for="wb-goal"]
+            "Weekly goal"
+          input#wb-goal.office-input.grid-goal [inputmode="numeric" max="100" min="1" type="number"]
+        details.wb-tables
+          summary
+            "The numbers as tables"
+          table.wb-table
+            caption
+              "How far they got"
+            thead
+              tr
+                th [scope="col"]
+                  "Stage"
+                th [scope="col"]
+                  "Applications"
+            tbody#wb-funnel
+          table.wb-table
+            caption
+              "Sent each week"
+            thead
+              tr
+                th [scope="col"]
+                  "Week of"
+                th [scope="col"]
+                  "Sent"
+            tbody#wb-weeks
+    div#departures.card-overlay.sheet-overlay [hidden]
+      div#departures-panel.card-panel.sheet-panel [aria-labelledby="departures-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#departures-title.card-title
+            "Departures"
+          button#departures-close.office-btn.office-btn-small [type="button"]
+            "Back to the desk"
+        table#dep-table.wb-table.dep-table
+          caption.sr-only
+            "This week's interviews and calls"
+          thead
+            tr
+              th [scope="col"]
+                "When"
+              th [scope="col"]
+                "What"
+              th [scope="col"]
+                "With"
+          tbody#dep-body
+        p#dep-empty.card-meta [hidden]
+          "Nothing is scheduled this week. The board will fill as interviews are booked."
+        div.card-actions
+          button#dep-export.office-btn [type="button"]
+            "Add everything coming up to my calendar"
     div#today.card-overlay [hidden]
       div#today-panel.card-panel.form-panel [aria-describedby="today-note" aria-labelledby="today-title" aria-modal="true" role="dialog" tabindex="-1"]
         h2#today-title.card-title
@@ -3720,6 +3793,14 @@ html [data-ui-theme="ember" lang="en"]
             "Close the folder"
         div#folder-body.folder-body
         div#folder-actions.card-actions
+    div#contact.card-overlay [hidden]
+      div#contact-panel.card-panel.folder-panel [aria-labelledby="contact-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#contact-title.card-title
+          button#contact-close.office-btn.office-btn-small [type="button"]
+            "Close"
+        div#contact-body.folder-body
+        div#contact-actions.card-actions
     div#wastebasket.card-overlay [hidden]
       div#wastebasket-panel.card-panel [aria-describedby="wastebasket-note" aria-labelledby="wastebasket-title" aria-modal="true" role="dialog" tabindex="-1"]
         h2#wastebasket-title.card-title
@@ -3744,6 +3825,8 @@ html [data-ui-theme="ember" lang="en"]
             "Export applications for a spreadsheet"
           button#outtray-ics.office-btn [type="button"]
             "Add everything coming up to my calendar"
+          button#outtray-print.office-btn [type="button"]
+            "Print a prep sheet"
           label.office-btn.office-file [for="outtray-restore"]
             "Restore from a backup"
           input#outtray-restore.sr-only [accept="application/json,.json" type="file"]
@@ -3751,6 +3834,21 @@ html [data-ui-theme="ember" lang="en"]
         div.card-actions
           button#outtray-close.office-btn [type="button"]
             "Close"
+    div#printer.card-overlay [hidden]
+      div#printer-panel.card-panel.form-panel [aria-describedby="printer-intro" aria-labelledby="printer-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#printer-title.card-title
+          "The printer"
+        p#printer-intro.card-detail
+          "A one-page prep sheet for an interview: the company, the people you will meet, what has happened so far, your notes, and room for your questions. Your browser's print dialog can also save it as a PDF."
+        div.form-row
+          label [for="printer-app"]
+            "Which application"
+          select#printer-app.office-select
+        div.card-actions
+          button#printer-close.office-btn [type="button"]
+            "Close"
+          button#printer-print.office-btn.office-btn-primary [type="button"]
+            "Print"
     div#settings.card-overlay [hidden]
       div#settings-panel.card-panel [aria-labelledby="settings-title" aria-modal="true" role="dialog" tabindex="-1"]
         h2#settings-title.card-title
@@ -3891,6 +3989,10 @@ html [data-ui-theme="ember" lang="en"]
               label [for="ef-round"]
                 "Round"
               input#ef-round.office-input [inputmode="numeric" min="1" type="number"]
+          fieldset#ef-with-row.form-row.form-with [hidden]
+            legend
+              "Who was there"
+            div#ef-with.form-with-list
           div.form-row
             label [for="ef-outcome"]
               "How it went"
@@ -3925,11 +4027,54 @@ html [data-ui-theme="ember" lang="en"]
               "Cancel"
             button#tf-save.office-btn.office-btn-primary [type="submit"]
               "Save"
+    div#contact-form.card-overlay [hidden]
+      div#contact-form-panel.card-panel.form-panel [aria-describedby="contact-form-about" aria-labelledby="contact-form-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#contact-form-title.card-title
+          "New contact"
+        p#contact-form-about.card-meta
+        form#cf-form.office-form [novalidate]
+          div.form-row
+            label [for="cf-name"]
+              "Name"
+            input#cf-name.office-input [autocomplete="off" type="text"]
+          div.form-row.form-pair
+            div
+              label [for="cf-title"]
+                "Title"
+              input#cf-title.office-input [autocomplete="off" placeholder="Recruiter" type="text"]
+            div
+              label [for="cf-company"]
+                "Company"
+              input#cf-company.office-input [autocomplete="off" type="text"]
+          div.form-row.form-pair
+            div
+              label [for="cf-email"]
+                "Email"
+              input#cf-email.office-input [autocomplete="off" inputmode="email" type="email"]
+            div
+              label [for="cf-phone"]
+                "Phone"
+              input#cf-phone.office-input [autocomplete="off" inputmode="tel" type="tel"]
+          div.form-row
+            label [for="cf-linkedin"]
+              "LinkedIn"
+            input#cf-linkedin.office-input [autocomplete="off" inputmode="url" type="url"]
+          div.form-row
+            label [for="cf-notes"]
+              "Notes"
+            textarea#cf-notes.office-input [placeholder="How you met, what you talked about" rows="3"]
+          p#cf-error.form-error [hidden role="alert"]
+          div.card-actions
+            button#cf-cancel.office-btn [type="button"]
+              "Cancel"
+            button#cf-save.office-btn.office-btn-primary [type="submit"]
+              "Save"
     div#confirm.card-overlay [hidden]
       div#confirm-panel.card-panel [aria-describedby="confirm-detail" aria-labelledby="confirm-title" aria-modal="true" role="dialog" tabindex="-1"]
         h2#confirm-title.card-title
         p#confirm-detail.card-detail
         div#confirm-actions.card-actions
+    section#print-sheet.print-sheet [aria-hidden="true"]
     script [src="../lib/three.min.js"]
     script [src="js/main.min.js" type="module"]"
 `;
