@@ -1,0 +1,46 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed.
+ *
+ * experience.css - Tornado Alley.
+ *
+ * Almost nothing, on purpose. The cards, the controls, the fade and the ending
+ * all come from the shared player's sheet (shared/css/player-1.0.0.css), and
+ * this file only fills the viewport and tints the player to the storm.
+ *
+ * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block:
+ * the page's CSP (style-src 'self') blocks inline styles outright. */
+
+/* A storm-gray page behind a slow first frame, and the player's scrim tinted
+   toward the storm's slate rather than High Water's sea teal.
+
+   DARKER THAN HIGH WATER'S, AND THE THREE QUIET GRAYS LIGHTER, because what
+   sits behind a card here is brighter: the pause card can come up over the
+   white funnel and the golden horizon. Measured on the social card's capture
+   of the mature tornado (the brightest 1% of pixels behind the card, band by
+   band), High Water's values left the warning at 4.28:1, the "Paused at"
+   line at 3.64:1 and the closing note at 3.10:1, under WCAG AA's 4.5:1 for
+   text this size. These put the worst of them at 5.0:1 and keep the order of
+   the grays. tests/tornado-contrast.test.mjs reads them from here. */
+:root {
+    --player-scrim-top: rgba(18, 20, 26, 0.68);
+    --player-scrim-bottom: rgba(18, 20, 26, 0.82);
+    --player-pill: rgba(18, 20, 26, 0.5);
+    --player-thumb-edge: rgba(18, 20, 26, 0.55);
+    --player-muted: #c4d4db;
+    --player-dim: #b8c7ce;
+    --player-faint: #adbdc4;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #3a4049;
+}
+
+#scene {
+    display: block;
+    width: 100%;
+    height: 100%;
+}

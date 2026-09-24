@@ -30,7 +30,7 @@ const CATEGORY_OF = {
     dad: 'personal', family: 'personal', roqui: 'personal', gavin: 'personal', jamar: 'personal',
     automan: 'business', interstate: 'business', seedtoseed: 'business', sunnyvalejenn: 'business',
     steve: 'worlds', mandelbrot: 'worlds', earthdefense: 'worlds', highwater: 'worlds', garden: 'worlds',
-    xo: 'worlds',
+    xo: 'worlds', tornado: 'worlds',
 };
 
 // THE MARKUP IS THE SOURCE OF TRUTH now that the catalog array is gone. Each
@@ -90,13 +90,41 @@ describe('the fixtures above are the real directory', () => {
 // An experience is a folder under www/ with its own index.html, which is the
 // one description of the set that none of the four files can drift away from.
 const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
-const builtSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
+
+// SCENES BEING BUILT, which are committed like any other but not yet listed
+// anywhere. Named here rather than left to fail, and held to the other half of
+// the bargain below: every one must carry `noindex`, so an unreleased scene
+// can never be crawled by accident. Releasing one means taking it off this
+// list, taking the `noindex` off its page, and adding its card, sitemap line
+// and llms.txt line, which the tests above then insist on. (Added 2026-09-23
+// for Tornado Alley, M1, and emptied when it was released the same day. The
+// list stays, empty, for the next scene built in the open.)
+const UNRELEASED = [];
+
+const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
     .filter((d) => d.isDirectory() && !IGNORED_DIRS.includes(d.name))
     .map((d) => d.name)
     .filter((name) => existsSync(join(process.cwd(), 'www', name, 'index.html')))
     .filter((name) => readFileSync(join(process.cwd(), 'www', name, 'index.html'), 'utf8')
         .includes('<canvas'))     // a scene page, not a directory blocker
     .sort();
+const builtSlugs = sceneSlugs.filter((name) => !UNRELEASED.includes(name));
+
+describe('scenes still being built', () => {
+    // One test that walks the list rather than one per entry, so the rule
+    // still runs (and passes) on the days the list is empty: test.each will
+    // not take an empty table.
+    test('each exists, carries noindex, and is listed nowhere', () => {
+        for (const slug of UNRELEASED) {
+            expect(sceneSlugs).toContain(slug);
+            const page = readFileSync(join(process.cwd(), 'www', slug, 'index.html'), 'utf8');
+            expect(page).toMatch(/<meta name="robots" content="noindex, nofollow">/);
+            expect(home).not.toContain(`/${slug}/`);
+            expect(sitemap).not.toContain(`/${slug}/`);
+            expect(llms).not.toContain(`/${slug}/`);
+        }
+    });
+});
 
 describe('every card is wired into the whole site', () => {
     test.each(slugs)('%s has a sitemap URL, an llms.txt line, and JSON-LD', (slug) => {

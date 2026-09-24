@@ -111,36 +111,42 @@
             {
               "@type": "ListItem",
               "position": 1,
+              "url": "https://www.scenexp.com/tornado/",
+              "name": "Tornado Alley"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
               "url": "https://www.scenexp.com/xo/",
               "name": "X's and O's"
             },
             {
               "@type": "ListItem",
-              "position": 2,
+              "position": 3,
               "url": "https://www.scenexp.com/garden/",
               "name": "Fractal Garden"
             },
             {
               "@type": "ListItem",
-              "position": 3,
+              "position": 4,
               "url": "https://www.scenexp.com/highwater/",
               "name": "High Water"
             },
             {
               "@type": "ListItem",
-              "position": 4,
+              "position": 5,
               "url": "https://www.scenexp.com/earthdefense/",
               "name": "Earth Defense"
             },
             {
               "@type": "ListItem",
-              "position": 5,
+              "position": 6,
               "url": "https://www.scenexp.com/mandelbrot/",
               "name": "The Mandelbrot Set"
             },
             {
               "@type": "ListItem",
-              "position": 6,
+              "position": 7,
               "url": "https://www.scenexp.com/steve/",
               "name": "Steve's Home Office"
             }
@@ -329,8 +335,8 @@
                     aria-labelledby="worlds-and-games">
                     <h2 id="worlds-and-games">Worlds and games</h2>
                     <ul class="experience-grid">
-                        <li class="experience-card" data-slug="xo">
-                            <a href="/xo/">
+                        <li class="experience-card" data-slug="tornado">
+                            <a href="/tornado/">
                                 <!-- THE ONLY EAGER IMAGE ON THE PAGE, and it has to stay the
                                      only one. This is the first card in the first group, so it
                                      is the Largest Contentful Paint element on any screen wide
@@ -338,15 +344,32 @@
                                      measurable own goal: the browser will not begin the fetch
                                      until layout has proved the image is needed, which is late
                                      by definition. `fetchpriority="high"` then lets it jump the
-                                     queue ahead of the fourteen lazy cards below.
-                                     The other fourteen stay lazy, because eager on all
-                                     fifteen would fetch 780KB of card art nobody has scrolled
-                                     to yet. If the card order ever changes, these two
+                                     queue ahead of the fifteen lazy cards below.
+                                     The other fifteen stay lazy, because eager on all
+                                     sixteen would fetch the card art of a page nobody has
+                                     scrolled yet. If the card order ever changes, these two
                                      attributes move to whichever card is first. They moved
-                                     here from the garden on 2026-09-14, when X's and O's
+                                     here from X's and O's on 2026-09-23, when Tornado Alley
                                      became the newest world. -->
-                                <img src="/xo/assets/og-xo.webp?v=1" width="1200" height="630" loading="eager"
+                                <img src="/tornado/assets/og-tornado.webp?v=1" width="1200" height="630" loading="eager"
                                     fetchpriority="high" decoding="async"
+                                    alt="A pale tornado reaching down from a dark, turning storm base to a cloud of dust and flying debris, just left of a small farm with a red barn, across golden fields with wildflowers in the foreground.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">A storm chaser's view of a tornado</p>
+                                    <h3>Tornado Alley</h3>
+                                    <p>Thirty seconds on the open prairie, beginning on a calm summer
+                                        evening. A storm organizes on the horizon, its base begins to
+                                        turn, and a tornado touches down far out across the fields.
+                                        Nobody is in its path, though it does pick a few things up
+                                        along the way.</p>
+                                    <span class="experience-cta">Watch the storm roll in →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="experience-card" data-slug="xo">
+                            <a href="/xo/">
+                                <img src="/xo/assets/og-xo.webp?v=1" width="1200" height="630" loading="lazy"
+                                    decoding="async"
                                     alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides.">
                                 <div class="experience-card-body">
                                     <p class="experience-eyebrow">A football game where you call the plays</p>

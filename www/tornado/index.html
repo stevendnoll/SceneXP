@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="surf">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         No media-src: this scene plays no sound. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <!-- RELEASED 2026-09-23 (M8). THE `noindex` IS GONE and there is
+         deliberately no `robots` tag here at all, the same as every other
+         experience: the site's default is indexable, and the page is on the
+         home page, in `sitemap.xml` and in `llms.txt`. A `robots` meta tag
+         reappearing on this page would mean somebody meant to hide it.
+
+         The social card was captured on 2026-09-23 at the mature tornado,
+         before the cow is picked up, so it gives nothing away. Its alt text
+         describes that capture, so a new capture needs new alt text. -->
+
+    <meta name="description" content="Thirty seconds on the open prairie in 3D, beginning on a calm summer evening. A storm builds on the horizon, a tornado touches down far out across the fields, and then the storm moves on. Plays without sound in any modern browser.">
+    <meta name="theme-color" content="#3a4049">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served. -->
+    <link rel="canonical" href="https://www.scenexp.com/tornado/">
+
+    <!-- Open Graph. It does not give away the ending, the same as High Water:
+         a share preview is read by people who have not chosen anything yet. -->
+    <meta property="og:title" content="Tornado Alley">
+    <meta property="og:description" content="Thirty seconds on the open prairie, beginning on a calm summer evening, as a storm builds on the horizon.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/tornado/">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:image" content="https://www.scenexp.com/tornado/assets/og-tornado.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A tornado on the open prairie under a dark, turning storm base. A pale funnel reaches down to a cloud of brown dust and flying debris just left of a small farm with a white house, a red barn and a gray silo. A wire fence crosses golden fields beyond a pond, and wildflowers fill the foreground.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Tornado Alley">
+    <meta name="twitter:description" content="Thirty seconds on the open prairie, beginning on a calm summer evening, as a storm builds on the horizon.">
+    <meta name="twitter:image" content="https://www.scenexp.com/tornado/assets/og-tornado.jpg?v=1">
+    <meta name="twitter:image:alt" content="A tornado on the open prairie under a dark, turning storm base. A pale funnel reaches down to a cloud of brown dust and flying debris just left of a small farm with a white house, a red barn and a gray silo. A wire fence crosses golden fields beyond a pond, and wildflowers fill the foreground.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/tornado/#website",
+      "url": "https://www.scenexp.com/tornado/",
+      "name": "Tornado Alley",
+      "description": "A passive 3D scene on the open prairie. Thirty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end as the storm moves on.",
+      "inLanguage": "en-US"
+    }
+    </script>
+
+    <title>Tornado Alley</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="../shared/css/player-1.0.0.min.css" as="style">
+    <link rel="preload" href="css/experience.min.css" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <!-- The shared sheet, then the shared player's, then this scene's, which
+         only sets tokens and the canvas. -->
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="../shared/css/player-1.0.0.min.css">
+    <link rel="stylesheet" href="css/experience.min.css">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers). -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Tornado Alley</h1>
+            <p>This is a passive 3D scene on the open prairie, and it needs
+                JavaScript to draw. It runs for thirty seconds and begins on a
+                calm summer evening, with golden light on the wheat and a storm
+                standing on the horizon. Then the storm organizes. Its base
+                lowers and begins to turn, a funnel reaches down to meet the
+                dust rising off the fields, and a tornado stands far out on the
+                plains before it thins into a rope and lets go.</p>
+            <p>Nobody is in its path. There is lightning, so the screen
+                flashes from time to time. It plays without sound, so you are
+                welcome to watch it anywhere, and you can watch it again as
+                many times as you wish.</p>
+            <p>SceneXP is a home for 3D experiences that run right in your
+                browser.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <canvas id="scene" role="img"
+        aria-label="A wide view across a golden prairie toward a storm on the horizon"></canvas>
+
+    <!-- The story, told to a screen reader one beat at a time as it plays
+         (js/narration.js and config.narration). Polite, so it waits its turn,
+         and only while the story plays into a beat: never behind the welcome
+         card, under a drag, or across a seek. -->
+    <p id="story-status" class="sr-only" role="status" aria-live="polite"></p>
+
+    <!-- The welcome card, which is also the pause card. The shared player
+         (shared/js/player-1.0.0.js) holds the story at zero until Begin, and on
+         a pause shows this same card with Resume and Restart and the line
+         saying where the story was held, so one copy of the note below is all
+         there is. -->
+    <div id="player-card">
+        <div class="card">
+            <p id="player-paused-at" class="paused-at" hidden>Paused</p>
+            <h1>Tornado Alley</h1>
+            <p class="lede">
+                Thirty seconds on the open prairie, beginning on a calm summer evening.
+            </p>
+            <p class="warning">
+                A storm builds on the horizon, and a tornado touches down far
+                out across the fields, then thins and lets go. Nobody is in its
+                path. There is lightning, so the screen flashes from time to
+                time. It plays without sound, so you are welcome to watch it
+                anywhere.
+            </p>
+            <button id="player-begin" type="button" class="player-btn player-btn-primary">Begin</button>
+            <div id="player-pause-actions" class="player-actions" hidden>
+                <button id="player-resume" type="button" class="player-btn player-btn-primary"
+                    aria-describedby="player-paused-at">Resume</button>
+                <button id="player-restart" type="button" class="player-btn">Restart</button>
+            </div>
+            <p class="note">You can watch it again as many times as you wish.</p>
+            <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
+        </div>
+    </div>
+
+    <!-- The closing fade. Plain DOM rather than WebGL, so it keeps working on a
+         frame the renderer has already stopped producing. -->
+    <div id="player-blackout" aria-hidden="true"></div>
+
+    <!-- The player controls: a pause button in the corner and a scrubber along
+         the bottom. Hidden until Begin, hidden by a pause and by the ending,
+         and faded whenever the pointer is still. -->
+    <div id="player-controls" hidden>
+        <button id="player-pause" type="button" class="menu-btn" aria-label="Pause" title="Pause (Esc)">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 5.5v13M15 5.5v13" />
+            </svg>
+        </button>
+        <div id="player-scrubber">
+            <label for="player-scrub" class="sr-only">Position in the story</label>
+            <input id="player-scrub" type="range" min="0" max="30" step="0.1" value="0"
+                aria-valuetext="0 seconds of 30">
+        </div>
+    </div>
+
+    <!-- The ending. role="status" so it is announced when it appears, and the
+         replay button takes focus so a keyboard visitor is not left hunting on
+         a black screen. -->
+    <div id="player-ending" hidden role="status" aria-live="polite">
+        <!-- The payoff's punch line, and the sentence a visitor repeats when
+             they share it. Steve's call, 2026-09-23. -->
+        <p id="ending-line" class="ending-line">The storm has moved on. The cow is fine.</p>
+        <p class="ending-note">Thank you for watching. The storm rarely picks up the same thing twice.</p>
+        <div class="player-actions">
+            <button id="share" type="button" class="player-btn">Share</button>
+            <button id="player-replay" type="button" class="player-btn">Watch it again</button>
+        </div>
+        <p id="share-status" class="sr-only" role="status" aria-live="polite"></p>
+        <a class="welcome-explore promo-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
+    </div>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

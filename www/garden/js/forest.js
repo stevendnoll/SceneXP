@@ -35,11 +35,14 @@
  * transparency sorting to get wrong.
  */
 
-import { GARDEN_CONFIG } from './config.min.js';
-import { makeRandom, resolveSpecies, SPECIES, speciesById } from './species.min.js';
+import { GARDEN_CONFIG, GARDEN_TREE_SETTINGS } from './config.min.js';
+import { makeRandom, resolveSpecies, SPECIES, speciesById } from '../../shared/js/treespecies-1.0.0.min.js';
 import { phenologyAt, seasonAt, clamp01 } from './clock.min.js';
 import { mixColor, packColor, unpackColor } from './sky.min.js';
-import { buildSkeleton, bakeGeometry, buildLeaves, leafClusterTexture, patchVertex } from './tree.min.js';
+import { buildSkeleton, bakeGeometry, buildLeaves, leafClusterTexture, patchVertex } from '../../shared/js/fractaltree-1.0.0.min.js';
+import {
+    crossedQuad as buildCrossedQuad, flowerTexture as buildFlowerTexture, placeWildflowers
+} from '../../shared/js/wildflowers-1.0.0.min.js';
 import {
     worldHeightAt, openingHalfWidthAt, pondWaterLevel, pondHalfWidth
 } from './terrain.min.js';
@@ -289,14 +292,22 @@ function buildCanopyTexture(size, seed, evergreen) {
     return texture;
 }
 
+// buildFlowerTexture and buildCrossedQuad are the shared wildflowers part's
+// flowerTexture and crossedQuad since 2026-09-23 (imported above).
+
 /**
- * One blossom on a stem, drawn once.
+ * A tuft of tall grass, drawn once into a canvas as an alpha mask.
  *
- * The quad is anchored at its base, so v runs from the ground up: stem in the
- * lower half, head in the upper. White, for the same reason everything else
- * here is white, so the per-plant colour does the work.
+ * WHITE, like every other mask here, so the material's colour can carry the
+ * season and the snow. Blades rather than a shape: a few strokes fanning from a
+ * common root, each bending a little, because what says "long grass" at this
+ * distance is a spray of near-vertical lines and nothing else.
+ *
+ * THE TIPS ARE DIMMER THAN THE ROOTS on purpose. `alphaTest` takes the faintest
+ * pixels first, so a tuft loses its very tips before its body and reads as
+ * thinning rather than as being cut off flat.
  */
-function buildFlowerTexture(size, seed) {
+function buildWeedTexture(size, seed) {
     if (typeof document === 'undefined') return null;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -306,29 +317,24 @@ function buildFlowerTexture(size, seed) {
     const random = makeRandom(seed);
 
     ctx.clearRect(0, 0, size, size);
-    const mid = size / 2;
-    // The stem. Thin, and dimmer than the head so the threshold takes it last.
-    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-    ctx.lineWidth = Math.max(1, size * 0.05);
-    ctx.beginPath();
-    ctx.moveTo(mid, size);
-    ctx.lineTo(mid, size * 0.42);
-    ctx.stroke();
-
-    // Petals round a centre, sitting at the top of the stem.
-    ctx.fillStyle = 'rgba(255,255,255,1)';
-    const petals = 5;
-    const headY = size * 0.34;
-    for (let i = 0; i < petals; i++) {
-        const a = (i / petals) * Math.PI * 2 + random() * 0.2;
+    ctx.lineCap = 'round';
+    const root = size * 0.5;
+    for (let i = 0; i < 9; i++) {
+        // Where it leaves the ground, and how far it leans by the tip.
+        const from = root + (random() - 0.5) * size * 0.30;
+        const lean = (random() - 0.5) * size * 0.44;
+        const top = size * (0.06 + random() * 0.30);
+        const grad = ctx.createLinearGradient(0, size, 0, top);
+        grad.addColorStop(0, 'rgba(255,255,255,1)');
+        grad.addColorStop(1, 'rgba(255,255,255,0.55)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = Math.max(1, size * (0.035 + random() * 0.025));
         ctx.beginPath();
-        ctx.ellipse(mid + Math.cos(a) * size * 0.17, headY + Math.sin(a) * size * 0.17,
-            size * 0.13, size * 0.10, a, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(from, size);
+        // One control point, so the blade bows instead of kinking.
+        ctx.quadraticCurveTo(from + lean * 0.35, size * 0.55, from + lean, top);
+        ctx.stroke();
     }
-    ctx.beginPath();
-    ctx.arc(mid, headY, size * 0.09, 0, Math.PI * 2);
-    ctx.fill();
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -407,72 +413,6 @@ function bakeLeafCards(leaves, limit, scale) {
 
 /** Two quads crossed at right angles: volume from any angle for four
  *  triangles, anchored at the base so the tree stands on the ground. */
-/**
- * A tuft of tall grass, drawn once into a canvas as an alpha mask.
- *
- * WHITE, like every other mask here, so the material's colour can carry the
- * season and the snow. Blades rather than a shape: a few strokes fanning from a
- * common root, each bending a little, because what says "long grass" at this
- * distance is a spray of near-vertical lines and nothing else.
- *
- * THE TIPS ARE DIMMER THAN THE ROOTS on purpose. `alphaTest` takes the faintest
- * pixels first, so a tuft loses its very tips before its body and reads as
- * thinning rather than as being cut off flat.
- */
-function buildWeedTexture(size, seed) {
-    if (typeof document === 'undefined') return null;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    const random = makeRandom(seed);
-
-    ctx.clearRect(0, 0, size, size);
-    ctx.lineCap = 'round';
-    const root = size * 0.5;
-    for (let i = 0; i < 9; i++) {
-        // Where it leaves the ground, and how far it leans by the tip.
-        const from = root + (random() - 0.5) * size * 0.30;
-        const lean = (random() - 0.5) * size * 0.44;
-        const top = size * (0.06 + random() * 0.30);
-        const grad = ctx.createLinearGradient(0, size, 0, top);
-        grad.addColorStop(0, 'rgba(255,255,255,1)');
-        grad.addColorStop(1, 'rgba(255,255,255,0.55)');
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = Math.max(1, size * (0.035 + random() * 0.025));
-        ctx.beginPath();
-        ctx.moveTo(from, size);
-        // One control point, so the blade bows instead of kinking.
-        ctx.quadraticCurveTo(from + lean * 0.35, size * 0.55, from + lean, top);
-        ctx.stroke();
-    }
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    return texture;
-}
-
-function buildCrossedQuad() {
-    const geo = new THREE.BufferGeometry();
-    const h = 0.5;
-    const position = new Float32Array([
-        -h, 0, 0, h, 0, 0, h, 1, 0, -h, 1, 0,
-        0, 0, -h, 0, 0, h, 0, 1, h, 0, 1, -h
-    ]);
-    const normal = new Float32Array([
-        0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
-        1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0
-    ]);
-    const uv = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1]);
-    const index = new Uint16Array([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]);
-    geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
-    geo.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    geo.setIndex(new THREE.BufferAttribute(index, 1));
-    return geo;
-}
-
 // ---- The wood sways (M8-5) --------------------------------------------------
 
 /**
@@ -765,12 +705,13 @@ function buildNearTreeline(scene, config, options) {
             const resolved = resolveSpecies(entry.id, undefined);
             resolved.depth = Math.max(3, resolved.depth - tier.depthReduction);
             const skeleton = buildSkeleton(resolved, config.world.seed + i * 7919 + tierIndex * 131, {
-                maxSegments: Math.round(config.tree.maxSegments * 0.45)
+                maxSegments: Math.round(config.tree.maxSegments * 0.45),
+                settings: GARDEN_TREE_SETTINGS
             });
             const leaves = bakeLeafCards(
-                buildLeaves(skeleton, resolved, config.world.seed + i * 7919),
+                buildLeaves(skeleton, resolved, config.world.seed + i * 7919, GARDEN_TREE_SETTINGS),
                 N.leafCards, N.leafScale);
-            return { geometry: bakeGeometry(skeleton), species: entry, resolved, skeleton, leaves };
+            return { geometry: bakeGeometry(skeleton, GARDEN_TREE_SETTINGS), species: entry, resolved, skeleton, leaves };
         });
 
         geometries.forEach((entry, i) => {
@@ -1298,21 +1239,7 @@ function buildWeeds(scene, config, options) {
 /** Rewrite the flower transforms for a bloom level, 0 gone and 1 full. */
 function setFlowerBloom(bloom) {
     if (!flowers || !flowerPlacements.length) return;
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const e = new THREE.Euler();
-    const p = new THREE.Vector3();
-    const s = new THREE.Vector3();
-    flowerPlacements.forEach((flower, i) => {
-        const size = flower.size * bloom;
-        p.set(flower.x, flower.y, flower.z);
-        e.set(0, flower.yaw, 0);
-        q.setFromEuler(e);
-        s.set(size, size, size);
-        m.compose(p, q, s);
-        flowers.setMatrixAt(i, m);
-    });
-    flowers.instanceMatrix.needsUpdate = true;
+    placeWildflowers(flowers, flowerPlacements, bloom);
 }
 
 /**

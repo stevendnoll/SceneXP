@@ -19,7 +19,7 @@
  */
 
 import { GARDEN_CONFIG } from './config.min.js';
-import { makeRandom } from './species.min.js';
+import { makeRandom } from '../../shared/js/treespecies-1.0.0.min.js';
 import { unpackColor } from './sky.min.js';
 import { solarAt, clamp01, smoothstep, isSnowingAt, seasonAt, WINTER } from './clock.min.js';
 

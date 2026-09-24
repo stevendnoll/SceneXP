@@ -1,6 +1,23 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * tree.js - The fractal tree: skeleton, geometry, and the shaders that grow it.
+ * fractaltree-1.0.0.js - The fractal tree: skeleton, geometry, and the shaders
+ * that grow it and sway it in the wind.
+ *
+ * PROMOTED FROM www/garden/js/tree.js ON 2026-09-23 so any scene can grow
+ * these trees (Tornado Alley bends them in a tornado's inflow). The garden
+ * imports it from here now, and a byte-for-byte comparison of every species'
+ * skeleton, geometry, leaves, fruit and shader source against the garden's
+ * own copy showed nothing changed on the way. The notes below are the
+ * garden's, written while the tree was being tuned there.
+ *
+ * ---- SETTINGS COME IN, THEY ARE NOT IMPORTED ----
+ *
+ * The garden tuned these trees against its own config's `tree` and
+ * `garden.fruit` blocks. Here those are one plain object, `{ tree, fruit }`,
+ * passed in as `settings` wherever a function needs it, with TREE_DEFAULTS
+ * (the garden's values) when none is given. A scene that wants different
+ * trees passes its own. `createTree` keeps the settings on the tree it
+ * returns, so `updateTree` needs nothing extra.
  *
  * Split three ways. `buildSkeleton` is pure arithmetic and fully testable.
  * `bakeGeometry` writes typed arrays and touches THREE only to wrap them.
@@ -37,9 +54,54 @@
  * makes a saved garden come back as the same garden.
  */
 
-import { GARDEN_CONFIG } from './config.min.js';
-import { makeRandom, tintColor } from './species.min.js';
-import { unpackColor, srgbToLinear } from './sky.min.js';
+import { makeRandom, tintColor } from './treespecies-1.0.0.min.js';
+
+/**
+ * The garden's tuning, as the defaults. Every number here was measured and
+ * argued for in www/garden/js/config.js (its `tree` and `garden.fruit`
+ * blocks), and the reasons live there beside the garden's own copy.
+ */
+export const TREE_DEFAULTS = Object.freeze({
+    tree: Object.freeze({
+        maxSegments: 1200,
+        maxSegmentsMobile: 480,
+        trunkSides: 9,
+        trunkRadiusRatio: 0.028,
+        swayPerMetre: 0.1,
+        leafFlutter: Object.freeze({ rate: 4.6, along: 0.16, cross: 0.11 }),
+        reducedMotion: 0.35,
+        leafCardScale: 2.0,
+        leafAlphaTest: 0.45,
+        leafLevels: 5,
+        saplingScale: 0.24,
+        saplingThickness: 0.72
+    }),
+    fruit: Object.freeze({
+        setSize: 0.30,
+        bearFrom: 0.62,
+        bearFull: 0.85,
+        cropFrom: 0.25,
+        cropFull: 0.75,
+        density: 0.07,
+        blossomDensity: 0.22,
+        size: 0.50
+    })
+});
+
+// ---- Color helpers (pure), the garden sky's own -------------------------------
+
+/** Unpack a packed hex into three sRGB channels in 0 to 1. */
+export function unpackColor(hex) {
+    return [
+        ((hex >> 16) & 0xff) / 255,
+        ((hex >> 8) & 0xff) / 255,
+        (hex & 0xff) / 255
+    ];
+}
+
+export function srgbToLinear(c) {
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
 
 // ---- Small vector helpers (pure, no THREE) ---------------------------------
 
@@ -90,10 +152,10 @@ const GOLDEN_ANGLE = 137.5 * Math.PI / 180;
  *
  * @param {object} params  from species.resolveSpecies
  * @param {number} seed
- * @param {object} options { maxSegments }
+ * @param {object} options { maxSegments, settings }
  */
 export function buildSkeleton(params, seed, options = {}) {
-    const T = GARDEN_CONFIG.tree;
+    const T = (options.settings || TREE_DEFAULTS).tree;
     const maxSegments = options.maxSegments || T.maxSegments;
     const random = makeRandom(seed);
     const segments = [];
@@ -202,10 +264,10 @@ export function buildSkeleton(params, seed, options = {}) {
  * `drop` is the autumn fall order, and it is not random: outer and higher
  * leaves go first, which is the order a real canopy empties in.
  */
-export function buildLeaves(skeleton, params, seed) {
+export function buildLeaves(skeleton, params, seed, settings = TREE_DEFAULTS) {
     const random = makeRandom(seed ^ 0x9E3779B9);
     const leaves = [];
-    const fromDepth = Math.max(1, params.depth - GARDEN_CONFIG.tree.leafLevels + 1);
+    const fromDepth = Math.max(1, params.depth - settings.tree.leafLevels + 1);
     const height = Math.max(0.001, skeleton.height);
 
     for (const s of skeleton.segments) {
@@ -267,9 +329,9 @@ export function buildLeaves(skeleton, params, seed) {
  * fruit is a subset of the flowers rather than an independent scattering, which
  * is both true and cheaper than two meshes.
  */
-export function buildFruit(leaves, resolved, seed, config = GARDEN_CONFIG) {
+export function buildFruit(leaves, resolved, seed, settings = TREE_DEFAULTS) {
     if (!resolved || !resolved.schedule) return null;
-    const F = config.garden.fruit;
+    const F = settings.fruit;
     const random = makeRandom((seed ^ 0x5EEDF00D) >>> 0);
     const anchors = [];
 
@@ -300,8 +362,8 @@ export function buildFruit(leaves, resolved, seed, config = GARDEN_CONFIG) {
 }
 
 /** Total triangle count a skeleton will bake to, for the budget checks. */
-export function sidesForDepth(depth) {
-    return Math.max(3, GARDEN_CONFIG.tree.trunkSides - depth);
+export function sidesForDepth(depth, settings = TREE_DEFAULTS) {
+    return Math.max(3, settings.tree.trunkSides - depth);
 }
 
 // ---- The bake --------------------------------------------------------------
@@ -323,14 +385,14 @@ export function sidesForDepth(depth) {
  *   aBirth    the growth value at which this segment starts
  *   aSway     wind weight, from depth and height
  */
-export function bakeGeometry(skeleton) {
+export function bakeGeometry(skeleton, settings = TREE_DEFAULTS) {
     const segs = skeleton.segments;
     const height = Math.max(0.001, skeleton.height);
 
     let vertexCount = 0;
     let indexCount = 0;
     for (const s of segs) {
-        const n = sidesForDepth(s.depth);
+        const n = sidesForDepth(s.depth, settings);
         vertexCount += n * 2;
         indexCount += n * 6;
     }
@@ -347,7 +409,7 @@ export function bakeGeometry(skeleton) {
     let v = 0;
     let i = 0;
     for (const s of segs) {
-        const n = sidesForDepth(s.depth);
+        const n = sidesForDepth(s.depth, settings);
         const dir = norm([s.x1 - s.x0, s.y1 - s.y0, s.z1 - s.z0]);
         const u = perpendicular(dir);
         const w = cross(dir, u);
@@ -425,6 +487,7 @@ uniform float uTime;
 uniform float uPhase;
 uniform float uSwayScale;
 uniform float uMotion;
+uniform float uLean;
 attribute vec3 aOrigin;
 attribute vec3 aRadial;
 attribute float aRadius;
@@ -450,8 +513,12 @@ const BARK_BODY = `
     // Read as one tree thrashing while the rest barely stirred, which is not
     // what one wind looks like. Multiplying by uScale as well means a sapling
     // sways like a sapling rather than like the tree it will become.
+    // uLean is a STEADY bend along the wind, added to the swing: 0 in the
+    // garden, where wind comes and goes, and more in a scene whose wind is
+    // a steady inflow (Tornado Alley). The leaves and the fruit carry the
+    // same term, so the canopy stays on the leaning branch.
     transformed += barkGust
-        * (sin(barkWP) * 0.62 + sin(barkWP * 1.73 + 1.3) * 0.38)
+        * (sin(barkWP) * 0.62 + sin(barkWP * 1.73 + 1.3) * 0.38 + uLean)
         * aSway * uSwayScale * uScale * uMotion;
 
     vBarkNormal = aRadial;
@@ -472,6 +539,7 @@ uniform float uFlutterRate;
 uniform float uFlutterAlong;
 uniform float uFlutterCross;
 uniform float uMotion;
+uniform float uLean;
 attribute float aBirth;
 attribute float aDrop;
 attribute float aTint;
@@ -555,7 +623,7 @@ const LEAF_BODY = `
     // standing still.
     float leafBWP = uTime * 1.35 + uPhase + (instanceMatrix[3].y * uScale) * 0.42;
     leafWorld += vec3(uWind.x, 0.0, uWind.z)
-        * (sin(leafBWP) * 0.62 + sin(leafBWP * 1.73 + 1.3) * 0.38)
+        * (sin(leafBWP) * 0.62 + sin(leafBWP * 1.73 + 1.3) * 0.38 + uLean)
         * aLeafSway * uSwayScale * uScale * uMotion;
     transformed += (leafRotT * leafWorld) / leafISC;
     #else
@@ -584,6 +652,7 @@ uniform float uPhase;
 uniform float uScale;
 uniform float uSwayScale;
 uniform float uMotion;
+uniform float uLean;
 attribute float aBirth;
 attribute float aDrop;
 attribute float aCrop;
@@ -661,7 +730,7 @@ const FRUIT_BODY = `
     // blossom sliding through its own canopy.
     float frBWP = uTime * 1.35 + uPhase + (instanceMatrix[3].y * uScale) * 0.42;
     frWorld += vec3(uWind.x, 0.0, uWind.z)
-        * (sin(frBWP) * 0.62 + sin(frBWP * 1.73 + 1.3) * 0.38)
+        * (sin(frBWP) * 0.62 + sin(frBWP * 1.73 + 1.3) * 0.38 + uLean)
         * aFruitSway * uSwayScale * uScale * uMotion;
     transformed += (frRotT * frWorld) / frISC;
     #else
@@ -1100,11 +1169,12 @@ export function patchVertex(material, uniforms, head, body, key) {
  * program once and reuses it.
  */
 export function createTree(resolved, seed, options = {}) {
-    const T = GARDEN_CONFIG.tree;
+    const settings = options.settings || TREE_DEFAULTS;
+    const T = settings.tree;
     const maxSegments = options.mobile ? T.maxSegmentsMobile : T.maxSegments;
 
-    const skeleton = buildSkeleton(resolved, seed, { maxSegments });
-    const leaves = buildLeaves(skeleton, resolved, seed);
+    const skeleton = buildSkeleton(resolved, seed, { maxSegments, settings });
+    const leaves = buildLeaves(skeleton, resolved, seed, settings);
 
     const group = new THREE.Group();
     group.name = `tree-${resolved.id}`;
@@ -1121,16 +1191,19 @@ export function createTree(resolved, seed, options = {}) {
         // number of metres. See the note in BARK_BODY.
         uSwayScale: { value: resolved.matureHeight * T.swayPerMetre },
         // 1 normally, damped by reduced motion. Never 0: see config.tree.
-        uMotion: { value: 1 }
+        uMotion: { value: 1 },
+        // A steady bend with the wind, on top of the swing. 0, the garden's
+        // behavior, unless a view asks for one. See BARK_BODY.
+        uLean: { value: 0 }
     };
 
-    const barkGeo = bakeGeometry(skeleton);
+    const barkGeo = bakeGeometry(skeleton, settings);
     const barkMaterial = new THREE.MeshStandardMaterial({
         color: resolved.bark,
         roughness: 0.94,
         metalness: 0
     });
-    patchVertex(barkMaterial, barkUniforms, BARK_HEAD, BARK_BODY, 'garden-bark');
+    patchVertex(barkMaterial, barkUniforms, BARK_HEAD, BARK_BODY, 'fractaltree-bark');
     barkMaterial.onBeforeCompile = wrapBarkFragment(barkMaterial.onBeforeCompile);
 
     const bark = new THREE.Mesh(barkGeo, barkMaterial);
@@ -1138,7 +1211,7 @@ export function createTree(resolved, seed, options = {}) {
     bark.receiveShadow = true;
     bark.customDepthMaterial = patchVertex(
         new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }),
-        barkUniforms, BARK_HEAD, BARK_BODY, 'garden-bark-depth'
+        barkUniforms, BARK_HEAD, BARK_BODY, 'fractaltree-bark-depth'
     );
     group.add(bark);
 
@@ -1151,6 +1224,7 @@ export function createTree(resolved, seed, options = {}) {
         uWind: barkUniforms.uWind,
         uSwayScale: barkUniforms.uSwayScale,
         uMotion: barkUniforms.uMotion,
+        uLean: barkUniforms.uLean,
         uFlutterRate: { value: T.leafFlutter.rate },
         uFlutterAlong: { value: T.leafFlutter.along },
         uFlutterCross: { value: T.leafFlutter.cross },
@@ -1175,7 +1249,7 @@ export function createTree(resolved, seed, options = {}) {
         metalness: 0,
         side: THREE.DoubleSide
     });
-    patchVertex(leafMaterial, leafUniforms, LEAF_HEAD, LEAF_BODY, 'garden-leaf');
+    patchVertex(leafMaterial, leafUniforms, LEAF_HEAD, LEAF_BODY, 'fractaltree-leaf');
     leafMaterial.onBeforeCompile = wrapLeafFragment(leafMaterial.onBeforeCompile);
 
     const leafMesh = new THREE.InstancedMesh(leafGeo, leafMaterial, Math.max(1, count));
@@ -1190,7 +1264,7 @@ export function createTree(resolved, seed, options = {}) {
             map: leafTexture,
             alphaTest: T.leafAlphaTest
         }),
-        leafUniforms, LEAF_HEAD, LEAF_BODY, 'garden-leaf-depth'
+        leafUniforms, LEAF_HEAD, LEAF_BODY, 'fractaltree-leaf-depth'
     );
 
     const birth = new Float32Array(Math.max(1, count));
@@ -1243,7 +1317,7 @@ export function createTree(resolved, seed, options = {}) {
     let fruitMaterial = null;
     let fruitUniforms = null;
     let fruitCount = 0;
-    const fruit = buildFruit(leaves, resolved, seed);
+    const fruit = buildFruit(leaves, resolved, seed, settings);
 
     if (fruit && fruit.anchors.length) {
         fruitCount = fruit.anchors.length;
@@ -1260,6 +1334,7 @@ export function createTree(resolved, seed, options = {}) {
             uScale: barkUniforms.uScale,
             uSwayScale: barkUniforms.uSwayScale,
             uMotion: barkUniforms.uMotion,
+        uLean: barkUniforms.uLean,
             uBloom: { value: 0 },
             uFruitSize: { value: 0 },
             uRipe: { value: 0 },
@@ -1285,7 +1360,7 @@ export function createTree(resolved, seed, options = {}) {
             metalness: 0,
             side: THREE.DoubleSide
         });
-        patchVertex(fruitMaterial, fruitUniforms, FRUIT_HEAD, FRUIT_BODY, 'garden-fruit');
+        patchVertex(fruitMaterial, fruitUniforms, FRUIT_HEAD, FRUIT_BODY, 'fractaltree-fruit');
         fruitMaterial.onBeforeCompile = wrapFruitFragment(fruitMaterial.onBeforeCompile);
 
         fruitMesh = new THREE.InstancedMesh(fruitGeo, fruitMaterial, fruitCount);
@@ -1303,7 +1378,7 @@ export function createTree(resolved, seed, options = {}) {
         const fRole = new Float32Array(fruitCount);
         const fPhase = new Float32Array(fruitCount);
         const fSway = new Float32Array(fruitCount);
-        const fSize = GARDEN_CONFIG.garden.fruit.size * (resolved.fruitSize || 1);
+        const fSize = settings.fruit.size * (resolved.fruitSize || 1);
 
         for (let i = 0; i < fruitCount; i++) {
             const a = fruit.anchors[i];
@@ -1353,7 +1428,9 @@ export function createTree(resolved, seed, options = {}) {
         // probe. Two species quietly sharing a mask is invisible in a
         // screenshot and one line here.
         fruitShape: (resolved.fruit && resolved.fruit.shape) || 'none',
-        counts: barkGeo.userData.counts
+        counts: barkGeo.userData.counts,
+        // What it was built with, so updateTree reads the same numbers.
+        settings
     };
 }
 
@@ -1523,7 +1600,7 @@ varying float vLeafBud;`)
  *                            snow, wind, time }
  */
 export function updateTree(tree, view, resolved) {
-    const T = GARDEN_CONFIG.tree;
+    const T = (tree.settings || TREE_DEFAULTS).tree;
     const b = tree.barkUniforms;
     const l = tree.leafUniforms;
 
@@ -1538,6 +1615,7 @@ export function updateTree(tree, view, resolved) {
     // Shared with the leaf material, so a damped tree cannot have undamped
     // leaves. Absent means full motion, never none.
     b.uMotion.value = view.motion === undefined ? 1 : view.motion;
+    b.uLean.value = view.lean || 0;
 
     l.uLeafScale.value = view.leaf;
     l.uDrop.value = view.drop;

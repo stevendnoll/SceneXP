@@ -106,18 +106,21 @@
     <title>High Water</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=4" as="style">
+    <link rel="preload" href="../shared/css/player-1.0.0.min.css" as="style">
+    <link rel="preload" href="css/experience.min.css?v=5" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-    <!-- The shared sheet FIRST and the experience sheet second, which is the
-         order the cascade needs: the shared one sets a universal reset and a
-         dark body, and this scene wants a pale sky behind a slow first frame.
-         Every rule in the cards below carries its own margin, colour and font,
-         so the reset has nothing of theirs to take away. -->
+    <!-- The shared sheet FIRST, then the shared player's, then the experience
+         sheet, which is the order the cascade needs: the shared one sets a
+         universal reset and a dark body, and this scene wants a pale sky behind
+         a slow first frame. The player's sheet styles the cards and controls
+         below, and its colors are this scene's, since it was lifted from
+         here. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=4">
+    <link rel="stylesheet" href="../shared/css/player-1.0.0.min.css">
+    <link rel="stylesheet" href="css/experience.min.css?v=5">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -167,6 +170,12 @@
     <canvas id="scene" aria-label="A view out to sea from the water's edge, with waves breaking toward you"
         role="img"></canvas>
 
+    <!-- The story, told to a screen reader one beat at a time as it plays
+         (config.narration, through shared/js/narration-1.0.0.js). Polite, so
+         it waits its turn, and only while the story plays into a beat: never
+         behind the welcome card, under a drag, or across a seek. -->
+    <p id="story-status" class="sr-only" role="status" aria-live="polite"></p>
+
     <!-- NO HOME BUTTON (2026-09-07). It came out with the rest of the site's
          Home chrome: visitors read it as "reset this view", tapped it, and
          left from the directory rather than coming back. The way to the
@@ -183,14 +192,15 @@
          holds the arc at zero until they are ready. The sea is already running
          behind it, so the card sits over a living ordinary afternoon rather than
          over a still frame. -->
-    <div id="welcome">
+    <div id="player-card">
         <div class="card">
             <!-- THE SAME CARD IS THE PAUSE CARD (2026-09-23). Steve asked for the
                  pause screen to say what this one says, and one copy of the
-                 content warning cannot drift from a second. main.js swaps Begin
-                 for Resume and Restart, and fills in this line with where the
-                 story was held, so a visitor can tell a pause from a reset. -->
-            <p id="paused-at" class="paused-at" hidden>Paused</p>
+                 content warning cannot drift from a second. The shared player
+                 (shared/js/player-1.0.0.js) swaps Begin for Resume and Restart,
+                 and fills in this line with where the story was held, so a
+                 visitor can tell a pause from a reset. -->
+            <p id="player-paused-at" class="paused-at" hidden>Paused</p>
             <h1>High Water</h1>
             <p class="lede">
                 Sixty seconds at the water's edge, beginning on an ordinary bright afternoon.
@@ -201,10 +211,11 @@
                 end. There is lightning, so the screen flashes from time to time.
                 It plays without sound, so you are welcome to watch it anywhere.
             </p>
-            <button id="begin" type="button" class="primary">Begin</button>
-            <div id="pause-actions" class="pause-actions" hidden>
-                <button id="resume" type="button" class="primary" aria-describedby="paused-at">Resume</button>
-                <button id="restart" type="button">Restart</button>
+            <button id="player-begin" type="button" class="player-btn player-btn-primary">Begin</button>
+            <div id="player-pause-actions" class="player-actions" hidden>
+                <button id="player-resume" type="button" class="player-btn player-btn-primary"
+                    aria-describedby="player-paused-at">Resume</button>
+                <button id="player-restart" type="button" class="player-btn">Restart</button>
             </div>
             <p class="note">You can watch it again as many times as you wish.</p>
             <!-- The one link back to the directory, replacing the floating Home
@@ -239,7 +250,7 @@
          no information a screen reader could use, and the ending card below
          carries all of it. -->
     <div id="wash" aria-hidden="true"></div>
-    <div id="blackout" aria-hidden="true"></div>
+    <div id="player-blackout" aria-hidden="true"></div>
 
     <!-- The player controls: a pause button in the corner and a scrubber
          along the bottom. Hidden until Begin, hidden again by a pause and by
@@ -252,17 +263,17 @@
          borrows the house `.menu-btn` circle and sits in its corner slot.
 
          The scrubber is a native range input, so the keyboard and a screen
-         reader get it for free. main.js takes the arrow keys to move five
-         seconds a press, and writes aria-valuetext in words. -->
-    <div id="controls" hidden>
-        <button id="pause-btn" type="button" class="menu-btn" aria-label="Pause" title="Pause (Esc)">
+         reader get it for free. The shared player takes the arrow keys to move
+         five seconds a press, and writes aria-valuetext in words. -->
+    <div id="player-controls" hidden>
+        <button id="player-pause" type="button" class="menu-btn" aria-label="Pause" title="Pause (Esc)">
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M9 5.5v13M15 5.5v13" />
             </svg>
         </button>
-        <div id="scrubber">
-            <label for="scrub" class="sr-only">Position in the story</label>
-            <input id="scrub" type="range" min="0" max="60" step="0.1" value="0"
+        <div id="player-scrubber">
+            <label for="player-scrub" class="sr-only">Position in the story</label>
+            <input id="player-scrub" type="range" min="0" max="60" step="0.1" value="0"
                 aria-valuetext="0 seconds of 60">
         </div>
     </div>
@@ -271,7 +282,7 @@
          on the page. role="status" so it is announced when it appears rather
          than stealing focus from the start, and the button takes focus so a
          keyboard visitor is not left hunting on a black screen. -->
-    <div id="ending" hidden role="status" aria-live="polite">
+    <div id="player-ending" hidden role="status" aria-live="polite">
         <p class="ending-line">The sea has taken the beach.</p>
         <!-- "ends" and not "happens", since 2026-08-24. A replay now draws a
              fresh hour, so the light on the water is not the same twice and the
@@ -288,9 +299,9 @@
              scene whose whole job was a mood. A thumbnail of another
              experience sells the next thing at the cost of this one. The quiet
              directory link underneath is as far as it goes here. -->
-        <div class="ending-actions">
-            <button id="share" type="button">Share</button>
-            <button id="replay" type="button">Watch it again</button>
+        <div class="player-actions">
+            <button id="share" type="button" class="player-btn">Share</button>
+            <button id="player-replay" type="button" class="player-btn">Watch it again</button>
         </div>
         <!-- Where the acknowledgement goes when a share falls through to a
              clipboard copy. This screen is not a dialog, so the region can live

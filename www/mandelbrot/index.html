@@ -147,17 +147,18 @@
     <!-- The welcome overlay. This experience is watched, not walked: the
          overlay sets the scene, notes the view controls, and steps aside
          on a click, a tap, Enter, Space, or Escape. The first time it
-         does, the dive starts by itself (2026-09-23). Escape brings it back
-         over a paused dive, and stepping back in resumes the flight if it
-         was flying. -->
-    <div id="blocker">
+         does, the dive starts by itself (2026-09-23). Escape or the help
+         button brings it back over a paused dive, and stepping back in
+         resumes the flight if it was flying. tabindex="-1" so the help button
+         can hand it focus as the button hides (see returnToWelcome). -->
+    <div id="blocker" tabindex="-1">
         <div id="instructions">
             <p class="title">WELCOME</p>
             <p class="subtitle">You are floating in deep space beside the most famous shape in mathematics</p>
             <p class="click-prompt">Click to drift closer</p>
             <div class="controls-hint">
                 <span>DIVE</span> The flight begins as you step in, down into the burning edge. The detail never ends.
-                <span>STEER</span> Pause or reset with the buttons below. After a reset, tap a glowing ring to dive somewhere new. Escape brings you back here.
+                <span>STEER</span> Pause or reset with the buttons below. After a reset, tap a glowing ring to dive somewhere new. The question mark in the corner, or Escape, brings you back here.
             </div>
             <!-- The one link back to the directory, replacing the floating Home
                  button (2026-09-07): Home sat in the corner of the live scene
@@ -181,13 +182,12 @@
         </div>
     </div>
 
-    <!-- THE HOME BUTTON IS GONE (2026-09-07), and it was the only float in
-         the markup: visitors read it as "reset this view", tapped it, and
-         left from the directory rather than coming back. The way to the
-         directory is now a named link at the foot of the welcome overlay
-         above. The AUTOZOOM row (play/pause and reset since 2026-09-23) is
-         built by main.js at runtime, and shown only while the welcome
-         overlay is out of the way. -->
+    <!-- THE HOME BUTTON IS GONE (2026-09-07): visitors read it as "reset
+         this view", tapped it, and left from the directory rather than
+         coming back. The way to the directory is now a named link at the
+         foot of the welcome overlay above. The AUTOZOOM row (play/pause and
+         reset since 2026-09-23) is built by main.js at runtime, and shown
+         only while the welcome overlay is out of the way. -->
 
     <!-- The depth chip: magnification readout during the infinite dive,
          updated by main.js, with a size comparison for company. Sits just
@@ -238,6 +238,28 @@
             move through the list, and Tab or Escape puts it away.</p>
         <ul id="prop-list" class="prop-list"></ul>
     </section>
+
+    <!-- HELP, AND IT IS THE WELCOME SCREEN ITSELF (2026-09-24), the way the
+         Fractal Garden's ? button is. It pauses the dive and brings the
+         welcome screen back, exactly as Escape does, for anybody without a
+         keyboard (a phone had no way back to it at all). The house .menu-btn
+         circle in the house corner. Like the autozoom row it is hidden while
+         the welcome screen is up: .ui-float is display:none until main.js
+         adds .visible.
+
+         AFTER THE LIST OF PLACES TO DIVE, not up by the welcome screen: that
+         list has to stay the first Tab after a click (see its note), and the
+         autozoom row main.js appends to the page comes after this. -->
+    <button id="help-btn" class="ui-float menu-btn help-btn" type="button"
+        title="Help (Esc)"
+        aria-label="Help">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" />
+            <path d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" stroke-linecap="round"
+                stroke-linejoin="round" fill="none" />
+            <circle cx="12.1" cy="17.4" r="1.05" stroke="none" fill="currentColor" />
+        </svg>
+    </button>
 
     <script src="../lib/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

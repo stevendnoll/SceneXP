@@ -2222,11 +2222,13 @@ html [data-ui-theme="surf" lang="en"]
     title
       "High Water"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
+    link [as="style" href="../shared/css/player-1.0.0.min.css" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=5" rel="preload"]
     link [as="script" href="../lib/three.min.js" rel="preload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=4" rel="stylesheet"]
+    link [href="../shared/css/player-1.0.0.min.css" rel="stylesheet"]
+    link [href="css/experience.min.css?v=5" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -2249,9 +2251,10 @@ html [data-ui-theme="surf" lang="en"]
               a [href="/privacy.html"]
                 "Privacy"
     canvas#scene [aria-label="A view out to sea from the water's edge, with waves breaking toward you" role="img"]
-    div#welcome
+    p#story-status.sr-only [aria-live="polite" role="status"]
+    div#player-card
       div.card
-        p#paused-at.paused-at [hidden]
+        p#player-paused-at.paused-at [hidden]
           "Paused"
         h1
           "High Water"
@@ -2259,36 +2262,36 @@ html [data-ui-theme="surf" lang="en"]
           "Sixty seconds at the water's edge, beginning on an ordinary bright afternoon."
         p.warning
           "It does not stay one, and you may find it unsettling. The weather turns, the surf keeps rising, and the sea comes over you at the end. There is lightning, so the screen flashes from time to time. It plays without sound, so you are welcome to watch it anywhere."
-        button#begin.primary [type="button"]
+        button#player-begin.player-btn.player-btn-primary [type="button"]
           "Begin"
-        div#pause-actions.pause-actions [hidden]
-          button#resume.primary [aria-describedby="paused-at" type="button"]
+        div#player-pause-actions.player-actions [hidden]
+          button#player-resume.player-btn.player-btn-primary [aria-describedby="player-paused-at" type="button"]
             "Resume"
-          button#restart [type="button"]
+          button#player-restart.player-btn [type="button"]
             "Restart"
         p.note
           "You can watch it again as many times as you wish."
         a#explore-link.welcome-explore [href="/"]
           "More 3D worlds to explore at SceneXP.com"
     div#wash [aria-hidden="true"]
-    div#blackout [aria-hidden="true"]
-    div#controls [hidden]
-      button#pause-btn.menu-btn [aria-label="Pause" title="Pause (Esc)" type="button"]
+    div#player-blackout [aria-hidden="true"]
+    div#player-controls [hidden]
+      button#player-pause.menu-btn [aria-label="Pause" title="Pause (Esc)" type="button"]
         svg [aria-hidden="true" viewbox="0 0 24 24"]
           path [d="M9 5.5v13M15 5.5v13"]
-      div#scrubber
-        label.sr-only [for="scrub"]
+      div#player-scrubber
+        label.sr-only [for="player-scrub"]
           "Position in the story"
-        input#scrub [aria-valuetext="0 seconds of 60" max="60" min="0" step="0.1" type="range" value="0"]
-    div#ending [aria-live="polite" hidden role="status"]
+        input#player-scrub [aria-valuetext="0 seconds of 60" max="60" min="0" step="0.1" type="range" value="0"]
+    div#player-ending [aria-live="polite" hidden role="status"]
       p.ending-line
         "The sea has taken the beach."
       p.ending-note
         "Thank you for watching. It ends the same way every time."
-      div.ending-actions
-        button#share [type="button"]
+      div.player-actions
+        button#share.player-btn [type="button"]
           "Share"
-        button#replay [type="button"]
+        button#player-replay.player-btn [type="button"]
           "Watch it again"
       p#share-status.sr-only [aria-live="polite" role="status"]
       a.welcome-explore.promo-explore [href="/"]
@@ -2355,36 +2358,42 @@ html [lang="en"]
               {
                 "@type": "ListItem",
                 "position": 1,
+                "url": "https://www.scenexp.com/tornado/",
+                "name": "Tornado Alley"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
                 "url": "https://www.scenexp.com/xo/",
                 "name": "X's and O's"
               },
               {
                 "@type": "ListItem",
-                "position": 2,
+                "position": 3,
                 "url": "https://www.scenexp.com/garden/",
                 "name": "Fractal Garden"
               },
               {
                 "@type": "ListItem",
-                "position": 3,
+                "position": 4,
                 "url": "https://www.scenexp.com/highwater/",
                 "name": "High Water"
               },
               {
                 "@type": "ListItem",
-                "position": 4,
+                "position": 5,
                 "url": "https://www.scenexp.com/earthdefense/",
                 "name": "Earth Defense"
               },
               {
                 "@type": "ListItem",
-                "position": 5,
+                "position": 6,
                 "url": "https://www.scenexp.com/mandelbrot/",
                 "name": "The Mandelbrot Set"
               },
               {
                 "@type": "ListItem",
-                "position": 6,
+                "position": 7,
                 "url": "https://www.scenexp.com/steve/",
                 "name": "Steve's Home Office"
               }
@@ -2520,9 +2529,21 @@ html [lang="en"]
             h2#worlds-and-games
               "Worlds and games"
             ul.experience-grid
+              li.experience-card [data-slug="tornado"]
+                a [href="/tornado/"]
+                  img [alt="A pale tornado reaching down from a dark, turning storm base to a cloud of dust and flying debris, just left of a small farm with a red barn, across golden fields with wildflowers in the foreground." decoding="async" fetchpriority="high" height="630" loading="eager" src="/tornado/assets/og-tornado.webp?v=1" width="1200"]
+                  div.experience-card-body
+                    p.experience-eyebrow
+                      "A storm chaser's view of a tornado"
+                    h3
+                      "Tornado Alley"
+                    p
+                      "Thirty seconds on the open prairie, beginning on a calm summer evening. A storm organizes on the horizon, its base begins to turn, and a tornado touches down far out across the fields. Nobody is in its path, though it does pick a few things up along the way."
+                    span.experience-cta
+                      "Watch the storm roll in →"
               li.experience-card [data-slug="xo"]
                 a [href="/xo/"]
-                  img [alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." decoding="async" fetchpriority="high" height="630" loading="eager" src="/xo/assets/og-xo.webp?v=1" width="1200"]
+                  img [alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." decoding="async" height="630" loading="lazy" src="/xo/assets/og-xo.webp?v=1" width="1200"]
                   div.experience-card-body
                     p.experience-eyebrow
                       "A football game where you call the plays"
@@ -3352,7 +3373,7 @@ html [data-ui-theme="ember" lang="en"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
           "Loading…"
-    div#blocker
+    div#blocker [tabindex="-1"]
       div#instructions
         p.title
           "WELCOME"
@@ -3366,7 +3387,7 @@ html [data-ui-theme="ember" lang="en"]
           "The flight begins as you step in, down into the burning edge. The detail never ends."
           span
             "STEER"
-          "Pause or reset with the buttons below. After a reset, tap a glowing ring to dive somewhere new. Escape brings you back here."
+          "Pause or reset with the buttons below. After a reset, tap a glowing ring to dive somewhere new. The question mark in the corner, or Escape, brings you back here."
         a#explore-link.welcome-explore [href="/"]
           "More 3D worlds to explore at SceneXP.com"
     div#depth-chip.depth-chip
@@ -3388,6 +3409,11 @@ html [data-ui-theme="ember" lang="en"]
       p.prop-panel-note
         "Choose a place and the dive begins there. The arrow keys move through the list, and Tab or Escape puts it away."
       ul#prop-list.prop-list
+    button#help-btn.ui-float.menu-btn.help-btn [aria-label="Help" title="Help (Esc)" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        circle [cx="12" cy="12" fill="none" r="9"]
+        path [d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"]
+        circle [cx="12.1" cy="17.4" fill="currentColor" r="1.05" stroke="none"]
     script [src="../lib/three.min.js"]
     script [src="js/main.min.js" type="module"]"
 `;
@@ -4834,6 +4860,124 @@ html [lang="en"]
             a [href="https://www.continuumcommercellc.com/" rel="noopener noreferrer" target="_blank" title="View the Continuum Commerce LLC website"]
               "Continuum Commerce LLC"
             ".""
+`;
+
+exports[`www/tornado/index.html 1`] = `
+"<!doctype html>
+html [data-ui-theme="surf" lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="Thirty seconds on the open prairie in 3D, beginning on a calm summer evening. A storm builds on the horizon, a tornado touches down far out across the fields, and then the storm moves on. Plays without sound in any modern browser." name="description"]
+    meta [content="#3a4049" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/tornado/" rel="canonical"]
+    meta [content="Tornado Alley" property="og:title"]
+    meta [content="Thirty seconds on the open prairie, beginning on a calm summer evening, as a storm builds on the horizon." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/tornado/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/tornado/assets/og-tornado.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A tornado on the open prairie under a dark, turning storm base. A pale funnel reaches down to a cloud of brown dust and flying debris just left of a small farm with a white house, a red barn and a gray silo. A wire fence crosses golden fields beyond a pond, and wildflowers fill the foreground." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Tornado Alley" name="twitter:title"]
+    meta [content="Thirty seconds on the open prairie, beginning on a calm summer evening, as a storm builds on the horizon." name="twitter:description"]
+    meta [content="https://www.scenexp.com/tornado/assets/og-tornado.jpg?v=1" name="twitter:image"]
+    meta [content="A tornado on the open prairie under a dark, turning storm base. A pale funnel reaches down to a cloud of brown dust and flying debris just left of a small farm with a white house, a red barn and a gray silo. A wire fence crosses golden fields beyond a pond, and wildflowers fill the foreground." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/tornado/#website",
+        "url": "https://www.scenexp.com/tornado/",
+        "name": "Tornado Alley",
+        "description": "A passive 3D scene on the open prairie. Thirty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end as the storm moves on.",
+        "inLanguage": "en-US"
+      }
+    title
+      "Tornado Alley"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="../shared/css/player-1.0.0.min.css" rel="preload"]
+    link [as="style" href="css/experience.min.css" rel="preload"]
+    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="favicon.svg" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="../shared/css/player-1.0.0.min.css" rel="stylesheet"]
+    link [href="css/experience.min.css" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body
+    noscript
+      div.noscript-fallback
+        h1
+          "Tornado Alley"
+        p
+          "This is a passive 3D scene on the open prairie, and it needs JavaScript to draw. It runs for thirty seconds and begins on a calm summer evening, with golden light on the wheat and a storm standing on the horizon. Then the storm organizes. Its base lowers and begins to turn, a funnel reaches down to meet the dust rising off the fields, and a tornado stands far out on the plains before it thins into a rope and lets go."
+        p
+          "Nobody is in its path. There is lightning, so the screen flashes from time to time. It plays without sound, so you are welcome to watch it anywhere, and you can watch it again as many times as you wish."
+        p
+          "SceneXP is a home for 3D experiences that run right in your browser."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/contact.html"]
+                "Contact the developer"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    canvas#scene [aria-label="A wide view across a golden prairie toward a storm on the horizon" role="img"]
+    p#story-status.sr-only [aria-live="polite" role="status"]
+    div#player-card
+      div.card
+        p#player-paused-at.paused-at [hidden]
+          "Paused"
+        h1
+          "Tornado Alley"
+        p.lede
+          "Thirty seconds on the open prairie, beginning on a calm summer evening."
+        p.warning
+          "A storm builds on the horizon, and a tornado touches down far out across the fields, then thins and lets go. Nobody is in its path. There is lightning, so the screen flashes from time to time. It plays without sound, so you are welcome to watch it anywhere."
+        button#player-begin.player-btn.player-btn-primary [type="button"]
+          "Begin"
+        div#player-pause-actions.player-actions [hidden]
+          button#player-resume.player-btn.player-btn-primary [aria-describedby="player-paused-at" type="button"]
+            "Resume"
+          button#player-restart.player-btn [type="button"]
+            "Restart"
+        p.note
+          "You can watch it again as many times as you wish."
+        a#explore-link.welcome-explore [href="/"]
+          "More 3D worlds to explore at SceneXP.com"
+    div#player-blackout [aria-hidden="true"]
+    div#player-controls [hidden]
+      button#player-pause.menu-btn [aria-label="Pause" title="Pause (Esc)" type="button"]
+        svg [aria-hidden="true" viewbox="0 0 24 24"]
+          path [d="M9 5.5v13M15 5.5v13"]
+      div#player-scrubber
+        label.sr-only [for="player-scrub"]
+          "Position in the story"
+        input#player-scrub [aria-valuetext="0 seconds of 30" max="30" min="0" step="0.1" type="range" value="0"]
+    div#player-ending [aria-live="polite" hidden role="status"]
+      p#ending-line.ending-line
+        "The storm has moved on. The cow is fine."
+      p.ending-note
+        "Thank you for watching. The storm rarely picks up the same thing twice."
+      div.player-actions
+        button#share.player-btn [type="button"]
+          "Share"
+        button#player-replay.player-btn [type="button"]
+          "Watch it again"
+      p#share-status.sr-only [aria-live="polite" role="status"]
+      a.welcome-explore.promo-explore [href="/"]
+        "More 3D worlds to explore at SceneXP.com"
+    script [src="../lib/three.min.js"]
+    script [src="js/main.min.js" type="module"]"
 `;
 
 exports[`www/xo/index.html 1`] = `

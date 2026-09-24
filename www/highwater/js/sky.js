@@ -600,11 +600,21 @@ vec3 oceanSkyColor(vec3 rayDir, float discWeight) {
 // The THREE shell
 // ---------------------------------------------------------------------------
 
+/** The dome's place in the draw order: after the sand and the buoy, which
+ *  sit at 0. Exported for tests/sky-drawn-last.test.mjs. */
+export const DOME_ORDER = 1000;
+
 const VERTEX_SHADER = `
 varying vec3 vRayDir;
 void main() {
     vRayDir = position;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    // AT THE FAR PLANE, WHATEVER THE RADIUS (2026-09-24). The dome is drawn
+    // last of the opaque things now, so its depth decides what it may paint
+    // over: pinned to the far plane, it loses the depth test to anything
+    // already drawn at any distance, and wins only where nothing was drawn,
+    // exactly as when it was drawn first. See the note where it is built.
+    gl_Position.z = gl_Position.w;
 }
 `;
 
@@ -754,16 +764,24 @@ export function initSky(scene, camera, config = OCEAN_CONFIG, options = {}) {
         fragmentShader: FRAGMENT_SHADER,
         side: THREE.BackSide,
         depthWrite: false,
-        depthTest: false,
+        // THE DEPTH TEST IS ON NOW (2026-09-24), and it has to be: the dome
+        // draws after the sand, and without the test it would paint over it.
         fog: false
     });
 
     dome = new THREE.Mesh(domeGeometry, domeMaterial);
     dome.name = 'sky';
     dome.frustumCulled = false;
-    // First in the queue and it writes no depth, so it is a background that
-    // happens to be geometry rather than something the sea has to sort against.
-    dome.renderOrder = -1;
+    // DRAWN LAST OF THE OPAQUE THINGS, NOT FIRST (2026-09-24). At -1 it was
+    // first in the queue, so its shader ran on every pixel before the sand
+    // and the buoy covered theirs. Drawn after them with the depth test on,
+    // those pixels are rejected before it shades them. It still writes no
+    // depth and is pinned to the far plane, so it stays a background that
+    // happens to be geometry. THE SEA IS TRANSPARENT, so it still draws over
+    // the dome, in the transparent pass, and nothing it shows changes. That
+    // also means the saving is only the sand and the buoy: the sea covers
+    // the sky rather than hiding it.
+    dome.renderOrder = DOME_ORDER;
     if (camera) dome.position.copy(camera.position);
     if (scene) scene.add(dome);
 

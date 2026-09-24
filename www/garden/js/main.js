@@ -25,7 +25,7 @@
  * what time it is would be a very hard bug to see.
  */
 
-import { GARDEN_CONFIG } from './config.min.js';
+import { GARDEN_CONFIG, GARDEN_TREE_SETTINGS } from './config.min.js';
 import {
     hourAt, yearAt, seasonAt, snowCoverageAt, startSeconds, fruitStageAt, showcaseHour
 } from './clock.min.js';
@@ -41,7 +41,7 @@ import {
 } from './wildlife.min.js';
 import { createWeather, stepWeather, weatherWords, overcastAt } from './weather.min.js';
 import { initPrecipitation, updatePrecipitation, disposePrecipitation } from './precip.min.js';
-import { resolveSpecies } from './species.min.js';
+import { resolveSpecies } from '../../shared/js/treespecies-1.0.0.min.js';
 import {
     dollyView, applyDollyDelta, dollyLimits, getDolly, resetView,
     focusDistance, dollyForDistance, focusOn, stepView, cancelFocus, getAim,
@@ -51,7 +51,7 @@ import {
     pickBase, pickDrop, pickDropIndex, dropScreenY, dropPresence, thirstyCount,
     setHoveredDrop, getBedMesh, getLevelMesh, bedSpan
 } from './beds.min.js';
-import { createTree, updateTree, disposeTree } from './tree.min.js';
+import { createTree, updateTree, disposeTree } from '../../shared/js/fractaltree-1.0.0.min.js';
 import {
     initGarden, plantTree, restoreTrees, removeTree, clearGarden, waterTree,
     updateGarden, getTrees, getOccupied, isFull, capacity, ageYears,
@@ -1875,7 +1875,7 @@ function rebuildPreview() {
     // promises. The small species were all under the cap, which is why only the
     // large ones looked wrong.
     previewTree = createTree(previewResolved, seed === undefined ? 0x5EED : seed,
-        { mobile: state.mobile });
+        { mobile: state.mobile, settings: GARDEN_TREE_SETTINGS });
     previewScene.add(previewTree.group);
 
     // FRAMED ON WHAT IS ACTUALLY THERE. The plant modal draws its tree full

@@ -25,6 +25,22 @@ import { join } from 'node:path';
 
 const DIR = join(process.cwd(), 'www', 'garden', 'js');
 
+// THE GARDEN'S TREES LIVE IN THE SHARED FRACTAL TREE PART since 2026-09-23
+// (www/shared/js/fractaltree-1.0.0.js, promoted from this folder's tree.js so
+// other scenes can grow them). They are still the garden's shaders, so every
+// check here still reads them, under their old name, through these two.
+const TREE_PATH = join(process.cwd(), 'www', 'shared', 'js', 'fractaltree-1.0.0.js');
+
+/** The garden's hand-written sources, its trees included. */
+function gardenSources() {
+    return [...readdirSync(DIR).filter((f) => f.endsWith('.js') && !f.endsWith('.min.js')), 'tree.js'];
+}
+
+/** One of them, as text. */
+function source(name) {
+    return readFileSync(name === 'tree.js' ? TREE_PATH : join(DIR, name), 'utf8');
+}
+
 /**
  * GLSL ES 3.00 reserved words.
  *
@@ -45,9 +61,9 @@ atomic_uint centroid invariant smooth flat noperspective
 /** Every template literal in the garden sources that looks like GLSL. */
 function glslBlocks() {
     const blocks = [];
-    for (const name of readdirSync(DIR)) {
+    for (const name of gardenSources()) {
         if (!name.endsWith('.js') || name.endsWith('.min.js')) continue;
-        const src = readFileSync(join(DIR, name), 'utf8');
+        const src = source(name);
         const re = /`([^`]*)`/g;
         let m;
         while ((m = re.exec(src)) !== null) {
@@ -172,7 +188,7 @@ test('every material modified through onBeforeCompile names its own cache key', 
     // attributes are demanded of the wrong geometry, and onBeforeCompile never
     // runs for the second material, so its uniforms never reach a shader.
     for (const name of ['tree.js', 'terrain.js']) {
-        const src = readFileSync(join(DIR, name), 'utf8');
+        const src = source(name);
         const patched = (src.match(/onBeforeCompile\s*=/g) || []).length;
         const keyed = (src.match(/customProgramCacheKey\s*=/g) || []).length;
         expect(patched).toBeGreaterThan(0);
@@ -180,8 +196,8 @@ test('every material modified through onBeforeCompile names its own cache key', 
     }
 
     // And the keys actually differ from one another.
-    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
-    const keys = (tree.match(/'garden-[a-z-]+'/g) || []);
+    const tree = source('tree.js');
+    const keys = (tree.match(/'fractaltree-[a-z-]+'/g) || []);
     expect(keys.length).toBeGreaterThanOrEqual(4);
     expect(new Set(keys).size).toBe(keys.length);
 });
@@ -192,7 +208,7 @@ test('injected shader bodies target chunks that three actually has', () => {
     const three = readFileSync(join(process.cwd(), 'www', 'lib', 'three.min.js'), 'utf8');
     const targets = new Set();
     for (const name of ['tree.js', 'terrain.js']) {
-        const src = readFileSync(join(DIR, name), 'utf8');
+        const src = source(name);
         for (const m of src.matchAll(/\.replace\(\s*'(#include <[a-z_]+>)'/g)) {
             targets.add(m[1]);
         }
@@ -217,14 +233,14 @@ test('injected shader bodies target chunks that three actually has', () => {
 // honest place to check that a map was actually asked for is the source.
 
 test('a leaf card carries the UVs its mask needs', () => {
-    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const tree = source('tree.js');
     const card = tree.slice(tree.indexOf('function buildLeafCard'));
     const body = card.slice(0, card.indexOf('\n}'));
     expect(body).toMatch(/setAttribute\(\s*'uv'/);
 });
 
 test('both leaf materials wear the mask, or the shadows outlive the shape', () => {
-    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const tree = source('tree.js');
     // Anchored past the leaf texture, because the BARK material and the BARK
     // depth material are both declared first and rightly carry no mask. An
     // unanchored indexOf finds those and passes while the leaves stay bare,
@@ -244,7 +260,7 @@ test('the alpha survives the fragment wrap that runs before the threshold', () =
     // must write only diffuseColor.rgb: assigning the whole vec4 would drop the
     // mask's alpha before alphatest_fragment ever sees it, and the leaves would
     // silently go back to being rectangles with no error anywhere.
-    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const tree = source('tree.js');
     const wrap = tree.slice(tree.indexOf('function wrapLeafFragment'));
     const body = wrap.slice(0, wrap.indexOf('\n}'));
     expect(body).toContain('#include <map_fragment>');
@@ -256,14 +272,14 @@ test('the plot and the wood share one leaf mask', () => {
     // Two canopy textures would be two answers to what a leaf clump looks like,
     // and the join between the plot and the treeline is where that would show.
     const forest = readFileSync(join(DIR, 'forest.js'), 'utf8');
-    expect(forest).toMatch(/import\s*\{[^}]*leafClusterTexture[^}]*\}\s*from\s*'\.\/tree\.min\.js'/);
+    expect(forest).toMatch(/import\s*\{[^}]*leafClusterTexture[^}]*\}\s*from\s*'\.\.\/\.\.\/shared\/js\/fractaltree-1\.0\.0\.min\.js'/);
     expect(forest).not.toMatch(/function buildLeafClusterTexture/);
 });
 
 // ---- The canopy has to move with the wood ----------------------------------
 
 test('the leaf shader applies the branch sway, not just its own flutter', () => {
-    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const tree = source('tree.js');
     const leafBody = tree.slice(tree.indexOf('const LEAF_BODY'));
     const body = leafBody.slice(0, leafBody.indexOf('`;'));
     // The per-leaf weight has to reach the displacement, not merely exist.
@@ -277,7 +293,7 @@ test('the branch sway is the SAME expression in both shaders', () => {
     // like two expressions disagreeing. Compare the coefficients that define
     // the motion rather than the whole line, since the two differ in where they
     // read their height from.
-    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const tree = source('tree.js');
     const grab = (marker) => {
         const block = tree.slice(tree.indexOf(marker));
         return block.slice(0, block.indexOf('`;'));
@@ -302,7 +318,7 @@ test('sway is scaled by the tree, in both shaders', () => {
     // maple swung a third of its own height while a 14 m redwood moved 7
     // percent of its. That reads as one tree thrashing while the rest barely
     // stir, which is not what one wind looks like.
-    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const tree = source('tree.js');
     for (const marker of ['const BARK_BODY', 'const LEAF_BODY']) {
         const block = tree.slice(tree.indexOf(marker));
         expect(block.slice(0, block.indexOf('`;'))).toMatch(/uSwayScale \* uScale/);
@@ -349,8 +365,8 @@ test('no backtick survives inside an injected GLSL block', () => {
     // into it again while writing a comment about map_fragment. Read as text
     // so this reports the real problem, since a suite that IMPORTS the broken
     // module just fails to load and says nothing useful.
-    for (const file of readdirSync(DIR).filter((f) => f.endsWith('.js') && !f.endsWith('.min.js'))) {
-        const src = readFileSync(join(DIR, file), 'utf8');
+    for (const file of gardenSources().filter((f) => f.endsWith('.js') && !f.endsWith('.min.js'))) {
+        const src = source(file);
         for (const m of src.matchAll(/\.replace\('#include <[^']+>',\s*`([\s\S]*?)`\)/g)) {
             expect(`${file}: ${m[1].includes('`') ? 'BACKTICK INSIDE GLSL' : 'clean'}`).toBe(`${file}: clean`);
         }
@@ -373,7 +389,7 @@ test('colours reach the tree shaders in linear, not as sRGB digits', () => {
     // hex's sRGB digits straight into diffuseColor. Every leaf rendered lighter
     // and flatter than the colour it was authored as, which a green forgives
     // and a dark red does not: the Japanese Maple came out salmon pink.
-    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const tree = source('tree.js');
     const fn = tree.slice(tree.indexOf('function setVec'));
     expect(fn.slice(0, fn.indexOf('\n}'))).toMatch(/srgbToLinear/);
 });
@@ -387,8 +403,8 @@ test('every injected material names its own program cache key, and no two share 
     // a shader at all. That is in the decision log from 2026-08-25 and it cost
     // a day. The keys are the whole defence, so they have to be distinct.
     const keys = [];
-    for (const file of readdirSync(DIR).filter((f) => f.endsWith('.js') && !f.endsWith('.min.js'))) {
-        const src = readFileSync(join(DIR, file), 'utf8');
+    for (const file of gardenSources().filter((f) => f.endsWith('.js') && !f.endsWith('.min.js'))) {
+        const src = source(file);
         for (const m of src.matchAll(/patchVertex\([\s\S]{0,400}?,\s*'([a-z0-9-]+)'\s*\)/g)) keys.push(m[1]);
         for (const m of src.matchAll(/customProgramCacheKey\s*=\s*\(\)\s*=>\s*'([a-z0-9-]+)'/g)) keys.push(m[1]);
     }
@@ -402,7 +418,7 @@ test('the leaf flutter is a SECOND motion, not the branch one repeated', () => {
     // Two motions at one frequency read as one motion. The branch runs at 1.35
     // and the flutter used to run at 1.6, close enough that the two beat slowly
     // and the canopy looked like a rigid thing being pushed.
-    const tree = readFileSync(join(DIR, 'tree.js'), 'utf8');
+    const tree = source('tree.js');
     const leaf = tree.slice(tree.indexOf('const LEAF_BODY'));
     const body = leaf.slice(0, leaf.indexOf('`;'));
 
@@ -449,7 +465,7 @@ test('reduced motion damps every moving term, and removes none of them', () => {
     // reason it is acceptable: the damp is one multiply at the end of a line,
     // and this file is where somebody adding one will look.
     const body = (file, marker) => {
-        const src = readFileSync(join(DIR, file), 'utf8');
+        const src = source(file);
         const block = src.slice(src.indexOf(marker));
         return block.slice(0, block.indexOf('`;'));
     };
@@ -843,9 +859,9 @@ test('INJECTED UNIFORMS GO THROUGH THE `#include <common>` SEAM', () => {
     // A green suite cannot tell a shader that compiles from one that does not,
     // so consistency across the four is the only guard available here.
     const offences = [];
-    for (const name of readdirSync(DIR)) {
+    for (const name of gardenSources()) {
         if (!name.endsWith('.js') || name.endsWith('.min.js')) continue;
-        const src = readFileSync(join(DIR, name), 'utf8');
+        const src = source(name);
         if (!src.includes('onBeforeCompile')) continue;
         // A prepend looks like: shader.fragmentShader = `...` + shader.fragmentShader
         if (/shader\.(fragment|vertex)Shader\s*=\s*`[^`]*`\s*\+\s*shader\./.test(src)) {
@@ -855,9 +871,9 @@ test('INJECTED UNIFORMS GO THROUGH THE `#include <common>` SEAM', () => {
     expect(offences).toEqual([]);
 
     // And the seam really is in use, so this cannot pass by finding nothing.
-    const patched = readdirSync(DIR)
+    const patched = gardenSources()
         .filter((n) => n.endsWith('.js') && !n.endsWith('.min.js'))
-        .map((n) => readFileSync(join(DIR, n), 'utf8'))
+        .map((n) => source(n))
         .filter((src) => src.includes('onBeforeCompile'));
     expect(patched.length).toBeGreaterThanOrEqual(3);
     for (const src of patched) {

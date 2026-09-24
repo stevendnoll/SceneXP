@@ -20,7 +20,7 @@
 
 import { GARDEN_CONFIG } from './config.min.js';
 import { seasonAt, hourAt } from './clock.min.js';
-import { SPECIES, DEFAULT_CUSTOM, isFlowering, speciesById } from './species.min.js';
+import { SPECIES, DEFAULT_CUSTOM, isFlowering, speciesById } from '../../shared/js/treespecies-1.0.0.min.js';
 import { healthBand, HEALTH_WORDS, cropAt } from './garden.min.js';
 import { fruitStageAt, fruitWords } from './clock.min.js';
 

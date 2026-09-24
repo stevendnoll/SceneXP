@@ -1964,7 +1964,7 @@ describe('the species copy', () => {
     const read = (p) => readFileSync(join(process.cwd(), ...p), 'utf8');
 
     test('every count in the copy is the real number of species', async () => {
-        const { SPECIES } = await import('../www/garden/js/species.js');
+        const { SPECIES } = await import('../www/shared/js/treespecies-1.0.0.js');
         const right = NUMBER_WORDS[SPECIES.length];
         expect(right).toBeTruthy();
         for (const path of FILES) {
@@ -1995,7 +1995,7 @@ describe('the species copy', () => {
         // nothing connects the sentence to the schedule it describes. Three of
         // these were wrong when M6-1 read them. Each assertion below is the
         // fact one surviving sentence rests on.
-        const { SPECIES, speciesById } = await import('../www/garden/js/species.js');
+        const { SPECIES, speciesById } = await import('../www/shared/js/treespecies-1.0.0.js');
         const { phenologyAt } = await import('../www/garden/js/clock.js');
         const blooming = SPECIES.filter((s) => s.schedule && s.schedule.bloomFull != null);
         const fruiting = SPECIES.filter((s) => s.fruit);
@@ -2077,14 +2077,19 @@ describe('house style (M6-1)', () => {
     const GARDEN_JS = ['beds', 'clock', 'config', 'forest', 'garden', 'main',
         'precip', 'sky', 'species', 'terrain', 'tree', 'ui', 'view', 'vista',
         'weather', 'wildlife'];
+    // The garden's species and trees are shared parts since 2026-09-23 and
+    // are still held to the garden's house style.
+    const SHARED_AS = { species: 'treespecies-1.0.0', tree: 'fractaltree-1.0.0' };
+    const gardenFile = (name) => (SHARED_AS[name]
+        ? join(process.cwd(), 'www', 'shared', 'js', `${SHARED_AS[name]}.js`)
+        : join(process.cwd(), 'www', 'garden', 'js', `${name}.js`));
 
     test('NO EM-DASH ANYWHERE, in copy or out of it', () => {
         // Zero tolerance is available here precisely because nothing else in a
         // JS file has any reason to hold one, which makes this the one house
         // rule that can be enforced without deciding what counts as prose.
         for (const name of GARDEN_JS) {
-            const src = readFileSync(
-                join(process.cwd(), 'www', 'garden', 'js', `${name}.js`), 'utf8');
+            const src = readFileSync(gardenFile(name), 'utf8');
             expect(`${name}.js: ${src.includes('—')}`).toBe(`${name}.js: false`);
         }
         const html = readFileSync(
@@ -2096,7 +2101,7 @@ describe('house style (M6-1)', () => {
         // Imported one at a time rather than through Promise.all: these modules
         // share `config.min.js`, and racing four dynamic imports at it under
         // the ESM loader fails with "not in cache".
-        const { SPECIES } = await import('../www/garden/js/species.js');
+        const { SPECIES } = await import('../www/shared/js/treespecies-1.0.0.js');
         const { HEALTH_WORDS } = await import('../www/garden/js/garden.js');
         const ui = await import('../www/garden/js/ui.js');
         const { fruitWords } = await import('../www/garden/js/clock.js');

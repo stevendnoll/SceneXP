@@ -24,6 +24,12 @@ const LIGHTNING_URL = '../www/highwater/js/lightning.js';
 jest.unstable_mockModule('../www/highwater/js/config.min.js', async () => (
     await import(CONFIG_URL)
 ));
+// The lightning is the shared part since 2026-09-23 (High Water's lightning.js
+// binds its config to it). Pointed at the source, so this suite, which still
+// holds every property High Water tuned, also measures the shared code.
+jest.unstable_mockModule('../www/shared/js/lightning-1.0.0.min.js', async () => (
+    await import('../www/shared/js/lightning-1.0.0.js')
+));
 jest.unstable_mockModule('../www/highwater/js/storm.min.js', async () => (
     await import(STORM_URL)
 ));

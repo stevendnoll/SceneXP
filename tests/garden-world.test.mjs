@@ -28,7 +28,7 @@ import { join } from 'node:path';
 import { dollyView, dollyTrackZ, panLimitFor, framingFor } from '../www/garden/js/view.js';
 import { cellInPlot, cellCenter, plantingReach } from '../www/garden/js/terrain.js';
 
-import { SPECIES } from '../www/garden/js/species.js';
+import { SPECIES } from '../www/shared/js/treespecies-1.0.0.js';
 
 const PLOT = GARDEN_CONFIG.plot;
 const HALF = PLOT.halfSize;

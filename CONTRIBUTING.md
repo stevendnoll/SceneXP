@@ -61,7 +61,11 @@ have in mind.
   brings them back to the surface to pick another destination.
   `www/highwater` is the strictest version of this: a pause button (or
   Escape) and a timeline scrubber, both of which fade out
-  whenever the pointer is still.
+  whenever the pointer is still. For a story like that, one that runs on a
+  single clock from a beginning to an ending, the shared player part
+  (`www/shared/js/player-1.0.0.js` and its stylesheet) supplies the welcome
+  card, pause card, scrubber, fade and ending card, so your scene only has to
+  draw a frame at a given second.
 - **Piloted flight.** The visitor drives a vehicle through open space rather
   than walking or watching, so the world moves around a camera that never
   stops. `www/earthdefense` is the reference: keyboard and mouse on desktop,

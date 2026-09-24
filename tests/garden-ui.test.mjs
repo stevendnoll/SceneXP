@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cardLines } from '../www/garden/js/ui.js';
 import { createRecord } from '../www/garden/js/garden.js';
-import { resolveSpecies, speciesById } from '../www/garden/js/species.js';
+import { resolveSpecies, speciesById } from '../www/shared/js/treespecies-1.0.0.js';
 
 const ROOT = process.cwd();
 const HTML = readFileSync(join(ROOT, 'www', 'garden', 'index.html'), 'utf8');
@@ -325,7 +325,7 @@ test('the card body survives a line count that moves', () => {
 
 // ---- The plant modal, regrouped (M16) --------------------------------------
 
-const { isFlowering: floweringOf, SPECIES: ALL } = await import('../www/garden/js/species.js');
+const { isFlowering: floweringOf, SPECIES: ALL } = await import('../www/shared/js/treespecies-1.0.0.js');
 const { GARDEN_CONFIG } = await import('../www/garden/js/config.js');
 
 test('THE PLANT BUTTON CANNOT FALL OUT OF THE CARD', () => {
@@ -365,7 +365,7 @@ test('the customise disclosure is gone, and its DATA PATH is not', () => {
     // records carry a `custom` object and `resolveSpecies` still takes one, so
     // removing the controls removed a decision and not a saved tree's shape.
     const species = readFileSync(
-        join(process.cwd(), 'www', 'garden', 'js', 'species.js'), 'utf8');
+        join(process.cwd(), 'www', 'shared', 'js', 'treespecies-1.0.0.js'), 'utf8');
     expect(species).toMatch(/export function resolveSpecies\(\s*id,\s*custom/);
     expect(ui).toMatch(/custom: \{ \.\.\.selection\.custom \}/);
 });

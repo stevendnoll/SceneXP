@@ -11,7 +11,7 @@ import {
     STATES, weightsFor, nextState, dwellFor, temperatureAt, precipFor,
     blendStates, createWeather, stepWeather, weatherWords, gustAt, overcastAt
 } from '../www/garden/js/weather.js';
-import { makeRandom } from '../www/garden/js/species.js';
+import { makeRandom } from '../www/shared/js/treespecies-1.0.0.js';
 import {
     flashAt, accumulateStrikes, strikeFactorAt, fallRates, fallOpacity
 } from '../www/garden/js/precip.js';

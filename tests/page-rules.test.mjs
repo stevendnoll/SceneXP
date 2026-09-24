@@ -50,6 +50,13 @@ const NAMED_BY_SCRIPT = {
   'www/garden/index.html': ['water-all'],   // garden/js/main.js sets its text
 };
 
+/** Pages whose social card carries a company logo, so .gitignore holds the
+ *  picture out of the public repository and a fresh clone (CI) has no file to
+ *  open. Where the file is present, as on the maintainer's machine, it is
+ *  checked like any other. Each card must really be git-ignored, or this list
+ *  would excuse a card somebody simply forgot to commit. */
+const WITHHELD_CARDS = ['www/interstate/index.html', 'www/seedtoseed/index.html'];
+
 // ---- Reading the pages -------------------------------------------------------
 
 async function htmlFiles(dir = 'www') {
@@ -111,6 +118,41 @@ const metas = (page, key) => page.els
   .filter((n) => n.tag === 'meta' && (attr(n, 'name') === key || attr(n, 'property') === key))
   .map((n) => attr(n, 'content'));
 
+/** Where a page's og:image lives in the repository. */
+const cardPath = (page) => `www${new URL(metas(page, 'og:image')[0]).pathname}`;
+
+/** What a picture file is, read from its own bytes: { type, width, height },
+ *  or null if it is not a JPEG, PNG or WebP. */
+function imageSize(b) {
+  if (b[0] === 0xFF && b[1] === 0xD8) {
+    // JPEG: walk the markers to the frame header, which holds the size.
+    let i = 2;
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xFF) return null;
+      const marker = b[i + 1];
+      const length = b.readUInt16BE(i + 2);
+      if (marker >= 0xC0 && marker <= 0xCF && ![0xC4, 0xC8, 0xCC].includes(marker)) {
+        return { type: 'image/jpeg', height: b.readUInt16BE(i + 5), width: b.readUInt16BE(i + 7) };
+      }
+      i += 2 + length;
+    }
+    return null;
+  }
+  if (b.readUInt32BE(0) === 0x89504E47) {
+    return { type: 'image/png', width: b.readUInt32BE(16), height: b.readUInt32BE(20) };
+  }
+  if (b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') {
+    const chunk = b.toString('ascii', 12, 16);
+    if (chunk === 'VP8X') return { type: 'image/webp', width: 1 + b.readUIntLE(24, 3), height: 1 + b.readUIntLE(27, 3) };
+    if (chunk === 'VP8 ') return { type: 'image/webp', width: b.readUInt16LE(26) & 0x3FFF, height: b.readUInt16LE(28) & 0x3FFF };
+    if (chunk === 'VP8L') {
+      const bits = b.readUInt32LE(21);
+      return { type: 'image/webp', width: (bits & 0x3FFF) + 1, height: ((bits >> 14) & 0x3FFF) + 1 };
+    }
+  }
+  return null;
+}
+
 /** Every string a visitor, screen reader or crawler reads, with where it came from. */
 function copyOf(page) {
   const out = [];
@@ -150,8 +192,14 @@ test('the scan finds the site, and each rule group has pages to hold', () => {
     'www/automan/index.html', 'www/garden/index.html', 'www/xo/index.html',
   ]));
   // An exemption for a page that is gone would be a rule quietly switched off.
-  [...NOT_SHARED, ...Object.keys(NAMED_BY_SCRIPT)].forEach((rel) =>
+  [...NOT_SHARED, ...Object.keys(NAMED_BY_SCRIPT), ...WITHHELD_CARDS].forEach((rel) =>
     expect(`${rel} exists: ${PAGES.some((p) => p.rel === rel)}`).toBe(`${rel} exists: true`));
+  WITHHELD_CARDS.forEach((rel) => {
+    const page = PAGES.find((p) => p.rel === rel);
+    if (!page) return;
+    const card = cardPath(page);
+    expect(`${card} is git-ignored: ${ignored([card]).has(card)}`).toBe(`${card} is git-ignored: true`);
+  });
 });
 
 // ---- Sharing -----------------------------------------------------------------
@@ -187,6 +235,27 @@ describe('sharing', () => {
     expect(canon).toHaveLength(1);
     expect(attr(canon[0], 'href')).toMatch(/^https:\/\/www\.scenexp\.com\//);
     expect(one('og:url')).toBe(attr(canon[0], 'href'));
+  });
+
+  // THE CARD IS A FILE, NOT JUST A TAG. Found 2026-09-23: tornado's og:image
+  // had named assets/og-tornado.jpg since M1 and the file did not exist, and
+  // nothing here noticed, because every rule above reads the tag and none
+  // opens the picture. A share of that page would have shown no card at all.
+  test.each(SHARED.map((p) => [p.rel, p]))('%s: its card image is on disk, the type and size its tags say', async (rel, page) => {
+    const url = new URL(metas(page, 'og:image')[0]);
+    const file = await readFile(new URL(cardPath(page), ROOT)).catch((err) => {
+      if (err.code === 'ENOENT' && WITHHELD_CARDS.includes(rel)) return null;
+      throw err;
+    });
+    if (!file) return;   // a withheld card on a fresh clone, see WITHHELD_CARDS
+    const size = imageSize(file);
+    expect(`${url.pathname} is a picture: ${size !== null}`).toBe(`${url.pathname} is a picture: true`);
+    const [type] = metas(page, 'og:image:type');
+    if (type) expect(`${url.pathname}: ${size.type}`).toBe(`${url.pathname}: ${type}`);
+    const [width] = metas(page, 'og:image:width');
+    const [height] = metas(page, 'og:image:height');
+    if (width) expect(`${url.pathname} width: ${size.width}`).toBe(`${url.pathname} width: ${width}`);
+    if (height) expect(`${url.pathname} height: ${size.height}`).toBe(`${url.pathname} height: ${height}`);
   });
 
   test.each(PAGES.map((p) => [p.rel, p]))('%s has structured data that parses', (_rel, page) => {

@@ -1706,6 +1706,26 @@ export const OCEAN_CONFIG = deepFreeze({
     // is frightening, the sky closes over, the water starts coming over the
     // camera, the sea withdraws, a tsunami arrives, and the page fades to black.
     //
+    // WHAT A SCREEN READER HEARS (shared/js/narration-1.0.0.js): one short
+    // sentence as the story plays into each beat, in a polite live region.
+    // Without them the story was the welcome card, a minute of silence and
+    // "The sea has taken the beach" (accessibility pass, 2026-09-23). Placed
+    // on the stages below, three and a half seconds or more apart so each can
+    // be read before the next, and the last just before the sea comes over
+    // the camera at about 56.8 s (tests/highwater-narration).
+    narration: {
+        beats: [
+            { at: 3.5, text: 'The swell starts to build, and the sky begins to close over.' },
+            { at: 12, text: 'Lightning starts to work along the storm base.' },
+            { at: 16, text: 'The storm is up, and the waves stand taller than the horizon as they break toward you.' },
+            { at: 25.5, text: 'Then the sea stops, and goes quiet and flat.' },
+            { at: 32.5, text: 'The water pulls back, off the beach and out to sea.' },
+            { at: 38, text: 'A wall of water comes up out of the fog on the horizon.' },
+            { at: 46, text: 'It keeps coming, and it grows as it nears the shore.' },
+            { at: 54, text: 'It reaches the beach, and the sea comes over you.' }
+        ]
+    },
+
     // THE SEA IS THE ONLY THING THAT CHANGES. The sun is held (see `cycle`), the
     // camera never moves (see `camera`), and there is nothing to click. That is
     // deliberate: with one signal in the frame, a visitor reads every change as
@@ -3363,7 +3383,8 @@ export const OCEAN_CONFIG = deepFreeze({
     // THE PLAYER CONTROLS, added 2026-09-23 after Steve's real-world QA: a
     // pause button, Escape, and a scrubber along the bottom. The scene was
     // built with no controls after Begin, and these keep as much of that as
-    // they can by getting out of the way. See controls.js.
+    // they can by getting out of the way. The player itself is shared
+    // (shared/js/player-1.0.0.js), and player.js hands it these.
     controls: {
         // How long the pointer has to sit still before the pause button and
         // the scrubber fade out. Three seconds is the video-player convention,

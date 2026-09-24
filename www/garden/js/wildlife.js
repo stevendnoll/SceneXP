@@ -58,7 +58,7 @@
 
 import { GARDEN_CONFIG } from './config.min.js';
 import { pondHalfWidth, pondWaterLevel } from './terrain.min.js';
-import { makeRandom } from './species.min.js';
+import { makeRandom } from '../../shared/js/treespecies-1.0.0.min.js';
 import { wrapHour, clamp01 } from './clock.min.js';
 
 // ---- When each one is out (pure) -------------------------------------------

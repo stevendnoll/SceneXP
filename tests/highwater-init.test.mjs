@@ -105,9 +105,12 @@ describe('the whole sea builds without a browser', () => {
 describe('the page carries the metadata a share and a crawler need', () => {
     let html;
     let main;
+    let player;
     beforeAll(async () => {
         html = await readFile(PAGE, 'utf8');
         main = await readFile(new URL('../www/highwater/js/main.js', import.meta.url), 'utf8');
+        player = await readFile(
+            new URL('../www/shared/js/player-1.0.0.js', import.meta.url), 'utf8');
     });
 
     /** The content of a meta tag, whichever attribute order it was written in. */
@@ -264,13 +267,19 @@ describe('the page carries the metadata a share and a crawler need', () => {
         // anything at all left it passing: the literal was still in the file,
         // just no longer being sent anywhere. Caught by deliberately breaking
         // it, which is the only way that class of weak assertion ever surfaces.
-        for (const event of ['session-start', 'begin-watching', 'arc-complete', 'replay']) {
-            expect(main).toMatch(new RegExp(`\\btrack\\(\\s*'${event}'`));
+        //
+        // THE STORY'S EVENTS ARE SENT BY THE SHARED PLAYER since 2026-09-24,
+        // so the assertion is in two halves: this page hands the player its
+        // `track`, and the player sends them.
+        expect(main).toMatch(new RegExp(`\\btrack\\(\\s*'session-start'`));
+        expect(main).toMatch(/\btrackFinal\(\s*'session-end'/);
+        expect(main).toMatch(/createPlayer\(\{[\s\S]*?\n\s*track,\n[\s\S]*?\}\)\.install\(\)/);
+        for (const event of ['begin-watching', 'arc-complete', 'replay']) {
+            expect(player).toMatch(new RegExp(`\\btrack\\(\\s*'${event}'`));
         }
         // The stage checkpoints are built from the stage name, so they are one
         // template literal rather than five names.
-        expect(main).toMatch(/\btrack\(\s*`reached-\$\{/);
-        expect(main).toMatch(/\btrackFinal\(\s*'session-end'/);
+        expect(player).toMatch(/\btrack\(\s*`reached-\$\{/);
         expect(main).toMatch(/import \{[^}]*\btrack\b[^}]*\} from '\.\.\/\.\.\/shared\/js\/telemetry-1\.0\.0\.min\.js'/);
     });
 
@@ -294,7 +303,7 @@ describe('the page carries the metadata a share and a crawler need', () => {
         //   that the sea closes over them, which is the ending
         //   that the screen flashes, which is the photosensitivity risk
         //   that it is silent, so they know they can watch it anywhere
-        const card = html.slice(html.indexOf('id="welcome"'), html.indexOf('id="wash"'));
+        const card = html.slice(html.indexOf('id="player-card"'), html.indexOf('id="wash"'));
         expect(card).toMatch(/unsettl|disturb|frighten|upsett/i);
         expect(card).toMatch(/comes over you|over your head|closes over|takes you under/i);
         expect(card).toMatch(/lightning/i);
@@ -304,6 +313,16 @@ describe('the page carries the metadata a share and a crawler need', () => {
 });
 
 describe('the drop-off funnel', () => {
+    /** The shared player's stage rule, over this scene's stages as player.js
+     *  hands them over, in the (seconds, reached, config) shape these tests
+     *  were written against when the rule lived in main.js. */
+    async function funnelRule() {
+        const { nextStageIndex } = await import('../www/shared/js/player-1.0.0.min.js');
+        const { playerOptions } = await import('../www/highwater/js/player.min.js');
+        return (seconds, reached, config) =>
+            nextStageIndex(seconds, reached, playerOptions(config).stages);
+    }
+
     // Steve asked for a checkpoint every thirty seconds so we could see where
     // people leave. These hang on the arc's own six named stages instead, which
     // costs no second schedule, reads as a sentence at the far end, and survives
@@ -313,7 +332,7 @@ describe('the drop-off funnel', () => {
     test('one watch reports every stage exactly once, in order', async () => {
         jest.resetModules();
         const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
-        const { nextStageIndex } = await import('../www/highwater/js/main.js');
+        const nextStageIndex = await funnelRule();
         const stages = OCEAN_CONFIG.storm.stages;
 
         let reached = 0;
@@ -337,7 +356,7 @@ describe('the drop-off funnel', () => {
         return (async () => {
             jest.resetModules();
             const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
-            const { nextStageIndex } = await import('../www/highwater/js/main.js');
+            const nextStageIndex = await funnelRule();
             // A whole second of frames inside one stage, after it was reported.
             // Derived rather than written down, for the same reason as the test
             // below: a literal here was two seconds from falling out of the
@@ -358,7 +377,7 @@ describe('the drop-off funnel', () => {
         // put a complete, entirely fictional watch into the log.
         jest.resetModules();
         const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
-        const { nextStageIndex } = await import('../www/highwater/js/main.js');
+        const nextStageIndex = await funnelRule();
         const stages = OCEAN_CONFIG.storm.stages;
         // TAKEN FROM THE TABLE RATHER THAN WRITTEN DOWN. This read a literal 73,
         // which sat inside `drawback` when it was written and moved into
@@ -379,7 +398,7 @@ describe('the drop-off funnel', () => {
     test('nothing is reported before the story starts', async () => {
         jest.resetModules();
         const { OCEAN_CONFIG } = await import('../www/highwater/js/config.min.js');
-        const { nextStageIndex } = await import('../www/highwater/js/main.js');
+        const nextStageIndex = await funnelRule();
         // The arc clock is held at zero while the welcome card is up, and the
         // opening stage is index 0, so there is nothing above `reached`.
         expect(nextStageIndex(0, 0, OCEAN_CONFIG)).toBe(-1);
@@ -522,46 +541,34 @@ describe('the ending screen', () => {
     });
 
     test('both buttons sit in one row that is allowed to wrap', () => {
-        expect(page).toMatch(/class="ending-actions"/);
+        expect(page).toMatch(/<div id="player-ending"[\s\S]*?<div class="player-actions">/);
     });
 
-    /** EVERY BUTTON ON THIS SCREEN WEARS THE SAME PILL, and this scene's
-     *  stylesheet keys that shape off IDS rather than a class.
+    /** EVERY BUTTON ON THIS SCREEN WEARS THE SAME PILL.
      *
-     *  Share shipped without it for exactly that reason: the new button was
-     *  added to the markup and to the rule that sets its padding, and the
-     *  shape (border, radius, colour, transparent background) lives in a
-     *  separate rule naming `#replay` and `#welcome .primary`. A new id gets
-     *  none of it, so Share rendered as a default browser button on a black
-     *  screen next to a pill, and nothing anywhere failed.
+     *  Share once shipped without it, because this scene's stylesheet keyed
+     *  the pill's shape off IDS: the new button was added to the markup and to
+     *  the rule that set its padding, the shape lived in a separate rule
+     *  naming `#replay` and `#welcome .primary`, and it rendered as a default
+     *  browser button on a black screen next to a pill with nothing failing.
      *
-     *  Written against the ending's buttons rather than against `#share` by
-     *  name, so the next button added here is covered on the day it lands. */
+     *  The shared player's sheet keys the pill by CLASS since 2026-09-24, so
+     *  the rule is now simply that every button here wears `.player-btn`.
+     *  Written against the ending's buttons rather than by name, so the next
+     *  button added here is covered on the day it lands. */
     test('every button in the ending wears the shared pill', async () => {
         const css = await readFile(
-            new URL('../www/highwater/css/experience.css', import.meta.url), 'utf8');
-
-        const ending = page.match(/<div id="ending"[\s\S]*?<\/div>\s*<\/div>/)
-            || page.match(/<div id="ending"[\s\S]*?<script/);
-        const ids = [...ending[0].matchAll(/<button id="([a-z-]+)"/g)].map((m) => m[1]);
-        expect(ids).toEqual(expect.arrayContaining(['replay', 'share']));
-
-        // The rules that make a button a pill: the shape, the hover and focus
-        // wash, and the focus ring. Each is found by something only it says.
-        const ruleFor = (needle) => {
-            const at = css.indexOf(needle);
-            expect(at).toBeGreaterThan(-1);
-            return css.slice(css.lastIndexOf('}', at) + 1, at);
-        };
-        const shape = ruleFor('border-radius: 2rem;');
-        const wash = ruleFor('background: rgba(232, 238, 241, 0.10);');
-        const ring = ruleFor('outline: 2px solid #9fb0b8;');
-
-        for (const id of ids) {
-            expect([id, shape.includes(`#${id}`)]).toEqual([id, true]);
-            expect([id, wash.includes(`#${id}:hover`)]).toEqual([id, true]);
-            expect([id, ring.includes(`#${id}:focus-visible`)]).toEqual([id, true]);
+            new URL('../www/shared/css/player-1.0.0.css', import.meta.url), 'utf8');
+        const ending = page.match(/<div id="player-ending"[\s\S]*?<script/);
+        const buttons = [...ending[0].matchAll(/<button id="([a-z-]+)"[^>]*>/g)];
+        expect(buttons.map((m) => m[1])).toEqual(expect.arrayContaining(['player-replay', 'share']));
+        for (const [tag, id] of buttons) {
+            expect([id, /class="[^"]*\bplayer-btn\b/.test(tag)]).toEqual([id, true]);
         }
+        // And the class carries the shape, the hover wash and the focus ring.
+        expect(css).toMatch(/\.player-btn \{[^}]*border-radius: 2rem;/);
+        expect(css).toMatch(/\.player-btn:hover,\s*\.player-btn:focus-visible \{/);
+        expect(css).toMatch(/\.player-btn:focus-visible \{[^}]*outline: 2px solid/);
     });
 
     test('main.js wires the share through the shared part', async () => {
