@@ -40,6 +40,9 @@ import { initPond, updatePond } from './pond.min.js';
 import { initFlora, updateFlora } from './flora.min.js';
 import { initCows, updateCows, cowPoseAt } from './cow.min.js';
 import { initRainbow, updateRainbow } from './rainbow.min.js';
+import {
+    PAYLOADS, nextPayload, payloadLine, initPayloads, updatePayloads, surprisePoseAt
+} from './payloads.min.js';
 
 let renderer = null;
 let scene = null;
@@ -53,6 +56,14 @@ let shellCount = CONFIG.shells.layers.length;
 let motion = 1;
 // The animation clock. See the header.
 let anim = 0;
+
+// WHAT THE TORNADO CARRIES THIS RUN (payloads.js). The cow first, always;
+// each replay after that draws a surprise. `shown` is this visit's list, and
+// `reached` how far into the story this run has been, so a restart before
+// the pickup keeps the payload the visitor has not seen yet.
+let payload = 'cow';
+const shown = ['cow'];
+let reached = 0;
 
 let sessionStart = 0;
 let sessionEnded = false;
@@ -132,7 +143,9 @@ export function drawFrame(delta, arc) {
     updateFarm(windAt(W.x, W.z, state, CONFIG), delta * motion, CONFIG);
     updatePond(windAt(CONFIG.pond.x, CONFIG.pond.z, state, CONFIG), anim, CONFIG);
     updateFlora(state, anim, motion, CONFIG);
-    updateCows(arc, CONFIG);
+    reached = Math.max(reached, arc);
+    updateCows(arc, CONFIG, payload === 'cow');
+    updatePayloads(arc, payload, CONFIG);
     updateRainbow(arc, CONFIG);
     // THE PHOTOSENSITIVITY GUARD. The flash-rate cap is written in story
     // seconds, and a scrub runs the story far faster than real time, so the
@@ -140,6 +153,29 @@ export function drawFrame(delta, arc) {
     // High Water's does. The shared player keeps that clock.
     if (player && player.flashAllowed()) updateLightning(arc, TORNADO_LIGHTNING);
     renderer.render(scene, camera);
+}
+
+/** The ending card names what came down. */
+function showPayloadLine() {
+    const line = document.getElementById('ending-line');
+    if (line) line.textContent = payloadLine(payload, CONFIG);
+}
+
+/** Back to the start for a replay or a restart: a new payload, if this run
+ *  got as far as showing the visitor what it picked up. */
+function nextRun() {
+    if (reached >= CONFIG.cow.pickupAt) {
+        payload = nextPayload(shown);
+        shown.push(payload);
+        showPayloadLine();
+    }
+    reached = 0;
+}
+
+/** The usage counter, with the payload on the watched-to-the-end event, so
+ *  the counts say which ones people stay for. */
+function trackRun(name, params) {
+    track(name, name === 'arc-complete' ? { ...params, payload } : params);
 }
 
 function endSession() {
@@ -176,6 +212,9 @@ async function init() {
     // The payoffs.
     initCows(scene, CONFIG);
     initRainbow(scene, CONFIG);
+    // Built now, all four, so a replay's surprise costs no frame when it
+    // first appears.
+    initPayloads(scene, CONFIG);
     // High Water's lightning, shared. Built now, not at the first strike: it
     // adds a light, and three recompiles every lit material when the number
     // of lights changes, which would stall the frame of the first flash.
@@ -191,13 +230,16 @@ async function init() {
         fadeSeconds: CONFIG.story.fadeSeconds,
         stages: CONFIG.story.stages,
         reducedMotion: prefersReducedMotion(),
-        track,
+        track: trackRun,
         frame: drawFrame,
         // Any flash in the sky goes out when the clock jumps or a drag
         // begins; see the photosensitivity guard in drawFrame.
         onSeek: () => resetLightning(),
         onScrubStart: () => resetLightning(),
-        onRewind: () => resetLightning(),
+        onRewind: () => {
+            resetLightning();
+            nextRun();
+        },
         redraw: () => renderer.render(scene, camera)
     }).install();
 
@@ -240,6 +282,18 @@ function installTuningAids() {
     window.tornadoStrike = (metres) => forceStrike(metres === undefined ? null : metres);
     // Where the cow is and how it is holding itself right now.
     window.tornadoCow = () => cowPoseAt(player.state().arc, CONFIG);
+    // Choose this run's payload by name ('cow', 'flamingo', 'outhouse',
+    // 'trampoline', 'mailbox'), or ask which it is, and its pose right now.
+    window.tornadoPayload = (name) => {
+        if (PAYLOADS.includes(name)) {
+            payload = name;
+            showPayloadLine();
+        }
+        return payload;
+    };
+    window.tornadoPayloadPose = () => (payload === 'cow'
+        ? cowPoseAt(player.state().arc, CONFIG)
+        : surprisePoseAt(payload, player.state().arc, CONFIG));
     // The wind at any ground point right now, for tuning the props.
     window.tornadoWind = (x, z) => windAt(x, z, funnelStateAt(player.state().arc, anim, CONFIG), CONFIG);
 }

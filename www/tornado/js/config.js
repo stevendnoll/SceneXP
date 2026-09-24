@@ -381,7 +381,89 @@ export const TORNADO_CONFIG = Object.freeze({
             { x: 41, z: -184, yaw: -1.1 },
             { x: 50, z: -216, yaw: 1.3 }
         ],
-        lookUpAt: 24.3            // the pasture cows look up, a beat apart
+        lookUpAt: 24.3,           // the pasture cows look up, a beat apart
+        // The ending card's punch line (Steve's call, 2026-09-23), which the
+        // page also carries as its default. A surprise has its own.
+        line: 'The storm has moved on. The cow is fine.'
+    },
+
+    // ---- Replay surprises (payloads.js) --------------------------------------
+    //
+    // THE FIRST WATCH IS ALWAYS THE COW: it is the headline. Each replay
+    // after it draws something else the tornado picked up, all four once in a
+    // shuffled order and then any payload but the last, so "what did you
+    // get?" is a question visitors can ask each other. Nothing is stored:
+    // a fresh visit starts with the cow again.
+    //
+    // They ride the cow's clock (pickupAt, flingAt, landAt) and its orbit,
+    // then fly their own last curve. THEY LAND CLOSE, 20 to 45 m out and
+    // left of center, where the cow cannot (its rig shows its polygons up
+    // close): a surprise has to be read in a glance, and these are simple
+    // shapes that hold up. Left of center keeps them off the farm and the
+    // herd (right of it), and inside a portrait phone's 10 degrees. Each one
+    // comes down at 10 to 12 m/s and thumps in, where the cow drifts down,
+    // and then does its one thing (tests/tornado-payloads holds all of it).
+    //
+    //   landing   { x, z, yaw }: yaw is added to the heading that turns the
+    //             payload's front (+z) to the camera
+    //   cruise    the flight's two control points, as config.cow.cruise
+    //   length    its longest side, for the size floor while it is far off
+    //   line      the ending card's punch line, in place of the cow's
+    payloads: {
+        flamingo: {
+            // A plastic lawn flamingo, spiked upright among the flowers, where
+            // it twangs on its wire legs until it is still.
+            landing: { x: -2, z: -24, yaw: 0.3 },     // side on, as it is posed
+            cruise: [[-150, 330, -1100], [-10, 40, -120]],
+            brake: 1.3,
+            length: 1.0,
+            sink: 0.12,                       // metres its legs go in
+            wobble: { amount: 0.32, rate: 9, decay: 0.9 },
+            line: 'The storm has moved on. The flamingo is fine, and has found a new lawn.'
+        },
+        outhouse: {
+            // Lands with a thump, door banging in the flight, then the door
+            // creaks open on nobody at all.
+            // On the pond's far shore: at 45 m its front corner stood 20 cm
+            // inside the water's outline, so it is 1.5 m further back.
+            landing: { x: -4.5, z: -46.5, yaw: 0.4 },
+            cruise: [[-150, 330, -1100], [-12, 40, -160]],
+            brake: 1.3,
+            length: 2.3,
+            hop: { height: 0.25, seconds: 0.35 },
+            wobble: { amount: 0.1, rate: 10, decay: 0.5 },
+            door: { opensAt: 1.1, seconds: 1.6, open: 1.9 },
+            line: 'The storm has moved on. The outhouse is fine, and nobody was inside.'
+        },
+        trampoline: {
+            // Spins flat through the air like a flying disc, then lands and
+            // bounces, each hop lower, until it settles. PAST THE POND: at 38 m
+            // it came down in the middle of it (QA 2026-09-23), which is 52 m
+            // across and reaches almost to straight ahead, so it flies over
+            // the water and bounces on the far side.
+            landing: { x: -3.5, z: -57, yaw: 0 },
+            cruise: [[-150, 330, -1100], [-12, 45, -175]],
+            brake: 1.3,
+            length: 3.7,
+            spin: 7,                          // radians per second in the air
+            bounce: { speed: 5.5, restitution: 0.5, stop: 0.6 },
+            line: 'The storm has moved on. The trampoline is fine, and seems to have enjoyed itself.'
+        },
+        mailbox: {
+            // Spiked in on its post among the flowers, a stiff wobble, and
+            // then its flag goes up.
+            landing: { x: -1.6, z: -20, yaw: -0.25 },  // side on, flag toward us
+            cruise: [[-150, 330, -1100], [-8, 35, -110]],
+            brake: 1.3,
+            length: 1.25,
+            sink: 0.18,
+            wobble: { amount: 0.22, rate: 12, decay: 0.6 },
+            flag: { upAt: 1.3, seconds: 0.35 },
+            line: 'The storm has moved on. The mailbox is fine, and it seems you have mail.'
+        },
+        // The contact shadow under each: strongest on the ground, gone by
+        // `height` metres up.
+        shadow: { opacity: 0.4, height: 10 }
     },
 
     // ---- The last payoff: the rainbow (rainbow.js) -------------------------

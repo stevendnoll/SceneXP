@@ -209,7 +209,7 @@ describe('a strike lights the storm', () => {
         expect(main).toMatch(/if \(player && player\.flashAllowed\(\)\) updateLightning\(/);
         expect(main).toMatch(/onSeek: \(\) => resetLightning\(\)/);
         expect(main).toMatch(/onScrubStart: \(\) => resetLightning\(\)/);
-        expect(main).toMatch(/onRewind: \(\) => resetLightning\(\)/);
+        expect(main).toMatch(/onRewind: \(\) => \{\s*resetLightning\(\);/);
         // And the welcome card's promise is now kept.
         const page = readFileSync(join(process.cwd(), 'www/tornado/index.html'), 'utf8');
         expect(page).toMatch(/There is lightning/);

@@ -4938,10 +4938,10 @@ html [data-ui-theme="surf" lang="en"]
           "Position in the story"
         input#player-scrub [aria-valuetext="0 seconds of 30" max="30" min="0" step="0.1" type="range" value="0"]
     div#player-ending [aria-live="polite" hidden role="status"]
-      p.ending-line
+      p#ending-line.ending-line
         "The storm has moved on. The cow is fine."
       p.ending-note
-        "Thank you for watching."
+        "Thank you for watching. The storm rarely picks up the same thing twice."
       div.player-actions
         button#share.player-btn [type="button"]
           "Share"

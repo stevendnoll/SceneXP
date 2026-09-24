@@ -66,25 +66,37 @@ function bezier(p0, p1, p2, p3, s) {
     };
 }
 
-/** Where the cow's feet are at story second t (before any size floor). */
-export function cowPosition(t, config = TORNADO_CONFIG) {
+/**
+ * Where anything the tornado carries is at story second t (before any size
+ * floor): round the funnel on the cow's orbit, then flung along one cubic
+ * curve to `flight.landing`, through `flight.cruise`, braking by
+ * `flight.brake`. The cow is one such flight; the replay surprises
+ * (payloads.js) are the others, on the same clock.
+ */
+export function flightPosition(t, flight, config = TORNADO_CONFIG) {
     const K = config.cow;
-    const L = K.landing;
+    const L = flight.landing;
     if (t < K.flingAt) return orbitPosition(Math.max(t, K.pickupAt), config);
     if (t >= K.landAt) return { x: L.x, y: 0, z: L.z };
-    // Leaves fast, as a fling does, and brakes all the way to the ground.
+    // Leaves fast, as a fling does, and brakes toward the ground.
     const u = (t - K.flingAt) / (K.landAt - K.flingAt);
-    const s = 1 - Math.pow(1 - u, K.brake);
+    const s = 1 - Math.pow(1 - u, flight.brake);
     const p0 = orbitPosition(K.flingAt, config);
-    const [c1, c2] = K.cruise.map(([x, y, z]) => ({ x, y, z }));
+    const [c1, c2] = flight.cruise.map(([x, y, z]) => ({ x, y, z }));
     return bezier(p0, c1, c2, { x: L.x, y: 0, z: L.z }, s);
 }
 
-/** How large to draw it so a far-off cow is never less than a few pixels. */
-export function sizeFloor(p, config = TORNADO_CONFIG) {
+/** Where the cow's feet are at story second t (before any size floor). */
+export function cowPosition(t, config = TORNADO_CONFIG) {
+    return flightPosition(t, config.cow, config);
+}
+
+/** How large to draw it so a far-off cow (or anything `length` metres long)
+ *  is never less than a few pixels. */
+export function sizeFloor(p, config = TORNADO_CONFIG, length = COW_LENGTH) {
     const d = Math.max(Math.hypot(p.x, p.y - config.camera.height, p.z), 1);
     const fov = config.camera.fovDegrees * Math.PI / 180;
-    const pixels = (COW_LENGTH / d) / fov * 900;
+    const pixels = (length / d) / fov * 900;
     return Math.max(1, config.cow.minPixels / pixels);
 }
 
@@ -320,9 +332,10 @@ export function initCows(scene, config = TORNADO_CONFIG) {
     });
 }
 
-/** Pose every cow for story second t. */
-export function updateCows(t, config = TORNADO_CONFIG) {
+/** Pose every cow for story second t. `flies` is false on a run where the
+ *  tornado carries something else (payloads.js): the herd is still there. */
+export function updateCows(t, config = TORNADO_CONFIG, flies = true) {
     if (!flyer) return;
-    applyCowPose(flyer, cowPoseAt(t, config));
+    applyCowPose(flyer, flies ? cowPoseAt(t, config) : cowPoseAt(-1, config));
     pasture.forEach((rig, i) => applyCowPose(rig, pasturePoseAt(i, t, config)));
 }
