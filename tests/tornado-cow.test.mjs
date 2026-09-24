@@ -97,7 +97,7 @@ describe('the flight', () => {
             prev = s;
         }
         // And the handovers meet exactly.
-        for (const at of [K().flingAt, K().hoverAt, K().landAt]) {
+        for (const at of [K().flingAt, K().landAt]) {
             const a = cow.cowPosition(at - 1e-7, C);
             const b = cow.cowPosition(at, C);
             expect(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)).toBeLessThan(0.01);
@@ -108,7 +108,8 @@ describe('the flight', () => {
         for (const t of samples()) {
             const p = cow.cowPoseAt(t, C);
             expect([t, onScreen(p).pixels >= K().minPixels - 1e-6]).toEqual([t, true]);
-            if (t >= K().hoverAt - 3) expect([t, p.scale]).toEqual([t, 1]);
+            // True size through the whole of the final descent.
+            if (t >= K().landAt - 4) expect([t, p.scale]).toEqual([t, 1]);
         }
     });
 
@@ -225,5 +226,34 @@ describe('the rig', () => {
         const rig = cow.createCow();
         expect(rig.group.name).toBe('cow');
         expect(rig.legs.length).toBe(4);
+    });
+});
+
+describe('the descent is one motion', () => {
+    test('IT NEVER STOPS IN THE AIR: it brakes all the way down and only then stops', () => {
+        // QA 2026-09-23: the first flight eased to a dead stop over the herd
+        // and then sank, so its speed fell to nothing mid-air and picked up
+        // again. The signature of that fault is a speed that rises after it
+        // has fallen, so that is what this refuses: from just after the
+        // fling to the ground, the speed may only ever fall.
+        const step = 0.05;
+        let prev = null;
+        let prevSpeed = Infinity;
+        for (let t = K().flingAt + 0.5; t <= K().landAt + 1e-9; t += step) {
+            const p = cow.cowPosition(t, C);
+            if (prev) {
+                const speed = Math.hypot(p.x - prev.x, p.y - prev.y, p.z - prev.z) / step;
+                const at = Number(t.toFixed(2));
+                expect([at, speed <= prevSpeed * 1.01]).toEqual([at, true]);
+                prevSpeed = speed;
+            }
+            prev = p;
+        }
+        // It is still coming down a second before it lands, and gently.
+        const a = cow.cowPosition(K().landAt - 1, C);
+        const b = cow.cowPosition(K().landAt - 0.5, C);
+        expect(a.y).toBeGreaterThan(b.y);
+        expect(b.y).toBeGreaterThan(0);
+        expect(cow.cowPosition(K().landAt - 0.05, C).y).toBeLessThan(0.1);
     });
 });

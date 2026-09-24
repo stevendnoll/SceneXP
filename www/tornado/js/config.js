@@ -38,11 +38,11 @@ export const TORNADO_CONFIG = Object.freeze({
         // The PRD's arc; the cow and the rainbow arrive in M5 and M6.
         stages: [
             { at: 0, name: 'ordinary' },
-            { at: 6, name: 'organizing' },
-            { at: 16, name: 'wall-cloud' },
-            { at: 22, name: 'touchdown' },
-            { at: 26, name: 'mature' },
-            { at: 32, name: 'pickup' },
+            { at: 2, name: 'organizing' },
+            { at: 4, name: 'wall-cloud' },
+            { at: 9, name: 'touchdown' },
+            { at: 13, name: 'mature' },
+            { at: 20, name: 'pickup' },
             { at: 40, name: 'rope-out' },
             { at: 48, name: 'dissipating' },
             { at: 50, name: 'payoff' },
@@ -92,16 +92,20 @@ export const TORNADO_CONFIG = Object.freeze({
 
     // The life cycle as keyframes [seconds, value], smoothstepped between.
     lifecycle: {
-        wall: [[4, 0], [14, 1], [44, 1], [54, 0.25]],
+        // FORMS EARLY, ON PURPOSE (QA 2026-09-23: "it takes too long to
+        // appear"). The wall cloud is down by 5 s, the funnel reaches down
+        // from 5 s and touches down by 11, and it is a mature cone by 16.
+        // The end of the arc did not move: rope-out from 37, gone by 53.
+        wall: [[0.5, 0], [5, 1], [44, 1], [54, 0.25]],
         // How far down from the wall cloud the condensation funnel reaches.
         // Gone by 53, so the payoff at 50 plays under a clearing sky.
-        extent: [[16, 0], [19, 0.12], [24, 1], [46, 1], [53, 0]],
+        extent: [[5, 0], [7, 0.12], [11, 1], [46, 1], [53, 0]],
         // The ground dust whirl comes BEFORE the funnel connects.
-        dust: [[17, 0], [21, 0.35], [26, 1], [40, 0.9], [46, 0.35], [51, 0]],
-        width: [[18, 0.3], [24, 0.6], [30, 1], [38, 1], [45, 0.2], [52, 0.17]],
+        dust: [[6, 0], [9, 0.35], [13, 1], [40, 0.9], [46, 0.35], [51, 0]],
+        width: [[7, 0.3], [11, 0.6], [16, 1], [38, 1], [45, 0.2], [52, 0.17]],
         rope: [[37, 0], [45, 1]],
         breakup: [[46, 0], [53, 1]],
-        inflow: [[5, 0], [16, 1], [42, 1], [50, 0]]
+        inflow: [[1, 0], [7, 1], [42, 1], [50, 0]]
     },
 
     funnel: {
@@ -287,24 +291,28 @@ export const TORNADO_CONFIG = Object.freeze({
         // Prairie flowers: purple coneflower, black-eyed Susan, white
         // yarrow, blue flax, Indian blanket.
         palette: [0xb05fa8, 0xf2b92a, 0xf1efe6, 0x6f86d6, 0xd8552b],
-        sway: { amount: 0.22, rate: 2.1 }
+        // How far a flower's head moves in the wind, as a fraction of its
+        // height per unit of wind (about 1.2 in the storm's inflow). Doubled
+        // after QA 2026-09-23 asked for more sway.
+        sway: { amount: 0.45, rate: 2.4 }
     },
 
     // ---- The payoff: the cow (cow.js) ----------------------------------------
     //
     // Lifted out of the dust at the tornado's foot, carried round the edge of
     // the debris, flung toward the camera as the tornado ropes out, and set
-    // down on all four feet among the flowers, where it looks at the visitor
-    // and chews. Every pose is a function of the story second, so a seek
+    // down on all four feet among the herd in the pasture, who look up. It
+    // came down in the foreground flowers at first, and QA (2026-09-23) found
+    // the low-poly rig reads well at a distance and not up close, so it
+    // lands with the others. Every pose is a function of the story second, so a seek
     // finds the cow exactly where an untouched watch has it.
     //
     // CARTOON PHYSICS, ON PURPOSE. It crosses about 1.8 km in nine seconds,
     // far faster than anything real. At that range it reads as a speck
     // sailing over, and the joke is the slow, gentle descent at the end.
     cow: {
-        pickupAt: 30,             // rises out of the dust
+        pickupAt: 20,             // rises out of the dust, once the tornado is mature
         flingAt: 40,              // leaves the debris as the tornado ropes out
-        hoverAt: 49,              // arrives over its landing spot, and floats down
         landAt: 52,               // four feet on the ground
         lookAt: 53,               // turns its head to the camera
         orbit: {
@@ -312,14 +320,27 @@ export const TORNADO_CONFIG = Object.freeze({
             height: 260,          // metres, once it is up
             rate: 0.9             // radians per second round the funnel
         },
-        // The cruise from the debris to the landing spot is a cubic curve
-        // through these two control points (x, y, z in metres). tests/tornado-cow
-        // holds the path inside the frame and above the ground.
-        cruise: [[-120, 430, -1100], [10, 70, -120]],
-        hover: 10,                // metres above the landing spot it arrives at
-        // Just right of the pond and inside a portrait phone's frame, turned
-        // a little toward the camera so its head can come round to look.
-        landing: { x: 3, z: -21, yaw: -0.45, clear: 2.2 },
+        // ONE FLIGHT FROM THE DEBRIS TO THE GROUND, a cubic curve through
+        // these two control points (x, y, z in metres), slowing the whole way
+        // and stopping only as its hooves touch. It used to stop dead in the
+        // air over the herd and then sink (QA 2026-09-23: "doesn't look quite
+        // right"), which nothing in a flight explains. The second point sits
+        // above and behind the landing spot, so the last of it comes down at
+        // a slant rather than dropping plumb. tests/tornado-cow holds the path
+        // inside the frame, above the ground, and never still until it lands.
+        cruise: [[-150, 330, -1100], [22, 90, -270]],
+        // How hard it brakes: speed falls as (1 - progress)^(brake - 1), so
+        // above 1 it slows all the way down and arrives gently.
+        brake: 1.8,
+        // Counted back from landAt, in seconds: when it rights itself, and
+        // when its legs come in under it.
+        uprightFrom: 4.5,
+        uprightBy: 2,
+        legsFrom: 2,
+        legsBy: 0.2,
+        // In the middle of the herd, inside a portrait phone's frame, turned a
+        // little toward the camera so its head can come round to look.
+        landing: { x: 27, z: -192, yaw: -0.45, clear: 2.2 },
         tumbleRate: 2.2,          // radians per second while it is in the air
         // A real cow 1.8 km away is one pixel. While it is far off it is held
         // to this many pixels long in a 900 pixel tall frame, and it is its
@@ -327,13 +348,14 @@ export const TORNADO_CONFIG = Object.freeze({
         minPixels: 7,
         chewRate: 3.2,
         neckLimit: 1.3,           // radians the head may turn
-        // Four grazing in the pasture right of the farm, heads down, who look
-        // up as the flying one lands. Right of the funnel, like everything.
+        // Four grazing in the pasture, heads down, who look up as the flying
+        // one lands among them. Right of the funnel, like everything, and
+        // close enough to the middle that a phone sees most of the herd.
         pasture: [
-            { x: 44, z: -170, yaw: 0.6 },
-            { x: 58, z: -205, yaw: 2.4 },
-            { x: 72, z: -188, yaw: -1.1 },
-            { x: 88, z: -226, yaw: 1.3 }
+            { x: 17, z: -178, yaw: 0.6 },
+            { x: 33, z: -207, yaw: 2.4 },
+            { x: 41, z: -184, yaw: -1.1 },
+            { x: 50, z: -216, yaw: 1.3 }
         ],
         lookUpAt: 52.3            // the pasture cows look up, a beat apart
     }

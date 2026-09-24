@@ -68,7 +68,13 @@ describe('the funnel reaches the ground', () => {
     });
 
     test('the tip is above the ground until the funnel is down', () => {
-        const s = F.funnelStateAt(20, 20, C);
+        // Found from the config rather than written down, so a retime of
+        // the life cycle cannot quietly leave this testing a finished funnel.
+        const reaching = everySecond.find((t) => {
+            const e = F.funnelStateAt(t, t, C).extent;
+            return e > 0.3 && e < 0.9;
+        });
+        const s = F.funnelStateAt(reaching, reaching, C);
         expect(s.extent).toBeGreaterThan(0);
         expect(s.extent).toBeLessThan(1);
         expect(F.radiusAt(0, s)).toBe(0);

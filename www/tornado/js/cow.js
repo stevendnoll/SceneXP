@@ -4,9 +4,12 @@
  *
  * A Holstein is lifted out of the dust at the tornado's foot, carried round
  * the edge of the debris, flung toward the camera as the tornado ropes out,
- * and set down gently on all four feet among the flowers, where it turns its
- * head, looks at the visitor, and chews. Four more graze in the pasture and
- * look up when it lands. See config.cow for the timeline.
+ * and set down gently on all four feet among the herd in the pasture, where
+ * it turns its head toward the visitor and chews while the four grazing
+ * there look up. See config.cow for the timeline.
+ *
+ * A RIG FOR DISTANCES. It is low-poly, and QA (2026-09-23) found its facets
+ * show up close, so it lands about 190 m out, never in the foreground.
  *
  * THE POSE IS PURE. cowPoseAt(t) and pasturePoseAt(i, t) answer where each
  * cow is and how it is holding itself at story second t, from the story clock
@@ -14,12 +17,16 @@
  * flight can be tested without a browser. The three.js half only builds the
  * rig and applies a pose to it.
  *
- * FOUR PIECES OF THE FLIGHT, joined so the cow never jumps:
+ * THREE PIECES OF THE FLIGHT, joined so the cow never jumps:
  *   orbit   round the funnel's foot, rising out of the dust, tumbling
- *   cruise  a cubic curve from where the orbit leaves it to a point just
- *           above its landing spot, easing to a stop there (the fling)
- *   descent floating straight down, turning itself upright, legs coming in
+ *   flight  one cubic curve from where the orbit lets go of it to the ground,
+ *           slowing the whole way, righting itself and bringing its legs in
+ *           as it comes down, and stopping only as its hooves touch
  *   landed  standing, then looking round at the camera, chewing
+ *
+ * There used to be a fourth: the flight stopped dead in the air over the
+ * herd and the cow then sank straight down. QA saw straight through the
+ * pause (2026-09-23), so it is one motion now.
  *
  * THE COW'S OWN AXES: +x is where it faces, y is up, and its feet stand on
  * y = 0 at the origin. It is about 2 m long and 1.45 m at the shoulder.
@@ -64,17 +71,13 @@ export function cowPosition(t, config = TORNADO_CONFIG) {
     const K = config.cow;
     const L = K.landing;
     if (t < K.flingAt) return orbitPosition(Math.max(t, K.pickupAt), config);
-    if (t < K.hoverAt) {
-        // Leaves fast, as a fling does, and eases to a stop over the spot.
-        const u = (t - K.flingAt) / (K.hoverAt - K.flingAt);
-        const s = 1 - (1 - u) * (1 - u);
-        const p0 = orbitPosition(K.flingAt, config);
-        const [c1, c2] = K.cruise.map(([x, y, z]) => ({ x, y, z }));
-        return bezier(p0, c1, c2, { x: L.x, y: K.hover, z: L.z }, s);
-    }
-    // Floats straight down, slow to leave and slow to touch.
-    const y = K.hover * (1 - smoothstep(K.hoverAt, K.landAt, t));
-    return { x: L.x, y, z: L.z };
+    if (t >= K.landAt) return { x: L.x, y: 0, z: L.z };
+    // Leaves fast, as a fling does, and brakes all the way to the ground.
+    const u = (t - K.flingAt) / (K.landAt - K.flingAt);
+    const s = 1 - Math.pow(1 - u, K.brake);
+    const p0 = orbitPosition(K.flingAt, config);
+    const [c1, c2] = K.cruise.map(([x, y, z]) => ({ x, y, z }));
+    return bezier(p0, c1, c2, { x: L.x, y: 0, z: L.z }, s);
 }
 
 /** How large to draw it so a far-off cow is never less than a few pixels. */
@@ -117,9 +120,10 @@ export function cowPoseAt(t, config = TORNADO_CONFIG) {
     const air = t - K.pickupAt;
     const w = K.tumbleRate;
     const landed = t >= K.landAt;
-    // A gentle rock on the way down, like a parachute, gone by touchdown.
-    const rock = t >= K.hoverAt && !landed
-        ? 0.08 * Math.sin((t - K.hoverAt) * 2.4) * (1 - smoothstep(K.landAt - 0.8, K.landAt, t))
+    // A gentle rock on the way down, gone by touchdown.
+    const down = K.landAt - K.uprightBy;
+    const rock = t >= down && !landed
+        ? 0.08 * Math.sin((t - down) * 2.4) * (1 - smoothstep(K.landAt - 0.8, K.landAt, t))
         : 0;
     const settle = t - K.landAt;
     return {
@@ -129,9 +133,9 @@ export function cowPoseAt(t, config = TORNADO_CONFIG) {
         z: p.z,
         scale: sizeFloor(p, config),
         tumble: { pitch: w * air, roll: 0.7 * w * air + 1, yaw: 0.4 * w * air },
-        upright: smoothstep(K.hoverAt - 2, K.hoverAt + 0.5, t),
+        upright: smoothstep(K.landAt - K.uprightFrom, K.landAt - K.uprightBy, t),
         yaw: K.landing.yaw + rock,
-        splay: 1 - smoothstep(K.hoverAt + 0.5, K.landAt - 0.2, t),
+        splay: 1 - smoothstep(K.landAt - K.legsFrom, K.landAt - K.legsBy, t),
         dip: landed && settle < 0.5 ? 0.06 * Math.sin(Math.PI * settle / 0.5) : 0,
         headYaw: lookTurn(config) * smoothstep(K.lookAt, K.lookAt + 0.8, t),
         headPitch: landed ? 0 : -0.25,
