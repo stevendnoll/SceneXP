@@ -8,7 +8,7 @@
  */
 import {
     CITY, WATER_Y, shoreZ, elevation, groundY, FAR_LAND, inPolygon, isLand, isWater, seeded, blockAt, districtOf,
-    cityTowers, piers, olympics, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
+    cityTowers, piers, olympics, farHills, reflectionPoints, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
 } from '../www/office/js/city.js';
 
 const towers = cityTowers();
@@ -183,5 +183,53 @@ describe('the waterfront and the far things', () => {
         expect(isLand(0, o.z)).toBe(true);
         expect(o.peaks.some(([, h]) => h > o.snow)).toBe(true);
         expect(o.peaks.some(([, h]) => h < o.snow)).toBe(true);
+    });
+
+    test('the reflections are captured from an open street among the towers, and from just over the bay', () => {
+        const { city, bay } = reflectionPoints();
+        const [x, y, z] = city;
+        // In the open: inside no tower or podium, above the street.
+        for (const t of towers) {
+            const half = Math.max(t.w, t.d, t.podium ? Math.max(t.podium.w, t.podium.d) : 0) / 2;
+            expect(Math.abs(x - t.x) > half || Math.abs(z - t.z) > half).toBe(true);
+        }
+        expect(y).toBeGreaterThan(groundY(x, z) + 50);
+        expect(isLand(x, z)).toBe(true);
+        // Among towers: several taller ones close by, whose glass it sees.
+        const around = towers.filter((t) => Math.hypot(t.x - x, t.z - z) < 300 && WATER_Y + t.base + t.h > y);
+        expect(around.length).toBeGreaterThanOrEqual(4);
+        // Over open water, low, off the office's own street.
+        expect(isWater(bay[0], bay[2])).toBe(true);
+        expect(bay[1] - WATER_Y).toBeGreaterThan(5);
+        expect(bay[1] - WATER_Y).toBeLessThan(60);
+        expect(bay[0]).toBe(x);
+    });
+
+    test('low wooded hills stand across the water, wholly on their own land, below the eye and the mountains', () => {
+        const hills = farHills();
+        expect(Object.keys(hills)).toEqual(['island', 'farShore']);
+        expect(farHills()).toEqual(hills);
+        const tallestMountain = Math.max(...olympics().peaks.map(([, h]) => h));
+        for (const ridge of Object.values(hills)) {
+            const xs = ridge.peaks.map(([x]) => x);
+            const near = ridge.z + ridge.depth / 2;
+            const far = ridge.z - ridge.depth / 2;
+            for (const x of xs) {
+                expect(isLand(x, near)).toBe(true);
+                expect(isLand(x, far)).toBe(true);
+            }
+            // They taper to the water at both ends, no cliff at the tips.
+            expect(ridge.peaks[0][1]).toBe(0);
+            expect(ridge.peaks.at(-1)[1]).toBe(0);
+            // Low: a band under the horizon, never in front of the mountains' snow.
+            const top = Math.max(...ridge.peaks.map(([, h]) => h));
+            expect(top).toBeGreaterThan(50);
+            expect(top).toBeLessThan(floorAboveWater);
+            expect(top).toBeLessThan(tallestMountain / 10);
+            expect(ridge.snow).toBe(Infinity);
+        }
+        // In order across the bay: the island, then the far shore, then the mountains.
+        expect(hills.island.z).toBeGreaterThan(hills.farShore.z);
+        expect(hills.farShore.z - hills.farShore.depth / 2).toBeGreaterThan(olympics().z + olympics().depth / 2);
     });
 });

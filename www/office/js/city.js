@@ -239,6 +239,51 @@ export function olympics(city = CITY) {
     return { z: -30000, depth: 9000, peaks, snow: 1600 };
 }
 
+/**
+ * Where the reflections are captured from, in the room's frame. The glass
+ * reflects the city as seen from `city`: the middle of a street crossing
+ * two blocks down the hill, 90 m up, among the towers, so every tower's
+ * glass shows towers. The water reflects the world as seen from `bay`: just
+ * over the water off the ferry dock, so the far water mirrors the far shore
+ * and the mountains nearly where a true mirror would (they are far enough
+ * off that the few hundred meters between here and any patch of water
+ * hardly moves them).
+ */
+export function reflectionPoints(city = CITY) {
+    const x = blockAt(1, 0, city).x0 - city.street / 2;
+    const z = blockAt(0, -2, city).z0 - city.street / 2;
+    return {
+        city: [x, groundY(x, z, city) + 90, z],
+        bay: [x, WATER_Y + 25, shoreZ(x, city) - 600]
+    };
+}
+
+/**
+ * The low wooded hills across the water, in front of the mountains: the
+ * island's back, and the far shore's ridge. Flat, they were each under a
+ * pixel tall from the office. Raised, they give the horizon its layers. Each
+ * is a ridge like the mountains' (`z` its middle, `depth` front to back,
+ * peaks of [x, height]), no snow, tapering to the water at both ends.
+ */
+export function farHills(city = CITY) {
+    const random = seeded(city.seed + 11);
+    const ridge = (x0, x1, step, height) => {
+        const peaks = [];
+        for (let x = x0; x <= x1; x += step) {
+            const t = (x - x0) / (x1 - x0);
+            peaks.push([x, Math.round(Math.sin(Math.PI * t) ** 0.4 * height(x))]);
+        }
+        return peaks;
+    };
+    return {
+        island: { z: -13800, depth: 2000, snow: Infinity, peaks: ridge(-7000, 6500, 500, () => 70 + random() * 50) },
+        farShore: {
+            z: -21200, depth: 4000, snow: Infinity,
+            peaks: ridge(-58500, 58500, 1500, (x) => 70 + 40 * Math.sin(x / 7000) + random() * 40)
+        }
+    };
+}
+
 // ---- Glass and rooftops ---------------------------------------------------------
 
 /** A curtain-wall panel's width and a floor's height, in meters: the scale

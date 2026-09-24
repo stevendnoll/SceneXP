@@ -19,23 +19,28 @@
  * ground of downtown (its shoreline is where the ground dips under the
  * water), the towers from their own plans (box, chamfered or round, with
  * setbacks and podiums) in one mesh per facade style, the roofs and what
- * stands on them, the piers, the far lands, the mountains and the sky.
- * Standard materials only: no custom shader, so nothing can fail to compile
- * in a browser the tests never see.
+ * stands on them, the piers, the far lands and their hills, the mountains
+ * and the sky. The water and the haze are bay.js's. Standard materials only:
+ * no custom shader, so nothing can fail to compile in a browser the tests
+ * never see.
  */
 
 /* global THREE */
 
 import {
-    CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, olympics, PANEL, FACADE_TILE, towerStyle,
+    CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, olympics, farHills, reflectionPoints, PANEL, FACADE_TILE, towerStyle,
     rooftop, aviationLights, facadeUv, outline, sections
 } from './city.min.js';
+import { BAY, HAZE, rippleNormals } from './bay.min.js';
 
 /** The facade styles, in the order paint.js paints them. */
 export const STYLES = ['grid', 'bands', 'fins'];
 
-/** Glass tints: cool blues, greens and silvers, one per tower. */
-const GLASS_TONES = [0x5f7f98, 0x7d97aa, 0x46627a, 0x8ea6b6, 0x557a73, 0x6c7b8a];
+/** Glass tints: cool blues, greens and silvers, one per tower. The glass is
+ *  metallic, so its tint is how much it reflects: light tints for the
+ *  mirrored curtain walls of a modern downtown, which by day show more of
+ *  the city and the sky than of themselves. */
+export const GLASS_TONES = [0x9db4c6, 0xb3c3cf, 0x8aa2b6, 0xc0cad2, 0x98b3ac, 0xa7b1bb];
 
 function standard(color, opts = {}) {
     return new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
@@ -316,11 +321,15 @@ function buildPiers(scene) {
     return group;
 }
 
-/** The mountains across the bay: a ridge of peaks along x, snow on the tops. */
-export function ridgeGeometry(ridge) {
+/** The mountains' rock and snow, and the dark green of the wooded hills. */
+export const RIDGE_COLORS = { rock: 0x55657a, snow: 0xf2f5f8, woods: 0x2c4435 };
+
+/** A ridge across the bay: peaks along x, snow on the tops above its snow
+ *  line. The mountains, and (all `rock`, no snow) the wooded hills. */
+export function ridgeGeometry(ridge, { rock: rockHex = RIDGE_COLORS.rock, snow: snowHex = RIDGE_COLORS.snow } = {}) {
     const t3 = triangles({ colors: true });
-    const rock = new THREE.Color().setHex(0x55657a, THREE.SRGBColorSpace);
-    const snow = new THREE.Color().setHex(0xf2f5f8, THREE.SRGBColorSpace);
+    const rock = new THREE.Color().setHex(rockHex, THREE.SRGBColorSpace);
+    const snow = new THREE.Color().setHex(snowHex, THREE.SRGBColorSpace);
     const near = ridge.z + ridge.depth / 2;
     const far = ridge.z - ridge.depth / 2;
     const color = (y) => (y - WATER_Y > ridge.snow ? snow : rock);
@@ -338,7 +347,9 @@ export function ridgeGeometry(ridge) {
         t3.tri([xb, WATER_Y, far], pa, pb, farFacing, rock);
     }
     // Snow on the upper part of each near face: a band from the snow line
-    // up to the ridge, so the tops read white against the sky.
+    // up to the ridge, so the tops read white against the sky. (The first
+    // pass colors a face by its lower corner, this one each corner by its
+    // own height.)
     const geometry = t3.geometry();
     const pos = geometry.attributes.position;
     const col = geometry.attributes.color;
@@ -379,34 +390,92 @@ export function paintSky(sky, top, horizon) {
     col.needsUpdate = true;
 }
 
+/** The size of the water plane: past the haze's end in every direction. */
+const WATER_SPAN = 400000;
+
 /**
- * Build the world outside. Returns the scene and camera, and the handles
- * main.js drives: `setLight(look)` from daylight.js, `updateEnvironment`
- * for the reflections, and `follow(camera)` to put the outside camera where
- * the room camera is.
+ * The ripples (bay.js) as a normal map: raw numbers, so no color space, and
+ * mipmapped, so far water flattens to a sheen instead of shimmering.
+ * Repeated to one tile every BAY.tile meters of water.
  */
-export function buildWorld(config, { aspect = 16 / 10, textures = {} } = {}) {
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xe3ecef, 6000, 110000);
-    const camera = new THREE.PerspectiveCamera(50, aspect, 5, 160000);
+export function rippleTexture(anisotropy = 1) {
+    const texture = new THREE.DataTexture(rippleNormals(BAY.size, BAY.waves), BAY.size, BAY.size, THREE.RGBAFormat);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.anisotropy = anisotropy;
+    texture.repeat.set(WATER_SPAN / BAY.tile, WATER_SPAN / BAY.tile);
+    texture.needsUpdate = true;
+    return texture;
+}
 
-    const hemi = new THREE.HemisphereLight(0xdfeaf5, 0x3f463f, 1.0);
-    scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff0d8, 1.8);
-    // Afternoon light from over the bay, a little to the south.
-    sun.position.set(-0.3, 0.65, -0.7).multiplyScalar(1000);
-    scene.add(sun);
-
+/** The bay: a dark body under a near-mirror of the world (its own
+ *  reflection, captured from over the water), a slow swell bending it. */
+function buildWater(scene, anisotropy) {
     const water = new THREE.Mesh(
-        new THREE.PlaneGeometry(400000, 400000),
-        standard(0x3d6378, { roughness: 0.35, metalness: 0.1 })
+        new THREE.PlaneGeometry(WATER_SPAN, WATER_SPAN),
+        standard(BAY.color, {
+            roughness: BAY.roughness, metalness: 0, normalMap: rippleTexture(anisotropy), envMapIntensity: BAY.reflect
+        })
     );
     water.rotation.x = -Math.PI / 2;
     water.position.y = WATER_Y;
     water.name = 'water';
     scene.add(water);
+    return water;
+}
 
+/** The wooded hills across the water, one mesh each (the view test counts
+ *  anything named land-* as land). */
+function buildHills(scene) {
+    const woods = standard(0xffffff, { vertexColors: true, roughness: 1 });
+    const group = new THREE.Group();
+    group.name = 'land-hills';
+    for (const [name, ridge] of Object.entries(farHills())) {
+        const mesh = new THREE.Mesh(ridgeGeometry(ridge, { rock: RIDGE_COLORS.woods }), woods);
+        mesh.name = `land-hills-${name}`;
+        group.add(mesh);
+    }
+    scene.add(group);
+    return group;
+}
+
+/**
+ * Build the world outside. Returns the scene and camera, and the handles
+ * main.js drives: `setLight(look)` from daylight.js, `updateEnvironment`
+ * for the reflections, and `follow(camera)` to put the outside camera where
+ * the room camera is. `anisotropy` sharpens the water's ripples at a
+ * glancing angle (main.js passes the renderer's, up to 8).
+ */
+export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy = 1 } = {}) {
+    const scene = new THREE.Scene();
+    // The haze: from the window out, all the horizon's color by HAZE.far.
+    scene.fog = new THREE.Fog(0xe3ecef, HAZE.near, HAZE.far);
+    const camera = new THREE.PerspectiveCamera(50, aspect, 5, 160000);
+
+    const hemi = new THREE.HemisphereLight(0xdfeaf5, 0x3f463f, 1.0);
+    scene.add(hemi);
+    const sun = new THREE.DirectionalLight(0xfff0d8, 1.8);
+    // Afternoon light from over the bay, a little to the south. Its target
+    // is in the scene, so the light keeps its direction when a reflection
+    // capture shifts the scene.
+    sun.position.set(-0.3, 0.65, -0.7).multiplyScalar(1000);
+    scene.add(sun, sun.target);
+    // The sun itself, for the reflections only: a bright disc the glass and
+    // the water mirror. Hidden in the view (stage 4 draws the sun there).
+    const glow = new THREE.Mesh(
+        new THREE.SphereGeometry(4000, 16, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, toneMapped: false })
+    );
+    glow.name = 'sun-glow';
+    glow.visible = false;
+    scene.add(glow);
+
+    const water = buildWater(scene, anisotropy);
     const streets = buildGround(scene, textures);
+    const hills = buildHills(scene);
     const plan = cityTowers();
     const towers = buildTowers(scene, plan, textures.facades);
     const beacons = buildBeacons(scene, plan);
@@ -418,8 +487,20 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {} } = {}) {
     paintSky(sky, 0x7fb2dd, 0xe3ecef);
 
     let pmrem = null;
-    let envTarget = null;
-    let envScene = null;
+    let reflections = null;
+    const points = reflectionPoints();
+
+    /** The world as seen from a point, prefiltered for reflection. PMREM
+     *  captures from the origin, so the scene steps back by the point for
+     *  the moment it takes, and returns. */
+    const captureFrom = ([x, y, z]) => {
+        scene.position.set(-x, -y, -z);
+        scene.updateMatrixWorld(true);
+        const target = pmrem.fromScene(scene, 0, 5, 200000);
+        scene.position.set(0, 0, 0);
+        scene.updateMatrixWorld(true);
+        return target;
+    };
 
     return {
         scene,
@@ -428,6 +509,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {} } = {}) {
         sun,
         hemi,
         water,
+        hills,
+        glow,
+        points,
         towers,
         beacons,
         docks,
@@ -447,31 +531,31 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {} } = {}) {
             beacons.visible = look.cityLights > 0.2;
         },
         /**
-         * Rebuild the reflections: the sky as it is now, and a bright sun,
-         * prefiltered into an environment every glass tower reflects. Worth
-         * doing only when the light has changed (main.js calls it from
-         * applyDaylight), and only with a real renderer.
+         * Rebuild the reflections: the world itself, as it is lit now, with
+         * a bright sun in it, captured twice. The glass reflects the city
+         * from among the towers, so towers show towers; the water reflects
+         * the world from just over the bay, so the far water mirrors the far
+         * shore and the mountains. Everything else lights itself from the
+         * bay's capture (mostly sky). Worth doing only when the light has
+         * changed (main.js calls it from applyDaylight, after setLight), and
+         * only with a real renderer.
          */
         updateEnvironment(renderer, look) {
             if (!renderer || !THREE.PMREMGenerator) return null;
-            if (!pmrem) {
-                pmrem = new THREE.PMREMGenerator(renderer);
-                envScene = new THREE.Scene();
-                const dome = new THREE.Mesh(sky.geometry.clone(), new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide }));
-                dome.name = 'env-sky';
-                const glow = new THREE.Mesh(new THREE.SphereGeometry(4000, 16, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-                glow.name = 'env-sun';
-                envScene.add(dome, glow);
-            }
-            const dome = envScene.getObjectByName('env-sky');
-            const glow = envScene.getObjectByName('env-sun');
-            paintSky(dome, look.skyTop, look.skyBottom);
+            if (!pmrem) pmrem = new THREE.PMREMGenerator(renderer);
             glow.position.copy(sun.position).normalize().multiplyScalar(120000);
             glow.material.color.setHex(look.sunColor, THREE.SRGBColorSpace).multiplyScalar(2 + 8 * look.sun / 1.52);
-            const next = pmrem.fromScene(envScene, 0, 10, 200000);
-            if (envTarget) envTarget.dispose();
-            envTarget = next;
-            scene.environment = next.texture;
+            glow.visible = true;
+            const next = { city: captureFrom(points.city), bay: captureFrom(points.bay) };
+            glow.visible = false;
+            if (reflections) {
+                reflections.city.dispose();
+                reflections.bay.dispose();
+            }
+            reflections = next;
+            for (const mesh of towers.meshes) mesh.material.envMap = next.city.texture;
+            water.material.envMap = next.bay.texture;
+            scene.environment = next.bay.texture;
             return next;
         },
         /** Stand the outside camera exactly where the room camera is. */

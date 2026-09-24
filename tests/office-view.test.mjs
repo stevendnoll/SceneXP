@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import vm from 'node:vm';
 import { CONFIG } from '../www/office/js/config.js';
+import * as bay from '../www/office/js/bay.js';
 
 let THREE;
 let room;
@@ -195,6 +196,123 @@ describe('the world itself', () => {
     });
 });
 
+// ---- The bay and the air --------------------------------------------------------
+
+/** What the window sees along the horizon, where the far things are: a fine
+ *  sweep of the band from the island's shore up past the mountain tops,
+ *  every hit's name and distance. */
+function horizonSweep(cam, columns = 90, rows = 40) {
+    const ndcY = (x, y, z) => new THREE.Vector3(x, y, z).project(cam).y;
+    const x = cam.position.x;
+    const low = ndcY(x, city.WATER_Y, -12000);
+    const high = ndcY(x, city.WATER_Y + 2600, -30000);
+    const hits = [];
+    for (let i = 0; i < columns; i++) {
+        for (let j = 0; j < rows; j++) {
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera(new THREE.Vector2(-1 + (2 * (i + 0.5)) / columns, low + ((high - low) * (j + 0.5)) / rows), cam);
+            if (ray.intersectObject(room.group, true).length) continue;
+            const [hit] = ray.intersectObject(world.scene, true);
+            if (hit) hits.push({ name: hit.object.name, distance: hit.distance });
+        }
+    }
+    return hits;
+}
+
+describe('the bay and the air', () => {
+    test('the water is a dark body under a glancing mirror, broken up by ripples', () => {
+        const m = world.water.material;
+        expect(m.type).toBe('MeshStandardMaterial');
+        expect(m.metalness).toBe(0);
+        expect(m.roughness).toBe(bay.BAY.roughness);
+        expect(m.roughness).toBeLessThan(0.3);
+        const lum = (hex) => ((hex >> 16) & 255) * 0.2126 + ((hex >> 8) & 255) * 0.7152 + (hex & 255) * 0.0722;
+        expect(lum(bay.BAY.color)).toBeLessThan(70);
+        expect(m.normalMap).toBeTruthy();
+    });
+
+    test('the ripples are a seamless normal map, one tile every BAY.tile meters, raw numbers, mipmapped', () => {
+        const t = world.water.material.normalMap;
+        expect(t.isDataTexture).toBe(true);
+        expect(t.image.width).toBe(bay.BAY.size);
+        expect(t.colorSpace).toBe(THREE.NoColorSpace);
+        expect(t.wrapS).toBe(THREE.RepeatWrapping);
+        expect(t.wrapT).toBe(THREE.RepeatWrapping);
+        expect(t.generateMipmaps).toBe(true);
+        expect(t.minFilter).toBe(THREE.LinearMipmapLinearFilter);
+        expect(world.water.geometry.parameters.width / t.repeat.x).toBeCloseTo(bay.BAY.tile, 6);
+        expect(world.water.geometry.parameters.height / t.repeat.y).toBeCloseTo(bay.BAY.tile, 6);
+        expect(worldMod.rippleTexture().anisotropy).toBe(1);
+        expect(worldMod.buildWorld(CONFIG, { anisotropy: 8 }).water.material.normalMap.anisotropy).toBe(8);
+    });
+
+    test.each(['wide 21:9', 'laptop 16:10'])('on a %s screen the far water the window sees mirrors the mountains, the near water the sky', (name) => {
+        // What each patch of water shows is its mirror ray, looked up in the
+        // world as captured from over the bay.
+        const cam = cameraAt('window', ASPECTS[name]);
+        const from = new THREE.Vector3(...world.points.bay);
+        const mirrored = {};
+        const n = 48;
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                const { what, point } = seeAt(cam, -1 + (2 * (i + 0.5)) / n, -1 + (2 * (j + 0.5)) / n);
+                if (what !== 'water') continue;
+                const dir = point.clone().sub(cam.position).normalize();
+                dir.y = -dir.y;
+                const [hit] = new THREE.Raycaster(from, dir).intersectObject(world.scene, true);
+                const shown = !hit || hit.object.name === 'sky' ? 'sky' : hit.object.name.startsWith('land-hills') ? 'hills' : hit.object.name;
+                mirrored[shown] = (mirrored[shown] || 0) + 1;
+            }
+        }
+        expect(mirrored.mountains || 0).toBeGreaterThan(0);
+        expect(mirrored.sky || 0).toBeGreaterThan(mirrored.mountains);
+    });
+
+    test('the water is calm: a slow swell, not a chop', () => {
+        expect(bay.meanSquareSlope()).toBeLessThan(0.006);
+        expect(bay.maxTilt()).toBeLessThan((12 * Math.PI) / 180);
+        expect(world.water.material.envMapIntensity).toBe(bay.BAY.reflect);
+        expect(bay.BAY.reflect).toBeGreaterThanOrEqual(1);
+    });
+
+    test('the haze runs from the window to the horizon, in the horizon’s own color', () => {
+        expect(world.scene.fog.near).toBe(bay.HAZE.near);
+        expect(world.scene.fog.far).toBe(bay.HAZE.far);
+        // Past the haze's end everything is the horizon, which the camera still reaches.
+        expect(world.camera.far).toBeGreaterThan(bay.HAZE.far);
+        expect(world.water.geometry.parameters.width / 2).toBeGreaterThan(bay.HAZE.far);
+    });
+
+    test.each(['wide 21:9', 'laptop 16:10', 'phone upright'])('on a %s screen the window sees the far things in layers, each paler than the last', (name) => {
+        const hits = horizonSweep(cameraAt('window', ASPECTS[name]));
+        const at = (prefix) => {
+            const mine = hits.filter((h) => h.name.startsWith(prefix));
+            return mine.length ? mine.reduce((sum, h) => sum + h.distance, 0) / mine.length : null;
+        };
+        const island = at('land-hills-island');
+        const farShore = at('land-hills-farShore');
+        const mountains = at('mountains');
+        expect(island).not.toBeNull();
+        expect(farShore).not.toBeNull();
+        expect(mountains).not.toBeNull();
+        expect(island).toBeLessThan(farShore);
+        expect(farShore).toBeLessThan(mountains);
+        expect(bay.hazeAt(farShore) - bay.hazeAt(island)).toBeGreaterThan(0.05);
+        expect(bay.hazeAt(mountains) - bay.hazeAt(farShore)).toBeGreaterThan(0.05);
+        // The mountains are hazed, not gone.
+        expect(bay.hazeAt(mountains)).toBeLessThan(0.65);
+    });
+
+    test('the hills are wooded and snowless, one mesh each, counted as land', () => {
+        const group = world.scene.getObjectByName('land-hills');
+        expect(group.children.map((m) => m.name)).toEqual(['land-hills-island', 'land-hills-farShore']);
+        const col = group.children[0].geometry.attributes.color;
+        const woods = new THREE.Color().setHex(worldMod.RIDGE_COLORS.woods, THREE.SRGBColorSpace);
+        for (let i = 0; i < col.count; i++) expect(col.getX(i)).toBeCloseTo(woods.r, 6);
+        expect(world.hills).toBe(group);
+    });
+});
+
 // ---- Glass, streets and night ---------------------------------------------------
 
 describe('the glass city', () => {
@@ -287,14 +405,21 @@ describe('the glass city', () => {
         expect(lit.updateEnvironment(null, {})).toBeNull();
     });
 
-    test('with a renderer, the sky and sun are prefiltered into the towers’ reflections, the old ones let go', async () => {
-        // A real PMREMGenerator needs WebGL: this one records what it was asked to filter.
+    test('with a renderer, the world is captured twice: the glass reflects the city, the water the bay, the old ones let go', async () => {
+        // A real PMREMGenerator needs WebGL: this one records where the scene
+        // stood and what was showing when it was asked to capture.
         const { lighting, lightAt } = await import('../www/office/js/daylight.js');
         const real = THREE.PMREMGenerator;
         const made = [];
         THREE.PMREMGenerator = class {
-            fromScene(scene) {
-                const target = { scene, texture: { id: made.length }, disposed: false, dispose() { this.disposed = true; } };
+            fromScene(scene, sigma, near, far) {
+                const sunAt = new THREE.Vector3().setFromMatrixPosition(lit.sun.matrixWorld);
+                const aimAt = new THREE.Vector3().setFromMatrixPosition(lit.sun.target.matrixWorld);
+                const target = {
+                    shift: scene.position.clone(), glow: lit.glow.visible, near, far,
+                    sunDirection: sunAt.sub(aimAt).normalize(),
+                    texture: { id: made.length }, disposed: false, dispose() { this.disposed = true; }
+                };
                 made.push(target);
                 return target;
             }
@@ -302,17 +427,36 @@ describe('the glass city', () => {
         try {
             const noon = lighting(lightAt(new Date(2026, 8, 24), 12));
             const first = lit.updateEnvironment({}, noon);
-            expect(lit.scene.environment).toBe(first.texture);
-            const sun = first.scene.getObjectByName('env-sun');
-            expect(sun.position.clone().normalize().dot(lit.sun.position.clone().normalize())).toBeCloseTo(1, 6);
-            expect(first.scene.getObjectByName('env-sky')).toBeTruthy();
+            // Each capture from its own point: the scene stepped back by it.
+            expect(first.city.shift.toArray()).toEqual(lit.points.city.map((v) => -v));
+            expect(first.bay.shift.toArray()).toEqual(lit.points.bay.map((v) => -v));
+            // The sun in them, bright, and in its own direction however the scene stood.
+            expect(first.city.glow && first.bay.glow).toBe(true);
+            const direction = lit.sun.position.clone().normalize();
+            expect(first.city.sunDirection.dot(direction)).toBeCloseTo(1, 6);
+            expect(first.bay.sunDirection.dot(direction)).toBeCloseTo(1, 6);
+            expect(lit.glow.position.clone().normalize().dot(direction)).toBeCloseTo(1, 6);
+            expect(first.city.far).toBeGreaterThan(Math.hypot(...lit.glow.position.toArray()));
+            // And afterward: back in place, the sun disc hidden from the view.
+            expect(lit.scene.position.toArray()).toEqual([0, 0, 0]);
+            expect(lit.glow.visible).toBe(false);
+            for (const mesh of lit.towers.meshes) expect(mesh.material.envMap).toBe(first.city.texture);
+            expect(lit.water.material.envMap).toBe(first.bay.texture);
+            expect(lit.scene.environment).toBe(first.bay.texture);
             const dusk = lighting(lightAt(new Date(2026, 8, 24), 19));
             const second = lit.updateEnvironment({}, dusk);
-            expect(first.disposed).toBe(true);
-            expect(second.scene).toBe(first.scene);
-            expect(lit.scene.environment).toBe(second.texture);
+            expect(first.city.disposed && first.bay.disposed).toBe(true);
+            expect(second.city.disposed || second.bay.disposed).toBe(false);
+            expect(lit.water.material.envMap).toBe(second.bay.texture);
         } finally {
             THREE.PMREMGenerator = real;
+        }
+    });
+
+    test('the glass is a mirror by day: every tint reflects at least a third of the light', () => {
+        for (const hex of worldMod.GLASS_TONES) {
+            const c = new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
+            expect(0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b).toBeGreaterThan(0.33);
         }
     });
 });

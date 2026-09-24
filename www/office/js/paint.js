@@ -421,12 +421,14 @@ export function drawFacade(ctx, W, H, style, map, seed = 1) {
         for (let c = 0; c < cols; c++) {
             const x = c * pw;
             const y = r * ph;
-            const shade = 0.9 + random() * 0.2;
+            // Panels differ by a few percent, as real glazing does: enough to
+            // read as panes, not so much the reflection looks broken up.
+            const shade = 0.97 + random() * 0.06;
             const lit = random() < 0.38;
             const warm = random() < 0.7;
             // The glass.
             if (map === 'color') {
-                const g = Math.round(200 * shade);
+                const g = Math.min(255, Math.round(236 * shade));
                 ctx.fillStyle = `rgb(${g}, ${Math.round(g * 1.03)}, ${Math.round(g * 1.08)})`;
             } else if (map === 'rm') {
                 ctx.fillStyle = 'rgb(0, 18, 245)';

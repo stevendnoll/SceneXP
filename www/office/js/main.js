@@ -315,6 +315,13 @@ function paintedTexture(width, height, paint) {
     return { canvas: c, texture };
 }
 
+/** How sharply a texture seen at a glancing angle may be filtered: the
+ *  renderer's most, up to 8. */
+function anisotropy() {
+    const caps = renderer && renderer.capabilities;
+    return caps && caps.getMaxAnisotropy ? Math.min(8, caps.getMaxAnisotropy()) : 1;
+}
+
 /**
  * The city's painted maps: for each facade style its color, its roughness
  * and metalness, and its lit offices; and the streets by day and by night.
@@ -323,9 +330,7 @@ function paintedTexture(width, height, paint) {
  */
 function worldTextures() {
     const sharp = (t) => {
-        if (t && renderer && renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
-            t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-        }
+        if (t) t.anisotropy = anisotropy();
         return t;
     };
     const facades = {};
@@ -344,9 +349,8 @@ function buildScene() {
     // No background: the room is drawn over the world outside, which shows
     // wherever the room has nothing, that is, through the windows.
     scene = new THREE.Scene();
-    world = buildWorld(CONFIG, { aspect: aspect(), textures: worldTextures() });
+    world = buildWorld(CONFIG, { aspect: aspect(), textures: worldTextures(), anisotropy: anisotropy() });
 
-    // Daylight through the two window walls, and the room's own fill.
     // Daylight through the two window walls, and the room's own fill. Their
     // strengths and colors follow the clock (applyDaylight).
     lights.hemi = new THREE.HemisphereLight(0xf4f1ea, 0x4a3a2c, 0.9);

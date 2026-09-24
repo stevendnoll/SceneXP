@@ -811,6 +811,15 @@ describe('the city painters', () => {
         expect(litPanels(5)).toBe(n);
     });
 
+    test('the glass is light and even: panes a few percent apart, so reflections read whole', () => {
+        const r = recorder();
+        paint.drawFacade(r.ctx, 512, 512, 'grid', 'color', 3);
+        const greens = r.fills.filter((f, i) => i % 3 === 0).map((f) => Number(f.style.match(/\d+/g)[1]));
+        expect(Math.min(...greens)).toBeGreaterThanOrEqual(225);
+        expect(Math.max(...greens)).toBeLessThanOrEqual(255);
+        expect((Math.max(...greens) - Math.min(...greens)) / Math.min(...greens)).toBeLessThan(0.08);
+    });
+
     test('the street tile has its streets at the edges, and a glow for night', () => {
         const day = recorder();
         paint.drawStreets(day.ctx, 256, 256, { block: 90, street: 22 });
