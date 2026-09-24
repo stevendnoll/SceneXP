@@ -230,12 +230,15 @@ export const TORNADO_CONFIG = Object.freeze({
     farm: {
         house: { x: 22, z: -430, width: 12, depth: 8, eave: 5.5, ridge: 8.5,
             wall: 0xe9e4d8, roof: 0x3b3d42, trim: 0x2a2b2e },
-        barn: { x: 48, z: -470, width: 14, depth: 24, eave: 5, knee: 9, ridge: 12,
+        barn: { x: 55, z: -470, width: 14, depth: 24, eave: 5, knee: 9, ridge: 12,
             wall: 0x9b2d20, roof: 0x45474c, trim: 0xefe9dc },
-        silo: { x: 72, z: -486, radius: 3.2, height: 16, color: 0x9aa5ad, cap: 0x7d868d },
-        // Far out on the left, past where the roped-out foot trails (about
-        // -17 degrees). Everything else stands right of the funnel.
-        windmill: { x: -215, z: -420, height: 14, rotor: 3.2, blades: 12,
+        silo: { x: 80, z: -486, radius: 3.2, height: 16, color: 0x9aa5ad, cap: 0x7d868d },
+        // In the farmyard between the house and the barn, where a portrait
+        // phone sees it standing above the rooftops. It was far out on the
+        // left, clear of the roped-out foot's trail, where only a very wide
+        // screen showed it (QA 2026-09-23); the barn and silo moved a few
+        // metres right to make room for it here.
+        windmill: { x: 33, z: -415, height: 14, rotor: 3.2, blades: 12,
             color: 0xb8bcc0, spin: 2.4 }   // radians per second per unit of wind
     },
 

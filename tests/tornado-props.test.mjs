@@ -95,12 +95,20 @@ function groundContact(t) {
 const overlaps = (a, b) => a.from < b.to && b.from < a.to;
 
 describe('the farm is composed against the frame', () => {
-    test('every building is in a landscape frame, and a phone sees the house and the barn', () => {
+    test('EVEN A PORTRAIT PHONE SEES THE WHOLE FARM, windmill and all', () => {
+        // The windmill stood far left at first, where only a very wide screen
+        // showed it (QA 2026-09-23). Every building is held to the narrowest
+        // frame now, and so to every frame wider than it.
         for (const b of buildings()) {
-            expect([b.name, b.from > -LANDSCAPE() + 3 && b.to < LANDSCAPE() - 3]).toEqual([b.name, true]);
-        }
-        for (const b of buildings().filter((x) => x.name === 'house' || x.name === 'barn')) {
             expect([b.name, b.from > -PORTRAIT() && b.to < PORTRAIT()]).toEqual([b.name, true]);
+        }
+    });
+
+    test('the buildings stand apart on screen, so each reads as its own shape', () => {
+        const all = buildings().sort((a, b) => a.from - b.from);
+        for (let i = 1; i < all.length; i++) {
+            expect([all[i - 1].name, all[i].name, all[i].from - all[i - 1].to > 0.2])
+                .toEqual([all[i - 1].name, all[i].name, true]);
         }
     });
 
