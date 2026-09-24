@@ -97,12 +97,13 @@ describe('the page', () => {
     test('has the live region, and the loop feeds it every frame', () => {
         expect(page).toContain('<p id="story-status" class="sr-only" role="status" aria-live="polite"></p>');
         expect(main).toMatch(/createNarrator\(document\.getElementById\('story-status'\), OCEAN_CONFIG\.narration\)/);
-        expect(main).toMatch(/narrator\.update\(state\.arc, \{ begun: state\.begun, scrubbing: ui\.scrubbing \}\)/);
+        // Handed the player's own { begun, scrubbing } for the frame, so it
+        // stays quiet behind the card and under a drag.
+        const frame = main.slice(main.indexOf('function drawFrame(delta, arc, info)'));
+        expect(frame).toMatch(/^[\s\S]{0,400}narrator\.update\(arc, info\)/);
     });
 
-    test('A KEYBOARD BEGIN HANDS FOCUS ON, as Resume, Restart and Replay do', () => {
-        expect(main).toMatch(/beginBtn\.addEventListener\('click', \(event\) => beginArc\(event\.detail === 0\)\)/);
-        const body = main.slice(main.indexOf('function beginArc('), main.indexOf('\n}\n', main.indexOf('function beginArc(')));
-        expect(body).toMatch(/placeFocus\(fromKeyboard\)/);
-    });
+    // A KEYBOARD BEGIN HANDS FOCUS ON, as Resume, Restart and Replay do. That
+    // is the shared player's now, and highwater-begin.test.mjs presses the
+    // real page's Begin both ways.
 });

@@ -29,8 +29,15 @@
  * frightening minute part way through and to go back to a moment that was
  * missed, so there is a pause button, Escape, a pause card with Restart, and a
  * scrubber. They fade out when the pointer is still, so the visitor still
- * mostly watches. The rules behind them live in controls.js, and the wiring is
- * the "player controls" section below.
+ * mostly watches.
+ *
+ * THE PLAYER IS SHARED NOW (2026-09-24). Everything around the picture (the
+ * welcome and pause card, the controls, the story clock, the fade, the ending
+ * and the usage events) is shared/js/player-1.0.0.js, which was lifted out of
+ * this file for Tornado Alley. This scene's numbers for it are in player.js.
+ * What stays here is the sea: `drawFrame` draws one frame at the story second
+ * the player hands it, and the hooks below put the sea's own clocks where a
+ * replay would have them when the player's clock jumps.
  *
  * ONE GENUINELY NEW PROPERTY: this is the first scene in the project that can
  * legitimately STOP RENDERING. Once the fade is complete there is nothing left
@@ -66,49 +73,30 @@ import {
     initSand, updateSand, addBreaks, surfaceWithSwash, resetSand, disposeSand,
     swashReachMetres
 } from './sand.min.js';
-import { stormStateAt, surgeAt, frontAt, frontLevelAt, washEnvelope, stageAt } from './storm.min.js';
+import { stormStateAt, surgeAt, frontAt, frontLevelAt, washEnvelope } from './storm.min.js';
 import { initBuoy, updateBuoy, resetBuoy, disposeBuoy } from './buoy.min.js';
 import {
     initLightning, updateLightning, resetLightning, disposeLightning, forceStrike
 } from './lightning.min.js';
-import {
-    escapeAction, isEditable, seekTarget, keySeekTarget, clockLabel, valueText,
-    progressPercent, mayIdle, lightningAllowed
-} from './controls.min.js';
+import { createPlayer } from '../../shared/js/player-1.0.0.min.js';
+import { playerOptions } from './player.min.js';
 import { createNarrator } from '../../shared/js/narration-1.0.0.min.js';
 
 // The story told to a screen reader, beat by beat (config.narration).
 let narrator = null;
 
+// THE STORY'S CLOCK IS THE PLAYER'S. It holds the arc at zero behind the
+// welcome card while the sea keeps moving, so the card sits over a living
+// ordinary afternoon: the card carries a content warning this scene owes
+// anybody who opens it, and a sixty second story should not be a third over
+// before the visitor has finished reading it. A PAUSE FREEZES EVERYTHING, the
+// sea included, because a sea left running behind the pause card would drift
+// the tide away from the second the story is held at, which is the
+// weaker-storm fault `resetWater` exists to prevent.
+let player = null;
+
 const state = {
-    running: false,
-    lastTime: 0,
     mobile: false,
-    // THE STORY WAITS FOR THE VISITOR AND THE SEA DOES NOT. The water runs from
-    // the moment the page loads, so what sits behind the welcome card is a
-    // living ordinary sea rather than a freeze frame, but the arc holds at zero
-    // until somebody presses Begin.
-    //
-    // It was originally the only arrangement that worked, because a browser will
-    // not build an AudioContext without a gesture. The sound is gone and this
-    // stays, because the reasons that survive it are better ones: the card
-    // carries a content warning this scene owes anybody who opens it, and a
-    // sixty second story should not be a third over before the visitor has
-    // finished reading the page it is on.
-    begun: false,
-    // Seconds since the arc began, which is the clock the whole scene runs on.
-    // Deliberately NOT the same as water.js's own elapsed: that one keeps
-    // running so the sea is never reset mid wave, and this one is what a replay
-    // puts back to zero.
-    arc: 0,
-    finished: false,
-    // THE PAUSE FREEZES EVERYTHING, the sea included, unlike the welcome card,
-    // which holds only the story over a living sea. Two reasons. It is what a
-    // visitor expects from a pause, and it is the only arrangement that keeps
-    // the tide in step with the storm: a sea left running behind the card would
-    // drift the tide away from the second the story is held at, which is the
-    // weaker-storm fault `resetWater` exists to prevent.
-    paused: false,
     // The white-out envelope, carried whole rather than as a number, because it
     // has to remember whether it is mid attack. See washEnvelope: it fires on
     // the water ARRIVING rather than on it being there, and the arrival is a
@@ -120,40 +108,7 @@ let canvas = null;
 let renderer = null;
 let scene = null;
 let camera = null;
-let frame = 0;
 let wash = null;        // the white-out when the water comes over the camera
-let blackout = null;    // the closing fade
-let ending = null;      // the card that sits on the black
-let replay = null;
-let welcome = null;     // the card that holds the arc until the visitor is ready
-
-// The player controls. See the section of that name below.
-const controlsEl = { root: null, pause: null, scrubber: null, scrub: null };
-const card = { begin: null, actions: null, resume: null, restart: null, pausedAt: null };
-const ui = {
-    scrubbing: false,
-    hoverPause: false,
-    hoverScrub: false,
-    // True through the closing fade, when the controls step aside for the
-    // ending and do not come back on a mere pointer move.
-    ending: false,
-    idleTimer: 0,
-    cardTimer: 0,
-    // Real seconds the lightning is still held for after a seek.
-    lightningHold: 0,
-    // Where the story was when the current drag started, for the seek report.
-    dragFrom: 0,
-    // The whole second last written to the scrubber's aria-valuetext.
-    lastWhole: -1,
-    // A seek waiting to be reported, so a run of them leaves one event.
-    seekFrom: null,
-    seekTo: 0,
-    seekTimer: 0,
-    // Whether this watch has been scrubbed at all, carried on the funnel
-    // events so a visitor who skipped to the end does not read as one who sat
-    // through it.
-    scrubbed: false
-};
 
 // What the renderer would use if nothing were slow, and how far below it we have
 // had to settle. See `nextPixelScale`.
@@ -296,62 +251,22 @@ function onResize() {
     quality.ceiling = Math.min(window.devicePixelRatio || 1, state.mobile ? 1.5 : 2);
     renderer.setPixelRatio(quality.ceiling * quality.scale);
     renderer.setSize(window.innerWidth, window.innerHeight, false);
-    // A resize clears the canvas, and a paused scene is not drawing, so without
-    // this the pause card would sit over a blank rectangle after a phone was
-    // turned on its side. One frame puts the frozen moment back.
-    if (state.paused && scene) renderer.render(scene, camera);
+    // A resize clears the canvas, and a paused scene is not drawing. The
+    // player puts the frozen moment back on the next frame through `redraw`,
+    // after this has run.
 }
 
-/** A backgrounded tab should stop drawing. requestAnimationFrame already
- *  throttles, but stopping outright means a phone in a pocket is not warming
- *  itself on a sea nobody is watching.
+/** One frame of the scene at story second `arc`, called by the player every
+ *  animation frame it runs: behind the welcome card (where `arc` holds at
+ *  zero and the sea still moves), through the story, and under a drag (where
+ *  the thumb is the clock). Never while paused, and never after the ending.
  *
- *  MID STORY, LEAVING THE TAB PAUSES IT (Steve, 2026-09-23). It used to resume
- *  by itself the moment the tab came back, so somebody who switched away during
- *  the storm returned to a scene already running under them. Now they come back
- *  to the pause card and choose when to go on. Before Begin there is no story to
- *  pause, so the sea simply stops and starts again as it always did. */
-function onVisibility() {
-    if (document.hidden) {
-        if (escapeAction(state) === 'pause') pauseArc('hidden');
-        else stop();
-    } else if (!state.running && !state.finished && !state.paused) {
-        // `lastTime` is cleared so the first frame back reports a delta of zero
-        // rather than however long the tab was hidden. That matters more now
-        // than it used to: the arc is a sixty second story, and a visitor who
-        // switched away for two minutes should come back to the sea they left
-        // rather than to the credits.
-        state.lastTime = 0;
-        start();
-    } else if (state.paused && renderer && scene) {
-        // Some mobile browsers drop a background tab's canvas, and a paused
-        // scene draws nothing by itself, so the frozen frame is put back once.
-        renderer.render(scene, camera);
-    }
-}
-
-function loop(now) {
-    if (!state.running) return;
-    frame = requestAnimationFrame(loop);
-    const seconds = now / 1000;
-    const delta = state.lastTime ? seconds - state.lastTime : 0;
-    state.lastTime = seconds;
+ *  `info` is the player's { begun, scrubbing, fade }. */
+function drawFrame(delta, arc, info) {
     adaptQuality(delta);
-    // The sea moves while the welcome card is up; the story does not. Nor does
-    // it while a scrubber thumb is held down: the thumb is the clock then, the
-    // way a video holds still under a finger.
-    if (state.begun && !ui.scrubbing) {
-        state.arc += Math.max(0, Math.min(0.25, delta));
-        paintScrubber();
-        // Read off the arc clock rather than off wall time, which is what makes
-        // these honest: the clock stops when the tab is hidden, so a visitor who
-        // walked away for five minutes does not come back having "reached" the
-        // tsunami they never saw.
-        reportStage();
-    }
     // Every frame, so it keeps its place quietly behind the card, under a drag
     // and across a seek, and speaks only as the story plays into a beat.
-    if (narrator) narrator.update(state.arc, { begun: state.begun, scrubbing: ui.scrubbing });
+    if (narrator) narrator.update(arc, info);
 
     // THE ARC IS READ BEFORE ANYTHING IS DRAWN, and the water level under the
     // camera is read from the SEA rather than from the arc, so the white-out can
@@ -368,9 +283,9 @@ function loop(now) {
     // the reason the tsunami stopped covering the eye when the surge curve
     // handed that job over to the front. sand.js is told about a water level
     // rather than about a tsunami, which is what keeps it reusable.
-    const surge = surgeAt(state.arc, OCEAN_CONFIG.storm)
-        + frontLevelAt(OCEAN_CONFIG.camera.z, frontAt(state.arc, OCEAN_CONFIG.storm));
-    const storm = stormStateAt(state.arc, OCEAN_CONFIG,
+    const surge = surgeAt(arc, OCEAN_CONFIG.storm)
+        + frontLevelAt(OCEAN_CONFIG.camera.z, frontAt(arc, OCEAN_CONFIG.storm));
+    const storm = stormStateAt(arc, OCEAN_CONFIG,
         surfaceWithSwash(OCEAN_CONFIG.camera.z, surge));
 
     // The sky first, because the water's own shader reads the sky's uniforms
@@ -392,11 +307,9 @@ function loop(now) {
     // HELD THROUGH A DRAG AND FOR A MOMENT AFTER ANY SEEK. A drag moves the arc
     // clock far faster than real time, and the rate cap is written in arc
     // seconds, so without the hold a scrub through the storm could flash
-    // faster than the welcome card promises. See `controls.lightningHoldSeconds`.
-    ui.lightningHold = Math.max(0, ui.lightningHold - Math.max(0, delta));
-    if (lightningAllowed({ scrubbing: ui.scrubbing, holdSeconds: ui.lightningHold })) {
-        updateLightning(state.arc, OCEAN_CONFIG);
-    }
+    // faster than the welcome card promises. The player keeps that hold (see
+    // `controls.lightningHoldSeconds`).
+    if (player && player.flashAllowed()) updateLightning(arc, OCEAN_CONFIG);
     updateWater(delta, storm);
     // AFTER THE WATER AND NOT BEFORE IT. `waveSurfaceAt` reads the profile that
     // `updateWater` has just rebuilt, so asking first would float the buoy on
@@ -405,7 +318,7 @@ function loop(now) {
     // times a second rather than sixty, so the stale frame is not the previous
     // one, it is up to a sixth of a second old, which at the storm's peak is a
     // visible step.
-    updateBuoy(state.arc, delta, OCEAN_CONFIG);
+    updateBuoy(arc, delta, OCEAN_CONFIG);
 
     // THE BREAK QUEUE. sand.js turns each entry into a sheet of water running up
     // the beach. It had a second reader until the sound was removed, which is
@@ -430,134 +343,37 @@ function loop(now) {
     // fire during the storm: see `washFloorAt`.
     state.wash = washEnvelope(state.wash, storm.engulf, delta, OCEAN_CONFIG.storm,
         storm.washFloor);
-    paintOverlay(state.wash.wash, storm.fade);
-
-    // THE CONTROLS STEP ASIDE FOR THE FADE. The last seconds are the sea closing
-    // over the visitor and then black, and a pause button floating over that is
-    // the one frame of chrome that would cost the scene most. They stay if the
-    // visitor is using them at that moment, and they do not come back on a mere
-    // pointer move until the next watch.
-    const ending = storm.fade > 0;
-    if (ending !== ui.ending) {
-        ui.ending = ending;
-        if (ending) idleControls();
-    }
-
-    // THE ONE SCENE IN THIS PROJECT THAT CAN HONESTLY STOP DRAWING. Once the
-    // fade is complete there is nothing left on screen, so idling the loop would
-    // be a phone warming itself on a black rectangle.
-    if (storm.finished && storm.fade >= 1) finish();
+    if (wash) wash.style.opacity = state.wash.wash.toFixed(3);
+    // THE CLOSING FADE IS THE PLAYER'S, and so is stepping the controls aside
+    // for it and stopping the loop once it is black: this is the one scene in
+    // the project that can honestly stop drawing, and now Tornado Alley is the
+    // second. The fade's curve is still this scene's own smoothstep, handed to
+    // the player in player.js.
 }
 
-/** The white-out and the closing fade, both plain DOM.
+/** The seek has landed at story second `at`: bring every clock in the scene
+ *  with it.
  *
- *  KEPT OUT OF WEBGL ON PURPOSE. Neither is a 3D effect: one is a face full of
- *  whitewater and the other is the end of a film. Doing them as two divs means
- *  the renderer never learns about the story, the reduced-motion variant is a
- *  stylesheet rather than a branch, and the fade keeps working on a frame the
- *  GPU has already stopped producing. */
-function paintOverlay(washAmount, fade) {
-    if (wash) wash.style.opacity = washAmount.toFixed(3);
-    if (blackout) blackout.style.opacity = fade.toFixed(3);
-}
-
-/** The visitor is ready. Start the story.
+ *  THE STORY CLOCK IS THE EASY PART. The storm, the sky, the buoy and the
+ *  lightning's schedule are all read straight off it. What is not: the tide and
+ *  the sets run on the sea's own clock, the bores on the beach carry the swell
+ *  of the moment they broke, and the white-out remembers whether it is mid
+ *  attack. Each of those is put where a replay would have it at this second,
+ *  so a scrubbed-to storm is the same storm an untouched watch gets there.
  *
- *  THE CARD OUTLIVED THE REASON IT WAS BUILT. It arrived because a browser will
- *  not build an AudioContext without a gesture, and the scene has no sound any
- *  more. It stays because the other two jobs it does are the ones that mattered:
- *  it carries the content warning, which this scene owes anybody who opens it,
- *  and it stops a sixty second story running while the visitor is still reading
- *  the page. */
-function beginArc(fromKeyboard = false) {
-    if (state.begun) return;
-    state.begun = true;
-    // THE CONVERSION ON THE CONTENT WARNING, which is the one number this card
-    // was always going to raise and nobody could answer. `session-start` counts
-    // everybody who arrived; this counts everybody who read what was coming and
-    // pressed the button anyway. The gap between the two is the cost of the
-    // warning, and it is worth knowing rather than guessing, because if it turns
-    // out to be large the answer is better wording and not a quieter warning.
-    //
-    // Inside the `begun` guard on purpose, so the QA hooks that call through
-    // here (`oceanSetArc`) cannot log a second one.
-    watch = 1;
-    track('begin-watching', { reduced: prefersReducedMotion() ? 1 : 0 });
-    hideCard();
-    showControls();
-    // THE BUTTON HIDES WITH ITS CARD, so a keyboard visitor's focus has to go
-    // somewhere or it is left on nothing: to the pause button, where Resume,
-    // Restart and Replay already send it (accessibility pass, 2026-09-23).
-    placeFocus(fromKeyboard);
+ *  Mid drag only the story clock moves, and the sea rebuilds its own profile
+ *  from it a few times a second anyway, so the storm tracks the thumb without
+ *  this, which is saved for the moment the thumb is let go. */
+function resyncTo(at) {
+    resetWater(at);
+    resetSand(at);
+    resetLightning();
+    resetBuoy();
+    state.wash = { wash: 0, target: 0, attacking: false };
 }
 
-/** Put the welcome card up again, as the pause card.
- *
- *  THE SAME CARD, NOT A SECOND ONE, because Steve asked for the pause screen to
- *  say what the welcome screen says, and one copy of the content warning cannot
- *  drift from another. What changes is the buttons: Resume in place of Begin,
- *  Restart beside it, and a line saying where the story was held. */
-function showCard() {
-    if (!welcome) return;
-    clearTimeout(ui.cardTimer);
-    if (card.begin) card.begin.hidden = true;
-    if (card.actions) card.actions.hidden = false;
-    if (card.pausedAt) {
-        card.pausedAt.hidden = false;
-        card.pausedAt.textContent = `Paused at ${clockLabel(state.arc)}`;
-    }
-    welcome.hidden = false;
-    welcome.style.pointerEvents = '';
-    // On the next frame, so the fade has a frame to start from. A hidden tab
-    // runs no frames, so a pause on the way out fades in on the way back,
-    // which is exactly when the visitor is there to see it.
-    requestAnimationFrame(() => { if (state.paused && welcome) welcome.style.opacity = '1'; });
-}
-
-/** Fade the card out, as Begin, Resume and Restart all do. */
-function hideCard() {
-    if (!welcome) return;
-    clearTimeout(ui.cardTimer);
-    welcome.style.opacity = '0';
-    // Stops catching clicks the instant it starts fading rather than when it
-    // finishes. Under reduced motion there is no fade at all, so without this
-    // the card would sit invisible over the whole page for most of a second,
-    // swallowing anything aimed at what is behind it.
-    welcome.style.pointerEvents = 'none';
-    // Then out of the flow entirely once the fade is done. The timer is kept so
-    // a pause inside those 700ms cannot have its card hidden from under it.
-    ui.cardTimer = setTimeout(() => { if (welcome && !state.paused) welcome.hidden = true; }, 700);
-}
-
-/** The end of the arc: stop drawing, and show the card.
- *
- *  THE CARD IS NOT OPTIONAL AND A BARE BLACK SCREEN WAS THE FIRST PLAN. Steve
- *  and I both landed on the same objection: a black rectangle with nothing in it
- *  does not read as an ending, it reads as a page that has broken, and a visitor
- *  who thinks the scene crashed does not share it with anyone. One line and a
- *  way back is the whole fix. */
-function finish() {
-    if (state.finished) return;
-    state.finished = true;
-    // MADE IT TO THE END. A minute is a long time to ask for, and the
-    // difference between a scene people start and a scene people finish is the
-    // difference between a good idea and a good experience. `runs` distinguishes
-    // a first watch from a second, so this stays meaningful after a replay.
-    runs += 1;
-    flushSeek();
-    track('arc-complete', { watch, scrubbed: ui.scrubbed ? 1 : 0 });
-    stop();
-    hideControls();
-    if (ending) {
-        ending.hidden = false;
-        // Requested on the next frame so the transition has a frame to start
-        // from. Setting hidden and opacity in the same tick skips the fade.
-        requestAnimationFrame(() => { ending.style.opacity = '1'; });
-    }
-    if (replay) replay.focus();
-}
-
-/** Put the arc back to the beginning without rebuilding the scene.
+/** Back to the first second for a replay or a restart, without rebuilding the
+ *  scene.
  *
  *  THE SEA IS RESET TOO, AND THE FIRST VERSION DID NOT DO THAT. It left the
  *  water and the sand running on their own clocks, so that a replay would open
@@ -569,365 +385,25 @@ function finish() {
  *  at low water, where no wave breaks over the visitor at all. Somebody pressing
  *  "watch it again" and getting a weaker storm is the worst answer available.
  *
+ *  The storm's lightning schedule goes back with it, for the same reason: a
+ *  replay that came back half way through its own timetable would not be the
+ *  storm the first watch was.
+ *
  *  THE SKY IS THE ONE THING THAT DELIBERATELY DOES NOT GO BACK. It used to: the
  *  note here said a second run was the same afternoon rather than a different
  *  one, and that was a reasonable call while the only thing a rewatch offered
  *  was the story again. Steve asked on 2026-08-24 for a second viewing to be
  *  worth something, and a fresh hour is the cheapest honest answer, since it
- *  changes the composition rather than adding a prop to it.
- *
- *  Everything else on this list resets so the second watch is the SAME STORM.
- *  This one is here so it is not the same light. See `resetSky` for how far it
- *  really moves, which is the glint path and not the mood. */
-function replayArc(fromKeyboard = false) {
-    // THE CLOSEST THING THIS PROJECT HAS TO A MEASURE OF DELIGHT. The stated
-    // goal for every scene on the site is that somebody enjoys it enough to pass
-    // it on, and there is no honest way to count that from here. Watching it a
-    // second time is the nearest available proxy and it costs one line.
-    //
-    // Not guarded: a third watch is worth knowing about too.
-    watch += 1;
-    track('replay', { watch });
-    rewind();
-    showControls();
-    placeFocus(fromKeyboard);
-    start();
-}
-
-/** Back to the first second of the story, from the pause card.
- *
- *  A NEW WATCH, THE SAME AS A REPLAY, and reported apart from one. "Watched it
- *  again" after the ending is the delight signal; "started again" from the
- *  middle is closer to "missed the beginning", and the two should not be
- *  counted as the same thing. `at` says how far in they were. */
-function restartArc(fromKeyboard) {
-    if (!state.paused) return;
-    const at = Math.round(state.arc);
-    flushSeek();
-    watch += 1;
-    track('restart', { at, watch });
-    state.paused = false;
-    hideCard();
-    rewind();
-    showControls();
-    placeFocus(fromKeyboard);
-    start();
-}
-
-/** Everything a replay and a restart both put back, and neither starts. */
-function rewind() {
-    // The funnel starts again with a new watch, or the second watch would
-    // report no stages at all and read as somebody who pressed replay and left.
-    stageReached = 0;
-    ui.scrubbed = false;
-    ui.ending = false;
-    ui.lightningHold = 0;
-    state.arc = 0;
+ *  changes the composition rather than adding a prop to it. See `resetSky` for
+ *  how far it really moves, which is the glint path and not the mood. */
+function rewindScene() {
     resetWater();
     resetSand();
-    // The storm's schedule goes back with it. A replay that came back with its
-    // lightning half way through its own timetable would be the same class of
-    // fault as the tide one above: the second watch would not be the storm the
-    // first one was.
     resetLightning();
     resetBuoy();
-    // AND THE SKY DRAWS A FRESH HOUR, which is the one thing on this list that
-    // is not about putting the scene back exactly as it was. Everything above
-    // resets so the second watch is the same storm. This is here so it is not
-    // the same afternoon: see `resetSky` for how far it actually moves, which is
-    // the glint path rather than the mood.
     resetSky();
-    state.finished = false;
-    state.lastTime = 0;
-    if (ending) {
-        ending.style.opacity = '0';
-        ending.hidden = true;
-    }
     state.wash = { wash: 0, target: 0, attacking: false };
-    paintOverlay(0, 0);
-    paintScrubber();
-}
-
-// ---- The player controls -----------------------------------------------------
-//
-// A pause button in the top right corner, Escape, a pause card with Restart, and
-// a scrubber along the bottom, all added 2026-09-23. The rules are in
-// controls.js; this is only the wiring.
-
-/** Stop the story and put the pause card up. `how` is 'button', 'key' or
- *  'hidden', for the report. */
-function pauseArc(how) {
-    if (escapeAction(state) !== 'pause') return;
-    // Escape in the middle of a drag lands the drag first, so the card says
-    // where the story actually is.
-    if (ui.scrubbing) endScrub();
-    flushSeek();
-    state.paused = true;
-    stop();
-    track('pause', { at: Math.round(state.arc), how, watch });
-    hideControls();
-    showCard();
-    if (card.resume) card.resume.focus();
-}
-
-/** Take the card down and carry on from the frame the pause froze. */
-function resumeArc(fromKeyboard) {
-    if (escapeAction(state) !== 'resume') return;
-    state.paused = false;
-    track('resume', { at: Math.round(state.arc), watch });
-    hideCard();
-    showControls();
-    placeFocus(fromKeyboard);
-    // The first frame back reports no delta, or the pause itself would arrive
-    // as a quarter second of storm in one frame.
-    state.lastTime = 0;
-    start();
-}
-
-/** Where focus goes when a card button has just been hidden under it.
- *
- *  FOLLOW A KEYBOARD, STAY OUT OF THE WAY OF A POINTER. A keyboard visitor lands
- *  on the pause button, so the next Escape or Enter is where they expect it.
- *  Somebody who clicked or tapped gets focus dropped, so there is no ring left
- *  on a button they did not aim at and the controls are free to fade. */
-function placeFocus(fromKeyboard) {
-    if (fromKeyboard && controlsEl.pause) {
-        controlsEl.pause.focus();
-    } else if (document.activeElement && document.activeElement.blur) {
-        document.activeElement.blur();
-    }
-}
-
-/** The controls belong to a story in progress: shown from Begin, hidden by a
- *  pause and by the ending. */
-function showControls() {
-    if (!controlsEl.root) return;
-    controlsEl.root.hidden = false;
-    paintScrubber();
-    // A resume inside the closing fade brings them back already out of the way.
-    if (ui.ending) idleControls();
-    else revealControls();
-}
-
-function hideControls() {
-    if (!controlsEl.root) return;
-    clearTimeout(ui.idleTimer);
-    controlsEl.root.hidden = true;
-    document.body.classList.remove('hw-idle');
-}
-
-/** Bring the controls up, and start the clock on putting them away. */
-function revealControls() {
-    const root = controlsEl.root;
-    if (!root || root.hidden) return;
-    if (ui.ending && !ui.scrubbing) return;
-    root.classList.remove('is-idle');
-    document.body.classList.remove('hw-idle');
-    clearTimeout(ui.idleTimer);
-    ui.idleTimer = setTimeout(idleControls, OCEAN_CONFIG.controls.idleSeconds * 1000);
-}
-
-/** Fade the controls out, unless the visitor is using them, in which case look
- *  again after another idle period. */
-function idleControls() {
-    const root = controlsEl.root;
-    if (!root || root.hidden) return;
-    clearTimeout(ui.idleTimer);
-    const busy = !mayIdle({
-        scrubbing: ui.scrubbing,
-        hovering: ui.hoverPause || ui.hoverScrub,
-        keyboardFocus: keyboardFocusInControls()
-    });
-    if (busy) {
-        ui.idleTimer = setTimeout(idleControls, OCEAN_CONFIG.controls.idleSeconds * 1000);
-        return;
-    }
-    root.classList.add('is-idle');
-    // The cursor goes with them, the way it does over a playing video, so the
-    // storm is not watched through an arrow. Scoped to the canvas in the
-    // stylesheet, so it never hides over a card.
-    document.body.classList.add('hw-idle');
-}
-
-/** Whether keyboard focus, as opposed to a click's leftover focus, is inside the
- *  controls. `:focus-visible` is the browser's own answer to exactly that. */
-function keyboardFocusInControls() {
-    const el = document.activeElement;
-    if (!el || !controlsEl.root || !controlsEl.root.contains(el)) return false;
-    try { return el.matches(':focus-visible'); } catch { return true; }
-}
-
-/** Put the story's position on the scrubber: the thumb, the filled track, and
- *  the words a screen reader hears. Left alone mid drag, when the thumb is the
- *  visitor's and not the clock's. */
-function paintScrubber() {
-    const scrub = controlsEl.scrub;
-    if (!scrub || ui.scrubbing) return;
-    scrub.value = state.arc.toFixed(1);
-    paintTrack(state.arc);
-}
-
-function paintTrack(seconds) {
-    const scrub = controlsEl.scrub;
-    if (!scrub) return;
-    // CSSOM, not a style attribute, so the CSP has nothing to say about it.
-    // Same as the overlays' opacity.
-    scrub.style.setProperty('--progress', progressPercent(seconds));
-    // Only on a new whole second, so a screen reader is not handed a new value
-    // sixty times a second.
-    const whole = Math.floor(seconds);
-    if (whole !== ui.lastWhole) {
-        ui.lastWhole = whole;
-        scrub.setAttribute('aria-valuetext', valueText(seconds));
-    }
-}
-
-/** A finger or a mouse button has gone down on the scrubber. */
-function beginScrub() {
-    if (ui.scrubbing || escapeAction(state) !== 'pause') return;
-    ui.scrubbing = true;
-    ui.dragFrom = state.arc;
-    // Any flash in the sky goes out now, and nothing new strikes until the
-    // drag has settled. See `controls.lightningHoldSeconds`.
-    resetLightning();
-    revealControls();
-}
-
-/** Mid drag, the story follows the thumb and nothing else is touched. The sea
- *  rebuilds its own profile from the arc a few times a second anyway, so the
- *  storm tracks the thumb without the full resync, which is saved for the
- *  moment the thumb is let go. */
-function dragTo(value) {
-    if (!ui.scrubbing) return;
-    state.arc = seekTarget(value);
-    paintTrack(state.arc);
-}
-
-/** The thumb has been let go: land the seek properly. */
-function endScrub() {
-    if (!ui.scrubbing) return;
-    ui.scrubbing = false;
-    seekArc(controlsEl.scrub ? controlsEl.scrub.value : state.arc, ui.dragFrom);
-}
-
-/** Move the story to `value` seconds and bring every clock in the scene with it.
- *
- *  THE STORY CLOCK IS THE EASY PART. The storm, the sky, the buoy and the
- *  lightning's schedule are all read straight off it. What is not: the tide and
- *  the sets run on the sea's own clock, the bores on the beach carry the swell
- *  of the moment they broke, and the white-out remembers whether it is mid
- *  attack. Each of those is put where a replay would have it at this second,
- *  so a scrubbed-to storm is the same storm an untouched watch gets there. */
-function seekArc(value, from = state.arc) {
-    if (!state.begun || state.finished) return;
-    const at = seekTarget(value);
-    state.arc = at;
-    resetWater(at);
-    resetSand(at);
-    resetLightning();
-    resetBuoy();
-    state.wash = { wash: 0, target: 0, attacking: false };
-    ui.lightningHold = OCEAN_CONFIG.controls.lightningHoldSeconds;
-    ui.scrubbed = true;
-    // A frame at a time: the loop's next delta should not include however long
-    // this took.
-    state.lastTime = 0;
-    noteSeek(from, at);
-    paintScrubber();
-    revealControls();
-}
-
-/** Remember a seek for the report, which goes once they stop. */
-function noteSeek(from, to) {
-    if (ui.seekFrom === null) ui.seekFrom = from;
-    ui.seekTo = to;
-    clearTimeout(ui.seekTimer);
-    ui.seekTimer = setTimeout(flushSeek, OCEAN_CONFIG.controls.seekReportSeconds * 1000);
-}
-
-function flushSeek() {
-    clearTimeout(ui.seekTimer);
-    if (ui.seekFrom === null) return;
-    track('seek', { from: Math.round(ui.seekFrom), to: Math.round(ui.seekTo), watch });
-    ui.seekFrom = null;
-}
-
-/** Escape pauses and resumes. Any other key brings the controls up, the way a
- *  video player's do. */
-function onKeyDown(event) {
-    if (event.key === 'Escape' && !event.repeat && !isEditable(event.target)) {
-        const action = escapeAction(state);
-        if (action === 'pause') {
-            event.preventDefault();
-            pauseArc('key');
-            return;
-        }
-        if (action === 'resume') {
-            event.preventDefault();
-            resumeArc(true);
-            return;
-        }
-    }
-    revealControls();
-}
-
-/** The scrubber's own keys, five seconds a press. See `keySeekTarget`. */
-function onScrubKey(event) {
-    const at = keySeekTarget(event.key, state.arc);
-    if (at === null) return;
-    event.preventDefault();
-    seekArc(at);
-}
-
-/** Find the elements and wire them. Every one is optional, so a stripped-down
- *  embed without the controls simply has none. */
-function installControls() {
-    controlsEl.root = document.getElementById('controls');
-    controlsEl.pause = document.getElementById('pause-btn');
-    controlsEl.scrubber = document.getElementById('scrubber');
-    controlsEl.scrub = document.getElementById('scrub');
-    card.begin = document.getElementById('begin');
-    card.actions = document.getElementById('pause-actions');
-    card.resume = document.getElementById('resume');
-    card.restart = document.getElementById('restart');
-    card.pausedAt = document.getElementById('paused-at');
-
-    if (controlsEl.pause) {
-        controlsEl.pause.addEventListener('click', () => pauseArc('button'));
-        controlsEl.pause.addEventListener('pointerenter', () => { ui.hoverPause = true; });
-        controlsEl.pause.addEventListener('pointerleave', () => { ui.hoverPause = false; });
-    }
-    if (card.resume) card.resume.addEventListener('click', (event) => resumeArc(event.detail === 0));
-    if (card.restart) card.restart.addEventListener('click', (event) => restartArc(event.detail === 0));
-
-    const scrub = controlsEl.scrub;
-    if (scrub) {
-        scrub.max = String(OCEAN_CONFIG.storm.seconds);
-        scrub.addEventListener('pointerdown', beginScrub);
-        // An `input` with no pointer behind it is assistive technology moving
-        // the value, which is a drag that starts and ends in one event.
-        scrub.addEventListener('input', () => {
-            const solo = !ui.scrubbing;
-            beginScrub();
-            dragTo(scrub.value);
-            if (solo) endScrub();
-        });
-        scrub.addEventListener('change', endScrub);
-        scrub.addEventListener('keydown', onScrubKey);
-    }
-    if (controlsEl.scrubber) {
-        controlsEl.scrubber.addEventListener('pointerenter', () => { ui.hoverScrub = true; });
-        controlsEl.scrubber.addEventListener('pointerleave', () => { ui.hoverScrub = false; });
-    }
-    if (controlsEl.root) controlsEl.root.addEventListener('focusin', revealControls);
-
-    // A release anywhere ends a drag, since a finger routinely leaves the
-    // slider before it lifts.
-    window.addEventListener('pointerup', endScrub);
-    window.addEventListener('pointercancel', endScrub);
-    window.addEventListener('pointermove', revealControls, { passive: true });
-    window.addEventListener('pointerdown', revealControls, { passive: true });
-    window.addEventListener('keydown', onKeyDown);
+    if (wash) wash.style.opacity = '0';
 }
 
 // Dwell time, reported once when the page is first hidden or torn down. It is
@@ -936,62 +412,6 @@ function installControls() {
 // long somebody stayed.
 let sessionStart = 0;
 let sessionEnded = false;
-// Which viewing this is, 1 based, so every event on the arc can say which watch
-// it belongs to and a funnel can be read over first watches alone.
-let watch = 0;
-// How many times the arc has been watched all the way through this load.
-let runs = 0;
-// The furthest stage reported this watch, as an index into `storm.stages`.
-// Compared rather than counted, so jumping the clock with `oceanSetArc` reports
-// the stage it lands in and not every stage it skipped over.
-let stageReached = 0;
-
-/** Report each stage of the story the first time this watch reaches it.
- *
- *  THE DROP OFF CURVE, AND WHY IT IS NOT A THIRTY SECOND TIMER. Steve asked for
- *  a checkpoint every half minute so we could see where people leave. The arc
- *  already divides itself into six named stages and `stageAt` already answers
- *  which one a second belongs to, so hanging the checkpoints on those costs no
- *  second schedule and reads better at the far end: "forty five per cent reached
- *  the drawback" is a sentence, and "forty five per cent reached sixty seconds"
- *  is a lookup.
- *
- *  IT ALSO SURVIVES A RETIME, which a grid of seconds does not. This arc has
- *  been three minutes, then two, then ninety seconds, then sixty, and every
- *  hardcoded second
- *  in the tests went stale each time. The stage names did not move once.
- *
- *  The seconds go along as a parameter anyway, so nothing is lost.
- *
- *  `ordinary` is deliberately not reported: it starts at zero, so it would be
- *  the same event as `begin-watching` with a different name on it. */
-function reportStage() {
-    const index = nextStageIndex(state.arc, stageReached, OCEAN_CONFIG);
-    if (index < 0) return;
-    stageReached = index;
-    track(`reached-${OCEAN_CONFIG.storm.stages[index].name}`,
-        { at: Math.round(state.arc), watch, scrubbed: ui.scrubbed ? 1 : 0 });
-}
-
-/** Which stage index is newly reached at `seconds`, or -1 for nothing to report.
- *
- *  PULLED OUT AND EXPORTED BECAUSE THE IDEMPOTENCE IS THE WHOLE THING. This runs
- *  on every animation frame, so a version that returned a stage rather than a
- *  CHANGE of stage would fire sixty telemetry requests a second and turn a quiet
- *  usage counter into a flood aimed at the site's own server. That is not a
- *  subtle failure but it is a silent one from inside the browser, and it is
- *  exactly the sort of guard that gets refactored away by somebody simplifying
- *  the caller. Pure, so a test can beat on it without a canvas.
- *
- *  Returns at most one index per call even when the clock jumps, so
- *  `oceanSetArc(73)` reports the drawback rather than every stage in front of
- *  it. A QA jump should leave one mark in the log, not a fake session. */
-export function nextStageIndex(seconds, reached, config = OCEAN_CONFIG) {
-    const stages = config.storm.stages;
-    const name = stageAt(seconds, config.storm).name;
-    const index = stages.findIndex((st) => st.name === name);
-    return index > reached ? index : -1;
-}
 
 function endSession() {
     if (sessionEnded || !sessionStart) return;
@@ -1001,23 +421,18 @@ function endSession() {
         // WHERE THEY GOT TO, which is the question this scene actually wants
         // answered. A sixty second arc that people leave at thirty is a
         // different problem from one nobody starts, and the two look identical
-        // in a plain session count.
-        arc: Math.round(state.arc),
-        finished: state.finished ? 1 : 0,
-        runs
+        // in a plain session count. `runs` distinguishes a first watch from a
+        // second, so `finished` stays meaningful after a replay.
+        ...(player ? player.summary() : { arc: 0, finished: 0, runs: 0 })
     });
 }
 
 function start() {
-    if (state.running || state.finished) return;
-    state.running = true;
-    frame = requestAnimationFrame(loop);
+    if (player) player.start();
 }
 
 function stop() {
-    state.running = false;
-    if (frame) cancelAnimationFrame(frame);
-    frame = 0;
+    if (player) player.stop();
 }
 
 async function init() {
@@ -1069,14 +484,7 @@ async function init() {
     initBuoy(scene, OCEAN_CONFIG, { reducedMotion: prefersReducedMotion() });
 
     wash = document.getElementById('wash');
-    blackout = document.getElementById('blackout');
-    ending = document.getElementById('ending');
-    replay = document.getElementById('replay');
-    welcome = document.getElementById('welcome');
-    installControls();
-    // `detail` is 0 for a click the keyboard made, which is how focus knows
-    // whether to follow the visitor or get out of their way. See `placeFocus`.
-    if (replay) replay.addEventListener('click', (event) => replayArc(event.detail === 0));
+    window.addEventListener('resize', onResize, { passive: true });
 
     // SHARING A SCENE IS NOT SHARING A SCORE, which is why the text below sells
     // the thing rather than a result. There is nothing to be proud of here and
@@ -1096,28 +504,45 @@ async function init() {
             onShare: (how) => track('share', { method: how })
         });
 
-    const beginBtn = document.getElementById('begin');
-    if (beginBtn) {
-        // `detail` is 0 for a click the keyboard made.
-        beginBtn.addEventListener('click', (event) => beginArc(event.detail === 0));
-    } else {
-        // No card on the page, so nothing is holding the story back. This is the
-        // path the old scaffold took and the one a stripped-down embed would
-        // take.
-        beginArc();
-    }
+    // THE PLAYER: the welcome card that is also the pause card, the pause
+    // button, Escape, the scrubber, the fade and the ending, all found by their
+    // `player-` ids. With no Begin button on the page it begins at once, which
+    // is the path a stripped-down embed would take.
+    //
+    // THE CONVERSION ON THE CONTENT WARNING is its `begin-watching` event.
+    // `session-start` counts everybody who arrived; that counts everybody who
+    // read what was coming and pressed the button anyway. The gap between the
+    // two is the cost of the warning, and if it turns out to be large the
+    // answer is better wording and not a quieter warning.
+    //
+    // A REPLAY IS THE CLOSEST THING THIS PROJECT HAS TO A MEASURE OF DELIGHT,
+    // and a restart from the pause card is counted apart from it: "watched it
+    // again" after the ending is the delight signal, and "started again" from
+    // the middle is closer to "missed the beginning".
+    player = createPlayer({
+        ...playerOptions(OCEAN_CONFIG),
+        frame: drawFrame,
+        // A paused scene draws nothing by itself, so after a resize or a
+        // background tab clears the canvas, the frozen frame is put back once.
+        redraw: () => renderer.render(scene, camera),
+        onSeek: resyncTo,
+        onRewind: rewindScene,
+        // Any flash in the sky goes out now, and nothing new strikes until the
+        // drag has settled.
+        onScrubStart: resetLightning,
+        track,
+        reducedMotion: prefersReducedMotion()
+    }).install();
 
-    window.addEventListener('resize', onResize, { passive: true });
-    document.addEventListener('visibilitychange', onVisibility);
     // Session end, for dwell time. visibilitychange to hidden is the reliable
     // terminal signal, especially on mobile where unload often does not fire,
     // and pagehide is the backup. Both are page-lifetime listeners and
     // `endSession` is idempotent, so being called twice costs nothing.
     //
-    // NOT FOLDED INTO `onVisibility` ABOVE, which already handles hidden. That
-    // one pauses the render loop and is about the sea; this one closes the
-    // books and is about the visit, and a visitor who switches away and comes
-    // back resumes the first without reopening the second.
+    // NOT FOLDED INTO THE PLAYER'S OWN visibility listener, which pauses the
+    // story mid-watch and is about the sea; this one closes the books and is
+    // about the visit, and a visitor who switches away and comes back resumes
+    // the first without reopening the second.
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') endSession();
     });
@@ -1141,7 +566,7 @@ async function init() {
     start();
 
     // The visit is on the record from here. Recorded at init rather than at
-    // `beginArc`, so the count includes visitors who read the content warning
+    // Begin, so the count includes visitors who read the content warning
     // and decided not to watch, which is a number worth being able to see.
     track('session-start', { device: state.mobile ? 'touch' : 'desktop' });
     sessionStart = Date.now();
@@ -1202,22 +627,15 @@ function installTuningAids() {
     // AND JUMP THE ARC, which is the one that matters now. A screenshot pass
     // wants the drawback at 145 seconds without sitting through the two and a
     // half minutes in front of it. Takes seconds from the start of the story.
+    //
+    // It jumps the way the scrubber does, from before Begin, from the pause
+    // card or from the ending, and brings the tide and the beach with it, so a
+    // screenshot at a second is the storm a visitor sees at that second.
     window.oceanSetArc = (seconds) => {
-        const at = Math.max(0, Number(seconds) || 0);
-        // Jumping the arc implies starting it, or the clock would be set and
-        // then sit there while the welcome card held it at that number.
-        beginArc();
-        // Coming back from the ending has to clear the card and restart the
-        // loop, and `replayArc` is the only thing that knows how, so it runs
-        // first and the time is set after it rather than before.
-        if (state.finished) replayArc();
-        // And from the pause card, which would otherwise hold the jump behind
-        // a frozen frame.
-        if (state.paused) resumeArc(false);
-        state.arc = at;
-        return state.arc;
+        player.jumpTo(Math.max(0, Number(seconds) || 0));
+        return player.state().arc;
     };
-    window.oceanArc = () => state.arc;
+    window.oceanArc = () => player.state().arc;
     // FIRE A STRIKE ON THE NEXT FRAME. A flash lasts about three hundred
     // milliseconds, so catching one for a screenshot by waiting is a poor use of
     // an afternoon. Takes an optional distance in metres, since the near and far
@@ -1261,7 +679,7 @@ function installTuningAids() {
             el.classList.toggle('visible', !on);
         });
         // The player controls are chrome again since 2026-09-23, so a capture
-        // takes them out of shot too.
+        // takes them out of shot too (the rule is in experience.css).
         document.body.classList.toggle('hw-capture', !!on);
         return { pinned: quality.pinned, ratio: quality.ceiling * quality.scale };
     };

@@ -2,16 +2,20 @@
 /**
  * High Water's player controls: pause, Escape, the pause card, and the scrubber.
  *
- * Added 2026-09-23 after Steve's real-world QA. The rules live in controls.js
- * and are pure, so most of this suite drives them directly. The rest checks
- * the two places a seek has to reach that the story clock does not (the sea's
- * own clock and the sand's), and the page furniture the wiring depends on.
+ * Added 2026-09-23 after Steve's real-world QA, and moved onto the shared
+ * player (shared/js/player-1.0.0.js) on 2026-09-24. The player's rules are
+ * proved in shared-player.test.mjs, so this suite proves what this scene hands
+ * them: its numbers, its stages and its smoothstep fade, through player.js.
+ * The rest checks the two places a seek has to reach that the story clock
+ * does not (the sea's own clock and the sand's), and the page furniture the
+ * wiring depends on. highwater-begin.test.mjs plays the real page.
  */
 import { jest } from '@jest/globals';
 import { readFile } from 'node:fs/promises';
 
 const CONFIG_URL = '../www/highwater/js/config.js';
 const WATER_URL = '../www/highwater/js/water.js';
+const STORM_URL = '../www/highwater/js/storm.js';
 
 // Pointed at the sources rather than the builds, matching the sand suite, so a
 // stale build cannot pass and the coverage lands on the files people edit.
@@ -21,111 +25,79 @@ jest.unstable_mockModule('../www/highwater/js/config.min.js', async () => (
 jest.unstable_mockModule('../www/highwater/js/water.min.js', async () => (
     await import(WATER_URL)
 ));
+jest.unstable_mockModule('../www/highwater/js/storm.min.js', async () => (
+    await import(STORM_URL)
+));
 
 const { OCEAN_CONFIG } = await import(CONFIG_URL);
-const controls = await import('../www/highwater/js/controls.js');
+const P = await import('../www/shared/js/player-1.0.0.js');
+const { playerOptions } = await import('../www/highwater/js/player.js');
+const storm = await import(STORM_URL);
 const water = await import(WATER_URL);
 const sand = await import('../www/highwater/js/sand.js');
 
-const END = OCEAN_CONFIG.storm.seconds - OCEAN_CONFIG.controls.endGuardSeconds;
+const OPTS = { ...P.PLAYER_DEFAULTS, ...playerOptions(OCEAN_CONFIG) };
+const SECONDS = OCEAN_CONFIG.storm.seconds;
+const END = SECONDS - OCEAN_CONFIG.controls.endGuardSeconds;
 
-describe('Escape', () => {
-    const { escapeAction } = controls;
-
-    test('pauses a story in progress and resumes a paused one', () => {
-        expect(escapeAction({ begun: true, finished: false, paused: false })).toBe('pause');
-        expect(escapeAction({ begun: true, finished: false, paused: true })).toBe('resume');
+describe('what High Water hands the shared player', () => {
+    test('the story\'s length and every control setting come from config', () => {
+        const c = OCEAN_CONFIG.controls;
+        expect(OPTS.seconds).toBe(SECONDS);
+        expect(OPTS.fadeSeconds).toBe(OCEAN_CONFIG.storm.fadeSeconds);
+        expect(OPTS.idleSeconds).toBe(c.idleSeconds);
+        expect(OPTS.stepSeconds).toBe(c.stepSeconds);
+        expect(OPTS.pageSeconds).toBe(c.pageSeconds);
+        expect(OPTS.endGuardSeconds).toBe(c.endGuardSeconds);
+        expect(OPTS.flashHoldSeconds).toBe(c.lightningHoldSeconds);
+        expect(OPTS.seekReportSeconds).toBe(c.seekReportSeconds);
     });
-
-    test('does nothing on the welcome card or the ending', () => {
-        // The welcome card carries the content warning and is dismissed only by
-        // Begin. The ending has nothing behind it to go back to.
-        expect(escapeAction({ begun: false, finished: false, paused: false })).toBeNull();
-        expect(escapeAction({ begun: true, finished: true, paused: false })).toBeNull();
-    });
-
-    test('leaves the key to a text field, never to the scrubber', () => {
-        const { isEditable } = controls;
-        expect(isEditable(null)).toBe(false);
-        expect(isEditable({ tagName: 'TEXTAREA' })).toBe(true);
-        expect(isEditable({ tagName: 'SELECT' })).toBe(true);
-        expect(isEditable({ tagName: 'INPUT' })).toBe(true);
-        expect(isEditable({ tagName: 'INPUT', type: 'search' })).toBe(true);
-        expect(isEditable({ tagName: 'DIV', isContentEditable: true })).toBe(true);
-        // Pausing from the scrubber or a button is exactly right.
-        expect(isEditable({ tagName: 'INPUT', type: 'range' })).toBe(false);
-        expect(isEditable({ tagName: 'BUTTON' })).toBe(false);
-        expect(isEditable({ tagName: 'BODY' })).toBe(false);
-    });
-});
-
-describe('the scrubber', () => {
-    const { seekTarget, keySeekTarget } = controls;
 
     test('a seek lands inside the story and never on its last instant', () => {
-        expect(seekTarget(12.5)).toBe(12.5);
-        expect(seekTarget(-4)).toBe(0);
-        expect(seekTarget('not a number')).toBe(0);
+        expect(P.seekTarget(12.5, OPTS)).toBe(12.5);
+        expect(P.seekTarget(-4, OPTS)).toBe(0);
         // Dragging to the far right plays the end of the fade rather than
         // cutting to the ending card under the pointer.
-        expect(seekTarget(OCEAN_CONFIG.storm.seconds)).toBe(END);
-        expect(seekTarget(1e6)).toBeLessThan(OCEAN_CONFIG.storm.seconds);
+        expect(P.seekTarget(SECONDS, OPTS)).toBe(END);
     });
 
-    test('the arrow keys move a visible step, not the slider\'s tenth', () => {
-        const step = OCEAN_CONFIG.controls.stepSeconds;
-        const page = OCEAN_CONFIG.controls.pageSeconds;
-        expect(keySeekTarget('ArrowRight', 10)).toBe(10 + step);
-        expect(keySeekTarget('ArrowUp', 10)).toBe(10 + step);
-        expect(keySeekTarget('ArrowLeft', 10)).toBe(10 - step);
-        expect(keySeekTarget('ArrowDown', 10)).toBe(10 - step);
-        expect(keySeekTarget('PageUp', 10)).toBe(10 + page);
-        expect(keySeekTarget('PageDown', 20)).toBe(20 - page);
-        expect(keySeekTarget('Home', 30)).toBe(0);
-        expect(keySeekTarget('End', 0)).toBe(END);
-        // Clamped at both ends like any other seek.
-        expect(keySeekTarget('ArrowLeft', 2)).toBe(0);
-        expect(keySeekTarget('ArrowRight', END)).toBe(END);
-        expect(keySeekTarget('ArrowRight', NaN)).toBe(step);
+    test('the arrow keys move this scene\'s step, and Page keys its page', () => {
+        const { stepSeconds: step, pageSeconds: page } = OCEAN_CONFIG.controls;
+        expect(P.keySeekTarget('ArrowRight', 10, OPTS)).toBe(10 + step);
+        expect(P.keySeekTarget('ArrowLeft', 10, OPTS)).toBe(10 - step);
+        expect(P.keySeekTarget('PageUp', 10, OPTS)).toBe(10 + page);
+        expect(P.keySeekTarget('PageDown', 20, OPTS)).toBe(20 - page);
+        expect(P.keySeekTarget('End', 0, OPTS)).toBe(END);
     });
 
-    test('any other key is left alone', () => {
-        for (const key of ['Tab', 'Escape', 'Enter', ' ', 'a']) {
-            expect(keySeekTarget(key, 10)).toBeNull();
+    test('a screen reader hears the story\'s own length', () => {
+        expect(P.valueText(24.6, OPTS.seconds)).toBe(`24 seconds of ${SECONDS}`);
+    });
+
+    test('THE STAGES ARE THE STORM\'S, reported where storm.js puts them', () => {
+        // The player reads start times as `at`, the storm writes them as
+        // `from`. Walked frame by frame, the two must agree on every second.
+        const names = OCEAN_CONFIG.storm.stages.map((st) => st.name);
+        expect(OPTS.stages.map((st) => st.name)).toEqual(names);
+        for (let t = 0; t <= SECONDS; t += 1 / 60) {
+            const index = P.stageIndexAt(t, OPTS.stages);
+            expect([t, OPTS.stages[index].name]).toEqual([t, storm.stageAt(t).name]);
         }
     });
 
-    test('what a visitor reads and what a screen reader hears', () => {
-        const { clockLabel, valueText, progressPercent } = controls;
-        expect(clockLabel(0)).toBe('0:00');
-        // Rounded down, so it never claims a second not yet reached.
-        expect(clockLabel(24.9)).toBe('0:24');
-        expect(clockLabel(59.99)).toBe('0:59');
-        expect(clockLabel(75)).toBe('1:15');
-        expect(clockLabel(-3)).toBe('0:00');
-
-        const total = OCEAN_CONFIG.storm.seconds;
-        expect(valueText(0)).toBe(`0 seconds of ${total}`);
-        expect(valueText(1.4)).toBe(`1 second of ${total}`);
-        expect(valueText(24.6)).toBe(`24 seconds of ${total}`);
-        expect(valueText(undefined)).toBe(`0 seconds of ${total}`);
-
-        expect(progressPercent(0)).toBe('0.00%');
-        expect(progressPercent(total / 2)).toBe('50.00%');
-        expect(progressPercent(total * 2)).toBe('100.00%');
-        expect(progressPercent(-1)).toBe('0.00%');
-    });
-});
-
-describe('the controls fade, but never out from under the visitor', () => {
-    const { mayIdle } = controls;
-
-    test('idle only when nobody is using them', () => {
-        expect(mayIdle({ scrubbing: false, hovering: false, keyboardFocus: false })).toBe(true);
-        expect(mayIdle({ scrubbing: true, hovering: false, keyboardFocus: false })).toBe(false);
-        expect(mayIdle({ scrubbing: false, hovering: true, keyboardFocus: false })).toBe(false);
-        // Fading the element with keyboard focus takes the focus ring with it.
-        expect(mayIdle({ scrubbing: false, hovering: false, keyboardFocus: true })).toBe(false);
+    test('THE FADE IS THE SMOOTHSTEP STEVE QA\'D, not the player\'s straight line', () => {
+        const from = SECONDS - OCEAN_CONFIG.storm.fadeSeconds;
+        let apart = 0;
+        for (let t = 0; t <= SECONDS; t += 1 / 60) {
+            expect(OPTS.fadeCurve(t)).toBe(storm.fadeAt(t));
+            apart = Math.max(apart, Math.abs(OPTS.fadeCurve(t) - P.fadeAt(t, OPTS)));
+        }
+        expect(apart).toBeGreaterThan(0.05);
+        // The player's contract: nothing before the fade begins, black at the
+        // end, which is when the controls step aside and the ending comes up.
+        expect(OPTS.fadeCurve(from)).toBe(0);
+        expect(OPTS.fadeCurve(from - 1)).toBe(0);
+        expect(OPTS.fadeCurve(SECONDS)).toBe(1);
     });
 });
 
@@ -133,20 +105,11 @@ describe('THE LIGHTNING IS HELD THROUGH A SEEK', () => {
     // A drag moves the arc clock many times faster than real time, and the
     // lightning's rate cap is written in arc seconds. Held, no scrub can flash
     // faster than the three per second the welcome card is written against.
-    const { lightningAllowed } = controls;
-
-    test('held mid drag and while the hold runs, free otherwise', () => {
-        expect(lightningAllowed({ scrubbing: false, holdSeconds: 0 })).toBe(true);
-        expect(lightningAllowed({ scrubbing: true, holdSeconds: 0 })).toBe(false);
-        expect(lightningAllowed({ scrubbing: false, holdSeconds: 0.2 })).toBe(false);
-    });
-
     test('the hold outlasts the minimum gap between flashes', () => {
         // After a seek the lightning starts from a fresh schedule, which has no
         // memory of the last flash. The hold is what keeps a flash just before
         // the seek and one just after it at least the minimum gap apart.
-        expect(OCEAN_CONFIG.controls.lightningHoldSeconds)
-            .toBeGreaterThan(OCEAN_CONFIG.storm.lightning.minGapSeconds);
+        expect(OPTS.flashHoldSeconds).toBeGreaterThan(OCEAN_CONFIG.storm.lightning.minGapSeconds);
     });
 });
 
@@ -191,66 +154,84 @@ describe('the page and the wiring', () => {
         ]);
     });
 
+    test('the page loads the shared player\'s sheet between the house sheet and its own', () => {
+        const house = html.indexOf('<link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css');
+        const shared = html.indexOf('<link rel="stylesheet" href="../shared/css/player-1.0.0.min.css">');
+        const own = html.indexOf('<link rel="stylesheet" href="css/experience.min.css');
+        expect(house).toBeGreaterThan(-1);
+        expect(shared).toBeGreaterThan(house);
+        expect(own).toBeGreaterThan(shared);
+        expect(html).toContain('<link rel="preload" href="../shared/css/player-1.0.0.min.css" as="style">');
+    });
+
+    test('every element the player looks for is on the page', () => {
+        // Each is optional to the player, so a renamed one would fail silently:
+        // the control would simply never be wired.
+        for (const id of Object.values(P.PLAYER_IDS)) {
+            expect([id, html.includes(`id="${id}"`)]).toEqual([id, true]);
+        }
+    });
+
     test('the controls ship hidden, and nothing on them is nameless', () => {
-        expect(html).toMatch(/<div id="controls" hidden>/);
-        expect(html).toMatch(/<button id="pause-btn" type="button" class="menu-btn" aria-label="Pause"/);
-        expect(html).toMatch(/<label for="scrub" class="sr-only">[^<]+<\/label>/);
-        expect(html).toMatch(/<input id="scrub" type="range"[^>]*aria-valuetext=/);
+        expect(html).toMatch(/<div id="player-controls" hidden>/);
+        expect(html).toMatch(/<button id="player-pause" type="button" class="menu-btn" aria-label="Pause"/);
+        expect(html).toMatch(/<label for="player-scrub" class="sr-only">[^<]+<\/label>/);
+        expect(html).toMatch(/<input id="player-scrub" type="range"[^>]*aria-valuetext=/);
         // Not a `.ui-float`: that class is shown once at boot, and these follow
         // the story.
-        expect(html).not.toMatch(/id="pause-btn"[^>]*ui-float/);
+        expect(html).not.toMatch(/id="player-pause"[^>]*ui-float/);
     });
 
     test('the scrubber\'s max in the markup matches the story', () => {
-        // main.js writes it from config at boot, and this keeps the no-script
-        // first paint honest too.
-        const max = html.match(/<input id="scrub"[^>]*max="(\d+)"/);
-        expect(Number(max[1])).toBe(OCEAN_CONFIG.storm.seconds);
+        // The player writes it from config at boot, and this keeps the
+        // no-script first paint honest too.
+        const max = html.match(/<input id="player-scrub"[^>]*max="(\d+)"/);
+        expect(Number(max[1])).toBe(SECONDS);
+        expect(html).toMatch(new RegExp(`aria-valuetext="0 seconds of ${SECONDS}"`));
     });
 
     test('the pause card is the welcome card, with Resume and Restart', () => {
-        const card = html.slice(html.indexOf('id="welcome"'), html.indexOf('id="wash"'));
-        expect(card).toMatch(/<p id="paused-at"[^>]*hidden>/);
-        expect(card).toMatch(/<div id="pause-actions"[^>]*hidden>/);
-        expect(card).toMatch(/<button id="resume"[^>]*class="primary"/);
-        expect(card).toMatch(/<button id="restart"/);
+        const card = html.slice(html.indexOf('id="player-card"'), html.indexOf('id="wash"'));
+        expect(card).toMatch(/<p id="player-paused-at"[^>]*hidden>/);
+        expect(card).toMatch(/<div id="player-pause-actions"[^>]*hidden>/);
+        expect(card).toMatch(/<button id="player-resume"[^>]*class="player-btn player-btn-primary"/);
+        expect(card).toMatch(/<button id="player-restart"[^>]*class="player-btn"/);
         // Begin is still the only way in for a first visit.
-        expect(card).toMatch(/<button id="begin"/);
+        expect(card).toMatch(/<button id="player-begin"[^>]*class="player-btn player-btn-primary"/);
     });
 
-    test('Restart wears the shared pill, which is keyed by id', () => {
-        // The same trap that shipped Share as a bare browser button.
-        const ruleFor = (needle) => {
-            const at = css.indexOf(needle);
-            expect(at).toBeGreaterThan(-1);
-            return css.slice(css.lastIndexOf('}', at) + 1, at);
-        };
-        expect(ruleFor('border-radius: 2rem;')).toContain('#restart');
-        expect(ruleFor('background: rgba(232, 238, 241, 0.10);')).toContain('#restart:hover');
-        expect(ruleFor('outline: 2px solid #9fb0b8;')).toContain('#restart:focus-visible');
+    test('the white-out sits under the fade, and the fade under the cards', () => {
+        // Same order as before the move: the white-out hands the frame to the
+        // black, and the ending sits on the black.
+        const at = (id) => html.indexOf(`id="${id}"`);
+        expect(at('player-card')).toBeLessThan(at('wash'));
+        expect(at('wash')).toBeLessThan(at('player-blackout'));
+        expect(at('player-blackout')).toBeLessThan(at('player-ending'));
     });
 
-    test('Escape, the button, and a hidden tab all pause', () => {
-        expect(main).toMatch(/window\.addEventListener\('keydown', onKeyDown\)/);
-        expect(main).toMatch(/pauseArc\('key'\)/);
-        expect(main).toMatch(/pauseArc\('button'\)/);
-        // Coming back to the tab lands on the pause card (Steve, 2026-09-23).
-        expect(main).toMatch(/if \(escapeAction\(state\) === 'pause'\) pauseArc\('hidden'\)/);
+    test('a capture for the social card still takes the controls out of shot', () => {
+        expect(main).toMatch(/document\.body\.classList\.toggle\('hw-capture', !!on\)/);
+        expect(css).toMatch(/\.hw-capture #player-controls \{\s*display: none;/);
     });
 
-    test('the lightning in the loop goes through the hold', () => {
-        const at = main.indexOf('updateLightning(state.arc, OCEAN_CONFIG)');
+    test('the loop\'s lightning goes through the player\'s photosensitivity hold', () => {
+        const at = main.indexOf('updateLightning(arc, OCEAN_CONFIG)');
         expect(at).toBeGreaterThan(-1);
-        const before = main.slice(Math.max(0, at - 200), at);
-        expect(before).toMatch(/if \(lightningAllowed\(/);
+        const before = main.slice(Math.max(0, at - 120), at);
+        expect(before).toMatch(/if \(player && player\.flashAllowed\(\)\)/);
+        // And a drag puts out anything mid flash.
+        expect(main).toMatch(/onScrubStart: resetLightning/);
     });
 
-    test('the new moments are counted', () => {
-        for (const event of ['pause', 'resume', 'restart', 'seek']) {
-            expect(main).toMatch(new RegExp(`\\btrack\\(\\s*'${event}'`));
+    test('THERE IS ONE COPY OF THE PLAYER, and this scene holds none of it', () => {
+        // Two copies had to be edited together while they lasted. The rules
+        // and the wiring now live only in the shared part.
+        expect(main).toContain("from '../../shared/js/player-1.0.0.min.js'");
+        for (const gone of ['function pauseArc', 'function seekArc', 'function idleControls',
+            'function installControls', "from './controls.min.js'"]) {
+            expect([gone, main.includes(gone)]).toEqual([gone, false]);
         }
-        // And a scrubbed watch says so wherever the funnel reads it.
-        expect(main).toMatch(/track\('arc-complete', \{[^}]*scrubbed/);
+        expect(css).not.toMatch(/#welcome|#controls\b|#scrub\b|#blackout/);
     });
 
     test('the copy on the controls keeps house style', () => {

@@ -2222,11 +2222,13 @@ html [data-ui-theme="surf" lang="en"]
     title
       "High Water"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
+    link [as="style" href="../shared/css/player-1.0.0.min.css" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=5" rel="preload"]
     link [as="script" href="../lib/three.min.js" rel="preload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=4" rel="stylesheet"]
+    link [href="../shared/css/player-1.0.0.min.css" rel="stylesheet"]
+    link [href="css/experience.min.css?v=5" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -2250,9 +2252,9 @@ html [data-ui-theme="surf" lang="en"]
                 "Privacy"
     canvas#scene [aria-label="A view out to sea from the water's edge, with waves breaking toward you" role="img"]
     p#story-status.sr-only [aria-live="polite" role="status"]
-    div#welcome
+    div#player-card
       div.card
-        p#paused-at.paused-at [hidden]
+        p#player-paused-at.paused-at [hidden]
           "Paused"
         h1
           "High Water"
@@ -2260,36 +2262,36 @@ html [data-ui-theme="surf" lang="en"]
           "Sixty seconds at the water's edge, beginning on an ordinary bright afternoon."
         p.warning
           "It does not stay one, and you may find it unsettling. The weather turns, the surf keeps rising, and the sea comes over you at the end. There is lightning, so the screen flashes from time to time. It plays without sound, so you are welcome to watch it anywhere."
-        button#begin.primary [type="button"]
+        button#player-begin.player-btn.player-btn-primary [type="button"]
           "Begin"
-        div#pause-actions.pause-actions [hidden]
-          button#resume.primary [aria-describedby="paused-at" type="button"]
+        div#player-pause-actions.player-actions [hidden]
+          button#player-resume.player-btn.player-btn-primary [aria-describedby="player-paused-at" type="button"]
             "Resume"
-          button#restart [type="button"]
+          button#player-restart.player-btn [type="button"]
             "Restart"
         p.note
           "You can watch it again as many times as you wish."
         a#explore-link.welcome-explore [href="/"]
           "More 3D worlds to explore at SceneXP.com"
     div#wash [aria-hidden="true"]
-    div#blackout [aria-hidden="true"]
-    div#controls [hidden]
-      button#pause-btn.menu-btn [aria-label="Pause" title="Pause (Esc)" type="button"]
+    div#player-blackout [aria-hidden="true"]
+    div#player-controls [hidden]
+      button#player-pause.menu-btn [aria-label="Pause" title="Pause (Esc)" type="button"]
         svg [aria-hidden="true" viewbox="0 0 24 24"]
           path [d="M9 5.5v13M15 5.5v13"]
-      div#scrubber
-        label.sr-only [for="scrub"]
+      div#player-scrubber
+        label.sr-only [for="player-scrub"]
           "Position in the story"
-        input#scrub [aria-valuetext="0 seconds of 60" max="60" min="0" step="0.1" type="range" value="0"]
-    div#ending [aria-live="polite" hidden role="status"]
+        input#player-scrub [aria-valuetext="0 seconds of 60" max="60" min="0" step="0.1" type="range" value="0"]
+    div#player-ending [aria-live="polite" hidden role="status"]
       p.ending-line
         "The sea has taken the beach."
       p.ending-note
         "Thank you for watching. It ends the same way every time."
-      div.ending-actions
-        button#share [type="button"]
+      div.player-actions
+        button#share.player-btn [type="button"]
           "Share"
-        button#replay [type="button"]
+        button#player-replay.player-btn [type="button"]
           "Watch it again"
       p#share-status.sr-only [aria-live="polite" role="status"]
       a.welcome-explore.promo-explore [href="/"]

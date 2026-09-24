@@ -478,6 +478,24 @@ describe('the player', () => {
         expect(player.state().finished).toBe(true);
     });
 
+    test('a scene\'s own fade curve paints the black and the frame, and still ends on time', () => {
+        // High Water's fade is a smoothstep, and its look was QA'd that way.
+        const smooth = (arc) => {
+            const t = Math.min(1, Math.max(0, (arc - 57) / 3));
+            return t * t * (3 - 2 * t);
+        };
+        const player = begun({ fadeCurve: smooth });
+        player.seek(58);
+        step(16);          // a seek's first frame carries no time
+        const expected = smooth(58);
+        expect(Math.abs(expected - P.fadeAt(58, OPTS))).toBeGreaterThan(0.05);
+        expect(Number(dom.el('player-blackout').style.opacity)).toBeCloseTo(expected, 3);
+        expect(frames[frames.length - 1].fade).toBe(expected);
+        step(100, 30);
+        expect(player.state().finished).toBe(true);
+        expect(player.summary().arc).toBe(60);
+    });
+
     test('LEAVING THE TAB MID-STORY IS A PAUSE, and the frozen frame comes back', () => {
         const player = begun();
         document.hidden = true;

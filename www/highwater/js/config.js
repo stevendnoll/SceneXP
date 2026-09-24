@@ -3383,7 +3383,8 @@ export const OCEAN_CONFIG = deepFreeze({
     // THE PLAYER CONTROLS, added 2026-09-23 after Steve's real-world QA: a
     // pause button, Escape, and a scrubber along the bottom. The scene was
     // built with no controls after Begin, and these keep as much of that as
-    // they can by getting out of the way. See controls.js.
+    // they can by getting out of the way. The player itself is shared
+    // (shared/js/player-1.0.0.js), and player.js hands it these.
     controls: {
         // How long the pointer has to sit still before the pause button and
         // the scrubber fade out. Three seconds is the video-player convention,

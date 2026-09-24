@@ -26,10 +26,9 @@
  * touches the cards, the controls or the clock.
  *
  * EXTRACTED FROM www/highwater ON 2026-09-23, where the same rules were
- * written for one scene and QA'd by Steve the same day. High Water still
- * carries its own copy (js/controls.js and the "player controls" section of
- * its main.js). Moving it onto this part is a separate change with its own QA
- * pass, and until then the two copies must be edited together.
+ * written for one scene and QA'd by Steve the same day. High Water moved onto
+ * this part on 2026-09-24 (its settings are in www/highwater/js/player.js), so
+ * there is one copy of the player again.
  *
  * THE MARKUP. Every element is found by id and every one is optional, so a
  * page can drop a control and the rest still works. The ids are prefixed
@@ -236,6 +235,12 @@ export function isLocalHost(location = (typeof window !== 'undefined' ? window.l
  *   onRewind()    back to zero for a replay or a restart.
  *   onScrubStart()
  *                 a drag has begun. Put out anything mid-flash.
+ *   fadeCurve(arc)
+ *                 the closing fade at story second `arc`, 0 to 1, for a scene
+ *                 whose fade is not the default straight line (High Water's is
+ *                 a smoothstep). It must be 0 until `seconds - fadeSeconds`
+ *                 and 1 at `seconds`, because the controls step aside when it
+ *                 leaves 0 and the ending comes up when it reaches 1.
  *   track(name, params)
  *                 the usage counter. Defaults to nothing.
  *   reducedMotion whether the visitor asked for less motion, reported once
@@ -248,6 +253,7 @@ export function createPlayer(options = {}) {
     const stages = opts.stages || [{ at: 0, name: 'start' }];
     const track = opts.track || (() => {});
     const frameFn = opts.frame || (() => {});
+    const fadeFn = opts.fadeCurve || ((arc) => fadeAt(arc, opts));
 
     const st = {
         running: false,
@@ -293,7 +299,7 @@ export function createPlayer(options = {}) {
             paintScrubber();
             reportStage();
         }
-        const fade = st.begun ? fadeAt(st.arc, opts) : 0;
+        const fade = st.begun ? fadeFn(st.arc) : 0;
         frameFn(delta, st.arc, { begun: st.begun, scrubbing: ui.scrubbing, fade });
         if (el.blackout) el.blackout.style.opacity = fade.toFixed(3);
 

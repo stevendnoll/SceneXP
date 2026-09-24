@@ -2,16 +2,22 @@
  *
  * experience.css - High Water.
  *
- * Enough to get the canvas filling the viewport, plus the things that sit over
- * it: the welcome card (which doubles as the pause card), the white-out, the
- * ending, and since 2026-09-23 the player controls.
+ * Enough to get the canvas filling the viewport, plus the one thing over it that
+ * is this scene's own: the white-out when the water comes over the camera.
  *
- * THE SHARED SHEET LOADS FIRST AND THIS ONE SECOND, which is the order the
+ * THE CARDS AND THE CONTROLS ARE THE SHARED PLAYER'S (2026-09-24). The welcome
+ * card that doubles as the pause card, the buttons, the pause button, the
+ * scrubber, the fade to black and the ending all moved to
+ * `shared/css/player-1.0.0.css`, which was lifted out of this file for Tornado
+ * Alley. Its default colors are the ones this scene was QA'd with, so nothing
+ * here re-tints it. Its buttons are keyed by class, so the trap this file used
+ * to warn about (a new button id getting none of the pill's shape, which is how
+ * Share once shipped as a bare browser button) is gone with them.
+ *
+ * THE SHARED SHEETS LOAD FIRST AND THIS ONE LAST, which is the order the
  * cascade needs. `shared/css/styles-1.0.0.css` sets a universal reset and a dark
  * body, and this scene wants a pale sky behind a slow first frame, so the
- * background below has to be the later rule. Everything in the cards carries its
- * own margin, colour and font already, so the reset has nothing of theirs to
- * take away.
+ * background below has to be the later rule.
  *
  * EVERY RULE LIVES IN A FILE, never in a style attribute or a <style> block.
  * The page runs a strict same-origin CSP with style-src 'self', which blocks
@@ -37,153 +43,7 @@ body {
     height: 100%;
 }
 
-/* ---- The welcome card -------------------------------------------------------
- *
- * DARK OVER A BRIGHT SEA. The scene opens at midday under a clear sky, which is
- * close to the brightest thing a screen can show, so light text on a scrim is
- * the only combination that stays readable across the whole frame. The scrim is
- * also doing the honest work of saying "this is not the experience yet".
- *
- * It stays out of the way of the horizon as far as it can. The composition
- * behind it is the reason anybody is here. */
-#welcome {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1.5rem;
-    background: linear-gradient(180deg, rgba(6, 20, 27, 0.62) 0%, rgba(6, 20, 27, 0.78) 100%);
-    opacity: 1;
-    transition: opacity 650ms ease;
-    font: 400 1rem/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
-    color: #e8eef1;
-}
-
-#welcome[hidden] {
-    display: none;
-}
-
-#welcome .card {
-    max-width: 34rem;
-    text-align: center;
-}
-
-#welcome h1 {
-    margin: 0 0 0.75rem;
-    font-size: clamp(1.9rem, 6vw, 3rem);
-    font-weight: 300;
-    letter-spacing: 0.02em;
-}
-
-#welcome .lede {
-    margin: 0 0 1.25rem;
-    font-size: clamp(1rem, 2.6vw, 1.15rem);
-    color: #cfdde3;
-}
-
-/* The one paragraph on this page that cannot be skimmed past, so it is set apart
-   rather than run in with the rest. A rule down the side does that without
-   shouting, which suits the tone better than a warning box would. */
-#welcome .warning {
-    margin: 0 auto 1.75rem;
-    max-width: 30rem;
-    padding: 0.85rem 1.1rem;
-    text-align: left;
-    border-left: 2px solid #6f8b96;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 0 0.35rem 0.35rem 0;
-    color: #b9ccd4;
-    font-size: 0.95rem;
-}
-
-#welcome .note {
-    margin: 1.1rem 0 0;
-    font-size: 0.85rem;
-    color: #8ea3ac;
-}
-
-/* THE PAUSE CARD IS THIS CARD. The line above the title says where the story
-   was held, so the card reads as a pause rather than as the page starting over.
-   Small and spaced out, like a chapter mark, so the title stays the title. */
-#welcome .paused-at {
-    margin: 0 0 0.35rem;
-    font-size: 0.8rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #9fb0b8;
-}
-
-/* Resume and Restart side by side, wrapping rather than squeezing, the same as
-   the ending's pair. */
-.pause-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-}
-
-.pause-actions[hidden],
-#welcome .paused-at[hidden],
-#welcome .primary[hidden] {
-    display: none;
-}
-
-/* ---- Buttons ----------------------------------------------------------------
- *
- * Shared shape between Begin, Watch it again and Share, so the page has one
- * button rather than three. Generous hit areas: this scene gets watched on
- * phones held at arm's length.
- *
- * EVERY SELECTOR HERE IS AN ID, WHICH IS A TRAP AND IS WHY THIS NOTE EXISTS.
- * Adding Share to the ending screen added `#share` to the markup and to the
- * sizing rule further down, and it rendered as a default browser button on a
- * black screen beside a pill: the shape lives up here, keyed by id, and a new
- * id gets none of it. A new button on this page has to be added to all three
- * rules in this block, not just to the one that sets its padding. */
-#welcome .primary,
-#replay,
-#share,
-#restart {
-    font: inherit;
-    color: #e8eef1;
-    background: transparent;
-    border: 1px solid #5c6d75;
-    border-radius: 2rem;
-    cursor: pointer;
-    transition: background-color 200ms ease, border-color 200ms ease;
-}
-
-#welcome .primary:hover,
-#welcome .primary:focus-visible,
-#replay:hover,
-#replay:focus-visible,
-#share:hover,
-#share:focus-visible,
-#restart:hover,
-#restart:focus-visible {
-    background: rgba(232, 238, 241, 0.10);
-    border-color: #9fb0b8;
-}
-
-#welcome .primary:focus-visible,
-#replay:focus-visible,
-#share:focus-visible,
-#restart:focus-visible {
-    outline: 2px solid #9fb0b8;
-    outline-offset: 3px;
-}
-
-#welcome .primary {
-    padding: 0.8rem 2.6rem;
-    font-size: 1.05rem;
-    border-color: #93aeb9;
-    background: rgba(232, 238, 241, 0.08);
-}
-
-/* ---- The arc's two overlays -------------------------------------------------
+/* ---- The white-out ----------------------------------------------------------
  *
  * THE WHITE-OUT IS NOT AN UNDERWATER VIEW, and that is a deliberate choice
  * rather than a shortcut. A wave breaking over your head is an opaque wall of
@@ -191,20 +51,16 @@ body {
  * over the whole frame and not a green room with fish in it. It is also why the
  * camera never has to move for it, which keeps the no-bob promise intact.
  *
- * Both of these are driven from JavaScript by writing `style.opacity`, which is
- * CSSOM rather than an inline style attribute and is therefore NOT blocked by
- * style-src 'self'. The rule at the top of this file still holds: no rule lives
+ * It is driven from JavaScript by writing `style.opacity`, as the player's fade
+ * to black is. That is CSSOM rather than an inline style attribute and is
+ * therefore NOT blocked by style-src 'self'. The rule at the top of this file still holds: no rule lives
  * outside a stylesheet. What JavaScript sets is one animated VALUE, the same way
  * earthdefense and interstate already do. */
-#wash,
-#blackout {
+#wash {
     position: absolute;
     inset: 0;
     pointer-events: none;
     opacity: 0;
-}
-
-#wash {
     /* Brightest at the bottom, where the water actually arrives from, and
        thinner at the top. A flat fill reads as a lens cap rather than as a sea. */
     background:
@@ -215,259 +71,10 @@ body {
             rgba(176, 205, 214, 0.62) 100%);
 }
 
-#blackout {
-    background: #000;
-}
-
-/* ---- The ending -------------------------------------------------------------
- *
- * Sits on top of the blackout, so it needs no background of its own. Faded in by
- * JavaScript once the scene has stopped drawing. */
-#ending {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1.25rem;
-    padding: 2rem;
-    text-align: center;
-    opacity: 0;
-    transition: opacity 900ms ease;
-    font: 400 1rem/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
-    color: #e8eef1;
-}
-
-#ending[hidden] {
+/* A capture for the social card takes the player's controls out of shot. See
+   `oceanCapture` in main.js. */
+.hw-capture #player-controls {
     display: none;
-}
-
-.ending-line {
-    margin: 0;
-    font-size: clamp(1.4rem, 4.5vw, 2.1rem);
-    font-weight: 300;
-    letter-spacing: 0.01em;
-}
-
-.ending-note {
-    margin: 0;
-    max-width: 30rem;
-    color: #9fb0b8;
-}
-
-/* Shape and states come from the shared button block above. Only the sizing is
-   its own, because these are nearly the only things on a black screen. */
-#replay,
-#share {
-    margin-top: 0.5rem;
-    padding: 0.7rem 1.6rem;
-}
-
-/* Restart is the quieter of the pause card's two, so it takes the ending's
-   size beside Resume's larger pill. */
-#restart {
-    padding: 0.7rem 1.6rem;
-    font-size: 1rem;
-}
-
-/* SIDE BY SIDE, AND WRAPPING RATHER THAN SHRINKING. Two pill buttons fit a
-   phone in one row at this size, but the moment they would not, a stacked pair
-   is better than two squeezed ones on a screen this spare. */
-.ending-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-}
-
-/* The directory link is the last thing on the page and is meant to be. It gets
-   its colour from this scene rather than from the shared sheet's variables,
-   which this scene does not use. */
-#ending .promo-explore {
-    color: #9fb0b8;
-    text-decoration-color: rgba(159, 176, 184, 0.5);
-}
-
-#ending .promo-explore:hover,
-#ending .promo-explore:focus-visible {
-    color: #e8eef1;
-    text-decoration-color: currentColor;
-}
-
-/* ---- The player controls ---------------------------------------------------
- *
- * A pause button in the corner and a scrubber along the bottom, added
- * 2026-09-23. A full-screen layer that catches nothing itself, so only the two
- * controls take a click and the rest falls through to the scene. Above the
- * white-out and the fade, below the cards, and never on screen with either
- * card, which main.js sees to by hiding the layer.
- *
- * THEY FADE OUT WHEN THE POINTER IS STILL. `.is-idle` also stops them taking
- * pointer events, so the first tap on a phone brings them back instead of
- * pressing an invisible pause button. They stay in the tab order while faded,
- * and focus brings them straight back. */
-#controls {
-    position: fixed;
-    inset: 0;
-    z-index: 2;
-    pointer-events: none;
-    opacity: 1;
-    transition: opacity 400ms ease;
-}
-
-#controls[hidden],
-.hw-capture #controls {
-    display: none;
-}
-
-#controls > * {
-    pointer-events: auto;
-}
-
-#controls.is-idle {
-    opacity: 0;
-}
-
-#controls.is-idle > * {
-    pointer-events: none;
-}
-
-/* The cursor goes with the controls over a playing scene, as it does over a
-   video. Only over the canvas, so it can never vanish over a card. */
-.hw-idle #scene {
-    cursor: none;
-}
-
-/* The house circle in the house corner. `.menu-btn` supplies the look and the
-   position, and `.ui-float.visible` normally supplies `display`, which this
-   button does not use (see the markup), so it is set here. The notch on a
-   phone held sideways is kept clear of it. */
-#pause-btn {
-    display: flex;
-    top: max(20px, env(safe-area-inset-top));
-    right: max(20px, env(safe-area-inset-right));
-}
-
-#pause-btn:focus-visible {
-    outline: 2px solid #e8eef1;
-    outline-offset: 3px;
-}
-
-/* THE SCRUBBER SITS ON A PILL, NOT STRAIGHT ON THE SKY. A bare translucent
-   track disappears against part of this scene whichever way it is tinted: the
-   sky runs from pale silver through storm gray to black. The pill keeps the
-   light track and thumb at better than 3 to 1 against whatever is behind them.
-   No backdrop blur: it would re-blur a moving WebGL frame every frame, and
-   this scene has been fill-rate bound on phones before. */
-#scrubber {
-    position: fixed;
-    left: 50%;
-    bottom: max(20px, env(safe-area-inset-bottom));
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    width: min(34rem, calc(100% - 32px));
-    padding: 0.35rem 1.1rem;
-    border-radius: 2rem;
-    background: rgba(6, 20, 27, 0.5);
-    border: 1px solid rgba(232, 238, 241, 0.18);
-    box-sizing: border-box;
-}
-
-#scrub {
-    --progress: 0%;
-    width: 100%;
-    height: 28px;
-    margin: 0;
-    background: transparent;
-    cursor: pointer;
-    -webkit-appearance: none;
-    appearance: none;
-    /* The drag is the scrubber's, not a page gesture's. */
-    touch-action: none;
-}
-
-#scrub:focus-visible {
-    outline: 2px solid #e8eef1;
-    outline-offset: 4px;
-    border-radius: 1rem;
-}
-
-/* The played part of the track filled, the rest faint. WebKit has no progress
-   pseudo-element, so the fill is a hard-stop gradient at the `--progress` that
-   main.js writes. Firefox draws its own with ::-moz-range-progress. */
-#scrub::-webkit-slider-runnable-track {
-    height: 4px;
-    border-radius: 2px;
-    background: linear-gradient(to right,
-            #e8eef1 0, #e8eef1 var(--progress),
-            rgba(232, 238, 241, 0.32) var(--progress), rgba(232, 238, 241, 0.32) 100%);
-}
-
-#scrub::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    margin-top: -6px;
-    border: none;
-    border-radius: 50%;
-    background: #e8eef1;
-    box-shadow: 0 0 0 1px rgba(6, 20, 27, 0.55);
-}
-
-#scrub::-moz-range-track {
-    height: 4px;
-    border-radius: 2px;
-    background: rgba(232, 238, 241, 0.32);
-}
-
-#scrub::-moz-range-progress {
-    height: 4px;
-    border-radius: 2px;
-    background: #e8eef1;
-}
-
-#scrub::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border: none;
-    border-radius: 50%;
-    background: #e8eef1;
-    box-shadow: 0 0 0 1px rgba(6, 20, 27, 0.55);
-}
-
-/* A bigger thumb for a fingertip. */
-@media (pointer: coarse) {
-    #scrub::-webkit-slider-thumb {
-        width: 22px;
-        height: 22px;
-        margin-top: -9px;
-    }
-
-    #scrub::-moz-range-thumb {
-        width: 22px;
-        height: 22px;
-    }
-}
-
-/* Reduced motion gets the same scene without the transitions. The arc itself is
-   the thing that would need a real answer here, and that belongs with the
-   welcome screen rather than with a stylesheet. */
-@media (prefers-reduced-motion: reduce) {
-
-    #welcome,
-    #ending,
-    #controls,
-    #welcome .primary,
-    #replay,
-    #share,
-    #restart {
-        transition: none;
-    }
 }
 
 /* NO .fallback RULE HERE ANY MORE. The no-JS message used to be a bare
