@@ -527,11 +527,22 @@ float gardenCloudCover(vec3 dir, float cover, float drift, vec4 shape, vec3 form
 }
 `;
 
+/** The dome's place in the draw order: after every opaque thing (the ridges
+ *  are -900 and up, everything else 0). Exported for
+ *  tests/sky-drawn-last.test.mjs. */
+export const DOME_ORDER = 1000;
+
 const SKY_VERT = `
 varying vec3 vDir;
 void main() {
     vDir = position;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    // AT THE FAR PLANE, WHATEVER THE RADIUS (2026-09-24). The dome is drawn
+    // last of the opaque things now, so its depth decides what it may paint
+    // over: pinned to the far plane, it loses the depth test to anything
+    // already drawn at any distance, and wins only where nothing was drawn,
+    // exactly as when it was drawn first. See the note where it is built.
+    gl_Position.z = gl_Position.w;
 }
 `;
 
@@ -780,9 +791,16 @@ export function initSky(scene, renderer, config = GARDEN_CONFIG, options = {}) {
     dome = new THREE.Mesh(new THREE.SphereGeometry(S.domeRadius, 32, 20), domeMaterial);
     dome.name = 'sky';
     dome.frustumCulled = false;
-    // Drawn before everything else, and it never writes depth, so the garden
-    // always sits in front of it whatever the dome radius is.
-    dome.renderOrder = -1000;
+    // DRAWN LAST OF THE OPAQUE THINGS, NOT FIRST (2026-09-24). At -1000 it was
+    // the first thing drawn, so its shader (the sky, the sun and moon, the
+    // stars and the clouds) ran on every pixel on screen before the meadow,
+    // the ridges, the forest and the trees painted over most of them. Drawn
+    // after them with the depth test on, those pixels are rejected before it
+    // shades them. It still writes no depth, and its vertex shader pins it to
+    // the far plane, so the garden sits in front of it whatever the dome
+    // radius is, as before. Everything transparent (the pond, the beds' glow,
+    // the rain) still draws after it, in the transparent pass.
+    dome.renderOrder = DOME_ORDER;
     scene.add(dome);
 
     // The fog fades distant ground into the horizon. Its colour is rewritten

@@ -210,19 +210,76 @@ export function holsteinTexture(seed = 0xC0) {
     return texture;
 }
 
+// THE PLAIN-COLORED PARTS ARE INSTANCED ACROSS THE HERD (M7, 2026-09-24).
+// Each cow was 18 meshes, so the five were 90 draw calls, half the frame's.
+// Every part but the two that wear the hide (the body and the head, whose
+// patches are drawn per cow) has the same shape and the same color on every
+// cow, so each of those nine kinds is one InstancedMesh for the whole herd,
+// and the rig keeps an empty placeholder where the mesh was. The rig still
+// takes every pose exactly as it did; the placeholders' world matrices are
+// copied into the instances after each pose. 90 draw calls became 19, and the
+// pixels are the same (proved against the old rig at every pose of the story).
+
+/** Each kind of plain part: its shape and its color, built once. */
+const KINDS = {
+    udder: () => [new THREE.SphereGeometry(0.13, 12, 8), 'pink'],
+    leg: () => [new THREE.CylinderGeometry(0.075, 0.06, 0.72, 8), 'white'],
+    hoof: () => [new THREE.CylinderGeometry(0.075, 0.08, 0.08, 8), 'hoof'],
+    skull: () => [new THREE.BoxGeometry(0.5, 0.28, 0.26), 'black'],
+    blaze: () => [new THREE.BoxGeometry(0.34, 0.03, 0.08), 'white'],
+    jaw: () => [new THREE.BoxGeometry(0.16, 0.18, 0.22), 'pink'],
+    ear: () => [new THREE.BoxGeometry(0.1, 0.04, 0.14), 'black'],
+    tail: () => [new THREE.CylinderGeometry(0.02, 0.02, 0.7, 6), 'white'],
+    tailTip: () => [new THREE.SphereGeometry(0.05, 8, 6), 'black']
+};
+
+let parts = null;
+
+/** The shared shapes and colors, built on first use. */
+function partKinds() {
+    if (parts) return parts;
+    const colors = {
+        black: lit(0x1c1b1a, 0.8),
+        white: lit(0xf2efe8, 0.85),
+        pink: lit(0xd9a3a0, 0.7),
+        hoof: lit(0x2a2522, 0.6)
+    };
+    parts = {};
+    for (const [kind, build] of Object.entries(KINDS)) {
+        const [geometry, color] = build();
+        parts[kind] = { geometry, material: colors[color] };
+    }
+    return parts;
+}
+
+/** A plain part: a placeholder the herd's instances follow when `holders`
+ *  is given, or a mesh of its own when it is not (a cow built on its own). */
+function plain(kind, x, y, z, holders) {
+    let node;
+    if (holders) {
+        node = new THREE.Object3D();
+        node.userData.kind = kind;
+        holders.push(node);
+    } else {
+        const { geometry, material } = partKinds()[kind];
+        node = new THREE.Mesh(geometry, material);
+    }
+    node.position.set(x, y, z);
+    return node;
+}
+
 function part(geometry, material, x, y, z) {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(x, y, z);
     return mesh;
 }
 
-/** Build one cow. Returns the rig applyCowPose drives. */
+/** Build one cow. Returns the rig applyCowPose drives. With
+ *  `options.holders` (an array), its plain parts are placeholders pushed onto
+ *  it, for the herd's instances to follow; without, they are meshes. */
 export function createCow(options = {}) {
     const hide = lit(0xffffff, 0.9, holsteinTexture(options.seed));
-    const black = lit(0x1c1b1a, 0.8);
-    const white = lit(0xf2efe8, 0.85);
-    const pink = lit(0xd9a3a0, 0.7);
-    const hoofColor = lit(0x2a2522, 0.6);
+    const holders = options.holders || null;
 
     const group = new THREE.Group();
     group.name = options.name || 'cow';
@@ -232,17 +289,15 @@ export function createCow(options = {}) {
     bodyGeo.scale(1, 1, 0.86);
     const body = part(bodyGeo, hide, 0, 1.1, 0);
     group.add(body);
-    group.add(part(new THREE.SphereGeometry(0.13, 12, 8), pink, -0.45, 0.72, 0));
+    group.add(plain('udder', -0.45, 0.72, 0, holders));
 
     // Legs hang from pivots at the hips and shoulders, so they can splay.
     const legs = [];
-    const legGeo = new THREE.CylinderGeometry(0.075, 0.06, 0.72, 8);
-    const hoofGeo = new THREE.CylinderGeometry(0.075, 0.08, 0.08, 8);
     for (const [x, z] of [[0.62, 0.2], [0.62, -0.2], [-0.62, 0.2], [-0.62, -0.2]]) {
         const pivot = new THREE.Group();
         pivot.position.set(x, 0.8, z);
-        pivot.add(part(legGeo, white, 0, -0.36, 0));
-        pivot.add(part(hoofGeo, hoofColor, 0, -0.76, 0));
+        pivot.add(plain('leg', 0, -0.36, 0, holders));
+        pivot.add(plain('hoof', 0, -0.76, 0, holders));
         pivot.userData.front = x > 0;
         pivot.userData.side = Math.sign(z);
         group.add(pivot);
@@ -256,17 +311,17 @@ export function createCow(options = {}) {
     const skull = new THREE.Group();
     skull.position.set(0.32, -0.02, 0);
     skull.rotation.z = -0.5;
-    skull.add(part(new THREE.BoxGeometry(0.5, 0.28, 0.26), black, 0.2, 0, 0));
-    skull.add(part(new THREE.BoxGeometry(0.34, 0.03, 0.08), white, 0.22, 0.14, 0));
+    skull.add(plain('skull', 0.2, 0, 0, holders));
+    skull.add(plain('blaze', 0.22, 0.14, 0, holders));
     const jaw = new THREE.Group();
     jaw.position.set(0.45, -0.03, 0);
-    jaw.add(part(new THREE.BoxGeometry(0.16, 0.18, 0.22), pink, 0.03, 0, 0));
+    jaw.add(plain('jaw', 0.03, 0, 0, holders));
     skull.add(jaw);
     const ears = [];
     for (const side of [1, -1]) {
         const ear = new THREE.Group();
         ear.position.set(0.04, 0.08, side * 0.14);
-        ear.add(part(new THREE.BoxGeometry(0.1, 0.04, 0.14), black, 0, 0, side * 0.06));
+        ear.add(plain('ear', 0, 0, side * 0.06, holders));
         ear.userData.side = side;
         skull.add(ear);
         ears.push(ear);
@@ -276,8 +331,8 @@ export function createCow(options = {}) {
 
     const tail = new THREE.Group();
     tail.position.set(-0.98, 1.3, 0);
-    tail.add(part(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 6), white, 0, -0.35, 0));
-    tail.add(part(new THREE.SphereGeometry(0.05, 8, 6), black, 0, -0.72, 0));
+    tail.add(plain('tail', 0, -0.35, 0, holders));
+    tail.add(plain('tailTip', 0, -0.72, 0, holders));
     group.add(tail);
 
     return {
@@ -320,16 +375,51 @@ export function applyCowPose(rig, pose) {
 
 let flyer = null;
 const pasture = [];
+// The herd's instanced parts: per kind, the InstancedMesh and, in instance
+// order, each placeholder with the rig it belongs to.
+let herd = [];
+const HIDDEN = { matrix: null };
 
 export function initCows(scene, config = TORNADO_CONFIG) {
-    flyer = createCow({ name: 'cow', seed: 0xC0 });
+    const holders = [];
+    const slots = [];
+    const collect = (rig) => {
+        for (const node of holders.splice(0)) slots.push({ node, rig });
+    };
+    flyer = createCow({ name: 'cow', seed: 0xC0, holders });
+    collect(flyer);
     scene.add(flyer.group);
     pasture.length = 0;
     config.cow.pasture.forEach((_, i) => {
-        const rig = createCow({ name: `pasture-cow-${i}`, seed: 0xC1 + i });
+        const rig = createCow({ name: `pasture-cow-${i}`, seed: 0xC1 + i, holders });
+        collect(rig);
         scene.add(rig.group);
         pasture.push(rig);
     });
+    herd = [];
+    for (const [kind, { geometry, material }] of Object.entries(partKinds())) {
+        const mine = slots.filter((s) => s.node.userData.kind === kind);
+        const mesh = new THREE.InstancedMesh(geometry, material, mine.length);
+        mesh.name = `cow-parts-${kind}`;
+        // The instances move every frame and the bounds three computes once
+        // would not follow them.
+        mesh.frustumCulled = false;
+        scene.add(mesh);
+        herd.push({ mesh, slots: mine });
+    }
+    // A hidden cow's parts are scaled to nothing: no triangle of it rasterizes.
+    HIDDEN.matrix = new THREE.Matrix4().makeScale(0, 0, 0);
+}
+
+/** Copy every placeholder's place into its instance, after the poses. */
+function syncHerd() {
+    for (const rig of [flyer, ...pasture]) if (rig.group.visible) rig.group.updateMatrixWorld(true);
+    for (const { mesh, slots } of herd) {
+        slots.forEach(({ node, rig }, i) => {
+            mesh.setMatrixAt(i, rig.group.visible ? node.matrixWorld : HIDDEN.matrix);
+        });
+        mesh.instanceMatrix.needsUpdate = true;
+    }
 }
 
 /** Pose every cow for story second t. `flies` is false on a run where the
@@ -338,4 +428,5 @@ export function updateCows(t, config = TORNADO_CONFIG, flies = true) {
     if (!flyer) return;
     applyCowPose(flyer, flies ? cowPoseAt(t, config) : cowPoseAt(-1, config));
     pasture.forEach((rig, i) => applyCowPose(rig, pasturePoseAt(i, t, config)));
+    syncHerd();
 }

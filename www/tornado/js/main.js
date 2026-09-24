@@ -25,7 +25,8 @@ import { TORNADO_CONFIG as CONFIG, TORNADO_LIGHTNING } from './config.min.js';
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
-import { createPlayer, isLocalHost } from '../../shared/js/player-1.0.0.min.js';
+import { createPlayer } from '../../shared/js/player-1.0.0.min.js';
+import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
 import { funnelStateAt, funnelUniforms, applyFunnelState } from './funnel.min.js';
 import { initShells, setShellCount, updateShells } from './shells.min.js';
 import { initWorld, updateWorld, flashUniforms } from './world.min.js';
@@ -44,8 +45,16 @@ import {
 } from './payloads.min.js';
 import { initTumbleweeds, updateTumbleweeds } from './tumbleweeds.min.js';
 import { createNarrator } from './narration.min.js';
+import { isQaHost, qaOptions, fpsOf, statsLines } from './perf.min.js';
 
 let renderer = null;
+// ADAPTIVE RESOLUTION (M7, 2026-09-24): High Water's, shared. The cost here is
+// fill rate (the sky, the storm base and the funnel's layers stack up in a
+// portrait phone's frame), so the lever is how many pixels are drawn, and a
+// phone that keeps up is never touched. PRD section 8.
+let resolution = null;
+// The on-screen readout for a phone, when asked for. See perf.js.
+let stats = null;
 let scene = null;
 let camera = null;
 let player = null;
@@ -93,8 +102,8 @@ function buildRenderer(canvas) {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile, powerPreference: 'high-performance' });
     // Every shader in this scene writes a display colour itself. See config.js.
     renderer.toneMapping = THREE.NoToneMapping;
-    renderer.setPixelRatio(pixelRatio());
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    resolution = createResolution({ renderer, ceiling: pixelRatio, quality: CONFIG.quality });
+    resolution.apply();
 }
 
 function placeCamera() {
@@ -109,8 +118,7 @@ function onResize() {
     if (!renderer || !camera) return;
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setPixelRatio(pixelRatio());
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    resolution.apply();
 }
 
 /**
@@ -138,6 +146,7 @@ function buildLighting() {
 /** One frame of the storm at story second `arc`. `info` is the player's
  *  ({ begun, scrubbing, fade }). */
 export function drawFrame(delta, arc, info = {}) {
+    if (resolution) resolution.sample(delta);
     anim += Math.max(0, Math.min(delta, 0.25));
     const state = funnelStateAt(arc, anim, CONFIG);
     applyFunnelState(shared, state);
@@ -159,6 +168,50 @@ export function drawFrame(delta, arc, info = {}) {
     if (player && player.flashAllowed()) updateLightning(arc, TORNADO_LIGHTNING);
     if (narrator) narrator.update(arc, info, payload);
     renderer.render(scene, camera);
+    if (stats) updateStats(delta, arc);
+}
+
+/** The phone readout: twice a second, what the last frame cost. */
+function updateStats(delta, arc) {
+    stats.frames += 1;
+    stats.seconds += Math.max(0, delta);
+    if (stats.seconds < 0.5) return;
+    stats.el.textContent = statsLines({
+        fps: fpsOf(stats.frames, stats.seconds),
+        arc,
+        readout: resolution.readout(),
+        calls: renderer.info.render.calls,
+        triangles: renderer.info.render.triangles,
+        shells: shellCount,
+        width: window.innerWidth,
+        height: window.innerHeight
+    }).join('\n');
+    stats.frames = 0;
+    stats.seconds = 0;
+}
+
+/** Put the readout on the page. Built here rather than in the markup, since
+ *  no visitor ever sees it, and styled through the CSSOM, which the page's
+ *  CSP (style-src 'self') allows where a style attribute it would not. */
+function installStats() {
+    const el = document.createElement('pre');
+    el.id = 'qa-stats';
+    el.setAttribute('aria-hidden', 'true');
+    Object.assign(el.style, {
+        position: 'fixed', left: '8px', top: 'max(8px, env(safe-area-inset-top))', zIndex: '5',
+        margin: '0', padding: '6px 8px', font: '11px/1.35 ui-monospace, Menlo, monospace',
+        color: '#e8eef1', background: 'rgba(0, 0, 0, 0.6)', borderRadius: '6px',
+        pointerEvents: 'none', whiteSpace: 'pre'
+    });
+    document.body.appendChild(el);
+    stats = { el, frames: 0, seconds: 0 };
+}
+
+/** How many funnel layers draw. Clamped to the layers there are. */
+function setShells(n) {
+    shellCount = Math.max(0, Math.min(CONFIG.shells.layers.length, Math.round(Number(n) || 0)));
+    setShellCount(shellCount);
+    return shellCount;
 }
 
 /** The ending card names what came down. */
@@ -277,7 +330,14 @@ async function init() {
     track('session-start', { device: mobile ? 'touch' : 'desktop' });
     sessionStart = Date.now();
 
-    if (isLocalHost()) installTuningAids();
+    // On this machine or the house network only, so a phone can be measured.
+    // See perf.js.
+    if (isQaHost()) {
+        installTuningAids();
+        const qa = qaOptions(window.location.search, CONFIG.shells.layers.length);
+        if (qa.shells !== null) setShells(qa.shells);
+        if (qa.stats) installStats();
+    }
 }
 
 /** Console hooks for the screenshot pass, on a local server only. A visitor
@@ -305,6 +365,18 @@ function installTuningAids() {
         : surprisePoseAt(payload, player.state().arc, CONFIG));
     // The wind at any ground point right now, for tuning the props.
     window.tornadoWind = (x, z) => windAt(x, z, funnelStateAt(player.state().arc, anim, CONFIG), CONFIG);
+    // THE PERFORMANCE PASS (M7). What the adaptive resolution has settled on
+    // and what the last frame cost; how many funnel layers draw (call with a
+    // number to change it, for an A/B on a phone); and full resolution held
+    // for a capture.
+    window.tornadoQuality = () => ({
+        ...resolution.readout(),
+        drawCalls: renderer.info.render.calls,
+        triangles: renderer.info.render.triangles,
+        shells: shellCount
+    });
+    window.tornadoShells = (n) => (n === undefined ? shellCount : setShells(n));
+    window.tornadoCapture = (on = true) => resolution.pin(on);
 }
 
 if (typeof document !== 'undefined') {

@@ -100,6 +100,13 @@ export const TORNADO_CONFIG = Object.freeze({
         mobilePixelRatio: 1.5
     },
 
+    // ADAPTIVE RESOLUTION (M7): overrides for the shared part's numbers
+    // (shared/js/resolution-1.0.0.js RESOLUTION_DEFAULTS, which are High
+    // Water's). None yet: they are tuned against the display's own best frame
+    // rather than a scene's content, so they carry over. Change one here only
+    // after a phone reading says to.
+    quality: {},
+
     // Where the storm is. `distance` is from the camera to the point under
     // the wall cloud, which is where the funnel's top is anchored.
     storm: {
@@ -176,7 +183,10 @@ export const TORNADO_CONFIG = Object.freeze({
             { scale: 1.50, opacity: 0.18, wisp: 1.00, spin: 1.60, seed: 43.1 }
         ],
         // Layers drawn on a phone. The fourth is the faintest and costs as
-        // much as the first. Unmeasured on a phone as yet (M7).
+        // much as the first: measured offline (M7, 2026-09-24), the four
+        // together shade 1.44 times a portrait phone's pixels at the mature
+        // tornado, and the fourth alone 0.44 of that. Compare a phone at 3 and
+        // 4 with ?stats&shells=4 on the house network (see perf.js).
         mobileCount: 3,
         dustLayers: [
             { scale: 0.75, opacity: 0.55, wisp: 0.60, spin: 1.8, seed: 5.5 },

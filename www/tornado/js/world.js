@@ -59,6 +59,12 @@ void main() {
     vN = normalize(mat3(modelMatrix) * normal);
     vUv = uv;
     gl_Position = projectionMatrix * viewMatrix * w;
+#ifdef AT_FAR_PLANE
+    // The sky only: pinned to the far plane, so drawn last of the opaque
+    // things it loses the depth test to anything already drawn, at any
+    // distance. See SKY_ORDER.
+    gl_Position.z = gl_Position.w;
+#endif
 }
 `;
 
@@ -226,6 +232,10 @@ export function wallUndersideRadius(state, config = TORNADO_CONFIG) {
 let base = null;
 let flash = null;
 
+/** The sky's place in the draw order: after every opaque thing, which all
+ *  sit at 0. Exported for tests/tornado-perf.test.mjs. */
+export const SKY_ORDER = 1000;
+
 /** The flash's uniforms, shared by the sky, the storm base and the wall
  *  cloud. Handed to the shared lightning part as its `sky.uniforms`, which
  *  writes uFlash and uFlashDir into them. */
@@ -256,6 +266,7 @@ export function initWorld(scene, config = TORNADO_CONFIG) {
     const sky = new THREE.Mesh(new THREE.SphereGeometry(30000, 32, 16), new THREE.ShaderMaterial({
         vertexShader: WORLD_VERT,
         fragmentShader: SKY_FRAG,
+        defines: { AT_FAR_PLANE: '' },
         uniforms: {
             ...flash,
             uHorizon: { value: v3(C.horizon) }, uSkyLow: { value: v3(C.skyLow) }, uZenith: { value: v3(C.zenith) }
@@ -263,7 +274,17 @@ export function initWorld(scene, config = TORNADO_CONFIG) {
         side: THREE.BackSide,
         depthWrite: false
     }));
-    sky.renderOrder = -1000;
+    // THE SKY IS DRAWN LAST OF THE OPAQUE THINGS, NOT FIRST (M7, 2026-09-24).
+    // It was -1000, which put it at the front of the opaque pass, so its
+    // shader ran on every pixel on screen before the ground, the wall cloud,
+    // the farm and the trees painted over a third to a half of them: High
+    // Water's untaken win (PRD section 8). Drawn after them with the depth
+    // test on, those pixels are rejected before it shades them. Nothing it
+    // covers changes: the storm base, the rainbow and the funnel are
+    // transparent, so they still draw after it. Its vertex shader pins it to
+    // the far plane (AT_FAR_PLANE), so the ground past the dome's 30 km stays
+    // in front of it too. tests/tornado-perf.test.mjs holds the order.
+    sky.renderOrder = SKY_ORDER;
     sky.frustumCulled = false;
     scene.add(sky);
 
@@ -307,7 +328,13 @@ export function initWorld(scene, config = TORNADO_CONFIG) {
             uTime: { value: 0 },
             uSunDir: { value: sun }
         },
-        side: THREE.DoubleSide
+        // FRONT FACES ONLY (M7, 2026-09-24). It was DoubleSide, which shades
+        // the lathe's far, inside faces as well, a third of a portrait
+        // phone's screen at the mature tornado. The lathe is closed and wound
+        // outward (the sides, the underside facing down and the tucked-in top
+        // facing up, measured), so its front faces are exactly the surface the
+        // depth test already let through. tests/tornado-perf.test.mjs holds it.
+        side: THREE.FrontSide
     }));
     wall.name = 'wall-cloud';
     scene.add(wall);
