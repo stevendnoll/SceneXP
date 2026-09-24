@@ -22,14 +22,17 @@
  * the visitor arrives.
  */
 
-import { TORNADO_CONFIG as CONFIG } from './config.min.js';
+import { TORNADO_CONFIG as CONFIG, TORNADO_LIGHTNING } from './config.min.js';
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
 import { createPlayer, isLocalHost } from '../../shared/js/player-1.0.0.min.js';
 import { funnelStateAt, funnelUniforms, applyFunnelState } from './funnel.min.js';
 import { initShells, setShellCount, updateShells } from './shells.min.js';
-import { initWorld, updateWorld } from './world.min.js';
+import { initWorld, updateWorld, flashUniforms } from './world.min.js';
+import {
+    initLightning, updateLightning, resetLightning, forceStrike
+} from '../../shared/js/lightning-1.0.0.min.js';
 import { TREE_DEFAULTS } from '../../shared/js/fractaltree-1.0.0.min.js';
 import { windAt } from './wind.min.js';
 import { initFarm, updateFarm } from './farm.min.js';
@@ -131,6 +134,11 @@ export function drawFrame(delta, arc) {
     updateFlora(state, anim, motion, CONFIG);
     updateCows(arc, CONFIG);
     updateRainbow(arc, CONFIG);
+    // THE PHOTOSENSITIVITY GUARD. The flash-rate cap is written in story
+    // seconds, and a scrub runs the story far faster than real time, so the
+    // lightning holds through a drag and for a second after any seek, as
+    // High Water's does. The shared player keeps that clock.
+    if (player && player.flashAllowed()) updateLightning(arc, TORNADO_LIGHTNING);
     renderer.render(scene, camera);
 }
 
@@ -168,6 +176,13 @@ async function init() {
     // The payoffs.
     initCows(scene, CONFIG);
     initRainbow(scene, CONFIG);
+    // High Water's lightning, shared. Built now, not at the first strike: it
+    // adds a light, and three recompiles every lit material when the number
+    // of lights changes, which would stall the frame of the first flash.
+    initLightning(scene, camera, TORNADO_LIGHTNING, {
+        sky: { uniforms: flashUniforms() },
+        reducedMotion: prefersReducedMotion()
+    });
     if (prefersReducedMotion()) motion = TREE_DEFAULTS.tree.reducedMotion;
 
     player = createPlayer({
@@ -178,6 +193,11 @@ async function init() {
         reducedMotion: prefersReducedMotion(),
         track,
         frame: drawFrame,
+        // Any flash in the sky goes out when the clock jumps or a drag
+        // begins; see the photosensitivity guard in drawFrame.
+        onSeek: () => resetLightning(),
+        onScrubStart: () => resetLightning(),
+        onRewind: () => resetLightning(),
         redraw: () => renderer.render(scene, camera)
     }).install();
 
@@ -215,6 +235,9 @@ function installTuningAids() {
     window.tornadoSetArc = (seconds) => player.jumpTo(Math.max(0, Number(seconds) || 0));
     window.tornadoArc = () => player.state().arc;
     window.tornadoState = () => funnelStateAt(player.state().arc, anim, CONFIG);
+    // Fire a strike on the next frame, optionally at a distance in metres, for
+    // photographing a channel. It goes through the rate limit like any other.
+    window.tornadoStrike = (metres) => forceStrike(metres === undefined ? null : metres);
     // Where the cow is and how it is holding itself right now.
     window.tornadoCow = () => cowPoseAt(player.state().arc, CONFIG);
     // The wind at any ground point right now, for tuning the props.

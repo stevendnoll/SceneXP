@@ -395,5 +395,94 @@ export const TORNADO_CONFIG = Object.freeze({
         dark: 0.05,               // Alexander's darker band between the two
         distance: 8000,           // metres: out in the rain, behind everything
         amount: [[23.5, 0], [25.5, 1]]
+    },
+
+    // ---- Lightning (shared/js/lightning-1.0.0.js) ----------------------------
+    //
+    // HIGH WATER'S LIGHTNING, promoted to a shared part so this scene has the
+    // same streaks, and set in High Water's own shape (see TORNADO_LIGHTNING
+    // below). Every number that is not about this scene's size or timing is
+    // High Water's tuned value, and its reasons are in
+    // www/highwater/js/config.js.
+    //
+    // THE FLASH RATE IS CAPPED FOR PHOTOSENSITIVE VIEWERS, and not only under
+    // reduced motion: no flash is ever closer than minGapSeconds to the last,
+    // which holds every second of the story under three flashes (WCAG 2.3.1).
+    // The welcome card says there is lightning. tests/tornado-lightning holds
+    // the cap.
+    lightning: {
+        // Strikes per second over the story: none until the storm has
+        // organized, busiest while the tornado is down, and none by the time
+        // the rainbow comes out.
+        rate: [
+            { at: 0, value: 0 }, { at: 2.5, value: 0 }, { at: 4, value: 0.25 },
+            { at: 10, value: 0.45 }, { at: 18, value: 0.45 }, { at: 21, value: 0.2 },
+            { at: 23, value: 0 }
+        ],
+        minGapSeconds: 0.34,
+        strokeChance: 0.3,
+        strokeGapSeconds: 0.4,
+        secondStrokePower: 0.78,
+        attackSeconds: 0.035,
+        decaySeconds: 0.28,
+        azimuthDegrees: 46,
+        boltAzimuthDegrees: 30,
+        boltFrameMarginDegrees: 3.5,
+        boltFrameMinFraction: 0.4,
+        // Most flashes show their channel: the streaks are the point.
+        boltChance: [
+            { at: 3, value: 0.7 }, { at: 8, value: 0.9 }, { at: 20, value: 0.9 }, { at: 23, value: 0.5 }
+        ],
+        // ALWAYS BEHIND THE TORNADO (1800 m), in the storm's rain, so the
+        // funnel is always in front of a bolt, which is the order they are
+        // drawn in.
+        farMetres: 6000,
+        nearMetres: 2600,
+        approach: [
+            { at: 3, value: 0.2 }, { at: 15, value: 0.65 }, { at: 23, value: 0.4 }
+        ],
+        approachSpread: 0.3,
+        referenceMetres: 2600,
+        // How much a flash lights the sky and the storm base (world.js), and
+        // the farm, trees and cows (a light).
+        skyGain: 1.1,
+        lightIntensity: 3.0,
+        lightColor: 0xcfe0ff,
+        flashColor: [0.74, 0.82, 1.0],
+        flashSpread: 3,
+        reduced: { gain: 0.26, strokeChance: 0, attackSeconds: 0.18, decaySeconds: 0.55 },
+        bolt: {
+            // From the storm base to the ground. The jitter scales with the
+            // height (High Water's bolts were 420 m tall, these 900); the width
+            // is an angle, so it is High Water's exactly.
+            baseHeightMetres: 900,
+            iterations: 6,
+            jitterMetres: 64,
+            jitterDecay: 0.52,
+            branchFrom: 1,
+            branchTo: 3,
+            branchChance: 0.3,
+            branchGenerations: 2,
+            branchLength: 0.55,
+            branchSpreadDegrees: 42,
+            branchThin: 0.55,
+            branchDim: 0.52,
+            branchJitterDecay: 0.7,
+            maxSegments: 512,
+            widthRadians: 0.0045,
+            intensity: 2.2,
+            coreColor: 0xffffff,
+            glowColor: 0x6f8cff
+        }
     }
+});
+
+/**
+ * The lightning's settings in the shape the shared part reads (High Water's):
+ * the story's length under `storm.seconds`, the lightning under
+ * `storm.lightning`, and the lens under `camera.fov`.
+ */
+export const TORNADO_LIGHTNING = Object.freeze({
+    storm: Object.freeze({ seconds: TORNADO_CONFIG.story.seconds, lightning: TORNADO_CONFIG.lightning }),
+    camera: Object.freeze({ fov: TORNADO_CONFIG.camera.fovDegrees })
 });

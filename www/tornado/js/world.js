@@ -62,7 +62,21 @@ void main() {
 }
 `;
 
+const FLASH_GLSL = /* glsl */`
+// The lightning's flash (shared/js/lightning-1.0.0.js writes uFlash and
+// uFlashDir; the color and spread are this scene's). A light from within the
+// cloud, brightest toward the strike.
+uniform float uFlash;
+uniform vec3 uFlashDir;
+uniform vec3 uFlashColor;
+uniform float uFlashSpread;
+float flashToward(vec3 d) {
+    return uFlash * pow(max(dot(d, uFlashDir), 0.0), uFlashSpread);
+}
+`;
+
 const SKY_FRAG = /* glsl */`
+${FLASH_GLSL}
 uniform vec3 uHorizon;
 uniform vec3 uSkyLow;
 uniform vec3 uZenith;
@@ -72,6 +86,7 @@ void main() {
     float e = max(d.y, 0.0);
     vec3 col = mix(uHorizon, uSkyLow, smoothstep(0.0, 0.09, e));
     col = mix(col, uZenith, smoothstep(0.09, 0.6, e));
+    col += uFlashColor * flashToward(d) * 0.8;
     // Below the horizon the ground covers it; keep it the horizon colour.
     gl_FragColor = vec4(col, 1.0);
 }
@@ -79,6 +94,7 @@ void main() {
 
 const BASE_FRAG = /* glsl */`
 ${NOISE_GLSL}
+${FLASH_GLSL}
 uniform vec3 uCenter;
 uniform float uRadius;
 uniform vec3 uCore;
@@ -101,6 +117,9 @@ void main() {
     col *= 0.78 + 0.36 * n + 0.10 * (streak - 0.5);
     float fromCenter = length(vW.xz - uCenter.xz) / uRadius;
     float alpha = 1.0 - smoothstep(0.72, 1.0, fromCenter + (n - 0.5) * 0.18);
+    // Lit from within by a strike, unevenly, through its own texture.
+    vec3 look = normalize(vW - cameraPosition);
+    col += uFlashColor * (0.25 * uFlash + 0.75 * flashToward(look)) * (0.45 + 0.55 * n);
     col = applyHaze(col, vW);
     gl_FragColor = vec4(col, alpha);
 }
@@ -108,6 +127,7 @@ void main() {
 
 const WALL_FRAG = /* glsl */`
 ${NOISE_GLSL}
+${FLASH_GLSL}
 uniform vec3 uColor;
 uniform vec3 uCenter;
 uniform float uTime;
@@ -123,6 +143,7 @@ void main() {
     float n = fbm4(vec3(p / 120.0, vW.y / 60.0));
     float lam = clamp(dot(normalize(vN), uSunDir) * 0.5 + 0.5, 0.0, 1.0);
     vec3 col = uColor * (0.75 + 0.5 * n) * (0.8 + 0.35 * lam);
+    col += uFlashColor * flashToward(normalize(vW - cameraPosition)) * 0.5 * (0.5 + 0.5 * n);
     col = applyHaze(col, vW);
     gl_FragColor = vec4(col, 1.0);
 }
@@ -200,6 +221,14 @@ export function wallUndersideRadius(state, config = TORNADO_CONFIG) {
 }
 
 let base = null;
+let flash = null;
+
+/** The flash's uniforms, shared by the sky, the storm base and the wall
+ *  cloud. Handed to the shared lightning part as its `sky.uniforms`, which
+ *  writes uFlash and uFlashDir into them. */
+export function flashUniforms() {
+    return flash;
+}
 let wall = null;
 let ground = null;
 let debris = null;
@@ -210,12 +239,22 @@ export function initWorld(scene, config = TORNADO_CONFIG) {
     const C = config.colors;
     const S = config.storm;
     const haze = { uHaze: { value: v3(C.haze) }, uVisibility: { value: config.visibility } };
+    const L = config.lightning;
+    flash = {
+        uFlash: { value: 0 },
+        uFlashDir: { value: new THREE.Vector3(0, 1, 0) },
+        uFlashColor: { value: v3(L.flashColor) },
+        uFlashSpread: { value: L.flashSpread }
+    };
     const sun = new THREE.Vector3(config.sun.x, config.sun.y, config.sun.z).normalize();
 
     const sky = new THREE.Mesh(new THREE.SphereGeometry(30000, 32, 16), new THREE.ShaderMaterial({
         vertexShader: WORLD_VERT,
         fragmentShader: SKY_FRAG,
-        uniforms: { uHorizon: { value: v3(C.horizon) }, uSkyLow: { value: v3(C.skyLow) }, uZenith: { value: v3(C.zenith) } },
+        uniforms: {
+            ...flash,
+            uHorizon: { value: v3(C.horizon) }, uSkyLow: { value: v3(C.skyLow) }, uZenith: { value: v3(C.zenith) }
+        },
         side: THREE.BackSide,
         depthWrite: false
     }));
@@ -228,6 +267,7 @@ export function initWorld(scene, config = TORNADO_CONFIG) {
         fragmentShader: BASE_FRAG,
         uniforms: {
             ...haze,
+            ...flash,
             uCenter: { value: new THREE.Vector3() },
             uRadius: { value: S.baseRadius },
             uCore: { value: v3(C.baseCore) },
@@ -255,6 +295,7 @@ export function initWorld(scene, config = TORNADO_CONFIG) {
         fragmentShader: WALL_FRAG,
         uniforms: {
             ...haze,
+            ...flash,
             uColor: { value: v3(C.wall) },
             uCenter: { value: new THREE.Vector3() },
             uTime: { value: 0 },
