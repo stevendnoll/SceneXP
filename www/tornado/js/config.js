@@ -52,7 +52,7 @@ export const TORNADO_CONFIG = Object.freeze({
             { at: 15, name: 'rope-out' },
             { at: 21, name: 'dissipating' },
             { at: 23, name: 'payoff' },
-            { at: 25, name: 'rainbow' }
+            { at: 24.5, name: 'rainbow' }
         ]
     },
 
@@ -102,16 +102,21 @@ export const TORNADO_CONFIG = Object.freeze({
         // FORMS EARLY, ON PURPOSE (QA 2026-09-23: "it takes too long to
         // appear"). The wall cloud is down by 2.5 s, the funnel reaches down
         // from 2 s and touches down by 5.5, and it is a mature cone by 8.
-        // Rope-out from 14.5 to 20, and gone by 24.
-        wall: [[0.3, 0], [2.5, 1], [20, 1], [26, 0.25]],
+        // Rope-out from 14.5 to 20, and gone by 23.5, the moment the
+        // rainbow starts to come out, so the two beats never overlap.
+        // The wall cloud stays full size until the funnel is gone (23.5), then
+        // lifts and draws in to nothing by 24.5 as the rainbow comes out. It
+        // used to hang on, lowered, to the end, and hid the bow (QA
+        // 2026-09-23, tornado-5).
+        wall: [[0.3, 0], [2.5, 1], [20, 1], [23.5, 0.5], [24.5, 0]],
         // How far down from the wall cloud the condensation funnel reaches.
-        // Gone by 24, so the payoff plays under a clearing sky.
-        extent: [[2, 0], [3, 0.12], [5.5, 1], [20.5, 1], [24, 0]],
+        // Gone by 23.5, so the payoff plays under a clearing sky.
+        extent: [[2, 0], [3, 0.12], [5.5, 1], [20.5, 1], [23.5, 0]],
         // The ground dust whirl comes BEFORE the funnel connects.
         dust: [[2.5, 0], [4, 0.35], [6.5, 1], [17, 0.9], [20.5, 0.35], [23.5, 0]],
         width: [[3, 0.3], [5.5, 0.6], [8, 1], [15, 1], [20, 0.2], [24, 0.17]],
         rope: [[14.5, 0], [20, 1]],
-        breakup: [[20.5, 0], [24, 1]],
+        breakup: [[20.5, 0], [23.5, 1]],
         inflow: [[0.5, 0], [3.5, 1], [19, 1], [24, 0]]
     },
 
@@ -369,5 +374,26 @@ export const TORNADO_CONFIG = Object.freeze({
             { x: 50, z: -216, yaw: 1.3 }
         ],
         lookUpAt: 24.3            // the pasture cows look up, a beat apart
+    },
+
+    // ---- The last payoff: the rainbow (rainbow.js) -------------------------
+    //
+    // A circle round the point opposite the sun: the first bow at about 42
+    // degrees, red outside, and a fainter second at about 51 with its colors
+    // the other way round. It comes out as the rope breaks up, so the cow
+    // lands under it, and it is still there as the picture fades.
+    rainbow: {
+        // THE POINT'S ELEVATION, in degrees. Opposite the real sun it would
+        // be 9 below the horizon and the crown would sit just above the
+        // frame; at 14 the crown lands about 28 degrees up, inside it, and the
+        // right leg meets the horizon about 22 degrees right of center. Its
+        // bearing always comes from `sun`.
+        centerElevation: -14,
+        primary: { inner: 40.6, outer: 42.4, strength: 0.55 },
+        secondary: { inner: 50.4, outer: 53.4, strength: 0.22 },
+        glow: 0.06,               // the brighter sky inside the first bow
+        dark: 0.05,               // Alexander's darker band between the two
+        distance: 8000,           // metres: out in the rain, behind everything
+        amount: [[23.5, 0], [25.5, 1]]
     }
 });

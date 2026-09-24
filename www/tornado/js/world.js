@@ -183,9 +183,15 @@ const v3 = (c) => new THREE.Vector3(c[0], c[1], c[2]);
 // ring shows as a lip (about 260 m when mature against 0.7 x 430 = 301 m).
 const UNDERSIDE = 0.7;
 
-/** How much the wall cloud is scaled across at this moment. */
+/**
+ * How much the wall cloud is scaled across at this moment. In its last half
+ * (wall under 0.5, once the funnel is gone) it also draws in to nothing as it
+ * lifts into the base, so its flat underside never lingers as a disc under
+ * the storm: that disc is what hid the rainbow in QA (2026-09-23, tornado-5).
+ */
 function wallScale(state) {
-    return 0.7 + 0.3 * state.wall;
+    const k = Math.min(1, Math.max(0, state.wall / 0.5));
+    return (0.7 + 0.3 * state.wall) * k * k * (3 - 2 * k);
 }
 
 /** The radius of the wall cloud's flat underside at this moment, metres. */
@@ -256,6 +262,7 @@ export function initWorld(scene, config = TORNADO_CONFIG) {
         },
         side: THREE.DoubleSide
     }));
+    wall.name = 'wall-cloud';
     scene.add(wall);
 
     ground = new THREE.Mesh(new THREE.PlaneGeometry(80000, 80000), new THREE.ShaderMaterial({
@@ -304,6 +311,8 @@ export function updateWorld(state, showDebris, config = TORNADO_CONFIG) {
     const drop = Math.max(S.baseHeight - state.top, 1) + 20;
     wall.position.set(top.x, S.baseHeight + 20, top.z);
     wall.scale.set(wallScale(state), drop, wallScale(state));
+    // Gone means gone: a wall cloud of nothing would only fight the base.
+    wall.visible = wallScale(state) > 0.005;
     wall.material.uniforms.uCenter.value.copy(wall.position);
     wall.material.uniforms.uTime.value = state.anim;
 

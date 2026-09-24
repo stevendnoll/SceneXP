@@ -36,6 +36,7 @@ import { initFarm, updateFarm } from './farm.min.js';
 import { initPond, updatePond } from './pond.min.js';
 import { initFlora, updateFlora } from './flora.min.js';
 import { initCows, updateCows, cowPoseAt } from './cow.min.js';
+import { initRainbow, updateRainbow } from './rainbow.min.js';
 
 let renderer = null;
 let scene = null;
@@ -129,6 +130,7 @@ export function drawFrame(delta, arc) {
     updatePond(windAt(CONFIG.pond.x, CONFIG.pond.z, state, CONFIG), anim, CONFIG);
     updateFlora(state, anim, motion, CONFIG);
     updateCows(arc, CONFIG);
+    updateRainbow(arc, CONFIG);
     renderer.render(scene, camera);
 }
 
@@ -163,8 +165,9 @@ async function init() {
     initFarm(scene, CONFIG);
     initPond(scene, CONFIG);
     initFlora(scene, CONFIG, { mobile });
-    // The payoff.
+    // The payoffs.
     initCows(scene, CONFIG);
+    initRainbow(scene, CONFIG);
     if (prefersReducedMotion()) motion = TREE_DEFAULTS.tree.reducedMotion;
 
     player = createPlayer({
