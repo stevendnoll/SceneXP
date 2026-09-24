@@ -35,6 +35,7 @@ import { windAt } from './wind.min.js';
 import { initFarm, updateFarm } from './farm.min.js';
 import { initPond, updatePond } from './pond.min.js';
 import { initFlora, updateFlora } from './flora.min.js';
+import { initCows, updateCows, cowPoseAt } from './cow.min.js';
 
 let renderer = null;
 let scene = null;
@@ -127,6 +128,7 @@ export function drawFrame(delta, arc) {
     updateFarm(windAt(W.x, W.z, state, CONFIG), delta * motion, CONFIG);
     updatePond(windAt(CONFIG.pond.x, CONFIG.pond.z, state, CONFIG), anim, CONFIG);
     updateFlora(state, anim, motion, CONFIG);
+    updateCows(arc, CONFIG);
     renderer.render(scene, camera);
 }
 
@@ -161,6 +163,8 @@ async function init() {
     initFarm(scene, CONFIG);
     initPond(scene, CONFIG);
     initFlora(scene, CONFIG, { mobile });
+    // The payoff.
+    initCows(scene, CONFIG);
     if (prefersReducedMotion()) motion = TREE_DEFAULTS.tree.reducedMotion;
 
     player = createPlayer({
@@ -208,6 +212,8 @@ function installTuningAids() {
     window.tornadoSetArc = (seconds) => player.jumpTo(Math.max(0, Number(seconds) || 0));
     window.tornadoArc = () => player.state().arc;
     window.tornadoState = () => funnelStateAt(player.state().arc, anim, CONFIG);
+    // Where the cow is and how it is holding itself right now.
+    window.tornadoCow = () => cowPoseAt(player.state().arc, CONFIG);
     // The wind at any ground point right now, for tuning the props.
     window.tornadoWind = (x, z) => windAt(x, z, funnelStateAt(player.state().arc, anim, CONFIG), CONFIG);
 }

@@ -28,7 +28,8 @@ let meadow = null;
 
 /**
  * Where the wildflowers stand: seeded, in front of the camera within a fan a
- * little wider than a landscape frame, and never in the pond.
+ * little wider than a landscape frame, never in the pond, and never where
+ * the cow lands.
  */
 export function meadowPlacements(config = TORNADO_CONFIG, mobile = false) {
     const M = config.meadow;
@@ -46,6 +47,9 @@ export function meadowPlacements(config = TORNADO_CONFIG, mobile = false) {
         const yaw = random() * Math.PI;
         const hue = M.palette[Math.floor(random() * M.palette.length)];
         if (inPond(x, z, 1.5, config)) continue;
+        // Nothing grows where the cow comes down.
+        const L = config.cow.landing;
+        if (Math.hypot(x - L.x, z - L.z) < L.clear) continue;
         out.push({ x, y: 0, z, size, yaw, hue });
     }
     return out;

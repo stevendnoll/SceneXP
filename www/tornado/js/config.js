@@ -288,5 +288,53 @@ export const TORNADO_CONFIG = Object.freeze({
         // yarrow, blue flax, Indian blanket.
         palette: [0xb05fa8, 0xf2b92a, 0xf1efe6, 0x6f86d6, 0xd8552b],
         sway: { amount: 0.22, rate: 2.1 }
+    },
+
+    // ---- The payoff: the cow (cow.js) ----------------------------------------
+    //
+    // Lifted out of the dust at the tornado's foot, carried round the edge of
+    // the debris, flung toward the camera as the tornado ropes out, and set
+    // down on all four feet among the flowers, where it looks at the visitor
+    // and chews. Every pose is a function of the story second, so a seek
+    // finds the cow exactly where an untouched watch has it.
+    //
+    // CARTOON PHYSICS, ON PURPOSE. It crosses about 1.8 km in nine seconds,
+    // far faster than anything real. At that range it reads as a speck
+    // sailing over, and the joke is the slow, gentle descent at the end.
+    cow: {
+        pickupAt: 30,             // rises out of the dust
+        flingAt: 40,              // leaves the debris as the tornado ropes out
+        hoverAt: 49,              // arrives over its landing spot, and floats down
+        landAt: 52,               // four feet on the ground
+        lookAt: 53,               // turns its head to the camera
+        orbit: {
+            radiusScale: 1.15,    // times the dust cloud's radius
+            height: 260,          // metres, once it is up
+            rate: 0.9             // radians per second round the funnel
+        },
+        // The cruise from the debris to the landing spot is a cubic curve
+        // through these two control points (x, y, z in metres). tests/tornado-cow
+        // holds the path inside the frame and above the ground.
+        cruise: [[-120, 430, -1100], [10, 70, -120]],
+        hover: 10,                // metres above the landing spot it arrives at
+        // Just right of the pond and inside a portrait phone's frame, turned
+        // a little toward the camera so its head can come round to look.
+        landing: { x: 3, z: -21, yaw: -0.45, clear: 2.2 },
+        tumbleRate: 2.2,          // radians per second while it is in the air
+        // A real cow 1.8 km away is one pixel. While it is far off it is held
+        // to this many pixels long in a 900 pixel tall frame, and it is its
+        // true size again long before it lands, so the change never shows.
+        minPixels: 7,
+        chewRate: 3.2,
+        neckLimit: 1.3,           // radians the head may turn
+        // Four grazing in the pasture right of the farm, heads down, who look
+        // up as the flying one lands. Right of the funnel, like everything.
+        pasture: [
+            { x: 44, z: -170, yaw: 0.6 },
+            { x: 58, z: -205, yaw: 2.4 },
+            { x: 72, z: -188, yaw: -1.1 },
+            { x: 88, z: -226, yaw: 1.3 }
+        ],
+        lookUpAt: 52.3            // the pasture cows look up, a beat apart
     }
 });
