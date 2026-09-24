@@ -50,6 +50,13 @@ const NAMED_BY_SCRIPT = {
   'www/garden/index.html': ['water-all'],   // garden/js/main.js sets its text
 };
 
+/** Pages whose social card carries a company logo, so .gitignore holds the
+ *  picture out of the public repository and a fresh clone (CI) has no file to
+ *  open. Where the file is present, as on the maintainer's machine, it is
+ *  checked like any other. Each card must really be git-ignored, or this list
+ *  would excuse a card somebody simply forgot to commit. */
+const WITHHELD_CARDS = ['www/interstate/index.html', 'www/seedtoseed/index.html'];
+
 // ---- Reading the pages -------------------------------------------------------
 
 async function htmlFiles(dir = 'www') {
@@ -110,6 +117,9 @@ const SCENES = PAGES.filter((p) => p.els.some((n) => n.tag === 'script'
 const metas = (page, key) => page.els
   .filter((n) => n.tag === 'meta' && (attr(n, 'name') === key || attr(n, 'property') === key))
   .map((n) => attr(n, 'content'));
+
+/** Where a page's og:image lives in the repository. */
+const cardPath = (page) => `www${new URL(metas(page, 'og:image')[0]).pathname}`;
 
 /** What a picture file is, read from its own bytes: { type, width, height },
  *  or null if it is not a JPEG, PNG or WebP. */
@@ -182,8 +192,14 @@ test('the scan finds the site, and each rule group has pages to hold', () => {
     'www/automan/index.html', 'www/garden/index.html', 'www/xo/index.html',
   ]));
   // An exemption for a page that is gone would be a rule quietly switched off.
-  [...NOT_SHARED, ...Object.keys(NAMED_BY_SCRIPT)].forEach((rel) =>
+  [...NOT_SHARED, ...Object.keys(NAMED_BY_SCRIPT), ...WITHHELD_CARDS].forEach((rel) =>
     expect(`${rel} exists: ${PAGES.some((p) => p.rel === rel)}`).toBe(`${rel} exists: true`));
+  WITHHELD_CARDS.forEach((rel) => {
+    const page = PAGES.find((p) => p.rel === rel);
+    if (!page) return;
+    const card = cardPath(page);
+    expect(`${card} is git-ignored: ${ignored([card]).has(card)}`).toBe(`${card} is git-ignored: true`);
+  });
 });
 
 // ---- Sharing -----------------------------------------------------------------
@@ -225,9 +241,13 @@ describe('sharing', () => {
   // had named assets/og-tornado.jpg since M1 and the file did not exist, and
   // nothing here noticed, because every rule above reads the tag and none
   // opens the picture. A share of that page would have shown no card at all.
-  test.each(SHARED.map((p) => [p.rel, p]))('%s: its card image is on disk, the type and size its tags say', async (_rel, page) => {
+  test.each(SHARED.map((p) => [p.rel, p]))('%s: its card image is on disk, the type and size its tags say', async (rel, page) => {
     const url = new URL(metas(page, 'og:image')[0]);
-    const file = await readFile(new URL(`www${url.pathname}`, ROOT));
+    const file = await readFile(new URL(cardPath(page), ROOT)).catch((err) => {
+      if (err.code === 'ENOENT' && WITHHELD_CARDS.includes(rel)) return null;
+      throw err;
+    });
+    if (!file) return;   // a withheld card on a fresh clone, see WITHHELD_CARDS
     const size = imageSize(file);
     expect(`${url.pathname} is a picture: ${size !== null}`).toBe(`${url.pathname} is a picture: true`);
     const [type] = metas(page, 'og:image:type');
