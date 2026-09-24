@@ -60,7 +60,8 @@ beforeAll(async () => {
         tumble: await import('../www/tornado/js/tumbleweeds.js'),
         cow: await import('../www/tornado/js/cow.js'),
         rainbow: await import('../www/tornado/js/rainbow.js'),
-        payloads: await import('../www/tornado/js/payloads.js')
+        payloads: await import('../www/tornado/js/payloads.js'),
+        witch: await import('../www/tornado/js/witch.js')
     };
 });
 
@@ -83,6 +84,7 @@ function buildScene() {
     M.cow.initCows(scene, C);
     M.rainbow.initRainbow(scene, C);
     M.payloads.initPayloads(scene, C);
+    M.witch.initWitch(scene, C);
     const at = (t) => {
         const s = F.funnelStateAt(t, t, C);
         F.applyFunnelState(shared, s);
@@ -93,6 +95,7 @@ function buildScene() {
         M.cow.updateCows(t, C, true);
         M.payloads.updatePayloads(t, 'cow', C);
         M.rainbow.updateRainbow(t, C);
+        M.witch.updateWitch(t, C);
         scene.updateMatrixWorld(true);
     };
     return { scene, at };

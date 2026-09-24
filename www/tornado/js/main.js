@@ -44,6 +44,7 @@ import {
     PAYLOADS, nextPayload, payloadLine, initPayloads, updatePayloads, surprisePoseAt
 } from './payloads.min.js';
 import { initTumbleweeds, updateTumbleweeds } from './tumbleweeds.min.js';
+import { initWitch, updateWitch, witchPoseAt } from './witch.min.js';
 import { createNarrator } from './narration.min.js';
 import { isQaHost, qaOptions, fpsOf, statsLines } from './perf.min.js';
 
@@ -157,6 +158,7 @@ export function drawFrame(delta, arc, info = {}) {
     updatePond(windAt(CONFIG.pond.x, CONFIG.pond.z, state, CONFIG), anim, CONFIG);
     updateFlora(state, anim, motion, CONFIG);
     updateTumbleweeds(arc, CONFIG);
+    updateWitch(arc, CONFIG, motion);
     reached = Math.max(reached, arc);
     updateCows(arc, CONFIG, payload === 'cow');
     updatePayloads(arc, payload, CONFIG);
@@ -270,6 +272,8 @@ async function init() {
     initFlora(scene, CONFIG, { mobile });
     // Tumbleweeds, drawn in by the inflow.
     initTumbleweeds(scene, CONFIG);
+    // And a witch on a broomstick, once round the funnel (witch.js).
+    initWitch(scene, CONFIG);
     // The payoffs.
     initCows(scene, CONFIG);
     initRainbow(scene, CONFIG);
@@ -363,6 +367,8 @@ function installTuningAids() {
     window.tornadoPayloadPose = () => (payload === 'cow'
         ? cowPoseAt(player.state().arc, CONFIG)
         : surprisePoseAt(payload, player.state().arc, CONFIG));
+    // Where the witch is and which way she faces right now.
+    window.tornadoWitch = () => witchPoseAt(player.state().arc, CONFIG);
     // The wind at any ground point right now, for tuning the props.
     window.tornadoWind = (x, z) => windAt(x, z, funnelStateAt(player.state().arc, anim, CONFIG), CONFIG);
     // THE PERFORMANCE PASS (M7). What the adaptive resolution has settled on

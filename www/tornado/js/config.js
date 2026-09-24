@@ -66,7 +66,10 @@ export const TORNADO_CONFIG = Object.freeze({
     narration: {
         beats: [
             { at: 1, text: 'A storm is organizing on the horizon, and its base is starting to turn.' },
-            { at: 4.5, text: 'A tornado touches down far out across the fields.' },
+            // The witch (config.witch) flies through between this beat and
+            // the next, too close to either for a beat of her own, so she
+            // rides on this one, which is spoken while she is on screen.
+            { at: 4.5, text: 'A tornado touches down far out across the fields, and a witch on a broomstick sweeps once around it.' },
             { at: 8.5, text: 'Something has been lifted into the storm, and it is circling the funnel.' },
             { at: 14.8, text: 'The tornado thins into a long rope.' },
             { at: 20.5, text: 'The rope breaks up, and the storm begins to move on.' },
@@ -428,6 +431,27 @@ export const TORNADO_CONFIG = Object.freeze({
     // the story as a dot at the foot of the farmyard oak or under the
     // farmhouse. (The swallows and the prairie dog built beside them were
     // taken out after QA, 2026-09-23.)
+    // THE WITCH (witch.js, 2026-09-24): a nod to the most famous tornado in
+    // film, as a silhouette. Every watch: in from the left as the first
+    // tumbleweed rolls, once round the funnel's upper trunk as it touches
+    // down, and off to the right before the cow rises at cow.pickupAt.
+    witch: {
+        length: 60,               // metres, bristles to tip: about 40 px on a phone
+        height: 480,              // the loop, metres up: under the dark wall cloud
+        radius: 170,              // metres from the funnel's axis
+        enterAt: 3.2,             // the run in starts, off the left of a wide frame
+        loopAt: 5.0,              // the circle starts, in front of the funnel
+        loopSeconds: 2.4,         // once round
+        lead: 1300,               // metres of straight run in, and run out
+        drop: 60,                 // metres she swoops down on the way in
+        rise: 120,                // and climbs on the way out
+        bank: 0.45,               // radians, leaning into the turn
+        flap: 0.35,               // the cape, radians
+        flapRate: 16,             // radians per second
+        color: 0x16141a,
+        broomColor: 0x2b1f14
+    },
+
     tumbleweeds: {
         radius: 0.45,
         speed: 10,                // m/s in the full inflow
