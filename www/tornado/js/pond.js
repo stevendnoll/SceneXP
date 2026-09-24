@@ -38,6 +38,7 @@ uniform vec2 uCenter;
 uniform vec2 uRadii;
 uniform float uTime;
 uniform vec2 uWind;
+uniform vec2 uDrift;
 uniform float uRipple;
 uniform float uRippleScale;
 uniform vec3 uHorizon;
@@ -67,8 +68,8 @@ void main() {
     float r = length(local);
     if (r > 1.0) discard;
 
-    // Ripples drift downwind.
-    vec2 p = vW.xz - uWind * uTime * 0.8;
+    // Ripples drift downwind, by as far as they have drifted so far.
+    vec2 p = vW.xz - uDrift;
     vec3 n = rippleNormal(p, uTime);
     vec3 eye = normalize(vW - cameraPosition);
     vec3 refl = reflect(eye, n);
@@ -93,6 +94,8 @@ void main() {
 const v3 = (c) => new THREE.Vector3(c[0], c[1], c[2]);
 
 let pond = null;
+// The animation clock the ripples' drift has been added up to.
+let driftClock = null;
 
 /** How rough the water is in a wind of `speed`. */
 export function rippleFor(speed, config = TORNADO_CONFIG) {
@@ -102,6 +105,7 @@ export function rippleFor(speed, config = TORNADO_CONFIG) {
 export function initPond(scene, config = TORNADO_CONFIG) {
     const P = config.pond;
     const C = config.colors;
+    driftClock = null;
     const geometry = new THREE.PlaneGeometry(P.radiusX * 2, P.radiusZ * 2, 1, 1);
     geometry.rotateX(-Math.PI / 2);
     pond = new THREE.Mesh(geometry, new THREE.ShaderMaterial({
@@ -112,6 +116,7 @@ export function initPond(scene, config = TORNADO_CONFIG) {
             uRadii: { value: new THREE.Vector2(P.radiusX, P.radiusZ) },
             uTime: { value: 0 },
             uWind: { value: new THREE.Vector2() },
+            uDrift: { value: new THREE.Vector2() },
             uRipple: { value: P.ripple },
             uRippleScale: { value: P.rippleScale },
             uHorizon: { value: v3(C.horizon) },
@@ -133,10 +138,24 @@ export function initPond(scene, config = TORNADO_CONFIG) {
     return pond;
 }
 
-/** This frame's wind at the pond ({ x, z, speed }) and the clock. */
+/** How far the ripples drift per second in a wind of 1, metres. */
+export const DRIFT_RATE = 0.8;
+
+/**
+ * This frame's wind at the pond ({ x, z, speed }) and the clock.
+ *
+ * THE DRIFT IS ADDED UP A FRAME AT A TIME, like the storm base's turn
+ * (world.js baseSpinRate). It used to be the wind times the clock, so as the
+ * inflow died away (19 to 24 s) the whole pattern slid back across the water
+ * at once, and further on every replay.
+ */
 export function updatePond(wind, time, config = TORNADO_CONFIG) {
     if (!pond) return;
     const u = pond.material.uniforms;
+    const step = driftClock === null ? 0 : Math.min(Math.max(time - driftClock, 0), 0.25);
+    driftClock = time;
+    u.uDrift.value.x += wind.x * DRIFT_RATE * step;
+    u.uDrift.value.y += wind.z * DRIFT_RATE * step;
     u.uTime.value = time;
     u.uWind.value.set(wind.x, wind.z);
     u.uRipple.value = rippleFor(wind.speed, config);

@@ -102,12 +102,15 @@ uniform vec3 uOuter;
 uniform vec3 uFunnelTop;
 uniform float uTime;
 uniform float uWall;
+uniform float uSpin;
 varying vec3 vW;
 void main() {
     vec2 rel = vW.xz - uFunnelTop.xz;
     float r = length(rel);
-    // Slow rotation about the funnel, faster close in: the mesocyclone.
-    float spin = uTime * (0.05 + 0.25 * uWall) * 2200.0 / (r + 1400.0);
+    // Slow rotation about the funnel, faster close in: the mesocyclone. The
+    // turn so far comes in whole (see baseSpinRate), never as a time times
+    // a rate that changes.
+    float spin = uSpin * 2200.0 / (r + 1400.0);
     float cs = cos(spin);
     float sn = sin(spin);
     vec2 p = vec2(cs * rel.x - sn * rel.y, sn * rel.x + cs * rel.y);
@@ -240,6 +243,8 @@ export function initWorld(scene, config = TORNADO_CONFIG) {
     const S = config.storm;
     const haze = { uHaze: { value: v3(C.haze) }, uVisibility: { value: config.visibility } };
     const L = config.lightning;
+    baseSpin = 0;
+    baseSpinClock = null;
     flash = {
         uFlash: { value: 0 },
         uFlashDir: { value: new THREE.Vector3(0, 1, 0) },
@@ -274,7 +279,8 @@ export function initWorld(scene, config = TORNADO_CONFIG) {
             uOuter: { value: v3(C.baseOuter) },
             uFunnelTop: { value: new THREE.Vector3() },
             uTime: { value: 0 },
-            uWall: { value: 0 }
+            uWall: { value: 0 },
+            uSpin: { value: 0 }
         },
         side: THREE.DoubleSide,
         transparent: true,
@@ -337,6 +343,27 @@ export function initWorld(scene, config = TORNADO_CONFIG) {
     dummy.scale = new THREE.Vector3();
 }
 
+/**
+ * How fast the storm base turns, radians per second of the animation clock,
+ * with the wall cloud at `wall` (0 to 1): faster while the storm is
+ * organized under it.
+ *
+ * THE TURN IS ADDED UP A FRAME AT A TIME, never worked out as the clock times
+ * this rate. It used to be (uTime * rate in the shader), and since the rate
+ * falls as the wall cloud draws in (20 to 24.5 s), every second the clock had
+ * run was repriced at once: the whole base whipped backward just as the
+ * rainbow came out (QA 2026-09-23), and faster on every replay, since the
+ * animation clock keeps running. Added up, a change of rate changes only how
+ * fast it turns from then on.
+ */
+export function baseSpinRate(wall) {
+    return 0.05 + 0.25 * wall;
+}
+
+/** The storm base's turn so far, and the animation clock it was added up to. */
+let baseSpin = 0;
+let baseSpinClock = null;
+
 /** Move everything to this moment. `showDebris` false hides the chunks. */
 export function updateWorld(state, showDebris, config = TORNADO_CONFIG) {
     const S = config.storm;
@@ -346,6 +373,11 @@ export function updateWorld(state, showDebris, config = TORNADO_CONFIG) {
     base.material.uniforms.uFunnelTop.value.set(top.x, S.baseHeight, top.z);
     base.material.uniforms.uTime.value = state.anim;
     base.material.uniforms.uWall.value = state.wall;
+    // A frame's worth, at most a quarter second as the page's frame clamps it.
+    const step = baseSpinClock === null ? 0 : Math.min(Math.max(state.anim - baseSpinClock, 0), 0.25);
+    baseSpinClock = state.anim;
+    baseSpin += step * baseSpinRate(state.wall);
+    base.material.uniforms.uSpin.value = baseSpin;
 
     // The lathe's y runs 0 (top) to -1 (underside), scaled to the drop, and
     // tucked 20 m up into the base so its top edge never shows.

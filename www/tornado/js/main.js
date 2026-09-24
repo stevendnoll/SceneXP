@@ -43,6 +43,7 @@ import { initRainbow, updateRainbow } from './rainbow.min.js';
 import {
     PAYLOADS, nextPayload, payloadLine, initPayloads, updatePayloads, surprisePoseAt
 } from './payloads.min.js';
+import { initTumbleweeds, updateTumbleweeds } from './tumbleweeds.min.js';
 
 let renderer = null;
 let scene = null;
@@ -143,6 +144,7 @@ export function drawFrame(delta, arc) {
     updateFarm(windAt(W.x, W.z, state, CONFIG), delta * motion, CONFIG);
     updatePond(windAt(CONFIG.pond.x, CONFIG.pond.z, state, CONFIG), anim, CONFIG);
     updateFlora(state, anim, motion, CONFIG);
+    updateTumbleweeds(arc, CONFIG);
     reached = Math.max(reached, arc);
     updateCows(arc, CONFIG, payload === 'cow');
     updatePayloads(arc, payload, CONFIG);
@@ -209,6 +211,8 @@ async function init() {
     initFarm(scene, CONFIG);
     initPond(scene, CONFIG);
     initFlora(scene, CONFIG, { mobile });
+    // Tumbleweeds, drawn in by the inflow.
+    initTumbleweeds(scene, CONFIG);
     // The payoffs.
     initCows(scene, CONFIG);
     initRainbow(scene, CONFIG);

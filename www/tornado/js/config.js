@@ -387,6 +387,30 @@ export const TORNADO_CONFIG = Object.freeze({
         line: 'The storm has moved on. The cow is fine.'
     },
 
+    // ---- Tumbleweeds (tumbleweeds.js) -----------------------------------------
+    //
+    // Drawn in by the inflow. Each rolls in from behind the camera on the
+    // right, keeps right of the pond, hops the fence, and runs on toward the
+    // tornado, fading into the storm's haze. Their speed follows the inflow,
+    // so they slow as it dies. They fade rather than roll on out of sight: a
+    // tumbleweed left where the inflow dropped it would sit for the rest of
+    // the story as a dot at the foot of the farmyard oak or under the
+    // farmhouse. (The swallows and the prairie dog built beside them were
+    // taken out after QA, 2026-09-23.)
+    tumbleweeds: {
+        radius: 0.45,
+        speed: 10,                // m/s in the full inflow
+        hop: 0.22,                // metres, each bounce at full speed
+        hopLength: 2.6,           // metres rolled per bounce
+        fenceHop: 1.5,            // over the top wire
+        fade: { from: 100, to: 150 },   // metres from the camera
+        list: [
+            // A quadratic curve to the fence, then straight at the storm.
+            { from: [8, -5], via: [13, -45], fence: [5, -95], startAt: 4.2 },
+            { from: [10, -4], via: [15, -50], fence: [7, -95], startAt: 6.5 }
+        ]
+    },
+
     // ---- Replay surprises (payloads.js) --------------------------------------
     //
     // THE FIRST WATCH IS ALWAYS THE COW: it is the headline. Each replay
