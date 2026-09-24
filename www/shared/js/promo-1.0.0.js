@@ -50,6 +50,7 @@
  *  `art` carries the home page's own cache-busting query string verbatim, so a
  *  visitor who has seen the directory already has the file. */
 export const EXPERIENCES = Object.freeze([
+    { slug: 'tornado', category: 'worlds', title: 'Tornado Alley', line: "A storm chaser's view of a tornado", art: '/tornado/assets/og-tornado.webp?v=1' },
     { slug: 'xo', category: 'worlds', title: "X's and O's", line: 'A football game where you call the plays', art: '/xo/assets/og-xo.webp?v=1' },
     { slug: 'garden', category: 'worlds', title: 'Fractal Garden', line: 'A garden you plant and tend yourself', art: '/garden/assets/og-garden.webp?v=3' },
     { slug: 'highwater', category: 'worlds', title: 'High Water', line: 'A study of water and weather', art: '/highwater/assets/og-highwater.webp?v=1' },

@@ -115,6 +115,7 @@ const SCENE_LABELS = {
     seedtoseed: 'The Seed to Seed Garden',
     steve: "Steve's Home Office",
     sunnyvalejenn: 'Sunnyvale Jenn Consulting',
+    tornado: 'Tornado Alley',
     xo: "X's and O's",
 };
 

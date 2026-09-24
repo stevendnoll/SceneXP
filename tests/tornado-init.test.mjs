@@ -2,15 +2,15 @@
 /**
  * Integration smoke for Tornado Alley, plus the page furniture.
  *
- * Three parts. The scene builds and walks its whole minute under the THREE
+ * Three parts. The scene builds and walks its whole story under the THREE
  * stub, so a missing import or a throw at second forty fails here rather than
  * on the live site. main.js boots under the DOM stub and hands its picture to
  * the shared player. And the page carries what a share, a crawler and the
  * player need, which is the half High Water's init suite showed is worth
  * asserting because nobody looks at it in a browser.
  *
- * UNRELEASED (M1, 2026-09-23): the page must carry noindex until M8. That
- * rule lives in tests/directory.test.mjs, beside the list that exempts it.
+ * Released 2026-09-23: its card, sitemap line and llms.txt line are held by
+ * tests/directory.test.mjs with every other experience's.
  */
 import { jest } from '@jest/globals';
 import { readFile } from 'node:fs/promises';
@@ -28,7 +28,7 @@ describe('the whole storm builds without a browser', () => {
     });
     afterEach(() => { uninstallAll(); });
 
-    test('world and funnel initialize and walk the whole minute', async () => {
+    test('world and funnel initialize and walk the whole story', async () => {
         jest.resetModules();
         // The BUILT modules, as main.js loads them. This is why `npm run build`
         // runs before `npm test`.
@@ -164,9 +164,11 @@ describe('the page carries what a share, a crawler and the player need', () => {
     test('the welcome card says what is coming before anybody presses Begin', () => {
         const warning = html.match(/<p class="warning">([\s\S]*?)<\/p>/);
         expect(warning).not.toBeNull();
-        expect(warning[1]).toMatch(/tornado/);
-        expect(warning[1]).toMatch(/Nobody is in its path/);
-        expect(warning[1]).toMatch(/lightning/);
-        expect(warning[1]).toMatch(/without sound/);
+        // As a reader sees it: a line break in the source is only a space.
+        const text = warning[1].replace(/\s+/g, ' ');
+        expect(text).toMatch(/tornado/);
+        expect(text).toMatch(/Nobody is in its path/);
+        expect(text).toMatch(/lightning/);
+        expect(text).toMatch(/without sound/);
     });
 });

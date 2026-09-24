@@ -3,16 +3,15 @@
  * main.js - Tornado Alley.
  *
  * Thirty seconds on the open prairie: a calm evening, a storm organizing on the
- * horizon, a tornado forming, crossing the fields and roping out, and the sky
- * clearing. A timed story, the second after High Water, and the first built
+ * horizon, a tornado touching down far out across the fields and roping out,
+ * and a cow (or something else, on a replay) coming down under a rainbow. A
+ * timed story, the second after High Water, and the first built
  * on the shared player (shared/js/player-1.0.0.js), which owns the welcome
  * card, the pause card, the scrubber, the fade, the ending and the usage
  * events. This file owns only the picture.
  *
- * UNRELEASED (M1, 2026-09-23). The page carries `noindex` and is on the
- * UNRELEASED list in tests/directory.test.mjs, so it is kept off the home
- * page, the sitemap and llms.txt until M8. See config.js for what is real
- * and what is a stand-in.
+ * RELEASED 2026-09-23 (M8): on the home page, in the sitemap and llms.txt,
+ * and indexable. See config.js for how the look came to be what it is.
  *
  * THE STORY CLOCK AND THE ANIMATION CLOCK ARE DIFFERENT CLOCKS. The player's
  * arc decides what the storm is doing, and every piece of the tornado is a

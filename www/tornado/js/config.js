@@ -6,19 +6,19 @@
  * prairie, from a calm evening through a tornado's whole life to a clearing
  * sky. The plan is specs/twister/PRD.md (git-ignored, Steve's copy).
  *
- * WHERE THIS STANDS (M1, 2026-09-23). The page, the player and the funnel are
- * real. The funnel is technique A from the M0 spike, stacked shells, which
- * Steve chose over a raymarched volume after QA round 1. Everything around it
- * (the sky, the storm base, the wall cloud, the prairie, the debris) is the
- * spike's stand-in, kept only so the funnel is judged against the right kind
- * of backdrop, and is replaced in M2 (sky and supercell) and M3 (ground and
- * farm). There is no cow yet (M6) and no lightning (M5).
+ * WHERE THIS STANDS (released 2026-09-23). The funnel is technique A from the
+ * M0 spike, stacked shells, which Steve chose over a raymarched volume. The
+ * sky, the storm base, the wall cloud and the ground (world.js) began as the
+ * spike's stand-in, and Steve approved that look at M1 and kept it: a rework
+ * of the sky (M2) and a cloud break at the ending were both tried and turned
+ * down. Everything since was added on top of it: the farm, the pond, the
+ * trees and flowers, the cow and the replay surprises, the rainbow, the
+ * lightning and the tumbleweeds.
  *
  * COLOURS ARE DISPLAY VALUES. Every shader writes its colour straight to the
  * screen with no tone mapping and no sRGB encode, so a number here is what
- * appears. That was the spike's choice and it holds for now. Whether the
- * scene keeps it or moves to High Water's ACES pipeline is decided in M2,
- * before any colour is tuned for real.
+ * appears. That was the spike's choice, and the approved look is built on
+ * it.
  *
  * COORDINATES. Metres. The camera stands at the origin looking down -z
  * (east), so +x is to the right (south) and +z is behind the camera (west,
@@ -110,7 +110,7 @@ export const TORNADO_CONFIG = Object.freeze({
         // 2026-09-23, tornado-5).
         wall: [[0.3, 0], [2.5, 1], [20, 1], [23.5, 0.5], [24.5, 0]],
         // How far down from the wall cloud the condensation funnel reaches.
-        // Gone by 23.5, so the payoff plays under a clearing sky.
+        // Gone by 23.5, so the payoff plays once the storm has moved on.
         extent: [[2, 0], [3, 0.12], [5.5, 1], [20.5, 1], [23.5, 0]],
         // The ground dust whirl comes BEFORE the funnel connects.
         dust: [[2.5, 0], [4, 0.35], [6.5, 1], [17, 0.9], [20.5, 0.35], [23.5, 0]],

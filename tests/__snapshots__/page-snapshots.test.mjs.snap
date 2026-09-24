@@ -2355,36 +2355,42 @@ html [lang="en"]
               {
                 "@type": "ListItem",
                 "position": 1,
+                "url": "https://www.scenexp.com/tornado/",
+                "name": "Tornado Alley"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
                 "url": "https://www.scenexp.com/xo/",
                 "name": "X's and O's"
               },
               {
                 "@type": "ListItem",
-                "position": 2,
+                "position": 3,
                 "url": "https://www.scenexp.com/garden/",
                 "name": "Fractal Garden"
               },
               {
                 "@type": "ListItem",
-                "position": 3,
+                "position": 4,
                 "url": "https://www.scenexp.com/highwater/",
                 "name": "High Water"
               },
               {
                 "@type": "ListItem",
-                "position": 4,
+                "position": 5,
                 "url": "https://www.scenexp.com/earthdefense/",
                 "name": "Earth Defense"
               },
               {
                 "@type": "ListItem",
-                "position": 5,
+                "position": 6,
                 "url": "https://www.scenexp.com/mandelbrot/",
                 "name": "The Mandelbrot Set"
               },
               {
                 "@type": "ListItem",
-                "position": 6,
+                "position": 7,
                 "url": "https://www.scenexp.com/steve/",
                 "name": "Steve's Home Office"
               }
@@ -2520,9 +2526,21 @@ html [lang="en"]
             h2#worlds-and-games
               "Worlds and games"
             ul.experience-grid
+              li.experience-card [data-slug="tornado"]
+                a [href="/tornado/"]
+                  img [alt="A pale tornado reaching down from a dark, turning storm base to a cloud of dust and flying debris, just left of a small farm with a red barn, across golden fields with wildflowers in the foreground." decoding="async" fetchpriority="high" height="630" loading="eager" src="/tornado/assets/og-tornado.webp?v=1" width="1200"]
+                  div.experience-card-body
+                    p.experience-eyebrow
+                      "A storm chaser's view of a tornado"
+                    h3
+                      "Tornado Alley"
+                    p
+                      "Thirty seconds on the open prairie, beginning on a calm summer evening. A storm organizes on the horizon, its base begins to turn, and a tornado touches down far out across the fields. Nobody is in its path, though it does pick a few things up along the way."
+                    span.experience-cta
+                      "Watch the storm roll in →"
               li.experience-card [data-slug="xo"]
                 a [href="/xo/"]
-                  img [alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." decoding="async" fetchpriority="high" height="630" loading="eager" src="/xo/assets/og-xo.webp?v=1" width="1200"]
+                  img [alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." decoding="async" height="630" loading="lazy" src="/xo/assets/og-xo.webp?v=1" width="1200"]
                   div.experience-card-body
                     p.experience-eyebrow
                       "A football game where you call the plays"
@@ -4844,8 +4862,7 @@ html [data-ui-theme="surf" lang="en"]
     meta [content="width=device-width, initial-scale=1.0" name="viewport"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
-    meta [content="noindex, nofollow" name="robots"]
-    meta [content="Thirty seconds on the open prairie in 3D, beginning on a calm summer evening. A storm builds on the horizon, a tornado forms and crosses the fields, and then the sky clears. Plays without sound in any modern browser." name="description"]
+    meta [content="Thirty seconds on the open prairie in 3D, beginning on a calm summer evening. A storm builds on the horizon, a tornado touches down far out across the fields, and then the storm moves on. Plays without sound in any modern browser." name="description"]
     meta [content="#3a4049" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/tornado/" rel="canonical"]
@@ -4859,12 +4876,12 @@ html [data-ui-theme="surf" lang="en"]
     meta [content="image/jpeg" property="og:image:type"]
     meta [content="1200" property="og:image:width"]
     meta [content="630" property="og:image:height"]
-    meta [content="A tornado seen across a golden prairie under a dark, slowly turning storm base, with a bright band of sky along the horizon." property="og:image:alt"]
+    meta [content="A tornado on the open prairie under a dark, turning storm base. A pale funnel reaches down to a cloud of brown dust and flying debris just left of a small farm with a white house, a red barn and a gray silo. A wire fence crosses golden fields beyond a pond, and wildflowers fill the foreground." property="og:image:alt"]
     meta [content="summary_large_image" name="twitter:card"]
     meta [content="Tornado Alley" name="twitter:title"]
     meta [content="Thirty seconds on the open prairie, beginning on a calm summer evening, as a storm builds on the horizon." name="twitter:description"]
     meta [content="https://www.scenexp.com/tornado/assets/og-tornado.jpg?v=1" name="twitter:image"]
-    meta [content="A tornado seen across a golden prairie under a dark, slowly turning storm base, with a bright band of sky along the horizon." name="twitter:image:alt"]
+    meta [content="A tornado on the open prairie under a dark, turning storm base. A pale funnel reaches down to a cloud of brown dust and flying debris just left of a small farm with a white house, a red barn and a gray silo. A wire fence crosses golden fields beyond a pond, and wildflowers fill the foreground." name="twitter:image:alt"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
@@ -4872,7 +4889,7 @@ html [data-ui-theme="surf" lang="en"]
         "@id": "https://www.scenexp.com/tornado/#website",
         "url": "https://www.scenexp.com/tornado/",
         "name": "Tornado Alley",
-        "description": "A passive 3D scene on the open prairie. Thirty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end under a clearing sky.",
+        "description": "A passive 3D scene on the open prairie. Thirty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end as the storm moves on.",
         "inLanguage": "en-US"
       }
     title
@@ -4893,7 +4910,7 @@ html [data-ui-theme="surf" lang="en"]
         h1
           "Tornado Alley"
         p
-          "This is a passive 3D scene on the open prairie, and it needs JavaScript to draw. It runs for thirty seconds and begins on a calm summer evening, with golden light on the wheat and a storm standing on the horizon. Then the storm organizes. Its base lowers and begins to turn, a funnel reaches down to meet the dust rising off the fields, and a tornado crosses the pasture before it thins into a rope and lets go."
+          "This is a passive 3D scene on the open prairie, and it needs JavaScript to draw. It runs for thirty seconds and begins on a calm summer evening, with golden light on the wheat and a storm standing on the horizon. Then the storm organizes. Its base lowers and begins to turn, a funnel reaches down to meet the dust rising off the fields, and a tornado stands far out on the plains before it thins into a rope and lets go."
         p
           "Nobody is in its path. There is lightning, so the screen flashes from time to time. It plays without sound, so you are welcome to watch it anywhere, and you can watch it again as many times as you wish."
         p
@@ -4916,7 +4933,7 @@ html [data-ui-theme="surf" lang="en"]
         p.lede
           "Thirty seconds on the open prairie, beginning on a calm summer evening."
         p.warning
-          "A storm builds on the horizon, and a tornado forms, crosses the fields, and moves on. Nobody is in its path. There is lightning, so the screen flashes from time to time. It plays without sound, so you are welcome to watch it anywhere."
+          "A storm builds on the horizon, and a tornado touches down far out across the fields, then thins and lets go. Nobody is in its path. There is lightning, so the screen flashes from time to time. It plays without sound, so you are welcome to watch it anywhere."
         button#player-begin.player-btn.player-btn-primary [type="button"]
           "Begin"
         div#player-pause-actions.player-actions [hidden]
