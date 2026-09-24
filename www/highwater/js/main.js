@@ -75,6 +75,10 @@ import {
     escapeAction, isEditable, seekTarget, keySeekTarget, clockLabel, valueText,
     progressPercent, mayIdle, lightningAllowed
 } from './controls.min.js';
+import { createNarrator } from '../../shared/js/narration-1.0.0.min.js';
+
+// The story told to a screen reader, beat by beat (config.narration).
+let narrator = null;
 
 const state = {
     running: false,
@@ -345,6 +349,9 @@ function loop(now) {
         // tsunami they never saw.
         reportStage();
     }
+    // Every frame, so it keeps its place quietly behind the card, under a drag
+    // and across a seek, and speaks only as the story plays into a beat.
+    if (narrator) narrator.update(state.arc, { begun: state.begun, scrubbing: ui.scrubbing });
 
     // THE ARC IS READ BEFORE ANYTHING IS DRAWN, and the water level under the
     // camera is read from the SEA rather than from the arc, so the white-out can
@@ -462,7 +469,7 @@ function paintOverlay(washAmount, fade) {
  *  it carries the content warning, which this scene owes anybody who opens it,
  *  and it stops a sixty second story running while the visitor is still reading
  *  the page. */
-function beginArc() {
+function beginArc(fromKeyboard = false) {
     if (state.begun) return;
     state.begun = true;
     // THE CONVERSION ON THE CONTENT WARNING, which is the one number this card
@@ -478,6 +485,10 @@ function beginArc() {
     track('begin-watching', { reduced: prefersReducedMotion() ? 1 : 0 });
     hideCard();
     showControls();
+    // THE BUTTON HIDES WITH ITS CARD, so a keyboard visitor's focus has to go
+    // somewhere or it is left on nothing: to the pause button, where Resume,
+    // Restart and Replay already send it (accessibility pass, 2026-09-23).
+    placeFocus(fromKeyboard);
 }
 
 /** Put the welcome card up again, as the pause card.
@@ -1028,6 +1039,7 @@ async function init() {
     setProofHash(proof && proof.hash);
     buildRenderer();
     buildScene();
+    narrator = createNarrator(document.getElementById('story-status'), OCEAN_CONFIG.narration);
     // The camera comes before the sky because the dome is centred on the eye
     // rather than on the world origin. See the note in sky.js: a dome at the
     // origin puts its equator a degree and a half below the horizon the visitor
@@ -1086,7 +1098,8 @@ async function init() {
 
     const beginBtn = document.getElementById('begin');
     if (beginBtn) {
-        beginBtn.addEventListener('click', beginArc);
+        // `detail` is 0 for a click the keyboard made.
+        beginBtn.addEventListener('click', (event) => beginArc(event.detail === 0));
     } else {
         // No card on the page, so nothing is holding the story back. This is the
         // path the old scaffold took and the one a stripped-down embed would

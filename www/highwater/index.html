@@ -167,6 +167,12 @@
     <canvas id="scene" aria-label="A view out to sea from the water's edge, with waves breaking toward you"
         role="img"></canvas>
 
+    <!-- The story, told to a screen reader one beat at a time as it plays
+         (config.narration, through shared/js/narration-1.0.0.js). Polite, so
+         it waits its turn, and only while the story plays into a beat: never
+         behind the welcome card, under a drag, or across a seek. -->
+    <p id="story-status" class="sr-only" role="status" aria-live="polite"></p>
+
     <!-- NO HOME BUTTON (2026-09-07). It came out with the rest of the site's
          Home chrome: visitors read it as "reset this view", tapped it, and
          left from the directory rather than coming back. The way to the

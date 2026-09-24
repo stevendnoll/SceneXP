@@ -56,6 +56,25 @@ export const TORNADO_CONFIG = Object.freeze({
         ]
     },
 
+    // WHAT A SCREEN READER HEARS (narration.js): one short sentence per beat,
+    // in a polite live region, as the story reaches it. Without these the
+    // story is thirty seconds of silence between the welcome card and "The
+    // cow is fine" (accessibility pass, 2026-09-23). Spaced three and a half
+    // seconds or more apart, so each can be read before the next arrives.
+    // `landed: true` is the landing, told for whatever this run carried
+    // (config.cow.landed, or config.payloads[name].landed), with the rainbow.
+    narration: {
+        beats: [
+            { at: 1, text: 'A storm is organizing on the horizon, and its base is starting to turn.' },
+            { at: 4.5, text: 'A tornado touches down far out across the fields.' },
+            { at: 8.5, text: 'Something has been lifted into the storm, and it is circling the funnel.' },
+            { at: 14.8, text: 'The tornado thins into a long rope.' },
+            { at: 20.5, text: 'The rope breaks up, and the storm begins to move on.' },
+            { at: 24.2, landed: true }
+        ],
+        rainbow: 'A double rainbow comes out.'
+    },
+
     // The player's timings. High Water's, which Steve QA'd on 2026-09-23.
     controls: {
         idleSeconds: 3,
@@ -384,7 +403,9 @@ export const TORNADO_CONFIG = Object.freeze({
         lookUpAt: 24.3,           // the pasture cows look up, a beat apart
         // The ending card's punch line (Steve's call, 2026-09-23), which the
         // page also carries as its default. A surprise has its own.
-        line: 'The storm has moved on. The cow is fine.'
+        line: 'The storm has moved on. The cow is fine.',
+        // What a screen reader hears as it lands (config.narration).
+        landed: 'A cow drifts down out of the sky and lands gently among the herd.'
     },
 
     // ---- Tumbleweeds (tumbleweeds.js) -----------------------------------------
@@ -443,7 +464,8 @@ export const TORNADO_CONFIG = Object.freeze({
             length: 1.0,
             sink: 0.12,                       // metres its legs go in
             wobble: { amount: 0.32, rate: 9, decay: 0.9 },
-            line: 'The storm has moved on. The flamingo is fine, and has found a new lawn.'
+            line: 'The storm has moved on. The flamingo is fine, and has found a new lawn.',
+            landed: 'A plastic lawn flamingo drops out of the sky and lands upright in the flowers.'
         },
         outhouse: {
             // Lands with a thump, door banging in the flight, then the door
@@ -457,7 +479,8 @@ export const TORNADO_CONFIG = Object.freeze({
             hop: { height: 0.25, seconds: 0.35 },
             wobble: { amount: 0.1, rate: 10, decay: 0.5 },
             door: { opensAt: 1.1, seconds: 1.6, open: 1.9 },
-            line: 'The storm has moved on. The outhouse is fine, and nobody was inside.'
+            line: 'The storm has moved on. The outhouse is fine, and nobody was inside.',
+            landed: 'An outhouse drops out of the sky and lands with a thump. Its door creaks open.'
         },
         trampoline: {
             // Spins flat through the air like a flying disc, then lands and
@@ -471,7 +494,8 @@ export const TORNADO_CONFIG = Object.freeze({
             length: 3.7,
             spin: 7,                          // radians per second in the air
             bounce: { speed: 5.5, restitution: 0.5, stop: 0.6 },
-            line: 'The storm has moved on. The trampoline is fine, and seems to have enjoyed itself.'
+            line: 'The storm has moved on. The trampoline is fine, and seems to have enjoyed itself.',
+            landed: 'A trampoline comes spinning out of the sky and bounces to a stop.'
         },
         mailbox: {
             // Spiked in on its post among the flowers, a stiff wobble, and
@@ -483,7 +507,8 @@ export const TORNADO_CONFIG = Object.freeze({
             sink: 0.18,
             wobble: { amount: 0.22, rate: 12, decay: 0.6 },
             flag: { upAt: 1.3, seconds: 0.35 },
-            line: 'The storm has moved on. The mailbox is fine, and it seems you have mail.'
+            line: 'The storm has moved on. The mailbox is fine, and it seems you have mail.',
+            landed: 'A mailbox drops out of the sky and lands upright in the flowers. Its flag goes up.'
         },
         // The contact shadow under each: strongest on the ground, gone by
         // `height` metres up.

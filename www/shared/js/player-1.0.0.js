@@ -328,13 +328,18 @@ export function createPlayer(options = {}) {
 
     // ---- The story -----------------------------------------------------------
 
-    function begin() {
+    /** Begin, from a click or (fromKeyboard) Enter or Space on the button.
+     *  THE BUTTON HIDES WITH ITS CARD, so a keyboard visitor's focus has to go
+     *  somewhere or it is left on nothing: to the pause button, as Resume,
+     *  Restart and Replay already send it (accessibility pass, 2026-09-23). */
+    function begin(fromKeyboard = false) {
         if (st.begun) return;
         st.begun = true;
         watch = 1;
         track('begin-watching', { reduced: opts.reducedMotion ? 1 : 0 });
         hideCard();
         showControls();
+        placeFocus(fromKeyboard);
     }
 
     function finish() {
@@ -669,7 +674,7 @@ export function createPlayer(options = {}) {
         on(window, 'resize', () => { if (st.paused) redrawSoon(); }, { passive: true });
         on(document, 'visibilitychange', onVisibility);
 
-        if (el.begin) on(el.begin, 'click', begin);
+        if (el.begin) on(el.begin, 'click', (event) => begin(event.detail === 0));
         else begin();
         return api;
     }

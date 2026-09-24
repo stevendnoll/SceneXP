@@ -2249,6 +2249,7 @@ html [data-ui-theme="surf" lang="en"]
               a [href="/privacy.html"]
                 "Privacy"
     canvas#scene [aria-label="A view out to sea from the water's edge, with waves breaking toward you" role="img"]
+    p#story-status.sr-only [aria-live="polite" role="status"]
     div#welcome
       div.card
         p#paused-at.paused-at [hidden]
@@ -4924,6 +4925,7 @@ html [data-ui-theme="surf" lang="en"]
               a [href="/privacy.html"]
                 "Privacy"
     canvas#scene [aria-label="A wide view across a golden prairie toward a storm on the horizon" role="img"]
+    p#story-status.sr-only [aria-live="polite" role="status"]
     div#player-card
       div.card
         p#player-paused-at.paused-at [hidden]

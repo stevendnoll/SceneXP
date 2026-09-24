@@ -226,6 +226,23 @@ describe('the player', () => {
         expect(named('begin-watching').length).toBe(1);
     });
 
+    test('A KEYBOARD BEGIN LANDS ON THE PAUSE BUTTON, not on the button that just hid', () => {
+        build();
+        const begin = dom.el('player-begin');
+        begin.focus();
+        fire(begin, 'click', { detail: 0 });
+        expect(document.activeElement).toBe(dom.el('player-pause'));
+    });
+
+    test('a pointer Begin leaves no focus ring behind', () => {
+        build();
+        const begin = dom.el('player-begin');
+        begin.focus();
+        fire(begin, 'click', { detail: 1 });
+        expect(document.activeElement).not.toBe(dom.el('player-pause'));
+        expect(dom.el('player-begin').focused).toBe(false);
+    });
+
     test('a stalled frame cannot jump the story', () => {
         const player = begun();
         step(5000);

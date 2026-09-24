@@ -43,6 +43,7 @@ import {
     PAYLOADS, nextPayload, payloadLine, initPayloads, updatePayloads, surprisePoseAt
 } from './payloads.min.js';
 import { initTumbleweeds, updateTumbleweeds } from './tumbleweeds.min.js';
+import { createNarrator } from './narration.min.js';
 
 let renderer = null;
 let scene = null;
@@ -64,6 +65,8 @@ let anim = 0;
 let payload = 'cow';
 const shown = ['cow'];
 let reached = 0;
+// The story told to a screen reader, beat by beat (narration.js).
+let narrator = null;
 
 let sessionStart = 0;
 let sessionEnded = false;
@@ -132,8 +135,9 @@ function buildLighting() {
     scene.fog.color.setRGB(haze[0], haze[1], haze[2]);
 }
 
-/** One frame of the storm at story second `arc`. */
-export function drawFrame(delta, arc) {
+/** One frame of the storm at story second `arc`. `info` is the player's
+ *  ({ begun, scrubbing, fade }). */
+export function drawFrame(delta, arc, info = {}) {
     anim += Math.max(0, Math.min(delta, 0.25));
     const state = funnelStateAt(arc, anim, CONFIG);
     applyFunnelState(shared, state);
@@ -153,6 +157,7 @@ export function drawFrame(delta, arc) {
     // lightning holds through a drag and for a second after any seek, as
     // High Water's does. The shared player keeps that clock.
     if (player && player.flashAllowed()) updateLightning(arc, TORNADO_LIGHTNING);
+    if (narrator) narrator.update(arc, info, payload);
     renderer.render(scene, camera);
 }
 
@@ -218,6 +223,7 @@ async function init() {
     // Built now, all four, so a replay's surprise costs no frame when it
     // first appears.
     initPayloads(scene, CONFIG);
+    narrator = createNarrator(document.getElementById('story-status'), CONFIG);
     // High Water's lightning, shared. Built now, not at the first strike: it
     // adds a light, and three recompiles every lit material when the number
     // of lights changes, which would stall the frame of the first flash.

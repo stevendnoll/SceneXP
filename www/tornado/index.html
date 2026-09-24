@@ -116,6 +116,12 @@
     <canvas id="scene" role="img"
         aria-label="A wide view across a golden prairie toward a storm on the horizon"></canvas>
 
+    <!-- The story, told to a screen reader one beat at a time as it plays
+         (js/narration.js and config.narration). Polite, so it waits its turn,
+         and only while the story plays into a beat: never behind the welcome
+         card, under a drag, or across a seek. -->
+    <p id="story-status" class="sr-only" role="status" aria-live="polite"></p>
+
     <!-- The welcome card, which is also the pause card. The shared player
          (shared/js/player-1.0.0.js) holds the story at zero until Begin, and on
          a pause shows this same card with Resume and Restart and the line
