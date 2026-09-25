@@ -3625,7 +3625,7 @@ html [data-ui-theme="ember" lang="en"]
           h2#calendar-title.card-title
             "Calendar"
           button#calendar-close.office-btn.office-btn-small [type="button"]
-            "Back to the desk"
+            "Close"
         div.cal-nav
           button#cal-prev.office-btn.office-btn-small [type="button"]
             "Previous month"
@@ -3705,7 +3705,7 @@ html [data-ui-theme="ember" lang="en"]
           h2#rolodex-title.card-title
             "The Rolodex"
           button#rolodex-close.office-btn.office-btn-small [type="button"]
-            "Back to the desk"
+            "Close"
         div.grid-tools
           label.sr-only [for="rolodex-search"]
             "Search the people"
@@ -3843,10 +3843,12 @@ html [data-ui-theme="ember" lang="en"]
           "The printer"
         p#printer-intro.card-detail
           "A one-page prep sheet for an interview: the company, the people you will meet, what has happened so far, your notes, and room for your questions. Your browser's print dialog can also save it as a PDF."
-        div.form-row
+        div#printer-choose.form-row
           label [for="printer-app"]
             "Which application"
           select#printer-app.office-select
+        p#printer-empty.card-meta [hidden]
+          "There is nothing to print yet. A prep sheet is made from an application, so add one first and it will be here."
         div.card-actions
           button#printer-close.office-btn [type="button"]
             "Close"

@@ -117,6 +117,10 @@ export function lighting(light) {
         sun: 0.12 + 1.4 * d,
         hemi: 0.22 + 0.7 * d,
         fill: 0.12 + 0.23 * d,
+        /** The daylight thrown back up off the floor and the desk, which is
+         *  all that lights the ceiling and whatever faces down: without it
+         *  the ceiling was near black (QA, 2026-09-25). */
+        bounce: 0.06 + 0.45 * d,
         /** How brightly the city's lit windows show, 0 to 1: they show
          *  only as the daylight goes. */
         cityLights: 1 - d,

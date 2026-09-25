@@ -760,6 +760,36 @@ describe('M6 panels and painters', () => {
             numbers: wb.bigNumbers(model), goal: model.goal, layout: wb.LAYOUT
         })).not.toThrow();
     });
+
+    test('the goal’s label ends where the goal line does, on the board (QA, 2026-09-25: it ran off the edge)', async () => {
+        const wb = await import('../www/office/js/whiteboard.js');
+        const model = wb.boardModel(emptyDoc(CONFIG, NOW), CONFIG, NOW);
+        const chart = wb.weekChart(model);
+        const texts = [];
+        const noop = () => {};
+        const ctx = new Proxy({ textAlign: 'left', textBaseline: 'middle' }, {
+            get(target, prop) {
+                if (prop === 'fillText') return (text, x, y) => texts.push({ text, x, y, align: target.textAlign, base: target.textBaseline });
+                if (prop === 'measureText') return (text) => ({ width: String(text).length * 10 });
+                if (prop in target) return target[prop];
+                return noop;
+            },
+            set(target, prop, value) { target[prop] = value; return true; }
+        });
+        paint.drawWhiteboard(ctx, 1024, 568, {
+            title: 'The search so far', funnel: wb.funnelBars(model), chart,
+            numbers: wb.bigNumbers(model), goal: model.goal, layout: wb.LAYOUT
+        });
+        const label = texts.find((t) => t.text === `goal ${model.goal}`);
+        expect(label.align).toBe('right');
+        expect(label.x).toBeCloseTo(1024 * chart.x1, 6);
+        // Over the line, not beside it.
+        expect(label.base).toBe('bottom');
+        expect(label.y).toBeLessThan(568 * chart.goalY);
+        // And what follows is written as the painter expects.
+        expect(ctx.textAlign).toBe('left');
+        expect(ctx.textBaseline).toBe('middle');
+    });
 });
 
 // ---- M6.5 stage 2: the facade and street painters ----------------------------------

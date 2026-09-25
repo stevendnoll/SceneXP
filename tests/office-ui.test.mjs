@@ -623,6 +623,21 @@ describe('the calendar', () => {
         expect(el('calendar').hidden).toBe(false);
     });
 
+    test('a card that opens where the visitor stands says Close, not Back to the desk', () => {
+        const html = readFileSync(join(process.cwd(), 'www/office/index.html'), 'utf8');
+        const closers = [...html.matchAll(/<button id="([a-z-]+)-close"[^>]*>([^<]+)<\/button>/g)].map((m) => [m[1], m[2].trim()]);
+        const said = Object.fromEntries(closers);
+        expect(said.calendar).toBe('Close');
+        expect(said.rolodex).toBe('Close');
+        // Only a card that took the visitor to a station of its own offers
+        // to take them back to the desk.
+        for (const [card, words] of closers) {
+            if (words === 'Back to the desk') expect(Object.keys(CONFIG.stations)).toContain(card);
+        }
+        expect(Object.keys(CONFIG.stations)).not.toContain('calendar');
+        expect(t.lights.bounce).toBeTruthy();
+    });
+
     test('a day shows what falls on it, and the arrows move the chosen day, turning the page', () => {
         t.stockOffice();
         t.openCalendar();
@@ -1510,6 +1525,18 @@ describe('the printer', () => {
         const headings = sheet.children.filter((c) => c.className === 'print-section').map((c) => c.children[0].textContent);
         expect(headings).toEqual(expect.arrayContaining(['Coming up', 'People', 'Still to do', 'Questions to ask']));
         expect(said()).toBe('The prep sheet for Tidewater Robotics, Frontend Engineer is ready to print.');
+    });
+
+    test('with nothing to print, it says so instead of showing an empty list (QA, 2026-09-25)', () => {
+        t.openPrinter();
+        expect(el('printer-choose').hidden).toBe(false);
+        expect(el('printer-empty').hidden).toBe(true);
+        t.clearTheSamples();
+        t.openPrinter();
+        expect(el('printer-app').children).toHaveLength(0);
+        expect(el('printer-print').disabled).toBe(true);
+        expect(el('printer-choose').hidden).toBe(true);
+        expect(el('printer-empty').hidden).toBe(false);
     });
 
     test('from an open folder, the printer offers that application, and the folder prints it directly', () => {

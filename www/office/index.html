@@ -289,7 +289,7 @@
             aria-labelledby="calendar-title" tabindex="-1">
             <div class="computer-head">
                 <h2 id="calendar-title" class="card-title">Calendar</h2>
-                <button id="calendar-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
+                <button id="calendar-close" class="office-btn office-btn-small" type="button">Close</button>
             </div>
             <div class="cal-nav">
                 <button id="cal-prev" class="office-btn office-btn-small" type="button">Previous month</button>
@@ -375,7 +375,7 @@
             aria-labelledby="rolodex-title" aria-describedby="rolodex-count" tabindex="-1">
             <div class="computer-head">
                 <h2 id="rolodex-title" class="card-title">The Rolodex</h2>
-                <button id="rolodex-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
+                <button id="rolodex-close" class="office-btn office-btn-small" type="button">Close</button>
             </div>
             <div class="grid-tools">
                 <label for="rolodex-search" class="sr-only">Search the people</label>
@@ -528,10 +528,12 @@
             <p id="printer-intro" class="card-detail">A one-page prep sheet for an interview: the company, the people you
                 will meet, what has happened so far, your notes, and room for your questions. Your browser's print
                 dialog can also save it as a PDF.</p>
-            <div class="form-row">
+            <div id="printer-choose" class="form-row">
                 <label for="printer-app">Which application</label>
                 <select id="printer-app" class="office-select"></select>
             </div>
+            <p id="printer-empty" class="card-meta" hidden>There is nothing to print yet. A prep sheet is made from an
+                application, so add one first and it will be here.</p>
             <div class="card-actions">
                 <button id="printer-close" class="office-btn" type="button">Close</button>
                 <button id="printer-print" class="office-btn office-btn-primary" type="button">Print</button>

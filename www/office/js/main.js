@@ -458,6 +458,11 @@ function buildScene() {
     lights.fill = new THREE.DirectionalLight(0xcfdcec, 0.35);
     lights.fill.position.set(-3, 3, 4);
     scene.add(lights.fill);
+    // The light off the floor, shining up: the ceiling and the undersides
+    // of things face only the hemisphere's dark ground color otherwise.
+    lights.bounce = new THREE.DirectionalLight(0xe8dccb, 0.3);
+    lights.bounce.position.set(0.4, -3, 0.3);
+    scene.add(lights.bounce);
     // The sun itself, by the windows only: the walls and ceiling cast its
     // shadows too (interior.js sunbeam, placed by applyDaylight). Always
     // there, dark when the sun is down, because a light coming and going
@@ -689,6 +694,7 @@ function applyDaylight(t, force = false) {
         lights.sun.intensity = look.sun;
         lights.sun.color.setHex(look.sunColor);
         lights.fill.intensity = look.fill;
+        lights.bounce.intensity = look.bounce;
     }
     if (lights.beam) {
         const beam = sunbeam(sky, look);
@@ -1597,6 +1603,11 @@ function fillPrinterChoices(t = now(), chosen = null) {
     select.value = choices.some((c) => c.app.id === keep) ? keep : choices[0] ? choices[0].app.id : '';
     const print = el('printer-print');
     if (print) print.disabled = choices.length === 0;
+    // With nothing to choose from, say so rather than show an empty list.
+    const row = el('printer-choose');
+    const empty = el('printer-empty');
+    if (row) row.hidden = choices.length === 0;
+    if (empty) empty.hidden = choices.length > 0;
     return choices;
 }
 

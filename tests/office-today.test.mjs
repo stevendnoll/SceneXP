@@ -185,6 +185,11 @@ describe('the light through the windows', () => {
         expect(dusk.cityLights).toBeLessThan(1);
         // Dusk's sun is warmer than noon's: more red than blue.
         expect((dusk.sunColor >> 16) - (dusk.sunColor & 255)).toBeGreaterThan((day.sunColor >> 16) - (day.sunColor & 255));
+        // The light thrown back up off the floor lights the ceiling by day
+        // about as the sky lights the walls, and barely by night.
+        expect(day.bounce).toBeGreaterThan(0.4);
+        expect(night.bounce).toBeLessThan(0.1);
+        expect(night.bounce).toBeGreaterThan(0);
     });
 
     test('colors mix and print', () => {

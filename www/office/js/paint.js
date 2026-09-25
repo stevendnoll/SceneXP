@@ -287,9 +287,15 @@ export function drawWhiteboard(ctx, W, H, { title, funnel, chart, numbers, goal,
     ctx.lineTo(W * chart.x1, H * chart.goalY);
     ctx.stroke();
     if (ctx.setLineDash) ctx.setLineDash([]);
+    // The label sits on the line's right end, ending where the line does:
+    // written after it, it ran off the board (QA, 2026-09-25).
     ctx.fillStyle = RED;
     ctx.font = hand(H * 0.036, 700);
-    ctx.fillText(`goal ${goal}`, W * (chart.x1 + 0.005), H * chart.goalY);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`goal ${goal}`, W * chart.x1, H * (chart.goalY - 0.008));
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
 
     // The two big numbers.
     numbers.forEach((n, i) => {
