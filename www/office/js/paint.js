@@ -14,6 +14,7 @@
 
 import { count } from './copy.min.js';
 import { FACADE_TILE } from './city.min.js';
+import { wrappedPuffs } from './sky.min.js';
 
 /** The monitor's lines, from derive.stats. */
 export function screenLines(s) {
@@ -445,6 +446,33 @@ export function drawFacade(ctx, W, H, style, map, seed = 1) {
             ctx.fillRect(x, y, mw, ph);
         }
     }
+}
+
+/**
+ * One tile of the cloud deck (sky.js), seen from below: each puff a soft
+ * white disc, and then, only where there is cloud, a gray shade at the
+ * thick middles, the way a cumulus's base darkens under a bright edge.
+ * Transparent everywhere else, so the sky shows through.
+ */
+export function drawClouds(ctx, W, H, puffs) {
+    ctx.clearRect(0, 0, W, H);
+    const all = wrappedPuffs(puffs);
+    const disc = (x, y, radius, stops) => {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        for (const [at, color] of stops) g.addColorStop(at, color);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+    };
+    for (const [u, v, r, a] of all) {
+        disc(u * W, v * H, r * W, [[0, `rgba(255, 255, 255, ${a})`], [0.6, `rgba(255, 255, 255, ${a * 0.7})`], [1, 'rgba(255, 255, 255, 0)']]);
+    }
+    ctx.globalCompositeOperation = 'source-atop';
+    for (const [u, v, r, a] of all) {
+        disc(u * W, v * H, r * W * 0.8, [[0, `rgba(150, 160, 174, ${a * 0.55})`], [1, 'rgba(150, 160, 174, 0)']]);
+    }
+    ctx.globalCompositeOperation = 'source-over';
 }
 
 /**

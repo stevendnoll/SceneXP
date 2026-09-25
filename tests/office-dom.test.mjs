@@ -820,6 +820,34 @@ describe('the city painters', () => {
         expect((Math.max(...greens) - Math.min(...greens)) / Math.min(...greens)).toBeLessThan(0.08);
     });
 
+    test('the cloud tile: a soft white disc per puff, then gray bases only where there is cloud', async () => {
+        const sky = await import('../www/office/js/sky.js');
+        const discs = [];
+        let cleared = false;
+        const ctx = {
+            fillStyle: '',
+            globalCompositeOperation: 'source-over',
+            clearRect() { cleared = true; },
+            createRadialGradient(x, y, r0, x1, y1, r) { return { x, y, r, stops: [], addColorStop(at, c) { this.stops.push(c); } }; },
+            beginPath() {}, arc() {},
+            fill() { discs.push({ mode: ctx.globalCompositeOperation, g: ctx.fillStyle }); }
+        };
+        const puffs = [[0.5, 0.5, 0.1, 0.8], [0.02, 0.5, 0.05, 0.6]];
+        paint.drawClouds(ctx, 100, 100, puffs);
+        const all = sky.wrappedPuffs(puffs);
+        expect(cleared).toBe(true);
+        expect(discs).toHaveLength(all.length * 2);
+        const body = discs.slice(0, all.length);
+        const shade = discs.slice(all.length);
+        expect(body.every((d) => d.mode === 'source-over' && d.g.stops[0].startsWith('rgba(255, 255, 255'))).toBe(true);
+        // The shade lands only on cloud already painted, and is smaller than the puff.
+        expect(shade.every((d) => d.mode === 'source-atop')).toBe(true);
+        expect(shade[0].g.r).toBeLessThan(body[0].g.r);
+        expect(ctx.globalCompositeOperation).toBe('source-over');
+        // The puff over the left edge is painted over the right as well.
+        expect(body.some((d) => d.g.x > 100)).toBe(true);
+    });
+
     test('the street tile has its streets at the edges, and a glow for night', () => {
         const day = recorder();
         paint.drawStreets(day.ctx, 256, 256, { block: 90, street: 22 });

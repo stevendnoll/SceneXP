@@ -46,9 +46,10 @@ import { buildRoom, setLamp, pickOf, setNotes, ensureCapacity } from './room.min
 import { buildWorld } from './world.min.js';
 import {
     screenLines, drawScreen, drawCalendar, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
-    drawLetterAtlas, drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, FACADE_STYLES
+    drawLetterAtlas, drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, FACADE_STYLES
 } from './paint.min.js';
 import { CITY } from './city.min.js';
+import { CLOUDS, cloudPuffs } from './sky.min.js';
 import { drawerPlan, liftedLine, TAB_COLORS } from './cabinet.min.js';
 import { createFiling } from './filing.min.js';
 import { boardPlan, boardSummary, boardColumns, columnAt, CARD_ATLAS } from './board.min.js';
@@ -256,12 +257,20 @@ async function init() {
         requestRender();
     }, CONFIG.loadingReveal);
 
-    // A console helper for screenshots: `cornerOffice.hour(21)` holds the
-    // light at 9 PM, and `cornerOffice.hour(null)` gives it back to the clock.
+    // Console helpers for screenshots: `cornerOffice.hour(21)` holds the
+    // light at 9 PM, and `cornerOffice.hour(null)` gives it back to the
+    // clock. `cornerOffice.tune({ glass: 2, metal: 0.7, water: 1.5 })` tries
+    // a finish on the glass and the water, and `cornerOffice.tune()` says
+    // what it is now.
     window.cornerOffice = {
         hour(h) {
             ui.hourPin = h == null ? null : Math.min(24, Math.max(0, Number(h)));
             return applyDaylight(now(), true).phase;
+        },
+        tune(values) {
+            const finish = world.tune(values);
+            requestRender();
+            return finish;
         }
     };
 
@@ -342,7 +351,8 @@ function worldTextures() {
     });
     const streets = sharp(paintedTexture(256, 256, (ctx, W, H) => drawStreets(ctx, W, H, CITY)).texture);
     const streetsLit = sharp(paintedTexture(256, 256, (ctx, W, H) => drawStreets(ctx, W, H, CITY, true)).texture);
-    return { facades, streets, streetsLit };
+    const clouds = sharp(paintedTexture(CLOUDS.size, CLOUDS.size, (ctx, W, H) => drawClouds(ctx, W, H, cloudPuffs())).texture);
+    return { facades, streets, streetsLit, clouds };
 }
 
 function buildScene() {

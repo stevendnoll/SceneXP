@@ -32,6 +32,7 @@ import {
     rooftop, aviationLights, facadeUv, outline, sections
 } from './city.min.js';
 import { BAY, HAZE, rippleNormals } from './bay.min.js';
+import { CLOUDS } from './sky.min.js';
 
 /** The facade styles, in the order paint.js paints them. */
 export const STYLES = ['grid', 'bands', 'fins'];
@@ -41,6 +42,16 @@ export const STYLES = ['grid', 'bands', 'fins'];
  *  mirrored curtain walls of a modern downtown, which by day show more of
  *  the city and the sky than of themselves. */
 export const GLASS_TONES = [0x9db4c6, 0xb3c3cf, 0x8aa2b6, 0xc0cad2, 0x98b3ac, 0xa7b1bb];
+
+/**
+ * The glass's finish. `reflect` strengthens its reflection past a plain
+ * mirror's (Steve, 2026-09-24: "a little dark and not too reflective").
+ * `metalness` scales the painted map's: a fully metallic pane is all
+ * reflection and no color of its own, so on the shaded side of a tower,
+ * reflecting the streets below, it goes dark; a little body color lets the
+ * sky's light show on it, as the frit and the offices behind real glass do.
+ */
+export const GLASS = { reflect: 1.6, metalness: 0.8 };
 
 function standard(color, opts = {}) {
     return new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
@@ -194,9 +205,10 @@ function buildTowers(scene, towers, facades) {
         const material = maps
             ? new THREE.MeshStandardMaterial({
                 vertexColors: true, map: maps.color, roughnessMap: maps.rm, metalnessMap: maps.rm, roughness: 1,
-                metalness: 1, emissiveMap: maps.lit, emissive: 0xffffff, emissiveIntensity: 0
+                metalness: GLASS.metalness, envMapIntensity: GLASS.reflect,
+                emissiveMap: maps.lit, emissive: 0xffffff, emissiveIntensity: 0
             })
-            : standard(0xffffff, { vertexColors: true, roughness: 0.3, metalness: 0.45 });
+            : standard(0xffffff, { vertexColors: true, roughness: 0.3, metalness: 0.45, envMapIntensity: GLASS.reflect });
         const mesh = new THREE.Mesh(towerGeometry(mine), material);
         mesh.name = `towers-${style}`;
         scene.add(mesh);
@@ -427,6 +439,28 @@ function buildWater(scene, anisotropy) {
     return water;
 }
 
+/**
+ * The cloud deck (sky.js): one wide plane high over everything, facing
+ * down, its painted tile repeated. Transparent, so it is drawn after the
+ * sky, and hazed like everything else, so it melts into the horizon.
+ */
+function buildClouds(scene, texture) {
+    if (texture) {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(CLOUDS.span / CLOUDS.tile, CLOUDS.span / CLOUDS.tile);
+    }
+    const deck = new THREE.Mesh(
+        new THREE.PlaneGeometry(CLOUDS.span, CLOUDS.span),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, map: texture || null, transparent: true, opacity: texture ? 1 : 0.4, depthWrite: false })
+    );
+    deck.rotation.x = Math.PI / 2;
+    deck.position.y = WATER_Y + CLOUDS.altitude;
+    deck.name = 'clouds';
+    scene.add(deck);
+    return deck;
+}
+
 /** The wooded hills across the water, one mesh each (the view test counts
  *  anything named land-* as land). */
 function buildHills(scene) {
@@ -484,6 +518,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     mountains.name = 'mountains';
     scene.add(mountains);
     const sky = buildSky(scene);
+    const clouds = buildClouds(scene, textures.clouds);
     paintSky(sky, 0x7fb2dd, 0xe3ecef);
 
     let pmrem = null;
@@ -510,6 +545,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         hemi,
         water,
         hills,
+        clouds,
         glow,
         points,
         towers,
@@ -521,6 +557,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         setLight(look) {
             paintSky(sky, look.skyTop, look.skyBottom);
             scene.fog.color.setHex(look.skyBottom, THREE.SRGBColorSpace);
+            clouds.material.color.setHex(look.clouds, THREE.SRGBColorSpace);
             hemi.intensity = look.hemi * 1.1;
             sun.intensity = look.sun * 1.2;
             sun.color.setHex(look.sunColor, THREE.SRGBColorSpace);
@@ -532,13 +569,16 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         },
         /**
          * Rebuild the reflections: the world itself, as it is lit now, with
-         * a bright sun in it, captured twice. The glass reflects the city
-         * from among the towers, so towers show towers; the water reflects
-         * the world from just over the bay, so the far water mirrors the far
-         * shore and the mountains. Everything else lights itself from the
-         * bay's capture (mostly sky). Worth doing only when the light has
-         * changed (main.js calls it from applyDaylight, after setLight), and
-         * only with a real renderer.
+         * a bright sun in it, captured twice. The water reflects the world
+         * from just over the bay, so the far water mirrors the far shore,
+         * the mountains and the clouds. The glass reflects the city from
+         * among the towers, so towers show towers. The bay is captured
+         * FIRST and handed to everything, towers included, so in the
+         * city's capture the neighbors' glass already shows the sky rather
+         * than nothing (captured the other way round, every tower in it is
+         * black and the glass reflects black glass). Worth doing only when
+         * the light has changed (main.js calls it from applyDaylight, after
+         * setLight), and only with a real renderer.
          */
         updateEnvironment(renderer, look) {
             if (!renderer || !THREE.PMREMGenerator) return null;
@@ -546,17 +586,35 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             glow.position.copy(sun.position).normalize().multiplyScalar(120000);
             glow.material.color.setHex(look.sunColor, THREE.SRGBColorSpace).multiplyScalar(2 + 8 * look.sun / 1.52);
             glow.visible = true;
-            const next = { city: captureFrom(points.city), bay: captureFrom(points.bay) };
+            const bay = captureFrom(points.bay);
+            water.material.envMap = bay.texture;
+            scene.environment = bay.texture;
+            for (const mesh of towers.meshes) mesh.material.envMap = bay.texture;
+            const city = captureFrom(points.city);
+            for (const mesh of towers.meshes) mesh.material.envMap = city.texture;
             glow.visible = false;
             if (reflections) {
                 reflections.city.dispose();
                 reflections.bay.dispose();
             }
-            reflections = next;
-            for (const mesh of towers.meshes) mesh.material.envMap = next.city.texture;
-            water.material.envMap = next.bay.texture;
-            scene.environment = next.bay.texture;
-            return next;
+            reflections = { city, bay };
+            return reflections;
+        },
+        /**
+         * Set the finish for a screenshot round and say what it is now:
+         * `glass` (the glass's reflection strength), `metal` (its metalness)
+         * and `water` (the water's reflection strength). main.js offers it
+         * as cornerOffice.tune in the console. The light does not change,
+         * so the reflections stand.
+         */
+        tune({ glass, metal, water: waterReflect } = {}) {
+            for (const mesh of towers.meshes) {
+                if (Number.isFinite(glass)) mesh.material.envMapIntensity = glass;
+                if (Number.isFinite(metal)) mesh.material.metalness = metal;
+            }
+            if (Number.isFinite(waterReflect)) water.material.envMapIntensity = waterReflect;
+            const first = towers.meshes[0].material;
+            return { glass: first.envMapIntensity, metal: first.metalness, water: water.material.envMapIntensity };
         },
         /** Stand the outside camera exactly where the room camera is. */
         follow(roomCamera) {

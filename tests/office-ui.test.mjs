@@ -701,6 +701,12 @@ describe('the light', () => {
         expect(typeof window.cornerOffice.hour(null)).toBe('string');
         expect(t.ui.hourPin).toBeNull();
     });
+
+    test('the glass and water finish can be tried from the console for a screenshot', () => {
+        // The Three stub swallows the values; world.tune is held in office-view.
+        expect(Object.keys(window.cornerOffice.tune({ glass: 2 }))).toEqual(['glass', 'metal', 'water']);
+        expect(Object.keys(window.cornerOffice.tune())).toEqual(['glass', 'metal', 'water']);
+    });
 });
 
 // ---- M3: the filing cabinet -------------------------------------------------------

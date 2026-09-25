@@ -71,9 +71,9 @@ export function lightAt(date, hour = null) {
     return { hour: h, daylight, phase, key: `${phase}:${Math.round(daylight * 8)}` };
 }
 
-const NIGHT = { top: 0x0b1530, bottom: 0x2a2f4a, sun: 0x9fb4ff };
-const GOLD = { top: 0x4f79b3, bottom: 0xf2b27a, sun: 0xffb36b };
-const DAY = { top: 0x7fb2dd, bottom: 0xe3ecef, sun: 0xfff0d8 };
+const NIGHT = { top: 0x0b1530, bottom: 0x2a2f4a, sun: 0x9fb4ff, clouds: 0x2c3044 };
+const GOLD = { top: 0x4f79b3, bottom: 0xf2b27a, sun: 0xffb36b, clouds: 0xffbf9c };
+const DAY = { top: 0x7fb2dd, bottom: 0xe3ecef, sun: 0xfff0d8, clouds: 0xffffff };
 
 /**
  * What the scene's lights and the painted sky should be for a light level.
@@ -87,6 +87,8 @@ export function lighting(light) {
         skyTop: pick('top'),
         skyBottom: pick('bottom'),
         sunColor: pick('sun'),
+        /** The clouds' light: white by day, peach at dawn and dusk, slate by night. */
+        clouds: pick('clouds'),
         sun: 0.12 + 1.4 * d,
         hemi: 0.22 + 0.7 * d,
         fill: 0.12 + 0.23 * d,

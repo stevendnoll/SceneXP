@@ -19,6 +19,7 @@ import { join } from 'node:path';
 import vm from 'node:vm';
 import { CONFIG } from '../www/office/js/config.js';
 import * as bay from '../www/office/js/bay.js';
+import * as sky from '../www/office/js/sky.js';
 
 let THREE;
 let room;
@@ -68,9 +69,11 @@ function seeAlong(origin, direction) {
     let o = hit.object;
     while (o.parent && o.parent !== world.scene && !o.name) o = o.parent;
     const name = o.name || (o.parent && o.parent.name) || 'unnamed';
-    // The towers are one mesh per facade style and one for the roofs.
-    const what = name.startsWith('land') ? 'land' : name.startsWith('towers') ? 'towers' : name;
-    return { what, point: hit.point };
+    // The towers are one mesh per facade style and one for the roofs, and
+    // the clouds are in the sky (the deck is see-through between them).
+    const kinds = { land: 'land', towers: 'towers', clouds: 'sky' };
+    const kind = Object.keys(kinds).find((k) => name.startsWith(k));
+    return { what: kind ? kinds[kind] : name, point: hit.point, name, uv: hit.uv };
 }
 
 function seeAt(cam, x, y) {
@@ -265,7 +268,43 @@ describe('the bay and the air', () => {
             }
         }
         expect(mirrored.mountains || 0).toBeGreaterThan(0);
-        expect(mirrored.sky || 0).toBeGreaterThan(mirrored.mountains);
+        // The sky it mirrors has its cloud deck in it.
+        expect(mirrored.clouds || 0).toBeGreaterThan(0);
+        expect((mirrored.sky || 0) + (mirrored.clouds || 0)).toBeGreaterThan(mirrored.mountains);
+    });
+
+    test.each(['wide 21:9', 'laptop 16:10', 'phone upright'])('on a %s screen there are clouds over the mountains, and they are the sky’s, not a ceiling', (name) => {
+        // Where a ray meets the deck, is there cloud painted there? The tile
+        // repeats span/tile times, and a canvas texture is flipped in v.
+        const puffs = sky.wrappedPuffs(sky.cloudPuffs());
+        const repeat = sky.CLOUDS.span / sky.CLOUDS.tile;
+        const frac = (x) => x - Math.floor(x);
+        const painted = (uv) => {
+            const u = frac(uv.x * repeat);
+            const v = 1 - frac(uv.y * repeat);
+            return puffs.some(([x, y, r]) => Math.hypot(u - x, v - y) < r);
+        };
+        const cam = cameraAt('window', ASPECTS[name]);
+        let deck = 0;
+        let cloud = 0;
+        let beyondShore = 0;
+        const n = 48;
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                const hit = seeAt(cam, -1 + (2 * (i + 0.5)) / n, -1 + (2 * (j + 0.5)) / n);
+                if (hit.name !== 'clouds') continue;
+                deck++;
+                if (!painted(hit.uv)) continue;
+                cloud++;
+                if (hit.point.z < city.shoreZ(hit.point.x)) beyondShore++;
+            }
+        }
+        // Clouds, with blue sky between them: less is more.
+        expect(cloud).toBeGreaterThan(0);
+        expect(cloud / deck).toBeGreaterThan(0.1);
+        expect(cloud / deck).toBeLessThan(0.7);
+        // Out over the bay and the mountains, not hanging over the street.
+        expect(beyondShore / cloud).toBeGreaterThan(0.9);
     });
 
     test('the water is calm: a slow swell, not a chop', () => {
@@ -320,7 +359,7 @@ describe('the glass city', () => {
     beforeAll(() => {
         const tex = () => new THREE.Texture();
         const facades = Object.fromEntries(worldMod.STYLES.map((s) => [s, { color: tex(), rm: tex(), lit: tex() }]));
-        lit = worldMod.buildWorld(CONFIG, { textures: { facades, streets: tex(), streetsLit: tex() } });
+        lit = worldMod.buildWorld(CONFIG, { textures: { facades, streets: tex(), streetsLit: tex(), clouds: tex() } });
     });
 
     const tower = (over) => ({ x: 0, z: 0, w: 20, d: 30, h: 60, base: 40, form: 'box', tiers: [], podium: null, tone: 0, low: false, ...over });
@@ -417,6 +456,7 @@ describe('the glass city', () => {
                 const aimAt = new THREE.Vector3().setFromMatrixPosition(lit.sun.target.matrixWorld);
                 const target = {
                     shift: scene.position.clone(), glow: lit.glow.visible, near, far,
+                    towersShow: lit.towers.meshes[0].material.envMap,
                     sunDirection: sunAt.sub(aimAt).normalize(),
                     texture: { id: made.length }, disposed: false, dispose() { this.disposed = true; }
                 };
@@ -430,6 +470,10 @@ describe('the glass city', () => {
             // Each capture from its own point: the scene stepped back by it.
             expect(first.city.shift.toArray()).toEqual(lit.points.city.map((v) => -v));
             expect(first.bay.shift.toArray()).toEqual(lit.points.bay.map((v) => -v));
+            // The bay first, and handed to the towers before the city's capture,
+            // so the neighbors in it show the sky, not black glass.
+            expect(made.indexOf(first.bay)).toBeLessThan(made.indexOf(first.city));
+            expect(first.city.towersShow).toBe(first.bay.texture);
             // The sun in them, bright, and in its own direction however the scene stood.
             expect(first.city.glow && first.bay.glow).toBe(true);
             const direction = lit.sun.position.clone().normalize();
@@ -451,6 +495,49 @@ describe('the glass city', () => {
         } finally {
             THREE.PMREMGenerator = real;
         }
+    });
+
+    test('the glass reflects strongly, with a little body color for the daylight to show', () => {
+        for (const mesh of lit.towers.meshes) {
+            expect(mesh.material.envMapIntensity).toBe(worldMod.GLASS.reflect);
+            expect(mesh.material.metalness).toBe(worldMod.GLASS.metalness);
+        }
+        expect(worldMod.GLASS.reflect).toBeGreaterThan(1);
+        expect(worldMod.GLASS.metalness).toBeGreaterThan(0.6);
+        expect(worldMod.GLASS.metalness).toBeLessThan(1);
+    });
+
+    test('the finish can be tried in the console, and says what it is', () => {
+        const before = lit.tune();
+        expect(before).toEqual({ glass: worldMod.GLASS.reflect, metal: worldMod.GLASS.metalness, water: bay.BAY.reflect });
+        expect(lit.tune({ glass: 2, metal: 0.7, water: 1.1 })).toEqual({ glass: 2, metal: 0.7, water: 1.1 });
+        for (const mesh of lit.towers.meshes) expect(mesh.material.envMapIntensity).toBe(2);
+        // Anything not a number leaves that part alone.
+        expect(lit.tune({ glass: 'bright' })).toEqual({ glass: 2, metal: 0.7, water: 1.1 });
+        lit.tune({ glass: before.glass, metal: before.metal, water: before.water });
+    });
+
+    test('the clouds are a see-through deck high over everything, painted, repeated, hazed and lit for the hour', async () => {
+        const deck = lit.clouds;
+        expect(deck.name).toBe('clouds');
+        expect(deck.material.transparent).toBe(true);
+        expect(deck.material.depthWrite).toBe(false);
+        expect(deck.material.fog).toBe(true);
+        expect(deck.position.y).toBe(city.WATER_Y + sky.CLOUDS.altitude);
+        // Facing down, to be seen from below.
+        const down = new THREE.Vector3(0, 0, 1).applyEuler(deck.rotation);
+        expect(down.y).toBeCloseTo(-1, 9);
+        expect(deck.material.map.repeat.x).toBeCloseTo(sky.CLOUDS.span / sky.CLOUDS.tile, 9);
+        expect(deck.material.map.wrapS).toBe(THREE.RepeatWrapping);
+        const { lighting, lightAt } = await import('../www/office/js/daylight.js');
+        lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 2)));
+        const night = deck.material.color.getHex(THREE.SRGBColorSpace);
+        lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 12)));
+        expect(deck.material.color.getHex(THREE.SRGBColorSpace)).toBe(0xffffff);
+        expect(night).not.toBe(0xffffff);
+        // Without a painted tile (a headless boot) it is a faint plain deck.
+        expect(world.clouds.material.map).toBeNull();
+        expect(world.clouds.material.opacity).toBeLessThan(1);
     });
 
     test('the glass is a mirror by day: every tint reflects at least a third of the light', () => {
