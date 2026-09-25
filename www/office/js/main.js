@@ -42,7 +42,8 @@ import { formatDate, formatDateTime, ceilToMinutes, addDays, displayDateTime } f
 import { stockSamples } from './samples.min.js';
 import { applicationsCsv } from './csv.min.js';
 import { poseFor, createGlide } from './stations.min.js';
-import { buildRoom, setLamp, pickOf, setNotes, ensureCapacity } from './room.min.js';
+import { buildRoom, setLamp, pickOf, setNotes, ensureCapacity, windowsOf } from './room.min.js';
+import { SUNBEAM, sunbeam, mirrorLevel, interiorEnvironment, mirrorCamera, layMirror } from './interior.min.js';
 import { buildWorld } from './world.min.js';
 import {
     screenLines, drawScreen, drawCalendar, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
@@ -162,6 +163,13 @@ const ui = {
     contactId: null,
     editingContactId: null,
     contactLinkApp: null,
+    /** The light of the hour (daylight.js, weathered), for what is lit
+     *  again between hours: the lamp switched changes the reflections. */
+    look: null,
+    /** How strongly the glass mirrors the room (interior.js mirrorLevel),
+     *  and whether the room has moved since the mirrors were drawn. */
+    mirror: 0,
+    mirrorDue: true,
     /** The departures board: what its flaps show, what they are turning
      *  to, and the time left before the next turn. */
     flaps: { rows: null, target: null, due: 0, clock: '' },
@@ -190,6 +198,16 @@ let camera = null;
 let room = null;
 /** Everything outside the windows: its own scene and camera (world.js). */
 let world = null;
+/** The room as its shiny things see it (interior.js), the capturer, and
+ *  its current capture. */
+let interior = null;
+let interiorPmrem = null;
+let interiorTarget = null;
+/** The night glass: a picture and a camera for each pane, and the camera
+ *  they were last drawn for. */
+const mirrors = { targets: [], cams: [], eye: null, lens: null };
+/** The height the sun's beam is aimed at, the room's middle. Meters. */
+const ROOM_MIDDLE = 1.2;
 let glide = null;
 let screenCanvas = null;
 let screenTexture = null;
@@ -360,6 +378,13 @@ function buildRenderer() {
     // Two scenes a frame, the world outside and then the room, so the
     // renderer clears once by hand rather than before each (animate).
     renderer.autoClear = false;
+    // The sun's shadows through the windows (interior.js). Drawn again only
+    // when the sun or something in the room has moved (markRoom), never for
+    // a frame where only the scenery outside or the camera moved.
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
     // Adaptive resolution (shared resolution-1.0.0): below the device's own
     // ratio for as long as the frames say it is too much, back up when not.
     resolution = createResolution({ renderer, ceiling: pixelRatioCeiling });
@@ -434,6 +459,25 @@ function buildScene() {
     lights.fill = new THREE.DirectionalLight(0xcfdcec, 0.35);
     lights.fill.position.set(-3, 3, 4);
     scene.add(lights.fill);
+    // The sun itself, by the windows only: the walls and ceiling cast its
+    // shadows too (interior.js sunbeam, placed by applyDaylight). Always
+    // there, dark when the sun is down, because a light coming and going
+    // would rebuild every material in the room.
+    lights.beam = new THREE.DirectionalLight(0xfff0d8, 0);
+    lights.beam.castShadow = true;
+    const mapSize = state.mobile ? SUNBEAM.mapSizeMobile : SUNBEAM.mapSize;
+    lights.beam.shadow.mapSize.set(mapSize, mapSize);
+    const shadowCam = lights.beam.shadow.camera;
+    shadowCam.left = -SUNBEAM.reach;
+    shadowCam.right = SUNBEAM.reach;
+    shadowCam.top = SUNBEAM.reach;
+    shadowCam.bottom = -SUNBEAM.reach;
+    shadowCam.near = 0.5;
+    shadowCam.far = 24;
+    lights.beam.shadow.bias = -0.0004;
+    lights.beam.shadow.normalBias = 0.02;
+    lights.beam.target.position.set(0, ROOM_MIDDLE, 0);
+    scene.add(lights.beam, lights.beam.target);
 
     painted.calendar = paintedTexture(512, 700, (ctx, W, H) => {
         ctx.fillStyle = '#f8f5ee';
@@ -464,6 +508,9 @@ function buildScene() {
         paintCard: drawCardFace
     });
     scene.add(room.group);
+    // The room as its shiny things see it, from over the desk (interior.js).
+    const d = CONFIG.room.desk;
+    interior = interiorEnvironment(CONFIG, windowsOf(CONFIG), [d.x, d.height + 0.3, d.z]);
 
     const pose = poseFor(ui.station, aspect(), CONFIG);
     camera = new THREE.PerspectiveCamera(pose.fov, aspect(), CONFIG.camera.near, CONFIG.camera.far);
@@ -506,6 +553,38 @@ function goTo(station) {
 /** Ask for one frame. Cheap to call as often as anything likes. */
 function requestRender() {
     state.dirty = true;
+    markRoom();
+}
+
+/**
+ * Something in the room, or the light on it, has changed: its shadows and
+ * its reflection in the night glass are drawn again on the next frame. The
+ * scenery outside and the camera's glides do not call this, so they cost
+ * neither.
+ */
+function markRoom() {
+    if (renderer && renderer.shadowMap) renderer.shadowMap.needsUpdate = true;
+    ui.mirrorDue = true;
+}
+
+/**
+ * Capture the room as its shiny things see it, for the light of the hour
+ * and the lamp, and give it to them (room.js castShadows lists them). Done
+ * with the world's own reflections, and when the lamp is switched.
+ */
+function captureInterior(look) {
+    if (!interior || !room || !look || !renderer || !THREE.PMREMGenerator) return null;
+    if (!interiorPmrem) interiorPmrem = new THREE.PMREMGenerator(renderer);
+    interior.set(look, ui.lampOn);
+    const target = interiorPmrem.fromScene(interior.scene, 0.02, 0.1, 50);
+    for (const m of room.shiny) {
+        if (!m.envMap) m.needsUpdate = true;
+        m.envMap = target.texture;
+        m.envMapIntensity = m.clearcoat ? 0.8 : 1;
+    }
+    if (interiorTarget) interiorTarget.dispose();
+    interiorTarget = target;
+    return target;
 }
 
 /** Repaint the monitor's face, only when its words change. */
@@ -625,18 +704,31 @@ function applyDaylight(t, force = false) {
     const look = weathered(lighting(light), weather);
     if (room && room.rain) room.rain.set(weather.rain);
     paintOffices(look.offices);
+    ui.look = look;
     if (lights.hemi) {
         lights.hemi.intensity = look.hemi;
         lights.sun.intensity = look.sun;
         lights.sun.color.setHex(look.sunColor);
         lights.fill.intensity = look.fill;
     }
+    if (lights.beam) {
+        const beam = sunbeam(sky, look);
+        lights.beam.intensity = beam.intensity;
+        lights.beam.color.setHex(beam.color);
+        lights.beam.position.set(beam.dir[0] * 12, ROOM_MIDDLE + beam.dir[1] * 12, beam.dir[2] * 12);
+    }
+    ui.mirror = mirrorLevel(look);
+    if (room && room.reflections) room.reflections.set(ui.mirror);
+    // New shadows (and night glass) when the light has changed, or while
+    // the sun is up and moving; not every frame of a night going by.
+    if (changed || (lights.beam && lights.beam.intensity > 0)) markRoom();
     if (world) {
         world.setLight(look, sky);
         paintMoon(sky);
         if (force || ui.lapse) ui.lifeDue = true;
         if (force || captureDue(sky, changed)) {
             world.updateEnvironment(renderer, look);
+            captureInterior(look);
             ui.capturedAt = performance.now();
             ui.capturedSun = sky.sun;
             ui.captureOwed = false;
@@ -2094,6 +2186,8 @@ function actOn(key, { armed = true, instanceId = -1, uv = null } = {}) {
 function toggleLamp() {
     ui.lampOn = !ui.lampOn;
     if (room) setLamp(room.lamp, ui.lampOn);
+    // The brass and the lacquer see the lamp come on or go off.
+    captureInterior(ui.look);
     announce(ui.lampOn ? 'The lamp is on.' : 'The lamp is off.');
     requestRender();
 }
@@ -2371,10 +2465,12 @@ function animate() {
     if (ui.cabinetMoving && filing) {
         ui.cabinetMoving = filing.update(delta);
         state.dirty = true;
+        markRoom();
     }
     if (ui.boardMoving && pinboard) {
         ui.boardMoving = pinboard.update(delta);
         state.dirty = true;
+        markRoom();
     }
     if (ui.lapse) {
         stepDay(delta);
@@ -2466,7 +2562,56 @@ function draw() {
         renderer.clearDepth();
     }
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    drawMirrors();
     renderer.render(scene, camera);
+}
+
+/**
+ * The night glass: the room drawn from where the eye's reflection in each
+ * pane would be, into a picture laid onto that pane (interior.js). Only by
+ * night (ui.mirror, interior.js mirrorLevel), only for a pane in view, and
+ * only when the camera or the room has moved since the last time: the
+ * scenery's own frames and the jet's cost nothing more.
+ */
+function drawMirrors() {
+    if (!room || !room.reflections || !(ui.mirror > 0.01)) return false;
+    camera.updateMatrixWorld();
+    const moved = !mirrors.eye || !mirrors.eye.equals(camera.matrixWorld) || !mirrors.lens.equals(camera.projectionMatrix);
+    if (!moved && !ui.mirrorDue) return false;
+    ui.mirrorDue = false;
+    mirrors.eye = camera.matrixWorld.clone();
+    mirrors.lens = camera.projectionMatrix.clone();
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const w = Math.max(64, Math.min(1024, Math.round(size.x / 2)));
+    const h = Math.max(32, Math.round(w / Math.max(0.2, camera.aspect)));
+    const frustum = new THREE.Frustum().setFromProjectionMatrix(
+        new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+    );
+    const { panes } = room.reflections;
+    const rain = room.rain ? room.rain.panes : [];
+    const wet = rain.map((p) => p.visible);
+    for (const p of [...panes.map((q) => q.mesh), ...rain]) p.visible = false;
+    panes.forEach((pane, i) => {
+        if (!mirrors.targets[i]) {
+            mirrors.targets[i] = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
+            mirrors.cams[i] = new THREE.PerspectiveCamera();
+            pane.mesh.material.map = mirrors.targets[i].texture;
+            pane.mesh.material.needsUpdate = true;
+        }
+        const target = mirrors.targets[i];
+        if (target.width !== w || target.height !== h) target.setSize(w, h);
+        pane.shown = frustum.intersectsObject(pane.mesh) && mirrorCamera(camera, pane, mirrors.cams[i]);
+        if (!pane.shown) return;
+        renderer.setRenderTarget(target);
+        renderer.clear();
+        renderer.render(scene, mirrors.cams[i]);
+        layMirror(pane.mesh, mirrors.cams[i]);
+    });
+    renderer.setRenderTarget(null);
+    room.reflections.set(ui.mirror);
+    panes.forEach((pane) => { if (!pane.shown) pane.mesh.visible = false; });
+    rain.forEach((p, i) => { p.visible = wet[i]; });
+    return true;
 }
 
 // ---- Teardown ---------------------------------------------------------------
@@ -2592,6 +2737,10 @@ export const __test__ = {
     stopDay,
     lifeMoves,
     placeLife,
+    markRoom,
+    captureInterior,
+    drawMirrors,
+    draw,
     resolution: () => resolution,
     lights,
     currentRows,

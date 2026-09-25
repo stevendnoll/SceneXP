@@ -727,6 +727,29 @@ describe('the light', () => {
         expect(main.paceScenery(0.05, -1, 15)).toEqual({ due: 0.05, draw: false });
     });
 
+    test('by night the glass mirrors the room, drawn again only when the room or the camera moves', () => {
+        window.cornerOffice.hour(12);
+        expect(t.ui.mirror).toBe(0);
+        expect(t.drawMirrors()).toBe(false);
+        window.cornerOffice.hour(23);
+        expect(t.ui.mirror).toBeGreaterThan(0.2);
+        t.markRoom();
+        expect(t.ui.mirrorDue).toBe(true);
+        expect(t.drawMirrors()).toBe(true);
+        expect(t.ui.mirrorDue).toBe(false);
+        // Nothing has moved: nothing to draw.
+        expect(t.drawMirrors()).toBe(false);
+        // The lamp switched is a change in the room.
+        t.actOn('lamp');
+        expect(t.ui.mirrorDue).toBe(true);
+        t.actOn('lamp');
+        // The shiny things are given the room for the hour; with no light
+        // yet there is nothing to capture.
+        expect(t.captureInterior(t.ui.look)).toBeTruthy();
+        expect(t.captureInterior(null)).toBeNull();
+        window.cornerOffice.hour(null);
+    });
+
     test('a jet can be sent across the sky for a screenshot', () => {
         t.ui.lifeDue = false;
         expect(window.cornerOffice.jet()).toBe('A jet is on its way across the bay.');

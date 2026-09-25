@@ -77,6 +77,76 @@ function box(w, h, d, material, x, y, z) {
     return mesh;
 }
 
+/**
+ * A box, its edges and corners rounded by `r` (QA, 2026-09-25: edges sharp
+ * as a knife were much of what read as computer-made). A rounded rectangle
+ * extruded along the box's thinnest side, with a quarter-round bevel that
+ * starts `r` inside the outline and ends on it, so the box's outside is
+ * exactly `w` by `h` by `d`, as the square box's was. Centered on the origin.
+ */
+export function roundedBoxGeometry(w, h, d, r) {
+    const size = [w, h, d];
+    const axis = size.indexOf(Math.min(...size));
+    const [a, b] = [0, 1, 2].filter((i) => i !== axis);
+    const round = Math.max(0.0005, Math.min(r, size[a] * 0.49, size[b] * 0.49, size[axis] * 0.49));
+    const [sw, sh] = [size[a], size[b]];
+    const shape = new THREE.Shape();
+    const x0 = -sw / 2;
+    const y0 = -sh / 2;
+    shape.moveTo(x0 + round, y0);
+    shape.lineTo(x0 + sw - round, y0);
+    shape.quadraticCurveTo(x0 + sw, y0, x0 + sw, y0 + round);
+    shape.lineTo(x0 + sw, y0 + sh - round);
+    shape.quadraticCurveTo(x0 + sw, y0 + sh, x0 + sw - round, y0 + sh);
+    shape.lineTo(x0 + round, y0 + sh);
+    shape.quadraticCurveTo(x0, y0 + sh, x0, y0 + sh - round);
+    shape.lineTo(x0, y0 + round);
+    shape.quadraticCurveTo(x0, y0, x0 + round, y0);
+    // The bevel round the two broad faces is a little smaller than the
+    // corners' radius: the broad faces are triangulated on the outline and
+    // then drawn stepped in by the bevel, and stepped in by the whole
+    // radius the corners' arcs close to points and triangles right across
+    // the face fold over, inside out (measured 2026-09-25).
+    const bevel = round * 0.6;
+    const g = new THREE.ExtrudeGeometry(shape, {
+        depth: size[axis] - 2 * bevel,
+        bevelEnabled: true,
+        bevelThickness: bevel,
+        bevelSize: bevel,
+        bevelOffset: -bevel,
+        bevelSegments: 3,
+        curveSegments: 3
+    });
+    // Onto the box's own axes: the outline's x and y to the two wide sides,
+    // the extrusion to the thin one. That is a permutation of the axes, and
+    // an odd one would turn every face inside out, so one axis is flipped
+    // to keep it a rotation (the box is symmetric, so nothing moves).
+    const odd = axis === 1;
+    const basis = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    basis[0].setComponent(a, 1);
+    basis[1].setComponent(b, odd ? -1 : 1);
+    basis[2].setComponent(axis, 1);
+    g.applyMatrix4(new THREE.Matrix4().makeBasis(basis[0], basis[1], basis[2]));
+    g.computeBoundingBox();
+    const c = g.boundingBox.getCenter(new THREE.Vector3());
+    g.translate(-c.x, -c.y, -c.z);
+    return g;
+}
+
+/** A slab by its corners, as `slab`, with its edges rounded by `r`. */
+function roundedSlab(x0, y0, z0, x1, y1, z1, r, material) {
+    const mesh = new THREE.Mesh(roundedBoxGeometry(x1 - x0, y1 - y0, z1 - z0, r), material);
+    mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    return mesh;
+}
+
+/** A box by its size and middle, as `box`, with its edges rounded by `r`. */
+function roundedBox(w, h, d, r, material, x, y, z) {
+    const mesh = new THREE.Mesh(roundedBoxGeometry(w, h, d, r), material);
+    mesh.position.set(x, y, z);
+    return mesh;
+}
+
 /** An upright cylinder of radius `r` and height `h`, centered on a point. */
 function cylinder(r, h, material, x, y, z, segments = 12) {
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, segments), material);
@@ -224,22 +294,22 @@ function buildShell(room, config) {
     group.add(slab(d0, door.height, hd, d1, height, hd + T, wall));
     const doorWood = mat(0x6b4a33, { roughness: 0.6 });
     group.add(slab(d0 + 0.01, 0, hd + 0.02, d1 - 0.01, door.height - 0.01, hd + 0.06, doorWood));
-    group.add(slab(d0 - 0.05, 0, hd - 0.02, d0, door.height + 0.05, hd + 0.02, trim));
-    group.add(slab(d1, 0, hd - 0.02, d1 + 0.05, door.height + 0.05, hd + 0.02, trim));
-    group.add(slab(d0 - 0.05, door.height, hd - 0.02, d1 + 0.05, door.height + 0.05, hd + 0.02, trim));
+    group.add(roundedSlab(d0 - 0.05, 0, hd - 0.02, d0, door.height + 0.05, hd + 0.02, 0.008, trim));
+    group.add(roundedSlab(d1, 0, hd - 0.02, d1 + 0.05, door.height + 0.05, hd + 0.02, 0.008, trim));
+    group.add(roundedSlab(d0 - 0.05, door.height, hd - 0.02, d1 + 0.05, door.height + 0.05, hd + 0.02, 0.008, trim));
     group.add(box(0.12, 0.025, 0.04, mat(COLORS.metal, { metalness: 0.6, roughness: 0.3 }), d1 - 0.12, 1.02, hd + 0.005));
 
     // Window frames: sills, heads and mullions.
     const f = 0.05;
-    group.add(slab(w.back.x0, w.sill - 0.02, -hd - 0.02, w.back.x1, w.sill + 0.03, -hd + 0.14, trim));
+    group.add(roundedSlab(w.back.x0, w.sill - 0.02, -hd - 0.02, w.back.x1, w.sill + 0.03, -hd + 0.14, 0.014, trim));
     group.add(slab(w.back.x0, w.head - f, -hd - 0.02, w.back.x1, w.head, -hd + 0.03, trim));
     for (const x of [w.back.x0, w.back.mullion, w.back.x1]) {
-        group.add(slab(x - f / 2, w.sill, -hd - 0.02, x + f / 2, w.head, -hd + 0.03, trim));
+        group.add(roundedSlab(x - f / 2, w.sill, -hd - 0.02, x + f / 2, w.head, -hd + 0.03, 0.008, trim));
     }
-    group.add(slab(hw - 0.14, w.sill - 0.02, w.right.z0, hw + 0.02, w.sill + 0.03, w.right.z1, trim));
+    group.add(roundedSlab(hw - 0.14, w.sill - 0.02, w.right.z0, hw + 0.02, w.sill + 0.03, w.right.z1, 0.014, trim));
     group.add(slab(hw - 0.03, w.head - f, w.right.z0, hw + 0.02, w.head, w.right.z1, trim));
     for (const z of [w.right.z0, (w.right.z0 + w.right.z1) / 2, w.right.z1]) {
-        group.add(slab(hw - 0.03, w.sill, z - f / 2, hw + 0.02, w.head, z + f / 2, trim));
+        group.add(roundedSlab(hw - 0.03, w.sill, z - f / 2, hw + 0.02, w.head, z + f / 2, 0.008, trim));
     }
     for (const mesh of mergeByMaterial(group.children)) room.add(mesh);
 }
@@ -296,6 +366,148 @@ function buildRainPanes(group, config, texture) {
 }
 
 /**
+ * The soft dark where things meet what they stand on: under the desk, the
+ * cabinet, the printer, the wastebasket, the chair and the plant, and on the
+ * desk under the monitor, the keyboard, the trays and the lamp (QA,
+ * 2026-09-25: with no shade where they touched down, things floated). Each
+ * patch is `{ x, z, y, w, d, soft, alpha }`: a rounded rectangle, dark
+ * `alpha` in its middle, fading to nothing over its outer `soft` meters.
+ * All of them are ONE mesh, black with the fade in its vertex colors, laid a
+ * few millimeters over the surface (and over the rug), and a tap or a ray
+ * passes through it.
+ */
+export function contactGrid(patch) {
+    const { w, d, soft, alpha } = patch;
+    const stops = (half) => {
+        const s = Math.min(soft, half);
+        return [-half, -half + s / 2, -half + s, 0, half - s, half - s / 2, half].filter((v, i, all) => i === 0 || v > all[i - 1] + 1e-9);
+    };
+    const xs = stops(w / 2);
+    const zs = stops(d / 2);
+    const fade = (u, v) => {
+        const dx = Math.max(0, Math.abs(u) - (w / 2 - soft));
+        const dz = Math.max(0, Math.abs(v) - (d / 2 - soft));
+        const t = Math.min(1, Math.hypot(dx, dz) / soft);
+        return alpha * (1 - t * t * (3 - 2 * t));
+    };
+    return { xs, zs, fade };
+}
+
+/** How high over the surface under it a contact patch lies, in meters. */
+export const CONTACT_LIFT = 0.006;
+
+function buildContactShadows(group, patches) {
+    const positions = [];
+    const colors = [];
+    const index = [];
+    for (const patch of patches) {
+        const { xs, zs, fade } = contactGrid(patch);
+        const base = positions.length / 3;
+        for (const v of zs) {
+            for (const u of xs) {
+                positions.push(patch.x + u, patch.y + CONTACT_LIFT, patch.z + v);
+                colors.push(0, 0, 0, fade(u, v));
+            }
+        }
+        const n = xs.length;
+        for (let j = 0; j < zs.length - 1; j++) {
+            for (let i = 0; i < n - 1; i++) {
+                const a = base + j * n + i;
+                // Wound to face up.
+                index.push(a, a + n, a + 1, a + 1, a + n, a + n + 1);
+            }
+        }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4));
+    geometry.setIndex(index);
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+        color: 0xffffff, vertexColors: true, transparent: true, depthWrite: false,
+        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1
+    }));
+    mesh.name = 'contact-shadows';
+    mesh.raycast = () => {};
+    mesh.renderOrder = -1;
+    group.add(mesh);
+    return mesh;
+}
+
+/**
+ * The glass as a faint mirror by night (QA, 2026-09-25): a pane in each
+ * window opening, a hair inside the rain's, wearing the room as seen in the
+ * glass (main.js renders it, interior.js works out the mirror's camera and
+ * lays the picture onto the pane). Added onto the city behind, so it only
+ * shows once the city outside is darker than the room. The panes are a fine
+ * grid, because the picture is laid on by each corner's own place in it,
+ * and a pane in two triangles would bend it. Clear by day; a tap or a ray
+ * passes through.
+ */
+export const MIRROR_GRID = [24, 10];
+
+function buildReflectionPanes(group, config) {
+    const w = windowsOf(config);
+    const hw = config.room.width / 2;
+    const hd = config.room.depth / 2;
+    const height = w.head - w.sill;
+    const y = (w.sill + w.head) / 2;
+    const pane = (width, name) => {
+        const mesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(width, height, MIRROR_GRID[0], MIRROR_GRID[1]),
+            new THREE.MeshBasicMaterial({
+                color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending
+            })
+        );
+        mesh.name = name;
+        mesh.visible = false;
+        mesh.raycast = () => {};
+        group.add(mesh);
+        return mesh;
+    };
+    const back = pane(w.back.x1 - w.back.x0, 'mirror-back');
+    back.position.set((w.back.x0 + w.back.x1) / 2, y, -hd + 0.012);
+    const right = pane(w.right.z1 - w.right.z0, 'mirror-right');
+    right.position.set(hw - 0.012, y, (w.right.z0 + w.right.z1) / 2);
+    right.rotation.y = -Math.PI / 2;
+    const panes = [
+        { mesh: back, normal: [0, 0, 1], point: back.position.toArray() },
+        { mesh: right, normal: [-1, 0, 0], point: right.position.toArray() }
+    ];
+    return {
+        panes,
+        /** How strongly the glass mirrors the room, 0 (not at all) to 1. */
+        set(level) {
+            for (const p of panes) {
+                p.mesh.material.opacity = level;
+                p.mesh.visible = level > 0.01 && !!p.mesh.material.map;
+            }
+        }
+    };
+}
+
+/**
+ * Every solid thing casts a shadow and takes one, walls and ceiling too, so
+ * the sun comes in by the windows only (interior.js sunbeam). What is
+ * see-through or painted flat (the panes, the contact patches, the notes
+ * and cards, the invisible hit boxes) casts none. Returns the materials
+ * that should mirror the room (metals, and the desk's lacquer): each is
+ * given the room's environment by main.js.
+ */
+function castShadows(group) {
+    const shiny = new Set();
+    group.traverse((o) => {
+        if (!o.isMesh) return;
+        const m = o.material;
+        const solid = m.visible !== false && !m.transparent && !m.isMeshBasicMaterial
+            && !['notes', 'board-cards'].includes(o.name);
+        o.castShadow = solid;
+        o.receiveShadow = !m.isMeshBasicMaterial;
+        if (m.isMeshStandardMaterial && (m.metalness >= 0.25 || m.clearcoat > 0)) shiny.add(m);
+    });
+    return [...shiny];
+}
+
+/**
  * The wall calendar: a board with a painted month on it (textures.calendar)
  * and a binder clip at the top.
  */
@@ -336,9 +548,9 @@ function buildCabinet(group, config, labels, picks) {
     const hw = c.width / 2;
     const hd = c.depth / 2;
     // The frame: a plinth up to the drawers' floor, and end panels.
-    cabinet.add(slab(-hw, 0, -hd, hw, c.floor, hd, steel));
-    cabinet.add(slab(-hw - 0.02, 0, -hd, -hw, c.height, hd, steel));
-    cabinet.add(slab(hw, 0, -hd, hw + 0.02, c.height, hd, steel));
+    cabinet.add(roundedSlab(-hw, 0, -hd, hw, c.floor, hd, 0.006, steel));
+    cabinet.add(roundedSlab(-hw - 0.02, 0, -hd, -hw, c.height, hd, 0.006, steel));
+    cabinet.add(roundedSlab(hw, 0, -hd, hw + 0.02, c.height, hd, 0.006, steel));
     cabinet.add(slab(-hw, c.floor, -hd - 0.02, hw, c.height, -hd, steel));
 
     const drawers = new THREE.Group();
@@ -352,7 +564,7 @@ function buildCabinet(group, config, labels, picks) {
         drawers.add(slab(x0, c.floor, -hd, x0 + 0.01, c.height - 0.02, hd, inside));
         drawers.add(slab(x1 - 0.01, c.floor, -hd, x1, c.height - 0.02, hd, inside));
         // The front: a panel with a label card and a handle.
-        drawers.add(slab(x0, c.floor, hd - 0.012, x1, c.height - 0.02, hd + 0.01, steel));
+        drawers.add(roundedSlab(x0, c.floor, hd - 0.012, x1, c.height - 0.02, hd + 0.01, 0.006, steel));
         const face = new THREE.Mesh(
             new THREE.PlaneGeometry(w * 0.62, 0.075),
             labels && labels[i] ? new THREE.MeshBasicMaterial({ map: labels[i] }) : new THREE.MeshBasicMaterial({ color: 0xf4efe4 })
@@ -518,7 +730,7 @@ function buildDepartures(group, config, texture, picks) {
     const b = config.room.departures;
     const front = config.room.depth / 2;
     const board = tag(new THREE.Group(), 'departures');
-    board.add(slab(b.x - b.width / 2 - 0.04, b.y - b.height / 2 - 0.04, front - 0.05, b.x + b.width / 2 + 0.04, b.y + b.height / 2 + 0.04, front, mat(0x2b2d31, { roughness: 0.5, metalness: 0.3 })));
+    board.add(roundedSlab(b.x - b.width / 2 - 0.04, b.y - b.height / 2 - 0.04, front - 0.05, b.x + b.width / 2 + 0.04, b.y + b.height / 2 + 0.04, front, 0.01, mat(0x2b2d31, { roughness: 0.5, metalness: 0.3 })));
     const face = new THREE.Mesh(
         new THREE.PlaneGeometry(b.width, b.height),
         new THREE.MeshBasicMaterial(texture ? { map: texture, toneMapped: false } : { color: 0x16181c })
@@ -546,7 +758,7 @@ function buildWhiteboard(group, config, texture, picks) {
     const z1 = w.z + w.width / 2;
     const y0 = w.y - w.height / 2;
     const y1 = w.y + w.height / 2;
-    board.add(slab(wallX, y0 - 0.03, z0 - 0.03, w.x - 0.004, y1 + 0.03, z1 + 0.03, frame));
+    board.add(roundedSlab(wallX, y0 - 0.03, z0 - 0.03, w.x - 0.004, y1 + 0.03, z1 + 0.03, 0.008, frame));
     const face = new THREE.Mesh(
         new THREE.PlaneGeometry(w.width, w.height),
         new THREE.MeshBasicMaterial(texture ? { map: texture, toneMapped: false } : { color: 0xf7f7f4 })
@@ -569,10 +781,10 @@ function buildPrinter(group, config, picks) {
     const printer = tag(new THREE.Group(), 'printer');
     printer.position.set(p.x, 0, p.z);
     const standMat = mat(0x3f454d, { roughness: 0.6, metalness: 0.3 });
-    printer.add(box(0.5, p.stand, 0.44, standMat, 0, p.stand / 2, 0));
+    printer.add(roundedBox(0.5, p.stand, 0.44, 0.012, standMat, 0, p.stand / 2, 0));
     const body = mat(0xe6e4df, { roughness: 0.5 });
-    printer.add(box(0.44, 0.17, 0.36, body, 0, p.stand + 0.085, 0));
-    printer.add(box(0.44, 0.03, 0.3, mat(0x2b2d31, { roughness: 0.5 }), 0, p.stand + 0.185, 0.02));
+    printer.add(roundedBox(0.44, 0.17, 0.36, 0.025, body, 0, p.stand + 0.085, 0));
+    printer.add(roundedBox(0.44, 0.03, 0.3, 0.01, mat(0x2b2d31, { roughness: 0.5 }), 0, p.stand + 0.185, 0.02));
     printer.add(box(0.3, 0.012, 0.14, body, -0.02, p.stand + 0.03, 0.24));
     printer.add(box(0.22, 0.004, 0.12, mat(COLORS.paper), -0.02, p.stand + 0.04, 0.24));
     printer.add(box(0.02, 0.012, 0.012, new THREE.MeshBasicMaterial({ color: 0x5dd37a }), 0.17, p.stand + 0.14, 0.181));
@@ -632,21 +844,23 @@ export function setNotes(notes, count, corners, uvs) {
     return geometry;
 }
 
-function buildDesk(group, config, picks) {
+function buildDesk(group, config, picks, contacts) {
     const d = config.room.desk;
     const x0 = d.x - d.width / 2;
     const x1 = d.x + d.width / 2;
     const z0 = d.z - d.depth / 2;
     const z1 = d.z + d.depth / 2;
     const top = d.height;
-    const wood = mat(COLORS.desk, { roughness: 0.55 });
+    // Lacquered: a clear coat over the grain that gives back the windows
+    // (it reflects the room's environment, interior.js).
+    const wood = new THREE.MeshPhysicalMaterial({ color: COLORS.desk, roughness: 0.55, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.14 });
     const dark = mat(COLORS.deskDark, { roughness: 0.6 });
     const desk = new THREE.Group();
     desk.name = 'desk';
-    desk.add(slab(x0, top - 0.04, z0, x1, top, z1, wood));
-    desk.add(slab(x0, 0, z0 + 0.04, x0 + 0.04, top - 0.04, z1 - 0.04, dark));
-    desk.add(slab(x1 - 0.04, 0, z0 + 0.04, x1, top - 0.04, z1 - 0.04, dark));
-    desk.add(slab(x0 + 0.04, 0.3, z0 + 0.02, x1 - 0.04, top - 0.04, z0 + 0.05, dark));
+    desk.add(roundedSlab(x0, top - 0.04, z0, x1, top, z1, 0.014, wood));
+    desk.add(roundedSlab(x0, 0, z0 + 0.04, x0 + 0.04, top - 0.04, z1 - 0.04, 0.008, dark));
+    desk.add(roundedSlab(x1 - 0.04, 0, z0 + 0.04, x1, top - 0.04, z1 - 0.04, 0.008, dark));
+    desk.add(roundedSlab(x0 + 0.04, 0.3, z0 + 0.02, x1 - 0.04, top - 0.04, z0 + 0.05, 0.006, dark));
     group.add(desk);
 
     // The monitor, which is the computer station.
@@ -654,11 +868,18 @@ function buildDesk(group, config, picks) {
     const computer = tag(new THREE.Group(), 'computer');
     const mx = d.x + 0.05;
     const mz = z0 + 0.22;
-    computer.add(box(0.24, 0.015, 0.16, metal, mx, top + 0.008, mz));
+    computer.add(roundedBox(0.24, 0.015, 0.16, 0.006, metal, mx, top + 0.008, mz));
     computer.add(box(0.04, 0.16, 0.03, metal, mx, top + 0.09, mz - 0.03));
-    const bezel = box(0.66, 0.41, 0.035, metal, mx, top + 0.36, mz);
+    const bezel = roundedBox(0.66, 0.41, 0.035, 0.012, metal, mx, top + 0.36, mz);
     computer.add(bezel);
-    computer.add(box(0.44, 0.015, 0.14, mat(0x3a3d42), mx, top + 0.008, z1 - 0.2));
+    computer.add(roundedBox(0.44, 0.015, 0.14, 0.005, mat(0x3a3d42), mx, top + 0.008, z1 - 0.2));
+    // Where the desk, the monitor's foot and the keyboard meet what they
+    // stand on.
+    contacts.push(
+        { x: d.x, z: d.z, y: 0, w: d.width + 0.14, d: d.depth + 0.12, soft: 0.2, alpha: 0.42 },
+        { x: mx, z: mz, y: top, w: 0.32, d: 0.24, soft: 0.07, alpha: 0.4 },
+        { x: mx, z: z1 - 0.2, y: top, w: 0.5, d: 0.2, soft: 0.05, alpha: 0.22 }
+    );
     group.add(computer);
     picks.computer = computer;
 
@@ -693,10 +914,12 @@ function buildDesk(group, config, picks) {
         return g;
     };
     tray('outtray', top, 1);
+    contacts.push({ x: tx, z: tz, y: top, w: 0.42, d: 0.34, soft: 0.07, alpha: 0.32 });
     const intray = tray('intray', top + TRAY_RISE, 2);
     // The posts stand on the out-tray's side walls and belong to the tray
     // they hold up.
-    const brass = mat(COLORS.brass, { roughness: 0.4, metalness: 0.3 });
+    // Truly metal now that it has a room to reflect (interior.js).
+    const brass = mat(COLORS.brass, { roughness: 0.3, metalness: 0.85 });
     const post = TRAY_RISE - 0.06;
     for (const sx of [-1, 1]) {
         for (const sz of [-1, 1]) {
@@ -713,6 +936,7 @@ function buildDesk(group, config, picks) {
     const lampGroup = tag(new THREE.Group(), 'lamp');
     const lx = x1 - 0.2;
     const lz = z0 + 0.2;
+    contacts.push({ x: lx, z: lz, y: top, w: 0.28, d: 0.2, soft: 0.07, alpha: 0.38 });
     const base = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.106, 0.024, 32), brass);
     base.scale.set(1, 1, 0.62);
     base.position.set(lx, top + 0.012, lz);
@@ -782,12 +1006,13 @@ function buildDesk(group, config, picks) {
     return { screen, light, glow, folder, lampGroup };
 }
 
-function buildFloorThings(group, config, picks) {
+function buildFloorThings(group, config, picks, contacts) {
     const d = config.room.desk;
     // The wastebasket, beside the desk on the corner side.
     const basket = tag(new THREE.Group(), 'wastebasket');
     const bx = d.x + d.width / 2 + 0.26;
     const bz = d.z + 0.05;
+    contacts.push({ x: bx, z: bz, y: 0, w: 0.46, d: 0.46, soft: 0.16, alpha: 0.45 });
     const wire = mat(COLORS.basket, { roughness: 0.6, metalness: 0.4, side: THREE.DoubleSide });
     const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.36, 24, 1, true), wire);
     shell.position.set(bx, 0.18, bz);
@@ -812,8 +1037,8 @@ function buildFloorThings(group, config, picks) {
     chair.name = 'chair';
     const cm = mat(COLORS.chair, { roughness: 0.7 });
     const steel = mat(COLORS.metal, { roughness: 0.45, metalness: 0.3 });
-    chair.add(box(0.48, 0.07, 0.46, cm, 0, 0.47, 0));
-    chair.add(box(0.46, 0.5, 0.06, cm, 0, 0.78, 0.22));
+    chair.add(roundedBox(0.48, 0.07, 0.46, 0.03, cm, 0, 0.47, 0));
+    chair.add(roundedBox(0.46, 0.5, 0.06, 0.028, cm, 0, 0.78, 0.22));
     chair.add(cylinder(0.025, 0.34, steel, 0, 0.27, 0));
     chair.add(cylinder(0.05, 0.05, steel, 0, 0.105, 0, 16));
     // Five legs, each with a caster at its end (QA, 2026-09-25): a twin
@@ -831,6 +1056,7 @@ function buildFloorThings(group, config, picks) {
         chair.add(leg);
     }
     chair.position.set(d.x + d.width / 2 + 0.25, 0, d.z + 0.95);
+    contacts.push({ x: chair.position.x, z: chair.position.z, y: 0, w: 0.8, d: 0.8, soft: 0.34, alpha: 0.32 });
     chair.rotation.y = CHAIR_TURN;
     group.add(chair);
 
@@ -841,6 +1067,7 @@ function buildFloorThings(group, config, picks) {
     const hw = config.room.width / 2;
     const px = hw - 0.4;
     const pz = config.room.depth / 2 - 0.45;
+    contacts.push({ x: px, z: pz, y: 0, w: 0.5, d: 0.5, soft: 0.16, alpha: 0.45 });
     plant.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.38, 20), mat(COLORS.pot)));
     plant.children[0].position.set(px, 0.19, pz);
     const leaves = mat(COLORS.plant, { flatShading: true });
@@ -862,8 +1089,9 @@ export function buildRoom(config, textures = {}) {
     group.name = 'room';
     const picks = {};
     buildShell(group, config);
-    const desk = buildDesk(group, config, picks);
-    buildFloorThings(group, config, picks);
+    const contacts = [];
+    const desk = buildDesk(group, config, picks, contacts);
+    buildFloorThings(group, config, picks, contacts);
     const calendar = buildCalendar(group, config, textures.calendar || null, picks);
     const cabinet = buildCabinet(group, config, textures.drawerLabels || null, picks);
     const board = buildBoard(group, config, textures, picks);
@@ -875,6 +1103,14 @@ export function buildRoom(config, textures = {}) {
     if (textures.screen) {
         desk.screen.material = new THREE.MeshBasicMaterial({ map: textures.screen, toneMapped: false });
     }
+    const { cabinet: cab, printer } = config.room;
+    contacts.push(
+        { x: cab.x, z: cab.z, y: 0, w: cab.width + 0.14, d: cab.depth + 0.14, soft: 0.16, alpha: 0.5 },
+        { x: printer.x, z: printer.z, y: 0, w: 0.58, d: 0.52, soft: 0.13, alpha: 0.5 }
+    );
+    const contactShadows = buildContactShadows(group, contacts);
+    const reflections = buildReflectionPanes(group, config);
+    const shiny = castShadows(group);
     return {
         group,
         picks,
@@ -887,6 +1123,9 @@ export function buildRoom(config, textures = {}) {
         whiteboard,
         notes,
         rain,
+        contactShadows,
+        reflections,
+        shiny,
         lamp: { light: desk.light, glow: desk.glow, group: desk.lampGroup }
     };
 }
