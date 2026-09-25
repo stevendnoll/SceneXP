@@ -53,3 +53,22 @@ export function storageNote(status, use) {
         return '';
     }
 }
+
+/** "6:40 AM": a clock time, for the day going by at the window. */
+export function clockTime(date) {
+    const h = date.getHours();
+    const m = String(date.getMinutes()).padStart(2, '0');
+    return `${h % 12 === 0 ? 12 : h % 12}:${m} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+/** What is said when a day starts going by at the window. */
+export function dayStartLine(date) {
+    return `A day is going by at the window, starting from ${clockTime(date)}. Stop the day ends it whenever you like.`;
+}
+
+/** What is said when it ends: the whole day, or stopped early. */
+export function dayEndLine(date, whole) {
+    return whole
+        ? `A whole day has gone by. It is ${clockTime(date)} again.`
+        : `Back to the present. It is ${clockTime(date)}.`;
+}

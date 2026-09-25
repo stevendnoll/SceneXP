@@ -198,7 +198,14 @@ export const CONFIG = deepFreeze({
         /** How long the Rolodex takes to turn to a letter. */
         spinSeconds: 0.6,
         /** How long one flap of the departures board takes to turn. */
-        flapSeconds: 0.035
+        flapSeconds: 0.035,
+        /** How long "Watch a day go by" takes for the whole 24 hours. */
+        daySeconds: 30,
+        /** While a day goes by, the reflections are captured again at most
+         *  this often, and outside it whenever the sun has moved this far
+         *  (each capture draws the world twelve times). */
+        captureSeconds: 1,
+        captureDegrees: 20
     },
 
     /** How far ahead the calendar file reaches, in days. */

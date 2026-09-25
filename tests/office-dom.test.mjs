@@ -848,6 +848,56 @@ describe('the city painters', () => {
         expect(body.some((d) => d.g.x > 100)).toBe(true);
     });
 
+    /** A context that writes down every call, in order. */
+    function calls() {
+        const log = [];
+        const ctx = new Proxy({ fillStyle: '', globalCompositeOperation: 'source-over' }, {
+            get(target, prop) {
+                if (prop in target) return target[prop];
+                return (...args) => {
+                    log.push([prop, args, target.fillStyle]);
+                    if (prop === 'createRadialGradient') return { stops: [], addColorStop(at, c) { this.stops.push([at, c]); } };
+                    return undefined;
+                };
+            },
+            set(target, prop, value) { target[prop] = value; return true; }
+        });
+        return { ctx, log };
+    }
+
+    test('the moon: a new moon is only its faint dark disc, and every other phase lit toward the right', () => {
+        const lit = (log) => log.filter(([name, , style]) => name === 'fill' && style === 'rgb(236, 234, 222)');
+        const fresh = calls();
+        paint.drawMoon(fresh.ctx, 256, 256, 0);
+        expect(lit(fresh.log)).toHaveLength(0);
+        expect(fresh.log.filter(([name]) => name === 'fill')).toHaveLength(1);
+        for (const [elongation, bulgesRight] of [[Math.PI / 3, true], [Math.PI * 0.75, false], [Math.PI, false]]) {
+            const { ctx, log } = calls();
+            paint.drawMoon(ctx, 256, 256, elongation);
+            expect(lit(log)).toHaveLength(1);
+            // The right limb, top to bottom, then the terminator back up.
+            const limb = log.find(([name, args]) => name === 'arc' && args[3] === -Math.PI / 2);
+            expect(limb[1][4]).toBe(Math.PI / 2);
+            const terminator = log.find(([name]) => name === 'ellipse')[1];
+            expect(terminator[2]).toBeCloseTo(256 * 0.46 * Math.abs(Math.cos(elongation)), 6);
+            expect(terminator[7]).toBe(bulgesRight);
+            // The seas land only on the lit part.
+            const clip = log.findIndex(([name]) => name === 'clip');
+            expect(clip).toBeGreaterThan(log.indexOf(lit(log)[0]));
+            expect(log.findIndex(([name]) => name === 'restore')).toBeGreaterThan(clip);
+        }
+    });
+
+    test('the glow about the sun fades from a bright core to nothing at its edge', () => {
+        const { ctx, log } = calls();
+        paint.drawGlow(ctx, 256, 256);
+        const gradient = log.find(([name]) => name === 'createRadialGradient');
+        expect(gradient[1]).toEqual([128, 128, 0, 128, 128, 128]);
+        expect(log.some(([name, args]) => name === 'fillRect' && args[2] === 256)).toBe(true);
+        expect(ctx.fillStyle.stops[0][1]).toBe('rgba(255, 255, 255, 1)');
+        expect(ctx.fillStyle.stops.at(-1)).toEqual([1, 'rgba(255, 255, 255, 0)']);
+    });
+
     test('the street tile has its streets at the edges, and a glow for night', () => {
         const day = recorder();
         paint.drawStreets(day.ctx, 256, 256, { block: 90, street: 22 });

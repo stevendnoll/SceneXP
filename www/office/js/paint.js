@@ -476,6 +476,58 @@ export function drawClouds(ctx, W, H, puffs) {
 }
 
 /**
+ * The moon at a phase, with the sun off to the RIGHT of the tile (world.js
+ * turns the disc so its right faces the sun). `elongation` is the moon's
+ * angle from the sun: 0 new, pi full. The lit part runs from the
+ * terminator, an ellipse cos(elongation) of the way across, to the right
+ * limb. The dark part keeps a faint earthshine, and a few gray seas mark
+ * the lit face (clipped to it).
+ */
+export function drawMoon(ctx, W, H, elongation) {
+    const cx = W / 2;
+    const cy = H / 2;
+    const r = W * 0.46;
+    const k = Math.cos(elongation);
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(70, 80, 100, 0.25)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    if (k < 0.995) {
+        ctx.fillStyle = 'rgb(236, 234, 222)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI / 2, false);
+        // Back up the terminator: bulging right (a crescent) or left (gibbous).
+        ctx.ellipse(cx, cy, r * Math.abs(k), r, 0, Math.PI / 2, k > 0 ? -Math.PI / 2 : Math.PI * 1.5, k > 0);
+        ctx.closePath();
+        ctx.fill();
+        // The seas, only on the lit part.
+        ctx.save();
+        ctx.clip();
+        ctx.fillStyle = 'rgba(150, 150, 150, 0.35)';
+        for (const [x, y, s] of [[-0.25, -0.2, 0.2], [0.15, -0.3, 0.14], [0.05, 0.05, 0.22], [-0.3, 0.25, 0.12], [0.3, 0.2, 0.1]]) {
+            ctx.beginPath();
+            ctx.arc(cx + x * r, cy + y * r, s * r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+}
+
+/** The glow about the sun: a bright core fading softly to nothing, added
+ *  over the sky (world.js colors it). */
+export function drawGlow(ctx, W, H) {
+    ctx.clearRect(0, 0, W, H);
+    const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W / 2);
+    g.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    g.addColorStop(0.08, 'rgba(255, 255, 255, 0.55)');
+    g.addColorStop(0.3, 'rgba(255, 255, 255, 0.12)');
+    g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+}
+
+/**
  * The streets: one city block with half a street round it, repeated across
  * the land (world.js sets the repeat so the block sits under its towers).
  * `lit` paints the street lights' glow for night instead.

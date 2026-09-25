@@ -64,14 +64,17 @@ function cameraAt(station, aspect) {
 function seeAlong(origin, direction) {
     const ray = new THREE.Raycaster(origin, direction.clone().normalize());
     if (ray.intersectObject(room.group, true).length) return { what: 'room' };
-    const [hit] = ray.intersectObject(world.scene, true);
+    // What is drawn: a raycaster meets hidden things too.
+    const shown = (o) => (o ? o.visible && shown(o.parent) : true);
+    const hit = ray.intersectObject(world.scene, true).find((h) => shown(h.object));
     if (!hit) return { what: 'nothing' };
     let o = hit.object;
     while (o.parent && o.parent !== world.scene && !o.name) o = o.parent;
     const name = o.name || (o.parent && o.parent.name) || 'unnamed';
     // The towers are one mesh per facade style and one for the roofs, and
-    // the clouds are in the sky (the deck is see-through between them).
-    const kinds = { land: 'land', towers: 'towers', clouds: 'sky' };
+    // the clouds (see-through between them), the sun, its halo, the moon
+    // and the stars are all the sky.
+    const kinds = { land: 'land', towers: 'towers', clouds: 'sky', sun: 'sky', moon: 'sky', stars: 'sky' };
     const kind = Object.keys(kinds).find((k) => name.startsWith(k));
     return { what: kind ? kinds[kind] : name, point: hit.point, name, uv: hit.uv };
 }
@@ -544,6 +547,153 @@ describe('the glass city', () => {
         for (const hex of worldMod.GLASS_TONES) {
             const c = new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
             expect(0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b).toBeGreaterThan(0.33);
+        }
+    });
+});
+
+// ---- Day and night ----------------------------------------------------------------
+
+describe('the sun, the moon and the stars', () => {
+    let lit;
+    let daylight;
+    const DAY = new Date(2026, 8, 24);
+    const at = (h) => new Date(DAY.getFullYear(), DAY.getMonth(), DAY.getDate(), 0, 0, 0, h * 3600000);
+    /** Light the world as it is at hour `h` today, and say what the sky was. */
+    const lightAt = (h) => {
+        const moment = h instanceof Date ? h : at(h);
+        const now = sky.skyAt(moment);
+        lit.setLight(daylight.lighting(daylight.lightAt(moment)), now);
+        lit.scene.updateMatrixWorld(true);
+        return now;
+    };
+    const along = (mesh) => mesh.position.clone().normalize();
+
+    beforeAll(async () => {
+        daylight = await import('../www/office/js/daylight.js');
+        const tex = () => new THREE.Texture();
+        lit = worldMod.buildWorld(CONFIG, { textures: { clouds: tex(), moon: tex(), glow: tex() } });
+    });
+
+    test('the sun’s disc and halo hang where the sun is, far off, facing the office, and the light comes from it', () => {
+        const now = lightAt(15);
+        const { disc, halo } = lit.heavens;
+        expect(along(disc).dot(new THREE.Vector3(...now.sun))).toBeCloseTo(1, 6);
+        expect(disc.position.length()).toBeCloseTo(worldMod.SKY_DISTANCE, 0);
+        expect(halo.position.equals(disc.position)).toBe(true);
+        // Facing the office: its front (+z) points back along the way to it.
+        const front = new THREE.Vector3(0, 0, 1).applyQuaternion(disc.quaternion);
+        expect(front.dot(along(disc))).toBeCloseTo(-1, 6);
+        expect(disc.visible && halo.visible).toBe(true);
+        expect(lit.sun.position.clone().normalize().toArray()).toEqual(sky.lightFrom(now).map((v) => expect.closeTo(v, 6)));
+        // Past everything but the sky dome, and inside the camera's reach.
+        expect(worldMod.SKY_DISTANCE * 1.2).toBeLessThan(140000);
+        expect(worldMod.SKY_DISTANCE * 1.2).toBeLessThan(lit.camera.far);
+        lightAt(23);
+        expect(disc.visible || halo.visible).toBe(false);
+    });
+
+    test('from the window, the sun goes down behind the mountains', () => {
+        const { sunset } = daylight.sunTimes(DAY);
+        const now = lightAt(sunset - 2 / 60);
+        const cam = cameraAt('window', 16 / 10);
+        const ray = new THREE.Raycaster(cam.position, new THREE.Vector3(...now.sun));
+        const [hit] = ray.intersectObjects([lit.scene.getObjectByName('mountains'), lit.scene.getObjectByName('land-hills')], true);
+        expect(hit).toBeTruthy();
+        // An hour earlier it stands clear above them.
+        const earlier = lightAt(sunset - 1);
+        const [none] = new THREE.Raycaster(cam.position, new THREE.Vector3(...earlier.sun))
+            .intersectObjects([lit.scene.getObjectByName('mountains'), lit.scene.getObjectByName('land-hills')], true);
+        expect(none).toBeUndefined();
+    });
+
+    test('the sky is brightest round the sun, and a sunset lights the western horizon', () => {
+        const pos = lit.sky.geometry.attributes.position;
+        const col = lit.sky.geometry.attributes.color;
+        const brightness = (dir) => {
+            let best = -2;
+            let at = 0;
+            for (let i = 0; i < pos.count; i++) {
+                const d = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize().dot(dir);
+                if (d > best) { best = d; at = i; }
+            }
+            return col.getX(at) + col.getY(at) + col.getZ(at);
+        };
+        const now = lightAt(15);
+        const toSun = new THREE.Vector3(...now.sun);
+        expect(brightness(toSun)).toBeGreaterThan(brightness(toSun.clone().negate().setY(toSun.y)));
+        const { sunset } = daylight.sunTimes(DAY);
+        lightAt(sunset);
+        const west = new THREE.Vector3(0, 0.05, -1).normalize();
+        const east = new THREE.Vector3(0, 0.05, 1).normalize();
+        expect(brightness(west)).toBeGreaterThan(brightness(east));
+        // Without a glow, the dome is just its two colors.
+        worldMod.paintSky(lit.sky, 0x000000, 0x000000);
+        expect(brightness(west)).toBe(0);
+    });
+
+    test('the moon faces the office with its lit side toward the sun, bright by night and pale by day', () => {
+        // Find, over the coming month, a moment when the moon is well up by
+        // night, one by day, and one when it is down.
+        const moments = Array.from({ length: 30 * 48 }, (_, i) => new Date(DAY.getTime() + i * 1800000));
+        const up = (m) => sky.skyAt(m).moonHeight > 0.2;
+        const nightHour = moments.find((m) => up(m) && daylight.lightAt(m).phase === 'night');
+        const dayHour = moments.find((m) => up(m) && daylight.lightAt(m).phase === 'day');
+        const now = lightAt(nightHour);
+        const { moon } = lit.heavens;
+        expect(moon.visible).toBe(true);
+        expect(along(moon).dot(new THREE.Vector3(...now.moon))).toBeCloseTo(1, 6);
+        const front = new THREE.Vector3(0, 0, 1).applyQuaternion(moon.quaternion);
+        expect(front.dot(along(moon))).toBeCloseTo(-1, 6);
+        // The painted tile's right (+x) is the side toward the sun.
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(moon.quaternion);
+        expect(right.dot(new THREE.Vector3(...now.sun))).toBeGreaterThan(0);
+        expect(moon.material.opacity).toBe(1);
+        lightAt(dayHour);
+        expect(moon.material.opacity).toBeLessThan(0.5);
+        expect(moon.material.opacity).toBeGreaterThan(0);
+        // Below the horizon, hidden.
+        const downHour = moments.find((m) => sky.skyAt(m).moonHeight < -0.2);
+        lightAt(downHour);
+        expect(moon.visible).toBe(false);
+    });
+
+    test('the stars come out by night and turn east to west about the pole', () => {
+        const { stars } = lit.heavens;
+        lightAt(12);
+        expect(stars.visible).toBe(false);
+        const now = lightAt(1);
+        expect(stars.visible).toBe(true);
+        expect(stars.material.opacity).toBe(1);
+        // A star on the meridian, high in the south: where the turn puts it,
+        // and a little later.
+        const star = new THREE.Vector3(...sky.direction(0, 0));
+        const spin = (turn) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(...sky.POLE), -turn);
+        const later = star.clone().applyQuaternion(spin(0.1));
+        expect(later.z).toBeLessThan(0);
+        expect(later.y).toBeLessThan(star.y);
+        expect(stars.quaternion.angleTo(spin(now.turn))).toBeCloseTo(0, 6);
+        // The pole itself stays put.
+        const pole = new THREE.Vector3(...sky.POLE);
+        expect(pole.clone().applyQuaternion(stars.quaternion).distanceTo(pole)).toBeCloseTo(0, 6);
+    });
+
+    test('a sun that has set shines in no glass: the reflections by night have no sun in them', () => {
+        const real = THREE.PMREMGenerator;
+        const seen = [];
+        THREE.PMREMGenerator = class {
+            fromScene() {
+                seen.push(lit.glow.visible);
+                return { texture: {}, dispose() {} };
+            }
+        };
+        try {
+            lightAt(23);
+            lit.updateEnvironment({}, daylight.lighting(daylight.lightAt(at(23))));
+            lightAt(14);
+            lit.updateEnvironment({}, daylight.lighting(daylight.lightAt(at(14))));
+            expect(seen).toEqual([false, false, true, true]);
+        } finally {
+            THREE.PMREMGenerator = real;
         }
     });
 });

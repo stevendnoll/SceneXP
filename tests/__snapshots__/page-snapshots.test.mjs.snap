@@ -3524,6 +3524,7 @@ html [data-ui-theme="ember" lang="en"]
       span#hud-week.hud-chip
       button#hud-due.hud-chip.hud-chip-due [hidden type="button"]
         "Due today"
+      span#hud-clock.hud-chip [aria-hidden="true" hidden]
     nav#office-bar.ui-float.office-bar [aria-label="The office"]
       button#bar-new.office-btn.office-btn-primary [title="New application (N)" type="button"]
         "New application"
@@ -3531,6 +3532,8 @@ html [data-ui-theme="ember" lang="en"]
         "Computer"
       button#bar-places.office-btn [aria-controls="places-menu" aria-expanded="false" type="button"]
         "Places"
+      button#bar-day.office-btn [hidden type="button"]
+        "Watch a day go by"
       button#bar-outtray.office-btn [title="Backups and exports" type="button"]
         "Out-tray"
       button#bar-wastebasket.office-btn [type="button"]

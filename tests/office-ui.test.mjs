@@ -702,10 +702,91 @@ describe('the light', () => {
         expect(t.ui.hourPin).toBeNull();
     });
 
+    test('a pinned hour is that hour today, for the sky as well as the light', () => {
+        window.cornerOffice.hour(6.5);
+        const at = t.skyTime(new Date(2026, 8, 24, 15, 20));
+        expect([at.getDate(), at.getHours(), at.getMinutes()]).toEqual([24, 6, 30]);
+        window.cornerOffice.hour(null);
+        expect(t.skyTime(new Date(2026, 8, 24, 15, 20)).getHours()).toBe(15);
+    });
+
     test('the glass and water finish can be tried from the console for a screenshot', () => {
         // The Three stub swallows the values; world.tune is held in office-view.
         expect(Object.keys(window.cornerOffice.tune({ glass: 2 }))).toEqual(['glass', 'metal', 'water']);
         expect(Object.keys(window.cornerOffice.tune())).toEqual(['glass', 'metal', 'water']);
+    });
+});
+
+describe('a day going by at the window', () => {
+    test('the button is at the window, and nowhere else until a day is going by', () => {
+        expect(el('bar-day').hidden).toBe(true);
+        key('9');
+        expect(el('bar-day').hidden).toBe(false);
+        expect(el('bar-day').textContent).toBe('Watch a day go by');
+        t.goTo('desk');
+        expect(el('bar-day').hidden).toBe(true);
+    });
+
+    test('a whole day goes by in CONFIG.view.daySeconds, with a clock, said at the start and the end', () => {
+        window.cornerOffice.hour(15);
+        key('9');
+        fire(el('bar-day'), 'click');
+        expect(t.ui.lapse).not.toBeNull();
+        expect(el('bar-day').textContent).toBe('Stop the day');
+        expect(el('hud-clock').hidden).toBe(false);
+        expect(el('hud-clock').textContent).toBe('3:00 PM');
+        expect(said()).toBe('A day is going by at the window, starting from 3:00 PM. Stop the day ends it whenever you like.');
+        // It stays while the visitor looks elsewhere.
+        t.goTo('desk');
+        expect(el('bar-day').hidden).toBe(false);
+        // A quarter of the way: six hours on, and night by then.
+        t.stepDay(CONFIG.view.daySeconds / 4);
+        expect(el('hud-clock').textContent).toBe('9:00 PM');
+        expect(t.ui.phase).toBe('night');
+        t.stepDay(CONFIG.view.daySeconds);
+        expect(t.ui.lapse).toBeNull();
+        expect(el('hud-clock').hidden).toBe(true);
+        expect(el('bar-day').hidden).toBe(true);
+        expect(said()).toBe('A whole day has gone by. It is 3:00 PM again.');
+        expect(t.ui.hourPin).toBe(15);
+        window.cornerOffice.hour(null);
+    });
+
+    test('Stop the day, or Escape, ends it early and gives the sky back', () => {
+        window.cornerOffice.hour(10);
+        key('9');
+        expect(t.watchDay()).toBe(true);
+        t.stepDay(1);
+        fire(el('bar-day'), 'click');
+        expect(t.ui.lapse).toBeNull();
+        expect(said()).toBe('Back to the present. It is 10:00 AM.');
+        t.watchDay();
+        key('Escape');
+        expect(t.ui.lapse).toBeNull();
+        expect(t.stopDay(false)).toBe(false);
+        window.cornerOffice.hour(null);
+    });
+
+    test('for a visitor who asked for less motion, it goes an hour at a time', () => {
+        t.state.reducedMotion = true;
+        window.cornerOffice.hour(8);
+        t.watchDay();
+        t.stepDay(CONFIG.view.daySeconds / 24 * 2.6);
+        expect(el('hud-clock').textContent).toBe('10:00 AM');
+        t.stopDay(false);
+        window.cornerOffice.hour(null);
+    });
+
+    test('the frame loop moves it on', () => {
+        window.cornerOffice.hour(12);
+        t.watchDay();
+        t.state.running = true;
+        t.state.lastTime = 0;
+        t.animate();
+        t.animate();
+        expect(t.ui.lapse).not.toBeNull();
+        t.stopDay(false);
+        window.cornerOffice.hour(null);
     });
 });
 

@@ -94,6 +94,13 @@ export function lighting(light) {
         fill: 0.12 + 0.23 * d,
         /** How many of the city's windows are lit, 0 to 1. */
         cityLights: 1 - d,
+        /** The stars, 0 to 1: out only once the sky is nearly dark. */
+        stars: smooth((0.35 - d) / 0.35),
+        /** The moon: bright by night, a pale ghost by day. */
+        moonShine: 1 - 0.65 * d,
+        /** The glow round the sun, in the sky and about its disc: soft at
+         *  noon, strong low in the sky at dawn and dusk. */
+        halo: 0.3 + 0.7 * golden,
         /** The haze on the painted blocks: dark at night, pale by day. */
         cityNear: mix(0x1c2333, 0x5b6b7d, d),
         cityFar: mix(0x252c40, 0x8499ad, d)

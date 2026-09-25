@@ -32,7 +32,7 @@ import {
     rooftop, aviationLights, facadeUv, outline, sections
 } from './city.min.js';
 import { BAY, HAZE, rippleNormals } from './bay.min.js';
-import { CLOUDS } from './sky.min.js';
+import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
 
 /** The facade styles, in the order paint.js paints them. */
 export const STYLES = ['grid', 'bands', 'fins'];
@@ -375,7 +375,8 @@ export function ridgeGeometry(ridge, { rock: rockHex = RIDGE_COLORS.rock, snow: 
 /** The sky: a dome whose colors run from the zenith to the horizon, drawn
  *  after everything opaque (the "draw the sky last" note) and never fogged. */
 function buildSky(scene) {
-    const geometry = new THREE.SphereGeometry(140000, 32, 16);
+    // Fine enough that the glow round the sun is a smooth patch of sky.
+    const geometry = new THREE.SphereGeometry(140000, 64, 32);
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(geometry.attributes.position.count * 3), 3));
     const sky = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
         vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false
@@ -386,20 +387,85 @@ function buildSky(scene) {
     return sky;
 }
 
-/** Color the dome: `top` at the zenith, `horizon` at and below it. */
-export function paintSky(sky, top, horizon) {
+/**
+ * Color the dome: `top` at the zenith, `horizon` at and below it, and, with
+ * a `glow` ({ dir, color, strength }), the sun's light added round it: a
+ * tight bright patch and a broad soft one, so the sky is brightest near the
+ * sun and a sunset lights the whole western horizon.
+ */
+export function paintSky(sky, top, horizon, glow = null) {
     const pos = sky.geometry.attributes.position;
     const col = sky.geometry.attributes.color;
     const a = new THREE.Color().setHex(top, THREE.SRGBColorSpace);
     const b = new THREE.Color().setHex(horizon, THREE.SRGBColorSpace);
+    const g = glow ? new THREE.Color().setHex(glow.color, THREE.SRGBColorSpace) : null;
     const c = new THREE.Color();
     const r = 140000;
     for (let i = 0; i < pos.count; i++) {
-        const up = Math.max(0, pos.getY(i) / r);
-        c.copy(b).lerp(a, Math.min(1, up ** 0.55));
+        const x = pos.getX(i) / r;
+        const y = pos.getY(i) / r;
+        const z = pos.getZ(i) / r;
+        c.copy(b).lerp(a, Math.min(1, Math.max(0, y) ** 0.55));
+        if (g && glow.strength > 0) {
+            const [sx, sy, sz] = glow.dir;
+            const angle = Math.acos(Math.min(1, Math.max(-1, x * sx + y * sy + z * sz)));
+            const k = glow.strength * (0.55 * Math.exp(-angle / 0.25) + 0.45 * Math.exp(-angle / 0.9));
+            c.r += g.r * k;
+            c.g += g.g * k;
+            c.b += g.b * k;
+        }
         col.setXYZ(i, c.r, c.g, c.b);
     }
     col.needsUpdate = true;
+}
+
+/** How far off the sun, moon and stars hang: past everything but the dome. */
+export const SKY_DISTANCE = 100000;
+
+/** The sun's and moon's discs and the sun's halo, in degrees across. The
+ *  discs are about twice life, because true scale is a couple of pixels. */
+export const DISCS = { sun: 0.9, moon: 1.1, halo: 18 };
+
+const DEG = Math.PI / 180;
+
+/**
+ * The sun's disc and halo, the moon, and the stars. The disc is opaque, so
+ * the mountains hide it as it sets; the halo is added over the sky; the
+ * moon is a painted disc (main.js paints its phase) turned so its lit side
+ * faces the sun; the stars turn about the pole on one Points object.
+ */
+function buildHeavens(scene, textures) {
+    const across = (deg) => 2 * SKY_DISTANCE * Math.tan((deg * DEG) / 2);
+    const disc = new THREE.Mesh(
+        new THREE.CircleGeometry(across(DISCS.sun) / 2, 32),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false })
+    );
+    disc.name = 'sun';
+    const halo = new THREE.Mesh(
+        new THREE.PlaneGeometry(across(DISCS.halo), across(DISCS.halo)),
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff, map: textures.glow || null, transparent: true, opacity: textures.glow ? 1 : 0,
+            blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+        })
+    );
+    halo.name = 'sun-halo';
+    const moon = new THREE.Mesh(
+        new THREE.PlaneGeometry(across(DISCS.moon), across(DISCS.moon)),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, map: textures.moon || null, transparent: true, depthWrite: false, fog: false })
+    );
+    moon.name = 'moon';
+    moon.visible = false;
+    const field = starField();
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(field.flatMap(([x, y, z]) => [x, y, z].map((v) => v * SKY_DISTANCE * 1.2)), 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(field.flatMap(([, , , b]) => [b, b, b * 1.05]), 3));
+    const stars = new THREE.Points(geometry, new THREE.PointsMaterial({
+        size: 2, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false
+    }));
+    stars.name = 'stars';
+    stars.visible = false;
+    scene.add(disc, halo, moon, stars);
+    return { disc, halo, moon, stars };
 }
 
 /** The size of the water plane: past the haze's end in every direction. */
@@ -497,8 +563,13 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     // capture shifts the scene.
     sun.position.set(-0.3, 0.65, -0.7).multiplyScalar(1000);
     scene.add(sun, sun.target);
-    // The sun itself, for the reflections only: a bright disc the glass and
-    // the water mirror. Hidden in the view (stage 4 draws the sun there).
+    // Until the clock says otherwise (setLight with a sky), the sun stands
+    // where that light comes from.
+    let moment = null;
+    const sunDirection = () => (moment ? moment.sun : sun.position.clone().normalize().toArray());
+    // The sun as the reflections see it: a bright ball the glass and the
+    // water mirror, shown only while a capture is taken (the view has its
+    // own disc and halo, which are too faint to light a reflection).
     const glow = new THREE.Mesh(
         new THREE.SphereGeometry(4000, 16, 8),
         new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, toneMapped: false })
@@ -519,7 +590,23 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     scene.add(mountains);
     const sky = buildSky(scene);
     const clouds = buildClouds(scene, textures.clouds);
+    const heavens = buildHeavens(scene, textures);
     paintSky(sky, 0x7fb2dd, 0xe3ecef);
+
+    /** Hang a disc (the sun's, its halo, the moon) at a direction, facing
+     *  the office. */
+    const hang = (mesh, dir) => {
+        mesh.position.set(dir[0], dir[1], dir[2]).multiplyScalar(SKY_DISTANCE);
+        mesh.lookAt(0, 0, 0);
+    };
+    const pole = new THREE.Vector3(...POLE);
+    const basis = new THREE.Matrix4();
+    const lower = -1 * DEG;
+    hang(heavens.disc, sunDirection());
+    hang(heavens.halo, sunDirection());
+    // Nothing waits at the office's own spot: the moon starts below the
+    // horizon until the clock places it.
+    hang(heavens.moon, [0, -1, 0]);
 
     let pmrem = null;
     let reflections = null;
@@ -546,6 +633,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         water,
         hills,
         clouds,
+        heavens,
         glow,
         points,
         towers,
@@ -553,9 +641,38 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         docks,
         mountains,
         plan,
-        /** Color the outside for a light level (daylight.js `lighting`). */
-        setLight(look) {
-            paintSky(sky, look.skyTop, look.skyBottom);
+        /**
+         * Color the outside for a light level (daylight.js `lighting`) and,
+         * given the sky at that moment (sky.js `skyAt`), put the sun, the
+         * moon and the stars where they are, and the light where it comes
+         * from. Cheap enough for every frame of a day going by.
+         */
+        setLight(look, at = null) {
+            if (at) {
+                moment = at;
+                const from = lightFrom(at);
+                sun.position.set(from[0], from[1], from[2]).multiplyScalar(1000);
+                hang(heavens.disc, at.sun);
+                hang(heavens.halo, at.sun);
+                heavens.disc.visible = at.sunHeight > lower;
+                heavens.halo.visible = at.sunHeight > 2 * lower;
+                heavens.moon.visible = at.moonHeight > lower;
+                const { right, up, normal } = discBasis(at.moon, at.sun);
+                heavens.moon.position.set(at.moon[0], at.moon[1], at.moon[2]).multiplyScalar(SKY_DISTANCE);
+                heavens.moon.quaternion.setFromRotationMatrix(basis.makeBasis(
+                    new THREE.Vector3(...right), new THREE.Vector3(...up), new THREE.Vector3(...normal)
+                ));
+                heavens.stars.quaternion.setFromAxisAngle(pole, -at.turn);
+            }
+            // The sky's glow round the sun lingers a little after it sets.
+            const height = moment ? moment.sunHeight : 0.7;
+            const lingering = Math.min(1, Math.max(0, (height + 8 * DEG) / (8 * DEG)));
+            paintSky(sky, look.skyTop, look.skyBottom, { dir: sunDirection(), color: look.sunColor, strength: look.halo * 0.6 * lingering });
+            heavens.disc.material.color.setHex(look.sunColor, THREE.SRGBColorSpace).multiplyScalar(1.4);
+            heavens.halo.material.color.setHex(look.sunColor, THREE.SRGBColorSpace).multiplyScalar(look.halo);
+            heavens.moon.material.opacity = look.moonShine;
+            heavens.stars.material.opacity = look.stars;
+            heavens.stars.visible = look.stars > 0.01;
             scene.fog.color.setHex(look.skyBottom, THREE.SRGBColorSpace);
             clouds.material.color.setHex(look.clouds, THREE.SRGBColorSpace);
             hemi.intensity = look.hemi * 1.1;
@@ -583,9 +700,11 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         updateEnvironment(renderer, look) {
             if (!renderer || !THREE.PMREMGenerator) return null;
             if (!pmrem) pmrem = new THREE.PMREMGenerator(renderer);
-            glow.position.copy(sun.position).normalize().multiplyScalar(120000);
+            const [gx, gy, gz] = sunDirection();
+            glow.position.set(gx, gy, gz).multiplyScalar(120000);
             glow.material.color.setHex(look.sunColor, THREE.SRGBColorSpace).multiplyScalar(2 + 8 * look.sun / 1.52);
-            glow.visible = true;
+            // Only a sun that is up shines in the glass.
+            glow.visible = !moment || moment.sunHeight > 2 * lower;
             const bay = captureFrom(points.bay);
             water.material.envMap = bay.texture;
             scene.environment = bay.texture;

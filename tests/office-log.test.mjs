@@ -6,7 +6,7 @@
 import { CONFIG } from '../www/office/js/config.js';
 import { emptyDoc, addApplication } from '../www/office/js/store.js';
 import { appendLog, normalizeLog, normalizeLogEntry, lastLoggedAt, createHistory } from '../www/office/js/log.js';
-import { count, welcomeLine, pageTitle, storageNote } from '../www/office/js/copy.js';
+import { count, welcomeLine, pageTitle, storageNote, clockTime, dayStartLine, dayEndLine } from '../www/office/js/copy.js';
 
 const NOW = new Date(2026, 8, 24, 10, 0);
 const entry = (i, extra = {}) => ({ at: new Date(2026, 8, 24, 10, i).toISOString(), kind: 'update', collection: 'applications', id: `a${i}`, label: `A${i}`, ...extra });
@@ -99,11 +99,19 @@ describe('copy', () => {
         expect(storageNote('fresh')).toBe('');
     });
 
+    test('a clock time reads the way a clock on the wall does', () => {
+        expect(clockTime(new Date(2026, 8, 24, 0, 0))).toBe('12:00 AM');
+        expect(clockTime(new Date(2026, 8, 24, 9, 5))).toBe('9:05 AM');
+        expect(clockTime(new Date(2026, 8, 24, 12, 30))).toBe('12:30 PM');
+        expect(clockTime(new Date(2026, 8, 24, 23, 59))).toBe('11:59 PM');
+    });
+
     test('every sentence keeps house style', () => {
         const all = [
             welcomeLine(s({ dueToday: 1 })), welcomeLine(s({ dueToday: 3 })), welcomeLine(s({ upcoming: 1 })),
             welcomeLine(s({ upcoming: 3 })), welcomeLine(s({ applications: 1 })), welcomeLine(s()),
-            storageNote('unavailable'), storageNote('newer'), storageNote('unreadable'), storageNote('x', { warn: true })
+            storageNote('unavailable'), storageNote('newer'), storageNote('unreadable'), storageNote('x', { warn: true }),
+            dayStartLine(new Date(2026, 8, 24, 15)), dayEndLine(new Date(2026, 8, 24, 15), true), dayEndLine(new Date(2026, 8, 24, 15), false)
         ];
         for (const line of all) {
             expect(line).not.toMatch(/[—;]/);

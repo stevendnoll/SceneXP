@@ -36,7 +36,7 @@ import {
 import { createHistory } from './log.min.js';
 import { stats, buildIndex, effectiveStatus, followUpFor, dueTasks, upcomingEvents } from './derive.min.js';
 import { queryApplications, facetCounts, normalizeQuery, searchContacts } from './query.min.js';
-import { welcomeLine, pageTitle, storageNote, count } from './copy.min.js';
+import { welcomeLine, pageTitle, storageNote, count, clockTime, dayStartLine, dayEndLine } from './copy.min.js';
 import { STATUS_LABELS, EVENT_LABELS, SORT_LABELS, applicationName, eventName } from './labels.min.js';
 import { formatDate, formatDateTime, ceilToMinutes, addDays, displayDateTime } from './dates.min.js';
 import { stockSamples } from './samples.min.js';
@@ -46,10 +46,10 @@ import { buildRoom, setLamp, pickOf, setNotes, ensureCapacity } from './room.min
 import { buildWorld } from './world.min.js';
 import {
     screenLines, drawScreen, drawCalendar, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
-    drawLetterAtlas, drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, FACADE_STYLES
+    drawLetterAtlas, drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, FACADE_STYLES
 } from './paint.min.js';
 import { CITY } from './city.min.js';
-import { CLOUDS, cloudPuffs } from './sky.min.js';
+import { CLOUDS, cloudPuffs, skyAt, dayLapse } from './sky.min.js';
 import { drawerPlan, liftedLine, TAB_COLORS } from './cabinet.min.js';
 import { createFiling } from './filing.min.js';
 import { boardPlan, boardSummary, boardColumns, columnAt, CARD_ATLAS } from './board.min.js';
@@ -126,6 +126,14 @@ const ui = {
     /** An hour the light is held at, for screenshots, or null for the clock
      *  (window.cornerOffice.hour). */
     hourPin: null,
+    /** A day going by at the window: its sky.js dayLapse and the moment it
+     *  has reached, or null. */
+    lapse: null,
+    /** When the reflections were last captured, and where the sun stood,
+     *  and what the moon was last painted for. */
+    capturedAt: 0,
+    capturedSun: null,
+    moonKey: null,
     /** Whether the cabinet's folders or drawers are mid-move, and what its
      *  drawer labels were last painted from. */
     cabinetMoving: false,
@@ -352,7 +360,10 @@ function worldTextures() {
     const streets = sharp(paintedTexture(256, 256, (ctx, W, H) => drawStreets(ctx, W, H, CITY)).texture);
     const streetsLit = sharp(paintedTexture(256, 256, (ctx, W, H) => drawStreets(ctx, W, H, CITY, true)).texture);
     const clouds = sharp(paintedTexture(CLOUDS.size, CLOUDS.size, (ctx, W, H) => drawClouds(ctx, W, H, cloudPuffs())).texture);
-    return { facades, streets, streetsLit, clouds };
+    // The moon is repainted as its phase changes (paintMoon), the glow never.
+    painted.moon = paintedTexture(256, 256, () => {});
+    const glow = paintedTexture(256, 256, drawGlow).texture;
+    return { facades, streets, streetsLit, clouds, moon: painted.moon.texture, glow };
 }
 
 function buildScene() {
@@ -436,6 +447,7 @@ function handleResize() {
 function goTo(station) {
     if (!camera) return;
     ui.station = station;
+    showDayButton();
     const to = poseFor(station, aspect(), CONFIG);
     glide = createGlide(state.pose || to, to, state.reducedMotion ? 0 : CONFIG.view.glideSeconds);
     requestRender();
@@ -488,11 +500,50 @@ function paintWallCalendar(t) {
     texture.needsUpdate = true;
 }
 
-/** Set the light through the windows from the clock (or the pinned hour),
- *  repainting the city only when it has visibly changed. */
+/** The moment the sky shows: a day going by, else the pinned hour today,
+ *  else the clock. */
+function skyTime(t) {
+    if (ui.lapse) return new Date(ui.lapse.at);
+    if (ui.hourPin == null) return t;
+    const midnight = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    return new Date(midnight.getTime() + ui.hourPin * 60 * 60 * 1000);
+}
+
+/** Paint the moon for its phase, when that has changed by a few degrees. */
+function paintMoon(sky) {
+    const key = Math.round(sky.elongation / (3 * Math.PI / 180));
+    if (key === ui.moonKey || !painted.moon || !painted.moon.canvas) return;
+    ui.moonKey = key;
+    const c = painted.moon.canvas;
+    drawMoon(c.getContext('2d'), c.width, c.height, sky.elongation);
+    painted.moon.texture.needsUpdate = true;
+}
+
+/**
+ * Whether the reflections should be captured again: when the light has
+ * visibly changed or the sun has moved on some way, but during a day going
+ * by no more often than CONFIG.view.captureSeconds, because a capture draws
+ * the whole world twelve times.
+ */
+function captureDue(sky, changed) {
+    const moved = !ui.capturedSun
+        || Math.acos(Math.min(1, sky.sun[0] * ui.capturedSun[0] + sky.sun[1] * ui.capturedSun[1] + sky.sun[2] * ui.capturedSun[2]))
+            > CONFIG.view.captureDegrees * Math.PI / 180;
+    if (!changed && !moved) return false;
+    return !ui.lapse || performance.now() - ui.capturedAt >= CONFIG.view.captureSeconds * 1000;
+}
+
+/**
+ * Set the light through the windows and the sky outside from the clock (or
+ * the pinned hour, or a day going by). The sun, moon and stars move every
+ * time, which is cheap; the reflections are captured again only when
+ * captureDue says so, or when `force`d.
+ */
 function applyDaylight(t, force = false) {
-    const light = lightAt(t, ui.hourPin);
-    if (!force && light.key === ui.lightKey) return light;
+    const at = skyTime(t);
+    const light = lightAt(at);
+    const sky = skyAt(at);
+    const changed = force || light.key !== ui.lightKey;
     ui.lightKey = light.key;
     ui.phase = light.phase;
     const look = lighting(light);
@@ -503,11 +554,68 @@ function applyDaylight(t, force = false) {
         lights.fill.intensity = look.fill;
     }
     if (world) {
-        world.setLight(look);
-        world.updateEnvironment(renderer, look);
+        world.setLight(look, sky);
+        paintMoon(sky);
+        if (force || captureDue(sky, changed)) {
+            world.updateEnvironment(renderer, look);
+            ui.capturedAt = performance.now();
+            ui.capturedSun = sky.sun;
+        }
     }
     requestRender();
     return light;
+}
+
+// ---- A day going by -----------------------------------------------------------
+
+/** The button shows at the window, where the day is seen, and stays while
+ *  a day is going by wherever the visitor goes. */
+function showDayButton() {
+    const btn = el('bar-day');
+    if (!btn) return;
+    btn.hidden = !(ui.station === 'window' || ui.lapse);
+    btn.textContent = ui.lapse ? 'Stop the day' : 'Watch a day go by';
+}
+
+/** Start a day going by from the moment the sky shows now, or stop it. A
+ *  visitor who asked for less motion sees it an hour at a time. */
+function watchDay() {
+    if (ui.lapse) return stopDay(false);
+    const from = skyTime(now()).getTime();
+    ui.lapse = { run: dayLapse(from, { seconds: CONFIG.view.daySeconds, stepped: state.reducedMotion }), at: from };
+    const clock = el('hud-clock');
+    if (clock) {
+        clock.hidden = false;
+        clock.textContent = clockTime(new Date(from));
+    }
+    showDayButton();
+    announce(dayStartLine(new Date(from)));
+    track('day-lapse');
+    requestRender();
+    return true;
+}
+
+/** Move a day going by on, and finish it at its end. */
+function stepDay(delta) {
+    const { at, done } = ui.lapse.run.step(delta);
+    ui.lapse.at = at;
+    const clock = el('hud-clock');
+    if (clock) clock.textContent = clockTime(new Date(at));
+    applyDaylight(now());
+    if (done) stopDay(true);
+}
+
+/** End a day going by, whole or early, and give the sky back to the clock
+ *  (or the pinned hour). */
+function stopDay(whole) {
+    if (!ui.lapse) return false;
+    ui.lapse = null;
+    const clock = el('hud-clock');
+    if (clock) clock.hidden = true;
+    showDayButton();
+    applyDaylight(now(), true);
+    announce(dayEndLine(skyTime(now()), whole));
+    return false;
 }
 
 // ---- Changing the document --------------------------------------------------
@@ -2063,6 +2171,8 @@ function setupEventListeners() {
     wire('bar-outtray', 'click', () => openOuttray());
     wire('bar-wastebasket', 'click', () => openWastebasket());
     wire('bar-settings', 'click', openSettings);
+    wire('bar-day', 'click', watchDay);
+    showDayButton();
     wire('bar-undo', 'click', undo);
     wire('grid-new', 'click', () => openApplicationForm(null));
     wire('grid-clear', 'click', gridHandlers.clearFilters);
@@ -2126,6 +2236,7 @@ function setupEventListeners() {
         // what the computer is for. Over any other card, nothing does.
         const top = topCard();
         if (top && top !== 'computer') return;
+        if (key === 'escape' && ui.lapse && !top) { event.preventDefault(); stopDay(false); return; }
         if (key === 'n') { event.preventDefault(); openApplicationForm(null); }
         else if (key === '/') {
             event.preventDefault();
@@ -2212,6 +2323,10 @@ function animate() {
     }
     if (ui.ring.t < 1) {
         stepRing(delta);
+        state.dirty = true;
+    }
+    if (ui.lapse) {
+        stepDay(delta);
         state.dirty = true;
     }
     if (ui.flaps.target && ui.flaps.rows !== ui.flaps.target) {
@@ -2365,6 +2480,10 @@ export const __test__ = {
     exportEvent,
     exportUpcoming,
     applyDaylight,
+    skyTime,
+    watchDay,
+    stepDay,
+    stopDay,
     lights,
     currentRows,
     openFolder,
