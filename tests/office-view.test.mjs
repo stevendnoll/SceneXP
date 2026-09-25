@@ -697,3 +697,243 @@ describe('the sun, the moon and the stars', () => {
         }
     });
 });
+
+// ---- What moves ---------------------------------------------------------------------
+
+describe('life on the water and in the streets', () => {
+    let lit;
+    let life;
+    const NOON = new Date(2026, 8, 24, 12, 0);
+    const later = (m) => new Date(NOON.getTime() + m * 60000);
+
+    beforeAll(async () => {
+        life = await import('../www/office/js/life.js');
+        lit = worldMod.buildWorld(CONFIG, { textures: { clouds: new THREE.Texture() } });
+    });
+
+    /** Whether the window sees any of a craft: a few points of its box, in
+     *  frame, with nothing drawn in front of them. */
+    function seen(cam, group) {
+        if (!group.visible) return false;
+        lit.scene.updateMatrixWorld(true);
+        const frustum = new THREE.Frustum().setFromProjectionMatrix(
+            new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)
+        );
+        const box = new THREE.Box3().setFromObject(group);
+        const shown = (o) => (o ? o.visible && shown(o.parent) : true);
+        // Eighteen points through the craft's box, low and high.
+        const points = [];
+        for (const fx of [0.2, 0.5, 0.8]) for (const fy of [0.3, 0.7]) for (const fz of [0.2, 0.5, 0.8]) points.push([fx, fy, fz]);
+        return points.some(([fx, fy, fz]) => {
+            const p = new THREE.Vector3(
+                box.min.x + (box.max.x - box.min.x) * fx, box.min.y + (box.max.y - box.min.y) * fy, box.min.z + (box.max.z - box.min.z) * fz
+            );
+            if (!frustum.containsPoint(p)) return false;
+            const dir = p.clone().sub(cam.position);
+            const ray = new THREE.Raycaster(cam.position, dir.clone().normalize(), 0.05, dir.length() + 1);
+            if (ray.intersectObject(room.group, true).length) return false;
+            let o = (ray.intersectObject(lit.scene, true).find((h) => shown(h.object)) || {}).object;
+            while (o && o !== group) o = o.parent;
+            return o === group;
+        });
+    }
+
+    test('everything starts hidden and far below the water, never at the office’s own spot', () => {
+        const fresh = worldMod.buildWorld(CONFIG);
+        const { ferries, ships, sailboats, seaplane, cars } = fresh.fleet;
+        for (const c of [...ferries, ...ships, ...sailboats, seaplane]) {
+            expect(c.group.visible).toBe(false);
+            expect(c.group.position.y).toBeLessThan(-1000);
+        }
+        expect(cars.visible).toBe(false);
+    });
+
+    test('each craft stands where its timetable says, and hides when it is not out', () => {
+        lit.setLife(NOON, 0);
+        const ferries = life.ferriesAt(NOON, life.ferryRoute());
+        lit.fleet.ferries.forEach((c, i) => {
+            expect(c.group.position.x).toBeCloseTo(ferries[i].x, 6);
+            expect(c.group.position.z).toBeCloseTo(ferries[i].z, 6);
+            expect(c.group.rotation.y).toBeCloseTo(ferries[i].yaw, 6);
+            expect(c.group.visible).toBe(true);
+        });
+        const ships = life.shipsAt(NOON);
+        for (const s of ships) {
+            const c = lit.fleet.ships[((s.k % 3) + 3) % 3];
+            expect(c.group.position.x).toBeCloseTo(s.x, 6);
+            expect(c.group.visible).toBe(true);
+        }
+        expect(lit.fleet.ships.filter((c) => c.group.visible)).toHaveLength(ships.length);
+        lit.setLife(new Date(2026, 8, 24, 23, 0), 0);
+        expect(lit.fleet.sailboats.every((c) => !c.group.visible)).toBe(true);
+        lit.setLife(new Date(2026, 8, 24, 12, 40), 0);
+        expect(lit.fleet.seaplane.group.visible).toBe(false);
+        lit.setLife(new Date(2026, 8, 24, 12, 21), 0);
+        expect(lit.fleet.seaplane.group.visible).toBe(true);
+        expect(lit.fleet.seaplane.group.rotation.x).toBeGreaterThan(0);
+    });
+
+    test('a craft under way leaves a wake, one at rest none, and the wake fades out behind it', () => {
+        const trail = lit.fleet.ferries[0].trail;
+        const docked = life.ferriesAt(NOON, life.ferryRoute());
+        lit.setLife(NOON, 0);
+        expect(trail.material.opacity).toBeCloseTo(0.55 * docked[0].speed, 6);
+        const moving = life.ferriesAt(later(17), life.ferryRoute());
+        lit.setLife(later(17), 0);
+        expect(trail.material.opacity).toBeCloseTo(0.55 * moving[0].speed, 6);
+        const color = trail.geometry.attributes.color;
+        expect(color.itemSize).toBe(4);
+        const alphas = Array.from({ length: color.count }, (_, i) => color.getW(i));
+        expect(Math.max(...alphas)).toBeGreaterThan(0.5);
+        expect(Math.min(...alphas)).toBe(0);
+        expect(trail.material.side).toBe(THREE.DoubleSide);
+    });
+
+    test('from the window a ferry is in sight all through its cycle, down the office’s street', () => {
+        const cam = cameraAt('window', 16 / 10);
+        for (let m = 0; m < life.LIFE.ferry.cycle; m += 5) {
+            lit.setLife(later(m), 0);
+            expect(lit.fleet.ferries.some((c) => seen(cam, c.group))).toBe(true);
+        }
+    });
+
+    test('from the window the sailboats are in sight by day, and a ship passes now and then', () => {
+        const cam = cameraAt('window', 16 / 10);
+        lit.setLife(NOON, 0);
+        expect(lit.fleet.sailboats.some((c) => seen(cam, c.group))).toBe(true);
+        let ship = false;
+        for (let m = 0; m < 150 && !ship; m += 2) {
+            lit.setLife(later(m), 0);
+            ship = lit.fleet.ships.some((c) => seen(cam, c.group));
+        }
+        expect(ship).toBe(true);
+    });
+
+    test('from the window the seaplane is seen taking off', () => {
+        const cam = cameraAt('window', 16 / 10);
+        let flying = false;
+        for (let s = 0; s < 240 && !flying; s += 10) {
+            lit.setLife(new Date(2026, 8, 24, 12, 20, s), 0);
+            flying = seen(cam, lit.fleet.seaplane.group) && lit.fleet.seaplane.group.position.y > city.WATER_Y;
+        }
+        expect(flying).toBe(true);
+    });
+
+    test('by night the ferries’ windows glow and the streets below fill with headlights and taillights', () => {
+        const cam = cameraAt('window', 16 / 10);
+        lit.fleet.light(1);
+        expect(lit.fleet.cars.visible).toBe(true);
+        expect(lit.fleet.ferries[0].lit.material.emissiveIntensity).toBeGreaterThan(1);
+        lit.setLife(NOON, 30);
+        lit.scene.updateMatrixWorld(true);
+        const frustum = new THREE.Frustum().setFromProjectionMatrix(
+            new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)
+        );
+        const shown = (o) => (o ? o.visible && shown(o.parent) : true);
+        const pos = lit.fleet.cars.geometry.attributes.position;
+        let inView = 0;
+        for (let i = 0; i < pos.count; i++) {
+            const p = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
+            if (!frustum.containsPoint(p)) continue;
+            const dir = p.clone().sub(cam.position);
+            const ray = new THREE.Raycaster(cam.position, dir.clone().normalize(), 0.05, dir.length() - 2);
+            if (ray.intersectObject(room.group, true).length) continue;
+            if (ray.intersectObject(lit.scene, true).some((h) => shown(h.object) && h.object.name !== 'cars')) continue;
+            inView++;
+        }
+        expect(inView).toBeGreaterThanOrEqual(10);
+        // They move on real seconds.
+        const before = pos.getX(0) + pos.getZ(0);
+        lit.setLife(NOON, 31);
+        expect(pos.getX(0) + pos.getZ(0)).not.toBeCloseTo(before, 3);
+        lit.fleet.light(0);
+        expect(lit.fleet.cars.visible).toBe(false);
+        expect(lit.fleet.ferries[0].lit.material.emissiveIntensity).toBe(0);
+    });
+
+    test('the wind drifts the clouds and the ripples', () => {
+        lit.setLife(NOON, 0);
+        const a = lit.clouds.material.map.offset.clone();
+        const r = lit.water.material.normalMap.offset.clone();
+        lit.setLife(later(1), 50);
+        expect(lit.clouds.material.map.offset.equals(a)).toBe(false);
+        expect(lit.water.material.normalMap.offset.equals(r)).toBe(false);
+        // Without a painted cloud tile nothing breaks.
+        expect(() => world.setLife(NOON, 0)).not.toThrow();
+    });
+
+});
+
+// fleet.js is reached through its .min build from world.js, which hides it
+// from coverage (the ".min imports hide coverage" note), so its source is
+// built directly here.
+describe('the fleet, built from its source', () => {
+    let fleetMod;
+    let life;
+    beforeAll(async () => {
+        fleetMod = await import('../www/office/js/fleet.js');
+        life = await import('../www/office/js/life.js');
+    });
+
+    test('a list of boxes is one geometry, each box its own color, where it was put', () => {
+        const g = fleetMod.boxesGeometry([[0, 1, 0, 2, 2, 2, 0xff0000], [10, 1, 0, 2, 2, 2, 0x0000ff]]);
+        expect(g.attributes.position.count).toBe(72);
+        g.computeBoundingBox();
+        expect(g.boundingBox.min.toArray()).toEqual([-1, 0, -1]);
+        expect(g.boundingBox.max.toArray()).toEqual([11, 2, 1]);
+        const color = g.attributes.color;
+        expect(color.getX(0)).toBeCloseTo(1, 6);
+        expect(color.getZ(71)).toBeCloseTo(1, 6);
+        expect(color.getX(71)).toBeCloseTo(0, 6);
+    });
+
+    test('a wake spreads back from the stern, white, fading to nothing', () => {
+        const g = fleetMod.wakeGeometry(100);
+        const pos = g.attributes.position;
+        const zs = Array.from({ length: pos.count }, (_, i) => pos.getZ(i));
+        expect(Math.min(...zs)).toBeCloseTo(50, 6);
+        expect(Math.max(...zs)).toBeCloseTo(350, 6);
+        const color = g.attributes.color;
+        for (let i = 0; i < pos.count; i++) {
+            expect(color.getX(i)).toBe(1);
+            // The far end has faded out, the stern has not.
+            if (pos.getZ(i) > 300) expect(color.getW(i)).toBe(0);
+            if (pos.getZ(i) === 50) expect(color.getW(i)).toBeGreaterThan(0.5);
+        }
+    });
+
+    test('the fleet is built into a scene hidden, lights up for the evening, and is placed or hidden by the timetable', () => {
+        const scene = new THREE.Scene();
+        const lanes = life.carLanes();
+        const fleet = fleetMod.buildFleet(scene, life.carFleet(lanes));
+        expect(fleet.ferries).toHaveLength(2);
+        expect(fleet.ships).toHaveLength(3);
+        expect(fleet.sailboats).toHaveLength(life.LIFE.sailboat.count);
+        expect(scene.getObjectByName('seaplane')).toBe(fleet.seaplane.group);
+        expect(scene.getObjectByName('cars')).toBe(fleet.cars);
+        expect(fleet.cars.geometry.attributes.color.count).toBe(life.LIFE.cars.count);
+        // The small craft are enlarged past life; the ships are true size.
+        expect(fleet.sailboats[0].group.scale.x).toBe(life.LIFE.sailboat.scale);
+        expect(fleet.ships[0].group.scale.x).toBe(1);
+        fleet.light(0.8);
+        expect(fleet.ferries[1].lit.material.emissiveIntensity).toBeCloseTo(0.8 * 1.4, 9);
+        expect(fleet.cars.visible).toBe(true);
+        fleet.light(0.1);
+        expect(fleet.cars.visible).toBe(false);
+        const boat = fleet.sailboats[0];
+        fleetMod.place(boat, { x: 10, y: -195, z: -2000, yaw: 0.5, heel: 0.2, out: true });
+        expect(boat.group.visible).toBe(true);
+        expect(boat.group.rotation.toArray().slice(0, 3)).toEqual([0, 0.5, 0.2]);
+        expect(boat.group.rotation.order).toBe('YXZ');
+        fleetMod.place(boat, { x: 10, y: -195, z: -2000, out: false });
+        expect(boat.group.visible).toBe(false);
+        fleetMod.place(boat, null);
+        expect(boat.group.visible).toBe(false);
+        expect(boat.group.position.y).toBeLessThan(-1000);
+        const ferry = fleet.ferries[0];
+        fleetMod.place(ferry, { x: 0, y: -195, z: -3000, yaw: 0, speed: 1 });
+        expect(ferry.trail.material.opacity).toBeCloseTo(0.55, 9);
+        fleetMod.place(ferry, { x: 0, y: -195, z: -3000, yaw: 0 });
+        expect(ferry.trail.material.opacity).toBe(0);
+    });
+});

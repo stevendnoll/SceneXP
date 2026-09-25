@@ -33,6 +33,10 @@ import {
 } from './city.min.js';
 import { BAY, HAZE, rippleNormals } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
+import {
+    ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions, drift
+} from './life.min.js';
+import { buildFleet, place } from './fleet.min.js';
 
 /** The facade styles, in the order paint.js paints them. */
 export const STYLES = ['grid', 'bands', 'fins'];
@@ -591,6 +595,12 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const sky = buildSky(scene);
     const clouds = buildClouds(scene, textures.clouds);
     const heavens = buildHeavens(scene, textures);
+    // What moves (life.js schedules, fleet.js meshes), laid out once.
+    const lanes = carLanes();
+    const cars = carFleet(lanes);
+    const route = ferryRoute();
+    const courses = sailboatCourses();
+    const fleet = buildFleet(scene, cars);
     paintSky(sky, 0x7fb2dd, 0xe3ecef);
 
     /** Hang a disc (the sun's, its halo, the moon) at a direction, facing
@@ -634,6 +644,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         hills,
         clouds,
         heavens,
+        fleet,
         glow,
         points,
         towers,
@@ -673,6 +684,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             heavens.moon.material.opacity = look.moonShine;
             heavens.stars.material.opacity = look.stars;
             heavens.stars.visible = look.stars > 0.01;
+            fleet.light(look.cityLights);
             scene.fog.color.setHex(look.skyBottom, THREE.SRGBColorSpace);
             clouds.material.color.setHex(look.clouds, THREE.SRGBColorSpace);
             hemi.intensity = look.hemi * 1.1;
@@ -718,6 +730,25 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             }
             reflections = { city, bay };
             return reflections;
+        },
+        /**
+         * Put everything that moves where it is: the ferries, ships,
+         * sailboats and seaplane on the sky's clock (`date`), the cars and
+         * the ripples on real `seconds`, and the clouds drifted by the wind.
+         * Cheap enough for every frame.
+         */
+        setLife(date, seconds) {
+            ferriesAt(date, route).forEach((at, i) => place(fleet.ferries[i], at));
+            const ships = shipsAt(date);
+            fleet.ships.forEach((c, slot) => place(c, ships.find((ship) => ((ship.k % 3) + 3) % 3 === slot) || null));
+            sailboatsAt(date, courses).forEach((at, i) => place(fleet.sailboats[i], at));
+            place(fleet.seaplane, seaplaneAt(date));
+            const positions = fleet.cars.geometry.attributes.position;
+            carPositions(cars, lanes, seconds, positions.array);
+            positions.needsUpdate = true;
+            const moved = drift(date, seconds, CLOUDS.tile);
+            if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);
+            water.material.normalMap.offset.set(moved.ripple[0], moved.ripple[1]);
         },
         /**
          * Set the finish for a screenshot round and say what it is now:

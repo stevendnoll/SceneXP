@@ -91,6 +91,8 @@ const state = {
     reducedMotion: false,
     lastTime: 0,
     tickDue: 0,
+    /** Seconds until the next frame of the moving scenery. */
+    ambientDue: 0,
     /** Set when something on screen changed and a frame should be drawn. */
     dirty: true,
     frames: 0,
@@ -134,6 +136,9 @@ const ui = {
     capturedAt: 0,
     capturedSun: null,
     moonKey: null,
+    /** Whether the moving scenery should be placed again even though it is
+     *  held still (reduced motion): the clock jumped, or a day is going by. */
+    lifeDue: true,
     /** Whether the cabinet's folders or drawers are mid-move, and what its
      *  drawer labels were last painted from. */
     cabinetMoving: false,
@@ -556,6 +561,7 @@ function applyDaylight(t, force = false) {
     if (world) {
         world.setLight(look, sky);
         paintMoon(sky);
+        if (force || ui.lapse) ui.lifeDue = true;
         if (force || captureDue(sky, changed)) {
             world.updateEnvironment(renderer, look);
             ui.capturedAt = performance.now();
@@ -2340,10 +2346,41 @@ function animate() {
         state.dirty = true;
     }
 
+    // The moving scenery asks for a frame about CONFIG.view.ambientFps
+    // times a second when nothing else is drawing.
+    const moving = lifeMoves();
+    if (moving) {
+        state.ambientDue -= delta;
+        if (state.ambientDue <= 0) {
+            state.ambientDue = 1 / CONFIG.view.ambientFps;
+            state.dirty = true;
+        }
+    }
+
     if (!state.dirty) return;
     state.dirty = false;
     state.frames++;
+    if (world && (moving || ui.lifeDue)) placeLife();
     draw();
+}
+
+/**
+ * Whether the scenery outside is moving: not for a visitor who asked for
+ * less motion (it is placed where the clock says and held there), and not
+ * while a card covers the room (the cabinet's and the corkboard's sheets
+ * are docked and leave it in view).
+ */
+function lifeMoves() {
+    if (state.reducedMotion || !world || !state.loaded) return false;
+    const top = topCard();
+    return !top || top === 'cabinet' || top === 'board';
+}
+
+/** Put the ferries, ships and the rest where the sky's clock says, and the
+ *  cars and ripples where real time says (held at zero for less motion). */
+function placeLife() {
+    ui.lifeDue = false;
+    world.setLife(skyTime(now()), state.reducedMotion ? 0 : performance.now() / 1000);
 }
 
 /**
@@ -2484,6 +2521,8 @@ export const __test__ = {
     watchDay,
     stepDay,
     stopDay,
+    lifeMoves,
+    placeLife,
     lights,
     currentRows,
     openFolder,

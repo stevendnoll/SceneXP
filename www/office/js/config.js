@@ -205,7 +205,10 @@ export const CONFIG = deepFreeze({
          *  this often, and outside it whenever the sun has moved this far
          *  (each capture draws the world twelve times). */
         captureSeconds: 1,
-        captureDegrees: 20
+        captureDegrees: 20,
+        /** How often the ferries, ships, cars and clouds move on when nothing
+         *  else is drawing: a few frames a second is all slow things need. */
+        ambientFps: 15
     },
 
     /** How far ahead the calendar file reaches, in days. */

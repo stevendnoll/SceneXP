@@ -790,6 +790,59 @@ describe('a day going by at the window', () => {
     });
 });
 
+describe('the scenery moves', () => {
+    const run = () => {
+        t.state.running = true;
+        t.state.lastTime = 0;
+    };
+
+    test('a few frames a second when nothing else is drawing, placing the fleet each time', () => {
+        expect(t.lifeMoves()).toBe(true);
+        run();
+        t.animate();
+        t.state.dirty = false;
+        const frames = t.state.frames;
+        t.state.ambientDue = 0;
+        t.ui.lifeDue = false;
+        t.animate();
+        expect(t.state.frames).toBe(frames + 1);
+        expect(t.state.ambientDue).toBeCloseTo(1 / CONFIG.view.ambientFps, 9);
+        // Not again until the next one is due.
+        t.state.lastTime = performance.now();
+        t.animate();
+        expect(t.state.frames).toBe(frames + 1);
+    });
+
+    test('still behind a card that covers the room, moving behind the docked sheets', () => {
+        key('c');
+        expect(t.lifeMoves()).toBe(false);
+        key('Escape');
+        key('4');
+        expect(t.lifeMoves()).toBe(true);
+    });
+
+    test('held still for a visitor who asked for less motion, but placed when the clock jumps', () => {
+        t.state.reducedMotion = true;
+        expect(t.lifeMoves()).toBe(false);
+        run();
+        t.animate();
+        t.state.dirty = false;
+        const frames = t.state.frames;
+        t.state.ambientDue = 0;
+        t.animate();
+        expect(t.state.frames).toBe(frames);
+        // A pinned hour is a jump: the fleet is placed once, on the next frame.
+        window.cornerOffice.hour(9);
+        expect(t.ui.lifeDue).toBe(true);
+        t.animate();
+        expect(t.ui.lifeDue).toBe(false);
+        expect(t.state.frames).toBe(frames + 1);
+        window.cornerOffice.hour(null);
+        t.placeLife();
+        expect(t.ui.lifeDue).toBe(false);
+    });
+});
+
 // ---- M3: the filing cabinet -------------------------------------------------------
 
 describe('the filing cabinet', () => {
