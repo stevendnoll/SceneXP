@@ -166,12 +166,30 @@ describe('what is in the room', () => {
         }
     });
 
-    test('the lamp switches, and its bulb dims with it', () => {
+    test('the lamp switches, and the glass inside its shade dims with it', () => {
         setLamp(room.lamp, false);
         expect(room.lamp.light.visible).toBe(false);
-        expect(room.lamp.bulb.material.color.getHex()).toBe(0x6b6356);
+        expect(room.lamp.glow.material.emissiveIntensity).toBe(0);
         setLamp(room.lamp, true);
         expect(room.lamp.light.visible).toBe(true);
+        expect(room.lamp.glow.material.emissiveIntensity).toBe(roomMod.LAMP_GLOW);
+    });
+
+    test('no bulb hangs under the lamp’s shade, and no cup stands on the desk (QA, 2026-09-25)', () => {
+        // The only ball on the lamp is the pull chain's bead (and the
+        // finial on top): nothing the size of a bulb.
+        const balls = [];
+        room.picks.lamp.traverse((o) => {
+            if (o.geometry && o.geometry.type === 'SphereGeometry') balls.push(o.geometry.parameters.radius);
+        });
+        expect(Math.max(...balls)).toBeLessThan(0.015);
+        expect(room.lamp.bulb).toBeUndefined();
+        // Nothing stands loose on the desk top: everything there is one of
+        // the tappable things.
+        const top = CONFIG.room.desk.height;
+        const loose = room.group.children.filter((o) => o.isMesh && !o.userData.pick && o.name !== 'shell'
+            && Math.abs(boxOf(o).min.y - top) < 0.01);
+        expect(loose).toEqual([]);
     });
 });
 
@@ -477,15 +495,6 @@ describe('the corkboard', () => {
             const p = ray.intersectPlane(plane, new THREE.Vector3());
             expect(boardMod.columnAt(p.z, B, 8)).toBe(c);
         }
-    });
-});
-
-describe('the mug', () => {
-    test('stands clear of everything else on the desk', () => {
-        const mug = room.group.children.find((o) => o.geometry && o.geometry.type === 'CylinderGeometry' && o.position.y < 1 && o.position.y > 0.75);
-        expect(mug).toBeTruthy();
-        const m = boxOf(mug);
-        for (const key of ['computer', 'intray', 'outtray', 'lamp']) expect(m.intersectsBox(boxOf(room.picks[key]))).toBe(false);
     });
 });
 

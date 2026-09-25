@@ -47,7 +47,6 @@ const COLORS = {
     basket: 0x3b3f45,
     shade: 0x1f6f4a,
     brass: 0xc9a04a,
-    mug: 0xc8553d,
     plant: 0x2f6b3a,
     pot: 0xb86b45,
     chair: 0x26282c,
@@ -757,20 +756,15 @@ function buildDesk(group, config, picks) {
     const bead = new THREE.Mesh(new THREE.SphereGeometry(0.007, 8, 6), brass);
     bead.position.set(lx + 0.07, shadeY - 0.052, lz + 0.1);
     lampGroup.add(bead);
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.024, 12, 8), new THREE.MeshBasicMaterial({ color: 0xfff1c9 }));
-    bulb.position.set(lx, shadeY - 0.025, lz + 0.035);
-    lampGroup.add(bulb);
+    // The light, up inside the shade. No bulb is drawn: under the shade's
+    // open side it showed as a white ball (QA, 2026-09-25), and the glowing
+    // white glass inside says the lamp is on.
     const light = new THREE.PointLight(0xffd9a0, 1.6, 3.5, 2);
-    light.position.copy(bulb.position);
+    light.position.set(lx, shadeY - 0.015, lz + 0.035);
     lampGroup.add(light);
     addHitBox(lampGroup);
     group.add(lampGroup);
     picks.lamp = lampGroup;
-
-    // A mug, for company, between the monitor and the lamp.
-    const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.036, 0.1, 16), mat(COLORS.mug, { roughness: 0.35 }));
-    mug.position.set(x1 - 0.37, top + 0.05, d.z + 0.07);
-    group.add(mug);
 
     // The open folder, lying on the desk while its card is open. Two covers
     // side by side, and a few pages on the right one.
@@ -785,7 +779,7 @@ function buildDesk(group, config, picks) {
     group.add(folder);
     picks.folder = folder;
 
-    return { screen, light, bulb, glow, folder, lampGroup };
+    return { screen, light, glow, folder, lampGroup };
 }
 
 function buildFloorThings(group, config, picks) {
@@ -893,14 +887,13 @@ export function buildRoom(config, textures = {}) {
         whiteboard,
         notes,
         rain,
-        lamp: { light: desk.light, bulb: desk.bulb, glow: desk.glow, group: desk.lampGroup }
+        lamp: { light: desk.light, glow: desk.glow, group: desk.lampGroup }
     };
 }
 
-/** Switch the lamp. The bulb dims with it, and the shade's white glass
- *  inside stops glowing, so the lamp reads as off. */
+/** Switch the lamp. The shade's white glass inside stops glowing with it,
+ *  so the lamp reads as off. */
 export function setLamp(lamp, on) {
     lamp.light.visible = on;
-    lamp.bulb.material.color.setHex(on ? 0xfff1c9 : 0x6b6356);
-    if (lamp.glow) lamp.glow.material.emissiveIntensity = on ? LAMP_GLOW : 0;
+    lamp.glow.material.emissiveIntensity = on ? LAMP_GLOW : 0;
 }
