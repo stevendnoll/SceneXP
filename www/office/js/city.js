@@ -259,23 +259,30 @@ export function noiseField(seed) {
         [perm[i], perm[j]] = [perm[j], perm[i]];
     }
     const angle = perm.map(() => random() * Math.PI * 2);
-    const gx = angle.map(Math.cos);
-    const gz = angle.map(Math.sin);
-    const at = (i, j) => perm[(perm[i & 255] + j) & 255];
+    const gx = Float64Array.from(angle, Math.cos);
+    const gz = Float64Array.from(angle, Math.sin);
     const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+    // The four corners worked out in line, with nothing made per call: the
+    // land's ninety thousand points ask it near a million times.
     return (x, z) => {
         const i = Math.floor(x);
         const j = Math.floor(z);
         const fx = x - i;
         const fz = z - j;
-        const dot = (di, dj) => {
-            const g = at(i + di, j + dj);
-            return gx[g] * (fx - di) + gz[g] * (fz - dj);
-        };
+        const p0 = perm[i & 255];
+        const p1 = perm[(i + 1) & 255];
+        const g00 = perm[(p0 + j) & 255];
+        const g10 = perm[(p1 + j) & 255];
+        const g01 = perm[(p0 + j + 1) & 255];
+        const g11 = perm[(p1 + j + 1) & 255];
+        const d00 = gx[g00] * fx + gz[g00] * fz;
+        const d10 = gx[g10] * (fx - 1) + gz[g10] * fz;
+        const d01 = gx[g01] * fx + gz[g01] * (fz - 1);
+        const d11 = gx[g11] * (fx - 1) + gz[g11] * (fz - 1);
         const u = fade(fx);
         const v = fade(fz);
-        const top = dot(0, 0) + (dot(1, 0) - dot(0, 0)) * u;
-        const bottom = dot(0, 1) + (dot(1, 1) - dot(0, 1)) * u;
+        const top = d00 + (d10 - d00) * u;
+        const bottom = d01 + (d11 - d01) * u;
         return Math.max(-1, Math.min(1, (top + (bottom - top) * v) * 1.4));
     };
 }
@@ -318,15 +325,21 @@ const smoothstep = (a, b, t) => {
  * larger than life). `inland` is how far back from the shore each part
  * begins and ends, meters; `snow` and `trees` the lines, before their
  * wander; `step` the grid across and the rows back for each band.
+ *
+ * The grid is fine enough that a summit 35 km off is more than a handful
+ * of triangles (QA, 2026-09-25: at 300 by 420 m each cell was 8 px across
+ * and the tops looked folded from paper), and `octaves` stops the crests'
+ * detail at what the grid can draw: a finer octave only jitters the points.
  */
 export const MOUNTAINS = {
     x: [-52000, 52000],
-    step: 300,
+    step: 150,
     bands: {
         farShore: { from: 0, to: 3500, row: 250 },
-        mountains: { from: 3500, to: 27000, row: 420 }
+        mountains: { from: 3500, to: 27000, row: 210 }
     },
-    snow: 2200,
+    octaves: 4,
+    snow: 2050,
     trees: 1200,
     seed: CITY.seed + 17
 };
@@ -353,7 +366,7 @@ export function mountainHeight(x, z, fields = mountainFields()) {
     // The massifs: stretches of the range standing high, and between them
     // saddles where the range behind the front one shows through.
     const massif = 0.35 + 0.65 * smoothstep(-0.55, 0.6, fields.massif(x / 14000, 0.37));
-    const ridges = crests(fields.ridge, x / 5200, d / 5200);
+    const ridges = crests(fields.ridge, x / 5200, d / 5200, MOUNTAINS.octaves);
     const rolling = 0.5 + 0.5 * fields.roll(x / 2500, d / 2500);
     // The foothills stay low (about a degree over the water from the
     // office), so the ranges' slopes show above them even in a frame that
@@ -396,28 +409,93 @@ const mixHex = (a, b, t) => {
 };
 
 /**
- * The color of the land at a point: `h` its height above the water,
+ * How the snow lies. It is drawn a pixel at a time (world.js landSnow), not
+ * a grid point at a time, so its edge against the rock is sharp and ragged
+ * however coarse the grid (QA, 2026-09-25: colored per point, it could only
+ * change every 300 m and smeared to gray across each triangle between).
+ * `soft` is how far either side of the snow line, in height, the snow thins
+ * out; `holds` the steepness (0 flat, 1 sheer) over which it gives way to
+ * rock at the snow line, about 33 to 43 degrees; `high` how much steeper
+ * ground it holds, and how far above the line, since near the summits snow
+ * and ice cling to the faces (without it the snow sat in thin rims on the
+ * crests over bare gray faces); `fray` how far the finest grain of the snow
+ * line (snowFray) moves it, meters of height and a share of the steepness;
+ * `distance` the far ranges' share of blue on the snow, a little of the
+ * ground's.
+ */
+export const SNOW = { soft: 35, holds: [0.16, 0.26], high: [0.14, 1000], fray: [70, 0.05], distance: 0.3 };
+
+/**
+ * The snow line's finest grain, -1 to 1: three ripples a hundred to three
+ * hundred meters long, crossing, finer than the grid, so the snow runs down
+ * the gullies in tongues and the rock breaks through it in ribs. Waves, not a
+ * hash, so a GPU draws it as this does (the "GLSL hash differs offline"
+ * note). world.js draws the same three.
+ */
+export const SNOW_FRAY = [[0.0467, 0.0229, 0], [-0.0118, 0.0287, 1.7], [0.0171, -0.0174, 4.1]];
+
+export function snowFray(x, z, waves = SNOW_FRAY) {
+    let sum = 0;
+    for (const [kx, kz, phase] of waves) sum += Math.sin(kx * x + kz * z + phase);
+    return sum / waves.length;
+}
+
+/** The snow line at a point, meters above the water, before its finest
+ *  grain: wandering over kilometers, and fraying at a finer one, tongues of
+ *  snow down the valleys and rock pushing up between. */
+export function snowLineAt(x, z, fields = mountainFields()) {
+    const wander = fields.lines(x / 3000, z / 3000);
+    const fray = fields.lines(x / 700 + 31.7, z / 700 - 12.9);
+    return MOUNTAINS.snow + 300 * wander + 220 * fray;
+}
+
+/** How much snow covers a point, 0 to 1: `h` its height, `steep` its
+ *  steepness, `line` the snow line there (snowLineAt), `fray` the finest
+ *  grain there (snowFray). Snow holds on the gentler ground and slides off
+ *  the steep faces, which stand out dark between the snowfields. */
+export function snowCover(h, steep, line, fray = 0) {
+    const edge = line + SNOW.fray[0] * fray;
+    const give = SNOW.fray[1] * fray + SNOW.high[0] * smoothstep(edge, edge + SNOW.high[1], h);
+    return smoothstep(edge - SNOW.soft, edge + SNOW.soft, h) * (1 - smoothstep(SNOW.holds[0] + give, SNOW.holds[1] + give, steep));
+}
+
+/** The blue of distance: how much of LAND_COLORS.far the land takes, going
+ *  from none at `from` meters off to `share` at `to`. */
+export const DISTANCE_BLUE = { share: 0.45, from: 12000, to: 40000 };
+
+/** How far a point's color has gone to the blue of distance, 0 to 1. */
+export function distanceBlue(distance) {
+    return DISTANCE_BLUE.share * smoothstep(DISTANCE_BLUE.from, DISTANCE_BLUE.to, distance);
+}
+
+/**
+ * The land at a point without its snow: `h` its height above the water,
  * `steep` 0 (flat) to 1 (sheer), `distance` from the office. Forest up to a
  * wandering tree line, alpine meadow and rock above it, dark cliff where it
- * is steep, snow above a ragged snow line where it is not too steep to
- * hold, and the far ranges a little bluer (the blue of distance, which the
- * pale haze alone washes white).
+ * is steep, and the far ranges a little bluer (the blue of distance, which
+ * the pale haze alone washes white). What world.js gives each grid point.
  */
-export function landColor(h, steep, x, z, distance, fields = mountainFields()) {
-    const wander = fields.lines(x / 3000, z / 3000);
-    // The snow line frays at a finer grain than it wanders: tongues of snow
-    // down the gullies, rock pushing up between them.
-    const fray = fields.lines(x / 700 + 31.7, z / 700 - 12.9);
-    const treeLine = MOUNTAINS.trees + 220 * wander;
-    const snowLine = MOUNTAINS.snow + 300 * wander + 220 * fray;
+export function landGround(h, steep, x, z, distance, fields = mountainFields()) {
+    const treeLine = MOUNTAINS.trees + 220 * fields.lines(x / 3000, z / 3000);
     let c = mixHex(LAND_COLORS.forest, LAND_COLORS.alpine, smoothstep(treeLine - 200, treeLine + 200, h));
     c = mixHex(c, LAND_COLORS.rock, smoothstep(treeLine + 200, treeLine + 700, h));
     c = mixHex(c, LAND_COLORS.cliff, smoothstep(0.12, 0.3, steep));
-    // Snow holds on the gentler ground and slides off the steep faces,
-    // which stand out dark between the snowfields.
-    const snow = smoothstep(snowLine - 120, snowLine + 160, h) * (1 - smoothstep(0.14, 0.3, steep));
-    c = mixHex(c, LAND_COLORS.snow, snow);
-    return mixHex(c, LAND_COLORS.far, 0.45 * smoothstep(12000, 40000, distance) * (1 - snow));
+    return mixHex(c, LAND_COLORS.far, distanceBlue(distance));
+}
+
+/** The snow's own color at a distance: it takes a little of the blue. */
+export function snowColor(distance) {
+    return mixHex(LAND_COLORS.snow, LAND_COLORS.far, SNOW.distance * distanceBlue(distance));
+}
+
+/**
+ * The color of the land at a point, snow and all: the ground (landGround)
+ * under the snow (snowCover). world.js draws it in two halves, the ground
+ * per grid point and the snow per pixel.
+ */
+export function landColor(h, steep, x, z, distance, fields = mountainFields()) {
+    const snow = snowCover(h, steep, snowLineAt(x, z, fields), snowFray(x, z));
+    return mixHex(landGround(h, steep, x, z, distance, fields), snowColor(distance), snow);
 }
 
 /**
@@ -467,9 +545,17 @@ export function stops(a, b, step) {
  * The land across the bay as grids: `farShore` (the wooded foothills) and
  * `mountains` (the ranges behind), sharing their seam row so they meet
  * without a crack, and the `island`. Rows run from the shore back, the
- * grid following the far shore's line.
+ * grid following the far shore's line. Made once and shared: the same on
+ * every visit, and the finer grid is ninety thousand points to work out.
+ * Nothing changes them once made.
  */
+let gridsMade = null;
 export function landGrids() {
+    if (!gridsMade) gridsMade = makeLandGrids();
+    return gridsMade;
+}
+
+function makeLandGrids() {
     const xs = stops(MOUNTAINS.x[0], MOUNTAINS.x[1], MOUNTAINS.step);
     const bands = {};
     for (const [name, band] of Object.entries(MOUNTAINS.bands)) {

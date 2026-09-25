@@ -20,16 +20,18 @@
  * water), the towers from their own plans (box, chamfered or round, with
  * setbacks and podiums) in one mesh per facade style, the roofs and what
  * stands on them, the piers, the far lands and their hills, the mountains
- * and the sky. The water and the haze are bay.js's. Standard materials only:
- * no custom shader, so nothing can fail to compile in a browser the tests
- * never see.
+ * and the sky. The water and the haze are bay.js's. Standard materials
+ * only, so little can fail to compile in a browser the tests never see. The
+ * one exception is the land's (landShader: the snow a pixel at a time and a
+ * bluer haze), a few lines spliced into the standard shader, whose source
+ * tests/office-view.test.mjs lints and compiles.
  */
 
 /* global THREE */
 
 import {
-    CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, landGrids, landColor, reflectionPoints, PANEL, FACADE_TILE, towerStyle,
-    rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
+    CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, landGrids, landGround, snowLineAt, SNOW, SNOW_FRAY, LAND_COLORS, DISTANCE_BLUE,
+    reflectionPoints, PANEL, FACADE_TILE, towerStyle, rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
 } from './city.min.js';
 import { BAY, HAZE, rippleNormals } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
@@ -371,40 +373,66 @@ function buildPiers(scene) {
     return mesh;
 }
 
+/** An sRGB channel, 0 to 255, as a linear value: three's conversion, once
+ *  for each of the 256. */
+let srgbMade = null;
+export function srgbTable() {
+    if (!srgbMade) {
+        const c = new THREE.Color();
+        srgbMade = new Float32Array(256).map((_, v) => c.setHex(v, THREE.SRGBColorSpace).b);
+    }
+    return srgbMade;
+}
+
 /**
  * A grid of land (city.js landGrids) as a mesh's geometry: its points
  * joined in triangles facing up, smooth normals from its own slopes (so the
- * sun lights one side of a ridge and leaves the other in shade), and each
- * point colored by its height and steepness (city.js landColor): forest,
- * meadow, rock, cliff and snow, the far ranges a little bluer.
+ * sun lights one side of a ridge and leaves the other in shade), each point
+ * colored by its height and steepness (city.js landGround): forest, meadow,
+ * rock and cliff, the far ranges a little bluer. The snow is not in the
+ * colors: each point carries its snow line (`snowLine`, city.js snowLineAt)
+ * and the land's shader lays the snow a pixel at a time (landSnow).
+ *
+ * Each square of the grid is split along the diagonal whose ends stand
+ * nearer in height, so the split runs along a ridge or a gully rather than
+ * across it, and there is no grain from every square split the same way.
  */
 export function landGeometry({ positions, cols, rows }) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const index = [];
+    const y = (k) => positions[k * 3 + 1];
+    const index = new Uint32Array((rows - 1) * (cols - 1) * 6);
+    let k = 0;
     for (let r = 0; r < rows - 1; r++) {
         for (let c = 0; c < cols - 1; c++) {
             const a = r * cols + c;
+            const b = a + 1;
             const d = a + cols;
-            index.push(a, a + 1, d, a + 1, d + 1, d);
+            const e = d + 1;
+            index.set(Math.abs(y(a) - y(e)) < Math.abs(y(b) - y(d)) ? [a, b, e, a, e, d] : [a, b, d, b, e, d], k);
+            k += 6;
         }
     }
-    g.setIndex(index);
+    g.setIndex(new THREE.BufferAttribute(index, 1));
     g.computeVertexNormals();
     const normal = g.attributes.normal;
     const colors = new Float32Array(positions.length);
-    const c = new THREE.Color();
+    const lines = new Float32Array(positions.length / 3);
+    // Each channel from sRGB to linear by table: three's own conversion,
+    // point by point, was most of the land's build time.
+    const linear = srgbTable();
     for (let i = 0; i < positions.length / 3; i++) {
         const x = positions[i * 3];
-        const y = positions[i * 3 + 1];
         const z = positions[i * 3 + 2];
         const steep = 1 - Math.abs(normal.getY(i));
-        c.setHex(landColor(y - WATER_Y, steep, x, z, Math.hypot(x, z)), THREE.SRGBColorSpace);
-        colors[i * 3] = c.r;
-        colors[i * 3 + 1] = c.g;
-        colors[i * 3 + 2] = c.b;
+        const hex = landGround(y(i) - WATER_Y, steep, x, z, Math.hypot(x, z));
+        colors[i * 3] = linear[(hex >> 16) & 255];
+        colors[i * 3 + 1] = linear[(hex >> 8) & 255];
+        colors[i * 3 + 2] = linear[hex & 255];
+        lines[i] = snowLineAt(x, z);
     }
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    g.setAttribute('snowLine', new THREE.BufferAttribute(lines, 1));
     g.computeBoundingSphere();
     return g;
 }
@@ -599,47 +627,104 @@ function buildWeather(scene) {
 }
 
 /**
- * How much of the scene's haze the land across the bay takes: in the clear
- * `clear` of it, all of it in a gray rain. The haze runs to the pale color
- * of the horizon, and at 25 to 35 km took half of every pixel of the ranges,
- * which no rock or forest color survives as anything but pale gray (QA,
- * 2026-09-25). A little less of it and they read in layers, darker and
- * bluer toward the front, as distant ranges do on a clear day.
+ * The haze on the land across the bay. `clear` is how much of the scene's
+ * haze it takes on a clear day, and in a gray rain it takes all of it. The
+ * haze once ran to the pale color of the horizon, and at 25 to 35 km took
+ * half of every pixel of the ranges, which no rock or forest color survives
+ * as anything but pale gray (QA, 2026-09-25). So on the land it runs part of
+ * the way (`blue`) from the horizon's color to the sky's overhead, as the air
+ * between here and a far range does on a clear day: the shaded faces go
+ * blue, not gray, and the ranges read in layers, bluer and softer toward the
+ * back. The rain takes the blue out.
  */
-export const LAND_HAZE = { clear: 0.6 };
+export const LAND_HAZE = { clear: 0.72, blue: 0.4 };
 
 /** three's own fog (its fog_fragment chunk, word for word) with its amount
- *  scaled by `landHaze`. */
+ *  scaled by `landHaze` and its color the land's (`landAir`, sRGB, as fogColor
+ *  is, since the fog comes after the color space). */
 export const LAND_FOG = `#ifdef USE_FOG
 	#ifdef FOG_EXP2
 		float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
 	#else
 		float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
 	#endif
-	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor * landHaze );
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, landAir, fogFactor * landHaze );
 #endif`;
 
-/** Give a material the land's lighter haze: `haze` is the uniform
- *  (`{ value }`) that setLight turns up in the rain. */
-export function lessHaze(material, haze) {
+/** A number as a GLSL float literal. */
+const glslFloat = (n) => (Number.isInteger(n) ? n.toFixed(1) : String(n));
+
+/** An sRGB color as a GLSL vec3 in the working (linear) space. */
+function glslColor(hex) {
+    const c = new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
+    return `vec3( ${glslFloat(c.r)}, ${glslFloat(c.g)}, ${glslFloat(c.b)} )`;
+}
+
+/**
+ * The snow, laid a pixel at a time over the ground's color (city.js
+ * snowCover, snowFray and snowColor, the same sums in GLSL): each pixel's
+ * own height and the steepness of its own interpolated normal decide it, so
+ * its edge against the rock is sharp and ragged, not smeared across a
+ * triangle. Runs after the vertex colors are in diffuseColor.
+ */
+export function landSnow() {
+    const waves = SNOW_FRAY.map(([kx, kz, phase]) =>
+        `sin( mod( dot( vLandPos.xz, vec2( ${glslFloat(kx)}, ${glslFloat(kz)} ) ) + ${glslFloat(phase)}, 6.2831853 ) )`);
+    return `#include <color_fragment>
+	{
+		float landFray = ( ${waves.join(' + ')} ) / ${glslFloat(waves.length)};
+		float landHeight = vLandPos.y - ( ${glslFloat(WATER_Y)} );
+		float landEdge = vSnowLine + ${glslFloat(SNOW.fray[0])} * landFray;
+		float landGive = ${glslFloat(SNOW.fray[1])} * landFray + ${glslFloat(SNOW.high[0])} * smoothstep( landEdge, landEdge + ${glslFloat(SNOW.high[1])}, landHeight );
+		float landSteep = 1.0 - abs( normalize( vLandNormal ).y );
+		float landCover = smoothstep( landEdge - ${glslFloat(SNOW.soft)}, landEdge + ${glslFloat(SNOW.soft)}, landHeight )
+			* ( 1.0 - smoothstep( ${glslFloat(SNOW.holds[0])} + landGive, ${glslFloat(SNOW.holds[1])} + landGive, landSteep ) );
+		float landBlue = ${glslFloat(SNOW.distance * DISTANCE_BLUE.share)} * smoothstep( ${glslFloat(DISTANCE_BLUE.from)}, ${glslFloat(DISTANCE_BLUE.to)}, length( vLandPos.xz ) );
+		diffuseColor.rgb = mix( diffuseColor.rgb, mix( ${glslColor(LAND_COLORS.snow)}, ${glslColor(LAND_COLORS.far)}, landBlue ), landCover );
+	}`;
+}
+
+/**
+ * The land's material: a standard one with the snow laid per pixel
+ * (landSnow) and the land's own haze (LAND_FOG). `haze` and `air` are the
+ * uniforms (`{ value }`) that setLight sets: how much haze, and its color.
+ * The points' positions and normals are the land's own (the mesh is never
+ * moved), so the snow stays put when a reflection capture shifts the scene.
+ */
+export function landShader(material, haze, air) {
     material.onBeforeCompile = (shader) => {
         shader.uniforms.landHaze = haze;
+        shader.uniforms.landAir = air;
+        shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', '#include <common>\nattribute float snowLine;\nvarying float vSnowLine;\nvarying vec3 vLandPos;\nvarying vec3 vLandNormal;')
+            .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvSnowLine = snowLine;\n\tvLandPos = position;\n\tvLandNormal = normal;');
         shader.fragmentShader = shader.fragmentShader
-            .replace('#include <fog_pars_fragment>', '#include <fog_pars_fragment>\nuniform float landHaze;')
+            .replace('#include <common>', '#include <common>\nvarying float vSnowLine;\nvarying vec3 vLandPos;\nvarying vec3 vLandNormal;')
+            .replace('#include <color_fragment>', landSnow())
+            .replace('#include <fog_pars_fragment>', '#include <fog_pars_fragment>\nuniform float landHaze;\nuniform vec3 landAir;')
             .replace('#include <fog_fragment>', LAND_FOG);
     };
     // Its own shader program, not the one every other standard material shares.
-    material.customProgramCacheKey = () => 'office-land-haze';
+    material.customProgramCacheKey = () => 'office-land';
     return material;
+}
+
+/** The land's haze color for a look: from the horizon's color toward the
+ *  sky's overhead by `blue`, in sRGB as fogColor is on the GPU. */
+export function landAirColor(look, blue, target = new THREE.Color()) {
+    const top = new THREE.Color().setHex(look.skyTop, THREE.LinearSRGBColorSpace);
+    return target.setHex(look.skyBottom, THREE.LinearSRGBColorSpace).lerp(top, blue);
 }
 
 /** The land across the water (city.js landGrids): the island and the far
  *  shore's wooded foothills as the hills (the view test counts anything
  *  named land-* as land), and the ranges behind as the mountains. One mesh
- *  each, one material, taking less of the haze than the city (LAND_HAZE). */
+ *  each, one material (landShader), taking less of the haze than the city
+ *  and a bluer one (LAND_HAZE). */
 function buildLand(scene) {
     const haze = { value: LAND_HAZE.clear };
-    const material = lessHaze(standard(0xffffff, { vertexColors: true, roughness: 0.95 }), haze);
+    const air = { value: landAirColor({ skyTop: 0x7fb2dd, skyBottom: 0xe3ecef }, LAND_HAZE.blue) };
+    const material = landShader(standard(0xffffff, { vertexColors: true, roughness: 0.95 }), haze, air);
     const grids = landGrids();
     const group = new THREE.Group();
     group.name = 'land-hills';
@@ -652,7 +737,7 @@ function buildLand(scene) {
     const mountains = new THREE.Mesh(landGeometry(grids.mountains), material);
     mountains.name = 'mountains';
     scene.add(mountains);
-    return { hills: group, mountains, haze };
+    return { hills: group, mountains, haze, air };
 }
 
 /**
@@ -693,7 +778,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
 
     const water = buildWater(scene, anisotropy);
     const streets = buildGround(scene, textures);
-    const { hills, mountains, haze: landHaze } = buildLand(scene);
+    const { hills, mountains, haze: landHaze, air: landAir } = buildLand(scene);
     const plan = cityTowers();
     const towers = buildTowers(scene, plan, textures.facades);
     const beacons = buildBeacons(scene, plan);
@@ -764,6 +849,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         water,
         hills,
         landHaze,
+        landAir,
         clouds,
         heavens,
         fleet,
@@ -820,7 +906,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             scene.fog.far = HAZE.far / (1 + 5 * raining + overcast);
             // The land across the bay takes all the haze in a gray rain,
             // so the mountains are lost in it as everything far is.
-            landHaze.value = LAND_HAZE.clear + (1 - LAND_HAZE.clear) * Math.min(1, Math.max(overcast, raining));
+            const gray = Math.min(1, Math.max(overcast, raining));
+            landHaze.value = LAND_HAZE.clear + (1 - LAND_HAZE.clear) * gray;
+            landAirColor(look, LAND_HAZE.blue * (1 - gray), landAir.value);
             water.material.roughness = BAY.roughness + 0.25 * raining;
             scene.fog.color.setHex(look.skyBottom, THREE.SRGBColorSpace);
             clouds.material.color.setHex(look.clouds, THREE.SRGBColorSpace);

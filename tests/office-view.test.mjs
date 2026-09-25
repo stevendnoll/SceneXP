@@ -50,23 +50,32 @@ afterAll(() => {
 const ASPECTS = { 'wide 21:9': 21 / 9, 'laptop 16:10': 16 / 10, 'phone upright': 390 / 844, 'tall phone': 9 / 19.5 };
 
 /**
- * The land across the bay is ~50k triangles, and three's raycaster tries
- * every one for every ray, which doubled this file's run (107 s to 214 s,
- * 2026-09-25). The page never casts a ray outside (taps test the room), so
- * the census alone gets a faster cast: each land mesh split into strips by
- * x, each with its own bounds, so a ray tries only the strips it crosses.
- * The hits are the mesh's own, as three would report them.
+ * The land across the bay is ~180k triangles (it was ~50k before the finer
+ * grid), and three's raycaster tries every one for every ray, which doubled
+ * this file's run (107 s to 214 s, 2026-09-25). The page never casts a ray
+ * outside (taps test the room), so the census alone gets a faster cast: each
+ * land mesh split into tiles, `across` by x and `back` by z, each with its
+ * own bounds, so a ray tries only the tiles it crosses. The hits are the
+ * mesh's own, as three would report them.
  */
-function stripCast(mesh, strips = 24) {
+function stripCast(mesh, across = 64, back = 12) {
     const g = mesh.geometry;
     const pos = g.attributes.position;
     const index = g.index.array;
-    let lo = Infinity;
-    let hi = -Infinity;
-    for (let i = 0; i < pos.count; i++) { lo = Math.min(lo, pos.getX(i)); hi = Math.max(hi, pos.getX(i)); }
-    const width = (hi - lo) / strips + 1e-6;
-    const parts = Array.from({ length: strips }, () => []);
-    for (let t = 0; t < index.length; t += 3) parts[Math.floor((pos.getX(index[t]) - lo) / width)].push(index[t], index[t + 1], index[t + 2]);
+    const span = (get) => {
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (let i = 0; i < pos.count; i++) { lo = Math.min(lo, get(i)); hi = Math.max(hi, get(i)); }
+        return { lo, width: (hi - lo) / 1 + 1e-6 };
+    };
+    const xs = span((i) => pos.getX(i));
+    const zs = span((i) => pos.getZ(i));
+    const parts = Array.from({ length: across * back }, () => []);
+    for (let t = 0; t < index.length; t += 3) {
+        const col = Math.floor(((pos.getX(index[t]) - xs.lo) / xs.width) * across);
+        const row = Math.floor(((pos.getZ(index[t]) - zs.lo) / zs.width) * back);
+        parts[row * across + col].push(index[t], index[t + 1], index[t + 2]);
+    }
     const probes = parts.filter((p) => p.length).map((p) => {
         const part = new THREE.BufferGeometry();
         part.setAttribute('position', pos);
@@ -78,8 +87,14 @@ function stripCast(mesh, strips = 24) {
         part.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
         return new THREE.Mesh(part, mesh.material);
     });
+    // Only the tiles the ray crosses are asked at all: asking all of them,
+    // each working out its own bounds, cost more than the triangles did.
+    const inverse = new THREE.Matrix4();
+    const local = new THREE.Ray();
     mesh.raycast = (raycaster, hits) => {
+        local.copy(raycaster.ray).applyMatrix4(inverse.copy(mesh.matrixWorld).invert());
         for (const probe of probes) {
+            if (!local.intersectsBox(probe.geometry.boundingBox)) continue;
             probe.matrixWorld.copy(mesh.matrixWorld);
             const before = hits.length;
             THREE.Mesh.prototype.raycast.call(probe, raycaster, hits);
@@ -411,11 +426,75 @@ describe('the bay and the air', () => {
         expect(east).toBeGreaterThan(n.count / 5 / 10);
         expect(west).toBeGreaterThan(n.count / 5 / 10);
         expect(steep).toBeGreaterThan(n.count / 5 / 10);
-        // Snow on it, and dark rock and forest too: many colors, not a band.
+        // Dark rock and forest, many colors, not a band. (The snow is laid
+        // by the shader, a pixel at a time: the next test.)
         const col = world.mountains.geometry.attributes.color;
         const shades = new Set();
-        for (let i = 0; i < col.count; i += 3) shades.add(Math.round((col.getX(i) + col.getY(i) + col.getZ(i)) * 20));
+        for (let i = 0; i < col.count; i += 3) shades.add(Math.round((col.getX(i) + col.getY(i) + col.getZ(i)) * 400));
         expect(shades.size).toBeGreaterThan(20);
+        // Each square split along a ridge or a gully, so both ways, not all
+        // alike (which drew a grain across the whole range).
+        const index = world.mountains.geometry.index.array;
+        const cols = city.landGrids().mountains.cols;
+        let ae = 0;
+        for (let t = 0; t < index.length; t += 6) if (index[t + 2] === index[t] + cols + 1) ae++;
+        expect(ae / (index.length / 6)).toBeGreaterThan(0.2);
+        expect(ae / (index.length / 6)).toBeLessThan(0.8);
+    });
+
+    test('the snow is laid on the mountains a pixel at a time, and never on the hills (QA, 2026-09-25)', () => {
+        const count = (mesh) => mesh.geometry.attributes.position.count;
+        // Every land mesh carries its snow line: the GPU would read a missing
+        // one as nought, and snow the hills to the water.
+        for (const mesh of [world.mountains, ...world.hills.children]) {
+            const line = mesh.geometry.attributes.snowLine;
+            expect(line.count).toBe(count(mesh));
+            const pos = mesh.geometry.attributes.position;
+            let above = 0;
+            for (let i = 0; i < line.count; i++) {
+                expect(line.getX(i)).toBeGreaterThan(1000);
+                if (pos.getY(i) - city.WATER_Y > line.getX(i)) above++;
+            }
+            if (mesh !== world.mountains) expect(above).toBe(0);
+            else expect(above / line.count).toBeGreaterThan(0.02);
+        }
+        // Spliced into three's own standard shader, every splice landing (a
+        // string that no longer matched would silently leave the snow out).
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+        world.mountains.material.onBeforeCompile(shader);
+        expect(shader.vertexShader).toContain('attribute float snowLine;');
+        expect(shader.vertexShader).toContain('vLandPos = position;');
+        expect(shader.vertexShader).toContain('vLandNormal = normal;');
+        // After the vertex colors, before the light.
+        const f = shader.fragmentShader;
+        expect(f.indexOf('#include <color_fragment>')).toBeGreaterThan(0);
+        expect(f.indexOf('float landCover')).toBeGreaterThan(f.indexOf('#include <color_fragment>'));
+        expect(f.indexOf('float landCover')).toBeLessThan(f.indexOf('#include <lights_fragment_begin>'));
+        expect(f.indexOf('varying vec3 vLandPos;')).toBeLessThan(f.indexOf('float landCover'));
+    });
+
+    test('the land’s shader source is clean GLSL, as far as text can tell', () => {
+        // Only a string here: the "GLSL is a string under test" note.
+        const snow = worldMod.landSnow();
+        expect(snow).not.toContain('`');
+        expect(snow).not.toMatch(/NaN|undefined|Infinity/);
+        // Every number a float literal, so no int meets a float.
+        for (const n of snow.match(/(?<![\w.])-?\d+(\.\d+)?(?![\w.])/g)) expect(n).toContain('.');
+        // Every local declared once, before it is used, and no reserved word.
+        const reserved = /\b(patch|sample|input|output|filter|common|smooth|flat|active|buffer|shared)\b/;
+        const declared = [...snow.matchAll(/float (land\w+) =/g)].map((m) => m[1]);
+        expect(new Set(declared).size).toBe(declared.length);
+        for (const name of declared) {
+            expect(name).not.toMatch(reserved);
+            expect(snow.indexOf(`float ${name} =`)).toBeLessThanOrEqual(snow.indexOf(name));
+        }
+        for (const used of snow.match(/\bland[A-Z]\w*/g)) expect(declared).toContain(used);
+        // Brackets balance.
+        expect((snow.match(/\(/g) || []).length).toBe((snow.match(/\)/g) || []).length);
+        expect((snow.match(/\{/g) || []).length).toBe((snow.match(/\}/g) || []).length);
+        // The fray is the JS one's waves, and its sine's argument kept small.
+        for (const [kx, kz] of city.SNOW_FRAY) expect(snow).toContain(`vec2( ${kx}, ${kz} )`);
+        expect(snow).toContain('6.2831853');
     });
 
     test('the census’s faster cast on the land finds just what three’s own finds', () => {
@@ -441,29 +520,43 @@ describe('the bay and the air', () => {
         expect(hits).toBeGreaterThan(20);
     });
 
-    test('the land across the bay takes less of the haze than the city, and all of it in the rain', () => {
-        // three's own fog, word for word, with only its amount scaled.
-        expect(worldMod.LAND_FOG.replace(' * landHaze', '')).toBe(THREE.ShaderChunk.fog_fragment);
+    test('the land across the bay takes less of the haze than the city, a bluer one, and all of it, gray, in the rain', () => {
+        // three's own fog, word for word, with only its amount and color the land's.
+        expect(worldMod.LAND_FOG.replace(' * landHaze', '').replace('landAir', 'fogColor')).toBe(THREE.ShaderChunk.fog_fragment);
         // Both swaps land in the real standard shader (a string that no
         // longer matched would silently leave the full haze).
         const shader = {
             uniforms: {},
+            vertexShader: THREE.ShaderLib.standard.vertexShader,
             fragmentShader: THREE.ShaderLib.standard.fragmentShader
         };
         world.mountains.material.onBeforeCompile(shader);
         expect(shader.fragmentShader).toContain('uniform float landHaze;');
-        expect(shader.fragmentShader).toContain('fogFactor * landHaze');
+        expect(shader.fragmentShader).toContain('uniform vec3 landAir;');
+        expect(shader.fragmentShader).toContain('mix( gl_FragColor.rgb, landAir, fogFactor * landHaze )');
         expect(shader.fragmentShader).not.toContain('#include <fog_fragment>');
         expect(shader.uniforms.landHaze).toBe(world.landHaze);
-        expect(world.mountains.material.customProgramCacheKey()).toBe('office-land-haze');
+        expect(shader.uniforms.landAir).toBe(world.landAir);
+        expect(world.mountains.material.customProgramCacheKey()).toBe('office-land');
         // The hills share it.
         for (const hill of world.hills.children) expect(hill.material).toBe(world.mountains.material);
         const daylight = { hemi: 1, sun: 1, fill: 1, skyTop: 0x7fb2dd, skyBottom: 0xe3ecef, sunColor: 0xffffff, clouds: 0xffffff, cityLights: 0, stars: 0, moonShine: 0, halo: 0.3 };
+        // The air's color is sRGB as it goes to the GPU (fogColor is, since
+        // the fog comes after the color space), so read it back raw.
+        const raw = () => world.landAir.value.getHex(THREE.LinearSRGBColorSpace);
         world.setLight({ ...daylight, rain: 1, overcast: 1 });
         expect(world.landHaze.value).toBe(1);
+        expect(raw()).toBe(daylight.skyBottom);
         world.setLight({ ...daylight, rain: 0, overcast: 0 });
         expect(world.landHaze.value).toBe(worldMod.LAND_HAZE.clear);
         expect(worldMod.LAND_HAZE.clear).toBeLessThan(1);
+        // On a clear day, part of the way from the horizon to the sky
+        // overhead: bluer (less red) than the horizon, paler than the zenith.
+        const [r, g, b] = [raw() >> 16, (raw() >> 8) & 255, raw() & 255];
+        expect(raw()).toBe(0xbbd5e8);
+        expect(r).toBeLessThan(daylight.skyBottom >> 16);
+        expect(r).toBeGreaterThan(daylight.skyTop >> 16);
+        expect(b).toBeGreaterThan(g);
     });
 
     test('the clouds float over the mountains’ tops, never across them', () => {

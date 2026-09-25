@@ -9,7 +9,7 @@
 import {
     CITY, WATER_Y, shoreZ, elevation, groundY, FAR_LAND, inPolygon, isLand, isWater, seeded, blockAt, districtOf,
     cityTowers, piers, reflectionPoints, noiseField, crests, MOUNTAINS, farCoastZ, mountainHeight, landColor, LAND_COLORS,
-    islandHeight, landGrids, stops, paneNormals, PANE_TILT, PANE_STORE, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
+    islandHeight, landGrids, stops, SNOW, snowCover, snowFray, snowLineAt, snowColor, landGround, paneNormals, PANE_TILT, PANE_STORE, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
 } from '../www/office/js/city.js';
 
 const towers = cityTowers();
@@ -336,6 +336,55 @@ describe('the land across the water', () => {
         }
         expect(snowy / all).toBeGreaterThan(0.05);
         expect(snowy / all).toBeLessThan(0.5);
+    });
+
+    test('the grid is fine enough for a summit, and the crests no finer than it can draw (QA, 2026-09-25)', () => {
+        // A cell of the high range, 35 km off, under a quarter of a degree:
+        // at 300 by 420 m it was half a degree, 8 px, and every top a
+        // handful of flat triangles.
+        const cell = Math.max(MOUNTAINS.step, MOUNTAINS.bands.mountains.row);
+        expect(Math.atan(cell / 35000) * 180 / Math.PI).toBeLessThan(0.36);
+        // The finest octave of the crests at least two cells long, or it
+        // only jitters the points (the fifth, at 306 m, did).
+        const finest = 5200 / 2.03 ** (MOUNTAINS.octaves - 1);
+        expect(finest).toBeGreaterThanOrEqual(2 * cell);
+        // Still a range the phone can hold: under 100k points in all.
+        const points = Object.values(grids).reduce((sum, g) => sum + g.cols * g.rows, 0);
+        expect(points).toBeLessThan(100000);
+    });
+
+    test('the snow: a sharp, ragged edge, holding on steeper ground near the tops, and bluer far off', () => {
+        const line = 2400;
+        // Sharp: from bare to covered within a few tens of meters of height.
+        expect(snowCover(line - SNOW.soft, 0.05, line)).toBe(0);
+        expect(snowCover(line + SNOW.soft, 0.05, line)).toBe(1);
+        // Ragged: the finest grain moves the edge, and changes within a grid
+        // cell (it is drawn per pixel, so the grid does not hold it back).
+        let lo = 0;
+        let hi = 0;
+        let changes = 0;
+        for (let i = 0; i < 400; i++) {
+            const f = snowFray(i * 37.1, -30000 + i * 11.3);
+            lo = Math.min(lo, f);
+            hi = Math.max(hi, f);
+            if (Math.abs(f - snowFray(i * 37.1 + 75, -30000 + i * 11.3)) > 0.2) changes++;
+        }
+        expect(lo).toBeGreaterThanOrEqual(-1);
+        expect(hi).toBeLessThanOrEqual(1);
+        expect(hi - lo).toBeGreaterThan(1);
+        expect(changes).toBeGreaterThan(100);
+        // Near the snow line a 44 degree face (steep 0.28) sheds its snow;
+        // a kilometer up it holds it, as ice and snow cling near the tops.
+        expect(snowCover(line + 60, 0.28, line)).toBeLessThan(0.1);
+        expect(snowCover(line + 1100, 0.28, line)).toBeGreaterThan(0.9);
+        // Sheer rock holds none, however high.
+        expect(snowCover(line + 1500, 0.6, line)).toBe(0);
+        // Where there is no snow the color is the ground's; the far snow bluer.
+        expect(landColor(900, 0.1, 1000, -30000, 20000)).toBe(landGround(900, 0.1, 1000, -30000, 20000));
+        expect(snowColor(45000) & 255).toBeLessThan(snowColor(10000) & 255);
+        expect(snowColor(10000)).toBe(LAND_COLORS.snow);
+        expect(snowLineAt(1000, -30000)).toBeGreaterThan(MOUNTAINS.snow - 600);
+        expect(snowLineAt(1000, -30000)).toBeLessThan(MOUNTAINS.snow + 600);
     });
 
     test('the island rolls, wooded, under the office’s eye, down to the water at its shore', () => {
