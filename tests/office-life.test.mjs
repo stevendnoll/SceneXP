@@ -9,7 +9,7 @@
  */
 import {
     LIFE, minutesOn, minutesOfDay, gently, yawFor, ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt,
-    SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift,
+    shipShift, SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift,
     TRAFFIC, VEHICLES, SUV, PARKED_Y, pitchOf, cycleOf, slotTimes, distanceAlong, onStreet,
     JET, jetCrossing, jetFlight, jetOnTrack, jetAt, jetFlashing
 } from '../www/office/js/life.js';
@@ -140,6 +140,33 @@ describe('the ships', () => {
             const t = after.find((u) => u.k === s.k);
             if (t) expect(Math.abs(t.x - s.x)).toBeLessThan(5);
         }
+    });
+
+    test('whenever the visitor arrives, a ship stands at its lane’s arrival point, the timetable moved as little as it can be (QA, 2026-09-25)', () => {
+        const { arrival, every } = LIFE.ship;
+        const shifts = [];
+        // Every seven minutes for two days, so every place in the cycle.
+        for (let m = 0; m < 2 * 24 * 60; m += 7) {
+            const date = later(NOON, m);
+            const shift = shipShift(date);
+            shifts.push(shift);
+            const ships = shipsAt(date, shift);
+            const arriving = ships.find((s) => {
+                const north = s.z === LIFE.ship.lanes.north;
+                return Math.abs(s.x - (north ? arrival.north : arrival.south)) < 1e-6;
+            });
+            expect(arriving).toBeTruthy();
+            // Half the gap between two ships, and the lanes' two arrival
+            // points a few minutes apart, is the most it moves.
+            expect(Math.abs(shift)).toBeLessThanOrEqual(every / 2 + 4);
+            // And from then on it keeps its timetable: a minute on, the
+            // same ship is a minute's sailing further along.
+            const next = shipsAt(later(date, 1), shift).find((s) => s.k === arriving.k);
+            expect(Math.abs(next.x - arriving.x)).toBeCloseTo(LIFE.ship.speed * 60, 6);
+        }
+        // Both lanes take their turn.
+        expect(shifts.some((s) => s > 0) && shifts.some((s) => s < 0)).toBe(true);
+        expect(shipsAt(NOON, 0)).toEqual(shipsAt(NOON));
     });
 });
 

@@ -35,7 +35,7 @@ import { BAY, HAZE, rippleNormals } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
 import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
-    carLightPositions, carYaws, drift, jetAt, jetFlashing
+    carLightPositions, carYaws, drift, jetAt, jetFlashing, shipShift
 } from './life.min.js';
 import { buildFleet, place, boxesGeometry } from './fleet.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
@@ -673,6 +673,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const pitches = new Float32Array(cars.length);
     // A jet asked for by hand (callJet), on the seconds' clock.
     let calledJet = null;
+    // How far the ships' timetable is run on so one is in view on arrival
+    // (arrive).
+    let shipShiftMinutes = 0;
     // For asking whether the jet is in view (jetInSight).
     const sight = new THREE.Frustum();
     const seeing = new THREE.Matrix4();
@@ -833,7 +836,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
          */
         setLife(date, seconds, still = false) {
             ferriesAt(date, route).forEach((at, i) => place(fleet.ferries[i], at));
-            const ships = shipsAt(date);
+            const ships = shipsAt(date, shipShiftMinutes);
             fleet.ships.forEach((c, slot) => place(c, ships.find((ship) => ((ship.k % 3) + 3) % 3 === slot) || null));
             sailboatsAt(date, courses, raining).forEach((at, i) => place(fleet.sailboats[i], at));
             place(fleet.seaplane, seaplaneAt(date, raining));
@@ -855,6 +858,16 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             const moved = drift(date, seconds, CLOUDS.tile);
             if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);
             water.material.normalMap.offset.set(moved.ripple[0], moved.ripple[1]);
+        },
+        /**
+         * The visitor arrives at `date` (the sky's clock): the ships'
+         * timetable is moved, once, so a ship is crossing the stretch of
+         * water every window sees (life.js shipShift). Returns the shift.
+         * No date puts the timetable back as it runs by itself.
+         */
+        arrive(date) {
+            shipShiftMinutes = date ? shipShift(date) : 0;
+            return shipShiftMinutes;
         },
         /**
          * Whether the jet is out and inside the camera's view, where it is

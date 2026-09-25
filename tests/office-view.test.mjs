@@ -816,6 +816,51 @@ describe('life on the water and in the streets', () => {
         expect(ship).toBe(true);
     });
 
+    test('whenever the visitor arrives, a container ship is in sight from the desk and the window, and stays a while (QA, 2026-09-25)', () => {
+        const views = [['desk', 16 / 10], ['desk', 390 / 844], ['window', 16 / 10], ['window', 390 / 844]];
+        // Points along the hull and the stacks, in the ship's own frame (its
+        // box is mostly its wake, so seen()'s points through the box are
+        // mostly empty air): seen when the eye finds a few of them.
+        const hullSeen = (cam, group) => {
+            if (!group.visible) return false;
+            lit.scene.updateMatrixWorld(true);
+            const frustum = new THREE.Frustum().setFromProjectionMatrix(
+                new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)
+            );
+            const shown = (o) => (o ? o.visible && shown(o.parent) : true);
+            let found = 0;
+            for (const along of [-0.4, -0.2, 0, 0.2, 0.4]) {
+                for (const up of [8, 16]) {
+                    const p = new THREE.Vector3(0, up, along * life.LIFE.ship.length).applyMatrix4(group.matrixWorld);
+                    if (!frustum.containsPoint(p)) continue;
+                    const dir = p.clone().sub(cam.position);
+                    const ray = new THREE.Raycaster(cam.position, dir.clone().normalize(), 0.05, dir.length() + 50);
+                    if (ray.intersectObject(room.group, true).length) continue;
+                    let o = (ray.intersectObject(lit.scene, true).find((h) => shown(h.object)) || {}).object;
+                    while (o && o !== group) o = o.parent;
+                    if (o === group) found++;
+                }
+            }
+            return found >= 3;
+        };
+        const anyShip = (cam) => lit.fleet.ships.some((c) => hullSeen(cam, c.group));
+        try {
+            // Arrivals through a whole cycle of both lanes, day and night.
+            for (let m = 0; m < 2 * life.LIFE.ship.every; m += 13) {
+                const arrival = later(m);
+                lit.arrive(arrival);
+                lit.setLife(arrival, 0);
+                for (const [station, aspect] of views) expect(`${m} ${station} ${aspect.toFixed(2)}: ${anyShip(cameraAt(station, aspect))}`).toBe(`${m} ${station} ${aspect.toFixed(2)}: true`);
+                // Two minutes later, still in sight from every one.
+                lit.setLife(later(m + 2), 0);
+                for (const [station, aspect] of views) expect(`${m}+2 ${station} ${aspect.toFixed(2)}: ${anyShip(cameraAt(station, aspect))}`).toBe(`${m}+2 ${station} ${aspect.toFixed(2)}: true`);
+            }
+        } finally {
+            // The other tests keep the timetable as it runs by itself.
+            expect(lit.arrive(null)).toBe(0);
+        }
+    });
+
     test('from the window the seaplane is seen taking off', () => {
         const cam = cameraAt('window', 16 / 10);
         let flying = false;

@@ -421,6 +421,8 @@ function buildScene() {
     // wherever the room has nothing, that is, through the windows.
     scene = new THREE.Scene();
     world = buildWorld(CONFIG, { aspect: aspect(), textures: worldTextures(), anisotropy: anisotropy() });
+    // A container ship is crossing the view as the visitor arrives.
+    world.arrive(skyTime(now()));
 
     // Daylight through the two window walls, and the room's own fill. Their
     // strengths and colors follow the clock (applyDaylight).

@@ -37,7 +37,15 @@ const MINUTE = 60000;
  */
 export const LIFE = {
     ferry: { cycle: 100, crossing: 35, lane: 70, length: 140, scale: 1.2 },
-    ship: { every: 75, offset: 20, speed: 7, span: 40000, lanes: { north: -6300, south: -6900 }, length: 290 },
+    ship: {
+        every: 75, offset: 20, speed: 7, span: 40000, lanes: { north: -6300, south: -6900 }, length: 290,
+        /** Where a ship stands, along each lane, when the visitor arrives
+         *  (shipShift): just into the stretch down the office's own street
+         *  and heading on across it. That stretch, x 0 to about 2200, is the
+         *  only one every station and screen sees (x 0 to 1250 from the
+         *  window on an upright phone), measured 2026-09-25. */
+        arrival: { north: 400, south: 1200 }
+    },
     sailboat: { count: 6, from: 8, to: 19.5, scale: 2 },
     seaplane: { takeoff: 20, landing: 50, from: 8, to: 19, run: 35, climb: 150, top: 45, rise: 4, scale: 2 },
     cars: { near: { x0: -200, x1: 120, z1: -6 } },
@@ -118,10 +126,11 @@ export function ferriesAt(date, route = ferryRoute()) {
  * minutes, alternately northbound and southbound in their own lanes. Each
  * is numbered `k` on the unbroken clock, so its look stays the same while
  * it is in sight. Only the ones within `span` of the office's line are listed.
+ * `shift` minutes run the timetable that much ahead (shipShift).
  */
-export function shipsAt(date) {
+export function shipsAt(date, shift = 0) {
     const { every, offset, speed, span, lanes } = LIFE.ship;
-    const m = minutesOn(date);
+    const m = minutesOn(date) + shift;
     const ships = [];
     const reach = span / speed / 60;
     for (let k = Math.floor((m - offset - reach) / every); k <= Math.ceil((m - offset + reach) / every); k++) {
@@ -132,6 +141,27 @@ export function shipsAt(date) {
         ships.push({ k, x, y: WATER_Y, z: north ? lanes.north : lanes.south, yaw: yawFor(north ? 1 : -1, 0), speed: 1 });
     }
     return ships;
+}
+
+/**
+ * The shift (minutes, for shipsAt) that has a ship in view when the
+ * visitor arrives at `date` (QA, 2026-09-25: with one every 75 minutes,
+ * most visitors never saw one). Of the ships due about then, the one whose
+ * moment at its lane's arrival point is nearest `date`, forward or back,
+ * so the timetable moves by no more than half a gap between two ships.
+ */
+export function shipShift(date) {
+    const { every, offset, speed, arrival } = LIFE.ship;
+    const m = minutesOn(date);
+    const near = Math.round((m - offset) / every);
+    let best = null;
+    for (let k = near - 2; k <= near + 2; k++) {
+        const north = ((k % 2) + 2) % 2 === 0;
+        // A ship is at x when (m - passes) * 60 * speed is x on its heading.
+        const at = k * every + offset + ((north ? 1 : -1) * (north ? arrival.north : arrival.south)) / (speed * 60);
+        if (best === null || Math.abs(at - m) < Math.abs(best)) best = at - m;
+    }
+    return best;
 }
 
 // ---- The sailboats --------------------------------------------------------------
@@ -470,12 +500,12 @@ export const JET = {
     first: -5,
     /** Faster than a real approach (about 75), because it is drawn four
      *  times its size: at 80 it crept across (QA, 2026-09-25). */
-    speed: 140,
-    z: -5200,
+    speed: 145,
+    z: -5500,
     span: 9000,
     low: 700,
     high: 960,
-    scale: 4,
+    scale: 3.5,
     /** A light aboard flashes this long, this often (seconds). */
     flash: 0.16,
     blink: 1.3
