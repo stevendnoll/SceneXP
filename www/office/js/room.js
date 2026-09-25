@@ -112,6 +112,10 @@ export function pickOf(object) {
     return null;
 }
 
+/** How far the chair is turned from square to the back wall, toward the
+ *  desk's right end (radians, positive turns its seat toward -x). */
+export const CHAIR_TURN = 0.6;
+
 /** The window openings, shared by the walls, the frames and the tests. */
 export function windowsOf(config) {
     const { width, depth } = config.room;
@@ -222,6 +226,9 @@ function buildShell(room, config) {
     for (const mesh of mergeByMaterial(group.children)) room.add(mesh);
 }
 
+/** How much glass one painted tile of drops covers, in meters. */
+export const RAIN_TILE = 0.6;
+
 /**
  * Rain on the glass: a pane in each window opening wearing the painted
  * drops (textures.rainGlass), clear until it rains (`set(level)`). The
@@ -233,12 +240,25 @@ function buildRainPanes(group, config, texture) {
     const hw = config.room.width / 2;
     const hd = config.room.depth / 2;
     const height = w.head - w.sill;
+    if (texture) {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+    }
     const material = new THREE.MeshStandardMaterial({
         color: 0xffffff, map: texture, transparent: true, opacity: 0, depthWrite: false, roughness: 0.15
     });
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(w.back.x1 - w.back.x0, height), material);
+    // The drops tile the glass at RAIN_TILE meters a tile, so a drop is a
+    // few millimeters however near the eye is (the Window station stands a
+    // hand's breadth from the back pane).
+    const pane = (width) => {
+        const g = new THREE.PlaneGeometry(width, height);
+        const uv = g.attributes.uv;
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * width) / RAIN_TILE, (uv.getY(i) * height) / RAIN_TILE);
+        return g;
+    };
+    const back = new THREE.Mesh(pane(w.back.x1 - w.back.x0), material);
     back.position.set((w.back.x0 + w.back.x1) / 2, (w.sill + w.head) / 2, -hd + 0.01);
-    const right = new THREE.Mesh(new THREE.PlaneGeometry(w.right.z1 - w.right.z0, height), material);
+    const right = new THREE.Mesh(pane(w.right.z1 - w.right.z0), material);
     right.position.set(hw - 0.01, (w.sill + w.head) / 2, (w.right.z0 + w.right.z1) / 2);
     right.rotation.y = -Math.PI / 2;
     const panes = [back, right];
@@ -777,8 +797,10 @@ function buildFloorThings(group, config, picks) {
     group.add(basket);
     picks.wastebasket = basket;
 
-    // The chair, pushed back from the desk's right end as if just left. It
-    // stood at the left end until M6, where it hid the printer from the desk.
+    // The chair, pushed back from the desk's right end and turned toward it,
+    // as if just left (its seat faces the desk, its back the right-hand
+    // window). It stood at the left end until M6, where it hid the printer
+    // from the desk. The seat faces the chair's own -z.
     const chair = new THREE.Group();
     chair.name = 'chair';
     const cm = mat(COLORS.chair, { roughness: 0.7 });
@@ -788,7 +810,7 @@ function buildFloorThings(group, config, picks) {
     chair.add(box(0.5, 0.03, 0.08, mat(COLORS.metal), 0, 0.02, 0));
     chair.add(box(0.08, 0.03, 0.5, mat(COLORS.metal), 0, 0.02, 0));
     chair.position.set(d.x + d.width / 2 + 0.25, 0, d.z + 0.95);
-    chair.rotation.y = -0.7;
+    chair.rotation.y = CHAIR_TURN;
     group.add(chair);
 
     // A plant in the front right corner, where it has the window's light and

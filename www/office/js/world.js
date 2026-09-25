@@ -39,6 +39,10 @@ import {
 import { buildFleet, place, boxesGeometry } from './fleet.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
 
+/** How brightly the street lamps light the streets at night: low, so the
+ *  streets read as streets and the cars' lights show on them. */
+export const STREET_GLOW = 0.35;
+
 /** The facade styles, in the order paint.js paints them. */
 export const STYLES = ['grid', 'bands', 'fins'];
 
@@ -147,7 +151,9 @@ export function towerGeometry(towers) {
     return t3.geometry();
 }
 
-const ROOF_COLORS = { roof: 0x3a3e44, terrace: 0x4b5057, podium: 0x5a5f66, penthouse: 0x8a9096, helipad: 0xa9afb5, spire: 0xcfd4d9 };
+/** Roofs and what stands on them: dark concrete and gravel, so a low sun
+ *  full on a penthouse does not burn it white. */
+export const ROOF_COLORS = { roof: 0x3a3e44, terrace: 0x4b5057, podium: 0x5a5f66, penthouse: 0x5d6268, helipad: 0x646a70, spire: 0x9aa0a6 };
 
 /** Every roof and terrace, and everything standing on the roofs (city.js
  *  rooftop), in one geometry colored by kind. */
@@ -495,7 +501,8 @@ function buildWater(scene, anisotropy) {
     const water = new THREE.Mesh(
         new THREE.PlaneGeometry(WATER_SPAN, WATER_SPAN),
         standard(BAY.color, {
-            roughness: BAY.roughness, metalness: 0, normalMap: rippleTexture(anisotropy), envMapIntensity: BAY.reflect
+            roughness: BAY.roughness, metalness: 0, normalMap: rippleTexture(anisotropy), envMapIntensity: BAY.reflect,
+            normalScale: new THREE.Vector2(BAY.normalScale, BAY.normalScale)
         })
     );
     water.rotation.x = -Math.PI / 2;
@@ -737,7 +744,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             // By night the offices and the streets light up, and the beacons
             // come on.
             for (const mesh of towers.meshes) mesh.material.emissiveIntensity = look.cityLights * 1.1;
-            streets.emissiveIntensity = look.cityLights * 0.9;
+            streets.emissiveIntensity = look.cityLights * STREET_GLOW;
             beacons.visible = look.cityLights > 0.2;
         },
         /**

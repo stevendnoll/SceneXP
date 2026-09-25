@@ -923,6 +923,15 @@ describe('the city painters', () => {
         expect(edge.h).toBeCloseTo((11 / 112) * 256, 9);
         const night = recorder();
         paint.drawStreets(night.ctx, 256, 256, { block: 90, street: 22 }, true);
-        expect(night.fills.filter((f) => f.style === 'rgb(255, 180, 90)')).toHaveLength(4);
+        // Pools of lamplight along all four edges, dark between them.
+        const pools = night.fills.filter((f) => f.style === paint.STREET_LAMP);
+        expect(pools).toHaveLength(20);
+        const along = pools.filter((f) => f.w > f.h && f.y < 20).map((f) => f.x).sort((a, b) => a - b);
+        expect(along).toHaveLength(5);
+        expect(along[1] - (along[0] + pools[0].w)).toBeGreaterThan(10);
+        // Warm, but nearer white than orange.
+        const [r, g, b] = paint.STREET_LAMP.match(/\d+/g).map(Number);
+        expect(g / r).toBeGreaterThan(0.8);
+        expect(b / r).toBeGreaterThan(0.6);
     });
 });

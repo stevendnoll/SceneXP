@@ -292,7 +292,7 @@ export const PANEL = { width: 1.5, floor: 3.8 };
 
 /** How many panels across and floors up one facade texture holds. paint.js
  *  paints to it and world.js maps to it, so the two always agree. */
-export const FACADE_TILE = { cols: 4, rows: 4 };
+export const FACADE_TILE = { cols: 16, rows: 12 };
 
 /** Which facade a tower wears. */
 export function towerStyle(t) {

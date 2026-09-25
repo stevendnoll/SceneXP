@@ -156,6 +156,27 @@ describe.each(Object.entries(ASPECTS))('from the desk, on a %s screen', (_name, 
     });
 });
 
+describe('the chair', () => {
+    test('is turned toward the desk, its seat facing it and its back to the window (QA, 2026-09-24)', () => {
+        const chair = room.group.getObjectByName('chair');
+        // The seat faces the chair's own -z.
+        const seatFaces = new THREE.Vector3(0, 0, -1).applyQuaternion(chair.quaternion);
+        const d = CONFIG.room.desk;
+        const toDesk = new THREE.Vector3(d.x + d.width / 2 - chair.position.x, 0, d.z - chair.position.z).normalize();
+        expect(seatFaces.dot(toDesk)).toBeGreaterThan(0.8);
+        // Seen from the desk station, some of the seat shows, not only the
+        // flat back of the chair.
+        const cam = cameraAt('desk', 16 / 10);
+        const seatCentre = chair.localToWorld(new THREE.Vector3(0, 0.505, -0.1));
+        const hit = new THREE.Raycaster(cam.position, seatCentre.clone().sub(cam.position).normalize()).intersectObject(room.group, true)[0];
+        let o = hit.object;
+        while (o && o !== chair) o = o.parent;
+        expect(o).toBe(chair);
+        expect(hit.point.y).toBeGreaterThan(0.45);
+        expect(hit.point.y).toBeLessThan(0.53);
+    });
+});
+
 describe('at the computer', () => {
     test('the monitor fills the middle of the view', () => {
         const cam = cameraAt('computer', 16 / 10);

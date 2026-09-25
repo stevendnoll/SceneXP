@@ -479,7 +479,9 @@ export function drawClouds(ctx, W, H, puffs) {
  * Rain on a window pane: a scatter of beads, each a pale disc with a
  * darker rim below and a bright point of light above (a drop is a lens,
  * lit from the sky over it), and a few that have run down the glass,
- * leaving a thin wet trail. Transparent between, so the city shows.
+ * leaving a thin wet trail. Transparent between, so the city shows. The tile repeats across the
+ * glass (room.js RAIN_TILE), so a bead over an edge is painted on both
+ * sides of it.
  */
 export function drawRainOnGlass(ctx, W, H, seed = 7) {
     const random = paintRandom(seed);
@@ -498,19 +500,27 @@ export function drawRainOnGlass(ctx, W, H, seed = 7) {
         ctx.arc(x - r * 0.3, y - r * 0.35, Math.max(0.6, r * 0.22), 0, Math.PI * 2);
         ctx.fill();
     };
-    for (let i = 0; i < 420; i++) bead(random() * W, random() * H, 0.8 + random() ** 3 * 4.5);
+    // A bead near an edge is painted again across it, so the tiles meet.
+    const wrapped = (x, y, r) => {
+        for (const dx of [-W, 0, W]) {
+            for (const dy of [-H, 0, H]) {
+                if (x + dx + r >= 0 && x + dx - r <= W && y + dy + r >= 0 && y + dy - r <= H) bead(x + dx, y + dy, r);
+            }
+        }
+    };
+    for (let i = 0; i < 420; i++) wrapped(random() * W, random() * H, 0.8 + random() ** 3 * 4.5);
     // The runs: a trail down the glass, and the drop at its foot.
     ctx.strokeStyle = 'rgba(214, 224, 234, 0.22)';
     for (let i = 0; i < 9; i++) {
         const x = random() * W;
         const y0 = random() * H * 0.5;
-        const y1 = y0 + H * (0.2 + random() * 0.4);
+        const y1 = Math.min(H - 8, y0 + H * (0.2 + random() * 0.4));
         ctx.lineWidth = 1 + random() * 1.5;
         ctx.beginPath();
         ctx.moveTo(x, y0);
         for (let y = y0; y < y1; y += 8) ctx.lineTo(x + Math.sin(y * 0.09 + i) * 1.6, y);
         ctx.stroke();
-        bead(x, y1, 3.2 + random() * 2);
+        wrapped(x, y1, 3.2 + random() * 2);
     }
 }
 
@@ -566,6 +576,9 @@ export function drawGlow(ctx, W, H) {
     ctx.fillRect(0, 0, W, H);
 }
 
+/** The street lamps' light: warm, but nearer white than orange. */
+export const STREET_LAMP = 'rgb(255, 222, 176)';
+
 /**
  * The streets: one city block with half a street round it, repeated across
  * the land (world.js sets the repeat so the block sits under its towers).
@@ -577,12 +590,18 @@ export function drawStreets(ctx, W, H, { block, street }, lit = false) {
     ctx.fillStyle = lit ? 'rgb(0, 0, 0)' : 'rgb(96, 102, 104)';
     ctx.fillRect(0, 0, W, H);
     if (lit) {
-        // Warm light along every street, brightest at its middle.
-        ctx.fillStyle = 'rgb(255, 180, 90)';
-        ctx.fillRect(0, s * 0.3, W, s * 0.5);
-        ctx.fillRect(0, H - s * 0.8, W, s * 0.5);
-        ctx.fillRect(s * 0.3, 0, s * 0.5, H);
-        ctx.fillRect(W - s * 0.8, 0, s * 0.5, H);
+        // Pools of warm white light under the street lamps along every
+        // street, dark between them, so the cars' lights still show.
+        ctx.fillStyle = STREET_LAMP;
+        const pools = 5;
+        const pool = s * 0.9;
+        for (let i = 0; i < pools; i++) {
+            const t = ((i + 0.5) / pools) * W - pool / 2;
+            ctx.fillRect(t, s * 0.25, pool, s * 0.55);
+            ctx.fillRect(t, H - s * 0.8, pool, s * 0.55);
+            ctx.fillRect(s * 0.25, t, s * 0.55, pool);
+            ctx.fillRect(W - s * 0.8, t, s * 0.55, pool);
+        }
         return;
     }
     // Asphalt round the edges, a sidewalk inside it, the block within.

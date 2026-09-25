@@ -3532,7 +3532,7 @@ html [data-ui-theme="ember" lang="en"]
         "Computer"
       button#bar-places.office-btn [aria-controls="places-menu" aria-expanded="false" type="button"]
         "Places"
-      button#bar-day.office-btn [hidden type="button"]
+      button#bar-day.office-btn [type="button"]
         "Watch a day go by"
       button#bar-outtray.office-btn [title="Backups and exports" type="button"]
         "Out-tray"

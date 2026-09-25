@@ -72,7 +72,10 @@ export function lightAt(date, hour = null) {
 }
 
 const NIGHT = { top: 0x0b1530, bottom: 0x2a2f4a, sun: 0x9fb4ff, clouds: 0x2c3044 };
-const GOLD = { top: 0x4f79b3, bottom: 0xf2b27a, sun: 0xffb36b, clouds: 0xffbf9c };
+// Dawn and dusk. The horizon all round is a soft rose-gray (the far side
+// of a sunrise is not golden); the gold is the sun's own glow, which
+// world.js paints into the sky near the sun.
+const GOLD = { top: 0x4f79b3, bottom: 0xcdbfc6, sun: 0xffb36b, clouds: 0xffbf9c };
 const DAY = { top: 0x7fb2dd, bottom: 0xe3ecef, sun: 0xfff0d8, clouds: 0xffffff };
 
 /**

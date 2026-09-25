@@ -30,10 +30,12 @@ describe('the ripples', () => {
     test('every wave fits the tile a whole number of times, long and low', () => {
         for (const [kx, ky, slope] of BAY.waves) {
             expect(Number.isInteger(kx) && Number.isInteger(ky)).toBe(true);
-            // Wavelengths of several meters to a few dozen: a swell, not a chop.
+            // Wavelengths of a couple of dozen meters to about a hundred: a
+            // swell, not a chop, on a tile long enough that its repeat does
+            // not show as a grid toward the horizon.
             const wavelength = BAY.tile / Math.hypot(kx, ky);
-            expect(wavelength).toBeGreaterThan(6);
-            expect(wavelength).toBeLessThan(60);
+            expect(wavelength).toBeGreaterThan(15);
+            expect(wavelength).toBeLessThan(120);
             // Each at least four pixels long, so none aliases in the tile.
             expect(wavelength / (BAY.tile / BAY.size)).toBeGreaterThanOrEqual(4);
             expect(slope).toBeGreaterThan(0);

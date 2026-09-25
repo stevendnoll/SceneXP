@@ -29,8 +29,10 @@
  * The water. `color` is the body of the bay under the reflections, dark so
  * the reflections carry it; `roughness` is how sharp the mirror is;
  * `reflect` strengthens the reflection a little past a plain dielectric's,
- * for the calm-day mirror Steve asked for; `tile` is how many meters one
- * swell texture spans, and `size` its pixels. Each wave is
+ * for the calm-day mirror Steve asked for; `normalScale` is how strongly
+ * the swell bends it; `tile` is how many meters one swell texture spans
+ * (long, so its repeat does not show as a grid toward the horizon), and
+ * `size` its pixels. Each wave is
  * `[kx, ky, slope, phase]`: how many times it fits across the tile each way
  * (whole numbers, so the tile repeats), its steepest slope, and where it
  * starts.
@@ -39,7 +41,8 @@ export const BAY = {
     color: 0x12303b,
     roughness: 0.05,
     reflect: 1.3,
-    tile: 96,
+    normalScale: 0.6,
+    tile: 240,
     size: 256,
     waves: [
         [2, 1, 0.035, 0.0],

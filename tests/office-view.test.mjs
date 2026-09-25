@@ -436,7 +436,12 @@ describe('the glass city', () => {
         lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 22)));
         expect(lit.beacons.visible).toBe(true);
         expect(lit.towers.meshes[0].material.emissiveIntensity).toBeGreaterThan(1);
-        expect(lit.scene.getObjectByName('land-downtown').material.emissiveIntensity).toBeGreaterThan(0.5);
+        // The street lamps glow, but low, so the streets read as streets
+        // and the cars' lights show on them (QA, 2026-09-24: "neon").
+        const glow = lit.scene.getObjectByName('land-downtown').material.emissiveIntensity;
+        expect(glow).toBeCloseTo(worldMod.STREET_GLOW, 6);
+        expect(glow).toBeGreaterThan(0.2);
+        expect(glow).toBeLessThan(0.5);
         lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 12)));
         expect(lit.beacons.visible).toBe(false);
         expect(lit.towers.meshes[0].material.emissiveIntensity).toBe(0);
@@ -1022,6 +1027,15 @@ describe('in the rain', () => {
         expect(panes[0].material.opacity).toBeCloseTo(0.72, 9);
         set(1);
         expect(panes[0].material.opacity).toBe(1);
+        // A tile of drops every RAIN_TILE meters of glass, so a drop is
+        // millimeters however near the eye (QA, 2026-09-24: blobs).
+        const roomMod = await import('../www/office/js/room.js');
+        const uv = panes[0].geometry.attributes.uv;
+        const pos = panes[0].geometry.attributes.position;
+        const du = Math.abs(uv.getX(1) - uv.getX(0));
+        const dx = Math.abs(pos.getX(1) - pos.getX(0));
+        expect(dx / du).toBeCloseTo(roomMod.RAIN_TILE, 6);
+        expect(panes[0].material.map.wrapS).toBe(THREE.RepeatWrapping);
         // In the window openings, facing into the room.
         const w = (await import('../www/office/js/room.js')).windowsOf(CONFIG);
         expect(panes[0].position.y).toBeCloseTo((w.sill + w.head) / 2, 9);
@@ -1061,5 +1075,55 @@ describe('in the rain', () => {
         bare.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
         const [noUv] = mergeByMaterial([new THREE.Mesh(bare, other.material), other]);
         expect(noUv.geometry.attributes.uv).toBeUndefined();
+    });
+});
+
+// ---- The QA polish of 2026-09-24 ----------------------------------------------------
+
+describe('after the screenshots', () => {
+    test('the lit windows repeat only every few dozen meters, not every few panels', () => {
+        expect(city.PANEL.width * city.FACADE_TILE.cols).toBeGreaterThanOrEqual(20);
+        expect(city.PANEL.floor * city.FACADE_TILE.rows).toBeGreaterThanOrEqual(40);
+    });
+
+    test('a low sun full on a rooftop box does not burn it white', () => {
+        // Its lit brightness: its color times the most light there is, the
+        // sun's, the sky's and the reflections' (about one), kept under 0.75.
+        const most = 1.52 * 1.2 + 0.92 * 1.1 + 1;
+        for (const kind of ['roof', 'terrace', 'podium', 'penthouse', 'helipad']) {
+            const c = new THREE.Color().setHex(worldMod.ROOF_COLORS[kind], THREE.SRGBColorSpace);
+            expect(Math.max(c.r, c.g, c.b) * most).toBeLessThan(0.75);
+        }
+    });
+
+    test('at dawn the warmth is round the sun in the east, and the west and the bay stay cool', async () => {
+        const daylight = await import('../www/office/js/daylight.js');
+        const day = new Date(2026, 8, 24);
+        const moment = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, daylight.sunTimes(day).sunrise * 3600000);
+        const look = daylight.lighting(daylight.lightAt(moment));
+        const dawn = worldMod.buildWorld(CONFIG);
+        dawn.setLight(look, sky.skyAt(moment));
+        const pos = dawn.sky.geometry.attributes.position;
+        const col = dawn.sky.geometry.attributes.color;
+        const warmth = (dir) => {
+            let best = -2;
+            let at = 0;
+            for (let i = 0; i < pos.count; i++) {
+                const d = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize().dot(dir);
+                if (d > best) { best = d; at = i; }
+            }
+            return col.getX(at) - col.getZ(at);
+        };
+        const east = warmth(new THREE.Vector3(0, 0.05, 1).normalize());
+        const west = warmth(new THREE.Vector3(0, 0.05, -1).normalize());
+        expect(east).toBeGreaterThan(west + 0.15);
+        // The haze (the fog is the horizon's color) over the bay is not tan.
+        const fog = dawn.scene.fog.color;
+        expect(fog.r - fog.b).toBeLessThan(0.08);
+    });
+
+    test('the swell bends the reflection softly', () => {
+        expect(world.water.material.normalScale.x).toBe(bay.BAY.normalScale);
+        expect(bay.BAY.normalScale).toBeLessThan(1);
     });
 });

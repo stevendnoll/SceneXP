@@ -718,13 +718,12 @@ describe('the light', () => {
 });
 
 describe('a day going by at the window', () => {
-    test('the button is at the window, and nowhere else until a day is going by', () => {
-        expect(el('bar-day').hidden).toBe(true);
-        key('9');
-        expect(el('bar-day').hidden).toBe(false);
-        expect(el('bar-day').textContent).toBe('Watch a day go by');
-        t.goTo('desk');
-        expect(el('bar-day').hidden).toBe(true);
+    test('the button is in the toolbar wherever the visitor is (Steve, 2026-09-24)', () => {
+        for (const station of ['desk', 'window', 'computer', 'cabinet']) {
+            t.goTo(station);
+            expect(el('bar-day').hidden).toBe(false);
+            expect(el('bar-day').textContent).toBe('Watch a day go by');
+        }
     });
 
     test('a whole day goes by in CONFIG.view.daySeconds, with a clock, said at the start and the end', () => {
@@ -746,7 +745,7 @@ describe('a day going by at the window', () => {
         t.stepDay(CONFIG.view.daySeconds);
         expect(t.ui.lapse).toBeNull();
         expect(el('hud-clock').hidden).toBe(true);
-        expect(el('bar-day').hidden).toBe(true);
+        expect(el('bar-day').textContent).toBe('Watch a day go by');
         expect(said()).toBe('A whole day has gone by. It is 3:00 PM again.');
         expect(t.ui.hourPin).toBe(15);
         window.cornerOffice.hour(null);
@@ -764,6 +763,26 @@ describe('a day going by at the window', () => {
         key('Escape');
         expect(t.ui.lapse).toBeNull();
         expect(t.stopDay(false)).toBe(false);
+        window.cornerOffice.hour(null);
+    });
+
+    test('a change of light inside the wait between captures is owed, and taken when the wait is over', () => {
+        const capture = jest.spyOn(t.world(), 'updateEnvironment');
+        window.cornerOffice.hour(6);
+        t.watchDay();
+        capture.mockClear();
+        // Just captured: a change now has to wait...
+        t.ui.capturedAt = performance.now();
+        t.ui.lightKey = 'something else';
+        t.applyDaylight(new Date());
+        expect(capture).not.toHaveBeenCalled();
+        expect(t.ui.captureOwed).toBe(true);
+        // ...and nothing changes after it, but once the wait is over it is taken.
+        t.ui.capturedAt = performance.now() - CONFIG.view.captureSeconds * 1000 - 1;
+        t.applyDaylight(new Date());
+        expect(capture).toHaveBeenCalledTimes(1);
+        expect(t.ui.captureOwed).toBe(false);
+        t.stopDay(false);
         window.cornerOffice.hour(null);
     });
 

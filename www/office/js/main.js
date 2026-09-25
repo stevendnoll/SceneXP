@@ -144,6 +144,8 @@ const ui = {
      *  and what the moon was last painted for. */
     capturedAt: 0,
     capturedSun: null,
+    /** A capture the wait put off, to be taken when it is over. */
+    captureOwed: false,
     moonKey: null,
     /** Whether the moving scenery should be placed again even though it is
      *  held still (reduced motion): the clock jumped, or a day is going by. */
@@ -562,14 +564,18 @@ function paintMoon(sky) {
  * Whether the reflections should be captured again: when the light has
  * visibly changed or the sun has moved on some way, but during a day going
  * by no more often than CONFIG.view.captureSeconds, because a capture draws
- * the whole world twelve times.
+ * the whole world twelve times. A change that falls inside that wait is
+ * OWED, not dropped: dawn's last change came inside it, and the water went
+ * on mirroring the gold sunrise sky into the morning (QA, 2026-09-24).
  */
 function captureDue(sky, changed) {
     const moved = !ui.capturedSun
         || Math.acos(Math.min(1, sky.sun[0] * ui.capturedSun[0] + sky.sun[1] * ui.capturedSun[1] + sky.sun[2] * ui.capturedSun[2]))
             > CONFIG.view.captureDegrees * Math.PI / 180;
-    if (!changed && !moved) return false;
-    return !ui.lapse || performance.now() - ui.capturedAt >= CONFIG.view.captureSeconds * 1000;
+    if (!changed && !moved && !ui.captureOwed) return false;
+    if (!ui.lapse || performance.now() - ui.capturedAt >= CONFIG.view.captureSeconds * 1000) return true;
+    ui.captureOwed = true;
+    return false;
 }
 
 /**
@@ -606,6 +612,7 @@ function applyDaylight(t, force = false) {
             world.updateEnvironment(renderer, look);
             ui.capturedAt = performance.now();
             ui.capturedSun = sky.sun;
+            ui.captureOwed = false;
         }
     }
     requestRender();
@@ -614,12 +621,13 @@ function applyDaylight(t, force = false) {
 
 // ---- A day going by -----------------------------------------------------------
 
-/** The button shows at the window, where the day is seen, and stays while
- *  a day is going by wherever the visitor goes. */
+/** The button is in the toolbar wherever the visitor is (the whole room
+ *  lives through the day, not only the view), and says Stop while a day is
+ *  going by. */
 function showDayButton() {
     const btn = el('bar-day');
     if (!btn) return;
-    btn.hidden = !(ui.station === 'window' || ui.lapse);
+    btn.hidden = false;
     btn.textContent = ui.lapse ? 'Stop the day' : 'Watch a day go by';
 }
 
