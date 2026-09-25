@@ -46,10 +46,11 @@ import { buildRoom, setLamp, pickOf, setNotes, ensureCapacity } from './room.min
 import { buildWorld } from './world.min.js';
 import {
     screenLines, drawScreen, drawCalendar, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
-    drawLetterAtlas, drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, FACADE_STYLES
+    drawLetterAtlas, drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, FACADE_STYLES
 } from './paint.min.js';
 import { CITY } from './city.min.js';
 import { CLOUDS, cloudPuffs, skyAt, dayLapse } from './sky.min.js';
+import { weatherAt, weathered } from './weather.min.js';
 import { drawerPlan, liftedLine, TAB_COLORS } from './cabinet.min.js';
 import { createFiling } from './filing.min.js';
 import { boardPlan, boardSummary, boardColumns, columnAt, CARD_ATLAS } from './board.min.js';
@@ -80,6 +81,7 @@ import {
     renderWhiteboardSheet, renderDepartures, renderPrintSheet
 } from './panels.min.js';
 import { installCardFocusTrap, installCardScrollReset, getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
+import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
 // ---- State ------------------------------------------------------------------
@@ -93,6 +95,8 @@ const state = {
     tickDue: 0,
     /** Seconds until the next frame of the moving scenery. */
     ambientDue: 0,
+    /** Whether the last pass of the loop drew a frame. */
+    drewLast: false,
     /** Set when something on screen changed and a frame should be drawn. */
     dirty: true,
     frames: 0,
@@ -131,6 +135,11 @@ const ui = {
     /** A day going by at the window: its sky.js dayLapse and the moment it
      *  has reached, or null. */
     lapse: null,
+    /** Weather held for screenshots ('rain' or 'clear'), or null for the
+     *  day's own (window.cornerOffice.weather). */
+    weatherPin: null,
+    /** The weather as last applied: { overcast, rain }. */
+    weather: { overcast: 0, rain: 0 },
     /** When the reflections were last captured, and where the sun stood,
      *  and what the moon was last painted for. */
     capturedAt: 0,
@@ -173,6 +182,8 @@ const painted = { calendar: null, notes: null, drawers: [] };
 const history = createHistory();
 
 let renderer = null;
+/** The adaptive resolution (shared resolution-1.0.0), made with the renderer. */
+let resolution = null;
 let scene = null;
 let camera = null;
 let room = null;
@@ -284,6 +295,26 @@ async function init() {
             const finish = world.tune(values);
             requestRender();
             return finish;
+        },
+        /** `cornerOffice.weather('rain')` or `('clear')` holds the weather,
+         *  and `(null)` gives it back to the day's own. */
+        weather(kind) {
+            ui.weatherPin = kind === 'rain' || kind === 'clear' ? kind : null;
+            applyDaylight(now(), true);
+            return ui.weather;
+        },
+        /** For a phone QA round: what the adaptive resolution has settled on,
+         *  and what a frame costs. */
+        quality() {
+            const info = renderer && renderer.info ? renderer.info.render : {};
+            return { ...resolution.readout(), drawCalls: info.calls, triangles: info.triangles, ambientFps: CONFIG.view.ambientFps };
+        },
+        /** Full resolution held, for a social-card capture (`capture(false)`
+         *  lets it adapt again). */
+        capture(on = true) {
+            const held = resolution.pin(on);
+            requestRender();
+            return held;
         }
     };
 
@@ -320,8 +351,10 @@ function buildRenderer() {
     // Two scenes a frame, the world outside and then the room, so the
     // renderer clears once by hand rather than before each (animate).
     renderer.autoClear = false;
-    renderer.setPixelRatio(pixelRatioCeiling());
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    // Adaptive resolution (shared resolution-1.0.0): below the device's own
+    // ratio for as long as the frames say it is too much, back up when not.
+    resolution = createResolution({ renderer, ceiling: pixelRatioCeiling });
+    resolution.apply();
 }
 
 /** A canvas texture painted by `paint`, or null where there is no canvas. */
@@ -405,6 +438,7 @@ function buildScene() {
         screen: screenTexture,
         calendar: painted.calendar.texture,
         notes: painted.notes.texture,
+        rainGlass: paintedTexture(512, 512, drawRainOnGlass).texture,
         drawerLabels: painted.drawers.map((p) => p.texture),
         boardHeader: painted.boardHeader.texture,
         rolodex: painted.rolodex.texture,
@@ -442,7 +476,7 @@ function applyPose(pose) {
 
 function handleResize() {
     if (!renderer || !camera) return;
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    resolution.apply();
     if (!glide) applyPose(poseFor(ui.station, aspect(), CONFIG));
     requestRender();
 }
@@ -548,10 +582,16 @@ function applyDaylight(t, force = false) {
     const at = skyTime(t);
     const light = lightAt(at);
     const sky = skyAt(at);
-    const changed = force || light.key !== ui.lightKey;
-    ui.lightKey = light.key;
+    const weather = weatherAt(at, ui.weatherPin);
+    // The light's own key and the weather's, in quarters: either changing
+    // visibly is a change worth new reflections.
+    const key = `${light.key}|${Math.round(weather.overcast * 4)}${Math.round(weather.rain * 4)}`;
+    const changed = force || key !== ui.lightKey;
+    ui.lightKey = key;
     ui.phase = light.phase;
-    const look = lighting(light);
+    ui.weather = weather;
+    const look = weathered(lighting(light), weather);
+    if (room && room.rain) room.rain.set(weather.rain);
     if (lights.hemi) {
         lights.hemi.intensity = look.hemi;
         lights.sun.intensity = look.sun;
@@ -2357,11 +2397,18 @@ function animate() {
         }
     }
 
+    // The frame after one that was drawn carries that frame's cost, so only
+    // those intervals tell the adaptive resolution anything (a frame not
+    // drawn costs nothing, and the scenery draws a few times a second).
+    if (state.drewLast && resolution) resolution.sample(delta);
+    state.drewLast = false;
+
     if (!state.dirty) return;
     state.dirty = false;
     state.frames++;
     if (world && (moving || ui.lifeDue)) placeLife();
     draw();
+    state.drewLast = true;
 }
 
 /**
@@ -2380,7 +2427,7 @@ function lifeMoves() {
  *  cars and ripples where real time says (held at zero for less motion). */
 function placeLife() {
     ui.lifeDue = false;
-    world.setLife(skyTime(now()), state.reducedMotion ? 0 : performance.now() / 1000);
+    world.setLife(skyTime(now()), state.reducedMotion ? 0 : performance.now() / 1000, state.reducedMotion);
 }
 
 /**
@@ -2523,6 +2570,7 @@ export const __test__ = {
     stopDay,
     lifeMoves,
     placeLife,
+    resolution: () => resolution,
     lights,
     currentRows,
     openFolder,

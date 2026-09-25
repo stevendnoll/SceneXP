@@ -888,6 +888,23 @@ describe('the city painters', () => {
         }
     });
 
+    test('rain on the glass: beads with a bright point and a dark rim, and a few runs down the pane', () => {
+        const { ctx, log } = calls();
+        paint.drawRainOnGlass(ctx, 512, 512, 7);
+        expect(log[0][0]).toBe('clearRect');
+        const fills = log.filter(([name]) => name === 'fill');
+        // Each bead is three fills: the drop, its rim, its highlight.
+        expect(fills.length % 3).toBe(0);
+        expect(fills.length / 3).toBeGreaterThan(400);
+        expect(fills.some(([, , style]) => style === 'rgba(255, 255, 255, 0.75)')).toBe(true);
+        expect(log.filter(([name]) => name === 'stroke')).toHaveLength(9);
+        // The same pane every visit.
+        const again = calls();
+        paint.drawRainOnGlass(again.ctx, 512, 512, 7);
+        expect(again.log.map(([name, args]) => [name, args.map((v) => (typeof v === 'number' ? v.toFixed(3) : v))]))
+            .toEqual(log.map(([name, args]) => [name, args.map((v) => (typeof v === 'number' ? v.toFixed(3) : v))]));
+    });
+
     test('the glow about the sun fades from a bright core to nothing at its edge', () => {
         const { ctx, log } = calls();
         paint.drawGlow(ctx, 256, 256);

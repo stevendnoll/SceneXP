@@ -36,7 +36,8 @@ import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
 import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions, drift
 } from './life.min.js';
-import { buildFleet, place } from './fleet.min.js';
+import { buildFleet, place, boxesGeometry } from './fleet.min.js';
+import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
 
 /** The facade styles, in the order paint.js paints them. */
 export const STYLES = ['grid', 'bands', 'fins'];
@@ -315,26 +316,21 @@ function buildGround(scene, textures) {
     return city;
 }
 
-function box(w, h, d, material, x, y, z) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-    mesh.position.set(x, y, z);
-    return mesh;
-}
-
 /** The piers along the waterfront, reaching west into the bay, with the
  *  ferry dock's terminal at the foot of the office's street. */
 function buildPiers(scene) {
-    const group = new THREE.Group();
-    group.name = 'piers';
-    const deck = standard(0x6e6259, { roughness: 1 });
-    const shed = standard(0x8f9aa3, { roughness: 0.7 });
+    const boxes = [];
     for (const pier of piers()) {
         const z = pier.z - pier.length / 2;
-        group.add(box(pier.width, 2, pier.length, deck, pier.x, WATER_Y + 3, z));
-        group.add(box(pier.width * 0.7, pier.ferry ? 14 : 9, pier.length * 0.75, shed, pier.x, WATER_Y + (pier.ferry ? 11 : 8.5), z));
+        boxes.push([pier.x, 3, z, pier.width, 2, pier.length, 0x6e6259]);
+        boxes.push([pier.x, pier.ferry ? 11 : 8.5, z, pier.width * 0.7, pier.ferry ? 14 : 9, pier.length * 0.75, 0x8f9aa3]);
     }
-    scene.add(group);
-    return group;
+    // One mesh for all of them (a draw call each would be sixteen).
+    const mesh = new THREE.Mesh(boxesGeometry(boxes), standard(0xffffff, { vertexColors: true, roughness: 0.9 }));
+    mesh.position.y = WATER_Y;
+    mesh.name = 'piers';
+    scene.add(mesh);
+    return mesh;
 }
 
 /** The mountains' rock and snow, and the dark green of the wooded hills. */
@@ -531,6 +527,39 @@ function buildClouds(scene, texture) {
     return deck;
 }
 
+/** How high the rain's low gray deck hangs: under the mountain tops, which
+ *  go into it, as they do. */
+export const OVERCAST_ALTITUDE = 1500;
+
+/**
+ * The weather's own meshes: a low gray deck that closes the sky over as
+ * the day turns wet, and the rain falling past the window (weather.js).
+ * Both are sky, not things: rays pass through them.
+ */
+function buildWeather(scene) {
+    const deck = new THREE.Mesh(
+        new THREE.PlaneGeometry(CLOUDS.span, CLOUDS.span),
+        new THREE.MeshBasicMaterial({ color: 0x9aa2aa, transparent: true, opacity: 0, depthWrite: false })
+    );
+    deck.rotation.x = Math.PI / 2;
+    deck.position.y = WATER_Y + OVERCAST_ALTITUDE;
+    deck.name = 'overcast';
+    deck.visible = false;
+    deck.raycast = () => {};
+    const streaks = rainStreaks();
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(streakPositions(streaks, 0), 3));
+    const rain = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
+        color: 0xc8d0d8, transparent: true, opacity: 0, depthWrite: false, fog: false
+    }));
+    rain.name = 'rain';
+    rain.visible = false;
+    rain.frustumCulled = false;
+    rain.raycast = () => {};
+    scene.add(deck, rain);
+    return { deck, rain, streaks };
+}
+
 /** The wooded hills across the water, one mesh each (the view test counts
  *  anything named land-* as land). */
 function buildHills(scene) {
@@ -601,6 +630,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const route = ferryRoute();
     const courses = sailboatCourses();
     const fleet = buildFleet(scene, cars);
+    const weather = buildWeather(scene);
+    // How wet it is now (setLight), for what moves (setLife).
+    let raining = 0;
     paintSky(sky, 0x7fb2dd, 0xe3ecef);
 
     /** Hang a disc (the sun's, its halo, the moon) at a direction, facing
@@ -645,6 +677,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         clouds,
         heavens,
         fleet,
+        weather,
         glow,
         points,
         towers,
@@ -685,6 +718,17 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             heavens.stars.material.opacity = look.stars;
             heavens.stars.visible = look.stars > 0.01;
             fleet.light(look.cityLights);
+            // The weather (weather.js `weathered` carries it on the look).
+            const overcast = look.overcast || 0;
+            raining = look.rain || 0;
+            weather.deck.visible = overcast > 0.02;
+            weather.deck.material.opacity = 0.93 * overcast;
+            weather.deck.material.color.setHex(look.skyBottom, THREE.SRGBColorSpace).multiplyScalar(0.92);
+            weather.rain.material.opacity = 0.35 * raining;
+            // The haze closes in, the mountains going first; the water is
+            // roughened by the drops.
+            scene.fog.far = HAZE.far / (1 + 5 * raining + overcast);
+            water.material.roughness = BAY.roughness + 0.25 * raining;
             scene.fog.color.setHex(look.skyBottom, THREE.SRGBColorSpace);
             clouds.material.color.setHex(look.clouds, THREE.SRGBColorSpace);
             hemi.intensity = look.hemi * 1.1;
@@ -733,16 +777,25 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         },
         /**
          * Put everything that moves where it is: the ferries, ships,
-         * sailboats and seaplane on the sky's clock (`date`), the cars and
-         * the ripples on real `seconds`, and the clouds drifted by the wind.
-         * Cheap enough for every frame.
+         * sailboats and seaplane on the sky's clock (`date`), the cars, the
+         * rain and the ripples on real `seconds`, and the clouds drifted by
+         * the wind. `still` is a visitor who asked for less motion. Cheap
+         * enough for every frame.
          */
-        setLife(date, seconds) {
+        setLife(date, seconds, still = false) {
             ferriesAt(date, route).forEach((at, i) => place(fleet.ferries[i], at));
             const ships = shipsAt(date);
             fleet.ships.forEach((c, slot) => place(c, ships.find((ship) => ((ship.k % 3) + 3) % 3 === slot) || null));
-            sailboatsAt(date, courses).forEach((at, i) => place(fleet.sailboats[i], at));
-            place(fleet.seaplane, seaplaneAt(date));
+            sailboatsAt(date, courses, raining).forEach((at, i) => place(fleet.sailboats[i], at));
+            place(fleet.seaplane, seaplaneAt(date, raining));
+            // Rain that is held still would read as scratches on the view,
+            // so for less motion only the gray sky and the wet glass show.
+            weather.rain.visible = raining > 0.02 && !still;
+            if (weather.rain.visible) {
+                const ends = weather.rain.geometry.attributes.position;
+                streakPositions(weather.streaks, seconds, RAIN, ends.array);
+                ends.needsUpdate = true;
+            }
             const positions = fleet.cars.geometry.attributes.position;
             carPositions(cars, lanes, seconds, positions.array);
             positions.needsUpdate = true;

@@ -123,7 +123,43 @@ export function windowsOf(config) {
     };
 }
 
-function buildShell(group, config) {
+/**
+ * Fold meshes that share a material into one mesh each, their places baked
+ * in. The room's shell is a few dozen boxes and planes in a handful of
+ * materials, and every mesh is a draw call on every frame, which on a
+ * phone is the budget the scenery outside would rather spend.
+ */
+export function mergeByMaterial(meshes) {
+    const byMaterial = new Map();
+    for (const mesh of meshes) {
+        mesh.updateMatrix();
+        const g = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
+        g.applyMatrix4(mesh.matrix);
+        if (!byMaterial.has(mesh.material)) byMaterial.set(mesh.material, []);
+        byMaterial.get(mesh.material).push(g);
+    }
+    return [...byMaterial].map(([material, parts]) => {
+        const merged = new THREE.BufferGeometry();
+        for (const name of ['position', 'normal', 'uv']) {
+            if (!parts.every((p) => p.attributes[name])) continue;
+            const arrays = parts.map((p) => p.attributes[name].array);
+            const array = new Float32Array(arrays.reduce((n, a) => n + a.length, 0));
+            let at = 0;
+            for (const a of arrays) {
+                array.set(a, at);
+                at += a.length;
+            }
+            merged.setAttribute(name, new THREE.BufferAttribute(array, parts[0].attributes[name].itemSize));
+        }
+        const mesh = new THREE.Mesh(merged, material);
+        mesh.name = 'shell';
+        return mesh;
+    });
+}
+
+function buildShell(room, config) {
+    // Built loose, then folded by material into a few meshes (mergeByMaterial).
+    const group = new THREE.Group();
     const { width, depth, height } = config.room;
     const w = windowsOf(config);
     const hw = width / 2;
@@ -183,6 +219,42 @@ function buildShell(group, config) {
     for (const z of [w.right.z0, (w.right.z0 + w.right.z1) / 2, w.right.z1]) {
         group.add(slab(hw - 0.03, w.sill, z - f / 2, hw + 0.02, w.head, z + f / 2, trim));
     }
+    for (const mesh of mergeByMaterial(group.children)) room.add(mesh);
+}
+
+/**
+ * Rain on the glass: a pane in each window opening wearing the painted
+ * drops (textures.rainGlass), clear until it rains (`set(level)`). The
+ * panes are there to be seen, never to be hit: a tap or a census ray passes
+ * through them to the city.
+ */
+function buildRainPanes(group, config, texture) {
+    const w = windowsOf(config);
+    const hw = config.room.width / 2;
+    const hd = config.room.depth / 2;
+    const height = w.head - w.sill;
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xffffff, map: texture, transparent: true, opacity: 0, depthWrite: false, roughness: 0.15
+    });
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(w.back.x1 - w.back.x0, height), material);
+    back.position.set((w.back.x0 + w.back.x1) / 2, (w.sill + w.head) / 2, -hd + 0.01);
+    const right = new THREE.Mesh(new THREE.PlaneGeometry(w.right.z1 - w.right.z0, height), material);
+    right.position.set(hw - 0.01, (w.sill + w.head) / 2, (w.right.z0 + w.right.z1) / 2);
+    right.rotation.y = -Math.PI / 2;
+    const panes = [back, right];
+    for (const pane of panes) {
+        pane.name = 'rain-glass';
+        pane.visible = false;
+        pane.raycast = () => {};
+        group.add(pane);
+    }
+    return {
+        panes,
+        set(level) {
+            material.opacity = texture ? Math.min(1, level * 1.2) : 0;
+            for (const pane of panes) pane.visible = level > 0.02 && !!texture;
+        }
+    };
 }
 
 /**
@@ -761,6 +833,7 @@ export function buildRoom(config, textures = {}) {
     const ringOf = textures.rolodexRing || null;
     const rolodex = ringOf ? buildRolodex(group, config, textures.rolodex || null, picks, ringOf.quad, ringOf.uvs, ringOf.count) : null;
     const notes = buildNotes(group, config, textures.notes || null, picks);
+    const rain = buildRainPanes(group, config, textures.rainGlass || null);
     if (textures.screen) {
         desk.screen.material = new THREE.MeshBasicMaterial({ map: textures.screen, toneMapped: false });
     }
@@ -776,6 +849,7 @@ export function buildRoom(config, textures = {}) {
         departures,
         whiteboard,
         notes,
+        rain,
         lamp: { light: desk.light, bulb: desk.bulb, group: desk.lampGroup }
     };
 }

@@ -149,10 +149,11 @@ export function sailboatCourses(seed = 20260927) {
     }));
 }
 
-/** Where the sailboats are, and whether they are out at all: by day only. */
-export function sailboatsAt(date, courses = sailboatCourses()) {
+/** Where the sailboats are, and whether they are out at all: by day, and
+ *  not in the rain (weather.js `rain`, 0 to 1). */
+export function sailboatsAt(date, courses = sailboatCourses(), rain = 0) {
     const m = minutesOfDay(date);
-    const out = m >= LIFE.sailboat.from * 60 && m <= LIFE.sailboat.to * 60;
+    const out = m >= LIFE.sailboat.from * 60 && m <= LIFE.sailboat.to * 60 && rain < 0.3;
     const going = minutesOn(date);
     return courses.map((c) => {
         const theta = 2 * Math.PI * (going / c.period + c.phase);
@@ -191,15 +192,15 @@ export function takeoff(seconds) {
  * past and flies away, and comes back at `landing` past: a takeoff run
  * backward (in from the west, nose a little up, touching down, slowing to a
  * stop where it started). The rest of the time it lies moored at its
- * start, so it never appears or vanishes on the water. Null only while it
- * is away.
+ * start, so it never appears or vanishes on the water, and in heavy rain
+ * it stays moored. Null only while it is away.
  */
-export function seaplaneAt(date) {
+export function seaplaneAt(date, rain = 0) {
     const { takeoff: up, landing, from, to, run, climb } = LIFE.seaplane;
     const moored = { x: SEAPLANE_START[0], y: WATER_Y, z: SEAPLANE_START[1], yaw: 0, pitch: 0, speed: 0 };
     const m = minutesOfDay(date);
     const hour = Math.floor(m / 60);
-    if (hour < from || hour > to) return moored;
+    if (hour < from || hour > to || rain > 0.5) return moored;
     const into = (m - hour * 60) * 60;
     const trip = run + climb;
     if (into < up * 60) return moored;

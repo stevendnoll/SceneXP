@@ -476,6 +476,45 @@ export function drawClouds(ctx, W, H, puffs) {
 }
 
 /**
+ * Rain on a window pane: a scatter of beads, each a pale disc with a
+ * darker rim below and a bright point of light above (a drop is a lens,
+ * lit from the sky over it), and a few that have run down the glass,
+ * leaving a thin wet trail. Transparent between, so the city shows.
+ */
+export function drawRainOnGlass(ctx, W, H, seed = 7) {
+    const random = paintRandom(seed);
+    ctx.clearRect(0, 0, W, H);
+    const bead = (x, y, r) => {
+        ctx.fillStyle = 'rgba(214, 224, 234, 0.32)';
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(40, 48, 58, 0.28)';
+        ctx.beginPath();
+        ctx.arc(x, y + r * 0.35, r * 0.7, 0, Math.PI);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.beginPath();
+        ctx.arc(x - r * 0.3, y - r * 0.35, Math.max(0.6, r * 0.22), 0, Math.PI * 2);
+        ctx.fill();
+    };
+    for (let i = 0; i < 420; i++) bead(random() * W, random() * H, 0.8 + random() ** 3 * 4.5);
+    // The runs: a trail down the glass, and the drop at its foot.
+    ctx.strokeStyle = 'rgba(214, 224, 234, 0.22)';
+    for (let i = 0; i < 9; i++) {
+        const x = random() * W;
+        const y0 = random() * H * 0.5;
+        const y1 = y0 + H * (0.2 + random() * 0.4);
+        ctx.lineWidth = 1 + random() * 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y0);
+        for (let y = y0; y < y1; y += 8) ctx.lineTo(x + Math.sin(y * 0.09 + i) * 1.6, y);
+        ctx.stroke();
+        bead(x, y1, 3.2 + random() * 2);
+    }
+}
+
+/**
  * The moon at a phase, with the sun off to the RIGHT of the tile (world.js
  * turns the disc so its right faces the sun). `elongation` is the moon's
  * angle from the sun: 0 new, pi full. The lit part runs from the

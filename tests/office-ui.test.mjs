@@ -843,6 +843,43 @@ describe('the scenery moves', () => {
     });
 });
 
+describe('rain and the phone budget', () => {
+    test('the weather can be held for a screenshot, and given back to the day', () => {
+        expect(window.cornerOffice.weather('rain')).toEqual({ overcast: 1, rain: 1 });
+        expect(t.ui.weatherPin).toBe('rain');
+        expect(window.cornerOffice.weather('clear')).toEqual({ overcast: 0, rain: 0 });
+        const own = window.cornerOffice.weather(null);
+        expect(t.ui.weatherPin).toBeNull();
+        expect(Object.keys(own)).toEqual(['overcast', 'rain']);
+        expect(window.cornerOffice.weather('snow')).toEqual(own);
+    });
+
+    test('the adaptive resolution hears only the frames that follow a drawn one', () => {
+        const res = t.resolution();
+        const sample = jest.spyOn(res, 'sample');
+        t.state.running = true;
+        t.state.lastTime = 0;
+        t.state.drewLast = false;
+        t.state.dirty = false;
+        t.state.ambientDue = 10;
+        t.animate();
+        expect(sample).not.toHaveBeenCalled();
+        t.requestRender();
+        t.animate();
+        expect(t.state.drewLast).toBe(true);
+        t.animate();
+        expect(sample).toHaveBeenCalledTimes(1);
+        expect(t.state.drewLast).toBe(false);
+    });
+
+    test('a quality readout for a phone, and full resolution held for a capture', () => {
+        const q = window.cornerOffice.quality();
+        for (const key of ['ratio', 'scale', 'drawCalls', 'triangles', 'ambientFps']) expect(q).toHaveProperty(key);
+        expect(window.cornerOffice.capture(true)).toMatchObject({ pinned: true });
+        expect(window.cornerOffice.capture(false)).toMatchObject({ pinned: false });
+    });
+});
+
 // ---- M3: the filing cabinet -------------------------------------------------------
 
 describe('the filing cabinet', () => {

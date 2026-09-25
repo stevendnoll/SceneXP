@@ -43,14 +43,33 @@ export function boxesGeometry(boxes) {
     return g;
 }
 
+/** Join geometries (unindexed, with positions, normals and colors) into one. */
+export function joinGeometries(parts) {
+    const g = new THREE.BufferGeometry();
+    for (const [name, size] of [['position', 3], ['normal', 3], ['color', 3]]) {
+        const arrays = parts.map((p) => p.attributes[name].array);
+        const array = new Float32Array(arrays.reduce((n, a) => n + a.length, 0));
+        let at = 0;
+        for (const a of arrays) {
+            array.set(a, at);
+            at += a.length;
+        }
+        g.setAttribute(name, new THREE.Float32BufferAttribute(array, size));
+    }
+    return g;
+}
+
 const HIDDEN_Y = -10000;
 
-/** A craft: its body, its windows (lit by night), and optionally a wake. */
-function craft(name, body, windows, { wake = 0, scale = 1 } = {}) {
+/** A craft: its body, its windows (lit by night), and optionally a wake.
+ *  `sided` draws the body from both sides (a sailboat's sails). */
+function craft(name, body, windows, { wake = 0, scale = 1, sided = false } = {}) {
     const group = new THREE.Group();
     group.name = name;
     group.rotation.order = 'YXZ';
-    const hull = new THREE.Mesh(body, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.1 }));
+    const hull = new THREE.Mesh(body, new THREE.MeshStandardMaterial({
+        vertexColors: true, roughness: 0.6, metalness: 0.1, side: sided ? THREE.DoubleSide : THREE.FrontSide
+    }));
     group.add(hull);
     let lit = null;
     if (windows) {
@@ -150,9 +169,10 @@ function ship(i) {
     return craft(`ship-${i}`, boxesGeometry(boxes), windows, { wake: L });
 }
 
-/** A sailboat: a white hull, a mast, a mainsail and a jib. */
+/** A sailboat: a white hull, a mast, a mainsail and a jib, one mesh drawn
+ *  from both sides (the sails are single sheets). */
 function sailboat(i) {
-    const body = boxesGeometry([[0, 0.8, 0, 3.6, 1.6, 12, 0xf6f6f2], [0, 9, -0.5, 0.25, 16, 0.25, 0xcfd2d4]]);
+    const hull = boxesGeometry([[0, 0.8, 0, 3.6, 1.6, 12, 0xf6f6f2], [0, 9, -0.5, 0.25, 16, 0.25, 0xcfd2d4]]);
     const sails = new THREE.BufferGeometry();
     // Main aft of the mast, jib forward of it, both in the boat's middle plane.
     sails.setAttribute('position', new THREE.Float32BufferAttribute([
@@ -160,10 +180,9 @@ function sailboat(i) {
         0, 2, -0.8, 0, 14, -0.8, 0, 2, -5.6
     ], 3));
     sails.computeVertexNormals();
-    const boat = craft(`sailboat-${i}`, body, null, { scale: LIFE.sailboat.scale });
-    const canvas = new THREE.Mesh(sails, new THREE.MeshStandardMaterial({ color: 0xfbfbf6, side: THREE.DoubleSide, roughness: 0.8 }));
-    boat.group.add(canvas);
-    return boat;
+    const white = new THREE.Color().setHex(0xfbfbf6, THREE.SRGBColorSpace);
+    sails.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: 6 }, () => [white.r, white.g, white.b]).flat(), 3));
+    return craft(`sailboat-${i}`, joinGeometries([hull, sails]), null, { scale: LIFE.sailboat.scale, sided: true });
 }
 
 /** A floatplane: fuselage, high wing, tail and two floats. No livery. */
@@ -229,5 +248,9 @@ export function place(c, at) {
     c.group.visible = at.out !== false;
     c.group.position.set(at.x, at.y, at.z);
     c.group.rotation.set(at.pitch || 0, at.yaw || 0, at.heel || 0);
-    if (c.trail) c.trail.material.opacity = 0.55 * (at.speed || 0);
+    if (c.trail) {
+        // A wake at rest is nothing to draw, and would still cost a draw call.
+        c.trail.material.opacity = 0.55 * (at.speed || 0);
+        c.trail.visible = c.trail.material.opacity > 0.01;
+    }
 }

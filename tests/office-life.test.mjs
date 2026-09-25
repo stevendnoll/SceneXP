@@ -283,3 +283,13 @@ describe('the wind', () => {
         }
     });
 });
+
+describe('in the rain', () => {
+    test('the sailboats stay in and the seaplane stays moored', () => {
+        expect(sailboatsAt(NOON, sailboatCourses(), 0.2).every((b) => b.out)).toBe(true);
+        expect(sailboatsAt(NOON, sailboatCourses(), 0.5).every((b) => !b.out)).toBe(true);
+        const flying = new Date(2026, 8, 24, 12, LIFE.seaplane.takeoff, 30);
+        expect(seaplaneAt(flying, 0).speed).toBeGreaterThan(0);
+        expect(seaplaneAt(flying, 0.8)).toMatchObject({ x: SEAPLANE_START[0], z: SEAPLANE_START[1], speed: 0 });
+    });
+});

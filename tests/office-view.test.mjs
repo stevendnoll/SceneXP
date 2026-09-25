@@ -937,3 +937,129 @@ describe('the fleet, built from its source', () => {
         expect(ferry.trail.material.opacity).toBe(0);
     });
 });
+
+// ---- Rain on some days ------------------------------------------------------------
+
+describe('in the rain', () => {
+    let wet;
+    let weatherMod;
+    let daylight;
+    const NOON = new Date(2026, 8, 24, 12, 0);
+    const lookFor = (w) => weatherMod.weathered(daylight.lighting(daylight.lightAt(NOON)), w);
+
+    beforeAll(async () => {
+        weatherMod = await import('../www/office/js/weather.js');
+        daylight = await import('../www/office/js/daylight.js');
+        wet = worldMod.buildWorld(CONFIG, { textures: { clouds: new THREE.Texture() } });
+    });
+
+    test('a low gray deck closes over the sky, the haze closes in, and the water roughens', () => {
+        wet.setLight(lookFor({ overcast: 1, rain: 1 }));
+        const { deck } = wet.weather;
+        expect(deck.visible).toBe(true);
+        expect(deck.material.opacity).toBeGreaterThan(0.9);
+        expect(deck.position.y).toBe(city.WATER_Y + worldMod.OVERCAST_ALTITUDE);
+        // Under the mountains' tops, which go up into it.
+        expect(worldMod.OVERCAST_ALTITUDE).toBeLessThan(Math.max(...city.olympics().peaks.map(([, h]) => h)));
+        expect(wet.scene.fog.far).toBeLessThan(bay.HAZE.far / 5);
+        expect(wet.water.material.roughness).toBeGreaterThan(bay.BAY.roughness + 0.2);
+        wet.setLight(lookFor({ overcast: 0, rain: 0 }));
+        expect(deck.visible).toBe(false);
+        expect(wet.scene.fog.far).toBe(bay.HAZE.far);
+        expect(wet.water.material.roughness).toBe(bay.BAY.roughness);
+    });
+
+    test('from the window the mountains are lost in heavy rain and back when it clears', () => {
+        const cam = cameraAt('window', 16 / 10);
+        const mountains = new THREE.Vector3(0, city.WATER_Y + 800, city.olympics().z + city.olympics().depth / 2);
+        const distance = mountains.distanceTo(cam.position);
+        wet.setLight(lookFor({ overcast: 1, rain: 1 }));
+        expect(distance).toBeGreaterThan(wet.scene.fog.far);
+        wet.setLight(lookFor({ overcast: 0, rain: 0 }));
+        expect(distance).toBeLessThan(wet.scene.fog.far * 0.65);
+    });
+
+    test('rain falls past the window, but is held back for a visitor who asked for less motion', () => {
+        wet.setLight(lookFor({ overcast: 1, rain: 0.8 }));
+        const { rain } = wet.weather;
+        wet.setLife(NOON, 10);
+        expect(rain.visible).toBe(true);
+        expect(rain.material.opacity).toBeCloseTo(0.35 * 0.8, 9);
+        const ends = rain.geometry.attributes.position;
+        const before = ends.getY(0);
+        wet.setLife(NOON, 10.05);
+        expect(ends.getY(0)).not.toBeCloseTo(before, 3);
+        wet.setLife(NOON, 11, true);
+        expect(rain.visible).toBe(false);
+        // In the rain the sailboats are in.
+        wet.setLife(NOON, 12);
+        expect(wet.fleet.sailboats.every((c) => !c.group.visible)).toBe(true);
+        wet.setLight(lookFor({ overcast: 0, rain: 0 }));
+        wet.setLife(NOON, 12);
+        expect(rain.visible).toBe(false);
+    });
+
+    test('the rain and its gray deck are sky: a census ray or a tap passes through them', () => {
+        wet.setLight(lookFor({ overcast: 1, rain: 1 }));
+        wet.setLife(NOON, 5);
+        wet.scene.updateMatrixWorld(true);
+        const hits = new THREE.Raycaster(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.1, 0.9, -0.4).normalize())
+            .intersectObject(wet.scene, true)
+            .map((h) => h.object.name);
+        expect(hits).not.toContain('overcast');
+        expect(hits).not.toContain('rain');
+    });
+
+    test('drops bead on the window glass as it rains, and the glass never stops a tap', async () => {
+        const { buildRoom } = await import('../www/office/js/room.js');
+        const glassy = buildRoom(CONFIG, { rainGlass: new THREE.Texture() });
+        const { panes, set } = glassy.rain;
+        expect(panes).toHaveLength(2);
+        set(0);
+        expect(panes.every((p) => !p.visible)).toBe(true);
+        set(0.6);
+        expect(panes.every((p) => p.visible)).toBe(true);
+        expect(panes[0].material.opacity).toBeCloseTo(0.72, 9);
+        set(1);
+        expect(panes[0].material.opacity).toBe(1);
+        // In the window openings, facing into the room.
+        const w = (await import('../www/office/js/room.js')).windowsOf(CONFIG);
+        expect(panes[0].position.y).toBeCloseTo((w.sill + w.head) / 2, 9);
+        expect(panes[0].position.z).toBeGreaterThan(-CONFIG.room.depth / 2);
+        expect(panes[1].position.x).toBeLessThan(CONFIG.room.width / 2);
+        glassy.group.updateMatrixWorld(true);
+        const through = new THREE.Raycaster(new THREE.Vector3(panes[0].position.x, panes[0].position.y, 0), new THREE.Vector3(0, 0, -1));
+        expect(through.intersectObjects(panes).length).toBe(0);
+        // Without a painted tile (a headless boot) the glass stays clear.
+        const plain = buildRoom(CONFIG);
+        plain.rain.set(1);
+        expect(plain.rain.panes.every((p) => !p.visible)).toBe(true);
+    });
+
+    test('the room’s shell is a few meshes, one a material, with every box where it was', async () => {
+        const { mergeByMaterial } = await import('../www/office/js/room.js');
+        const shells = room.group.children.filter((o) => o.name === 'shell');
+        expect(shells.length).toBeGreaterThan(3);
+        expect(shells.length).toBeLessThan(10);
+        expect(new Set(shells.map((m) => m.material)).size).toBe(shells.length);
+        const a = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+        a.position.set(5, 0, 0);
+        const b = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), a.material);
+        b.rotation.x = -Math.PI / 2;
+        const [merged, ...rest] = mergeByMaterial([a, b]);
+        expect(rest).toHaveLength(0);
+        merged.geometry.computeBoundingBox();
+        expect(merged.geometry.boundingBox.max.x).toBeCloseTo(5.5, 6);
+        expect(merged.geometry.boundingBox.min.x).toBeCloseTo(-1, 6);
+        // The laid-down plane's normals turned with it: up.
+        const n = merged.geometry.attributes.normal;
+        expect(n.getY(n.count - 1)).toBeCloseTo(1, 6);
+        expect(merged.geometry.attributes.uv).toBeTruthy();
+        const other = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+        expect(mergeByMaterial([a, other])).toHaveLength(2);
+        const bare = new THREE.BufferGeometry();
+        bare.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+        const [noUv] = mergeByMaterial([new THREE.Mesh(bare, other.material), other]);
+        expect(noUv.geometry.attributes.uv).toBeUndefined();
+    });
+});
