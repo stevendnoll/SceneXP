@@ -198,8 +198,15 @@ export function dayLapse(from, { seconds = 30, stepped = false } = {}) {
  * The deck: its height above the water, how far it spreads, how many
  * meters one painted tile covers, the tile's pixels, and how many cloud
  * cells a tile holds.
+ *
+ * Over the mountains' tops (QA, 2026-09-25): at 2.8 km it cut across the
+ * new ranges, whose peaks stand near 3.9 km, and hid their upper halves.
+ * Raised to 4.8 km with its span and its tile grown in the same proportion
+ * (and the wind with them, life.js), the sky looks just as it did from
+ * the office, every puff at the same angle, and the ranges stand clear
+ * under it.
  */
-export const CLOUDS = { altitude: 2800, span: 240000, tile: 14000, size: 1024, cells: 22, seed: 20260925 };
+export const CLOUDS = { altitude: 4800, span: 411000, tile: 24000, size: 1024, cells: 22, seed: 20260925 };
 
 /**
  * The puffs of one tile, as [u, v, radius, alpha] in tile units (0 to 1):

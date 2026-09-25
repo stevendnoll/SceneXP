@@ -171,7 +171,7 @@ export const CONFIG = deepFreeze({
          *  canyon of towers to slivers of the bay and the mountains beyond:
          *  the view the office is named for. Framed by a census of what each
          *  pixel sees (tests/office-view.test.mjs). */
-        window: { eye: [2.45, 1.6, -1.9], aim: [1.4, -2.9, -14], fov: 62, maxFov: 66, holdWidth: true }
+        window: { eye: [2.45, 1.6, -1.9], aim: [1.4, -2.9, -14], fov: 62, maxFov: 66, holdWidth: true, holdTop: true }
     },
 
     view: {

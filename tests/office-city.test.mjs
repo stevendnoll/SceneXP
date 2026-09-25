@@ -8,7 +8,8 @@
  */
 import {
     CITY, WATER_Y, shoreZ, elevation, groundY, FAR_LAND, inPolygon, isLand, isWater, seeded, blockAt, districtOf,
-    cityTowers, piers, olympics, farHills, reflectionPoints, paneNormals, PANE_TILT, PANE_STORE, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
+    cityTowers, piers, reflectionPoints, noiseField, crests, MOUNTAINS, farCoastZ, mountainHeight, landColor, LAND_COLORS,
+    islandHeight, landGrids, stops, paneNormals, PANE_TILT, PANE_STORE, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
 } from '../www/office/js/city.js';
 
 const towers = cityTowers();
@@ -200,12 +201,6 @@ describe('the waterfront and the far things', () => {
         for (const p of all) expect(isWater(p.x, p.z - p.length / 2)).toBe(true);
     });
 
-    test('the mountains stand across the bay on the far shore, with snow on their tops', () => {
-        const o = olympics();
-        expect(isLand(0, o.z)).toBe(true);
-        expect(o.peaks.some(([, h]) => h > o.snow)).toBe(true);
-        expect(o.peaks.some(([, h]) => h < o.snow)).toBe(true);
-    });
 
     test('the reflections are captured from an open street among the towers, and from just over the bay', () => {
         const { city, bay } = reflectionPoints();
@@ -230,31 +225,134 @@ describe('the waterfront and the far things', () => {
         expect(bay[0]).toBe(x);
     });
 
-    test('low wooded hills stand across the water, wholly on their own land, below the eye and the mountains', () => {
-        const hills = farHills();
-        expect(Object.keys(hills)).toEqual(['island', 'farShore']);
-        expect(farHills()).toEqual(hills);
-        const tallestMountain = Math.max(...olympics().peaks.map(([, h]) => h));
-        for (const ridge of Object.values(hills)) {
-            const xs = ridge.peaks.map(([x]) => x);
-            const near = ridge.z + ridge.depth / 2;
-            const far = ridge.z - ridge.depth / 2;
-            for (const x of xs) {
-                expect(isLand(x, near)).toBe(true);
-                expect(isLand(x, far)).toBe(true);
+});
+
+// ---- The land across the water (QA, 2026-09-25: "the weakest part of the scene")
+
+describe('the land across the water', () => {
+    const grids = landGrids();
+    const heights = (g) => Array.from({ length: g.cols * g.rows }, (_, i) => g.positions[i * 3 + 1] - WATER_Y);
+    const eye = [0.35, 1.5, 0.9];
+    /** The highest angle over the horizon the land reaches, looking along
+     *  bearing `a` (degrees from west toward north), from the desk's eye. */
+    function skylineAt(a) {
+        let best = -90;
+        for (const g of [grids.farShore, grids.mountains]) {
+            for (let k = 0; k < g.positions.length; k += 3) {
+                const dx = g.positions[k] - eye[0];
+                const dz = g.positions[k + 2] - eye[2];
+                if (Math.abs(Math.atan2(dx, -dz) * 180 / Math.PI - a) > 0.3) continue;
+                best = Math.max(best, Math.atan2(g.positions[k + 1] - eye[1], Math.hypot(dx, dz)) * 180 / Math.PI);
             }
-            // They taper to the water at both ends, no cliff at the tips.
-            expect(ridge.peaks[0][1]).toBe(0);
-            expect(ridge.peaks.at(-1)[1]).toBe(0);
-            // Low: a band under the horizon, never in front of the mountains' snow.
-            const top = Math.max(...ridge.peaks.map(([, h]) => h));
-            expect(top).toBeGreaterThan(50);
-            expect(top).toBeLessThan(floorAboveWater);
-            expect(top).toBeLessThan(tallestMountain / 10);
-            expect(ridge.snow).toBe(Infinity);
         }
-        // In order across the bay: the island, then the far shore, then the mountains.
-        expect(hills.island.z).toBeGreaterThan(hills.farShore.z);
-        expect(hills.farShore.z - hills.farShore.depth / 2).toBeGreaterThan(olympics().z + olympics().depth / 2);
+        return best;
+    }
+
+    test('its raw stuff: a smooth seeded field, the same every visit, and crests between nothing and one', () => {
+        const f = noiseField(7);
+        const g = noiseField(7);
+        let lo = 0;
+        let hi = 0;
+        for (let i = 0; i < 2000; i++) {
+            const x = i * 0.137;
+            const z = i * 0.071;
+            expect(f(x, z)).toBe(g(x, z));
+            lo = Math.min(lo, f(x, z));
+            hi = Math.max(hi, f(x, z));
+            const c = crests(f, x, z);
+            expect(c).toBeGreaterThanOrEqual(0);
+            expect(c).toBeLessThanOrEqual(1);
+        }
+        expect(lo).toBeGreaterThanOrEqual(-1);
+        expect(hi).toBeLessThanOrEqual(1);
+        expect(hi - lo).toBeGreaterThan(1);
+        // Smooth: a step of a hundredth moves it a little, never a jump.
+        expect(Math.abs(f(3.2, 4.1) - f(3.21, 4.1))).toBeLessThan(0.05);
+        expect(noiseField(8)(1.5, 2.5)).not.toBe(f(1.5, 2.5));
+        expect(stops(0, 10, 3)).toEqual([0, 2.5, 5, 7.5, 10]);
+    });
+
+    test('the land rises from the far shore: nothing short of it, low wooded foothills, the ranges behind', () => {
+        for (const x of [-30000, 0, 25000]) {
+            expect(mountainHeight(x, farCoastZ(x) + 100)).toBeLessThan(0);
+            expect(isLand(x, farCoastZ(x) - 50)).toBe(true);
+        }
+        const foot = heights(grids.farShore);
+        // Low: about a degree over the water from the office, never snowy.
+        expect(Math.max(...foot)).toBeLessThan(650);
+        // Its first row, on the shore line, a little under the water, so
+        // the land meets the water with no gap along it.
+        const shore = foot.slice(0, grids.farShore.cols);
+        for (const h of shore) expect(h).toBe(-8);
+        expect(Math.min(...foot.slice(grids.farShore.cols))).toBeGreaterThanOrEqual(0);
+        const ranges = heights(grids.mountains);
+        // The high range stands near 4,000 m: 1.5 times the old range's
+        // 2,650 m tallest (Steve's choice, 2026-09-25).
+        expect(Math.max(...ranges)).toBeGreaterThan(3400);
+        expect(Math.max(...ranges)).toBeLessThan(4400);
+        // The foothills' back row is the ranges' front row: no crack.
+        const seam = grids.farShore.positions.slice((grids.farShore.rows - 1) * grids.farShore.cols * 3);
+        expect(Array.from(seam)).toEqual(Array.from(grids.mountains.positions.slice(0, seam.length)));
+    });
+
+    test('a skyline, not a wall: massifs and saddles along the range, peaks well over the water', () => {
+        const line = [];
+        for (let a = -38; a <= 38; a += 2) line.push(skylineAt(a));
+        const top = Math.max(...line);
+        const low = Math.min(...line);
+        // Its tallest a good way up the sky, as Steve asked; its saddles low.
+        expect(top).toBeGreaterThan(5);
+        expect(top).toBeLessThan(7.5);
+        expect(top - low).toBeGreaterThan(2);
+        // Up and down along its length, not one long rise.
+        let turns = 0;
+        for (let i = 1; i < line.length - 1; i++) if ((line[i] - line[i - 1]) * (line[i + 1] - line[i]) < 0) turns++;
+        expect(turns).toBeGreaterThan(5);
+    });
+
+    test('snow on the heights and never where it is sheer, forest below, cliff where it is steep, the far ranges bluer', () => {
+        const lum = (hex) => ((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255);
+        const green = (hex) => ((hex >> 8) & 255) - ((hex >> 16) & 255);
+        const x = 1000;
+        const z = -32000;
+        // Gentle ground (steep 0.05, under about 18 degrees) holds snow; the
+        // snow slides off from about 30 degrees (steep 0.14) on.
+        expect(landColor(3900, 0.05, x, z, 30000)).toBeGreaterThan(0);
+        expect(lum(landColor(3900, 0.05, x, z, 30000))).toBeGreaterThan(lum(LAND_COLORS.snow) * 0.8);
+        expect(lum(landColor(3900, 0.95, x, z, 30000))).toBeLessThan(lum(LAND_COLORS.rock) * 1.2);
+        expect(green(landColor(400, 0.1, x, z, 20000))).toBeGreaterThan(0);
+        expect(lum(landColor(1900, 0.9, x, z, 20000))).toBeLessThan(lum(landColor(1900, 0.1, x, z, 20000)));
+        const near = landColor(2000, 0.3, x, z, 15000);
+        const far = landColor(2000, 0.3, x, z, 45000);
+        expect(far & 255).toBeGreaterThan(near & 255);
+        // Over the whole range some of it is snow, most of it not.
+        let snowy = 0;
+        let all = 0;
+        const g = grids.mountains;
+        for (let k = 0; k < g.positions.length; k += 3 * 7) {
+            const h = g.positions[k + 1] - WATER_Y;
+            all++;
+            if (lum(landColor(h, 0.05, g.positions[k], g.positions[k + 2], 30000)) > lum(LAND_COLORS.snow) * 0.8) snowy++;
+        }
+        expect(snowy / all).toBeGreaterThan(0.05);
+        expect(snowy / all).toBeLessThan(0.5);
+    });
+
+    test('the island rolls, wooded, under the office’s eye, down to the water at its shore', () => {
+        const h = heights(grids.island);
+        expect(Math.max(...h)).toBeGreaterThan(100);
+        expect(Math.max(...h)).toBeLessThan(floorAboveWater);
+        expect(islandHeight(0, -5000)).toBeLessThan(0);
+        const [[x0, z0]] = FAR_LAND.island;
+        expect(islandHeight(x0, z0)).toBeLessThan(1);
+        // Every point above the water is on the island.
+        const g = grids.island;
+        for (let k = 0; k < g.positions.length; k += 3) {
+            if (g.positions[k + 1] > WATER_Y) expect(isLand(g.positions[k], g.positions[k + 2])).toBe(true);
+        }
+        // In order across the bay: the island, then the far shore.
+        expect(Math.max(...FAR_LAND.island.map(([, z]) => z))).toBeLessThan(shoreZ(0));
+        expect(Math.min(...FAR_LAND.island.map(([, z]) => z))).toBeGreaterThan(farCoastZ(0));
+        expect(MOUNTAINS.bands.farShore.to).toBe(MOUNTAINS.bands.mountains.from);
     });
 });

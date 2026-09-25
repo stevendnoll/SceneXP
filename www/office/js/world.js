@@ -28,7 +28,7 @@
 /* global THREE */
 
 import {
-    CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, olympics, farHills, reflectionPoints, PANEL, FACADE_TILE, towerStyle,
+    CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, landGrids, landColor, reflectionPoints, PANEL, FACADE_TILE, towerStyle,
     rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
 } from './city.min.js';
 import { BAY, HAZE, rippleNormals } from './bay.min.js';
@@ -339,17 +339,18 @@ function buildGround(scene, textures) {
     beyond.position.set(TERRAIN.x1 + 30000, WATER_Y + CITY.hill - 1, 25000);
     beyond.name = 'land-beyond';
     scene.add(beyond);
+    // The far shore's flat ground, under and beyond its hills and ranges
+    // (buildLand). The island is its own hills, whole.
     const woods = standard(0x3b5443, { roughness: 1 });
-    for (const [name, poly] of Object.entries(FAR_LAND)) {
-        // A shape lies in x and y. Drawn with y = -z, then laid flat by a
-        // quarter turn about x, each point lands at its own (x, z).
-        const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)));
-        const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), woods);
-        mesh.rotation.x = -Math.PI / 2;
-        mesh.position.y = WATER_Y + (name === 'island' ? 20 : 2);
-        mesh.name = `land-${name}`;
-        scene.add(mesh);
-    }
+    const poly = FAR_LAND.farShore;
+    // A shape lies in x and y. Drawn with y = -z, then laid flat by a
+    // quarter turn about x, each point lands at its own (x, z).
+    const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)));
+    const far = new THREE.Mesh(new THREE.ShapeGeometry(shape), woods);
+    far.rotation.x = -Math.PI / 2;
+    far.position.y = WATER_Y + 2;
+    far.name = 'land-farShore';
+    scene.add(far);
     return city;
 }
 
@@ -370,43 +371,42 @@ function buildPiers(scene) {
     return mesh;
 }
 
-/** The mountains' rock and snow, and the dark green of the wooded hills. */
-export const RIDGE_COLORS = { rock: 0x55657a, snow: 0xf2f5f8, woods: 0x2c4435 };
-
-/** A ridge across the bay: peaks along x, snow on the tops above its snow
- *  line. The mountains, and (all `rock`, no snow) the wooded hills. */
-export function ridgeGeometry(ridge, { rock: rockHex = RIDGE_COLORS.rock, snow: snowHex = RIDGE_COLORS.snow } = {}) {
-    const t3 = triangles({ colors: true });
-    const rock = new THREE.Color().setHex(rockHex, THREE.SRGBColorSpace);
-    const snow = new THREE.Color().setHex(snowHex, THREE.SRGBColorSpace);
-    const near = ridge.z + ridge.depth / 2;
-    const far = ridge.z - ridge.depth / 2;
-    const color = (y) => (y - WATER_Y > ridge.snow ? snow : rock);
-    for (let i = 0; i < ridge.peaks.length - 1; i++) {
-        const [xa, ha] = ridge.peaks[i];
-        const [xb, hb] = ridge.peaks[i + 1];
-        const pa = [xa, WATER_Y + ha, ridge.z];
-        const pb = [xb, WATER_Y + hb, ridge.z];
-        // The near face, toward the city, and the far face.
-        const nearFacing = [0, 0.4, 0.92];
-        t3.tri([xa, WATER_Y, near], [xb, WATER_Y, near], pb, nearFacing, rock);
-        t3.tri([xa, WATER_Y, near], pb, pa, nearFacing, color(Math.min(pa[1], pb[1])));
-        const farFacing = [0, 0.4, -0.92];
-        t3.tri([xb, WATER_Y, far], [xa, WATER_Y, far], pa, farFacing, rock);
-        t3.tri([xb, WATER_Y, far], pa, pb, farFacing, rock);
+/**
+ * A grid of land (city.js landGrids) as a mesh's geometry: its points
+ * joined in triangles facing up, smooth normals from its own slopes (so the
+ * sun lights one side of a ridge and leaves the other in shade), and each
+ * point colored by its height and steepness (city.js landColor): forest,
+ * meadow, rock, cliff and snow, the far ranges a little bluer.
+ */
+export function landGeometry({ positions, cols, rows }) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const index = [];
+    for (let r = 0; r < rows - 1; r++) {
+        for (let c = 0; c < cols - 1; c++) {
+            const a = r * cols + c;
+            const d = a + cols;
+            index.push(a, a + 1, d, a + 1, d + 1, d);
+        }
     }
-    // Snow on the upper part of each near face: a band from the snow line
-    // up to the ridge, so the tops read white against the sky. (The first
-    // pass colors a face by its lower corner, this one each corner by its
-    // own height.)
-    const geometry = t3.geometry();
-    const pos = geometry.attributes.position;
-    const col = geometry.attributes.color;
-    for (let i = 0; i < pos.count; i++) {
-        const k = pos.getY(i) - WATER_Y > ridge.snow ? snow : rock;
-        col.setXYZ(i, k.r, k.g, k.b);
+    g.setIndex(index);
+    g.computeVertexNormals();
+    const normal = g.attributes.normal;
+    const colors = new Float32Array(positions.length);
+    const c = new THREE.Color();
+    for (let i = 0; i < positions.length / 3; i++) {
+        const x = positions[i * 3];
+        const y = positions[i * 3 + 1];
+        const z = positions[i * 3 + 2];
+        const steep = 1 - Math.abs(normal.getY(i));
+        c.setHex(landColor(y - WATER_Y, steep, x, z, Math.hypot(x, z)), THREE.SRGBColorSpace);
+        colors[i * 3] = c.r;
+        colors[i * 3 + 1] = c.g;
+        colors[i * 3 + 2] = c.b;
     }
-    return geometry;
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    g.computeBoundingSphere();
+    return g;
 }
 
 /** The sky: a dome whose colors run from the zenith to the horizon, drawn
@@ -598,19 +598,61 @@ function buildWeather(scene) {
     return { deck, rain, streaks };
 }
 
-/** The wooded hills across the water, one mesh each (the view test counts
- *  anything named land-* as land). */
-function buildHills(scene) {
-    const woods = standard(0xffffff, { vertexColors: true, roughness: 1 });
+/**
+ * How much of the scene's haze the land across the bay takes: in the clear
+ * `clear` of it, all of it in a gray rain. The haze runs to the pale color
+ * of the horizon, and at 25 to 35 km took half of every pixel of the ranges,
+ * which no rock or forest color survives as anything but pale gray (QA,
+ * 2026-09-25). A little less of it and they read in layers, darker and
+ * bluer toward the front, as distant ranges do on a clear day.
+ */
+export const LAND_HAZE = { clear: 0.6 };
+
+/** three's own fog (its fog_fragment chunk, word for word) with its amount
+ *  scaled by `landHaze`. */
+export const LAND_FOG = `#ifdef USE_FOG
+	#ifdef FOG_EXP2
+		float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+	#else
+		float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+	#endif
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor * landHaze );
+#endif`;
+
+/** Give a material the land's lighter haze: `haze` is the uniform
+ *  (`{ value }`) that setLight turns up in the rain. */
+export function lessHaze(material, haze) {
+    material.onBeforeCompile = (shader) => {
+        shader.uniforms.landHaze = haze;
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <fog_pars_fragment>', '#include <fog_pars_fragment>\nuniform float landHaze;')
+            .replace('#include <fog_fragment>', LAND_FOG);
+    };
+    // Its own shader program, not the one every other standard material shares.
+    material.customProgramCacheKey = () => 'office-land-haze';
+    return material;
+}
+
+/** The land across the water (city.js landGrids): the island and the far
+ *  shore's wooded foothills as the hills (the view test counts anything
+ *  named land-* as land), and the ranges behind as the mountains. One mesh
+ *  each, one material, taking less of the haze than the city (LAND_HAZE). */
+function buildLand(scene) {
+    const haze = { value: LAND_HAZE.clear };
+    const material = lessHaze(standard(0xffffff, { vertexColors: true, roughness: 0.95 }), haze);
+    const grids = landGrids();
     const group = new THREE.Group();
     group.name = 'land-hills';
-    for (const [name, ridge] of Object.entries(farHills())) {
-        const mesh = new THREE.Mesh(ridgeGeometry(ridge, { rock: RIDGE_COLORS.woods }), woods);
+    for (const name of ['island', 'farShore']) {
+        const mesh = new THREE.Mesh(landGeometry(grids[name]), material);
         mesh.name = `land-hills-${name}`;
         group.add(mesh);
     }
     scene.add(group);
-    return group;
+    const mountains = new THREE.Mesh(landGeometry(grids.mountains), material);
+    mountains.name = 'mountains';
+    scene.add(mountains);
+    return { hills: group, mountains, haze };
 }
 
 /**
@@ -651,14 +693,11 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
 
     const water = buildWater(scene, anisotropy);
     const streets = buildGround(scene, textures);
-    const hills = buildHills(scene);
+    const { hills, mountains, haze: landHaze } = buildLand(scene);
     const plan = cityTowers();
     const towers = buildTowers(scene, plan, textures.facades);
     const beacons = buildBeacons(scene, plan);
     const docks = buildPiers(scene);
-    const mountains = new THREE.Mesh(ridgeGeometry(olympics()), standard(0xffffff, { vertexColors: true, roughness: 0.95 }));
-    mountains.name = 'mountains';
-    scene.add(mountains);
     const sky = buildSky(scene);
     const clouds = buildClouds(scene, textures.clouds);
     const heavens = buildHeavens(scene, textures);
@@ -724,6 +763,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         hemi,
         water,
         hills,
+        landHaze,
         clouds,
         heavens,
         fleet,
@@ -778,6 +818,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             // The haze closes in, the mountains going first; the water is
             // roughened by the drops.
             scene.fog.far = HAZE.far / (1 + 5 * raining + overcast);
+            // The land across the bay takes all the haze in a gray rain,
+            // so the mountains are lost in it as everything far is.
+            landHaze.value = LAND_HAZE.clear + (1 - LAND_HAZE.clear) * Math.min(1, Math.max(overcast, raining));
             water.material.roughness = BAY.roughness + 0.25 * raining;
             scene.fog.color.setHex(look.skyBottom, THREE.SRGBColorSpace);
             clouds.material.color.setHex(look.clouds, THREE.SRGBColorSpace);

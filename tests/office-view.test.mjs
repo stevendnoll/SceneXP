@@ -39,7 +39,7 @@ beforeAll(async () => {
     city = await import('../www/office/js/city.js');
     room = buildRoom(CONFIG);
     room.group.updateMatrixWorld(true);
-    world = worldMod.buildWorld(CONFIG);
+    world = buildWorld(CONFIG);
     world.scene.updateMatrixWorld(true);
 });
 
@@ -48,6 +48,54 @@ afterAll(() => {
 });
 
 const ASPECTS = { 'wide 21:9': 21 / 9, 'laptop 16:10': 16 / 10, 'phone upright': 390 / 844, 'tall phone': 9 / 19.5 };
+
+/**
+ * The land across the bay is ~50k triangles, and three's raycaster tries
+ * every one for every ray, which doubled this file's run (107 s to 214 s,
+ * 2026-09-25). The page never casts a ray outside (taps test the room), so
+ * the census alone gets a faster cast: each land mesh split into strips by
+ * x, each with its own bounds, so a ray tries only the strips it crosses.
+ * The hits are the mesh's own, as three would report them.
+ */
+function stripCast(mesh, strips = 24) {
+    const g = mesh.geometry;
+    const pos = g.attributes.position;
+    const index = g.index.array;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < pos.count; i++) { lo = Math.min(lo, pos.getX(i)); hi = Math.max(hi, pos.getX(i)); }
+    const width = (hi - lo) / strips + 1e-6;
+    const parts = Array.from({ length: strips }, () => []);
+    for (let t = 0; t < index.length; t += 3) parts[Math.floor((pos.getX(index[t]) - lo) / width)].push(index[t], index[t + 1], index[t + 2]);
+    const probes = parts.filter((p) => p.length).map((p) => {
+        const part = new THREE.BufferGeometry();
+        part.setAttribute('position', pos);
+        part.setIndex(p);
+        const box = new THREE.Box3();
+        const v = new THREE.Vector3();
+        for (const k of p) box.expandByPoint(v.fromBufferAttribute(pos, k));
+        part.boundingBox = box;
+        part.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+        return new THREE.Mesh(part, mesh.material);
+    });
+    mesh.raycast = (raycaster, hits) => {
+        for (const probe of probes) {
+            probe.matrixWorld.copy(mesh.matrixWorld);
+            const before = hits.length;
+            THREE.Mesh.prototype.raycast.call(probe, raycaster, hits);
+            for (let i = before; i < hits.length; i++) hits[i].object = mesh;
+        }
+    };
+}
+
+/** A world built for these tests: the land given its strip cast. */
+function buildWorld(config, options) {
+    const w = worldMod.buildWorld(config, options);
+    for (const mesh of [w.mountains, ...w.hills.children]) stripCast(mesh);
+    return w;
+}
+
+
 
 function cameraAt(station, aspect) {
     const pose = poseFor(station, aspect, CONFIG);
@@ -74,7 +122,9 @@ function seeAlong(origin, direction) {
     // The towers are one mesh per facade style and one for the roofs, and
     // the clouds (see-through between them), the sun, its halo, the moon
     // and the stars are all the sky.
-    const kinds = { land: 'land', towers: 'towers', clouds: 'sky', sun: 'sky', moon: 'sky', stars: 'sky' };
+    // The hills across the water (land-hills-*) are hills, not the ground
+    // of the city: the far shore's stand higher than the office's eye.
+    const kinds = { 'land-hills': 'hills', land: 'land', towers: 'towers', clouds: 'sky', sun: 'sky', moon: 'sky', stars: 'sky' };
     const kind = Object.keys(kinds).find((k) => name.startsWith(k));
     return { what: kind ? kinds[kind] : name, point: hit.point, name, uv: hit.uv };
 }
@@ -179,7 +229,8 @@ describe('the world itself', () => {
         expect(world.sky.renderOrder).toBeGreaterThan(0);
         expect(world.sky.material.fog).toBe(false);
         expect(world.sky.material.depthWrite).toBe(false);
-        expect(world.camera.far).toBeGreaterThan(Math.abs(city.olympics().z) * 2);
+        // Past the back of the ranges, and then some.
+        expect(world.camera.far).toBeGreaterThan(Math.abs(city.farCoastZ(0) - city.MOUNTAINS.bands.mountains.to) * 2);
         expect(world.camera.near).toBeGreaterThanOrEqual(1);
     });
 
@@ -249,7 +300,7 @@ describe('the bay and the air', () => {
         expect(world.water.geometry.parameters.width / t.repeat.x).toBeCloseTo(bay.BAY.tile, 6);
         expect(world.water.geometry.parameters.height / t.repeat.y).toBeCloseTo(bay.BAY.tile, 6);
         expect(worldMod.rippleTexture().anisotropy).toBe(1);
-        expect(worldMod.buildWorld(CONFIG, { anisotropy: 8 }).water.material.normalMap.anisotropy).toBe(8);
+        expect(buildWorld(CONFIG, { anisotropy: 8 }).water.material.normalMap.anisotropy).toBe(8);
     });
 
     test.each(['wide 21:9', 'laptop 16:10'])('on a %s screen the far water the window sees mirrors the mountains, the near water the sky', (name) => {
@@ -345,12 +396,99 @@ describe('the bay and the air', () => {
         expect(bay.hazeAt(mountains)).toBeLessThan(0.65);
     });
 
+    test('the mountains have relief: their slopes face every way, and the sun lights some and leaves others (QA, 2026-09-25)', () => {
+        const n = world.mountains.geometry.attributes.normal;
+        // The old range's near faces all faced one way; these face about.
+        let east = 0;
+        let west = 0;
+        let steep = 0;
+        for (let i = 0; i < n.count; i += 5) {
+            if (n.getX(i) > 0.2) east++;
+            if (n.getX(i) < -0.2) west++;
+            // Steeper than 25 degrees.
+            if (n.getY(i) < 0.9) steep++;
+        }
+        expect(east).toBeGreaterThan(n.count / 5 / 10);
+        expect(west).toBeGreaterThan(n.count / 5 / 10);
+        expect(steep).toBeGreaterThan(n.count / 5 / 10);
+        // Snow on it, and dark rock and forest too: many colors, not a band.
+        const col = world.mountains.geometry.attributes.color;
+        const shades = new Set();
+        for (let i = 0; i < col.count; i += 3) shades.add(Math.round((col.getX(i) + col.getY(i) + col.getZ(i)) * 20));
+        expect(shades.size).toBeGreaterThan(20);
+    });
+
+    test('the census’s faster cast on the land finds just what three’s own finds', () => {
+        const cam = cameraAt('desk', 16 / 10);
+        let hits = 0;
+        for (let i = 0; i < 60; i++) {
+            const ray = new THREE.Raycaster();
+            // Across the frame at the mountains' height (about 1 to 6 degrees up).
+            ray.setFromCamera(new THREE.Vector2(-1 + (2 * (i + 0.5)) / 60, 0.5 + (i % 5) * 0.04), cam);
+            for (const mesh of [world.mountains, ...world.hills.children]) {
+                const fast = [];
+                mesh.raycast(ray, fast);
+                const full = [];
+                THREE.Mesh.prototype.raycast.call(mesh, ray, full);
+                const nearest = (list) => (list.length ? Math.min(...list.map((h) => h.distance)) : null);
+                expect(nearest(fast)).toBe(nearest(full));
+                if (fast.length) {
+                    hits++;
+                    expect(fast[0].object).toBe(mesh);
+                }
+            }
+        }
+        expect(hits).toBeGreaterThan(20);
+    });
+
+    test('the land across the bay takes less of the haze than the city, and all of it in the rain', () => {
+        // three's own fog, word for word, with only its amount scaled.
+        expect(worldMod.LAND_FOG.replace(' * landHaze', '')).toBe(THREE.ShaderChunk.fog_fragment);
+        // Both swaps land in the real standard shader (a string that no
+        // longer matched would silently leave the full haze).
+        const shader = {
+            uniforms: {},
+            fragmentShader: THREE.ShaderLib.standard.fragmentShader
+        };
+        world.mountains.material.onBeforeCompile(shader);
+        expect(shader.fragmentShader).toContain('uniform float landHaze;');
+        expect(shader.fragmentShader).toContain('fogFactor * landHaze');
+        expect(shader.fragmentShader).not.toContain('#include <fog_fragment>');
+        expect(shader.uniforms.landHaze).toBe(world.landHaze);
+        expect(world.mountains.material.customProgramCacheKey()).toBe('office-land-haze');
+        // The hills share it.
+        for (const hill of world.hills.children) expect(hill.material).toBe(world.mountains.material);
+        const daylight = { hemi: 1, sun: 1, fill: 1, skyTop: 0x7fb2dd, skyBottom: 0xe3ecef, sunColor: 0xffffff, clouds: 0xffffff, cityLights: 0, stars: 0, moonShine: 0, halo: 0.3 };
+        world.setLight({ ...daylight, rain: 1, overcast: 1 });
+        expect(world.landHaze.value).toBe(1);
+        world.setLight({ ...daylight, rain: 0, overcast: 0 });
+        expect(world.landHaze.value).toBe(worldMod.LAND_HAZE.clear);
+        expect(worldMod.LAND_HAZE.clear).toBeLessThan(1);
+    });
+
+    test('the clouds float over the mountains’ tops, never across them', () => {
+        const g = city.landGrids().mountains;
+        let peak = 0;
+        for (let k = 1; k < g.positions.length; k += 3) peak = Math.max(peak, g.positions[k] - city.WATER_Y);
+        expect(sky.CLOUDS.altitude).toBeGreaterThan(peak + 500);
+        // Grown with its height, so each puff is where it was in the sky.
+        expect(sky.CLOUDS.tile / sky.CLOUDS.altitude).toBeCloseTo(14000 / 2800, 1);
+    });
+
     test('the hills are wooded and snowless, one mesh each, counted as land', () => {
         const group = world.scene.getObjectByName('land-hills');
         expect(group.children.map((m) => m.name)).toEqual(['land-hills-island', 'land-hills-farShore']);
-        const col = group.children[0].geometry.attributes.color;
-        const woods = new THREE.Color().setHex(worldMod.RIDGE_COLORS.woods, THREE.SRGBColorSpace);
-        for (let i = 0; i < col.count; i++) expect(col.getX(i)).toBeCloseTo(woods.r, 6);
+        // Green, and nowhere near the white of snow.
+        const snow = new THREE.Color().setHex(city.LAND_COLORS.snow, THREE.SRGBColorSpace);
+        for (const mesh of group.children) {
+            const col = mesh.geometry.attributes.color;
+            let greener = 0;
+            for (let i = 0; i < col.count; i++) {
+                if (col.getY(i) > col.getX(i)) greener++;
+                expect(col.getX(i) + col.getY(i) + col.getZ(i)).toBeLessThan((snow.r + snow.g + snow.b) * 0.6);
+            }
+            expect(greener / col.count).toBeGreaterThan(0.9);
+        }
         expect(world.hills).toBe(group);
     });
 });
@@ -362,7 +500,7 @@ describe('the glass city', () => {
     beforeAll(() => {
         const tex = () => new THREE.Texture();
         const facades = Object.fromEntries(worldMod.STYLES.map((s) => [s, { color: tex(), rm: tex(), lit: tex() }]));
-        lit = worldMod.buildWorld(CONFIG, { textures: { facades, streets: tex(), streetsLit: tex(), clouds: tex() } });
+        lit = buildWorld(CONFIG, { textures: { facades, streets: tex(), streetsLit: tex(), clouds: tex() } });
     });
 
     const tower = (over) => ({ x: 0, z: 0, w: 20, d: 30, h: 60, base: 40, form: 'box', tiers: [], podium: null, tone: 0, low: false, ...over });
@@ -578,7 +716,7 @@ describe('the sun, the moon and the stars', () => {
     beforeAll(async () => {
         daylight = await import('../www/office/js/daylight.js');
         const tex = () => new THREE.Texture();
-        lit = worldMod.buildWorld(CONFIG, { textures: { clouds: tex(), moon: tex(), glow: tex() } });
+        lit = buildWorld(CONFIG, { textures: { clouds: tex(), moon: tex(), glow: tex() } });
     });
 
     test('the sun’s disc and halo hang where the sun is, far off, facing the office, and the light comes from it', () => {
@@ -715,7 +853,7 @@ describe('life on the water and in the streets', () => {
 
     beforeAll(async () => {
         life = await import('../www/office/js/life.js');
-        lit = worldMod.buildWorld(CONFIG, { textures: { clouds: new THREE.Texture() } });
+        lit = buildWorld(CONFIG, { textures: { clouds: new THREE.Texture() } });
     });
 
     /** Whether the window sees any of a craft: a few points of its box, in
@@ -746,7 +884,7 @@ describe('life on the water and in the streets', () => {
     }
 
     test('everything starts hidden and far below the water, never at the office’s own spot', () => {
-        const fresh = worldMod.buildWorld(CONFIG);
+        const fresh = buildWorld(CONFIG);
         const { ferries, ships, sailboats, seaplane, cars } = fresh.fleet;
         for (const c of [...ferries, ...ships, ...sailboats, seaplane]) {
             expect(c.group.visible).toBe(false);
@@ -1101,7 +1239,7 @@ describe('in the rain', () => {
     beforeAll(async () => {
         weatherMod = await import('../www/office/js/weather.js');
         daylight = await import('../www/office/js/daylight.js');
-        wet = worldMod.buildWorld(CONFIG, { textures: { clouds: new THREE.Texture() } });
+        wet = buildWorld(CONFIG, { textures: { clouds: new THREE.Texture() } });
     });
 
     test('a low gray deck closes over the sky, the haze closes in, and the water roughens', () => {
@@ -1111,7 +1249,10 @@ describe('in the rain', () => {
         expect(deck.material.opacity).toBeGreaterThan(0.9);
         expect(deck.position.y).toBe(city.WATER_Y + worldMod.OVERCAST_ALTITUDE);
         // Under the mountains' tops, which go up into it.
-        expect(worldMod.OVERCAST_ALTITUDE).toBeLessThan(Math.max(...city.olympics().peaks.map(([, h]) => h)));
+        const g = city.landGrids().mountains;
+        let peak = 0;
+        for (let k = 1; k < g.positions.length; k += 3) peak = Math.max(peak, g.positions[k] - city.WATER_Y);
+        expect(worldMod.OVERCAST_ALTITUDE).toBeLessThan(peak);
         expect(wet.scene.fog.far).toBeLessThan(bay.HAZE.far / 5);
         expect(wet.water.material.roughness).toBeGreaterThan(bay.BAY.roughness + 0.2);
         wet.setLight(lookFor({ overcast: 0, rain: 0 }));
@@ -1122,7 +1263,8 @@ describe('in the rain', () => {
 
     test('from the window the mountains are lost in heavy rain and back when it clears', () => {
         const cam = cameraAt('window', 16 / 10);
-        const mountains = new THREE.Vector3(0, city.WATER_Y + 800, city.olympics().z + city.olympics().depth / 2);
+        // The front range's nearest slopes.
+        const mountains = new THREE.Vector3(0, city.WATER_Y + 800, city.farCoastZ(0) - city.MOUNTAINS.bands.mountains.from);
         const distance = mountains.distanceTo(cam.position);
         wet.setLight(lookFor({ overcast: 1, rain: 1 }));
         expect(distance).toBeGreaterThan(wet.scene.fog.far);
@@ -1247,7 +1389,7 @@ describe('after the screenshots', () => {
         const day = new Date(2026, 8, 24);
         const moment = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, daylight.sunTimes(day).sunrise * 3600000);
         const look = daylight.lighting(daylight.lightAt(moment));
-        const dawn = worldMod.buildWorld(CONFIG);
+        const dawn = buildWorld(CONFIG);
         dawn.setLight(look, sky.skyAt(moment));
         const pos = dawn.sky.geometry.attributes.position;
         const col = dawn.sky.geometry.attributes.color;
@@ -1283,7 +1425,7 @@ describe('the second round of screenshots (2026-09-24)', () => {
         life = await import('../www/office/js/life.js');
         const tex = () => new THREE.Texture();
         const facades = Object.fromEntries(worldMod.STYLES.map((s) => [s, { color: tex(), rm: tex(), lit: tex() }]));
-        lit = worldMod.buildWorld(CONFIG, { textures: { facades, streets: tex(), streetsLit: tex() } });
+        lit = buildWorld(CONFIG, { textures: { facades, streets: tex(), streetsLit: tex() } });
     });
 
     test('every tower wears the leaning panes, scaled back to their true lean, and reflects strongly', () => {
@@ -1312,7 +1454,7 @@ describe('the second round of screenshots (2026-09-24)', () => {
         const p = new THREE.Vector3();
         const q = new THREE.Quaternion();
         const s = new THREE.Vector3();
-        const fresh = worldMod.buildWorld(CONFIG).fleet.vehicles;
+        const fresh = buildWorld(CONFIG).fleet.vehicles;
         fresh.car.paint.getMatrixAt(0, m);
         expect(new THREE.Vector3().setFromMatrixPosition(m).y).toBeLessThan(-1000);
         lit.setLife(NOON, 12);
@@ -1408,7 +1550,7 @@ describe('the third round of screenshots (2026-09-25)', () => {
     beforeAll(async () => {
         life = await import('../www/office/js/life.js');
         fleetMod = await import('../www/office/js/fleet.js');
-        lit = worldMod.buildWorld(CONFIG, { textures: { clouds: new THREE.Texture() } });
+        lit = buildWorld(CONFIG, { textures: { clouds: new THREE.Texture() } });
     });
 
     test('from the desk, more of the view is window than it was (QA: "too much of the view is blocked by the wall")', () => {

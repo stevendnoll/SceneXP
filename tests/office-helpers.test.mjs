@@ -192,6 +192,27 @@ describe('the station camera', () => {
         expect(poseFor('nowhere', 16 / 10, CONFIG).aim).toEqual(CONFIG.stations.desk.aim);
     });
 
+    test('the window keeps its top edge on a wide screen, tilting up by what its narrowed fov gave up (QA, 2026-09-25)', () => {
+        const topOf = (pose) => {
+            const d = pose.aim.map((v, i) => v - pose.eye[i]);
+            return (Math.atan2(d[1], Math.hypot(d[0], d[2])) * 180) / Math.PI + pose.fov / 2;
+        };
+        const ref = poseFor('window', 16 / 10, CONFIG);
+        const wide = poseFor('window', 21 / 9, CONFIG);
+        expect(wide.fov).toBeLessThan(ref.fov);
+        expect(topOf(wide)).toBeCloseTo(topOf(ref), 6);
+        // The same bearing and the same distance to its aim.
+        const bearing = (p) => Math.atan2(p.aim[0] - p.eye[0], p.aim[2] - p.eye[2]);
+        expect(bearing(wide)).toBeCloseTo(bearing(ref), 9);
+        const reach = (p) => Math.hypot(...p.aim.map((v, i) => v - p.eye[i]));
+        expect(reach(wide)).toBeCloseTo(reach(ref), 9);
+        // At the reference and narrower, the aim is the config's own.
+        expect(ref.aim).toEqual(CONFIG.stations.window.aim);
+        expect(poseFor('window', 390 / 844, CONFIG).aim).toEqual(CONFIG.stations.window.aim);
+        // A station without holdTop keeps its aim on a wide screen.
+        expect(poseFor('desk', 21 / 9, CONFIG).aim).toEqual(CONFIG.stations.desk.aim);
+    });
+
     test('a wide station backs its eye away on a phone, along its line of sight', () => {
         const wide = poseFor('cabinet', 16 / 10, CONFIG);
         const phone = poseFor('cabinet', CONFIG.view.narrowAspect, CONFIG);

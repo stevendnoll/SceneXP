@@ -49,7 +49,8 @@ export const LIFE = {
     sailboat: { count: 6, from: 8, to: 19.5, scale: 2 },
     seaplane: { takeoff: 20, landing: 50, from: 8, to: 19, run: 35, climb: 150, top: 45, rise: 4, scale: 2 },
     cars: { near: { x0: -200, x1: 120, z1: -6 } },
-    wind: 6,
+    /** Meters a second, at the clouds' height (sky.js CLOUDS). */
+    wind: 10,
     ripple: [0.004, 0.0025]
 };
 

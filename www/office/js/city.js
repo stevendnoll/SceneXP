@@ -225,21 +225,6 @@ export function piers(city = CITY) {
 }
 
 /**
- * The mountains west, beyond the far shore: a ridge of peaks `[x, height]`
- * along z = `z`, with snow above `snow`. Heights in meters above the water,
- * nearer and taller than life so they read above the water at all.
- */
-export function olympics(city = CITY) {
-    const random = seeded(city.seed + 7);
-    const peaks = [];
-    for (let x = -36000; x <= 36000; x += 1300) {
-        const ridge = 1100 + 750 * Math.sin((x + 36000) / 8500) + random() * 800;
-        peaks.push([x, Math.round(ridge)]);
-    }
-    return { z: -30000, depth: 9000, peaks, snow: 1600 };
-}
-
-/**
  * Where the reflections are captured from, in the room's frame. The glass
  * reflects the city as seen from `city`: over a street crossing two blocks
  * down the hill, 150 m up (the office's own height), among the towers, so
@@ -259,30 +244,252 @@ export function reflectionPoints(city = CITY) {
     };
 }
 
+// ---- The land across the water -------------------------------------------------
+
 /**
- * The low wooded hills across the water, in front of the mountains: the
- * island's back, and the far shore's ridge. Flat, they were each under a
- * pixel tall from the office. Raised, they give the horizon its layers. Each
- * is a ridge like the mountains' (`z` its middle, `depth` front to back,
- * peaks of [x, height]), no snow, tapering to the water at both ends.
+ * A smooth random field on the plane, -1 to 1 (gradient noise on a seeded
+ * lattice): the raw stuff the mountains and hills are shaped from. The same
+ * seed gives the same field on every visit.
  */
-export function farHills(city = CITY) {
-    const random = seeded(city.seed + 11);
-    const ridge = (x0, x1, step, height) => {
-        const peaks = [];
-        for (let x = x0; x <= x1; x += step) {
-            const t = (x - x0) / (x1 - x0);
-            peaks.push([x, Math.round(Math.sin(Math.PI * t) ** 0.4 * height(x))]);
-        }
-        return peaks;
+export function noiseField(seed) {
+    const random = seeded(seed);
+    const perm = Array.from({ length: 256 }, (_, i) => i);
+    for (let i = 255; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [perm[i], perm[j]] = [perm[j], perm[i]];
+    }
+    const angle = perm.map(() => random() * Math.PI * 2);
+    const gx = angle.map(Math.cos);
+    const gz = angle.map(Math.sin);
+    const at = (i, j) => perm[(perm[i & 255] + j) & 255];
+    const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+    return (x, z) => {
+        const i = Math.floor(x);
+        const j = Math.floor(z);
+        const fx = x - i;
+        const fz = z - j;
+        const dot = (di, dj) => {
+            const g = at(i + di, j + dj);
+            return gx[g] * (fx - di) + gz[g] * (fz - dj);
+        };
+        const u = fade(fx);
+        const v = fade(fz);
+        const top = dot(0, 0) + (dot(1, 0) - dot(0, 0)) * u;
+        const bottom = dot(0, 1) + (dot(1, 1) - dot(0, 1)) * u;
+        return Math.max(-1, Math.min(1, (top + (bottom - top) * v) * 1.4));
     };
-    return {
-        island: { z: -13800, depth: 2000, snow: Infinity, peaks: ridge(-7000, 6500, 500, () => 70 + random() * 50) },
-        farShore: {
-            z: -21200, depth: 4000, snow: Infinity,
-            peaks: ridge(-58500, 58500, 1500, (x) => 70 + 40 * Math.sin(x / 7000) + random() * 40)
+}
+
+/**
+ * Mountain crests, 0 to 1: ridged noise, where each octave's field is
+ * folded along its zero line into a sharp crest, and the finer octaves
+ * cut in hardest where the coarse ones already stand high (so the peaks
+ * are rugged and the valleys smooth, as weather leaves real ranges).
+ */
+export function crests(field, x, z, octaves = 5) {
+    let sum = 0;
+    let total = 0;
+    let amp = 1;
+    let freq = 1;
+    let weight = 1;
+    for (let o = 0; o < octaves; o++) {
+        let n = 1 - Math.abs(field(x * freq + o * 17.3, z * freq - o * 9.1));
+        n *= n * weight;
+        weight = Math.min(1, n * 2);
+        sum += n * amp;
+        total += amp;
+        amp *= 0.55;
+        freq *= 2.03;
+    }
+    return sum / total;
+}
+
+const smoothstep = (a, b, t) => {
+    const x = Math.min(1, Math.max(0, (t - a) / (b - a)));
+    return x * x * (3 - 2 * x);
+};
+
+/**
+ * The mountains across the bay (QA, 2026-09-25: "the weakest part of the
+ * scene"). One landscape from the far shore back: wooded foothills, a
+ * front range, and the high snowy range at the back about 34 km out, its
+ * peaks near 4,200 m, drawn 1.5 times as tall as such a range would stand
+ * (Steve's choice, so they rise clear of the water, as the jet is drawn
+ * larger than life). `inland` is how far back from the shore each part
+ * begins and ends, meters; `snow` and `trees` the lines, before their
+ * wander; `step` the grid across and the rows back for each band.
+ */
+export const MOUNTAINS = {
+    x: [-52000, 52000],
+    step: 300,
+    bands: {
+        farShore: { from: 0, to: 3500, row: 250 },
+        mountains: { from: 3500, to: 27000, row: 420 }
+    },
+    snow: 2200,
+    trees: 1200,
+    seed: CITY.seed + 17
+};
+
+/** Where the far shore's water line is, as a z, at a point along it (the
+ *  near edge of FAR_LAND.farShore). */
+export function farCoastZ(x) {
+    const [[x0, z0], [x1, z1]] = FAR_LAND.farShore;
+    return z0 + ((z1 - z0) * (x - x0)) / (x1 - x0);
+}
+
+/**
+ * The land across the bay's height above the water at a point, meters:
+ * nothing (below the water) short of the far shore, and back from it the
+ * foothills rolling up to the front range and the high range behind it,
+ * the ranges' crests rising and falling in massifs along their length.
+ */
+export function mountainHeight(x, z, fields = mountainFields()) {
+    const d = farCoastZ(x) - z;
+    if (d <= 0) return -8;
+    const shore = smoothstep(0, 700, d);
+    const front = smoothstep(4000, 9000, d) * (1 - 0.35 * smoothstep(15000, 22000, d));
+    const high = smoothstep(9000, 16000, d) * (1 - smoothstep(21000, 26000, d));
+    // The massifs: stretches of the range standing high, and between them
+    // saddles where the range behind the front one shows through.
+    const massif = 0.35 + 0.65 * smoothstep(-0.55, 0.6, fields.massif(x / 14000, 0.37));
+    const ridges = crests(fields.ridge, x / 5200, d / 5200);
+    const rolling = 0.5 + 0.5 * fields.roll(x / 2500, d / 2500);
+    // The foothills stay low (about a degree over the water from the
+    // office), so the ranges' slopes show above them even in a frame that
+    // looks down, as the window's does on a wide screen.
+    const foot = 120 + 300 * smoothstep(500, 5000, d);
+    return shore * (foot + 180 * rolling * (1 - front) + front * (300 + 1700 * massif * ridges) + high * (200 + 1400 * massif * ridges));
+}
+
+/** The seeded fields the land is shaped from, made once. */
+let fieldsMade = null;
+export function mountainFields() {
+    if (!fieldsMade) {
+        const seed = MOUNTAINS.seed;
+        fieldsMade = {
+            ridge: noiseField(seed),
+            massif: noiseField(seed + 1),
+            roll: noiseField(seed + 2),
+            lines: noiseField(seed + 3),
+            island: noiseField(seed + 4)
+        };
+    }
+    return fieldsMade;
+}
+
+/** The land's colors, sRGB. */
+export const LAND_COLORS = {
+    forest: 0x213a2d,
+    alpine: 0x46504b,
+    rock: 0x4f5764,
+    cliff: 0x363c46,
+    snow: 0xf1f4f7,
+    far: 0x3d4d68
+};
+
+const mixHex = (a, b, t) => {
+    const k = Math.min(1, Math.max(0, t));
+    const ch = (c, s) => (c >> s) & 255;
+    const one = (s) => Math.round(ch(a, s) + (ch(b, s) - ch(a, s)) * k);
+    return (one(16) << 16) | (one(8) << 8) | one(0);
+};
+
+/**
+ * The color of the land at a point: `h` its height above the water,
+ * `steep` 0 (flat) to 1 (sheer), `distance` from the office. Forest up to a
+ * wandering tree line, alpine meadow and rock above it, dark cliff where it
+ * is steep, snow above a ragged snow line where it is not too steep to
+ * hold, and the far ranges a little bluer (the blue of distance, which the
+ * pale haze alone washes white).
+ */
+export function landColor(h, steep, x, z, distance, fields = mountainFields()) {
+    const wander = fields.lines(x / 3000, z / 3000);
+    // The snow line frays at a finer grain than it wanders: tongues of snow
+    // down the gullies, rock pushing up between them.
+    const fray = fields.lines(x / 700 + 31.7, z / 700 - 12.9);
+    const treeLine = MOUNTAINS.trees + 220 * wander;
+    const snowLine = MOUNTAINS.snow + 300 * wander + 220 * fray;
+    let c = mixHex(LAND_COLORS.forest, LAND_COLORS.alpine, smoothstep(treeLine - 200, treeLine + 200, h));
+    c = mixHex(c, LAND_COLORS.rock, smoothstep(treeLine + 200, treeLine + 700, h));
+    c = mixHex(c, LAND_COLORS.cliff, smoothstep(0.12, 0.3, steep));
+    // Snow holds on the gentler ground and slides off the steep faces,
+    // which stand out dark between the snowfields.
+    const snow = smoothstep(snowLine - 120, snowLine + 160, h) * (1 - smoothstep(0.14, 0.3, steep));
+    c = mixHex(c, LAND_COLORS.snow, snow);
+    return mixHex(c, LAND_COLORS.far, 0.45 * smoothstep(12000, 40000, distance) * (1 - snow));
+}
+
+/**
+ * The island's height above the water: gently rolling wooded hills,
+ * highest in its middle, down to the water at its shore, and below the
+ * water off it. Under the office's eye (it sits lower than the far shore).
+ */
+export function islandHeight(x, z, fields = mountainFields()) {
+    const poly = FAR_LAND.island;
+    if (!inPolygon(x, z, poly)) return -8;
+    let edge = Infinity;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [ax, az] = poly[j];
+        const [bx, bz] = poly[i];
+        const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / ((bx - ax) ** 2 + (bz - az) ** 2)));
+        edge = Math.min(edge, Math.hypot(x - (ax + t * (bx - ax)), z - (az + t * (bz - az))));
+    }
+    const rolling = 0.5 + 0.5 * fields.island(x / 2600, z / 2600);
+    return smoothstep(0, 1400, edge) * (70 + 100 * rolling);
+}
+
+/**
+ * A band of land as a grid: `x` across [from, to] every `dx` meters, and
+ * `rows` of z. Heights from `height(x, z)`, y in the room's frame. Returns
+ * the grid's `positions` (x, y, z each), and `cols` and `rows` counts.
+ */
+export function landGrid(xs, zs, height) {
+    const positions = new Float32Array(xs.length * zs.length * 3);
+    let k = 0;
+    for (const z of zs) {
+        for (const x of xs) {
+            positions[k++] = x;
+            positions[k++] = WATER_Y + height(x, z);
+            positions[k++] = z;
         }
-    };
+    }
+    return { positions, cols: xs.length, rows: zs.length };
+}
+
+/** Evenly from `a` to `b`, every `step` or a little less, both ends in. */
+export function stops(a, b, step) {
+    const n = Math.max(1, Math.ceil(Math.abs(b - a) / step));
+    return Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
+}
+
+/**
+ * The land across the bay as grids: `farShore` (the wooded foothills) and
+ * `mountains` (the ranges behind), sharing their seam row so they meet
+ * without a crack, and the `island`. Rows run from the shore back, the
+ * grid following the far shore's line.
+ */
+export function landGrids() {
+    const xs = stops(MOUNTAINS.x[0], MOUNTAINS.x[1], MOUNTAINS.step);
+    const bands = {};
+    for (const [name, band] of Object.entries(MOUNTAINS.bands)) {
+        const ds = stops(band.from, band.to, band.row);
+        // Each row follows the shore: z at a distance d inland.
+        const positions = new Float32Array(xs.length * ds.length * 3);
+        let k = 0;
+        for (const d of ds) {
+            for (const x of xs) {
+                const z = farCoastZ(x) - d;
+                positions[k++] = x;
+                positions[k++] = WATER_Y + mountainHeight(x, z);
+                positions[k++] = z;
+            }
+        }
+        bands[name] = { positions, cols: xs.length, rows: ds.length };
+    }
+    // The island's grid covers it and a little water round it.
+    bands.island = landGrid(stops(-9500, 9500, 250), stops(-11800, -15800, 250), (x, z) => islandHeight(x, z));
+    return bands;
 }
 
 // ---- Glass and rooftops ---------------------------------------------------------

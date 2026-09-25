@@ -48,13 +48,28 @@ export function poseFor(key, aspect, config) {
         const len = Math.hypot(...d) || 1;
         for (let i = 0; i < 3; i++) eye[i] += (d[i] / len) * s.retreat * t;
     }
-    return {
-        eye,
-        aim: [...s.aim],
-        // A station may cap its own widening: the window is a view, and on a
-        // phone a narrower view of the bay beats a wide view of the room.
-        fov: fovFor(s.fov, aspect, config.view.refAspect, s.maxFov || config.view.maxFov, Boolean(s.holdWidth))
-    };
+    // A station may cap its own widening: the window is a view, and on a
+    // phone a narrower view of the bay beats a wide view of the room.
+    const fov = fovFor(s.fov, aspect, config.view.refAspect, s.maxFov || config.view.maxFov, Boolean(s.holdWidth));
+    return { eye, aim: s.holdTop && fov < s.fov ? liftAim(eye, s.aim, (s.fov - fov) / 2) : [...s.aim], fov };
+}
+
+/**
+ * The aim `degrees` higher, seen from `eye`: the same bearing and the same
+ * distance, tilted up. A station that keeps its width on a wide screen
+ * (holdWidth) narrows its fov there, which drops its top edge: `holdTop`
+ * tilts it up by half what it narrowed, so the top edge stays where it is
+ * at the reference aspect and the wide screen gives up a little of the
+ * bottom instead (QA, 2026-09-25: from the window on 21:9, the taller
+ * mountains had left no sky at all).
+ */
+export function liftAim(eye, aim, degrees) {
+    const d = aim.map((v, i) => v - eye[i]);
+    const flat = Math.hypot(d[0], d[2]);
+    const length = Math.hypot(flat, d[1]);
+    const pitch = Math.atan2(d[1], flat) + (degrees * Math.PI) / 180;
+    const across = length * Math.cos(pitch);
+    return [eye[0] + (d[0] / flat) * across, eye[1] + length * Math.sin(pitch), eye[2] + (d[2] / flat) * across];
 }
 
 /** Ease in and out, so a glide starts and lands gently. */
