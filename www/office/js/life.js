@@ -278,14 +278,51 @@ export function carFleet(lanes = carLanes(), seed = 20260928) {
     return cars;
 }
 
-/** Every car's position at `seconds`, written into `out` (x, y, z each). */
+/**
+ * Every car's position at `seconds`, written into `out` (x, y, z each), at
+ * the lanes' height over the street where it is: the street follows the
+ * hill's curve, and a straight line between a lane's ends would float a car
+ * off it (by nearly seven meters, mid-hill).
+ */
 export function carPositions(cars, lanes, seconds, out = new Float32Array(cars.length * 3)) {
     cars.forEach((car, i) => {
         const { a, b } = lanes[car.lane];
         const s = (((car.start + (seconds * car.speed) / car.length) % 1) + 1) % 1;
-        out[i * 3] = a[0] + (b[0] - a[0]) * s;
-        out[i * 3 + 1] = a[1] + (b[1] - a[1]) * s;
-        out[i * 3 + 2] = a[2] + (b[2] - a[2]) * s;
+        const x = a[0] + (b[0] - a[0]) * s;
+        const z = a[2] + (b[2] - a[2]) * s;
+        out[i * 3] = x;
+        out[i * 3 + 1] = groundY(x, z) + 1.2;
+        out[i * 3 + 2] = z;
+    });
+    return out;
+}
+
+/** A car's size in meters, and how high its lights ride above the street. */
+export const CAR = { length: 4.6, width: 1.9, height: 1.45, lights: 0.8 };
+
+/** How each car faces: along its lane (a yaw, bow toward -z as built). */
+export function carYaws(cars, lanes) {
+    return cars.map(({ lane }) => {
+        const { a, b } = lanes[lane];
+        return yawFor(b[0] - a[0], b[2] - a[2]);
+    });
+}
+
+/**
+ * Every car's lights at `seconds`, written into `out`: at the end of the car
+ * the window sees, the tail of one driving away (red) and the nose of one
+ * coming (white), a little above the street and just clear of the body.
+ */
+export function carLightPositions(cars, lanes, seconds, out = new Float32Array(cars.length * 3)) {
+    carPositions(cars, lanes, seconds, out);
+    const reach = CAR.length / 2 + 0.2;
+    cars.forEach((car, i) => {
+        const { a, b } = lanes[car.lane];
+        const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
+        const sign = car.red ? -1 : 1;
+        out[i * 3] += ((b[0] - a[0]) / len) * reach * sign;
+        out[i * 3 + 1] += CAR.lights - 1.2;
+        out[i * 3 + 2] += ((b[2] - a[2]) / len) * reach * sign;
     });
     return out;
 }

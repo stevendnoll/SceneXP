@@ -147,6 +147,9 @@ const ui = {
     /** A capture the wait put off, to be taken when it is over. */
     captureOwed: false,
     moonKey: null,
+    /** The share of offices the city's windows were last painted with, in
+     *  CONFIG.view.officeStep steps. */
+    officesKey: null,
     /** Whether the moving scenery should be placed again even though it is
      *  held still (reduced motion): the clock jumped, or a day is going by. */
     lifeDue: true,
@@ -391,9 +394,12 @@ function worldTextures() {
         return t;
     };
     const facades = {};
+    painted.offices = {};
     FACADE_STYLES.forEach((style, i) => {
         const one = (map) => sharp(paintedTexture(512, 512, (ctx, W, H) => drawFacade(ctx, W, H, style, map, 11 + i)).texture);
-        facades[style] = { color: one('color'), rm: one('rm'), lit: one('lit') };
+        // The lit offices are kept, to repaint as the night goes on (paintOffices).
+        painted.offices[style] = paintedTexture(512, 512, (ctx, W, H) => drawFacade(ctx, W, H, style, 'lit', 11 + i, 0));
+        facades[style] = { color: one('color'), rm: one('rm'), lit: sharp(painted.offices[style].texture) };
         // The roughness and metalness map holds numbers, not colors.
         if (facades[style].rm) facades[style].rm.colorSpace = THREE.NoColorSpace;
     });
@@ -550,6 +556,23 @@ function skyTime(t) {
     return new Date(midnight.getTime() + ui.hourPin * 60 * 60 * 1000);
 }
 
+/**
+ * Repaint the city's lit offices for the share of them with their lights on
+ * (daylight.js officesLit), when it has changed by a step: at most a few
+ * dozen repaints across a night, each some of the same offices going out.
+ */
+function paintOffices(share) {
+    const step = Math.round(share / CONFIG.view.officeStep);
+    if (step === ui.officesKey || !painted.offices) return;
+    ui.officesKey = step;
+    FACADE_STYLES.forEach((style, i) => {
+        const { canvas: c, texture } = painted.offices[style] || {};
+        if (!c) return;
+        drawFacade(c.getContext('2d'), c.width, c.height, style, 'lit', 11 + i, step * CONFIG.view.officeStep);
+        texture.needsUpdate = true;
+    });
+}
+
 /** Paint the moon for its phase, when that has changed by a few degrees. */
 function paintMoon(sky) {
     const key = Math.round(sky.elongation / (3 * Math.PI / 180));
@@ -598,6 +621,7 @@ function applyDaylight(t, force = false) {
     ui.weather = weather;
     const look = weathered(lighting(light), weather);
     if (room && room.rain) room.rain.set(weather.rain);
+    paintOffices(look.offices);
     if (lights.hemi) {
         lights.hemi.intensity = look.hemi;
         lights.sun.intensity = look.sun;

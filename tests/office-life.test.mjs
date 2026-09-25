@@ -8,7 +8,7 @@
  */
 import {
     LIFE, minutesOn, minutesOfDay, gently, yawFor, ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt,
-    SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, drift
+    SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift
 } from '../www/office/js/life.js';
 import { CITY, WATER_Y, piers, isWater, isLand, groundY } from '../www/office/js/city.js';
 
@@ -249,6 +249,15 @@ describe('the cars', () => {
         expect(cars.some((c) => c.red) && cars.some((c) => !c.red)).toBe(true);
     });
 
+    test('a car keeps to the street as it follows the hill down, never floating off it', () => {
+        for (const t of [0, 3, 11, 29]) {
+            const at = carPositions(cars, lanes, t);
+            for (let i = 0; i < cars.length; i++) {
+                expect(at[i * 3 + 1]).toBeCloseTo(groundY(at[i * 3], at[i * 3 + 2]) + 1.2, 3);
+            }
+        }
+    });
+
     test('a car moves along its lane at its speed, and comes round again', () => {
         const at0 = carPositions(cars, lanes, 0);
         const at1 = carPositions(cars, lanes, 1);
@@ -263,6 +272,35 @@ describe('the cars', () => {
         expect(round[2]).toBeCloseTo(at0[2], 3);
         const out = new Float32Array(cars.length * 3);
         expect(carPositions(cars, lanes, 2, out)).toBe(out);
+    });
+});
+
+describe('the cars by day and night', () => {
+    const lanes = carLanes();
+    const cars = carFleet(lanes);
+
+    test('each car faces along its lane', () => {
+        const yaws = carYaws(cars, lanes);
+        cars.forEach((car, i) => {
+            const { a, b } = lanes[car.lane];
+            const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
+            expect(-Math.sin(yaws[i])).toBeCloseTo((b[0] - a[0]) / len, 9);
+            expect(-Math.cos(yaws[i])).toBeCloseTo((b[2] - a[2]) / len, 9);
+        });
+    });
+
+    test('its lights ride at the end the window sees: the tail going away, the nose coming, clear of the body', () => {
+        const middles = carPositions(cars, lanes, 7);
+        const lights = carLightPositions(cars, lanes, 7);
+        cars.forEach((car, i) => {
+            const { a, b } = lanes[car.lane];
+            const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
+            const along = ((lights[i * 3] - middles[i * 3]) * (b[0] - a[0]) + (lights[i * 3 + 2] - middles[i * 3 + 2]) * (b[2] - a[2])) / len;
+            expect(Math.abs(along)).toBeGreaterThan(CAR.length / 2);
+            expect(Math.sign(along)).toBe(car.red ? -1 : 1);
+            // Down from the lanes' height (1.2 m) to the lights' (CAR.lights).
+            expect(lights[i * 3 + 1] - middles[i * 3 + 1]).toBeCloseTo(CAR.lights - 1.2, 4);
+        });
     });
 });
 

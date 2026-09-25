@@ -435,13 +435,15 @@ describe('the glass city', () => {
         const { lighting, lightAt } = await import('../www/office/js/daylight.js');
         lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 22)));
         expect(lit.beacons.visible).toBe(true);
-        expect(lit.towers.meshes[0].material.emissiveIntensity).toBeGreaterThan(1);
+        // The lit offices glow, softly (QA, 2026-09-24: "too bright").
+        expect(lit.towers.meshes[0].material.emissiveIntensity).toBeCloseTo(worldMod.OFFICE_GLOW, 6);
+        expect(worldMod.OFFICE_GLOW).toBeLessThan(1);
         // The street lamps glow, but low, so the streets read as streets
         // and the cars' lights show on them (QA, 2026-09-24: "neon").
         const glow = lit.scene.getObjectByName('land-downtown').material.emissiveIntensity;
         expect(glow).toBeCloseTo(worldMod.STREET_GLOW, 6);
         expect(glow).toBeGreaterThan(0.2);
-        expect(glow).toBeLessThan(0.5);
+        expect(glow).toBeLessThanOrEqual(0.5);
         lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 12)));
         expect(lit.beacons.visible).toBe(false);
         expect(lit.towers.meshes[0].material.emissiveIntensity).toBe(0);
@@ -940,6 +942,20 @@ describe('the fleet, built from its source', () => {
         expect(ferry.trail.material.opacity).toBeCloseTo(0.55, 9);
         fleetMod.place(ferry, { x: 0, y: -195, z: -3000, yaw: 0 });
         expect(ferry.trail.material.opacity).toBe(0);
+        // The cars stand on the street (their middles ride 1.2 m up), facing their lanes.
+        expect(fleet.carBodies.count).toBe(life.LIFE.cars.count);
+        const centers = new Float32Array(fleet.carBodies.count * 3).fill(0);
+        centers[1] = 11.2;
+        const yaws = new Array(fleet.carBodies.count).fill(Math.PI / 2);
+        fleet.moveCars(centers, yaws);
+        const m = new THREE.Matrix4();
+        fleet.carBodies.getMatrixAt(0, m);
+        const p = new THREE.Vector3();
+        const q = new THREE.Quaternion();
+        m.decompose(p, q, new THREE.Vector3());
+        expect(p.y).toBeCloseTo(10, 6);
+        expect(new THREE.Vector3(0, 0, -1).applyQuaternion(q).x).toBeCloseTo(-1, 6);
+        expect(fleetMod.CAR_COLORS.length).toBeGreaterThan(5);
     });
 });
 
@@ -1125,5 +1141,94 @@ describe('after the screenshots', () => {
     test('the swell bends the reflection softly', () => {
         expect(world.water.material.normalScale.x).toBe(bay.BAY.normalScale);
         expect(bay.BAY.normalScale).toBeLessThan(1);
+    });
+});
+
+describe('the second round of screenshots (2026-09-24)', () => {
+    let lit;
+    let life;
+    const NOON = new Date(2026, 8, 24, 12, 0);
+
+    beforeAll(async () => {
+        life = await import('../www/office/js/life.js');
+        const tex = () => new THREE.Texture();
+        const facades = Object.fromEntries(worldMod.STYLES.map((s) => [s, { color: tex(), rm: tex(), lit: tex() }]));
+        lit = worldMod.buildWorld(CONFIG, { textures: { facades, streets: tex(), streetsLit: tex() } });
+    });
+
+    test('every tower wears the leaning panes, scaled back to their true lean, and reflects strongly', () => {
+        for (const mesh of lit.towers.meshes) {
+            const m = mesh.material;
+            expect(m.normalMap.isDataTexture).toBe(true);
+            expect(m.normalMap.magFilter).toBe(THREE.NearestFilter);
+            expect(m.normalMap.generateMipmaps).toBe(true);
+            expect(m.normalScale.x).toBeCloseTo(1 / city.PANE_STORE, 9);
+            expect(m.envMapIntensity).toBeGreaterThanOrEqual(2);
+        }
+        // All the towers share one pane texture.
+        expect(new Set(lit.towers.meshes.map((m) => m.material.normalMap)).size).toBe(1);
+    });
+
+    test('the cars are there by day: one instanced mesh, each car on its street, facing its lane, in its own color', () => {
+        const bodies = lit.fleet.carBodies;
+        expect(bodies.isInstancedMesh).toBe(true);
+        expect(bodies.count).toBe(life.LIFE.cars.count);
+        // Far below the water until placed.
+        const m = new THREE.Matrix4();
+        const p = new THREE.Vector3();
+        const q = new THREE.Quaternion();
+        const s = new THREE.Vector3();
+        const fresh = worldMod.buildWorld(CONFIG).fleet.carBodies;
+        fresh.getMatrixAt(0, m);
+        expect(new THREE.Vector3().setFromMatrixPosition(m).y).toBeLessThan(-1000);
+        lit.setLife(NOON, 12);
+        const lanes = life.carLanes();
+        const cars = life.carFleet(lanes);
+        const middles = life.carPositions(cars, lanes, 12);
+        const yaws = life.carYaws(cars, lanes);
+        for (const i of [0, 17, 99, cars.length - 1]) {
+            bodies.getMatrixAt(i, m);
+            m.decompose(p, q, s);
+            expect(p.x).toBeCloseTo(middles[i * 3], 3);
+            expect(p.z).toBeCloseTo(middles[i * 3 + 2], 3);
+            expect(p.y).toBeCloseTo(city.groundY(p.x, p.z), 0);
+            const bow = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+            expect(bow.x).toBeCloseTo(-Math.sin(yaws[i]), 6);
+        }
+        const colors = new Set();
+        const c = new THREE.Color();
+        for (let i = 0; i < bodies.count; i++) {
+            bodies.getColorAt(i, c);
+            colors.add(c.getHexString());
+        }
+        expect(colors.size).toBeGreaterThan(5);
+        // By day and by night alike; the lights only by night.
+        lit.fleet.light(0);
+        expect(bodies.visible).toBe(true);
+        expect(lit.fleet.cars.visible).toBe(false);
+    });
+
+    test('from the window by day, a good many cars are seen in the streets below', () => {
+        const cam = cameraAt('window', 16 / 10);
+        lit.setLife(NOON, 30);
+        lit.scene.updateMatrixWorld(true);
+        const frustum = new THREE.Frustum().setFromProjectionMatrix(
+            new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)
+        );
+        const bodies = lit.fleet.carBodies;
+        const m = new THREE.Matrix4();
+        let seen = 0;
+        for (let i = 0; i < bodies.count; i++) {
+            bodies.getMatrixAt(i, m);
+            const p = new THREE.Vector3().setFromMatrixPosition(m).add(new THREE.Vector3(0, 1, 0));
+            if (!frustum.containsPoint(p)) continue;
+            const dir = p.clone().sub(cam.position);
+            const ray = new THREE.Raycaster(cam.position, dir.clone().normalize(), 0.05, dir.length() - 3);
+            if (ray.intersectObject(room.group, true).length) continue;
+            const shown = (o) => (o ? o.visible && shown(o.parent) : true);
+            if (ray.intersectObjects(lit.scene.children.filter((o) => o !== bodies), true).some((h) => shown(h.object))) continue;
+            seen++;
+        }
+        expect(seen).toBeGreaterThanOrEqual(10);
     });
 });

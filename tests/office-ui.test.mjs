@@ -710,6 +710,24 @@ describe('the light', () => {
         expect(t.skyTime(new Date(2026, 8, 24, 15, 20)).getHours()).toBe(15);
     });
 
+    test('the city’s windows are repainted as offices go dark through the night and light before dawn', () => {
+        const at = (h) => {
+            window.cornerOffice.hour(h);
+            return t.ui.officesKey;
+        };
+        const evening = at(20);
+        const late = at(2.5);
+        const quiet = at(3.5);
+        const early = at(6);
+        expect(late).toBeLessThan(evening);
+        expect(quiet).toBeLessThanOrEqual(late);
+        expect(early).toBeGreaterThan(quiet);
+        expect(evening * CONFIG.view.officeStep).toBeCloseTo(0.33, 1);
+        // A step at a time: a whole night is a few dozen repaints at most.
+        expect(Math.round(0.42 / CONFIG.view.officeStep)).toBeLessThan(20);
+        window.cornerOffice.hour(null);
+    });
+
     test('the glass and water finish can be tried from the console for a screenshot', () => {
         // The Three stub swallows the values; world.tune is held in office-view.
         expect(Object.keys(window.cornerOffice.tune({ glass: 2 }))).toEqual(['glass', 'metal', 'water']);

@@ -799,6 +799,36 @@ describe('the city painters', () => {
         }
     });
 
+    test('a smaller share of offices lit is always some of the same offices, in lamps that glow rather than glare', () => {
+        const litAt = (share) => {
+            const r = recorder();
+            paint.drawFacade(r.ctx, 512, 512, 'grid', 'lit', 5, share);
+            return r.fills.map((f, i) => (i % 3 === 0 && f.style !== 'rgb(0, 0, 0)' ? i : -1)).filter((i) => i >= 0);
+        };
+        const panels = paint.FACADE.cols * paint.FACADE.rows;
+        const late = litAt(0.08);
+        const evening = litAt(0.35);
+        expect(late.length / panels).toBeGreaterThan(0.03);
+        expect(late.length / panels).toBeLessThan(0.15);
+        expect(evening.length / panels).toBeGreaterThan(0.25);
+        expect(evening.length / panels).toBeLessThan(0.45);
+        for (const i of late) expect(evening).toContain(i);
+        expect(litAt(0)).toHaveLength(0);
+        // No lamp is full white: the brightest channel is well under 255.
+        for (const warm of [true, false]) {
+            for (const tint of [0, 1]) {
+                expect(Math.max(...paint.officeLamp(warm, tint).match(/\d+/g).map(Number))).toBeLessThan(230);
+            }
+        }
+    });
+
+    test('the glass is polished: its roughness in the rm map is low', () => {
+        const r = recorder();
+        paint.drawFacade(r.ctx, 512, 512, 'grid', 'rm', 3);
+        expect(r.fills[0].style).toBe(`rgb(0, ${paint.GLASS_ROUGHNESS}, 245)`);
+        expect(paint.GLASS_ROUGHNESS / 255).toBeLessThan(0.05);
+    });
+
     test('some offices are lit at night and most are not, the same ones every visit', () => {
         const litPanels = (seed) => {
             const r = recorder();
@@ -856,7 +886,9 @@ describe('the city painters', () => {
                 if (prop in target) return target[prop];
                 return (...args) => {
                     log.push([prop, args, target.fillStyle]);
-                    if (prop === 'createRadialGradient') return { stops: [], addColorStop(at, c) { this.stops.push([at, c]); } };
+                    if (prop === 'createRadialGradient' || prop === 'createLinearGradient') {
+                        return { stops: [], addColorStop(at, c) { this.stops.push([at, c]); } };
+                    }
                     return undefined;
                 };
             },
@@ -921,14 +953,21 @@ describe('the city painters', () => {
         expect(day.fills[0]).toMatchObject({ x: 0, y: 0, w: 256, h: 256 });
         const edge = day.fills[1];
         expect(edge.h).toBeCloseTo((11 / 112) * 256, 9);
-        const night = recorder();
-        paint.drawStreets(night.ctx, 256, 256, { block: 90, street: 22 }, true);
-        // Pools of lamplight along all four edges, dark between them.
-        const pools = night.fills.filter((f) => f.style === paint.STREET_LAMP);
-        expect(pools).toHaveLength(20);
-        const along = pools.filter((f) => f.w > f.h && f.y < 20).map((f) => f.x).sort((a, b) => a - b);
-        expect(along).toHaveLength(5);
-        expect(along[1] - (along[0] + pools[0].w)).toBeGreaterThan(10);
+        // By night: soft pools of lamplight, not hard rectangles (QA,
+        // 2026-09-24: the rectangles read as a checkerboard). A faint band
+        // down each street, a pool under each lamp and a brighter, wider
+        // one where the streets cross.
+        const { ctx, log } = calls();
+        paint.drawStreets(ctx, 256, 256, { block: 90, street: 22 }, true);
+        expect(log.filter(([name]) => name === 'createLinearGradient')).toHaveLength(4);
+        const pools = log.filter(([name]) => name === 'createRadialGradient').map(([, args]) => args);
+        expect(pools).toHaveLength((paint.STREET_LAMPS - 1) * 4 + 4);
+        // Every pool on an edge of the tile (a street's middle), so the tiles meet.
+        for (const [x, y] of pools) expect(x === 0 || x === 256 || y === 0 || y === 256).toBe(true);
+        const corner = pools.filter(([x, y]) => (x === 0 || x === 256) && (y === 0 || y === 256));
+        const between = pools.filter((p) => !corner.includes(p));
+        expect(corner).toHaveLength(4);
+        expect(corner[0][5]).toBeGreaterThan(between[0][5]);
         // Warm, but nearer white than orange.
         const [r, g, b] = paint.STREET_LAMP.match(/\d+/g).map(Number);
         expect(g / r).toBeGreaterThan(0.8);

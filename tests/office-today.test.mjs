@@ -244,3 +244,42 @@ describe('the sticky notes', () => {
         expect(keys.size).toBe(ATLAS.cols * ATLAS.rows);
     });
 });
+
+describe('the offices’ lights through the night (Steve, 2026-09-24)', () => {
+    let officesLit;
+    let lighting;
+    let lightAt;
+    beforeAll(async () => {
+        ({ officesLit, lighting, lightAt } = await import('../www/office/js/daylight.js'));
+    });
+
+    test('fewer and fewer from eight in the evening to three in the morning', () => {
+        let last = officesLit(20);
+        for (let h = 20.25; h <= 27; h += 0.25) {
+            const now = officesLit(h);
+            expect(now).toBeLessThanOrEqual(last + 1e-12);
+            last = now;
+        }
+        expect(officesLit(20)).toBeGreaterThan(officesLit(3) * 4);
+    });
+
+    test('a quiet hour, then the early risers from four, before the sun', () => {
+        expect(officesLit(3.5)).toBeCloseTo(officesLit(3), 9);
+        expect(officesLit(4)).toBeLessThan(0.08);
+        expect(officesLit(6)).toBeGreaterThan(officesLit(4) * 3);
+        expect(officesLit(6)).toBeLessThan(officesLit(9));
+        // By day most are on, but the sun outshines them (cityLights).
+        expect(officesLit(12)).toBeGreaterThan(0.35);
+        const noon = lighting(lightAt(new Date(2026, 8, 24), 12));
+        expect(noon.cityLights).toBe(0);
+        expect(noon.offices).toBeCloseTo(officesLit(12), 9);
+    });
+
+    test('round the clock without a jump, whatever hour it is given', () => {
+        expect(officesLit(24)).toBeCloseTo(officesLit(0), 9);
+        expect(officesLit(-1)).toBeCloseTo(officesLit(23), 9);
+        expect(officesLit(49)).toBeCloseTo(officesLit(1), 9);
+        for (let h = 0; h < 24; h += 0.1) expect(Math.abs(officesLit(h + 0.1) - officesLit(h))).toBeLessThan(0.02);
+        expect(officesLit(12, [[0, 0.5]])).toBe(0.5);
+    });
+});

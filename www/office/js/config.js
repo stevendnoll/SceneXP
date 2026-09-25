@@ -208,7 +208,10 @@ export const CONFIG = deepFreeze({
         captureDegrees: 20,
         /** How often the ferries, ships, cars and clouds move on when nothing
          *  else is drawing: a few frames a second is all slow things need. */
-        ambientFps: 15
+        ambientFps: 15,
+        /** The city's lit offices are repainted when the share of them
+         *  with their lights on moves by this much (daylight.js officesLit). */
+        officeStep: 0.03
     },
 
     /** How far ahead the calendar file reaches, in days. */

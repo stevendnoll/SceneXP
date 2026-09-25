@@ -79,6 +79,28 @@ const GOLD = { top: 0x4f79b3, bottom: 0xcdbfc6, sun: 0xffb36b, clouds: 0xffbf9c 
 const DAY = { top: 0x7fb2dd, bottom: 0xe3ecef, sun: 0xfff0d8, clouds: 0xffffff };
 
 /**
+ * How many of the city's offices have their lights on at a clock hour,
+ * whatever the daylight (by day they are on but the sun outshines them).
+ * Most go home by eight; from there fewer and fewer until three in the
+ * morning, when only the night owls and the cleaners are left; from four,
+ * the early risers come in before the sun is up (Steve, 2026-09-24).
+ * Hours and shares, joined by straight lines round the clock.
+ */
+export const OFFICE_HOURS = [[0, 0.14], [3, 0.05], [4, 0.05], [6.5, 0.24], [8, 0.42], [17, 0.42], [20, 0.34], [24, 0.14]];
+
+export function officesLit(hour, hours = OFFICE_HOURS) {
+    const h = ((hour % 24) + 24) % 24;
+    for (let i = 1; i < hours.length; i++) {
+        const [h1, v1] = hours[i];
+        if (h <= h1) {
+            const [h0, v0] = hours[i - 1];
+            return v0 + ((v1 - v0) * (h - h0)) / (h1 - h0);
+        }
+    }
+    return hours[hours.length - 1][1];
+}
+
+/**
  * What the scene's lights and the painted sky should be for a light level.
  * Dawn and dusk pass through gold on the way.
  */
@@ -95,8 +117,11 @@ export function lighting(light) {
         sun: 0.12 + 1.4 * d,
         hemi: 0.22 + 0.7 * d,
         fill: 0.12 + 0.23 * d,
-        /** How many of the city's windows are lit, 0 to 1. */
+        /** How brightly the city's lit windows show, 0 to 1: they show
+         *  only as the daylight goes. */
         cityLights: 1 - d,
+        /** How many of its offices have their lights on (officesLit). */
+        offices: officesLit(light.hour),
         /** The stars, 0 to 1: out only once the sky is nearly dark. */
         stars: smooth((0.35 - d) / 0.35),
         /** The moon: bright by night, a pale ghost by day. */

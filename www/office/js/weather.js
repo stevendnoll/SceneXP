@@ -13,7 +13,7 @@
  *
  * WHAT RAIN DOES, all from two numbers, `overcast` and `rain` (0 to 1): a
  * gray sky and a low gray deck over it, the sun's light and glow dimmed,
- * the stars and the moon hidden, more offices lit against the gloom (the
+ * the stars and the moon hidden, the lit offices showing through the gloom (the
  * look, here), and in world.js the haze closing in (the mountains go first,
  * as they do), the water roughened, streaks falling past the window and
  * drops beaded on the glass. On the water the sailboats stay in and the
@@ -114,7 +114,7 @@ export function grayOf(hex, k = 1) {
 /**
  * A look (daylight.js `lighting`) under the weather: the sky and clouds
  * grayed, the sun and its glow dimmed, the stars and moon clouded out, the
- * room's light a little lower, more offices lit, and the weather itself
+ * room's light a little lower, the lit offices showing, and the weather itself
  * carried along for world.js.
  */
 export function weathered(look, { overcast, rain }) {

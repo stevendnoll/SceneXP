@@ -398,12 +398,24 @@ function paintRandom(seed) {
  *   color  the glass (light, so each tower's own tint shows) with a little
  *          variation from panel to panel, the mullions and the spandrels;
  *   rm     roughness in green and metalness in blue, three's channels: the
- *          glass smooth and metallic, the frames and the spandrels matte;
- *   lit    black with the offices that are lit at night, warm or cool.
+ *          glass polished and metallic, the frames and the spandrels matte;
+ *   lit    black with the offices whose lights are on, warm or cool; `lit`
+ *          (0 to 1) is the share of them, and main.js repaints it as the
+ *          night goes on.
  */
 export const FACADE = FACADE_TILE;
 
+/** The glass's roughness in the rm map (0 to 255): polished, so it gives a
+ *  sharp reflection (Steve, 2026-09-24: "like polished glass"). */
+export const GLASS_ROUGHNESS = 6;
+
 export const FACADE_STYLES = ['grid', 'bands', 'fins'];
+
+/** An office's light as the night sees it: mostly warm, some cool, and
+ *  never full white, so a lit tower glows rather than glares. */
+export function officeLamp(warm, tint) {
+    return warm ? `rgb(226, ${Math.round(178 + tint * 26)}, 128)` : `rgb(${Math.round(160 + tint * 20)}, 186, 214)`;
+}
 
 function facadeLayout(style) {
     // Fractions of a panel (w) and of a floor (h) for the frame parts.
@@ -412,7 +424,7 @@ function facadeLayout(style) {
     return { mullion: 0.04, spandrel: 0.18, fin: 0 };
 }
 
-export function drawFacade(ctx, W, H, style, map, seed = 1) {
+export function drawFacade(ctx, W, H, style, map, seed = 1, lit = 0.38) {
     const random = paintRandom(seed);
     const { cols, rows } = FACADE;
     const pw = W / cols;
@@ -425,16 +437,21 @@ export function drawFacade(ctx, W, H, style, map, seed = 1) {
             // Panels differ by a few percent, as real glazing does: enough to
             // read as panes, not so much the reflection looks broken up.
             const shade = 0.97 + random() * 0.06;
-            const lit = random() < 0.38;
+            // Each office has its place in the order the lights go out, and
+            // a lamp of its own, drawn whatever the share lit, so a smaller
+            // share is always some of the same offices (the lights go out
+            // one by one as the night goes on, daylight.js officesLit).
+            const order = random();
             const warm = random() < 0.7;
+            const tint = random();
             // The glass.
             if (map === 'color') {
                 const g = Math.min(255, Math.round(236 * shade));
                 ctx.fillStyle = `rgb(${g}, ${Math.round(g * 1.03)}, ${Math.round(g * 1.08)})`;
             } else if (map === 'rm') {
-                ctx.fillStyle = 'rgb(0, 18, 245)';
+                ctx.fillStyle = `rgb(0, ${GLASS_ROUGHNESS}, 245)`;
             } else {
-                ctx.fillStyle = lit ? (warm ? `rgb(255, ${Math.round(200 + random() * 30)}, 140)` : 'rgb(200, 225, 255)') : 'rgb(0, 0, 0)';
+                ctx.fillStyle = order < lit ? officeLamp(warm, tint) : 'rgb(0, 0, 0)';
             }
             ctx.fillRect(x, y, pw, ph);
             // The spandrel: the band at the floor line.
@@ -579,6 +596,10 @@ export function drawGlow(ctx, W, H) {
 /** The street lamps' light: warm, but nearer white than orange. */
 export const STREET_LAMP = 'rgb(255, 222, 176)';
 
+/** Lamps along each street, a block long: STREET_LAMPS - 1 between the
+ *  crossings (about 25 m apart on a 98 m block). */
+export const STREET_LAMPS = 4;
+
 /**
  * The streets: one city block with half a street round it, repeated across
  * the land (world.js sets the repeat so the block sits under its towers).
@@ -590,18 +611,37 @@ export function drawStreets(ctx, W, H, { block, street }, lit = false) {
     ctx.fillStyle = lit ? 'rgb(0, 0, 0)' : 'rgb(96, 102, 104)';
     ctx.fillRect(0, 0, W, H);
     if (lit) {
-        // Pools of warm white light under the street lamps along every
-        // street, dark between them, so the cars' lights still show.
-        ctx.fillStyle = STREET_LAMP;
-        const pools = 5;
-        const pool = s * 0.9;
-        for (let i = 0; i < pools; i++) {
-            const t = ((i + 0.5) / pools) * W - pool / 2;
-            ctx.fillRect(t, s * 0.25, pool, s * 0.55);
-            ctx.fillRect(t, H - s * 0.8, pool, s * 0.55);
-            ctx.fillRect(s * 0.25, t, s * 0.55, pool);
-            ctx.fillRect(W - s * 0.8, t, s * 0.55, pool);
+        // Every street runs along an edge of the tile (its middle ON the
+        // edge, half of it in this tile and half in the next), so whatever
+        // is drawn on an edge is drawn on the opposite one too.
+        const [r, g, b] = STREET_LAMP.match(/\d+/g).map(Number);
+        const lamp = (a) => `rgba(${r}, ${g}, ${b}, ${a})`;
+        // A faint warm band down every street: the lamps' light running
+        // together on the wet-dark asphalt.
+        for (const [x0, y0, x1, y1, rx, ry, rw, rh] of [
+            [0, 0, 0, s, 0, 0, W, s], [0, H, 0, H - s, 0, H - s, W, s],
+            [0, 0, s, 0, 0, 0, s, H], [W, 0, W - s, 0, W - s, 0, s, H]
+        ]) {
+            const band = ctx.createLinearGradient(x0, y0, x1, y1);
+            band.addColorStop(0, lamp(0.28));
+            band.addColorStop(1, lamp(0));
+            ctx.fillStyle = band;
+            ctx.fillRect(rx, ry, rw, rh);
         }
+        // Soft pools under the lamps along each street, and a brighter one
+        // where the streets cross (the tile's corners).
+        const pool = (x, y, radius, a) => {
+            const glow = ctx.createRadialGradient(x, y, 0, x, y, radius);
+            glow.addColorStop(0, lamp(a));
+            glow.addColorStop(1, lamp(0));
+            ctx.fillStyle = glow;
+            ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+        };
+        for (let i = 1; i < STREET_LAMPS; i++) {
+            const t = (i / STREET_LAMPS) * W;
+            for (const [x, y] of [[t, 0], [t, H], [0, t], [W, t]]) pool(x, y, s * 1.1, 0.7);
+        }
+        for (const [x, y] of [[0, 0], [W, 0], [0, H], [W, H]]) pool(x, y, s * 1.7, 0.95);
         return;
     }
     // Asphalt round the edges, a sidewalk inside it, the block within.

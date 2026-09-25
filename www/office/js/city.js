@@ -241,9 +241,10 @@ export function olympics(city = CITY) {
 
 /**
  * Where the reflections are captured from, in the room's frame. The glass
- * reflects the city as seen from `city`: the middle of a street crossing
- * two blocks down the hill, 90 m up, among the towers, so every tower's
- * glass shows towers. The water reflects the world as seen from `bay`: just
+ * reflects the city as seen from `city`: over a street crossing two blocks
+ * down the hill, 150 m up (the office's own height), among the towers, so
+ * every tower's glass shows towers and, past them, the sky, the skyline and
+ * the bay. Lower, in the canyon, the glass mirrored mostly dark street. The water reflects the world as seen from `bay`: just
  * over the water off the ferry dock, so the far water mirrors the far shore
  * and the mountains nearly where a true mirror would (they are far enough
  * off that the few hundred meters between here and any patch of water
@@ -253,7 +254,7 @@ export function reflectionPoints(city = CITY) {
     const x = blockAt(1, 0, city).x0 - city.street / 2;
     const z = blockAt(0, -2, city).z0 - city.street / 2;
     return {
-        city: [x, groundY(x, z, city) + 90, z],
+        city: [x, groundY(x, z, city) + 150, z],
         bay: [x, WATER_Y + 25, shoreZ(x, city) - 600]
     };
 }
@@ -371,6 +372,45 @@ export function aviationLights(towers, above = 120) {
         out.push([t.x, t.base + top + 1, t.z]);
     }
     return out;
+}
+
+/** How far a curtain wall's panes lean off true, at most, as a slope. A
+ *  real wall's panes are never quite flat nor quite in line, and that is
+ *  what breaks its reflection pane by pane, the look of polished glass. */
+export const PANE_TILT = 0.02;
+
+/** Tilts that small are only a step or two of a byte, so they are stored
+ *  this many times larger and the material scales them back (world.js
+ *  normalScale). */
+export const PANE_STORE = 5;
+
+/**
+ * The panes' tilts as a normal map, one facade tile (FACADE_TILE panes)
+ * across at `per` texels a pane: RGBA bytes, each pane leaning its own way,
+ * (-slope across, -slope up, 1) with the slope PANE_STORE times its true
+ * size, normalized and stored 0 to 255.
+ */
+export function paneNormals(per = 4, seed = CITY.seed + 13) {
+    const { cols, rows } = FACADE_TILE;
+    const random = seeded(seed);
+    const tilts = Array.from({ length: cols * rows }, () => [(random() * 2 - 1) * PANE_TILT, (random() * 2 - 1) * PANE_TILT]);
+    const W = cols * per;
+    const H = rows * per;
+    const data = new Uint8Array(W * H * 4);
+    for (let j = 0; j < H; j++) {
+        for (let i = 0; i < W; i++) {
+            const [tx, ty] = tilts[Math.floor(j / per) * cols + Math.floor(i / per)];
+            const sx = tx * PANE_STORE;
+            const sy = ty * PANE_STORE;
+            const len = Math.hypot(sx, sy, 1);
+            const at = (j * W + i) * 4;
+            data[at] = Math.round(((-sx / len) * 0.5 + 0.5) * 255);
+            data[at + 1] = Math.round(((-sy / len) * 0.5 + 0.5) * 255);
+            data[at + 2] = Math.round(((1 / len) * 0.5 + 0.5) * 255);
+            data[at + 3] = 255;
+        }
+    }
+    return { data, width: W, height: H };
 }
 
 /** The facade's texture coordinate for a length in meters along a wall (or

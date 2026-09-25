@@ -16,7 +16,8 @@
 
 /* global THREE */
 
-import { LIFE } from './life.min.js';
+import { LIFE, CAR } from './life.min.js';
+import { seeded } from './city.min.js';
 
 /**
  * One geometry from a list of boxes, each `[x, y, z, w, h, d, color]` in
@@ -206,12 +207,37 @@ function carLights(cars) {
     g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(cars.length * 3), 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(cars.flatMap((c) => (c.red ? [1, 0.18, 0.12] : [1, 0.95, 0.82])), 3));
     const points = new THREE.Points(g, new THREE.PointsMaterial({
-        size: 2.5, sizeAttenuation: false, vertexColors: true, fog: true, toneMapped: false
+        size: 3, sizeAttenuation: false, vertexColors: true, fog: true, toneMapped: false
     }));
     points.name = 'cars';
     points.visible = false;
     points.frustumCulled = false;
     return points;
+}
+
+/** The colors cars come in, most of them white, black, silver and gray. */
+export const CAR_COLORS = [0xe9e9e6, 0xe9e9e6, 0x1d1e21, 0x1d1e21, 0xa7abaf, 0xa7abaf, 0x5c6065, 0x243a5e, 0x8e2323, 0x2f5d8a, 0xb5a98f];
+
+/**
+ * The cars themselves, by day and by night: one box a car, all of them one
+ * instanced mesh (one draw call for the lot), each its own color. Their
+ * lights (carLights) ride on them by night.
+ */
+function carBodies(cars) {
+    const box = new THREE.BoxGeometry(CAR.width, CAR.height, CAR.length);
+    box.translate(0, CAR.height / 2, 0);
+    const bodies = new THREE.InstancedMesh(box, new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.4 }), cars.length);
+    const random = seeded(20260931);
+    const c = new THREE.Color();
+    // Far below the water until placed, like every craft.
+    const away = new THREE.Matrix4().makeTranslation(0, HIDDEN_Y, 0);
+    for (let i = 0; i < cars.length; i++) {
+        bodies.setColorAt(i, c.setHex(CAR_COLORS[Math.floor(random() * CAR_COLORS.length)], THREE.SRGBColorSpace));
+        bodies.setMatrixAt(i, away);
+    }
+    bodies.name = 'car-bodies';
+    bodies.frustumCulled = false;
+    return bodies;
 }
 
 /**
@@ -226,11 +252,27 @@ export function buildFleet(scene, cars) {
         ships: [ship(0), ship(1), ship(2)],
         sailboats: Array.from({ length: LIFE.sailboat.count }, (_, i) => sailboat(i)),
         seaplane: seaplane(),
-        cars: carLights(cars)
+        cars: carLights(cars),
+        carBodies: carBodies(cars)
     };
     const all = [...fleet.ferries, ...fleet.ships, ...fleet.sailboats, fleet.seaplane];
     for (const c of all) scene.add(c.group);
-    scene.add(fleet.cars);
+    scene.add(fleet.cars, fleet.carBodies);
+    const matrix = new THREE.Matrix4();
+    const turn = new THREE.Quaternion();
+    const at = new THREE.Vector3();
+    const one = new THREE.Vector3(1, 1, 1);
+    const up = new THREE.Vector3(0, 1, 0);
+    /** Stand every car at its place (life.js carPositions: its middle at
+     *  the lanes' height, 1.2 m up) facing along its lane. */
+    fleet.moveCars = (centers, yaws) => {
+        for (let i = 0; i < yaws.length; i++) {
+            at.set(centers[i * 3], centers[i * 3 + 1] - 1.2, centers[i * 3 + 2]);
+            matrix.compose(at, turn.setFromAxisAngle(up, yaws[i]), one);
+            fleet.carBodies.setMatrixAt(i, matrix);
+        }
+        fleet.carBodies.instanceMatrix.needsUpdate = true;
+    };
     fleet.light = (level) => {
         for (const c of all) if (c.lit) c.lit.material.emissiveIntensity = level * 1.4;
         fleet.cars.visible = level > 0.3;

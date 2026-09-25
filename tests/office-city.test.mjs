@@ -8,7 +8,7 @@
  */
 import {
     CITY, WATER_Y, shoreZ, elevation, groundY, FAR_LAND, inPolygon, isLand, isWater, seeded, blockAt, districtOf,
-    cityTowers, piers, olympics, farHills, reflectionPoints, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
+    cityTowers, piers, olympics, farHills, reflectionPoints, paneNormals, PANE_TILT, PANE_STORE, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
 } from '../www/office/js/city.js';
 
 const towers = cityTowers();
@@ -162,6 +162,28 @@ describe('forms', () => {
         expect(top).toBeGreaterThan(tallest.base + tallest.h);
     });
 
+    test('each pane leans its own little way, all of it within PANE_TILT, so the reflection breaks pane by pane', () => {
+        const per = 4;
+        const { data, width, height } = paneNormals(per);
+        expect([width, height]).toEqual([FACADE_TILE.cols * per, FACADE_TILE.rows * per]);
+        expect(paneNormals(per)).toEqual({ data, width, height });
+        const decode = (i, j) => [0, 1, 2].map((k) => (data[(j * width + i) * 4 + k] / 255) * 2 - 1);
+        const tilts = new Set();
+        for (let j = 0; j < height; j += per) {
+            for (let i = 0; i < width; i += per) {
+                const n = decode(i, j);
+                // One lean across the whole pane.
+                expect(decode(i + per - 1, j + per - 1)).toEqual(n);
+                // Stored PANE_STORE times its true lean, which is within PANE_TILT.
+                expect(Math.hypot(n[0], n[1]) / n[2] / PANE_STORE).toBeLessThanOrEqual(PANE_TILT * Math.SQRT2 + 0.003);
+                expect(n[2]).toBeGreaterThan(0.98);
+                tilts.add(n.join());
+            }
+        }
+        expect(tilts.size).toBeGreaterThan(FACADE_TILE.cols * FACADE_TILE.rows * 0.5);
+        expect(PANE_TILT).toBeLessThan(0.05);
+    });
+
     test('a facade tile spans its panels in meters', () => {
         expect(facadeUv(PANEL.width * FACADE_TILE.cols, PANEL.width, FACADE_TILE.cols)).toBe(1);
         expect(facadeUv(38, 3.8, 4)).toBeCloseTo(2.5, 9);
@@ -194,6 +216,9 @@ describe('the waterfront and the far things', () => {
             expect(Math.abs(x - t.x) > half || Math.abs(z - t.z) > half).toBe(true);
         }
         expect(y).toBeGreaterThan(groundY(x, z) + 50);
+        // At the office's own height, so the glass mirrors sky and skyline
+        // past its neighbors, not only the dark canyon below.
+        expect(Math.abs(y)).toBeLessThan(15);
         expect(isLand(x, z)).toBe(true);
         // Among towers: several taller ones close by, whose glass it sees.
         const around = towers.filter((t) => Math.hypot(t.x - x, t.z - z) < 300 && WATER_Y + t.base + t.h > y);

@@ -29,19 +29,25 @@
 
 import {
     CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, olympics, farHills, reflectionPoints, PANEL, FACADE_TILE, towerStyle,
-    rooftop, aviationLights, facadeUv, outline, sections
+    rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
 } from './city.min.js';
 import { BAY, HAZE, rippleNormals } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
 import {
-    ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions, drift
+    ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
+    carLightPositions, carYaws, drift
 } from './life.min.js';
 import { buildFleet, place, boxesGeometry } from './fleet.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
 
-/** How brightly the street lamps light the streets at night: low, so the
- *  streets read as streets and the cars' lights show on them. */
-export const STREET_GLOW = 0.35;
+/** How brightly the street lamps light the streets at night: soft pools
+ *  (paint.js drawStreets) at half strength, so the streets read as streets
+ *  and the cars' lights show on them. */
+export const STREET_GLOW = 0.5;
+
+/** How brightly a lit office shows at night: under full, so a lit tower
+ *  glows rather than glares (QA, 2026-09-24: "too bright"). */
+export const OFFICE_GLOW = 0.75;
 
 /** The facade styles, in the order paint.js paints them. */
 export const STYLES = ['grid', 'bands', 'fins'];
@@ -54,13 +60,32 @@ export const GLASS_TONES = [0x9db4c6, 0xb3c3cf, 0x8aa2b6, 0xc0cad2, 0x98b3ac, 0x
 
 /**
  * The glass's finish. `reflect` strengthens its reflection past a plain
- * mirror's (Steve, 2026-09-24: "a little dark and not too reflective").
+ * mirror's (Steve, 2026-09-24: "a little dark and not too reflective", and
+ * later "like polished glass", with the rm map's roughness brought down to
+ * paint.js GLASS_ROUGHNESS and each pane leaning a little, paneTexture).
  * `metalness` scales the painted map's: a fully metallic pane is all
  * reflection and no color of its own, so on the shaded side of a tower,
  * reflecting the streets below, it goes dark; a little body color lets the
  * sky's light show on it, as the frit and the offices behind real glass do.
  */
-export const GLASS = { reflect: 1.6, metalness: 0.8 };
+export const GLASS = { reflect: 2.2, metalness: 0.8 };
+
+/**
+ * The panes' tilts (city.js paneNormals) as a normal map shared by every
+ * facade: crisp at a pane's edge up close, averaged flat far off (mipmaps),
+ * so a near tower's reflection breaks pane by pane and a far one is calm.
+ */
+export function paneTexture() {
+    const { data, width, height } = paneNormals();
+    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.needsUpdate = true;
+    return texture;
+}
 
 function standard(color, opts = {}) {
     return new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
@@ -204,6 +229,7 @@ export function roofGeometry(towers) {
  */
 function buildTowers(scene, towers, facades) {
     const meshes = [];
+    const panes = facades ? paneTexture() : null;
     for (const style of STYLES) {
         const mine = towers.filter((t) => towerStyle(t) === style);
         if (!mine.length) continue;
@@ -217,6 +243,7 @@ function buildTowers(scene, towers, facades) {
             ? new THREE.MeshStandardMaterial({
                 vertexColors: true, map: maps.color, roughnessMap: maps.rm, metalnessMap: maps.rm, roughness: 1,
                 metalness: GLASS.metalness, envMapIntensity: GLASS.reflect,
+                normalMap: panes, normalScale: new THREE.Vector2(1 / PANE_STORE, 1 / PANE_STORE),
                 emissiveMap: maps.lit, emissive: 0xffffff, emissiveIntensity: 0
             })
             : standard(0xffffff, { vertexColors: true, roughness: 0.3, metalness: 0.45, envMapIntensity: GLASS.reflect });
@@ -637,6 +664,8 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const route = ferryRoute();
     const courses = sailboatCourses();
     const fleet = buildFleet(scene, cars);
+    const yaws = carYaws(cars, lanes);
+    const centers = new Float32Array(cars.length * 3);
     const weather = buildWeather(scene);
     // How wet it is now (setLight), for what moves (setLife).
     let raining = 0;
@@ -743,7 +772,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             sun.color.setHex(look.sunColor, THREE.SRGBColorSpace);
             // By night the offices and the streets light up, and the beacons
             // come on.
-            for (const mesh of towers.meshes) mesh.material.emissiveIntensity = look.cityLights * 1.1;
+            // The lit offices glow, softly: how many are lit is the painted
+            // map's (main.js repaints it for the hour, daylight.js officesLit).
+            for (const mesh of towers.meshes) mesh.material.emissiveIntensity = look.cityLights * OFFICE_GLOW;
             streets.emissiveIntensity = look.cityLights * STREET_GLOW;
             beacons.visible = look.cityLights > 0.2;
         },
@@ -803,8 +834,10 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
                 streakPositions(weather.streaks, seconds, RAIN, ends.array);
                 ends.needsUpdate = true;
             }
+            // The cars by day and night, and their lights by night.
+            fleet.moveCars(carPositions(cars, lanes, seconds, centers), yaws);
             const positions = fleet.cars.geometry.attributes.position;
-            carPositions(cars, lanes, seconds, positions.array);
+            carLightPositions(cars, lanes, seconds, positions.array);
             positions.needsUpdate = true;
             const moved = drift(date, seconds, CLOUDS.tile);
             if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);
