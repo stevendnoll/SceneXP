@@ -1448,6 +1448,32 @@ describe('the third round of screenshots (2026-09-25)', () => {
         expect(size.window).toBeGreaterThan(16);
     });
 
+    test('the world knows when the jet is in view, so it can be drawn every frame just then', () => {
+        const follow = (station) => {
+            const cam = cameraAt(station, 16 / 10);
+            lit.follow(cam);
+        };
+        const start = life.jetFlight(0).start;
+        // Aloft, and crossing the desk's frame.
+        follow('desk');
+        let inSight = 0;
+        for (let s = start; s < start + life.jetCrossing(); s += 2) {
+            lit.setLife(NOON, s);
+            if (lit.jetInSight()) inSight += 2;
+        }
+        // In sight for part of the crossing, not all of it.
+        expect(inSight).toBeGreaterThan(20);
+        expect(inSight).toBeLessThan(life.jetCrossing() * 0.8);
+        // Between flights, never.
+        lit.setLife(NOON, start + life.jetCrossing() + 10);
+        expect(lit.jetInSight()).toBe(false);
+        // Mid-crossing but facing the front wall, never.
+        lit.setLife(NOON, start + life.jetCrossing() / 2);
+        expect(lit.jetInSight()).toBe(true);
+        follow('departures');
+        expect(lit.jetInSight()).toBe(false);
+    });
+
     test('never a jet held still in the sky for a visitor who asked for less motion', () => {
         lit.setLife(NOON, 30);
         expect(lit.fleet.jet.group.visible).toBe(true);

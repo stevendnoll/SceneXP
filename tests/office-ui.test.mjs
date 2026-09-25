@@ -702,6 +702,31 @@ describe('the light', () => {
         expect(t.ui.hourPin).toBeNull();
     });
 
+    test('the scenery’s frames come evenly, and every frame while a jet is in view', () => {
+        // Which display frames the scenery draws on, given a steady rate.
+        const drawnOn = (hz, fps, frames) => {
+            let due = 0;
+            const drawn = [];
+            for (let f = 0; f < frames; f++) {
+                const paced = main.paceScenery(due, 1 / hz, fps);
+                due = paced.due;
+                if (paced.draw) drawn.push(f);
+            }
+            // Once under way: the very first draw starts a frame overdue.
+            return drawn.slice(1).map((f, i) => f - drawn[i]).slice(2);
+        };
+        // 15 a second on a 60 Hz screen is every 4th frame, never 4 then 5
+        // (the stutter QA saw on the jet, 2026-09-25).
+        expect(new Set(drawnOn(60, 15, 240))).toEqual(new Set([4]));
+        // 60 a second is every frame at 60 Hz, every other at 120 Hz.
+        expect(new Set(drawnOn(60, 60, 240))).toEqual(new Set([1]));
+        expect(new Set(drawnOn(120, 60, 240))).toEqual(new Set([2]));
+        expect(new Set(drawnOn(144, 15, 288)).size).toBeLessThanOrEqual(2);
+        // Far behind (a hidden tab), the count starts again, one draw owed.
+        expect(main.paceScenery(0.01, 5, 15)).toEqual({ due: 1 / 15, draw: true });
+        expect(main.paceScenery(0.05, -1, 15)).toEqual({ due: 0.05, draw: false });
+    });
+
     test('a jet can be sent across the sky for a screenshot', () => {
         t.ui.lifeDue = false;
         expect(window.cornerOffice.jet()).toBe('A jet is on its way across the bay.');

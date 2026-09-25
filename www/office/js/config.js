@@ -203,6 +203,10 @@ export const CONFIG = deepFreeze({
         /** How often the ferries, ships, cars and clouds move on when nothing
          *  else is drawing: a few frames a second is all slow things need. */
         ambientFps: 15,
+        /** While a jet crosses the view it is drawn this often instead:
+         *  at 15 frames a second a jet steps across the sky in visible
+         *  jumps (QA, 2026-09-25), and it is in sight well under a minute. */
+        jetFps: 60,
         /** The city's lit offices are repainted when the share of them
          *  with their lights on moves by this much (daylight.js officesLit). */
         officeStep: 0.03

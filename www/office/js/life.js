@@ -467,8 +467,10 @@ export function carLightPositions(cars, lanes, seconds, out = new Float32Array(c
 export const JET = {
     every: 420,
     late: 90,
-    first: -35,
-    speed: 80,
+    first: -5,
+    /** Faster than a real approach (about 75), because it is drawn four
+     *  times its size: at 80 it crept across (QA, 2026-09-25). */
+    speed: 140,
     z: -5200,
     span: 9000,
     low: 700,

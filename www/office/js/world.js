@@ -40,6 +40,10 @@ import {
 import { buildFleet, place, boxesGeometry } from './fleet.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
 
+/** Half the jet's length and a little over, as built (fleet.js jetParts),
+ *  before its scale: the sphere that holds it. */
+const JET_REACH = 22;
+
 /** How brightly the street lamps light the streets at night: soft pools
  *  (paint.js drawStreets) at half strength, so the streets read as streets
  *  and the cars' lights show on them. */
@@ -669,6 +673,10 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const pitches = new Float32Array(cars.length);
     // A jet asked for by hand (callJet), on the seconds' clock.
     let calledJet = null;
+    // For asking whether the jet is in view (jetInSight).
+    const sight = new THREE.Frustum();
+    const seeing = new THREE.Matrix4();
+    const reach = new THREE.Sphere();
     const weather = buildWeather(scene);
     // How wet it is now (setLight), for what moves (setLife).
     let raining = 0;
@@ -849,11 +857,25 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             water.material.normalMap.offset.set(moved.ripple[0], moved.ripple[1]);
         },
         /**
+         * Whether the jet is out and inside the camera's view, where it is
+         * worth drawing every frame (main.js CONFIG.view.jetFps). Strictly
+         * true or false.
+         */
+        jetInSight() {
+            const jet = fleet.jet.group;
+            if (jet.visible !== true) return false;
+            camera.updateMatrixWorld();
+            sight.setFromProjectionMatrix(seeing.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+            reach.center.copy(jet.position);
+            reach.radius = JET_REACH * jet.scale.x;
+            return sight.intersectsSphere(reach) === true;
+        },
+        /**
          * Send a jet across now, for a screenshot round (main.js offers it
          * as cornerOffice.jet): one southbound, set out `lead` seconds ago
          * so it is just coming into the desk's view at `seconds`.
          */
-        callJet(seconds, lead = 55) {
+        callJet(seconds, lead = 28) {
             calledJet = seconds - lead;
             return calledJet;
         },

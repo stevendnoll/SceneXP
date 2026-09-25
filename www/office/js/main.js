@@ -311,7 +311,7 @@ async function init() {
             return { ...resolution.readout(), drawCalls: info.calls, triangles: info.triangles, ambientFps: CONFIG.view.ambientFps };
         },
         /** A jet across the sky now, for a screenshot: it comes into the
-         *  desk's view straight away and takes about a minute to cross it. */
+         *  desk's view straight away and takes under a minute to cross it. */
         jet() {
             world.callJet(performance.now() / 1000);
             ui.lifeDue = true;
@@ -2390,14 +2390,14 @@ function animate() {
     }
 
     // The moving scenery asks for a frame about CONFIG.view.ambientFps
-    // times a second when nothing else is drawing.
+    // times a second when nothing else is drawing, and CONFIG.view.jetFps
+    // while a jet is crossing the view.
     const moving = lifeMoves();
     if (moving) {
-        state.ambientDue -= delta;
-        if (state.ambientDue <= 0) {
-            state.ambientDue = 1 / CONFIG.view.ambientFps;
-            state.dirty = true;
-        }
+        const fps = world.jetInSight() ? CONFIG.view.jetFps : CONFIG.view.ambientFps;
+        const paced = paceScenery(state.ambientDue, delta, fps);
+        state.ambientDue = paced.due;
+        if (paced.draw) state.dirty = true;
     }
 
     // The frame after one that was drawn carries that frame's cost, so only
@@ -2412,6 +2412,24 @@ function animate() {
     if (world && (moving || ui.lifeDue)) placeLife();
     draw();
     state.drewLast = true;
+}
+
+/**
+ * The scenery's own frame clock: `due` seconds until its next frame, less
+ * this frame's `delta`, at `fps`. The remainder carries over, so the frames
+ * come evenly: started afresh at a whole period each time, they fell 4 and
+ * then 5 display frames apart by turns, and a jet crossing the sky
+ * stuttered (QA, 2026-09-25). `SLACK` (a quarter of a 60 Hz frame) lets a
+ * frame that is due a hair from now count as due, so 60 a second on a
+ * 60 Hz screen is every frame, not every other. Far behind (a hidden tab,
+ * a long frame) the count starts again.
+ */
+export function paceScenery(due, delta, fps) {
+    const SLACK = 0.004;
+    const left = due - Math.max(0, delta);
+    if (left > SLACK) return { due: left, draw: false };
+    const next = left + 1 / fps;
+    return { due: next > 0 ? next : 1 / fps, draw: true };
 }
 
 /**
