@@ -45,13 +45,8 @@ afterAll(() => {
     delete globalThis.THREE;
 });
 
-const TAPPABLE = ['computer', 'intray', 'outtray', 'wastebasket', 'lamp', 'calendar', 'printer'];
+const TAPPABLE = ['computer', 'intray', 'outtray', 'wastebasket', 'lamp', 'printer'];
 const ASPECTS = { 'wide 21:9': 21 / 9, 'laptop 16:10': 16 / 10, 'phone upright': 390 / 844, 'tall phone': 9 / 19.5 };
-/** What the desk's frame may leave out on an upright phone: the calendar
- *  moved left so the window could widen (QA, 2026-09-25), and a phone
- *  reaches it from Places. */
-const PHONE_LEAVES_OUT = ['calendar'];
-const tappableFrom = (aspect) => TAPPABLE.filter((key) => aspect > 1 || !PHONE_LEAVES_OUT.includes(key));
 
 function cameraAt(station, aspect) {
     const pose = poseFor(station, aspect, CONFIG);
@@ -194,7 +189,7 @@ describe('what is in the room', () => {
 });
 
 describe.each(Object.entries(ASPECTS))('from the desk, on a %s screen', (_name, aspect) => {
-    test.each(tappableFrom(aspect))('the %s is in the frame and nothing stands in front of it', (key) => {
+    test.each(TAPPABLE)('the %s is in the frame and nothing stands in front of it', (key) => {
         const cam = cameraAt('desk', aspect);
         const center = boxOf(room.picks[key]).getCenter(new THREE.Vector3());
         const ndc = center.clone().project(cam);
@@ -204,16 +199,24 @@ describe.each(Object.entries(ASPECTS))('from the desk, on a %s screen', (_name, 
         expect(firstPick(cam, center)).toBe(key);
     });
 
-    test('the window is an opening: nothing of the room stands in it', () => {
+    test('the window is an opening: nothing of the room stands in any pane the eye sees', () => {
         const cam = cameraAt('desk', aspect);
         const w = windowsOf(CONFIG);
-        // The middle of the LEFT pane: dead center is the mullion. The city
-        // beyond is world.js's own scene, so a ray through the glass meets
-        // nothing of the room's at all.
-        const through = new THREE.Vector3(w.back.x0 + (w.back.x1 - w.back.x0) / 4, (w.sill + w.head) / 2, -CONFIG.room.depth / 2);
-        const ray = new THREE.Raycaster();
-        ray.set(cam.position, through.clone().sub(cam.position).normalize());
-        expect(ray.intersectObject(room.group, true)).toEqual([]);
+        // The middle of each pane between the mullions. The city beyond is
+        // world.js's own scene, so a ray through the glass meets nothing of
+        // the room's at all.
+        const edges = [w.back.x0, ...w.back.mullions, w.back.x1];
+        let seen = 0;
+        for (let i = 0; i < edges.length - 1; i++) {
+            const through = new THREE.Vector3((edges[i] + edges[i + 1]) / 2, (w.sill + w.head) / 2, -CONFIG.room.depth / 2);
+            const ndc = through.clone().project(cam);
+            if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) continue;
+            seen++;
+            const ray = new THREE.Raycaster();
+            ray.set(cam.position, through.clone().sub(cam.position).normalize());
+            expect(ray.intersectObject(room.group, true)).toEqual([]);
+        }
+        expect(seen).toBeGreaterThanOrEqual(2);
     });
 });
 
@@ -271,7 +274,7 @@ describe('at the computer', () => {
     });
 });
 
-describe('the wall calendar and the sticky notes', () => {
+describe('the back window and the sticky notes', () => {
     const showNotes = (n) => {
         setNotes(room.notes, n, (i) => notesMod.quadCorners(notesMod.NOTE_SLOTS[i]), (i) => notesMod.cellUvs(i));
         room.group.updateMatrixWorld(true);
@@ -279,23 +282,25 @@ describe('the wall calendar and the sticky notes', () => {
 
     afterEach(() => showNotes(0));
 
-    test('the calendar hangs on the back wall, clear of the window', () => {
-        const b = boxOf(room.picks.calendar);
+    test('the back wall is window from corner to corner, over everything that stands against it (QA, 2026-09-25)', () => {
         const w = windowsOf(CONFIG);
-        expect(b.max.x).toBeLessThan(w.back.x0);
-        expect(b.min.z).toBeGreaterThanOrEqual(-CONFIG.room.depth / 2 - 1e-6);
-        expect(b.min.y).toBeGreaterThan(0.9);
-        expect(b.max.y).toBeLessThan(CONFIG.room.height);
-    });
-
-    test('at the calendar station, the calendar fills the view', () => {
-        const cam = cameraAt('calendar', 16 / 10);
-        const b = boxOf(room.calendar);
-        const a = b.min.clone().project(cam);
-        const c = b.max.clone().project(cam);
-        expect(Math.abs(c.y - a.y)).toBeGreaterThan(1.2);
-        expect(Math.abs(c.y - a.y)).toBeLessThan(2);
-        expect(firstPick(cam, b.getCenter(new THREE.Vector3()))).toBe('calendar');
+        const hw = CONFIG.room.width / 2;
+        // A corner pier each end, as at the right-hand corner.
+        expect(w.back.x0).toBeCloseTo(-hw + 0.1, 9);
+        expect(w.back.x1).toBeCloseTo(hw - 0.1, 9);
+        // The cabinet, the printer and the desk all stand below the sill.
+        for (const key of ['cabinet', 'printer']) expect(boxOf(room.picks[key]).max.y).toBeLessThan(w.sill);
+        // Mullions at a curtain wall's even module, none behind the monitor.
+        const edges = [w.back.x0, ...w.back.mullions, w.back.x1];
+        for (let i = 1; i < edges.length; i++) {
+            expect(edges[i] - edges[i - 1]).toBeGreaterThan(1.3);
+            expect(edges[i] - edges[i - 1]).toBeLessThan(1.6);
+        }
+        const monitor = boxOf(room.picks.computer);
+        for (const x of w.back.mullions) expect(x < monitor.min.x || x > monitor.max.x).toBe(true);
+        // And no wall calendar: the calendar is a card from Places.
+        expect(room.picks.calendar).toBeUndefined();
+        expect(room.calendar).toBeUndefined();
     });
 
     test('six notes are one mesh of six quads, and none shows when nothing is due', () => {
@@ -336,10 +341,9 @@ describe('the filing cabinet', () => {
         room.group.updateMatrixWorld(true);
     });
 
-    test('stands clear of the calendar, the chair, the plant and the desk', () => {
+    test('stands clear of the chair, the plant and the desk', () => {
         const cab = boxOf(room.picks.cabinet);
         const others = room.group.children.filter((o) => ['chair', 'plant'].includes(o.name)).map(boxOf);
-        others.push(boxOf(room.picks.calendar));
         others.push(boxOf(room.group.children.find((o) => o.name === 'desk')));
         for (const other of others) expect(cab.intersectsBox(other)).toBe(false);
     });

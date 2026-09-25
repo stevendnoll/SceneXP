@@ -602,18 +602,23 @@ describe('today', () => {
 });
 
 describe('the calendar', () => {
-    test('opens on today at its station, from the toolbar, the wall and the 3 key', () => {
+    test('opens on today where the visitor stands, from Places and the 3 key', () => {
+        t.goTo('window');
+        const standing = t.ui.station;
         place('calendar');
         expect(el('calendar').hidden).toBe(false);
-        expect(t.ui.station).toBe('calendar');
+        // The wall calendar gave its wall to the window (QA, 2026-09-25):
+        // nowhere to go.
+        expect(t.ui.station).toBe(standing);
         const now = new Date();
         expect(t.ui.calDay).toBe(formatDate(now));
         expect(el('calendar-title').textContent).toBe(new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(now));
         el('calendar-close').click();
-        expect(t.ui.station).toBe('desk');
-        t.actOn('calendar');
-        expect(el('calendar').hidden).toBe(false);
-        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        expect(el('calendar').hidden).toBe(true);
+        expect(t.ui.station).toBe(standing);
+        // Nothing in the room answers to it any more.
+        expect(t.actOn('calendar')).toBe(false);
+        expect(el('calendar').hidden).toBe(true);
         key('3');
         expect(el('calendar').hidden).toBe(false);
     });

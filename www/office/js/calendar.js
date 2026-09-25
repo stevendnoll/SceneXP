@@ -1,10 +1,9 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * calendar.js - The wall calendar's month, and what falls on each day.
+ * calendar.js - The calendar card's month, and what falls on each day.
  *
- * Pure. The painted calendar on the wall and the calendar card both draw
- * from `monthGrid` and `agenda`, so the dots on the wall and the rows in the
- * card cannot disagree.
+ * Pure. The calendar card draws its month from `monthGrid` and `agenda`,
+ * so its dots and its day's rows cannot disagree.
  *
  * Weeks start on Monday, like the weekly goal (dates.js).
  */

@@ -116,19 +116,16 @@ export const CONFIG = deepFreeze({
         depth: 5,
         height: 2.8,
         desk: { x: 0.9, z: -2.05, width: 1.6, depth: 0.8, height: 0.75 },
-        /** The wall calendar, on the back wall left of the window, where the
-         *  desk's view reaches it on a laptop or wider. `y` is its center.
-         *  It hung at x -0.32 until QA on 2026-09-25 asked for more of the
-         *  view, and it moved left so the window could reach further: on an
-         *  upright phone it is now off the desk's frame, and reached from
-         *  Places. */
-        calendar: { x: -0.95, y: 1.52, width: 0.54, height: 0.74 },
-        /** The back window's left edge (the right one is the corner), and
-         *  its one mullion, which stands where it always did, just right of
-         *  the monitor, so the pane widened to the left is one clear sheet. */
-        backWindow: { x0: -0.5, mullion: 1.5 },
+        /** The back window runs the whole wall (QA, 2026-09-25: "ideally the
+         *  window would take up the entire field of view"), from the left
+         *  corner to the right, over the cabinet and the printer, both lower
+         *  than its sill. The wall calendar that hung here gave its place up;
+         *  the calendar is a card from Places. Its mullions stand at a
+         *  curtain wall's even module, about 1.45 m, one where it always
+         *  was just right of the monitor, and none behind it. */
+        backWindow: { x0: -2.9, mullions: [-1.4, 0.05, 1.5] },
         /** The filing cabinet: a low lateral file of open-topped drawers
-         *  along the back wall, left of the calendar. `x` and `z` are its
+         *  along the back wall, under the window. `x` and `z` are its
          *  center on the floor. `floor` is the drawers' floor, `pull` how far
          *  they slide out when the visitor comes over, `lift` how far a
          *  found folder rises. Meters. */
@@ -165,7 +162,6 @@ export const CONFIG = deepFreeze({
     stations: {
         desk: { eye: [0.35, 1.5, 0.9], aim: [0.8, 0.9, -2.05], fov: 48 },
         computer: { eye: [0.95, 1.2, -1.2], aim: [0.95, 1.05, -2.3], fov: 42 },
-        calendar: { eye: [-0.85, 1.5, -1.2], aim: [-0.95, 1.52, -2.5], fov: 44 },
         cabinet: { eye: [-1.85, 1.72, -0.55], aim: [-1.85, 0.42, -2.12], fov: 50, retreat: 1.1 },
         board: { eye: [-0.95, 1.52, -1.05], aim: [-2.97, 1.52, -1.05], fov: 46, retreat: 1.6 },
         whiteboard: { eye: [-0.95, 1.5, 1.25], aim: [-2.97, 1.5, 1.25], fov: 46, retreat: 1.4 },

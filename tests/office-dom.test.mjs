@@ -535,13 +535,9 @@ describe('calendar and today panels', () => {
 });
 
 describe('the M2 painters', () => {
-    test('the calendar and the notes paint without a hitch', async () => {
-        const calendar = await import('../www/office/js/calendar.js');
+    test('the notes paint without a hitch', async () => {
         const notes = await import('../www/office/js/notes.js');
         const ctx = document.createElement('canvas').getContext('2d');
-        const grid = calendar.monthGrid(2026, 8);
-        const marks = new Map([['2026-09-24', { events: [1], tasks: [1] }]]);
-        expect(() => paint.drawCalendar(ctx, 512, 700, { grid, marks, todayKey: '2026-09-24' })).not.toThrow();
         const list = notes.stickyNotes({ overdue: [{ id: 'a', text: 'Call Priya about the panel and the portfolio review next week' }], today: [] });
         expect(() => paint.drawNoteAtlas(ctx, 768, 512, list, notes.ATLAS, notes.noteWords, notes.noteColor)).not.toThrow();
     });

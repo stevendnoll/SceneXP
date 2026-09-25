@@ -46,7 +46,7 @@ import { buildRoom, setLamp, pickOf, setNotes, ensureCapacity, windowsOf } from 
 import { SUNBEAM, sunbeam, mirrorLevel, interiorEnvironment, mirrorCamera, layMirror } from './interior.min.js';
 import { buildWorld } from './world.min.js';
 import {
-    screenLines, drawScreen, drawCalendar, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
+    screenLines, drawScreen, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
     drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, FACADE_STYLES
 } from './paint.min.js';
 import { CITY } from './city.min.js';
@@ -123,10 +123,9 @@ const ui = {
     /** The month the calendar card is showing, and the day chosen in it. */
     calMonth: null,
     calDay: null,
-    /** What the notes, the wall calendar and the light were last painted
-     *  from, so each repaints only when it changes. */
+    /** What the notes and the light were last painted from, so each
+     *  repaints only when it changes. */
     notesKey: null,
-    wallKey: null,
     lightKey: null,
     /** An hour the light is held at, for screenshots, or null for the clock
      *  (window.cornerOffice.hour). */
@@ -186,7 +185,7 @@ let drag = null;
 
 /** The lights the time of day sets, and the canvases it repaints. */
 const lights = { hemi: null, sun: null, fill: null };
-const painted = { calendar: null, notes: null, drawers: [] };
+const painted = { notes: null, drawers: [] };
 
 const history = createHistory();
 
@@ -479,10 +478,6 @@ function buildScene() {
     lights.beam.target.position.set(0, ROOM_MIDDLE, 0);
     scene.add(lights.beam, lights.beam.target);
 
-    painted.calendar = paintedTexture(512, 700, (ctx, W, H) => {
-        ctx.fillStyle = '#f8f5ee';
-        ctx.fillRect(0, 0, W, H);
-    });
     painted.notes = paintedTexture(ATLAS.cols * 256, ATLAS.rows * 256, () => {});
     painted.drawers = Array.from({ length: CONFIG.room.cabinet.drawers }, () => paintedTexture(256, 64, () => {}));
     painted.boardHeader = paintedTexture(1024, 52, (ctx, W, H) => drawBoardHeader(ctx, W, H, boardColumns(CONFIG).map((c) => c.label)));
@@ -493,7 +488,6 @@ function buildScene() {
     screenTexture = screen.texture;
     room = buildRoom(CONFIG, {
         screen: screenTexture,
-        calendar: painted.calendar.texture,
         notes: painted.notes.texture,
         rainGlass: paintedTexture(512, 512, drawRainOnGlass).texture,
         drawerLabels: painted.drawers.map((p) => p.texture),
@@ -612,21 +606,6 @@ function paintNotes(t) {
         texture.needsUpdate = true;
     }
     setNotes(room.notes, notes.length, (i) => quadCorners(NOTE_SLOTS[i]), (i) => cellUvs(i));
-}
-
-/** Repaint the wall calendar when the month, today, or its marks change.
- *  The wall always shows this month: browsing is the card's job. */
-function paintWallCalendar(t) {
-    const grid = monthGrid(t.getFullYear(), t.getMonth());
-    const marks = monthAgenda(state.doc, grid);
-    const todayKey = formatDate(t);
-    const key = `${grid.title}|${todayKey}|${[...marks].map(([k, v]) => `${k}:${v.events.length}:${v.tasks.length}`).join(',')}`;
-    if (key === ui.wallKey) return;
-    ui.wallKey = key;
-    const { canvas: c, texture } = painted.calendar;
-    if (!c) return;
-    drawCalendar(c.getContext('2d'), c.width, c.height, { grid, marks, todayKey });
-    texture.needsUpdate = true;
 }
 
 /** The moment the sky shows: a day going by, else the pinned hour today,
@@ -912,7 +891,6 @@ function refresh() {
     }
     paintScreen(s);
     paintNotes(t);
-    paintWallCalendar(t);
     applyDaylight(t);
     fileCabinet(t);
     pinBoard(t);
@@ -1698,8 +1676,9 @@ function openCalendar({ armed = false } = {}) {
     ui.calMonth = { year: t.getFullYear(), month: t.getMonth() };
     ui.calDay = formatDate(t);
     drawCalendarCard(t);
-    openCard('calendar', { armed, onClose: () => goTo('desk') });
-    goTo('calendar');
+    // Where the visitor stands: the wall calendar gave its wall to the
+    // window (QA, 2026-09-25), so there is nothing in the room to go to.
+    openCard('calendar', { armed });
     track('open-calendar');
 }
 
@@ -2175,7 +2154,6 @@ function actOn(key, { armed = true, instanceId = -1, uv = null } = {}) {
     case 'wastebasket': openWastebasket({ armed }); break;
     case 'lamp': toggleLamp(); break;
     case 'folder': if (ui.lastFolderId) openFolder(ui.lastFolderId, { armed }); break;
-    case 'calendar': openCalendar({ armed }); break;
     case 'notes': openToday({ armed }); break;
     default: return false;
     }

@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * panels.js - The folder on the desk, the wall calendar, today's list, the
+ * panels.js - The folder on the desk, the calendar, today's list, the
  * Rolodex and its people, the wastebasket, and the settings card.
  *
  * Each draws one card from the document and a set of handlers, and never

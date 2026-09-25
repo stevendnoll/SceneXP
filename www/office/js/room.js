@@ -11,20 +11,20 @@
  * action: the monitor opens the computer, the in-tray starts a new
  * application, the out-tray opens backups and exports, the wastebasket opens
  * itself, the lamp switches, an open folder on the desk reopens its card, the
- * wall calendar opens the calendar, the sticky notes open today's list, the
+ * sticky notes open today's list, the
  * filing cabinet opens itself and a folder in it opens on the desk, the
  * corkboard opens itself (its cards drag between columns), the whiteboard
  * opens its numbers (and its goal line the weekly
  * goal), the departures board opens the week, and the printer prints a prep
  * sheet. `pickOf` walks up from whatever a ray hit to the nearest of these.
  *
- * NO CANVAS IN HERE. The monitor's face, the wall calendar, the sticky notes
- * and the rest take optional textures (`textures.screen`, `.calendar`,
- * `.notes` and so on) that main.js paints, so this file builds the same room
+ * NO CANVAS IN HERE. The monitor's face, the sticky notes
+ * and the rest take optional textures (`textures.screen`, `.notes` and so
+ * on) that main.js paints, so this file builds the same room
  * under real three in node:vm, where there is no canvas, and a test can
  * measure what the eye sees.
  *
- * Builds and returns `{ group, picks, lamp, folder, screen, calendar,
+ * Builds and returns `{ group, picks, lamp, folder, screen,
  * cabinet, board, departures, whiteboard, notes, rain }`. It adds nothing
  * to a scene itself and reads no clock.
  */
@@ -210,7 +210,7 @@ export function windowsOf(config) {
     return {
         sill: 0.95,
         head: 2.45,
-        back: { x0: backWindow.x0, x1: width / 2 - 0.1, mullion: backWindow.mullion },
+        back: { x0: backWindow.x0, x1: width / 2 - 0.1, mullions: backWindow.mullions },
         right: { z0: -depth / 2 + 0.1, z1: 0.3 }
     };
 }
@@ -303,7 +303,7 @@ function buildShell(room, config) {
     const f = 0.05;
     group.add(roundedSlab(w.back.x0, w.sill - 0.02, -hd - 0.02, w.back.x1, w.sill + 0.03, -hd + 0.14, 0.014, trim));
     group.add(slab(w.back.x0, w.head - f, -hd - 0.02, w.back.x1, w.head, -hd + 0.03, trim));
-    for (const x of [w.back.x0, w.back.mullion, w.back.x1]) {
+    for (const x of [w.back.x0, ...w.back.mullions, w.back.x1]) {
         group.add(roundedSlab(x - f / 2, w.sill, -hd - 0.02, x + f / 2, w.head, -hd + 0.03, 0.008, trim));
     }
     group.add(roundedSlab(hw - 0.14, w.sill - 0.02, w.right.z0, hw + 0.02, w.sill + 0.03, w.right.z1, 0.014, trim));
@@ -505,27 +505,6 @@ function castShadows(group) {
         if (m.isMeshStandardMaterial && (m.metalness >= 0.25 || m.clearcoat > 0)) shiny.add(m);
     });
     return [...shiny];
-}
-
-/**
- * The wall calendar: a board with a painted month on it (textures.calendar)
- * and a binder clip at the top.
- */
-function buildCalendar(group, config, texture, picks) {
-    const c = config.room.calendar;
-    const back = -config.room.depth / 2;
-    const cal = tag(new THREE.Group(), 'calendar');
-    cal.add(slab(c.x - c.width / 2 - 0.02, c.y - c.height / 2 - 0.02, back, c.x + c.width / 2 + 0.02, c.y + c.height / 2 + 0.02, back + 0.012, mat(0x8a6a4a)));
-    const face = new THREE.Mesh(
-        new THREE.PlaneGeometry(c.width, c.height),
-        texture ? new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9 }) : mat(0xf8f5ee, { roughness: 0.9 })
-    );
-    face.position.set(c.x, c.y, back + 0.014);
-    cal.add(face);
-    cal.add(box(0.12, 0.035, 0.02, mat(COLORS.metal, { metalness: 0.5, roughness: 0.3 }), c.x, c.y + c.height / 2 + 0.005, back + 0.02));
-    group.add(cal);
-    picks.calendar = cal;
-    return face;
 }
 
 /**
@@ -1081,7 +1060,7 @@ function buildFloorThings(group, config, picks, contacts) {
 
 /**
  * Build the office. `textures` may carry `screen` (the monitor's face),
- * `calendar`, `notes`, `drawerLabels` (one per drawer), `boardHeader`,
+ * `notes`, `drawerLabels` (one per drawer), `boardHeader`,
  * `boardCards`, `departures`, `whiteboard` and `rainGlass`, all optional.
  */
 export function buildRoom(config, textures = {}) {
@@ -1092,7 +1071,6 @@ export function buildRoom(config, textures = {}) {
     const contacts = [];
     const desk = buildDesk(group, config, picks, contacts);
     buildFloorThings(group, config, picks, contacts);
-    const calendar = buildCalendar(group, config, textures.calendar || null, picks);
     const cabinet = buildCabinet(group, config, textures.drawerLabels || null, picks);
     const board = buildBoard(group, config, textures, picks);
     const departures = buildDepartures(group, config, textures.departures || null, picks);
@@ -1116,7 +1094,6 @@ export function buildRoom(config, textures = {}) {
         picks,
         screen: desk.screen,
         folder: desk.folder,
-        calendar,
         cabinet,
         board,
         departures,

@@ -1413,10 +1413,11 @@ describe('the third round of screenshots (2026-09-25)', () => {
 
     test('from the desk, more of the view is window than it was (QA: "too much of the view is blocked by the wall")', () => {
         // A row across the frame at the window's middle height: how much of
-        // it looks out. With the window's left edge where it was (x 0.1)
-        // and the calendar beside it, this was 0.58 (measured 2026-09-25);
-        // with the window reaching to x -0.5 it is 0.725. The monitor, the
-        // lamp and the calendar keep it well short of 1.
+        // it looks out. With the window's left edge at x 0.1 and the
+        // calendar beside it, this was 0.58; reaching to x -0.5, 0.725;
+        // with the calendar gone and the window from corner to corner, 0.917
+        // (all measured 2026-09-25). The monitor, the lamp and the mullions
+        // are what keep it short of 1.
         const cam = cameraAt('desk', 16 / 10);
         const y = new THREE.Vector3(0, 1.7, -CONFIG.room.depth / 2).project(cam).y;
         let out = 0;
@@ -1425,7 +1426,7 @@ describe('the third round of screenshots (2026-09-25)', () => {
             const { what } = seeAt(cam, -1 + (2 * (i + 0.5)) / n, y);
             if (what !== 'room') out++;
         }
-        expect(out / n).toBeGreaterThan(0.7);
+        expect(out / n).toBeGreaterThan(0.88);
     });
 
     test('a car has dark glass round a colored roof, and reads so from straight above', () => {

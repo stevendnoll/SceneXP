@@ -1,7 +1,7 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * paint.js - The pictures the office paints on canvases: the monitor's face,
- * the city beyond the glass, the wall calendar, and the sticky notes.
+ * the city beyond the glass, and the sticky notes.
  *
  * Every measurement is a fraction of the canvas's width and height, so the
  * same painter fills a small texture or a large one without drifting.
@@ -52,58 +52,6 @@ export function drawScreen(ctx, W, H, lines) {
         ctx.font = `${i === 0 ? 700 : 500} ${Math.round(H * (i === 0 ? 0.11 : 0.075))}px system-ui, sans-serif`;
         ctx.fillText(line, W * 0.07, H * (0.3 + i * 0.15), W * 0.86);
     });
-}
-
-/** Paint the wall calendar's month, with a dot for every event and a ring for
- *  every follow-up, and today circled. `marks` is calendar.js `agenda`. */
-export function drawCalendar(ctx, W, H, { grid, marks, todayKey }) {
-    ctx.fillStyle = '#f8f5ee';
-    ctx.fillRect(0, 0, W, H);
-    // The picture half: a band of color, as wall calendars have.
-    ctx.fillStyle = '#2f5d73';
-    ctx.fillRect(0, 0, W, H * 0.2);
-    ctx.fillStyle = '#f6ecd8';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `700 ${Math.round(H * 0.07)}px system-ui, sans-serif`;
-    ctx.fillText(grid.title, W / 2, H * 0.1);
-
-    const top = H * 0.25;
-    const cellW = W / 7;
-    const cellH = (H - top - H * 0.03) / (grid.weeks.length + 0.6);
-    ctx.fillStyle = '#6b6356';
-    ctx.font = `600 ${Math.round(cellH * 0.3)}px system-ui, sans-serif`;
-    ['M', 'T', 'W', 'T', 'F', 'S', 'S'].forEach((d, i) => ctx.fillText(d, cellW * (i + 0.5), top + cellH * 0.3));
-    grid.weeks.forEach((week, r) => {
-        week.forEach((day, c) => {
-            const cx = cellW * (c + 0.5);
-            const cy = top + cellH * (r + 1.1);
-            const items = marks.get(day.key);
-            if (day.key === todayKey) {
-                ctx.fillStyle = '#e4c07a';
-                ctx.beginPath();
-                ctx.arc(cx, cy, cellH * 0.36, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            ctx.fillStyle = day.inMonth ? '#2a2420' : '#b9b0a3';
-            ctx.font = `${day.key === todayKey ? 700 : 500} ${Math.round(cellH * 0.34)}px system-ui, sans-serif`;
-            ctx.fillText(String(day.day), cx, cy);
-            if (items && items.events.length) {
-                ctx.fillStyle = '#c8553d';
-                ctx.beginPath();
-                ctx.arc(cx - cellW * 0.12, cy + cellH * 0.32, cellH * 0.07, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            if (items && items.tasks.length) {
-                ctx.strokeStyle = '#2f5d73';
-                ctx.lineWidth = Math.max(1, cellH * 0.03);
-                ctx.beginPath();
-                ctx.arc(cx + cellW * 0.12, cy + cellH * 0.32, cellH * 0.07, 0, Math.PI * 2);
-                ctx.stroke();
-            }
-        });
-    });
-    ctx.textAlign = 'left';
 }
 
 /** Words wrapped to a width, at most `max` lines, the last one ending in an
