@@ -1,9 +1,9 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * fleet.js - The things that move out there, as meshes: two ferries, the
- * container ships, the sailboats, the seaplane, the cars' lights, and the
- * wakes behind whatever is under way. life.js says where they are, and
- * world.js puts them there.
+ * container ships, the sailboats, the seaplane, the jet, the traffic and
+ * its lights, and the wakes behind whatever is under way. life.js says
+ * where they are, and world.js puts them there.
  *
  * Each craft is a few boxes merged into one geometry colored by its
  * vertices, built bow toward -z at its true size and then scaled up where
@@ -16,7 +16,7 @@
 
 /* global THREE */
 
-import { LIFE, CAR } from './life.min.js';
+import { LIFE, JET } from './life.min.js';
 import { seeded } from './city.min.js';
 
 /**
@@ -218,64 +218,300 @@ function carLights(cars) {
 /** The colors cars come in, most of them white, black, silver and gray. */
 export const CAR_COLORS = [0xe9e9e6, 0xe9e9e6, 0x1d1e21, 0x1d1e21, 0xa7abaf, 0xa7abaf, 0x5c6065, 0x243a5e, 0x8e2323, 0x2f5d8a, 0xb5a98f];
 
+/** The colors the buses come in: no operator's livery, only paint. */
+export const BUS_COLORS = [0xeef0ee, 0xe6e3da, 0x3a6f8f, 0x3d7358];
+
+const GLASS = 0x1a2027;
+const TIRE = 0x141414;
+const BUMPER = 0x2a2c30;
+const HEADLAMP = 0xf1eee2;
+const TAILLAMP = 0xa3221b;
+
 /**
- * The cars themselves, by day and by night: one box a car, all of them one
- * instanced mesh (one draw call for the lot), each its own color. Their
- * lights (carLights) ride on them by night.
+ * A car, built bow toward -z standing on y = 0, in two parts: the paint
+ * (white, so each car's own color is all of it) and the trim (the glass
+ * all round the cabin, the tires, the bumpers and the lamps). From forty
+ * floors up, the dark glass framing a colored roof is what reads as a car
+ * (QA, 2026-09-25: the one box a car was "a little more detail" short).
  */
-function carBodies(cars) {
-    const box = new THREE.BoxGeometry(CAR.width, CAR.height, CAR.length);
-    box.translate(0, CAR.height / 2, 0);
-    const bodies = new THREE.InstancedMesh(box, new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.4 }), cars.length);
+export function carParts() {
+    const paint = boxesGeometry([
+        [0, 0.56, 0, 1.84, 0.6, 4.4, 0xffffff],
+        [0, 1.365, 0.3, 1.44, 0.07, 1.8, 0xffffff]
+    ]);
+    const trim = boxesGeometry([
+        [0, 1.1, 0.25, 1.6, 0.48, 2.4, GLASS],
+        [0.83, 0.32, -1.42, 0.26, 0.64, 0.66, TIRE], [-0.83, 0.32, -1.42, 0.26, 0.64, 0.66, TIRE],
+        [0.83, 0.32, 1.42, 0.26, 0.64, 0.66, TIRE], [-0.83, 0.32, 1.42, 0.26, 0.64, 0.66, TIRE],
+        [0, 0.4, -2.24, 1.8, 0.22, 0.1, BUMPER], [0, 0.4, 2.24, 1.8, 0.22, 0.1, BUMPER],
+        [0.6, 0.72, -2.2, 0.4, 0.1, 0.06, HEADLAMP], [-0.6, 0.72, -2.2, 0.4, 0.1, 0.06, HEADLAMP],
+        [0.62, 0.76, 2.2, 0.42, 0.1, 0.06, TAILLAMP], [-0.62, 0.76, 2.2, 0.42, 0.1, 0.06, TAILLAMP]
+    ]);
+    return { paint, trim };
+}
+
+/** A city bus, the same way: the paint, and a band of windows down each
+ *  side, the windshield under an amber destination sign, and the rest. */
+export function busParts() {
+    const paint = boxesGeometry([
+        [0, 1.8, 0, 2.55, 2.5, 11.8, 0xffffff],
+        [0, 3.1, 0.2, 2.35, 0.1, 11, 0xf4f4f4],
+        [0, 3.29, 1.5, 1.7, 0.28, 2.8, 0xe6e6e6]
+    ]);
+    const trim = boxesGeometry([
+        [0, 0.45, 0, 2.5, 0.3, 11.7, BUMPER],
+        [1.285, 2.2, 0.4, 0.02, 1.0, 9.2, GLASS], [-1.285, 2.2, 0.4, 0.02, 1.0, 9.2, GLASS],
+        [0, 2.05, -5.915, 2.3, 1.6, 0.04, GLASS],
+        [0, 2.95, -5.915, 1.7, 0.22, 0.04, 0xd9b44a],
+        [0, 2.5, 5.915, 1.9, 0.7, 0.04, GLASS],
+        [1.18, 0.5, -3.7, 0.3, 1.0, 1.0, TIRE], [-1.18, 0.5, -3.7, 0.3, 1.0, 1.0, TIRE],
+        [1.18, 0.5, 3.4, 0.3, 1.0, 1.0, TIRE], [-1.18, 0.5, 3.4, 0.3, 1.0, 1.0, TIRE],
+        [0, 0.5, -5.95, 2.5, 0.3, 0.12, BUMPER], [0, 0.5, 5.95, 2.5, 0.3, 0.12, BUMPER],
+        [0.9, 0.85, -5.93, 0.4, 0.14, 0.05, HEADLAMP], [-0.9, 0.85, -5.93, 0.4, 0.14, 0.05, HEADLAMP],
+        [1.0, 1.0, 5.93, 0.25, 0.4, 0.05, TAILLAMP], [-1.0, 1.0, 5.93, 0.25, 0.4, 0.05, TAILLAMP]
+    ]);
+    return { paint, trim };
+}
+
+/**
+ * The vehicles themselves, by day and by night: for each kind, its paint
+ * and its trim as two instanced meshes (so all the traffic is four draw
+ * calls), each vehicle its own color. `slot[i]` is vehicle i's instance
+ * in its kind's meshes. Their lights (carLights) ride on them by night.
+ */
+function vehicleMeshes(cars) {
     const random = seeded(20260931);
     const c = new THREE.Color();
     // Far below the water until placed, like every craft.
     const away = new THREE.Matrix4().makeTranslation(0, HIDDEN_Y, 0);
-    for (let i = 0; i < cars.length; i++) {
-        bodies.setColorAt(i, c.setHex(CAR_COLORS[Math.floor(random() * CAR_COLORS.length)], THREE.SRGBColorSpace));
-        bodies.setMatrixAt(i, away);
+    const kinds = { car: { parts: carParts(), colors: CAR_COLORS }, bus: { parts: busParts(), colors: BUS_COLORS } };
+    const slot = new Int32Array(cars.length);
+    const out = { slot, meshes: [] };
+    for (const [kind, { parts, colors }] of Object.entries(kinds)) {
+        const mine = cars.map((car, i) => (car.kind === kind ? i : -1)).filter((i) => i >= 0);
+        const room = Math.max(1, mine.length);
+        const paint = new THREE.InstancedMesh(parts.paint, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.4 }), room);
+        const trim = new THREE.InstancedMesh(parts.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.25 }), room);
+        mine.forEach((car, k) => {
+            slot[car] = k;
+            paint.setColorAt(k, c.setHex(colors[Math.floor(random() * colors.length)], THREE.SRGBColorSpace));
+            paint.setMatrixAt(k, away);
+            trim.setMatrixAt(k, away);
+        });
+        for (const [mesh, part] of [[paint, 'bodies'], [trim, 'trim']]) {
+            mesh.count = mine.length;
+            mesh.name = `${kind}-${part}`;
+            mesh.frustumCulled = false;
+            out.meshes.push(mesh);
+        }
+        out[kind] = { paint, trim };
     }
-    bodies.name = 'car-bodies';
-    bodies.frustumCulled = false;
-    return bodies;
+    return out;
+}
+
+/**
+ * A solid between two corners' worth of points: a box whose eight corners
+ * are wherever `corner(u, v, w)` puts them (u, v and w each 0 or 1, along
+ * x, y and z). A wing or a fin is a box stretched and swept this way. Each
+ * of `corner`'s three directions must run the same way as its axis, or the
+ * faces turn inside out. Colored `color`, flat shaded.
+ */
+export function sweptBox(corner, color) {
+    const g = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+        const p = corner(pos.getX(i) > 0 ? 1 : 0, pos.getY(i) > 0 ? 1 : 0, pos.getZ(i) > 0 ? 1 : 0);
+        pos.setXYZ(i, p[0], p[1], p[2]);
+    }
+    g.deleteAttribute('uv');
+    g.computeVertexNormals();
+    return painted(g, () => color);
+}
+
+/** Give a geometry (unindexed) a color per vertex, from its position. */
+function painted(g, colorAt) {
+    const c = new THREE.Color();
+    const pos = g.attributes.position;
+    const colors = [];
+    for (let i = 0; i < pos.count; i++) {
+        c.setHex(colorAt(pos.getX(i), pos.getY(i), pos.getZ(i)), THREE.SRGBColorSpace);
+        colors.push(c.r, c.g, c.b);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    return g;
+}
+
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/**
+ * A wing-like panel from a root section to a tip section. Each section is
+ * `{ at, lead, trail, y, thick }`: where it is along the span (x, or y for
+ * a fin), its leading and trailing edges (z), and its middle and thickness
+ * across the span. `fin` stands it upright.
+ */
+function panel(root, tip, color, fin = false) {
+    const [lo, hi] = root.at < tip.at ? [root, tip] : [tip, root];
+    return sweptBox((u, v, w) => {
+        if (fin) {
+            const s = v ? hi : lo;
+            return [s.y + (u - 0.5) * s.thick, s.at, lerp(s.lead, s.trail, w)];
+        }
+        const s = u ? hi : lo;
+        return [s.at, s.y + (v - 0.5) * s.thick, lerp(s.lead, s.trail, w)];
+    }, color);
+}
+
+// A white airliner all but vanishes against a pale sky, so its belly,
+// wings and engines are a shade darker than life, and the fin and winglets
+// carry the one strong color.
+const JET_WHITE = 0xf3f4f5;
+const JET_BELLY = 0x9aa1a9;
+const JET_WING = 0xaeb4bb;
+const JET_TAIL = 0x1f3a5f;
+const JET_ENGINE = 0xb8bdc3;
+
+/**
+ * A passenger jet: a twin-engined narrow-body of an everyday airliner's
+ * proportions, meters, bow toward -z, its middle on the fuselage's axis.
+ * The fuselage is turned from a profile (a round nose, a long parallel
+ * cabin, the tail cone swept up), the wings are low and swept with winglets
+ * turned up at their tips, the two engines hang ahead of the wings, and the
+ * tall fin carries the only color: no airline's livery.
+ */
+export function jetParts() {
+    const profile = [
+        [0.02, -19.8], [0.7, -19.4], [1.2, -18.6], [1.6, -17.4], [1.85, -15.6], [1.88, -14],
+        [1.88, 12], [1.7, 14.5], [1.25, 16.8], [0.75, 18.6], [0.3, 19.8]
+    ].map(([r, y]) => new THREE.Vector2(r, y));
+    const lathe = new THREE.LatheGeometry(profile, 16);
+    lathe.rotateX(Math.PI / 2);
+    // The tail cone sweeps up toward the fin.
+    const lp = lathe.attributes.position;
+    for (let i = 0; i < lp.count; i++) {
+        const z = lp.getZ(i);
+        if (z > 12) lp.setY(i, lp.getY(i) + (z - 12) * 0.13);
+    }
+    lathe.computeVertexNormals();
+    const fuselage = painted(lathe.toNonIndexed(), (x, y) => (y < -0.7 ? JET_BELLY : JET_WHITE));
+    fuselage.deleteAttribute('uv');
+    const parts = [fuselage];
+    for (const side of [-1, 1]) {
+        const tipX = side * 17.9;
+        parts.push(panel(
+            { at: side * 1.7, lead: -3.2, trail: 3.6, y: -1.0, thick: 0.5 },
+            { at: tipX, lead: 4.35, trail: 5.75, y: 0.7, thick: 0.14 }, JET_WING));
+        // The winglet, turned up from the tip, leaning a little outboard.
+        parts.push(sweptBox((u, v, w) => {
+            // Across its thickness always toward +x, on either wing.
+            const out = (u - 0.5) * 0.12;
+            const lean = side * v * 0.35;
+            const lead = v ? 5.5 : 4.4;
+            const trail = v ? 6.1 : 5.7;
+            return [tipX + out + lean, 0.7 + v * 2.4, lerp(lead, trail, w)];
+        }, JET_TAIL));
+        parts.push(panel(
+            { at: side * 1.0, lead: 13.6, trail: 17.4, y: 0.95, thick: 0.25 },
+            { at: side * 7.2, lead: 17.2, trail: 18.4, y: 1.7, thick: 0.1 }, JET_WING));
+        // The engine, ahead of and under the wing, on its pylon.
+        const engine = new THREE.CylinderGeometry(0.8, 0.95, 4.2, 14).toNonIndexed();
+        engine.rotateX(Math.PI / 2);
+        engine.translate(side * 5.1, -1.9, -3.9);
+        engine.deleteAttribute('uv');
+        parts.push(painted(engine, () => JET_ENGINE));
+        parts.push(boxesGeometry([[side * 5.1, -1.3, -2.4, 0.25, 0.8, 2.6, JET_WING]]));
+    }
+    parts.push(panel(
+        { at: 1.4, lead: 11.0, trail: 18.6, y: 0, thick: 0.36 },
+        { at: 7.6, lead: 15.3, trail: 17.7, y: 0, thick: 0.16 }, JET_TAIL, true));
+    // Its cabin windows, a line down each side, which glow by night.
+    const windows = boxesGeometry([
+        [1.86, 0.45, -1.5, 0.06, 0.28, 26, 0], [-1.86, 0.45, -1.5, 0.06, 0.28, 26, 0]
+    ]);
+    return { body: joinGeometries(parts), windows, parts };
+}
+
+/**
+ * The jet, and its lights: the steady red and green at the wingtips and
+ * white at the tail, and the white strobes and the red beacons that flash
+ * (life.js jetFlashing). The lights are drawn only by night.
+ */
+function jet() {
+    const { body, windows } = jetParts();
+    const c = craft('jet', body, windows, { scale: JET.scale });
+    const dots = (name, points) => {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(points.flatMap((p) => p.slice(0, 3)), 3));
+        g.setAttribute('color', new THREE.Float32BufferAttribute(points.flatMap((p) => p[3]), 3));
+        const lights = new THREE.Points(g, new THREE.PointsMaterial({
+            size: 3, sizeAttenuation: false, vertexColors: true, fog: true, toneMapped: false
+        }));
+        lights.name = name;
+        lights.visible = false;
+        c.group.add(lights);
+        return lights;
+    };
+    const red = [1, 0.15, 0.1];
+    const green = [0.3, 1, 0.45];
+    const white = [1, 1, 1];
+    c.navLights = dots('jet-lights', [[-17.9, 0.8, 5.0, red], [17.9, 0.8, 5.0, green], [0, 1.0, 19.9, white]]);
+    c.strobes = dots('jet-strobes', [[-18.1, 0.8, 5.4, white], [18.1, 0.8, 5.4, white], [0, 2.1, 0, red], [0, -2.1, 0, red]]);
+    return c;
 }
 
 /**
  * Build the fleet into `scene`: two ferries, a pool of three ships (as
- * many as can be in sight at once), the sailboats, the seaplane and the
- * cars. Returns them, and `light(level)` to turn the windows and the cars
- * on for the evening (daylight.js cityLights).
+ * many as can be in sight at once), the sailboats, the seaplane, the jet
+ * and the traffic. Returns them, and `light(level)` to turn the windows and
+ * the traffic's lights on for the evening (daylight.js cityLights).
  */
 export function buildFleet(scene, cars) {
+    const vehicles = vehicleMeshes(cars);
     const fleet = {
         ferries: [ferry(0), ferry(1)],
         ships: [ship(0), ship(1), ship(2)],
         sailboats: Array.from({ length: LIFE.sailboat.count }, (_, i) => sailboat(i)),
         seaplane: seaplane(),
+        jet: jet(),
         cars: carLights(cars),
-        carBodies: carBodies(cars)
+        vehicles
     };
-    const all = [...fleet.ferries, ...fleet.ships, ...fleet.sailboats, fleet.seaplane];
+    const all = [...fleet.ferries, ...fleet.ships, ...fleet.sailboats, fleet.seaplane, fleet.jet];
     for (const c of all) scene.add(c.group);
-    scene.add(fleet.cars, fleet.carBodies);
+    scene.add(fleet.cars, ...vehicles.meshes);
     const matrix = new THREE.Matrix4();
     const turn = new THREE.Quaternion();
+    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
     const at = new THREE.Vector3();
-    const one = new THREE.Vector3(1, 1, 1);
-    const up = new THREE.Vector3(0, 1, 0);
-    /** Stand every car at its place (life.js carPositions: its middle at
-     *  the lanes' height, 1.2 m up) facing along its lane. */
-    fleet.moveCars = (centers, yaws) => {
+    const size = new THREE.Vector3();
+    let lightsOn = false;
+    /** Stand every vehicle at its place (life.js carPositions: its middle
+     *  at the lanes' height, 1.2 m up) facing along its lane, tilted with
+     *  the street by `pitches` when given. */
+    fleet.moveCars = (centers, yaws, pitches = null) => {
         for (let i = 0; i < yaws.length; i++) {
+            const car = cars[i];
+            const { paint, trim } = vehicles[car.kind];
+            const k = vehicles.slot[i];
             at.set(centers[i * 3], centers[i * 3 + 1] - 1.2, centers[i * 3 + 2]);
-            matrix.compose(at, turn.setFromAxisAngle(up, yaws[i]), one);
-            fleet.carBodies.setMatrixAt(i, matrix);
+            turn.setFromEuler(euler.set(pitches ? pitches[i] : 0, yaws[i], 0));
+            matrix.compose(at, turn, size.fromArray(car.scale));
+            paint.setMatrixAt(k, matrix);
+            trim.setMatrixAt(k, matrix);
         }
-        fleet.carBodies.instanceMatrix.needsUpdate = true;
+        for (const mesh of vehicles.meshes) mesh.instanceMatrix.needsUpdate = true;
     };
     fleet.light = (level) => {
         for (const c of all) if (c.lit) c.lit.material.emissiveIntensity = level * 1.4;
-        fleet.cars.visible = level > 0.3;
+        lightsOn = level > 0.3;
+        fleet.cars.visible = lightsOn;
+        fleet.jet.navLights.visible = lightsOn;
+        if (!lightsOn) fleet.jet.strobes.visible = false;
+    };
+    /** Fly the jet (life.js jetAt, or null to hide it), its strobes lit
+     *  when `flashing` and it is dark enough to see them. */
+    fleet.flyJet = (at, flashing = false) => {
+        place(fleet.jet, at);
+        fleet.jet.strobes.visible = lightsOn && flashing && !!at;
     };
     return fleet;
 }

@@ -1,14 +1,17 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * Corner Office's moving scenery (life.js), pure: the ferries' and ships'
- * timetables, the sailboats' loops, the seaplane's runs, the cars' lanes,
- * and the wind. Each must keep to the water (or the street), keep its
- * schedule, and never jump. What the window SEES of them is measured
- * through the camera in office-view.
+ * timetables, the sailboats' loops, the seaplane's runs, the traffic on its
+ * green wave, the jet's crossings, and the wind. Each must keep to the
+ * water (or the street, or the sky), keep its schedule, and never jump, and
+ * no vehicle may drive through another. What the window SEES of them is
+ * measured through the camera in office-view.
  */
 import {
     LIFE, minutesOn, minutesOfDay, gently, yawFor, ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt,
-    SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift
+    SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift,
+    TRAFFIC, VEHICLES, SUV, PARKED_Y, pitchOf, cycleOf, slotTimes, distanceAlong, onStreet,
+    JET, jetCrossing, jetFlight, jetOnTrack, jetAt, jetFlashing
 } from '../www/office/js/life.js';
 import { CITY, WATER_Y, piers, isWater, isLand, groundY } from '../www/office/js/city.js';
 
@@ -235,43 +238,170 @@ describe('the cars', () => {
         }
     });
 
-    test('the cars spread over the lanes, taillights going away down the hill, headlights coming up it', () => {
-        expect(cars).toHaveLength(LIFE.cars.count);
+    test('platoons fill the lanes, some led by a bus, taillights going away down the hill, headlights coming up it', () => {
         expect(carFleet(lanes)).toEqual(cars);
+        expect(cars.length).toBeGreaterThan(120);
         const used = new Set(cars.map((c) => c.lane));
-        expect(used.size).toBeGreaterThan(lanes.length / 2);
+        expect(used.size).toBe(lanes.length);
+        const buses = cars.filter((c) => c.kind === 'bus');
+        expect(buses.length).toBeGreaterThan(5);
+        expect(cars.filter((c) => c.kind === 'car' && c.scale === SUV).length).toBeGreaterThan(10);
+        const slots = slotTimes();
         for (const c of cars) {
             const { a, b } = lanes[c.lane];
             if (Math.abs(b[2] - a[2]) > Math.abs(b[0] - a[0])) expect(c.red).toBe(b[2] < a[2]);
-            expect(c.speed).toBeGreaterThanOrEqual(LIFE.cars.speed[0]);
-            expect(c.speed).toBeLessThanOrEqual(LIFE.cars.speed[1]);
+            expect(slots).toContain(c.slot);
+            // A bus is always the middle of its platoon.
+            if (c.kind === 'bus') expect(c.slot).toBe(0.25);
         }
         expect(cars.some((c) => c.red) && cars.some((c) => !c.red)).toBe(true);
     });
 
-    test('a car keeps to the street as it follows the hill down, never floating off it', () => {
+    test('a vehicle keeps to the street as it follows the hill down, tilted with it, or is parked out of sight', () => {
+        const pitches = new Float32Array(cars.length);
+        let parked = 0;
         for (const t of [0, 3, 11, 29]) {
-            const at = carPositions(cars, lanes, t);
+            const at = carPositions(cars, lanes, t, undefined, pitches);
             for (let i = 0; i < cars.length; i++) {
+                if (!onStreet(at[i * 3 + 1])) {
+                    expect(at[i * 3 + 1]).toBe(PARKED_Y);
+                    parked++;
+                    continue;
+                }
                 expect(at[i * 3 + 1]).toBeCloseTo(groundY(at[i * 3], at[i * 3 + 2]) + 1.2, 3);
+                // Nose up driving up the hill (east, +z), down driving down it.
+                const { a, b } = lanes[cars[i].lane];
+                if (Math.abs(b[2] - a[2]) > 1 && pitches[i] !== 0) expect(Math.sign(pitches[i])).toBe(Math.sign(b[2] - a[2]));
+                expect(Math.abs(pitches[i])).toBeLessThan(0.2);
             }
         }
+        // Most of the loop is the street.
+        expect(parked / (4 * cars.length)).toBeLessThan(0.3);
     });
 
-    test('a car moves along its lane at its speed, and comes round again', () => {
+    test('every vehicle drives at the one speed along its lane, and comes round again after its loop', () => {
         const at0 = carPositions(cars, lanes, 0);
         const at1 = carPositions(cars, lanes, 1);
         expect(at0).toHaveLength(cars.length * 3);
         cars.forEach((c, i) => {
+            if (!onStreet(at0[i * 3 + 1]) || !onStreet(at1[i * 3 + 1])) return;
             const moved = Math.hypot(at1[i * 3] - at0[i * 3], at1[i * 3 + 2] - at0[i * 3 + 2]);
-            // Either a second's drive, or it came round to the lane's start.
-            if (moved < c.speed * 2) expect(moved).toBeCloseTo(c.speed, 1);
+            expect(moved).toBeCloseTo(TRAFFIC.speed, 3);
         });
-        const round = carPositions(cars, lanes, cars[0].length / cars[0].speed);
-        expect(round[0]).toBeCloseTo(at0[0], 3);
-        expect(round[2]).toBeCloseTo(at0[2], 3);
+        // A loop is a whole number of light cycles, so the whole traffic
+        // comes round in one cycle.
+        const { seconds } = cycleOf();
+        for (const lane of lanes) expect((lane.loop / cycleOf().meters) % 1).toBe(0);
+        const round = carPositions(cars, lanes, seconds);
+        for (let i = 0; i < cars.length; i += 17) {
+            const d0 = distanceAlong(cars[i], lanes[cars[i].lane], 0);
+            const d1 = distanceAlong(cars[i], lanes[cars[i].lane], lanes[cars[i].lane].loop / TRAFFIC.speed);
+            expect(d1).toBeCloseTo(d0, 6);
+        }
+        expect(round).not.toEqual(at0);
         const out = new Float32Array(cars.length * 3);
         expect(carPositions(cars, lanes, 2, out)).toBe(out);
+    });
+
+    test('every platoon crosses in its own street’s half of the light’s cycle, clear of the other’s', () => {
+        // A lane along z crosses the streets along x at their middles, and
+        // the other way round. Each vehicle is inside a crossing (the whole
+        // width of the street it crosses, plus half its own length) only in
+        // its street's half of the cycle, with time to spare either side.
+        const pitch = pitchOf();
+        const { seconds: period } = cycleOf();
+        const xStreets = CITY.ownTower.x0 - CITY.street / 2;
+        const zStreets = CITY.ownTower.z0 - CITY.street / 2;
+        const inside = (q, c0, reach) => Math.abs(((((q - c0) % pitch) + pitch * 1.5) % pitch) - pitch / 2) < reach;
+        let seen = 0;
+        for (let t = 0; t < period * 3; t += 0.1) {
+            const at = carPositions(cars, lanes, t);
+            cars.forEach((car, i) => {
+                if (!onStreet(at[i * 3 + 1])) return;
+                const lane = lanes[car.lane];
+                const reach = CITY.street / 2 + (VEHICLES[car.kind].length * car.scale[2]) / 2;
+                const q = lane.alongZ ? at[i * 3 + 2] : at[i * 3];
+                if (!inside(q, lane.alongZ ? zStreets : xStreets, reach)) return;
+                seen++;
+                // Which half of the cycle this crossing gives this street:
+                // the checkerboard of crossings, and the second half for
+                // lanes along x.
+                const ix = Math.round(((lane.alongZ ? at[i * 3] : q) - xStreets) / pitch);
+                const iz = Math.round(((lane.alongZ ? q : at[i * 3 + 2]) - zStreets) / pitch);
+                const phase = ((t / period - (ix + iz) / 2 - (lane.alongZ ? 0 : 0.5)) % 1 + 1) % 1;
+                expect(phase).toBeGreaterThan(0.05);
+                expect(phase).toBeLessThan(0.45);
+            });
+        }
+        expect(seen).toBeGreaterThan(1000);
+    });
+});
+
+/** Whether two vehicles' bodies (plus `clearance` meters end to end)
+ *  overlap, seen from above: oriented rectangles, separating axes. */
+function bodiesMeet(p, q, clearance) {
+    const corners = ({ x, z, ux, uz, length, width }) => {
+        const hl = length / 2 + clearance / 2;
+        const hw = width / 2;
+        return [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([l, w]) => [x + ux * hl * l - uz * hw * w, z + uz * hl * l + ux * hw * w]);
+    };
+    const A = corners(p);
+    const B = corners(q);
+    for (const poly of [A, B]) {
+        for (let i = 0; i < 4; i++) {
+            const [x1, z1] = poly[i];
+            const [x2, z2] = poly[(i + 1) % 4];
+            const nx = z2 - z1;
+            const nz = x1 - x2;
+            const pa = A.map(([x, z]) => x * nx + z * nz);
+            const pb = B.map(([x, z]) => x * nx + z * nz);
+            if (Math.max(...pa) < Math.min(...pb) || Math.max(...pb) < Math.min(...pa)) return false;
+        }
+    }
+    return true;
+}
+
+describe('the traffic never drives through itself (QA, 2026-09-25)', () => {
+    const lanes = carLanes();
+    const cars = carFleet(lanes);
+    const bodiesAt = (fleet, t) => {
+        const at = carPositions(fleet, lanes, t);
+        return fleet.map((car, i) => {
+            if (!onStreet(at[i * 3 + 1])) return null;
+            const { a, b, length } = lanes[car.lane];
+            const size = VEHICLES[car.kind];
+            return {
+                x: at[i * 3], z: at[i * 3 + 2], ux: (b[0] - a[0]) / length, uz: (b[2] - a[2]) / length,
+                length: size.length * car.scale[2], width: size.width * car.scale[0]
+            };
+        }).filter(Boolean);
+    };
+    const meetings = (fleet, from, to, clearance) => {
+        let n = 0;
+        for (let t = from; t < to; t += 0.1) {
+            const bodies = bodiesAt(fleet, t);
+            for (let p = 0; p < bodies.length; p++) {
+                for (let q = p + 1; q < bodies.length; q++) {
+                    if (Math.abs(bodies[p].x - bodies[q].x) > 20 || Math.abs(bodies[p].z - bodies[q].z) > 20) continue;
+                    if (bodiesMeet(bodies[p], bodies[q], clearance)) n++;
+                }
+            }
+        }
+        return n;
+    };
+
+    test('no two bodies ever meet, nose to tail or at a crossing, with a meter to spare', () => {
+        // Three light cycles is every arrangement the traffic has, and a
+        // stretch much later checks nothing drifts.
+        const { seconds } = cycleOf();
+        expect(meetings(cars, 0, seconds * 3, 1)).toBe(0);
+        expect(meetings(cars, 5000, 5000 + seconds, 1)).toBe(0);
+    });
+
+    test('the check would catch a fleet off the green wave', () => {
+        // The same vehicles, but every lane's platoons out of step.
+        const offBeat = cars.map((c) => ({ ...c, slot: (c.slot + 0.37 * (c.lane % 3)) % 1 }));
+        expect(meetings(offBeat, 0, cycleOf().seconds, 1)).toBeGreaterThan(0);
     });
 });
 
@@ -279,7 +409,7 @@ describe('the cars by day and night', () => {
     const lanes = carLanes();
     const cars = carFleet(lanes);
 
-    test('each car faces along its lane', () => {
+    test('each vehicle faces along its lane', () => {
         const yaws = carYaws(cars, lanes);
         cars.forEach((car, i) => {
             const { a, b } = lanes[car.lane];
@@ -292,15 +422,117 @@ describe('the cars by day and night', () => {
     test('its lights ride at the end the window sees: the tail going away, the nose coming, clear of the body', () => {
         const middles = carPositions(cars, lanes, 7);
         const lights = carLightPositions(cars, lanes, 7);
+        let lit = 0;
         cars.forEach((car, i) => {
+            if (!onStreet(middles[i * 3 + 1])) {
+                expect(lights[i * 3 + 1]).toBe(PARKED_Y);
+                return;
+            }
+            lit++;
             const { a, b } = lanes[car.lane];
             const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
+            const size = VEHICLES[car.kind];
             const along = ((lights[i * 3] - middles[i * 3]) * (b[0] - a[0]) + (lights[i * 3 + 2] - middles[i * 3 + 2]) * (b[2] - a[2])) / len;
-            expect(Math.abs(along)).toBeGreaterThan(CAR.length / 2);
+            expect(Math.abs(along)).toBeGreaterThan((size.length * car.scale[2]) / 2);
             expect(Math.sign(along)).toBe(car.red ? -1 : 1);
-            // Down from the lanes' height (1.2 m) to the lights' (CAR.lights).
-            expect(lights[i * 3 + 1] - middles[i * 3 + 1]).toBeCloseTo(CAR.lights - 1.2, 4);
+            // Down from the lanes' height (1.2 m) to the lights' own.
+            expect(lights[i * 3 + 1] - middles[i * 3 + 1]).toBeCloseTo(size.lights - 1.2, 4);
         });
+        expect(lit).toBeGreaterThan(100);
+        expect(CAR).toBe(VEHICLES.car);
+    });
+});
+
+describe('the jet', () => {
+    const crossing = jetCrossing();
+
+    test('crosses the whole sky over the bay, far out over the water, at a steady speed', () => {
+        expect(crossing).toBeCloseTo((2 * JET.span) / JET.speed, 9);
+        const south = [0, crossing / 2, crossing].map((s) => jetOnTrack(s, true));
+        expect(south[0].x).toBeCloseTo(JET.span, 6);
+        expect(south[1].x).toBeCloseTo(0, 6);
+        expect(south[2].x).toBeCloseTo(-JET.span, 6);
+        for (const p of south) {
+            expect(isWater(0, p.z)).toBe(true);
+            expect(p.z).toBe(JET.z);
+            // Its height above the water keeps between low and high.
+            expect(p.y - WATER_Y).toBeGreaterThanOrEqual(JET.low - 1e-6);
+            expect(p.y - WATER_Y).toBeLessThanOrEqual(JET.high + 1e-6);
+        }
+        const a = jetOnTrack(10, true);
+        const b = jetOnTrack(11, true);
+        expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(JET.speed, 0);
+    });
+
+    test('south it lets down nose a touch up, north it climbs, facing the way it flies', () => {
+        const down = [jetOnTrack(10, true), jetOnTrack(100, true)];
+        expect(down[1].y).toBeLessThan(down[0].y);
+        expect(down[0].pitch).toBeGreaterThan(0);
+        const up = [jetOnTrack(10, false), jetOnTrack(100, false)];
+        expect(up[1].y).toBeGreaterThan(up[0].y);
+        expect(up[0].pitch).toBeGreaterThan(down[0].pitch);
+        // Bow toward -z as built: south (-x) and north (+x).
+        expect(-Math.sin(down[0].yaw)).toBeCloseTo(-1, 9);
+        expect(-Math.sin(up[0].yaw)).toBeCloseTo(1, 9);
+    });
+
+    test('it stands well above the office’s eye, and under the low gray deck', () => {
+        // Over the stretch the windows look out on (half a crossing, a
+        // little over 45 degrees either side of west), a few degrees over
+        // the horizon: above the far mountains (about 2.5 degrees), under
+        // the window's head.
+        for (const s of [crossing / 4, crossing / 2, (3 * crossing) / 4]) {
+            const p = jetOnTrack(s, true);
+            const elevation = Math.atan2(p.y - 1.6, Math.hypot(p.x, p.z)) * (180 / Math.PI);
+            expect(elevation).toBeGreaterThan(3);
+            expect(elevation).toBeLessThan(12);
+            expect(p.y - WATER_Y).toBeLessThan(1500);
+        }
+    });
+
+    test('the first comes over within a minute of the office opening, and then one now and then, never two at once', () => {
+        expect(jetFlight(0)).toEqual({ start: JET.first, south: true });
+        expect(jetAt(0)).not.toBeNull();
+        let flights = 0;
+        let aloft = false;
+        for (let s = 0; s < 3600; s += 1) {
+            const now = jetAt(s) !== null;
+            if (now && !aloft) flights++;
+            aloft = now;
+        }
+        // An hour holds about eight or nine.
+        expect(flights).toBeGreaterThanOrEqual(8);
+        expect(flights).toBeLessThanOrEqual(10);
+        for (let k = 0; k < 30; k++) {
+            const { start, south } = jetFlight(k);
+            expect(south).toBe(k % 2 === 0);
+            // Each lands before the next one's stretch of the clock begins.
+            expect(start + crossing).toBeLessThan(JET.first + (k + 1) * JET.every);
+            expect(start).toBeGreaterThanOrEqual(JET.first + k * JET.every);
+        }
+        expect(jetAt(-100)).toBeNull();
+    });
+
+    test('one asked for by hand flies south from when it was asked, whatever the timetable', () => {
+        // Asked for just after the first flight has gone, with the whole
+        // crossing over before the second is due.
+        const called = jetFlight(0).start + crossing + 1;
+        expect(called + crossing + 1).toBeLessThan(jetFlight(1).start);
+        expect(jetAt(called + 20)).toBeNull();
+        expect(jetAt(called + 20, called)).toEqual(jetOnTrack(20, true));
+        expect(jetAt(called + crossing + 1, called)).toBeNull();
+        // And the timetable carries on under it.
+        expect(jetAt(jetFlight(1).start + 5, called)).toEqual(jetOnTrack(5, false));
+    });
+
+    test('its strobes flash briefly, over and over', () => {
+        let lit = 0;
+        let samples = 0;
+        for (let s = 0; s < JET.blink * 10; s += 0.01, samples++) if (jetFlashing(s)) lit++;
+        expect(lit / samples).toBeCloseTo(JET.flash / JET.blink, 1);
+        expect(jetFlashing(0)).toBe(true);
+        expect(jetFlashing(JET.blink / 2)).toBe(false);
+        expect(jetFlashing(-JET.blink + 0.01)).toBe(true);
     });
 });
 

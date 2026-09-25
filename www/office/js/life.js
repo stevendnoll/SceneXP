@@ -1,14 +1,15 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * life.js - What moves out there: the ferries, the ships, the sailboats, the
- * seaplane, the cars, and the wind in the clouds and on the water.
+ * seaplane, the traffic, a jet now and then, and the wind in the clouds and
+ * on the water.
  *
  * ON A TIMETABLE, NOT AT RANDOM. Everything on the water keeps a schedule
  * on the sky's clock (the visitor's own time, a pinned hour, or a day going
  * by), so a ferry is where the timetable says it is whenever the visitor
  * looks, and a day going by runs the whole harbor at speed, the way a
- * time-lapse does. The cars and the ripples keep real seconds instead: at a
- * day-going-by's pace a car would cross the city in a frame.
+ * time-lapse does. The cars, the jet and the ripples keep real seconds
+ * instead: at a day-going-by's pace a car would cross the city in a frame.
  *
  * WHERE THE WINDOW CAN SEE. The water shows only in slivers between the
  * towers (the brief), so every route is laid through the slivers the
@@ -39,7 +40,7 @@ export const LIFE = {
     ship: { every: 75, offset: 20, speed: 7, span: 40000, lanes: { north: -6300, south: -6900 }, length: 290 },
     sailboat: { count: 6, from: 8, to: 19.5, scale: 2 },
     seaplane: { takeoff: 20, landing: 50, from: 8, to: 19, run: 35, climb: 150, top: 45, rise: 4, scale: 2 },
-    cars: { count: 240, speed: [8, 14], near: { x0: -200, x1: 120, z1: -6 } },
+    cars: { near: { x0: -200, x1: 120, z1: -6 } },
     wind: 6,
     ripple: [0.004, 0.0025]
 };
@@ -214,16 +215,105 @@ export function seaplaneAt(date, rain = 0) {
 // ---- The cars -------------------------------------------------------------------
 
 /**
+ * THE TRAFFIC IS TIMED, so nothing drives through anything (QA, 2026-09-25:
+ * cars at their own speeds ran through the one ahead, and through the cross
+ * traffic at every corner). Downtown's signals are a green wave:
+ *
+ * - Every vehicle drives at `speed`, so none ever gains on the one ahead.
+ * - The blocks are the same size both ways, so a light's cycle can be the
+ *   time it takes to drive two blocks (`cycle`, 2 x 98 m). Each street at a
+ *   crossing has the green for half of it, and the crossings are offset in
+ *   a checkerboard, so a vehicle that meets one green meets every green
+ *   after it, whichever way it drives.
+ * - The vehicles run in platoons that fill the middle of their green, with
+ *   `margin` seconds clear before the cross street's platoon arrives: at
+ *   most `slots` places `spacing` apart, or a bus with a place either side.
+ *
+ * A vehicle's place on its lane is then a pure function of time: `slot` (a
+ * share of the cycle) and `group` (which platoon of the lane's loop). The
+ * loop is a whole number of cycles long, a little longer than the street,
+ * and a vehicle on the stretch past the street's end is parked out of sight.
+ */
+export const TRAFFIC = {
+    speed: 10,
+    slots: 5,
+    spacing: 10.5,
+    fill: 0.62,
+    buses: 0.16,
+    suvs: 0.3,
+    /** How much further the loop runs than the street, at least. */
+    tail: 30
+};
+
+/** Each kind of vehicle's size in meters, and how high its lights ride. */
+export const VEHICLES = {
+    car: { length: 4.6, width: 1.9, height: 1.45, lights: 0.8 },
+    bus: { length: 12, width: 2.55, height: 3.3, lights: 1.0 }
+};
+
+/** A car's size (the kind most vehicles are). */
+export const CAR = VEHICLES.car;
+
+/** How an SUV is a car enlarged: a little longer and wider, and taller. */
+export const SUV = [1.04, 1.22, 1.05];
+
+/** Where a vehicle not on the street waits: far below the water. */
+export const PARKED_Y = -10000;
+
+/** The distance, along any street, from one crossing to the next. */
+export function pitchOf(city = CITY) {
+    return city.block + city.street;
+}
+
+/** A light's full cycle, in meters of driving and in seconds. */
+export function cycleOf(city = CITY) {
+    const meters = 2 * pitchOf(city);
+    return { meters, seconds: meters / TRAFFIC.speed };
+}
+
+/**
+ * The share of the cycle each place in a platoon arrives at a crossing, the
+ * middle one at a quarter. The first half of every cycle is one street's
+ * green and the second half the other's.
+ */
+export function slotTimes(city = CITY) {
+    const step = TRAFFIC.spacing / cycleOf(city).meters;
+    const middle = (TRAFFIC.slots - 1) / 2;
+    return Array.from({ length: TRAFFIC.slots }, (_, k) => 0.25 + (k - middle) * step);
+}
+
+/**
  * The lanes of the streets under the window: both ways along every street
  * in the few blocks the window looks down on, each from `a` to `b` at the
- * height of the street, stopping short of the water.
+ * height of the street, stopping short of the water. Each carries its
+ * `length`, its `loop` (a whole number of cycles) and `d0`, the distance
+ * along it that keeps its platoons on the green wave.
  */
 export function carLanes(city = CITY) {
     const { x0, x1, z1 } = LIFE.cars.near;
     const half = city.street / 2;
+    const pitch = pitchOf(city);
+    const cycle = cycleOf(city).meters;
+    // The middles of the streets: those running along z (at these x's) and
+    // those running along x (at these z's), every `pitch` from here.
+    const xStreets = city.ownTower.x0 - half;
+    const zStreets = city.ownTower.z0 - half;
     const lanes = [];
     const lane = (a, b) => {
-        if (Math.hypot(b[0] - a[0], b[2] - a[2]) > 40) lanes.push({ a, b });
+        const length = Math.hypot(b[0] - a[0], b[2] - a[2]);
+        if (length <= 40) return;
+        // A lane along z crosses the streets along x, and the other way round.
+        const alongZ = Math.abs(b[2] - a[2]) > Math.abs(b[0] - a[0]);
+        const s = Math.sign(alongZ ? b[2] - a[2] : b[0] - a[0]);
+        const from = alongZ ? a[2] : a[0];
+        const crossings = alongZ ? zStreets : xStreets;
+        // Which street of the other way this lane is on: its crossings'
+        // greens are that many half-cycles on (the checkerboard), and a
+        // lane along x has the second half of every cycle.
+        const own = alongZ ? Math.round((a[0] - xStreets) / pitch) : Math.round((a[2] - zStreets) / pitch);
+        const d0 = s * (crossings - from) - own * pitch - (alongZ ? 0 : pitch);
+        const loop = Math.ceil((length + TRAFFIC.tail) / cycle) * cycle;
+        lanes.push({ a, b, length, loop, d0, alongZ });
     };
     const at = (x, z) => [x, groundY(x, z, city) + 1.2, z];
     // Streets running along z (east and west), at the block edges in x.
@@ -255,52 +345,81 @@ export function carLanes(city = CITY) {
 }
 
 /**
- * The cars: each on a lane at its own speed and starting point, with its
- * lights as the window sees them: taillights (red) on a car driving away
- * down the hill, headlights (white) on one coming up it, and either on the
- * cross streets.
+ * The vehicles: platoons on every lane's loop, each place taken or not by
+ * chance, some platoons led by a bus. Each vehicle has its `kind`, its
+ * `slot` (the share of the cycle it arrives at a crossing) and `group`, its
+ * `scale` (an SUV is a car enlarged), and its lights as the window sees
+ * them: taillights (red) on one driving away down the hill, headlights
+ * (white) on one coming up it, and either on the cross streets.
  */
-export function carFleet(lanes = carLanes(), seed = 20260928) {
+export function carFleet(lanes = carLanes(), seed = 20260928, city = CITY) {
     const random = seeded(seed);
-    const lengths = lanes.map((l) => Math.hypot(l.b[0] - l.a[0], l.b[2] - l.a[2]));
-    const total = lengths.reduce((s, v) => s + v, 0);
-    const [slow, fast] = LIFE.cars.speed;
+    const times = slotTimes(city);
+    const middle = (TRAFFIC.slots - 1) / 2;
+    const cycle = cycleOf(city).meters;
     const cars = [];
-    for (let i = 0; i < LIFE.cars.count; i++) {
-        // Lanes get cars by their length.
-        let pick = random() * total;
-        let lane = 0;
-        while (pick > lengths[lane] && lane < lanes.length - 1) pick -= lengths[lane++];
-        const { a, b } = lanes[lane];
-        const away = b[2] < a[2] || (b[2] === a[2] && b[0] > a[0]);
-        cars.push({ lane, start: random(), speed: slow + random() * (fast - slow), length: lengths[lane], red: away });
-    }
+    lanes.forEach(({ a, b, loop }, lane) => {
+        const red = b[2] < a[2] || (b[2] === a[2] && b[0] > a[0]);
+        for (let group = 0; group < loop / cycle; group++) {
+            // A bus takes the middle three places.
+            const bus = random() < TRAFFIC.buses;
+            for (let k = 0; k < TRAFFIC.slots; k++) {
+                const kind = bus && Math.abs(k - middle) <= 1 ? 'bus' : 'car';
+                if (kind === 'bus' && k !== middle) continue;
+                if (kind === 'car' && random() >= TRAFFIC.fill) continue;
+                const suv = kind === 'car' && random() < TRAFFIC.suvs;
+                cars.push({ lane, kind, slot: times[k], group, scale: suv ? SUV : [1, 1, 1], red });
+            }
+        }
+    });
     return cars;
 }
 
+/** How far along its lane's loop a vehicle is at `seconds`, in meters. */
+export function distanceAlong(car, lane, seconds, city = CITY) {
+    const { meters, seconds: period } = cycleOf(city);
+    const d = meters * (seconds / period - car.slot) + lane.d0 + car.group * meters;
+    return ((d % lane.loop) + lane.loop) % lane.loop;
+}
+
 /**
- * Every car's position at `seconds`, written into `out` (x, y, z each), at
- * the lanes' height over the street where it is: the street follows the
+ * Every vehicle's position at `seconds`, written into `out` (x, y, z each),
+ * at the lanes' height over the street where it is: the street follows the
  * hill's curve, and a straight line between a lane's ends would float a car
- * off it (by nearly seven meters, mid-hill).
+ * off it (by nearly seven meters, mid-hill). One on its loop's stretch past
+ * the street's end is parked at PARKED_Y. Given `pitches`, each one's tilt
+ * with the street is written there too (positive, nose up).
  */
-export function carPositions(cars, lanes, seconds, out = new Float32Array(cars.length * 3)) {
+export function carPositions(cars, lanes, seconds, out = new Float32Array(cars.length * 3), pitches = null) {
     cars.forEach((car, i) => {
-        const { a, b } = lanes[car.lane];
-        const s = (((car.start + (seconds * car.speed) / car.length) % 1) + 1) % 1;
-        const x = a[0] + (b[0] - a[0]) * s;
-        const z = a[2] + (b[2] - a[2]) * s;
+        const lane = lanes[car.lane];
+        const { a, b, length } = lane;
+        const d = distanceAlong(car, lane, seconds);
+        if (d > length) {
+            out[i * 3] = a[0];
+            out[i * 3 + 1] = PARKED_Y;
+            out[i * 3 + 2] = a[2];
+            if (pitches) pitches[i] = 0;
+            return;
+        }
+        const ux = (b[0] - a[0]) / length;
+        const uz = (b[2] - a[2]) / length;
+        const x = a[0] + ux * d;
+        const z = a[2] + uz * d;
         out[i * 3] = x;
         out[i * 3 + 1] = groundY(x, z) + 1.2;
         out[i * 3 + 2] = z;
+        if (pitches) pitches[i] = Math.atan((groundY(x + ux * 2, z + uz * 2) - groundY(x - ux * 2, z - uz * 2)) / 4);
     });
     return out;
 }
 
-/** A car's size in meters, and how high its lights ride above the street. */
-export const CAR = { length: 4.6, width: 1.9, height: 1.45, lights: 0.8 };
+/** Whether a position carPositions wrote is on the street. */
+export function onStreet(y) {
+    return y > PARKED_Y / 2;
+}
 
-/** How each car faces: along its lane (a yaw, bow toward -z as built). */
+/** How each vehicle faces: along its lane (a yaw, bow toward -z as built). */
 export function carYaws(cars, lanes) {
     return cars.map(({ lane }) => {
         const { a, b } = lanes[lane];
@@ -309,22 +428,103 @@ export function carYaws(cars, lanes) {
 }
 
 /**
- * Every car's lights at `seconds`, written into `out`: at the end of the car
+ * Every vehicle's lights at `seconds`, written into `out`: at the end of it
  * the window sees, the tail of one driving away (red) and the nose of one
- * coming (white), a little above the street and just clear of the body.
+ * coming (white), a little above the street and just clear of the body. A
+ * parked vehicle's lights are parked with it.
  */
 export function carLightPositions(cars, lanes, seconds, out = new Float32Array(cars.length * 3)) {
     carPositions(cars, lanes, seconds, out);
-    const reach = CAR.length / 2 + 0.2;
     cars.forEach((car, i) => {
-        const { a, b } = lanes[car.lane];
-        const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
+        if (!onStreet(out[i * 3 + 1])) return;
+        const { a, b, length } = lanes[car.lane];
+        const size = VEHICLES[car.kind];
+        const reach = (size.length * car.scale[2]) / 2 + 0.2;
         const sign = car.red ? -1 : 1;
-        out[i * 3] += ((b[0] - a[0]) / len) * reach * sign;
-        out[i * 3 + 1] += CAR.lights - 1.2;
-        out[i * 3 + 2] += ((b[2] - a[2]) / len) * reach * sign;
+        out[i * 3] += ((b[0] - a[0]) / length) * reach * sign;
+        out[i * 3 + 1] += size.lights - 1.2;
+        out[i * 3 + 2] += ((b[2] - a[2]) / length) * reach * sign;
     });
     return out;
+}
+
+// ---- The jet --------------------------------------------------------------------
+
+/**
+ * Now and then a passenger jet crosses the far sky (QA, 2026-09-25): a
+ * twin-engined narrow-body on the approach line over the bay, the way the
+ * arrivals come down past a real waterfront. It flies south, letting down,
+ * and the next one north, climbing, `span` meters either side of the
+ * office's line on the track `z` out over the water, between `low` and
+ * `high` meters above it. Enlarged by `scale`, like the small craft, so its
+ * shape reads as an airliner rather than a speck.
+ *
+ * On real seconds, like the cars: a day going by at speed would fire one
+ * across the window in a frame. The first comes into the desk's view half a
+ * minute after the office opens, and then one every `every` seconds or a
+ * little later (`late`).
+ */
+export const JET = {
+    every: 420,
+    late: 90,
+    first: -35,
+    speed: 80,
+    z: -5200,
+    span: 9000,
+    low: 700,
+    high: 960,
+    scale: 4,
+    /** A light aboard flashes this long, this often (seconds). */
+    flash: 0.16,
+    blink: 1.3
+};
+
+/** How long a crossing takes, in seconds. */
+export function jetCrossing() {
+    return (2 * JET.span) / JET.speed;
+}
+
+/** Flight `k`: when it sets out (seconds on the page's clock) and which way. */
+export function jetFlight(k) {
+    const late = k === 0 ? 0 : seeded(20260925 + k * 7919)() * JET.late;
+    return { start: JET.first + k * JET.every + late, south: k % 2 === 0 };
+}
+
+/**
+ * The jet `into` seconds into a crossing: where it is, which way it faces,
+ * and its pitch (the nose a touch up letting down, more climbing). Its
+ * height follows a straight line along the track, so south is down and
+ * north is up.
+ */
+export function jetOnTrack(into, south) {
+    const { span, speed, low, high, z } = JET;
+    const x = south ? span - speed * into : -span + speed * into;
+    const slope = (high - low) / (2 * span);
+    const y = WATER_Y + (low + high) / 2 + slope * x;
+    const climb = Math.atan(slope) * (south ? -1 : 1);
+    return { x, y, z, yaw: yawFor(south ? -1 : 1, 0), pitch: climb + 0.035, speed: 1 };
+}
+
+/**
+ * Where the jet is at `seconds`, or null between flights. `called` is the
+ * start of one asked for by hand (main.js cornerOffice.jet), which flies
+ * south whatever the timetable says.
+ */
+export function jetAt(seconds, called = null) {
+    const crossing = jetCrossing();
+    if (called != null && seconds >= called && seconds - called <= crossing) return jetOnTrack(seconds - called, true);
+    // A crossing and the most a flight is late are shorter than `every`, so
+    // the flight due in this stretch of the clock is the only one aloft.
+    const k = Math.floor((seconds - JET.first) / JET.every);
+    if (k < 0) return null;
+    const { start, south } = jetFlight(k);
+    return seconds >= start && seconds - start <= crossing ? jetOnTrack(seconds - start, south) : null;
+}
+
+/** Whether the jet's strobes are lit at `seconds`: a short flash, over and
+ *  over. */
+export function jetFlashing(seconds) {
+    return ((seconds % JET.blink) + JET.blink) % JET.blink < JET.flash;
 }
 
 // ---- The wind -------------------------------------------------------------------

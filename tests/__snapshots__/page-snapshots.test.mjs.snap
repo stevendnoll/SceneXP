@@ -3518,7 +3518,7 @@ html [data-ui-theme="ember" lang="en"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
           "Loading…"
-    canvas#game-canvas [aria-label="A corner office with windows onto the city. A wooden desk holds a computer with sticky notes on it, a lamp, and two letter trays, with a wastebasket beside it, a calendar on the wall, a low filing cabinet full of folders, a corkboard of index cards, a Rolodex, a whiteboard of numbers, a printer, and a departures board over the door." role="img"]
+    canvas#game-canvas [aria-label="A corner office with windows onto the city. A wooden desk holds a computer with sticky notes on it, a green banker's lamp, and two stacked letter trays, with a wastebasket beside it, a calendar on the wall, a low filing cabinet full of folders, a corkboard of index cards, a whiteboard of numbers, a printer, and a departures board over the door." role="img"]
     p#office-live.sr-only [aria-live="polite" role="status"]
     div#office-hud.ui-float.office-hud [aria-label="Your week" role="group"]
       span#hud-week.hud-chip

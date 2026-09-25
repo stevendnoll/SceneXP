@@ -46,7 +46,7 @@ import { buildRoom, setLamp, pickOf, setNotes, ensureCapacity } from './room.min
 import { buildWorld } from './world.min.js';
 import {
     screenLines, drawScreen, drawCalendar, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
-    drawLetterAtlas, drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, FACADE_STYLES
+    drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, FACADE_STYLES
 } from './paint.min.js';
 import { CITY } from './city.min.js';
 import { CLOUDS, cloudPuffs, skyAt, dayLapse } from './sky.min.js';
@@ -54,9 +54,7 @@ import { weatherAt, weathered } from './weather.min.js';
 import { drawerPlan, liftedLine, TAB_COLORS } from './cabinet.min.js';
 import { createFiling } from './filing.min.js';
 import { boardPlan, boardSummary, boardColumns, columnAt, CARD_ATLAS } from './board.min.js';
-import {
-    LETTERS, LETTER_ATLAS, letterOf, letterIndex, spinTo, nearestTurn, ringQuad, ringUvs, peopleOf
-} from './rolodex.min.js';
+import { peopleOf } from './rolodex.min.js';
 import { createPinboard } from './pinboard.min.js';
 import { departureRows, blankRows, stepFlaps, readableRow, FLAP_COLUMNS } from './splitflap.min.js';
 import { boardModel, funnelBars, weekChart, bigNumbers, summaryLines, onGoalLine, LAYOUT } from './whiteboard.min.js';
@@ -164,8 +162,6 @@ const ui = {
     contactId: null,
     editingContactId: null,
     contactLinkApp: null,
-    /** The Rolodex's turn, and where it is turning to. */
-    ring: { angle: 0, from: 0, to: 0, t: 1 },
     /** The departures board: what its flaps show, what they are turning
      *  to, and the time left before the next turn. */
     flaps: { rows: null, target: null, due: 0, clock: '' },
@@ -314,6 +310,14 @@ async function init() {
             const info = renderer && renderer.info ? renderer.info.render : {};
             return { ...resolution.readout(), drawCalls: info.calls, triangles: info.triangles, ambientFps: CONFIG.view.ambientFps };
         },
+        /** A jet across the sky now, for a screenshot: it comes into the
+         *  desk's view straight away and takes about a minute to cross it. */
+        jet() {
+            world.callJet(performance.now() / 1000);
+            ui.lifeDue = true;
+            requestRender();
+            return 'A jet is on its way across the bay.';
+        },
         /** Full resolution held, for a social-card capture (`capture(false)`
          *  lets it adapt again). */
         capture(on = true) {
@@ -436,7 +440,6 @@ function buildScene() {
     painted.notes = paintedTexture(ATLAS.cols * 256, ATLAS.rows * 256, () => {});
     painted.drawers = Array.from({ length: CONFIG.room.cabinet.drawers }, () => paintedTexture(256, 64, () => {}));
     painted.boardHeader = paintedTexture(1024, 52, (ctx, W, H) => drawBoardHeader(ctx, W, H, boardColumns(CONFIG).map((c) => c.label)));
-    painted.rolodex = paintedTexture(LETTER_ATLAS.cols * 128, LETTER_ATLAS.rows * 96, (ctx, W, H) => drawLetterAtlas(ctx, W, H, LETTERS, LETTER_ATLAS));
     painted.departures = paintedTexture(1024, 280, () => {});
     painted.whiteboard = paintedTexture(1024, 568, () => {});
     const screen = paintedTexture(512, 320, (ctx, W, H) => drawScreen(ctx, W, H, []));
@@ -449,10 +452,8 @@ function buildScene() {
         rainGlass: paintedTexture(512, 512, drawRainOnGlass).texture,
         drawerLabels: painted.drawers.map((p) => p.texture),
         boardHeader: painted.boardHeader.texture,
-        rolodex: painted.rolodex.texture,
         departures: painted.departures.texture,
-        whiteboard: painted.whiteboard.texture,
-        rolodexRing: { quad: (i) => ringQuad(i, CONFIG.room.rolodex.card), uvs: (i) => ringUvs(i), count: LETTERS.length }
+        whiteboard: painted.whiteboard.texture
     });
     filing = createFiling(room.cabinet, CONFIG, { reducedMotion: state.reducedMotion });
     pinboard = createPinboard(room.board, CONFIG, {
@@ -1193,48 +1194,25 @@ function boardPointerCancel(event) {
 
 // ---- The Rolodex and its people ------------------------------------------------
 
-/** Turn the wheel to a letter, the short way round. */
-function spinRolodexTo(letter) {
-    const r = CONFIG.room.rolodex;
-    const target = nearestTurn(ui.ring.angle, spinTo(letterIndex(letter), r.facing));
-    // Already there, or already on the way there: carry on.
-    if (Math.abs(target - ui.ring.to) < 1e-9) return false;
-    ui.ring = { angle: ui.ring.angle, from: ui.ring.angle, to: target, t: state.reducedMotion ? 1 : 0 };
-    if (state.reducedMotion) setRing(target);
-    requestRender();
-    return true;
-}
-
-function setRing(angle) {
-    ui.ring.angle = angle;
-    if (room && room.rolodex) room.rolodex.ring.rotation.x = angle;
-}
-
-function stepRing(delta) {
-    const ring = ui.ring;
-    ring.t = Math.min(1, ring.t + Math.max(0, delta) / CONFIG.view.spinSeconds);
-    const k = ring.t * ring.t * (3 - 2 * ring.t);
-    setRing(ring.t >= 1 ? ring.to : ring.from + (ring.to - ring.from) * k);
-}
-
-/** The Rolodex's list, from its search box. With `spin`, the wheel turns to
- *  the first person found. */
-function drawRolodexSheet({ spin = false } = {}) {
+/** The Rolodex's list, from its search box. The Rolodex is this list alone:
+ *  the wheel on the desk was taken away (QA, 2026-09-25), and the people
+ *  stay a place of their own and a key. */
+function drawRolodexSheet() {
     const search = el('rolodex-search');
     const text = search ? search.value : '';
     const people = searchContacts(state.doc, text);
     const total = state.doc.contacts.filter((c) => !c.deletedAt).length;
     renderRolodexList({ people, total, text, on: { open: (id) => openContact(id) } });
-    if (spin && people.length) spinRolodexTo(letterOf(people[0].name));
     return people;
 }
 
+/** Open the Rolodex where the visitor stands: there is nothing in the room
+ *  to go and look at. */
 function openRolodex({ armed = false } = {}) {
     const search = el('rolodex-search');
     if (search) search.value = '';
     drawRolodexSheet();
-    openCard('rolodex', { armed, onClose: () => goTo('desk') });
-    goTo('rolodex');
+    openCard('rolodex', { armed });
     track('open-rolodex');
 }
 
@@ -1268,7 +1246,6 @@ function openContact(id, { armed = false } = {}) {
     ui.contactId = id;
     drawContact();
     openCard('contact', { armed, onClose: () => { ui.contactId = null; } });
-    spinRolodexTo(letterOf(contact.name));
     return true;
 }
 
@@ -1327,7 +1304,6 @@ function submitContactForm(event) {
         return result;
     }
     closeCard('contact-form');
-    spinRolodexTo(letterOf(fields.name));
     track(ui.editingContactId ? 'edit-contact' : 'add-contact');
     return result;
 }
@@ -2093,7 +2069,6 @@ function actOn(key, { armed = true, instanceId = -1, uv = null } = {}) {
     case 'printer': openPrinter({ armed }); break;
     case 'cabinet': openCabinet({ armed }); break;
     case 'board': openBoard({ armed }); break;
-    case 'rolodex': openRolodex({ armed }); break;
     case 'cabinet-folder': {
         const id = filing ? filing.idAt(instanceId) : null;
         if (!id) return false;
@@ -2198,7 +2173,7 @@ function setupEventListeners() {
     wire('printer-print', 'click', () => printPrep(el('printer-app').value));
     wire('outtray-print', 'click', () => { closeCard('outtray'); openPrinter(); });
     wire('rolodex-search', 'input', () => {
-        drawRolodexSheet({ spin: true });
+        drawRolodexSheet();
         if (!ui.searchedPeople) {
             ui.searchedPeople = true;
             track('search-people');
@@ -2399,10 +2374,6 @@ function animate() {
         ui.boardMoving = pinboard.update(delta);
         state.dirty = true;
     }
-    if (ui.ring.t < 1) {
-        stepRing(delta);
-        state.dirty = true;
-    }
     if (ui.lapse) {
         stepDay(delta);
         state.dirty = true;
@@ -2573,7 +2544,6 @@ export const __test__ = {
     setDepartures,
     openPrinter,
     printPrep,
-    spinRolodexTo,
     openContact,
     openContactForm,
     submitContactForm,

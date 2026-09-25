@@ -25,7 +25,7 @@ let setLamp;
 let poseFor;
 let setNotes;
 let notesMod;
-let rolodexMod;
+let roomMod;
 let room;
 
 beforeAll(async () => {
@@ -33,17 +33,11 @@ beforeAll(async () => {
     vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
     THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
     globalThis.THREE = THREE;
-    ({ buildRoom, pickOf, windowsOf, setLamp, setNotes } = await import('../www/office/js/room.js'));
+    roomMod = await import('../www/office/js/room.js');
+    ({ buildRoom, pickOf, windowsOf, setLamp, setNotes } = roomMod);
     notesMod = await import('../www/office/js/notes.js');
     ({ poseFor } = await import('../www/office/js/stations.js'));
-    rolodexMod = await import('../www/office/js/rolodex.js');
-    room = buildRoom(CONFIG, {
-        rolodexRing: {
-            quad: (i) => rolodexMod.ringQuad(i, CONFIG.room.rolodex.card),
-            uvs: (i) => rolodexMod.ringUvs(i),
-            count: rolodexMod.LETTERS.length
-        }
-    });
+    room = buildRoom(CONFIG);
     room.group.updateMatrixWorld(true);
 });
 
@@ -51,8 +45,13 @@ afterAll(() => {
     delete globalThis.THREE;
 });
 
-const TAPPABLE = ['computer', 'intray', 'outtray', 'wastebasket', 'lamp', 'calendar', 'rolodex', 'printer'];
+const TAPPABLE = ['computer', 'intray', 'outtray', 'wastebasket', 'lamp', 'calendar', 'printer'];
 const ASPECTS = { 'wide 21:9': 21 / 9, 'laptop 16:10': 16 / 10, 'phone upright': 390 / 844, 'tall phone': 9 / 19.5 };
+/** What the desk's frame may leave out on an upright phone: the calendar
+ *  moved left so the window could widen (QA, 2026-09-25), and a phone
+ *  reaches it from Places. */
+const PHONE_LEAVES_OUT = ['calendar'];
+const tappableFrom = (aspect) => TAPPABLE.filter((key) => aspect > 1 || !PHONE_LEAVES_OUT.includes(key));
 
 function cameraAt(station, aspect) {
     const pose = poseFor(station, aspect, CONFIG);
@@ -104,7 +103,7 @@ describe('what is in the room', () => {
 
     test('what stands on the desk rests on its top, and the wastebasket on the floor', () => {
         const top = CONFIG.room.desk.height;
-        for (const key of ['computer', 'intray', 'outtray', 'lamp', 'folder', 'rolodex']) {
+        for (const key of ['computer', 'outtray', 'lamp', 'folder']) {
             room.picks.folder.visible = true;
             expect(boxOf(room.picks[key]).min.y).toBeCloseTo(top, 2);
         }
@@ -112,9 +111,53 @@ describe('what is in the room', () => {
         expect(boxOf(room.picks.wastebasket).min.y).toBeCloseTo(0, 2);
     });
 
+    test('the in-tray is stacked on the out-tray, on posts standing on its walls (QA, 2026-09-25)', () => {
+        const inBox = boxOf(room.picks.intray);
+        const outBox = boxOf(room.picks.outtray);
+        // The same footprint, the one over the other.
+        expect(inBox.min.x).toBeCloseTo(outBox.min.x, 3);
+        expect(inBox.max.z).toBeCloseTo(outBox.max.z, 3);
+        expect(inBox.min.y).toBeCloseTo(outBox.max.y, 3);
+        // The in-tray's own floor is TRAY_RISE up, clear of the out-tray.
+        const floors = room.picks.intray.children.filter((m) => m.geometry.parameters.height === 0.012);
+        expect(floors).toHaveLength(1);
+        expect(boxOf(floors[0]).min.y).toBeCloseTo(CONFIG.room.desk.height + roomMod.TRAY_RISE, 4);
+        expect(boxOf(floors[0]).min.y).toBeGreaterThan(outBox.max.y + 0.04);
+    });
+
+    test('the lamp is a banker’s lamp: a green shade lying along the desk over a brass stem, lit inside', () => {
+        const lamp = room.picks.lamp;
+        const shade = lamp.children.find((c) => c.isGroup);
+        const b = boxOf(shade);
+        // Lying on its side: longer across the desk than it is tall or deep
+        // (a real one is about 24 cm long and 15 cm through).
+        expect(b.max.x - b.min.x).toBeGreaterThan(1.4 * (b.max.y - b.min.y));
+        expect(b.max.x - b.min.x).toBeGreaterThan(1.4 * (b.max.z - b.min.z));
+        const glass = shade.children.find((c) => c.geometry.type === 'CylinderGeometry' && c.material.side === THREE.FrontSide);
+        const green = glass.material.color;
+        expect(green.g).toBeGreaterThan(green.r * 2);
+        expect(green.g).toBeGreaterThan(green.b);
+        // The bulb and its light are under the shade's top, over the base.
+        expect(room.lamp.light.position.y).toBeLessThan(b.max.y);
+        expect(room.lamp.light.position.y).toBeGreaterThan(b.min.y - 0.05);
+        const base = boxOf(lamp.children[0]);
+        expect(room.lamp.light.position.x).toBeGreaterThan(base.min.x);
+        expect(room.lamp.light.position.x).toBeLessThan(base.max.x);
+        // Switched off, the white glass inside stops glowing, and back on.
+        setLamp(room.lamp, false);
+        expect(room.lamp.glow.material.emissiveIntensity).toBe(0);
+        setLamp(room.lamp, true);
+        expect(room.lamp.glow.material.emissiveIntensity).toBe(roomMod.LAMP_GLOW);
+    });
+
+    test('the Rolodex is gone from the desk (QA, 2026-09-25)', () => {
+        expect(room.picks.rolodex).toBeUndefined();
+        expect(room.group.getObjectByName('rolodex')).toBeUndefined();
+    });
+
     test('everything on the desk fits on the desk', () => {
         const d = CONFIG.room.desk;
-        for (const key of ['computer', 'intray', 'outtray', 'lamp', 'rolodex']) {
+        for (const key of ['computer', 'intray', 'outtray', 'lamp']) {
             const b = boxOf(room.picks[key]);
             expect(b.min.x).toBeGreaterThanOrEqual(d.x - d.width / 2 - 1e-6);
             expect(b.max.x).toBeLessThanOrEqual(d.x + d.width / 2 + 1e-6);
@@ -133,7 +176,7 @@ describe('what is in the room', () => {
 });
 
 describe.each(Object.entries(ASPECTS))('from the desk, on a %s screen', (_name, aspect) => {
-    test.each(TAPPABLE)('the %s is in the frame and nothing stands in front of it', (key) => {
+    test.each(tappableFrom(aspect))('the %s is in the frame and nothing stands in front of it', (key) => {
         const cam = cameraAt('desk', aspect);
         const center = boxOf(room.picks[key]).getCenter(new THREE.Vector3());
         const ndc = center.clone().project(cam);
@@ -174,6 +217,28 @@ describe('the chair', () => {
         expect(o).toBe(chair);
         expect(hit.point.y).toBeGreaterThan(0.45);
         expect(hit.point.y).toBeLessThan(0.53);
+    });
+
+    test('rolls on five casters, each at the end of a leg and on the floor (QA, 2026-09-25)', () => {
+        const chair = room.group.getObjectByName('chair');
+        const { count, reach, wheel } = roomMod.CHAIR_LEGS;
+        const casters = [];
+        chair.traverse((o) => {
+            if (o.geometry && o.geometry.type === 'CylinderGeometry' && o.geometry.parameters.radiusTop === wheel) casters.push(o);
+        });
+        expect(casters).toHaveLength(count);
+        const column = chair.localToWorld(new THREE.Vector3(0, 0, 0));
+        const angles = casters.map((c) => {
+            const b = boxOf(c);
+            // On the floor, to within the wheel's facets.
+            expect(b.min.y).toBeGreaterThanOrEqual(-1e-6);
+            expect(b.min.y).toBeLessThan(0.002);
+            const at = b.getCenter(new THREE.Vector3());
+            expect(Math.hypot(at.x - column.x, at.z - column.z)).toBeCloseTo(reach - 0.01, 2);
+            return Math.atan2(at.z - column.z, at.x - column.x);
+        }).sort((p, q) => p - q);
+        // Spread evenly round the column.
+        for (let i = 1; i < angles.length; i++) expect(angles[i] - angles[i - 1]).toBeCloseTo((2 * Math.PI) / count, 3);
     });
 });
 
@@ -415,44 +480,12 @@ describe('the corkboard', () => {
     });
 });
 
-describe('the Rolodex', () => {
+describe('the mug', () => {
     test('stands clear of everything else on the desk', () => {
-        const r = boxOf(room.picks.rolodex);
-        for (const key of ['computer', 'intray', 'outtray', 'lamp']) expect(r.intersectsBox(boxOf(room.picks[key]))).toBe(false);
         const mug = room.group.children.find((o) => o.geometry && o.geometry.type === 'CylinderGeometry' && o.position.y < 1 && o.position.y > 0.75);
         expect(mug).toBeTruthy();
-        expect(r.intersectsBox(boxOf(mug))).toBe(false);
-    });
-
-    test.each(Object.entries(ASPECTS))('at its station on a %s screen, it sits in the top half, above the docked sheet', (_name, aspect) => {
-        const cam = cameraAt('rolodex', aspect);
-        const b = boxOf(room.picks.rolodex);
-        const corners = [];
-        for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) corners.push(new THREE.Vector3(x, y, z));
-        for (const c of corners) {
-            const ndc = c.project(cam);
-            expect(Math.abs(ndc.x)).toBeLessThan(1);
-            expect(ndc.y).toBeLessThan(1);
-            expect(ndc.y).toBeGreaterThan(-0.15);
-        }
-    });
-
-    test('a turn brings the chosen card round to face the room', () => {
-        const r = CONFIG.room.rolodex;
-        for (const letter of ['A', 'M', '#']) {
-            const i = rolodexMod.letterIndex(letter);
-            room.rolodex.ring.rotation.x = rolodexMod.spinTo(i, r.facing);
-            room.group.updateMatrixWorld(true);
-            const q = rolodexMod.ringQuad(i, r.card);
-            const outer = new THREE.Vector3(0, (q[2][1] + q[3][1]) / 2, (q[2][2] + q[3][2]) / 2);
-            const axle = new THREE.Vector3();
-            room.rolodex.ring.localToWorld(outer);
-            room.rolodex.ring.getWorldPosition(axle);
-            const d = outer.sub(axle);
-            // Up and toward the room, at the facing angle from straight up.
-            expect(Math.atan2(d.z, d.y)).toBeCloseTo(r.facing, 6);
-        }
-        room.rolodex.ring.rotation.x = 0;
+        const m = boxOf(mug);
+        for (const key of ['computer', 'intray', 'outtray', 'lamp']) expect(m.intersectsBox(boxOf(room.picks[key]))).toBe(false);
     });
 });
 

@@ -13,8 +13,8 @@
  * itself, the lamp switches, an open folder on the desk reopens its card, the
  * wall calendar opens the calendar, the sticky notes open today's list, the
  * filing cabinet opens itself and a folder in it opens on the desk, the
- * corkboard opens itself (its cards drag between columns), the Rolodex opens
- * the people, the whiteboard opens its numbers (and its goal line the weekly
+ * corkboard opens itself (its cards drag between columns), the whiteboard
+ * opens its numbers (and its goal line the weekly
  * goal), the departures board opens the week, and the printer prints a prep
  * sheet. `pickOf` walks up from whatever a ray hit to the nearest of these.
  *
@@ -25,7 +25,7 @@
  * measure what the eye sees.
  *
  * Builds and returns `{ group, picks, lamp, folder, screen, calendar,
- * cabinet, board, rolodex, departures, whiteboard, notes }`. It adds nothing
+ * cabinet, board, departures, whiteboard, notes, rain }`. It adds nothing
  * to a scene itself and reads no clock.
  */
 
@@ -45,12 +45,20 @@ const COLORS = {
     paper: 0xf7f3ea,
     manila: 0xe4c07a,
     basket: 0x3b3f45,
-    shade: 0x1f5c4a,
+    shade: 0x1f6f4a,
+    brass: 0xc9a04a,
     mug: 0xc8553d,
     plant: 0x2f6b3a,
     pot: 0xb86b45,
-        chair: 0x26282c
+    chair: 0x26282c,
+    caster: 0x151618
 };
+
+/** How far the in-tray stands over the out-tray it is stacked on. */
+export const TRAY_RISE = 0.11;
+
+/** How brightly the lamp shade's white glass glows while the lamp is on. */
+export const LAMP_GLOW = 0.7;
 
 function mat(color, opts = {}) {
     return new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, ...opts });
@@ -66,6 +74,13 @@ function slab(x0, y0, z0, x1, y1, z1, material) {
 
 function box(w, h, d, material, x, y, z) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    mesh.position.set(x, y, z);
+    return mesh;
+}
+
+/** An upright cylinder of radius `r` and height `h`, centered on a point. */
+function cylinder(r, h, material, x, y, z, segments = 12) {
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, segments), material);
     mesh.position.set(x, y, z);
     return mesh;
 }
@@ -94,7 +109,7 @@ function addHitBox(group, pad = 0.03) {
     // Grown upward only, so it never sinks into what the thing stands on.
     // The box was measured in the world, so its center is brought back into
     // the group's own frame: a group placed away from the origin (the
-    // Rolodex) would otherwise get its hit box twice as far away.
+    // printer) would otherwise get its hit box twice as far away.
     group.worldToLocal(center);
     proxy.position.set(center.x, center.y + pad / 2, center.z);
     proxy.name = `${group.userData.pick}-hit`;
@@ -116,13 +131,17 @@ export function pickOf(object) {
  *  desk's right end (radians, positive turns its seat toward -x). */
 export const CHAIR_TURN = 0.6;
 
+/** The chair's base: how many legs, how far each reaches from the column,
+ *  and the radius of the caster at its end. Meters. */
+export const CHAIR_LEGS = { count: 5, reach: 0.3, wheel: 0.03 };
+
 /** The window openings, shared by the walls, the frames and the tests. */
 export function windowsOf(config) {
-    const { width, depth } = config.room;
+    const { width, depth, backWindow } = config.room;
     return {
         sill: 0.95,
         head: 2.45,
-        back: { x0: 0.1, x1: width / 2 - 0.1 },
+        back: { x0: backWindow.x0, x1: width / 2 - 0.1, mullion: backWindow.mullion },
         right: { z0: -depth / 2 + 0.1, z1: 0.3 }
     };
 }
@@ -215,7 +234,7 @@ function buildShell(room, config) {
     const f = 0.05;
     group.add(slab(w.back.x0, w.sill - 0.02, -hd - 0.02, w.back.x1, w.sill + 0.03, -hd + 0.14, trim));
     group.add(slab(w.back.x0, w.head - f, -hd - 0.02, w.back.x1, w.head, -hd + 0.03, trim));
-    for (const x of [w.back.x0, (w.back.x0 + w.back.x1) / 2, w.back.x1]) {
+    for (const x of [w.back.x0, w.back.mullion, w.back.x1]) {
         group.add(slab(x - f / 2, w.sill, -hd - 0.02, x + f / 2, w.head, -hd + 0.03, trim));
     }
     group.add(slab(hw - 0.14, w.sill - 0.02, w.right.z0, hw + 0.02, w.sill + 0.03, w.right.z1, trim));
@@ -491,67 +510,6 @@ export function setBoardQuads(cards, quads, config) {
 }
 
 /**
- * The Rolodex: a base, two side wheels on an axle, a knob, and a ring of
- * lettered cards (textures.rolodex, one cell per letter) that turns about
- * the axle. The ring is one merged mesh, and turning it is turning its
- * group, so a spin costs nothing but a rotation.
- */
-function buildRolodex(group, config, texture, picks, quad, uvs, count) {
-    const r = config.room.rolodex;
-    const top = config.room.desk.height;
-    const rolodex = tag(new THREE.Group(), 'rolodex');
-    rolodex.position.set(r.x, top, r.z);
-    const dark = mat(0x2d2a28, { roughness: 0.5, metalness: 0.2 });
-    rolodex.add(box(r.width, 0.03, 0.15, dark, 0, 0.015, 0));
-    for (const side of [-1, 1]) {
-        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(r.wheel, r.wheel, 0.012, 28), dark);
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(side * (r.width / 2 - 0.006), r.axle, 0);
-        rolodex.add(wheel);
-    }
-    const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, r.width + 0.03, 10), mat(COLORS.metal, { metalness: 0.6, roughness: 0.3 }));
-    axle.rotation.z = Math.PI / 2;
-    axle.position.set(0, r.axle, 0);
-    rolodex.add(axle);
-    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.025, 16), mat(0xc8553d, { roughness: 0.4 }));
-    knob.rotation.z = Math.PI / 2;
-    knob.position.set(r.width / 2 + 0.025, r.axle, 0);
-    rolodex.add(knob);
-
-    const ring = new THREE.Group();
-    ring.name = 'rolodex-ring';
-    ring.position.set(0, r.axle, 0);
-    const positions = [];
-    const uv = [];
-    const index = [];
-    for (let i = 0; i < count; i++) {
-        const q = quad(i);
-        const t = uvs(i);
-        for (let k = 0; k < 4; k++) {
-            positions.push(...q[k]);
-            uv.push(...t[k]);
-        }
-        const base = i * 4;
-        index.push(base, base + 1, base + 2, base, base + 2, base + 3);
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    geometry.setIndex(index);
-    geometry.computeVertexNormals();
-    const cards = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
-        map: texture || null, color: texture ? 0xffffff : 0xf6f1e6, roughness: 0.9, side: THREE.DoubleSide
-    }));
-    cards.name = 'rolodex-cards';
-    ring.add(cards);
-    rolodex.add(ring);
-    addHitBox(rolodex, 0.02);
-    group.add(rolodex);
-    picks.rolodex = rolodex;
-    return { group: rolodex, ring, cards };
-}
-
-/**
  * The departures board over the door: a dark frame holding one plane, whose
  * face is the split-flap board painted by main.js (textures.departures).
  * The plane faces into the room, its right toward -x, which is the screen's
@@ -714,38 +672,93 @@ function buildDesk(group, config, picks) {
     screen.position.set(mx, top + 0.36, mz + 0.019);
     computer.add(screen);
 
-    // The trays, at the left end: in at the back, out at the front.
+    // The trays, stacked at the left end on four brass posts (QA,
+    // 2026-09-25): the out-tray on the desk, the in-tray (a new
+    // application) over it. The gap between them is wide enough that the
+    // desk's eye sees the out-tray's page over its front lip, so each
+    // tray is still a tap of its own.
     const trayMat = mat(COLORS.tray, { roughness: 0.5 });
     const paper = mat(COLORS.paper, { roughness: 0.95 });
-    const tray = (key, z, sheets) => {
+    const tx = x0 + 0.24;
+    const tz = z0 + 0.2;
+    const tray = (key, y, sheets) => {
         const g = tag(new THREE.Group(), key);
-        const tx = x0 + 0.24;
-        g.add(box(0.34, 0.012, 0.26, trayMat, tx, top + 0.006, z));
-        g.add(box(0.34, 0.06, 0.012, trayMat, tx, top + 0.03, z - 0.124));
-        g.add(box(0.34, 0.035, 0.012, trayMat, tx, top + 0.018, z + 0.124));
-        g.add(box(0.012, 0.06, 0.26, trayMat, tx - 0.164, top + 0.03, z));
-        g.add(box(0.012, 0.06, 0.26, trayMat, tx + 0.164, top + 0.03, z));
-        for (let i = 0; i < sheets; i++) g.add(box(0.3, 0.004, 0.22, paper, tx, top + 0.016 + i * 0.006, z));
+        g.add(box(0.34, 0.012, 0.26, trayMat, tx, y + 0.006, tz));
+        g.add(box(0.34, 0.06, 0.012, trayMat, tx, y + 0.03, tz - 0.124));
+        g.add(box(0.34, 0.035, 0.012, trayMat, tx, y + 0.018, tz + 0.124));
+        g.add(box(0.012, 0.06, 0.26, trayMat, tx - 0.164, y + 0.03, tz));
+        g.add(box(0.012, 0.06, 0.26, trayMat, tx + 0.164, y + 0.03, tz));
+        for (let i = 0; i < sheets; i++) g.add(box(0.3, 0.004, 0.22, paper, tx, y + 0.016 + i * 0.006, tz));
         group.add(g);
         picks[key] = g;
+        return g;
     };
-    tray('intray', z0 + 0.2, 2);
-    tray('outtray', z1 - 0.18, 1);
+    tray('outtray', top, 1);
+    const intray = tray('intray', top + TRAY_RISE, 2);
+    // The posts stand on the out-tray's side walls and belong to the tray
+    // they hold up.
+    const brass = mat(COLORS.brass, { roughness: 0.4, metalness: 0.3 });
+    const post = TRAY_RISE - 0.06;
+    for (const sx of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+            intray.add(box(0.012, post, 0.012, brass, tx + sx * 0.164, top + 0.06 + post / 2, tz + sz * 0.112));
+        }
+    }
 
-    // The lamp, at the right end, which the visitor can switch.
+    // The lamp, at the right end, which the visitor can switch: a banker's
+    // lamp (QA, 2026-09-25, after the one in Steve's own office scene), an
+    // oval brass base and stem under a green glass shade lying on its side,
+    // white glass inside, tipped so its light falls toward the chair.
+    // Its left end stays clear of the monitor's edge, where the sticky notes
+    // are (tests/office-room).
     const lampGroup = tag(new THREE.Group(), 'lamp');
-    // Far enough toward the corner that its hit box stays clear of the
-    // monitor's edge, where the sticky notes are (tests/office-room).
-    const lx = x1 - 0.13;
-    const lz = z0 + 0.22;
-    lampGroup.add(box(0.16, 0.02, 0.16, metal, lx, top + 0.01, lz));
-    lampGroup.add(box(0.02, 0.42, 0.02, metal, lx, top + 0.22, lz));
-    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.14, 20, 1, true), mat(COLORS.shade, { side: THREE.DoubleSide }));
-    shade.position.set(lx - 0.07, top + 0.44, lz + 0.05);
-    shade.rotation.z = 0.5;
-    lampGroup.add(shade);
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), new THREE.MeshBasicMaterial({ color: 0xfff1c9 }));
-    bulb.position.set(lx - 0.1, top + 0.4, lz + 0.05);
+    const lx = x1 - 0.2;
+    const lz = z0 + 0.2;
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.106, 0.024, 32), brass);
+    base.scale.set(1, 1, 0.62);
+    base.position.set(lx, top + 0.012, lz);
+    lampGroup.add(base);
+    const step = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.07, 0.022, 24), brass);
+    step.scale.set(1, 1, 0.75);
+    step.position.set(lx, top + 0.035, lz);
+    lampGroup.add(step);
+    lampGroup.add(cylinder(0.009, 0.28, brass, lx, top + 0.186, lz));
+    // The shade, in a frame of its own: along x, tipped back.
+    const shadeY = top + 0.35;
+    const shadeFrame = new THREE.Group();
+    shadeFrame.position.set(lx, shadeY, lz + 0.03);
+    shadeFrame.rotation.x = -0.3;
+    const glass = new THREE.CylinderGeometry(0.075, 0.075, 0.27, 24, 1, true, 0, Math.PI);
+    const outside = new THREE.Mesh(glass, mat(COLORS.shade, { roughness: 0.25, metalness: 0.1 }));
+    outside.rotation.z = Math.PI / 2;
+    shadeFrame.add(outside);
+    const glow = new THREE.Mesh(glass, mat(0xf4ecd6, { side: THREE.BackSide, emissive: 0xffe3a8, emissiveIntensity: LAMP_GLOW }));
+    glow.rotation.z = Math.PI / 2;
+    shadeFrame.add(glow);
+    for (const end of [-1, 1]) {
+        const cap = new THREE.Mesh(new THREE.CircleGeometry(0.075, 16, 0, Math.PI), mat(COLORS.shade, { roughness: 0.25, side: THREE.DoubleSide }));
+        cap.rotation.y = Math.PI / 2;
+        cap.position.x = end * 0.135;
+        shadeFrame.add(cap);
+    }
+    // A brass rim along the shade's lower edges, and the finial on top.
+    for (const side of [-1, 1]) {
+        const rim = cylinder(0.005, 0.275, brass, 0, 0, side * 0.075);
+        rim.rotation.z = Math.PI / 2;
+        shadeFrame.add(rim);
+    }
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 8), brass);
+    finial.position.y = 0.082;
+    shadeFrame.add(finial);
+    lampGroup.add(shadeFrame);
+    // The pull chain, hanging from the shade's front rim (which the tip
+    // lifts 2 cm and brings 7 cm forward of the frame), and its bead.
+    lampGroup.add(cylinder(0.002, 0.07, brass, lx + 0.07, shadeY - 0.013, lz + 0.1));
+    const bead = new THREE.Mesh(new THREE.SphereGeometry(0.007, 8, 6), brass);
+    bead.position.set(lx + 0.07, shadeY - 0.052, lz + 0.1);
+    lampGroup.add(bead);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.024, 12, 8), new THREE.MeshBasicMaterial({ color: 0xfff1c9 }));
+    bulb.position.set(lx, shadeY - 0.025, lz + 0.035);
     lampGroup.add(bulb);
     const light = new THREE.PointLight(0xffd9a0, 1.6, 3.5, 2);
     light.position.copy(bulb.position);
@@ -772,7 +785,7 @@ function buildDesk(group, config, picks) {
     group.add(folder);
     picks.folder = folder;
 
-    return { screen, light, bulb, folder, lampGroup };
+    return { screen, light, bulb, glow, folder, lampGroup };
 }
 
 function buildFloorThings(group, config, picks) {
@@ -804,11 +817,25 @@ function buildFloorThings(group, config, picks) {
     const chair = new THREE.Group();
     chair.name = 'chair';
     const cm = mat(COLORS.chair, { roughness: 0.7 });
+    const steel = mat(COLORS.metal, { roughness: 0.45, metalness: 0.3 });
     chair.add(box(0.48, 0.07, 0.46, cm, 0, 0.47, 0));
     chair.add(box(0.46, 0.5, 0.06, cm, 0, 0.78, 0.22));
-    chair.add(box(0.05, 0.42, 0.05, mat(COLORS.metal), 0, 0.22, 0));
-    chair.add(box(0.5, 0.03, 0.08, mat(COLORS.metal), 0, 0.02, 0));
-    chair.add(box(0.08, 0.03, 0.5, mat(COLORS.metal), 0, 0.02, 0));
+    chair.add(cylinder(0.025, 0.34, steel, 0, 0.27, 0));
+    chair.add(cylinder(0.05, 0.05, steel, 0, 0.105, 0, 16));
+    // Five legs, each with a caster at its end (QA, 2026-09-25): a twin
+    // wheel on its side under a little fork, turned along the leg.
+    const caster = mat(COLORS.caster, { roughness: 0.6 });
+    for (let i = 0; i < CHAIR_LEGS.count; i++) {
+        const a = (i / CHAIR_LEGS.count) * Math.PI * 2;
+        const leg = new THREE.Group();
+        leg.rotation.y = a;
+        leg.add(box(0.045, 0.035, CHAIR_LEGS.reach, steel, 0, 0.09, CHAIR_LEGS.reach / 2));
+        leg.add(box(0.04, 0.03, 0.04, steel, 0, 0.065, CHAIR_LEGS.reach - 0.01));
+        const wheel = cylinder(CHAIR_LEGS.wheel, 0.03, caster, 0, CHAIR_LEGS.wheel, CHAIR_LEGS.reach - 0.01, 14);
+        wheel.rotation.z = Math.PI / 2;
+        leg.add(wheel);
+        chair.add(leg);
+    }
     chair.position.set(d.x + d.width / 2 + 0.25, 0, d.z + 0.95);
     chair.rotation.y = CHAIR_TURN;
     group.add(chair);
@@ -833,11 +860,8 @@ function buildFloorThings(group, config, picks) {
 
 /**
  * Build the office. `textures` may carry `screen` (the monitor's face),
- * `calendar`, `notes`,
- * `drawerLabels` (one per drawer), `boardHeader`, `boardCards`, `rolodex`,
- * `departures` and `whiteboard`, all optional. `rolodexRing` is the Rolodex's card layout
- * (`{ quad(i), uvs(i), count }`, from rolodex.js), and without it there is
- * no Rolodex.
+ * `calendar`, `notes`, `drawerLabels` (one per drawer), `boardHeader`,
+ * `boardCards`, `departures`, `whiteboard` and `rainGlass`, all optional.
  */
 export function buildRoom(config, textures = {}) {
     const group = new THREE.Group();
@@ -852,8 +876,6 @@ export function buildRoom(config, textures = {}) {
     const departures = buildDepartures(group, config, textures.departures || null, picks);
     const whiteboard = buildWhiteboard(group, config, textures.whiteboard || null, picks);
     buildPrinter(group, config, picks);
-    const ringOf = textures.rolodexRing || null;
-    const rolodex = ringOf ? buildRolodex(group, config, textures.rolodex || null, picks, ringOf.quad, ringOf.uvs, ringOf.count) : null;
     const notes = buildNotes(group, config, textures.notes || null, picks);
     const rain = buildRainPanes(group, config, textures.rainGlass || null);
     if (textures.screen) {
@@ -867,17 +889,18 @@ export function buildRoom(config, textures = {}) {
         calendar,
         cabinet,
         board,
-        rolodex,
         departures,
         whiteboard,
         notes,
         rain,
-        lamp: { light: desk.light, bulb: desk.bulb, group: desk.lampGroup }
+        lamp: { light: desk.light, bulb: desk.bulb, glow: desk.glow, group: desk.lampGroup }
     };
 }
 
-/** Switch the lamp. The bulb dims with it, so the lamp reads as off. */
+/** Switch the lamp. The bulb dims with it, and the shade's white glass
+ *  inside stops glowing, so the lamp reads as off. */
 export function setLamp(lamp, on) {
     lamp.light.visible = on;
     lamp.bulb.material.color.setHex(on ? 0xfff1c9 : 0x6b6356);
+    if (lamp.glow) lamp.glow.material.emissiveIntensity = on ? LAMP_GLOW : 0;
 }

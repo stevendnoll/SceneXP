@@ -117,8 +117,16 @@ export const CONFIG = deepFreeze({
         height: 2.8,
         desk: { x: 0.9, z: -2.05, width: 1.6, depth: 0.8, height: 0.75 },
         /** The wall calendar, on the back wall left of the window, where the
-         *  desk's view reaches it. `y` is its center. */
-        calendar: { x: -0.32, y: 1.52, width: 0.54, height: 0.74 },
+         *  desk's view reaches it on a laptop or wider. `y` is its center.
+         *  It hung at x -0.32 until QA on 2026-09-25 asked for more of the
+         *  view, and it moved left so the window could reach further: on an
+         *  upright phone it is now off the desk's frame, and reached from
+         *  Places. */
+        calendar: { x: -0.95, y: 1.52, width: 0.54, height: 0.74 },
+        /** The back window's left edge (the right one is the corner), and
+         *  its one mullion, which stands where it always did, just right of
+         *  the monitor, so the pane widened to the left is one clear sheet. */
+        backWindow: { x0: -0.5, mullion: 1.5 },
         /** The filing cabinet: a low lateral file of open-topped drawers
          *  along the back wall, left of the calendar. `x` and `z` are its
          *  center on the floor. `floor` is the drawers' floor, `pull` how far
@@ -134,15 +142,6 @@ export const CONFIG = deepFreeze({
          *  width and height, all exaggerated from life so a card reads
          *  across the room. */
         board: { x: -2.97, z: -1.05, y: 1.55, width: 2.4, height: 1.1, header: 0.12, card: [0.25, 0.155] },
-        /** The Rolodex, at the desk's front right corner. `x` and `z` are
-         *  its middle on the desk top, `axle` the axle's height above the
-         *  desk, and `card` a lettered card's width and its inner and outer
-         *  edges from the axle. `facing` is the angle, from straight up
-         *  toward the room, at which the chosen card stands. */
-        rolodex: {
-            x: 1.5, z: -1.8, width: 0.22, axle: 0.12, wheel: 0.09,
-            card: { width: 0.16, inner: 0.025, outer: 0.085 }, facing: 1.0
-        },
         /** The door in the front wall, and the departures board over it.
          *  `x` is each one's middle, `y` the board's. */
         door: { x: 0.3, width: 0.92, height: 2.05 },
@@ -166,12 +165,9 @@ export const CONFIG = deepFreeze({
     stations: {
         desk: { eye: [0.35, 1.5, 0.9], aim: [0.8, 0.9, -2.05], fov: 48 },
         computer: { eye: [0.95, 1.2, -1.2], aim: [0.95, 1.05, -2.3], fov: 42 },
-        calendar: { eye: [-0.22, 1.5, -1.2], aim: [-0.32, 1.52, -2.5], fov: 44 },
+        calendar: { eye: [-0.85, 1.5, -1.2], aim: [-0.95, 1.52, -2.5], fov: 44 },
         cabinet: { eye: [-1.85, 1.72, -0.55], aim: [-1.85, 0.42, -2.12], fov: 50, retreat: 1.1 },
         board: { eye: [-0.95, 1.52, -1.05], aim: [-2.97, 1.52, -1.05], fov: 46, retreat: 1.6 },
-        /** Aimed a little below the Rolodex, so it sits in the top half of
-         *  the screen, clear of the sheet docked beneath it. */
-        rolodex: { eye: [1.32, 1.32, -1.0], aim: [1.5, 0.66, -1.8], fov: 44, retreat: 0.35 },
         whiteboard: { eye: [-0.95, 1.5, 1.25], aim: [-2.97, 1.5, 1.25], fov: 46, retreat: 1.4 },
         departures: { eye: [0.3, 1.45, 0.25], aim: [0.3, 2.25, 2.5], fov: 46, retreat: 0.8 },
         /** At the back window, just right of the desk (the desk hides the
@@ -195,8 +191,6 @@ export const CONFIG = deepFreeze({
         liftSeconds: 0.35,
         /** How long a card takes to cross the corkboard. */
         carrySeconds: 0.7,
-        /** How long the Rolodex takes to turn to a letter. */
-        spinSeconds: 0.6,
         /** How long one flap of the departures board takes to turn. */
         flapSeconds: 0.035,
         /** How long "Watch a day go by" takes for the whole 24 hours. */

@@ -233,30 +233,6 @@ export function drawCardFace(ctx, x, y, w, h, card) {
     }
 }
 
-/** Paint the Rolodex's lettered cards: one cell per letter, the letter on a
- *  tab at the top of the cell, which is the card's outer edge. */
-export function drawLetterAtlas(ctx, W, H, letters, { cols, rows }) {
-    const cw = W / cols;
-    const ch = H / rows;
-    ctx.clearRect(0, 0, W, H);
-    letters.forEach((letter, i) => {
-        const x = (i % cols) * cw;
-        const y = Math.floor(i / cols) * ch;
-        ctx.fillStyle = '#f6f1e6';
-        ctx.fillRect(x, y, cw, ch);
-        ctx.fillStyle = 'rgba(111, 168, 220, 0.3)';
-        for (let ly = y + ch * 0.45; ly < y + ch * 0.95; ly += ch * 0.15) ctx.fillRect(x + cw * 0.08, ly, cw * 0.84, 1);
-        ctx.fillStyle = i % 2 ? '#2f5d73' : '#c8553d';
-        ctx.fillRect(x + cw * 0.34, y, cw * 0.32, ch * 0.3);
-        ctx.fillStyle = '#fbf8f1';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `700 ${Math.round(ch * 0.24)}px system-ui, sans-serif`;
-        ctx.fillText(letter, x + cw / 2, y + ch * 0.16);
-    });
-    ctx.textAlign = 'left';
-}
-
 /**
  * Paint the departures board: a dark panel, DEPARTURES and the clock across
  * the top, the column heads, and a tile for every flap, split across its

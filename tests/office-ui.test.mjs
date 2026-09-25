@@ -702,6 +702,13 @@ describe('the light', () => {
         expect(t.ui.hourPin).toBeNull();
     });
 
+    test('a jet can be sent across the sky for a screenshot', () => {
+        t.ui.lifeDue = false;
+        expect(window.cornerOffice.jet()).toBe('A jet is on its way across the bay.');
+        // The scenery is placed again on the next frame, jet and all.
+        expect(t.ui.lifeDue).toBe(true);
+    });
+
     test('a pinned hour is that hour today, for the sky as well as the light', () => {
         window.cornerOffice.hour(6.5);
         const at = t.skyTime(new Date(2026, 8, 24, 15, 20));
@@ -1156,37 +1163,35 @@ describe('the Rolodex', () => {
     const listNames = () => el('rolodex-list').children.map((li) => li.children[0].children[0].textContent);
     const texts = (node) => (node.children && node.children.length ? node.children.flatMap(texts) : [node.textContent || '']);
 
-    test('opens at its station from the toolbar, the desk and the 6 key, and lists everyone', () => {
+    test('opens where the visitor stands from Places and the 6 key, and lists everyone', () => {
+        t.goTo('window');
+        const standing = t.ui.station;
         place('rolodex');
         expect(el('rolodex').hidden).toBe(false);
-        expect(t.ui.station).toBe('rolodex');
+        // The wheel is gone from the desk (QA, 2026-09-25): nowhere to go.
+        expect(t.ui.station).toBe(standing);
         expect(el('rolodex-count').textContent).toBe('5 people in the Rolodex.');
         expect(listNames()).toEqual(['Dana Whitcombe', 'Jordan Reyes', 'Lena Fischer', 'Marcus Oyelaran', 'Priya Anand']);
         el('rolodex-close').click();
-        expect(t.ui.station).toBe('desk');
-        t.actOn('rolodex');
-        expect(el('rolodex').hidden).toBe(false);
-        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        expect(el('rolodex').hidden).toBe(true);
+        expect(t.ui.station).toBe(standing);
+        // Nothing in the room answers to it any more.
+        expect(t.actOn('rolodex')).toBe(false);
+        expect(el('rolodex').hidden).toBe(true);
         key('6');
         expect(el('rolodex').hidden).toBe(false);
     });
 
-    test('typing narrows the list and turns the wheel to the first letter found', () => {
+    test('typing narrows the list', () => {
         t.openRolodex();
         el('rolodex-search').value = 'fisch';
         fire(el('rolodex-search'), 'input');
         expect(listNames()).toEqual(['Lena Fischer']);
         expect(el('rolodex-count').textContent).toBe('1 of 5 people match.');
-        expect(t.ui.ring.t).toBe(0);
-        for (let i = 0; i < 10; i++) { jest.advanceTimersByTime(100); dom.loops.at(-1)(); }
-        expect(t.ui.ring.t).toBe(1);
-        expect(t.ui.ring.angle).toBe(t.ui.ring.to);
         // Searching by company finds the people there too.
         el('rolodex-search').value = 'tidewater';
         fire(el('rolodex-search'), 'input');
         expect(listNames()).toEqual(['Marcus Oyelaran']);
-        // The same letter again is no new turn.
-        expect(t.spinRolodexTo('M')).toBe(false);
     });
 
     test('a person’s card: how to reach them, safely linked, and everything they are part of', () => {

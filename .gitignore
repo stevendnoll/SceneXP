@@ -12,6 +12,7 @@ coverage/
 deploy/
 node_modules/
 ops/
+samples/
 snaps/
 specs/
 stage/

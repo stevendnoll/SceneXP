@@ -35,7 +35,7 @@ import { BAY, HAZE, rippleNormals } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
 import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
-    carLightPositions, carYaws, drift
+    carLightPositions, carYaws, drift, jetAt, jetFlashing
 } from './life.min.js';
 import { buildFleet, place, boxesGeometry } from './fleet.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
@@ -666,6 +666,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const fleet = buildFleet(scene, cars);
     const yaws = carYaws(cars, lanes);
     const centers = new Float32Array(cars.length * 3);
+    const pitches = new Float32Array(cars.length);
+    // A jet asked for by hand (callJet), on the seconds' clock.
+    let calledJet = null;
     const weather = buildWeather(scene);
     // How wet it is now (setLight), for what moves (setLife).
     let raining = 0;
@@ -815,10 +818,10 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         },
         /**
          * Put everything that moves where it is: the ferries, ships,
-         * sailboats and seaplane on the sky's clock (`date`), the cars, the
-         * rain and the ripples on real `seconds`, and the clouds drifted by
-         * the wind. `still` is a visitor who asked for less motion. Cheap
-         * enough for every frame.
+         * sailboats and seaplane on the sky's clock (`date`), the traffic,
+         * the jet, the rain and the ripples on real `seconds`, and the
+         * clouds drifted by the wind. `still` is a visitor who asked for
+         * less motion. Cheap enough for every frame.
          */
         setLife(date, seconds, still = false) {
             ferriesAt(date, route).forEach((at, i) => place(fleet.ferries[i], at));
@@ -834,14 +837,25 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
                 streakPositions(weather.streaks, seconds, RAIN, ends.array);
                 ends.needsUpdate = true;
             }
-            // The cars by day and night, and their lights by night.
-            fleet.moveCars(carPositions(cars, lanes, seconds, centers), yaws);
+            // The traffic by day and night, and its lights by night.
+            fleet.moveCars(carPositions(cars, lanes, seconds, centers, pitches), yaws, pitches);
             const positions = fleet.cars.geometry.attributes.position;
             carLightPositions(cars, lanes, seconds, positions.array);
             positions.needsUpdate = true;
+            // A jet crossing the sky, but never one held still in it.
+            fleet.flyJet(still ? null : jetAt(seconds, calledJet), jetFlashing(seconds));
             const moved = drift(date, seconds, CLOUDS.tile);
             if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);
             water.material.normalMap.offset.set(moved.ripple[0], moved.ripple[1]);
+        },
+        /**
+         * Send a jet across now, for a screenshot round (main.js offers it
+         * as cornerOffice.jet): one southbound, set out `lead` seconds ago
+         * so it is just coming into the desk's view at `seconds`.
+         */
+        callJet(seconds, lead = 55) {
+            calledJet = seconds - lead;
+            return calledJet;
         },
         /**
          * Set the finish for a screenshot round and say what it is now:

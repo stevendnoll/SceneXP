@@ -912,13 +912,17 @@ describe('the fleet, built from its source', () => {
     test('the fleet is built into a scene hidden, lights up for the evening, and is placed or hidden by the timetable', () => {
         const scene = new THREE.Scene();
         const lanes = life.carLanes();
-        const fleet = fleetMod.buildFleet(scene, life.carFleet(lanes));
+        const cars = life.carFleet(lanes);
+        const fleet = fleetMod.buildFleet(scene, cars);
         expect(fleet.ferries).toHaveLength(2);
         expect(fleet.ships).toHaveLength(3);
         expect(fleet.sailboats).toHaveLength(life.LIFE.sailboat.count);
         expect(scene.getObjectByName('seaplane')).toBe(fleet.seaplane.group);
+        expect(scene.getObjectByName('jet')).toBe(fleet.jet.group);
+        expect(fleet.jet.group.visible).toBe(false);
+        expect(fleet.jet.group.scale.x).toBe(life.JET.scale);
         expect(scene.getObjectByName('cars')).toBe(fleet.cars);
-        expect(fleet.cars.geometry.attributes.color.count).toBe(life.LIFE.cars.count);
+        expect(fleet.cars.geometry.attributes.color.count).toBe(cars.length);
         // The small craft are enlarged past life; the ships are true size.
         expect(fleet.sailboats[0].group.scale.x).toBe(life.LIFE.sailboat.scale);
         expect(fleet.ships[0].group.scale.x).toBe(1);
@@ -942,20 +946,101 @@ describe('the fleet, built from its source', () => {
         expect(ferry.trail.material.opacity).toBeCloseTo(0.55, 9);
         fleetMod.place(ferry, { x: 0, y: -195, z: -3000, yaw: 0 });
         expect(ferry.trail.material.opacity).toBe(0);
-        // The cars stand on the street (their middles ride 1.2 m up), facing their lanes.
-        expect(fleet.carBodies.count).toBe(life.LIFE.cars.count);
-        const centers = new Float32Array(fleet.carBodies.count * 3).fill(0);
+        // The vehicles stand on the street (their middles ride 1.2 m up),
+        // facing their lanes, tilted by a pitch when given one.
+        const { vehicles } = fleet;
+        expect(vehicles.car.paint.count + vehicles.bus.paint.count).toBe(cars.length);
+        const centers = new Float32Array(cars.length * 3).fill(0);
         centers[1] = 11.2;
-        const yaws = new Array(fleet.carBodies.count).fill(Math.PI / 2);
+        const yaws = new Array(cars.length).fill(Math.PI / 2);
         fleet.moveCars(centers, yaws);
         const m = new THREE.Matrix4();
-        fleet.carBodies.getMatrixAt(0, m);
+        const first = vehicles[cars[0].kind];
+        first.paint.getMatrixAt(vehicles.slot[0], m);
         const p = new THREE.Vector3();
         const q = new THREE.Quaternion();
         m.decompose(p, q, new THREE.Vector3());
         expect(p.y).toBeCloseTo(10, 6);
         expect(new THREE.Vector3(0, 0, -1).applyQuaternion(q).x).toBeCloseTo(-1, 6);
+        fleet.moveCars(centers, yaws, new Float32Array(cars.length).fill(0.1));
+        first.trim.getMatrixAt(vehicles.slot[0], m);
+        m.decompose(p, q, new THREE.Vector3());
+        expect(new THREE.Vector3(0, 0, -1).applyQuaternion(q).y).toBeCloseTo(Math.sin(0.1), 6);
+        // Every vehicle has its own instance in its kind's meshes.
+        for (const kind of ['car', 'bus']) {
+            const mine = cars.map((c, i) => (c.kind === kind ? vehicles.slot[i] : -1)).filter((k) => k >= 0);
+            expect(new Set(mine).size).toBe(mine.length);
+            expect(Math.max(...mine)).toBe(mine.length - 1);
+        }
         expect(fleetMod.CAR_COLORS.length).toBeGreaterThan(5);
+        expect(fleetMod.BUS_COLORS.length).toBeGreaterThan(1);
+        // By night the jet's lights come on, the strobes only when flashing.
+        fleet.light(1);
+        fleet.flyJet({ x: 0, y: 500, z: -5200, yaw: 0, pitch: 0 }, false);
+        expect(fleet.jet.navLights.visible).toBe(true);
+        expect(fleet.jet.strobes.visible).toBe(false);
+        fleet.flyJet({ x: 0, y: 500, z: -5200, yaw: 0, pitch: 0 }, true);
+        expect(fleet.jet.strobes.visible).toBe(true);
+        fleet.flyJet(null, true);
+        expect(fleet.jet.group.visible).toBe(false);
+        expect(fleet.jet.strobes.visible).toBe(false);
+    });
+
+    test('a fleet with no buses in it still builds', () => {
+        const scene = new THREE.Scene();
+        const lanes = life.carLanes();
+        const cars = life.carFleet(lanes).filter((c) => c.kind === 'car');
+        const fleet = fleetMod.buildFleet(scene, cars);
+        expect(fleet.vehicles.bus.paint.count).toBe(0);
+        expect(() => fleet.moveCars(new Float32Array(cars.length * 3), new Array(cars.length).fill(0))).not.toThrow();
+    });
+
+    test('the jet is an airliner’s shape: a long fuselage, wings nearly as wide, a tall fin, two engines under the wings', () => {
+        const { body, windows } = fleetMod.jetParts();
+        body.computeBoundingBox();
+        const b = body.boundingBox;
+        const length = b.max.z - b.min.z;
+        const span = b.max.x - b.min.x;
+        expect(length).toBeGreaterThan(38);
+        expect(length).toBeLessThan(41);
+        expect(span / length).toBeGreaterThan(0.85);
+        expect(span / length).toBeLessThan(1.0);
+        // The fin stands several meters over the fuselage, at the tail.
+        expect(b.max.y).toBeGreaterThan(7);
+        const pos = body.attributes.position;
+        let finTop = null;
+        for (let i = 0; i < pos.count; i++) if (pos.getY(i) === b.max.y) finTop = pos.getZ(i);
+        expect(finTop).toBeGreaterThan(10);
+        // Every part is solid and turned the right way out: each face, as
+        // it is wound (which is the side drawn), faces away from the part's
+        // own middle. A panel on the left wing is the one that could be
+        // built inside out (its span runs toward -x).
+        const inward = (g) => {
+            const p = g.attributes.position;
+            const middle = new THREE.Vector3();
+            for (let i = 0; i < p.count; i++) middle.add(new THREE.Vector3().fromBufferAttribute(p, i));
+            middle.divideScalar(p.count);
+            let n = 0;
+            for (let i = 0; i < p.count; i += 3) {
+                const [a, bb, c] = [i, i + 1, i + 2].map((k) => new THREE.Vector3().fromBufferAttribute(p, k));
+                const face = bb.clone().sub(a).cross(c.clone().sub(a));
+                if (face.lengthSq() < 1e-10) continue;
+                const out = a.add(bb).add(c).divideScalar(3).sub(middle);
+                if (face.dot(out) < 0) n++;
+            }
+            return n;
+        };
+        const { parts } = fleetMod.jetParts();
+        expect(parts.length).toBeGreaterThan(8);
+        parts.forEach((part) => expect(inward(part)).toBe(0));
+        // And the check catches a box built inside out.
+        const turned = fleetMod.sweptBox((u, v, w) => [1 - u, v, w], 0xffffff);
+        expect(inward(turned)).toBeGreaterThan(0);
+        // The engines hang under the wings, one either side.
+        const low = [];
+        for (let i = 0; i < pos.count; i++) if (pos.getY(i) < -2.6) low.push(pos.getX(i));
+        expect(low.some((x) => x > 4) && low.some((x) => x < -4)).toBe(true);
+        expect(windows.attributes.position.count).toBeGreaterThan(0);
     });
 });
 
@@ -1169,66 +1254,238 @@ describe('the second round of screenshots (2026-09-24)', () => {
         expect(new Set(lit.towers.meshes.map((m) => m.material.normalMap)).size).toBe(1);
     });
 
-    test('the cars are there by day: one instanced mesh, each car on its street, facing its lane, in its own color', () => {
-        const bodies = lit.fleet.carBodies;
-        expect(bodies.isInstancedMesh).toBe(true);
-        expect(bodies.count).toBe(life.LIFE.cars.count);
+    test('the traffic is there by day: paint and trim for cars and buses, each on its street, facing its lane, tilted with the hill, in its own color', () => {
+        const { vehicles } = lit.fleet;
+        const lanes = life.carLanes();
+        const cars = life.carFleet(lanes);
+        expect(vehicles.meshes).toHaveLength(4);
+        for (const mesh of vehicles.meshes) expect(mesh.isInstancedMesh).toBe(true);
+        expect(vehicles.car.paint.count + vehicles.bus.paint.count).toBe(cars.length);
+        expect(vehicles.bus.trim.count).toBe(cars.filter((c) => c.kind === 'bus').length);
         // Far below the water until placed.
         const m = new THREE.Matrix4();
         const p = new THREE.Vector3();
         const q = new THREE.Quaternion();
         const s = new THREE.Vector3();
-        const fresh = worldMod.buildWorld(CONFIG).fleet.carBodies;
-        fresh.getMatrixAt(0, m);
+        const fresh = worldMod.buildWorld(CONFIG).fleet.vehicles;
+        fresh.car.paint.getMatrixAt(0, m);
         expect(new THREE.Vector3().setFromMatrixPosition(m).y).toBeLessThan(-1000);
         lit.setLife(NOON, 12);
-        const lanes = life.carLanes();
-        const cars = life.carFleet(lanes);
-        const middles = life.carPositions(cars, lanes, 12);
+        const pitches = new Float32Array(cars.length);
+        const middles = life.carPositions(cars, lanes, 12, undefined, pitches);
         const yaws = life.carYaws(cars, lanes);
-        for (const i of [0, 17, 99, cars.length - 1]) {
-            bodies.getMatrixAt(i, m);
+        const onHill = cars.findIndex((c, i) => life.onStreet(middles[i * 3 + 1]) && Math.abs(pitches[i]) > 0.02);
+        const bus = cars.findIndex((c, i) => c.kind === 'bus' && life.onStreet(middles[i * 3 + 1]));
+        const suv = cars.findIndex((c, i) => c.scale === life.SUV && life.onStreet(middles[i * 3 + 1]));
+        expect(Math.min(onHill, bus, suv)).toBeGreaterThanOrEqual(0);
+        for (const i of [0, 17, 99, onHill, bus, suv, cars.length - 1]) {
+            const { paint, trim } = vehicles[cars[i].kind];
+            const k = vehicles.slot[i];
+            trim.getMatrixAt(k, m);
+            const trimAt = m.clone();
+            paint.getMatrixAt(k, m);
+            expect(trimAt.equals(m)).toBe(true);
             m.decompose(p, q, s);
             expect(p.x).toBeCloseTo(middles[i * 3], 3);
             expect(p.z).toBeCloseTo(middles[i * 3 + 2], 3);
+            expect(s.toArray().map((v) => +v.toFixed(6))).toEqual(cars[i].scale);
+            if (!life.onStreet(middles[i * 3 + 1])) {
+                expect(p.y).toBeLessThan(-1000);
+                continue;
+            }
             expect(p.y).toBeCloseTo(city.groundY(p.x, p.z), 0);
             const bow = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-            expect(bow.x).toBeCloseTo(-Math.sin(yaws[i]), 6);
+            expect(Math.atan2(-bow.x, -bow.z)).toBeCloseTo(yaws[i], 6);
+            expect(Math.asin(bow.y)).toBeCloseTo(pitches[i], 5);
         }
         const colors = new Set();
         const c = new THREE.Color();
-        for (let i = 0; i < bodies.count; i++) {
-            bodies.getColorAt(i, c);
+        for (let i = 0; i < vehicles.car.paint.count; i++) {
+            vehicles.car.paint.getColorAt(i, c);
             colors.add(c.getHexString());
         }
         expect(colors.size).toBeGreaterThan(5);
         // By day and by night alike; the lights only by night.
         lit.fleet.light(0);
-        expect(bodies.visible).toBe(true);
+        for (const mesh of vehicles.meshes) expect(mesh.visible).toBe(true);
         expect(lit.fleet.cars.visible).toBe(false);
     });
 
-    test('from the window by day, a good many cars are seen in the streets below', () => {
+    test('from the window by day, a good many cars and a bus or two are seen in the streets below', () => {
         const cam = cameraAt('window', 16 / 10);
         lit.setLife(NOON, 30);
         lit.scene.updateMatrixWorld(true);
         const frustum = new THREE.Frustum().setFromProjectionMatrix(
             new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)
         );
-        const bodies = lit.fleet.carBodies;
+        const { vehicles } = lit.fleet;
+        const occluders = lit.scene.children.filter((o) => !vehicles.meshes.includes(o));
         const m = new THREE.Matrix4();
-        let seen = 0;
-        for (let i = 0; i < bodies.count; i++) {
-            bodies.getMatrixAt(i, m);
-            const p = new THREE.Vector3().setFromMatrixPosition(m).add(new THREE.Vector3(0, 1, 0));
-            if (!frustum.containsPoint(p)) continue;
-            const dir = p.clone().sub(cam.position);
-            const ray = new THREE.Raycaster(cam.position, dir.clone().normalize(), 0.05, dir.length() - 3);
-            if (ray.intersectObject(room.group, true).length) continue;
-            const shown = (o) => (o ? o.visible && shown(o.parent) : true);
-            if (ray.intersectObjects(lit.scene.children.filter((o) => o !== bodies), true).some((h) => shown(h.object))) continue;
-            seen++;
+        const seen = { car: 0, bus: 0 };
+        for (const kind of ['car', 'bus']) {
+            const bodies = vehicles[kind].paint;
+            for (let i = 0; i < bodies.count; i++) {
+                bodies.getMatrixAt(i, m);
+                const p = new THREE.Vector3().setFromMatrixPosition(m).add(new THREE.Vector3(0, 1, 0));
+                if (!frustum.containsPoint(p)) continue;
+                const dir = p.clone().sub(cam.position);
+                const ray = new THREE.Raycaster(cam.position, dir.clone().normalize(), 0.05, dir.length() - 3);
+                if (ray.intersectObject(room.group, true).length) continue;
+                const shown = (o) => (o ? o.visible && shown(o.parent) : true);
+                if (ray.intersectObjects(occluders, true).some((h) => shown(h.object))) continue;
+                seen[kind]++;
+            }
         }
-        expect(seen).toBeGreaterThanOrEqual(10);
+        expect(seen.car).toBeGreaterThanOrEqual(10);
+        // Buses lead about one platoon in six, so over a minute a few pass.
+        let buses = seen.bus;
+        for (let t = 35; t < 95 && !buses; t += 5) {
+            lit.setLife(NOON, t);
+            lit.scene.updateMatrixWorld(true);
+            for (let i = 0; i < vehicles.bus.paint.count; i++) {
+                vehicles.bus.paint.getMatrixAt(i, m);
+                if (frustum.containsPoint(new THREE.Vector3().setFromMatrixPosition(m))) buses++;
+            }
+        }
+        expect(buses).toBeGreaterThan(0);
+    });
+});
+
+// ---- The third round of screenshots (2026-09-25) ---------------------------------
+
+describe('the third round of screenshots (2026-09-25)', () => {
+    let lit;
+    let life;
+    let fleetMod;
+    const NOON = new Date(2026, 8, 24, 12, 0);
+    const shown = (o) => (o ? o.visible && shown(o.parent) : true);
+
+    beforeAll(async () => {
+        life = await import('../www/office/js/life.js');
+        fleetMod = await import('../www/office/js/fleet.js');
+        lit = worldMod.buildWorld(CONFIG, { textures: { clouds: new THREE.Texture() } });
+    });
+
+    test('from the desk, more of the view is window than it was (QA: "too much of the view is blocked by the wall")', () => {
+        // A row across the frame at the window's middle height: how much of
+        // it looks out. With the window's left edge where it was (x 0.1)
+        // and the calendar beside it, this was 0.58 (measured 2026-09-25);
+        // with the window reaching to x -0.5 it is 0.725. The monitor, the
+        // lamp and the calendar keep it well short of 1.
+        const cam = cameraAt('desk', 16 / 10);
+        const y = new THREE.Vector3(0, 1.7, -CONFIG.room.depth / 2).project(cam).y;
+        let out = 0;
+        const n = 120;
+        for (let i = 0; i < n; i++) {
+            const { what } = seeAt(cam, -1 + (2 * (i + 0.5)) / n, y);
+            if (what !== 'room') out++;
+        }
+        expect(out / n).toBeGreaterThan(0.7);
+    });
+
+    test('a car has dark glass round a colored roof, and reads so from straight above', () => {
+        const { paint, trim } = fleetMod.carParts();
+        const scene = new THREE.Scene();
+        const body = new THREE.Mesh(paint, new THREE.MeshBasicMaterial());
+        body.name = 'paint';
+        const rest = new THREE.Mesh(trim, new THREE.MeshBasicMaterial());
+        rest.name = 'trim';
+        scene.add(body, rest);
+        scene.updateMatrixWorld(true);
+        const from = (z) => {
+            const [hit] = new THREE.Raycaster(new THREE.Vector3(0, 10, z), new THREE.Vector3(0, -1, 0)).intersectObjects([body, rest]);
+            return hit.object.name;
+        };
+        // Hood, windshield, roof, rear window, trunk, from the bow back.
+        expect([-1.8, -0.8, 0.3, 1.35, 1.9].map(from)).toEqual(['paint', 'trim', 'paint', 'trim', 'paint']);
+        paint.computeBoundingBox();
+        trim.computeBoundingBox();
+        expect(trim.boundingBox.min.y).toBeCloseTo(0, 6);
+        const length = Math.max(paint.boundingBox.max.z, trim.boundingBox.max.z) - Math.min(paint.boundingBox.min.z, trim.boundingBox.min.z);
+        expect(length).toBeCloseTo(life.VEHICLES.car.length, 0);
+        // And a bus is as long as a bus.
+        const busTrim = fleetMod.busParts().trim;
+        busTrim.computeBoundingBox();
+        expect(busTrim.boundingBox.max.z - busTrim.boundingBox.min.z).toBeCloseTo(life.VEHICLES.bus.length, 0);
+    });
+
+    test('a jet crosses the far sky, seen from the desk and from the window, big enough to read as an airliner', () => {
+        const jet = lit.fleet.jet.group;
+        const crossing = life.jetCrossing();
+        const size = { desk: 0, window: 0 };
+        const seconds = { desk: 0, window: 0 };
+        for (let s = 0; s < life.jetFlight(0).start + crossing; s += 2) {
+            lit.setLife(NOON, s);
+            lit.scene.updateMatrixWorld(true);
+            for (const station of ['desk', 'window']) {
+                const cam = cameraAt(station, 16 / 10);
+                const box = new THREE.Box3().setFromObject(jet);
+                // On the fuselage's axis (the box's middle is thin air over
+                // it, between the wings and the fin).
+                const middle = jet.getWorldPosition(new THREE.Vector3());
+                const ndc = middle.clone().project(cam);
+                if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) continue;
+                // Seen: the ray to its middle leaves by a window and meets it first.
+                const dir = middle.clone().sub(cam.position);
+                const ray = new THREE.Raycaster(cam.position, dir.clone().normalize());
+                if (ray.intersectObject(room.group, true).length) continue;
+                const [hit] = ray.intersectObject(lit.scene, true).filter((h) => shown(h.object));
+                let o = hit && hit.object;
+                while (o && o !== jet) o = o.parent;
+                if (o !== jet) continue;
+                seconds[station] += 2;
+                // Its length across a 1440 px wide screen.
+                const ends = [new THREE.Vector3(box.min.x, middle.y, middle.z), new THREE.Vector3(box.max.x, middle.y, middle.z)]
+                    .map((v) => v.project(cam).x);
+                size[station] = Math.max(size[station], (Math.abs(ends[1] - ends[0]) / 2) * 1440);
+            }
+        }
+        expect(seconds.desk).toBeGreaterThanOrEqual(20);
+        expect(seconds.window).toBeGreaterThanOrEqual(20);
+        // Small, but a shape, not a speck.
+        expect(size.desk).toBeGreaterThan(20);
+        expect(size.desk).toBeLessThan(80);
+        expect(size.window).toBeGreaterThan(16);
+    });
+
+    test('never a jet held still in the sky for a visitor who asked for less motion', () => {
+        lit.setLife(NOON, 30);
+        expect(lit.fleet.jet.group.visible).toBe(true);
+        lit.setLife(NOON, 30, true);
+        expect(lit.fleet.jet.group.visible).toBe(false);
+        expect(lit.fleet.jet.group.position.y).toBeLessThan(-1000);
+    });
+
+    test('by night its wingtip lights burn and its strobes flash; one can be called for a screenshot', () => {
+        const { jet } = lit.fleet;
+        lit.fleet.light(1);
+        lit.setLife(NOON, 0);
+        expect(life.jetFlashing(0)).toBe(true);
+        expect(jet.navLights.visible).toBe(true);
+        expect(jet.strobes.visible).toBe(true);
+        expect(jet.lit.material.emissiveIntensity).toBeGreaterThan(1);
+        lit.setLife(NOON, 0.6);
+        expect(jet.strobes.visible).toBe(false);
+        const colors = jet.navLights.geometry.attributes.color;
+        const pos = jet.navLights.geometry.attributes.position;
+        // Red on the left wingtip (-x for a bow toward -z), green on the right.
+        const left = pos.getX(0) < 0 ? 0 : 1;
+        expect(colors.getX(left)).toBeGreaterThan(colors.getY(left));
+        expect(colors.getY(1 - left)).toBeGreaterThan(colors.getX(1 - left));
+        lit.fleet.light(0);
+        expect(jet.navLights.visible).toBe(false);
+        expect(jet.strobes.visible).toBe(false);
+        // Between flights, a jet asked for comes straight into the desk's view.
+        const idle = life.jetFlight(0).start + life.jetCrossing() + 30;
+        lit.setLife(NOON, idle);
+        expect(jet.group.visible).toBe(false);
+        lit.callJet(idle);
+        lit.setLife(NOON, idle + 5);
+        expect(jet.group.visible).toBe(true);
+        const cam = cameraAt('desk', 16 / 10);
+        lit.scene.updateMatrixWorld(true);
+        const ndc = jet.group.getWorldPosition(new THREE.Vector3()).project(cam);
+        expect(Math.abs(ndc.x)).toBeLessThan(1);
+        expect(Math.abs(ndc.y)).toBeLessThan(1);
     });
 });

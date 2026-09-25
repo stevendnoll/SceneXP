@@ -699,12 +699,6 @@ describe('people panels and forms', () => {
         expect(forms.readContactForm()).toMatchObject({ name: 'Pat', title: 'Recruiter' });
         expect(forms.validateContact({ name: 'Pat', email: 'pat@acme.example', linkedIn: 'linkedin.example/in/pat' })).toBe('');
     });
-
-    test('the lettered cards paint', async () => {
-        const rolodex = await import('../www/office/js/rolodex.js');
-        const ctx = document.createElement('canvas').getContext('2d');
-        expect(() => paint.drawLetterAtlas(ctx, 1152, 288, rolodex.LETTERS, rolodex.LETTER_ATLAS)).not.toThrow();
-    });
 });
 
 // ---- M6: the whiteboard, the departures and the prep sheet, from source ------------
