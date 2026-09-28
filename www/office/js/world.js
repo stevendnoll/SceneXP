@@ -37,7 +37,7 @@ import { BAY, HAZE, rippleNormals } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
 import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
-    carLightPositions, carYaws, drift, jetAt, jetParked, jetFlashing, shipShift, LIFE, JET
+    carLightPositions, carYaws, drift, jetsAt, jetFlashing, shipShift, LIFE, JET
 } from './life.min.js';
 import { buildFleet, place, boxesGeometry, jetParts, joinGeometries } from './fleet.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
@@ -327,8 +327,7 @@ export function airportGeometry(parts) {
 
 /**
  * The airport across the bay: its ground, runway, taxiways, apron and
- * buildings in one mesh; the jets waiting at the gates (every gate but the
- * arrival's) in another; and by night its lights, and the approach's
+ * buildings in one mesh; the jets waiting at the gates in another; and by night its lights, and the approach's
  * flashers running in toward the runway (`rabbit`, one light at a time).
  * Lights are light, not things: no ray stops at them.
  */
@@ -337,7 +336,7 @@ function buildAirport(scene) {
     ground.name = 'airport';
     scene.add(ground);
     const { body } = jetParts();
-    const parked = airportGates().filter((g) => !g.free).map((g) => {
+    const parked = airportGates().map((g) => {
         const jet = body.clone();
         jet.scale(JET.scale, JET.scale, JET.scale);
         jet.rotateY(g.yaw);
@@ -913,9 +912,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const pitches = new Float32Array(cars.length);
     // A jet asked for by hand (callJet), on the seconds' clock.
     let calledJet = null;
-    // Whether the jet is in the air or on its rollout (setLife), when it is
+    // Which jets are in the air or on their rollout (setLife), when they are
     // worth drawing every frame.
-    let jetFast = false;
+    let jetsFast = [];
     // How far the ships' timetable is run on so one is in view on arrival
     // (arrive).
     let shipShiftMinutes = 0;
@@ -1120,11 +1119,11 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             const positions = fleet.cars.geometry.attributes.position;
             carLightPositions(cars, lanes, seconds, positions.array);
             positions.needsUpdate = true;
-            // A jet coming in to land, but never one held still in the sky:
-            // for less motion it waits at its gate.
-            const jet = still ? jetParked() : jetAt(seconds, calledJet);
-            fleet.flyJet(jet, jetFlashing(real));
-            jetFast = jet.fast === true;
+            // The jets coming in to land, but never one held still in the
+            // sky: for less motion there are only those at the gates.
+            const jets = still ? [] : jetsAt(seconds, calledJet);
+            fleet.flyJets(jets, jetFlashing(real));
+            jetsFast = fleet.jets.map((_, i) => Boolean(jets[i] && jets[i].fast));
             // The approach's flashers run by night, and never held still.
             airport.rabbit.visible = airportNight && !still;
             if (airport.rabbit.visible) {
@@ -1145,19 +1144,21 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             return shipShiftMinutes;
         },
         /**
-         * Whether the jet is in the air or on its rollout and inside the
-         * camera's view, where it is worth drawing every frame (main.js
-         * CONFIG.view.jetFps); taxiing and parked, the scenery's own frames
-         * do. Strictly true or false.
+         * Whether a jet is in the air or on its rollout, nearer than
+         * JET.smooth and inside the camera's view, where it is worth drawing
+         * every frame (main.js CONFIG.view.jetFps); taxiing or far off, the
+         * scenery's own frames do. Strictly true or false.
          */
         jetInSight() {
-            const jet = fleet.jet.group;
-            if (jet.visible !== true || !jetFast) return false;
             camera.updateMatrixWorld();
             sight.setFromProjectionMatrix(seeing.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
-            reach.center.copy(jet.position);
-            reach.radius = JET_REACH * jet.scale.x;
-            return sight.intersectsSphere(reach) === true;
+            return fleet.jets.some(({ group }, i) => {
+                if (group.visible !== true || !jetsFast[i]) return false;
+                if (group.position.distanceTo(camera.position) >= JET.smooth) return false;
+                reach.center.copy(group.position);
+                reach.radius = JET_REACH * group.scale.x;
+                return sight.intersectsSphere(reach) === true;
+            });
         },
         /**
          * Send a jet in to land now, for a screenshot round (main.js offers

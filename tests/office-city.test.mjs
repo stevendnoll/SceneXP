@@ -594,10 +594,12 @@ describe('the airport across the bay (QA, 2026-09-28)', () => {
         expect(islandBuilt(x, z)).toBe(0);
     });
 
-    test('gates along the apron, noses to the terminal, one kept free for the jet coming in', () => {
+    test('gates along the apron, noses to the terminal; the arrivals taxi into the hangar at the far end', () => {
         const gates = airportGates();
         expect(gates).toHaveLength(AIRPORT.gates.a.length);
-        expect(gates.filter((g) => g.free)).toEqual([gates[AIRPORT.arrivalGate]]);
+        const hangar = airportParts().find((p) => p.kind === 'hangar');
+        expect([hangar.a, hangar.b]).toEqual([AIRPORT.hangar.a, AIRPORT.hangar.b]);
+        expect(hangar.a).toBeGreaterThan(Math.max(...AIRPORT.gates.a));
         for (const g of gates) {
             expect(-Math.sin(g.yaw)).toBeCloseTo(across[0], 12);
             expect(-Math.cos(g.yaw)).toBeCloseTo(across[1], 12);

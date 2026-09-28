@@ -464,7 +464,7 @@ function jet() {
 
 /**
  * Build the fleet into `scene`: two ferries, a pool of three ships (as
- * many as can be in sight at once), the sailboats, the seaplane, the jet
+ * many as can be in sight at once), the sailboats, the seaplane, the jets
  * and the traffic. Returns them, and `light(level)` to turn the windows and
  * the traffic's lights on for the evening (daylight.js cityLights).
  */
@@ -475,11 +475,12 @@ export function buildFleet(scene, cars) {
         ships: [ship(0), ship(1), ship(2)],
         sailboats: Array.from({ length: LIFE.sailboat.count }, (_, i) => sailboat(i)),
         seaplane: seaplane(),
-        jet: jet(),
+        // Enough for the flights that are out at once, and one called by hand.
+        jets: Array.from({ length: JET.fleet + 1 }, () => jet()),
         cars: carLights(cars),
         vehicles
     };
-    const all = [...fleet.ferries, ...fleet.ships, ...fleet.sailboats, fleet.seaplane, fleet.jet];
+    const all = [...fleet.ferries, ...fleet.ships, ...fleet.sailboats, fleet.seaplane, ...fleet.jets];
     for (const c of all) scene.add(c.group);
     scene.add(fleet.cars, ...vehicles.meshes);
     const matrix = new THREE.Matrix4();
@@ -508,19 +509,24 @@ export function buildFleet(scene, cars) {
         for (const c of all) if (c.lit) c.lit.material.emissiveIntensity = level * 1.4;
         lightsOn = level > 0.3;
         fleet.cars.visible = lightsOn;
-        fleet.jet.navLights.visible = lightsOn;
-        if (!lightsOn) {
-            fleet.jet.strobes.visible = false;
-            fleet.jet.landing.visible = false;
+        for (const jet of fleet.jets) {
+            jet.navLights.visible = lightsOn;
+            if (!lightsOn) {
+                jet.strobes.visible = false;
+                jet.landing.visible = false;
+            }
         }
     };
-    /** Fly the jet (life.js jetAt, or null to hide it), its strobes lit
-     *  when `flashing` and its landing lights while it comes in fast, when
-     *  it is dark enough to see them. */
-    fleet.flyJet = (at, flashing = false) => {
-        place(fleet.jet, at);
-        fleet.jet.strobes.visible = lightsOn && flashing && !!at;
-        fleet.jet.landing.visible = lightsOn && !!at && at.fast === true;
+    /** Fly the jets (life.js jetsAt, each null to hide it), their strobes
+     *  lit when `flashing` and their landing lights while they come in fast,
+     *  when it is dark enough to see them. */
+    fleet.flyJets = (ats, flashing = false) => {
+        fleet.jets.forEach((jet, i) => {
+            const at = ats[i] || null;
+            place(jet, at);
+            jet.strobes.visible = lightsOn && flashing && !!at;
+            jet.landing.visible = lightsOn && !!at && at.fast === true;
+        });
     };
     return fleet;
 }

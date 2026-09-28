@@ -586,8 +586,10 @@ export function islandHeight(x, z, fields = mountainFields()) {
  * buildings there once hid the rollout and the taxi). `elevation` its height
  * above the
  * water, `runway` its ends and width, `taxiway` the parallel taxiway's
- * offset and width, `apron` and `gates` where the jets park (the arrival's
- * own gate is `arrivalGate`, left free for it), and `approach` the lights
+ * offset and width, `apron` and `gates` where the jets wait (all of them
+ * taken), `hangar` the one the arrivals taxi into at the runway's far end
+ * (from the office it hides a jet inside it, so the arrivals leave the
+ * scene there rather than vanishing from a gate), and `approach` the lights
  * reaching out over the water before the runway.
  */
 export const AIRPORT = {
@@ -600,9 +602,7 @@ export const AIRPORT = {
     taxiway: { b: 300, width: 70, exits: [150, 1350, 2550] },
     apron: { a: [800, 2500], b: [380, 620] },
     gates: { a: [1250, 1500, 1750, 2000, 2250], b: 520 },
-    /** The gate nearest the office's line of sight: the row of gates runs
-     *  nearly along it, so each jet parked there hides the next. */
-    arrivalGate: 0,
+    hangar: { a: 2700, b: 560, len: 200, wid: 170, h: 44 },
     approach: { reach: 900, every: 30 },
     lampEvery: 60
 };
@@ -707,19 +707,19 @@ export function airportParts() {
         { a: 950, b: 640, len: 36, wid: 36, y: 95, h: 16, color: C.cab, kind: 'tower' },
         { a: 950, b: 640, len: 40, wid: 40, y: 111, h: 3, color: C.tower, kind: 'tower' },
         // The hangars, by the runway's far end.
-        { a: 2700, b: 560, len: 200, wid: 170, y: 0, h: 44, color: C.hangar, kind: 'hangar' },
+        { ...AIRPORT.hangar, y: 0, color: C.hangar, kind: 'hangar' },
         { a: 2920, b: 600, len: 150, wid: 150, y: 0, h: 38, color: C.hangar, kind: 'hangar' }
     ];
     return parts;
 }
 
-/** Where the jets park: each gate's [x, z] and the yaw that points a jet's
- *  nose at the terminal. `free` marks the arrival's own gate. */
+/** Where the jets wait: each gate's [x, z] and the yaw that points a
+ *  jet's nose at the terminal. */
 export function airportGates() {
     const yaw = airportYaw(0, 1);
-    return AIRPORT.gates.a.map((a, i) => {
+    return AIRPORT.gates.a.map((a) => {
         const [x, z] = airportPoint(a, AIRPORT.gates.b);
-        return { x, z, a, b: AIRPORT.gates.b, yaw, free: i === AIRPORT.arrivalGate };
+        return { x, z, a, b: AIRPORT.gates.b, yaw };
     });
 }
 

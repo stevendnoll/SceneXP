@@ -1227,9 +1227,13 @@ describe('the fleet, built from its source', () => {
         expect(fleet.ships).toHaveLength(3);
         expect(fleet.sailboats).toHaveLength(life.LIFE.sailboat.count);
         expect(scene.getObjectByName('seaplane')).toBe(fleet.seaplane.group);
-        expect(scene.getObjectByName('jet')).toBe(fleet.jet.group);
-        expect(fleet.jet.group.visible).toBe(false);
-        expect(fleet.jet.group.scale.x).toBe(life.JET.scale);
+        // A jet for each flight that can be out at once, and one to call.
+        expect(fleet.jets).toHaveLength(life.JET.fleet + 1);
+        expect(scene.getObjectByName('jet')).toBe(fleet.jets[0].group);
+        for (const jet of fleet.jets) {
+            expect(jet.group.visible).toBe(false);
+            expect(jet.group.scale.x).toBe(life.JET.scale);
+        }
         expect(scene.getObjectByName('cars')).toBe(fleet.cars);
         expect(fleet.cars.geometry.attributes.color.count).toBe(cars.length);
         // The small craft are enlarged past life; the ships are true size.
@@ -1285,14 +1289,19 @@ describe('the fleet, built from its source', () => {
         expect(fleetMod.BUS_COLORS.length).toBeGreaterThan(1);
         // By night the jet's lights come on, the strobes only when flashing.
         fleet.light(1);
-        fleet.flyJet({ x: 0, y: 500, z: -5200, yaw: 0, pitch: 0 }, false);
-        expect(fleet.jet.navLights.visible).toBe(true);
-        expect(fleet.jet.strobes.visible).toBe(false);
-        fleet.flyJet({ x: 0, y: 500, z: -5200, yaw: 0, pitch: 0 }, true);
-        expect(fleet.jet.strobes.visible).toBe(true);
-        fleet.flyJet(null, true);
-        expect(fleet.jet.group.visible).toBe(false);
-        expect(fleet.jet.strobes.visible).toBe(false);
+        const aloft = { x: 0, y: 500, z: -5200, yaw: 0, pitch: 0 };
+        fleet.flyJets([aloft, null], false);
+        expect(fleet.jets[0].navLights.visible).toBe(true);
+        expect(fleet.jets[0].strobes.visible).toBe(false);
+        fleet.flyJets([aloft, null], true);
+        expect(fleet.jets[0].strobes.visible).toBe(true);
+        expect(fleet.jets[1].group.visible).toBe(false);
+        expect(fleet.jets[1].strobes.visible).toBe(false);
+        fleet.flyJets([], true);
+        for (const jet of fleet.jets) {
+            expect(jet.group.visible).toBe(false);
+            expect(jet.strobes.visible).toBe(false);
+        }
     });
 
     test('a fleet with no buses in it still builds', () => {
@@ -1724,7 +1733,8 @@ describe('the third round of screenshots (2026-09-25)', () => {
     });
 
     test('a jet comes in to land, seen from the desk and from the window, big enough to read as an airliner, always right to left', () => {
-        const jet = lit.fleet.jet.group;
+        // Flight 0 flies jet 0.
+        const jet = lit.fleet.jets[0].group;
         const times = life.jetTimes();
         const size = { desk: 0, window: 0 };
         const seconds = { desk: 0, window: 0 };
@@ -1753,7 +1763,7 @@ describe('the third round of screenshots (2026-09-25)', () => {
                 seconds[station] += 2;
                 expect(ndc.x).toBeLessThan(lastX[station]);
                 lastX[station] = ndc.x;
-                if (life.jetAt(s).phase === 'rollout') landed[station] += 2;
+                if (life.jetsAt(s)[0].phase === 'rollout') landed[station] += 2;
                 // Its length across a 1440 px wide screen.
                 const ends = [new THREE.Vector3(box.min.x, middle.y, middle.z), new THREE.Vector3(box.max.x, middle.y, middle.z)]
                     .map((v) => v.project(cam).x);
@@ -1771,66 +1781,94 @@ describe('the third round of screenshots (2026-09-25)', () => {
         expect(size.window).toBeGreaterThan(16);
     });
 
-    test('taxiing in, both see it all the way to its gate: nothing on the island stands in the way', () => {
+    test('taxiing in, both see it down the taxiway until it passes behind the jets at the gates, and the hangar hides it at the end', () => {
         const times = life.jetTimes();
         const start = life.jetFlight(0).start + times.approach + times.rollout;
+        const jet = lit.fleet.jets[0].group;
+        const firstHit = (cam, target) => {
+            const [hit] = new THREE.Raycaster(cam.position, target.clone().sub(cam.position).normalize())
+                .intersectObject(lit.scene, true).filter((h) => shown(h.object));
+            let o = hit && hit.object;
+            while (o && o !== jet && o.parent) o = o.parent;
+            return { jet: o === jet, name: hit && hit.object.name };
+        };
         for (const station of ['desk', 'window']) {
             const cam = cameraAt(station, 16 / 10);
             let seen = 0;
             let asked = 0;
-            for (let s = start; s <= start + times.taxi + 4; s += 4) {
+            for (let s = start; s <= start + times.taxi; s += 4) {
+                const at = life.jetsAt(s)[0];
+                // Short of the gate row's far end: nothing in the way.
+                if (city.airportLocal(at.x, at.z).a > 2200) continue;
                 lit.setLife(NOON, s);
                 lit.scene.updateMatrixWorld(true);
-                const middle = lit.fleet.jet.group.getWorldPosition(new THREE.Vector3());
                 asked++;
-                const [hit] = new THREE.Raycaster(cam.position, middle.clone().sub(cam.position).normalize())
-                    .intersectObject(lit.scene, true).filter((h) => shown(h.object));
-                let o = hit && hit.object;
-                while (o && o !== lit.fleet.jet.group) o = o.parent;
-                if (o === lit.fleet.jet.group) seen++;
+                if (firstHit(cam, jet.getWorldPosition(new THREE.Vector3())).jet) seen++;
             }
+            expect(asked).toBeGreaterThan(10);
             expect(seen / asked).toBeGreaterThan(0.9);
+            // At the end of its taxi it is inside the hangar, which hides it,
+            // so it goes from the scene unseen.
+            lit.setLife(NOON, start + times.taxi - 0.5);
+            lit.scene.updateMatrixWorld(true);
+            const end = firstHit(cam, jet.getWorldPosition(new THREE.Vector3()));
+            expect(end.jet).toBe(false);
+            expect(end.name).toBe('airport');
+            lit.setLife(NOON, start + times.taxi + 0.5);
+            expect(jet.visible).toBe(false);
         }
     });
 
-    test('the world knows when the jet is in view, so it can be drawn every frame just then', () => {
+    test('the world knows when a jet is in view, so it can be drawn every frame just then', () => {
         const follow = (station) => {
             const cam = cameraAt(station, 16 / 10);
             lit.follow(cam);
+            return cam;
         };
-        const start = life.jetFlight(0).start;
-        // Aloft, and crossing the desk's frame.
-        follow('desk');
+        // Its own count: a jet in the air or on its rollout, inside the frame.
+        const expected = (cam, s) => {
+            const frustum = new THREE.Frustum().setFromProjectionMatrix(
+                new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+            return life.jetsAt(s).some((at) => at && at.fast
+                && Math.hypot(at.x - cam.position.x, at.y - cam.position.y, at.z - cam.position.z) < life.JET.smooth
+                && frustum.intersectsSphere(new THREE.Sphere(new THREE.Vector3(at.x, at.y, at.z), 22 * life.JET.scale)));
+        };
+        const desk = follow('desk');
         let inSight = 0;
-        for (let s = start; s < start + life.jetCrossing(); s += 2) {
+        let slow = 0;
+        for (let s = 0; s < 900; s += 3) {
             lit.setLife(NOON, s);
-            if (lit.jetInSight()) inSight += 2;
+            const want = expected(desk, s);
+            expect(lit.jetInSight()).toBe(want);
+            if (want) inSight += 3;
+            // Jets out, but only taxiing: not worth every frame.
+            if (!want && life.jetsAt(s).some((at) => at && !at.fast)) slow++;
         }
-        // In sight for part of the approach, not all of it.
-        expect(inSight).toBeGreaterThan(20);
-        expect(inSight).toBeLessThan(life.jetCrossing() * 0.8);
-        // Taxiing in and parked at its gate, in view but slow: never.
-        const times = life.jetTimes();
-        lit.setLife(NOON, start + times.approach + times.rollout + 20);
-        expect(life.jetAt(start + times.approach + times.rollout + 20).phase).toBe('taxi');
-        expect(lit.jetInSight()).toBe(false);
-        lit.setLife(NOON, start + times.total + 10);
-        expect(lit.jetInSight()).toBe(false);
-        // Mid-crossing but facing the front wall, never.
-        lit.setLife(NOON, start + life.jetCrossing() / 2);
+        // In sight, near enough to step visibly at the scenery's own 15
+        // frames a second, some of the time: a flight every 90 seconds
+        // (QA, 2026-09-29) had a jet somewhere in the frame 83% of it, and
+        // the page would have drawn at 60 nearly always. Within JET.smooth
+        // it is about 37% (a flight every 7 minutes was about 10%).
+        expect(inSight).toBeGreaterThan(90);
+        expect(inSight).toBeLessThan(900 * 0.42);
+        expect(slow).toBeGreaterThan(10);
+        // Facing the front wall, never.
+        let near = 0;
+        while (!expected(desk, near)) near += 1;
+        lit.setLife(NOON, near);
         expect(lit.jetInSight()).toBe(true);
         follow('departures');
         expect(lit.jetInSight()).toBe(false);
     });
 
     test('the jet flies on the scenery’s clock, its strobes on real time (QA, 2026-09-29)', () => {
-        const { jet } = lit.fleet;
+        const [jet] = lit.fleet.jets;
         lit.fleet.light(1);
         // Seconds 30 on the scenery's clock (a day going by has run it on),
         // 0.6 on the real one: where the jet is is the first's, whether its
         // strobes flash the second's.
         lit.setLife(NOON, 30, false, 0.6);
-        const at = life.jetAt(30);
+        const at = life.jetsAt(30)[0];
         expect(jet.group.position.x).toBeCloseTo(at.x, 6);
         expect(life.jetFlashing(30)).not.toBe(life.jetFlashing(0.6));
         expect(jet.strobes.visible).toBe(life.jetFlashing(0.6));
@@ -1839,20 +1877,18 @@ describe('the third round of screenshots (2026-09-25)', () => {
         lit.fleet.light(0);
     });
 
-    test('never a jet held still in the sky for a visitor who asked for less motion: it waits at its gate', () => {
+    test('never a jet held still in the sky for a visitor who asked for less motion: only those at the gates', () => {
         lit.setLife(NOON, 30);
-        expect(lit.fleet.jet.group.visible).toBe(true);
-        const aloft = lit.fleet.jet.group.position.y;
+        expect(lit.fleet.jets[0].group.visible).toBe(true);
         lit.setLife(NOON, 30, true);
-        const parked = life.jetParked();
-        expect(lit.fleet.jet.group.visible).toBe(true);
-        expect(lit.fleet.jet.group.position.y).toBeCloseTo(parked.y, 6);
-        expect(lit.fleet.jet.group.position.y).toBeLessThan(aloft - 200);
+        for (const jet of lit.fleet.jets) expect(jet.group.visible).toBe(false);
         expect(lit.jetInSight()).toBe(false);
+        // The gates stay full.
+        expect(lit.airport.jets.geometry.attributes.position.count).toBeGreaterThan(0);
     });
 
     test('by night its wingtip lights burn and its strobes flash; one can be called for a screenshot', () => {
-        const { jet } = lit.fleet;
+        const [jet] = lit.fleet.jets;
         lit.fleet.light(1);
         lit.setLife(NOON, 0);
         expect(life.jetFlashing(0)).toBe(true);
@@ -1867,26 +1903,29 @@ describe('the third round of screenshots (2026-09-25)', () => {
         const left = pos.getX(0) < 0 ? 0 : 1;
         expect(colors.getX(left)).toBeGreaterThan(colors.getY(left));
         expect(colors.getY(1 - left)).toBeGreaterThan(colors.getX(1 - left));
-        // Its landing lights burn coming in, and not at the gate.
+        // Its landing lights burn coming in, and not taxiing.
         expect(jet.landing.visible).toBe(true);
-        const gateTime = life.jetFlight(0).start + life.jetTimes().total + 30;
-        lit.setLife(NOON, gateTime);
+        const times = life.jetTimes();
+        lit.setLife(NOON, life.jetFlight(0).start + times.approach + times.rollout + 10);
+        expect(jet.group.visible).toBe(true);
         expect(jet.landing.visible).toBe(false);
         lit.fleet.light(0);
         expect(jet.navLights.visible).toBe(false);
         expect(jet.strobes.visible).toBe(false);
         expect(jet.landing.visible).toBe(false);
-        // Between flights it waits at its gate, and a jet asked for comes
-        // straight into the desk's view.
-        const idle = gateTime;
+        // Its flight over, it is gone into the hangar; and a jet asked for
+        // comes straight into the desk's view, on a jet of its own.
+        const idle = life.jetFlight(0).start + times.total + 1;
         lit.setLife(NOON, idle);
-        expect(jet.group.position.x).toBeCloseTo(life.jetParked().x, 6);
+        expect(life.jetsAt(idle)[0]).toBeNull();
+        expect(jet.group.visible).toBe(false);
         lit.callJet(idle);
         lit.setLife(NOON, idle + 1);
-        expect(jet.group.visible).toBe(true);
+        const called = lit.fleet.jets[life.JET.fleet];
+        expect(called.group.visible).toBe(true);
         const cam = cameraAt('desk', 16 / 10);
         lit.scene.updateMatrixWorld(true);
-        const ndc = jet.group.getWorldPosition(new THREE.Vector3()).project(cam);
+        const ndc = called.group.getWorldPosition(new THREE.Vector3()).project(cam);
         expect(Math.abs(ndc.x)).toBeLessThan(1);
         expect(Math.abs(ndc.y)).toBeLessThan(1);
     });
@@ -2009,7 +2048,7 @@ describe('the fifth round of screenshots (2026-09-28)', () => {
         const times = life.jetTimes();
         let dashing = 0;
         for (let t = 0; t <= times.approach; t += 1) {
-            const at = life.jetAt(start + t);
+            const at = life.jetsAt(start + t)[0];
             const left = -city.airportLocal(at.x, at.z).a;
             if (life.approachSpeed(left) <= life.JET.speed + 1) continue;
             dashing++;
@@ -2025,10 +2064,10 @@ describe('the fifth round of screenshots (2026-09-28)', () => {
         expect(dashing).toBeGreaterThan(8);
     });
 
-    test('jets wait at every gate but the arrival’s, on their wheels', async () => {
+    test('jets wait at every gate, on their wheels', async () => {
         const jets = world.scene.getObjectByName('airport-jets');
         const one = (await import('../www/office/js/fleet.js')).jetParts().body.attributes.position.count;
-        expect(jets.geometry.attributes.position.count).toBe(one * (city.AIRPORT.gates.a.length - 1));
+        expect(jets.geometry.attributes.position.count).toBe(one * city.AIRPORT.gates.a.length);
         jets.geometry.computeBoundingBox();
         const low = jets.geometry.boundingBox.min.y;
         // The engines hang 2.9 m under the axis, the wheels 3.4 (both times

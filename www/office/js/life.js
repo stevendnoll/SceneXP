@@ -500,9 +500,18 @@ export function carLightPositions(cars, lanes, seconds, out = new Float32Array(c
  * behind the tower is about 20 seconds, not 45. It comes out low over the
  * airport and touches down. It flares over the last `flare` meters, rolls out
  * `rollout` meters slowing to `taxiSpeed`, turns off at the taxiway exit
- * past that and taxis to its gate, where it waits until the next one comes
- * in. A twin-engined narrow-body, enlarged by `scale` like the small craft,
- * so its shape reads as an airliner rather than a speck.
+ * past that and taxis down to the hangar at the runway's far end and into
+ * it, where the scene lets it go. A twin-engined narrow-body, enlarged by
+ * `scale` like the small craft, so its shape reads as an airliner rather
+ * than a speck.
+ *
+ * ONE EVERY 90 SECONDS (QA, 2026-09-29: "there aren't enough passenger
+ * jets"; Steve chose 90 s). One every seven minutes was right for real
+ * time, but a day going by runs the jets 30 times over, and its 30 seconds
+ * held two. A flight from first sight to the hangar takes nearly four
+ * minutes, so `fleet` jets fly at once, each flight in turn taking the next
+ * (flight k the jet k mod fleet), and each is inside the hangar before its
+ * jet is wanted again (held by a test).
  *
  * On the scenery's seconds, like the cars (main.js sceneryClock): real
  * time, and 30 times faster while a day goes by, not the day's own 2,880,
@@ -511,9 +520,10 @@ export function carLightPositions(cars, lanes, seconds, out = new Float32Array(c
  * every `every` seconds or a little later (`late`).
  */
 export const JET = {
-    every: 420,
-    late: 90,
+    every: 90,
+    late: 20,
     first: -5,
+    fleet: 3,
     /** Faster than a real approach (about 75), because it is drawn 3.5
      *  times its size: at 80 it crept across (QA, 2026-09-25). */
     speed: 145,
@@ -529,7 +539,14 @@ export const JET = {
     scale: 3.5,
     /** A light aboard flashes this long, this often (seconds). */
     flash: 0.16,
-    blink: 1.3
+    blink: 1.3,
+    /** Nearer the eye than this, meters, a jet coming in steps visibly at
+     *  the scenery's 15 frames a second, and is worth drawing every frame
+     *  (world.js jetInSight). Farther, it moves about a pixel and a half a
+     *  frame or less: with a flight every 90 seconds, some jet was in the
+     *  frame 83% of the time, and every frame for all of them was the
+     *  phone's battery. */
+    smooth: 6500
 };
 
 /** The jet's nose attitude on the approach, a touch down, and at the end of
@@ -550,13 +567,13 @@ export function glideHeight(left) {
     return ((slope * F) / 2) * t * t;
 }
 
-/** The taxi from the end of the rollout to the arrival's gate, as points of
- *  the airport's frame [a, b]: on along the runway to the exit, across to the
- *  taxiway, along it to the gate, and in to the gate. */
+/** The taxi from the end of the rollout into the hangar, as points of the
+ *  airport's frame [a, b]: on along the runway to the exit, across to the
+ *  taxiway, along it past the gates to the hangar, and in. */
 export function taxiRoute() {
     const exit = AIRPORT.taxiway.exits.find((a) => a >= JET.rollout);
-    const gate = AIRPORT.gates.a[AIRPORT.arrivalGate];
-    return [[JET.rollout, 0], [exit, 0], [exit, AIRPORT.taxiway.b], [gate, AIRPORT.taxiway.b], [gate, AIRPORT.gates.b]];
+    const { hangar } = AIRPORT;
+    return [[JET.rollout, 0], [exit, 0], [exit, AIRPORT.taxiway.b], [hangar.a, AIRPORT.taxiway.b], [hangar.a, hangar.b]];
 }
 
 /** The jet's speed over the ground on the approach, `left` meters short
@@ -641,12 +658,14 @@ function jetAtPoint(a, b, up, da, db, pitch, phase, fast) {
 
 /**
  * The jet `into` seconds into a flight: where it is, which way it faces,
- * its pitch, and its `phase` ('approach', 'rollout', 'taxi' or 'parked').
- * `fast` is whether it is moving quickly enough to be worth drawing at its
- * own frame rate: in the air and on the rollout, not taxiing or parked.
+ * its pitch, and its `phase` ('approach', 'rollout' or 'taxi'), or null
+ * before the flight and once it is in the hangar. `fast` is whether it is
+ * moving quickly enough to be worth drawing at its own frame rate: in the
+ * air and on the rollout, not taxiing.
  */
 export function jetOnTrack(into) {
     const times = jetTimes();
+    if (!(into >= 0) || into > times.total) return null;
     const ground = JET.wheels * JET.scale;
     if (into < times.approach) {
         const left = approachLeft(into);
@@ -674,32 +693,26 @@ export function jetOnTrack(into) {
         }
         along -= length;
     }
-    return jetParked();
-}
-
-/** The jet at its gate, nose to the terminal. */
-export function jetParked() {
-    const gate = airportGates()[AIRPORT.arrivalGate];
-    const at = jetAtPoint(gate.a, gate.b, JET.wheels * JET.scale, 0, 1, 0, 'parked', false);
-    return { ...at, speed: 0 };
+    // In the hangar, at its middle.
+    const [a, b] = route[route.length - 1];
+    return jetAtPoint(a, b, ground, 0, 1, 0, 'taxi', false);
 }
 
 /**
- * Where the jet is at `seconds`. `called` is the start of one asked for by
- * hand (main.js cornerOffice.jet). Between flights it waits at its gate, so
- * before the first and after each it is parked there; a new flight takes it
- * from the gate (at 13 km, and with the visitor's eye on the new one coming
- * in on the right, that is the least of it).
+ * Every jet at `seconds`: an array of JET.fleet + 1, each null (not out) or
+ * where it is (jetOnTrack). Flight k flies jet k mod JET.fleet; the last
+ * is kept for one asked for by hand (`called`, the start of it, main.js
+ * cornerOffice.jet), so it never takes a jet a flight is using.
  */
-export function jetAt(seconds, called = null) {
-    const times = jetTimes();
-    if (called != null && seconds >= called && seconds - called <= times.total) return jetOnTrack(seconds - called);
-    // A flight and the most one is late are shorter than `every`, so the
-    // flight due in this stretch of the clock is the only one out.
-    const k = Math.floor((seconds - JET.first) / JET.every);
-    if (k < 0) return jetParked();
-    const { start } = jetFlight(k);
-    return seconds >= start ? jetOnTrack(seconds - start) : jetParked();
+export function jetsAt(seconds, called = null) {
+    const slots = new Array(JET.fleet + 1).fill(null);
+    const last = Math.floor((seconds - JET.first) / JET.every);
+    for (let k = last - JET.fleet; k <= last; k++) {
+        const at = jetOnTrack(seconds - jetFlight(k).start);
+        if (at) slots[((k % JET.fleet) + JET.fleet) % JET.fleet] = at;
+    }
+    if (called != null) slots[JET.fleet] = jetOnTrack(seconds - called);
+    return slots;
 }
 
 /** Whether the jet's strobes are lit at `seconds`: a short flash, over and

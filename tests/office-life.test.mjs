@@ -11,7 +11,7 @@ import {
     LIFE, minutesOn, minutesOfDay, gently, yawFor, ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt,
     shipShift, SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift,
     TRAFFIC, VEHICLES, SUV, PARKED_Y, pitchOf, cycleOf, slotTimes, distanceAlong, onStreet,
-    JET, jetCrossing, jetFlight, jetOnTrack, jetAt, jetFlashing, jetTimes, jetParked, glideHeight, approachSpeed, approachLeft
+    JET, jetCrossing, jetFlight, jetOnTrack, jetsAt, jetFlashing, jetTimes, glideHeight, approachSpeed, approachLeft
 } from '../www/office/js/life.js';
 import { CITY, WATER_Y, piers, isWater, isLand, groundY, shoreZ, AIRPORT, airportFrame, airportLocal, airportGates } from '../www/office/js/city.js';
 
@@ -474,7 +474,7 @@ describe('the jet', () => {
     const times = jetTimes();
     const flight = (step = 0.5) => {
         const out = [];
-        for (let t = 0; t <= times.total + 5; t += step) out.push({ t, ...jetOnTrack(t) });
+        for (let t = 0; t <= times.total; t += step) out.push({ t, ...jetOnTrack(t) });
         return out;
     };
     const ground = WATER_Y + AIRPORT.elevation + JET.wheels * JET.scale;
@@ -531,7 +531,7 @@ describe('the jet', () => {
         expect(airportLocal(down.x, down.z).a).toBeCloseTo(0, 6);
     });
 
-    test('it rolls out on the runway slowing to a taxi, then taxis on the airport to its gate and waits there', () => {
+    test('it rolls out on the runway slowing to a taxi, then taxis on the airport into the hangar, and is gone', () => {
         const roll = flight(0.25).filter((p) => p.phase === 'rollout');
         let last = Infinity;
         for (let i = 1; i < roll.length; i++) {
@@ -549,19 +549,25 @@ describe('the jet', () => {
         for (const p of taxi) {
             const { a, b } = airportLocal(p.x, p.z);
             expect(a).toBeGreaterThan(0);
-            expect(a).toBeLessThan(AIRPORT.runway.to);
+            expect(a).toBeLessThanOrEqual(AIRPORT.hangar.a + 1e-6);
             expect(b).toBeGreaterThanOrEqual(-1e-6);
-            expect(b).toBeLessThanOrEqual(AIRPORT.gates.b + 1e-6);
+            expect(b).toBeLessThanOrEqual(AIRPORT.hangar.b + 1e-6);
             expect(p.fast).toBe(false);
+            // Clear of the jets at the gates, whose tails reach 70 m either
+            // side of the gate line: it passes them on the taxiway.
+            if (b > AIRPORT.taxiway.b + 1) expect(a).toBeGreaterThan(Math.max(...AIRPORT.gates.a) + 150);
         }
-        const parked = jetOnTrack(times.total + 1);
-        const gate = airportGates()[AIRPORT.arrivalGate];
-        expect(parked).toEqual(jetParked());
-        expect(parked.phase).toBe('parked');
-        expect(parked.x).toBeCloseTo(gate.x, 6);
-        expect(parked.z).toBeCloseTo(gate.z, 6);
-        expect(parked.yaw).toBeCloseTo(gate.yaw, 9);
-        expect(gate.free).toBe(true);
+        // Its last place is well inside the hangar, which hides it (a whole
+        // jet, its length along b and its span along a), and then it is gone.
+        const { hangar } = AIRPORT;
+        const end = jetOnTrack(times.total);
+        const { a, b } = airportLocal(end.x, end.z);
+        const length = 40 * JET.scale;
+        const span = 36 * JET.scale;
+        expect(Math.abs(a - hangar.a) + span / 2).toBeLessThan(hangar.len / 2);
+        expect(Math.abs(b - hangar.b) + length / 2).toBeLessThan(hangar.wid / 2);
+        expect(jetOnTrack(times.total + 0.01)).toBeNull();
+        expect(jetOnTrack(-0.01)).toBeNull();
     });
 
     test('never a jump: from the first second out to its gate it moves no faster than it flies, and only dashes in the dash', () => {
@@ -601,42 +607,49 @@ describe('the jet', () => {
         }
     });
 
-    test('the first comes in within a minute of the office opening, then one now and then; between them it waits at its gate', () => {
+    test('one every 90 seconds or so (QA, 2026-09-29), up to three out at once, each on a jet of its own', () => {
         expect(jetFlight(0)).toEqual({ start: JET.first });
-        expect(jetAt(0).phase).toBe('approach');
-        expect(jetAt(-100)).toEqual(jetParked());
-        let flights = 0;
-        let flying = false;
+        expect(JET.every).toBe(90);
+        // The first comes in as the office opens.
+        expect(jetsAt(0)[0].phase).toBe('approach');
+        let landings = 0;
+        const flying = new Array(JET.fleet + 1).fill(false);
         for (let s = 0; s < 3600; s += 1) {
-            const at = jetAt(s);
-            expect(at).not.toBeNull();
-            const now = at.phase === 'approach';
-            if (now && !flying) flights++;
-            flying = now;
+            const jets = jetsAt(s);
+            expect(jets).toHaveLength(JET.fleet + 1);
+            expect(jets.filter(Boolean).length).toBeLessThanOrEqual(JET.fleet);
+            jets.forEach((at, i) => {
+                const now = Boolean(at && at.phase === 'approach');
+                if (now && !flying[i]) landings++;
+                flying[i] = now;
+            });
+            // The called jet's place is kept for it.
+            expect(jets[JET.fleet]).toBeNull();
         }
-        // An hour holds about eight or nine.
-        expect(flights).toBeGreaterThanOrEqual(8);
-        expect(flights).toBeLessThanOrEqual(10);
-        for (let k = 0; k < 30; k++) {
+        // An hour holds about forty: a day going by (15 minutes of the
+        // scenery's clock) about ten.
+        expect(landings).toBeGreaterThanOrEqual(38);
+        expect(landings).toBeLessThanOrEqual(42);
+        for (let k = -5; k < 60; k++) {
             const { start } = jetFlight(k);
-            // Each is at its gate before the next one's stretch of the clock.
-            expect(start + times.total).toBeLessThan(JET.first + (k + 1) * JET.every);
             expect(start).toBeGreaterThanOrEqual(JET.first + k * JET.every);
-            expect(jetAt(start + times.total + 1)).toEqual(jetParked());
+            expect(start).toBeLessThan(JET.first + k * JET.every + JET.late);
+            // A jet is in the hangar before the flight after next wants it.
+            expect(start + times.total).toBeLessThan(jetFlight(k + JET.fleet).start);
+            // And a flight never catches the one ahead: the same approach,
+            // on the same clock, a minute or more behind it.
+            expect(jetFlight(k + 1).start - start).toBeGreaterThan(JET.every - JET.late);
         }
         expect(jetCrossing()).toBe(times.approach);
     });
 
-    test('one asked for by hand comes in from when it was asked, whatever the timetable', () => {
-        // Asked for just after the first flight has come in, with the whole
-        // flight over before the second is due.
-        const called = jetFlight(0).start + times.total + 1;
-        expect(called + times.total + 1).toBeLessThan(jetFlight(1).start);
-        expect(jetAt(called + 20)).toEqual(jetParked());
-        expect(jetAt(called + 20, called)).toEqual(jetOnTrack(20));
-        expect(jetAt(called + times.total + 1, called)).toEqual(jetParked());
-        // And the timetable carries on under it.
-        expect(jetAt(jetFlight(1).start + 5, called)).toEqual(jetOnTrack(5));
+    test('one asked for by hand comes in from when it was asked, on its own jet, whatever the timetable', () => {
+        const called = 1000;
+        expect(jetsAt(called - 1, called)[JET.fleet]).toBeNull();
+        expect(jetsAt(called + 20, called)[JET.fleet]).toEqual(jetOnTrack(20));
+        expect(jetsAt(called + times.total + 1, called)[JET.fleet]).toBeNull();
+        // And the timetable carries on beside it.
+        expect(jetsAt(called + 20, called).slice(0, JET.fleet)).toEqual(jetsAt(called + 20).slice(0, JET.fleet));
     });
 
     test('its strobes flash briefly, over and over', () => {
