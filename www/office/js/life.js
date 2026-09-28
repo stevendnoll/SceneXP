@@ -1,7 +1,7 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * life.js - What moves out there: the ferries, the ships, the sailboats, the
- * seaplane, the traffic, a jet now and then, and the wind in the clouds and
+ * seaplane, the traffic, a jet coming in to land now and then, and the wind in the clouds and
  * on the water.
  *
  * ON A TIMETABLE, NOT AT RANDOM. Everything on the water keeps a schedule
@@ -26,7 +26,9 @@
  * meshes on them.
  */
 
-import { CITY, WATER_Y, shoreZ, groundY, blockAt, piers, isLand, seeded } from './city.min.js';
+import {
+    CITY, WATER_Y, shoreZ, groundY, blockAt, piers, isLand, seeded, AIRPORT, airportPoint, airportYaw, airportY, airportGates
+} from './city.min.js';
 
 const MINUTE = 60000;
 
@@ -482,13 +484,18 @@ export function carLightPositions(cars, lanes, seconds, out = new Float32Array(c
 // ---- The jet --------------------------------------------------------------------
 
 /**
- * Now and then a passenger jet crosses the far sky (QA, 2026-09-25): a
- * twin-engined narrow-body on the approach line over the bay, the way the
- * arrivals come down past a real waterfront. It flies south, letting down,
- * and the next one north, climbing, `span` meters either side of the
- * office's line on the track `z` out over the water, between `low` and
- * `high` meters above it. Enlarged by `scale`, like the small craft, so its
- * shape reads as an airliner rather than a speck.
+ * Now and then a passenger jet comes in to land at the airport across the
+ * bay (city.js AIRPORT; QA, 2026-09-28). Every one flies the same way, in
+ * from the visitor's right and down to their left, never left to right: a
+ * straight final approach along the runway's line, letting down on a
+ * `glide` slope from `from` meters out, over the water and in over the
+ * island's shore, the big tower left of the office's street hiding it for
+ * the last half minute before it comes out low over the airport and
+ * touches down. It flares over the last `flare` meters, rolls out
+ * `rollout` meters slowing to `taxiSpeed`, turns off at the taxiway exit
+ * past that and taxis to its gate, where it waits until the next one comes
+ * in. A twin-engined narrow-body, enlarged by `scale` like the small craft,
+ * so its shape reads as an airliner rather than a speck.
  *
  * On real seconds, like the cars: a day going by at speed would fire one
  * across the window in a frame. The first comes into the desk's view half a
@@ -499,59 +506,142 @@ export const JET = {
     every: 420,
     late: 90,
     first: -5,
-    /** Faster than a real approach (about 75), because it is drawn four
+    /** Faster than a real approach (about 75), because it is drawn 3.5
      *  times its size: at 80 it crept across (QA, 2026-09-25). */
     speed: 145,
-    z: -5500,
-    span: 9000,
-    low: 700,
-    high: 960,
+    glide: 3,
+    from: 16000,
+    flare: 400,
+    rollout: 1300,
+    taxiSpeed: 14,
+    /** How far the fuselage's axis stands above the ground on its wheels,
+     *  meters, before `scale` (the engines hang 2.9 m under it). */
+    wheels: 3.4,
     scale: 3.5,
     /** A light aboard flashes this long, this often (seconds). */
     flash: 0.16,
     blink: 1.3
 };
 
-/** How long a crossing takes, in seconds. */
-export function jetCrossing() {
-    return (2 * JET.span) / JET.speed;
+/** The jet's nose attitude on the approach, a touch down, and at the end of
+ *  the flare, a little up (radians). */
+const APPROACH_PITCH = -0.017;
+const FLARE_PITCH = 0.06;
+
+/** The height over the runway on the approach, `left` meters short of the
+ *  touchdown point. The glide slope is aimed half a flare short of it, as a
+ *  real one is aimed short of where the wheels meet the runway, and the
+ *  flare rounds it off from there: a parabola that starts at the slope's
+ *  own angle and only ever grows shallower, level at touchdown. */
+export function glideHeight(left) {
+    const slope = Math.tan((JET.glide * Math.PI) / 180);
+    const F = JET.flare;
+    if (left >= F) return slope * (left - F / 2);
+    const t = Math.max(0, left) / F;
+    return ((slope * F) / 2) * t * t;
 }
 
-/** Flight `k`: when it sets out (seconds on the page's clock) and which way. */
+/** The taxi from the end of the rollout to the arrival's gate, as points of
+ *  the airport's frame [a, b]: on along the runway to the exit, across to the
+ *  taxiway, along it to the gate, and in to the gate. */
+export function taxiRoute() {
+    const exit = AIRPORT.taxiway.exits.find((a) => a >= JET.rollout);
+    const gate = AIRPORT.gates.a[AIRPORT.arrivalGate];
+    return [[JET.rollout, 0], [exit, 0], [exit, AIRPORT.taxiway.b], [gate, AIRPORT.taxiway.b], [gate, AIRPORT.gates.b]];
+}
+
+/** How long each part of a flight takes, seconds: `approach`, `rollout` and
+ *  `taxi`, and `total`. */
+export function jetTimes() {
+    const approach = JET.from / JET.speed;
+    const rollout = (2 * JET.rollout) / (JET.speed + JET.taxiSpeed);
+    const route = taxiRoute();
+    let length = 0;
+    for (let i = 1; i < route.length; i++) length += Math.hypot(route[i][0] - route[i - 1][0], route[i][1] - route[i - 1][1]);
+    const taxi = length / JET.taxiSpeed;
+    return { approach, rollout, taxi, total: approach + rollout + taxi };
+}
+
+/** How long a flight is in the air, seconds: the stretch worth drawing at
+ *  the jet's own frame rate (main.js CONFIG.view.jetFps). */
+export function jetCrossing() {
+    return jetTimes().approach;
+}
+
+/** Flight `k`: when it sets out (seconds on the page's clock). */
 export function jetFlight(k) {
     const late = k === 0 ? 0 : seeded(20260925 + k * 7919)() * JET.late;
-    return { start: JET.first + k * JET.every + late, south: k % 2 === 0 };
+    return { start: JET.first + k * JET.every + late };
+}
+
+/** The jet at a point of the airport's frame, `up` meters over its ground,
+ *  heading along (da, db) with its nose `pitch` up. */
+function jetAtPoint(a, b, up, da, db, pitch, phase, fast) {
+    const [x, z] = airportPoint(a, b);
+    return { x, y: airportY(up), z, yaw: airportYaw(da, db), pitch, speed: 1, phase, fast };
 }
 
 /**
- * The jet `into` seconds into a crossing: where it is, which way it faces,
- * and its pitch (the nose a touch up letting down, more climbing). Its
- * height follows a straight line along the track, so south is down and
- * north is up.
+ * The jet `into` seconds into a flight: where it is, which way it faces,
+ * its pitch, and its `phase` ('approach', 'rollout', 'taxi' or 'parked').
+ * `fast` is whether it is moving quickly enough to be worth drawing at its
+ * own frame rate: in the air and on the rollout, not taxiing or parked.
  */
-export function jetOnTrack(into, south) {
-    const { span, speed, low, high, z } = JET;
-    const x = south ? span - speed * into : -span + speed * into;
-    const slope = (high - low) / (2 * span);
-    const y = WATER_Y + (low + high) / 2 + slope * x;
-    const climb = Math.atan(slope) * (south ? -1 : 1);
-    return { x, y, z, yaw: yawFor(south ? -1 : 1, 0), pitch: climb + 0.035, speed: 1 };
+export function jetOnTrack(into) {
+    const times = jetTimes();
+    const ground = JET.wheels * JET.scale;
+    if (into < times.approach) {
+        const left = JET.from - JET.speed * Math.max(0, into);
+        const flare = 1 - Math.min(1, left / JET.flare);
+        const pitch = APPROACH_PITCH + (FLARE_PITCH - APPROACH_PITCH) * flare;
+        return jetAtPoint(-left, 0, ground + glideHeight(left), 1, 0, pitch, 'approach', true);
+    }
+    let t = into - times.approach;
+    if (t < times.rollout) {
+        const slowing = (JET.speed - JET.taxiSpeed) / times.rollout;
+        const a = JET.speed * t - 0.5 * slowing * t * t;
+        const pitch = FLARE_PITCH * Math.max(0, 1 - t / 3);
+        return jetAtPoint(a, 0, ground, 1, 0, pitch, 'rollout', true);
+    }
+    t -= times.rollout;
+    const route = taxiRoute();
+    let along = t * JET.taxiSpeed;
+    for (let i = 1; i < route.length; i++) {
+        const [a0, b0] = route[i - 1];
+        const [a1, b1] = route[i];
+        const length = Math.hypot(a1 - a0, b1 - b0);
+        if (along <= length) {
+            const k = along / length;
+            return jetAtPoint(a0 + (a1 - a0) * k, b0 + (b1 - b0) * k, ground, a1 - a0, b1 - b0, 0, 'taxi', false);
+        }
+        along -= length;
+    }
+    return jetParked();
+}
+
+/** The jet at its gate, nose to the terminal. */
+export function jetParked() {
+    const gate = airportGates()[AIRPORT.arrivalGate];
+    const at = jetAtPoint(gate.a, gate.b, JET.wheels * JET.scale, 0, 1, 0, 'parked', false);
+    return { ...at, speed: 0 };
 }
 
 /**
- * Where the jet is at `seconds`, or null between flights. `called` is the
- * start of one asked for by hand (main.js cornerOffice.jet), which flies
- * south whatever the timetable says.
+ * Where the jet is at `seconds`. `called` is the start of one asked for by
+ * hand (main.js cornerOffice.jet). Between flights it waits at its gate, so
+ * before the first and after each it is parked there; a new flight takes it
+ * from the gate (at 13 km, and with the visitor's eye on the new one coming
+ * in on the right, that is the least of it).
  */
 export function jetAt(seconds, called = null) {
-    const crossing = jetCrossing();
-    if (called != null && seconds >= called && seconds - called <= crossing) return jetOnTrack(seconds - called, true);
-    // A crossing and the most a flight is late are shorter than `every`, so
-    // the flight due in this stretch of the clock is the only one aloft.
+    const times = jetTimes();
+    if (called != null && seconds >= called && seconds - called <= times.total) return jetOnTrack(seconds - called);
+    // A flight and the most one is late are shorter than `every`, so the
+    // flight due in this stretch of the clock is the only one out.
     const k = Math.floor((seconds - JET.first) / JET.every);
-    if (k < 0) return null;
-    const { start, south } = jetFlight(k);
-    return seconds >= start && seconds - start <= crossing ? jetOnTrack(seconds - start, south) : null;
+    if (k < 0) return jetParked();
+    const { start } = jetFlight(k);
+    return seconds >= start ? jetOnTrack(seconds - start) : jetParked();
 }
 
 /** Whether the jet's strobes are lit at `seconds`: a short flash, over and

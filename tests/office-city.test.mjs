@@ -10,6 +10,8 @@ import {
     CITY, WATER_Y, shoreZ, elevation, groundY, FAR_LAND, inPolygon, isLand, isWater, seeded, blockAt, districtOf,
     cityTowers, piers, reflectionPoints, noiseField, crests, MOUNTAINS, farCoastZ, mountainHeight, landColor, LAND_COLORS,
     islandHeight, islandShoreZ, islandCenter, islandLandingX, islandTowers, islandLamps, islandBuilt, islandGround, ISLAND_CITY,
+    AIRPORT, AIRPORT_COLORS, airportFrame, airportPoint, airportLocal, airportDistance, airportFlat, airportYaw, airportParts, airportGates,
+    airportLights, airportY,
     landGrids, stops, SNOW, snowCover, snowFray, snowLineAt, snowColor, landGround, paneNormals, PANE_TILT, PANE_STORE, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
 } from '../www/office/js/city.js';
 
@@ -501,8 +503,9 @@ describe('the city across the bay (QA, 2026-09-26)', () => {
             expect(y - WATER_Y).toBeCloseTo(islandHeight(x, z) + 6, 3);
             expect(islandShoreZ(x) - z).toBeLessThanOrEqual(ISLAND_CITY.inland);
         }
-        // The promenade runs along the water, in front of the first row.
-        expect(lamps.filter(([x, , z]) => islandShoreZ(x) - z < ISLAND_CITY.beach).length).toBeGreaterThan(150);
+        // The promenade runs along the water, in front of the first row
+        // (short of the airport, which has its own lights).
+        expect(lamps.filter(([x, , z]) => islandShoreZ(x) - z < ISLAND_CITY.beach).length).toBeGreaterThan(100);
     });
 
     test('its hillside is grayer where it is built, and the rest of the island stays forest', () => {
@@ -516,5 +519,108 @@ describe('the city across the bay (QA, 2026-09-26)', () => {
         expect(built).not.toBe(forest);
         // Still a green gray, never white or brown: the hills stay hills.
         expect((built >> 8) & 255).toBeGreaterThan((built >> 16) & 255);
+    });
+});
+
+describe('the airport across the bay (QA, 2026-09-28)', () => {
+    const { origin, along, across } = airportFrame();
+    const corners = (p) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => airportPoint(p.a + (i * p.len) / 2, p.b + (j * p.wid) / 2));
+
+    test('its runway runs the way the jets land: south and a little west, away to the visitor’s left', () => {
+        expect(Math.hypot(...along)).toBeCloseTo(1, 12);
+        expect(along[0] * across[0] + along[1] * across[1]).toBeCloseTo(0, 12);
+        // South (-x) mostly, and west (-z, away from the office) some.
+        expect(along[0]).toBeLessThan(-0.8);
+        expect(along[1]).toBeLessThan(0);
+        // Across points away from the office, so the terminal stands beyond
+        // the runway, with nothing of the airport's between it and the eye.
+        expect(across[1]).toBeLessThan(0);
+        const back = airportLocal(...airportPoint(1234, 567));
+        expect(back.a).toBeCloseTo(1234, 9);
+        expect(back.b).toBeCloseTo(567, 9);
+        // A jet built facing -z, turned by airportYaw, faces along.
+        const yaw = airportYaw(1, 0);
+        expect(-Math.sin(yaw)).toBeCloseTo(along[0], 12);
+        expect(-Math.cos(yaw)).toBeCloseTo(along[1], 12);
+    });
+
+    test('where the desk and the window see it: touchdown just left of the tower that hides the island, the rollout in the desk’s stretch', () => {
+        // Measured 2026-09-28: the desk sees the island from x -6,250 to
+        // -4,000 on a laptop, and a tower hides it from there to x 0.
+        expect(origin[0]).toBeLessThan(-4000);
+        expect(origin[0]).toBeGreaterThan(-4600);
+        const [rollX] = airportPoint(1300, 0);
+        expect(rollX).toBeGreaterThan(-6250);
+        for (const g of airportGates()) expect(g.x).toBeGreaterThan(-6250);
+    });
+
+    test('everything it is built of stands on the island, on level ground at its elevation', () => {
+        for (const p of airportParts()) {
+            for (const [x, z] of corners(p)) {
+                expect(inPolygon(x, z, FAR_LAND.island)).toBe(true);
+                expect(islandHeight(x, z)).toBeCloseTo(AIRPORT.elevation, 6);
+            }
+        }
+        // Leveled from the site to the shore, so no hill nor building stands
+        // between the office and the runway.
+        const [x, z] = airportPoint(1300, -600);
+        expect(airportFlat(x, z)).toBe(1);
+        expect(airportDistance(x, z)).toBeGreaterThan(400);
+        // And back to the island's own hills well away from it.
+        expect(airportFlat(0, islandShoreZ(0) - 800)).toBe(0);
+        const kinds = new Set(airportParts().map((p) => p.kind));
+        for (const k of ['field', 'runway', 'taxiway', 'apron', 'terminal', 'tower', 'hangar']) expect(kinds.has(k)).toBe(true);
+        // A control tower that stands out: the tallest thing there.
+        const tops = airportParts().map((p) => ({ kind: p.kind, top: p.y + p.h }));
+        const tallest = tops.reduce((m, t) => (t.top > m.top ? t : m));
+        expect(tallest.kind).toBe('tower');
+        expect(tallest.top).toBeGreaterThan(90);
+    });
+
+    test('its ground reads as airfield, and the island city keeps off it', () => {
+        for (const t of islandTowers()) {
+            expect(airportFlat(t.x, t.z)).toBe(0);
+            expect(airportDistance(t.x, t.z)).toBeGreaterThan(ISLAND_CITY.airportClear);
+        }
+        for (const [x, , z] of islandLamps()) expect(airportFlat(x, z)).toBe(0);
+        const [x, z] = airportPoint(1500, 300);
+        expect(islandGround(LAND_COLORS.forest, x, z)).toBe(AIRPORT_COLORS.field);
+        expect(islandBuilt(x, z)).toBe(0);
+    });
+
+    test('gates along the apron, noses to the terminal, one kept free for the jet coming in', () => {
+        const gates = airportGates();
+        expect(gates).toHaveLength(AIRPORT.gates.a.length);
+        expect(gates.filter((g) => g.free)).toEqual([gates[AIRPORT.arrivalGate]]);
+        for (const g of gates) {
+            expect(-Math.sin(g.yaw)).toBeCloseTo(across[0], 12);
+            expect(-Math.cos(g.yaw)).toBeCloseTo(across[1], 12);
+            const { b } = airportLocal(g.x, g.z);
+            expect(b).toBeGreaterThan(AIRPORT.apron.b[0]);
+            expect(b).toBeLessThan(AIRPORT.apron.b[1]);
+        }
+        for (let i = 1; i < gates.length; i++) expect(Math.hypot(gates[i].x - gates[i - 1].x, gates[i].z - gates[i - 1].z)).toBeGreaterThan(200);
+    });
+
+    test('by night: runway edges, green threshold, red end, blue taxiway, approach lights over the water, and the flashers running in', () => {
+        const { positions, colors, rabbit } = airportLights();
+        expect(positions).toHaveLength(colors.length);
+        const green = colors.filter(([r, g]) => g > 0.8 && r < 0.5).length;
+        const red = colors.filter(([r, g]) => r > 0.8 && g < 0.3).length;
+        const blue = colors.filter(([r, , b]) => b > 0.8 && r < 0.5).length;
+        expect(green).toBeGreaterThanOrEqual(10);
+        expect(red).toBeGreaterThanOrEqual(11);
+        expect(blue).toBeGreaterThan(40);
+        for (const [x, y, z] of positions) {
+            expect(y).toBeGreaterThan(airportY(0));
+            expect(Number.isFinite(x + z)).toBe(true);
+        }
+        // The approach reaches out over the water before the runway.
+        expect(positions.some(([x, , z]) => isWater(x, z))).toBe(true);
+        // The flashers, from farthest out toward the runway.
+        const [tx, tz] = airportPoint(AIRPORT.runway.from, 0);
+        const d = rabbit.map(([x, , z]) => Math.hypot(x - tx, z - tz));
+        for (let i = 1; i < d.length; i++) expect(d[i]).toBeLessThan(d[i - 1]);
+        expect(rabbit.length).toBeGreaterThan(20);
     });
 });

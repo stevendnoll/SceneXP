@@ -118,8 +118,9 @@ export const CONFIG = deepFreeze({
         desk: { x: 0.9, z: -2.05, width: 1.6, depth: 0.8, height: 0.75 },
         /** The back window runs the whole wall (QA, 2026-09-25: "ideally the
          *  window would take up the entire field of view"), from the left
-         *  corner to the right, over the cabinet and the printer, both lower
-         *  than its sill. The wall calendar that hung here gave its place up;
+         *  corner to the right, and from the floor to the ceiling (QA,
+         *  2026-09-28), with the cabinet and the printer standing in front
+         *  of it. The wall calendar that hung here gave its place up;
          *  the calendar is a card from Places. Its mullions stand at a
          *  curtain wall's even module, about 1.45 m, one where it always
          *  was just right of the monitor, and none behind it. */

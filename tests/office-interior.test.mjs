@@ -96,10 +96,21 @@ describe('the sun comes in by the windows, and only by them', () => {
         }
     });
 
-    test('the desk casts its shadow: under it stays dark while the floor beside it is lit', () => {
+    test('the desk casts its shadow: where its top’s shadow falls stays dark while the floor beside it is lit', () => {
+        // With the glass down to the floor (QA, 2026-09-28) the low sun
+        // reaches in under the desk from behind, as it would, so the shadow
+        // is where the top blocks it: the top's middle, cast along the sun
+        // to the floor.
         const sky = skyAt(at(16));
         const d = CONFIG.room.desk;
-        expect(sunlit(sky.sun, [[d.x, 0.01, d.z]])).toEqual([]);
+        const [sx, sy, sz] = sky.sun;
+        const k = d.height / sy;
+        const shade = [d.x - sx * k, 0.01, d.z - sz * k];
+        expect(shade[2]).toBeLessThan(CONFIG.room.depth / 2);
+        expect(sunlit(sky.sun, [shade])).toEqual([]);
+        // Round it, within a meter, the sun is on the floor.
+        const near = floorPoints().filter(([x, , z]) => Math.hypot(x - shade[0], z - shade[2]) < 1);
+        expect(sunlit(sky.sun, near).length).toBeGreaterThan(3);
     });
 
     test('every solid thing casts a shadow, walls and ceiling too; what is see-through or painted flat casts none', () => {

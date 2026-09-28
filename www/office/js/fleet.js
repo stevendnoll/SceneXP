@@ -432,8 +432,10 @@ export function jetParts() {
 
 /**
  * The jet, and its lights: the steady red and green at the wingtips and
- * white at the tail, and the white strobes and the red beacons that flash
- * (life.js jetFlashing). The lights are drawn only by night.
+ * white at the tail, the white strobes and the red beacons that flash
+ * (life.js jetFlashing), and the landing lights ahead of the wings, burning
+ * on the approach and the rollout, the brightest thing coming in over the
+ * bay. The lights are drawn only by night.
  */
 function jet() {
     const { body, windows } = jetParts();
@@ -455,6 +457,8 @@ function jet() {
     const white = [1, 1, 1];
     c.navLights = dots('jet-lights', [[-17.9, 0.8, 5.0, red], [17.9, 0.8, 5.0, green], [0, 1.0, 19.9, white]]);
     c.strobes = dots('jet-strobes', [[-18.1, 0.8, 5.4, white], [18.1, 0.8, 5.4, white], [0, 2.1, 0, red], [0, -2.1, 0, red]]);
+    c.landing = dots('jet-landing', [[0, -1.6, -17.5, [1, 0.98, 0.9]]]);
+    c.landing.material.size = 6;
     return c;
 }
 
@@ -505,13 +509,18 @@ export function buildFleet(scene, cars) {
         lightsOn = level > 0.3;
         fleet.cars.visible = lightsOn;
         fleet.jet.navLights.visible = lightsOn;
-        if (!lightsOn) fleet.jet.strobes.visible = false;
+        if (!lightsOn) {
+            fleet.jet.strobes.visible = false;
+            fleet.jet.landing.visible = false;
+        }
     };
     /** Fly the jet (life.js jetAt, or null to hide it), its strobes lit
-     *  when `flashing` and it is dark enough to see them. */
+     *  when `flashing` and its landing lights while it comes in fast, when
+     *  it is dark enough to see them. */
     fleet.flyJet = (at, flashing = false) => {
         place(fleet.jet, at);
         fleet.jet.strobes.visible = lightsOn && flashing && !!at;
+        fleet.jet.landing.visible = lightsOn && !!at && at.fast === true;
     };
     return fleet;
 }

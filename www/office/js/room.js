@@ -204,12 +204,38 @@ export const CHAIR_TURN = 0.6;
  *  and the radius of the caster at its end. Meters. */
 export const CHAIR_LEGS = { count: 5, reach: 0.3, wheel: 0.03 };
 
-/** The window openings, shared by the walls, the frames and the tests. */
+/**
+ * The crumpled pages in the wastebasket: where each sits in the basket (off
+ * its center, meters) and how big. As many show as what is in it calls for
+ * (wastePages), and none when it is empty (QA, 2026-09-28: a page in an empty
+ * basket said there was something to find).
+ */
+export const WASTE_PAGES = [
+    { dx: 0.02, y: 0.3, dz: -0.02, r: 0.06 },
+    { dx: -0.06, y: 0.27, dz: 0.04, r: 0.055 },
+    { dx: 0.05, y: 0.32, dz: 0.06, r: 0.05 }
+];
+
+/** How many crumpled pages show for `count` things in the wastebasket: none
+ *  when empty, one for a few, two from three, all three from six. */
+export function wastePages(count) {
+    if (!(count > 0)) return 0;
+    return count >= 6 ? 3 : count >= 3 ? 2 : 1;
+}
+
+/**
+ * The window openings, shared by the walls, the frames and the tests. Floor
+ * to ceiling (QA, 2026-09-28: the wall under the windows "takes up too much
+ * premium screen real estate"): the glass rises from a slim ledge a hand
+ * off the floor to just under the ceiling, as a modern tower's curtain wall
+ * does, so the cabinet, the printer and the wastebasket stand in front of
+ * it and the desk looks straight down to the street.
+ */
 export function windowsOf(config) {
     const { width, depth, backWindow } = config.room;
     return {
-        sill: 0.95,
-        head: 2.45,
+        sill: 0.1,
+        head: 2.65,
         back: { x0: backWindow.x0, x1: width / 2 - 0.1, mullions: backWindow.mullions },
         right: { z0: -depth / 2 + 0.1, z1: 0.3 }
     };
@@ -1000,10 +1026,17 @@ function buildFloorThings(group, config, picks, contacts) {
     bottom.rotation.x = -Math.PI / 2;
     bottom.position.set(bx, 0.01, bz);
     basket.add(bottom);
-    // A crumpled page, so it reads as a wastebasket at a glance.
-    const crumple = new THREE.Mesh(new THREE.IcosahedronGeometry(0.06, 0), mat(COLORS.paper, { flatShading: true }));
-    crumple.position.set(bx + 0.02, 0.3, bz - 0.02);
-    basket.add(crumple);
+    // Crumpled pages, shown only while something is in it (setWaste).
+    const crumpled = mat(COLORS.paper, { flatShading: true });
+    const pages = WASTE_PAGES.map(({ dx, y, dz, r }, i) => {
+        const page = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), crumpled);
+        page.position.set(bx + dx, y, bz + dz);
+        page.rotation.set(i * 1.1, i * 2.3, i * 0.7);
+        page.name = 'waste-page';
+        page.visible = false;
+        basket.add(page);
+        return page;
+    });
     addHitBox(basket, 0.02);
     group.add(basket);
     picks.wastebasket = basket;
@@ -1056,6 +1089,7 @@ function buildFloorThings(group, config, picks, contacts) {
         plant.add(leaf);
     }
     group.add(plant);
+    return { pages };
 }
 
 /**
@@ -1070,7 +1104,7 @@ export function buildRoom(config, textures = {}) {
     buildShell(group, config);
     const contacts = [];
     const desk = buildDesk(group, config, picks, contacts);
-    buildFloorThings(group, config, picks, contacts);
+    const waste = buildFloorThings(group, config, picks, contacts);
     const cabinet = buildCabinet(group, config, textures.drawerLabels || null, picks);
     const board = buildBoard(group, config, textures, picks);
     const departures = buildDepartures(group, config, textures.departures || null, picks);
@@ -1100,11 +1134,20 @@ export function buildRoom(config, textures = {}) {
         whiteboard,
         notes,
         rain,
+        waste,
         contactShadows,
         reflections,
         shiny,
         lamp: { light: desk.light, glow: desk.glow, group: desk.lampGroup }
     };
+}
+
+/** Show the crumpled pages for `count` things in the wastebasket (wastePages).
+ *  Returns how many show. */
+export function setWaste(waste, count) {
+    const shown = wastePages(count);
+    waste.pages.forEach((page, i) => { page.visible = i < shown; });
+    return shown;
 }
 
 /** Switch the lamp. The shade's white glass inside stops glowing with it,

@@ -538,7 +538,231 @@ export function islandHeight(x, z, fields = mountainFields()) {
         edge = Math.min(edge, Math.hypot(x - (ax + t * (bx - ax)), z - (az + t * (bz - az))));
     }
     const rolling = 0.5 + 0.5 * fields.island(x / 2600, z / 2600);
-    return smoothstep(0, 1400, edge) * (70 + 100 * rolling);
+    const natural = smoothstep(0, 1400, edge) * (70 + 100 * rolling);
+    // Leveled where the airport stands (airportFlat).
+    return natural + (AIRPORT.elevation - natural) * airportFlat(x, z);
+}
+
+// ---- The airport across the bay -------------------------------------------------
+
+/**
+ * An airport on the island's south end, where the jets land (QA, 2026-09-28:
+ * "a cool way to really anchor the passenger jet animation to the
+ * environment"). Every jet comes in from the visitor's right and lands
+ * toward their left, so the runway runs the way they land: `heading`
+ * degrees west of south, down and away from the office.
+ *
+ * WHERE THE WINDOWS SEE IT (measured 2026-09-28, with the windows floor to
+ * ceiling): the desk sees the island's south end from x -6,250 to -4,000
+ * on a laptop, the window from -9,000 to -4,250, and the big tower left of
+ * the office's street hides the island from there to x 0. So the jets
+ * touch down at `touchdown` (x, and meters `back` from the shore), just
+ * left of that tower, and roll out and taxi in across the stretch every
+ * desk sees.
+ *
+ * DRAWN LIKE THE JET. The jet is drawn 3.5 times its size (life.js JET) so
+ * it reads as an airliner 13 km off; the airport is drawn to match it, a
+ * control tower 95 m tall and a runway 140 m wide, or a jet would not fit
+ * on it. By day, from 195 m up and 13 km off, its flat ground is a line a
+ * pixel tall, so it is the tower, the terminal, the hangars and the jets
+ * at the gates that say airport; by night, its lights.
+ *
+ * The airport's frame: `a` meters along the runway the way the jets land
+ * (from the touchdown point), `b` meters across it, away from the office.
+ * `site` is the airfield (a and b ranges), `flat` how far past the site the
+ * ground is fully level and how far it then blends back into the hills (the
+ * island's grid is 250 m, so the level core must be wider than a cell past
+ * everything built on it), and the ground is leveled all the way from the
+ * site to the shore (`flat.shore`, b): from the office the view of the
+ * runway skims 25 to 45 m over that ground, and the island's hills and its
+ * waterfront buildings there hid the rollout and the taxi (measured
+ * 2026-09-28). `elevation` its height above the
+ * water, `runway` its ends and width, `taxiway` the parallel taxiway's
+ * offset and width, `apron` and `gates` where the jets park (the arrival's
+ * own gate is `arrivalGate`, left free for it), and `approach` the lights
+ * reaching out over the water before the runway.
+ */
+export const AIRPORT = {
+    touchdown: { x: -4300, back: 300 },
+    heading: 30,
+    elevation: 12,
+    site: { a: [-350, 3000], b: [-120, 880] },
+    flat: { margin: 380, blend: 350, shore: -1500 },
+    runway: { from: -300, to: 2700, width: 140 },
+    taxiway: { b: 300, width: 70, exits: [150, 1350, 2550] },
+    apron: { a: [800, 2500], b: [380, 620] },
+    gates: { a: [1250, 1500, 1750, 2000, 2250], b: 520 },
+    arrivalGate: 2,
+    approach: { reach: 900, every: 30 },
+    lampEvery: 60
+};
+
+const DEG = Math.PI / 180;
+
+/** The airport's frame in the room's: the touchdown point `origin` [x, z],
+ *  `along` the runway the way the jets land, and `across` it, away from the
+ *  office, both unit [x, z]. */
+export function airportFrame() {
+    const x = AIRPORT.touchdown.x;
+    const h = AIRPORT.heading * DEG;
+    return {
+        origin: [x, islandShoreZ(x) - AIRPORT.touchdown.back],
+        along: [-Math.cos(h), -Math.sin(h)],
+        across: [Math.sin(h), -Math.cos(h)]
+    };
+}
+
+/** A point of the airport's frame (a along, b across) as [x, z]. */
+export function airportPoint(a, b = 0) {
+    const { origin, along, across } = airportFrame();
+    return [origin[0] + a * along[0] + b * across[0], origin[1] + a * along[1] + b * across[1]];
+}
+
+/** A point [x, z] in the airport's frame: { a, b }. */
+export function airportLocal(x, z) {
+    const { origin, along, across } = airportFrame();
+    const dx = x - origin[0];
+    const dz = z - origin[1];
+    return { a: dx * along[0] + dz * along[1], b: dx * across[0] + dz * across[1] };
+}
+
+/** How far a point is from the airport's site, meters (0 inside it). */
+export function airportDistance(x, z) {
+    const { a, b } = airportLocal(x, z);
+    const { site } = AIRPORT;
+    const da = Math.max(site.a[0] - a, 0, a - site.a[1]);
+    const db = Math.max(site.b[0] - b, 0, b - site.b[1]);
+    return Math.hypot(da, db);
+}
+
+/** How level the ground is at a point for the airport, 0 to 1: all of it
+ *  on the site, between it and the shore, and a margin round both, blending
+ *  back to the hills. */
+export function airportFlat(x, z) {
+    const { margin, blend, shore } = AIRPORT.flat;
+    const { a, b } = airportLocal(x, z);
+    const { site } = AIRPORT;
+    const da = Math.max(site.a[0] - a, 0, a - site.a[1]);
+    const db = Math.max(shore - b, 0, b - site.b[1]);
+    return 1 - smoothstep(margin, margin + blend, Math.hypot(da, db));
+}
+
+/** The airport's yaw for a direction along its frame (a, b), for a mesh
+ *  built facing -z (life.js yawFor's convention). */
+export function airportYaw(da, db) {
+    const { along, across } = airportFrame();
+    const dx = da * along[0] + db * across[0];
+    const dz = da * along[1] + db * across[1];
+    return Math.atan2(-dx, -dz);
+}
+
+/** The airport's colors, sRGB. */
+export const AIRPORT_COLORS = {
+    field: 0x5d6a52,
+    runway: 0x33363a,
+    taxiway: 0x44474b,
+    apron: 0x8a8d8c,
+    terminal: 0x9fb2bf,
+    concourse: 0xc9ccc8,
+    tower: 0xdad6ce,
+    cab: 0x3f4d58,
+    hangar: 0xd2d4d1,
+    garage: 0xa7a7a0
+};
+
+/**
+ * What the airport is built of, as boxes in its frame: `{ a, b, len, wid, y,
+ * h, color, kind }`, `a` and `b` the box's center, `len` along the runway,
+ * `wid` across it, `y` its foot above the airport's ground and `h` its
+ * height. The flat things (the field, the runway, the taxiways, the apron)
+ * stand a little proud of each other, so none fights another for the same
+ * depth.
+ */
+export function airportParts() {
+    const C = AIRPORT_COLORS;
+    const { site, runway, taxiway, apron } = AIRPORT;
+    const mid = (r) => (r[0] + r[1]) / 2;
+    const span = (r) => r[1] - r[0];
+    const parts = [
+        { a: mid(site.a), b: mid(site.b), len: span(site.a), wid: span(site.b), y: 0, h: 0.3, color: C.field, kind: 'field' },
+        { a: (runway.from + runway.to) / 2, b: 0, len: runway.to - runway.from, wid: runway.width, y: 0, h: 0.8, color: C.runway, kind: 'runway' },
+        { a: 1300, b: taxiway.b, len: 2600, wid: taxiway.width, y: 0, h: 0.6, color: C.taxiway, kind: 'taxiway' },
+        ...taxiway.exits.map((a) => ({ a, b: taxiway.b / 2, len: taxiway.width, wid: taxiway.b, y: 0, h: 0.6, color: C.taxiway, kind: 'taxiway' })),
+        { a: mid(apron.a), b: mid(apron.b), len: span(apron.a), wid: span(apron.b), y: 0, h: 0.7, color: C.apron, kind: 'apron' },
+        // The terminal: a long glass hall behind the apron, its concourse
+        // along the apron's edge, and the garage behind.
+        { a: 1550, b: 720, len: 1000, wid: 150, y: 0, h: 42, color: C.terminal, kind: 'terminal' },
+        { a: 1600, b: 640, len: 1500, wid: 40, y: 0, h: 24, color: C.concourse, kind: 'terminal' },
+        { a: 1550, b: 835, len: 500, wid: 70, y: 0, h: 22, color: C.garage, kind: 'garage' },
+        // The control tower: a shaft, its glass cab, and the cab's roof.
+        { a: 600, b: 640, len: 18, wid: 18, y: 0, h: 95, color: C.tower, kind: 'tower' },
+        { a: 600, b: 640, len: 36, wid: 36, y: 95, h: 16, color: C.cab, kind: 'tower' },
+        { a: 600, b: 640, len: 40, wid: 40, y: 111, h: 3, color: C.tower, kind: 'tower' },
+        // The hangars, by the runway's far end.
+        { a: 2700, b: 560, len: 200, wid: 170, y: 0, h: 44, color: C.hangar, kind: 'hangar' },
+        { a: 2920, b: 600, len: 150, wid: 150, y: 0, h: 38, color: C.hangar, kind: 'hangar' }
+    ];
+    return parts;
+}
+
+/** Where the jets park: each gate's [x, z] and the yaw that points a jet's
+ *  nose at the terminal. `free` marks the arrival's own gate. */
+export function airportGates() {
+    const yaw = airportYaw(0, 1);
+    return AIRPORT.gates.a.map((a, i) => {
+        const [x, z] = airportPoint(a, AIRPORT.gates.b);
+        return { x, z, a, b: AIRPORT.gates.b, yaw, free: i === AIRPORT.arrivalGate };
+    });
+}
+
+/** The airport's height in the room's frame: its ground, the water's depth
+ *  below the office and its elevation above the water. */
+export function airportY(above = 0) {
+    return WATER_Y + AIRPORT.elevation + above;
+}
+
+/**
+ * The airport's lights by night, `{ positions, colors }` ([x, y, z] and
+ * [r, g, b], 0 to 1): white along both edges of the runway, green across
+ * its threshold and red across its end, blue along the taxiway, a line of
+ * white reaching out over the water before the runway, warm floods over the
+ * apron, the terminal's windows, and a red beacon on the tower. And
+ * `rabbit`, the approach's sequenced flashers in the order they run, from
+ * farthest out toward the runway.
+ */
+export function airportLights() {
+    const { runway, taxiway, apron, approach, lampEvery } = AIRPORT;
+    const positions = [];
+    const colors = [];
+    const add = (a, b, up, rgb) => {
+        const [x, z] = airportPoint(a, b);
+        positions.push([x, airportY(up), z]);
+        colors.push(rgb);
+    };
+    const white = [1, 0.97, 0.9];
+    const half = runway.width / 2;
+    for (let a = runway.from; a <= runway.to + 1e-6; a += lampEvery) {
+        add(a, -half, 1, white);
+        add(a, half, 1, white);
+    }
+    for (let b = -half; b <= half + 1e-6; b += runway.width / 10) {
+        add(runway.from, b, 1, [0.35, 1, 0.45]);
+        add(runway.to, b, 1, [1, 0.2, 0.15]);
+    }
+    for (let a = 0; a <= 2600; a += lampEvery) {
+        add(a, taxiway.b - taxiway.width / 2, 1, [0.3, 0.45, 1]);
+        add(a, taxiway.b + taxiway.width / 2, 1, [0.3, 0.45, 1]);
+    }
+    for (let a = runway.from - approach.every; a >= runway.from - approach.reach; a -= approach.every) add(a, 0, 1, white);
+    for (let a = apron.a[0]; a <= apron.a[1]; a += 100) add(a, apron.b[0], 18, [1, 0.85, 0.6]);
+    for (let a = 1060; a <= 2040; a += 40) add(a, 645, 14, [1, 0.88, 0.66]);
+    add(600, 640, 116, [1, 0.15, 0.1]);
+    const rabbit = [];
+    for (let a = runway.from - approach.reach; a <= runway.from - approach.every + 1e-6; a += approach.every) {
+        const [x, z] = airportPoint(a, 0);
+        rabbit.push([x, airportY(2), z]);
+    }
+    return { positions, colors, rabbit };
 }
 
 // ---- The city across the bay ---------------------------------------------------
@@ -553,9 +777,10 @@ export function islandHeight(x, z, fields = mountainFields()) {
  *
  * WHERE THE WINDOWS SEE IT (measured 2026-09-26): the office's own street
  * opens on the shore from x 0 to about 3,900 on every screen, and the wider
- * frames see it again from about -9,000 to -3,900. The two `centers` stand
- * in those openings, the main one opposite the street, and between them and
- * away from them the city is low. A SKYLINE HAS A PROFILE: measured in a
+ * frames see it again from about -9,000 to -3,900. The city's center stands
+ * in the first opening, opposite the street; the second is the airport's
+ * (AIRPORT, QA 2026-09-28, where a second center stood), and elsewhere the
+ * city is low, keeping `airportClear` meters off the airport. A SKYLINE HAS A PROFILE: measured in a
  * preview, towers of much the same height all along the shore read as a
  * picket fence, so the towers gather in the centers, tallest in the middle
  * and near the water, and a few `landmarks` (`x` along the shore, `d` back
@@ -571,8 +796,10 @@ export const ISLAND_CITY = {
     beach: 45,
     inland: 1000,
     landing: 70,
-    centers: [{ x: 1900, spread: 1200, lift: 1 }, { x: -6300, spread: 1100, lift: 0.8 }],
-    landmarks: [{ x: 1700, d: 170, h: 290 }, { x: 2470, d: 260, h: 245 }, { x: 1070, d: 80, h: 215 }, { x: -6260, d: 170, h: 235 }],
+    centers: [{ x: 1900, spread: 1200, lift: 1 }],
+    landmarks: [{ x: 1700, d: 170, h: 290 }, { x: 2470, d: 260, h: 245 }, { x: 1070, d: 80, h: 215 }],
+    /** How far the city keeps from the airport's site, meters. */
+    airportClear: 120,
     ground: 0x4c5249,
     lamps: 80,
     seed: CITY.seed + 29
@@ -621,8 +848,9 @@ export function islandTowers(city = CITY) {
             const shape = random();
             const size = random();
             const tone = random();
-            // The ferry's plaza, open to the water.
+            // The ferry's plaza, open to the water, and the airport.
             if (Math.abs(x - landing) < S.landing && d < 260) continue;
+            if (airportFlat(x, z) > 0 || airportDistance(x, z) < S.airportClear + S.block) continue;
             const half = S.block / 2;
             const corners = [[x - half, z - half], [x + half, z - half], [x + half, z + half], [x - half, z + half]];
             // Every corner on the island. (The ground is under a meter for
@@ -674,7 +902,7 @@ export function islandLamps() {
     const out = [];
     const lamp = (x, z) => {
         const h = islandHeight(x, z);
-        if (h >= 0) out.push([x, WATER_Y + h + 6, z]);
+        if (h >= 0 && airportFlat(x, z) === 0 && airportDistance(x, z) > S.airportClear) out.push([x, WATER_Y + h + 6, z]);
     };
     for (let x = x0 + 400; x <= x1 - 300; x += S.lamps) lamp(x, islandShoreZ(x) - S.beach * 0.6);
     for (let x = x0 + 400 + pitch / 2; x <= x1 - 300; x += pitch) {
@@ -689,13 +917,15 @@ export function islandBuilt(x, z) {
     const [[x0], [x1]] = FAR_LAND.island;
     const d = islandShoreZ(x) - z;
     const along = smoothstep(x0 + 200, x0 + 600, x) * (1 - smoothstep(x1 - 500, x1 - 100, x));
-    return along * (1 - smoothstep(ISLAND_CITY.inland, ISLAND_CITY.inland + 300, d)) * smoothstep(0, ISLAND_CITY.beach, d);
+    const clear = smoothstep(0, ISLAND_CITY.airportClear, airportDistance(x, z));
+    return clear * along * (1 - smoothstep(ISLAND_CITY.inland, ISLAND_CITY.inland + 300, d)) * smoothstep(0, ISLAND_CITY.beach, d);
 }
 
 /** The island's ground color at a point, from the forest's (`hex`) toward
- *  the city's where it is built (islandBuilt). */
+ *  the city's where it is built (islandBuilt), and the airfield's grass
+ *  where the airport has leveled it. */
 export function islandGround(hex, x, z) {
-    return mixHex(hex, ISLAND_CITY.ground, 0.8 * islandBuilt(x, z));
+    return mixHex(mixHex(hex, ISLAND_CITY.ground, 0.8 * islandBuilt(x, z)), AIRPORT_COLORS.field, airportFlat(x, z));
 }
 
 /**

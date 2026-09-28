@@ -42,7 +42,7 @@ import { formatDate, formatDateTime, ceilToMinutes, addDays, displayDateTime } f
 import { stockSamples } from './samples.min.js';
 import { applicationsCsv } from './csv.min.js';
 import { poseFor, createGlide } from './stations.min.js';
-import { buildRoom, setLamp, pickOf, setNotes, ensureCapacity, windowsOf } from './room.min.js';
+import { buildRoom, setLamp, setWaste, pickOf, setNotes, ensureCapacity, windowsOf } from './room.min.js';
 import { SUNBEAM, sunbeam, mirrorLevel, interiorEnvironment, mirrorCamera, layMirror } from './interior.min.js';
 import { buildWorld } from './world.min.js';
 import {
@@ -118,6 +118,8 @@ const ui = {
     /** Whether the folder lies open on the desk. Kept here as well as on the
      *  mesh, because the test stub cannot read a mesh back. */
     folderOnDesk: false,
+    /** How many crumpled pages show in the wastebasket, for the same reason. */
+    wastePages: 0,
     screenText: '',
     searched: false,
     /** The month the calendar card is showing, and the day chosen in it. */
@@ -327,13 +329,14 @@ async function init() {
             const info = renderer && renderer.info ? renderer.info.render : {};
             return { ...resolution.readout(), drawCalls: info.calls, triangles: info.triangles, ambientFps: CONFIG.view.ambientFps };
         },
-        /** A jet across the sky now, for a screenshot: it comes into the
-         *  desk's view straight away and takes under a minute to cross it. */
+        /** A jet in to land now, for a screenshot: it comes into the desk's
+         *  view straight away, lands about a minute and a half later, and
+         *  taxis to its gate. */
         jet() {
             world.callJet(performance.now() / 1000);
             ui.lifeDue = true;
             requestRender();
-            return 'A jet is on its way across the bay.';
+            return 'A jet is on its way in to land.';
         },
         /** Full resolution held, for a social-card capture (`capture(false)`
          *  lets it adapt again). */
@@ -917,7 +920,14 @@ function refresh() {
     if (isOpen('wastebasket')) drawWastebasket();
     if (isOpen('settings')) renderSamplesButtons(state.doc);
     showFolderOnDesk(isOpen('folder'));
+    showWaste(wastebasket(state.doc).length);
     requestRender();
+}
+
+/** The crumpled pages in the wastebasket, as many as what is in it calls
+ *  for (room.js wastePages), none when it is empty. */
+function showWaste(count) {
+    ui.wastePages = room ? setWaste(room.waste, count) : 0;
 }
 
 function showFolderOnDesk(on) {

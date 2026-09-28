@@ -329,15 +329,20 @@ describe('the folder', () => {
     });
 
     test('emptying the wastebasket asks first, and can still be undone', () => {
+        // An empty basket shows no crumpled page (QA, 2026-09-28).
+        expect(t.ui.wastePages).toBe(0);
         t.throwAway('applications', id);
+        expect(t.ui.wastePages).toBe(1);
         t.openWastebasket();
         el('wastebasket-empty').click();
         expect(el('confirm').hidden).toBe(false);
         expect(el('confirm-detail').textContent).toMatch(/^1 item will be removed for good/);
         el('confirm-actions').children[1].click();
         expect(doc().applications).toEqual([]);
+        expect(t.ui.wastePages).toBe(0);
         t.undo();
         expect(doc().applications).toHaveLength(1);
+        expect(t.ui.wastePages).toBe(1);
     });
 });
 
@@ -770,9 +775,9 @@ describe('the light', () => {
         window.cornerOffice.hour(null);
     });
 
-    test('a jet can be sent across the sky for a screenshot', () => {
+    test('a jet can be sent in to land for a screenshot', () => {
         t.ui.lifeDue = false;
-        expect(window.cornerOffice.jet()).toBe('A jet is on its way across the bay.');
+        expect(window.cornerOffice.jet()).toBe('A jet is on its way in to land.');
         // The scenery is placed again on the next frame, jet and all.
         expect(t.ui.lifeDue).toBe(true);
     });

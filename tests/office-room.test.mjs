@@ -89,6 +89,28 @@ describe('what is in the room', () => {
         }
     });
 
+    test('the wastebasket shows crumpled pages only when something is in it, more as it fills (QA, 2026-09-28)', () => {
+        const { setWaste, wastePages, WASTE_PAGES } = roomMod;
+        const pages = room.waste.pages;
+        expect(pages).toHaveLength(WASTE_PAGES.length);
+        // Built empty, and inside the basket, not floating over it.
+        expect(pages.every((p) => p.visible === false)).toBe(true);
+        for (const p of pages) expect(room.picks.wastebasket.children).toContain(p);
+        expect([0, 1, 2, 3, 5, 6, 40].map(wastePages)).toEqual([0, 1, 1, 2, 2, 3, 3]);
+        expect(wastePages(undefined)).toBe(0);
+        expect(setWaste(room.waste, 4)).toBe(2);
+        expect(pages.map((p) => p.visible)).toEqual([true, true, false]);
+        expect(setWaste(room.waste, 0)).toBe(0);
+        expect(pages.every((p) => p.visible === false)).toBe(true);
+        // Each page sits in the basket: its top under the rim plus a little.
+        const box = new THREE.Box3();
+        for (const p of pages) {
+            box.setFromObject(p);
+            expect(box.min.y).toBeGreaterThan(0.15);
+            expect(box.max.y).toBeLessThan(0.4);
+        }
+    });
+
     test('pickOf finds the tappable thing from any part of it, and nothing from a wall', () => {
         const part = room.picks.lamp.children[2];
         expect(pickOf(part)).toBe('lamp');
@@ -288,8 +310,15 @@ describe('the back window and the sticky notes', () => {
         // A corner pier each end, as at the right-hand corner.
         expect(w.back.x0).toBeCloseTo(-hw + 0.1, 9);
         expect(w.back.x1).toBeCloseTo(hw - 0.1, 9);
-        // The cabinet, the printer and the desk all stand below the sill.
-        for (const key of ['cabinet', 'printer']) expect(boxOf(room.picks[key]).max.y).toBeLessThan(w.sill);
+        // Floor to ceiling (QA, 2026-09-28): a ledge a hand high, the head
+        // just under the ceiling, and the cabinet and the printer standing
+        // in front of the glass, clear of it.
+        expect(w.sill).toBeLessThanOrEqual(0.15);
+        expect(w.head).toBeGreaterThan(CONFIG.room.height - 0.2);
+        expect(w.head).toBeLessThan(CONFIG.room.height);
+        for (const key of ['cabinet', 'printer', 'wastebasket']) {
+            expect(boxOf(room.picks[key]).min.z).toBeGreaterThan(-CONFIG.room.depth / 2 + 0.02);
+        }
         // Mullions at a curtain wall's even module, none behind the monitor.
         const edges = [w.back.x0, ...w.back.mullions, w.back.x1];
         for (let i = 1; i < edges.length; i++) {

@@ -31,15 +31,15 @@
 
 import {
     CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, landGrids, landGround, snowLineAt, SNOW, SNOW_FRAY, LAND_COLORS, DISTANCE_BLUE,
-    islandTowers, islandLamps, islandGround, reflectionPoints, PANEL, FACADE_TILE, towerStyle, rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
+    islandTowers, islandLamps, islandGround, airportParts, airportPoint, airportY, airportGates, airportLights, reflectionPoints, PANEL, FACADE_TILE, towerStyle, rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
 } from './city.min.js';
 import { BAY, HAZE, rippleNormals } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
 import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
-    carLightPositions, carYaws, drift, jetAt, jetFlashing, shipShift, LIFE
+    carLightPositions, carYaws, drift, jetAt, jetParked, jetFlashing, shipShift, LIFE, JET
 } from './life.min.js';
-import { buildFleet, place, boxesGeometry } from './fleet.min.js';
+import { buildFleet, place, boxesGeometry, jetParts, joinGeometries } from './fleet.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
 
 /** Half the jet's length and a little over, as built (fleet.js jetParts),
@@ -295,6 +295,83 @@ function buildLamps(scene) {
     lamps.raycast = () => {};
     scene.add(lamps);
     return lamps;
+}
+
+/** How long the approach's sequenced flashers take to run in toward the
+ *  runway once, seconds. Slow enough that the scenery's 15 frames a second
+ *  show every light of it. */
+export const RABBIT_SECONDS = 2;
+
+/**
+ * Boxes turned to lie along the airport's runway (city.js airportParts,
+ * `len` along it, `wid` across), colored by part, as one geometry.
+ */
+export function airportGeometry(parts) {
+    const [x0, z0] = airportPoint(0, 0);
+    const [x1, z1] = airportPoint(1, 0);
+    // A turn about y that lays a box's x along the runway and its z across.
+    const turn = Math.atan2(-(z1 - z0), x1 - x0);
+    const c = new THREE.Color();
+    const pieces = parts.map((p) => {
+        const g = new THREE.BoxGeometry(p.len, p.h, p.wid).toNonIndexed();
+        g.deleteAttribute('uv');
+        g.rotateY(turn);
+        const [x, z] = airportPoint(p.a, p.b);
+        g.translate(x, airportY(p.y + p.h / 2), z);
+        c.setHex(p.color, THREE.SRGBColorSpace);
+        g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: g.attributes.position.count }, () => [c.r, c.g, c.b]).flat(), 3));
+        return g;
+    });
+    return joinGeometries(pieces);
+}
+
+/**
+ * The airport across the bay: its ground, runway, taxiways, apron and
+ * buildings in one mesh; the jets waiting at the gates (every gate but the
+ * arrival's) in another; and by night its lights, and the approach's
+ * flashers running in toward the runway (`rabbit`, one light at a time).
+ * Lights are light, not things: no ray stops at them.
+ */
+function buildAirport(scene) {
+    const ground = new THREE.Mesh(airportGeometry(airportParts()), standard(0xffffff, { vertexColors: true, roughness: 0.85 }));
+    ground.name = 'airport';
+    scene.add(ground);
+    const { body } = jetParts();
+    const parked = airportGates().filter((g) => !g.free).map((g) => {
+        const jet = body.clone();
+        jet.scale(JET.scale, JET.scale, JET.scale);
+        jet.rotateY(g.yaw);
+        jet.translate(g.x, airportY(JET.wheels * JET.scale), g.z);
+        return jet;
+    });
+    const jets = new THREE.Mesh(joinGeometries(parked), standard(0xffffff, { vertexColors: true, roughness: 0.6, metalness: 0.1 }));
+    jets.name = 'airport-jets';
+    scene.add(jets);
+    const { positions, colors, rabbit } = airportLights();
+    const points = (name, at, rgb, size) => {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(at.flat(), 3));
+        if (rgb) g.setAttribute('color', new THREE.Float32BufferAttribute(rgb.flat(), 3));
+        const p = new THREE.Points(g, new THREE.PointsMaterial({
+            color: 0xffffff, vertexColors: Boolean(rgb), size, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false
+        }));
+        p.name = name;
+        p.visible = false;
+        p.raycast = () => {};
+        scene.add(p);
+        return p;
+    };
+    const lights = points('airport-lights', positions, colors, 1.6);
+    const flashers = points('airport-rabbit', rabbit, null, 3.5);
+    flashers.geometry.setDrawRange(0, 1);
+    return { ground, jets, lights, rabbit: flashers };
+}
+
+/** Which of the approach's `count` flashers is lit at `seconds`: they run
+ *  in toward the runway, one after another, over and over. */
+export function rabbitAt(seconds, count) {
+    const phase = (((seconds % RABBIT_SECONDS) + RABBIT_SECONDS) % RABBIT_SECONDS) / RABBIT_SECONDS;
+    return Math.min(count - 1, Math.floor(phase * count));
 }
 
 /** Where the downtown ground is modeled, as its own sloped mesh. */
@@ -820,6 +897,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const towers = buildTowers(scene, plan, textures.facades);
     const beacons = buildBeacons(scene, plan);
     const lamps = buildLamps(scene);
+    const airport = buildAirport(scene);
     const docks = buildPiers(scene);
     const sky = buildSky(scene);
     const clouds = buildClouds(scene, textures.clouds);
@@ -835,6 +913,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const pitches = new Float32Array(cars.length);
     // A jet asked for by hand (callJet), on the seconds' clock.
     let calledJet = null;
+    // Whether the jet is in the air or on its rollout (setLife), when it is
+    // worth drawing every frame.
+    let jetFast = false;
     // How far the ships' timetable is run on so one is in view on arrival
     // (arrive).
     let shipShiftMinutes = 0;
@@ -845,6 +926,8 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const weather = buildWeather(scene);
     // How wet it is now (setLight), for what moves (setLife).
     let raining = 0;
+    // Whether the airport's lights are on (setLight), for the flashers.
+    let airportNight = false;
     paintSky(sky, 0x7fb2dd, 0xe3ecef);
 
     /** Hang a disc (the sun's, its halo, the moon) at a direction, facing
@@ -897,6 +980,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         towers,
         beacons,
         lamps,
+        airport,
         docks,
         mountains,
         plan,
@@ -963,6 +1047,10 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             beacons.visible = look.cityLights > 0.2;
             lamps.visible = look.cityLights > 0.05;
             lamps.material.opacity = Math.min(1, look.cityLights);
+            airport.lights.visible = lamps.visible;
+            airport.lights.material.opacity = lamps.material.opacity;
+            airport.rabbit.material.opacity = lamps.material.opacity;
+            airportNight = lamps.visible;
         },
         /**
          * Rebuild the reflections: the world itself, as it is lit now, with
@@ -1025,8 +1113,16 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             const positions = fleet.cars.geometry.attributes.position;
             carLightPositions(cars, lanes, seconds, positions.array);
             positions.needsUpdate = true;
-            // A jet crossing the sky, but never one held still in it.
-            fleet.flyJet(still ? null : jetAt(seconds, calledJet), jetFlashing(seconds));
+            // A jet coming in to land, but never one held still in the sky:
+            // for less motion it waits at its gate.
+            const jet = still ? jetParked() : jetAt(seconds, calledJet);
+            fleet.flyJet(jet, jetFlashing(seconds));
+            jetFast = jet.fast === true;
+            // The approach's flashers run by night, and never held still.
+            airport.rabbit.visible = airportNight && !still;
+            if (airport.rabbit.visible) {
+                airport.rabbit.geometry.setDrawRange(rabbitAt(seconds, airport.rabbit.geometry.attributes.position.count), 1);
+            }
             const moved = drift(date, seconds, CLOUDS.tile);
             if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);
             water.material.normalMap.offset.set(moved.ripple[0], moved.ripple[1]);
@@ -1042,13 +1138,14 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             return shipShiftMinutes;
         },
         /**
-         * Whether the jet is out and inside the camera's view, where it is
-         * worth drawing every frame (main.js CONFIG.view.jetFps). Strictly
-         * true or false.
+         * Whether the jet is in the air or on its rollout and inside the
+         * camera's view, where it is worth drawing every frame (main.js
+         * CONFIG.view.jetFps); taxiing and parked, the scenery's own frames
+         * do. Strictly true or false.
          */
         jetInSight() {
             const jet = fleet.jet.group;
-            if (jet.visible !== true) return false;
+            if (jet.visible !== true || !jetFast) return false;
             camera.updateMatrixWorld();
             sight.setFromProjectionMatrix(seeing.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
             reach.center.copy(jet.position);
@@ -1056,9 +1153,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             return sight.intersectsSphere(reach) === true;
         },
         /**
-         * Send a jet across now, for a screenshot round (main.js offers it
-         * as cornerOffice.jet): one southbound, set out `lead` seconds ago
-         * so it is just coming into the desk's view at `seconds`.
+         * Send a jet in to land now, for a screenshot round (main.js offers
+         * it as cornerOffice.jet): set out `lead` seconds ago, so it is just
+         * coming into the desk's view at `seconds`.
          */
         callJet(seconds, lead = 28) {
             calledJet = seconds - lead;

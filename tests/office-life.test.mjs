@@ -2,7 +2,7 @@
 /**
  * Corner Office's moving scenery (life.js), pure: the ferries' and ships'
  * timetables, the sailboats' loops, the seaplane's runs, the traffic on its
- * green wave, the jet's crossings, and the wind. Each must keep to the
+ * green wave, the jet's landings, and the wind. Each must keep to the
  * water (or the street, or the sky), keep its schedule, and never jump, and
  * no vehicle may drive through another. What the window SEES of them is
  * measured through the camera in office-view.
@@ -11,9 +11,9 @@ import {
     LIFE, minutesOn, minutesOfDay, gently, yawFor, ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt,
     shipShift, SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift,
     TRAFFIC, VEHICLES, SUV, PARKED_Y, pitchOf, cycleOf, slotTimes, distanceAlong, onStreet,
-    JET, jetCrossing, jetFlight, jetOnTrack, jetAt, jetFlashing
+    JET, jetCrossing, jetFlight, jetOnTrack, jetAt, jetFlashing, jetTimes, jetParked, glideHeight
 } from '../www/office/js/life.js';
-import { CITY, WATER_Y, piers, isWater, isLand, groundY } from '../www/office/js/city.js';
+import { CITY, WATER_Y, piers, isWater, isLand, groundY, AIRPORT, airportFrame, airportLocal, airportGates } from '../www/office/js/city.js';
 
 const NOON = new Date(2026, 8, 24, 12, 0);
 const later = (date, minutes) => new Date(date.getTime() + minutes * 60000);
@@ -471,85 +471,140 @@ describe('the cars by day and night', () => {
 });
 
 describe('the jet', () => {
-    const crossing = jetCrossing();
+    const times = jetTimes();
+    const flight = (step = 0.5) => {
+        const out = [];
+        for (let t = 0; t <= times.total + 5; t += step) out.push({ t, ...jetOnTrack(t) });
+        return out;
+    };
+    const ground = WATER_Y + AIRPORT.elevation + JET.wheels * JET.scale;
 
-    test('crosses the whole sky over the bay, far out over the water, at a steady speed', () => {
-        expect(crossing).toBeCloseTo((2 * JET.span) / JET.speed, 9);
-        const south = [0, crossing / 2, crossing].map((s) => jetOnTrack(s, true));
-        expect(south[0].x).toBeCloseTo(JET.span, 6);
-        expect(south[1].x).toBeCloseTo(0, 6);
-        expect(south[2].x).toBeCloseTo(-JET.span, 6);
-        for (const p of south) {
-            expect(isWater(0, p.z)).toBe(true);
-            expect(p.z).toBe(JET.z);
-            // Its height above the water keeps between low and high.
-            expect(p.y - WATER_Y).toBeGreaterThanOrEqual(JET.low - 1e-6);
-            expect(p.y - WATER_Y).toBeLessThanOrEqual(JET.high + 1e-6);
+    test('every jet flies right to left, never left to right (QA, 2026-09-28): south, and on to its gate', () => {
+        // The windows look west (-z) with north (+x) on the visitor's right,
+        // so right to left is south. In the air and on the rollout x only
+        // ever falls; nothing is left of which way a flight goes.
+        const path = flight().filter((p) => p.fast);
+        expect(path.length).toBeGreaterThan(100);
+        for (let i = 1; i < path.length; i++) expect(path[i].x).toBeLessThan(path[i - 1].x);
+        expect(Object.keys(jetFlight(3))).toEqual(['start']);
+        // Facing the way it flies: its bow (-z as built) along the runway.
+        const { along } = airportFrame();
+        const p = jetOnTrack(10);
+        expect(-Math.sin(p.yaw)).toBeCloseTo(along[0], 9);
+        expect(-Math.cos(p.yaw)).toBeCloseTo(along[1], 9);
+    });
+
+    test('it comes in on the runway’s line, over the water, down a steady glide slope, and flares to touch down', () => {
+        const approach = flight().filter((p) => p.phase === 'approach');
+        for (const p of approach) {
+            const { a, b } = airportLocal(p.x, p.z);
+            expect(Math.abs(b)).toBeLessThan(1e-6);
+            expect(a).toBeLessThanOrEqual(1e-6);
         }
-        const a = jetOnTrack(10, true);
-        const b = jetOnTrack(11, true);
-        expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(JET.speed, 0);
+        // It sets out over the water, well out from the island.
+        const first = approach[0];
+        expect(isWater(first.x, first.z)).toBe(true);
+        expect(Math.hypot(first.x, first.z)).toBeLessThan(12000);
+        // Only ever down, the glide slope's own angle until the flare.
+        for (let i = 1; i < approach.length; i++) expect(approach[i].y).toBeLessThanOrEqual(approach[i - 1].y + 1e-9);
+        const slope = Math.tan((JET.glide * Math.PI) / 180);
+        expect(glideHeight(3000) - glideHeight(2000)).toBeCloseTo(1000 * slope, 6);
+        expect(glideHeight(0)).toBe(0);
+        // The flare rounds off: never steeper than the slope, and shallow
+        // just before the wheels meet the runway.
+        for (let left = 1; left <= 1000; left += 1) {
+            expect(glideHeight(left) - glideHeight(left - 1)).toBeLessThanOrEqual(slope + 1e-9);
+        }
+        expect(glideHeight(20) / 20).toBeLessThan(slope / 5);
+        // Nose a touch down on the slope, up in the flare.
+        expect(jetOnTrack(10).pitch).toBeLessThan(0);
+        expect(jetOnTrack(times.approach - 0.1).pitch).toBeGreaterThan(0.04);
+        // Down on the runway: on its wheels at the touchdown point, on land.
+        const down = jetOnTrack(times.approach);
+        expect(down.phase).toBe('rollout');
+        expect(down.y).toBeCloseTo(ground, 6);
+        expect(isLand(down.x, down.z)).toBe(true);
+        expect(airportLocal(down.x, down.z).a).toBeCloseTo(0, 6);
     });
 
-    test('south it lets down nose a touch up, north it climbs, facing the way it flies', () => {
-        const down = [jetOnTrack(10, true), jetOnTrack(100, true)];
-        expect(down[1].y).toBeLessThan(down[0].y);
-        expect(down[0].pitch).toBeGreaterThan(0);
-        const up = [jetOnTrack(10, false), jetOnTrack(100, false)];
-        expect(up[1].y).toBeGreaterThan(up[0].y);
-        expect(up[0].pitch).toBeGreaterThan(down[0].pitch);
-        // Bow toward -z as built: south (-x) and north (+x).
-        expect(-Math.sin(down[0].yaw)).toBeCloseTo(-1, 9);
-        expect(-Math.sin(up[0].yaw)).toBeCloseTo(1, 9);
+    test('it rolls out on the runway slowing to a taxi, then taxis on the airport to its gate and waits there', () => {
+        const roll = flight(0.25).filter((p) => p.phase === 'rollout');
+        let last = Infinity;
+        for (let i = 1; i < roll.length; i++) {
+            const speed = Math.hypot(roll[i].x - roll[i - 1].x, roll[i].z - roll[i - 1].z) / 0.25;
+            expect(speed).toBeLessThan(last + 1e-6);
+            last = speed;
+            const { a, b } = airportLocal(roll[i].x, roll[i].z);
+            expect(Math.abs(b)).toBeLessThan(1e-6);
+            expect(a).toBeLessThanOrEqual(AIRPORT.runway.to);
+            expect(roll[i].y).toBeCloseTo(ground, 6);
+        }
+        expect(last).toBeLessThan(JET.taxiSpeed * 1.2);
+        const taxi = flight().filter((p) => p.phase === 'taxi');
+        expect(taxi.length).toBeGreaterThan(20);
+        for (const p of taxi) {
+            const { a, b } = airportLocal(p.x, p.z);
+            expect(a).toBeGreaterThan(0);
+            expect(a).toBeLessThan(AIRPORT.runway.to);
+            expect(b).toBeGreaterThanOrEqual(-1e-6);
+            expect(b).toBeLessThanOrEqual(AIRPORT.gates.b + 1e-6);
+            expect(p.fast).toBe(false);
+        }
+        const parked = jetOnTrack(times.total + 1);
+        const gate = airportGates()[AIRPORT.arrivalGate];
+        expect(parked).toEqual(jetParked());
+        expect(parked.phase).toBe('parked');
+        expect(parked.x).toBeCloseTo(gate.x, 6);
+        expect(parked.z).toBeCloseTo(gate.z, 6);
+        expect(parked.yaw).toBeCloseTo(gate.yaw, 9);
+        expect(gate.free).toBe(true);
     });
 
-    test('it stands well above the office’s eye, and under the low gray deck', () => {
-        // Over the stretch the windows look out on (half a crossing, a
-        // little over 45 degrees either side of west), a few degrees over
-        // the horizon: above the far mountains (about 2.5 degrees), under
-        // the window's head.
-        for (const s of [crossing / 4, crossing / 2, (3 * crossing) / 4]) {
-            const p = jetOnTrack(s, true);
-            const elevation = Math.atan2(p.y - 1.6, Math.hypot(p.x, p.z)) * (180 / Math.PI);
-            expect(elevation).toBeGreaterThan(3);
-            expect(elevation).toBeLessThan(12);
-            expect(p.y - WATER_Y).toBeLessThan(1500);
+    test('never a jump: from the first second out to its gate it moves no faster than it flies', () => {
+        const path = flight(0.5);
+        for (let i = 1; i < path.length; i++) {
+            const d = Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y, path[i].z - path[i - 1].z);
+            // Its speed is over the ground, so down the slope a touch more.
+            expect(d).toBeLessThanOrEqual((JET.speed * 0.5) / Math.cos((JET.glide * Math.PI) / 180) + 1e-6);
         }
     });
 
-    test('the first comes over within a minute of the office opening, and then one now and then, never two at once', () => {
-        expect(jetFlight(0)).toEqual({ start: JET.first, south: true });
-        expect(jetAt(0)).not.toBeNull();
+    test('the first comes in within a minute of the office opening, then one now and then; between them it waits at its gate', () => {
+        expect(jetFlight(0)).toEqual({ start: JET.first });
+        expect(jetAt(0).phase).toBe('approach');
+        expect(jetAt(-100)).toEqual(jetParked());
         let flights = 0;
-        let aloft = false;
+        let flying = false;
         for (let s = 0; s < 3600; s += 1) {
-            const now = jetAt(s) !== null;
-            if (now && !aloft) flights++;
-            aloft = now;
+            const at = jetAt(s);
+            expect(at).not.toBeNull();
+            const now = at.phase === 'approach';
+            if (now && !flying) flights++;
+            flying = now;
         }
         // An hour holds about eight or nine.
         expect(flights).toBeGreaterThanOrEqual(8);
         expect(flights).toBeLessThanOrEqual(10);
         for (let k = 0; k < 30; k++) {
-            const { start, south } = jetFlight(k);
-            expect(south).toBe(k % 2 === 0);
-            // Each lands before the next one's stretch of the clock begins.
-            expect(start + crossing).toBeLessThan(JET.first + (k + 1) * JET.every);
+            const { start } = jetFlight(k);
+            // Each is at its gate before the next one's stretch of the clock.
+            expect(start + times.total).toBeLessThan(JET.first + (k + 1) * JET.every);
             expect(start).toBeGreaterThanOrEqual(JET.first + k * JET.every);
+            expect(jetAt(start + times.total + 1)).toEqual(jetParked());
         }
-        expect(jetAt(-100)).toBeNull();
+        expect(jetCrossing()).toBe(times.approach);
     });
 
-    test('one asked for by hand flies south from when it was asked, whatever the timetable', () => {
-        // Asked for just after the first flight has gone, with the whole
-        // crossing over before the second is due.
-        const called = jetFlight(0).start + crossing + 1;
-        expect(called + crossing + 1).toBeLessThan(jetFlight(1).start);
-        expect(jetAt(called + 20)).toBeNull();
-        expect(jetAt(called + 20, called)).toEqual(jetOnTrack(20, true));
-        expect(jetAt(called + crossing + 1, called)).toBeNull();
+    test('one asked for by hand comes in from when it was asked, whatever the timetable', () => {
+        // Asked for just after the first flight has come in, with the whole
+        // flight over before the second is due.
+        const called = jetFlight(0).start + times.total + 1;
+        expect(called + times.total + 1).toBeLessThan(jetFlight(1).start);
+        expect(jetAt(called + 20)).toEqual(jetParked());
+        expect(jetAt(called + 20, called)).toEqual(jetOnTrack(20));
+        expect(jetAt(called + times.total + 1, called)).toEqual(jetParked());
         // And the timetable carries on under it.
-        expect(jetAt(jetFlight(1).start + 5, called)).toEqual(jetOnTrack(5, false));
+        expect(jetAt(jetFlight(1).start + 5, called)).toEqual(jetOnTrack(5));
     });
 
     test('its strobes flash briefly, over and over', () => {
