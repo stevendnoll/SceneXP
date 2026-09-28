@@ -92,6 +92,9 @@ const state = {
     mobile: false,
     reducedMotion: false,
     lastTime: 0,
+    /** The scenery's own seconds (sceneryClock): the cars, the jet and the
+     *  ripples keep it. */
+    scenerySeconds: typeof performance !== 'undefined' ? performance.now() / 1000 : 0,
     tickDue: 0,
     /** Seconds until the next frame of the moving scenery. */
     ambientDue: 0,
@@ -334,7 +337,7 @@ async function init() {
          *  view straight away, lands about a minute and a half later, and
          *  taxis to its gate. */
         jet() {
-            world.callJet(performance.now() / 1000);
+            world.callJet(state.scenerySeconds);
             ui.lifeDue = true;
             requestRender();
             return 'A jet is on its way in to land.';
@@ -2511,6 +2514,7 @@ function animate() {
         stepDay(delta);
         state.dirty = true;
     }
+    state.scenerySeconds = sceneryClock(state.scenerySeconds, delta, Boolean(ui.lapse));
     if (ui.flaps.target && ui.flaps.rows !== ui.flaps.target) {
         ui.flaps.due -= delta;
         while (ui.flaps.due <= 0 && ui.flaps.rows !== ui.flaps.target) {
@@ -2577,11 +2581,25 @@ function lifeMoves() {
     return !top || top === 'cabinet' || top === 'board';
 }
 
+/**
+ * The scenery's clock, `delta` seconds on from `seconds`: real time, and
+ * CONFIG.view.lapseScenery times faster while a day goes by (`lapsing`), so
+ * the traffic and the jets race with the sky. Kept a frame at a time, as
+ * the day's own clock is, so the jet never jumps when the day starts or
+ * stops (the "a clock times a changing rate lurches" note).
+ */
+export function sceneryClock(seconds, delta, lapsing) {
+    return seconds + Math.max(0, delta) * (lapsing ? CONFIG.view.lapseScenery : 1);
+}
+
 /** Put the ferries, ships and the rest where the sky's clock says, and the
- *  cars and ripples where real time says (held at zero for less motion). */
+ *  cars, the jet and the ripples where the scenery's clock says, with the
+ *  rain and the lights that flash on real time (held at zero for less
+ *  motion). */
 function placeLife() {
     ui.lifeDue = false;
-    world.setLife(skyTime(now()), state.reducedMotion ? 0 : performance.now() / 1000, state.reducedMotion);
+    const still = state.reducedMotion;
+    world.setLife(skyTime(now()), still ? 0 : state.scenerySeconds, still, still ? 0 : performance.now() / 1000);
 }
 
 /**
@@ -2716,6 +2734,8 @@ if (typeof document !== 'undefined') {
 export const __test__ = {
     state,
     ui,
+    sceneryClock,
+    placeLife,
     history,
     mutate,
     change,

@@ -192,6 +192,13 @@ export const CONFIG = deepFreeze({
         flapSeconds: 0.035,
         /** How long "Watch a day go by" takes for the whole 24 hours. */
         daySeconds: 30,
+        /** How many times faster than life the cars, the jet and the
+         *  ripples go while a day goes by (QA, 2026-09-29: the jet flew in
+         *  at its own pace while the clock raced). Not the day's own 2,880:
+         *  at that a landing is a twentieth of a second and jets flicker
+         *  across several times a second. At 30 the jet crosses the view in
+         *  under a second, as the ferries do. */
+        lapseScenery: 30,
         /** While a day goes by, the reflections are captured again at most
          *  this often, and outside it whenever the sun has moved this far
          *  (each capture draws the world twelve times). */

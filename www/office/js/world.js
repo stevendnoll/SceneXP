@@ -1095,11 +1095,13 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         /**
          * Put everything that moves where it is: the ferries, ships,
          * sailboats and seaplane on the sky's clock (`date`), the traffic,
-         * the jet, the rain and the ripples on real `seconds`, and the
-         * clouds drifted by the wind. `still` is a visitor who asked for
-         * less motion. Cheap enough for every frame.
+         * the jet and the ripples on the scenery's `seconds` (main.js
+         * sceneryClock: real time, faster while a day goes by), the rain and
+         * the lights that flash on `real` seconds, and the clouds drifted by
+         * the wind. `still` is a visitor who asked for less motion. Cheap
+         * enough for every frame.
          */
-        setLife(date, seconds, still = false) {
+        setLife(date, seconds, still = false, real = seconds) {
             ferriesAt(date, route).forEach((at, i) => place(fleet.ferries[i], at));
             const ships = shipsAt(date, shipShiftMinutes);
             fleet.ships.forEach((c, slot) => place(c, ships.find((ship) => ((ship.k % 3) + 3) % 3 === slot) || null));
@@ -1110,7 +1112,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             weather.rain.visible = raining > 0.02 && !still;
             if (weather.rain.visible) {
                 const ends = weather.rain.geometry.attributes.position;
-                streakPositions(weather.streaks, seconds, RAIN, ends.array);
+                streakPositions(weather.streaks, real, RAIN, ends.array);
                 ends.needsUpdate = true;
             }
             // The traffic by day and night, and its lights by night.
@@ -1121,12 +1123,12 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             // A jet coming in to land, but never one held still in the sky:
             // for less motion it waits at its gate.
             const jet = still ? jetParked() : jetAt(seconds, calledJet);
-            fleet.flyJet(jet, jetFlashing(seconds));
+            fleet.flyJet(jet, jetFlashing(real));
             jetFast = jet.fast === true;
             // The approach's flashers run by night, and never held still.
             airport.rabbit.visible = airportNight && !still;
             if (airport.rabbit.visible) {
-                airport.rabbit.geometry.setDrawRange(rabbitAt(seconds, airport.rabbit.geometry.attributes.position.count), 1);
+                airport.rabbit.geometry.setDrawRange(rabbitAt(real, airport.rabbit.geometry.attributes.position.count), 1);
             }
             const moved = drift(date, seconds, CLOUDS.tile);
             if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);

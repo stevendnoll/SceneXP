@@ -8,8 +8,10 @@
  * on the sky's clock (the visitor's own time, a pinned hour, or a day going
  * by), so a ferry is where the timetable says it is whenever the visitor
  * looks, and a day going by runs the whole harbor at speed, the way a
- * time-lapse does. The cars, the jet and the ripples keep real seconds
- * instead: at a day-going-by's pace a car would cross the city in a frame.
+ * time-lapse does. The cars, the jet and the ripples keep the scenery's
+ * seconds instead (main.js sceneryClock): real time, and 30 times faster
+ * while a day goes by, so they race with it (QA, 2026-09-29) without going
+ * at the day's own pace, at which a car would cross the city in a frame.
  *
  * WHERE THE WINDOW CAN SEE. The water shows only in slivers between the
  * towers (the brief), so every route is laid through the slivers the
@@ -502,10 +504,11 @@ export function carLightPositions(cars, lanes, seconds, out = new Float32Array(c
  * in. A twin-engined narrow-body, enlarged by `scale` like the small craft,
  * so its shape reads as an airliner rather than a speck.
  *
- * On real seconds, like the cars: a day going by at speed would fire one
- * across the window in a frame. The first comes into the desk's view half a
- * minute after the office opens, and then one every `every` seconds or a
- * little later (`late`).
+ * On the scenery's seconds, like the cars (main.js sceneryClock): real
+ * time, and 30 times faster while a day goes by, not the day's own 2,880,
+ * at which a landing would last a twentieth of a second. The first comes
+ * into the desk's view half a minute after the office opens, and then one
+ * every `every` seconds or a little later (`late`).
  */
 export const JET = {
     every: 420,

@@ -1823,6 +1823,22 @@ describe('the third round of screenshots (2026-09-25)', () => {
         expect(lit.jetInSight()).toBe(false);
     });
 
+    test('the jet flies on the scenery’s clock, its strobes on real time (QA, 2026-09-29)', () => {
+        const { jet } = lit.fleet;
+        lit.fleet.light(1);
+        // Seconds 30 on the scenery's clock (a day going by has run it on),
+        // 0.6 on the real one: where the jet is is the first's, whether its
+        // strobes flash the second's.
+        lit.setLife(NOON, 30, false, 0.6);
+        const at = life.jetAt(30);
+        expect(jet.group.position.x).toBeCloseTo(at.x, 6);
+        expect(life.jetFlashing(30)).not.toBe(life.jetFlashing(0.6));
+        expect(jet.strobes.visible).toBe(life.jetFlashing(0.6));
+        lit.setLife(NOON, 30, false, 0);
+        expect(jet.strobes.visible).toBe(life.jetFlashing(0));
+        lit.fleet.light(0);
+    });
+
     test('never a jet held still in the sky for a visitor who asked for less motion: it waits at its gate', () => {
         lit.setLife(NOON, 30);
         expect(lit.fleet.jet.group.visible).toBe(true);

@@ -849,6 +849,39 @@ describe('a day going by at the window', () => {
         window.cornerOffice.hour(null);
     });
 
+    test('the traffic and the jets race with the clock, 30 times over, and the rain keeps real time (QA, 2026-09-29)', () => {
+        const rate = CONFIG.view.lapseScenery;
+        expect(rate).toBe(30);
+        // Real time outside a day going by, faster inside, never backward.
+        expect(t.sceneryClock(10, 0.5, false)).toBe(10.5);
+        expect(t.sceneryClock(10, 0.5, true)).toBe(10 + 0.5 * rate);
+        expect(t.sceneryClock(10, -1, true)).toBe(10);
+        // A frame of a day going by moves the scenery's clock 30 frames on.
+        window.cornerOffice.hour(12);
+        t.watchDay();
+        const before = t.state.scenerySeconds;
+        t.state.lastTime = performance.now() - 50;
+        t.animate();
+        const moved = t.state.scenerySeconds - before;
+        expect(moved).toBeGreaterThan(0.04 * rate);
+        expect(moved).toBeLessThan(0.06 * rate);
+        t.stopDay(false);
+        const after = t.state.scenerySeconds;
+        t.state.lastTime = performance.now() - 50;
+        t.animate();
+        expect(t.state.scenerySeconds - after).toBeLessThan(0.06);
+        // The world is placed on the scenery's clock, with real time beside
+        // it for the rain and the flashing lights.
+        const place = jest.spyOn(t.world(), 'setLife');
+        t.state.scenerySeconds = 1234;
+        t.placeLife();
+        const [, seconds, still, real] = place.mock.calls[place.mock.calls.length - 1];
+        expect(seconds).toBe(1234);
+        expect(still).toBe(false);
+        expect(real).toBeCloseTo(performance.now() / 1000, 1);
+        window.cornerOffice.hour(null);
+    });
+
     test('Stop the day, or Escape, ends it early and gives the sky back', () => {
         window.cornerOffice.hour(10);
         key('9');
