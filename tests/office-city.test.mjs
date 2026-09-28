@@ -526,15 +526,22 @@ describe('the airport across the bay (QA, 2026-09-28)', () => {
     const { origin, along, across } = airportFrame();
     const corners = (p) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => airportPoint(p.a + (i * p.len) / 2, p.b + (j * p.wid) / 2));
 
-    test('its runway runs the way the jets land: south and a little west, away to the visitor’s left', () => {
+    test('its runway runs the way the jets land: west and south, away from the office and to the visitor’s left', () => {
         expect(Math.hypot(...along)).toBeCloseTo(1, 12);
         expect(along[0] * across[0] + along[1] * across[1]).toBeCloseTo(0, 12);
-        // South (-x) mostly, and west (-z, away from the office) some.
-        expect(along[0]).toBeLessThan(-0.8);
-        expect(along[1]).toBeLessThan(0);
-        // Across points away from the office, so the terminal stands beyond
-        // the runway, with nothing of the airport's between it and the eye.
-        expect(across[1]).toBeLessThan(0);
+        // West (-z, away from the office) mostly, and south (-x) some: its
+        // approach comes from over downtown (QA, 2026-09-29).
+        expect(along[1]).toBeLessThan(-0.8);
+        expect(along[0]).toBeLessThan(0);
+        // Across is the landing jet's left: south, and toward the office's
+        // side, where the terminal stands low.
+        expect(across[0]).toBeLessThan(0);
+        expect(across[1]).toBeGreaterThan(0);
+        // The runway's line runs back past the office within 3.5 km, to its
+        // north: that is how the jet comes close.
+        const { a, b } = airportLocal(0, 0);
+        expect(a).toBeLessThan(0);
+        expect(Math.abs(b) / Math.hypot(a, b)).toBeLessThan(0.25);
         const back = airportLocal(...airportPoint(1234, 567));
         expect(back.a).toBeCloseTo(1234, 9);
         expect(back.b).toBeCloseTo(567, 9);
@@ -561,11 +568,10 @@ describe('the airport across the bay (QA, 2026-09-28)', () => {
                 expect(islandHeight(x, z)).toBeCloseTo(AIRPORT.elevation, 6);
             }
         }
-        // Leveled from the site to the shore, so no hill nor building stands
-        // between the office and the runway.
-        const [x, z] = airportPoint(1300, -600);
+        // Level before the runway on the office's side, over which the view
+        // of the runway skims, so no hill nor building stands in the way.
+        const [x, z] = airportPoint(0, 300);
         expect(airportFlat(x, z)).toBe(1);
-        expect(airportDistance(x, z)).toBeGreaterThan(400);
         // And back to the island's own hills well away from it.
         expect(airportFlat(0, islandShoreZ(0) - 800)).toBe(0);
         const kinds = new Set(airportParts().map((p) => p.kind));

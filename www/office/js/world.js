@@ -1157,7 +1157,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
          * it as cornerOffice.jet): set out `lead` seconds ago, so it is just
          * coming into the desk's view at `seconds`.
          */
-        callJet(seconds, lead = 28) {
+        callJet(seconds, lead = 18) {
             calledJet = seconds - lead;
             return calledJet;
         },

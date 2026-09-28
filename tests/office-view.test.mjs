@@ -1962,7 +1962,8 @@ describe('the fifth round of screenshots (2026-09-28)', () => {
         for (const [station, aspect] of [['desk', 16 / 10], ['desk', 1305 / 894], ['window', 16 / 10]]) {
             const cam = cameraAt(station, aspect);
             for (const p of [cab, hall]) {
-                const [x, z] = city.airportPoint(p.a, p.b - p.wid / 2 + 1);
+                // Its face toward the office (the airport's b runs that way).
+                const [x, z] = city.airportPoint(p.a, p.b + p.wid / 2 - 1);
                 const target = new THREE.Vector3(x, city.airportY(p.y + p.h * 0.6), z);
                 const ndc = target.clone().project(cam);
                 expect(Math.abs(ndc.x)).toBeLessThan(1);
@@ -1970,6 +1971,29 @@ describe('the fifth round of screenshots (2026-09-28)', () => {
                 expect(seeAlong(cam.position, target.clone().sub(cam.position)).name).toBe('airport');
             }
         }
+    });
+
+    test('the jet flies faster only where no station and no screen can see it (QA, 2026-09-29)', () => {
+        const views = [['desk', 16 / 10], ['desk', 1305 / 894], ['desk', 21 / 9], ['window', 16 / 10], ['window', 1305 / 894],
+            ['window', 21 / 9], ['window', 390 / 844], ['desk', 390 / 844]].map(([station, aspect]) => cameraAt(station, aspect));
+        const start = life.jetFlight(0).start;
+        const times = life.jetTimes();
+        let dashing = 0;
+        for (let t = 0; t <= times.approach; t += 1) {
+            const at = life.jetAt(start + t);
+            const left = -city.airportLocal(at.x, at.z).a;
+            if (life.approachSpeed(left) <= life.JET.speed + 1) continue;
+            dashing++;
+            world.setLife(NOON, start + t);
+            world.scene.updateMatrixWorld(true);
+            const middle = new THREE.Vector3(at.x, at.y, at.z);
+            for (const cam of views) {
+                const ndc = middle.clone().project(cam);
+                if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) continue;
+                expect(seeAlong(cam.position, middle.clone().sub(cam.position)).name).not.toBe('jet');
+            }
+        }
+        expect(dashing).toBeGreaterThan(8);
     });
 
     test('jets wait at every gate but the arrival’s, on their wheels', async () => {

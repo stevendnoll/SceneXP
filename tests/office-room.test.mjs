@@ -210,6 +210,123 @@ describe('what is in the room', () => {
     });
 });
 
+describe('the desk: walnut and brass (QA, 2026-09-29)', () => {
+    let furnished;
+    const SIZE = [2.6, 1.0];
+    beforeAll(() => {
+        const tex = () => new THREE.Texture();
+        furnished = buildRoom(CONFIG, {
+            walnut: { map: tex(), normalMap: tex(), roughnessMap: tex(), size: SIZE },
+            leather: { map: tex(), normalMap: tex(), roughnessMap: tex() }
+        });
+        furnished.group.updateMatrixWorld(true);
+    });
+    const deskOf = (r) => r.group.getObjectByName('desk');
+    const d = CONFIG.room.desk;
+    const x0 = d.x - d.width / 2;
+    const x1 = d.x + d.width / 2;
+    const top = d.height;
+    // The top's underside (roomMod is imported in the file's beforeAll).
+    const underside = () => top - roomMod.DESK.top;
+    /** The meters along the grain at a mesh's vertices facing `face`, near a point. */
+    const along = (mesh, face, near) => {
+        const pos = mesh.geometry.attributes.position;
+        const nor = mesh.geometry.attributes.normal;
+        const uv = mesh.geometry.attributes.uv;
+        const out = [];
+        for (let i = 0; i < pos.count; i++) {
+            const n = [nor.getX(i), nor.getY(i), nor.getZ(i)].map(Math.abs);
+            const axis = n[1] >= n[0] && n[1] >= n[2] ? 'y' : n[0] >= n[2] ? 'x' : 'z';
+            if (axis !== face) continue;
+            const p = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)).add(mesh.position);
+            if (near(p)) out.push(uv.getX(i) * SIZE[0]);
+        }
+        return out;
+    };
+
+    test('a thick top running over a waterfall end, the grain unbroken over the corner', () => {
+        const walnut = deskOf(furnished).children.filter((m) => m.material && m.material.clearcoat === 1 && m.material.map);
+        const slab = walnut.find((m) => boxOf(m).max.y > top - 1e-3 && boxOf(m).max.x > x1 - 1e-3);
+        const fall = walnut.find((m) => boxOf(m).min.y < 1e-3 && boxOf(m).min.x < x0 + 1e-3);
+        expect(boxOf(slab).max.y - boxOf(slab).min.y).toBeCloseTo(roomMod.DESK.top, 4);
+        const under = underside();
+        expect(boxOf(fall).max.y).toBeCloseTo(under, 4);
+        // Up the waterfall's outer face the grain runs a meter a meter, and
+        // it carries on up the top's end and across the top without a jump.
+        const up = along(fall, 'x', (p) => p.x < x0 + 0.01 && Math.abs(p.y - under) < 0.02);
+        const end = along(slab, 'x', (p) => p.x < x0 + 0.01 && Math.abs(p.y - under) < 0.02);
+        const across = along(slab, 'y', (p) => p.y > top - 0.001 && p.x < x0 + 0.02);
+        expect(up.length).toBeGreaterThan(0);
+        expect(end.length).toBeGreaterThan(0);
+        expect(across.length).toBeGreaterThan(0);
+        for (const u of [...up, ...end]) expect(u).toBeCloseTo(under, 1);
+        for (const u of across) expect(Math.abs(u - top)).toBeLessThan(0.03);
+    });
+
+    test('a pedestal of three drawers cut from one board, brushed brass pulls, on a dark plinth set back', () => {
+        const desk = deskOf(furnished);
+        // The fronts stand just behind the top's front edge (the top and the
+        // waterfall run right to it).
+        const front = d.z + d.depth / 2;
+        const fronts = desk.children.filter((m) => m.material && m.material.clearcoat === 1
+            && boxOf(m).max.z > front - 0.025 && boxOf(m).max.z < front - 0.01);
+        expect(fronts).toHaveLength(roomMod.DESK.drawers.length);
+        // Grain-matched: the same meters along the grain at the same x on
+        // every front, and across it, their heights: one board.
+        const u = (m) => {
+            const uv = m.geometry.attributes.uv;
+            const pos = m.geometry.attributes.position;
+            let best = null;
+            for (let i = 0; i < pos.count; i++) if (best === null || pos.getX(i) < pos.getX(best)) best = i;
+            return uv.getX(best);
+        };
+        const us = fronts.map(u);
+        for (const v of us) expect(v).toBeCloseTo(us[0], 6);
+        const brass = [];
+        desk.traverse((o) => { if (o.material && o.material.metalness === 1) brass.push(o); });
+        // A bar and two posts a drawer, and the waterfall's foot.
+        expect(brass.length).toBe(3 * roomMod.DESK.drawers.length + 1);
+        expect(brass[0].material.anisotropy).toBeGreaterThan(0);
+        const plinth = desk.children.find((m) => m.material && m.material.color.getHex() === 0x0e0b09);
+        const pedestal = fronts.map(boxOf).reduce((b, f) => b.union(f), new THREE.Box3());
+        expect(boxOf(plinth).max.y).toBeCloseTo(roomMod.DESK.plinth, 4);
+        expect(boxOf(plinth).min.x).toBeGreaterThan(pedestal.min.x + 0.02);
+        expect(boxOf(plinth).max.z).toBeLessThan(pedestal.max.z - 0.03);
+    });
+
+    test('a stitched leather pad under the keyboard, and the folder lies on it', () => {
+        const pad = deskOf(furnished).getObjectByName('desk-pad');
+        const b = boxOf(pad);
+        expect(b.min.y).toBeCloseTo(top, 4);
+        expect(b.max.y).toBeCloseTo(top + roomMod.DESK.pad.thick, 4);
+        expect(b.min.x).toBeGreaterThan(x0);
+        expect(b.max.x).toBeLessThan(x1);
+        expect(pad.material.sheen).toBeGreaterThan(0);
+        // Its map spans it exactly once.
+        const uv = pad.geometry.attributes.uv;
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (let i = 0; i < uv.count; i++) { lo = Math.min(lo, uv.getX(i)); hi = Math.max(hi, uv.getX(i)); }
+        expect(lo).toBeCloseTo(0, 3);
+        expect(hi).toBeCloseTo(1, 3);
+        // The keyboard stands on it, and so does the open folder.
+        const keyboard = furnished.picks.computer.children.find((m) => m.material && m.material.color && m.material.color.getHex() === 0x3a3d42);
+        expect(boxOf(keyboard).min.y).toBeCloseTo(b.max.y, 4);
+        furnished.picks.folder.visible = true;
+        expect(boxOf(furnished.picks.folder).min.y).toBeCloseTo(b.max.y, 4);
+        furnished.picks.folder.visible = false;
+    });
+
+    test('without the painted maps (a test, no WebGL2), the same desk in plain lacquered walnut', () => {
+        const plain = deskOf(room).children.filter((m) => m.material && m.material.clearcoat === 1);
+        expect(plain.length).toBeGreaterThan(4);
+        for (const m of plain) {
+            expect(m.material.map).toBeNull();
+            expect(m.material.color.getHex()).not.toBe(0xffffff);
+        }
+    });
+});
+
 describe.each(Object.entries(ASPECTS))('from the desk, on a %s screen', (_name, aspect) => {
     test.each(TAPPABLE)('the %s is in the frame and nothing stands in front of it', (key) => {
         const cam = cameraAt('desk', aspect);

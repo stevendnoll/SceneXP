@@ -81,6 +81,7 @@ import {
 } from './panels.min.js';
 import { installCardFocusTrap, installCardScrollReset, getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
+import { WALNUT, walnutMaps, leatherMaps } from './finishes.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
 // ---- State ------------------------------------------------------------------
@@ -413,6 +414,38 @@ function anisotropy() {
     return caps && caps.getMaxAnisotropy ? Math.min(8, caps.getMaxAnisotropy()) : 1;
 }
 
+/** A painted map (finishes.js) as a texture: repeating, mipmapped, filtered
+ *  as sharply as the device allows, in sRGB when it is a color. */
+function finishTexture(data, width, height, color) {
+    const t = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.anisotropy = anisotropy();
+    if (color) t.colorSpace = THREE.SRGBColorSpace;
+    t.needsUpdate = true;
+    return t;
+}
+
+/**
+ * The desk's walnut and its leather pad (finishes.js), painted at load: a
+ * fifth of a second's work on a laptop, so only where there is WebGL2 to
+ * show them (every browser the office runs in; never a test's stub, which
+ * builds the page dozens of times). Null elsewhere, and the desk keeps its
+ * plain colors.
+ */
+function paintFinishes() {
+    if (typeof WebGL2RenderingContext === 'undefined') return null;
+    const asTextures = ({ color, normal, rough, width, height }) => ({
+        map: finishTexture(color, width, height, true),
+        normalMap: finishTexture(normal, width, height, false),
+        roughnessMap: finishTexture(rough, width, height, false)
+    });
+    return { walnut: { ...asTextures(walnutMaps()), size: WALNUT.size }, leather: asTextures(leatherMaps()) };
+}
+
 /**
  * The city's painted maps: for each facade style its color, its roughness
  * and metalness, and its lit offices; and the streets by day and by night.
@@ -494,7 +527,10 @@ function buildScene() {
     const screen = paintedTexture(512, 320, (ctx, W, H) => drawScreen(ctx, W, H, []));
     screenCanvas = screen.canvas;
     screenTexture = screen.texture;
+    const finish = paintFinishes();
     room = buildRoom(CONFIG, {
+        walnut: finish && finish.walnut,
+        leather: finish && finish.leather,
         screen: screenTexture,
         notes: painted.notes.texture,
         rainGlass: paintedTexture(512, 512, drawRainOnGlass).texture,

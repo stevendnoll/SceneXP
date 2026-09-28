@@ -11,9 +11,9 @@ import {
     LIFE, minutesOn, minutesOfDay, gently, yawFor, ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt,
     shipShift, SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift,
     TRAFFIC, VEHICLES, SUV, PARKED_Y, pitchOf, cycleOf, slotTimes, distanceAlong, onStreet,
-    JET, jetCrossing, jetFlight, jetOnTrack, jetAt, jetFlashing, jetTimes, jetParked, glideHeight
+    JET, jetCrossing, jetFlight, jetOnTrack, jetAt, jetFlashing, jetTimes, jetParked, glideHeight, approachSpeed, approachLeft
 } from '../www/office/js/life.js';
-import { CITY, WATER_Y, piers, isWater, isLand, groundY, AIRPORT, airportFrame, airportLocal, airportGates } from '../www/office/js/city.js';
+import { CITY, WATER_Y, piers, isWater, isLand, groundY, shoreZ, AIRPORT, airportFrame, airportLocal, airportGates } from '../www/office/js/city.js';
 
 const NOON = new Date(2026, 8, 24, 12, 0);
 const later = (date, minutes) => new Date(date.getTime() + minutes * 60000);
@@ -501,10 +501,14 @@ describe('the jet', () => {
             expect(Math.abs(b)).toBeLessThan(1e-6);
             expect(a).toBeLessThanOrEqual(1e-6);
         }
-        // It sets out over the water, well out from the island.
+        // It sets out over downtown behind the office's right shoulder
+        // (QA, 2026-09-29: closer, so bigger), north (+x) of it and no
+        // farther west than its own waterfront, and crosses the bay.
         const first = approach[0];
-        expect(isWater(first.x, first.z)).toBe(true);
-        expect(Math.hypot(first.x, first.z)).toBeLessThan(12000);
+        expect(first.x).toBeGreaterThan(0);
+        expect(first.z).toBeGreaterThan(shoreZ(first.x));
+        expect(Math.hypot(first.x, first.z)).toBeLessThan(5000);
+        expect(approach.some((p) => isWater(p.x, p.z))).toBe(true);
         // Only ever down, the glide slope's own angle until the flare.
         for (let i = 1; i < approach.length; i++) expect(approach[i].y).toBeLessThanOrEqual(approach[i - 1].y + 1e-9);
         const slope = Math.tan((JET.glide * Math.PI) / 180);
@@ -560,12 +564,40 @@ describe('the jet', () => {
         expect(gate.free).toBe(true);
     });
 
-    test('never a jump: from the first second out to its gate it moves no faster than it flies', () => {
+    test('never a jump: from the first second out to its gate it moves no faster than it flies, and only dashes in the dash', () => {
         const path = flight(0.5);
+        // Its speed is over the ground, so down the slope a touch more.
+        const climb = 1 / Math.cos((JET.glide * Math.PI) / 180);
         for (let i = 1; i < path.length; i++) {
             const d = Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y, path[i].z - path[i - 1].z);
-            // Its speed is over the ground, so down the slope a touch more.
-            expect(d).toBeLessThanOrEqual((JET.speed * 0.5) / Math.cos((JET.glide * Math.PI) / 180) + 1e-6);
+            expect(d).toBeLessThanOrEqual(JET.dash.speed * 0.5 * climb + 1e-6);
+            // Outside the dash and its ramps, its own speed (both ends of
+            // the step outside, or it may have run into a ramp).
+            const outside = (p) => {
+                const left = -airportLocal(p.x, p.z).a;
+                return left > JET.dash.from + JET.dash.ramp || left < JET.dash.to - JET.dash.ramp;
+            };
+            if (path[i].phase === 'approach' && outside(path[i - 1]) && outside(path[i])) {
+                expect(d).toBeLessThanOrEqual(JET.speed * 0.5 * climb + 1e-6);
+            }
+        }
+        // The speed through the dash: its own outside, the dash's in the
+        // middle, never less than its own nor more than the dash's.
+        expect(approachSpeed(JET.from)).toBe(JET.speed);
+        expect(approachSpeed(0)).toBe(JET.speed);
+        expect(approachSpeed((JET.dash.from + JET.dash.to) / 2)).toBe(JET.dash.speed);
+        for (let left = 0; left <= JET.from; left += 25) {
+            expect(approachSpeed(left)).toBeGreaterThanOrEqual(JET.speed);
+            expect(approachSpeed(left)).toBeLessThanOrEqual(JET.dash.speed);
+        }
+        // The table and its inverse agree, and time only ever runs on.
+        expect(approachLeft(0)).toBe(JET.from);
+        expect(approachLeft(times.approach)).toBe(0);
+        let last = Infinity;
+        for (let t = 0; t <= times.approach; t += 0.25) {
+            const left = approachLeft(t);
+            expect(left).toBeLessThan(last);
+            last = left;
         }
     });
 

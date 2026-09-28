@@ -488,10 +488,15 @@ export function carLightPositions(cars, lanes, seconds, out = new Float32Array(c
  * bay (city.js AIRPORT; QA, 2026-09-28). Every one flies the same way, in
  * from the visitor's right and down to their left, never left to right: a
  * straight final approach along the runway's line, letting down on a
- * `glide` slope from `from` meters out, over the water and in over the
- * island's shore, the big tower left of the office's street hiding it for
- * the last half minute before it comes out low over the airport and
- * touches down. It flares over the last `flare` meters, rolls out
+ * `glide` slope from `from` meters out: from over downtown behind the
+ * office's right shoulder, across the view 3 to 5 km out, and away over the
+ * bay to the island (QA, 2026-09-29: closer, so bigger). The big tower
+ * left of the office's street hides it from about 8.3 km out to 1.6,
+ * from every station and screen (measured 2026-09-29), and in that stretch
+ * it flies faster (`dash`: meters left from and to, its speed there, and
+ * the ramps either side, all inside the hidden stretch), so the wait
+ * behind the tower is about 20 seconds, not 45. It comes out low over the
+ * airport and touches down. It flares over the last `flare` meters, rolls out
  * `rollout` meters slowing to `taxiSpeed`, turns off at the taxiway exit
  * past that and taxis to its gate, where it waits until the next one comes
  * in. A twin-engined narrow-body, enlarged by `scale` like the small craft,
@@ -509,8 +514,9 @@ export const JET = {
     /** Faster than a real approach (about 75), because it is drawn 3.5
      *  times its size: at 80 it crept across (QA, 2026-09-25). */
     speed: 145,
+    dash: { from: 7700, to: 2000, speed: 450, ramp: 350 },
     glide: 3,
-    from: 16000,
+    from: 15000,
     flare: 400,
     rollout: 1300,
     taxiSpeed: 14,
@@ -550,10 +556,59 @@ export function taxiRoute() {
     return [[JET.rollout, 0], [exit, 0], [exit, AIRPORT.taxiway.b], [gate, AIRPORT.taxiway.b], [gate, AIRPORT.gates.b]];
 }
 
+/** The jet's speed over the ground on the approach, `left` meters short
+ *  of the touchdown point: its own, and faster in the dash, ramped smoothly
+ *  in and out. */
+export function approachSpeed(left) {
+    const { from, to, speed, ramp } = JET.dash;
+    const ease = (t) => {
+        const x = Math.min(1, Math.max(0, t));
+        return x * x * (3 - 2 * x);
+    };
+    const inDash = ease((left - (to - ramp)) / ramp) * (1 - ease((left - from) / ramp));
+    return JET.speed + (speed - JET.speed) * inDash;
+}
+
+/** The approach as a table, made once: `seconds[i]` into the approach the
+ *  jet is `JET.from - i * step` meters short of the touchdown point. */
+const APPROACH_STEP = 5;
+let approachTable = null;
+function approachSeconds() {
+    if (!approachTable) {
+        const n = Math.ceil(JET.from / APPROACH_STEP);
+        const seconds = new Float64Array(n + 1);
+        for (let i = 1; i <= n; i++) {
+            const mid = JET.from - (i - 0.5) * APPROACH_STEP;
+            seconds[i] = seconds[i - 1] + APPROACH_STEP / approachSpeed(mid);
+        }
+        approachTable = seconds;
+    }
+    return approachTable;
+}
+
+/** How far short of the touchdown point the jet is `into` seconds into the
+ *  approach, meters. */
+export function approachLeft(into) {
+    const seconds = approachSeconds();
+    const n = seconds.length - 1;
+    if (into <= 0) return JET.from;
+    if (into >= seconds[n]) return Math.max(0, JET.from - n * APPROACH_STEP);
+    let lo = 0;
+    let hi = n;
+    while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (seconds[mid] <= into) lo = mid;
+        else hi = mid;
+    }
+    const k = (into - seconds[lo]) / (seconds[hi] - seconds[lo]);
+    return Math.max(0, JET.from - (lo + k) * APPROACH_STEP);
+}
+
 /** How long each part of a flight takes, seconds: `approach`, `rollout` and
  *  `taxi`, and `total`. */
 export function jetTimes() {
-    const approach = JET.from / JET.speed;
+    const table = approachSeconds();
+    const approach = table[table.length - 1];
     const rollout = (2 * JET.rollout) / (JET.speed + JET.taxiSpeed);
     const route = taxiRoute();
     let length = 0;
@@ -591,7 +646,7 @@ export function jetOnTrack(into) {
     const times = jetTimes();
     const ground = JET.wheels * JET.scale;
     if (into < times.approach) {
-        const left = JET.from - JET.speed * Math.max(0, into);
+        const left = approachLeft(into);
         const flare = 1 - Math.min(1, left / JET.flare);
         const pitch = APPROACH_PITCH + (FLARE_PITCH - APPROACH_PITCH) * flare;
         return jetAtPoint(-left, 0, ground + glideHeight(left), 1, 0, pitch, 'approach', true);

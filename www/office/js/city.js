@@ -567,32 +567,42 @@ export function islandHeight(x, z, fields = mountainFields()) {
  * pixel tall, so it is the tower, the terminal, the hangars and the jets
  * at the gates that say airport; by night, its lights.
  *
+ * THE RUNWAY POINTS BACK AT THE CITY (QA, 2026-09-29: the jet "looks really
+ * small"). Laid across the view, 30 degrees west of south, its approach ran
+ * 10 to 13 km out the whole way. Turned to 60 degrees, the approach starts
+ * over downtown behind the office's right shoulder, and the jet crosses the
+ * view 3 to 5 km out on its way down to the island, two to three times the
+ * size.
+ *
  * The airport's frame: `a` meters along the runway the way the jets land
- * (from the touchdown point), `b` meters across it, away from the office.
- * `site` is the airfield (a and b ranges), `flat` how far past the site the
- * ground is fully level and how far it then blends back into the hills (the
- * island's grid is 250 m, so the level core must be wider than a cell past
- * everything built on it), and the ground is leveled all the way from the
- * site to the shore (`flat.shore`, b): from the office the view of the
- * runway skims 25 to 45 m over that ground, and the island's hills and its
- * waterfront buildings there hid the rollout and the taxi (measured
- * 2026-09-28). `elevation` its height above the
+ * (from the touchdown point), `b` meters across it, to the left of a jet
+ * landing: south, and toward the office's side, which is why what stands
+ * there is kept low. `site` is the airfield, rectangles of a and b (narrower
+ * by the threshold, where the shore is near), `flat` how far past the site
+ * the ground is fully level and how far it then blends back into the hills
+ * (the island's grid is 250 m, so the level core must be wider than a cell
+ * past everything built on it; from the office the view of the runway skims
+ * 25 to 45 m over the ground before it, and the island's hills and
+ * buildings there once hid the rollout and the taxi). `elevation` its height
+ * above the
  * water, `runway` its ends and width, `taxiway` the parallel taxiway's
  * offset and width, `apron` and `gates` where the jets park (the arrival's
  * own gate is `arrivalGate`, left free for it), and `approach` the lights
  * reaching out over the water before the runway.
  */
 export const AIRPORT = {
-    touchdown: { x: -4300, back: 300 },
-    heading: 30,
+    touchdown: { x: -4300, back: 500 },
+    heading: 60,
     elevation: 12,
-    site: { a: [-350, 3000], b: [-120, 880] },
-    flat: { margin: 380, blend: 350, shore: -1500 },
+    site: [{ a: [-350, 800], b: [-150, 360] }, { a: [800, 3000], b: [-150, 880] }],
+    flat: { margin: 380, blend: 350 },
     runway: { from: -300, to: 2700, width: 140 },
     taxiway: { b: 300, width: 70, exits: [150, 1350, 2550] },
     apron: { a: [800, 2500], b: [380, 620] },
     gates: { a: [1250, 1500, 1750, 2000, 2250], b: 520 },
-    arrivalGate: 2,
+    /** The gate nearest the office's line of sight: the row of gates runs
+     *  nearly along it, so each jet parked there hides the next. */
+    arrivalGate: 0,
     approach: { reach: 900, every: 30 },
     lampEvery: 60
 };
@@ -608,7 +618,7 @@ export function airportFrame() {
     return {
         origin: [x, islandShoreZ(x) - AIRPORT.touchdown.back],
         along: [-Math.cos(h), -Math.sin(h)],
-        across: [Math.sin(h), -Math.cos(h)]
+        across: [-Math.sin(h), Math.cos(h)]
     };
 }
 
@@ -629,22 +639,17 @@ export function airportLocal(x, z) {
 /** How far a point is from the airport's site, meters (0 inside it). */
 export function airportDistance(x, z) {
     const { a, b } = airportLocal(x, z);
-    const { site } = AIRPORT;
-    const da = Math.max(site.a[0] - a, 0, a - site.a[1]);
-    const db = Math.max(site.b[0] - b, 0, b - site.b[1]);
-    return Math.hypot(da, db);
+    return Math.min(...AIRPORT.site.map((r) => Math.hypot(
+        Math.max(r.a[0] - a, 0, a - r.a[1]),
+        Math.max(r.b[0] - b, 0, b - r.b[1])
+    )));
 }
 
 /** How level the ground is at a point for the airport, 0 to 1: all of it
- *  on the site, between it and the shore, and a margin round both, blending
- *  back to the hills. */
+ *  on the site and a margin round it, blending back to the hills. */
 export function airportFlat(x, z) {
-    const { margin, blend, shore } = AIRPORT.flat;
-    const { a, b } = airportLocal(x, z);
-    const { site } = AIRPORT;
-    const da = Math.max(site.a[0] - a, 0, a - site.a[1]);
-    const db = Math.max(shore - b, 0, b - site.b[1]);
-    return 1 - smoothstep(margin, margin + blend, Math.hypot(da, db));
+    const { margin, blend } = AIRPORT.flat;
+    return 1 - smoothstep(margin, margin + blend, airportDistance(x, z));
 }
 
 /** The airport's yaw for a direction along its frame (a, b), for a mesh
@@ -684,20 +689,23 @@ export function airportParts() {
     const mid = (r) => (r[0] + r[1]) / 2;
     const span = (r) => r[1] - r[0];
     const parts = [
-        { a: mid(site.a), b: mid(site.b), len: span(site.a), wid: span(site.b), y: 0, h: 0.3, color: C.field, kind: 'field' },
+        ...site.map((r) => ({ a: mid(r.a), b: mid(r.b), len: span(r.a), wid: span(r.b), y: 0, h: 0.3, color: C.field, kind: 'field' })),
         { a: (runway.from + runway.to) / 2, b: 0, len: runway.to - runway.from, wid: runway.width, y: 0, h: 0.8, color: C.runway, kind: 'runway' },
         { a: 1300, b: taxiway.b, len: 2600, wid: taxiway.width, y: 0, h: 0.6, color: C.taxiway, kind: 'taxiway' },
         ...taxiway.exits.map((a) => ({ a, b: taxiway.b / 2, len: taxiway.width, wid: taxiway.b, y: 0, h: 0.6, color: C.taxiway, kind: 'taxiway' })),
         { a: mid(apron.a), b: mid(apron.b), len: span(apron.a), wid: span(apron.b), y: 0, h: 0.7, color: C.apron, kind: 'apron' },
-        // The terminal: a long glass hall behind the apron, its concourse
-        // along the apron's edge, and the garage behind.
-        { a: 1550, b: 720, len: 1000, wid: 150, y: 0, h: 42, color: C.terminal, kind: 'terminal' },
-        { a: 1600, b: 640, len: 1500, wid: 40, y: 0, h: 24, color: C.concourse, kind: 'terminal' },
-        { a: 1550, b: 835, len: 500, wid: 70, y: 0, h: 22, color: C.garage, kind: 'garage' },
+        // The terminal: a long, low concourse along the apron's edge and the
+        // glass hall behind it, the garage beyond. They stand on the office's
+        // side of the gates, so they are kept low: from 15 km the view drops
+        // only about 10 m in the 800 m to the gates, and a hall 26 m tall hid
+        // the jets at them (measured 2026-09-29).
+        { a: 1600, b: 650, len: 1400, wid: 40, y: 0, h: 10, color: C.concourse, kind: 'terminal' },
+        { a: 1600, b: 790, len: 1000, wid: 110, y: 0, h: 14, color: C.terminal, kind: 'terminal' },
+        { a: 2450, b: 800, len: 400, wid: 70, y: 0, h: 12, color: C.garage, kind: 'garage' },
         // The control tower: a shaft, its glass cab, and the cab's roof.
-        { a: 600, b: 640, len: 18, wid: 18, y: 0, h: 95, color: C.tower, kind: 'tower' },
-        { a: 600, b: 640, len: 36, wid: 36, y: 95, h: 16, color: C.cab, kind: 'tower' },
-        { a: 600, b: 640, len: 40, wid: 40, y: 111, h: 3, color: C.tower, kind: 'tower' },
+        { a: 950, b: 640, len: 18, wid: 18, y: 0, h: 95, color: C.tower, kind: 'tower' },
+        { a: 950, b: 640, len: 36, wid: 36, y: 95, h: 16, color: C.cab, kind: 'tower' },
+        { a: 950, b: 640, len: 40, wid: 40, y: 111, h: 3, color: C.tower, kind: 'tower' },
         // The hangars, by the runway's far end.
         { a: 2700, b: 560, len: 200, wid: 170, y: 0, h: 44, color: C.hangar, kind: 'hangar' },
         { a: 2920, b: 600, len: 150, wid: 150, y: 0, h: 38, color: C.hangar, kind: 'hangar' }
@@ -755,8 +763,8 @@ export function airportLights() {
     }
     for (let a = runway.from - approach.every; a >= runway.from - approach.reach; a -= approach.every) add(a, 0, 1, white);
     for (let a = apron.a[0]; a <= apron.a[1]; a += 100) add(a, apron.b[0], 18, [1, 0.85, 0.6]);
-    for (let a = 1060; a <= 2040; a += 40) add(a, 645, 14, [1, 0.88, 0.66]);
-    add(600, 640, 116, [1, 0.15, 0.1]);
+    for (let a = 1120; a <= 2080; a += 40) add(a, 735, 9, [1, 0.88, 0.66]);
+    add(950, 640, 116, [1, 0.15, 0.1]);
     const rabbit = [];
     for (let a = runway.from - approach.reach; a <= runway.from - approach.every + 1e-6; a += approach.every) {
         const [x, z] = airportPoint(a, 0);

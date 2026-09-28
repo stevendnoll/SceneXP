@@ -37,8 +37,11 @@ const COLORS = {
     floor: 0x7a5236,
     rug: 0x3f4f5f,
     ceiling: 0xf3eee6,
-    desk: 0x6b4128,
-    deskDark: 0x4a2c1a,
+    desk: 0x5f3a23,
+    reveal: 0x120c08,
+    plinth: 0x0e0b09,
+    leather: 0x2c211b,
+    deskBrass: 0xc9a25a,
     metal: 0x2b2d31,
     screenOff: 0x0e1622,
     tray: 0x8c6a45,
@@ -849,23 +852,148 @@ export function setNotes(notes, count, corners, uvs) {
     return geometry;
 }
 
-function buildDesk(group, config, picks, contacts) {
+/**
+ * The desk's parts, meters (QA, 2026-09-29: "the furniture in the scene
+ * should look really expensive"): a walnut top `top` thick, running over a
+ * waterfall end on the left (the grain unbroken over the edge); a drawer
+ * pedestal on the right, `pedestal` wide, standing on a dark plinth set
+ * back so it floats, its three drawer fronts cut from one board so the
+ * grain runs across them (`drawers`, each [foot, head] in meters), with
+ * brushed brass pulls; a brass foot under the waterfall; a walnut modesty
+ * panel at the back; and a stitched leather pad under the keyboard (`pad`,
+ * its width and depth, and how far in from the desk's front edge).
+ */
+export const DESK = {
+    top: 0.05,
+    pedestal: 0.46,
+    plinth: 0.07,
+    drawers: [[0.075, 0.355], [0.36, 0.525], [0.53, 0.692]],
+    pad: { width: 0.8, depth: 0.42, front: 0.02, thick: 0.004 },
+    pull: { length: 0.2, reach: 0.025, drop: 0.05 }
+};
+
+/**
+ * Lay a texture on a mesh in meters: `toGrain(x, y, z, face)` gives each
+ * vertex's meters along and across the texture from its place in the room
+ * and the axis its face turns to ('x', 'y' or 'z'), and `size` how many
+ * meters one texture covers. So the grain keeps its scale on every part,
+ * and parts that meet can carry it over the join.
+ */
+export function grainUv(mesh, toGrain, size) {
+    const g = mesh.geometry;
+    const pos = g.attributes.position;
+    const nor = g.attributes.normal;
+    const uv = new Float32Array(pos.count * 2);
+    const { x: ox, y: oy, z: oz } = mesh.position;
+    for (let i = 0; i < pos.count; i++) {
+        const nx = Math.abs(nor.getX(i));
+        const ny = Math.abs(nor.getY(i));
+        const nz = Math.abs(nor.getZ(i));
+        const face = ny >= nx && ny >= nz ? 'y' : nx >= nz ? 'x' : 'z';
+        const [u, v] = toGrain(pos.getX(i) + ox, pos.getY(i) + oy, pos.getZ(i) + oz, face);
+        uv[i * 2] = u / size[0];
+        uv[i * 2 + 1] = v / size[1];
+    }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    return mesh;
+}
+
+/** The meters of walnut one texture covers when none is given (the tests):
+ *  finishes.js WALNUT.size. */
+const GRAIN_SIZE = [2.6, 1.0];
+
+/**
+ * The desk's materials: lacquered walnut (a deep clear coat over the grain
+ * that gives back the windows, interior.js), brushed brass, the dark of the
+ * reveals and the plinth, and the pad's leather. `finish` is main.js's
+ * painted maps (finishes.js), or nothing, and then plain colors.
+ */
+function deskMaterials(finish) {
+    const walnut = finish && finish.walnut;
+    const leather = finish && finish.leather;
+    return {
+        wood: new THREE.MeshPhysicalMaterial({
+            color: walnut ? 0xffffff : COLORS.desk,
+            map: walnut ? walnut.map : null,
+            normalMap: walnut ? walnut.normalMap : null,
+            normalScale: new THREE.Vector2(0.6, 0.6),
+            roughnessMap: walnut ? walnut.roughnessMap : null,
+            roughness: walnut ? 1 : 0.5,
+            metalness: 0,
+            clearcoat: 1,
+            clearcoatRoughness: 0.07
+        }),
+        brass: new THREE.MeshPhysicalMaterial({ color: COLORS.deskBrass, metalness: 1, roughness: 0.3, anisotropy: 0.6 }),
+        reveal: mat(COLORS.reveal, { roughness: 0.9 }),
+        plinth: mat(COLORS.plinth, { roughness: 0.7 }),
+        leather: new THREE.MeshPhysicalMaterial({
+            color: leather ? 0xffffff : COLORS.leather,
+            map: leather ? leather.map : null,
+            normalMap: leather ? leather.normalMap : null,
+            roughnessMap: leather ? leather.roughnessMap : null,
+            roughness: leather ? 1 : 0.6,
+            sheen: 0.35,
+            sheenColor: new THREE.Color(0x6a4a3a),
+            sheenRoughness: 0.6
+        }),
+        size: (walnut && walnut.size) || GRAIN_SIZE
+    };
+}
+
+function buildDesk(group, config, picks, contacts, finish = null) {
     const d = config.room.desk;
     const x0 = d.x - d.width / 2;
     const x1 = d.x + d.width / 2;
     const z0 = d.z - d.depth / 2;
     const z1 = d.z + d.depth / 2;
     const top = d.height;
-    // Lacquered: a clear coat over the grain that gives back the windows
-    // (it reflects the room's environment, interior.js).
-    const wood = new THREE.MeshPhysicalMaterial({ color: COLORS.desk, roughness: 0.55, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.14 });
-    const dark = mat(COLORS.deskDark, { roughness: 0.6 });
+    const T = DESK.top;
+    const under = top - T;
+    const m = deskMaterials(finish);
     const desk = new THREE.Group();
     desk.name = 'desk';
-    desk.add(roundedSlab(x0, top - 0.04, z0, x1, top, z1, 0.014, wood));
-    desk.add(roundedSlab(x0, 0, z0 + 0.04, x0 + 0.04, top - 0.04, z1 - 0.04, 0.008, dark));
-    desk.add(roundedSlab(x1 - 0.04, 0, z0 + 0.04, x1, top - 0.04, z1 - 0.04, 0.008, dark));
-    desk.add(roundedSlab(x0 + 0.04, 0.3, z0 + 0.02, x1 - 0.04, top - 0.04, z0 + 0.05, 0.006, dark));
+    const wood = (mesh, toGrain) => desk.add(grainUv(mesh, toGrain, m.size));
+    // The top and the waterfall, one board: along the grain is the distance
+    // round the edge (up the waterfall, then across the top), across it the
+    // depth, so the figure runs unbroken over the corner.
+    const flow = (x, y, z, face) => {
+        const across = z - z0;
+        if (face === 'x' && x < x0 + T + 1e-6) return [y, across];
+        if (face === 'z') return [x <= x0 + T ? y : top + (x - x0), across + 0.3 * (top - y)];
+        return [top + (x - x0), across];
+    };
+    wood(roundedSlab(x0, under, z0, x1, top, z1, 0.012, m.wood), flow);
+    wood(roundedSlab(x0, 0, z0, x0 + T, under, z1, 0.008, m.wood), flow);
+    // A brass foot under the waterfall.
+    desk.add(slab(x0 - 0.002, 0, z0 - 0.002, x0 + T + 0.002, 0.012, z1 + 0.002, m.brass));
+    // The pedestal: its sides' grain upright, standing on a plinth set back.
+    const px0 = x1 - DESK.pedestal;
+    const px1 = x1 - 0.015;
+    wood(roundedSlab(px0, DESK.plinth, z0 + 0.02, px1, under, z1 - 0.04, 0.006, m.wood), (x, y, z, face) =>
+        (face === 'x' ? [y + 1.0, z - z0 + 0.1] : [x - px0 + 1.9, z - z0 + (face === 'z' ? y : 0)]));
+    desk.add(slab(px0 + 0.03, 0, z0 + 0.06, px1 - 0.03, DESK.plinth, z1 - 0.08, m.plinth));
+    // The dark reveal behind the drawer fronts, so the gaps between them
+    // read as gaps.
+    desk.add(slab(px0 + 0.008, DESK.plinth + 0.002, z1 - 0.046, px1 - 0.008, under - 0.004, z1 - 0.039, m.reveal));
+    // The drawer fronts, from one board: the grain runs across all three.
+    const cx = (px0 + px1) / 2;
+    const { length, reach, drop } = DESK.pull;
+    for (const [y0, y1] of DESK.drawers) {
+        wood(roundedSlab(px0 + 0.006, y0, z1 - 0.04, px1 - 0.006, y1, z1 - 0.018, 0.004, m.wood), (x, y) => [x - px0 + 0.3, y + 0.1]);
+        // Its pull: a brass bar on two posts.
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, length, 16), m.brass);
+        bar.rotation.z = Math.PI / 2;
+        bar.position.set(cx, y1 - drop, z1 - 0.018 + reach);
+        desk.add(bar);
+        for (const side of [-1, 1]) {
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, reach, 10), m.brass);
+            post.rotation.x = Math.PI / 2;
+            post.position.set(cx + side * (length / 2 - 0.015), y1 - drop, z1 - 0.018 + reach / 2);
+            desk.add(post);
+        }
+    }
+    // The modesty panel at the back, between the waterfall and the pedestal.
+    wood(roundedSlab(x0 + T, 0.28, z0 + 0.03, px0, under, z0 + 0.05, 0.004, m.wood), (x, y) => [x - x0 + 0.2, y + 0.2]);
     group.add(desk);
 
     // The monitor, which is the computer station.
@@ -877,7 +1005,13 @@ function buildDesk(group, config, picks, contacts) {
     computer.add(box(0.04, 0.16, 0.03, metal, mx, top + 0.09, mz - 0.03));
     const bezel = roundedBox(0.66, 0.41, 0.035, 0.012, metal, mx, top + 0.36, mz);
     computer.add(bezel);
-    computer.add(roundedBox(0.44, 0.015, 0.14, 0.005, mat(0x3a3d42), mx, top + 0.008, z1 - 0.2));
+    computer.add(roundedBox(0.44, 0.015, 0.14, 0.005, mat(0x3a3d42), mx, top + DESK.pad.thick + 0.0075, z1 - 0.2));
+    // The leather pad under the keyboard, part of the desk.
+    const { width: pw, depth: pd, front, thick } = DESK.pad;
+    const pad = roundedSlab(mx - pw / 2, top, z1 - front - pd, mx + pw / 2, top + thick, z1 - front, 0.008, m.leather);
+    pad.name = 'desk-pad';
+    grainUv(pad, (x, y, z) => [x - (mx - pw / 2), z - (z1 - front - pd)], [pw, pd]);
+    desk.add(pad);
     // Where the desk, the monitor's foot and the keyboard meet what they
     // stand on.
     contacts.push(
@@ -996,14 +1130,15 @@ function buildDesk(group, config, picks, contacts) {
     picks.lamp = lampGroup;
 
     // The open folder, lying on the desk while its card is open. Two covers
-    // side by side, and a few pages on the right one.
+    // side by side, and a few pages on the right one, on the leather pad.
     const folder = tag(new THREE.Group(), 'folder');
     const manila = mat(COLORS.manila, { roughness: 0.9 });
     const fx = d.x + 0.02;
     const fz = z1 - 0.2;
-    folder.add(box(0.22, 0.004, 0.3, manila, fx - 0.112, top + 0.002, fz));
-    folder.add(box(0.22, 0.004, 0.3, manila, fx + 0.112, top + 0.002, fz));
-    folder.add(box(0.2, 0.006, 0.27, paper, fx + 0.112, top + 0.007, fz));
+    const onPad = top + DESK.pad.thick;
+    folder.add(box(0.22, 0.004, 0.3, manila, fx - 0.112, onPad + 0.002, fz));
+    folder.add(box(0.22, 0.004, 0.3, manila, fx + 0.112, onPad + 0.002, fz));
+    folder.add(box(0.2, 0.006, 0.27, paper, fx + 0.112, onPad + 0.007, fz));
     folder.visible = false;
     group.add(folder);
     picks.folder = folder;
@@ -1095,7 +1230,9 @@ function buildFloorThings(group, config, picks, contacts) {
 /**
  * Build the office. `textures` may carry `screen` (the monitor's face),
  * `notes`, `drawerLabels` (one per drawer), `boardHeader`,
- * `boardCards`, `departures`, `whiteboard` and `rainGlass`, all optional.
+ * `boardCards`, `departures`, `whiteboard`, `rainGlass`, and the desk's
+ * finishes `walnut` and `leather` (each `{ map, normalMap, roughnessMap }`,
+ * the walnut with the `size` in meters its maps cover), all optional.
  */
 export function buildRoom(config, textures = {}) {
     const group = new THREE.Group();
@@ -1103,7 +1240,7 @@ export function buildRoom(config, textures = {}) {
     const picks = {};
     buildShell(group, config);
     const contacts = [];
-    const desk = buildDesk(group, config, picks, contacts);
+    const desk = buildDesk(group, config, picks, contacts, { walnut: textures.walnut || null, leather: textures.leather || null });
     const waste = buildFloorThings(group, config, picks, contacts);
     const cabinet = buildCabinet(group, config, textures.drawerLabels || null, picks);
     const board = buildBoard(group, config, textures, picks);
