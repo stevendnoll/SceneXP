@@ -47,7 +47,7 @@ import { SUNBEAM, sunbeam, mirrorLevel, interiorEnvironment, mirrorCamera, layMi
 import { buildWorld } from './world.min.js';
 import {
     screenLines, drawScreen, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
-    drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, FACADE_STYLES
+    drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, drawConcrete, FACADE_STYLES
 } from './paint.min.js';
 import { CITY } from './city.min.js';
 import { CLOUDS, cloudPuffs, skyAt, dayLapse } from './sky.min.js';
@@ -469,7 +469,8 @@ function worldTextures() {
         // The roughness and metalness map holds numbers, not colors.
         if (facades[style].rm) facades[style].rm.colorSpace = THREE.NoColorSpace;
     });
-    const streets = sharp(paintedTexture(256, 256, (ctx, W, H) => drawStreets(ctx, W, H, CITY)).texture);
+    // 512 across a block: the street paint's lines hold from forty floors up.
+    const streets = sharp(paintedTexture(512, 512, (ctx, W, H) => drawStreets(ctx, W, H, CITY)).texture);
     const streetsLit = sharp(paintedTexture(256, 256, (ctx, W, H) => drawStreets(ctx, W, H, CITY, true)).texture);
     const clouds = sharp(paintedTexture(CLOUDS.size, CLOUDS.size, (ctx, W, H) => drawClouds(ctx, W, H, cloudPuffs())).texture);
     // The moon is repainted as its phase changes (paintMoon), the glow never.
@@ -488,7 +489,10 @@ function buildScene() {
 
     // Daylight through the two window walls, and the room's own fill. Their
     // strengths and colors follow the clock (applyDaylight).
-    lights.hemi = new THREE.HemisphereLight(0xf4f1ea, 0x4a3a2c, 0.9);
+    // The room's ambient light: from above the daylight's, from below the
+    // pale stone floor's (a dark brown, for the wood floor that was, turned
+    // every white in the room taupe: QA, 2026-09-29).
+    lights.hemi = new THREE.HemisphereLight(0xf3f4f6, 0x9b9892, 0.9);
     scene.add(lights.hemi);
     lights.sun = new THREE.DirectionalLight(0xfff0d8, 1.5);
     lights.sun.position.set(6, 5, -6);
@@ -498,7 +502,7 @@ function buildScene() {
     scene.add(lights.fill);
     // The light off the floor, shining up: the ceiling and the undersides
     // of things face only the hemisphere's dark ground color otherwise.
-    lights.bounce = new THREE.DirectionalLight(0xe8dccb, 0.3);
+    lights.bounce = new THREE.DirectionalLight(0xe4e3e0, 0.3);
     lights.bounce.position.set(0.4, -3, 0.3);
     scene.add(lights.bounce);
     // The sun itself, by the windows only: the walls and ceiling cast its
@@ -535,6 +539,7 @@ function buildScene() {
         screen: screenTexture,
         notes: painted.notes.texture,
         rainGlass: paintedTexture(512, 512, drawRainOnGlass).texture,
+        concrete: paintedTexture(256, 512, drawConcrete).texture,
         drawerLabels: painted.drawers.map((p) => p.texture),
         boardHeader: painted.boardHeader.texture,
         departures: painted.departures.texture,

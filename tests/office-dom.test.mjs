@@ -967,6 +967,65 @@ describe('the city painters', () => {
         expect(ctx.fillStyle.stops.at(-1)).toEqual([1, 'rgba(255, 255, 255, 0)']);
     });
 
+    test('the streets are painted: a double yellow down the middle, parking lines, and zebra crosswalks at every corner (QA, 2026-09-29)', () => {
+        const W = 512;
+        const city = { block: 76, street: 22 };
+        const px = W / (city.block + city.street);
+        const { ctx, fills } = recorder();
+        paint.drawStreets(ctx, W, W, city);
+        const P = paint.STREET_PAINT;
+        const of = (color) => fills.filter((f) => f.style === color);
+        // The yellow: one line of the pair in this tile along each edge
+        // (the other in the next), just in from the middle.
+        const yellow = of(P.yellow.color);
+        expect(yellow).toHaveLength(4);
+        for (const f of yellow) {
+            const thin = Math.min(f.w, f.h);
+            expect(thin).toBeGreaterThanOrEqual(1.4);
+            expect(thin).toBeLessThan(2);
+        }
+        // Each line stops short of the crosswalks: none reaches the corners.
+        for (const f of [...yellow, ...of(P.edge.color)]) {
+            const long = f.w > f.h ? [f.x, f.x + f.w] : [f.y, f.y + f.h];
+            expect(long[0]).toBeGreaterThan((city.street / 2 + P.crosswalk.inset + P.crosswalk.length) * px);
+            expect(long[1]).toBeLessThan(W - (city.street / 2 + P.crosswalk.inset + P.crosswalk.length) * px);
+        }
+        // The crosswalks: stripes across each street at both ends of it,
+        // from the middle out to the curb, each a stripe's width, the walk's
+        // length long.
+        const stripes = of(P.crosswalk.color);
+        const perStreet = Math.ceil((city.street / 2 - 0.3 - P.crosswalk.stripe / 2) / (P.crosswalk.stripe + P.crosswalk.gap));
+        expect(stripes).toHaveLength(4 * 2 * perStreet);
+        for (const f of stripes) {
+            const [thin, long] = [Math.min(f.w, f.h), Math.max(f.w, f.h)];
+            expect(thin).toBeCloseTo(P.crosswalk.stripe * px, 6);
+            expect(long).toBeCloseTo(P.crosswalk.length * px, 6);
+        }
+        // No stripe on the block itself: all within a street's half-width
+        // of an edge.
+        const half = (city.street / 2) * px;
+        for (const f of stripes) {
+            const nearEdge = f.y < half || f.y + f.h > W - half || f.x < half || f.x + f.w > W - half;
+            expect(nearEdge).toBe(true);
+        }
+    });
+
+    test('the ceiling’s concrete: one board-formed panel, its joints and six tie holes (QA, 2026-09-29)', () => {
+        const arcs = [];
+        const ctx = {
+            fillStyle: '',
+            fillRect() {}, beginPath() {}, fill() {},
+            arc(x, y, r) { arcs.push([x, y, r]); },
+            createRadialGradient() { return { addColorStop() {} }; }
+        };
+        paint.drawConcrete(ctx, 256, 512);
+        // Each tie hole is a pale ring and a dark pit: twelve circles.
+        expect(arcs).toHaveLength(12);
+        const pits = arcs.filter((_, i) => i % 2 === 1);
+        expect(new Set(pits.map(([x]) => x)).size).toBe(2);
+        expect(new Set(pits.map(([, y]) => y)).size).toBe(3);
+    });
+
     test('the street tile has its streets at the edges, and a glow for night', () => {
         const day = recorder();
         paint.drawStreets(day.ctx, 256, 256, { block: 90, street: 22 });

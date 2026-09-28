@@ -21,13 +21,13 @@
 /* The page behind the canvas: the room's own shadow color, so the moment
  * before the first frame and the overscroll on a phone match the scene. */
 body {
-    background: #2a211a;
+    background: #1d1e21;
 }
 
 #loading-screen {
     background:
-        radial-gradient(120% 80% at 50% 110%, #4a3322 0%, transparent 60%),
-        #1c1612;
+        radial-gradient(120% 80% at 50% 110%, #34373c 0%, transparent 60%),
+        #141517;
 }
 
 .loader-title {
@@ -44,7 +44,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 1rem;
-    background: rgba(14, 10, 7, 0.72);
+    background: rgba(8, 9, 11, 0.72);
 }
 
 .card-overlay[hidden] {
@@ -56,10 +56,10 @@ body {
     max-height: 100%;
     overflow-y: auto;
     padding: 1.4rem 1.5rem 1.6rem;
-    border: 1px solid rgba(255, 244, 230, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 16px;
-    background: #1f1812;
-    color: #f1e8dc;
+    background: #1c1d20;
+    color: #eef0f3;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
     text-align: center;
 }
@@ -83,7 +83,7 @@ body {
 
 .card-meta {
     margin: 0.5rem 0 0;
-    color: #bcab94;
+    color: #a3a8b0;
     font-size: 0.9rem;
     line-height: 1.5;
 }
@@ -104,10 +104,10 @@ body {
 
 .office-btn {
     padding: 0.6rem 1.2rem;
-    border: 1px solid rgba(255, 244, 230, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 999px;
-    background: rgba(48, 37, 28, 0.94);
-    color: #f1e8dc;
+    background: rgba(40, 42, 46, 0.94);
+    color: #eef0f3;
     font: inherit;
     font-weight: 600;
     cursor: pointer;
@@ -117,7 +117,7 @@ body {
 .office-btn:hover,
 .office-btn:focus-visible {
     border-color: var(--ui-accent);
-    background: rgba(64, 49, 36, 0.96);
+    background: rgba(56, 59, 64, 0.96);
 }
 
 .office-btn:focus-visible {
@@ -152,7 +152,7 @@ body {
 /* Empty and silent unless the browser will not keep the office. */
 .storage-note {
     margin: 0.6rem 0 0;
-    color: #e6bb8a;
+    color: #c9d2de;
     font-size: 0.9rem;
     line-height: 1.5;
 }
@@ -221,10 +221,10 @@ body {
 .office-select {
     width: 100%;
     padding: 0.55rem 0.7rem;
-    border: 1px solid rgba(255, 244, 230, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 10px;
-    background: #15100c;
-    color: #f5ecdf;
+    background: #121315;
+    color: #f2f3f5;
     font: inherit;
     font-size: 1rem;
 }
@@ -257,7 +257,7 @@ textarea.office-input {
 .hud-chip {
     padding: 0.4rem 0.8rem;
     border-radius: 999px;
-    background: rgba(28, 21, 16, 0.86);
+    background: rgba(26, 27, 30, 0.86);
     color: var(--ui-subtitle);
     font-size: 0.85rem;
     font-weight: 600;
@@ -289,7 +289,7 @@ textarea.office-input {
     padding: 0.45rem;
     /* A pill on one row, and still a tidy shape when it wraps to two. */
     border-radius: 24px;
-    background: rgba(24, 18, 13, 0.78);
+    background: rgba(22, 23, 26, 0.78);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
@@ -324,8 +324,8 @@ textarea.office-input {
     max-width: calc(100vw - 32px);
     padding: 0.6rem 0.7rem 0.6rem 1rem;
     border-radius: 12px;
-    background: #f3e9d8;
-    color: #2a1c0a;
+    background: #eef0f3;
+    color: #1c1d20;
     font-weight: 600;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
@@ -345,7 +345,7 @@ textarea.office-input {
 
 .office-toast .office-btn {
     background: #2a1c0a;
-    color: #f3e9d8;
+    color: #eef0f3;
     border-color: #2a1c0a;
 }
 
@@ -421,7 +421,7 @@ textarea.office-input {
 }
 
 .form-salary label {
-    color: #bcab94;
+    color: #a3a8b0;
     font-size: 0.85rem;
 }
 
@@ -433,7 +433,7 @@ textarea.office-input {
 .form-more {
     margin: 0.2rem 0 0.9rem;
     padding: 0.6rem 0.8rem;
-    border: 1px solid rgba(255, 244, 230, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
 }
 
@@ -680,14 +680,14 @@ textarea.office-input {
 }
 
 .grid-row:hover td {
-    background: rgba(228, 192, 122, 0.06);
+    background: rgba(200, 208, 220, 0.06);
 }
 
 .grid-open {
     padding: 0;
     border: 0;
     background: none;
-    color: #f3dcaa;
+    color: #dfe4ea;
     font: inherit;
     font-weight: 700;
     text-align: left;
@@ -824,8 +824,8 @@ textarea.office-input {
 .folder-panel {
     width: min(40rem, 100%);
     text-align: left;
-    background: #2b2117;
-    border-color: rgba(228, 192, 122, 0.35);
+    background: #202226;
+    border-color: rgba(200, 208, 220, 0.35);
 }
 
 .folder-body {
@@ -852,8 +852,8 @@ textarea.office-input {
     margin: 0.7rem 0 0;
     padding: 0.5rem 0.7rem;
     border-left: 3px solid var(--ui-accent);
-    background: rgba(228, 192, 122, 0.08);
-    color: #f1e3c9;
+    background: rgba(200, 208, 220, 0.08);
+    color: #e8ebef;
 }
 
 .folder-facts {
@@ -868,7 +868,7 @@ textarea.office-input {
 }
 
 .folder-facts dt {
-    color: #bcab94;
+    color: #a3a8b0;
     font-size: 0.88rem;
 }
 
@@ -901,7 +901,7 @@ textarea.office-input {
     max-height: 16rem;
     overflow: auto;
     white-space: pre-wrap;
-    color: #d9ccb8;
+    color: #c8ccd2;
     font-size: 0.9rem;
     line-height: 1.5;
 }
@@ -925,7 +925,7 @@ textarea.office-input {
 
 .folder-empty {
     margin: 0.5rem 0 0;
-    color: #bcab94;
+    color: #a3a8b0;
     font-size: 0.9rem;
 }
 
@@ -942,7 +942,7 @@ textarea.office-input {
     justify-content: space-between;
     gap: 0.5rem;
     padding: 0.55rem 0;
-    border-top: 1px solid rgba(255, 244, 230, 0.1);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .folder-item-main {
@@ -973,12 +973,12 @@ textarea.office-input {
 }
 
 .folder-item.is-done label {
-    color: #a99a86;
+    color: #9aa0a8;
     text-decoration: line-through;
 }
 
 .folder-item-when {
-    color: #bcab94;
+    color: #a3a8b0;
     font-size: 0.85rem;
 }
 
@@ -995,7 +995,7 @@ textarea.office-input {
 
 .outcome-passed { color: #9ee0b6; }
 .outcome-declined { color: #f2b8a8; }
-.outcome-pending { color: #e2cfae; }
+.outcome-pending { color: #d6dae0; }
 
 .folder-item-actions {
     display: flex;
@@ -1032,44 +1032,18 @@ button.hud-chip:focus-visible {
     outline-offset: 2px;
 }
 
-/* ---- The wall calendar ---------------------------------------------------- */
+/* ---- The wall calendar ----------------------------------------------------
+ * The calendar card wears the office's own card and buttons (QA,
+ * 2026-09-29: it had its own cream and blue, unlike every other card). */
 
 .calendar-panel {
     width: min(34rem, 100%);
     text-align: left;
-    background: #f3eee4;
-    color: #2a2420;
-    border-color: rgba(42, 36, 32, 0.2);
 }
 
 .calendar-panel .card-title,
 .calendar-panel .card-subtitle {
-    color: #2f5d73;
-}
-
-.calendar-panel .office-btn {
-    background: #fffaf1;
-    color: #2a2420;
-    border-color: rgba(42, 36, 32, 0.25);
-}
-
-.calendar-panel .office-btn:hover,
-.calendar-panel .office-btn:focus-visible {
-    border-color: #2f5d73;
-    background: #fff;
-}
-
-.calendar-panel .office-btn:focus-visible {
-    outline-color: #2f5d73;
-}
-
-.calendar-panel .folder-item {
-    border-top-color: rgba(42, 36, 32, 0.12);
-}
-
-.calendar-panel .folder-item-when,
-.calendar-panel .folder-empty {
-    color: #6b6356;
+    color: var(--ui-title);
 }
 
 .cal-nav {
@@ -1088,7 +1062,7 @@ button.hud-chip:focus-visible {
 
 .cal-table th {
     padding: 0.2rem 0;
-    color: #6b6356;
+    color: #a3a8b0;
     font-size: 0.78rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -1105,25 +1079,25 @@ button.hud-chip:focus-visible {
     padding: 0.2rem 0 0;
     border: 1px solid transparent;
     border-radius: 8px;
-    background: #fffaf1;
-    color: #2a2420;
+    background: rgba(255, 255, 255, 0.06);
+    color: #eef0f3;
     font: inherit;
     font-weight: 600;
     cursor: pointer;
 }
 
 .cal-day:hover {
-    border-color: rgba(47, 93, 115, 0.5);
+    border-color: rgba(var(--ui-accent-rgb), 0.5);
 }
 
 .cal-day:focus-visible {
-    outline: 2px solid #2f5d73;
+    outline: 2px solid var(--ui-accent-strong);
     outline-offset: 1px;
 }
 
 .cal-day.is-out {
     background: transparent;
-    color: #7a7063;
+    color: #6e737b;
     font-weight: 500;
 }
 
@@ -1131,12 +1105,13 @@ button.hud-chip:focus-visible {
     display: inline-block;
     min-width: 1.7em;
     border-radius: 999px;
-    background: #e4c07a;
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
 }
 
 /* Chosen: a solid edge AND bold type, never color alone. */
 .cal-day.is-selected {
-    border: 2px solid #2f5d73;
+    border: 2px solid var(--ui-accent-strong);
     font-weight: 800;
 }
 
@@ -1150,11 +1125,11 @@ button.hud-chip:focus-visible {
 }
 
 .cal-dot {
-    background: #c8553d;
+    background: #e0736b;
 }
 
 .cal-ring {
-    border: 2px solid #2f5d73;
+    border: 2px solid var(--ui-accent);
 }
 
 .cal-day .cal-dot,
@@ -1173,7 +1148,7 @@ button.hud-chip:focus-visible {
 
 .cal-key {
     margin: 0.5rem 0 0;
-    color: #6b6356;
+    color: #a3a8b0;
     font-size: 0.82rem;
 }
 
@@ -1211,7 +1186,7 @@ button.hud-chip:focus-visible {
     max-height: 46vh;
     padding: 0.8rem 1rem 0.9rem;
     text-align: left;
-    background: rgba(24, 18, 13, 0.92);
+    background: rgba(22, 23, 26, 0.92);
 }
 
 .sheet-panel .card-title {
@@ -1305,7 +1280,7 @@ button.hud-chip:focus-visible {
 
 .rolodex-person .person-line {
     display: block;
-    color: #bcab94;
+    color: #a3a8b0;
     font-size: 0.8rem;
     font-weight: 500;
 }
@@ -1367,7 +1342,7 @@ button.hud-chip:focus-visible {
     min-width: 13rem;
     padding: 0.4rem;
     border-radius: 14px;
-    background: rgba(24, 18, 13, 0.96);
+    background: rgba(22, 23, 26, 0.96);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
 }
 
@@ -1384,7 +1359,7 @@ button.hud-chip:focus-visible {
     border: 1px solid transparent;
     border-radius: 9px;
     background: transparent;
-    color: #f1e8dc;
+    color: #eef0f3;
     font: inherit;
     font-weight: 600;
     text-align: left;
@@ -1394,7 +1369,7 @@ button.hud-chip:focus-visible {
 .places-item:hover,
 .places-item:focus-visible {
     border-color: var(--ui-accent);
-    background: rgba(64, 49, 36, 0.96);
+    background: rgba(56, 59, 64, 0.96);
 }
 
 .places-item:focus-visible {
@@ -1405,9 +1380,9 @@ button.hud-chip:focus-visible {
 .places-item kbd {
     min-width: 1.5rem;
     padding: 0.05rem 0.35rem;
-    border: 1px solid rgba(255, 244, 230, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: 6px;
-    color: #bcab94;
+    color: #a3a8b0;
     font: 600 0.78rem ui-monospace, Menlo, Consolas, monospace;
     text-align: center;
 }
@@ -1439,7 +1414,7 @@ button.hud-chip:focus-visible {
     width: 100%;
     margin-top: 0.6rem;
     border-collapse: collapse;
-    color: #f1e8dc;
+    color: #eef0f3;
     font-size: 0.9rem;
 }
 
@@ -1453,7 +1428,7 @@ button.hud-chip:focus-visible {
 .wb-table th,
 .wb-table td {
     padding: 0.3rem 0.5rem;
-    border-bottom: 1px solid rgba(255, 244, 230, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     text-align: left;
 }
 

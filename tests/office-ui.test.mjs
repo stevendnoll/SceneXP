@@ -513,6 +513,40 @@ describe('the room and the keyboard', () => {
 
 // ---- The page and the scripts agree -----------------------------------------------
 
+describe('the look (QA, 2026-09-29)', () => {
+    const css = readFileSync(join(process.cwd(), 'www/office/css/experience.css'), 'utf8');
+    const html = readFileSync(join(process.cwd(), 'www/office/index.html'), 'utf8');
+
+    test('no orange and brown: the site’s neutral theme, and the office’s own cards in graphite', () => {
+        // The shared default (a neutral silver), no amber theme named.
+        expect(html).not.toMatch(/data-ui-theme=/);
+        expect(html).toMatch(/<meta name="theme-color" content="#141517">/);
+        // No brown left in the office's own colors: every color whose red
+        // leads its blue by much is one of the few that mean something
+        // (danger, an error, the event dot, the accepted badge, the outcome
+        // notes).
+        const meaning = new Set(['#d9826a', '#ffd9cc', '#f0a58f', '#ffb4a0', '#e0736b', '#e4c07a', '#2a1c0a', '#f2b8a8', '#f2d9d9', '#4a3b3b']);
+        const warm = [];
+        for (const m of css.matchAll(/#([0-9a-f]{6})\b/gi)) {
+            const hex = `#${m[1].toLowerCase()}`;
+            const [r, , b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+            if (r - b > 24 && !meaning.has(hex)) warm.push(hex);
+        }
+        for (const m of css.matchAll(/rgba\((\d+), (\d+), (\d+),/g)) {
+            const [r, , b] = [m[1], m[2], m[3]].map(Number);
+            if (r - b > 24 && !(r === 120 && b === 28)) warm.push(m[0]);
+        }
+        expect(warm).toEqual([]);
+    });
+
+    test('the calendar wears the office’s own card, not a cream one of its own', () => {
+        const block = css.slice(css.indexOf('.calendar-panel {'), css.indexOf('.cal-nav {'));
+        expect(block).not.toMatch(/background/);
+        expect(block).not.toMatch(/#f3eee4|#fffaf1|#2f5d73/);
+        expect(css).not.toMatch(/#fffaf1|#2f5d73|#f3eee4/);
+    });
+});
+
 describe('the markup and the scripts agree', () => {
     const html = readFileSync(join(process.cwd(), 'www/office/index.html'), 'utf8');
     const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));

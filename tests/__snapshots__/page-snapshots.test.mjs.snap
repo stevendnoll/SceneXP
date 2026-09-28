@@ -3420,7 +3420,7 @@ html [data-ui-theme="ember" lang="en"]
 
 exports[`www/office/index.html 1`] = `
 "<!doctype html>
-html [data-ui-theme="ember" lang="en"]
+html [lang="en"]
   head
     meta [charset="UTF-8"]
     meta [content="width=device-width, initial-scale=1.0" name="viewport"]
@@ -3428,7 +3428,7 @@ html [data-ui-theme="ember" lang="en"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
     meta [content="noindex, nofollow" name="robots"]
     meta [content="A job search tracker that lives in a 3D office. Your applications, interviews, contacts and follow-ups fill the furniture, and every record stays private in your own browser." name="description"]
-    meta [content="#1c1612" name="theme-color"]
+    meta [content="#141517" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/office/" rel="canonical"]
     meta [content="Corner Office" property="og:title"]

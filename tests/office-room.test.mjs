@@ -369,6 +369,64 @@ describe('the credenza, the printer and the trays, in white and aluminum (QA, 20
     });
 });
 
+describe('the ceiling and the walls (QA, 2026-09-29)', () => {
+    test('exposed concrete, a panel a tile, a white soffit round the windows, and two slim pendants hung under it', () => {
+        const tex = new THREE.Texture();
+        const withConcrete = buildRoom(CONFIG, { concrete: tex });
+        const { width, depth, height } = CONFIG.room;
+        expect(tex.repeat.x).toBeCloseTo(width / roomMod.CONCRETE_PANEL[0], 9);
+        expect(tex.repeat.y).toBeCloseTo(depth / roomMod.CONCRETE_PANEL[1], 9);
+        expect(tex.wrapS).toBe(THREE.RepeatWrapping);
+        let concrete = null;
+        withConcrete.group.traverse((o) => { if (o.isMesh && o.material.map === tex) concrete = o; });
+        expect(concrete).toBeTruthy();
+        // Without a painted map (a test), a plain concrete gray.
+        let plain = false;
+        room.group.traverse((o) => { if (o.isMesh && o.material.color && o.material.color.getHex() === 0xb9b8b3) plain = true; });
+        expect(plain).toBe(true);
+        // The pendants: under the concrete, over the window's head, clear of
+        // the desk's view (the tappable things stay in the frame, tested
+        // below), each on two fine cables.
+        const pendants = room.group.getObjectByName('pendants');
+        const { CEILING } = roomMod;
+        const b = boxOf(pendants);
+        expect(b.max.y).toBeLessThanOrEqual(height + 1e-6);
+        expect(b.min.y).toBeGreaterThan(windowsOf(CONFIG).head - 0.5);
+        expect(b.min.y).toBeGreaterThan(CONFIG.room.desk.height + 1.2);
+        const cables = pendants.children.filter((m) => m.geometry.type === 'CylinderGeometry');
+        expect(cables).toHaveLength(2 * CEILING.pendants.length);
+    });
+
+    test('the corner piers are the frames’ dark bronze, and the walls meet the floor in a shadow gap', () => {
+        // Between the windows, dark: the glass reads as one curtain wall.
+        const hw = CONFIG.room.width / 2;
+        const hd = CONFIG.room.depth / 2;
+        const w = windowsOf(CONFIG);
+        const hits = new THREE.Raycaster(new THREE.Vector3(hw - 0.3, (w.sill + w.head) / 2, -hd + 0.3), new THREE.Vector3(1, 0, -1).normalize())
+            .intersectObject(room.group, true);
+        const pier = hits.find((h) => h.object.name === 'shell');
+        expect(pier.object.material.color.getHex()).toBe(0x3a3936);
+        // At the foot of the left wall, a slim dark reveal.
+        const [foot] = new THREE.Raycaster(new THREE.Vector3(-hw + 0.5, 0.012, 1), new THREE.Vector3(-1, 0, 0)).intersectObject(room.group, true);
+        expect(foot.object.material.color.getHex()).toBe(0x16171a);
+        const [above] = new THREE.Raycaster(new THREE.Vector3(-hw + 0.5, 0.2, 1), new THREE.Vector3(-1, 0, 0)).intersectObject(room.group, true);
+        expect(above.object.material.color.getHex()).toBe(0xf3f2ef);
+    });
+
+    test('the printer cabinet’s drawers face the room: its reveals run across its front, not up it', () => {
+        const printer = room.picks.printer;
+        const reveals = printer.children.filter((m) => m.material && m.material.color && m.material.color.getHex() === 0x16171a);
+        expect(reveals).toHaveLength(roomMod.PRINTER_DRAWERS.length);
+        for (const r of reveals) {
+            const b = boxOf(r);
+            expect(b.max.x - b.min.x).toBeGreaterThan(0.4);
+            expect(b.max.y - b.min.y).toBeLessThan(0.01);
+            // On the cabinet's front (0.22 m from its middle), toward the room (+z).
+            expect(b.max.z - printer.position.z).toBeGreaterThan(0.21);
+        }
+    });
+});
+
 describe.each(Object.entries(ASPECTS))('from the desk, on a %s screen', (_name, aspect) => {
     test.each(TAPPABLE)('the %s is in the frame and nothing stands in front of it', (key) => {
         const cam = cameraAt('desk', aspect);

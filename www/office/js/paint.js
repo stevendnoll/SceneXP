@@ -42,7 +42,7 @@ export function drawScreen(ctx, W, H, lines) {
     // A title bar, like any window.
     ctx.fillStyle = '#26384f';
     ctx.fillRect(0, 0, W, H * 0.14);
-    ctx.fillStyle = '#e4c07a';
+    ctx.fillStyle = '#c9d2de';
     ctx.font = `600 ${Math.round(H * 0.075)}px system-ui, sans-serif`;
     ctx.textBaseline = 'middle';
     ctx.fillText('Corner Office', W * 0.05, H * 0.07);
@@ -535,6 +535,131 @@ export const STREET_LAMPS = 4;
  * the land (world.js sets the repeat so the block sits under its towers).
  * `lit` paints the street lights' glow for night instead.
  */
+/**
+ * One board-formed concrete panel for the ceiling (room.js CONCRETE_PANEL,
+ * 1.2 by 2.4 m a tile): a pale warm gray, mottled as poured concrete is,
+ * the faint grain of the formwork's boards along it, a darker joint round
+ * its edge where the panels met, and its six tie holes, each a dark pit in
+ * a paler ring. Seeded: the same ceiling every visit.
+ */
+export function drawConcrete(ctx, W, H) {
+    const random = paintRandom(20260930);
+    ctx.fillStyle = 'rgb(186, 184, 178)';
+    ctx.fillRect(0, 0, W, H);
+    // Mottling: soft patches lighter and darker.
+    for (let i = 0; i < 140; i++) {
+        const x = random() * W;
+        const y = random() * H;
+        const r = (0.04 + random() * 0.12) * W;
+        const light = random() < 0.5;
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, r);
+        glow.addColorStop(0, light ? 'rgba(206, 204, 198, 0.35)' : 'rgba(150, 148, 142, 0.3)');
+        glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+    }
+    // The boards' faint grain, along the panel.
+    for (let x = 0; x < W; x += W / 8) {
+        ctx.fillStyle = `rgba(120, 118, 112, ${0.05 + random() * 0.06})`;
+        ctx.fillRect(x, 0, Math.max(1, W * 0.004), H);
+    }
+    // Fine speckle.
+    for (let i = 0; i < W * H * 0.004; i++) {
+        ctx.fillStyle = random() < 0.5 ? 'rgba(120, 118, 112, 0.35)' : 'rgba(220, 218, 212, 0.35)';
+        ctx.fillRect(random() * W, random() * H, 1, 1);
+    }
+    // The joint round the panel's edge.
+    ctx.fillStyle = 'rgba(110, 108, 103, 0.8)';
+    const j = Math.max(1, W * 0.008);
+    ctx.fillRect(0, 0, W, j);
+    ctx.fillRect(0, 0, j, H);
+    // The tie holes: two across, three along.
+    for (const u of [0.25, 0.75]) {
+        for (const v of [1 / 6, 0.5, 5 / 6]) {
+            const x = u * W;
+            const y = v * H;
+            const r = W * 0.028;
+            ctx.fillStyle = 'rgba(214, 212, 206, 0.9)';
+            ctx.beginPath();
+            ctx.arc(x, y, r * 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgb(88, 86, 82)';
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+}
+
+/** The street paint, meters and colors: the double yellow's `gap` between
+ *  its two lines, the parking lane's line `from` the middle, and the
+ *  crosswalk's stripes (`inset` from the corner, `length` across the
+ *  walk, `stripe` wide with a `gap`). */
+export const STREET_PAINT = {
+    yellow: { gap: 0.3, width: 0.15, color: 'rgb(214, 180, 72)' },
+    edge: { from: 6.2, width: 0.15, color: 'rgb(214, 214, 208)' },
+    crosswalk: { inset: 1, length: 3.5, stripe: 0.6, gap: 0.6, color: 'rgb(222, 222, 216)' }
+};
+
+/**
+ * The paint on the streets (QA, 2026-09-29: "street lines and crosswalk
+ * lines"), in meters as STREET_PAINT lays it: a double yellow line
+ * down each street's middle (the tile's edge, so half of it in this tile
+ * and half in the next), a white line where the parking lane begins, and at
+ * every corner a zebra crosswalk across each street. (No stop bars: a tile
+ * holds one direction's half of each street, and a bar at both ends would
+ * put one on the wrong side.) Drawn no thinner than 1.4 px, so from forty
+ * floors up the lines hold.
+ */
+export function drawStreetMarkings(ctx, W, H, { block, street }) {
+    const pitch = block + street;
+    const px = W / pitch;
+    const P = STREET_PAINT;
+    const thick = (m) => Math.max(1.4, m * px);
+    const half = street / 2;
+    // Along one street, which runs along an edge: `across(d)` is the tile
+    // coordinate `d` meters in from that edge, `along` the length.
+    const edges = [
+        // [the edge's coordinate, inward sign, runs along x?]
+        [0, 1, true], [H, -1, true], [0, 1, false], [W, -1, false]
+    ];
+    for (const [edge, inward, alongX] of edges) {
+        const at = (d) => edge + inward * d * px;
+        const band = (d0, d1, from, to, style) => {
+            ctx.fillStyle = style;
+            const a = Math.min(at(d0), at(d1));
+            const b = Math.max(at(d0), at(d1));
+            if (alongX) ctx.fillRect(from, a, to - from, Math.max(thick(0), b - a));
+            else ctx.fillRect(a, from, Math.max(thick(0), b - a), to - from);
+        };
+        const crossing = (half + 0.5) * px;
+        const z = P.crosswalk;
+        // The lines stop a meter short of the crosswalks.
+        const clear = crossing + (z.inset + z.length + 1) * px;
+        const from = clear;
+        const to = (alongX ? W : H) - clear;
+        // The double yellow line: two lines either side of the middle.
+        const y = P.yellow;
+        band(y.gap / 2, y.gap / 2 + thick(y.width) / px, from, to, y.color);
+        // The parking lane's white line.
+        const w = P.edge;
+        band(w.from, w.from + thick(w.width) / px, from, to, w.color);
+        // At each end, the zebra crosswalk.
+        const length = (alongX ? W : H);
+        for (const end of [0, 1]) {
+            const s0 = end ? length - crossing : crossing;
+            const dir = end ? -1 : 1;
+            // Stripes along the street, laid across it, from the middle to
+            // the curb.
+            for (let d = z.stripe / 2; d < half - 0.3; d += z.stripe + z.gap) {
+                const a = s0 + dir * z.inset * px;
+                const b = a + dir * z.length * px;
+                band(d, d + z.stripe, Math.min(a, b), Math.max(a, b), z.color);
+            }
+        }
+    }
+}
+
 export function drawStreets(ctx, W, H, { block, street }, lit = false) {
     const pitch = block + street;
     const s = (street / 2 / pitch) * W;
@@ -584,6 +709,7 @@ export function drawStreets(ctx, W, H, { block, street }, lit = false) {
     ctx.strokeStyle = 'rgb(150, 150, 146)';
     ctx.lineWidth = Math.max(1, W * 0.012);
     ctx.strokeRect(s, s, W - 2 * s, H - 2 * s);
+    drawStreetMarkings(ctx, W, H, { block, street });
     // A few trees along the sidewalks.
     ctx.fillStyle = 'rgb(62, 92, 58)';
     for (let i = 1; i < 6; i++) {

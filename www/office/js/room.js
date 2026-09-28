@@ -45,7 +45,7 @@ const COLORS = {
     trim: 0x3a3936,
     floor: 0xcfcbc4,
     rug: 0xb7b1a7,
-    ceiling: 0xf6f5f2,
+    ceiling: 0xb9b8b3,
     door: 0xe9e7e3,
     white: 0xf1f0ed,
     aluminum: 0xc8cbcf,
@@ -239,6 +239,10 @@ export const CHAIR_TURN = 0.6;
  *  and the radius of the caster at its end. Meters. */
 export const CHAIR_LEGS = { count: 5, reach: 0.3, wheel: 0.03 };
 
+/** Where the reveals run across the printer cabinet's front, meters up:
+ *  under the top drawer, and between the two. */
+export const PRINTER_DRAWERS = [0.575, 0.33];
+
 /**
  * The executive chair (QA, 2026-09-29: the furniture should "look really
  * expensive"; in pale gray leather and polished aluminum since the room went
@@ -325,7 +329,25 @@ export function mergeByMaterial(meshes) {
     });
 }
 
-function buildShell(room, config) {
+/** The exposed concrete ceiling's formwork panel, meters: one painted
+ *  tile (paint.js drawConcrete) covers one panel. */
+export const CONCRETE_PANEL = [1.2, 2.4];
+
+/**
+ * The ceiling's fittings (QA, 2026-09-29: an exposed concrete ceiling,
+ * Steve's choice, remembering the exposed structure of a high rise he
+ * worked in): a white `soffit` dropped round the two window walls, `depth`
+ * into the room and `drop` below the concrete (it carries the window's
+ * blinds and hides the edge of the slab), and slim linear pendants hung
+ * `drop` below the concrete: `pendants` each [x, z, length along x].
+ */
+export const CEILING = {
+    soffit: { depth: 0.45, drop: 0.12 },
+    pendant: { drop: 0.55, width: 0.055, height: 0.035 },
+    pendants: [[0.9, -1.55, 1.4], [-1.3, 0.2, 1.2]]
+};
+
+function buildShell(room, config, textures = {}) {
     // Built loose, then folded by material into a few meshes (mergeByMaterial).
     const group = new THREE.Group();
     const { width, depth, height } = config.room;
@@ -344,10 +366,24 @@ function buildShell(room, config) {
     rug.rotation.x = -Math.PI / 2;
     rug.position.set(0.7, 0.004, -1.4);
     group.add(rug);
-    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), mat(COLORS.ceiling));
+    // Exposed concrete, board-formed: its formwork panels, their joints and
+    // tie holes painted (paint.js drawConcrete), a panel a tile.
+    const concreteMap = textures.concrete || null;
+    if (concreteMap) {
+        concreteMap.wrapS = THREE.RepeatWrapping;
+        concreteMap.wrapT = THREE.RepeatWrapping;
+        concreteMap.repeat.set(width / CONCRETE_PANEL[0], depth / CONCRETE_PANEL[1]);
+    }
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(width, depth),
+        mat(concreteMap ? 0xffffff : COLORS.ceiling, { map: concreteMap, roughness: 0.92 }));
+    ceiling.name = 'ceiling';
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = height;
     group.add(ceiling);
+    // The white soffit round the two window walls.
+    const { depth: sd, drop } = CEILING.soffit;
+    group.add(slab(-hw, height - drop, -hd, hw, height, -hd + sd, wall));
+    group.add(slab(hw - sd, height - drop, -hd + sd, hw, height, hd, wall));
 
     // Back wall: solid left of the window, a band below and above it.
     group.add(slab(-hw, 0, -hd - T, w.back.x0, height, -hd, wall));
@@ -357,9 +393,10 @@ function buildShell(room, config) {
     group.add(slab(hw, 0, w.right.z1, hw + T, height, hd, wall));
     group.add(slab(hw, 0, -hd, hw + T, w.sill, w.right.z1, wall));
     group.add(slab(hw, w.head, -hd, hw + T, height, w.right.z1, wall));
-    // The narrow pier at the corner, between the two windows.
-    group.add(slab(w.back.x1, w.sill, -hd - T, hw + T, w.head, -hd + 0.1, wall));
-    group.add(slab(hw - 0.1, w.sill, -hd, hw + T, w.head, w.right.z0, wall));
+    // The narrow pier at the corner, between the two windows: dark bronze,
+    // as the frames are, so the glass reads as one curtain wall.
+    group.add(slab(w.back.x1, w.sill, -hd - T, hw + T, w.head, -hd + 0.1, trim));
+    group.add(slab(hw - 0.1, w.sill, -hd, hw + T, w.head, w.right.z0, trim));
     // Left wall, solid.
     group.add(slab(-hw - T, 0, -hd, -hw, height, hd, wall));
     // Front wall, with the door in it.
@@ -369,6 +406,14 @@ function buildShell(room, config) {
     group.add(slab(-hw, 0, hd, d0, height, hd + T, wall));
     group.add(slab(d1, 0, hd, hw, height, hd + T, wall));
     group.add(slab(d0, door.height, hd, d1, height, hd + T, wall));
+    // A shadow gap where the walls meet the floor, in place of a skirting
+    // board: a slim dark reveal.
+    const gap = mat(COLORS.reveal, { roughness: 0.8 });
+    const g = 0.025;
+    group.add(slab(-hw, 0, -hd, -hw + 0.006, g, hd, gap));
+    group.add(slab(-hw, 0, hd - 0.006, d0, g, hd, gap));
+    group.add(slab(d1, 0, hd - 0.006, hw, g, hd, gap));
+    group.add(slab(hw - 0.006, 0, w.right.z1, hw, g, hd, gap));
     const doorFace = mat(COLORS.door, { roughness: 0.4 });
     group.add(slab(d0 + 0.01, 0, hd + 0.02, d1 - 0.01, door.height - 0.01, hd + 0.06, doorFace));
     group.add(roundedSlab(d0 - 0.05, 0, hd - 0.02, d0, door.height + 0.05, hd + 0.02, 0.008, trim));
@@ -847,12 +892,14 @@ function buildPrinter(group, config, picks, m) {
     const p = config.room.printer;
     const printer = tag(new THREE.Group(), 'printer');
     printer.position.set(p.x, 0, p.z);
-    // A white side cabinet (QA, 2026-09-29): a flush door, its seam the
-    // only line on it, on a brushed aluminum kick set back.
+    // A white side cabinet (QA, 2026-09-29): two flush drawers facing the
+    // room, the reveals between them the only lines on it (a single
+    // upright seam read as a drawer turned on its side), on a brushed
+    // aluminum kick set back.
     const kick = 0.05;
     printer.add(roundedBox(0.5, p.stand - kick, 0.44, 0.012, m.white, 0, (p.stand + kick) / 2, 0));
     printer.add(box(0.46, kick, 0.4, m.aluminum, 0, kick / 2, -0.01));
-    printer.add(box(0.003, p.stand - kick - 0.04, 0.003, m.reveal, 0.06, (p.stand + kick) / 2, 0.2205));
+    for (const y of PRINTER_DRAWERS) printer.add(box(0.48, 0.003, 0.003, m.reveal, 0, y, 0.2205));
     // The printer: white, with a lid of dark glass, an aluminum output
     // tray, the page in it and its light.
     const glassLid = new THREE.MeshPhysicalMaterial({ color: 0x1d1f22, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.05 });
@@ -1255,6 +1302,27 @@ function buildFloorThings(group, config, picks, contacts) {
     return { pages };
 }
 
+/** The slim linear pendants under the concrete (CEILING): a dark body
+ *  with a pale diffuser under it, hung on two fine cables. Unlit: the office
+ *  keeps its daylight by day and its dark by night (Steve, 2026-09-25). */
+function buildPendants(group) {
+    const height = 2.8;
+    const { drop, width, height: h } = CEILING.pendant;
+    const body = mat(COLORS.graphite, { roughness: 0.4, metalness: 0.5 });
+    const diffuser = mat(0xe8e8e6, { roughness: 0.6 });
+    const cable = mat(0x1b1c1e, { roughness: 0.5 });
+    const pendants = new THREE.Group();
+    pendants.name = 'pendants';
+    const y = height - drop;
+    for (const [x, z, length] of CEILING.pendants) {
+        pendants.add(roundedBox(length, h, width, 0.008, body, x, y, z));
+        pendants.add(box(length - 0.02, 0.003, width - 0.012, diffuser, x, y - h / 2 - 0.001, z));
+        for (const side of [-1, 1]) pendants.add(cylinder(0.0015, drop - h / 2, cable, x + side * (length / 2 - 0.1), y + h / 2 + (drop - h / 2) / 2, z, 6));
+    }
+    group.add(pendants);
+    return pendants;
+}
+
 /**
  * Build the office. `textures` may carry `screen` (the monitor's face),
  * `notes`, `drawerLabels` (one per drawer), `boardHeader`,
@@ -1266,7 +1334,8 @@ export function buildRoom(config, textures = {}) {
     const group = new THREE.Group();
     group.name = 'room';
     const picks = {};
-    buildShell(group, config);
+    buildShell(group, config, textures);
+    buildPendants(group);
     const contacts = [];
     // The desk, the credenza, the printer and the trays share one white, one
     // aluminum and one leather.
