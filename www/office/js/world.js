@@ -31,7 +31,7 @@
 
 import {
     CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, landGrids, landGround, snowLineAt, SNOW, SNOW_FRAY, LAND_COLORS, DISTANCE_BLUE,
-    islandTowers, islandLamps, islandGround, airportParts, airportPoint, airportY, airportGates, airportLights, reflectionPoints, PANEL, FACADE_TILE, towerStyle, rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
+    islandTowers, islandLamps, islandGround, beaconTowers, airportParts, airportPoint, airportY, airportGates, airportLights, reflectionPoints, PANEL, FACADE_TILE, towerStyle, rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
 } from './city.min.js';
 import { BAY, HAZE, rippleNormals } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
@@ -895,7 +895,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     // in the same three glass meshes and the roof mesh.
     const plan = [...cityTowers(), ...islandTowers()];
     const towers = buildTowers(scene, plan, textures.facades);
-    const beacons = buildBeacons(scene, plan);
+    const beacons = buildBeacons(scene, beaconTowers(plan));
     const lamps = buildLamps(scene);
     const airport = buildAirport(scene);
     const docks = buildPiers(scene);
@@ -1073,6 +1073,10 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             glow.material.color.setHex(look.sunColor, THREE.SRGBColorSpace).multiplyScalar(2 + 8 * look.sun / 1.52);
             // Only a sun that is up shines in the glass.
             glow.visible = !moment || moment.sunHeight > 2 * lower;
+            // The beacons stay out of the reflections: a three-pixel point in
+            // a cube face, blurred for the water, spread into a red blot.
+            const beaconsShown = beacons.visible;
+            beacons.visible = false;
             const bay = captureFrom(points.bay);
             water.material.envMap = bay.texture;
             scene.environment = bay.texture;
@@ -1080,6 +1084,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             const city = captureFrom(points.city);
             for (const mesh of towers.meshes) mesh.material.envMap = city.texture;
             glow.visible = false;
+            beacons.visible = beaconsShown;
             if (reflections) {
                 reflections.city.dispose();
                 reflections.bay.dispose();

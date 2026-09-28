@@ -678,10 +678,15 @@ describe('the glass city', () => {
         lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 12)));
         expect(lit.beacons.visible).toBe(false);
         expect(lit.towers.meshes[0].material.emissiveIntensity).toBe(0);
-        // The beacons are downtown's and the island city's (one skyline).
+        // The beacons are downtown's and, across the bay, the landmarks'
+        // only (QA, 2026-09-29: one on every tall island tower ran into a
+        // red bar from 12 km).
         expect(lit.plan.length).toBe(city.cityTowers().length + city.islandTowers().length);
-        expect(lit.beacons.geometry.attributes.position.count).toBe(city.aviationLights(lit.plan).length);
-        expect(city.aviationLights(city.islandTowers()).length).toBeGreaterThan(3);
+        expect(lit.beacons.geometry.attributes.position.count).toBe(city.aviationLights(city.beaconTowers(lit.plan)).length);
+        const island = city.aviationLights(city.beaconTowers(city.islandTowers())).length;
+        expect(island).toBeGreaterThanOrEqual(1);
+        expect(island).toBeLessThanOrEqual(city.ISLAND_CITY.landmarks.length);
+        expect(city.aviationLights(city.beaconTowers(city.cityTowers()))).toEqual(city.aviationLights(city.cityTowers()));
     });
 
     test('by night the island city’s streets glitter with lamps, and by day they are out; never in a ray’s way', async () => {
@@ -716,7 +721,7 @@ describe('the glass city', () => {
                 const sunAt = new THREE.Vector3().setFromMatrixPosition(lit.sun.matrixWorld);
                 const aimAt = new THREE.Vector3().setFromMatrixPosition(lit.sun.target.matrixWorld);
                 const target = {
-                    shift: scene.position.clone(), glow: lit.glow.visible, near, far,
+                    shift: scene.position.clone(), glow: lit.glow.visible, beacons: lit.beacons.visible, near, far,
                     towersShow: lit.towers.meshes[0].material.envMap,
                     sunDirection: sunAt.sub(aimAt).normalize(),
                     texture: { id: made.length }, disposed: false, dispose() { this.disposed = true; }
@@ -749,8 +754,16 @@ describe('the glass city', () => {
             expect(lit.water.material.envMap).toBe(first.bay.texture);
             expect(lit.scene.environment).toBe(first.bay.texture);
             const dusk = lighting(lightAt(new Date(2026, 8, 24), 19));
+            // By night the beacons are on, but never in a capture (a point
+            // in a cube face, blurred for the water, spread into a red blot:
+            // QA, 2026-09-29), and on again after.
+            lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 22)));
+            expect(lit.beacons.visible).toBe(true);
+            const night = lit.updateEnvironment({}, lighting(lightAt(new Date(2026, 8, 24), 22)));
+            expect(night.bay.beacons || night.city.beacons).toBe(false);
+            expect(lit.beacons.visible).toBe(true);
             const second = lit.updateEnvironment({}, dusk);
-            expect(first.city.disposed && first.bay.disposed).toBe(true);
+            expect(night.city.disposed && night.bay.disposed).toBe(true);
             expect(second.city.disposed || second.bay.disposed).toBe(false);
             expect(lit.water.material.envMap).toBe(second.bay.texture);
         } finally {

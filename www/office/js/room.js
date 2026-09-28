@@ -575,7 +575,9 @@ function buildCabinet(group, config, labels, picks) {
         drawers.add(roundedSlab(x0, c.floor, hd - 0.012, x1, c.height - 0.02, hd + 0.01, 0.006, steel));
         const face = new THREE.Mesh(
             new THREE.PlaneGeometry(w * 0.62, 0.075),
-            labels && labels[i] ? new THREE.MeshBasicMaterial({ map: labels[i] }) : new THREE.MeshBasicMaterial({ color: 0xf4efe4 })
+            // Card, lit by the room like everything else: unlit, it glowed
+            // white in the dark office (QA, 2026-09-29).
+            labels && labels[i] ? mat(0xffffff, { map: labels[i], roughness: 0.9 }) : mat(0xf4efe4, { roughness: 0.9 })
         );
         face.position.set((x0 + x1) / 2, c.height - 0.08, hd + 0.0115);
         drawers.add(face);
@@ -664,7 +666,7 @@ function buildBoard(group, config, textures, picks) {
 
     const header = new THREE.Mesh(
         new THREE.PlaneGeometry(b.width, b.header),
-        textures.boardHeader ? new THREE.MeshBasicMaterial({ map: textures.boardHeader }) : new THREE.MeshBasicMaterial({ color: 0xf4efe4 })
+        textures.boardHeader ? mat(0xffffff, { map: textures.boardHeader, roughness: 0.9 }) : mat(0xf4efe4, { roughness: 0.9 })
     );
     // A plane faces +z. Turned a quarter to face +x, its right runs to -z,
     // which is the screen's right when the camera faces the wall.
@@ -769,7 +771,9 @@ function buildWhiteboard(group, config, texture, picks) {
     board.add(roundedSlab(wallX, y0 - 0.03, z0 - 0.03, w.x - 0.004, y1 + 0.03, z1 + 0.03, 0.008, frame));
     const face = new THREE.Mesh(
         new THREE.PlaneGeometry(w.width, w.height),
-        new THREE.MeshBasicMaterial(texture ? { map: texture, toneMapped: false } : { color: 0xf7f7f4 })
+        // A board lit by the room, glossy as a whiteboard is: unlit, it shone
+        // in the dark office, and its reflection hung in the night glass.
+        mat(texture ? 0xffffff : 0xf7f7f4, { map: texture || null, roughness: 0.35 })
     );
     face.rotation.y = Math.PI / 2;
     face.position.set(w.x, w.y, w.z);
@@ -902,17 +906,25 @@ export function grainUv(mesh, toGrain, size) {
  *  finishes.js WALNUT.size. */
 const GRAIN_SIZE = [2.6, 1.0];
 
+/** The desk's lacquer: the top's deep gloss, and a satin on the rest
+ *  (QA, 2026-09-29: glossed all over, the side panels, seen at a glancing
+ *  angle, gave back so much of the room that they glowed, orange by lamp
+ *  light, pale by day). `coat` and `rough` are the clear coat's strength
+ *  and roughness. */
+export const LACQUER = { top: { coat: 1, rough: 0.07 }, body: { coat: 0.3, rough: 0.4 } };
+
 /**
- * The desk's materials: lacquered walnut (a deep clear coat over the grain
- * that gives back the windows, interior.js), brushed brass, the dark of the
- * reveals and the plinth, and the pad's leather. `finish` is main.js's
- * painted maps (finishes.js), or nothing, and then plain colors.
+ * The desk's materials: lacquered walnut (a clear coat over the grain that
+ * gives back the windows, interior.js), a gloss for the top and a satin for
+ * the body, brushed brass, the dark of the reveals and the plinth, and the
+ * pad's leather. `finish` is main.js's painted maps (finishes.js), or
+ * nothing, and then plain colors.
  */
 function deskMaterials(finish) {
     const walnut = finish && finish.walnut;
     const leather = finish && finish.leather;
-    return {
-        wood: new THREE.MeshPhysicalMaterial({
+    const lacquered = (name, { coat, rough }) => {
+        const m = new THREE.MeshPhysicalMaterial({
             color: walnut ? 0xffffff : COLORS.desk,
             map: walnut ? walnut.map : null,
             normalMap: walnut ? walnut.normalMap : null,
@@ -920,9 +932,15 @@ function deskMaterials(finish) {
             roughnessMap: walnut ? walnut.roughnessMap : null,
             roughness: walnut ? 1 : 0.5,
             metalness: 0,
-            clearcoat: 1,
-            clearcoatRoughness: 0.07
-        }),
+            clearcoat: coat,
+            clearcoatRoughness: rough
+        });
+        m.name = name;
+        return m;
+    };
+    return {
+        top: lacquered('walnut-top', LACQUER.top),
+        wood: lacquered('walnut', LACQUER.body),
         brass: new THREE.MeshPhysicalMaterial({ color: COLORS.deskBrass, metalness: 1, roughness: 0.3, anisotropy: 0.6 }),
         reveal: mat(COLORS.reveal, { roughness: 0.9 }),
         plinth: mat(COLORS.plinth, { roughness: 0.7 }),
@@ -962,7 +980,7 @@ function buildDesk(group, config, picks, contacts, finish = null) {
         if (face === 'z') return [x <= x0 + T ? y : top + (x - x0), across + 0.3 * (top - y)];
         return [top + (x - x0), across];
     };
-    wood(roundedSlab(x0, under, z0, x1, top, z1, 0.012, m.wood), flow);
+    wood(roundedSlab(x0, under, z0, x1, top, z1, 0.012, m.top), flow);
     wood(roundedSlab(x0, 0, z0, x0 + T, under, z1, 0.008, m.wood), flow);
     // A brass foot under the waterfall.
     desk.add(slab(x0 - 0.002, 0, z0 - 0.002, x0 + T + 0.002, 0.012, z1 + 0.002, m.brass));

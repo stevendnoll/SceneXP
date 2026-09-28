@@ -111,6 +111,27 @@ describe('what is in the room', () => {
         }
     });
 
+    test('paper and the whiteboard take the room’s light; only the screens glow (QA, 2026-09-29)', () => {
+        // Unlit, the cabinet's label cards, the corkboard's header and the
+        // whiteboard shone white in the dark office.
+        const unlit = [];
+        room.group.traverse((o) => {
+            if (o.isMesh && o.material && o.material.isMeshBasicMaterial && o.material.visible !== false) unlit.push(o);
+        });
+        const glowing = unlit.filter((o) => !['contact-shadows', 'rain-glass', 'mirror-back', 'mirror-right'].includes(o.name));
+        for (const o of glowing) {
+            let key = null;
+            for (let p = o; p && !key; p = p.parent) key = (p.userData && p.userData.pick) || null;
+            // The monitor's face, the departures display and the printer's
+            // light are lights; nothing else.
+            const isScreen = o === room.screen;
+            const isDisplay = key === 'departures';
+            const isLed = key === 'printer' && boxOf(o).max.x - boxOf(o).min.x < 0.03;
+            expect({ name: o.name, key, ok: isScreen || isDisplay || isLed }).toEqual({ name: o.name, key, ok: true });
+        }
+        expect(glowing).toContain(room.screen);
+    });
+
     test('pickOf finds the tappable thing from any part of it, and nothing from a wall', () => {
         const part = room.picks.lamp.children[2];
         expect(pickOf(part)).toBe('lamp');
@@ -245,7 +266,7 @@ describe('the desk: walnut and brass (QA, 2026-09-29)', () => {
     };
 
     test('a thick top running over a waterfall end, the grain unbroken over the corner', () => {
-        const walnut = deskOf(furnished).children.filter((m) => m.material && m.material.clearcoat === 1 && m.material.map);
+        const walnut = deskOf(furnished).children.filter((m) => m.material && /^walnut/.test(m.material.name) && m.material.map);
         const slab = walnut.find((m) => boxOf(m).max.y > top - 1e-3 && boxOf(m).max.x > x1 - 1e-3);
         const fall = walnut.find((m) => boxOf(m).min.y < 1e-3 && boxOf(m).min.x < x0 + 1e-3);
         expect(boxOf(slab).max.y - boxOf(slab).min.y).toBeCloseTo(roomMod.DESK.top, 4);
@@ -268,7 +289,7 @@ describe('the desk: walnut and brass (QA, 2026-09-29)', () => {
         // The fronts stand just behind the top's front edge (the top and the
         // waterfall run right to it).
         const front = d.z + d.depth / 2;
-        const fronts = desk.children.filter((m) => m.material && m.material.clearcoat === 1
+        const fronts = desk.children.filter((m) => m.material && /^walnut/.test(m.material.name)
             && boxOf(m).max.z > front - 0.025 && boxOf(m).max.z < front - 0.01);
         expect(fronts).toHaveLength(roomMod.DESK.drawers.length);
         // Grain-matched: the same meters along the grain at the same x on
@@ -317,8 +338,21 @@ describe('the desk: walnut and brass (QA, 2026-09-29)', () => {
         furnished.picks.folder.visible = false;
     });
 
+    test('a deep gloss on the top, a satin on the rest, so the side panels do not glow (QA, 2026-09-29)', () => {
+        const parts = deskOf(furnished).children.filter((m) => m.material && /^walnut/.test(m.material.name));
+        const top = parts.filter((m) => m.material.name === 'walnut-top');
+        expect(top).toHaveLength(1);
+        expect(boxOf(top[0]).max.y).toBeCloseTo(CONFIG.room.desk.height, 4);
+        const body = parts.filter((m) => m.material.name === 'walnut');
+        expect(body.length).toBeGreaterThan(4);
+        for (const m of body) {
+            expect(m.material.clearcoat).toBeLessThan(top[0].material.clearcoat / 2);
+            expect(m.material.clearcoatRoughness).toBeGreaterThan(top[0].material.clearcoatRoughness * 3);
+        }
+    });
+
     test('without the painted maps (a test, no WebGL2), the same desk in plain lacquered walnut', () => {
-        const plain = deskOf(room).children.filter((m) => m.material && m.material.clearcoat === 1);
+        const plain = deskOf(room).children.filter((m) => m.material && /^walnut/.test(m.material.name));
         expect(plain.length).toBeGreaterThan(4);
         for (const m of plain) {
             expect(m.material.map).toBeNull();

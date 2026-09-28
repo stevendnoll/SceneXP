@@ -808,6 +808,10 @@ export const ISLAND_CITY = {
     landmarks: [{ x: 1700, d: 170, h: 290 }, { x: 2470, d: 260, h: 245 }, { x: 1070, d: 80, h: 215 }],
     /** How far the city keeps from the airport's site, meters. */
     airportClear: 120,
+    /** Only towers this tall carry red aviation lights (QA, 2026-09-29:
+     *  from 12 km, one on every tower over 120 m ran together into a red
+     *  bar, and the bay mirrored it as a red blot). */
+    beaconAbove: 200,
     ground: 0x4c5249,
     lamps: 80,
     seed: CITY.seed + 29
@@ -1071,6 +1075,12 @@ export function rooftop(t) {
     }
     if (t.h > 260) out.push({ x: t.x, z: t.z, w: 1.4, d: 1.4, y: t.h + ph, h: 30, kind: 'spire' });
     return out;
+}
+
+/** The towers that carry red aviation lights: every one downtown (over
+ *  aviationLights' own height), and across the bay only the landmarks. */
+export function beaconTowers(towers) {
+    return towers.filter((t) => !t.island || t.h > ISLAND_CITY.beaconAbove);
 }
 
 /** The red aviation lights: at the top of every tower taller than `above`
