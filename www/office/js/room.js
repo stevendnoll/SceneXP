@@ -15,7 +15,7 @@
  * filing cabinet opens itself and a folder in it opens on the desk, the
  * corkboard opens itself (its cards drag between columns), the whiteboard
  * opens its numbers (and its goal line the weekly
- * goal), the departures board opens the week, and the printer prints a prep
+ * goal), and the printer prints a prep
  * sheet. `pickOf` walks up from whatever a ray hit to the nearest of these.
  *
  * NO CANVAS IN HERE. The monitor's face, the sticky notes
@@ -25,7 +25,7 @@
  * measure what the eye sees.
  *
  * Builds and returns `{ group, picks, lamp, folder, screen,
- * cabinet, board, departures, whiteboard, notes, rain }`. It adds nothing
+ * cabinet, board, whiteboard, notes, rain }`. It adds nothing
  * to a scene itself and reads no clock.
  */
 
@@ -51,7 +51,7 @@ const COLORS = {
     aluminum: 0xc8cbcf,
     graphite: 0x2b2d31,
     reveal: 0x16171a,
-    felt: 0x9a9894,
+    felt: 0xcfccc6,
     leather: 0x2e3034,
     chairLeather: 0xc2beb8,
     chairShell: 0x8e8a85,
@@ -749,24 +749,20 @@ function buildBoard(group, config, textures, picks) {
     const b = config.room.board;
     const wallX = -config.room.width / 2;
     const board = tag(new THREE.Group(), 'board');
-    // A pinboard of gray felt in a slim aluminum frame (the cork and its
-    // wooden frame went with the walnut).
-    const cork = mat(COLORS.felt, { roughness: 1 });
-    const wood = mat(COLORS.aluminum, { roughness: 0.35, metalness: 0.8 });
+    // A frameless tack panel of light-gray wool felt (QA, 2026-09-29: the
+    // cork and then a felt board in a frame did not suit the room), its
+    // edges softened, standing a little off the wall.
+    const felt = mat(COLORS.felt, { roughness: 1 });
     const z0 = b.z - b.width / 2;
     const z1 = b.z + b.width / 2;
     const y0 = b.y - b.height / 2;
     const y1 = b.y + b.height / 2;
-    board.add(slab(wallX, y0, z0, b.x - 0.003, y1, z1, cork));
-    const f = 0.045;
-    board.add(slab(wallX, y1, z0 - f, b.x + 0.01, y1 + f, z1 + f, wood));
-    board.add(slab(wallX, y0 - f, z0 - f, b.x + 0.01, y0, z1 + f, wood));
-    board.add(slab(wallX, y0, z0 - f, b.x + 0.01, y1, z0, wood));
-    board.add(slab(wallX, y0, z1, b.x + 0.01, y1, z1 + f, wood));
+    const m = 0.04;
+    board.add(roundedSlab(wallX, y0 - m, z0 - m, b.x - 0.003, y1 + m, z1 + m, 0.008, felt));
 
     const header = new THREE.Mesh(
         new THREE.PlaneGeometry(b.width, b.header),
-        textures.boardHeader ? mat(0xffffff, { map: textures.boardHeader, roughness: 0.9 }) : mat(0xf4efe4, { roughness: 0.9 })
+        textures.boardHeader ? mat(0xffffff, { map: textures.boardHeader, roughness: 0.9 }) : mat(0xfafafa, { roughness: 0.9 })
     );
     // A plane faces +z. Turned a quarter to face +x, its right runs to -z,
     // which is the screen's right when the camera faces the wall.
@@ -831,29 +827,6 @@ export function setBoardQuads(cards, quads, config) {
 }
 
 /**
- * The departures board over the door: a dark frame holding one plane, whose
- * face is the split-flap board painted by main.js (textures.departures).
- * The plane faces into the room, its right toward -x, which is the screen's
- * right for a camera looking at the front wall.
- */
-function buildDepartures(group, config, texture, picks) {
-    const b = config.room.departures;
-    const front = config.room.depth / 2;
-    const board = tag(new THREE.Group(), 'departures');
-    board.add(roundedSlab(b.x - b.width / 2 - 0.04, b.y - b.height / 2 - 0.04, front - 0.05, b.x + b.width / 2 + 0.04, b.y + b.height / 2 + 0.04, front, 0.01, mat(0x2b2d31, { roughness: 0.5, metalness: 0.3 })));
-    const face = new THREE.Mesh(
-        new THREE.PlaneGeometry(b.width, b.height),
-        new THREE.MeshBasicMaterial(texture ? { map: texture, toneMapped: false } : { color: 0x16181c })
-    );
-    face.rotation.y = Math.PI;
-    face.position.set(b.x, b.y, front - 0.052);
-    board.add(face);
-    group.add(board);
-    picks.departures = board;
-    return face;
-}
-
-/**
  * The whiteboard on the left wall: a white panel in a thin frame with a
  * marker tray, its face painted by main.js (textures.whiteboard). It faces
  * +x, so its right runs to -z, the screen's right from the room. A raycast's
@@ -863,24 +836,34 @@ function buildWhiteboard(group, config, texture, picks) {
     const w = config.room.whiteboard;
     const wallX = -config.room.width / 2;
     const board = tag(new THREE.Group(), 'whiteboard');
-    const frame = mat(0xb8bcc2, { roughness: 0.35, metalness: 0.6 });
+    // Frameless white glass (QA, 2026-09-29), on four brushed aluminum
+    // standoffs, its thin edge catching the light; no tray.
     const z0 = w.z - w.width / 2;
     const z1 = w.z + w.width / 2;
     const y0 = w.y - w.height / 2;
     const y1 = w.y + w.height / 2;
-    board.add(roundedSlab(wallX, y0 - 0.03, z0 - 0.03, w.x - 0.004, y1 + 0.03, z1 + 0.03, 0.008, frame));
+    const glass = new THREE.MeshPhysicalMaterial({ color: 0xe9efec, roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.04 });
+    const m = 0.04;
+    board.add(roundedSlab(w.x - 0.013, y0 - m, z0 - m, w.x - 0.001, y1 + m, z1 + m, 0.004, glass));
+    const standoff = new THREE.MeshPhysicalMaterial({ color: COLORS.aluminum, metalness: 1, roughness: 0.3 });
+    for (const y of [y0 - m + 0.05, y1 + m - 0.05]) {
+        for (const z of [z0 - m + 0.05, z1 + m - 0.05]) {
+            const post = cylinder(0.011, w.x - wallX + 0.004, standoff, (wallX + w.x) / 2 + 0.002, y, z, 16);
+            post.rotation.z = Math.PI / 2;
+            board.add(post);
+        }
+    }
     const face = new THREE.Mesh(
         new THREE.PlaneGeometry(w.width, w.height),
-        // A board lit by the room, glossy as a whiteboard is: unlit, it shone
-        // in the dark office, and its reflection hung in the night glass.
-        mat(texture ? 0xffffff : 0xf7f7f4, { map: texture || null, roughness: 0.35 })
+        // Lit by the room, and glossy as glass is: unlit, it shone in the
+        // dark office, and its reflection hung in the night glass.
+        new THREE.MeshPhysicalMaterial({
+            color: texture ? 0xffffff : 0xf7f7f4, map: texture || null, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.05
+        })
     );
     face.rotation.y = Math.PI / 2;
     face.position.set(w.x, w.y, w.z);
     board.add(face);
-    board.add(slab(wallX, y0 - 0.06, z0 + 0.2, w.x + 0.05, y0 - 0.035, z1 - 0.2, frame));
-    board.add(box(0.02, 0.02, 0.13, mat(0x2b5fa8, { roughness: 0.4 }), w.x + 0.03, y0 - 0.025, w.z - 0.1));
-    board.add(box(0.02, 0.02, 0.13, mat(0xc8392b, { roughness: 0.4 }), w.x + 0.03, y0 - 0.025, w.z + 0.08));
     group.add(board);
     picks.whiteboard = board;
     return face;
@@ -1326,7 +1309,7 @@ function buildPendants(group) {
 /**
  * Build the office. `textures` may carry `screen` (the monitor's face),
  * `notes`, `drawerLabels` (one per drawer), `boardHeader`,
- * `boardCards`, `departures`, `whiteboard`, `rainGlass`, and the desk's
+ * `boardCards`, `whiteboard`, `rainGlass`, and the desk's
  * pad's `leather` (`{ map, normalMap, roughnessMap }`, finishes.js), all
  * optional.
  */
@@ -1344,7 +1327,6 @@ export function buildRoom(config, textures = {}) {
     const waste = buildFloorThings(group, config, picks, contacts);
     const cabinet = buildCabinet(group, config, textures.drawerLabels || null, picks, finish);
     const board = buildBoard(group, config, textures, picks);
-    const departures = buildDepartures(group, config, textures.departures || null, picks);
     const whiteboard = buildWhiteboard(group, config, textures.whiteboard || null, picks);
     buildPrinter(group, config, picks, finish);
     const notes = buildNotes(group, config, textures.notes || null, picks);
@@ -1367,7 +1349,6 @@ export function buildRoom(config, textures = {}) {
         folder: desk.folder,
         cabinet,
         board,
-        departures,
         whiteboard,
         notes,
         rain,

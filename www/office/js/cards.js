@@ -32,7 +32,7 @@
 
 /** The dialogs, in the order they appear in the markup. */
 export const CARD_ORDER = [
-    'welcome', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'departures', 'today', 'folder',
+    'welcome', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'today', 'folder',
     'contact', 'wastebasket', 'outtray', 'printer', 'settings', 'application-form', 'event-form', 'task-form',
     'contact-form', 'confirm'
 ];

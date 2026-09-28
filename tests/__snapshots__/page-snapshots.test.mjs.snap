@@ -3518,7 +3518,7 @@ html [lang="en"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
           "Loading…"
-    canvas#game-canvas [aria-label="A corner office walled with windows onto the city. A wooden desk holds a computer with sticky notes on it, a green banker's lamp, and two stacked letter trays, with a wastebasket beside it, a low filing cabinet full of folders under the window, a corkboard of index cards, a whiteboard of numbers, a printer, and a departures board over the door." role="img"]
+    canvas#game-canvas [aria-label="A corner office walled with windows onto the city, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it, a slim lamp, and two stacked letter trays, with a wastebasket beside it, a low white credenza of folders under the window, a fabric pinboard of index cards, a glass whiteboard of numbers, and a printer." role="img"]
     p#office-live.sr-only [aria-live="polite" role="status"]
     div#office-hud.ui-float.office-hud [aria-label="Your week" role="group"]
       span#hud-week.hud-chip
@@ -3684,7 +3684,7 @@ html [lang="en"]
       div#board-panel.card-panel.sheet-panel [aria-describedby="board-summary" aria-labelledby="board-title" aria-modal="true" role="dialog" tabindex="-1"]
         div.computer-head
           h2#board-title.card-title
-            "The corkboard"
+            "The pinboard"
           button#board-close.office-btn.office-btn-small [type="button"]
             "Back to the desk"
         p#board-summary.card-meta
@@ -3749,30 +3749,6 @@ html [lang="en"]
                 th [scope="col"]
                   "Sent"
             tbody#wb-weeks
-    div#departures.card-overlay.sheet-overlay [hidden]
-      div#departures-panel.card-panel.sheet-panel [aria-labelledby="departures-title" aria-modal="true" role="dialog" tabindex="-1"]
-        div.computer-head
-          h2#departures-title.card-title
-            "Departures"
-          button#departures-close.office-btn.office-btn-small [type="button"]
-            "Back to the desk"
-        table#dep-table.wb-table.dep-table
-          caption.sr-only
-            "This week's interviews and calls"
-          thead
-            tr
-              th [scope="col"]
-                "When"
-              th [scope="col"]
-                "What"
-              th [scope="col"]
-                "With"
-          tbody#dep-body
-        p#dep-empty.card-meta [hidden]
-          "Nothing is scheduled this week. The board will fill as interviews are booked."
-        div.card-actions
-          button#dep-export.office-btn [type="button"]
-            "Add everything coming up to my calendar"
     div#today.card-overlay [hidden]
       div#today-panel.card-panel.form-panel [aria-describedby="today-note" aria-labelledby="today-title" aria-modal="true" role="dialog" tabindex="-1"]
         h2#today-title.card-title

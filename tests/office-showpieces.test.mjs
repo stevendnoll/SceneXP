@@ -1,15 +1,13 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * Corner Office's M6 pure modules: the split-flap departures board, the
- * whiteboard's numbers and layout, and the printed prep sheet.
+ * Corner Office's M6 pure modules: the whiteboard's numbers and layout, and
+ * the printed prep sheet. (The split-flap departures board was removed,
+ * QA 2026-09-29.)
  */
 import { CONFIG } from '../www/office/js/config.js';
 import {
     emptyDoc, addApplication, addEvent, addTask, addContact, linkContact, setStatus, setTaskDone, deleteRecord, setSettings
 } from '../www/office/js/store.js';
-import {
-    FLAP_CHARS, FLAP_WIDTH, FLAP_ROWS, fit, whenText, departureRows, blankRows, stepFlaps, readableRow
-} from '../www/office/js/splitflap.js';
 import {
     boardModel, funnelBars, weekChart, onGoalLine, bigNumbers, summaryLines, LAYOUT
 } from '../www/office/js/whiteboard.js';
@@ -17,75 +15,6 @@ import { prepSheet, printChoices, QUESTION_LINES } from '../www/office/js/prep.j
 
 // Thursday, September 24, 2026, 10 AM.
 const NOW = new Date(2026, 8, 24, 10, 0);
-
-// ---- The departures board ------------------------------------------------------
-
-describe('the departures board', () => {
-    test('text is folded to what a flap can show, and cut or padded to its width', () => {
-        expect(fit('Café Lumen', 12)).toBe('CAFE LUMEN  ');
-        expect(fit('Juniper & Vale!', 10)).toBe('JUNIPER & ');
-        expect(fit('ab', 0)).toBe('');
-        expect([...fit('x#y', 3)].every((c) => FLAP_CHARS.includes(c))).toBe(true);
-    });
-
-    test('when reads like an airport', () => {
-        expect(whenText('2026-09-24T14:00', NOW)).toBe('TODAY 2:00P');
-        expect(whenText('2026-09-25T09:30', NOW)).toBe('TMRW 9:30A');
-        expect(whenText('2026-09-28T12:05', NOW)).toBe('MON 12:05P');
-        expect(whenText('2026-10-02T00:00', NOW)).toBe('OCT 2 12:00A');
-        expect(whenText('nope', NOW)).toBe('');
-    });
-
-    test('rows: five at most, soonest first, each exactly the board’s width', () => {
-        const events = Array.from({ length: 7 }, (_, i) => ({
-            type: i % 2 ? 'call' : 'interview', at: `2026-09-2${5 + (i % 4)}T1${i}:00`, applicationId: `a${i}`
-        }));
-        const names = new Map(events.map((e, i) => [e.applicationId, `Company ${i}`]));
-        const rows = departureRows(events, names, NOW);
-        expect(rows).toHaveLength(FLAP_ROWS);
-        expect(rows.every((r) => r.length === FLAP_WIDTH)).toBe(true);
-        expect(rows[0]).toBe(`${fit('TMRW 10:00A', 11)} ${fit('INTERVIEW', 10)} ${fit('Company 0', 12)}`);
-        expect(rows[1]).toContain(' CALL ');
-        const two = departureRows(events.slice(0, 2), names, NOW);
-        expect(two.slice(2).every((r) => r.trim() === '')).toBe(true);
-    });
-
-    test('an empty week says so, centered', () => {
-        const rows = departureRows([], new Map(), NOW);
-        expect(rows[1].trim()).toBe('NO DEPARTURES THIS WEEK');
-        expect(rows[1].length).toBe(FLAP_WIDTH);
-        expect(Math.abs(rows[1].indexOf('N') - (FLAP_WIDTH - rows[1].trimEnd().length))).toBeLessThanOrEqual(1);
-        expect(blankRows().every((r) => r === ' '.repeat(FLAP_WIDTH))).toBe(true);
-    });
-
-    test('every flap turns forward one character a step, and all arrive', () => {
-        const target = ['HELLO', 'A', '9'];
-        let rows = ['     ', 'B', ' '];
-        const first = stepFlaps(rows, target);
-        expect(first.rows[0]).toBe('AAAAA');
-        expect(first.rows[1]).toBe('C');
-        expect(first.done).toBe(false);
-        let steps = 0;
-        let done = false;
-        while (!done) {
-            ({ rows, done } = stepFlaps(rows, target));
-            steps++;
-        }
-        expect(rows).toEqual(target);
-        // The longest way round is once through every character.
-        expect(steps).toBeLessThanOrEqual(FLAP_CHARS.length);
-        expect(stepFlaps(target, target)).toEqual({ rows: target, done: true });
-    });
-
-    test('the sheet reads the same rows the way a person would', () => {
-        const names = new Map([['a', 'Acme']]);
-        expect(readableRow({ type: 'interview', at: '2026-09-24T14:00', applicationId: 'a' }, names, NOW))
-            .toEqual({ when: expect.stringMatching(/^Today, 2:00\sPM$/), what: 'Interview', with: 'Acme' });
-        expect(readableRow({ type: 'call', at: '2026-09-25T09:00', applicationId: 'x' }, names, NOW).when).toMatch(/^Tomorrow/);
-        expect(readableRow({ type: 'call', at: '2026-09-28T09:00', applicationId: 'a' }, names, NOW).when).toMatch(/^Monday/);
-        expect(readableRow({ type: 'call', at: '2026-10-09T09:00', applicationId: 'a' }, names, NOW).when).toMatch(/^Oct 9/);
-    });
-});
 
 // ---- The whiteboard --------------------------------------------------------------
 

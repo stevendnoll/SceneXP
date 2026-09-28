@@ -509,7 +509,7 @@ export function renderRolodexList({ people, total, text, on }) {
     return people.length;
 }
 
-// ---- The whiteboard and the departures board ------------------------------------
+// ---- The whiteboard ---------------------------------------------------------------
 
 /** The whiteboard's sheet: its numbers in sentences, and as two tables. */
 export function renderWhiteboardSheet(model, lines) {
@@ -535,20 +535,6 @@ export function renderWhiteboardSheet(model, lines) {
             ]));
         }
     }
-}
-
-/** The departures sheet: the same rows as the board, as a person reads
- *  them. Returns how many. */
-export function renderDepartures(rows) {
-    const body = byId('dep-body');
-    const empty = byId('dep-empty');
-    const table = byId('dep-table');
-    if (empty) empty.hidden = rows.length > 0;
-    if (table) table.hidden = rows.length === 0;
-    if (!body) return rows.length;
-    clear(body);
-    for (const r of rows) body.appendChild(h('tr', {}, [h('td', { text: r.when }), h('td', { text: r.what }), h('td', { text: r.with })]));
-    return rows.length;
 }
 
 // ---- The prep sheet ------------------------------------------------------------

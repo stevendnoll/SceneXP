@@ -146,7 +146,7 @@
          through #office-live. A tap on the room is a shortcut, never the only
          way to do anything. -->
     <canvas id="game-canvas" role="img"
-        aria-label="A corner office walled with windows onto the city. A wooden desk holds a computer with sticky notes on it, a green banker's lamp, and two stacked letter trays, with a wastebasket beside it, a low filing cabinet full of folders under the window, a corkboard of index cards, a whiteboard of numbers, a printer, and a departures board over the door."></canvas>
+        aria-label="A corner office walled with windows onto the city, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it, a slim lamp, and two stacked letter trays, with a wastebasket beside it, a low white credenza of folders under the window, a fabric pinboard of index cards, a glass whiteboard of numbers, and a printer."></canvas>
 
     <!-- Every change, said aloud. Polite, so it waits its turn. -->
     <p id="office-live" class="sr-only" role="status" aria-live="polite"></p>
@@ -353,7 +353,7 @@
         <div id="board-panel" class="card-panel sheet-panel" role="dialog" aria-modal="true"
             aria-labelledby="board-title" aria-describedby="board-summary" tabindex="-1">
             <div class="computer-head">
-                <h2 id="board-title" class="card-title">The corkboard</h2>
+                <h2 id="board-title" class="card-title">The pinboard</h2>
                 <button id="board-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
             </div>
             <p id="board-summary" class="card-meta"></p>
@@ -416,27 +416,6 @@
                     <tbody id="wb-weeks"></tbody>
                 </table>
             </details>
-        </div>
-    </div>
-
-    <!-- THE DEPARTURES BOARD, over the door: the week's interviews and
-         calls, as text. -->
-    <div id="departures" class="card-overlay sheet-overlay" hidden>
-        <div id="departures-panel" class="card-panel sheet-panel" role="dialog" aria-modal="true"
-            aria-labelledby="departures-title" tabindex="-1">
-            <div class="computer-head">
-                <h2 id="departures-title" class="card-title">Departures</h2>
-                <button id="departures-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
-            </div>
-            <table id="dep-table" class="wb-table dep-table">
-                <caption class="sr-only">This week's interviews and calls</caption>
-                <thead><tr><th scope="col">When</th><th scope="col">What</th><th scope="col">With</th></tr></thead>
-                <tbody id="dep-body"></tbody>
-            </table>
-            <p id="dep-empty" class="card-meta" hidden>Nothing is scheduled this week. The board will fill as interviews are booked.</p>
-            <div class="card-actions">
-                <button id="dep-export" class="office-btn" type="button">Add everything coming up to my calendar</button>
-            </div>
         </div>
     </div>
 

@@ -124,125 +124,74 @@ export function drawLabelCard(ctx, W, H, text) {
     ctx.textAlign = 'left';
 }
 
-/** Paint the corkboard's header: the column names across a paper strip, the
- *  first column on the left. */
+/** Paint the pinboard's header: the column names across a white strip in
+ *  graphite, the first column on the left. */
 export function drawBoardHeader(ctx, W, H, labels) {
-    ctx.fillStyle = '#f4efe4';
+    ctx.fillStyle = '#fafafa';
     ctx.fillRect(0, 0, W, H);
     const w = W / labels.length;
-    ctx.fillStyle = '#2a2420';
+    ctx.fillStyle = '#2b2d31';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     labels.forEach((label, i) => {
         let size = Math.round(H * 0.42);
-        ctx.font = `700 ${size}px system-ui, sans-serif`;
+        ctx.font = `600 ${size}px system-ui, sans-serif`;
         while (size > 8 && ctx.measureText && ctx.measureText(label).width > w * 0.9) {
             size -= 2;
-            ctx.font = `700 ${size}px system-ui, sans-serif`;
+            ctx.font = `600 ${size}px system-ui, sans-serif`;
         }
         ctx.fillText(label, w * (i + 0.5), H / 2);
         if (i) {
-            ctx.fillStyle = 'rgba(42, 36, 32, 0.25)';
-            ctx.fillRect(w * i - 1, H * 0.2, 2, H * 0.6);
-            ctx.fillStyle = '#2a2420';
+            ctx.fillStyle = 'rgba(43, 45, 49, 0.18)';
+            ctx.fillRect(w * i - 1, H * 0.25, 2, H * 0.5);
+            ctx.fillStyle = '#2b2d31';
         }
     });
     ctx.textAlign = 'left';
 }
 
 /**
- * Paint one index card into its cell of the board's atlas: a ruled card with
- * a colored band for its status, a pin, the company, the role, and a line
- * saying if it has gone quiet or is a sample.
+ * Paint one card into its cell of the board's atlas: a crisp white card with
+ * a slim band of its status's color, a small steel pin, the company, the
+ * role, and a line saying if it has gone quiet or is a sample.
  */
 export function drawCardFace(ctx, x, y, w, h, card) {
-    ctx.fillStyle = '#fbf8f1';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = card.band || '#6fa8dc';
-    ctx.fillRect(x, y, w, h * 0.12);
-    ctx.fillStyle = 'rgba(111, 168, 220, 0.25)';
-    for (let ly = y + h * 0.42; ly < y + h * 0.95; ly += h * 0.14) ctx.fillRect(x + w * 0.04, ly, w * 0.92, 1);
+    ctx.fillRect(x, y, w, h * 0.06);
     // The pin.
-    ctx.fillStyle = '#c8553d';
+    ctx.fillStyle = '#5b6068';
     ctx.beginPath();
-    ctx.arc(x + w / 2, y + h * 0.07, h * 0.06, 0, Math.PI * 2);
+    ctx.arc(x + w / 2, y + h * 0.12, h * 0.035, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#2a2420';
+    ctx.fillStyle = '#2b2d31';
     ctx.textBaseline = 'top';
     ctx.font = `700 ${Math.round(h * 0.17)}px system-ui, sans-serif`;
     wrap(ctx, card.title, w * 0.88, 2).forEach((line, i) => ctx.fillText(line, x + w * 0.06, y + h * (0.17 + i * 0.18)));
     ctx.font = `500 ${Math.round(h * 0.12)}px system-ui, sans-serif`;
-    ctx.fillStyle = '#4a4238';
+    ctx.fillStyle = '#5a5f66';
     wrap(ctx, card.subtitle || '', w * 0.88, 1).forEach((line) => ctx.fillText(line, x + w * 0.06, y + h * 0.56));
     if (card.note) {
         ctx.font = `700 ${Math.round(h * 0.11)}px system-ui, sans-serif`;
-        ctx.fillStyle = '#8a4a3a';
+        ctx.fillStyle = '#b5473a';
         ctx.fillText(card.note, x + w * 0.06, y + h * 0.78);
     }
 }
 
 /**
- * Paint the departures board: a dark panel, DEPARTURES and the clock across
- * the top, the column heads, and a tile for every flap, split across its
- * middle the way a real flap is.
- */
-export function drawFlapBoard(ctx, W, H, rows, { clock = '', heads = ['WHEN', 'WHAT', 'WITH'], columns = null } = {}) {
-    ctx.fillStyle = '#16181c';
-    ctx.fillRect(0, 0, W, H);
-    const width = rows[0] ? rows[0].length : 35;
-    const headerH = H * 0.2;
-    ctx.fillStyle = '#f2c14e';
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-    ctx.font = `700 ${Math.round(headerH * 0.5)}px ui-monospace, Menlo, Consolas, monospace`;
-    ctx.fillText('DEPARTURES', W * 0.02, headerH * 0.55);
-    ctx.textAlign = 'right';
-    ctx.fillText(clock, W * 0.98, headerH * 0.55);
-    const cellW = (W * 0.96) / width;
-    const headH = H * 0.08;
-    const rowsTop = headerH + headH;
-    const cellH = (H - rowsTop - H * 0.03) / rows.length;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#9aa3ad';
-    ctx.font = `600 ${Math.round(headH * 0.7)}px ui-monospace, Menlo, Consolas, monospace`;
-    if (columns) {
-        let at = 0;
-        heads.forEach((head, i) => {
-            ctx.fillText(head, W * 0.02 + cellW * at, headerH + headH / 2);
-            at += columns[i] + 1;
-        });
-    }
-    ctx.textAlign = 'center';
-    ctx.font = `700 ${Math.round(cellH * 0.62)}px ui-monospace, Menlo, Consolas, monospace`;
-    rows.forEach((row, r) => {
-        for (let i = 0; i < row.length; i++) {
-            const x = W * 0.02 + cellW * i;
-            const y = rowsTop + cellH * r;
-            ctx.fillStyle = '#23262b';
-            ctx.fillRect(x + 1, y + 2, cellW - 2, cellH - 4);
-            if (row[i] !== ' ') {
-                ctx.fillStyle = '#f4f1e8';
-                ctx.fillText(row[i], x + cellW / 2, y + cellH / 2 + 1);
-            }
-            ctx.fillStyle = '#0c0d0f';
-            ctx.fillRect(x + 1, y + cellH / 2, cellW - 2, 1.5);
-        }
-    });
-    ctx.textAlign = 'left';
-}
-
-/**
- * Paint the whiteboard in marker: the funnel, the weeks against the goal
- * line, and the two big numbers, where whiteboard.js LAYOUT says. The pieces
+ * Paint the glass whiteboard in clean type (QA, 2026-09-29: the marker hand
+ * did not suit the room): the funnel, the weeks against the goal line, and
+ * the two big numbers, where whiteboard.js LAYOUT says. The pieces
  * come in already measured (funnelBars, weekChart, bigNumbers), so the
  * drawing and the tap targets can never disagree.
  */
 export function drawWhiteboard(ctx, W, H, { title, funnel, chart, numbers, goal, layout }) {
-    const INK = '#23262b';
-    const BLUE = '#2b5fa8';
-    const RED = '#c8392b';
-    const hand = (size, weight = 600) => `${weight} ${Math.round(size)}px "Marker Felt", "Chalkboard SE", "Comic Neue", "Comic Sans MS", cursive`;
-    ctx.fillStyle = '#f7f7f4';
+    const INK = '#26282c';
+    const BLUE = '#3a6fc4';
+    const RED = '#c8453b';
+    const hand = (size, weight = 600) => `${weight} ${Math.round(size)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    ctx.fillStyle = '#f8f9f8';
     ctx.fillRect(0, 0, W, H);
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -544,7 +493,7 @@ export const STREET_LAMPS = 4;
  */
 export function drawConcrete(ctx, W, H) {
     const random = paintRandom(20260930);
-    ctx.fillStyle = 'rgb(186, 184, 178)';
+    ctx.fillStyle = 'rgb(202, 200, 195)';
     ctx.fillRect(0, 0, W, H);
     // Mottling: soft patches lighter and darker.
     for (let i = 0; i < 140; i++) {
@@ -553,23 +502,23 @@ export function drawConcrete(ctx, W, H) {
         const r = (0.04 + random() * 0.12) * W;
         const light = random() < 0.5;
         const glow = ctx.createRadialGradient(x, y, 0, x, y, r);
-        glow.addColorStop(0, light ? 'rgba(206, 204, 198, 0.35)' : 'rgba(150, 148, 142, 0.3)');
+        glow.addColorStop(0, light ? 'rgba(214, 212, 207, 0.22)' : 'rgba(170, 168, 162, 0.16)');
         glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = glow;
         ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
     }
     // The boards' faint grain, along the panel.
     for (let x = 0; x < W; x += W / 8) {
-        ctx.fillStyle = `rgba(120, 118, 112, ${0.05 + random() * 0.06})`;
+        ctx.fillStyle = `rgba(140, 138, 132, ${0.03 + random() * 0.04})`;
         ctx.fillRect(x, 0, Math.max(1, W * 0.004), H);
     }
     // Fine speckle.
     for (let i = 0; i < W * H * 0.004; i++) {
-        ctx.fillStyle = random() < 0.5 ? 'rgba(120, 118, 112, 0.35)' : 'rgba(220, 218, 212, 0.35)';
+        ctx.fillStyle = random() < 0.5 ? 'rgba(140, 138, 132, 0.22)' : 'rgba(224, 222, 217, 0.22)';
         ctx.fillRect(random() * W, random() * H, 1, 1);
     }
     // The joint round the panel's edge.
-    ctx.fillStyle = 'rgba(110, 108, 103, 0.8)';
+    ctx.fillStyle = 'rgba(128, 126, 121, 0.5)';
     const j = Math.max(1, W * 0.008);
     ctx.fillRect(0, 0, W, j);
     ctx.fillRect(0, 0, j, H);
@@ -578,12 +527,14 @@ export function drawConcrete(ctx, W, H) {
         for (const v of [1 / 6, 0.5, 5 / 6]) {
             const x = u * W;
             const y = v * H;
-            const r = W * 0.028;
-            ctx.fillStyle = 'rgba(214, 212, 206, 0.9)';
+            // About 3 cm across, a real tie hole's size (drawn larger, they
+            // read as downlights: QA, 2026-09-29).
+            const r = W * 0.012;
+            ctx.fillStyle = 'rgba(214, 212, 206, 0.6)';
             ctx.beginPath();
-            ctx.arc(x, y, r * 1.5, 0, Math.PI * 2);
+            ctx.arc(x, y, r * 1.4, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = 'rgb(88, 86, 82)';
+            ctx.fillStyle = 'rgb(122, 120, 115)';
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
             ctx.fill();

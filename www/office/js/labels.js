@@ -81,10 +81,9 @@ export const STATION_LABELS = {
     computer: 'Computer',
     calendar: 'Calendar',
     cabinet: 'Filing cabinet',
-    board: 'Corkboard',
+    board: 'Pinboard',
     rolodex: 'Rolodex',
     whiteboard: 'Whiteboard',
-    departures: 'Departures board',
     window: 'The window'
 };
 

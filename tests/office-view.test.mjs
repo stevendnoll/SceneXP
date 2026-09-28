@@ -1869,7 +1869,7 @@ describe('the third round of screenshots (2026-09-25)', () => {
         while (!expected(desk, near)) near += 1;
         lit.setLife(NOON, near);
         expect(lit.jetInSight()).toBe(true);
-        follow('departures');
+        follow('whiteboard');
         expect(lit.jetInSight()).toBe(false);
     });
 

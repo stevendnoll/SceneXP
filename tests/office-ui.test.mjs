@@ -514,6 +514,20 @@ describe('the room and the keyboard', () => {
 // ---- The page and the scripts agree -----------------------------------------------
 
 describe('the look (QA, 2026-09-29)', () => {
+    test('the room is exposed brighter by day, so its whites read white, and as dark as ever by night', async () => {
+        const { lighting, lightAt } = await import('../www/office/js/daylight.js');
+        const noon = t.roomExposure(lighting(lightAt(new Date(2026, 8, 24), 12)));
+        const midnight = t.roomExposure(lighting(lightAt(new Date(2026, 8, 24), 0)));
+        expect(noon).toBeCloseTo(CONFIG.view.roomExposure.day, 2);
+        expect(midnight).toBeCloseTo(CONFIG.view.roomExposure.night, 2);
+        expect(CONFIG.view.roomExposure.night).toBe(1);
+        expect(noon).toBeGreaterThan(1.1);
+        // Set with the light, and handed to the room's pass.
+        window.cornerOffice.hour(12);
+        expect(t.ui.roomExposure).toBeCloseTo(noon, 2);
+        window.cornerOffice.hour(null);
+    });
+
     const css = readFileSync(join(process.cwd(), 'www/office/css/experience.css'), 'utf8');
     const html = readFileSync(join(process.cwd(), 'www/office/index.html'), 'utf8');
 
@@ -1465,7 +1479,7 @@ describe('places', () => {
         expect(el('bar-places').getAttribute('aria-expanded')).toBe('true');
         const items = el('places-menu').children;
         expect(items.map((b) => b.children[0] ? b.dataset.place : b.dataset.place)).toEqual(
-            ['window', 'desk', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'departures', 'printer']);
+            ['window', 'desk', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'printer']);
         expect(dom.documentStub.activeElement).toBe(items[0]);
         expect(el('places-menu').style.left).toMatch(/px$/);
         items.find((b) => b.dataset.place === 'calendar').click();
@@ -1548,36 +1562,21 @@ describe('the whiteboard', () => {
     });
 });
 
-describe('the departures board', () => {
-    test('opens at its station from Places and the 8 key, the flaps clattering from blank to the week', () => {
-        t.stockOffice();
-        place('departures');
-        expect(el('departures').hidden).toBe(false);
-        expect(t.ui.station).toBe('departures');
-        expect(t.ui.flaps.rows.every((r) => r.trim() === '')).toBe(true);
-        for (let i = 0; i < 80; i++) { jest.advanceTimersByTime(50); dom.loops.at(-1)(); }
-        expect(t.ui.flaps.rows).toBe(t.ui.flaps.target);
-        expect(t.ui.flaps.rows[0]).toMatch(/^TMRW\s+\d+:\d\d[AP]\s+SCREEN\s+TIDEWATER RO$/);
-        const rows = el('dep-body').children;
-        expect(rows.length).toBeGreaterThanOrEqual(3);
-        expect(rows[0].children.map((td) => td.textContent)).toEqual([expect.stringMatching(/^Tomorrow, /), 'Phone screen', 'Tidewater Robotics']);
-        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+describe('the departures board is gone (QA, 2026-09-29)', () => {
+    test('no card, no place, no station, and the 8 key does nothing', () => {
+        expect(Object.keys(CONFIG.stations)).not.toContain('departures');
+        expect(CONFIG.room.departures).toBeUndefined();
+        expect(t.goToPlace('departures')).toBeFalsy();
+        const station = t.ui.station;
         key('8');
-        expect(el('departures').hidden).toBe(false);
-    });
-
-    test('an empty week says so, on the board and in words', () => {
-        t.openDepartures();
-        expect(el('dep-empty').hidden).toBe(false);
-        expect(el('dep-table').hidden).toBe(true);
-        expect(t.ui.flaps.target[1].trim()).toBe('NO DEPARTURES THIS WEEK');
-    });
-
-    test('while nobody is looking, the board is simply set, ready for the next visit', () => {
-        t.stockOffice();
-        expect(t.ui.flaps.rows).toBe(t.ui.flaps.target);
+        expect(t.ui.station).toBe(station);
+        expect(t.openDepartures).toBeUndefined();
+        const html = readFileSync(join(process.cwd(), 'www/office/index.html'), 'utf8');
+        expect(html).not.toMatch(/departures|dep-/i);
+        expect(readFileSync(join(process.cwd(), 'www/office/js/main.js'), 'utf8')).not.toMatch(/departure|splitflap/i);
     });
 });
+
 
 describe('the printer', () => {
     beforeEach(() => {

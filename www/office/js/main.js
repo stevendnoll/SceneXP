@@ -47,7 +47,7 @@ import { SUNBEAM, sunbeam, mirrorLevel, interiorEnvironment, mirrorCamera, layMi
 import { buildWorld } from './world.min.js';
 import {
     screenLines, drawScreen, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
-    drawFlapBoard, drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, drawConcrete, FACADE_STYLES
+    drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, drawConcrete, FACADE_STYLES
 } from './paint.min.js';
 import { CITY } from './city.min.js';
 import { CLOUDS, cloudPuffs, skyAt, dayLapse } from './sky.min.js';
@@ -57,7 +57,6 @@ import { createFiling } from './filing.min.js';
 import { boardPlan, boardSummary, boardColumns, columnAt, CARD_ATLAS } from './board.min.js';
 import { peopleOf } from './rolodex.min.js';
 import { createPinboard } from './pinboard.min.js';
-import { departureRows, blankRows, stepFlaps, readableRow, FLAP_COLUMNS } from './splitflap.min.js';
 import { boardModel, funnelBars, weekChart, bigNumbers, summaryLines, onGoalLine, LAYOUT } from './whiteboard.min.js';
 import { prepSheet, printChoices, QUESTION_LINES } from './prep.min.js';
 import { monthGrid, monthAgenda, shiftMonth } from './calendar.min.js';
@@ -77,7 +76,7 @@ import {
 import { initGrid, renderGrid, renderChips, isFiltered } from './grid.min.js';
 import {
     renderFolder, renderWastebasket, renderSamplesButtons, renderCalendar, renderToday, renderContact, renderRolodexList,
-    renderWhiteboardSheet, renderDepartures, renderPrintSheet
+    renderWhiteboardSheet, renderPrintSheet
 } from './panels.min.js';
 import { installCardFocusTrap, installCardScrollReset, getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
@@ -119,6 +118,8 @@ const ui = {
     taskAppId: null,
     editingTaskId: null,
     lampOn: true,
+    /** The room's tone-mapping exposure (roomExposure), set with the light. */
+    roomExposure: 1,
     /** Whether the folder lies open on the desk. Kept here as well as on the
      *  mesh, because the test stub cannot read a mesh back. */
     folderOnDesk: false,
@@ -175,9 +176,6 @@ const ui = {
      *  and whether the room has moved since the mirrors were drawn. */
     mirror: 0,
     mirrorDue: true,
-    /** The departures board: what its flaps show, what they are turning
-     *  to, and the time left before the next turn. */
-    flaps: { rows: null, target: null, due: 0, clock: '' },
     /** What the whiteboard was last painted from. */
     whiteboardKey: null,
     whiteboardModel: null
@@ -528,7 +526,6 @@ function buildScene() {
     painted.notes = paintedTexture(ATLAS.cols * 256, ATLAS.rows * 256, () => {});
     painted.drawers = Array.from({ length: CONFIG.room.cabinet.drawers }, () => paintedTexture(256, 64, () => {}));
     painted.boardHeader = paintedTexture(1024, 52, (ctx, W, H) => drawBoardHeader(ctx, W, H, boardColumns(CONFIG).map((c) => c.label)));
-    painted.departures = paintedTexture(1024, 280, () => {});
     painted.whiteboard = paintedTexture(1024, 568, () => {});
     const screen = paintedTexture(512, 320, (ctx, W, H) => drawScreen(ctx, W, H, []));
     screenCanvas = screen.canvas;
@@ -542,7 +539,6 @@ function buildScene() {
         concrete: paintedTexture(256, 512, drawConcrete).texture,
         drawerLabels: painted.drawers.map((p) => p.texture),
         boardHeader: painted.boardHeader.texture,
-        departures: painted.departures.texture,
         whiteboard: painted.whiteboard.texture
     });
     filing = createFiling(room.cabinet, CONFIG, { reducedMotion: state.reducedMotion });
@@ -740,6 +736,7 @@ function applyDaylight(t, force = false) {
         lights.sun.color.setHex(look.sunColor);
         lights.fill.intensity = look.fill;
         lights.bounce.intensity = look.bounce;
+        ui.roomExposure = roomExposure(look);
     }
     if (lights.beam) {
         const beam = sunbeam(sky, look);
@@ -946,14 +943,12 @@ function refresh() {
     fileCabinet(t);
     pinBoard(t);
     paintWhiteboard(t);
-    setDepartures(t);
 
     if (isOpen('computer')) drawComputer(t);
     if (isOpen('cabinet')) drawCabinetSheet(t);
     if (isOpen('board')) drawBoardSheet(t);
     if (isOpen('rolodex')) drawRolodexSheet();
     if (isOpen('whiteboard')) drawWhiteboardSheet();
-    if (isOpen('departures')) drawDeparturesSheet(t);
     if (isOpen('printer')) fillPrinterChoices(t);
     if (isOpen('contact')) drawContact();
     if (isOpen('calendar')) drawCalendarCard(t);
@@ -1448,10 +1443,9 @@ export const PLACES = [
     { place: 'computer', label: 'Computer', key: '2' },
     { place: 'calendar', label: 'Calendar', key: '3' },
     { place: 'cabinet', label: 'Filing cabinet', key: '4' },
-    { place: 'board', label: 'Corkboard', key: '5' },
+    { place: 'board', label: 'Pinboard', key: '5' },
     { place: 'rolodex', label: 'Rolodex', key: '6' },
     { place: 'whiteboard', label: 'Whiteboard', key: '7' },
-    { place: 'departures', label: 'Departures board', key: '8' },
     { place: 'printer', label: 'Printer', key: 'P' }
 ];
 
@@ -1526,7 +1520,6 @@ function goToPlace(place) {
         board: () => openBoard(),
         rolodex: () => openRolodex(),
         whiteboard: () => openWhiteboard(),
-        departures: () => openDepartures(),
         printer: () => openPrinter()
     }[place];
     if (!open) return false;
@@ -1573,71 +1566,6 @@ function openWhiteboard({ armed = false, goal = false } = {}) {
     goTo('whiteboard');
     if (goal) announce(`Your weekly goal is ${state.doc.settings.weeklyGoal}. You can change it here.`);
     track('open-whiteboard');
-}
-
-// ---- The departures board ------------------------------------------------------
-
-/** The week's events, and the company each is with. */
-function departureData(t) {
-    const events = upcomingEvents(state.doc, t, 7);
-    const names = new Map(state.doc.applications.map((a) => [a.id, a.company || a.role]));
-    return { events, names };
-}
-
-function flapClock(t) {
-    return t.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }).toUpperCase();
-}
-
-/**
- * Set what the board should say. While the board is being looked at, its
- * flaps turn to the new rows; otherwise they are simply set, ready for the
- * next visit.
- */
-function setDepartures(t = now()) {
-    const { events, names } = departureData(t);
-    const target = departureRows(events, names, t);
-    const clock = flapClock(t);
-    const same = ui.flaps.target && ui.flaps.target.join('|') === target.join('|');
-    if (same && clock === ui.flaps.clock) return false;
-    ui.flaps.clock = clock;
-    if (!same) {
-        ui.flaps.target = target;
-        if (!isOpen('departures') || state.reducedMotion || !ui.flaps.rows) ui.flaps.rows = target;
-    }
-    paintFlaps();
-    return !same;
-}
-
-function paintFlaps() {
-    const { canvas: c, texture } = painted.departures || {};
-    if (!c || !ui.flaps.rows) return;
-    drawFlapBoard(c.getContext('2d'), c.width, c.height, ui.flaps.rows, {
-        clock: ui.flaps.clock,
-        columns: [FLAP_COLUMNS.when, FLAP_COLUMNS.what, FLAP_COLUMNS.with]
-    });
-    texture.needsUpdate = true;
-    requestRender();
-}
-
-function drawDeparturesSheet(t = now()) {
-    const { events, names } = departureData(t);
-    return renderDepartures(events.slice(0, 5).map((ev) => readableRow(ev, names, t)));
-}
-
-/** Go to the board. The flaps clatter from blank to the week, unless the
- *  visitor asked for less motion. */
-function openDepartures({ armed = false } = {}) {
-    const t = now();
-    setDepartures(t);
-    if (!state.reducedMotion) {
-        ui.flaps.rows = blankRows();
-        ui.flaps.due = CONFIG.view.glideSeconds;
-    }
-    paintFlaps();
-    drawDeparturesSheet(t);
-    openCard('departures', { armed, onClose: () => goTo('desk') });
-    goTo('departures');
-    track('open-departures');
 }
 
 // ---- The printer --------------------------------------------------------------
@@ -2201,7 +2129,6 @@ function actOn(key, { armed = true, instanceId = -1, uv = null } = {}) {
         }
         openWhiteboard({ armed });
         break;
-    case 'departures': openDepartures({ armed }); break;
     case 'printer': openPrinter({ armed }); break;
     case 'cabinet': openCabinet({ armed }); break;
     case 'board': openBoard({ armed }); break;
@@ -2306,7 +2233,6 @@ function setupEventListeners() {
         if (!inside(menu) && !inside(toggle)) togglePlaces(false, { restoreFocus: false });
     }, { signal, capture: true });
     wire('wb-goal', 'change', () => saveGoal('wb-goal'));
-    wire('dep-export', 'click', exportUpcoming);
     wire('printer-print', 'click', () => printPrep(el('printer-app').value));
     wire('outtray-print', 'click', () => { closeCard('outtray'); openPrinter(); });
     wire('rolodex-search', 'input', () => {
@@ -2439,7 +2365,6 @@ function setupEventListeners() {
         else if (key === '5') { event.preventDefault(); openBoard(); }
         else if (key === '6') { event.preventDefault(); openRolodex(); }
         else if (key === '7') { event.preventDefault(); openWhiteboard(); }
-        else if (key === '8') { event.preventDefault(); openDepartures(); }
         else if (key === 'p') { event.preventDefault(); openPrinter(); }
         else if (key === 't') { event.preventDefault(); openToday(); }
         else if (key === '1') { event.preventDefault(); goTo('desk'); }
@@ -2518,16 +2443,6 @@ function animate() {
         state.dirty = true;
     }
     state.scenerySeconds = sceneryClock(state.scenerySeconds, delta, Boolean(ui.lapse));
-    if (ui.flaps.target && ui.flaps.rows !== ui.flaps.target) {
-        ui.flaps.due -= delta;
-        while (ui.flaps.due <= 0 && ui.flaps.rows !== ui.flaps.target) {
-            const next = stepFlaps(ui.flaps.rows, ui.flaps.target);
-            ui.flaps.rows = next.done ? ui.flaps.target : next.rows;
-            ui.flaps.due += CONFIG.view.flapSeconds;
-        }
-        paintFlaps();
-        state.dirty = true;
-    }
 
     // The moving scenery asks for a frame about CONFIG.view.ambientFps
     // times a second when nothing else is drawing, and CONFIG.view.jetFps
@@ -2618,8 +2533,17 @@ function draw() {
         renderer.clearDepth();
     }
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = ui.roomExposure;
     drawMirrors();
     renderer.render(scene, camera);
+}
+
+/** The room's exposure for a light level (daylight.js `lighting`): from
+ *  CONFIG.view.roomExposure's night to its day as the daylight comes up. */
+export function roomExposure(look) {
+    const { day, night } = CONFIG.view.roomExposure;
+    const d = Math.min(1, Math.max(0, 1 - look.cityLights));
+    return night + (day - night) * d;
 }
 
 /**
@@ -2738,6 +2662,7 @@ export const __test__ = {
     state,
     ui,
     sceneryClock,
+    roomExposure,
     placeLife,
     history,
     mutate,
@@ -2763,8 +2688,6 @@ export const __test__ = {
     goToPlace,
     openWhiteboard,
     paintWhiteboard,
-    openDepartures,
-    setDepartures,
     openPrinter,
     printPrep,
     openContact,

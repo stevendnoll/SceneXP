@@ -1391,7 +1391,7 @@ button.hud-chip:focus-visible {
     border-color: var(--ui-accent);
 }
 
-/* ---- The whiteboard and departures sheets ---------------------------------- */
+/* ---- The whiteboard sheet --------------------------------------------------- */
 
 .wb-summary {
     margin: 0.5rem 0 0;

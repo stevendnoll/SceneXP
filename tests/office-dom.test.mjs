@@ -718,15 +718,6 @@ describe('M6 panels and painters', () => {
         expect(el('wb-goal').value).toBe('9');
     });
 
-    test('the departures sheet, full and empty', () => {
-        expect(panels.renderDepartures([{ when: 'Today, 2:00 PM', what: 'Interview', with: 'Acme' }])).toBe(1);
-        expect(el('dep-table').hidden).toBe(false);
-        expect(el('dep-body').children[0].children.map((td) => td.textContent)).toEqual(['Today, 2:00 PM', 'Interview', 'Acme']);
-        expect(panels.renderDepartures([])).toBe(0);
-        expect(el('dep-empty').hidden).toBe(false);
-        expect(el('dep-table').hidden).toBe(true);
-    });
-
     test('the prep sheet is laid out as text, sections only where there is something to say', () => {
         const words = (node) => (node.children && node.children.length ? node.children.flatMap(words) : [node.textContent || '']);
         panels.renderPrintSheet({
@@ -749,11 +740,10 @@ describe('M6 panels and painters', () => {
         expect(sheet.children.filter((c) => c.className === 'print-section').map((s) => s.children[0].textContent)).toEqual(['Questions to ask']);
     });
 
-    test('the flap board and the whiteboard paint', async () => {
+    test('the whiteboard paints', async () => {
         const wb = await import('../www/office/js/whiteboard.js');
         const ctx = document.createElement('canvas').getContext('2d');
-        expect(() => paint.drawFlapBoard(ctx, 1024, 280, ['TODAY 2:00P INTERVIEW  ACME        '], { clock: 'THU 10:00 AM', columns: [11, 10, 12] })).not.toThrow();
-        expect(() => paint.drawFlapBoard(ctx, 1024, 280, [])).not.toThrow();
+        expect(paint.drawFlapBoard).toBeUndefined();
         const model = wb.boardModel(emptyDoc(CONFIG, NOW), CONFIG, NOW);
         expect(() => paint.drawWhiteboard(ctx, 1024, 568, {
             title: 'The search so far', funnel: wb.funnelBars(model), chart: wb.weekChart(model),

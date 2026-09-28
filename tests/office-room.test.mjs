@@ -122,12 +122,11 @@ describe('what is in the room', () => {
         for (const o of glowing) {
             let key = null;
             for (let p = o; p && !key; p = p.parent) key = (p.userData && p.userData.pick) || null;
-            // The monitor's face, the departures display and the printer's
-            // light are lights; nothing else.
+            // The monitor's face and the printer's light are lights; nothing
+            // else.
             const isScreen = o === room.screen;
-            const isDisplay = key === 'departures';
             const isLed = key === 'printer' && boxOf(o).max.x - boxOf(o).min.x < 0.03;
-            expect({ name: o.name, key, ok: isScreen || isDisplay || isLed }).toEqual({ name: o.name, key, ok: true });
+            expect({ name: o.name, key, ok: isScreen || isLed }).toEqual({ name: o.name, key, ok: true });
         }
         expect(glowing).toContain(room.screen);
     });
@@ -786,7 +785,7 @@ describe('the corkboard', () => {
     });
 });
 
-describe('the front wall, the departures board, the whiteboard and the printer', () => {
+describe('the front wall, the whiteboard and the printer', () => {
     const inView = (cam, object) => {
         const b = boxOf(object);
         for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
@@ -797,7 +796,7 @@ describe('the front wall, the departures board, the whiteboard and the printer',
     };
 
     test('nothing new stands in anything else', () => {
-        const things = ['printer', 'whiteboard', 'board', 'cabinet', 'departures', 'wastebasket'].map((k) => [k, boxOf(room.picks[k])]);
+        const things = ['printer', 'whiteboard', 'board', 'cabinet', 'wastebasket'].map((k) => [k, boxOf(room.picks[k])]);
         const plant = room.group.children.find((o) => o.name === 'plant');
         things.push(['plant', boxOf(plant)]);
         things.push(['desk', boxOf(room.group.children.find((o) => o.name === 'desk'))]);
@@ -817,18 +816,6 @@ describe('the front wall, the departures board, the whiteboard and the printer',
         // The door itself, a little proud of the wall line, not the wall.
         expect(hit.point.z).toBeGreaterThan(CONFIG.room.depth / 2 + 0.01);
         expect(hit.point.z).toBeLessThan(CONFIG.room.depth / 2 + 0.03);
-    });
-
-    test.each(Object.entries(ASPECTS))('at its station on a %s screen, the whole departures board is in view and readable side up', (_name, aspect) => {
-        const cam = cameraAt('departures', aspect);
-        inView(cam, room.departures);
-        // Its first column is on the screen's left.
-        const b = CONFIG.room.departures;
-        const left = new THREE.Vector3(b.x - b.width / 2, b.y, CONFIG.room.depth / 2 - 0.06).project(cam);
-        const leftOfFace = new THREE.Vector3(0, 0, 0);
-        room.departures.localToWorld(leftOfFace.set(-b.width / 2, 0, 0));
-        expect(leftOfFace.clone().project(cam).x).toBeLessThan(0);
-        expect(left).toBeTruthy();
     });
 
     test.each(Object.entries(ASPECTS))('at its station on a %s screen, the whole whiteboard is in view', (_name, aspect) => {
