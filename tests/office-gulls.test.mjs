@@ -25,16 +25,18 @@ describe('the flock', () => {
         expect(new Set(flock().map((g) => g.turn)).size).toBe(2);
     });
 
-    test('none ever comes nearer the office than GULLS.nearest, nor low over the water, nor over the office', () => {
+    test('none ever comes nearer the office than GULLS.nearest, all near its height, and never over the office', () => {
         for (const g of flock()) {
             for (let t = 0; t < HOUR; t += 1.5) {
                 const [x, y, z] = gullAt(g, t);
                 // The office's eye is 195 m over the water, at the room's origin.
                 expect(Math.hypot(x, y - 195, z)).toBeGreaterThan(GULLS.nearest);
                 expect(y).toBeGreaterThan(15);
-                expect(y).toBeLessThan(195);
+                // About the office's own height, so they are seen level,
+                // against the land rather than the water's sheen.
+                expect(Math.abs(y - 195)).toBeLessThan(60);
                 // Out over the waterfront and the bay, west of the office.
-                expect(z).toBeLessThan(-400);
+                expect(z).toBeLessThan(-250);
             }
         }
     });

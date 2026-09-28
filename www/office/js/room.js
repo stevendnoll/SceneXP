@@ -865,8 +865,55 @@ function buildWhiteboard(group, config, texture, picks) {
     return face;
 }
 
-/** The printer, on a small stand under the right-hand window, with a page
- *  in its tray and a green light that says it is ready. */
+/**
+ * The printer's touch screen: one flat mesh of colored rectangles, each
+ * `[x0, y0, x1, y1, color]` in meters on the screen's face (centered), each
+ * a hair in front of the last, lit from within.
+ */
+export function screenPanel(rects) {
+    const positions = [];
+    const colors = [];
+    const c = new THREE.Color();
+    rects.forEach(([x0, y0, x1, y1, color], i) => {
+        const z = i * 0.0004;
+        c.setHex(color, THREE.SRGBColorSpace);
+        for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y0], [x1, y1], [x0, y1]]) {
+            positions.push(x, y, z);
+            colors.push(c.r, c.g, c.b);
+        }
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true }));
+}
+
+/**
+ * The printer's parts, in its own frame (meters, its front toward +z, y up
+ * from the top of its cabinet): a modern multifunction laser printer in
+ * white (QA, 2026-09-29: "the printer doesn't have enough detail"). The
+ * print engine below, its paper cassette across the front with a finger
+ * pull and a paper gauge; the output bay, an open dark slot under the
+ * scanner with the last pages printed lying in it; the scanner and its
+ * lid; the document feeder on the lid, its roller housing at one end and
+ * its gray input tray; a tilted touch screen at the front right; the power
+ * button and its light; vents down the right side.
+ */
+export const PRINTER = {
+    width: 0.44,
+    depth: 0.38,
+    engine: 0.2,
+    bay: 0.06,
+    scanner: 0.05,
+    lid: 0.028,
+    feeder: 0.035,
+    cassette: [0.012, 0.088],
+    screen: { width: 0.15, height: 0.085, tilt: 0.9, x: 0.105 },
+    vents: 7
+};
+
+/** The printer, on a small stand under the right-hand window (PRINTER), a
+ *  page in its bay and a green light that says it is ready. */
 function buildPrinter(group, config, picks, m) {
     const p = config.room.printer;
     const printer = tag(new THREE.Group(), 'printer');
@@ -879,14 +926,84 @@ function buildPrinter(group, config, picks, m) {
     printer.add(roundedBox(0.5, p.stand - kick, 0.44, 0.012, m.white, 0, (p.stand + kick) / 2, 0));
     printer.add(box(0.46, kick, 0.4, m.aluminum, 0, kick / 2, -0.01));
     for (const y of PRINTER_DRAWERS) printer.add(box(0.48, 0.003, 0.003, m.reveal, 0, y, 0.2205));
-    // The printer: white, with a lid of dark glass, an aluminum output
-    // tray, the page in it and its light.
-    const glassLid = new THREE.MeshPhysicalMaterial({ color: 0x1d1f22, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.05 });
-    printer.add(roundedBox(0.44, 0.17, 0.36, 0.025, m.white, 0, p.stand + 0.085, 0));
-    printer.add(roundedBox(0.44, 0.03, 0.3, 0.01, glassLid, 0, p.stand + 0.185, 0.02));
-    printer.add(box(0.3, 0.012, 0.14, m.aluminum, -0.02, p.stand + 0.03, 0.24));
-    printer.add(box(0.22, 0.004, 0.12, mat(COLORS.paper), -0.02, p.stand + 0.04, 0.24));
-    printer.add(box(0.02, 0.012, 0.012, new THREE.MeshBasicMaterial({ color: 0x5dd37a }), 0.17, p.stand + 0.14, 0.181));
+
+    const P = PRINTER;
+    const y0 = p.stand;
+    const W = P.width;
+    const D = P.depth;
+    const front = D / 2;
+    const dark = mat(0x2a2c30, { roughness: 0.7 });
+    const cavity = mat(0x121315, { roughness: 1 });
+    const gray = mat(0x5b5f65, { roughness: 0.55 });
+    const paper = mat(COLORS.paper, { roughness: 0.9 });
+    // The engine, and the cassette's face, a hair proud of it, its seams.
+    printer.add(roundedBox(W, P.engine, D, 0.018, m.white, 0, y0 + P.engine / 2, 0));
+    const [c0, c1] = P.cassette;
+    printer.add(roundedBox(W - 0.03, c1 - c0, 0.012, 0.004, m.white, 0, y0 + (c0 + c1) / 2, front));
+    printer.add(box(W - 0.03, 0.002, 0.004, m.reveal, 0, y0 + c1 + 0.002, front + 0.001));
+    printer.add(box(0.13, 0.012, 0.004, dark, 0, y0 + c1 - 0.012, front + 0.005));
+    printer.add(box(0.035, 0.007, 0.002, gray, -W / 2 + 0.05, y0 + (c0 + c1) / 2, front + 0.006));
+    // The front door's seam, above the cassette, and a USB port at its left.
+    printer.add(box(W - 0.03, 0.002, 0.004, m.reveal, 0, y0 + P.engine - 0.03, front + 0.001));
+    printer.add(box(0.014, 0.006, 0.003, cavity, -W / 2 + 0.04, y0 + P.engine - 0.055, front + 0.001));
+    // The power button, brushed aluminum, and its light beside it.
+    const button = cylinder(0.009, 0.004, m.aluminum, W / 2 - 0.04, y0 + P.engine - 0.055, front + 0.002, 20);
+    button.rotation.x = Math.PI / 2;
+    printer.add(button);
+    printer.add(box(0.012, 0.004, 0.003, new THREE.MeshBasicMaterial({ color: 0x5dd37a }), W / 2 - 0.07, y0 + P.engine - 0.055, front + 0.001));
+    // Vents down the right side, toward the room.
+    for (let i = 0; i < P.vents; i++) {
+        printer.add(box(0.003, 0.005, 0.16, dark, W / 2 + 0.0005, y0 + 0.05 + i * 0.016, -0.04));
+    }
+    // The output bay: the scanner stands on a spine at the back and a cheek
+    // each side, over an open dark slot, the last pages printed in it.
+    const b0 = y0 + P.engine;
+    printer.add(box(W, P.bay, 0.09, m.white, 0, b0 + P.bay / 2, -D / 2 + 0.045));
+    for (const side of [-1, 1]) printer.add(box(0.03, P.bay, D - 0.02, m.white, side * (W / 2 - 0.015), b0 + P.bay / 2, 0));
+    printer.add(box(W - 0.06, P.bay, 0.006, cavity, 0, b0 + P.bay / 2, -D / 2 + 0.093));
+    printer.add(box(W - 0.06, 0.003, D - 0.1, cavity, 0, b0 + 0.0015, 0.04));
+    const pages = box(0.216, 0.008, 0.25, paper, 0, b0 + 0.007, 0.05);
+    pages.rotation.x = -0.05;
+    printer.add(pages);
+    // The scanner, its lid, and on the lid the document feeder: its roller
+    // housing at the left end, its gray tray and a waiting page, a guide.
+    const s0 = b0 + P.bay;
+    printer.add(roundedBox(W, P.scanner, D, 0.012, m.white, 0, s0 + P.scanner / 2, 0));
+    const l0 = s0 + P.scanner;
+    printer.add(roundedBox(W - 0.004, P.lid, D - 0.03, 0.01, m.white, 0, l0 + P.lid / 2, -0.012));
+    printer.add(box(W - 0.02, 0.002, 0.003, m.reveal, 0, l0 + 0.001, front - 0.026));
+    const f0 = l0 + P.lid;
+    printer.add(roundedBox(0.11, P.feeder, D - 0.05, 0.012, m.white, -W / 2 + 0.057, f0 + P.feeder / 2, -0.02));
+    const tray = box(0.3, 0.006, 0.24, gray, 0.05, f0 + 0.012, -0.03);
+    tray.rotation.z = -0.06;
+    printer.add(tray);
+    const waiting = box(0.2, 0.004, 0.21, paper, 0.06, f0 + 0.018, -0.03);
+    waiting.rotation.z = -0.06;
+    printer.add(waiting);
+    printer.add(box(0.006, 0.014, 0.2, gray, 0.17, f0 + 0.012, -0.03));
+    // The touch screen, tilted up at the front right: a dark glass bezel and
+    // the screen in it, its tiles lit.
+    const sc = P.screen;
+    const panel = new THREE.Group();
+    // On the scanner's front edge, clear of the output bay below it.
+    panel.position.set(sc.x, s0 + 0.036, front + 0.024);
+    panel.rotation.x = -sc.tilt;
+    const glassBezel = new THREE.MeshPhysicalMaterial({ color: 0x1d1f22, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.05 });
+    panel.add(roundedBox(sc.width + 0.02, sc.height + 0.016, 0.008, 0.004, glassBezel, 0, 0, 0));
+    const w2 = sc.width / 2;
+    const h2 = sc.height / 2;
+    const face = screenPanel([
+        [-w2, -h2, w2, h2, 0x1b2a3c],
+        [-w2 + 0.006, h2 - 0.014, w2 - 0.006, h2 - 0.006, 0x3b5670],
+        [-w2 + 0.008, -0.022, -w2 + 0.046, 0.018, 0x3a7bd5],
+        [-w2 + 0.054, -0.022, -w2 + 0.092, 0.018, 0x2f9e8f],
+        [-w2 + 0.100, -0.022, -w2 + 0.138, 0.018, 0xd08a3a],
+        [-w2 + 0.008, -h2 + 0.006, w2 - 0.008, -h2 + 0.014, 0x2a3d52]
+    ]);
+    face.name = 'printer-screen';
+    face.position.z = 0.0045;
+    panel.add(face);
+    printer.add(panel);
     addHitBox(printer, 0.03);
     group.add(printer);
     picks.printer = printer;

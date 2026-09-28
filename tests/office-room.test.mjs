@@ -122,11 +122,12 @@ describe('what is in the room', () => {
         for (const o of glowing) {
             let key = null;
             for (let p = o; p && !key; p = p.parent) key = (p.userData && p.userData.pick) || null;
-            // The monitor's face and the printer's light are lights; nothing
-            // else.
+            // The monitor's face, the printer's touch screen and its light
+            // are lights; nothing else.
             const isScreen = o === room.screen;
             const isLed = key === 'printer' && boxOf(o).max.x - boxOf(o).min.x < 0.03;
-            expect({ name: o.name, key, ok: isScreen || isLed }).toEqual({ name: o.name, key, ok: true });
+            const isPanel = key === 'printer' && o.name === 'printer-screen';
+            expect({ name: o.name, key, ok: isScreen || isLed || isPanel }).toEqual({ name: o.name, key, ok: true });
         }
         expect(glowing).toContain(room.screen);
     });
@@ -339,16 +340,48 @@ describe('the credenza, the printer and the trays, in white and aluminum (QA, 20
         expect(boxOf(kick).max.z).toBeLessThan(body.max.z - 0.02);
     });
 
-    test('the printer: white with a dark glass lid, on a flush white cabinet on an aluminum kick, its light still lit', () => {
+    test('the printer is a multifunction laser printer in white, in detail (QA, 2026-09-29: "not enough detail")', () => {
         const printer = room.picks.printer;
-        expect(named(printer, 'white').length).toBe(2);
-        const lid = printer.children.find((m) => m.material && m.material.clearcoat === 1);
-        expect(lid.material.color.getHex()).toBe(0x1d1f22);
-        expect(metals(printer).length).toBeGreaterThanOrEqual(2);
-        const led = printer.children.filter((m) => m.material && m.material.isMeshBasicMaterial && m.material.visible !== false);
+        printer.updateMatrixWorld(true);
+        const p = CONFIG.room.printer;
+        const P = roomMod.PRINTER;
+        const front = p.z + P.depth / 2;
+        // Engine, cassette, scanner, lid, feeder and the bay's spine and cheeks, in white.
+        expect(named(printer, 'white').length).toBeGreaterThanOrEqual(8);
+        // The output bay: open at the front, dark inside, the last pages printed in it.
+        const bayY = p.stand + P.engine + P.bay / 2;
+        const [inBay] = new THREE.Raycaster(new THREE.Vector3(p.x, bayY, front + 0.5), new THREE.Vector3(0, 0, -1)).intersectObject(printer, true)
+            .filter((h) => h.object.material.visible !== false);
+        expect(inBay.object.material.color.getHex()).toBe(0x121315);
+        const [onPages] = new THREE.Raycaster(new THREE.Vector3(p.x, bayY + 0.5, 0.05 + p.z), new THREE.Vector3(0, -1, 0)).intersectObject(printer, true)
+            .filter((h) => h.object.material.visible !== false && h.point.y < p.stand + P.engine + P.bay);
+        expect(onPages.object.material.color.getHex()).toBe(0xf7f3ea);
+        // The touch screen: at the front right, tilted up to the eye, its tiles lit.
+        const screen = printer.getObjectByName('printer-screen');
+        expect(screen.material.isMeshBasicMaterial).toBe(true);
+        const tiles = new Set();
+        const col = screen.geometry.attributes.color;
+        for (let i = 0; i < col.count; i++) tiles.add([col.getX(i), col.getY(i), col.getZ(i)].map((v) => v.toFixed(3)).join());
+        expect(tiles.size).toBeGreaterThanOrEqual(5);
+        const facing = new THREE.Vector3(0, 0, 1).applyQuaternion(screen.getWorldQuaternion(new THREE.Quaternion()));
+        expect(facing.y).toBeGreaterThan(0.3);
+        expect(facing.z).toBeGreaterThan(0.5);
+        expect(boxOf(screen).min.x).toBeGreaterThan(p.x);
+        const bezel = screen.parent.children.find((m) => m.material && m.material.clearcoat === 1);
+        expect(bezel.material.color.getHex()).toBe(0x1d1f22);
+        // Its light, a power button in aluminum, the kick in aluminum.
+        const led = [];
+        printer.traverse((m) => { if (m.isMesh && m.material.isMeshBasicMaterial && m.material.visible !== false && m !== screen) led.push(m); });
         expect(led).toHaveLength(1);
+        expect(metals(printer).length).toBeGreaterThanOrEqual(2);
+        // Vents down its right side.
+        const vents = printer.children.filter((m) => m.isMesh && Math.abs(boxOf(m).max.x - (p.x + P.width / 2) - 0.002) < 0.001);
+        expect(vents).toHaveLength(P.vents);
+        // It stands on its cabinet, inside its footprint.
+        const b = boxOf(printer.children.find((m) => m.isMesh && m.material.name === 'white' && boxOf(m).min.y > p.stand - 1e-6));
+        expect(b.min.y).toBeCloseTo(p.stand, 6);
+        expect(b.max.x - b.min.x).toBeLessThanOrEqual(0.5);
     });
-
 
 });
 
@@ -398,7 +431,8 @@ describe('the ceiling and the walls (QA, 2026-09-29)', () => {
 
     test('the printer cabinet’s drawers face the room: its reveals run across its front, not up it', () => {
         const printer = room.picks.printer;
-        const reveals = printer.children.filter((m) => m.material && m.material.color && m.material.color.getHex() === 0x16171a);
+        const reveals = printer.children.filter((m) => m.material && m.material.color && m.material.color.getHex() === 0x16171a
+            && boxOf(m).max.y < CONFIG.room.printer.stand);
         expect(reveals).toHaveLength(roomMod.PRINTER_DRAWERS.length);
         for (const r of reveals) {
             const b = boxOf(r);

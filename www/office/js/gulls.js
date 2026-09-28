@@ -15,11 +15,18 @@
  * follows the arm a moment late, so the stroke ripples out to the tip.
  *
  * TRUE SCALE IS A FEW PIXELS. A gull's wings span about 1.4 meters, and
- * the nearest of these is half a kilometer off, where that is three pixels.
- * So each is drawn `scale` times life (the "true scale fails at a few
- * pixels" note), which keeps the silhouette and the motion readable, and
- * none comes nearer than `nearest` meters, so none is ever a big bird at
- * the glass.
+ * these are a quarter to a kilometer and a half off, where that is two to
+ * five pixels. So each is drawn `scale` times life (the "true scale fails
+ * at a few pixels" note), which keeps the silhouette and the motion
+ * readable, and none comes nearer than `nearest` meters, so none is ever a
+ * big bird at the glass.
+ *
+ * AT THE OFFICE'S HEIGHT, AGAINST THE LAND. Drawn lower, over the water,
+ * a white gull on the bay's silver sheen could not be seen at all (QA,
+ * 2026-09-29: "I also haven't seen any seagulls yet"). Riding the air up the
+ * towers' faces, they wheel at about the fortieth floor's height, so the
+ * visitor sees them level, against the far shore and the mountains, where a
+ * white bird shows.
  *
  * ON THE VISITOR'S OWN SECONDS. The gulls keep real time even while a day
  * goes by (a gull at thirty times its pace is a moth), and go home by night
@@ -36,22 +43,22 @@ const TAU = Math.PI * 2;
 
 /**
  * The flock. Each gull wheels round its own `center` (x, z in the room's
- * frame, meters: over the waterfront and the near bay the desk and the
- * window both see, measured 2026-09-29) at a radius between `radius`, at
- * `speed` meters a second, `height` meters over the water (the office's
- * eye is 195 up, so the visitor looks down on most of them), its center
+ * frame, meters: over the waterfront and the near bay, in the gaps the
+ * desk and the window both see at the office's height, measured
+ * 2026-09-29) at a radius between `radius`, at `speed` meters a second,
+ * `height` meters over the water (the office's eye is 195 up), its center
  * drifting `drift` meters along the shore and back. `flap` is how often a
  * burst of beats comes (the chance in each `every` seconds), how long one
  * lasts, and how quick the beats are.
  */
 export const GULLS = {
-    centers: [[100, -720], [120, -930], [90, -1180], [-420, -1060], [-520, -1260], [-310, -960]],
+    centers: [[100, -620], [120, -860], [100, -1100], [-300, -660], [-200, -440], [-420, -960], [-560, -1250], [250, -1150]],
     radius: [45, 120],
     speed: [8, 11],
-    height: [48, 125],
+    height: [175, 215],
     drift: 60,
-    scale: 2.5,
-    nearest: 450,
+    scale: 3.5,
+    nearest: 250,
     flap: { every: 7, chance: 0.4, seconds: [0.9, 1.8], hz: 2.9 },
     seed: 20260929
 };

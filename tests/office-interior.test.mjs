@@ -327,7 +327,8 @@ describe('rounded edges', () => {
         expect(b.max.y).toBeCloseTo(d.height, 6);
         const chair = room.group.getObjectByName('chair');
         expect(chair.children[0].geometry.type).toBe('ExtrudeGeometry');
-        const printer = room.picks.printer.children.map((c) => c.geometry.type);
+        const printer = [];
+        room.picks.printer.traverse((c) => { if (c.isMesh) printer.push(c.geometry.type); });
         expect(printer.filter((t) => t === 'ExtrudeGeometry').length).toBeGreaterThanOrEqual(3);
     });
 
