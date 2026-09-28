@@ -44,7 +44,7 @@ import { applicationsCsv } from './csv.min.js';
 import { poseFor, createGlide } from './stations.min.js';
 import { buildRoom, setLamp, setWaste, pickOf, setNotes, ensureCapacity, windowsOf } from './room.min.js';
 import { SUNBEAM, sunbeam, mirrorLevel, interiorEnvironment, mirrorCamera, layMirror } from './interior.min.js';
-import { buildWorld } from './world.min.js';
+import { buildWorld, TOWER_SHADOWS } from './world.min.js';
 import {
     screenLines, drawScreen, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
     drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, drawConcrete, FACADE_STYLES
@@ -481,7 +481,10 @@ function buildScene() {
     // No background: the room is drawn over the world outside, which shows
     // wherever the room has nothing, that is, through the windows.
     scene = new THREE.Scene();
-    world = buildWorld(CONFIG, { aspect: aspect(), textures: worldTextures(), anisotropy: anisotropy() });
+    world = buildWorld(CONFIG, {
+        aspect: aspect(), textures: worldTextures(), anisotropy: anisotropy(),
+        shadowSize: state.mobile ? TOWER_SHADOWS.mapSizeMobile : TOWER_SHADOWS.mapSize
+    });
     // A container ship is crossing the view as the visitor arrives.
     world.arrive(skyTime(now()));
 
@@ -726,7 +729,7 @@ function applyDaylight(t, force = false) {
     ui.lightKey = key;
     ui.phase = light.phase;
     ui.weather = weather;
-    const look = weathered(lighting(light), weather);
+    const look = weathered(lighting(light, sky), weather);
     if (room && room.rain) room.rain.set(weather.rain);
     paintOffices(look.offices);
     ui.look = look;
@@ -2139,8 +2142,6 @@ function actOn(key, { armed = true, instanceId = -1, uv = null } = {}) {
         break;
     }
     case 'computer': openComputer({ armed }); break;
-    case 'intray': openApplicationForm(null, { armed }); break;
-    case 'outtray': openOuttray({ armed }); break;
     case 'wastebasket': openWastebasket({ armed }); break;
     case 'lamp': toggleLamp(); break;
     case 'folder': if (ui.lastFolderId) openFolder(ui.lastFolderId, { armed }); break;
@@ -2529,7 +2530,13 @@ function draw() {
     renderer.clear();
     if (world) {
         renderer.toneMapping = THREE.NoToneMapping;
+        // One shadow switch for both scenes: the towers' shadows are drawn
+        // only when the sun has moved, and the room's are left as they were
+        // due (markRoom), since drawing the world would otherwise spend them.
+        const roomDue = renderer.shadowMap.needsUpdate;
+        renderer.shadowMap.needsUpdate = world.takeShadows();
         renderer.render(world.scene, world.camera);
+        renderer.shadowMap.needsUpdate = roomDue;
         renderer.clearDepth();
     }
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -2663,7 +2670,6 @@ export const __test__ = {
     ui,
     sceneryClock,
     roomExposure,
-    placeLife,
     history,
     mutate,
     change,

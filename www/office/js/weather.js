@@ -126,6 +126,7 @@ export function weathered(look, { overcast, rain }) {
         clouds: mix(look.clouds, grayOf(look.clouds, 0.72), 0.8 * g),
         sun: look.sun * (1 - 0.7 * g),
         halo: look.halo * (1 - g),
+        warm: (look.warm || 0) * (1 - g),
         hemi: look.hemi * (1 - 0.25 * g),
         fill: look.fill * (1 - 0.2 * g),
         stars: look.stars * (1 - g),

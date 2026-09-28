@@ -101,19 +101,42 @@ export function officesLit(hour, hours = OFFICE_HOURS) {
 }
 
 /**
- * What the scene's lights and the painted sky should be for a light level.
- * Dawn and dusk pass through gold on the way.
+ * THE GOLDEN HOUR. The clock's dawn and dusk (lightAt) are the hour either
+ * side of sunrise and sunset, and here the sun goes behind the mountains
+ * five degrees up, half an hour before the clock's sunset (sky.js
+ * sunClear): so a sun warmed only by the clock was white until it was gone
+ * (QA, 2026-09-29: "not doing enough with the sun"). The sun's own light
+ * warms as it sinks, from `high` degrees up to all gold by `low`, as the
+ * air it comes through thickens.
  */
-export function lighting(light) {
+export const GOLDEN_HOUR = { high: 18, low: 5 };
+
+/** How golden the sun's light is at a height (radians), 0 to 1. */
+export function goldenHour(sunHeight) {
+    const deg = (sunHeight * 180) / Math.PI;
+    return smooth((GOLDEN_HOUR.high - deg) / (GOLDEN_HOUR.high - GOLDEN_HOUR.low));
+}
+
+/**
+ * What the scene's lights and the painted sky should be for a light level.
+ * Dawn and dusk pass through gold on the way. Given the sky (sky.js skyAt),
+ * the sun's light, the clouds' and the glow round the sun warm through the
+ * golden hour too, while the sky's own colors keep to the clock.
+ */
+export function lighting(light, sky = null) {
     const d = light.daylight;
     const golden = light.phase === 'dawn' || light.phase === 'dusk' ? Math.sin(d * Math.PI) : 0;
-    const pick = (field) => mix(mix(NIGHT[field], DAY[field], d), GOLD[field], golden * 0.7);
+    const warm = Math.max(golden, sky ? goldenHour(sky.sunHeight) * d : 0);
+    const pick = (field, gold = golden) => mix(mix(NIGHT[field], DAY[field], d), GOLD[field], gold * 0.7);
     return {
         skyTop: pick('top'),
         skyBottom: pick('bottom'),
-        sunColor: pick('sun'),
+        sunColor: pick('sun', warm),
         /** The clouds' light: white by day, peach at dawn and dusk, slate by night. */
-        clouds: pick('clouds'),
+        clouds: pick('clouds', warm),
+        /** How golden the hour is, 0 to 1: the glitter on the bay, the
+         *  glare round the sun and the glow in the clouds follow it. */
+        warm,
         sun: 0.12 + 1.4 * d,
         hemi: 0.22 + 0.7 * d,
         fill: 0.12 + 0.23 * d,
@@ -132,7 +155,7 @@ export function lighting(light) {
         moonShine: 1 - 0.65 * d,
         /** The glow round the sun, in the sky and about its disc: soft at
          *  noon, strong low in the sky at dawn and dusk. */
-        halo: 0.3 + 0.7 * golden,
+        halo: 0.3 + 0.7 * warm,
         /** The haze on the painted blocks: dark at night, pale by day. */
         cityNear: mix(0x1c2333, 0x5b6b7d, d),
         cityFar: mix(0x252c40, 0x8499ad, d)

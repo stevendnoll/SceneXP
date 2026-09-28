@@ -36,7 +36,7 @@
  * hour (daylight.js `clouds`).
  */
 
-import { seeded } from './city.min.js';
+import { seeded, ridgeAt } from './city.min.js';
 import { sunTimes, dayOfYear } from './daylight.min.js';
 
 const DEG = Math.PI / 180;
@@ -47,6 +47,28 @@ export const LATITUDE = 40;
 
 /** The celestial pole, in the room's frame (north is +x, up is +y). */
 export const POLE = [Math.cos(LATITUDE * DEG), Math.sin(LATITUDE * DEG), 0];
+
+/**
+ * THE SUNSET IS FRAMED (QA, 2026-09-29: "I'm still not seeing the sun set in
+ * the west"; Steve chose to frame it). The true sun goes down behind a tower
+ * from both the desk and the window: every station sees the mountains' crest
+ * only from about 2 degrees south of west to 9 north (measured 2026-09-29),
+ * and on the 28th of September the true sun meets the crest 8 degrees south.
+ * So the sun's path keeps a fifth of its seasonal swing (`swing`) and is
+ * turned `turn` degrees north, and it meets the crest between about 2
+ * degrees south and 10 north every day of the year, down the office's
+ * street. Its hours are still daylight.js's: it touches the horizon at the
+ * sunset the clock gives. The same license as the jets drawn larger than
+ * life.
+ */
+export const SUNSET_FRAME = { swing: 0.2, turn: 8.5 };
+
+/** A vector in the room's frame turned `deg` degrees about the vertical,
+ *  west (-z) toward north (+x). */
+export function turnNorth([x, y, z], deg) {
+    const a = deg * DEG;
+    return [x * Math.cos(a) - z * Math.sin(a), y, z * Math.cos(a) + x * Math.sin(a)];
+}
 
 /** A lunar month, in days, and a new moon to count it from. */
 export const SYNODIC_DAYS = 29.530588853;
@@ -100,11 +122,13 @@ export function skyAt(date) {
     const halfDay = (sunset - sunrise) / 2;
     const dec = declination(date);
     const phi = LATITUDE * DEG;
+    // The sun's own path, framed (SUNSET_FRAME).
+    const sunDec = dec * SUNSET_FRAME.swing;
     // The hour angle at which the sun meets the horizon, so the sun's hours
     // can be stretched to meet daylight.js's sunrise and sunset exactly.
-    const setting = Math.acos(Math.min(1, Math.max(-1, -Math.tan(phi) * Math.tan(dec))));
+    const setting = Math.acos(Math.min(1, Math.max(-1, -Math.tan(phi) * Math.tan(sunDec))));
     const h = clockHours(date);
-    const sun = direction(((h - noon) / halfDay) * setting, dec);
+    const sun = turnNorth(direction(((h - noon) / halfDay) * setting, sunDec), SUNSET_FRAME.turn);
     const age = moonAge(date);
     const moon = direction(((h - noon) / 12) * Math.PI - 2 * Math.PI * age, dec * Math.cos(2 * Math.PI * age));
     const turn = ((((date.getTime() / SIDEREAL_MS) % 1) + 1) % 1) * 2 * Math.PI;
@@ -114,6 +138,26 @@ export function skyAt(date) {
         moonHeight: Math.asin(moon[1]),
         elongation: unitAngle(sun, moon)
     };
+}
+
+/** A direction's bearing in degrees north of west (the room's frame). */
+export function bearingOf([north, , east]) {
+    return Math.atan2(north, -east) / DEG;
+}
+
+/** The sun's disc as drawn, degrees across (world.js DISCS.sun). */
+const SUN_DISC = 0.9;
+
+/**
+ * How much of the sun's disc stands clear of the ranges and the horizon, 0
+ * to 1 (city.js ridgeAt): what is left of its direct light, its glitter on
+ * the water and its glare. Down behind the mountains the sky still glows,
+ * but the city is in their shadow.
+ */
+export function sunClear(sky, ridge = ridgeAt) {
+    const crest = Math.max(0, ridge(bearingOf(sky.sun)));
+    const over = sky.sunHeight / DEG - crest;
+    return Math.min(1, Math.max(0, over / SUN_DISC + 0.5));
 }
 
 /**

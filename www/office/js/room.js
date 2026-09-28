@@ -8,8 +8,7 @@
  * desk stands against the back wall just left of the corner.
  *
  * THE THINGS YOU CAN TOUCH carry `userData.pick`, a key main.js turns into an
- * action: the monitor opens the computer, the in-tray starts a new
- * application, the out-tray opens backups and exports, the wastebasket opens
+ * action: the monitor opens the computer, the wastebasket opens
  * itself, the lamp switches, an open folder on the desk reopens its card, the
  * sticky notes open today's list, the
  * filing cabinet opens itself and a folder in it opens on the desk, the
@@ -63,9 +62,6 @@ const COLORS = {
     pot: 0xe4e2de,
     caster: 0x151618
 };
-
-/** How far the in-tray stands over the out-tray it is stacked on. */
-export const TRAY_RISE = 0.11;
 
 /** How brightly the lamp's strip of light glows while the lamp is on. */
 export const LAMP_GLOW = 0.7;
@@ -1090,38 +1086,9 @@ function buildDesk(group, config, picks, contacts, m) {
     screen.position.set(mx, top + 0.36, mz + 0.019);
     computer.add(screen);
 
-    // The trays, stacked at the left end on four aluminum posts (QA,
-    // 2026-09-25): the out-tray on the desk, the in-tray (a new
-    // application) over it. The gap between them is wide enough that the
-    // desk's eye sees the out-tray's page over its front lip, so each
-    // tray is still a tap of its own.
-    // Brushed aluminum, lined in graphite.
+    // No letter trays (QA, 2026-09-29: Steve asked for them gone); a new
+    // application and the backups are on the toolbar. The folder's page.
     const paper = mat(COLORS.paper, { roughness: 0.95 });
-    const tx = x0 + 0.24;
-    const tz = z0 + 0.2;
-    const tray = (key, y, sheets) => {
-        const g = tag(new THREE.Group(), key);
-        g.add(box(0.34, 0.012, 0.26, m.lining, tx, y + 0.006, tz));
-        g.add(box(0.34, 0.06, 0.012, m.aluminum, tx, y + 0.03, tz - 0.124));
-        g.add(box(0.34, 0.035, 0.012, m.aluminum, tx, y + 0.018, tz + 0.124));
-        g.add(box(0.012, 0.06, 0.26, m.aluminum, tx - 0.164, y + 0.03, tz));
-        g.add(box(0.012, 0.06, 0.26, m.aluminum, tx + 0.164, y + 0.03, tz));
-        for (let i = 0; i < sheets; i++) g.add(box(0.3, 0.004, 0.22, paper, tx, y + 0.016 + i * 0.006, tz));
-        group.add(g);
-        picks[key] = g;
-        return g;
-    };
-    tray('outtray', top, 1);
-    contacts.push({ x: tx, z: tz, y: top, w: 0.42, d: 0.34, soft: 0.07, alpha: 0.32 });
-    const intray = tray('intray', top + TRAY_RISE, 2);
-    // The posts stand on the out-tray's side walls and belong to the tray
-    // they hold up.
-    const post = TRAY_RISE - 0.06;
-    for (const sx of [-1, 1]) {
-        for (const sz of [-1, 1]) {
-            intray.add(box(0.012, post, 0.012, m.aluminum, tx + sx * 0.164, top + 0.06 + post / 2, tz + sz * 0.112));
-        }
-    }
 
     // The lamp, at the right end, which the visitor can switch: a slim
     // aluminum LED lamp (QA, 2026-09-29, in place of the banker's lamp), a

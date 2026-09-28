@@ -742,7 +742,7 @@ describe('the glass city', () => {
             expect(first.city.towersShow).toBe(first.bay.texture);
             // The sun in them, bright, and in its own direction however the scene stood.
             expect(first.city.glow && first.bay.glow).toBe(true);
-            const direction = lit.sun.position.clone().normalize();
+            const direction = lit.sun.position.clone().sub(lit.sun.target.position).normalize();
             expect(first.city.sunDirection.dot(direction)).toBeCloseTo(1, 6);
             expect(first.bay.sunDirection.dot(direction)).toBeCloseTo(1, 6);
             expect(lit.glow.position.clone().normalize().dot(direction)).toBeCloseTo(1, 6);
@@ -855,7 +855,7 @@ describe('the sun, the moon and the stars', () => {
         const front = new THREE.Vector3(0, 0, 1).applyQuaternion(disc.quaternion);
         expect(front.dot(along(disc))).toBeCloseTo(-1, 6);
         expect(disc.visible && halo.visible).toBe(true);
-        expect(lit.sun.position.clone().normalize().toArray()).toEqual(sky.lightFrom(now).map((v) => expect.closeTo(v, 6)));
+        expect(lit.sun.position.clone().sub(lit.sun.target.position).normalize().toArray()).toEqual(sky.lightFrom(now).map((v) => expect.closeTo(v, 6)));
         // Past everything but the sky dome, and inside the camera's reach.
         expect(worldMod.SKY_DISTANCE * 1.2).toBeLessThan(140000);
         expect(worldMod.SKY_DISTANCE * 1.2).toBeLessThan(lit.camera.far);

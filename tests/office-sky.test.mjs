@@ -7,7 +7,7 @@
  */
 import {
     CLOUDS, cloudPuffs, wrappedPuffs, cloudCover, LATITUDE, POLE, declination, direction, moonAge, skyAt, lightFrom,
-    discBasis, starField, dayLapse
+    discBasis, starField, dayLapse, SUNSET_FRAME
 } from '../www/office/js/sky.js';
 import { lighting, lightAt, sunTimes } from '../www/office/js/daylight.js';
 
@@ -86,9 +86,13 @@ describe('the sun', () => {
         expect(skyAt(at(DATE, sunrise)).sun[2]).toBeGreaterThan(0.9);
         expect(skyAt(at(DATE, sunset)).sun[2]).toBeLessThan(-0.9);
         expect(noon.sun[0]).toBeLessThan(0);
-        expect(Math.abs(noon.sun[2])).toBeLessThan(1e-9);
-        // Near the equinox, noon's height is 90 degrees less the latitude.
-        expect(noon.sunHeight / DEG).toBeCloseTo(90 - LATITUDE + declination(DATE) / DEG, 6);
+        // Due south at noon, turned SUNSET_FRAME.turn degrees (toward the
+        // west, as the whole path is turned north at its western end).
+        const noonBearing = Math.atan2(-noon.sun[2], -noon.sun[0]) / DEG;
+        expect(noonBearing).toBeCloseTo(SUNSET_FRAME.turn, 6);
+        // Near the equinox, noon's height is 90 degrees less the latitude,
+        // with a fifth of the season's swing.
+        expect(noon.sunHeight / DEG).toBeCloseTo(90 - LATITUDE + (SUNSET_FRAME.swing * declination(DATE)) / DEG, 6);
         // An afternoon sun is in the southwest, over the bay: the window's side.
         const four = skyAt(at(DATE, 16)).sun;
         expect(four[0]).toBeLessThan(0);
@@ -100,9 +104,31 @@ describe('the sun', () => {
             const { sunrise, sunset } = sunTimes(date);
             return skyAt(at(date, (sunrise + sunset) / 2)).sunHeight / DEG;
         };
-        expect(noonHeight(new Date(2026, 5, 21))).toBeCloseTo(90 - LATITUDE + 23.44, 0);
-        expect(noonHeight(new Date(2026, 11, 21))).toBeCloseTo(90 - LATITUDE - 23.44, 0);
+        // A fifth of the true swing (SUNSET_FRAME): still higher in summer.
+        expect(noonHeight(new Date(2026, 5, 21))).toBeCloseTo(90 - LATITUDE + 23.44 * SUNSET_FRAME.swing, 0);
+        expect(noonHeight(new Date(2026, 11, 21))).toBeCloseTo(90 - LATITUDE - 23.44 * SUNSET_FRAME.swing, 0);
         expect(declination(new Date(2026, 5, 21)) / DEG).toBeCloseTo(23.44, 1);
+    });
+
+    test('the sunset is framed: every day of the year the sun meets the mountains down the office’s street (QA, 2026-09-29)', () => {
+        // Where it is as it comes down to 5 degrees (the crest's height),
+        // bearing north of west: inside the gap every station sees, about
+        // 2 degrees south to 11 north (measured 2026-09-29).
+        for (let month = 0; month < 12; month++) {
+            const date = new Date(2026, month, 15);
+            let last = null;
+            let bearing = null;
+            for (let m = 12 * 60; m < 22 * 60 && bearing === null; m++) {
+                const s = skyAt(new Date(2026, month, 15, 0, m)).sun;
+                const height = Math.asin(s[1]) / DEG;
+                if (last !== null && last >= 5 && height < 5) bearing = Math.atan2(s[0], -s[2]) / DEG;
+                last = height;
+            }
+            expect(`${date.toDateString()}: ${bearing !== null && bearing > -2.5 && bearing < 11}`).toBe(`${date.toDateString()}: true`);
+        }
+        // And it still meets the horizon at the clock's sunset.
+        const { sunset } = sunTimes(DATE);
+        expect(skyAt(at(DATE, sunset)).sunHeight / DEG).toBeCloseTo(0, 3);
     });
 
     test('a direction is a unit vector in the room’s frame: north +x, up +y, east +z', () => {

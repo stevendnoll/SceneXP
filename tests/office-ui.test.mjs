@@ -161,10 +161,8 @@ describe('quick add', () => {
         expect(said()).toBe('There is nothing to undo.');
     });
 
-    test('the in-tray and the toolbar both open the same form', () => {
-        t.actOn('intray');
-        expect(el('application-form').hidden).toBe(false);
-        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+    test('the toolbar opens the form (the in-tray is gone from the desk, QA 2026-09-29)', () => {
+        expect(t.actOn('intray')).toBe(false);
         el('bar-new').click();
         expect(el('application-form').hidden).toBe(false);
     });
@@ -433,7 +431,7 @@ describe('settings', () => {
 
 describe('the room and the keyboard', () => {
     test('each tappable thing opens its card, armed against the tap', () => {
-        for (const [pick, card] of [['computer', 'computer'], ['outtray', 'outtray'], ['wastebasket', 'wastebasket']]) {
+        for (const [pick, card] of [['computer', 'computer'], ['wastebasket', 'wastebasket']]) {
             expect(t.actOn(pick)).toBe(true);
             expect(el(card).hidden).toBe(false);
             fire(dom.documentStub, 'keydown', { key: 'Escape' });

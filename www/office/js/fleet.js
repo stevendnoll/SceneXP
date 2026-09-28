@@ -560,3 +560,139 @@ export function place(c, at) {
         c.trail.visible = c.trail.material.opacity > 0.01;
     }
 }
+
+/** The window washers' machines: aluminum and white, their hoists dark. */
+export const WASHER_COLORS = { frame: 0xd3d6da, panel: 0xeceeef, dark: 0x3f4349, cable: 0x2b2e33 };
+
+/**
+ * One gondola, built in its own frame (meters: x along the glass, y up from
+ * its deck, z out from the glass), as boxes: the deck, a white front panel
+ * under the top rail, the back rail, the end frames and the two hoists the
+ * cables run into.
+ */
+export function gondolaBoxes(width = 7) {
+    const { frame, panel, dark } = WASHER_COLORS;
+    const half = width / 2;
+    return [
+        [0, 0, 0, width, 0.2, 0.9, frame],
+        [0, 0.6, 0.45, width, 1.0, 0.05, panel],
+        [0, 1.12, 0.45, width, 0.08, 0.08, frame],
+        [0, 1.12, -0.45, width, 0.08, 0.08, frame],
+        [-half, 0.6, 0, 0.12, 1.25, 0.9, frame],
+        [half, 0.6, 0, 0.12, 1.25, 0.9, frame],
+        [-half + 0.4, 0.45, 0, 0.45, 0.6, 0.5, dark],
+        [half - 0.4, 0.45, 0, 0.45, 0.6, 0.5, dark]
+    ];
+}
+
+/**
+ * The machine on the roof, in the same frame with y from the roof: a
+ * carriage back from the parapet on its track, its mast, and the jib
+ * reaching out over the edge to a head beam as wide as the gondola, `stand`
+ * out from the glass and `lift` over the roof.
+ */
+export function rigBoxes(width = 7, stand = 1.4, lift = 4.6) {
+    const { frame, dark } = WASHER_COLORS;
+    const back = -4;
+    return [
+        [0, 1.1, back, 3.2, 2.2, 3.6, frame],
+        [0, 0.15, back, 3.8, 0.3, 4.2, dark],
+        [0, 3.2, back + 0.8, 0.6, 2.2, 0.6, frame],
+        [0, lift, (back + 0.8 + stand) / 2, 0.45, 0.45, stand - back - 0.8, frame],
+        [0, lift - 0.1, stand, width + 0.4, 0.35, 0.35, frame]
+    ];
+}
+
+/**
+ * The gondolas and their machines on the faces the crews work (washers.js
+ * washerFaces): each a rig on the roof and a gondola under it, and their
+ * cables as lines. Returns them and `hang(ats)` to put each where
+ * washers.js washerAt says.
+ */
+export function buildWashers(scene, faces, { width = 7, stand = 1.4, lift = 4.6, parked = 2.4 } = {}) {
+    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.2 });
+    const crews = faces.map((face, i) => {
+        const group = new THREE.Group();
+        group.name = `washer-${i}`;
+        group.position.set(face.x, face.roof, face.z);
+        group.rotation.y = face.yaw;
+        const rig = new THREE.Mesh(boxesGeometry(rigBoxes(width, stand, lift)), material);
+        rig.name = 'washer-rig';
+        const gondola = new THREE.Mesh(boxesGeometry(gondolaBoxes(width)), material);
+        gondola.name = 'washer-gondola';
+        group.add(rig, gondola);
+        scene.add(group);
+        return { face, group, rig, gondola };
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(faces.length * 4 * 3), 3));
+    const cables = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: WASHER_COLORS.cable }));
+    cables.name = 'washer-cables';
+    cables.frustumCulled = false;
+    cables.raycast = () => {};
+    scene.add(cables);
+    const cable = (i, end, top, bottom) => {
+        const p = geometry.attributes.position;
+        p.setXYZ(i * 4 + end * 2, top.x, top.y, top.z);
+        p.setXYZ(i * 4 + end * 2 + 1, bottom.x, bottom.y, bottom.z);
+    };
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    /** Put each gondola `along` its face and `down` from its parked place,
+     *  and its rig above it, with the cables between. */
+    const hang = (ats) => {
+        crews.forEach((crew, i) => {
+            const at = ats[i];
+            crew.rig.position.set(at.along, 0, 0);
+            crew.gondola.position.set(at.along, -parked - at.down, stand);
+            crew.group.updateMatrixWorld(true);
+            for (const end of [0, 1]) {
+                const x = at.along + (end ? 1 : -1) * (width / 2 - 0.4);
+                cable(i, end, a.set(x, lift - 0.25, stand).applyMatrix4(crew.group.matrixWorld),
+                    b.set(x, 0.75 - parked - at.down, stand).applyMatrix4(crew.group.matrixWorld));
+            }
+        });
+        geometry.attributes.position.needsUpdate = true;
+    };
+    return { crews, cables, hang };
+}
+
+/**
+ * The gulls (gulls.js): the whole flock one mesh, two-sided, its points
+ * written afresh each frame (a few hundred). `fly(poses, y0)` puts them
+ * where gulls.js gullPose says; `null` hides them.
+ */
+export function buildGulls(scene, count, shape, flockTriangles) {
+    const n = count * shape.length * 3;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+    const colors = new Float32Array(n * 3);
+    const c = new THREE.Color();
+    for (let g = 0; g < count; g++) {
+        shape.forEach(([, hex], t) => {
+            c.setHex(hex, THREE.SRGBColorSpace);
+            for (let v = 0; v < 3; v++) colors.set([c.r, c.g, c.b], ((g * shape.length + t) * 3 + v) * 3);
+        });
+    }
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+        vertexColors: true, roughness: 0.8, side: THREE.DoubleSide
+    }));
+    mesh.name = 'gulls';
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    mesh.raycast = () => {};
+    scene.add(mesh);
+    const fly = (poses, y0) => {
+        if (!poses) {
+            mesh.visible = false;
+            return;
+        }
+        mesh.visible = true;
+        flockTriangles(poses, y0, geometry.attributes.position.array, geometry.attributes.normal.array, shape);
+        geometry.attributes.position.needsUpdate = true;
+        geometry.attributes.normal.needsUpdate = true;
+    };
+    return { mesh, fly };
+}

@@ -23,6 +23,8 @@
 
 /* global THREE */
 
+import { sunClear } from './sky.min.js';
+
 const DEG = Math.PI / 180;
 
 /** The sun's beam: how strong at full sun, and over how many degrees of
@@ -41,14 +43,15 @@ const smooth = (t) => {
 
 /**
  * The sun's beam at a moment: `dir`, the direction toward the sun (sky.js
- * `sun`), its `intensity` (nothing below the horizon, coming up over the
- * first few degrees, and dimmed by an overcast sky), and its `color` (the
+ * `sun`), its `intensity` (nothing below the horizon or behind the
+ * mountains, sky.js sunClear, coming up over the first few degrees, and
+ * dimmed by an overcast sky), and its `color` (the
  * light's own, daylight.js). `look` is the weathered light (weather.js).
  */
 export function sunbeam(sky, look) {
     const up = smooth(sky.sunHeight / (SUNBEAM.riseDegrees * DEG));
     const clear = 1 - Math.min(1, Math.max(0, look.overcast || 0));
-    return { dir: sky.sun, intensity: SUNBEAM.strength * up * clear, color: look.sunColor };
+    return { dir: sky.sun, intensity: SUNBEAM.strength * up * clear * sunClear(sky), color: look.sunColor };
 }
 
 /** How strongly the glass mirrors the room: only as the city outside goes

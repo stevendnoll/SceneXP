@@ -45,7 +45,7 @@ afterAll(() => {
     delete globalThis.THREE;
 });
 
-const TAPPABLE = ['computer', 'intray', 'outtray', 'wastebasket', 'lamp', 'printer'];
+const TAPPABLE = ['computer', 'wastebasket', 'lamp', 'printer'];
 const ASPECTS = { 'wide 21:9': 21 / 9, 'laptop 16:10': 16 / 10, 'phone upright': 390 / 844, 'tall phone': 9 / 19.5 };
 
 function cameraAt(station, aspect) {
@@ -140,7 +140,7 @@ describe('what is in the room', () => {
 
     test('what stands on the desk rests on its top, and the wastebasket on the floor', () => {
         const top = CONFIG.room.desk.height;
-        for (const key of ['computer', 'outtray', 'lamp', 'folder']) {
+        for (const key of ['computer', 'lamp', 'folder']) {
             room.picks.folder.visible = true;
             expect(boxOf(room.picks[key]).min.y).toBeCloseTo(top, 2);
         }
@@ -148,18 +148,10 @@ describe('what is in the room', () => {
         expect(boxOf(room.picks.wastebasket).min.y).toBeCloseTo(0, 2);
     });
 
-    test('the in-tray is stacked on the out-tray, on posts standing on its walls (QA, 2026-09-25)', () => {
-        const inBox = boxOf(room.picks.intray);
-        const outBox = boxOf(room.picks.outtray);
-        // The same footprint, the one over the other.
-        expect(inBox.min.x).toBeCloseTo(outBox.min.x, 3);
-        expect(inBox.max.z).toBeCloseTo(outBox.max.z, 3);
-        expect(inBox.min.y).toBeCloseTo(outBox.max.y, 3);
-        // The in-tray's own floor is TRAY_RISE up, clear of the out-tray.
-        const floors = room.picks.intray.children.filter((m) => m.geometry.parameters.height === 0.012);
-        expect(floors).toHaveLength(1);
-        expect(boxOf(floors[0]).min.y).toBeCloseTo(CONFIG.room.desk.height + roomMod.TRAY_RISE, 4);
-        expect(boxOf(floors[0]).min.y).toBeGreaterThan(outBox.max.y + 0.04);
+    test('no letter trays on the desk (QA, 2026-09-29)', () => {
+        expect(room.picks.intray).toBeUndefined();
+        expect(room.picks.outtray).toBeUndefined();
+        expect(roomMod.TRAY_RISE).toBeUndefined();
     });
 
     test('the lamp is a slim aluminum LED lamp: a post, a head reaching over the desk, a warm strip of light under it (QA, 2026-09-29)', () => {
@@ -201,7 +193,7 @@ describe('what is in the room', () => {
 
     test('everything on the desk fits on the desk', () => {
         const d = CONFIG.room.desk;
-        for (const key of ['computer', 'intray', 'outtray', 'lamp']) {
+        for (const key of ['computer', 'lamp']) {
             const b = boxOf(room.picks[key]);
             expect(b.min.x).toBeGreaterThanOrEqual(d.x - d.width / 2 - 1e-6);
             expect(b.max.x).toBeLessThanOrEqual(d.x + d.width / 2 + 1e-6);
@@ -357,15 +349,7 @@ describe('the credenza, the printer and the trays, in white and aluminum (QA, 20
         expect(led).toHaveLength(1);
     });
 
-    test('the trays: brushed aluminum, lined in graphite, on aluminum posts', () => {
-        for (const key of ['intray', 'outtray']) {
-            const tray = room.picks[key];
-            const walls = metals(tray).filter((m) => m.geometry.parameters.height !== roomMod.TRAY_RISE - 0.06);
-            expect(walls.length).toBe(4);
-            const floor = tray.children.find((m) => m.geometry.parameters.height === 0.012);
-            expect(floor.material.color.getHex()).toBe(0x2b2d31);
-        }
-    });
+
 });
 
 describe('the ceiling and the walls (QA, 2026-09-29)', () => {

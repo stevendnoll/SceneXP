@@ -3518,7 +3518,7 @@ html [lang="en"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
           "Loading…"
-    canvas#game-canvas [aria-label="A corner office walled with windows onto the city, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it, a slim lamp, and two stacked letter trays, with a wastebasket beside it, a low white credenza of folders under the window, a fabric pinboard of index cards, a glass whiteboard of numbers, and a printer." role="img"]
+    canvas#game-canvas [aria-label="A corner office walled with windows onto the city, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it and a slim lamp, with a wastebasket beside it, a low white credenza of folders under the window, a fabric pinboard of index cards, a glass whiteboard of numbers, and a printer." role="img"]
     p#office-live.sr-only [aria-live="polite" role="status"]
     div#office-hud.ui-float.office-hud [aria-label="Your week" role="group"]
       span#hud-week.hud-chip

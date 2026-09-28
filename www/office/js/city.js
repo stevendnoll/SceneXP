@@ -543,6 +543,48 @@ export function islandHeight(x, z, fields = mountainFields()) {
     return natural + (AIRPORT.elevation - natural) * airportFlat(x, z);
 }
 
+/**
+ * The ranges' skyline as the office sees it: for each bearing (degrees north
+ * of west, `from` to `to` by `step`), how high the crest stands, in degrees
+ * over level from an eye `eye` meters over the office's floor, found by
+ * walking out from `near` to `far` meters every `stride`. The sun goes behind
+ * it about five degrees up, so its light leaves the city half an hour before
+ * the clock's sunset, as it does behind real mountains (sky.js sunClear).
+ */
+export const RIDGE = { from: -45, to: 45, step: 1, near: 2000, far: 50000, stride: 200, eye: 1.5 };
+
+let ridgeMade = null;
+export function ridgeLine() {
+    if (!ridgeMade) {
+        const fields = mountainFields();
+        const n = Math.round((RIDGE.to - RIDGE.from) / RIDGE.step) + 1;
+        ridgeMade = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+            const a = ((RIDGE.from + i * RIDGE.step) * Math.PI) / 180;
+            let best = -90;
+            for (let d = RIDGE.near; d <= RIDGE.far; d += RIDGE.stride) {
+                const x = Math.sin(a) * d;
+                const z = -Math.cos(a) * d;
+                const h = Math.max(mountainHeight(x, z, fields), islandHeight(x, z, fields));
+                best = Math.max(best, (Math.atan2(WATER_Y + h - RIDGE.eye, d) * 180) / Math.PI);
+            }
+            ridgeMade[i] = best;
+        }
+    }
+    return ridgeMade;
+}
+
+/** The crest's height at a bearing (degrees north of west), in degrees,
+ *  between the measured bearings a straight line; off either end of them
+ *  there is no range to hide anything, and it is -90. */
+export function ridgeAt(bearing) {
+    const line = ridgeLine();
+    const f = (bearing - RIDGE.from) / RIDGE.step;
+    if (!(f >= 0 && f <= line.length - 1)) return -90;
+    const i = Math.min(line.length - 2, Math.floor(f));
+    return line[i] + (line[i + 1] - line[i]) * (f - i);
+}
+
 // ---- The airport across the bay -------------------------------------------------
 
 /**

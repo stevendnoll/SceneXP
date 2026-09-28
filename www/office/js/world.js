@@ -33,13 +33,15 @@ import {
     CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, landGrids, landGround, snowLineAt, SNOW, SNOW_FRAY, LAND_COLORS, DISTANCE_BLUE,
     islandTowers, islandLamps, islandGround, beaconTowers, airportParts, airportPoint, airportY, airportGates, airportLights, reflectionPoints, PANEL, FACADE_TILE, towerStyle, rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
 } from './city.min.js';
-import { BAY, HAZE, rippleNormals } from './bay.min.js';
-import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
+import { BAY, HAZE, rippleNormals, meanSquareSlope } from './bay.min.js';
+import { CLOUDS, POLE, starField, lightFrom, discBasis, sunClear } from './sky.min.js';
 import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
     carLightPositions, carYaws, drift, jetsAt, jetFlashing, shipShift, LIFE, JET, LIVERIES
 } from './life.min.js';
-import { buildFleet, place, boxesGeometry, jetParts, joinGeometries } from './fleet.min.js';
+import { buildFleet, place, boxesGeometry, jetParts, joinGeometries, buildWashers, buildGulls } from './fleet.min.js';
+import { WASHERS, washerFaces, washerAt } from './washers.min.js';
+import { flock, gullPose, gullShape, flockTriangles } from './gulls.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
 
 /** Half the jet's length and a little over, as built (fleet.js jetParts),
@@ -592,15 +594,25 @@ export function paintSky(sky, top, horizon, glow = null) {
 /** How far off the sun, moon and stars hang: past everything but the dome. */
 export const SKY_DISTANCE = 100000;
 
-/** The sun's and moon's discs and the sun's halo, in degrees across. The
- *  discs are about twice life, because true scale is a couple of pixels. */
-export const DISCS = { sun: 0.9, moon: 1.1, halo: 18 };
+/** The sun's and moon's discs, the sun's halo and its glare, in degrees
+ *  across. The discs are about twice life, because true scale is a couple
+ *  of pixels. */
+export const DISCS = { sun: 0.9, moon: 1.1, halo: 18, glare: 64 };
+
+/**
+ * The glare of a low sun: the light scattered in the eye and the air round
+ * a sun in view, wide and soft, laid over everything in the view (the
+ * mountains included, as a real glare is) but only while the disc is clear
+ * of them. `strength` at the height of the golden hour (daylight.js warm).
+ */
+export const GLARE = { strength: 0.55 };
 
 const DEG = Math.PI / 180;
 
 /**
- * The sun's disc and halo, the moon, and the stars. The disc is opaque, so
- * the mountains hide it as it sets; the halo is added over the sky; the
+ * The sun's disc, halo and glare, the moon, and the stars. The disc is
+ * opaque, so the mountains hide it as it sets; the halo is added over the
+ * sky, and the glare over everything (GLARE); the
  * moon is a painted disc (main.js paints its phase) turned so its lit side
  * faces the sun; the stars turn about the pole on one Points object.
  */
@@ -619,6 +631,17 @@ function buildHeavens(scene, textures) {
         })
     );
     halo.name = 'sun-halo';
+    const glare = new THREE.Mesh(
+        new THREE.PlaneGeometry(across(DISCS.glare), across(DISCS.glare)),
+        new THREE.MeshBasicMaterial({
+            color: 0x000000, map: textures.glow || null, transparent: true, opacity: textures.glow ? 1 : 0,
+            blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false
+        })
+    );
+    glare.name = 'sun-glare';
+    glare.renderOrder = 11;
+    glare.visible = false;
+    glare.raycast = () => {};
     const moon = new THREE.Mesh(
         new THREE.PlaneGeometry(across(DISCS.moon), across(DISCS.moon)),
         new THREE.MeshBasicMaterial({ color: 0xffffff, map: textures.moon || null, transparent: true, depthWrite: false, fog: false })
@@ -634,8 +657,8 @@ function buildHeavens(scene, textures) {
     }));
     stars.name = 'stars';
     stars.visible = false;
-    scene.add(disc, halo, moon, stars);
-    return { disc, halo, moon, stars };
+    scene.add(disc, halo, glare, moon, stars);
+    return { disc, halo, glare, moon, stars };
 }
 
 /** The size of the water plane: past the haze's end in every direction. */
@@ -659,16 +682,82 @@ export function rippleTexture(anisotropy = 1) {
     return texture;
 }
 
+/**
+ * THE GLITTER PATH (QA, 2026-09-29: the sunsets on the water in High Water,
+ * and "not doing enough with the sun"). A low sun over water is not one
+ * reflection but thousands: every ripple tilted just so throws the sun to
+ * the eye, and together they lay a road of light from under the sun toward
+ * the viewer, widest near and narrowing to the horizon. How likely a patch
+ * is to be tilted just so is a bell of its slope (the sea-glitter
+ * measurements' own shape, Cox and Munk's): the slope the patch needs is
+ * the tilt of the halfway direction between the sun and the eye, and the
+ * bell's width the water's mean square slope.
+ *
+ * Near the window the swell itself is drawn (the ripple map), so there the
+ * path is worked from each pixel's own tilted normal and only the chop too
+ * small to draw (`chop`) widens it: the road breaks into moving streaks,
+ * swell by swell. Far off the map's mipmaps flatten the swell, and it goes
+ * back into the bell's width (`swellFrom` to `swellTo` meters), so the road
+ * stays as wide as the water is rough. Each bell is scaled by its own width,
+ * so a narrower one is brighter on less water, as it should be.
+ *
+ * `strength` is the sun's light at the path's heart before the Fresnel
+ * reflectance (Schlick's, from `fresnel` head on), well past white where
+ * the path is thickest, so its heart burns and its edges glow.
+ */
+export const GLITTER = { strength: 5, chop: 0.0035, fresnel: 0.02, swellFrom: 900, swellTo: 5000 };
+
+/** The glitter, as GLSL spliced in after the light and before the fog, in
+ *  the view space three's standard shader works in. */
+export function waterGlitter(glitter = GLITTER) {
+    const swell = meanSquareSlope(BAY.waves) * BAY.normalScale * BAY.normalScale;
+    const all = glitter.chop + swell;
+    return `{
+		vec3 glitterEye = normalize( vViewPosition );
+		vec3 glitterSunView = normalize( ( viewMatrix * vec4( glitterSun, 0.0 ) ).xyz );
+		vec3 glitterHalf = normalize( glitterSunView + glitterEye );
+		float glitterFlat = max( dot( glitterHalf, nonPerturbedNormal ), 0.001 );
+		float glitterTilted = max( dot( glitterHalf, normal ), 0.001 );
+		float glitterFar = ( glitterFlat * glitterFlat - 1.0 ) / ( glitterFlat * glitterFlat );
+		float glitterNear = ( glitterTilted * glitterTilted - 1.0 ) / ( glitterTilted * glitterTilted );
+		float glitterDrawn = 1.0 - smoothstep( ${glslFloat(glitter.swellFrom)}, ${glslFloat(glitter.swellTo)}, length( vViewPosition ) );
+		float glitterBell = mix( exp( glitterFar / ${glslFloat(all)} ), ${glslFloat(all / glitter.chop)} * exp( glitterNear / ${glslFloat(glitter.chop)} ), glitterDrawn );
+		float glitterFacing = 1.0 - max( dot( glitterHalf, glitterEye ), 0.0 );
+		float glitterFresnel = ${glslFloat(glitter.fresnel)} + ${glslFloat(1 - glitter.fresnel)} * glitterFacing * glitterFacing * glitterFacing * glitterFacing * glitterFacing;
+		outgoingLight += glitterLight * glitterFresnel * glitterBell;
+	}
+	#include <opaque_fragment>`;
+}
+
+/** The water's material: a standard one with the glitter path spliced in
+ *  (waterGlitter). `sun` and `light` are the uniforms setLight sets: the
+ *  direction toward the sun, and its light on the water (nothing when the
+ *  sun is down, behind the mountains or hidden by an overcast). */
+export function waterShader(material, sun, light) {
+    material.onBeforeCompile = (shader) => {
+        shader.uniforms.glitterSun = sun;
+        shader.uniforms.glitterLight = light;
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', '#include <common>\nuniform vec3 glitterSun;\nuniform vec3 glitterLight;')
+            .replace('#include <opaque_fragment>', waterGlitter());
+    };
+    material.customProgramCacheKey = () => 'office-water';
+    return material;
+}
+
 /** The bay: a dark body under a near-mirror of the world (its own
- *  reflection, captured from over the water), a slow swell bending it. */
+ *  reflection, captured from over the water), a slow swell bending it, and
+ *  the sun's glitter on it (GLITTER). */
 function buildWater(scene, anisotropy) {
+    const glitter = { sun: { value: new THREE.Vector3(0, 1, 0) }, light: { value: new THREE.Color(0) } };
     const water = new THREE.Mesh(
         new THREE.PlaneGeometry(WATER_SPAN, WATER_SPAN),
-        standard(BAY.color, {
+        waterShader(standard(BAY.color, {
             roughness: BAY.roughness, metalness: 0, normalMap: rippleTexture(anisotropy), envMapIntensity: BAY.reflect,
             normalScale: new THREE.Vector2(BAY.normalScale, BAY.normalScale)
-        })
+        }), glitter.sun, glitter.light)
     );
+    water.userData.glitter = glitter;
     water.rotation.x = -Math.PI / 2;
     water.position.y = WATER_Y;
     water.name = 'water';
@@ -677,9 +766,49 @@ function buildWater(scene, anisotropy) {
 }
 
 /**
+ * The clouds lit from behind: a cloud between the eye and the sun is lit
+ * through, brightest at its edges, as the light scattered forward through
+ * it comes on toward the eye. So the clouds round the sun glow in its color,
+ * a broad warmth (`broad`, over some 30 degrees) and a bright rim close in
+ * (`rim`, some 8), strongest in the golden hour and lingering after the sun
+ * has gone behind the mountains, since the deck is high enough to see it
+ * for a while yet (`linger` degrees below the horizon).
+ */
+export const CLOUD_GLOW = { day: 0.25, golden: 1.6, broad: [0.8, 4], rim: [1.8, 40], linger: 4 };
+
+/** The glow, as GLSL spliced in after the clouds' painted map. */
+export function cloudGlow(glow = CLOUD_GLOW) {
+    return `#include <map_fragment>
+	{
+		vec3 cloudLook = normalize( vCloudWorld - cameraPosition );
+		float cloudToward = max( dot( cloudLook, cloudSun ), 0.0 );
+		float cloudLit = ${glslFloat(glow.broad[0])} * pow( cloudToward, ${glslFloat(glow.broad[1])} ) + ${glslFloat(glow.rim[0])} * pow( cloudToward, ${glslFloat(glow.rim[1])} );
+		diffuseColor.rgb *= vec3( 1.0 ) + cloudLight * cloudLit;
+	}`;
+}
+
+/** The deck's material with the glow spliced in (cloudGlow). `sun` and
+ *  `light` are the uniforms setLight sets. */
+export function cloudShader(material, sun, light) {
+    material.onBeforeCompile = (shader) => {
+        shader.uniforms.cloudSun = sun;
+        shader.uniforms.cloudLight = light;
+        shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', '#include <common>\nvarying vec3 vCloudWorld;')
+            .replace('#include <project_vertex>', '#include <project_vertex>\n\tvCloudWorld = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', '#include <common>\nvarying vec3 vCloudWorld;\nuniform vec3 cloudSun;\nuniform vec3 cloudLight;')
+            .replace('#include <map_fragment>', cloudGlow());
+    };
+    material.customProgramCacheKey = () => 'office-clouds';
+    return material;
+}
+
+/**
  * The cloud deck (sky.js): one wide plane high over everything, facing
  * down, its painted tile repeated. Transparent, so it is drawn after the
- * sky, and hazed like everything else, so it melts into the horizon.
+ * sky, and hazed like everything else, so it melts into the horizon. Lit
+ * from behind round the sun (CLOUD_GLOW).
  */
 function buildClouds(scene, texture) {
     if (texture) {
@@ -687,13 +816,16 @@ function buildClouds(scene, texture) {
         texture.wrapT = THREE.RepeatWrapping;
         texture.repeat.set(CLOUDS.span / CLOUDS.tile, CLOUDS.span / CLOUDS.tile);
     }
+    const glow = { sun: { value: new THREE.Vector3(0, 1, 0) }, light: { value: new THREE.Color(0) } };
     const deck = new THREE.Mesh(
         new THREE.PlaneGeometry(CLOUDS.span, CLOUDS.span),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, map: texture || null, transparent: true, opacity: texture ? 1 : 0.4, depthWrite: false })
+        cloudShader(new THREE.MeshBasicMaterial({ color: 0xffffff, map: texture || null, transparent: true, opacity: texture ? 1 : 0.4, depthWrite: false }),
+            glow.sun, glow.light)
     );
     deck.rotation.x = Math.PI / 2;
     deck.position.y = WATER_Y + CLOUDS.altitude;
     deck.name = 'clouds';
+    deck.userData.glow = glow;
     scene.add(deck);
     return deck;
 }
@@ -852,13 +984,68 @@ function buildLand(scene) {
 }
 
 /**
+ * THE TOWERS CAST SHADOWS (QA, 2026-09-29: the golden hour's long shadows).
+ * The sun's light over downtown casts them from the towers, their roofs and
+ * the piers onto the streets and onto each other, in one shadow map framed
+ * on `box` (downtown and its waterfront, in the room's frame, meters) as
+ * the sun sees it. Drawn again only when the sun has moved `moveDegrees`
+ * (main.js draws the world with the map due only then), so a still hour
+ * costs a lookup a pixel and nothing more. `mapSize` on a desktop,
+ * `mapSizeMobile` on a phone; `bias` and `normalBias` keep a face from
+ * shadowing itself.
+ */
+export const TOWER_SHADOWS = {
+    mapSize: 2048,
+    mapSizeMobile: 1024,
+    box: { x: [-650, 2650], y: [WATER_Y, WATER_Y + 360], z: [-1250, 450] },
+    bias: -0.0005,
+    normalBias: 1.5,
+    moveDegrees: 0.4
+};
+
+/**
+ * Hang a directional light toward `dir` over the middle of `box`, and frame
+ * its shadow camera tightly on the box as the light sees it: every corner
+ * inside, and nothing more, so the map's pixels are spent on downtown.
+ */
+export function fitShadow(light, dir, box = TOWER_SHADOWS.box) {
+    const [x0, x1] = box.x;
+    const [y0, y1] = box.y;
+    const [z0, z1] = box.z;
+    const middle = new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    const reach = Math.hypot(x1 - x0, y1 - y0, z1 - z0);
+    light.target.position.copy(middle);
+    light.position.set(dir[0], dir[1], dir[2]).normalize().multiplyScalar(reach).add(middle);
+    const cam = light.shadow.camera;
+    cam.position.copy(light.position);
+    cam.lookAt(middle);
+    cam.updateMatrixWorld(true);
+    const lo = new THREE.Vector3(Infinity, Infinity, Infinity);
+    const hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+    const p = new THREE.Vector3();
+    for (const x of box.x) for (const y of box.y) for (const z of box.z) {
+        p.set(x, y, z).applyMatrix4(cam.matrixWorldInverse);
+        lo.min(p);
+        hi.max(p);
+    }
+    cam.left = lo.x;
+    cam.right = hi.x;
+    cam.bottom = lo.y;
+    cam.top = hi.y;
+    cam.near = Math.max(1, -hi.z);
+    cam.far = -lo.z;
+    cam.updateProjectionMatrix();
+    return cam;
+}
+
+/**
  * Build the world outside. Returns the scene and camera, and the handles
  * main.js drives: `setLight(look)` from daylight.js, `updateEnvironment`
  * for the reflections, and `follow(camera)` to put the outside camera where
  * the room camera is. `anisotropy` sharpens the water's ripples at a
  * glancing angle (main.js passes the renderer's, up to 8).
  */
-export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy = 1 } = {}) {
+export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy = 1, shadowSize = TOWER_SHADOWS.mapSize } = {}) {
     const scene = new THREE.Scene();
     // The haze: from the window out, all the horizon's color by HAZE.far.
     scene.fog = new THREE.Fog(0xe3ecef, HAZE.near, HAZE.far);
@@ -869,13 +1056,22 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const sun = new THREE.DirectionalLight(0xfff0d8, 1.8);
     // Afternoon light from over the bay, a little to the south. Its target
     // is in the scene, so the light keeps its direction when a reflection
-    // capture shifts the scene.
-    sun.position.set(-0.3, 0.65, -0.7).multiplyScalar(1000);
+    // capture shifts the scene. It casts the towers' shadows (TOWER_SHADOWS).
+    const afternoon = new THREE.Vector3(-0.3, 0.65, -0.7).normalize().toArray();
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(shadowSize, shadowSize);
+    sun.shadow.bias = TOWER_SHADOWS.bias;
+    sun.shadow.normalBias = TOWER_SHADOWS.normalBias;
+    fitShadow(sun, afternoon);
     scene.add(sun, sun.target);
+    // Whether the shadows need drawing again (takeShadows), and the
+    // direction they were last drawn for.
+    let shadowsDue = true;
+    let shadowFrom = afternoon;
     // Until the clock says otherwise (setLight with a sky), the sun stands
     // where that light comes from.
     let moment = null;
-    const sunDirection = () => (moment ? moment.sun : sun.position.clone().normalize().toArray());
+    const sunDirection = () => (moment ? moment.sun : shadowFrom);
     // The sun as the reflections see it: a bright ball the glass and the
     // water mirror, shown only while a capture is taken (the view has its
     // own disc and halo, which are too faint to light a reflection).
@@ -898,6 +1094,11 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const lamps = buildLamps(scene);
     const airport = buildAirport(scene);
     const docks = buildPiers(scene);
+    for (const mesh of [...towers.meshes, towers.roofs, docks]) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+    }
+    scene.getObjectByName('land-downtown').receiveShadow = true;
     const sky = buildSky(scene);
     const clouds = buildClouds(scene, textures.clouds);
     const heavens = buildHeavens(scene, textures);
@@ -923,8 +1124,17 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const seeing = new THREE.Matrix4();
     const reach = new THREE.Sphere();
     const weather = buildWeather(scene);
+    // The window washers on two towers across the street (washers.js), and
+    // the gulls over the waterfront (gulls.js).
+    const washers = buildWashers(scene, washerFaces(plan.filter((t) => !t.island)), {
+        width: WASHERS.width, stand: WASHERS.stand, parked: WASHERS.parked
+    });
+    const gullShapes = gullShape();
+    const gulls = buildGulls(scene, flock().length, gullShapes, flockTriangles);
     // How wet it is now (setLight), for what moves (setLife).
     let raining = 0;
+    // How dark it is (setLight, daylight.js cityLights): the gulls go home.
+    let dark = 0;
     // Whether the airport's lights are on (setLight), for the flashers.
     let airportNight = false;
     paintSky(sky, 0x7fb2dd, 0xe3ecef);
@@ -951,9 +1161,12 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     /** The world as seen from a point, prefiltered for reflection. PMREM
      *  captures from the origin, so the scene steps back by the point for
      *  the moment it takes, and returns. */
-    const captureFrom = ([x, y, z]) => {
+    const captureFrom = ([x, y, z], renderer) => {
         scene.position.set(-x, -y, -z);
         scene.updateMatrixWorld(true);
+        // The towers' shadows drawn again for the scene where it now
+        // stands, or they would fall where it stood.
+        if (renderer.shadowMap) renderer.shadowMap.needsUpdate = true;
         const target = pmrem.fromScene(scene, 0, 5, 200000);
         scene.position.set(0, 0, 0);
         scene.updateMatrixWorld(true);
@@ -983,6 +1196,8 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         docks,
         mountains,
         plan,
+        washers,
+        gulls,
         /**
          * Color the outside for a light level (daylight.js `lighting`) and,
          * given the sky at that moment (sky.js `skyAt`), put the sun, the
@@ -993,7 +1208,12 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             if (at) {
                 moment = at;
                 const from = lightFrom(at);
-                sun.position.set(from[0], from[1], from[2]).multiplyScalar(1000);
+                const turned = Math.acos(Math.min(1, from[0] * shadowFrom[0] + from[1] * shadowFrom[1] + from[2] * shadowFrom[2]));
+                if (turned > TOWER_SHADOWS.moveDegrees * DEG) {
+                    fitShadow(sun, from);
+                    shadowFrom = from;
+                    shadowsDue = true;
+                }
                 hang(heavens.disc, at.sun);
                 hang(heavens.halo, at.sun);
                 heavens.disc.visible = at.sunHeight > lower;
@@ -1012,13 +1232,31 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             paintSky(sky, look.skyTop, look.skyBottom, { dir: sunDirection(), color: look.sunColor, strength: look.halo * 0.6 * lingering });
             heavens.disc.material.color.setHex(look.sunColor, THREE.SRGBColorSpace).multiplyScalar(1.4);
             heavens.halo.material.color.setHex(look.sunColor, THREE.SRGBColorSpace).multiplyScalar(look.halo);
+            // What is left of the sun once the mountains and the weather
+            // have had theirs (sky.js sunClear): its direct light, its
+            // glitter on the bay and its glare.
+            const overcast = look.overcast || 0;
+            raining = look.rain || 0;
+            const clear = (moment ? sunClear(moment) : 1) * (1 - Math.min(1, overcast));
+            const warm = look.warm || 0;
+            const [sx, sy, sz] = sunDirection();
+            heavens.glare.material.color.setHex(look.sunColor, THREE.SRGBColorSpace).multiplyScalar(GLARE.strength * warm * clear);
+            heavens.glare.visible = heavens.disc.visible !== false && GLARE.strength * warm * clear > 0.01;
+            if (heavens.glare.visible) hang(heavens.glare, [sx, sy, sz]);
+            water.userData.glitter.sun.value.set(sx, sy, sz);
+            water.userData.glitter.light.value.setHex(look.sunColor, THREE.SRGBColorSpace)
+                .multiplyScalar(GLITTER.strength * clear * (1 - raining));
+            // The clouds catch the sun for a while after the city has lost it.
+            const deckLit = moment ? Math.min(1, Math.max(0, (moment.sunHeight + CLOUD_GLOW.linger * DEG) / (CLOUD_GLOW.linger * DEG))) : 1;
+            clouds.userData.glow.sun.value.set(sx, sy, sz);
+            clouds.userData.glow.light.value.setHex(look.sunColor, THREE.SRGBColorSpace)
+                .multiplyScalar((CLOUD_GLOW.day + CLOUD_GLOW.golden * warm) * deckLit * (1 - overcast));
             heavens.moon.material.opacity = look.moonShine;
             heavens.stars.material.opacity = look.stars;
             heavens.stars.visible = look.stars > 0.01;
             fleet.light(look.cityLights);
+            dark = look.cityLights;
             // The weather (weather.js `weathered` carries it on the look).
-            const overcast = look.overcast || 0;
-            raining = look.rain || 0;
             weather.deck.visible = overcast > 0.02;
             weather.deck.material.opacity = 0.93 * overcast;
             weather.deck.material.color.setHex(look.skyBottom, THREE.SRGBColorSpace).multiplyScalar(0.92);
@@ -1035,7 +1273,11 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             scene.fog.color.setHex(look.skyBottom, THREE.SRGBColorSpace);
             clouds.material.color.setHex(look.clouds, THREE.SRGBColorSpace);
             hemi.intensity = look.hemi * 1.1;
-            sun.intensity = look.sun * 1.2;
+            // Behind the mountains the city is in their shadow, and only
+            // the sky lights it (a little is kept for the sky's own warmth
+            // from that side); the moon's light is the moon's.
+            const sunLit = moment && moment.sunHeight > -6 * DEG ? sunClear(moment) : 1;
+            sun.intensity = look.sun * 1.2 * (0.2 + 0.8 * sunLit);
             sun.color.setHex(look.sunColor, THREE.SRGBColorSpace);
             // By night the offices and the streets light up, and the beacons
             // come on.
@@ -1076,20 +1318,39 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             // a cube face, blurred for the water, spread into a red blot.
             const beaconsShown = beacons.visible;
             beacons.visible = false;
-            const bay = captureFrom(points.bay);
+            // No glitter in the reflections: the water does not see itself.
+            const glitter = water.userData.glitter.light.value.clone();
+            water.userData.glitter.light.value.setRGB(0, 0, 0);
+            // The room's own shadows are left as they were due, and the
+            // towers' are due again, where the scene stands once more.
+            const roomDue = renderer.shadowMap ? renderer.shadowMap.needsUpdate : false;
+            const bay = captureFrom(points.bay, renderer);
             water.material.envMap = bay.texture;
             scene.environment = bay.texture;
             for (const mesh of towers.meshes) mesh.material.envMap = bay.texture;
-            const city = captureFrom(points.city);
+            const city = captureFrom(points.city, renderer);
             for (const mesh of towers.meshes) mesh.material.envMap = city.texture;
             glow.visible = false;
             beacons.visible = beaconsShown;
+            water.userData.glitter.light.value.copy(glitter);
+            if (renderer.shadowMap) renderer.shadowMap.needsUpdate = roomDue;
+            shadowsDue = true;
             if (reflections) {
                 reflections.city.dispose();
                 reflections.bay.dispose();
             }
             reflections = { city, bay };
             return reflections;
+        },
+        /**
+         * Whether the towers' shadows are due to be drawn again, as the sun
+         * has moved (or a capture drew them elsewhere): true once, then
+         * false until they are due again. main.js asks as it draws.
+         */
+        takeShadows() {
+            const due = shadowsDue;
+            shadowsDue = false;
+            return due;
         },
         /**
          * Put everything that moves where it is: the ferries, ships,
@@ -1129,6 +1390,11 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             if (airport.rabbit.visible) {
                 airport.rabbit.geometry.setDrawRange(rabbitAt(real, airport.rabbit.geometry.attributes.position.count), 1);
             }
+            // The window washers keep the sky's hours; the gulls keep real
+            // time, by day, out of the rain, and never held still in the air.
+            washers.hang(washers.crews.map(({ face }, i) => washerAt(face, date, i, raining)));
+            const gullsOut = !still && dark < 0.6 && raining < 0.25;
+            gulls.fly(gullsOut ? flock().map((g) => gullPose(g, real)) : null, WATER_Y);
             const moved = drift(date, seconds, CLOUDS.tile);
             if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);
             water.material.normalMap.offset.set(moved.ripple[0], moved.ripple[1]);
