@@ -11,7 +11,8 @@ import {
     LIFE, minutesOn, minutesOfDay, gently, yawFor, ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt,
     shipShift, SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift,
     TRAFFIC, VEHICLES, SUV, PARKED_Y, pitchOf, cycleOf, slotTimes, distanceAlong, onStreet,
-    JET, jetCrossing, jetFlight, jetOnTrack, jetsAt, jetFlashing, jetTimes, glideHeight, approachSpeed, approachLeft
+    JET, jetCrossing, jetFlight, jetOnTrack, jetsAt, jetFlashing, jetTimes, glideHeight, approachSpeed, approachLeft,
+    LIVERIES, liveryOf
 } from '../www/office/js/life.js';
 import { CITY, WATER_Y, piers, isWater, isLand, groundY, shoreZ, AIRPORT, airportFrame, airportLocal, airportGates } from '../www/office/js/city.js';
 
@@ -646,10 +647,44 @@ describe('the jet', () => {
     test('one asked for by hand comes in from when it was asked, on its own jet, whatever the timetable', () => {
         const called = 1000;
         expect(jetsAt(called - 1, called)[JET.fleet]).toBeNull();
-        expect(jetsAt(called + 20, called)[JET.fleet]).toEqual(jetOnTrack(20));
+        expect(jetsAt(called + 20, called)[JET.fleet]).toEqual({ ...jetOnTrack(20), livery: liveryOf(called) });
         expect(jetsAt(called + times.total + 1, called)[JET.fleet]).toBeNull();
         // And the timetable carries on beside it.
         expect(jetsAt(called + 20, called).slice(0, JET.fleet)).toEqual(jetsAt(called + 20).slice(0, JET.fleet));
+    });
+
+    test('the jets fly for different airlines, invented ones, and no two flights in a row alike (QA, 2026-09-29)', () => {
+        expect(LIVERIES.length).toBeGreaterThanOrEqual(6);
+        // Each its own: the tail and the fuselage, which read from afar,
+        // never the same pair twice.
+        const looks = new Set(LIVERIES.map((l) => `${l.tail}/${l.body}`));
+        expect(looks.size).toBe(LIVERIES.length);
+        expect(new Set(LIVERIES.map((l) => l.name)).size).toBe(LIVERIES.length);
+        for (const l of LIVERIES) {
+            for (const key of ['body', 'belly', 'stripe', 'tail', 'engine']) {
+                expect(Number.isInteger(l[key])).toBe(true);
+                expect(l[key]).toBeGreaterThanOrEqual(0);
+                expect(l[key]).toBeLessThanOrEqual(0xffffff);
+            }
+            // No all-yellow fuselage (a real carrier's mark).
+            const [r, g, b] = [(l.body >> 16) & 255, (l.body >> 8) & 255, l.body & 255];
+            expect(r > 180 && g > 150 && b < 90).toBe(false);
+        }
+        // Flight after flight: all of them before any comes again, none twice
+        // in a row, the same every visit.
+        const seen = Array.from({ length: 40 }, (_, k) => liveryOf(k - 20));
+        for (let i = 1; i < seen.length; i++) expect(seen[i]).not.toBe(seen[i - 1]);
+        expect(new Set(seen.slice(0, LIVERIES.length)).size).toBe(LIVERIES.length);
+        expect(liveryOf(3)).toBe(liveryOf(3 + LIVERIES.length));
+        // Each jet out carries its flight's livery.
+        const s = 1000;
+        const last = Math.floor((s - JET.first) / JET.every);
+        const jets = jetsAt(s);
+        for (let k = last - JET.fleet; k <= last; k++) {
+            const at = jets[((k % JET.fleet) + JET.fleet) % JET.fleet];
+            if (at && jetOnTrack(s - jetFlight(k).start)) expect(at.livery).toBe(liveryOf(k));
+        }
+        expect(Number.isInteger(jetsAt(s + 20, s)[JET.fleet].livery)).toBe(true);
     });
 
     test('its strobes flash briefly, over and over', () => {

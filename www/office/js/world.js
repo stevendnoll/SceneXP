@@ -37,7 +37,7 @@ import { BAY, HAZE, rippleNormals } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
 import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
-    carLightPositions, carYaws, drift, jetsAt, jetFlashing, shipShift, LIFE, JET
+    carLightPositions, carYaws, drift, jetsAt, jetFlashing, shipShift, LIFE, JET, LIVERIES
 } from './life.min.js';
 import { buildFleet, place, boxesGeometry, jetParts, joinGeometries } from './fleet.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
@@ -335,9 +335,9 @@ function buildAirport(scene) {
     const ground = new THREE.Mesh(airportGeometry(airportParts()), standard(0xffffff, { vertexColors: true, roughness: 0.85 }));
     ground.name = 'airport';
     scene.add(ground);
-    const { body } = jetParts();
-    const parked = airportGates().map((g) => {
-        const jet = body.clone();
+    // The jets at the gates, of several airlines (life.js LIVERIES).
+    const parked = airportGates().map((g, i) => {
+        const jet = jetParts(LIVERIES[(i * 3 + 1) % LIVERIES.length]).body;
         jet.scale(JET.scale, JET.scale, JET.scale);
         jet.rotateY(g.yaw);
         jet.translate(g.x, airportY(JET.wheels * JET.scale), g.z);

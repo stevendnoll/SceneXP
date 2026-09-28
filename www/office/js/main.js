@@ -81,7 +81,7 @@ import {
 } from './panels.min.js';
 import { installCardFocusTrap, installCardScrollReset, getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
-import { WALNUT, walnutMaps, leatherMaps } from './finishes.min.js';
+import { leatherMaps } from './finishes.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
 // ---- State ------------------------------------------------------------------
@@ -433,11 +433,10 @@ function finishTexture(data, width, height, color) {
 }
 
 /**
- * The desk's walnut and its leather pad (finishes.js), painted at load: a
- * fifth of a second's work on a laptop, so only where there is WebGL2 to
- * show them (every browser the office runs in; never a test's stub, which
- * builds the page dozens of times). Null elsewhere, and the desk keeps its
- * plain colors.
+ * The desk pad's leather (finishes.js), painted at load: only where there
+ * is WebGL2 to show it (every browser the office runs in; never a test's
+ * stub, which builds the page dozens of times). Null elsewhere, and the pad
+ * keeps its plain color.
  */
 function paintFinishes() {
     if (typeof WebGL2RenderingContext === 'undefined') return null;
@@ -446,7 +445,7 @@ function paintFinishes() {
         normalMap: finishTexture(normal, width, height, false),
         roughnessMap: finishTexture(rough, width, height, false)
     });
-    return { walnut: { ...asTextures(walnutMaps()), size: WALNUT.size }, leather: asTextures(leatherMaps()) };
+    return { leather: asTextures(leatherMaps()) };
 }
 
 /**
@@ -532,7 +531,6 @@ function buildScene() {
     screenTexture = screen.texture;
     const finish = paintFinishes();
     room = buildRoom(CONFIG, {
-        walnut: finish && finish.walnut,
         leather: finish && finish.leather,
         screen: screenTexture,
         notes: painted.notes.texture,

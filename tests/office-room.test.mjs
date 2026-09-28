@@ -163,29 +163,36 @@ describe('what is in the room', () => {
         expect(boxOf(floors[0]).min.y).toBeGreaterThan(outBox.max.y + 0.04);
     });
 
-    test('the lamp is a banker’s lamp: a green shade lying along the desk over a brass stem, lit inside', () => {
+    test('the lamp is a slim aluminum LED lamp: a post, a head reaching over the desk, a warm strip of light under it (QA, 2026-09-29)', () => {
         const lamp = room.picks.lamp;
-        const shade = lamp.children.find((c) => c.isGroup);
-        const b = boxOf(shade);
-        // Lying on its side: longer across the desk than it is tall or deep
-        // (a real one is about 24 cm long and 15 cm through).
-        expect(b.max.x - b.min.x).toBeGreaterThan(1.4 * (b.max.y - b.min.y));
-        expect(b.max.x - b.min.x).toBeGreaterThan(1.4 * (b.max.z - b.min.z));
-        const glass = shade.children.find((c) => c.geometry.type === 'CylinderGeometry' && c.material.side === THREE.FrontSide);
-        const green = glass.material.color;
-        expect(green.g).toBeGreaterThan(green.r * 2);
-        expect(green.g).toBeGreaterThan(green.b);
-        // The bulb and its light are under the shade's top, over the base.
-        expect(room.lamp.light.position.y).toBeLessThan(b.max.y);
-        expect(room.lamp.light.position.y).toBeGreaterThan(b.min.y - 0.05);
-        const base = boxOf(lamp.children[0]);
-        expect(room.lamp.light.position.x).toBeGreaterThan(base.min.x);
-        expect(room.lamp.light.position.x).toBeLessThan(base.max.x);
-        // Switched off, the white glass inside stops glowing, and back on.
+        const { LAMP } = roomMod;
+        const top = CONFIG.room.desk.height;
+        // Slim: its post a pencil's width, its whole height a hand over the
+        // monitor's foot and no more.
+        const post = lamp.children.find((c) => c.geometry && c.geometry.type === 'CylinderGeometry' && c.geometry.parameters.height === LAMP.post);
+        expect(post.geometry.parameters.radiusTop).toBeLessThan(0.01);
+        const b = boxOf(lamp);
+        expect(b.max.y - top).toBeLessThan(0.4);
+        // Aluminum, no brass nor green glass left.
+        lamp.traverse((o) => {
+            if (!o.isMesh || !o.material.visible) return;
+            const c = o.material.color;
+            expect(c.g > c.r * 1.5).toBe(false);
+        });
+        // The head reaches forward (toward the visitor, +z) over the desk,
+        // the light strip under it facing down, the light itself under it.
+        const glow = room.lamp.glow;
+        const strip = boxOf(glow);
+        expect(strip.max.z - strip.min.z).toBeGreaterThan(0.2);
+        expect(boxOf(post).max.y).toBeGreaterThan(strip.max.y - 0.03);
+        expect(room.lamp.light.position.y).toBeLessThan(strip.min.y);
+        expect(room.lamp.light.position.z).toBeGreaterThan(strip.min.z);
+        expect(room.lamp.light.position.z).toBeLessThan(strip.max.z);
+        // Switched off, the strip stops glowing, and back on.
         setLamp(room.lamp, false);
-        expect(room.lamp.glow.material.emissiveIntensity).toBe(0);
+        expect(glow.material.emissiveIntensity).toBe(0);
         setLamp(room.lamp, true);
-        expect(room.lamp.glow.material.emissiveIntensity).toBe(roomMod.LAMP_GLOW);
+        expect(glow.material.emissiveIntensity).toBe(roomMod.LAMP_GLOW);
     });
 
     test('the Rolodex is gone from the desk (QA, 2026-09-25)', () => {
@@ -231,15 +238,11 @@ describe('what is in the room', () => {
     });
 });
 
-describe('the desk: walnut and brass (QA, 2026-09-29)', () => {
+describe('the desk: white and aluminum (QA, 2026-09-29)', () => {
     let furnished;
-    const SIZE = [2.6, 1.0];
     beforeAll(() => {
         const tex = () => new THREE.Texture();
-        furnished = buildRoom(CONFIG, {
-            walnut: { map: tex(), normalMap: tex(), roughnessMap: tex(), size: SIZE },
-            leather: { map: tex(), normalMap: tex(), roughnessMap: tex() }
-        });
+        furnished = buildRoom(CONFIG, { leather: { map: tex(), normalMap: tex(), roughnessMap: tex() } });
         furnished.group.updateMatrixWorld(true);
     });
     const deskOf = (r) => r.group.getObjectByName('desk');
@@ -247,75 +250,43 @@ describe('the desk: walnut and brass (QA, 2026-09-29)', () => {
     const x0 = d.x - d.width / 2;
     const x1 = d.x + d.width / 2;
     const top = d.height;
-    // The top's underside (roomMod is imported in the file's beforeAll).
-    const underside = () => top - roomMod.DESK.top;
-    /** The meters along the grain at a mesh's vertices facing `face`, near a point. */
-    const along = (mesh, face, near) => {
-        const pos = mesh.geometry.attributes.position;
-        const nor = mesh.geometry.attributes.normal;
-        const uv = mesh.geometry.attributes.uv;
+    const aluminumIn = (o) => {
         const out = [];
-        for (let i = 0; i < pos.count; i++) {
-            const n = [nor.getX(i), nor.getY(i), nor.getZ(i)].map(Math.abs);
-            const axis = n[1] >= n[0] && n[1] >= n[2] ? 'y' : n[0] >= n[2] ? 'x' : 'z';
-            if (axis !== face) continue;
-            const p = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)).add(mesh.position);
-            if (near(p)) out.push(uv.getX(i) * SIZE[0]);
-        }
+        o.traverse((m) => { if (m.isMesh && m.material.metalness === 1 && m.material.color.getHex() === 0xc8cbcf) out.push(m); });
         return out;
     };
 
-    test('a thick top running over a waterfall end, the grain unbroken over the corner', () => {
-        const walnut = deskOf(furnished).children.filter((m) => m.material && /^walnut/.test(m.material.name) && m.material.map);
-        const slab = walnut.find((m) => boxOf(m).max.y > top - 1e-3 && boxOf(m).max.x > x1 - 1e-3);
-        const fall = walnut.find((m) => boxOf(m).min.y < 1e-3 && boxOf(m).min.x < x0 + 1e-3);
-        expect(boxOf(slab).max.y - boxOf(slab).min.y).toBeCloseTo(roomMod.DESK.top, 4);
-        const under = underside();
-        expect(boxOf(fall).max.y).toBeCloseTo(under, 4);
-        // Up the waterfall's outer face the grain runs a meter a meter, and
-        // it carries on up the top's end and across the top without a jump.
-        const up = along(fall, 'x', (p) => p.x < x0 + 0.01 && Math.abs(p.y - under) < 0.02);
-        const end = along(slab, 'x', (p) => p.x < x0 + 0.01 && Math.abs(p.y - under) < 0.02);
-        const across = along(slab, 'y', (p) => p.y > top - 0.001 && p.x < x0 + 0.02);
-        expect(up.length).toBeGreaterThan(0);
-        expect(end.length).toBeGreaterThan(0);
-        expect(across.length).toBeGreaterThan(0);
-        for (const u of [...up, ...end]) expect(u).toBeCloseTo(under, 1);
-        for (const u of across) expect(Math.abs(u - top)).toBeLessThan(0.03);
+    test('a slim white slab on two brushed aluminum sled frames, a floating drawer, no hardware', () => {
+        const { DESK } = roomMod;
+        const desk = deskOf(room);
+        const slab = desk.children[0];
+        expect(slab.material.name).toBe('white-top');
+        expect(boxOf(slab).max.y - boxOf(slab).min.y).toBeCloseTo(DESK.top, 4);
+        expect(boxOf(slab).max.x - boxOf(slab).min.x).toBeCloseTo(d.width, 4);
+        // Two frames of four bars each, and the beam between them.
+        const aluminum = aluminumIn(desk);
+        expect(aluminum).toHaveLength(9);
+        expect(aluminum[0].material.anisotropy).toBeGreaterThan(0);
+        for (const bar of aluminum) {
+            const b = boxOf(bar);
+            expect(b.min.y).toBeGreaterThanOrEqual(-1e-6);
+            expect(b.max.y).toBeLessThanOrEqual(top - DESK.top + 1e-6);
+        }
+        // The frames stand in from the ends, on the floor.
+        const feet = aluminum.filter((m) => boxOf(m).min.y < 1e-6);
+        expect(feet.length).toBeGreaterThanOrEqual(2);
+        for (const f of feet) {
+            expect(boxOf(f).min.x).toBeGreaterThan(x0 + 0.05);
+            expect(boxOf(f).max.x).toBeLessThan(x1 - 0.05);
+        }
+        // The drawer floats under the top: white, a gap over it, nothing on it.
+        const drawer = desk.children.find((m) => m.material && m.material.name === 'white');
+        expect(boxOf(drawer).max.y).toBeCloseTo(top - DESK.top - DESK.drawer.gap, 4);
+        // Nothing on the desk of wood, brass or walnut.
+        desk.traverse((m) => { if (m.isMesh) expect(/walnut/.test(m.material.name)).toBe(false); });
     });
 
-    test('a pedestal of three drawers cut from one board, brushed brass pulls, on a dark plinth set back', () => {
-        const desk = deskOf(furnished);
-        // The fronts stand just behind the top's front edge (the top and the
-        // waterfall run right to it).
-        const front = d.z + d.depth / 2;
-        const fronts = desk.children.filter((m) => m.material && /^walnut/.test(m.material.name)
-            && boxOf(m).max.z > front - 0.025 && boxOf(m).max.z < front - 0.01);
-        expect(fronts).toHaveLength(roomMod.DESK.drawers.length);
-        // Grain-matched: the same meters along the grain at the same x on
-        // every front, and across it, their heights: one board.
-        const u = (m) => {
-            const uv = m.geometry.attributes.uv;
-            const pos = m.geometry.attributes.position;
-            let best = null;
-            for (let i = 0; i < pos.count; i++) if (best === null || pos.getX(i) < pos.getX(best)) best = i;
-            return uv.getX(best);
-        };
-        const us = fronts.map(u);
-        for (const v of us) expect(v).toBeCloseTo(us[0], 6);
-        const brass = [];
-        desk.traverse((o) => { if (o.material && o.material.metalness === 1) brass.push(o); });
-        // A bar and two posts a drawer, and the waterfall's foot.
-        expect(brass.length).toBe(3 * roomMod.DESK.drawers.length + 1);
-        expect(brass[0].material.anisotropy).toBeGreaterThan(0);
-        const plinth = desk.children.find((m) => m.material && m.material.color.getHex() === 0x0e0b09);
-        const pedestal = fronts.map(boxOf).reduce((b, f) => b.union(f), new THREE.Box3());
-        expect(boxOf(plinth).max.y).toBeCloseTo(roomMod.DESK.plinth, 4);
-        expect(boxOf(plinth).min.x).toBeGreaterThan(pedestal.min.x + 0.02);
-        expect(boxOf(plinth).max.z).toBeLessThan(pedestal.max.z - 0.03);
-    });
-
-    test('a stitched leather pad under the keyboard, and the folder lies on it', () => {
+    test('a stitched graphite leather pad under the keyboard, and the folder lies on it', () => {
         const pad = deskOf(furnished).getObjectByName('desk-pad');
         const b = boxOf(pad);
         expect(b.min.y).toBeCloseTo(top, 4);
@@ -323,40 +294,77 @@ describe('the desk: walnut and brass (QA, 2026-09-29)', () => {
         expect(b.min.x).toBeGreaterThan(x0);
         expect(b.max.x).toBeLessThan(x1);
         expect(pad.material.sheen).toBeGreaterThan(0);
-        // Its map spans it exactly once.
+        expect(pad.material.map).toBeTruthy();
         const uv = pad.geometry.attributes.uv;
         let lo = Infinity;
         let hi = -Infinity;
         for (let i = 0; i < uv.count; i++) { lo = Math.min(lo, uv.getX(i)); hi = Math.max(hi, uv.getX(i)); }
         expect(lo).toBeCloseTo(0, 3);
         expect(hi).toBeCloseTo(1, 3);
-        // The keyboard stands on it, and so does the open folder.
-        const keyboard = furnished.picks.computer.children.find((m) => m.material && m.material.color && m.material.color.getHex() === 0x3a3d42);
+        // The keyboard (silver) stands on it, and so does the open folder.
+        const keyboard = furnished.picks.computer.children.find((m) => m.material && m.material.color && m.material.color.getHex() === 0xd6d8db);
         expect(boxOf(keyboard).min.y).toBeCloseTo(b.max.y, 4);
         furnished.picks.folder.visible = true;
         expect(boxOf(furnished.picks.folder).min.y).toBeCloseTo(b.max.y, 4);
         furnished.picks.folder.visible = false;
+        // Without the painted maps (a test, no WebGL2), a plain graphite.
+        const plain = deskOf(room).getObjectByName('desk-pad');
+        expect(plain.material.map).toBeNull();
+        expect(plain.material.color.getHex()).toBe(0x2e3034);
     });
+});
 
-    test('a deep gloss on the top, a satin on the rest, so the side panels do not glow (QA, 2026-09-29)', () => {
-        const parts = deskOf(furnished).children.filter((m) => m.material && /^walnut/.test(m.material.name));
-        const top = parts.filter((m) => m.material.name === 'walnut-top');
-        expect(top).toHaveLength(1);
-        expect(boxOf(top[0]).max.y).toBeCloseTo(CONFIG.room.desk.height, 4);
-        const body = parts.filter((m) => m.material.name === 'walnut');
-        expect(body.length).toBeGreaterThan(4);
-        for (const m of body) {
-            expect(m.material.clearcoat).toBeLessThan(top[0].material.clearcoat / 2);
-            expect(m.material.clearcoatRoughness).toBeGreaterThan(top[0].material.clearcoatRoughness * 3);
+describe('the credenza, the printer and the trays, in white and aluminum (QA, 2026-09-29)', () => {
+    const named = (o, name) => {
+        const out = [];
+        o.traverse((m) => { if (m.isMesh && m.material.name === name) out.push(m); });
+        return out;
+    };
+    const metals = (o) => {
+        const out = [];
+        o.traverse((m) => { if (m.isMesh && m.material.metalness >= 0.8) out.push(m); });
+        return out;
+    };
+
+    test('the credenza: white, flush fronts with no hardware, labels printed on them, on an aluminum kick', () => {
+        const c = CONFIG.room.cabinet;
+        const { drawers, faces } = room.cabinet;
+        const fronts = named(drawers, 'white');
+        expect(fronts).toHaveLength(c.drawers);
+        // No pulls nor holders: nothing metal on the drawers.
+        expect(metals(drawers)).toEqual([]);
+        // Gaps between the fronts (they read dark, over the dark lining).
+        const xs = fronts.map((m) => boxOf(m)).sort((p, q) => p.min.x - q.min.x);
+        for (let i = 1; i < xs.length; i++) expect(xs[i].min.x - xs[i - 1].max.x).toBeGreaterThan(0.01);
+        // Each label on its front.
+        for (const face of faces) {
+            const front = fronts.find((m) => Math.abs(m.position.x - face.position.x) < 1e-6);
+            expect(front).toBeTruthy();
+            expect(face.position.z).toBeGreaterThan(boxOf(front).max.z - c.z);
         }
+        // The kick: aluminum, set back under the white body.
+        const kick = metals(room.picks.cabinet).find((m) => boxOf(m).min.y < 1e-6);
+        const body = boxOf(named(room.picks.cabinet, 'white').find((m) => boxOf(m).min.y > 0.01 && boxOf(m).max.y <= c.floor + 1e-6));
+        expect(boxOf(kick).max.z).toBeLessThan(body.max.z - 0.02);
     });
 
-    test('without the painted maps (a test, no WebGL2), the same desk in plain lacquered walnut', () => {
-        const plain = deskOf(room).children.filter((m) => m.material && /^walnut/.test(m.material.name));
-        expect(plain.length).toBeGreaterThan(4);
-        for (const m of plain) {
-            expect(m.material.map).toBeNull();
-            expect(m.material.color.getHex()).not.toBe(0xffffff);
+    test('the printer: white with a dark glass lid, on a flush white cabinet on an aluminum kick, its light still lit', () => {
+        const printer = room.picks.printer;
+        expect(named(printer, 'white').length).toBe(2);
+        const lid = printer.children.find((m) => m.material && m.material.clearcoat === 1);
+        expect(lid.material.color.getHex()).toBe(0x1d1f22);
+        expect(metals(printer).length).toBeGreaterThanOrEqual(2);
+        const led = printer.children.filter((m) => m.material && m.material.isMeshBasicMaterial && m.material.visible !== false);
+        expect(led).toHaveLength(1);
+    });
+
+    test('the trays: brushed aluminum, lined in graphite, on aluminum posts', () => {
+        for (const key of ['intray', 'outtray']) {
+            const tray = room.picks[key];
+            const walls = metals(tray).filter((m) => m.geometry.parameters.height !== roomMod.TRAY_RISE - 0.06);
+            expect(walls.length).toBe(4);
+            const floor = tray.children.find((m) => m.geometry.parameters.height === 0.012);
+            expect(floor.material.color.getHex()).toBe(0x2b2d31);
         }
     });
 });
@@ -401,16 +409,54 @@ describe('the chair', () => {
         const d = CONFIG.room.desk;
         const toDesk = new THREE.Vector3(d.x + d.width / 2 - chair.position.x, 0, d.z - chair.position.z).normalize();
         expect(seatFaces.dot(toDesk)).toBeGreaterThan(0.8);
-        // Seen from the desk station, some of the seat shows, not only the
-        // flat back of the chair.
+        // Seen from the desk station, much of the seat shows, not only the
+        // back of the chair (an armrest crosses some of it, as it would).
         const cam = cameraAt('desk', 16 / 10);
-        const seatCentre = chair.localToWorld(new THREE.Vector3(0, 0.505, -0.1));
-        const hit = new THREE.Raycaster(cam.position, seatCentre.clone().sub(cam.position).normalize()).intersectObject(room.group, true)[0];
-        let o = hit.object;
-        while (o && o !== chair) o = o.parent;
-        expect(o).toBe(chair);
-        expect(hit.point.y).toBeGreaterThan(0.45);
-        expect(hit.point.y).toBeLessThan(0.53);
+        const { seat } = roomMod.CHAIR;
+        let seen = 0;
+        let asked = 0;
+        for (let x = -0.18; x <= 0.18; x += 0.06) {
+            for (let z = -0.18; z <= 0.18; z += 0.06) {
+                asked++;
+                const onSeat = chair.localToWorld(new THREE.Vector3(x, seat.top - 0.01, z));
+                const hit = new THREE.Raycaster(cam.position, onSeat.clone().sub(cam.position).normalize()).intersectObject(room.group, true)[0];
+                let o = hit.object;
+                while (o && o !== chair) o = o.parent;
+                if (o === chair && hit.point.y > seat.top - 0.07 && hit.point.y < seat.top + 0.01) seen++;
+            }
+        }
+        expect(seen / asked).toBeGreaterThan(0.4);
+    });
+
+    test('an executive chair in pale gray leather: stitched channels, a high reclined back, padded arms, polished aluminum (QA, 2026-09-29)', () => {
+        const chair = room.group.getObjectByName('chair');
+        const { seat, back, arm } = roomMod.CHAIR;
+        const leather = [];
+        const polished = [];
+        chair.traverse((o) => {
+            if (!o.isMesh) return;
+            if (o.material.color.getHex() === 0xc2beb8) leather.push(o);
+            if (o.material.metalness === 1) polished.push(o);
+        });
+        // The channels (seat and back) and the two arm pads.
+        expect(leather).toHaveLength(seat.channels + back.channels + 2);
+        expect(leather[0].material.sheen).toBeGreaterThan(0);
+        // A high back: its top well over the desk, under the window's head.
+        const top = boxOf(chair).max.y;
+        expect(top).toBeGreaterThan(CONFIG.room.desk.height + 0.35);
+        expect(top).toBeLessThan(1.3);
+        // Reclined: the back's top stands behind its foot (the seat faces -z).
+        const backrest = chair.children.find((c) => c.isGroup && c.rotation.x === back.recline);
+        expect(backrest).toBeTruthy();
+        const foot = chair.worldToLocal(backrest.localToWorld(new THREE.Vector3(0, 0, 0)));
+        const head = chair.worldToLocal(backrest.localToWorld(new THREE.Vector3(0, back.height, 0)));
+        expect(head.z - foot.z).toBeGreaterThan(0.05);
+        // The arms at their height, either side of the seat.
+        const pads = leather.filter((m) => Math.abs(boxOf(m).max.y - (arm.top + 0.0175)) < 0.01);
+        expect(pads).toHaveLength(2);
+        // Polished aluminum: the legs, the arms, the column and its hub.
+        expect(polished.length).toBeGreaterThanOrEqual(roomMod.CHAIR_LEGS.count + 4);
+        expect(polished[0].material.roughness).toBeLessThan(0.25);
     });
 
     test('rolls on five casters, each at the end of a leg and on the floor (QA, 2026-09-25)', () => {

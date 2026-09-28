@@ -16,7 +16,7 @@
 
 /* global THREE */
 
-import { LIFE, JET } from './life.min.js';
+import { LIFE, JET, LIVERIES } from './life.min.js';
 import { seeded } from './city.min.js';
 
 /**
@@ -364,11 +364,7 @@ function panel(root, tip, color, fin = false) {
 // A white airliner all but vanishes against a pale sky, so its belly,
 // wings and engines are a shade darker than life, and the fin and winglets
 // carry the one strong color.
-const JET_WHITE = 0xf3f4f5;
-const JET_BELLY = 0x9aa1a9;
 const JET_WING = 0xaeb4bb;
-const JET_TAIL = 0x1f3a5f;
-const JET_ENGINE = 0xb8bdc3;
 
 /**
  * A passenger jet: a twin-engined narrow-body of an everyday airliner's
@@ -376,9 +372,12 @@ const JET_ENGINE = 0xb8bdc3;
  * The fuselage is turned from a profile (a round nose, a long parallel
  * cabin, the tail cone swept up), the wings are low and swept with winglets
  * turned up at their tips, the two engines hang ahead of the wings, and the
- * tall fin carries the only color: no airline's livery.
+ * tall fin rises over the tail. Painted in a `livery` (life.js LIVERIES): its
+ * fuselage and belly, a stripe along each side, its fin and winglets, and
+ * its engines. Every livery paints the same vertices in the same order, so
+ * a jet's colors can be swapped for another's (fleet.flyJets).
  */
-export function jetParts() {
+export function jetParts(livery = LIVERIES[0]) {
     const profile = [
         [0.02, -19.8], [0.7, -19.4], [1.2, -18.6], [1.6, -17.4], [1.85, -15.6], [1.88, -14],
         [1.88, 12], [1.7, 14.5], [1.25, 16.8], [0.75, 18.6], [0.3, 19.8]
@@ -392,7 +391,9 @@ export function jetParts() {
         if (z > 12) lp.setY(i, lp.getY(i) + (z - 12) * 0.13);
     }
     lathe.computeVertexNormals();
-    const fuselage = painted(lathe.toNonIndexed(), (x, y) => (y < -0.7 ? JET_BELLY : JET_WHITE));
+    // The belly under the sides' middle, and the stripe along it (the ring
+    // of the fuselage's points at its widest, softened to the next).
+    const fuselage = painted(lathe.toNonIndexed(), (x, y) => (y < -0.7 ? livery.belly : Math.abs(y) < 0.35 ? livery.stripe : livery.body));
     fuselage.deleteAttribute('uv');
     const parts = [fuselage];
     for (const side of [-1, 1]) {
@@ -408,7 +409,7 @@ export function jetParts() {
             const lead = v ? 5.5 : 4.4;
             const trail = v ? 6.1 : 5.7;
             return [tipX + out + lean, 0.7 + v * 2.4, lerp(lead, trail, w)];
-        }, JET_TAIL));
+        }, livery.tail));
         parts.push(panel(
             { at: side * 1.0, lead: 13.6, trail: 17.4, y: 0.95, thick: 0.25 },
             { at: side * 7.2, lead: 17.2, trail: 18.4, y: 1.7, thick: 0.1 }, JET_WING));
@@ -417,12 +418,12 @@ export function jetParts() {
         engine.rotateX(Math.PI / 2);
         engine.translate(side * 5.1, -1.9, -3.9);
         engine.deleteAttribute('uv');
-        parts.push(painted(engine, () => JET_ENGINE));
+        parts.push(painted(engine, () => livery.engine));
         parts.push(boxesGeometry([[side * 5.1, -1.3, -2.4, 0.25, 0.8, 2.6, JET_WING]]));
     }
     parts.push(panel(
         { at: 1.4, lead: 11.0, trail: 18.6, y: 0, thick: 0.36 },
-        { at: 7.6, lead: 15.3, trail: 17.7, y: 0, thick: 0.16 }, JET_TAIL, true));
+        { at: 7.6, lead: 15.3, trail: 17.7, y: 0, thick: 0.16 }, livery.tail, true));
     // Its cabin windows, a line down each side, which glow by night.
     const windows = boxesGeometry([
         [1.86, 0.45, -1.5, 0.06, 0.28, 26, 0], [-1.86, 0.45, -1.5, 0.06, 0.28, 26, 0]
@@ -438,8 +439,10 @@ export function jetParts() {
  * bay. The lights are drawn only by night.
  */
 function jet() {
-    const { body, windows } = jetParts();
+    const { body, windows } = jetParts(LIVERIES[0]);
     const c = craft('jet', body, windows, { scale: JET.scale });
+    c.hull = c.group.children[0];
+    c.livery = 0;
     const dots = (name, points) => {
         const g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.Float32BufferAttribute(points.flatMap((p) => p.slice(0, 3)), 3));
@@ -517,12 +520,22 @@ export function buildFleet(scene, cars) {
             }
         }
     };
-    /** Fly the jets (life.js jetsAt, each null to hide it), their strobes
-     *  lit when `flashing` and their landing lights while they come in fast,
-     *  when it is dark enough to see them. */
+    // Each livery's colors for the jet's body, worked out once: a jet taking
+    // a new flight takes that flight's colors, the same points in the same
+    // order.
+    const liveryColors = LIVERIES.map((l) => jetParts(l).body.attributes.color.array);
+    /** Fly the jets (life.js jetsAt, each null to hide it), each in its
+     *  flight's livery, their strobes lit when `flashing` and their landing
+     *  lights while they come in fast, when it is dark enough to see them. */
     fleet.flyJets = (ats, flashing = false) => {
         fleet.jets.forEach((jet, i) => {
             const at = ats[i] || null;
+            if (at && Number.isInteger(at.livery) && at.livery !== jet.livery) {
+                const color = jet.hull.geometry.attributes.color;
+                color.array.set(liveryColors[at.livery]);
+                color.needsUpdate = true;
+                jet.livery = at.livery;
+            }
             place(jet, at);
             jet.strobes.visible = lightsOn && flashing && !!at;
             jet.landing.visible = lightsOn && !!at && at.fast === true;

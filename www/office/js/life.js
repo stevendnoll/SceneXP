@@ -549,6 +549,44 @@ export const JET = {
     smooth: 6500
 };
 
+/**
+ * The airlines' colors (QA, 2026-09-29: "so they look like they belong to
+ * different airlines"). Invented, as the ferries' are: no real carrier's
+ * livery, no names or marks, and none of the color schemes a real carrier is
+ * known by (no all-yellow fuselage, no blue one with a red belly, no white
+ * one with an orange tail and engines). Each is the fuselage `body`, its
+ * `belly`, a `stripe` along its sides, the `tail` (the fin and the
+ * winglets) and the `engine` nacelles, sRGB. From 3 to 15 km it is the tail
+ * and the fuselage's color that read, so those differ most.
+ */
+export const LIVERIES = [
+    { name: 'harbor', body: 0xf3f4f5, belly: 0x9aa1a9, stripe: 0x1f3a5f, tail: 0x1f3a5f, engine: 0xb8bdc3 },
+    { name: 'cedar', body: 0xf2f3f1, belly: 0xe4e7e6, stripe: 0x1d6b58, tail: 0x1d6b58, engine: 0x1d6b58 },
+    { name: 'ember', body: 0xf4f2ef, belly: 0xb9bec4, stripe: 0xc8a24a, tail: 0x9e1f2c, engine: 0xd9dcdf },
+    { name: 'glacier', body: 0xdbe7f1, belly: 0xf5f6f7, stripe: 0x3b7fb6, tail: 0x3b7fb6, engine: 0xf5f6f7 },
+    { name: 'canyon', body: 0xf5f5f3, belly: 0x5d6168, stripe: 0xb4532a, tail: 0xb4532a, engine: 0x3a3e44 },
+    { name: 'graphite', body: 0x3b4047, belly: 0x2c3036, stripe: 0xc9ced3, tail: 0xc9ced3, engine: 0x9aa1a9 },
+    { name: 'plum', body: 0xf3f3f4, belly: 0xa7adb4, stripe: 0x6b3b7a, tail: 0x6b3b7a, engine: 0xe8e9eb }
+];
+
+/** The order the liveries come in, shuffled once: flight after flight goes
+ *  through all of them before any comes again, and no two in a row match. */
+const LIVERY_ORDER = (() => {
+    const random = seeded(20260929);
+    const order = LIVERIES.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+    }
+    return order;
+})();
+
+/** Flight `k`'s livery, an index into LIVERIES. */
+export function liveryOf(k) {
+    const n = LIVERY_ORDER.length;
+    return LIVERY_ORDER[((k % n) + n) % n];
+}
+
 /** The jet's nose attitude on the approach, a touch down, and at the end of
  *  the flare, a little up (radians). */
 const APPROACH_PITCH = -0.017;
@@ -700,18 +738,22 @@ export function jetOnTrack(into) {
 
 /**
  * Every jet at `seconds`: an array of JET.fleet + 1, each null (not out) or
- * where it is (jetOnTrack). Flight k flies jet k mod JET.fleet; the last
- * is kept for one asked for by hand (`called`, the start of it, main.js
- * cornerOffice.jet), so it never takes a jet a flight is using.
+ * where it is (jetOnTrack) and in which `livery` (liveryOf). Flight k flies
+ * jet k mod JET.fleet; the last is kept for one asked for by hand
+ * (`called`, the start of it, main.js cornerOffice.jet), so it never takes
+ * a jet a flight is using.
  */
 export function jetsAt(seconds, called = null) {
     const slots = new Array(JET.fleet + 1).fill(null);
     const last = Math.floor((seconds - JET.first) / JET.every);
     for (let k = last - JET.fleet; k <= last; k++) {
         const at = jetOnTrack(seconds - jetFlight(k).start);
-        if (at) slots[((k % JET.fleet) + JET.fleet) % JET.fleet] = at;
+        if (at) slots[((k % JET.fleet) + JET.fleet) % JET.fleet] = { ...at, livery: liveryOf(k) };
     }
-    if (called != null) slots[JET.fleet] = jetOnTrack(seconds - called);
+    if (called != null) {
+        const at = jetOnTrack(seconds - called);
+        slots[JET.fleet] = at && { ...at, livery: liveryOf(Math.floor(called)) };
+    }
     return slots;
 }
 

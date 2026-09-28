@@ -31,36 +31,53 @@
 
 /* global THREE */
 
+/**
+ * The room's palette: modern luxury in white and aluminum (QA, 2026-09-29:
+ * the walnut, brass and banker's lamp had "a cheap 90's living room computer
+ * desk feel"; Steve asked what a company like Apple would furnish a corner
+ * office with, and chose white and aluminum for the whole room). Few
+ * materials, used with restraint: a matte warm white, satin aluminum, a
+ * pale stone floor, a light wool rug, graphite for the few dark parts, and
+ * pale gray leather. No hardware on the fronts. The view is the hero.
+ */
 const COLORS = {
-    wall: 0xe9e0d0,
-    trim: 0xf6f1e8,
-    floor: 0x7a5236,
-    rug: 0x3f4f5f,
-    ceiling: 0xf3eee6,
-    desk: 0x5f3a23,
-    reveal: 0x120c08,
-    plinth: 0x0e0b09,
-    leather: 0x2c211b,
-    deskBrass: 0xc9a25a,
+    wall: 0xf3f2ef,
+    trim: 0x3a3936,
+    floor: 0xcfcbc4,
+    rug: 0xb7b1a7,
+    ceiling: 0xf6f5f2,
+    door: 0xe9e7e3,
+    white: 0xf1f0ed,
+    aluminum: 0xc8cbcf,
+    graphite: 0x2b2d31,
+    reveal: 0x16171a,
+    felt: 0x9a9894,
+    leather: 0x2e3034,
+    chairLeather: 0xc2beb8,
+    chairShell: 0x8e8a85,
     metal: 0x2b2d31,
     screenOff: 0x0e1622,
-    tray: 0x8c6a45,
     paper: 0xf7f3ea,
     manila: 0xe4c07a,
-    basket: 0x3b3f45,
-    shade: 0x1f6f4a,
-    brass: 0xc9a04a,
     plant: 0x2f6b3a,
-    pot: 0xb86b45,
-    chair: 0x26282c,
+    pot: 0xe4e2de,
     caster: 0x151618
 };
 
 /** How far the in-tray stands over the out-tray it is stacked on. */
 export const TRAY_RISE = 0.11;
 
-/** How brightly the lamp shade's white glass glows while the lamp is on. */
+/** How brightly the lamp's strip of light glows while the lamp is on. */
 export const LAMP_GLOW = 0.7;
+
+/** The LED lamp's parts, meters: its round base, its post's height, and
+ *  the head reaching forward from the top of it (`length` along the desk's
+ *  depth). */
+export const LAMP = {
+    base: { radius: 0.07, height: 0.012 },
+    post: 0.34,
+    head: { length: 0.3, width: 0.04, thick: 0.014 }
+};
 
 function mat(color, opts = {}) {
     return new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, ...opts });
@@ -150,6 +167,21 @@ function roundedBox(w, h, d, r, material, x, y, z) {
     return mesh;
 }
 
+/** A bar `length` long along +z from the origin, `width` by `height` at its
+ *  root, its tip `taper` of that and dropped `drop` lower: a chair's leg. */
+export function taperedBar(length, width, height, taper, drop) {
+    const g = new THREE.BoxGeometry(width, height, length);
+    g.translate(0, 0, length / 2);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+        const t = pos.getZ(i) / length;
+        const k = 1 + (taper - 1) * t;
+        pos.setXYZ(i, pos.getX(i) * k, pos.getY(i) * k - drop * t, pos.getZ(i));
+    }
+    g.computeVertexNormals();
+    return g;
+}
+
 /** An upright cylinder of radius `r` and height `h`, centered on a point. */
 function cylinder(r, h, material, x, y, z, segments = 12) {
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, segments), material);
@@ -206,6 +238,21 @@ export const CHAIR_TURN = 0.6;
 /** The chair's base: how many legs, how far each reaches from the column,
  *  and the radius of the caster at its end. Meters. */
 export const CHAIR_LEGS = { count: 5, reach: 0.3, wheel: 0.03 };
+
+/**
+ * The executive chair (QA, 2026-09-29: the furniture should "look really
+ * expensive"; in pale gray leather and polished aluminum since the room went
+ * white and aluminum). Meters, in the chair's own frame
+ * (the seat faces -z). `seat` its cushion's top and size, `channels` how
+ * many stitched pads run across it front to back, `back` the backrest's
+ * foot, height, width, how many pads run up it and how far it reclines
+ * (radians), `arm` the armrests' height and length.
+ */
+export const CHAIR = {
+    seat: { top: 0.52, width: 0.5, depth: 0.48, channels: 4 },
+    back: { foot: 0.56, height: 0.62, width: 0.5, channels: 5, recline: 0.16 },
+    arm: { top: 0.68, length: 0.3, x: 0.29 }
+};
 
 /**
  * The crumpled pages in the wastebasket: where each sits in the basket (off
@@ -289,7 +336,8 @@ function buildShell(room, config) {
     const wall = mat(COLORS.wall);
     const trim = mat(COLORS.trim);
 
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), mat(COLORS.floor, { roughness: 0.7 }));
+    // Honed stone: pale, with a little of the windows' light in it.
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), mat(COLORS.floor, { roughness: 0.45 }));
     floor.rotation.x = -Math.PI / 2;
     group.add(floor);
     const rug = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.8), mat(COLORS.rug, { roughness: 1 }));
@@ -321,8 +369,8 @@ function buildShell(room, config) {
     group.add(slab(-hw, 0, hd, d0, height, hd + T, wall));
     group.add(slab(d1, 0, hd, hw, height, hd + T, wall));
     group.add(slab(d0, door.height, hd, d1, height, hd + T, wall));
-    const doorWood = mat(0x6b4a33, { roughness: 0.6 });
-    group.add(slab(d0 + 0.01, 0, hd + 0.02, d1 - 0.01, door.height - 0.01, hd + 0.06, doorWood));
+    const doorFace = mat(COLORS.door, { roughness: 0.4 });
+    group.add(slab(d0 + 0.01, 0, hd + 0.02, d1 - 0.01, door.height - 0.01, hd + 0.06, doorFace));
     group.add(roundedSlab(d0 - 0.05, 0, hd - 0.02, d0, door.height + 0.05, hd + 0.02, 0.008, trim));
     group.add(roundedSlab(d1, 0, hd - 0.02, d1 + 0.05, door.height + 0.05, hd + 0.02, 0.008, trim));
     group.add(roundedSlab(d0 - 0.05, door.height, hd - 0.02, d1 + 0.05, door.height + 0.05, hd + 0.02, 0.008, trim));
@@ -547,19 +595,24 @@ function castShadows(group) {
  * comes over. The folders are drawn in the cabinet's own frame: x across,
  * y up from the floor, z out toward the room from the cabinet's middle.
  */
-function buildCabinet(group, config, labels, picks) {
+function buildCabinet(group, config, labels, picks, m) {
     const c = config.room.cabinet;
     const cabinet = tag(new THREE.Group(), 'cabinet');
     cabinet.position.set(c.x, 0, c.z);
-    const steel = mat(0x55606b, { roughness: 0.5, metalness: 0.35 });
-    const inside = mat(0x3a424b, { roughness: 0.8, metalness: 0.2 });
+    // A low white credenza (QA, 2026-09-29): flush drawer fronts with no
+    // hardware (they open with a push), the gaps between them dark, on a
+    // brushed aluminum kick set back so it floats; the drawers lined dark.
+    const inside = mat(0x2a2b2e, { roughness: 0.9 });
     const hw = c.width / 2;
     const hd = c.depth / 2;
-    // The frame: a plinth up to the drawers' floor, and end panels.
-    cabinet.add(roundedSlab(-hw, 0, -hd, hw, c.floor, hd, 0.006, steel));
-    cabinet.add(roundedSlab(-hw - 0.02, 0, -hd, -hw, c.height, hd, 0.006, steel));
-    cabinet.add(roundedSlab(hw, 0, -hd, hw + 0.02, c.height, hd, 0.006, steel));
-    cabinet.add(slab(-hw, c.floor, -hd - 0.02, hw, c.height, -hd, steel));
+    const kick = 0.05;
+    // The frame: a white base up to the drawers' floor over the kick, white
+    // ends and a back.
+    cabinet.add(box(c.width - 0.04, kick, c.depth - 0.05, m.aluminum, 0, kick / 2, -0.015));
+    cabinet.add(roundedBox(c.width, c.floor - kick, c.depth, 0.006, m.white, 0, (c.floor + kick) / 2, 0));
+    cabinet.add(roundedBox(0.02, c.height, c.depth, 0.006, m.white, -hw - 0.01, c.height / 2, 0));
+    cabinet.add(roundedBox(0.02, c.height, c.depth, 0.006, m.white, hw + 0.01, c.height / 2, 0));
+    cabinet.add(box(c.width, c.height - c.floor, 0.02, m.white, 0, (c.height + c.floor) / 2, -hd - 0.01));
 
     const drawers = new THREE.Group();
     drawers.name = 'drawers';
@@ -571,18 +624,18 @@ function buildCabinet(group, config, labels, picks) {
         drawers.add(slab(x0, c.floor, -hd, x1, c.floor + 0.012, hd, inside));
         drawers.add(slab(x0, c.floor, -hd, x0 + 0.01, c.height - 0.02, hd, inside));
         drawers.add(slab(x1 - 0.01, c.floor, -hd, x1, c.height - 0.02, hd, inside));
-        // The front: a panel with a label card and a handle.
-        drawers.add(roundedSlab(x0, c.floor, hd - 0.012, x1, c.height - 0.02, hd + 0.01, 0.006, steel));
+        // The front: flush white, with its label printed small on it.
+        const cx = (x0 + x1) / 2;
+        drawers.add(roundedSlab(x0, c.floor, hd - 0.012, x1, c.height - 0.02, hd + 0.01, 0.004, m.white));
         const face = new THREE.Mesh(
             new THREE.PlaneGeometry(w * 0.62, 0.075),
             // Card, lit by the room like everything else: unlit, it glowed
             // white in the dark office (QA, 2026-09-29).
             labels && labels[i] ? mat(0xffffff, { map: labels[i], roughness: 0.9 }) : mat(0xf4efe4, { roughness: 0.9 })
         );
-        face.position.set((x0 + x1) / 2, c.height - 0.08, hd + 0.0115);
+        face.position.set(cx, c.height - 0.08, hd + 0.0115);
         drawers.add(face);
         faces.push(face);
-        drawers.add(box(w * 0.3, 0.018, 0.02, mat(COLORS.metal, { metalness: 0.6, roughness: 0.3 }), (x0 + x1) / 2, c.height - 0.16, hd + 0.02));
     }
     cabinet.add(drawers);
 
@@ -651,8 +704,10 @@ function buildBoard(group, config, textures, picks) {
     const b = config.room.board;
     const wallX = -config.room.width / 2;
     const board = tag(new THREE.Group(), 'board');
-    const cork = mat(0xb98a5a, { roughness: 1 });
-    const wood = mat(0x6b4128, { roughness: 0.6 });
+    // A pinboard of gray felt in a slim aluminum frame (the cork and its
+    // wooden frame went with the walnut).
+    const cork = mat(COLORS.felt, { roughness: 1 });
+    const wood = mat(COLORS.aluminum, { roughness: 0.35, metalness: 0.8 });
     const z0 = b.z - b.width / 2;
     const z1 = b.z + b.width / 2;
     const y0 = b.y - b.height / 2;
@@ -788,16 +843,22 @@ function buildWhiteboard(group, config, texture, picks) {
 
 /** The printer, on a small stand under the right-hand window, with a page
  *  in its tray and a green light that says it is ready. */
-function buildPrinter(group, config, picks) {
+function buildPrinter(group, config, picks, m) {
     const p = config.room.printer;
     const printer = tag(new THREE.Group(), 'printer');
     printer.position.set(p.x, 0, p.z);
-    const standMat = mat(0x3f454d, { roughness: 0.6, metalness: 0.3 });
-    printer.add(roundedBox(0.5, p.stand, 0.44, 0.012, standMat, 0, p.stand / 2, 0));
-    const body = mat(0xe6e4df, { roughness: 0.5 });
-    printer.add(roundedBox(0.44, 0.17, 0.36, 0.025, body, 0, p.stand + 0.085, 0));
-    printer.add(roundedBox(0.44, 0.03, 0.3, 0.01, mat(0x2b2d31, { roughness: 0.5 }), 0, p.stand + 0.185, 0.02));
-    printer.add(box(0.3, 0.012, 0.14, body, -0.02, p.stand + 0.03, 0.24));
+    // A white side cabinet (QA, 2026-09-29): a flush door, its seam the
+    // only line on it, on a brushed aluminum kick set back.
+    const kick = 0.05;
+    printer.add(roundedBox(0.5, p.stand - kick, 0.44, 0.012, m.white, 0, (p.stand + kick) / 2, 0));
+    printer.add(box(0.46, kick, 0.4, m.aluminum, 0, kick / 2, -0.01));
+    printer.add(box(0.003, p.stand - kick - 0.04, 0.003, m.reveal, 0.06, (p.stand + kick) / 2, 0.2205));
+    // The printer: white, with a lid of dark glass, an aluminum output
+    // tray, the page in it and its light.
+    const glassLid = new THREE.MeshPhysicalMaterial({ color: 0x1d1f22, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.05 });
+    printer.add(roundedBox(0.44, 0.17, 0.36, 0.025, m.white, 0, p.stand + 0.085, 0));
+    printer.add(roundedBox(0.44, 0.03, 0.3, 0.01, glassLid, 0, p.stand + 0.185, 0.02));
+    printer.add(box(0.3, 0.012, 0.14, m.aluminum, -0.02, p.stand + 0.03, 0.24));
     printer.add(box(0.22, 0.004, 0.12, mat(COLORS.paper), -0.02, p.stand + 0.04, 0.24));
     printer.add(box(0.02, 0.012, 0.012, new THREE.MeshBasicMaterial({ color: 0x5dd37a }), 0.17, p.stand + 0.14, 0.181));
     addHitBox(printer, 0.03);
@@ -857,23 +918,20 @@ export function setNotes(notes, count, corners, uvs) {
 }
 
 /**
- * The desk's parts, meters (QA, 2026-09-29: "the furniture in the scene
- * should look really expensive"): a walnut top `top` thick, running over a
- * waterfall end on the left (the grain unbroken over the edge); a drawer
- * pedestal on the right, `pedestal` wide, standing on a dark plinth set
- * back so it floats, its three drawer fronts cut from one board so the
- * grain runs across them (`drawers`, each [foot, head] in meters), with
- * brushed brass pulls; a brass foot under the waterfall; a walnut modesty
- * panel at the back; and a stitched leather pad under the keyboard (`pad`,
- * its width and depth, and how far in from the desk's front edge).
+ * The desk's parts, meters: a slim white slab `top` thick with softened
+ * edges, on two brushed aluminum sled frames (`leg`: the profile's width
+ * and depth, and how far in from the ends), joined by a slim `beam` under
+ * the back; a drawer floating under the top at the right (`drawer`: its
+ * width, depth down and the gap under the top), flush, with no hardware;
+ * and a stitched graphite leather pad under the keyboard (`pad`, its width
+ * and depth, and how far in from the desk's front edge).
  */
 export const DESK = {
-    top: 0.05,
-    pedestal: 0.46,
-    plinth: 0.07,
-    drawers: [[0.075, 0.355], [0.36, 0.525], [0.53, 0.692]],
-    pad: { width: 0.8, depth: 0.42, front: 0.02, thick: 0.004 },
-    pull: { length: 0.2, reach: 0.025, drop: 0.05 }
+    top: 0.03,
+    leg: { width: 0.06, depth: 0.03, inset: 0.1 },
+    beam: { width: 0.03, height: 0.04 },
+    drawer: { width: 0.5, depth: 0.065, gap: 0.006 },
+    pad: { width: 0.8, depth: 0.42, front: 0.02, thick: 0.004 }
 };
 
 /**
@@ -902,116 +960,68 @@ export function grainUv(mesh, toGrain, size) {
     return mesh;
 }
 
-/** The meters of walnut one texture covers when none is given (the tests):
- *  finishes.js WALNUT.size. */
-const GRAIN_SIZE = [2.6, 1.0];
-
-/** The desk's lacquer: the top's deep gloss, and a satin on the rest
- *  (QA, 2026-09-29: glossed all over, the side panels, seen at a glancing
- *  angle, gave back so much of the room that they glowed, orange by lamp
- *  light, pale by day). `coat` and `rough` are the clear coat's strength
- *  and roughness. */
-export const LACQUER = { top: { coat: 1, rough: 0.07 }, body: { coat: 0.3, rough: 0.4 } };
-
 /**
- * The desk's materials: lacquered walnut (a clear coat over the grain that
- * gives back the windows, interior.js), a gloss for the top and a satin for
- * the body, brushed brass, the dark of the reveals and the plinth, and the
- * pad's leather. `finish` is main.js's painted maps (finishes.js), or
- * nothing, and then plain colors.
+ * The room's furniture materials, made once and shared: the desk top's
+ * matte white with a satin coat, the same white for the rest, brushed
+ * aluminum, graphite for the reveals, and the leather of the desk pad
+ * (main.js paints its maps, finishes.js; without them a plain graphite)
+ * and of the trays' lining.
  */
-function deskMaterials(finish) {
-    const walnut = finish && finish.walnut;
+function furnitureMaterials(finish) {
     const leather = finish && finish.leather;
-    const lacquered = (name, { coat, rough }) => {
-        const m = new THREE.MeshPhysicalMaterial({
-            color: walnut ? 0xffffff : COLORS.desk,
-            map: walnut ? walnut.map : null,
-            normalMap: walnut ? walnut.normalMap : null,
-            normalScale: new THREE.Vector2(0.6, 0.6),
-            roughnessMap: walnut ? walnut.roughnessMap : null,
-            roughness: walnut ? 1 : 0.5,
-            metalness: 0,
-            clearcoat: coat,
-            clearcoatRoughness: rough
-        });
+    const white = (name, coat) => {
+        const m = new THREE.MeshPhysicalMaterial({ color: COLORS.white, roughness: 0.42, clearcoat: coat, clearcoatRoughness: 0.3 });
         m.name = name;
         return m;
     };
     return {
-        top: lacquered('walnut-top', LACQUER.top),
-        wood: lacquered('walnut', LACQUER.body),
-        brass: new THREE.MeshPhysicalMaterial({ color: COLORS.deskBrass, metalness: 1, roughness: 0.3, anisotropy: 0.6 }),
-        reveal: mat(COLORS.reveal, { roughness: 0.9 }),
-        plinth: mat(COLORS.plinth, { roughness: 0.7 }),
+        top: white('white-top', 0.35),
+        white: white('white', 0.15),
+        aluminum: new THREE.MeshPhysicalMaterial({ color: COLORS.aluminum, metalness: 1, roughness: 0.32, anisotropy: 0.5 }),
+        reveal: mat(COLORS.reveal, { roughness: 0.8 }),
         leather: new THREE.MeshPhysicalMaterial({
             color: leather ? 0xffffff : COLORS.leather,
             map: leather ? leather.map : null,
             normalMap: leather ? leather.normalMap : null,
             roughnessMap: leather ? leather.roughnessMap : null,
             roughness: leather ? 1 : 0.6,
-            sheen: 0.35,
-            sheenColor: new THREE.Color(0x6a4a3a),
+            sheen: 0.3,
+            sheenColor: new THREE.Color(0x7a7e84),
             sheenRoughness: 0.6
         }),
-        size: (walnut && walnut.size) || GRAIN_SIZE
+        lining: mat(COLORS.graphite, { roughness: 0.95 })
     };
 }
 
-function buildDesk(group, config, picks, contacts, finish = null) {
+function buildDesk(group, config, picks, contacts, m) {
     const d = config.room.desk;
     const x0 = d.x - d.width / 2;
     const x1 = d.x + d.width / 2;
     const z0 = d.z - d.depth / 2;
     const z1 = d.z + d.depth / 2;
     const top = d.height;
-    const T = DESK.top;
-    const under = top - T;
-    const m = deskMaterials(finish);
+    const under = top - DESK.top;
     const desk = new THREE.Group();
     desk.name = 'desk';
-    const wood = (mesh, toGrain) => desk.add(grainUv(mesh, toGrain, m.size));
-    // The top and the waterfall, one board: along the grain is the distance
-    // round the edge (up the waterfall, then across the top), across it the
-    // depth, so the figure runs unbroken over the corner.
-    const flow = (x, y, z, face) => {
-        const across = z - z0;
-        if (face === 'x' && x < x0 + T + 1e-6) return [y, across];
-        if (face === 'z') return [x <= x0 + T ? y : top + (x - x0), across + 0.3 * (top - y)];
-        return [top + (x - x0), across];
-    };
-    wood(roundedSlab(x0, under, z0, x1, top, z1, 0.012, m.top), flow);
-    wood(roundedSlab(x0, 0, z0, x0 + T, under, z1, 0.008, m.wood), flow);
-    // A brass foot under the waterfall.
-    desk.add(slab(x0 - 0.002, 0, z0 - 0.002, x0 + T + 0.002, 0.012, z1 + 0.002, m.brass));
-    // The pedestal: its sides' grain upright, standing on a plinth set back.
-    const px0 = x1 - DESK.pedestal;
-    const px1 = x1 - 0.015;
-    wood(roundedSlab(px0, DESK.plinth, z0 + 0.02, px1, under, z1 - 0.04, 0.006, m.wood), (x, y, z, face) =>
-        (face === 'x' ? [y + 1.0, z - z0 + 0.1] : [x - px0 + 1.9, z - z0 + (face === 'z' ? y : 0)]));
-    desk.add(slab(px0 + 0.03, 0, z0 + 0.06, px1 - 0.03, DESK.plinth, z1 - 0.08, m.plinth));
-    // The dark reveal behind the drawer fronts, so the gaps between them
-    // read as gaps.
-    desk.add(slab(px0 + 0.008, DESK.plinth + 0.002, z1 - 0.046, px1 - 0.008, under - 0.004, z1 - 0.039, m.reveal));
-    // The drawer fronts, from one board: the grain runs across all three.
-    const cx = (px0 + px1) / 2;
-    const { length, reach, drop } = DESK.pull;
-    for (const [y0, y1] of DESK.drawers) {
-        wood(roundedSlab(px0 + 0.006, y0, z1 - 0.04, px1 - 0.006, y1, z1 - 0.018, 0.004, m.wood), (x, y) => [x - px0 + 0.3, y + 0.1]);
-        // Its pull: a brass bar on two posts.
-        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, length, 16), m.brass);
-        bar.rotation.z = Math.PI / 2;
-        bar.position.set(cx, y1 - drop, z1 - 0.018 + reach);
-        desk.add(bar);
-        for (const side of [-1, 1]) {
-            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, reach, 10), m.brass);
-            post.rotation.x = Math.PI / 2;
-            post.position.set(cx + side * (length / 2 - 0.015), y1 - drop, z1 - 0.018 + reach / 2);
-            desk.add(post);
-        }
+    desk.add(roundedSlab(x0, under, z0, x1, top, z1, 0.008, m.top));
+    // The sled frames: two uprights, a foot and a rail under the top, each
+    // a slim aluminum profile, one frame in from each end.
+    const { width: lw, depth: ld, inset } = DESK.leg;
+    for (const lx of [x0 + inset, x1 - inset]) {
+        const fz0 = z0 + 0.05;
+        const fz1 = z1 - 0.05;
+        desk.add(box(ld, under - ld, lw, m.aluminum, lx, (under - ld) / 2 + ld / 2, fz0 + lw / 2));
+        desk.add(box(ld, under - ld, lw, m.aluminum, lx, (under - ld) / 2 + ld / 2, fz1 - lw / 2));
+        desk.add(box(ld, ld, fz1 - fz0, m.aluminum, lx, ld / 2, (fz0 + fz1) / 2));
+        desk.add(box(ld, ld, fz1 - fz0, m.aluminum, lx, under - ld / 2, (fz0 + fz1) / 2));
     }
-    // The modesty panel at the back, between the waterfall and the pedestal.
-    wood(roundedSlab(x0 + T, 0.28, z0 + 0.03, px0, under, z0 + 0.05, 0.004, m.wood), (x, y) => [x - x0 + 0.2, y + 0.2]);
+    // The beam between them under the back.
+    const { width: bw, height: bh } = DESK.beam;
+    desk.add(box(d.width - 2 * inset, bh, bw, m.aluminum, d.x, under - bh / 2, z0 + 0.08));
+    // The drawer, floating under the top at the right, flush and bare.
+    const { width: dw, depth: dd, gap } = DESK.drawer;
+    const dx1 = x1 - inset - 0.03;
+    desk.add(roundedSlab(dx1 - dw, under - gap - dd, z0 + 0.12, dx1, under - gap, z1 - 0.03, 0.006, m.white));
     group.add(desk);
 
     // The monitor, which is the computer station.
@@ -1019,11 +1029,12 @@ function buildDesk(group, config, picks, contacts, finish = null) {
     const computer = tag(new THREE.Group(), 'computer');
     const mx = d.x + 0.05;
     const mz = z0 + 0.22;
-    computer.add(roundedBox(0.24, 0.015, 0.16, 0.006, metal, mx, top + 0.008, mz));
-    computer.add(box(0.04, 0.16, 0.03, metal, mx, top + 0.09, mz - 0.03));
+    // Its foot and neck in aluminum; the keyboard silver.
+    computer.add(roundedBox(0.24, 0.012, 0.16, 0.006, m.aluminum, mx, top + 0.006, mz));
+    computer.add(box(0.05, 0.16, 0.012, m.aluminum, mx, top + 0.09, mz - 0.03));
     const bezel = roundedBox(0.66, 0.41, 0.035, 0.012, metal, mx, top + 0.36, mz);
     computer.add(bezel);
-    computer.add(roundedBox(0.44, 0.015, 0.14, 0.005, mat(0x3a3d42), mx, top + DESK.pad.thick + 0.0075, z1 - 0.2));
+    computer.add(roundedBox(0.44, 0.012, 0.13, 0.004, mat(0xd6d8db, { roughness: 0.4, metalness: 0.6 }), mx, top + DESK.pad.thick + 0.006, z1 - 0.2));
     // The leather pad under the keyboard, part of the desk.
     const { width: pw, depth: pd, front, thick } = DESK.pad;
     const pad = roundedSlab(mx - pw / 2, top, z1 - front - pd, mx + pw / 2, top + thick, z1 - front, 0.008, m.leather);
@@ -1049,22 +1060,22 @@ function buildDesk(group, config, picks, contacts, finish = null) {
     screen.position.set(mx, top + 0.36, mz + 0.019);
     computer.add(screen);
 
-    // The trays, stacked at the left end on four brass posts (QA,
+    // The trays, stacked at the left end on four aluminum posts (QA,
     // 2026-09-25): the out-tray on the desk, the in-tray (a new
     // application) over it. The gap between them is wide enough that the
     // desk's eye sees the out-tray's page over its front lip, so each
     // tray is still a tap of its own.
-    const trayMat = mat(COLORS.tray, { roughness: 0.5 });
+    // Brushed aluminum, lined in graphite.
     const paper = mat(COLORS.paper, { roughness: 0.95 });
     const tx = x0 + 0.24;
     const tz = z0 + 0.2;
     const tray = (key, y, sheets) => {
         const g = tag(new THREE.Group(), key);
-        g.add(box(0.34, 0.012, 0.26, trayMat, tx, y + 0.006, tz));
-        g.add(box(0.34, 0.06, 0.012, trayMat, tx, y + 0.03, tz - 0.124));
-        g.add(box(0.34, 0.035, 0.012, trayMat, tx, y + 0.018, tz + 0.124));
-        g.add(box(0.012, 0.06, 0.26, trayMat, tx - 0.164, y + 0.03, tz));
-        g.add(box(0.012, 0.06, 0.26, trayMat, tx + 0.164, y + 0.03, tz));
+        g.add(box(0.34, 0.012, 0.26, m.lining, tx, y + 0.006, tz));
+        g.add(box(0.34, 0.06, 0.012, m.aluminum, tx, y + 0.03, tz - 0.124));
+        g.add(box(0.34, 0.035, 0.012, m.aluminum, tx, y + 0.018, tz + 0.124));
+        g.add(box(0.012, 0.06, 0.26, m.aluminum, tx - 0.164, y + 0.03, tz));
+        g.add(box(0.012, 0.06, 0.26, m.aluminum, tx + 0.164, y + 0.03, tz));
         for (let i = 0; i < sheets; i++) g.add(box(0.3, 0.004, 0.22, paper, tx, y + 0.016 + i * 0.006, tz));
         group.add(g);
         picks[key] = g;
@@ -1075,73 +1086,38 @@ function buildDesk(group, config, picks, contacts, finish = null) {
     const intray = tray('intray', top + TRAY_RISE, 2);
     // The posts stand on the out-tray's side walls and belong to the tray
     // they hold up.
-    // Truly metal now that it has a room to reflect (interior.js).
-    const brass = mat(COLORS.brass, { roughness: 0.3, metalness: 0.85 });
     const post = TRAY_RISE - 0.06;
     for (const sx of [-1, 1]) {
         for (const sz of [-1, 1]) {
-            intray.add(box(0.012, post, 0.012, brass, tx + sx * 0.164, top + 0.06 + post / 2, tz + sz * 0.112));
+            intray.add(box(0.012, post, 0.012, m.aluminum, tx + sx * 0.164, top + 0.06 + post / 2, tz + sz * 0.112));
         }
     }
 
-    // The lamp, at the right end, which the visitor can switch: a banker's
-    // lamp (QA, 2026-09-25, after the one in Steve's own office scene), an
-    // oval brass base and stem under a green glass shade lying on its side,
-    // white glass inside, tipped so its light falls toward the chair.
-    // Its left end stays clear of the monitor's edge, where the sticky notes
-    // are (tests/office-room).
+    // The lamp, at the right end, which the visitor can switch: a slim
+    // aluminum LED lamp (QA, 2026-09-29, in place of the banker's lamp), a
+    // round base, a thin post, and a flat head reaching forward over the
+    // desk with a warm strip of light under it. It stands clear of the
+    // monitor's edge, where the sticky notes are (tests/office-room).
     const lampGroup = tag(new THREE.Group(), 'lamp');
     const lx = x1 - 0.2;
     const lz = z0 + 0.2;
-    contacts.push({ x: lx, z: lz, y: top, w: 0.28, d: 0.2, soft: 0.07, alpha: 0.38 });
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.106, 0.024, 32), brass);
-    base.scale.set(1, 1, 0.62);
-    base.position.set(lx, top + 0.012, lz);
+    const { base: lb, post: lp, head: lh } = LAMP;
+    contacts.push({ x: lx, z: lz, y: top, w: 0.2, d: 0.2, soft: 0.06, alpha: 0.38 });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(lb.radius, lb.radius + 0.004, lb.height, 40), m.aluminum);
+    base.position.set(lx, top + lb.height / 2, lz);
     lampGroup.add(base);
-    const step = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.07, 0.022, 24), brass);
-    step.scale.set(1, 1, 0.75);
-    step.position.set(lx, top + 0.035, lz);
-    lampGroup.add(step);
-    lampGroup.add(cylinder(0.009, 0.28, brass, lx, top + 0.186, lz));
-    // The shade, in a frame of its own: along x, tipped back.
-    const shadeY = top + 0.35;
-    const shadeFrame = new THREE.Group();
-    shadeFrame.position.set(lx, shadeY, lz + 0.03);
-    shadeFrame.rotation.x = -0.3;
-    const glass = new THREE.CylinderGeometry(0.075, 0.075, 0.27, 24, 1, true, 0, Math.PI);
-    const outside = new THREE.Mesh(glass, mat(COLORS.shade, { roughness: 0.25, metalness: 0.1 }));
-    outside.rotation.z = Math.PI / 2;
-    shadeFrame.add(outside);
-    const glow = new THREE.Mesh(glass, mat(0xf4ecd6, { side: THREE.BackSide, emissive: 0xffe3a8, emissiveIntensity: LAMP_GLOW }));
-    glow.rotation.z = Math.PI / 2;
-    shadeFrame.add(glow);
-    for (const end of [-1, 1]) {
-        const cap = new THREE.Mesh(new THREE.CircleGeometry(0.075, 16, 0, Math.PI), mat(COLORS.shade, { roughness: 0.25, side: THREE.DoubleSide }));
-        cap.rotation.y = Math.PI / 2;
-        cap.position.x = end * 0.135;
-        shadeFrame.add(cap);
-    }
-    // A brass rim along the shade's lower edges, and the finial on top.
-    for (const side of [-1, 1]) {
-        const rim = cylinder(0.005, 0.275, brass, 0, 0, side * 0.075);
-        rim.rotation.z = Math.PI / 2;
-        shadeFrame.add(rim);
-    }
-    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 8), brass);
-    finial.position.y = 0.082;
-    shadeFrame.add(finial);
-    lampGroup.add(shadeFrame);
-    // The pull chain, hanging from the shade's front rim (which the tip
-    // lifts 2 cm and brings 7 cm forward of the frame), and its bead.
-    lampGroup.add(cylinder(0.002, 0.07, brass, lx + 0.07, shadeY - 0.013, lz + 0.1));
-    const bead = new THREE.Mesh(new THREE.SphereGeometry(0.007, 8, 6), brass);
-    bead.position.set(lx + 0.07, shadeY - 0.052, lz + 0.1);
-    lampGroup.add(bead);
-    // The light, up inside the shade. No bulb is drawn: under the shade's
-    // open side it showed as a white ball (QA, 2026-09-25), and the glowing
-    // white glass inside says the lamp is on.
+    lampGroup.add(cylinder(0.007, lp, m.aluminum, lx, top + lb.height + lp / 2, lz, 16));
+    const headY = top + lb.height + lp;
+    const joint = cylinder(0.011, 0.03, m.aluminum, lx, headY, lz, 16);
+    joint.rotation.z = Math.PI / 2;
+    lampGroup.add(joint);
+    lampGroup.add(roundedBox(lh.width, lh.thick, lh.length, 0.005, m.aluminum, lx, headY, lz + lh.length / 2));
+    // The strip of light under the head: warm, and dark when switched off.
+    const glow = box(lh.width - 0.012, 0.002, lh.length - 0.03, mat(0xf4ecd6, { emissive: 0xffe3a8, emissiveIntensity: LAMP_GLOW }),
+        lx, headY - lh.thick / 2 - 0.001, lz + lh.length / 2);
+    lampGroup.add(glow);
     const light = new THREE.PointLight(0xffd9a0, 1.6, 3.5, 2);
-    light.position.set(lx, shadeY - 0.015, lz + 0.035);
+    light.position.set(lx, headY - 0.03, lz + lh.length / 2);
     lampGroup.add(light);
     addHitBox(lampGroup);
     group.add(lampGroup);
@@ -1171,7 +1147,8 @@ function buildFloorThings(group, config, picks, contacts) {
     const bx = d.x + d.width / 2 + 0.26;
     const bz = d.z + 0.05;
     contacts.push({ x: bx, z: bz, y: 0, w: 0.46, d: 0.46, soft: 0.16, alpha: 0.45 });
-    const wire = mat(COLORS.basket, { roughness: 0.6, metalness: 0.4, side: THREE.DoubleSide });
+    // Satin aluminum, solid-walled.
+    const wire = mat(COLORS.aluminum, { roughness: 0.35, metalness: 0.9, side: THREE.DoubleSide });
     const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.36, 24, 1, true), wire);
     shell.position.set(bx, 0.18, bz);
     basket.add(shell);
@@ -1197,24 +1174,57 @@ function buildFloorThings(group, config, picks, contacts) {
     // The chair, pushed back from the desk's right end and turned toward it,
     // as if just left (its seat faces the desk, its back the right-hand
     // window). It stood at the left end until M6, where it hid the printer
-    // from the desk. The seat faces the chair's own -z.
+    // from the desk. The seat faces the chair's own -z. A high-back
+    // executive chair in pale gray leather (CHAIR), its cushions stitched in
+    // channels, on polished aluminum.
     const chair = new THREE.Group();
     chair.name = 'chair';
-    const cm = mat(COLORS.chair, { roughness: 0.7 });
-    const steel = mat(COLORS.metal, { roughness: 0.45, metalness: 0.3 });
-    chair.add(roundedBox(0.48, 0.07, 0.46, 0.03, cm, 0, 0.47, 0));
-    chair.add(roundedBox(0.46, 0.5, 0.06, 0.028, cm, 0, 0.78, 0.22));
-    chair.add(cylinder(0.025, 0.34, steel, 0, 0.27, 0));
-    chair.add(cylinder(0.05, 0.05, steel, 0, 0.105, 0, 16));
-    // Five legs, each with a caster at its end (QA, 2026-09-25): a twin
-    // wheel on its side under a little fork, turned along the leg.
+    const leather = new THREE.MeshPhysicalMaterial({
+        color: COLORS.chairLeather, roughness: 0.5, sheen: 0.35, sheenColor: new THREE.Color(0xf2efe9), sheenRoughness: 0.5, clearcoat: 0.1, clearcoatRoughness: 0.4
+    });
+    const hide = mat(COLORS.chairShell, { roughness: 0.55 });
+    const polished = new THREE.MeshPhysicalMaterial({ color: COLORS.aluminum, metalness: 1, roughness: 0.16 });
+    const dark = mat(COLORS.graphite, { roughness: 0.5 });
+    const { seat, back, arm } = CHAIR;
+    // The seat: a leather-wrapped shell, and on it the cushion in channels,
+    // each its own pad, so the stitching between them reads as a line.
+    chair.add(roundedBox(seat.width + 0.03, 0.05, seat.depth + 0.02, 0.022, hide, 0, seat.top - 0.075, 0));
+    const pad = seat.depth / seat.channels;
+    for (let i = 0; i < seat.channels; i++) {
+        const z = -seat.depth / 2 + pad * (i + 0.5);
+        chair.add(roundedBox(seat.width, 0.055, pad - 0.006, 0.02, leather, 0, seat.top - 0.0275, z));
+    }
+    // The back: reclined about its foot, a shell and its channels up it.
+    const backrest = new THREE.Group();
+    backrest.position.set(0, back.foot, seat.depth / 2 - 0.02);
+    backrest.rotation.x = back.recline;
+    backrest.add(roundedBox(back.width + 0.03, back.height, 0.055, 0.025, hide, 0, back.height / 2, 0.02));
+    const rib = back.height / back.channels;
+    for (let i = 0; i < back.channels; i++) {
+        backrest.add(roundedBox(back.width - 0.03, rib - 0.008, 0.05, 0.02, leather, 0, rib * (i + 0.5), -0.025));
+    }
+    chair.add(backrest);
+    // The arms: polished posts from under the seat to leather pads.
+    for (const side of [-1, 1]) {
+        const x = side * arm.x;
+        chair.add(box(0.03, arm.top - (seat.top - 0.1), 0.035, polished, x, (arm.top + seat.top - 0.1) / 2 - 0.015, 0.02));
+        chair.add(box(Math.abs(x) - seat.width / 2 + 0.02, 0.025, 0.035, polished, side * (seat.width / 2 + (Math.abs(x) - seat.width / 2) / 2), seat.top - 0.1, 0.02));
+        chair.add(roundedBox(0.075, 0.035, arm.length, 0.015, leather, x, arm.top, 0.02 - arm.length * 0.15));
+    }
+    // Under the seat: the tilt mechanism, and the column in its shroud.
+    chair.add(box(0.2, 0.045, 0.24, dark, 0, seat.top - 0.13, 0.02));
+    chair.add(cylinder(0.024, 0.2, polished, 0, seat.top - 0.25, 0, 16));
+    chair.add(cylinder(0.034, 0.16, dark, 0, 0.21, 0, 16));
+    chair.add(cylinder(0.06, 0.045, polished, 0, 0.115, 0, 20));
+    // Five tapered legs of polished aluminum, sloping down to their casters
+    // (QA, 2026-09-25): a twin wheel on its side under a little fork.
     const caster = mat(COLORS.caster, { roughness: 0.6 });
     for (let i = 0; i < CHAIR_LEGS.count; i++) {
         const a = (i / CHAIR_LEGS.count) * Math.PI * 2;
         const leg = new THREE.Group();
         leg.rotation.y = a;
-        leg.add(box(0.045, 0.035, CHAIR_LEGS.reach, steel, 0, 0.09, CHAIR_LEGS.reach / 2));
-        leg.add(box(0.04, 0.03, 0.04, steel, 0, 0.065, CHAIR_LEGS.reach - 0.01));
+        leg.add(new THREE.Mesh(taperedBar(CHAIR_LEGS.reach, 0.05, 0.04, 0.6, 0.03), polished).translateY(0.1));
+        leg.add(box(0.036, 0.03, 0.036, dark, 0, 0.065, CHAIR_LEGS.reach - 0.01));
         const wheel = cylinder(CHAIR_LEGS.wheel, 0.03, caster, 0, CHAIR_LEGS.wheel, CHAIR_LEGS.reach - 0.01, 14);
         wheel.rotation.z = Math.PI / 2;
         leg.add(wheel);
@@ -1249,8 +1259,8 @@ function buildFloorThings(group, config, picks, contacts) {
  * Build the office. `textures` may carry `screen` (the monitor's face),
  * `notes`, `drawerLabels` (one per drawer), `boardHeader`,
  * `boardCards`, `departures`, `whiteboard`, `rainGlass`, and the desk's
- * finishes `walnut` and `leather` (each `{ map, normalMap, roughnessMap }`,
- * the walnut with the `size` in meters its maps cover), all optional.
+ * pad's `leather` (`{ map, normalMap, roughnessMap }`, finishes.js), all
+ * optional.
  */
 export function buildRoom(config, textures = {}) {
     const group = new THREE.Group();
@@ -1258,13 +1268,16 @@ export function buildRoom(config, textures = {}) {
     const picks = {};
     buildShell(group, config);
     const contacts = [];
-    const desk = buildDesk(group, config, picks, contacts, { walnut: textures.walnut || null, leather: textures.leather || null });
+    // The desk, the credenza, the printer and the trays share one white, one
+    // aluminum and one leather.
+    const finish = furnitureMaterials({ leather: textures.leather || null });
+    const desk = buildDesk(group, config, picks, contacts, finish);
     const waste = buildFloorThings(group, config, picks, contacts);
-    const cabinet = buildCabinet(group, config, textures.drawerLabels || null, picks);
+    const cabinet = buildCabinet(group, config, textures.drawerLabels || null, picks, finish);
     const board = buildBoard(group, config, textures, picks);
     const departures = buildDepartures(group, config, textures.departures || null, picks);
     const whiteboard = buildWhiteboard(group, config, textures.whiteboard || null, picks);
-    buildPrinter(group, config, picks);
+    buildPrinter(group, config, picks, finish);
     const notes = buildNotes(group, config, textures.notes || null, picks);
     const rain = buildRainPanes(group, config, textures.rainGlass || null);
     if (textures.screen) {

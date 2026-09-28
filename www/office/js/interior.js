@@ -98,7 +98,8 @@ export function interiorEnvironment(config, windows, from) {
     band(rw, half, city, hw - 0.01, mid - half / 2, rz, -Math.PI / 2);
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 8), glow());
     const d = config.room.desk;
-    lamp.position.set(d.x + d.width / 2 - 0.2, d.height + 0.34, d.z - d.depth / 2 + 0.23);
+    // Under the LED lamp's head (room.js LAMP).
+    lamp.position.set(d.x + d.width / 2 - 0.2, d.height + 0.33, d.z - d.depth / 2 + 0.35);
     scene.add(lamp);
     scene.position.set(-from[0], -from[1], -from[2]);
     scene.updateMatrixWorld(true);
@@ -112,9 +113,11 @@ export function interiorEnvironment(config, windows, from) {
          *  night the lamp is. */
         set(look, lampOn) {
             const day = 1 - look.cityLights;
-            faces.wall.color.copy(linear(0xe9e0d0, 0.12 + 0.4 * day));
-            faces.ceiling.color.copy(linear(0xf3eee6, 0.1 + 0.45 * day));
-            faces.floor.color.copy(linear(0x7a5236, 0.08 + 0.3 * day));
+            // The white walls at the brightness the old beige ones were tuned
+            // to (it is about 6% brighter), so the windows still outshine them.
+            faces.wall.color.copy(linear(0xf3f2ef, 0.113 + 0.375 * day));
+            faces.ceiling.color.copy(linear(0xf6f5f2, 0.1 + 0.45 * day));
+            faces.floor.color.copy(linear(0xcfcbc4, 0.08 + 0.3 * day));
             sky.color.copy(linear(look.skyTop, 0.25 + 2.6 * day));
             city.color.copy(linear(look.cityNear, 0.3 + 1.2 * day)).add(linear(0xffc98a, 0.25 * look.cityLights));
             lamp.visible = !!lampOn;

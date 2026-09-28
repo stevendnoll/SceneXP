@@ -1302,6 +1302,18 @@ describe('the fleet, built from its source', () => {
             expect(jet.group.visible).toBe(false);
             expect(jet.strobes.visible).toBe(false);
         }
+        // A jet taking a flight takes its airline's colors, and keeps them
+        // while it flies (QA, 2026-09-29).
+        const colorsOf = (i) => Array.from(fleetMod.jetParts(life.LIVERIES[i]).body.attributes.color.array);
+        const hull = () => Array.from(fleet.jets[0].hull.geometry.attributes.color.array);
+        expect(hull()).toEqual(colorsOf(0));
+        fleet.flyJets([{ ...aloft, livery: 4 }], false);
+        expect(fleet.jets[0].livery).toBe(4);
+        expect(hull()).toEqual(colorsOf(4));
+        expect(colorsOf(4)).not.toEqual(colorsOf(0));
+        fleet.flyJets([{ ...aloft, livery: 2 }, { ...aloft, livery: 5 }], false);
+        expect(hull()).toEqual(colorsOf(2));
+        expect(Array.from(fleet.jets[1].hull.geometry.attributes.color.array)).toEqual(colorsOf(5));
     });
 
     test('a fleet with no buses in it still builds', () => {
@@ -2064,10 +2076,16 @@ describe('the fifth round of screenshots (2026-09-28)', () => {
         expect(dashing).toBeGreaterThan(8);
     });
 
-    test('jets wait at every gate, on their wheels', async () => {
+    test('jets wait at every gate, on their wheels, of several airlines', async () => {
         const jets = world.scene.getObjectByName('airport-jets');
-        const one = (await import('../www/office/js/fleet.js')).jetParts().body.attributes.position.count;
+        const fleetParts = (await import('../www/office/js/fleet.js')).jetParts;
+        const one = fleetParts().body.attributes.position.count;
         expect(jets.geometry.attributes.position.count).toBe(one * city.AIRPORT.gates.a.length);
+        // Each gate's jet in its own colors: no two alike, side by side.
+        const color = jets.geometry.attributes.color.array;
+        const each = color.length / city.AIRPORT.gates.a.length;
+        const liveries = Array.from({ length: city.AIRPORT.gates.a.length }, (_, i) => color.slice(i * each, (i + 1) * each).join(','));
+        expect(new Set(liveries).size).toBe(liveries.length);
         jets.geometry.computeBoundingBox();
         const low = jets.geometry.boundingBox.min.y;
         // The engines hang 2.9 m under the axis, the wheels 3.4 (both times
