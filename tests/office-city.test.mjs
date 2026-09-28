@@ -9,7 +9,8 @@
 import {
     CITY, WATER_Y, shoreZ, elevation, groundY, FAR_LAND, inPolygon, isLand, isWater, seeded, blockAt, districtOf,
     cityTowers, piers, reflectionPoints, noiseField, crests, MOUNTAINS, farCoastZ, mountainHeight, landColor, LAND_COLORS,
-    islandHeight, landGrids, stops, SNOW, snowCover, snowFray, snowLineAt, snowColor, landGround, paneNormals, PANE_TILT, PANE_STORE, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
+    islandHeight, islandShoreZ, islandCenter, islandLandingX, islandTowers, islandLamps, islandBuilt, islandGround, ISLAND_CITY,
+    landGrids, stops, SNOW, snowCover, snowFray, snowLineAt, snowColor, landGround, paneNormals, PANE_TILT, PANE_STORE, PANEL, FACADE_TILE, towerStyle, outline, sections, rooftop, aviationLights, facadeUv
 } from '../www/office/js/city.js';
 
 const towers = cityTowers();
@@ -316,7 +317,7 @@ describe('the land across the water', () => {
         const x = 1000;
         const z = -32000;
         // Gentle ground (steep 0.05, under about 18 degrees) holds snow; the
-        // snow slides off from about 30 degrees (steep 0.14) on.
+        // snow starts to slide off from about 28 degrees (steep 0.12) on.
         expect(landColor(3900, 0.05, x, z, 30000)).toBeGreaterThan(0);
         expect(lum(landColor(3900, 0.05, x, z, 30000))).toBeGreaterThan(lum(LAND_COLORS.snow) * 0.8);
         expect(lum(landColor(3900, 0.95, x, z, 30000))).toBeLessThan(lum(LAND_COLORS.rock) * 1.2);
@@ -353,11 +354,32 @@ describe('the land across the water', () => {
         expect(points).toBeLessThan(100000);
     });
 
-    test('the snow: a sharp, ragged edge, holding on steeper ground near the tops, and bluer far off', () => {
+    test('the snow: a soft, ragged edge, holding on steeper ground near the tops, and bluer far off', () => {
         const line = 2400;
-        // Sharp: from bare to covered within a few tens of meters of height.
+        // Soft (QA, 2026-09-26: "a little too sharp and jagged"): a range
+        // 35 km off is about 40 m a pixel, and an edge thinner than a few
+        // pixels stair-steps in a shader. From bare to covered over at least
+        // 200 m of height, and on gentle ground no more than 300.
         expect(snowCover(line - SNOW.soft, 0.05, line)).toBe(0);
         expect(snowCover(line + SNOW.soft, 0.05, line)).toBe(1);
+        expect(2 * SNOW.soft).toBeGreaterThanOrEqual(200);
+        expect(2 * SNOW.soft).toBeLessThanOrEqual(300);
+        const halfway = snowCover(line, 0.05, line);
+        expect(halfway).toBeGreaterThan(0.3);
+        expect(halfway).toBeLessThan(0.7);
+        // And over a wide range of steepness, not at one angle: at the line
+        // a slope halfway through the range holds about half.
+        const mid = (SNOW.holds[0] + SNOW.holds[1]) / 2;
+        expect(SNOW.holds[1] - SNOW.holds[0]).toBeGreaterThan(0.18);
+        expect(snowCover(line + SNOW.soft, mid, line)).toBeCloseTo(0.5, 1);
+        // A light veil over the rock near the tops, so the snowfields fade
+        // into the faces: on a 57 degree face (steep 0.45, too steep for the
+        // snowfields) well above the line, never more than the veil's share...
+        const face = 0.45;
+        expect(snowCover(line + 400, face, line)).toBeGreaterThan(0);
+        expect(snowCover(line + 400, face, line)).toBeLessThanOrEqual(SNOW.dust.share);
+        // ...and none of it below the line.
+        expect(snowCover(line - 20, face, line)).toBe(0);
         // Ragged: the finest grain moves the edge, and changes within a grid
         // cell (it is drawn per pixel, so the grid does not hold it back).
         let lo = 0;
@@ -373,9 +395,10 @@ describe('the land across the water', () => {
         expect(hi).toBeLessThanOrEqual(1);
         expect(hi - lo).toBeGreaterThan(1);
         expect(changes).toBeGreaterThan(100);
-        // Near the snow line a 44 degree face (steep 0.28) sheds its snow;
-        // a kilometer up it holds it, as ice and snow cling near the tops.
-        expect(snowCover(line + 60, 0.28, line)).toBeLessThan(0.1);
+        // Near the snow line a 44 degree face (steep 0.28) sheds most of its
+        // snow; a kilometer up it holds it, as ice and snow cling near the
+        // tops.
+        expect(snowCover(line + 60, 0.28, line)).toBeLessThan(0.2);
         expect(snowCover(line + 1100, 0.28, line)).toBeGreaterThan(0.9);
         // Sheer rock holds none, however high.
         expect(snowCover(line + 1500, 0.6, line)).toBe(0);
@@ -403,5 +426,95 @@ describe('the land across the water', () => {
         expect(Math.max(...FAR_LAND.island.map(([, z]) => z))).toBeLessThan(shoreZ(0));
         expect(Math.min(...FAR_LAND.island.map(([, z]) => z))).toBeGreaterThan(farCoastZ(0));
         expect(MOUNTAINS.bands.farShore.to).toBe(MOUNTAINS.bands.mountains.from);
+    });
+});
+
+describe('the city across the bay (QA, 2026-09-26)', () => {
+    const island = islandTowers();
+    const back = (t) => islandShoreZ(t.x) - t.z;
+    const mean = (list) => list.reduce((sum, t) => sum + t.h, 0) / list.length;
+
+    test('the same skyline every visit, and a city of it: a thousand buildings or so', () => {
+        expect(islandTowers()).toEqual(island);
+        expect(island.length).toBeGreaterThan(800);
+        expect(island.length).toBeLessThan(1800);
+        expect(island.every((t) => t.island === true)).toBe(true);
+        expect(towers.some((t) => t.island)).toBe(false);
+    });
+
+    test('every building stands wholly on the island, along the shore that faces the office, on its own ground', () => {
+        for (const t of island) {
+            for (const [x, z] of outline({ ...t, tiers: [] })) expect(inPolygon(x, z, FAR_LAND.island)).toBe(true);
+            expect(back(t)).toBeGreaterThan(ISLAND_CITY.beach);
+            expect(back(t)).toBeLessThan(ISLAND_CITY.inland + ISLAND_CITY.block);
+            // On the lowest of its corners, so none floats on the slope.
+            expect(t.base).toBeGreaterThanOrEqual(0);
+            expect(t.base).toBeLessThanOrEqual(islandHeight(t.x, t.z));
+            expect(['box', 'chamfer', 'round']).toContain(t.form);
+        }
+        // The waterfront row is built (the ground there is under a meter,
+        // and a rule asking for more once left the shore bare).
+        expect(island.filter((t) => back(t) < 100).length).toBeGreaterThan(60);
+    });
+
+    test('the ferry berths at an open plaza, straight out from the office’s dock', () => {
+        const landing = islandLandingX();
+        expect(landing).toBe(piers().find((p) => p.ferry).x);
+        for (const t of island) {
+            if (back(t) < 260) expect(Math.abs(t.x - landing)).toBeGreaterThanOrEqual(ISLAND_CITY.landing);
+        }
+    });
+
+    test('a skyline with a profile, not a picket fence: towers gathered in the centers, landmarks over them', () => {
+        // The main center stands in the opening the office's street gives
+        // every screen (x 0 to about 3,900, measured 2026-09-26).
+        const main = ISLAND_CITY.centers[0];
+        expect(main.x).toBeGreaterThan(0);
+        expect(main.x).toBeLessThan(3900);
+        // Along the water, where the skyline stands, the opening's buildings
+        // average twice the height of those between the centers.
+        const front = (t) => back(t) < 300;
+        const opening = island.filter((t) => front(t) && t.x > 0 && t.x < 3900);
+        const between = island.filter((t) => front(t) && t.x > -3500 && t.x < -1000);
+        expect(mean(opening)).toBeGreaterThan(2 * mean(between));
+        // Low where the centers are not: a waterfront of mid-rises.
+        for (const t of island) if (islandCenter(t.x) < 0.1) expect(t.h).toBeLessThan(60);
+        // Every landmark is built, and the tallest of them tops the rest.
+        for (const l of ISLAND_CITY.landmarks) {
+            expect(island.some((t) => t.h === l.h && Math.abs(t.x - l.x) < 50 && Math.abs(back(t) - l.d) < 50)).toBe(true);
+        }
+        const tallest = island.reduce((a, t) => (t.h > a.h ? t : a));
+        expect(tallest.h).toBe(Math.max(...ISLAND_CITY.landmarks.map((l) => l.h)));
+        expect(tallest.x).toBeGreaterThan(0);
+        expect(tallest.x).toBeLessThan(3900);
+        // A skyline from 12 km: dozens of towers over 100 m, a few over 150.
+        expect(island.filter((t) => t.h > 100).length).toBeGreaterThan(40);
+        expect(island.filter((t) => t.h > 150).length).toBeGreaterThan(8);
+    });
+
+    test('by night its streets are strung with lamps, along the promenade and up the hill', () => {
+        const lamps = islandLamps();
+        expect(lamps.length).toBeGreaterThan(1000);
+        expect(lamps.length).toBeLessThan(4000);
+        for (const [x, y, z] of lamps) {
+            expect(inPolygon(x, z, FAR_LAND.island)).toBe(true);
+            expect(y - WATER_Y).toBeCloseTo(islandHeight(x, z) + 6, 3);
+            expect(islandShoreZ(x) - z).toBeLessThanOrEqual(ISLAND_CITY.inland);
+        }
+        // The promenade runs along the water, in front of the first row.
+        expect(lamps.filter(([x, , z]) => islandShoreZ(x) - z < ISLAND_CITY.beach).length).toBeGreaterThan(150);
+    });
+
+    test('its hillside is grayer where it is built, and the rest of the island stays forest', () => {
+        const x = 1900;
+        const forest = LAND_COLORS.forest;
+        expect(islandBuilt(x, islandShoreZ(x) - 400)).toBe(1);
+        expect(islandBuilt(x, islandShoreZ(x) - 2000)).toBe(0);
+        expect(islandBuilt(x, islandShoreZ(x) + 10)).toBe(0);
+        expect(islandGround(forest, x, islandShoreZ(x) - 2000)).toBe(forest);
+        const built = islandGround(forest, x, islandShoreZ(x) - 400);
+        expect(built).not.toBe(forest);
+        // Still a green gray, never white or brown: the hills stay hills.
+        expect((built >> 8) & 255).toBeGreaterThan((built >> 16) & 255);
     });
 });

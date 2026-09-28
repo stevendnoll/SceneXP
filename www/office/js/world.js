@@ -31,13 +31,13 @@
 
 import {
     CITY, WATER_Y, FAR_LAND, blockAt, elevation, cityTowers, piers, landGrids, landGround, snowLineAt, SNOW, SNOW_FRAY, LAND_COLORS, DISTANCE_BLUE,
-    reflectionPoints, PANEL, FACADE_TILE, towerStyle, rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
+    islandTowers, islandLamps, islandGround, reflectionPoints, PANEL, FACADE_TILE, towerStyle, rooftop, aviationLights, facadeUv, outline, sections, paneNormals, PANE_STORE
 } from './city.min.js';
 import { BAY, HAZE, rippleNormals } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis } from './sky.min.js';
 import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
-    carLightPositions, carYaws, drift, jetAt, jetFlashing, shipShift
+    carLightPositions, carYaws, drift, jetAt, jetFlashing, shipShift, LIFE
 } from './life.min.js';
 import { buildFleet, place, boxesGeometry } from './fleet.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
@@ -221,7 +221,11 @@ export function roofGeometry(towers) {
         }
         const secs = sections(t);
         secs.forEach((s, i) => cap(outline(t, s.at), ground + s.y1, i === secs.length - 1 ? ROOF_COLORS.roof : ROOF_COLORS.terrace));
-        for (const b of rooftop(t)) boxAt(b.x, b.z, b.w, b.d, ground + b.y, ground + b.y + b.h, ROOF_COLORS[b.kind]);
+        // A low building across the bay keeps a bare roof: its penthouse would
+        // be a tenth of a pixel from 12 km, and a thousand of them were more
+        // than half the island's triangles.
+        const tops = t.island && t.low ? [] : rooftop(t);
+        for (const b of tops) boxAt(b.x, b.z, b.w, b.d, ground + b.y, ground + b.y + b.h, ROOF_COLORS[b.kind]);
     }
     return t3.geometry();
 }
@@ -276,6 +280,21 @@ function buildBeacons(scene, towers) {
     beacons.visible = false;
     scene.add(beacons);
     return beacons;
+}
+
+/** The island city's street lights (city.js islandLamps): warm points shown
+ *  at night, never in the way of a ray (they are light, not things). */
+function buildLamps(scene) {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(islandLamps().flat(), 3));
+    const lamps = new THREE.Points(geometry, new THREE.PointsMaterial({
+        color: 0xffd79a, size: 1.5, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false
+    }));
+    lamps.name = 'island-lamps';
+    lamps.visible = false;
+    lamps.raycast = () => {};
+    scene.add(lamps);
+    return lamps;
 }
 
 /** Where the downtown ground is modeled, as its own sloped mesh. */
@@ -357,7 +376,9 @@ function buildGround(scene, textures) {
 }
 
 /** The piers along the waterfront, reaching west into the bay, with the
- *  ferry dock's terminal at the foot of the office's street. */
+ *  ferry dock's terminal at the foot of the office's street, and across the
+ *  bay the island's ferry landing, reaching out to where the ferry berths
+ *  (life.js ferryRoute), its terminal on the plaza behind. */
 function buildPiers(scene) {
     const boxes = [];
     for (const pier of piers()) {
@@ -365,7 +386,12 @@ function buildPiers(scene) {
         boxes.push([pier.x, 3, z, pier.width, 2, pier.length, 0x6e6259]);
         boxes.push([pier.x, pier.ferry ? 11 : 8.5, z, pier.width * 0.7, pier.ferry ? 14 : 9, pier.length * 0.75, 0x8f9aa3]);
     }
-    // One mesh for all of them (a draw call each would be sixteen).
+    const route = ferryRoute();
+    // The ferry stops 60 m short of the shore with its bow toward it.
+    const shore = route.to - LIFE.ferry.length / 2 - 60;
+    boxes.push([route.x, 3, shore + 26, 40, 2, 72, 0x6e6259]);
+    boxes.push([route.x, 8, shore - 45, 44, 12, 40, 0x8f9aa3]);
+    // One mesh for all of them (a draw call each would be eighteen).
     const mesh = new THREE.Mesh(boxesGeometry(boxes), standard(0xffffff, { vertexColors: true, roughness: 0.9 }));
     mesh.position.y = WATER_Y;
     mesh.name = 'piers';
@@ -396,8 +422,10 @@ export function srgbTable() {
  * Each square of the grid is split along the diagonal whose ends stand
  * nearer in height, so the split runs along a ridge or a gully rather than
  * across it, and there is no grain from every square split the same way.
+ * `tint(hex, x, z)`, given, changes a point's ground color (the island's
+ * built-up shore, city.js islandGround).
  */
-export function landGeometry({ positions, cols, rows }) {
+export function landGeometry({ positions, cols, rows }, tint = null) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const y = (k) => positions[k * 3 + 1];
@@ -425,7 +453,8 @@ export function landGeometry({ positions, cols, rows }) {
         const x = positions[i * 3];
         const z = positions[i * 3 + 2];
         const steep = 1 - Math.abs(normal.getY(i));
-        const hex = landGround(y(i) - WATER_Y, steep, x, z, Math.hypot(x, z));
+        const ground = landGround(y(i) - WATER_Y, steep, x, z, Math.hypot(x, z));
+        const hex = tint ? tint(ground, x, z) : ground;
         colors[i * 3] = linear[(hex >> 16) & 255];
         colors[i * 3 + 1] = linear[(hex >> 8) & 255];
         colors[i * 3 + 2] = linear[hex & 255];
@@ -664,12 +693,14 @@ function glslColor(hex) {
  * The snow, laid a pixel at a time over the ground's color (city.js
  * snowCover, snowFray and snowColor, the same sums in GLSL): each pixel's
  * own height and the steepness of its own interpolated normal decide it, so
- * its edge against the rock is sharp and ragged, not smeared across a
- * triangle. Runs after the vertex colors are in diffuseColor.
+ * it follows the ground rather than smearing across a triangle, and fades
+ * into the rock over several pixels (SNOW.soft) rather than stair-stepping
+ * along a one-pixel edge. Runs after the vertex colors are in diffuseColor.
  */
 export function landSnow() {
     const waves = SNOW_FRAY.map(([kx, kz, phase]) =>
         `sin( mod( dot( vLandPos.xz, vec2( ${glslFloat(kx)}, ${glslFloat(kz)} ) ) + ${glslFloat(phase)}, 6.2831853 ) )`);
+    const { dust } = SNOW;
     return `#include <color_fragment>
 	{
 		float landFray = ( ${waves.join(' + ')} ) / ${glslFloat(waves.length)};
@@ -677,8 +708,11 @@ export function landSnow() {
 		float landEdge = vSnowLine + ${glslFloat(SNOW.fray[0])} * landFray;
 		float landGive = ${glslFloat(SNOW.fray[1])} * landFray + ${glslFloat(SNOW.high[0])} * smoothstep( landEdge, landEdge + ${glslFloat(SNOW.high[1])}, landHeight );
 		float landSteep = 1.0 - abs( normalize( vLandNormal ).y );
-		float landCover = smoothstep( landEdge - ${glslFloat(SNOW.soft)}, landEdge + ${glslFloat(SNOW.soft)}, landHeight )
+		float landField = smoothstep( landEdge - ${glslFloat(SNOW.soft)}, landEdge + ${glslFloat(SNOW.soft)}, landHeight )
 			* ( 1.0 - smoothstep( ${glslFloat(SNOW.holds[0])} + landGive, ${glslFloat(SNOW.holds[1])} + landGive, landSteep ) );
+		float landVeil = ${glslFloat(dust.share)} * smoothstep( landEdge, landEdge + ${glslFloat(dust.over)}, landHeight )
+			* ( 1.0 - smoothstep( ${glslFloat(dust.holds[0])}, ${glslFloat(dust.holds[1])}, landSteep ) );
+		float landCover = max( landField, landVeil );
 		float landBlue = ${glslFloat(SNOW.distance * DISTANCE_BLUE.share)} * smoothstep( ${glslFloat(DISTANCE_BLUE.from)}, ${glslFloat(DISTANCE_BLUE.to)}, length( vLandPos.xz ) );
 		diffuseColor.rgb = mix( diffuseColor.rgb, mix( ${glslColor(LAND_COLORS.snow)}, ${glslColor(LAND_COLORS.far)}, landBlue ), landCover );
 	}`;
@@ -716,8 +750,9 @@ export function landAirColor(look, blue, target = new THREE.Color()) {
     return target.setHex(look.skyBottom, THREE.LinearSRGBColorSpace).lerp(top, blue);
 }
 
-/** The land across the water (city.js landGrids): the island and the far
- *  shore's wooded foothills as the hills (the view test counts anything
+/** The land across the water (city.js landGrids): the island (its shore
+ *  built up, grayer where the city stands) and the far shore's wooded
+ *  foothills as the hills (the view test counts anything
  *  named land-* as land), and the ranges behind as the mountains. One mesh
  *  each, one material (landShader), taking less of the haze than the city
  *  and a bluer one (LAND_HAZE). */
@@ -729,7 +764,7 @@ function buildLand(scene) {
     const group = new THREE.Group();
     group.name = 'land-hills';
     for (const name of ['island', 'farShore']) {
-        const mesh = new THREE.Mesh(landGeometry(grids[name]), material);
+        const mesh = new THREE.Mesh(landGeometry(grids[name], name === 'island' ? islandGround : null), material);
         mesh.name = `land-hills-${name}`;
         group.add(mesh);
     }
@@ -779,9 +814,12 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const water = buildWater(scene, anisotropy);
     const streets = buildGround(scene, textures);
     const { hills, mountains, haze: landHaze, air: landAir } = buildLand(scene);
-    const plan = cityTowers();
+    // Downtown and, across the bay, the island's waterfront: one skyline,
+    // in the same three glass meshes and the roof mesh.
+    const plan = [...cityTowers(), ...islandTowers()];
     const towers = buildTowers(scene, plan, textures.facades);
     const beacons = buildBeacons(scene, plan);
+    const lamps = buildLamps(scene);
     const docks = buildPiers(scene);
     const sky = buildSky(scene);
     const clouds = buildClouds(scene, textures.clouds);
@@ -858,6 +896,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         points,
         towers,
         beacons,
+        lamps,
         docks,
         mountains,
         plan,
@@ -922,6 +961,8 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             for (const mesh of towers.meshes) mesh.material.emissiveIntensity = look.cityLights * OFFICE_GLOW;
             streets.emissiveIntensity = look.cityLights * STREET_GLOW;
             beacons.visible = look.cityLights > 0.2;
+            lamps.visible = look.cityLights > 0.05;
+            lamps.material.opacity = Math.min(1, look.cityLights);
         },
         /**
          * Rebuild the reflections: the world itself, as it is lit now, with

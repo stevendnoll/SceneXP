@@ -678,7 +678,27 @@ describe('the glass city', () => {
         lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 12)));
         expect(lit.beacons.visible).toBe(false);
         expect(lit.towers.meshes[0].material.emissiveIntensity).toBe(0);
-        expect(lit.beacons.geometry.attributes.position.count).toBe(city.aviationLights(city.cityTowers()).length);
+        // The beacons are downtown's and the island city's (one skyline).
+        expect(lit.plan.length).toBe(city.cityTowers().length + city.islandTowers().length);
+        expect(lit.beacons.geometry.attributes.position.count).toBe(city.aviationLights(lit.plan).length);
+        expect(city.aviationLights(city.islandTowers()).length).toBeGreaterThan(3);
+    });
+
+    test('by night the island city’s streets glitter with lamps, and by day they are out; never in a ray’s way', async () => {
+        const { lighting, lightAt } = await import('../www/office/js/daylight.js');
+        const lamps = lit.scene.getObjectByName('island-lamps');
+        expect(lamps).toBe(lit.lamps);
+        expect(lamps.geometry.attributes.position.count).toBe(city.islandLamps().length);
+        lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 22)));
+        expect(lamps.visible).toBe(true);
+        expect(lamps.material.opacity).toBeGreaterThan(0.5);
+        // A point a pixel and a half across whatever the distance.
+        expect(lamps.material.sizeAttenuation).toBe(false);
+        lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 12)));
+        expect(lamps.visible).toBe(false);
+        const hits = [];
+        lamps.raycast(new THREE.Raycaster(), hits);
+        expect(hits).toEqual([]);
     });
 
     test('without a renderer there is nothing to reflect yet, and nothing breaks', () => {
@@ -1794,5 +1814,78 @@ describe('the third round of screenshots (2026-09-25)', () => {
         const ndc = jet.group.getWorldPosition(new THREE.Vector3()).project(cam);
         expect(Math.abs(ndc.x)).toBeLessThan(1);
         expect(Math.abs(ndc.y)).toBeLessThan(1);
+    });
+});
+
+describe('the fourth round of screenshots (2026-09-26)', () => {
+    let life;
+    beforeAll(async () => {
+        life = await import('../www/office/js/life.js');
+    });
+
+    test('the snow fades into the rock over a veil, drawn from the same numbers as city.js', () => {
+        const snow = worldMod.landSnow();
+        expect(snow).toContain('float landCover = max( landField, landVeil );');
+        expect(snow).toContain(`${city.SNOW.dust.share} * smoothstep( landEdge, landEdge + ${city.SNOW.dust.over}.0, landHeight )`);
+        expect(snow).toContain(`smoothstep( landEdge - ${city.SNOW.soft}.0, landEdge + ${city.SNOW.soft}.0, landHeight )`);
+    });
+
+    /**
+     * Whether the island city is seen: rays from the eye toward the upper
+     * part of each tower along the island's waterfront, and how many of those
+     * inside the frame meet an island tower first (not the room, not a
+     * downtown tower in the way).
+     */
+    function islandSeen(station, aspect) {
+        const cam = cameraAt(station, aspect);
+        const shore = (t) => city.islandShoreZ(t.x) - t.z;
+        let seen = 0;
+        for (const t of city.islandTowers()) {
+            if (shore(t) > 300 || t.h < 40) continue;
+            const target = new THREE.Vector3(t.x, city.WATER_Y + t.base + t.h * 0.7, t.z);
+            const ndc = target.clone().project(cam);
+            if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) continue;
+            const hit = seeAlong(cam.position, target.clone().sub(cam.position));
+            if (hit.what === 'towers' && hit.point.z < city.islandShoreZ(hit.point.x) + 5) seen++;
+        }
+        return seen;
+    }
+
+    test.each([
+        ['desk', 'laptop 16:10'], ['desk', 'wide 21:9'], ['window', 'laptop 16:10'], ['window', 'wide 21:9'], ['window', 'phone upright']
+    ])('from the %s on a %s screen, the city across the bay shows over the water', (station, name) => {
+        expect(islandSeen(station, ASPECTS[name])).toBeGreaterThan(20);
+    });
+
+    test('the island city is in the glass meshes, its hillside grayer where it is built', () => {
+        const island = world.scene.getObjectByName('land-hills-island');
+        const pos = island.geometry.attributes.position;
+        const col = island.geometry.attributes.color;
+        let built = null;
+        let wild = null;
+        for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const z = pos.getZ(i);
+            if (pos.getY(i) <= city.WATER_Y) continue;
+            const b = city.islandBuilt(x, z);
+            if (b === 1 && built === null) built = i;
+            if (b === 0 && wild === null && city.islandShoreZ(x) - z > 2000) wild = i;
+        }
+        // Grayer: its channels closer together than the forest's.
+        const spread = (i) => Math.max(col.getX(i), col.getY(i), col.getZ(i)) - Math.min(col.getX(i), col.getY(i), col.getZ(i));
+        const bright = (i) => col.getX(i) + col.getY(i) + col.getZ(i);
+        expect(spread(built) / bright(built)).toBeLessThan(spread(wild) / bright(wild));
+        expect(world.plan.filter((t) => t.island).length).toBe(city.islandTowers().length);
+    });
+
+    test('the ferry berths at a landing on the island, straight across from the dock', () => {
+        const route = life.ferryRoute();
+        const shore = route.to - life.LIFE.ferry.length / 2 - 60;
+        world.docks.geometry.computeBoundingBox();
+        const box = world.docks.geometry.boundingBox;
+        // The landing reaches from the island's shore out to the ferry's bow.
+        expect(box.min.z).toBeLessThan(shore - 40);
+        expect(city.isLand(route.x, shore)).toBe(true);
+        expect(city.isLand(route.x, shore + 10)).toBe(false);
     });
 });

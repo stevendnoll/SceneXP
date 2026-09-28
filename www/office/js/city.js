@@ -13,7 +13,8 @@
  * view. Less is more: no port, no stadiums, no volcano, no south at all.
  *
  * SEATTLE-INSPIRED, NOT SEATTLE. A glass downtown on a hill above a bay to
- * the west, an island and snowy mountains beyond. No real building is
+ * the west, an island beyond whose waterfront is built up as more of the
+ * city (islandTowers), and snowy mountains behind. No real building is
  * anybody's in particular.
  *
  * THE FRAME IS THE ROOM'S. The office is the northwest corner of its floor:
@@ -410,20 +411,39 @@ const mixHex = (a, b, t) => {
 
 /**
  * How the snow lies. It is drawn a pixel at a time (world.js landSnow), not
- * a grid point at a time, so its edge against the rock is sharp and ragged
- * however coarse the grid (QA, 2026-09-25: colored per point, it could only
- * change every 300 m and smeared to gray across each triangle between).
+ * a grid point at a time, so its edge follows the ground however coarse the
+ * grid (QA, 2026-09-25: colored per point, it could only change every 300 m
+ * and smeared to gray across each triangle between).
+ *
+ * SOFT, NOT SHARP (QA, 2026-09-26: "a little too sharp and jagged"). A
+ * range 35 km off is some 40 m a pixel, so an edge a few tens of meters wide
+ * was a pixel wide, and a pixel-wide edge drawn in a shader stair-steps
+ * (nothing smooths it, not even the canvas's antialiasing, which only
+ * smooths the edges of triangles). So the snow thins out over a hundred
+ * meters or more of height and a wide range of steepness, and a light veil
+ * of it lies over the rock near the tops, so the snowfields fade into the
+ * faces rather than stopping at them.
+ *
  * `soft` is how far either side of the snow line, in height, the snow thins
  * out; `holds` the steepness (0 flat, 1 sheer) over which it gives way to
- * rock at the snow line, about 33 to 43 degrees; `high` how much steeper
+ * rock at the snow line, about 28 to 49 degrees; `high` how much steeper
  * ground it holds, and how far above the line, since near the summits snow
  * and ice cling to the faces (without it the snow sat in thin rims on the
  * crests over bare gray faces); `fray` how far the finest grain of the snow
  * line (snowFray) moves it, meters of height and a share of the steepness;
- * `distance` the far ranges' share of blue on the snow, a little of the
- * ground's.
+ * `dust` the veil over the rock: its `share` of snow, reached `over` that
+ * many meters above the line, on ground up to `holds` steep (none on sheer
+ * rock); `distance` the far ranges' share of blue on the snow, a little of
+ * the ground's.
  */
-export const SNOW = { soft: 35, holds: [0.16, 0.26], high: [0.14, 1000], fray: [70, 0.05], distance: 0.3 };
+export const SNOW = {
+    soft: 110,
+    holds: [0.12, 0.34],
+    high: [0.14, 1000],
+    fray: [45, 0.03],
+    dust: { share: 0.2, over: 700, holds: [0.3, 0.6] },
+    distance: 0.3
+};
 
 /**
  * The snow line's finest grain, -1 to 1: three ripples a hundred to three
@@ -452,11 +472,15 @@ export function snowLineAt(x, z, fields = mountainFields()) {
 /** How much snow covers a point, 0 to 1: `h` its height, `steep` its
  *  steepness, `line` the snow line there (snowLineAt), `fray` the finest
  *  grain there (snowFray). Snow holds on the gentler ground and slides off
- *  the steep faces, which stand out dark between the snowfields. */
+ *  the steep faces, which stand out darker between the snowfields, under
+ *  a light veil of it (SNOW.dust) near the tops. */
 export function snowCover(h, steep, line, fray = 0) {
     const edge = line + SNOW.fray[0] * fray;
     const give = SNOW.fray[1] * fray + SNOW.high[0] * smoothstep(edge, edge + SNOW.high[1], h);
-    return smoothstep(edge - SNOW.soft, edge + SNOW.soft, h) * (1 - smoothstep(SNOW.holds[0] + give, SNOW.holds[1] + give, steep));
+    const field = smoothstep(edge - SNOW.soft, edge + SNOW.soft, h) * (1 - smoothstep(SNOW.holds[0] + give, SNOW.holds[1] + give, steep));
+    const { share, over, holds } = SNOW.dust;
+    const veil = share * smoothstep(edge, edge + over, h) * (1 - smoothstep(holds[0], holds[1], steep));
+    return Math.max(field, veil);
 }
 
 /** The blue of distance: how much of LAND_COLORS.far the land takes, going
@@ -515,6 +539,163 @@ export function islandHeight(x, z, fields = mountainFields()) {
     }
     const rolling = 0.5 + 0.5 * fields.island(x / 2600, z / 2600);
     return smoothstep(0, 1400, edge) * (70 + 100 * rolling);
+}
+
+// ---- The city across the bay ---------------------------------------------------
+
+/**
+ * The island's waterfront built up as part of the city (QA, 2026-09-26:
+ * "buildings along the waterfront across the water", an Alki-like shore as
+ * a modern extension of downtown). It faces the office along the island's
+ * east shore, 12 km out, where a 150 m tower is about 1.5% of the frame's
+ * height: a skyline, not a facade, so the forms stay simple and it is the
+ * heights and the gaps that make it read.
+ *
+ * WHERE THE WINDOWS SEE IT (measured 2026-09-26): the office's own street
+ * opens on the shore from x 0 to about 3,900 on every screen, and the wider
+ * frames see it again from about -9,000 to -3,900. The two `centers` stand
+ * in those openings, the main one opposite the street, and between them and
+ * away from them the city is low. A SKYLINE HAS A PROFILE: measured in a
+ * preview, towers of much the same height all along the shore read as a
+ * picket fence, so the towers gather in the centers, tallest in the middle
+ * and near the water, and a few `landmarks` (`x` along the shore, `d` back
+ * from it, `h` tall) stand over them. `block` and `street` are its grid,
+ * `beach` the open strip along the water, `inland` how far back it is built,
+ * `landing` the plaza left open round the ferry's berth, `ground` the color
+ * its streets and roofs give the hillside from 12 km, and `lamps` the
+ * spacing of the street lights by night.
+ */
+export const ISLAND_CITY = {
+    block: 70,
+    street: 20,
+    beach: 45,
+    inland: 1000,
+    landing: 70,
+    centers: [{ x: 1900, spread: 1200, lift: 1 }, { x: -6300, spread: 1100, lift: 0.8 }],
+    landmarks: [{ x: 1700, d: 170, h: 290 }, { x: 2470, d: 260, h: 245 }, { x: 1070, d: 80, h: 215 }, { x: -6260, d: 170, h: 235 }],
+    ground: 0x4c5249,
+    lamps: 80,
+    seed: CITY.seed + 29
+};
+
+/** Where the island's shore facing the office is, as a z, at a point along
+ *  it (the edge of FAR_LAND.island between its first two corners). */
+export function islandShoreZ(x) {
+    const [[x0, z0], [x1, z1]] = FAR_LAND.island;
+    return z0 + ((z1 - z0) * (x - x0)) / (x1 - x0);
+}
+
+/** How strongly the island city rises at a point along its shore, 0 to 1:
+ *  high in its two centers, low between. */
+export function islandCenter(x) {
+    return Math.max(...ISLAND_CITY.centers.map((c) => c.lift * Math.exp(-(((x - c.x) / c.spread) ** 2))));
+}
+
+/** The x of the ferry's berth on the island: straight out from the dock at
+ *  the foot of the office's street (life.js ferryRoute runs along it). */
+export function islandLandingX(city = CITY) {
+    return piers(city).find((p) => p.ferry).x;
+}
+
+/**
+ * The island's buildings, in the same form as cityTowers (`base` is the
+ * ground's height above the water, the lowest of its corners, so no
+ * building floats on the slope). Along the water, condominiums and offices
+ * of six to eighteen floors, as a waterfront has; in the two centers,
+ * glass towers up to about 250 m, the tallest near the water; farther back
+ * up the hill, lower buildings and more open ground. Seeded: the same
+ * skyline on every visit.
+ */
+export function islandTowers(city = CITY) {
+    const S = ISLAND_CITY;
+    const random = seeded(S.seed);
+    const pitch = S.block + S.street;
+    const [[x0], [x1]] = FAR_LAND.island;
+    const landing = islandLandingX(city);
+    const out = [];
+    for (let x = x0 + 400; x <= x1 - 300; x += pitch) {
+        const center = islandCenter(x);
+        for (let d = S.beach + S.block / 2; d <= S.inland; d += pitch) {
+            const z = islandShoreZ(x) - d;
+            const roll = random();
+            const shape = random();
+            const size = random();
+            const tone = random();
+            // The ferry's plaza, open to the water.
+            if (Math.abs(x - landing) < S.landing && d < 260) continue;
+            const half = S.block / 2;
+            const corners = [[x - half, z - half], [x + half, z - half], [x + half, z + half], [x - half, z + half]];
+            // Every corner on the island. (The ground is under a meter for
+            // the first sixty meters back from the water, so asking for more
+            // than none took the whole waterfront row.)
+            const grounds = corners.map(([cx, cz]) => islandHeight(cx, cz));
+            if (Math.min(...grounds) < 0) continue;
+            const back = d / S.inland;
+            const landmark = S.landmarks.find((l) => Math.abs(l.x - x) < pitch / 2 && Math.abs(l.d - d) < pitch / 2);
+            // Open blocks: parks and plazas, more of them up the hill and
+            // fewer in the centers.
+            if (!landmark && roll < 0.12 + 0.4 * back - 0.15 * center) continue;
+            const base = Math.min(...grounds);
+            const tallness = center * (0.4 + 0.6 * Math.exp(-d / 400));
+            let h;
+            let w;
+            let form = 'box';
+            if (landmark || shape < 0.9 * tallness ** 1.3) {
+                h = landmark ? landmark.h : 55 + 170 * tallness ** 1.2 * (0.4 + 0.6 * size);
+                w = landmark ? 46 : 30 + 18 * random();
+                const f = random();
+                form = landmark ? 'chamfer' : f < 0.1 ? 'round' : f < 0.45 ? 'chamfer' : 'box';
+            } else if (d < 200) {
+                h = 20 + 38 * size;
+                w = S.block - 12 - 8 * random();
+            } else {
+                h = 10 + 24 * size;
+                w = S.block - 14 - 10 * random();
+            }
+            const deep = form === 'box' ? w * (0.75 + 0.25 * random()) : w;
+            const tiers = h > 120 && random() < 0.55 ? [{ from: h * (0.6 + 0.2 * random()), inset: 3 + 3 * random() }] : [];
+            if (landmark) tiers.splice(0, tiers.length, { from: h * 0.62, inset: 4 }, { from: h * 0.84, inset: 4 });
+            out.push({ x, z, w, d: deep, h, base, form, tiers, podium: null, tone, low: h < 35, island: true });
+        }
+    }
+    return out;
+}
+
+/**
+ * The island city's street lights, `[x, y, z]` in the room's frame: along
+ * the waterfront promenade, and up each cross street toward the hill every
+ * ISLAND_CITY.lamps meters. Lit by night (world.js), a glitter along the far
+ * shore under the lit towers.
+ */
+export function islandLamps() {
+    const S = ISLAND_CITY;
+    const pitch = S.block + S.street;
+    const [[x0], [x1]] = FAR_LAND.island;
+    const out = [];
+    const lamp = (x, z) => {
+        const h = islandHeight(x, z);
+        if (h >= 0) out.push([x, WATER_Y + h + 6, z]);
+    };
+    for (let x = x0 + 400; x <= x1 - 300; x += S.lamps) lamp(x, islandShoreZ(x) - S.beach * 0.6);
+    for (let x = x0 + 400 + pitch / 2; x <= x1 - 300; x += pitch) {
+        for (let d = S.beach + S.lamps; d <= S.inland; d += S.lamps) lamp(x, islandShoreZ(x) - d);
+    }
+    return out;
+}
+
+/** How built up the island's ground is at a point, 0 to 1: all of it over
+ *  the city's band along the shore, fading out a little way beyond. */
+export function islandBuilt(x, z) {
+    const [[x0], [x1]] = FAR_LAND.island;
+    const d = islandShoreZ(x) - z;
+    const along = smoothstep(x0 + 200, x0 + 600, x) * (1 - smoothstep(x1 - 500, x1 - 100, x));
+    return along * (1 - smoothstep(ISLAND_CITY.inland, ISLAND_CITY.inland + 300, d)) * smoothstep(0, ISLAND_CITY.beach, d);
+}
+
+/** The island's ground color at a point, from the forest's (`hex`) toward
+ *  the city's where it is built (islandBuilt). */
+export function islandGround(hex, x, z) {
+    return mixHex(hex, ISLAND_CITY.ground, 0.8 * islandBuilt(x, z));
 }
 
 /**
