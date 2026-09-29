@@ -183,6 +183,7 @@ export function normalizeSettings(raw, config) {
         weeklyGoal: bounded('weeklyGoal'),
         followUpDays: bounded('followUpDays'),
         ghostAfterDays: bounded('ghostAfterDays'),
+        coached: bounded('coached'),
         sortKey: oneOf(src.sortKey, Object.keys(config.sortKeys), base.sortKey),
         sortDir: oneOf(src.sortDir, ['asc', 'desc'], base.sortDir)
     };

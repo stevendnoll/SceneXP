@@ -895,3 +895,175 @@ export function buildGulls(scene, count, shape, flockTriangles) {
     };
     return { mesh, fly };
 }
+
+/** An orca's colors, sRGB: the black, the white of its belly and eye patch,
+ *  and the gray saddle behind its fin. */
+export const ORCA_COLORS = { black: 0x141517, white: 0xf2f2ee, saddle: 0x6f7378 };
+
+/**
+ * One orca, life size, its nose toward -z and its middle at the origin: a
+ * body turned on a lathe, flattened a little from side to side, colored by
+ * where each point is (the white belly and eye patch, the gray saddle); a
+ * dorsal fin, tall and straight on a bull (`bull`), shorter and swept back
+ * on the others; the tail flukes and the flippers. One geometry, colored by
+ * its vertices.
+ */
+export function orcaParts(bull = false, L = 7.5) {
+    const R = 0.95;
+    // The outline from tail to nose, drawn smooth through its points.
+    const knots = [[0, -0.5], [0.18, -0.46], [0.3, -0.36], [0.55, -0.22], [0.82, -0.06], [0.95, 0.08],
+        [0.92, 0.2], [0.78, 0.32], [0.55, 0.42], [0.25, 0.48], [0, 0.5]];
+    const spline = new THREE.SplineCurve(knots.map(([r, y]) => new THREE.Vector2(r, y)));
+    const profile = spline.getPoints(28).map((p) => new THREE.Vector2(Math.max(0, p.x) * R, p.y * L));
+    const body = new THREE.LatheGeometry(profile, 28).toNonIndexed();
+    body.rotateX(-Math.PI / 2);
+    body.scale(0.82, 1, 1);
+    const c = new THREE.Color();
+    const pos = body.attributes.position;
+    const colors = [];
+    // Each face one color, by where its middle is, so a marking has a clean
+    // edge rather than a blend zigzagging across the triangles.
+    for (let i = 0; i < pos.count; i += 3) {
+        const x = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3;
+        const y = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
+        const z = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3 / L;
+        let hex = ORCA_COLORS.black;
+        // The belly, white from the chin back past the middle.
+        if (y < -0.3 * R && z < 0.2) hex = ORCA_COLORS.white;
+        // The eye patch, an oval on each side above and behind the eye.
+        const eye = ((z + 0.3) / 0.055) ** 2 + ((y - 0.27 * R) / (0.17 * R)) ** 2;
+        if (Math.abs(x) > 0.4 * R && eye < 1) hex = ORCA_COLORS.white;
+        // The saddle behind the fin.
+        if (y > 0.62 * R && z > 0.06 && z < 0.2) hex = ORCA_COLORS.saddle;
+        c.setHex(hex, THREE.SRGBColorSpace);
+        for (let k = 0; k < 3; k++) colors.push(c.r, c.g, c.b);
+    }
+    body.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    body.deleteAttribute('uv');
+    // The fins, as thin wedges: `pts` their outline in the plane x = 0.
+    const positions = [];
+    const fcolors = [];
+    c.setHex(ORCA_COLORS.black, THREE.SRGBColorSpace);
+    const wedge = (pts, thick, axis = 'x') => {
+        const at = (p, s) => (axis === 'x' ? [s * thick, p[0], p[1]] : [p[0], s * thick, p[1]]);
+        for (let i = 1; i < pts.length - 1; i++) {
+            for (const s of [1, -1]) {
+                const tri = [pts[0], pts[i], pts[i + 1]].map((p) => at(p, s));
+                if (s < 0) tri.reverse();
+                for (const q of tri) {
+                    positions.push(...q);
+                    fcolors.push(c.r, c.g, c.b);
+                }
+            }
+        }
+    };
+    const top = 0.82 * R;
+    if (bull) wedge([[top, -0.06 * L], [top + 1.8, 0.0 * L], [top, 0.08 * L]], 0.05);
+    else wedge([[top, -0.07 * L], [top + 0.7, 0.02 * L], [top + 0.9, 0.08 * L], [top, 0.07 * L]], 0.05);
+    // The flukes, flat at the tail, and the flippers, low on the sides.
+    wedge([[0, 0.46 * L], [-1.1, 0.56 * L], [0, 0.5 * L], [1.1, 0.56 * L]], 0.04, 'y');
+    for (const side of [-1, 1]) {
+        const pts = [[side * 0.5, -0.2 * L], [side * 1.4, -0.12 * L], [side * 0.55, -0.1 * L]];
+        const flipper = pts.map(([px, pz]) => [px, -0.45 * R, pz]);
+        for (const q of flipper) {
+            positions.push(...q);
+            fcolors.push(c.r, c.g, c.b);
+        }
+    }
+    const fins = new THREE.BufferGeometry();
+    fins.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    fins.setAttribute('color', new THREE.Float32BufferAttribute(fcolors, 3));
+    fins.computeVertexNormals();
+    body.computeVertexNormals();
+    return joinGeometries([body, fins]);
+}
+
+/**
+ * The pod (orcas.js): an orca each, wet-dark and two-sided (their fins are
+ * single sheets), and their spouts and splashes as one set of soft white
+ * glows. `place(poses, scale, y0)` puts each where orcas.js orcaPose says,
+ * `scale` times life; `null` poses hide them.
+ */
+export function buildOrcas(scene, count, { spoutHeight = 3.5 } = {}) {
+    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.05, side: THREE.DoubleSide });
+    const animals = Array.from({ length: count }, (_, i) => {
+        const group = new THREE.Group();
+        group.name = `orca-${i}`;
+        group.rotation.order = 'YXZ';
+        group.add(new THREE.Mesh(orcaParts(i === 0), material));
+        group.visible = false;
+        group.position.y = HIDDEN_Y;
+        scene.add(group);
+        return group;
+    });
+    // Each animal's spout (a column of puffs) and splash (a ring thrown up).
+    const PUFFS = 8;
+    const DROPS = 14;
+    const per = PUFFS + DROPS;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(count * per * 3), 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(count * per * 4), 4));
+    const spray = new THREE.Points(g, new THREE.PointsMaterial({
+        size: 1.6, sizeAttenuation: true, vertexColors: true, map: lightDot(), transparent: true, depthWrite: false, fog: true
+    }));
+    spray.name = 'orca-spray';
+    spray.visible = false;
+    spray.frustumCulled = false;
+    spray.raycast = () => {};
+    scene.add(spray);
+    const place = (poses, scale, y0) => {
+        const pos = g.attributes.position.array;
+        const col = g.attributes.color.array;
+        col.fill(0);
+        let any = false;
+        animals.forEach((group, i) => {
+            const p = poses && poses[i];
+            if (!p) {
+                group.visible = false;
+                group.position.y = HIDDEN_Y;
+                return;
+            }
+            group.visible = p.y + 3 > -1;
+            group.position.set(p.x, y0 + p.y * scale, p.z);
+            group.rotation.set(p.pitch, p.yaw, p.roll);
+            group.scale.setScalar(scale);
+            const base = i * per;
+            const put = (k, x, y, z, a) => {
+                pos[(base + k) * 3] = x;
+                pos[(base + k) * 3 + 1] = y;
+                pos[(base + k) * 3 + 2] = z;
+                col[(base + k) * 4] = 1;
+                col[(base + k) * 4 + 1] = 1;
+                col[(base + k) * 4 + 2] = 1;
+                col[(base + k) * 4 + 3] = a;
+            };
+            if (p.spout != null) {
+                any = true;
+                // The blow, from the blowhole ahead of the fin: up fast, then
+                // hanging and spreading as it fades.
+                const bx = p.x - Math.sin(p.yaw) * 2.2 * scale;
+                const bz = p.z - Math.cos(p.yaw) * 2.2 * scale;
+                const rise = Math.min(1, p.spout * 2.2);
+                for (let k = 0; k < PUFFS; k++) {
+                    const f = k / (PUFFS - 1);
+                    const spread = (0.2 + 0.8 * p.spout) * f * 0.9 * scale;
+                    put(k, bx + Math.sin(k * 2.4) * spread, y0 + (0.5 + spoutHeight * rise * f) * scale, bz + Math.cos(k * 2.4) * spread,
+                        0.75 * (1 - p.spout) * (0.6 + 0.4 * f));
+                }
+            }
+            if (p.splash != null) {
+                any = true;
+                for (let k = 0; k < DROPS; k++) {
+                    const a = (k / DROPS) * Math.PI * 2;
+                    const out = (1.5 + 4 * p.splash) * scale;
+                    const up = Math.sin(Math.PI * p.splash) * 3 * scale;
+                    put(PUFFS + k, p.x + Math.cos(a) * out, y0 + up, p.z + Math.sin(a) * out, 0.85 * (1 - p.splash));
+                }
+            }
+        });
+        g.attributes.position.needsUpdate = true;
+        g.attributes.color.needsUpdate = true;
+        spray.visible = any;
+    };
+    return { animals, spray, place };
+}

@@ -46,7 +46,10 @@ export const CONFIG = deepFreeze({
         followUpDays: 7,
         ghostAfterDays: 21,
         sortKey: 'activity',
-        sortDir: 'desc'
+        sortDir: 'desc',
+        /** What the visitor has opened in the office, a bit for each thing
+         *  (marks.js OPENED): the pulsing markers retire from it. */
+        coached: 0
     },
 
     /** Bounds the settings enforce, so a typo cannot ask for a goal of a
@@ -54,7 +57,8 @@ export const CONFIG = deepFreeze({
     settingsBounds: {
         weeklyGoal: { min: 1, max: 100 },
         followUpDays: { min: 1, max: 60 },
-        ghostAfterDays: { min: 1, max: 365 }
+        ghostAfterDays: { min: 1, max: 365 },
+        coached: { min: 0, max: 65535 }
     },
 
     /** Application statuses, IN PIPELINE ORDER, which is also the order the

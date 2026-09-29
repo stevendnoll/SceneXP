@@ -106,7 +106,8 @@ describe('quick add', () => {
         expect(doc().tasks).toEqual([expect.objectContaining({
             text: 'Follow up with Acme', auto: true, due: formatDate(addDays(new Date(), 7))
         })]);
-        expect(said()).toBe('Added Acme, Designer, with a follow-up reminder in 7 days.');
+        // And celebrated: applying is the win (celebrate.js).
+        expect(said()).toBe("Added Acme, Designer, with a follow-up reminder in 7 days. Application sent. That's your first this week.");
         expect(el('office-toast').hidden).toBe(false);
         expect(el('toast-undo').hidden).toBe(false);
         expect(t.history.size).toBe(1);
@@ -1796,5 +1797,84 @@ describe('the binoculars (QA, 2026-09-29: "tripod-mounted binoculars ... a zoome
         expect(t.draw()).toBe(false);
         t.putDownBinoculars();
         expect(t.draw()).toBe(true);
+    });
+});
+
+describe('the pulsing markers (QA, 2026-09-29: "a floating pulsing circle over the computer")', () => {
+    test('built over the computer and the binoculars, as buttons that open what they point at', () => {
+        expect(t.marks.list.map((m) => m.key)).toEqual(['computer', 'binoculars']);
+        for (const m of t.marks.list) {
+            expect(m.btn.getAttribute('aria-label')).toBeTruthy();
+            expect(m.btn.className).toBe('office-mark');
+        }
+        const computer = t.marks.list.find((m) => m.key === 'computer');
+        computer.btn.click();
+        expect(el('computer').hidden).toBe(false);
+    });
+
+    test('opening things is remembered in the office, and the markers retire from it, for good', () => {
+        expect(t.state.doc.settings.coached).toBe(0);
+        key('c');
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        expect(t.state.doc.settings.coached).toBe(1);
+        key('p');
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('t');
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        const saved = JSON.parse(localStorage.getItem(CONFIG.storage.key));
+        expect(saved.settings.coached).toBe(t.state.doc.settings.coached);
+        t.updateMarks(true);
+        for (const m of t.marks.list) expect(m.btn.hidden).toBe(true);
+        // Not an undo step: undo has nothing to take back.
+        expect(t.history.size).toBe(0);
+    });
+
+    test('out of sight while a card is up and through the binoculars', () => {
+        key('c');
+        t.updateMarks(true);
+        for (const m of t.marks.list) expect(m.btn.hidden).toBe(true);
+    });
+});
+
+describe('celebrating (QA, 2026-09-29: "the mere act of applying should be cause for a celebration")', () => {
+    test('an application sent: a word of it, and a firework over the bay once the room is in view', () => {
+        quickAdd('Acme', 'Designer');
+        expect(said()).toMatch(/Application sent\. That's your first this week\./);
+        // Earned while the form was still closing: fired on the next frame.
+        expect(t.ui.pendingShow).toBe('applied');
+        t.state.lastTime = performance.now() - 16;
+        t.animate();
+        expect(t.ui.pendingShow).toBeNull();
+        // Added from the computer, the show waits for the card to close.
+        key('c');
+        el('grid-new').click();
+        el('af-company').value = 'Globex';
+        el('af-role').value = 'Engineer';
+        submit('af-form');
+        expect(said()).toMatch(/That's 2 this week, 3 to go\./);
+        expect(t.ui.pendingShow).toBe('applied');
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        t.state.lastTime = performance.now() - 16;
+        t.animate();
+        expect(t.ui.pendingShow).toBeNull();
+    });
+
+    test('the week\'s goal reached, and an offer, are the bigger moments; the samples are never celebrated', () => {
+        for (const name of ['A', 'B', 'C', 'D']) quickAdd(name, 'Role');
+        key('c');
+        el('grid-new').click();
+        el('af-company').value = 'E';
+        el('af-role').value = 'Role';
+        submit('af-form');
+        expect(said()).toMatch(/That makes 5 this week, your weekly goal\. Wonderful work!/);
+        expect(t.ui.pendingShow).toBe('goal');
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        const a = live()[0];
+        t.changeStatus(a.id, 'offer');
+        expect(said()).toMatch(new RegExp(`An offer from ${a.company}\\. Congratulations!`));
+        const before = live().length;
+        t.stockOffice();
+        expect(live().length).toBeGreaterThan(before);
+        expect(said()).not.toMatch(/Application sent|Congratulations/);
     });
 });

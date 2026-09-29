@@ -3482,11 +3482,11 @@ html [lang="en"]
     title
       "Corner Office"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=3" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
     link [as="script" href="../lib/three.min.js" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=3" rel="stylesheet"]
+    link [href="css/experience.min.css?v=4" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body

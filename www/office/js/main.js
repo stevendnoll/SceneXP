@@ -84,6 +84,9 @@ import {
     initPortraitControls, updatePortraitControls, resetPortraitAim, gestureClaimedTap, disposePortraitControls
 } from '../../shared/js/pan-1.0.0.min.js';
 import { leatherMaps } from './finishes.min.js';
+import { MARKS, COACHING, marksShown, noteOpened } from './marks.min.js';
+import { celebrationFor, champagneToday } from './celebrate.min.js';
+import { showFor } from './fireworks.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
 // ---- State ------------------------------------------------------------------
@@ -123,6 +126,8 @@ const ui = {
     lampOn: true,
     /** How far the visitor has zoomed, doublings of magnification (setZoom). */
     zoom: 0,
+    /** The biggest celebration waiting for the room to be in view. */
+    pendingShow: null,
     /** The binoculars are raised (raiseBinoculars), from the glide to them
      *  until they are put down; `eyepiece` once the eye is at them, when
      *  the view is through them. */
@@ -736,6 +741,123 @@ function goTo(station) {
     requestRender();
 }
 
+// ---- The pulsing markers (marks.js) ----------------------------------------------
+
+// The markers' buttons, where each rides in the room, and what was last
+// written, so a frame that moved nothing writes nothing.
+const marks = { root: null, list: [], started: 0, frame: 0 };
+
+/** The visitor opened `key` (by any route): remembered in the office's
+ *  settings, and the markers retire from it (marks.js). */
+function noteOpen(key) {
+    if (!state.doc) return false;
+    const bits = state.doc.settings.coached || 0;
+    const next = noteOpened(bits, key);
+    if (next === bits) return false;
+    state.doc = setSettings(state.doc, { coached: next }, CONFIG).doc;
+    save();
+    updateMarks(true);
+    return true;
+}
+
+/**
+ * Build the markers: a button for each (marks.js MARKS), a ring that
+ * pulses, over its thing in the room. Buttons, so a keyboard reaches them
+ * too; they open what a tap on the thing opens.
+ */
+function buildMarks(signal) {
+    if (!room || typeof document.createElement !== 'function') return null;
+    const root = document.createElement('div');
+    root.className = 'office-marks';
+    const top = (object, lift) => {
+        const box = new THREE.Box3();
+        object.updateMatrixWorld(true);
+        object.traverse((o) => { if (o.isMesh && o.material && o.material.visible !== false) box.expandByObject(o); });
+        const c = box.getCenter(new THREE.Vector3());
+        return new THREE.Vector3(c.x, box.max.y + lift, c.z);
+    };
+    const b = CONFIG.room.binoculars;
+    const anchors = {
+        computer: () => top(room.picks.computer, 0.12),
+        binoculars: () => new THREE.Vector3(b.x, b.head + 0.32, b.z)
+    };
+    marks.list = MARKS.filter((m) => anchors[m.key] && room.picks[m.key]).map((m) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'office-mark';
+        btn.setAttribute('aria-label', m.label);
+        btn.dataset.mark = m.key;
+        btn.hidden = true;
+        const ring = document.createElement('span');
+        ring.className = 'office-mark-ring';
+        btn.appendChild(ring);
+        btn.addEventListener('click', () => actOn(m.key, { armed: false }), { signal });
+        root.appendChild(btn);
+        return { key: m.key, btn, anchor: anchors[m.key](), at: '', occluded: false };
+    });
+    if (document.body && document.body.appendChild) document.body.appendChild(root);
+    marks.root = root;
+    marks.started = performance.now();
+    return root;
+}
+
+const markPoint = new THREE.Vector3();
+
+/**
+ * Put each marker over its thing, or out of sight: when it has retired,
+ * while a card or the binoculars are up, when its thing is off the frame,
+ * and when something in the room stands in front of it (asked only when the
+ * camera has moved, or `force`d, or now and then).
+ */
+function updateMarks(force = false, moved = false) {
+    if (!marks.root || !camera) return;
+    const shown = new Set(marksShown((state.doc && state.doc.settings.coached) || 0));
+    const quiet = lookLocked() || ui.binoculars;
+    const W = window.innerWidth || 1;
+    const H = window.innerHeight || 1;
+    marks.frame++;
+    for (const m of marks.list) {
+        let on = shown.has(m.key) && !quiet;
+        let x = 0;
+        let y = 0;
+        if (on) {
+            markPoint.copy(m.anchor).project(camera);
+            on = Number.isFinite(markPoint.x) && markPoint.z < 1 && Math.abs(markPoint.x) < 0.94 && Math.abs(markPoint.y) < 0.94;
+            x = ((markPoint.x + 1) / 2) * W;
+            y = ((1 - markPoint.y) / 2) * H;
+        }
+        if (on && (force || moved || marks.frame % 30 === 0)) m.occluded = markHidden(m);
+        on = on && !m.occluded;
+        if (m.btn.hidden !== !on) m.btn.hidden = !on;
+        if (on) {
+            const at = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%)`;
+            if (at !== m.at) {
+                m.btn.style.transform = at;
+                m.at = at;
+            }
+        }
+    }
+    const calm = performance.now() - marks.started > COACHING.calmSeconds * 1000;
+    if (calm && marks.root.classList && !marks.root.classList.contains('office-marks-calm')) marks.root.classList.add('office-marks-calm');
+}
+
+/** Whether something in the room stands between the eye and a marker,
+ *  other than its own thing. */
+function markHidden(m) {
+    if (!raycaster || !room) return false;
+    const to = m.anchor.clone().sub(camera.position);
+    const far = to.length();
+    raycaster.set(camera.position, to.normalize());
+    raycaster.far = far - 0.02;
+    const hits = raycaster.intersectObject(room.group, true);
+    raycaster.far = Infinity;
+    return hits.some((hit) => {
+        for (let o = hit.object; o; o = o.parent) if (o.visible === false) return false;
+        if (hit.object.material && hit.object.material.visible === false) return false;
+        return pickOf(hit.object) !== m.key;
+    });
+}
+
 // ---- The binoculars -----------------------------------------------------------
 
 /**
@@ -752,6 +874,7 @@ function raiseBinoculars() {
     ui.binoculars = true;
     showBinocularButton();
     track('binoculars');
+    noteOpen('binoculars');
     return true;
 }
 
@@ -1082,13 +1205,57 @@ function mutate(fn, label = '') {
  * result), and defaults to the label. Nothing is said when nothing changed.
  */
 function change(fn, label, message = label) {
+    const before = state.doc;
     const result = mutate(fn, label);
     if (result.changed) {
-        const words = typeof message === 'function' ? message(result) : message;
+        let words = typeof message === 'function' ? message(result) : message;
+        // Applying is the win (celebrate.js): an application sent, the
+        // week's goal and an offer each have their moment.
+        const party = celebrationFor(before, state.doc, CONFIG, now());
+        if (party) {
+            words = `${words} ${party.line}`;
+            celebrate(party);
+        }
         announce(words);
         toast(words, { undo, seconds: CONFIG.toastSeconds });
     }
     return result;
+}
+
+// The biggest celebration waiting for the room to be in view (a card was
+// up when it was earned), and how many shows there have been.
+let showsFired = 0;
+const SHOW_RANK = { applied: 1, goal: 2, offer: 3 };
+
+/** Set off a celebration's fireworks (fireworks.js), now or as soon as the
+ *  room is in view; never for a visitor who asked for less motion, for
+ *  whom the words are the celebration. */
+function celebrate(party) {
+    track('celebrate', { kind: party.kind });
+    refreshChampagne();
+    if (state.reducedMotion || !world) return false;
+    if (!ui.pendingShow || SHOW_RANK[party.kind] > SHOW_RANK[ui.pendingShow]) ui.pendingShow = party.kind;
+    return playPendingShow();
+}
+
+/** Fire the waiting show if the room is in view. */
+function playPendingShow() {
+    if (!ui.pendingShow || !world || lookLocked()) return false;
+    world.launchShow(showFor(ui.pendingShow, showsFired++), performance.now() / 1000 + 0.6);
+    ui.pendingShow = null;
+    state.dirty = true;
+    return true;
+}
+
+/** The champagne on the desk: there the day an offer comes in. */
+function refreshChampagne() {
+    if (!room || !room.champagne || !state.doc) return false;
+    const on = champagneToday(state.doc, now());
+    if (room.champagne.visible !== on) {
+        room.champagne.visible = on;
+        markRoom();
+    }
+    return on;
 }
 
 /** A change that is not worth an undo step (the sort order). */
@@ -1153,6 +1320,7 @@ function refresh() {
     const t = now();
     const s = stats(state.doc, CONFIG, t);
     document.title = pageTitle(CONFIG.name, s);
+    refreshChampagne();
     const resume = el('welcome-resume');
     if (resume && state.storageStatus === 'restored') {
         resume.hidden = false;
@@ -1299,6 +1467,7 @@ function openComputer({ armed = false, focusSearch = false } = {}) {
     });
     goTo('computer');
     track('open-computer');
+    noteOpen('computer');
 }
 
 // ---- The filing cabinet -------------------------------------------------------
@@ -1385,6 +1554,7 @@ function openCabinet({ armed = false } = {}) {
     if (filing && filing.setOpen(true)) ui.cabinetMoving = true;
     goTo('cabinet');
     track('open-cabinet');
+    noteOpen('cabinet');
 }
 
 // ---- The corkboard ------------------------------------------------------------
@@ -1450,6 +1620,7 @@ function openBoard({ armed = false } = {}) {
     openCard('board', { armed, onClose: () => goTo('desk') });
     goTo('board');
     track('open-board');
+    noteOpen('board');
 }
 
 /** The keyboard's move: the chosen card to the chosen column. */
@@ -1575,6 +1746,7 @@ function openRolodex({ armed = false } = {}) {
     drawRolodexSheet();
     openCard('rolodex', { armed });
     track('open-rolodex');
+    noteOpen('rolodex');
 }
 
 function drawContact() {
@@ -1811,6 +1983,7 @@ function openWhiteboard({ armed = false, goal = false } = {}) {
     goTo('whiteboard');
     if (goal) announce(`Your weekly goal is ${state.doc.settings.weeklyGoal}. You can change it here.`);
     track('open-whiteboard');
+    noteOpen('whiteboard');
 }
 
 // ---- The printer --------------------------------------------------------------
@@ -1840,6 +2013,7 @@ function openPrinter({ armed = false, appId = null } = {}) {
     fillPrinterChoices(now(), appId || ui.folderId || ui.lastFolderId);
     openCard('printer', { armed });
     track('open-printer');
+    noteOpen('printer');
 }
 
 /** Lay out the prep sheet and open the browser's print dialog. */
@@ -1916,6 +2090,7 @@ function openCalendar({ armed = false } = {}) {
     // window (QA, 2026-09-25), so there is nothing in the room to go to.
     openCard('calendar', { armed });
     track('open-calendar');
+    noteOpen('calendar');
 }
 
 function drawToday(t = now()) {
@@ -1932,6 +2107,7 @@ function openToday({ armed = false } = {}) {
     drawToday();
     openCard('today', { armed });
     track('open-today');
+    noteOpen('today');
 }
 
 // ---- Calendar files ----------------------------------------------------------
@@ -2183,6 +2359,7 @@ function openWastebasket({ armed = false } = {}) {
     drawWastebasket();
     openCard('wastebasket', { armed });
     track('open-wastebasket');
+    noteOpen('wastebasket');
 }
 
 function restore(collection, id) {
@@ -2398,6 +2575,7 @@ function actOn(key, { armed = true, instanceId = -1, uv = null } = {}) {
 function toggleLamp() {
     ui.lampOn = !ui.lampOn;
     if (room) setLamp(room.lamp, ui.lampOn);
+    noteOpen('lamp');
     // The brass and the lacquer see the lamp come on or go off.
     captureInterior(ui.look);
     announce(ui.lampOn ? 'The lamp is on.' : 'The lamp is off.');
@@ -2597,6 +2775,7 @@ function setupEventListeners() {
         canvas.style.cursor = !ui.binoculars && pickAt(event.clientX, event.clientY) ? 'pointer' : '';
     }, { signal });
     setupLook(signal);
+    buildMarks(signal);
 
     // Shortcuts. Undo works anywhere but inside a text box, where the
     // browser's own undo is the one a visitor means.
@@ -2709,10 +2888,13 @@ function animate() {
     // The visitor's look (setupLook), and a frame when it has turned or
     // zoomed the camera, the world's camera with it.
     if (camera && !lookLocked()) updatePortraitControls(delta);
-    if (camera && lookChanged()) {
+    const turned = camera ? lookChanged() : false;
+    if (turned) {
         if (world) world.follow(camera);
         state.dirty = true;
     }
+    updateMarks(false, turned);
+    if (ui.pendingShow) playPendingShow();
     if (ui.cabinetMoving && filing) {
         ui.cabinetMoving = filing.update(delta);
         state.dirty = true;
@@ -2735,7 +2917,8 @@ function animate() {
     // crossing it.
     const moving = lifeMoves();
     if (moving) {
-        const fps = world.jetInSight() ? CONFIG.view.jetFps : world.gullsInSight() ? CONFIG.view.gullFps : CONFIG.view.ambientFps;
+        const fps = world.jetInSight() || world.fireworksBusy() ? CONFIG.view.jetFps
+            : world.gullsInSight() ? CONFIG.view.gullFps : CONFIG.view.ambientFps;
         const paced = paceScenery(state.ambientDue, delta, fps);
         state.ambientDue = paced.due;
         if (paced.draw) state.dirty = true;
@@ -2959,6 +3142,10 @@ if (typeof document !== 'undefined') {
 export const __test__ = {
     state,
     ui,
+    changeStatus,
+    marks,
+    noteOpen,
+    updateMarks,
     setZoom,
     lookLocked,
     raiseBinoculars,

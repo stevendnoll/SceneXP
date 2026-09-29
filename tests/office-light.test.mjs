@@ -713,3 +713,94 @@ describe('the lights out there by night (QA, 2026-09-29: "the lights on the pass
         lit.fleet.light(0);
     });
 });
+
+describe('the fireworks over the bay', () => {
+    test('a show fired is drawn on the visitor\'s own seconds, in the desk\'s view past the towers, and gone when it is over', async () => {
+        const fw = await import('../www/office/js/fireworks.js');
+        const m = momentAt(21);
+        lit.setLight(m.look, m.sky);
+        expect(lit.fireworksBusy()).toBe(false);
+        const show = fw.showFor('goal', 2);
+        lit.launchShow(show, 100);
+        expect(lit.fireworksBusy()).toBe(true);
+        lit.setLife(m.at, 5000, false, 100 + fw.FIREWORKS.rise + 0.7);
+        expect(lit.fireworks.visible).toBe(true);
+        // By night added over the dark.
+        expect(lit.fireworks.material.blending).toBe(THREE.AdditiveBlending);
+        const pos = lit.fireworks.geometry.attributes.position;
+        const col = lit.fireworks.geometry.attributes.color;
+        const burning = [];
+        for (let i = 0; i < lit.fireworks.geometry.drawRange.count; i++) {
+            if (col.getW(i) > 0.05) burning.push(new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)));
+        }
+        expect(burning.length).toBeGreaterThan(50);
+        // From the desk, in frame and not behind a tower.
+        const cam = cameraAt('desk');
+        const solid = [...lit.towers.meshes, lit.towers.roofs];
+        let seen = 0;
+        for (const p of burning) {
+            const ndc = p.clone().project(cam);
+            if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) continue;
+            const d = p.clone().sub(cam.position);
+            if (new THREE.Raycaster(cam.position, d.clone().normalize(), 0, d.length()).intersectObjects(solid, false).length === 0) seen++;
+        }
+        expect(seen / burning.length).toBeGreaterThan(0.8);
+        // Over, and gone.
+        lit.setLife(m.at, 5000, false, 100 + 30);
+        expect(lit.fireworksBusy()).toBe(false);
+        expect(lit.fireworks.visible).toBe(false);
+        // By day laid over the sky.
+        const noon = momentAt(12);
+        lit.setLight(noon.look, noon.sky);
+        expect(lit.fireworks.material.blending).toBe(THREE.NormalBlending);
+    });
+});
+
+describe('the orcas in the world', () => {
+    test('drawn larger than life for the naked eye, at life size through the binoculars, home by night and never held still', async () => {
+        const o = await import('../www/office/js/orcas.js');
+        const day = momentAt(11);
+        lit.setLight(day.look, day.sky);
+        // A moment the bull is up.
+        let t = o.ORCAS.visit.first;
+        while (!o.orcaPose(o.pod()[0], t).up) t += 0.1;
+        t += o.ORCAS.roll / 2;
+        lit.setTrueScale(false);
+        lit.setLife(day.at, 100, false, t);
+        const bull = lit.orcas.animals[0];
+        expect(bull.visible).toBe(true);
+        expect(bull.scale.x).toBe(o.ORCAS.scale);
+        lit.setTrueScale(true);
+        lit.setLife(day.at, 100, false, t);
+        expect(bull.scale.x).toBe(1);
+        lit.setTrueScale(false);
+        lit.setLife(day.at, 100, true, t);
+        expect(lit.orcas.animals.every((a) => !a.visible)).toBe(true);
+        const night = momentAt(23);
+        lit.setLight(night.look, night.sky);
+        lit.setLife(night.at, 100, false, t);
+        expect(lit.orcas.animals.every((a) => !a.visible)).toBe(true);
+    });
+
+    test('from the desk and the window, a surfacing orca\'s back is in plain sight', async () => {
+        const o = await import('../www/office/js/orcas.js');
+        const solid = [...lit.towers.meshes, lit.towers.roofs, lit.docks];
+        for (const station of ['desk', 'window']) {
+            const cam = cameraAt(station);
+            let up = 0;
+            let seenUp = 0;
+            for (let t = o.ORCAS.visit.first; t < o.ORCAS.visit.first + o.ORCAS.visit.length; t += 1) {
+                for (const orca of o.pod()) {
+                    const p = o.orcaPose(orca, t);
+                    if (!p.up || p.y < -0.3) continue;
+                    up++;
+                    const back = new THREE.Vector3(p.x, city.WATER_Y + (p.y + 1) * o.ORCAS.scale, p.z);
+                    if (seen(cam, back) && new THREE.Raycaster(cam.position, back.clone().sub(cam.position).normalize(), 0, back.distanceTo(cam.position) - 3)
+                        .intersectObjects(solid, false).length === 0) seenUp++;
+                }
+            }
+            expect(up).toBeGreaterThan(20);
+            expect(seenUp / up).toBeGreaterThan(0.5);
+        }
+    });
+});

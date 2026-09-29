@@ -1040,3 +1040,68 @@ describe('the binoculars on their tripod (QA, 2026-09-29: in the corner beside t
         expect(glass).toBe(2);
     });
 });
+
+describe('where the pulsing markers ride (main.js buildMarks)', () => {
+    const topOf = (object, lift) => {
+        const box = new THREE.Box3();
+        object.updateMatrixWorld(true);
+        object.traverse((o) => { if (o.isMesh && o.material && o.material.visible !== false) box.expandByObject(o); });
+        const c = box.getCenter(new THREE.Vector3());
+        return new THREE.Vector3(c.x, box.max.y + lift, c.z);
+    };
+    const clear = (cam, point, own) => {
+        const to = point.clone().sub(cam.position);
+        const far = to.length();
+        const hits = new THREE.Raycaster(cam.position, to.normalize(), 0, far - 0.02).intersectObject(room.group, true)
+            .filter((h) => h.object.material.visible !== false && roomMod.pickOf(h.object) !== own);
+        return hits.length === 0;
+    };
+
+    test.each(Object.entries(ASPECTS))('over the computer, in frame and in plain sight from the desk on a %s screen', (_name, aspect) => {
+        const cam = cameraAt('desk', aspect);
+        const p = topOf(room.picks.computer, 0.12);
+        const ndc = p.clone().project(cam);
+        expect(Math.abs(ndc.x)).toBeLessThan(0.9);
+        expect(Math.abs(ndc.y)).toBeLessThan(0.9);
+        expect(clear(cam, p, 'computer')).toBe(true);
+    });
+
+    test('over the binoculars, in plain sight once the desk turns right', () => {
+        const cam = cameraAt('desk', 16 / 10);
+        const dir = new THREE.Vector3();
+        cam.getWorldDirection(dir);
+        dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), -CONFIG.view.look.pan.maxAngle);
+        cam.lookAt(cam.position.clone().add(dir));
+        cam.updateMatrixWorld(true);
+        const b = CONFIG.room.binoculars;
+        const p = new THREE.Vector3(b.x, b.head + 0.32, b.z);
+        const ndc = p.clone().project(cam);
+        expect(Math.abs(ndc.x)).toBeLessThan(0.94);
+        expect(Math.abs(ndc.y)).toBeLessThan(0.94);
+        expect(clear(cam, p, 'binoculars')).toBe(true);
+    });
+});
+
+describe('the champagne (celebrate.js champagneToday)', () => {
+    test('a bottle and two flutes at the desk\'s left end, standing on it, clear of everything else there, hidden until an offer', () => {
+        const c = room.champagne;
+        expect(c.visible).toBe(false);
+        c.visible = true;
+        const box = boxOf(c);
+        const d = CONFIG.room.desk;
+        expect(box.min.y).toBeCloseTo(d.height, 3);
+        expect(box.min.x).toBeGreaterThan(d.x - d.width / 2);
+        expect(box.min.z).toBeGreaterThan(d.z - d.depth / 2);
+        expect(box.max.z).toBeLessThan(d.z + d.depth / 2);
+        for (const key of ['computer', 'lamp']) {
+            const other = new THREE.Box3();
+            room.picks[key].traverse((o) => { if (o.isMesh && o.material.visible !== false) other.expandByObject(o, true); });
+            expect(box.intersectsBox(other)).toBe(false);
+        }
+        expect(box.intersectsBox(boxOf(room.group.getObjectByName('desk-pad')))).toBe(false);
+        // In the desk's own view.
+        const ndc = box.getCenter(new THREE.Vector3()).project(cameraAt('desk', 16 / 10));
+        expect(Math.abs(ndc.x)).toBeLessThan(0.95);
+        c.visible = false;
+    });
+});

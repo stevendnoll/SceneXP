@@ -1107,6 +1107,57 @@ function buildBinoculars(group, config, picks, contacts, m) {
 }
 
 /**
+ * The champagne (celebrate.js): a bottle and two flutes at the desk's left
+ * end, there the day an offer comes in (main.js refreshChampagne), hidden
+ * otherwise. Meters: the bottle's height and radius, and where on the desk
+ * the three stand (from its left end and its back edge).
+ */
+export const CHAMPAGNE = { bottle: { height: 0.3, radius: 0.043 }, at: [0.22, 0.34], flutes: [[0.12, 0.2], [0.3, 0.22]] };
+
+function buildChampagne(group, config) {
+    const d = config.room.desk;
+    const top = d.height;
+    const x0 = d.x - d.width / 2;
+    const z0 = d.z - d.depth / 2;
+    const champagne = new THREE.Group();
+    champagne.name = 'champagne';
+    const green = new THREE.MeshPhysicalMaterial({ color: 0x1f3a24, roughness: 0.15, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05 });
+    const foil = new THREE.MeshPhysicalMaterial({ color: 0xc9a54a, roughness: 0.35, metalness: 1 });
+    const label = mat(0xf1ead8, { roughness: 0.7 });
+    const glass = new THREE.MeshPhysicalMaterial({ color: 0xeef3f4, roughness: 0.05, transparent: true, opacity: 0.32, clearcoat: 1, depthWrite: false });
+    const wine = new THREE.MeshPhysicalMaterial({ color: 0xe9c46a, roughness: 0.1, transparent: true, opacity: 0.8 });
+    const { height: h, radius: r } = CHAMPAGNE.bottle;
+    const [bx, bz] = CHAMPAGNE.at;
+    const bottle = new THREE.Group();
+    bottle.position.set(x0 + bx, top, z0 + bz);
+    // The body, the shoulder narrowing to the neck, the foil over the cork.
+    const profile = [[0, 0], [r, 0], [r, h * 0.6], [r * 0.85, h * 0.68], [r * 0.38, h * 0.78], [r * 0.34, h], [0, h]]
+        .map(([x, y]) => new THREE.Vector2(x, y));
+    bottle.add(new THREE.Mesh(new THREE.LatheGeometry(profile, 24), green));
+    bottle.add(cylinder(r * 0.37, h * 0.18, foil, 0, h * 0.91, 0, 18));
+    const tag = cylinder(r * 1.01, h * 0.22, label, 0, h * 0.33, 0, 24);
+    bottle.add(tag);
+    champagne.add(bottle);
+    for (const [fx, fz] of CHAMPAGNE.flutes) {
+        const flute = new THREE.Group();
+        flute.position.set(x0 + fx, top, z0 + fz);
+        flute.add(cylinder(0.03, 0.004, glass, 0, 0.002, 0, 20));
+        flute.add(cylinder(0.003, 0.09, glass, 0, 0.049, 0, 8));
+        const bowl = new THREE.LatheGeometry([[0.004, 0], [0.02, 0.03], [0.024, 0.11], [0.024, 0.112]].map(([x, y]) => new THREE.Vector2(x, y)), 20);
+        const cup = new THREE.Mesh(bowl, glass);
+        cup.position.y = 0.094;
+        flute.add(cup);
+        const fill = new THREE.Mesh(new THREE.LatheGeometry([[0.001, 0.002], [0.018, 0.03], [0.021, 0.08], [0, 0.08]].map(([x, y]) => new THREE.Vector2(x, y)), 20), wine);
+        fill.position.y = 0.094;
+        flute.add(fill);
+        champagne.add(flute);
+    }
+    champagne.visible = false;
+    group.add(champagne);
+    return champagne;
+}
+
+/**
  * The sticky notes: ONE mesh whose geometry holds a quad per note, each
  * mapped to its own cell of one atlas (notes.js). `setNotes` rebuilds the
  * geometry when the number of notes changes.
@@ -1657,6 +1708,7 @@ export function buildRoom(config, textures = {}) {
     const whiteboard = buildWhiteboard(group, config, textures.whiteboard || null, picks);
     buildPrinter(group, config, picks, finish);
     const binoculars = buildBinoculars(group, config, picks, contacts, finish);
+    const champagne = buildChampagne(group, config);
     const notes = buildNotes(group, config, textures.notes || null, picks);
     const rain = buildRainPanes(group, config, textures.rainGlass || null);
     if (textures.screen) {
@@ -1685,6 +1737,7 @@ export function buildRoom(config, textures = {}) {
         reflections,
         shiny,
         binoculars,
+        champagne,
         lamp: { light: desk.light, glow: desk.glow, group: desk.lampGroup }
     };
 }

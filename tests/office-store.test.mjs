@@ -132,8 +132,12 @@ describe('normalizers rebuild a record field by field', () => {
     test('settings are clamped to their bounds and unknown keys are dropped', () => {
         const s = normalizeSettings({ weeklyGoal: 1000, followUpDays: 0, ghostAfterDays: 'x', sortKey: 'mood', sortDir: 'up', extra: 1 }, CONFIG);
         expect(s).toEqual({
-            weeklyGoal: 100, followUpDays: 1, ghostAfterDays: 21, sortKey: 'activity', sortDir: 'desc'
+            weeklyGoal: 100, followUpDays: 1, ghostAfterDays: 21, coached: 0, sortKey: 'activity', sortDir: 'desc'
         });
+        // What has been opened, for the markers: a whole number of bits, kept in bounds.
+        expect(normalizeSettings({ coached: 5 }, CONFIG).coached).toBe(5);
+        expect(normalizeSettings({ coached: -3 }, CONFIG).coached).toBe(0);
+        expect(normalizeSettings({ coached: 1e9 }, CONFIG).coached).toBe(65535);
         expect(normalizeSettings(null, CONFIG)).toEqual(CONFIG.settings);
     });
 });

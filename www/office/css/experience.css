@@ -1561,3 +1561,96 @@ body .pan-controls.no-chrome.visible {
 body.binocular-mode .office-bar .office-btn:not(#bar-binoculars):not(#bar-places):not(#bar-day) {
     display: none;
 }
+
+/* THE PULSING MARKERS (main.js buildMarks, marks.js): a ring over the
+   computer and one over the binoculars, saying the room answers a tap, in
+   the office's white and silver (www/automan's halos, without the gold).
+   Under the HUD and the toolbar, and never in a pointer's way but their own.
+   They retire once the visitor has opened a few things. */
+.office-marks {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    pointer-events: none;
+}
+
+.office-mark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3.1rem;
+    height: 3.1rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.office-mark[hidden] {
+    display: none;
+}
+
+/* The steady ring, a bright outline over a dark halo, so it holds its edge
+   over the white walls and over the bright sky through the glass. */
+.office-mark-ring {
+    position: absolute;
+    inset: 0.35rem;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    background: radial-gradient(circle, rgba(214, 226, 240, 0.35) 0%, rgba(214, 226, 240, 0.1) 55%, rgba(20, 21, 23, 0) 72%);
+    box-shadow: 0 0 0 1px rgba(20, 21, 23, 0.5), 0 0 14px rgba(20, 21, 23, 0.45), inset 0 0 10px rgba(255, 255, 255, 0.35);
+}
+
+/* Two rings spreading out of it, half a cycle apart. */
+.office-mark-ring::before,
+.office-mark-ring::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 2px solid rgba(232, 240, 250, 0.9);
+    animation: office-mark-pulse 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.office-mark-ring::after {
+    animation-delay: 1.3s;
+}
+
+/* After half a minute the pulse halves in speed, and nothing else changes. */
+.office-marks-calm .office-mark-ring::before,
+.office-marks-calm .office-mark-ring::after {
+    animation-duration: 5.2s;
+}
+
+.office-marks-calm .office-mark-ring::after {
+    animation-delay: 2.6s;
+}
+
+@keyframes office-mark-pulse {
+    0% { transform: scale(0.7); opacity: 0; }
+    15% { opacity: 0.9; }
+    100% { transform: scale(2); opacity: 0; }
+}
+
+.office-mark:hover .office-mark-ring,
+.office-mark:focus-visible .office-mark-ring {
+    background: radial-gradient(circle, rgba(214, 226, 240, 0.55) 0%, rgba(214, 226, 240, 0.18) 55%, rgba(20, 21, 23, 0) 72%);
+}
+
+.office-mark:focus-visible {
+    outline: none;
+}
+
+.office-mark:focus-visible .office-mark-ring {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 0 6px rgba(20, 21, 23, 0.8);
+}
+
+/* Less motion: the ring stays, still. */
+@media (prefers-reduced-motion: reduce) {
+    .office-mark-ring::before,
+    .office-mark-ring::after {
+        animation: none;
+        opacity: 0;
+    }
+}

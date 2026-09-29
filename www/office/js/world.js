@@ -39,9 +39,11 @@ import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
     carLightPositions, carYaws, drift, jetsAt, jetFlashing, shipShift, cruiseLane, cruisePier, cruiseAt, LIFE, JET, LIVERIES
 } from './life.min.js';
-import { buildFleet, place, boxesGeometry, jetParts, joinGeometries, buildWashers, buildGulls, lightDot, aimRunningLights } from './fleet.min.js';
+import { buildFleet, place, boxesGeometry, jetParts, joinGeometries, buildWashers, buildGulls, lightDot, aimRunningLights, buildOrcas } from './fleet.min.js';
 import { WASHERS, washerFaces, washerAt } from './washers.min.js';
 import { flock, gullPose, gullShape, flockTriangles } from './gulls.min.js';
+import { FIREWORKS, MAX_SHELLS, SHELL_SECONDS, shellLights } from './fireworks.min.js';
+import { ORCAS, pod, orcaPose } from './orcas.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
 
 /** Half the jet's length and a little over, as built (fleet.js jetParts),
@@ -1061,6 +1063,29 @@ export function fitShadow(light, dir, box = TOWER_SHADOWS.box) {
 }
 
 /**
+ * The fireworks (fireworks.js): every star of the biggest show one point,
+ * a round glow (fleet.js lightDot) a few meters across whatever its
+ * distance, each with its own color and how brightly it still burns. Added
+ * over the dark by night, laid over the bright sky by day.
+ */
+function buildFireworks(scene) {
+    const n = MAX_SHELLS * (1 + FIREWORKS.burst.count);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(n * 4), 4));
+    const points = new THREE.Points(geometry, new THREE.PointsMaterial({
+        size: 7, sizeAttenuation: true, vertexColors: true, map: lightDot(), transparent: true, depthWrite: false,
+        blending: THREE.AdditiveBlending, fog: true, toneMapped: false
+    }));
+    points.name = 'fireworks';
+    points.visible = false;
+    points.frustumCulled = false;
+    points.raycast = () => {};
+    scene.add(points);
+    return points;
+}
+
+/**
  * Build the world outside. Returns the scene and camera, and the handles
  * main.js drives: `setLight(look)` from daylight.js, `updateEnvironment`
  * for the reflections, and `follow(camera)` to put the outside camera where
@@ -1154,6 +1179,12 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const washers = buildWashers(scene, washerFaces(plan.filter((t) => !t.island)), {
         width: WASHERS.width, stand: WASHERS.stand, parked: WASHERS.parked
     });
+    const fireworks = buildFireworks(scene);
+    // The orcas that visit the bay now and then (orcas.js).
+    const orcas = buildOrcas(scene, pod().length, { spoutHeight: ORCAS.spout.height });
+    // The shells in the air, each with the second it was fired on the
+    // visitor's clock (launchShow).
+    let shells = [];
     const gullShapes = gullShape();
     const gulls = buildGulls(scene, flock().length, gullShapes, flockTriangles);
     // How wet it is now (setLight), for what moves (setLife).
@@ -1229,6 +1260,8 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         plan,
         washers,
         gulls,
+        fireworks,
+        orcas,
         /**
          * Color the outside for a light level (daylight.js `lighting`) and,
          * given the sky at that moment (sky.js `skyAt`), put the sun, the
@@ -1287,6 +1320,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             heavens.stars.visible = look.stars > 0.01;
             fleet.light(look.cityLights);
             dark = look.cityLights;
+            // Added over the dark, laid over the bright sky (added, a star
+            // would vanish into the day).
+            fireworks.material.blending = dark > 0.3 ? THREE.AdditiveBlending : THREE.NormalBlending;
             // The weather (weather.js `weathered` carries it on the look).
             weather.deck.visible = overcast > 0.02;
             weather.deck.material.opacity = 0.93 * overcast;
@@ -1432,6 +1468,23 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             const gullsOut = !still && dark < 0.6 && raining < 0.25;
             gullPoses = gullsOut ? flock().map((g) => gullPose(g, real)) : null;
             gulls.fly(gullPoses, WATER_Y, trueScale ? 1 : undefined);
+            // The fireworks, on the visitor's own seconds.
+            if (shells.length) {
+                shells = shells.filter((s) => real - s.start <= SHELL_SECONDS + 0.1);
+                const pos = fireworks.geometry.attributes.position;
+                const col = fireworks.geometry.attributes.color;
+                let k = 0;
+                for (const s of shells) k = shellLights(s, real - s.start, WATER_Y, pos.array, col.array, k);
+                col.array.fill(0, k * 4);
+                fireworks.geometry.setDrawRange(0, k);
+                pos.needsUpdate = true;
+                col.needsUpdate = true;
+            }
+            fireworks.visible = shells.length > 0 && !still;
+            // The orcas, on the visitor's own seconds, by day (a black fin on
+            // a black sea is nothing), never held still.
+            const orcasOut = !still && dark < 0.6;
+            orcas.place(orcasOut ? pod().map((o) => orcaPose(o, real)) : null, trueScale ? 1 : ORCAS.scale, WATER_Y);
             const moved = drift(date, seconds, CLOUDS.tile);
             if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);
             water.material.normalMap.offset.set(moved.ripple[0], moved.ripple[1]);
@@ -1475,6 +1528,20 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             const all = [...fleet.ferries, ...fleet.ships, ...fleet.cruises, ...fleet.sailboats, fleet.seaplane, ...fleet.jets];
             for (const c of all) c.group.scale.setScalar(trueScale ? 1 : c.group.userData.scale);
             return trueScale;
+        },
+        /**
+         * Fire a show (fireworks.js showFor): each shell launched `at`
+         * seconds after `start`, on the visitor's own seconds (setLife's
+         * `real`). Returns how many shells are in the air or waiting.
+         */
+        launchShow(show, start) {
+            const room = Math.max(0, MAX_SHELLS - shells.length);
+            for (const shell of show.slice(0, room)) shells.push({ ...shell, start: start + shell.at });
+            return shells.length;
+        },
+        /** Whether a show is on: the scenery is then drawn every frame. */
+        fireworksBusy() {
+            return shells.length > 0;
         },
         /**
          * Whether a gull is out and inside the camera's view, where the
